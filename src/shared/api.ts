@@ -181,9 +181,18 @@ export interface SaveProjectDocumentResult {
   relativePath: string;
 }
 
+export type ProjectAccessMode =
+  | { kind: "readWrite" }
+  | { kind: "readOnly"; reason: "writeLockUnavailable" };
+
+export const defaultProjectAccessMode: ProjectAccessMode = {
+  kind: "readWrite"
+};
+
 export interface PergamumProject {
   rootPath: string;
   activeProjectFilePath: string;
+  accessMode: ProjectAccessMode;
   name: string;
   config: PergamumProjectConfig | null;
   documents: ProjectDocument[];

@@ -11,10 +11,12 @@ import {
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
+  defaultProjectAccessMode,
   PROJECT_CHANNELS,
   type OpenRecentProjectRequest,
   type PergamumProject,
   type PergamumProjectConfig,
+  type ProjectAccessMode,
   type ProjectDocument,
   type ProjectDocumentContent,
   type ReadProjectDocumentRequest,
@@ -54,6 +56,7 @@ import {
 interface CurrentProjectState {
   rootPath: string;
   activeProjectFilePath: string;
+  accessMode: ProjectAccessMode;
   documentRelativePaths: Set<string>;
 }
 
@@ -86,6 +89,10 @@ export function currentActiveProjectFilePath(): string | null {
   return currentProjectState?.activeProjectFilePath ?? null;
 }
 
+export function currentProjectAccessMode(): ProjectAccessMode | null {
+  return currentProjectState?.accessMode ?? null;
+}
+
 export function requireCurrentProjectRootPath(): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
@@ -100,6 +107,14 @@ export function requireCurrentActiveProjectFilePath(): string {
   }
 
   return currentProjectState.activeProjectFilePath;
+}
+
+export function requireCurrentProjectAccessMode(): ProjectAccessMode {
+  if (!currentProjectState) {
+    throw new Error("No project is currently open.");
+  }
+
+  return currentProjectState.accessMode;
 }
 
 function parentWindow(event: IpcMainInvokeEvent): BrowserWindow | undefined {
@@ -347,6 +362,7 @@ function activateProject(project: PergamumProject): void {
   currentProjectState = {
     rootPath: project.rootPath,
     activeProjectFilePath: project.activeProjectFilePath,
+    accessMode: project.accessMode,
     documentRelativePaths: new Set(
       project.documents.map((document) => document.relativePath)
     )
@@ -364,6 +380,7 @@ async function createProjectFromParts(
   return {
     rootPath,
     activeProjectFilePath,
+    accessMode: { ...defaultProjectAccessMode },
     name,
     config,
     documents

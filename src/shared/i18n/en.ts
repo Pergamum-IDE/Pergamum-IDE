@@ -185,6 +185,8 @@ export const enTranslations = {
   "menu.zoomIn": "Zoom In",
   "menu.zoomOut": "Zoom Out",
   "project.label": "Project: {name}",
+  "projectAccess.readOnly.label": "Read-only",
+  "projectAccess.readOnly.tooltip": "Opened in read-only mode",
   "recent.empty": "No recent projects",
   "recent.title": "Recent Projects",
   "settings.application.advanced.disabledDescription": "Enable advanced settings to change this item.",

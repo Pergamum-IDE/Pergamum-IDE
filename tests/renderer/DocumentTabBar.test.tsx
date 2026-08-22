@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DocumentTabBar } from "../../src/renderer/DocumentTabBar";
+import type { ProjectAccessMode } from "../../src/shared/api";
 import type { DocumentTab } from "../../src/renderer/openDocuments";
 import { t, type Translate } from "../../src/shared/i18n";
 import {
@@ -44,6 +46,7 @@ function renderTabBar(
   tabs: DocumentTab[],
   overrides: {
     activeDocumentId?: EditorId;
+    projectAccessMode?: ProjectAccessMode | null;
     activeWorkspaceTabId?: WorkspaceTabId;
     specialTabs?: SpecialWorkspaceTab[];
     translate?: Translate;
@@ -56,6 +59,7 @@ function renderTabBar(
     React.createElement(DocumentTabBar, {
       tabs,
       activeDocumentId: overrides.activeDocumentId ?? tabs[0]?.id ?? projectDocumentId,
+      projectAccessMode: overrides.projectAccessMode,
       activeWorkspaceTabId: overrides.activeWorkspaceTabId,
       specialTabs: overrides.specialTabs,
       translate: overrides.translate ?? realTranslateEn,
@@ -89,6 +93,18 @@ function tabMarkup(markup: string, occurrence = 0): string {
     occurrence + 1 < starts.length ? starts[occurrence + 1] : markup.length;
 
   return markup.slice(start, end);
+}
+
+function tablistMarkup(markup: string): string {
+  const start = markup.indexOf('role="tablist"');
+  const navStart = markup.lastIndexOf("<nav", start);
+  const navEnd = markup.indexOf("</nav>", start);
+
+  if (navStart === -1 || navEnd === -1) {
+    throw new Error("Tablist markup was not found.");
+  }
+
+  return markup.slice(navStart, navEnd);
 }
 
 describe("DocumentTabBar special tabs (#181)", () => {
@@ -158,6 +174,154 @@ describe("DocumentTabBar special tabs (#181)", () => {
 });
 
 describe("DocumentTabBar", () => {
+  it("does not render the read-only shield indicator for readWrite projects", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      {
+        projectAccessMode: { kind: "readWrite" }
+      }
+    );
+
+    expect(markup).not.toContain("projectAccessModeIndicator-readOnly");
+    expect(markup).not.toContain("feather-shield");
+  });
+
+  it("renders the read-only shield indicator before document tabs", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      {
+        projectAccessMode: {
+          kind: "readOnly",
+          reason: "writeLockUnavailable"
+        }
+      }
+    );
+    const indicatorIndex = markup.indexOf("projectAccessModeIndicator-readOnly");
+    const tablistIndex = markup.indexOf('role="tablist"');
+    const firstTabIndex = markup.indexOf('role="tab"');
+
+    expect(indicatorIndex).toBeGreaterThan(-1);
+    expect(tablistIndex).toBeGreaterThan(indicatorIndex);
+    expect(firstTabIndex).toBeGreaterThan(tablistIndex);
+    expect(markup).toContain("feather-shield");
+  });
+
+  it("does not treat the read-only indicator as a document tab", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        },
+        {
+          id: secondProjectDocumentId,
+          title: "chapter-02.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      {
+        projectAccessMode: {
+          kind: "readOnly",
+          reason: "writeLockUnavailable"
+        }
+      }
+    );
+    const tabRoles = markup.match(/role="tab"/g) ?? [];
+    const indicatorIndex = markup.indexOf("projectAccessModeIndicator-readOnly");
+    const indicatorTag = markup.slice(
+      markup.lastIndexOf("<", indicatorIndex),
+      markup.indexOf(">", indicatorIndex)
+    );
+
+    expect(tabRoles).toHaveLength(2);
+    expect(indicatorTag).toContain('role="img"');
+    expect(indicatorTag).not.toContain('role="tab"');
+    expect(tablistMarkup(markup)).not.toContain(
+      "projectAccessModeIndicator-readOnly"
+    );
+  });
+
+  it("localizes the read-only shield tooltip", () => {
+    const enMarkup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      {
+        projectAccessMode: {
+          kind: "readOnly",
+          reason: "writeLockUnavailable"
+        },
+        translate: realTranslateEn
+      }
+    );
+    const jaMarkup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      {
+        projectAccessMode: {
+          kind: "readOnly",
+          reason: "writeLockUnavailable"
+        },
+        translate: realTranslateJa
+      }
+    );
+
+    expect(enMarkup).toContain('aria-label="Opened in read-only mode"');
+    expect(enMarkup).toContain('title="Opened in read-only mode"');
+    expect(jaMarkup).toContain(
+      'aria-label="\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u3067\u958B\u3044\u3066\u3044\u307E\u3059"'
+    );
+    expect(jaMarkup).toContain(
+      'title="\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u3067\u958B\u3044\u3066\u3044\u307E\u3059"'
+    );
+  });
+
+  it("uses the shield.svg asset and read-only blue CSS token", () => {
+    const source = readFileSync("src/renderer/DocumentTabBar.tsx", "utf8");
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    const shieldSvg = readFileSync("assets/icons/global/shield.svg", "utf8");
+
+    expect(source).toContain(
+      "../../assets/icons/global/shield.svg?raw"
+    );
+    expect(shieldSvg).toContain("feather-shield");
+    expect(shieldSvg).toContain('stroke="currentColor"');
+    expect(css).toContain("--color-project-read-only");
+    expect(css).toContain(
+      "color: var(--color-project-read-only);"
+    );
+    expect(css).not.toContain("--color-project-read-only: #a32929");
+    expect(css).not.toContain("--color-project-read-only: #8a4c0f");
+  });
+
   it("renders the alert-triangle warning icon before the file name for an external Markdown tab", () => {
     const markup = renderTabBar([
       {
