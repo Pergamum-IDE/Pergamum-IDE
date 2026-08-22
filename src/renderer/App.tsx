@@ -3114,6 +3114,7 @@ export function App(): JSX.Element {
                 <DocumentTabBar
                   tabs={tabs}
                   activeDocumentId={openDocumentsState.activeDocumentId}
+                  projectAccessMode={project?.accessMode ?? null}
                   activeWorkspaceTabId={activeWorkspaceTabId}
                   specialTabs={specialTabs}
                   translate={translate}

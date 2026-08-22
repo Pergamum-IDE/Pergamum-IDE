@@ -46,6 +46,7 @@ const translate: Translate = (key) => key;
 const project: PergamumProject = {
   rootPath: "C:\\Novel",
   activeProjectFilePath: "C:\\Novel\\pergamum.db",
+  accessMode: { kind: "readWrite" },
   name: "Novel",
   config: null,
   documents: [

@@ -56,6 +56,7 @@ const secondProjectDocument: ProjectDocument = {
 const project: PergamumProject = {
   rootPath: projectContext.rootPath,
   activeProjectFilePath: `${projectContext.rootPath}\\pergamum.db`,
+  accessMode: { kind: "readWrite" },
   name: "Novel",
   config: null,
   documents: [firstProjectDocument, secondProjectDocument]

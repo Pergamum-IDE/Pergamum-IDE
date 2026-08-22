@@ -183,6 +183,8 @@ export const jaTranslations = {
   "menu.zoomIn": "拡大",
   "menu.zoomOut": "縮小",
   "project.label": "プロジェクト: {name}",
+  "projectAccess.readOnly.label": "読み取り専用",
+  "projectAccess.readOnly.tooltip": "読み取り専用で開いています",
   "recent.empty": "最近のプロジェクトはありません",
   "recent.title": "最近のプロジェクト",
   "settings.application.advanced.disabledDescription": "この項目を変更するには、達人向け設定を有効にしてください。",

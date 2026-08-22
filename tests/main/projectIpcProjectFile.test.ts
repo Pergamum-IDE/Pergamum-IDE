@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PROJECT_CHANNELS } from "../../src/shared/api";
+import { defaultProjectAccessMode, PROJECT_CHANNELS } from "../../src/shared/api";
 import type { DebugLogger } from "../../src/main/debugLogger";
 import { projectConfigFileName } from "../../src/main/projectConfigStore";
 import {
@@ -46,6 +46,7 @@ vi.mock("electron", () => ({
 
 import {
   currentActiveProjectFilePath,
+  currentProjectAccessMode,
   currentProjectRootPath,
   registerProjectIpc
 } from "../../src/main/projectIpc";
@@ -59,6 +60,10 @@ const projectConflictWarningMessage =
 describe("project file IPC foundation", () => {
   let projectRootPath: string;
   let userDataPath: string;
+
+  it("uses readWrite as the default project access mode", () => {
+    expect(defaultProjectAccessMode).toEqual({ kind: "readWrite" });
+  });
 
   beforeEach(async () => {
     electronMock.handle.mockClear();
@@ -171,6 +176,7 @@ describe("project file IPC foundation", () => {
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: defaultProjectAccessMode,
       name: "Secret Draft",
       config: {
         name: "Secret Draft"
@@ -184,6 +190,7 @@ describe("project file IPC foundation", () => {
     });
     expect(currentProjectRootPath()).toBe(projectRootPath);
     expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
 
     const database = await openProjectDatabase(projectFilePath);
     try {
@@ -355,6 +362,7 @@ describe("project file IPC foundation", () => {
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: defaultProjectAccessMode,
       name: "Confirmed"
     });
     await expect(fs.access(projectFilePath)).resolves.toBeUndefined();
@@ -428,6 +436,7 @@ describe("project file IPC foundation", () => {
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: defaultProjectAccessMode,
       name: "Metadata Project Name",
       config: {
         name: "Config Name"
@@ -441,6 +450,7 @@ describe("project file IPC foundation", () => {
     });
     expect(currentProjectRootPath()).toBe(projectRootPath);
     expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
     await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
       {
         projectId: metadata.projectId,
@@ -538,6 +548,7 @@ describe("project file IPC foundation", () => {
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: defaultProjectAccessMode,
       name: "Recent Metadata Name",
       config: {
         name: "Config Name"
@@ -556,6 +567,7 @@ describe("project file IPC foundation", () => {
     expect(refreshedRecentProject?.lastOpenedAt).not.toBe(
       "2026-08-22T00:00:00.000Z"
     );
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
   });
 
   it("openRecentProject rejects legacy database recent targets without opening or refreshing them", async () => {
@@ -617,6 +629,7 @@ describe("project file IPC foundation", () => {
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: defaultProjectAccessMode,
       name: "Warn Secret"
     });
     const warnings = consoleWarnSpy.mock.calls.map((call) => call.join(" "));

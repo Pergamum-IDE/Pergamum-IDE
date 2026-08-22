@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { ProjectAccessMode } from "../shared/api";
 import type { Translate } from "../shared/i18n";
 import {
   editorIdEquals,
@@ -24,10 +25,12 @@ import {
 } from "./workspaceTabs";
 import alertTriangleIcon from "../../assets/icons/global/alert-triangle.svg?raw";
 import closeXIcon from "../../assets/icons/global/close-x.svg?raw";
+import shieldIcon from "../../assets/icons/global/shield.svg?raw";
 
 interface DocumentTabBarProps {
   tabs: DocumentTab[];
   activeDocumentId: EditorId;
+  projectAccessMode?: ProjectAccessMode | null;
   activeWorkspaceTabId?: WorkspaceTabId;
   specialTabs?: SpecialWorkspaceTab[];
   translate: Translate;
@@ -42,6 +45,7 @@ interface DocumentTabBarProps {
 export function DocumentTabBar({
   tabs,
   activeDocumentId,
+  projectAccessMode = null,
   activeWorkspaceTabId = documentWorkspaceTabId(activeDocumentId),
   specialTabs = [],
   translate,
@@ -55,6 +59,7 @@ export function DocumentTabBar({
   const utilityWindowLabel = translate("utilityWindow.label");
   const closeTabLabel = translate("tabs.closeTab");
   const unsavedLabel = translate("tabs.unsaved");
+  const readOnlyTooltip = translate("projectAccess.readOnly.tooltip");
   const [hoveredDocumentId, setHoveredDocumentId] = useState<EditorId | null>(
     null
   );
@@ -240,6 +245,15 @@ export function DocumentTabBar({
 
   return (
     <div className="documentTabBar">
+      {projectAccessMode?.kind === "readOnly" ? (
+        <span
+          className="projectAccessModeIndicator projectAccessModeIndicator-readOnly"
+          role="img"
+          aria-label={readOnlyTooltip}
+          title={readOnlyTooltip}
+          dangerouslySetInnerHTML={{ __html: shieldIcon }}
+        />
+      ) : null}
       <nav
         className="documentTabBarTabs"
         aria-label={translate("tabs.openDocuments")}
