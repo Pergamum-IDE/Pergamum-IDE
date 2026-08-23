@@ -19,8 +19,11 @@ export interface UtilityWindowCommandController {
 
 export interface UtilityWindowCommandTitles {
   open: string;
+  openDescription: string;
   close: string;
+  closeDescription: string;
   toggle: string;
+  toggleDescription: string;
 }
 
 type UtilityWindowCommand = Command<readonly [], void>;
@@ -30,8 +33,15 @@ export function createUtilityWindowCommandTitles(
 ): UtilityWindowCommandTitles {
   return {
     open: translate("command.workbench.utilityWindow.open"),
+    openDescription: translate("command.workbench.utilityWindow.open.description"),
     close: translate("command.workbench.utilityWindow.close"),
-    toggle: translate("command.workbench.utilityWindow.toggle")
+    closeDescription: translate(
+      "command.workbench.utilityWindow.close.description"
+    ),
+    toggle: translate("command.workbench.utilityWindow.toggle"),
+    toggleDescription: translate(
+      "command.workbench.utilityWindow.toggle.description"
+    )
   };
 }
 
@@ -43,6 +53,7 @@ export function createUtilityWindowCommands(
     {
       id: utilityWindowCommandIds.open,
       title: titles.open,
+      description: titles.openDescription,
       execute: () => {
         controller.openUtilityWindow();
       }
@@ -50,6 +61,7 @@ export function createUtilityWindowCommands(
     {
       id: utilityWindowCommandIds.close,
       title: titles.close,
+      description: titles.closeDescription,
       execute: () => {
         controller.closeUtilityWindow();
       }
@@ -57,6 +69,7 @@ export function createUtilityWindowCommands(
     {
       id: utilityWindowCommandIds.toggle,
       title: titles.toggle,
+      description: titles.toggleDescription,
       execute: () => {
         controller.toggleUtilityWindow();
       }

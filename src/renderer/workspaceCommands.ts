@@ -26,9 +26,13 @@ export interface WorkspaceCommandController {
 
 export interface WorkspaceCommandTitles {
   focusFiles: string;
+  focusFilesDescription: string;
   focusSearch: string;
+  focusSearchDescription: string;
   focusGlossary: string;
+  focusGlossaryDescription: string;
   openApplicationSettings: string;
+  openApplicationSettingsDescription: string;
 }
 
 type WorkspaceCommand = Command<readonly [], void>;
@@ -38,10 +42,20 @@ export function createWorkspaceCommandTitles(
 ): WorkspaceCommandTitles {
   return {
     focusFiles: translate("command.workspace.files.focus"),
+    focusFilesDescription: translate("command.workspace.files.focus.description"),
     focusSearch: translate("command.workspace.search.focus"),
+    focusSearchDescription: translate(
+      "command.workspace.search.focus.description"
+    ),
     focusGlossary: translate("command.workspace.glossary.focus"),
+    focusGlossaryDescription: translate(
+      "command.workspace.glossary.focus.description"
+    ),
     openApplicationSettings: translate(
       "command.workspace.applicationSettings.open"
+    ),
+    openApplicationSettingsDescription: translate(
+      "command.workspace.applicationSettings.open.description"
     )
   };
 }
@@ -67,6 +81,7 @@ export function createWorkspaceCommands(
     {
       id: workspaceCommandIds.focusFiles,
       title: titles.focusFiles,
+      description: titles.focusFilesDescription,
       execute: () => {
         controller.focusSidebarMode("files");
       }
@@ -74,6 +89,7 @@ export function createWorkspaceCommands(
     {
       id: workspaceCommandIds.focusSearch,
       title: titles.focusSearch,
+      description: titles.focusSearchDescription,
       execute: () => {
         controller.focusSidebarMode("search");
       }
@@ -81,6 +97,7 @@ export function createWorkspaceCommands(
     {
       id: workspaceCommandIds.focusGlossary,
       title: titles.focusGlossary,
+      description: titles.focusGlossaryDescription,
       execute: () => {
         controller.focusSidebarMode("glossary");
       }
@@ -88,6 +105,7 @@ export function createWorkspaceCommands(
     {
       id: workspaceCommandIds.openApplicationSettings,
       title: titles.openApplicationSettings,
+      description: titles.openApplicationSettingsDescription,
       execute: () => {
         controller.openApplicationSettings();
       }

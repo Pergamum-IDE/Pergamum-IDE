@@ -31,9 +31,13 @@ export interface GlossaryOccurrencesCommandController {
 
 export interface GlossaryOccurrencesCommandTitles {
   previous: string;
+  previousDescription: string;
   next: string;
+  nextDescription: string;
   openEntry: string;
+  openEntryDescription: string;
   closeTracking: string;
+  closeTrackingDescription: string;
 }
 
 type GlossaryOccurrencesCommand = Command<readonly [], boolean>;
@@ -43,9 +47,19 @@ export function createGlossaryOccurrencesCommandTitles(
 ): GlossaryOccurrencesCommandTitles {
   return {
     previous: translate("command.glossary.occurrences.previous"),
+    previousDescription: translate(
+      "command.glossary.occurrences.previous.description"
+    ),
     next: translate("command.glossary.occurrences.next"),
+    nextDescription: translate("command.glossary.occurrences.next.description"),
     openEntry: translate("command.glossary.occurrences.entry.open"),
-    closeTracking: translate("command.glossary.occurrences.tracking.close")
+    openEntryDescription: translate(
+      "command.glossary.occurrences.entry.open.description"
+    ),
+    closeTracking: translate("command.glossary.occurrences.tracking.close"),
+    closeTrackingDescription: translate(
+      "command.glossary.occurrences.tracking.close.description"
+    )
   };
 }
 
@@ -57,23 +71,27 @@ export function createGlossaryOccurrencesCommands(
     {
       id: glossaryOccurrencesCommandIds.previous,
       title: titles.previous,
+      description: titles.previousDescription,
       execute: () => controller.navigateToPreviousOccurrence(),
       when: glossaryOccurrenceTrackingCommandWhen
     },
     {
       id: glossaryOccurrencesCommandIds.next,
       title: titles.next,
+      description: titles.nextDescription,
       execute: () => controller.navigateToNextOccurrence(),
       when: glossaryOccurrenceTrackingCommandWhen
     },
     {
       id: glossaryOccurrencesCommandIds.openEntry,
       title: titles.openEntry,
+      description: titles.openEntryDescription,
       execute: () => controller.openTrackedGlossaryEntry()
     },
     {
       id: glossaryOccurrencesCommandIds.closeTracking,
       title: titles.closeTracking,
+      description: titles.closeTrackingDescription,
       execute: () => controller.closeGlossaryOccurrenceTracking(),
       when: glossaryOccurrenceTrackingCommandWhen
     }

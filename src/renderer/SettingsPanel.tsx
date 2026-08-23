@@ -23,6 +23,12 @@ interface SettingsPanelProps {
 
 const lineEndingOptions = getCatalogEntry("files.newFile.lineEnding").enumValues;
 const encodingOptions = getCatalogEntry("files.newFile.encoding").enumValues;
+const commandPaletteDescriptionDelayEntry = getCatalogEntry(
+  "commandPalette.description.marquee.delay"
+);
+const commandPaletteDescriptionSpeedEntry = getCatalogEntry(
+  "commandPalette.description.marquee.speed"
+);
 
 function fontFamilyValue(value: string): string | undefined {
   const trimmed = value.trim();
@@ -51,6 +57,7 @@ function saveRequest(
 ): SaveApplicationSettingsRequest {
   return {
     workbench: overrides.workbench ?? settings.workbench,
+    commandPalette: overrides.commandPalette ?? settings.commandPalette,
     editor: overrides.editor ?? settings.editor,
     files: overrides.files ?? settings.files
   };
@@ -80,6 +87,10 @@ export function SettingsPanel({
   const advancedControlsDisabled = isLoading || !advancedSettingsEnabled;
   const soundSettings = settings.workbench.sound;
   const soundControlsDisabled = isLoading || !soundSettings.enabled;
+  const commandPaletteDescriptionSettings =
+    settings.commandPalette.description;
+  const commandPaletteMarqueeControlsDisabled =
+    advancedControlsDisabled || !commandPaletteDescriptionSettings.enable;
 
   async function changeAdvancedSettingsEnabled(enabled: boolean): Promise<void> {
     if (enabled && !advancedSettingsEnabled) {
@@ -125,6 +136,44 @@ export function SettingsPanel({
           sound: {
             ...soundSettings,
             [child]: { enabled }
+          }
+        }
+      })
+    );
+  }
+
+  function changeCommandPaletteDescriptionEnabled(enabled: boolean): void {
+    onChangeSettings(
+      saveRequest(settings, {
+        commandPalette: {
+          ...settings.commandPalette,
+          description: {
+            ...commandPaletteDescriptionSettings,
+            enable: enabled
+          }
+        }
+      })
+    );
+  }
+
+  function changeCommandPaletteDescriptionMarqueeValue(
+    field: "delay" | "speed",
+    value: number
+  ): void {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+
+    onChangeSettings(
+      saveRequest(settings, {
+        commandPalette: {
+          ...settings.commandPalette,
+          description: {
+            ...commandPaletteDescriptionSettings,
+            marquee: {
+              ...commandPaletteDescriptionSettings.marquee,
+              [field]: value
+            }
           }
         }
       })
@@ -384,6 +433,135 @@ export function SettingsPanel({
             </select>
             <p className="settingsDescription">
               {translate("settings.files.newFile.encoding.description")}
+            </p>
+            {!advancedSettingsEnabled ? (
+              <p className="settingsAdvancedDisabled">
+                {translate("settings.application.advanced.disabledDescription")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="settingsSection"
+        aria-labelledby="applicationSettingsCommandPalette"
+      >
+        <h2 id="applicationSettingsCommandPalette">
+          {translate("settings.application.section.commandPalette")}
+        </h2>
+        <div className="settingsRow">
+          <label
+            className="settingsLabel"
+            htmlFor="applicationSettingsCommandPaletteDescriptionEnabled"
+          >
+            {translate("settings.commandPalette.description.enable.label")}
+          </label>
+          <div className="settingsControl">
+            <label className="settingsInlineCheckbox">
+              <input
+                id="applicationSettingsCommandPaletteDescriptionEnabled"
+                type="checkbox"
+                checked={commandPaletteDescriptionSettings.enable}
+                disabled={advancedControlsDisabled}
+                onChange={(event) =>
+                  changeCommandPaletteDescriptionEnabled(event.target.checked)
+                }
+              />
+              <span>
+                {translate("settings.commandPalette.description.enable.label")}
+              </span>
+            </label>
+            <p className="settingsDescription">
+              {translate(
+                "settings.commandPalette.description.enable.description"
+              )}
+            </p>
+            {!advancedSettingsEnabled ? (
+              <p className="settingsAdvancedDisabled">
+                {translate("settings.application.advanced.disabledDescription")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div className="settingsRow">
+          <label
+            className="settingsLabel"
+            htmlFor="applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+          >
+            {translate(
+              "settings.commandPalette.description.marquee.delay.label"
+            )}
+          </label>
+          <div className="settingsControl">
+            <div className="settingsNumberInputGroup">
+              <input
+                id="applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+                className="settingsNumberInput"
+                type="number"
+                min={commandPaletteDescriptionDelayEntry.numericRange.min}
+                max={commandPaletteDescriptionDelayEntry.numericRange.max}
+                step={1}
+                value={commandPaletteDescriptionSettings.marquee.delay}
+                disabled={commandPaletteMarqueeControlsDisabled}
+                onChange={(event) =>
+                  changeCommandPaletteDescriptionMarqueeValue(
+                    "delay",
+                    event.target.valueAsNumber
+                  )
+                }
+              />
+              <span className="settingsUnit">
+                {translate("settings.unit.ms")}
+              </span>
+            </div>
+            <p className="settingsDescription">
+              {translate(
+                "settings.commandPalette.description.marquee.delay.description"
+              )}
+            </p>
+            {!advancedSettingsEnabled ? (
+              <p className="settingsAdvancedDisabled">
+                {translate("settings.application.advanced.disabledDescription")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div className="settingsRow">
+          <label
+            className="settingsLabel"
+            htmlFor="applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+          >
+            {translate(
+              "settings.commandPalette.description.marquee.speed.label"
+            )}
+          </label>
+          <div className="settingsControl">
+            <div className="settingsNumberInputGroup">
+              <input
+                id="applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+                className="settingsNumberInput"
+                type="number"
+                min={commandPaletteDescriptionSpeedEntry.numericRange.min}
+                max={commandPaletteDescriptionSpeedEntry.numericRange.max}
+                step="any"
+                value={commandPaletteDescriptionSettings.marquee.speed}
+                disabled={commandPaletteMarqueeControlsDisabled}
+                onChange={(event) =>
+                  changeCommandPaletteDescriptionMarqueeValue(
+                    "speed",
+                    event.target.valueAsNumber
+                  )
+                }
+              />
+              <span className="settingsUnit">
+                {translate("settings.unit.pxPerSecond")}
+              </span>
+            </div>
+            <p className="settingsDescription">
+              {translate(
+                "settings.commandPalette.description.marquee.speed.description"
+              )}
             </p>
             {!advancedSettingsEnabled ? (
               <p className="settingsAdvancedDisabled">

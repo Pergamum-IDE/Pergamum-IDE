@@ -240,14 +240,9 @@ function commandPalettePrimaryField(
 }
 
 function commandPaletteSecondaryField(
-  entry: CommandPaletteEntry,
   matches: readonly CommandPaletteFieldMatch[],
   primaryField: CommandPaletteMatchField
 ): CommandPaletteMatchField {
-  if (entry.description && hasCommandPaletteFieldMatch(matches, "description")) {
-    return "description";
-  }
-
   if (
     primaryField === "canonicalLabel" &&
     hasCommandPaletteFieldMatch(matches, "title")
@@ -259,7 +254,7 @@ function commandPaletteSecondaryField(
     return "commandId";
   }
 
-  return entry.description ? "description" : "commandId";
+  return "commandId";
 }
 
 function commandPaletteFilteredEntry(
@@ -268,7 +263,6 @@ function commandPaletteFilteredEntry(
 ): CommandPaletteFilteredEntry {
   const primaryField = commandPalettePrimaryField(entry);
   const secondaryField = commandPaletteSecondaryField(
-    entry,
     matches,
     primaryField
   );

@@ -12,6 +12,7 @@ import {
   CommandPalette,
   CommandPaletteHighlightedText,
   commandPaletteItemClassName,
+  resolveCommandPaletteDescriptionMarquee,
   resolveCommandPaletteFooterModel,
   scrollCommandPaletteSelectionIntoView
 } from "../../src/renderer/CommandPalette";
@@ -22,12 +23,17 @@ import {
 } from "../../src/renderer/commandPaletteEntries";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import type { LineJumpEditorSnapshot } from "../../src/renderer/lineJumpQuery";
+import type { CommandPaletteDescriptionSettings } from "../../src/shared/settings";
 
 const translate: Translate = (key) => key;
 const realTranslateEn: Translate = (key, values) => t("en", key, values);
 const realTranslateJa: Translate = (key, values) => t("ja", key, values);
 const notComposing = () => false;
 const noop = () => undefined;
+const descriptionDisabledSettings: CommandPaletteDescriptionSettings = {
+  enable: false,
+  marquee: { delay: 2000, speed: 40 }
+};
 
 function buildRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
@@ -114,6 +120,7 @@ function renderPalette(overrides: {
   onExecuteCommand?: (commandId: unknown, ...args: readonly unknown[]) => void;
   onBlockedCommand?: (commandId: unknown) => void;
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
+  descriptionSettings?: CommandPaletteDescriptionSettings;
 } = {}): string {
   return renderToStaticMarkup(
     React.createElement(CommandPalette, {
@@ -125,7 +132,8 @@ function renderPalette(overrides: {
       onExecuteCommand: overrides.onExecuteCommand ?? noop,
       onBlockedCommand: overrides.onBlockedCommand ?? noop,
       onClose: noop,
-      lineJumpEditorSnapshot: overrides.lineJumpEditorSnapshot
+      lineJumpEditorSnapshot: overrides.lineJumpEditorSnapshot,
+      descriptionSettings: overrides.descriptionSettings
     })
   );
 }
@@ -161,11 +169,12 @@ describe("CommandPalette", () => {
     expect(markup).toContain('value="&gt;"');
   });
 
-  it("renders a two-line item using description/canonicalLabel with title/id fallback", () => {
+  it("renders commandId in the item secondary line and description in the footer", () => {
     const markup = renderPalette();
 
     expect(markup).toContain("現在の文書を保存");
     expect(markup).toContain("Save Document");
+    expect(markup).toContain("test.command.save");
     expect(markup).toContain("Fallback Only");
     expect(markup).toContain("test.command.fallback");
   });
@@ -207,6 +216,126 @@ describe("CommandPalette", () => {
     expect(englishMarkup).toContain("editor.close");
     expect(englishMarkup).not.toContain("Save Current Editor");
     expect(englishMarkup).not.toContain("Close Current Editor");
+  });
+
+  it("defines Command Palette command description keys in Japanese and English", () => {
+    const descriptions = [
+      [
+        "command.workspace.project.create.description",
+        "新しいPergamumプロジェクトを作成します。",
+        "Create a new Pergamum project."
+      ],
+      [
+        "command.workspace.project.open.description",
+        "既存プロジェクトファイルを開きます。文書に編集がある場合は確認します。",
+        "Open an existing project. Check for unsaved changes before switching projects."
+      ],
+      [
+        "command.workspace.recentProjects.toggle.description",
+        "最近開いたプロジェクトを切り替えます。文書に編集がある場合は確認します。",
+        "Switch between recently opened projects. Check for unsaved changes before switching projects."
+      ],
+      [
+        "command.editor.document.markdown.open.description",
+        "主にプロジェクト外のMarkdownファイルを開きます。",
+        "Open a Markdown file outside the current project."
+      ],
+      [
+        "command.editor.document.save.description",
+        "現在の文書を上書き保存します。",
+        "Save the current document and overwrite the existing file."
+      ],
+      [
+        "command.editor.saveAs.description",
+        "現在の文書を任意の場所に別名で保存します。",
+        "Save the current document with a different name and location."
+      ],
+      [
+        "command.editor.document.close.description",
+        "現在の文書を閉じます。変更がある場合は確認します。",
+        "Close the current document. Check for unsaved changes before closing."
+      ],
+      [
+        "command.editor.selection.cut.description",
+        "現在のエディタ内で選択中のテキストを切り取ります。",
+        "Cut the selected text in the current editor."
+      ],
+      [
+        "command.editor.selection.copy.description",
+        "現在のエディタ内で選択中のテキストをコピーします。",
+        "Copy the selected text in the current editor."
+      ],
+      [
+        "command.editor.selection.paste.description",
+        "現在のエディタ内でカーソルの位置にテキストを貼り付けます。",
+        "Paste text at the current cursor position in the editor."
+      ],
+      [
+        "command.editor.selection.selectAll.description",
+        "現在のエディタ内のテキストを全文選択します。",
+        "Select all text in the current editor."
+      ],
+      [
+        "command.workspace.files.focus.description",
+        "（未実装です）",
+        "Not implemented."
+      ],
+      [
+        "command.workspace.search.focus.description",
+        "（未実装です）",
+        "Not implemented."
+      ],
+      [
+        "command.workspace.glossary.focus.description",
+        "用語集を表示します。",
+        "Show the Glossary panel."
+      ],
+      [
+        "command.workspace.applicationSettings.open.description",
+        "Pergamum全体に有効な設定画面を表示します。",
+        "Open application-wide settings."
+      ],
+      [
+        "command.workbench.utilityWindow.open.description",
+        "支援ウィンドウを表示します。",
+        "Show the Utility Window."
+      ],
+      [
+        "command.workbench.utilityWindow.close.description",
+        "支援ウィンドウを非表示にします。",
+        "Hide the Utility Window."
+      ],
+      [
+        "command.workbench.utilityWindow.toggle.description",
+        "支援ウィンドウの表示項目を切り替えます。",
+        "Toggle the Utility Window."
+      ],
+      [
+        "command.glossary.occurrences.previous.description",
+        "（未実装です）",
+        "Not implemented."
+      ],
+      [
+        "command.glossary.occurrences.next.description",
+        "（未実装です）",
+        "Not implemented."
+      ],
+      [
+        "command.glossary.occurrences.entry.open.description",
+        "（未実装です）",
+        "Not implemented."
+      ],
+      [
+        "command.glossary.occurrences.tracking.close.description",
+        "（未実装です）",
+        "Not implemented."
+      ]
+    ] as const;
+
+    for (const [key, japanese, english] of descriptions) {
+      expect(jaTranslations[key]).toBe(japanese);
+      expect(enTranslations[key]).toBe(english);
+    }
   });
 
   it("renders the empty result state in the result list area", () => {
@@ -426,22 +555,35 @@ describe("CommandPalette", () => {
     expect(() => scrollCommandPaletteSelectionIntoView(null)).not.toThrow();
   });
 
-  it("renders fixed footer hints and the command-mode search hint, without a result count, for the default empty query", () => {
+  it("renders fixed footer hints and the selected command description, without a result count, for the default empty query", () => {
     const markup = renderPalette();
 
     expect(markup).toContain("commandPaletteFooter");
     expect(markup).toContain("commandPalette.footer.selectHint");
     expect(markup).toContain("commandPalette.footer.runHint");
     expect(markup).toContain("commandPalette.footer.closeHint");
-    expect(markup).toContain("commandPalette.footer.searchHint");
+    expect(markup).toContain(
+      '<span class="commandPaletteFooterStatusText">現在の文書を保存</span>'
+    );
+    expect(markup).not.toContain("commandPalette.footer.searchHint");
     expect(markup).not.toContain("commandPalette.footer.results");
   });
 
-  it("shows the real English/Japanese search hint text for the default > with an empty query", () => {
-    expect(renderPalette({ translate: realTranslateEn })).toContain(
+  it("shows the real English/Japanese search hint text when command descriptions are disabled", () => {
+    expect(
+      renderPalette({
+        translate: realTranslateEn,
+        descriptionSettings: descriptionDisabledSettings
+      })
+    ).toContain(
       "Search commands"
     );
-    expect(renderPalette({ translate: realTranslateJa })).toContain(
+    expect(
+      renderPalette({
+        translate: realTranslateJa,
+        descriptionSettings: descriptionDisabledSettings
+      })
+    ).toContain(
       "コマンドを検索します"
     );
   });
@@ -465,7 +607,8 @@ describe("CommandPalette", () => {
     // test.
     const markup = renderPalette({
       translate: realTranslateEn,
-      initialInputValue: ">fallback"
+      initialInputValue: ">fallback",
+      descriptionSettings: descriptionDisabledSettings
     });
 
     expect(markup).toContain("1 result");
@@ -475,7 +618,8 @@ describe("CommandPalette", () => {
   it("renders '{count} results' for a real English query with multiple matches", () => {
     const markup = renderPalette({
       translate: realTranslateEn,
-      initialInputValue: ">test.command"
+      initialInputValue: ">test.command",
+      descriptionSettings: descriptionDisabledSettings
     });
 
     expect(markup).toContain("3 results");
@@ -486,7 +630,8 @@ describe("CommandPalette", () => {
   it("renders the Japanese counter form for a real one-result query", () => {
     const markup = renderPalette({
       translate: realTranslateJa,
-      initialInputValue: ">fallback"
+      initialInputValue: ">fallback",
+      descriptionSettings: descriptionDisabledSettings
     });
 
     expect(markup).toContain("1件の結果");
@@ -507,6 +652,74 @@ describe("CommandPalette", () => {
     expect(jaTranslations["commandPalette.footer.selectHint"]).toBe("↑↓");
     expect(jaTranslations["commandPalette.footer.runHint"]).toBe("Enter");
     expect(jaTranslations["commandPalette.footer.closeHint"]).toBe("Esc");
+  });
+
+  it("measures real overflow and enables command description marquee with configured delay and speed", () => {
+    expect(
+      resolveCommandPaletteDescriptionMarquee({
+        enabled: true,
+        reducedMotion: false,
+        scrollWidth: 260,
+        clientWidth: 100,
+        delayMs: 2000,
+        speedPxPerSecond: 40
+      })
+    ).toEqual({
+      overflowing: true,
+      active: true,
+      distancePx: 160,
+      durationMs: 4000,
+      delayMs: 2000,
+      speedPxPerSecond: 40
+    });
+  });
+
+  it("does not enable command description marquee when the text fits", () => {
+    expect(
+      resolveCommandPaletteDescriptionMarquee({
+        enabled: true,
+        reducedMotion: false,
+        scrollWidth: 100,
+        clientWidth: 100,
+        delayMs: 2000,
+        speedPxPerSecond: 40
+      })
+    ).toMatchObject({
+      overflowing: false,
+      active: false
+    });
+  });
+
+  it("suppresses command description marquee when reduced motion is preferred", () => {
+    expect(
+      resolveCommandPaletteDescriptionMarquee({
+        enabled: true,
+        reducedMotion: true,
+        scrollWidth: 260,
+        clientWidth: 100,
+        delayMs: 2000,
+        speedPxPerSecond: 40
+      })
+    ).toMatchObject({
+      overflowing: true,
+      active: false
+    });
+  });
+
+  it("uses measured scrollWidth/clientWidth, CSS animation, and selected command identity to reset description marquee", () => {
+    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+
+    expect(source).not.toContain("<marquee");
+    expect(source).toContain("scrollWidth: text.scrollWidth");
+    expect(source).toContain("clientWidth: container.clientWidth");
+    expect(source).toContain("resetKey:");
+    expect(source).toContain("selectedEntry?.id");
+    expect(source).toContain(
+      "--command-palette-description-marquee-delay"
+    );
+    expect(source).toContain(
+      "--command-palette-description-marquee-duration"
+    );
   });
 
   it("uses adaptive top-anchored height while keeping large result sets scrollable", () => {
@@ -543,6 +756,9 @@ describe("CommandPalette", () => {
     expect(styles).toContain("box-shadow: inset 0.1875rem 0 0 #c9d3dc;");
     expect(styles).toContain("border-radius: 0.125em;");
     expect(styles).toContain("padding: 0 0.08em;");
+    expect(styles).toContain(".commandPaletteFooterStatusText-marquee");
+    expect(styles).toContain("@keyframes commandPaletteDescriptionMarquee");
+    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
   });
 });
 
@@ -557,6 +773,7 @@ describe("CommandPalette highlighting and footer model", () => {
     {
       id: defineCommandId("test.command.disabled"),
       title: "Disabled Command",
+      description: "Disabled command description",
       enabled: false
     }
   ];
@@ -605,7 +822,7 @@ describe("CommandPalette highlighting and footer model", () => {
     );
   });
 
-  it("shows result count only for command queries in the footer model", () => {
+  it("shows an enabled selected command description before result count or hints in the footer model", () => {
     const results = filterCommandPaletteEntries(entries, "command");
 
     expect(
@@ -615,6 +832,25 @@ describe("CommandPalette highlighting and footer model", () => {
         inputValue: ">command",
         entries: results,
         selectedIndex: 0
+      })
+    ).toEqual({
+      statusKey: null,
+      statusText: "Write the current editor to disk",
+      canRunSelected: true
+    });
+  });
+
+  it("shows result count only for command queries when selected command description display is disabled", () => {
+    const results = filterCommandPaletteEntries(entries, "command");
+
+    expect(
+      resolveCommandPaletteFooterModel({
+        mode: "command",
+        query: "command",
+        inputValue: ">command",
+        entries: results,
+        selectedIndex: 0,
+        descriptionEnabled: false
       })
     ).toEqual({
       statusKey: "commandPalette.footer.results.other",
@@ -627,7 +863,8 @@ describe("CommandPalette highlighting and footer model", () => {
         query: "",
         inputValue: "",
         entries: results,
-        selectedIndex: 0
+        selectedIndex: 0,
+        descriptionEnabled: false
       }).statusKey
     ).toBeNull();
   });
@@ -642,7 +879,8 @@ describe("CommandPalette highlighting and footer model", () => {
         query: "save",
         inputValue: ">save",
         entries: results,
-        selectedIndex: 0
+        selectedIndex: 0,
+        descriptionEnabled: false
       })
     ).toEqual({
       statusKey: "commandPalette.footer.results.one",
@@ -651,7 +889,7 @@ describe("CommandPalette highlighting and footer model", () => {
     });
   });
 
-  it("uses a disabled status and dims Enter when the selected item is disabled", () => {
+  it("uses a disabled status and dims Enter when the selected item is disabled, even when it has a description", () => {
     const results = filterCommandPaletteEntries(entries, "disabled");
 
     expect(
@@ -678,6 +916,7 @@ describe("CommandPalette highlighting and footer model", () => {
           {
             id: defineCommandId("test.command.save"),
             title: "Save",
+            description: "Save the current document",
             enabled: false,
             disabledReason: "readOnlyProject",
             matches: [],
@@ -704,6 +943,7 @@ describe("CommandPalette highlighting and footer model", () => {
           {
             id: defineCommandId("test.command.save"),
             title: "Save",
+            description: "Save the current document",
             enabled: false,
             disabledReason: null,
             matches: [],
@@ -732,7 +972,8 @@ describe("CommandPalette highlighting and footer model", () => {
         query: "",
         inputValue: ">",
         entries: results,
-        selectedIndex: 0
+        selectedIndex: 0,
+        descriptionEnabled: false
       })
     ).toEqual({
       statusKey: "commandPalette.footer.searchHint",
@@ -749,7 +990,8 @@ describe("CommandPalette highlighting and footer model", () => {
         query: "",
         inputValue: "",
         entries: results,
-        selectedIndex: 0
+        selectedIndex: 0,
+        descriptionEnabled: false
       }).statusKey
     ).toBeNull();
   });

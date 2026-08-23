@@ -200,6 +200,11 @@ describe("filterCommandPaletteEntries", () => {
       filterCommandPaletteEntries(entries, "   ").map((entry) => entry.id)
     ).toEqual(entries.map((entry) => entry.id));
     expect(filterCommandPaletteEntries(entries, "")[0]?.matches).toEqual([]);
+    expect(filterCommandPaletteEntries(entries, "")[0]?.secondary).toEqual({
+      field: "commandId",
+      text: "test.command.save",
+      ranges: []
+    });
   });
 
   it("matches by id case-insensitively and reports the id ranges from the filtering result", () => {
@@ -222,14 +227,20 @@ describe("filterCommandPaletteEntries", () => {
     expect(results[0]?.primary.ranges).toEqual([{ start: 0, end: 6 }]);
   });
 
-  it("matches by description", () => {
+  it("matches by description while keeping commandId as the secondary line", () => {
     const results = filterCommandPaletteEntries(entries, "文書");
 
     expect(results.map((entry) => entry.id)).toEqual(["test.command.save"]);
+    expect(results[0]?.matches).toEqual([
+      {
+        field: "description",
+        ranges: [{ start: 3, end: 5 }]
+      }
+    ]);
     expect(results[0]?.secondary).toEqual({
-      field: "description",
-      text: "現在の文書を保存",
-      ranges: [{ start: 3, end: 5 }]
+      field: "commandId",
+      text: "test.command.save",
+      ranges: []
     });
   });
 
@@ -272,7 +283,7 @@ describe("filterCommandPaletteEntries", () => {
     });
   });
 
-  it("falls back to commandId in the secondary line when no description is present", () => {
+  it("falls back to commandId in the secondary line", () => {
     const results = filterCommandPaletteEntries(
       [
         {

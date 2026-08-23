@@ -116,11 +116,12 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     expect(markup).toContain("一般");
     expect(markup).toContain("外観");
     expect(markup).toContain("エディタ");
+    expect(markup).toContain("コマンドパレット");
     expect(markup).toContain("サウンド");
     expect(markup).toContain("ファイル");
   });
 
-  it("renders core setting controls for language, status bar, UI font, editor font, sound, line ending, and encoding", () => {
+  it("renders core setting controls for language, status bar, UI font, editor font, sound, command palette, line ending, and encoding", () => {
     const element = settingsPanelElement("en");
 
     expect(elementById(element, "applicationSettingsLanguage").type).toBe(
@@ -147,6 +148,22 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     expect(elementById(element, "applicationSettingsKeypressSound").type).toBe(
       "input"
     );
+    expect(
+      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
+        .type
+    ).toBe("input");
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+      ).type
+    ).toBe("input");
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+      ).type
+    ).toBe("input");
     expect(elementById(element, "applicationSettingsLineEnding").type).toBe(
       "select"
     );
@@ -155,7 +172,31 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     );
   });
 
-  it("disables the advanced files controls until advanced settings are enabled", () => {
+  it("renders Command Palette controls with catalog-backed defaults and units", () => {
+    const element = settingsPanelElement("en");
+    const markup = renderSettingsPanel("en");
+
+    expect(
+      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
+        .props.checked
+    ).toBe(true);
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+      ).props.value
+    ).toBe(2000);
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+      ).props.value
+    ).toBe(40);
+    expect(markup).toContain("ms");
+    expect(markup).toContain("px/sec");
+  });
+
+  it("disables the advanced files and Command Palette controls until advanced settings are enabled", () => {
     const element = settingsPanelElement("en");
 
     expect(elementById(element, "applicationSettingsLineEnding").props.disabled).toBe(
@@ -164,9 +205,25 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     expect(elementById(element, "applicationSettingsEncoding").props.disabled).toBe(
       true
     );
+    expect(
+      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
+        .props.disabled
+    ).toBe(true);
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+      ).props.disabled
+    ).toBe(true);
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+      ).props.disabled
+    ).toBe(true);
   });
 
-  it("enables the advanced files controls when advanced settings are enabled", () => {
+  it("enables the advanced files and Command Palette controls when advanced settings are enabled", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       workbench: {
@@ -182,6 +239,143 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     expect(elementById(element, "applicationSettingsEncoding").props.disabled).toBe(
       false
     );
+    expect(
+      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
+        .props.disabled
+    ).toBe(false);
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+      ).props.disabled
+    ).toBe(false);
+    expect(
+      elementById(
+        element,
+        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+      ).props.disabled
+    ).toBe(false);
+  });
+
+  it("disables Command Palette marquee controls while preserving their values when command descriptions are disabled", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      },
+      commandPalette: {
+        description: {
+          enable: false,
+          marquee: { delay: 3456, speed: 78.5 }
+        }
+      }
+    };
+    const element = settingsPanelElement("en", settings);
+    const descriptionEnabled = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionEnabled"
+    );
+    const marqueeDelay = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+    );
+    const marqueeSpeed = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+    );
+
+    expect(descriptionEnabled.props.checked).toBe(false);
+    expect(descriptionEnabled.props.disabled).toBe(false);
+    expect(marqueeDelay.props.disabled).toBe(true);
+    expect(marqueeDelay.props.value).toBe(3456);
+    expect(marqueeSpeed.props.disabled).toBe(true);
+    expect(marqueeSpeed.props.value).toBe(78.5);
+  });
+
+  it("saves Command Palette description settings without discarding other application settings", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      }
+    };
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelElement(
+      "en",
+      settings,
+      () => Promise.resolve(true),
+      onChangeSettings
+    );
+    const descriptionEnabled = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionEnabled"
+    );
+    const marqueeDelay = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+    );
+    const marqueeSpeed = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+    );
+
+    (
+      descriptionEnabled.props.onChange as (event: {
+        target: { checked: boolean };
+      }) => void
+    )({ target: { checked: false } });
+    (
+      marqueeDelay.props.onChange as (event: {
+        target: { valueAsNumber: number };
+      }) => void
+    )({ target: { valueAsNumber: 2500 } });
+    (
+      marqueeSpeed.props.onChange as (event: {
+        target: { valueAsNumber: number };
+      }) => void
+    )({ target: { valueAsNumber: 64 } });
+
+    expect(onChangeSettings).toHaveBeenNthCalledWith(1, {
+      workbench: settings.workbench,
+      commandPalette: {
+        description: {
+          ...settings.commandPalette.description,
+          enable: false
+        }
+      },
+      editor: settings.editor,
+      files: settings.files
+    });
+    expect(onChangeSettings).toHaveBeenNthCalledWith(2, {
+      workbench: settings.workbench,
+      commandPalette: {
+        description: {
+          ...settings.commandPalette.description,
+          marquee: {
+            ...settings.commandPalette.description.marquee,
+            delay: 2500
+          }
+        }
+      },
+      editor: settings.editor,
+      files: settings.files
+    });
+    expect(onChangeSettings).toHaveBeenNthCalledWith(3, {
+      workbench: settings.workbench,
+      commandPalette: {
+        description: {
+          ...settings.commandPalette.description,
+          marquee: {
+            ...settings.commandPalette.description.marquee,
+            speed: 64
+          }
+        }
+      },
+      editor: settings.editor,
+      files: settings.files
+    });
   });
 
   it("renders sound feedback controls with the catalog-backed default states", () => {
@@ -270,6 +464,7 @@ describe("SettingsPanel application settings core controls (#195)", () => {
           keypress: { enabled: false }
         }
       },
+      commandPalette: settings.commandPalette,
       editor: settings.editor,
       files: settings.files
     });
@@ -301,6 +496,7 @@ describe("SettingsPanel application settings core controls (#195)", () => {
           keypress: { enabled: true }
         }
       },
+      commandPalette: defaultApplicationSettings.commandPalette,
       editor: defaultApplicationSettings.editor,
       files: defaultApplicationSettings.files
     });
@@ -345,6 +541,7 @@ describe("SettingsPanel application settings core controls (#195)", () => {
         ...defaultApplicationSettings.workbench,
         advancedSettings: { enabled: true }
       },
+      commandPalette: defaultApplicationSettings.commandPalette,
       editor: defaultApplicationSettings.editor,
       files: defaultApplicationSettings.files
     });
@@ -414,6 +611,7 @@ describe("SettingsPanel application settings core controls (#195)", () => {
         advancedSettings: settings.workbench.advancedSettings,
         sound: settings.workbench.sound
       },
+      commandPalette: settings.commandPalette,
       editor: settings.editor,
       files: settings.files
     });

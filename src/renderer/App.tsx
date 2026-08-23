@@ -3460,6 +3460,7 @@ export function App(): JSX.Element {
           translate={translate}
           isComposing={imeCompositionSaveGuard.isComposing}
           commandContext={commandContext}
+          descriptionSettings={effectiveSettings.commandPalette.description}
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);
             setIsCommandPaletteOpen(false);

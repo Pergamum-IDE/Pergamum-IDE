@@ -272,6 +272,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expectTypeOf(
         getCatalogDefaultValue("workbench.sound.enabled")
       ).toEqualTypeOf<boolean>();
+      expectTypeOf(
+        getCatalogDefaultValue("commandPalette.description.marquee.delay")
+      ).toEqualTypeOf<number>();
     });
 
     it("rejects an invalid/unknown key at the type level", () => {
@@ -625,18 +628,94 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("does not add the fixture-only number type to the production catalog (boolean is now used in production by #174's workbench.statusBar.visible)", () => {
+    it("uses number settings in production for Command Palette description marquee controls", () => {
       const productionTypes = new Set(
         getCatalogEntries().map((entry) => entry.type)
       );
 
-      expect(productionTypes.has("number")).toBe(false);
+      expect(productionTypes.has("number")).toBe(true);
+      expect(
+        getCatalogEntries()
+          .filter((entry) => entry.type === "number")
+          .map((entry) => entry.key)
+      ).toEqual([
+        "commandPalette.description.marquee.delay",
+        "commandPalette.description.marquee.speed"
+      ]);
       expect(
         getCatalogEntries().some((entry) => entry.key === "workbench.fontSize")
       ).toBe(false);
     });
 
-    it("workbench.statusBar.visible (#174), advanced settings (#195), and sound feedback (#200) are the production boolean entries", () => {
+    it("validates Command Palette description marquee delay as a finite integer from 0 to 10000", () => {
+      const entry = getCatalogEntry("commandPalette.description.marquee.delay");
+
+      expect(entry.type).toBe("number");
+      if (entry.type !== "number") {
+        throw new Error("Expected number setting.");
+      }
+
+      expect(entry.numericRange).toEqual({
+        min: 0,
+        max: 10000,
+        integer: true
+      });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 0)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 10000)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", -1)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 10001)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 1.5)
+      ).toEqual({ ok: false, failure: "integer" });
+      expect(
+        validateCatalogValue(
+          "commandPalette.description.marquee.delay",
+          Number.POSITIVE_INFINITY
+        )
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("validates Command Palette description marquee speed as a finite number from 1 to 1000", () => {
+      const entry = getCatalogEntry("commandPalette.description.marquee.speed");
+
+      expect(entry.type).toBe("number");
+      if (entry.type !== "number") {
+        throw new Error("Expected number setting.");
+      }
+
+      expect(entry.numericRange).toEqual({ min: 1, max: 1000 });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 1)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 40.5)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 1000)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 0)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 1000.1)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue(
+          "commandPalette.description.marquee.speed",
+          Number.NaN
+        )
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("workbench.statusBar.visible (#174), advanced settings (#195), sound feedback (#200), and command descriptions (#215) are the production boolean entries", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
@@ -647,7 +726,8 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
-        "workbench.sound.keypress.enabled"
+        "workbench.sound.keypress.enabled",
+        "commandPalette.description.enable"
       ]);
     });
   });
@@ -755,6 +835,15 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("workbench.sound.enabled").scope).toBe(
         "applicationOnly"
       );
+      expect(getCatalogEntry("commandPalette.description.enable").scope).toBe(
+        "applicationOnly"
+      );
+      expect(
+        getCatalogEntry("commandPalette.description.marquee.delay").scope
+      ).toBe("applicationOnly");
+      expect(
+        getCatalogEntry("commandPalette.description.marquee.speed").scope
+      ).toBe("applicationOnly");
     });
 
     it("represents all three ADR-0006 S-11 scope values", () => {
@@ -777,6 +866,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getSettingArea("workbench.fontFamily")).toBe("workbench");
       expect(getSettingArea("editor.fontFamily")).toBe("editor");
       expect(getSettingArea("preview.renderer")).toBe("preview");
+      expect(getSettingArea("commandPalette.description.enable")).toBe(
+        "commandPalette"
+      );
       expect(getSettingArea("files.newFile.lineEnding")).toBe("files");
     });
 
@@ -816,9 +908,12 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #195 advanced settings guard, and #200 sound feedback entries", () => {
+    it("registers exactly the #150 entries, #174 entries, #195 advanced settings guard, #200 sound feedback entries, and #215 command description settings", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
+          "commandPalette.description.enable",
+          "commandPalette.description.marquee.delay",
+          "commandPalette.description.marquee.speed",
           "editor.fontFamily",
           "files.newFile.encoding",
           "files.newFile.lineEnding",

@@ -52,6 +52,12 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
       advancedSettings: { enabled: false },
       sound: defaultSoundSettings
     },
+    commandPalette: {
+      description: {
+        enable: true,
+        marquee: { delay: 2000, speed: 40 }
+      }
+    },
     editor: {},
     files: {
       newFile: {
@@ -73,6 +79,12 @@ function validSaveRequest(
       statusBar: { visible: true },
       advancedSettings: { enabled: false },
       sound: defaultSoundSettings
+    },
+    commandPalette: {
+      description: {
+        enable: true,
+        marquee: { delay: 2000, speed: 40 }
+      }
     },
     editor: {},
     files: {
@@ -107,6 +119,17 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
       encoding: getCatalogDefaultValue("files.newFile.encoding")
     });
+    expect(settings.commandPalette.description).toEqual({
+      enable: getCatalogDefaultValue("commandPalette.description.enable"),
+      marquee: {
+        delay: getCatalogDefaultValue(
+          "commandPalette.description.marquee.delay"
+        ),
+        speed: getCatalogDefaultValue(
+          "commandPalette.description.marquee.speed"
+        )
+      }
+    });
   });
 
   it("reads valid advanced flag, editor font, line ending, and encoding values", async () => {
@@ -129,6 +152,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
             lineEnding: "crlf",
             encoding: "utf8"
           }
+        },
+        commandPalette: {
+          description: {
+            enable: false,
+            marquee: { delay: 3000, speed: 80 }
+          }
         }
       })
     );
@@ -146,6 +175,10 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.files.newFile).toEqual({
       lineEnding: "crlf",
       encoding: "utf8"
+    });
+    expect(settings.commandPalette.description).toEqual({
+      enable: false,
+      marquee: { delay: 3000, speed: 80 }
     });
   });
 
@@ -169,6 +202,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
             lineEnding: "cr",
             encoding: "shift_jis"
           }
+        },
+        commandPalette: {
+          description: {
+            enable: "yes",
+            marquee: { delay: -1, speed: 0 }
+          }
         }
       })
     );
@@ -182,6 +221,30 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       lineEnding: "lf",
       encoding: "utf8"
     });
+    expect(settings.commandPalette.description).toEqual({
+      enable: true,
+      marquee: { delay: 2000, speed: 40 }
+    });
+  });
+
+  it("falls back Command Palette marquee values that violate range or integer validation", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 1.5, speed: 1000.1 }
+          }
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.commandPalette.description).toEqual({
+      enable: true,
+      marquee: { delay: 2000, speed: 40 }
+    });
   });
 });
 
@@ -194,10 +257,16 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     fsMock.mkdir.mockResolvedValue(undefined);
   });
 
-  it("writes workbench/editor/files settings while preserving preview and recent projects", async () => {
+  it("writes workbench/commandPalette/editor/files settings while preserving preview and recent projects", async () => {
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({
-        recentProjects: [recentProject]
+        recentProjects: [recentProject],
+        commandPalette: {
+          description: {
+            enable: false,
+            marquee: { delay: 3000, speed: 80 }
+          }
+        }
       })
     );
 
@@ -216,6 +285,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           fontFamily: "Inter"
         },
         editor: { fontFamily: "Fira Code" },
+        commandPalette: {
+          description: {
+            enable: false,
+            marquee: { delay: 3000, speed: 80 }
+          }
+        },
         files: {
           newFile: {
             lineEnding: "crlf",
@@ -233,6 +308,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
 
     expect(written.preview).toEqual({ renderer: "markdown" });
     expect(written.recentProjects).toEqual([recentProject]);
+    expect(written.commandPalette).toEqual({
+      description: {
+        enable: false,
+        marquee: { delay: 3000, speed: 80 }
+      }
+    });
     expect(written.workbench).toEqual({
       language: "en",
       statusBar: { visible: false },
@@ -292,6 +373,54 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         editor: { fontFamily: 'Fira Code"; color: red' }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: "yes" as unknown as boolean,
+            marquee: { delay: 2000, speed: 40 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: -1, speed: 40 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 10001, speed: 40 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 1.5, speed: 40 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 2000, speed: 0 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 2000, speed: 1001 }
+          }
+        }
       }),
       validSaveRequest({
         files: { newFile: { lineEnding: "cr" as "lf", encoding: "utf8" } }

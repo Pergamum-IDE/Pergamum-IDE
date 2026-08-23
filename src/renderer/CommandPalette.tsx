@@ -1,9 +1,12 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
-  type ReactNode
+  type ReactNode,
+  type RefObject
 } from "react";
 import type { CommandContext } from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
@@ -13,6 +16,10 @@ import type {
   TranslationKey,
   TranslationValues
 } from "../shared/i18n";
+import {
+  builtInDefaultSettings,
+  type CommandPaletteDescriptionSettings
+} from "../shared/settings";
 import {
   type CommandPaletteFilteredEntry,
   type CommandPaletteMatchRange,
@@ -79,14 +86,80 @@ export interface CommandPaletteProps {
    * `maxCandidates` preview lookups per keystroke stay cheap.
    */
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
+  descriptionSettings?: CommandPaletteDescriptionSettings;
 }
 
 const defaultInputValue = ">";
+const defaultDescriptionSettings =
+  builtInDefaultSettings.commandPalette.description;
+const useCommandPaletteLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export interface CommandPaletteFooterModel {
   readonly statusKey: TranslationKey | null;
   readonly statusValues?: TranslationValues;
+  readonly statusText?: string;
   readonly canRunSelected: boolean;
+}
+
+export interface CommandPaletteDescriptionMarqueeInput {
+  readonly enabled: boolean;
+  readonly reducedMotion: boolean;
+  readonly scrollWidth: number;
+  readonly clientWidth: number;
+  readonly delayMs: number;
+  readonly speedPxPerSecond: number;
+}
+
+export interface CommandPaletteDescriptionMarqueeState {
+  readonly overflowing: boolean;
+  readonly active: boolean;
+  readonly distancePx: number;
+  readonly durationMs: number;
+  readonly delayMs: number;
+  readonly speedPxPerSecond: number;
+}
+
+const inactiveCommandPaletteDescriptionMarqueeState: CommandPaletteDescriptionMarqueeState =
+  {
+    overflowing: false,
+    active: false,
+    distancePx: 0,
+    durationMs: 0,
+    delayMs: 0,
+    speedPxPerSecond: 0
+  };
+
+export function resolveCommandPaletteDescriptionMarquee(
+  input: CommandPaletteDescriptionMarqueeInput
+): CommandPaletteDescriptionMarqueeState {
+  const distancePx = Math.max(0, input.scrollWidth - input.clientWidth);
+  const overflowing = distancePx > 0;
+
+  if (
+    !input.enabled ||
+    input.reducedMotion ||
+    !overflowing ||
+    input.speedPxPerSecond <= 0
+  ) {
+    return {
+      overflowing,
+      active: false,
+      distancePx,
+      durationMs: 0,
+      delayMs: input.delayMs,
+      speedPxPerSecond: input.speedPxPerSecond
+    };
+  }
+
+  return {
+    overflowing,
+    active: true,
+    distancePx,
+    durationMs: (distancePx / input.speedPxPerSecond) * 1000,
+    delayMs: input.delayMs,
+    speedPxPerSecond: input.speedPxPerSecond
+  };
 }
 
 export interface CommandPaletteScrollTarget {
@@ -140,14 +213,105 @@ function selectedCommandPaletteEntry(
   return selectedIndex === null ? null : entries[selectedIndex] ?? null;
 }
 
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    setPrefersReducedMotion(media.matches);
+
+    function handleChange(event: MediaQueryListEvent): void {
+      setPrefersReducedMotion(event.matches);
+    }
+
+    media.addEventListener("change", handleChange);
+
+    return () => {
+      media.removeEventListener("change", handleChange);
+    };
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+function useCommandPaletteDescriptionMarquee(input: {
+  readonly enabled: boolean;
+  readonly resetKey: string;
+  readonly settings: CommandPaletteDescriptionSettings;
+}): {
+  readonly containerRef: RefObject<HTMLDivElement>;
+  readonly textRef: RefObject<HTMLSpanElement>;
+  readonly state: CommandPaletteDescriptionMarqueeState;
+} {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const reducedMotion = usePrefersReducedMotion();
+  const [state, setState] = useState<CommandPaletteDescriptionMarqueeState>(
+    inactiveCommandPaletteDescriptionMarqueeState
+  );
+
+  useCommandPaletteLayoutEffect(() => {
+    setState(inactiveCommandPaletteDescriptionMarqueeState);
+
+    if (!input.enabled) {
+      return;
+    }
+
+    const container = containerRef.current;
+    const text = textRef.current;
+
+    if (!container || !text) {
+      return;
+    }
+
+    const measure = () => {
+      setState(
+        resolveCommandPaletteDescriptionMarquee({
+          enabled: input.enabled,
+          reducedMotion,
+          scrollWidth: text.scrollWidth,
+          clientWidth: container.clientWidth,
+          delayMs: input.settings.marquee.delay,
+          speedPxPerSecond: input.settings.marquee.speed
+        })
+      );
+    };
+
+    if (typeof window === "undefined" || !window.requestAnimationFrame) {
+      measure();
+      return;
+    }
+
+    const animationFrame = window.requestAnimationFrame(measure);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [
+    input.enabled,
+    input.resetKey,
+    input.settings.marquee.delay,
+    input.settings.marquee.speed,
+    reducedMotion
+  ]);
+
+  return { containerRef, textRef, state };
+}
+
 /**
  * Footer status priority (highest first):
  *  1. disabled selected command message
- *  2. non-empty query result count
- *  3. command mode empty-query hint — only once the user has actually typed
+ *  2. enabled selected command description
+ *  3. non-empty query result count
+ *  4. command mode empty-query hint — only once the user has actually typed
  *     the `>` prefix, not for a fully empty input (which shows the native
  *     placeholder instead, per #129)
- *  4. empty status
+ *  5. empty status
  *
  * `inputValue` is taken separately from `query` so this function can react
  * to the raw input rather than just the parsed query; `mode !== "command"`
@@ -161,6 +325,7 @@ export function resolveCommandPaletteFooterModel(input: {
   readonly inputValue: string;
   readonly entries: readonly CommandPaletteFilteredEntry[];
   readonly selectedIndex: number | null;
+  readonly descriptionEnabled?: boolean;
 }): CommandPaletteFooterModel {
   const selectedEntry = selectedCommandPaletteEntry(
     input.entries,
@@ -181,6 +346,18 @@ export function resolveCommandPaletteFooterModel(input: {
         selectedEntry.disabledReason === "readOnlyProject"
           ? "command.disabled.readOnlyProject"
           : "commandPalette.footer.disabled",
+      canRunSelected
+    };
+  }
+
+  if (
+    input.descriptionEnabled !== false &&
+    selectedEntry?.enabled === true &&
+    selectedEntry.description
+  ) {
+    return {
+      statusKey: null,
+      statusText: selectedEntry.description,
       canRunSelected
     };
   }
@@ -309,7 +486,8 @@ export function CommandPalette({
   onBlockedCommand,
   onClose,
   initialInputValue = defaultInputValue,
-  lineJumpEditorSnapshot = null
+  lineJumpEditorSnapshot = null,
+  descriptionSettings = defaultDescriptionSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
   const [inputValue, setInputValue] = useState(initialInputValue);
@@ -507,6 +685,10 @@ export function CommandPalette({
   }
 
   const reservedKey = reservedPlaceholderKey(mode);
+  const selectedEntry =
+    mode === "command"
+      ? selectedCommandPaletteEntry(entries, selectedIndex)
+      : null;
   const footer = lineJumpState
     ? resolveLineJumpFooterModel(lineJumpState)
     : resolveCommandPaletteFooterModel({
@@ -514,11 +696,33 @@ export function CommandPalette({
         query,
         inputValue,
         entries,
-        selectedIndex
+        selectedIndex,
+        descriptionEnabled: descriptionSettings.enable
       });
   const runHintClassName = footer.canRunSelected
     ? "commandPaletteFooterHint"
     : "commandPaletteFooterHint commandPaletteFooterHintUnavailable";
+  const footerStatusText =
+    footer.statusText ??
+    (footer.statusKey ? translate(footer.statusKey, footer.statusValues) : null);
+  const descriptionMarquee = useCommandPaletteDescriptionMarquee({
+    enabled: footer.statusText !== undefined && descriptionSettings.enable,
+    resetKey:
+      footer.statusText !== undefined
+        ? `${String(selectedEntry?.id ?? "")}:${footer.statusText}`
+        : "",
+    settings: descriptionSettings
+  });
+  const footerStatusClassName = descriptionMarquee.state.active
+    ? "commandPaletteFooterStatusText commandPaletteFooterStatusText-marquee"
+    : "commandPaletteFooterStatusText";
+  const footerStatusStyle = descriptionMarquee.state.active
+    ? ({
+        "--command-palette-description-marquee-delay": `${descriptionMarquee.state.delayMs}ms`,
+        "--command-palette-description-marquee-duration": `${descriptionMarquee.state.durationMs}ms`,
+        "--command-palette-description-marquee-distance": `${descriptionMarquee.state.distancePx}px`
+      } as CSSProperties)
+    : undefined;
 
   return (
     <div className="commandPaletteBackdrop" onClick={onClose}>
@@ -664,10 +868,24 @@ export function CommandPalette({
           </ul>
         )}
         <div className="commandPaletteFooter">
-          <div className="commandPaletteFooterStatus">
-            {footer.statusKey
-              ? translate(footer.statusKey, footer.statusValues)
-              : null}
+          <div
+            className="commandPaletteFooterStatus"
+            ref={descriptionMarquee.containerRef}
+          >
+            {footerStatusText ? (
+              <span
+                className={footerStatusClassName}
+                key={
+                  footer.statusText !== undefined
+                    ? `${String(selectedEntry?.id ?? "")}:${footer.statusText}`
+                    : footerStatusText
+                }
+                ref={descriptionMarquee.textRef}
+                style={footerStatusStyle}
+              >
+                {footerStatusText}
+              </span>
+            ) : null}
           </div>
           <div className="commandPaletteFooterHints">
             <span className="commandPaletteFooterHint">

@@ -20,13 +20,26 @@ import {
 
 const titles = {
   openMarkdownDocument: "Open Markdown file",
+  openMarkdownDocumentDescription:
+    "Open a Markdown file outside the current project.",
   saveDocument: "Save Current Document",
+  saveDocumentDescription:
+    "Save the current document and overwrite the existing file.",
   saveAs: "Save current document as",
+  saveAsDescription:
+    "Save the current document with a different name and location.",
   closeEditor: "Close Current Document",
+  closeEditorDescription:
+    "Close the current document. Check for unsaved changes before closing.",
   cutSelection: "Cut",
+  cutSelectionDescription: "Cut the selected text in the current editor.",
   copySelection: "Copy",
+  copySelectionDescription: "Copy the selected text in the current editor.",
   pasteSelection: "Paste",
-  selectAllSelection: "Select All"
+  pasteSelectionDescription:
+    "Paste text at the current cursor position in the editor.",
+  selectAllSelection: "Select All",
+  selectAllSelectionDescription: "Select all text in the current editor."
 };
 const executionOptions = { source: "toolbar" } as const;
 const someEditorId: EditorId = createProjectDocumentEditorId("chapter-01.md", {
@@ -327,13 +340,28 @@ describe("editor commands", () => {
 
     expect(createEditorCommandTitles(translate)).toEqual({
       openMarkdownDocument: "translated:command.editor.document.markdown.open",
+      openMarkdownDocumentDescription:
+        "translated:command.editor.document.markdown.open.description",
       saveDocument: "translated:command.editor.document.save",
+      saveDocumentDescription:
+        "translated:command.editor.document.save.description",
       saveAs: "translated:command.editor.saveAs",
+      saveAsDescription: "translated:command.editor.saveAs.description",
       closeEditor: "translated:command.editor.document.close",
+      closeEditorDescription:
+        "translated:command.editor.document.close.description",
       cutSelection: "translated:command.editor.selection.cut",
+      cutSelectionDescription:
+        "translated:command.editor.selection.cut.description",
       copySelection: "translated:command.editor.selection.copy",
+      copySelectionDescription:
+        "translated:command.editor.selection.copy.description",
       pasteSelection: "translated:command.editor.selection.paste",
-      selectAllSelection: "translated:command.editor.selection.selectAll"
+      pasteSelectionDescription:
+        "translated:command.editor.selection.paste.description",
+      selectAllSelection: "translated:command.editor.selection.selectAll",
+      selectAllSelectionDescription:
+        "translated:command.editor.selection.selectAll.description"
     });
   });
 

@@ -203,6 +203,44 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
   };
 }
 
+function readCommandPaletteDescriptionSettings(
+  value: unknown
+): ApplicationSettings["commandPalette"]["description"] {
+  const descriptionValue = isObject(value) ? value : undefined;
+  const marqueeValue = isObject(descriptionValue?.marquee)
+    ? descriptionValue.marquee
+    : undefined;
+
+  return {
+    enable: resolveCatalogValue(
+      "commandPalette.description.enable",
+      descriptionValue?.enable
+    ).value,
+    marquee: {
+      delay: resolveCatalogValue(
+        "commandPalette.description.marquee.delay",
+        marqueeValue?.delay
+      ).value,
+      speed: resolveCatalogValue(
+        "commandPalette.description.marquee.speed",
+        marqueeValue?.speed
+      ).value
+    }
+  };
+}
+
+function readCommandPaletteSettings(
+  value: unknown
+): ApplicationSettings["commandPalette"] {
+  const commandPaletteValue = isObject(value) ? value : undefined;
+
+  return {
+    description: readCommandPaletteDescriptionSettings(
+      commandPaletteValue?.description
+    )
+  };
+}
+
 function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   const editorValue = isObject(value) ? value : undefined;
 
@@ -250,6 +288,7 @@ function readSettingsValue(value: unknown): ApplicationSettings {
   return {
     preview: readPreviewSettings(value.preview),
     workbench: readWorkbenchSettings(value.workbench),
+    commandPalette: readCommandPaletteSettings(value.commandPalette),
     editor: readEditorSettings(value.editor),
     files: readFilesSettings(value.files),
     recentProjects: readRecentProjects(value.recentProjects)
@@ -320,8 +359,9 @@ export function parseSaveApplicationSettingsRequest(
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 3 ||
+    keys.length !== 4 ||
     !keys.includes("workbench") ||
+    !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
     !keys.includes("files")
   ) {
@@ -330,6 +370,7 @@ export function parseSaveApplicationSettingsRequest(
 
   return {
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
+    commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     files: parseFilesSettingsForWrite(value.files)
   };
@@ -551,6 +592,80 @@ function parseWorkbenchSettingsForWrite(
   };
 }
 
+function parseCommandPaletteDescriptionSettingsForWrite(
+  value: unknown
+): ApplicationSettings["commandPalette"]["description"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 2 ||
+    !keys.includes("enable") ||
+    !keys.includes("marquee") ||
+    !isObject(value.marquee)
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const marqueeKeys = Object.keys(value.marquee);
+
+  if (
+    marqueeKeys.length !== 2 ||
+    !marqueeKeys.includes("delay") ||
+    !marqueeKeys.includes("speed")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const enableResolution = resolveCatalogValue(
+    "commandPalette.description.enable",
+    value.enable
+  );
+  const delayResolution = resolveCatalogValue(
+    "commandPalette.description.marquee.delay",
+    value.marquee.delay
+  );
+  const speedResolution = resolveCatalogValue(
+    "commandPalette.description.marquee.speed",
+    value.marquee.speed
+  );
+
+  if (!enableResolution.ok || !delayResolution.ok || !speedResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    enable: enableResolution.value,
+    marquee: {
+      delay: delayResolution.value,
+      speed: speedResolution.value
+    }
+  };
+}
+
+function parseCommandPaletteSettingsForWrite(
+  value: unknown
+): ApplicationSettings["commandPalette"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("description")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    description: parseCommandPaletteDescriptionSettingsForWrite(
+      value.description
+    )
+  };
+}
+
 function parseEditorSettingsForWrite(
   value: unknown
 ): ApplicationSettings["editor"] {
@@ -643,9 +758,10 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 5 ||
+    keys.length !== 6 ||
     !keys.includes("preview") ||
     !keys.includes("workbench") ||
+    !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
     !keys.includes("files") ||
     !keys.includes("recentProjects")
@@ -656,6 +772,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   return {
     preview: parsePreviewSettingsForWrite(value.preview),
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
+    commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     files: parseFilesSettingsForWrite(value.files),
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
@@ -708,6 +825,7 @@ export async function saveApplicationSettings(
   return saveSettings({
     ...settings,
     workbench: settingsRequest.workbench,
+    commandPalette: settingsRequest.commandPalette,
     editor: settingsRequest.editor,
     files: settingsRequest.files
   });

@@ -14,9 +14,13 @@ const executionOptions = { source: "activityBar" } as const;
 describe("workspace commands", () => {
   const titles = {
     focusFiles: "Focus Files",
+    focusFilesDescription: "Not implemented.",
     focusSearch: "Focus Search",
+    focusSearchDescription: "Not implemented.",
     focusGlossary: "Focus Glossary",
-    openApplicationSettings: "Open Application Settings"
+    focusGlossaryDescription: "Show the Glossary panel.",
+    openApplicationSettings: "Open Application Settings",
+    openApplicationSettingsDescription: "Open application-wide settings."
   };
 
   it("registers Workspace focus and settings commands", () => {
@@ -99,10 +103,18 @@ describe("workspace commands", () => {
 
     expect(createWorkspaceCommandTitles(translate)).toEqual({
       focusFiles: "translated:command.workspace.files.focus",
+      focusFilesDescription:
+        "translated:command.workspace.files.focus.description",
       focusSearch: "translated:command.workspace.search.focus",
+      focusSearchDescription:
+        "translated:command.workspace.search.focus.description",
       focusGlossary: "translated:command.workspace.glossary.focus",
+      focusGlossaryDescription:
+        "translated:command.workspace.glossary.focus.description",
       openApplicationSettings:
-        "translated:command.workspace.applicationSettings.open"
+        "translated:command.workspace.applicationSettings.open",
+      openApplicationSettingsDescription:
+        "translated:command.workspace.applicationSettings.open.description"
     });
   });
 

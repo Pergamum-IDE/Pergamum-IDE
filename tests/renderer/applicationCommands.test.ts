@@ -9,8 +9,13 @@ import {
 
 const titles = {
   createProject: "Create Project",
+  createProjectDescription: "Create a new Pergamum project.",
   openProject: "Open Project",
-  toggleRecentProjects: "Toggle Recent Projects"
+  openProjectDescription:
+    "Open an existing project. Check for unsaved changes before switching projects.",
+  toggleRecentProjects: "Toggle Recent Projects",
+  toggleRecentProjectsDescription:
+    "Switch between recently opened projects. Check for unsaved changes before switching projects."
 };
 const executionOptions = { source: "toolbar" } as const;
 
@@ -71,8 +76,14 @@ describe("application commands", () => {
 
     expect(createApplicationCommandTitles(translate)).toEqual({
       createProject: "translated:command.workspace.project.create",
+      createProjectDescription:
+        "translated:command.workspace.project.create.description",
       openProject: "translated:command.workspace.project.open",
-      toggleRecentProjects: "translated:command.workspace.recentProjects.toggle"
+      openProjectDescription:
+        "translated:command.workspace.project.open.description",
+      toggleRecentProjects: "translated:command.workspace.recentProjects.toggle",
+      toggleRecentProjectsDescription:
+        "translated:command.workspace.recentProjects.toggle.description"
     });
   });
 
