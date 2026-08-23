@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { CommandRegistry, defineCommandId } from "../../src/shared/commandRegistry";
 import type { CommandContext } from "../../src/shared/commandEnablement";
+import { editorCommandIds } from "../../src/shared/commandIds";
 import { t, type Translate } from "../../src/shared/i18n";
 import { enTranslations } from "../../src/shared/i18n/en";
 import { jaTranslations } from "../../src/shared/i18n/ja";
@@ -86,6 +87,25 @@ function buildReadOnlyProjectWriteRegistry(): CommandRegistry {
   return registry;
 }
 
+function buildTranslatedEditorDocumentCommandRegistry(
+  translate: Translate
+): CommandRegistry {
+  const registry = new CommandRegistry();
+
+  registry.register({
+    id: editorCommandIds.saveDocument,
+    title: translate("command.editor.document.save"),
+    execute: () => undefined
+  });
+  registry.register({
+    id: editorCommandIds.close,
+    title: translate("command.editor.document.close"),
+    execute: () => undefined
+  });
+
+  return registry;
+}
+
 function renderPalette(overrides: {
   registry?: CommandRegistry;
   commandContext?: CommandContext;
@@ -150,6 +170,45 @@ describe("CommandPalette", () => {
     expect(markup).toContain("test.command.fallback");
   });
 
+  it("uses Document wording for localized editor document command labels without changing command IDs", () => {
+    expect(jaTranslations["command.editor.document.save"]).toBe(
+      "現在の文書を保存"
+    );
+    expect(jaTranslations["command.editor.document.close"]).toBe(
+      "現在の文書を閉じる"
+    );
+    expect(enTranslations["command.editor.document.save"]).toBe(
+      "Save Current Document"
+    );
+    expect(enTranslations["command.editor.document.close"]).toBe(
+      "Close Current Document"
+    );
+    expect(editorCommandIds.saveDocument).toBe("editor.document.save");
+    expect(editorCommandIds.close).toBe("editor.close");
+
+    const japaneseMarkup = renderPalette({
+      registry: buildTranslatedEditorDocumentCommandRegistry(realTranslateJa),
+      initialInputValue: ">"
+    });
+    const englishMarkup = renderPalette({
+      registry: buildTranslatedEditorDocumentCommandRegistry(realTranslateEn),
+      initialInputValue: ">"
+    });
+
+    expect(japaneseMarkup).toContain("現在の文書を保存");
+    expect(japaneseMarkup).toContain("現在の文書を閉じる");
+    expect(japaneseMarkup).toContain("editor.document.save");
+    expect(japaneseMarkup).toContain("editor.close");
+    expect(japaneseMarkup).not.toContain("現在のエディタを保存");
+    expect(japaneseMarkup).not.toContain("現在のエディタを閉じる");
+    expect(englishMarkup).toContain("Save Current Document");
+    expect(englishMarkup).toContain("Close Current Document");
+    expect(englishMarkup).toContain("editor.document.save");
+    expect(englishMarkup).toContain("editor.close");
+    expect(englishMarkup).not.toContain("Save Current Editor");
+    expect(englishMarkup).not.toContain("Close Current Editor");
+  });
+
   it("renders the empty result state in the result list area", () => {
     const markup = renderPalette({
       registry: new CommandRegistry()
@@ -165,6 +224,67 @@ describe("CommandPalette", () => {
 
     expect(markup).toContain("commandPaletteItemDisabled");
     expect(markup).toContain('aria-disabled="true"');
+  });
+
+  it("renders a status column for command items even when no icon is shown", () => {
+    const registry = new CommandRegistry();
+
+    registry.register({
+      id: defineCommandId("test.command.enabledOnly"),
+      title: "Enabled only",
+      execute: () => undefined
+    });
+
+    const markup = renderPalette({
+      registry,
+      initialInputValue: ">enabled"
+    });
+
+    expect(markup).toContain("commandPaletteStatusColumn");
+    expect(markup).toContain(
+      '<span class="commandPaletteStatusColumn" aria-hidden="true"></span><div class="commandPaletteItemText">'
+    );
+    expect(markup).not.toContain("data-command-palette-status-icon");
+    expect(markup).not.toContain("feather-shield");
+    expect(markup).not.toContain("ionicon");
+  });
+
+  it("keeps command text behind the same status column with and without an icon", () => {
+    const enabledRegistry = new CommandRegistry();
+
+    enabledRegistry.register({
+      id: defineCommandId("test.command.enabledOnly"),
+      title: "Enabled only",
+      description: "Enabled description",
+      execute: () => undefined
+    });
+
+    const enabledMarkup = renderPalette({
+      registry: enabledRegistry,
+      initialInputValue: ">enabled"
+    });
+    const readOnlyMarkup = renderPalette({
+      registry: buildReadOnlyProjectWriteRegistry(),
+      commandContext: {
+        "project.access.readWrite": false,
+        "project.access.readOnly": true,
+        "editor.isDirty": false
+      },
+      translate: realTranslateEn,
+      initialInputValue: ">project"
+    });
+
+    for (const markup of [enabledMarkup, readOnlyMarkup]) {
+      const columnIndex = markup.indexOf("commandPaletteStatusColumn");
+      const textIndex = markup.indexOf("commandPaletteItemText");
+      const primaryIndex = markup.indexOf("commandPaletteItemPrimary");
+      const secondaryIndex = markup.indexOf("commandPaletteItemSecondary");
+
+      expect(columnIndex).toBeGreaterThan(-1);
+      expect(textIndex).toBeGreaterThan(columnIndex);
+      expect(primaryIndex).toBeGreaterThan(textIndex);
+      expect(secondaryIndex).toBeGreaterThan(primaryIndex);
+    }
   });
 
   it("renders as a labeled dialog with a search input and a close button", () => {
@@ -223,7 +343,30 @@ describe("CommandPalette", () => {
     );
   });
 
-  it("does not render the read-only reason or shield icon for ordinary disabled commands", () => {
+  it("renders the Shield icon for readOnlyProject disabled commands", () => {
+    const markup = renderPalette({
+      registry: buildReadOnlyProjectWriteRegistry(),
+      commandContext: {
+        "project.access.readWrite": false,
+        "project.access.readOnly": true,
+        "editor.isDirty": false
+      },
+      translate: realTranslateEn,
+      initialInputValue: ">project"
+    });
+    const iconIndex = markup.indexOf("commandPaletteStatusColumn");
+    const primaryIndex = markup.indexOf("commandPaletteItemPrimary");
+
+    expect(markup).toContain(
+      'data-command-palette-status-icon="readOnlyProject"'
+    );
+    expect(markup).toContain("commandPaletteStatusIcon-readOnlyProject");
+    expect(markup).toContain("feather-shield");
+    expect(iconIndex).toBeGreaterThan(-1);
+    expect(primaryIndex).toBeGreaterThan(iconIndex);
+  });
+
+  it("renders the Ban icon for disabled commands without a specific disabled reason", () => {
     const markup = renderPalette({
       registry: buildReadOnlyProjectWriteRegistry(),
       commandContext: {
@@ -238,6 +381,24 @@ describe("CommandPalette", () => {
     expect(markup).toContain("Normal disabled");
     expect(markup).not.toContain("Unavailable in read-only mode");
     expect(markup).not.toContain("feather-shield");
+    expect(markup).toContain(
+      'data-command-palette-status-icon="conditionUnavailable"'
+    );
+    expect(markup).toContain("commandPaletteStatusIcon-conditionUnavailable");
+    expect(markup).toContain("ionicon");
+  });
+
+  it("renders the Construct icon for reserved not-implemented palette modes", () => {
+    const markup = renderPalette({
+      initialInputValue: "@alice"
+    });
+
+    expect(markup).toContain("commandPalette.reserved.glossary");
+    expect(markup).toContain(
+      'data-command-palette-status-icon="notImplemented"'
+    );
+    expect(markup).toContain("commandPaletteStatusIcon-notImplemented");
+    expect(markup).toContain("ionicon");
   });
 
   it("uses the original primary label as the result accessible name", () => {
@@ -366,9 +527,19 @@ describe("CommandPalette", () => {
     expect(styles).toContain("gap: 1em;");
     expect(styles).toContain(".commandPaletteEmpty {\n  display: flex;\n  min-height: 6rem;");
     expect(styles).toContain(".commandPaletteItem {\n  display: flex;");
-    expect(styles).toContain("gap: 0.15em;");
+    expect(styles).toContain("align-items: stretch;");
+    expect(styles).toContain("gap: 0.55em;");
     expect(styles).toContain("min-height: 3rem;");
     expect(styles).toContain("padding: 0.52em 0.6em;");
+    expect(styles).toContain(".commandPaletteStatusColumn");
+    expect(styles).toContain("flex: 0 0 1.25rem;");
+    expect(styles).toContain("min-height: 2.25rem;");
+    expect(styles).toContain("align-items: center;");
+    expect(styles).toContain(".commandPaletteItemText");
+    expect(styles).toContain("gap: 0.15em;");
+    expect(styles).toContain(
+      "color: var(--color-project-read-only);"
+    );
     expect(styles).toContain("box-shadow: inset 0.1875rem 0 0 #c9d3dc;");
     expect(styles).toContain("border-radius: 0.125em;");
     expect(styles).toContain("padding: 0 0.08em;");

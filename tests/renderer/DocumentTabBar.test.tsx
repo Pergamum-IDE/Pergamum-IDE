@@ -307,10 +307,13 @@ describe("DocumentTabBar", () => {
   it("uses the shield.svg asset and read-only blue CSS token", () => {
     const source = readFileSync("src/renderer/DocumentTabBar.tsx", "utf8");
     const css = readFileSync("src/renderer/styles.css", "utf8");
-    const shieldSvg = readFileSync("assets/icons/global/shield.svg", "utf8");
+    const shieldSvg = readFileSync(
+      "assets/icons/feather/global/shield.svg",
+      "utf8"
+    );
 
     expect(source).toContain(
-      "../../assets/icons/global/shield.svg?raw"
+      "../../assets/icons/feather/global/shield.svg?raw"
     );
     expect(shieldSvg).toContain("feather-shield");
     expect(shieldSvg).toContain('stroke="currentColor"');

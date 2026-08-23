@@ -63,7 +63,7 @@ function buildCoreCommandRegistry(): CommandRegistry {
     {
       openMarkdownDocument: "Open Markdown File",
       saveDocument: "Save",
-      closeEditor: "Close current editor",
+      closeEditor: "Close Current Document",
       cutSelection: "Cut",
       copySelection: "Copy",
       pasteSelection: "Paste",
