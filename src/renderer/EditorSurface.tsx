@@ -225,6 +225,7 @@ interface EditorSurfaceProps {
   translate: Translate;
   soundFeedback: SoundFeedbackPlayer;
   soundSettings: WorkbenchSoundSettings;
+  isProjectOwnedReadOnly: boolean;
   markdownEditorPreviewRatio: number;
   onChangeMarkdownEditorPreviewRatio: (ratio: number) => void;
   onChangeMarkdownContent: (content: string) => void;
@@ -325,6 +326,7 @@ export function EditorSurface({
   translate,
   soundFeedback,
   soundSettings,
+  isProjectOwnedReadOnly,
   markdownEditorPreviewRatio,
   onChangeMarkdownEditorPreviewRatio,
   onChangeMarkdownContent,
@@ -362,6 +364,7 @@ export function EditorSurface({
           translate={translate}
           soundFeedback={soundFeedback}
           soundSettings={soundSettings}
+          readOnly={isProjectOwnedReadOnly}
           onChangeMarkdownContent={onChangeMarkdownContent}
           pendingSelection={pendingMarkdownSelection}
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
@@ -413,6 +416,7 @@ export function EditorSurface({
             onNavigateToPreviousGlossaryOccurrence
           }
           onNavigateToNextOccurrence={onNavigateToNextGlossaryOccurrence}
+          readOnly={isProjectOwnedReadOnly}
         />
       );
   }
@@ -425,6 +429,7 @@ interface MarkdownEditorSurfaceProps {
   translate: Translate;
   soundFeedback: SoundFeedbackPlayer;
   soundSettings: WorkbenchSoundSettings;
+  readOnly: boolean;
   onChangeMarkdownContent: (content: string) => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
@@ -466,6 +471,7 @@ function MarkdownEditorSurface({
   translate,
   soundFeedback,
   soundSettings,
+  readOnly,
   onChangeMarkdownContent,
   pendingSelection,
   onPendingSelectionApplied,
@@ -616,6 +622,7 @@ function MarkdownEditorSurface({
           contextSurface="markdownEditor"
           soundFeedback={soundFeedback}
           soundSettings={soundSettings}
+          readOnly={readOnly}
         />
       </section>
 

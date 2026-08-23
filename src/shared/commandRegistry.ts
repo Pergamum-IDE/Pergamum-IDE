@@ -1,7 +1,8 @@
 import {
-  evaluateCommandEnablement,
+  evaluateCommandEnablementResult,
   validateCommandEnablementExpression,
   type CommandContext,
+  type CommandDisabledReason,
   type CommandEnablementExpression
 } from "./commandEnablement";
 import type {
@@ -81,6 +82,11 @@ export type CommandExecutionBlocker = (
   event: CommandExecutionLogEvent
 ) => DebugLogReason | null;
 
+export interface CommandEnablementState {
+  readonly enabled: boolean;
+  readonly disabledReason: CommandDisabledReason | null;
+}
+
 /**
  * Combined enablement: legacy `Command.isEnabled` (imperative, argument-aware)
  * and `when` (declarative, evaluated against `context`) are independent
@@ -88,16 +94,16 @@ export type CommandExecutionBlocker = (
  * `isEnabledForContext` (explicit context: Palette snapshot, toolbar live
  * context) and `execute` (injected live context) so the two never diverge.
  */
-function isCommandEnabled<TArgs extends readonly unknown[], TResult>(
+function commandEnablementState<TArgs extends readonly unknown[], TResult>(
   command: Command<TArgs, TResult>,
   context: CommandContext,
   args: CommandArgumentList<TArgs>
-): boolean {
+): CommandEnablementState {
   if (command.isEnabled && !command.isEnabled(...args)) {
-    return false;
+    return { enabled: false, disabledReason: null };
   }
 
-  return evaluateCommandEnablement(command.when, context);
+  return evaluateCommandEnablementResult(command.when, context);
 }
 
 const commandIdSegmentPattern = /^[a-z][A-Za-z0-9]*$/;
@@ -240,7 +246,15 @@ export class CommandRegistry {
     context: CommandContext,
     ...args: CommandArgumentList<TArgs>
   ): boolean {
-    return isCommandEnabled(this.require(commandId), context, args);
+    return this.enablementForContext(commandId, context, ...args).enabled;
+  }
+
+  enablementForContext<TArgs extends readonly unknown[], TResult>(
+    commandId: CommandId<TArgs, TResult>,
+    context: CommandContext,
+    ...args: CommandArgumentList<TArgs>
+  ): CommandEnablementState {
+    return commandEnablementState(this.require(commandId), context, args);
   }
 
   get<TArgs extends readonly unknown[], TResult>(
@@ -287,9 +301,19 @@ export class CommandRegistry {
       throw new CommandDisabledError(commandId, blockReason);
     }
 
-    if (!isCommandEnabled(command, liveContext, args)) {
-      this.emitCommandExecutionLog(this.onCommandIgnored, event);
-      throw new CommandDisabledError(commandId);
+    const enablement = commandEnablementState(command, liveContext, args);
+
+    if (!enablement.enabled) {
+      this.emitCommandExecutionLog(
+        this.onCommandIgnored,
+        enablement.disabledReason
+          ? { ...event, reason: enablement.disabledReason }
+          : event
+      );
+      throw new CommandDisabledError(
+        commandId,
+        enablement.disabledReason ?? undefined
+      );
     }
 
     this.emitCommandExecutionLog(this.onCommandInvoked, event);

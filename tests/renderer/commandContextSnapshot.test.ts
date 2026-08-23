@@ -6,10 +6,13 @@ import {
 
 const baseInput = {
   projectIsOpen: true,
+  projectAccessReadWrite: true,
+  projectAccessReadOnly: false,
   editorHasDocument: true,
   editorIsDirty: false,
   editorKindMarkdown: true,
   editorKindGlossary: false,
+  editorDocumentProjectOwned: true,
   occurrenceTrackingActive: false
 };
 
@@ -17,10 +20,13 @@ describe("buildCommandContextSnapshot", () => {
   it("copies each input into the matching context key", () => {
     expect(buildCommandContextSnapshot(baseInput)).toEqual({
       "project.isOpen": true,
+      "project.access.readWrite": true,
+      "project.access.readOnly": false,
       "editor.hasDocument": true,
       "editor.isDirty": false,
       "editor.kind.markdown": true,
       "editor.kind.glossary": false,
+      "editor.document.projectOwned": true,
       "glossary.occurrences.tracking.active": false
     });
   });

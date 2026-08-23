@@ -20,6 +20,7 @@ import { filterGlossaryEntriesForNavigator } from "./glossaryNavigatorSearch";
 
 interface GlossarySidebarProps {
   projectRootPath: string | null;
+  readOnly?: boolean;
   highlightedEntryId: GlossaryEntryId | null;
   refreshToken: number;
   translate: Translate;
@@ -57,6 +58,7 @@ interface GlossarySidebarViewProps {
   onChangeCreateSurface: (surface: string) => void;
   onChangeCreateKind: (kind: GlossaryEntryKind) => void;
   onSubmitCreateForm: () => void;
+  readOnly?: boolean;
 }
 
 function initialGlossarySidebarState(
@@ -80,7 +82,8 @@ export function GlossarySidebarView({
   onToggleCreateForm,
   onChangeCreateSurface,
   onChangeCreateKind,
-  onSubmitCreateForm
+  onSubmitCreateForm,
+  readOnly = false
 }: GlossarySidebarViewProps): JSX.Element {
   let content: JSX.Element;
   const filteredEntries =
@@ -189,7 +192,9 @@ export function GlossarySidebarView({
           aria-label={translate("glossary.create.title")}
           onSubmit={(event) => {
             event.preventDefault();
-            onSubmitCreateForm();
+            if (!readOnly) {
+              onSubmitCreateForm();
+            }
           }}
         >
           <label className="glossaryCreateFormField">
@@ -197,17 +202,25 @@ export function GlossarySidebarView({
             <input
               type="text"
               value={createForm.canonicalSurface}
-              disabled={createForm.isSubmitting}
-              onChange={(event) => onChangeCreateSurface(event.target.value)}
+              disabled={createForm.isSubmitting || readOnly}
+              onChange={(event) => {
+                if (!readOnly) {
+                  onChangeCreateSurface(event.target.value);
+                }
+              }}
             />
           </label>
           <label className="glossaryCreateFormField">
             <span>{translate("glossary.create.kindLabel")}</span>
             <select
               value={createForm.kind}
-              disabled={createForm.isSubmitting}
+              disabled={createForm.isSubmitting || readOnly}
               onChange={(event) =>
-                onChangeCreateKind(event.target.value as GlossaryEntryKind)
+                !readOnly
+                  ? onChangeCreateKind(
+                      event.target.value as GlossaryEntryKind
+                    )
+                  : undefined
               }
             >
               {glossaryEntryKinds.map((kind) => (
@@ -234,6 +247,7 @@ export function GlossarySidebarView({
               type="submit"
               disabled={
                 createForm.isSubmitting ||
+                readOnly ||
                 createForm.canonicalSurface.trim().length === 0
               }
             >
@@ -246,8 +260,12 @@ export function GlossarySidebarView({
         <button
           type="button"
           className="workspaceSidebarButton"
-          disabled={!canCreateEntry}
-          onClick={onToggleCreateForm}
+          disabled={!canCreateEntry || readOnly}
+          onClick={() => {
+            if (!readOnly) {
+              onToggleCreateForm();
+            }
+          }}
         >
           {translate("glossary.add")}
         </button>
@@ -258,6 +276,7 @@ export function GlossarySidebarView({
 
 export function GlossarySidebar({
   projectRootPath,
+  readOnly = false,
   highlightedEntryId,
   refreshToken,
   translate,
@@ -345,7 +364,7 @@ export function GlossarySidebar({
   async function submitCreateForm(): Promise<void> {
     const canonicalSurface = createForm.canonicalSurface.trim();
 
-    if (canonicalSurface.length === 0 || createForm.isSubmitting) {
+    if (readOnly || canonicalSurface.length === 0 || createForm.isSubmitting) {
       return;
     }
 
@@ -392,13 +411,13 @@ export function GlossarySidebar({
         }))
       }
       onActivateEntry={onActivateEntry}
-      canCreateEntry={projectRootPath !== null}
+      canCreateEntry={projectRootPath !== null && !readOnly}
       searchQuery={searchQuery}
       createForm={createForm}
       onChangeSearchQuery={setSearchQuery}
       onToggleCreateForm={() =>
         setCreateForm((currentForm) =>
-          currentForm.isOpen
+          currentForm.isOpen || readOnly
             ? initialGlossaryCreateFormState
             : { ...initialGlossaryCreateFormState, isOpen: true }
         )
@@ -415,6 +434,7 @@ export function GlossarySidebar({
       onSubmitCreateForm={() => {
         void submitCreateForm();
       }}
+      readOnly={readOnly}
     />
   );
 }

@@ -1,4 +1,7 @@
-import type { CommandContext } from "../shared/commandEnablement";
+import type {
+  CommandContext,
+  CommandDisabledReason
+} from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
 import type { Translate, TranslationKey } from "../shared/i18n";
 
@@ -30,6 +33,7 @@ export interface CommandPaletteEntry {
   readonly description?: string;
   readonly canonicalLabel?: string;
   readonly enabled: boolean;
+  readonly disabledReason?: CommandDisabledReason | null;
 }
 
 export interface CommandPaletteFilteredEntry extends CommandPaletteEntry {
@@ -67,13 +71,18 @@ export function listCommandPaletteEntries(
   return registry
     .list()
     .filter((command) => command.palette?.visible !== false)
-    .map((command) => ({
-      id: command.id,
-      title: command.title,
-      description: command.description,
-      canonicalLabel: command.canonicalLabel,
-      enabled: registry.isEnabledForContext(command.id, context)
-    }));
+    .map((command) => {
+      const enablement = registry.enablementForContext(command.id, context);
+
+      return {
+        id: command.id,
+        title: command.title,
+        description: command.description,
+        canonicalLabel: command.canonicalLabel,
+        enabled: enablement.enabled,
+        disabledReason: enablement.disabledReason
+      };
+    });
 }
 
 function commandPaletteFieldText(

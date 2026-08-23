@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   InvalidCommandEnablementExpressionError,
   evaluateCommandEnablement,
+  evaluateCommandEnablementResult,
   validateCommandEnablementExpression,
   type CommandEnablementExpression
 } from "../../src/shared/commandEnablement";
@@ -112,6 +113,83 @@ describe("evaluateCommandEnablement", () => {
         "editor.hasDocument": true
       })
     ).toBe(false);
+  });
+
+  it("reports readOnlyProject only when read-only access blocks project writes", () => {
+    expect(
+      evaluateCommandEnablementResult(
+        { key: "project.access.readWrite" },
+        {
+          "project.access.readWrite": false,
+          "project.access.readOnly": true
+        }
+      )
+    ).toEqual({
+      enabled: false,
+      disabledReason: "readOnlyProject"
+    });
+    expect(
+      evaluateCommandEnablementResult(
+        { key: "editor.isDirty" },
+        {
+          "editor.isDirty": false,
+          "project.access.readOnly": true
+        }
+      )
+    ).toEqual({
+      enabled: false,
+      disabledReason: null
+    });
+  });
+
+  it("keeps read-only reason behind ordinary allOf prerequisites", () => {
+    const expression: CommandEnablementExpression = {
+      allOf: [
+        { key: "editor.hasDocument" },
+        { key: "project.access.readWrite" }
+      ]
+    };
+
+    expect(
+      evaluateCommandEnablementResult(expression, {
+        "editor.hasDocument": false,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: false,
+      disabledReason: null
+    });
+  });
+
+  it("propagates read-only reason through anyOf when no safe alternative is enabled", () => {
+    const expression: CommandEnablementExpression = {
+      anyOf: [
+        { not: { key: "editor.document.projectOwned" } },
+        { key: "project.access.readWrite" }
+      ]
+    };
+
+    expect(
+      evaluateCommandEnablementResult(expression, {
+        "editor.document.projectOwned": true,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: false,
+      disabledReason: "readOnlyProject"
+    });
+    expect(
+      evaluateCommandEnablementResult(expression, {
+        "editor.document.projectOwned": false,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: true,
+      disabledReason: null
+    });
   });
 });
 

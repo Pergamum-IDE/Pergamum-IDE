@@ -14,11 +14,14 @@ import {
   defaultProjectAccessMode,
   PROJECT_CHANNELS,
   type OpenRecentProjectRequest,
+  type PendingReadOnlyProjectOpen,
+  type PendingReadOnlyProjectOpenRequest,
   type PergamumProject,
   type PergamumProjectConfig,
   type ProjectAccessMode,
   type ProjectDocument,
   type ProjectDocumentContent,
+  type ProjectOpenResult,
   type ReadProjectDocumentRequest,
   type RecordRecentProjectInput,
   type SaveProjectDocumentRequest,
@@ -57,6 +60,8 @@ interface CurrentProjectState {
   rootPath: string;
   activeProjectFilePath: string;
   accessMode: ProjectAccessMode;
+  writeOwnership: ProjectWriteOwnership;
+  writeOwnershipManager: ProjectWriteOwnershipManager;
   documentRelativePaths: Set<string>;
 }
 
@@ -65,9 +70,42 @@ interface ProjectFileOpenResult {
   metadata: ProjectMetadata;
   projectFilePath: string;
   projectRootPath: string;
+  writeOwnership: ProjectWriteOwnership;
+  writeOwnershipManager: ProjectWriteOwnershipManager;
+}
+
+type ProjectOpenOperation = "create" | "open";
+
+interface PendingReadOnlyProjectOpenState {
+  token: string;
+  openedProject: ProjectFileOpenResult;
+  operation: ProjectOpenOperation;
+  logger: DebugLogger;
+  projectRef: string;
+  startedAt: number;
+}
+
+export type ProjectWriteOwnership =
+  | {
+      kind: "owned";
+    }
+  | {
+      kind: "unavailable";
+      reason: "lockUnavailable";
+    };
+
+export interface ProjectWriteOwnershipManager {
+  acquire(projectFilePath: string): Promise<ProjectWriteOwnership>;
+  release(
+    projectFilePath: string,
+    ownership: ProjectWriteOwnership
+  ): Promise<void>;
 }
 
 let currentProjectState: CurrentProjectState | null = null;
+let pendingReadOnlyProjectOpenState: PendingReadOnlyProjectOpenState | null =
+  null;
+let pendingReadOnlyProjectOpenSequence = 0;
 
 const defaultProjectRecoveryDirectoryName = ".pergamum_recovery";
 const createProjectConflictWarningMessage =
@@ -80,6 +118,86 @@ const createProjectConflictDialogButtonIndex = {
   confirm: 0,
   cancel: 1
 } as const;
+const projectWriteLockDirectoryName = ".pergamum.lock";
+
+export function projectWriteLockDirectoryPath(
+  projectFilePath: string
+): string {
+  return path.join(
+    resolveProjectRoot(projectFilePath),
+    projectWriteLockDirectoryName
+  );
+}
+
+export class ProjectWriteLockOwnershipManager
+  implements ProjectWriteOwnershipManager
+{
+  private readonly ownedLockDirectoryPaths = new Set<string>();
+
+  async acquire(projectFilePath: string): Promise<ProjectWriteOwnership> {
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+
+    if (this.ownedLockDirectoryPaths.has(lockDirectoryPath)) {
+      return { kind: "owned" };
+    }
+
+    try {
+      await fs.mkdir(lockDirectoryPath);
+      this.ownedLockDirectoryPaths.add(lockDirectoryPath);
+      return { kind: "owned" };
+    } catch (error) {
+      if (nodeErrorCode(error) === "EEXIST") {
+        return {
+          kind: "unavailable",
+          reason: "lockUnavailable"
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  async release(
+    projectFilePath: string,
+    ownership: ProjectWriteOwnership
+  ): Promise<void> {
+    if (ownership.kind !== "owned") {
+      return;
+    }
+
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+
+    if (!this.ownedLockDirectoryPaths.has(lockDirectoryPath)) {
+      return;
+    }
+
+    try {
+      await fs.rmdir(lockDirectoryPath);
+    } catch {
+      // Lock release is best-effort; failing to remove it must not break
+      // the project session transition or shutdown path.
+    } finally {
+      this.ownedLockDirectoryPaths.delete(lockDirectoryPath);
+    }
+  }
+}
+
+export const defaultProjectWriteOwnershipManager: ProjectWriteOwnershipManager =
+  new ProjectWriteLockOwnershipManager();
+
+export function projectAccessModeFromWriteOwnership(
+  ownership: ProjectWriteOwnership
+): ProjectAccessMode {
+  switch (ownership.kind) {
+    case "owned":
+      return { ...defaultProjectAccessMode };
+    case "unavailable":
+      return {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      };
+  }
+}
 
 export function currentProjectRootPath(): string | null {
   return currentProjectState?.rootPath ?? null;
@@ -293,6 +411,22 @@ function parseOpenRecentProjectRequest(
   };
 }
 
+function parsePendingReadOnlyProjectOpenRequest(
+  value: unknown
+): PendingReadOnlyProjectOpenRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.token !== "string" ||
+    value.token.length === 0
+  ) {
+    throw new Error("Invalid read-only project open request.");
+  }
+
+  return {
+    token: value.token
+  };
+}
+
 function resolveProjectDocumentPath(relativePath: string): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
@@ -358,20 +492,90 @@ async function discoverMarkdownFiles(
   );
 }
 
-function activateProject(project: PergamumProject): void {
+async function releaseWriteOwnership(
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  projectFilePath: string,
+  writeOwnership: ProjectWriteOwnership
+): Promise<void> {
+  try {
+    await writeOwnershipManager.release(projectFilePath, writeOwnership);
+  } catch {
+    // Ownership release is intentionally best-effort.
+  }
+}
+
+async function releaseProjectWriteOwnership(
+  state: CurrentProjectState
+): Promise<void> {
+  await releaseWriteOwnership(
+    state.writeOwnershipManager,
+    state.activeProjectFilePath,
+    state.writeOwnership
+  );
+}
+
+function shouldReleasePreviousProjectWriteOwnership(
+  previousState: CurrentProjectState,
+  nextProjectFilePath: string,
+  nextOwnershipManager: ProjectWriteOwnershipManager,
+  nextOwnership: ProjectWriteOwnership
+): boolean {
+  return !(
+    previousState.activeProjectFilePath === nextProjectFilePath &&
+    previousState.writeOwnershipManager === nextOwnershipManager &&
+    previousState.writeOwnership.kind === "owned" &&
+    nextOwnership.kind === "owned"
+  );
+}
+
+export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
+  await discardPendingReadOnlyProjectOpen();
+
+  const stateToRelease = currentProjectState;
+
+  if (!stateToRelease) {
+    return;
+  }
+
+  currentProjectState = null;
+  await releaseProjectWriteOwnership(stateToRelease);
+}
+
+async function activateProject(
+  project: PergamumProject,
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  writeOwnership: ProjectWriteOwnership
+): Promise<void> {
+  const previousState = currentProjectState;
+
   currentProjectState = {
     rootPath: project.rootPath,
     activeProjectFilePath: project.activeProjectFilePath,
     accessMode: project.accessMode,
+    writeOwnership,
+    writeOwnershipManager,
     documentRelativePaths: new Set(
       project.documents.map((document) => document.relativePath)
     )
   };
+
+  if (
+    previousState &&
+    shouldReleasePreviousProjectWriteOwnership(
+      previousState,
+      project.activeProjectFilePath,
+      writeOwnershipManager,
+      writeOwnership
+    )
+  ) {
+    await releaseProjectWriteOwnership(previousState);
+  }
 }
 
 async function createProjectFromParts(
   rootPath: string,
   activeProjectFilePath: string,
+  accessMode: ProjectAccessMode,
   name: string,
   config: PergamumProjectConfig | null
 ): Promise<PergamumProject> {
@@ -380,7 +584,7 @@ async function createProjectFromParts(
   return {
     rootPath,
     activeProjectFilePath,
-    accessMode: { ...defaultProjectAccessMode },
+    accessMode,
     name,
     config,
     documents
@@ -459,9 +663,154 @@ async function recordProjectFileOpenRecently(
   );
 }
 
+function logProjectOpenSucceeded(
+  logger: DebugLogger,
+  projectRef: string,
+  operation: ProjectOpenOperation,
+  startedAt: number
+): void {
+  logger.log({
+    level: "info",
+    event: "project.open.succeeded",
+    details: {
+      projectRef,
+      operation,
+      result: "succeeded",
+      durationMs: durationSince(startedAt)
+    }
+  });
+}
+
+async function finalizeProjectFileOpen(
+  openedProject: ProjectFileOpenResult
+): Promise<PergamumProject> {
+  await activateProject(
+    openedProject.project,
+    openedProject.writeOwnershipManager,
+    openedProject.writeOwnership
+  );
+  await recordProjectFileOpenRecently(openedProject);
+
+  return openedProject.project;
+}
+
+function readOnlyProjectOpenNeedsConfirmation(
+  project: PergamumProject
+): boolean {
+  return (
+    project.accessMode.kind === "readOnly" &&
+    project.accessMode.reason === "writeLockUnavailable"
+  );
+}
+
+function nextPendingReadOnlyProjectOpenToken(): string {
+  pendingReadOnlyProjectOpenSequence += 1;
+  return `pending-read-only-project-open:${pendingReadOnlyProjectOpenSequence}`;
+}
+
+async function discardPendingReadOnlyProjectOpen(): Promise<void> {
+  const pending = pendingReadOnlyProjectOpenState;
+
+  if (!pending) {
+    return;
+  }
+
+  pendingReadOnlyProjectOpenState = null;
+  await releaseWriteOwnership(
+    pending.openedProject.writeOwnershipManager,
+    pending.openedProject.projectFilePath,
+    pending.openedProject.writeOwnership
+  );
+}
+
+async function createPendingReadOnlyProjectOpen(
+  openedProject: ProjectFileOpenResult,
+  logger: DebugLogger,
+  projectRef: string,
+  operation: ProjectOpenOperation,
+  startedAt: number
+): Promise<PendingReadOnlyProjectOpen> {
+  await discardPendingReadOnlyProjectOpen();
+
+  const token = nextPendingReadOnlyProjectOpenToken();
+  pendingReadOnlyProjectOpenState = {
+    token,
+    openedProject,
+    operation,
+    logger,
+    projectRef,
+    startedAt
+  };
+
+  return {
+    kind: "pendingReadOnlyProjectOpen",
+    token,
+    project: openedProject.project
+  };
+}
+
+async function projectOpenResultForOpenedProject(
+  openedProject: ProjectFileOpenResult,
+  logger: DebugLogger,
+  projectRef: string,
+  operation: ProjectOpenOperation,
+  startedAt: number
+): Promise<ProjectOpenResult> {
+  if (readOnlyProjectOpenNeedsConfirmation(openedProject.project)) {
+    return createPendingReadOnlyProjectOpen(
+      openedProject,
+      logger,
+      projectRef,
+      operation,
+      startedAt
+    );
+  }
+
+  const project = await finalizeProjectFileOpen(openedProject);
+  logProjectOpenSucceeded(logger, projectRef, operation, startedAt);
+
+  return project;
+}
+
+export async function confirmReadOnlyProjectOpen(
+  rawRequest: unknown
+): Promise<PergamumProject | null> {
+  const request = parsePendingReadOnlyProjectOpenRequest(rawRequest);
+  const pending = pendingReadOnlyProjectOpenState;
+
+  if (!pending || pending.token !== request.token) {
+    return null;
+  }
+
+  pendingReadOnlyProjectOpenState = null;
+  const project = await finalizeProjectFileOpen(pending.openedProject);
+  logProjectOpenSucceeded(
+    pending.logger,
+    pending.projectRef,
+    pending.operation,
+    pending.startedAt
+  );
+
+  return project;
+}
+
+export async function cancelReadOnlyProjectOpen(
+  rawRequest: unknown
+): Promise<void> {
+  const request = parsePendingReadOnlyProjectOpenRequest(rawRequest);
+  const pending = pendingReadOnlyProjectOpenState;
+
+  if (!pending || pending.token !== request.token) {
+    return;
+  }
+
+  await discardPendingReadOnlyProjectOpen();
+}
+
 async function createProjectFromProjectFile(
   projectFilePath: string,
-  logger: DebugLogger
+  logger: DebugLogger,
+  writeOwnershipManager: ProjectWriteOwnershipManager
 ): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const initialProjectName =
@@ -480,54 +829,90 @@ async function createProjectFromProjectFile(
   };
 
   await writeProjectConfig(projectRootPath, config);
+  const ownership = await writeOwnershipManager.acquire(projectFilePath);
+  const accessMode = projectAccessModeFromWriteOwnership(ownership);
+  let shouldReleaseOwnership = true;
 
-  const project = await createProjectFromParts(
-    projectRootPath,
-    projectFilePath,
-    metadata.projectName,
-    await readProjectConfig(projectRootPath)
-  );
+  try {
+    const project = await createProjectFromParts(
+      projectRootPath,
+      projectFilePath,
+      accessMode,
+      metadata.projectName,
+      await readProjectConfig(projectRootPath)
+    );
 
-  activateProject(project);
+    shouldReleaseOwnership = false;
 
-  return {
-    project,
-    metadata,
-    projectFilePath,
-    projectRootPath
-  };
+    return {
+      project,
+      metadata,
+      projectFilePath,
+      projectRootPath,
+      writeOwnership: ownership,
+      writeOwnershipManager
+    };
+  } finally {
+    if (shouldReleaseOwnership) {
+      await releaseWriteOwnership(
+        writeOwnershipManager,
+        projectFilePath,
+        ownership
+      );
+    }
+  }
 }
 
 async function openProjectFromProjectFile(
   projectFilePath: string,
-  logger: DebugLogger
+  logger: DebugLogger,
+  writeOwnershipManager: ProjectWriteOwnershipManager
 ): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const database = await openProjectDatabase(projectFilePath, logger);
   const metadata = await readProjectMetadataAndClose(database);
 
   const config = await readProjectConfig(projectRootPath);
-  const project = await createProjectFromParts(
-    projectRootPath,
-    projectFilePath,
-    metadata.projectName,
-    config
-  );
+  const ownership = await writeOwnershipManager.acquire(projectFilePath);
+  const accessMode = projectAccessModeFromWriteOwnership(ownership);
+  let shouldReleaseOwnership = true;
 
-  activateProject(project);
+  try {
+    const project = await createProjectFromParts(
+      projectRootPath,
+      projectFilePath,
+      accessMode,
+      metadata.projectName,
+      config
+    );
 
-  return {
-    project,
-    metadata,
-    projectFilePath,
-    projectRootPath
-  };
+    shouldReleaseOwnership = false;
+
+    return {
+      project,
+      metadata,
+      projectFilePath,
+      projectRootPath,
+      writeOwnership: ownership,
+      writeOwnershipManager
+    };
+  } finally {
+    if (shouldReleaseOwnership) {
+      await releaseWriteOwnership(
+        writeOwnershipManager,
+        projectFilePath,
+        ownership
+      );
+    }
+  }
 }
 
 export async function createProject(
   event: IpcMainInvokeEvent,
-  logger: DebugLogger = getDebugLogger()
-): Promise<PergamumProject | null> {
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
+): Promise<ProjectOpenResult> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
 
@@ -571,22 +956,16 @@ export async function createProject(
 
     const openedProject = await createProjectFromProjectFile(
       projectFilePath,
-      logger
+      logger,
+      writeOwnershipManager
     );
-    await recordProjectFileOpenRecently(openedProject);
-
-    logger.log({
-      level: "info",
-      event: "project.open.succeeded",
-      details: {
-        projectRef,
-        operation: "create",
-        result: "succeeded",
-        durationMs: durationSince(startedAt)
-      }
-    });
-
-    return openedProject.project;
+    return projectOpenResultForOpenedProject(
+      openedProject,
+      logger,
+      projectRef,
+      "create",
+      startedAt
+    );
   } catch (error) {
     const safeError = sanitizedFileIoError(error);
     logger.log({
@@ -607,8 +986,10 @@ export async function createProject(
 
 export async function openProject(
   event: IpcMainInvokeEvent,
-  logger: DebugLogger = getDebugLogger()
-): Promise<PergamumProject | null> {
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
+): Promise<ProjectOpenResult> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
 
@@ -639,22 +1020,16 @@ export async function openProject(
 
     const openedProject = await openProjectFromProjectFile(
       projectFilePath,
-      logger
+      logger,
+      writeOwnershipManager
     );
-    await recordProjectFileOpenRecently(openedProject);
-
-    logger.log({
-      level: "info",
-      event: "project.open.succeeded",
-      details: {
-        projectRef,
-        operation: "open",
-        result: "succeeded",
-        durationMs: durationSince(startedAt)
-      }
-    });
-
-    return openedProject.project;
+    return projectOpenResultForOpenedProject(
+      openedProject,
+      logger,
+      projectRef,
+      "open",
+      startedAt
+    );
   } catch (error) {
     const safeError = sanitizedFileIoError(error);
     logger.log({
@@ -674,14 +1049,16 @@ export async function openProject(
 }
 
 export function registerProjectIpc(
-  logger: DebugLogger = getDebugLogger()
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
 ): void {
   ipcMain.handle(PROJECT_CHANNELS.createProject, (event) =>
-    createProject(event, logger)
+    createProject(event, logger, writeOwnershipManager)
   );
 
   ipcMain.handle(PROJECT_CHANNELS.openProject, (event) =>
-    openProject(event, logger)
+    openProject(event, logger, writeOwnershipManager)
   );
 
   ipcMain.handle(
@@ -689,7 +1066,7 @@ export function registerProjectIpc(
     async (
       _event,
       rawRequest: unknown
-    ): Promise<PergamumProject> => {
+    ): Promise<ProjectOpenResult> => {
       const startedAt = Date.now();
       let request: OpenRecentProjectRequest;
 
@@ -706,22 +1083,17 @@ export function registerProjectIpc(
 
         const openedProject = await openProjectFromProjectFile(
           projectFilePath,
-          logger
+          logger,
+          writeOwnershipManager
         );
-        await recordProjectFileOpenRecently(openedProject);
 
-        logger.log({
-          level: "info",
-          event: "project.open.succeeded",
-          details: {
-            projectRef: logger.projectRefForKey(projectFilePath),
-            operation: "open",
-            result: "succeeded",
-            durationMs: durationSince(startedAt)
-          }
-        });
-
-        return openedProject.project;
+        return projectOpenResultForOpenedProject(
+          openedProject,
+          logger,
+          logger.projectRefForKey(projectFilePath),
+          "open",
+          startedAt
+        );
       } catch (error) {
         const safeError = sanitizedFileIoError(error);
         logger.log({
@@ -737,6 +1109,19 @@ export function registerProjectIpc(
 
         throw safeError;
       }
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
+    (_event, rawRequest: unknown): Promise<PergamumProject | null> =>
+      confirmReadOnlyProjectOpen(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.cancelReadOnlyProjectOpen,
+    async (_event, rawRequest: unknown): Promise<void> => {
+      await cancelReadOnlyProjectOpen(rawRequest);
     }
   );
 

@@ -72,6 +72,7 @@ describe("debug log catalog", () => {
 
   it("includes command ignored reason catalog values", () => {
     expect(debugLogReasons).toContain("disabled_command");
+    expect(debugLogReasons).toContain("readOnlyProject");
     expect(debugLogReasons).toContain("app_modal_open");
   });
 

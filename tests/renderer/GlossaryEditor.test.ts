@@ -348,6 +348,142 @@ describe("GlossaryEditor", () => {
     );
   });
 
+  it("disables write controls in read-only mode without disabling occurrence navigation", () => {
+    const onChangeKind = vi.fn();
+    const onChangeDescription = vi.fn();
+    const onChangeCanonicalSurface = vi.fn();
+    const onChangeCanonicalMatchBoundaryStart = vi.fn();
+    const onChangeCanonicalMatchBoundaryEnd = vi.fn();
+    const onAddForm = vi.fn();
+    const onChangeFormSurface = vi.fn();
+    const onChangeFormWarningPolicy = vi.fn();
+    const onChangeFormMatchBoundaryStart = vi.fn();
+    const onChangeFormMatchBoundaryEnd = vi.fn();
+    const onDeleteForm = vi.fn();
+    const onDeleteEntry = vi.fn();
+    const onNavigateToPreviousOccurrence = vi.fn();
+    const onNavigateToNextOccurrence = vi.fn();
+    const element = GlossaryEditor(glossaryEditorProps({
+      readOnly: true,
+      onChangeKind,
+      onChangeDescription,
+      onChangeCanonicalSurface,
+      onChangeCanonicalMatchBoundaryStart,
+      onChangeCanonicalMatchBoundaryEnd,
+      onAddForm,
+      onChangeFormSurface,
+      onChangeFormWarningPolicy,
+      onChangeFormMatchBoundaryStart,
+      onChangeFormMatchBoundaryEnd,
+      onDeleteForm,
+      onDeleteEntry,
+      onNavigateToPreviousOccurrence,
+      onNavigateToNextOccurrence
+    }));
+    const inputs = collectElements(
+      element,
+      (child) => child.type === "input"
+    );
+    const selects = collectElements(
+      element,
+      (child) => child.type === "select"
+    );
+    const buttons = collectElements(
+      element,
+      (child) => child.type === "button"
+    );
+    const markdownEditors = collectElements(
+      element,
+      (child) =>
+        typeof child.type === "function" && child.type.name === "MarkdownEditor"
+    );
+    const advancedSettings = collectElements(
+      element,
+      (child) => child.type === GlossaryFormAdvancedMatchingSettings
+    );
+    const occurrenceButtons = buttons.filter(
+      (button) =>
+        button.props.className === "glossaryEditorOccurrenceButton"
+    );
+    const removeButtons = buttons.filter(
+      (button) =>
+        button.props.className === "glossaryEditorRemoveFormButton"
+    );
+    const addButtons = buttons.filter(
+      (button) => button.props.className === "glossaryEditorAddForm"
+    );
+    const deleteButton = buttons.find(
+      (button) => button.props.className === "glossaryEditorDeleteButton"
+    );
+
+    expect(inputs).toHaveLength(3);
+    for (const input of inputs) {
+      expect(input.props.readOnly).toBe(true);
+    }
+    expect(selects).toHaveLength(3);
+    for (const select of selects) {
+      expect(select.props.disabled).toBe(true);
+    }
+    expect(markdownEditors[0].props.readOnly).toBe(true);
+    expect(advancedSettings).toHaveLength(3);
+    for (const settings of advancedSettings) {
+      expect(settings.props.readOnly).toBe(true);
+    }
+    expect(removeButtons).toHaveLength(2);
+    expect(addButtons).toHaveLength(2);
+    for (const button of [...removeButtons, ...addButtons]) {
+      expect(button.props.disabled).toBe(true);
+    }
+    expect(deleteButton?.props.disabled).toBe(true);
+    expect(occurrenceButtons).toHaveLength(2);
+    expect(occurrenceButtons[0].props.disabled).toBeUndefined();
+    expect(occurrenceButtons[1].props.disabled).toBeUndefined();
+
+    (inputs[0].props.onChange as (event: unknown) => void)({
+      target: { value: "新王都" }
+    });
+    (inputs[1].props.onChange as (event: unknown) => void)({
+      target: { value: "新別名" }
+    });
+    (selects[0].props.onChange as (event: unknown) => void)({
+      target: { value: "person" }
+    });
+    (selects[1].props.onChange as (event: unknown) => void)({
+      target: { value: "ignore" }
+    });
+    (
+      advancedSettings[0].props.onChangeMatchBoundaryStart as (
+        value: string
+      ) => void
+    )("none");
+    (
+      advancedSettings[1].props.onChangeMatchBoundaryEnd as (
+        value: string
+      ) => void
+    )("strict");
+    (markdownEditors[0].props.onChange as (value: string) => void)("変更");
+    (removeButtons[0].props.onClick as () => void)();
+    (addButtons[0].props.onClick as () => void)();
+    (deleteButton?.props.onClick as () => void)();
+    (occurrenceButtons[0].props.onClick as () => void)();
+    (occurrenceButtons[1].props.onClick as () => void)();
+
+    expect(onChangeKind).not.toHaveBeenCalled();
+    expect(onChangeDescription).not.toHaveBeenCalled();
+    expect(onChangeCanonicalSurface).not.toHaveBeenCalled();
+    expect(onChangeCanonicalMatchBoundaryStart).not.toHaveBeenCalled();
+    expect(onChangeCanonicalMatchBoundaryEnd).not.toHaveBeenCalled();
+    expect(onAddForm).not.toHaveBeenCalled();
+    expect(onChangeFormSurface).not.toHaveBeenCalled();
+    expect(onChangeFormWarningPolicy).not.toHaveBeenCalled();
+    expect(onChangeFormMatchBoundaryStart).not.toHaveBeenCalled();
+    expect(onChangeFormMatchBoundaryEnd).not.toHaveBeenCalled();
+    expect(onDeleteForm).not.toHaveBeenCalled();
+    expect(onDeleteEntry).not.toHaveBeenCalled();
+    expect(onNavigateToPreviousOccurrence).toHaveBeenCalledTimes(1);
+    expect(onNavigateToNextOccurrence).toHaveBeenCalledTimes(1);
+  });
+
   it("reports occurrence navigation clicks through the onNavigateToPrevious/NextOccurrence props, not inline logic", () => {
     const onNavigateToPreviousOccurrence = vi.fn();
     const onNavigateToNextOccurrence = vi.fn();

@@ -8,6 +8,7 @@ import {
 } from "react";
 import type {
   PergamumProject,
+  ProjectOpenResult,
   ProjectDocument,
   SaveApplicationSettingsRequest
 } from "../shared/api";
@@ -70,6 +71,7 @@ import {
   applyStandaloneSaveResult,
   createProjectDocument,
   currentDocumentContent,
+  displayName,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   standaloneSavePath,
@@ -212,6 +214,7 @@ import {
   resetOpenDocumentsForProjectContextSwitch
 } from "./projectActivationState";
 import { confirmProjectSwitchWithUnsavedDocuments } from "./projectSwitchConfirmation";
+import { confirmReadOnlyProjectOpenIfNeeded } from "./readOnlyProjectOpenConfirmation";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { SettingsPanel } from "./SettingsPanel";
@@ -674,6 +677,15 @@ export function App(): JSX.Element {
     applyEditorFontFamily(effectiveSettings.editor.fontFamily);
   }, [effectiveSettings.editor.fontFamily]);
   const isDirty = isCurrentEditorDirty(currentEditor);
+  const isReadOnlyProject = project?.accessMode.kind === "readOnly";
+  const isReadWriteProject = project?.accessMode.kind === "readWrite";
+  const isProjectOwnedCurrentEditor =
+    !isSettingsTabActive &&
+    (currentEditor.kind === "glossaryEntry" ||
+      (currentEditor.kind === "markdown" &&
+        activeMarkdownDocument?.kind === "project"));
+  const isReadOnlyProjectOwnedEditor =
+    isReadOnlyProject && isProjectOwnedCurrentEditor;
   const isSavingGlossaryEntry =
     currentEditor.kind === "glossaryEntry" &&
     currentEditor.draft.saveState === "saving";
@@ -693,6 +705,8 @@ export function App(): JSX.Element {
     () =>
       buildCommandContextSnapshot({
         projectIsOpen: project !== null,
+        projectAccessReadWrite: isReadWriteProject,
+        projectAccessReadOnly: isReadOnlyProject,
         editorHasDocument:
           !isSettingsTabActive && currentEditor.kind === "markdown"
             ? Boolean(activeMarkdownDocument)
@@ -702,14 +716,18 @@ export function App(): JSX.Element {
           !isSettingsTabActive && currentEditor.kind === "markdown",
         editorKindGlossary:
           !isSettingsTabActive && currentEditor.kind === "glossaryEntry",
+        editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
         occurrenceTrackingActive:
           glossaryOccurrenceTrackingState.kind === "active"
       }),
     [
       project,
+      isReadWriteProject,
+      isReadOnlyProject,
       isSettingsTabActive,
       currentEditor.kind,
       activeMarkdownDocument,
+      isProjectOwnedCurrentEditor,
       isDirty,
       glossaryOccurrenceTrackingState.kind
     ]
@@ -1033,7 +1051,25 @@ export function App(): JSX.Element {
     });
   }
 
+  async function resolveProjectOpenResult(
+    result: ProjectOpenResult
+  ): Promise<PergamumProject | null> {
+    return confirmReadOnlyProjectOpenIfNeeded({
+      result,
+      translate,
+      choiceDialog,
+      confirmReadOnlyProjectOpen:
+        window.pergamum.projects.confirmReadOnlyProjectOpen,
+      cancelReadOnlyProjectOpen:
+        window.pergamum.projects.cancelReadOnlyProjectOpen
+    });
+  }
+
   function setActiveDocumentContent(nextContent: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenDocument(state, (document) =>
         updateCurrentDocumentContent(document, nextContent)
@@ -1042,6 +1078,10 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryKind(kind: GlossaryEntryKind): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1052,6 +1092,10 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryDescription(description: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1068,6 +1112,10 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryCanonicalSurface(surface: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1086,6 +1134,10 @@ export function App(): JSX.Element {
   function setActiveGlossaryEntryCanonicalMatchBoundaryStart(
     matchBoundaryStart: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1104,6 +1156,10 @@ export function App(): JSX.Element {
   function setActiveGlossaryEntryCanonicalMatchBoundaryEnd(
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1122,6 +1178,10 @@ export function App(): JSX.Element {
   function addActiveGlossaryEntryForm(
     relation: GlossaryFormRelation
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1138,6 +1198,10 @@ export function App(): JSX.Element {
     formId: string,
     surface: string
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1158,6 +1222,10 @@ export function App(): JSX.Element {
     formId: string,
     warningPolicy: GlossaryWarningPolicy
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1178,6 +1246,10 @@ export function App(): JSX.Element {
     formId: string,
     matchBoundaryStart: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1198,6 +1270,10 @@ export function App(): JSX.Element {
     formId: string,
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1215,6 +1291,10 @@ export function App(): JSX.Element {
   }
 
   function deleteActiveGlossaryEntryForm(formId: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1929,6 +2009,28 @@ export function App(): JSX.Element {
     });
   }
 
+  async function showReadOnlyProjectSaveAsSucceededDialog(
+    fileName: string
+  ): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.readOnlyProjectSaveAsSucceeded.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.readOnlyProjectSaveAsSucceeded.message", {
+          fileName
+        })
+      },
+      icon: {
+        kind: "info",
+        tooltip: translate("dialog.icon.info")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
   async function selectStandaloneSaveTarget(
     documentToSave: CurrentDocument
   ): Promise<StandaloneSaveTargetSelection> {
@@ -2511,6 +2613,10 @@ export function App(): JSX.Element {
 
           const documentToSave = targetEditor.document;
           const documentIdToSave = targetOpenDocument.id;
+          const isReadOnlyProjectDocumentSaveAs =
+            isReadOnlyProject &&
+            options.forceSaveAs === true &&
+            isProjectCurrentDocument(documentToSave);
 
           if (
             isProjectCurrentDocument(documentToSave) &&
@@ -2579,6 +2685,27 @@ export function App(): JSX.Element {
 
           if (!savedStandaloneDocument) {
             return "cancelled";
+          }
+
+          if (isReadOnlyProjectDocumentSaveAs) {
+            const fileName = displayName(savedStandaloneDocument.path);
+
+            setStatus({
+              key: "status.savedPath",
+              values: { path: fileName }
+            });
+            logRendererDebugEvent({
+              level: "debug",
+              event: "save.succeeded",
+              details: {
+                editorIdKind,
+                operation: "save",
+                result: "succeeded",
+                saveTargetKind: "standaloneMarkdown"
+              }
+            });
+            await showReadOnlyProjectSaveAsSucceededDialog(fileName);
+            return "saved";
           }
 
           const savedDocument = applyStandaloneSaveResult(
@@ -2732,7 +2859,9 @@ export function App(): JSX.Element {
     }
 
     try {
-      const createdProject = await window.pergamum.projects.createProject();
+      const createdProject = await resolveProjectOpenResult(
+        await window.pergamum.projects.createProject()
+      );
 
       if (!createdProject) {
         setStatus({ key: "status.openProjectCanceled" });
@@ -2762,7 +2891,9 @@ export function App(): JSX.Element {
     }
 
     try {
-      const openedProject = await window.pergamum.projects.openProject();
+      const openedProject = await resolveProjectOpenResult(
+        await window.pergamum.projects.openProject()
+      );
 
       if (!openedProject) {
         setStatus({ key: "status.openProjectCanceled" });
@@ -2792,9 +2923,15 @@ export function App(): JSX.Element {
     }
 
     try {
-      const openedProject = await window.pergamum.projects.openRecentProject(
-        projectFilePath
+      const openedProject = await resolveProjectOpenResult(
+        await window.pergamum.projects.openRecentProject(projectFilePath)
       );
+
+      if (!openedProject) {
+        setStatus({ key: "status.openProjectCanceled" });
+        return;
+      }
+
       const settingsReloadError = await reloadSettingsAfterProjectOpen();
       const openedStatus = await activateProject(openedProject);
 
@@ -3159,6 +3296,7 @@ export function App(): JSX.Element {
                         translate={translate}
                         soundFeedback={soundFeedback}
                         soundSettings={effectiveSettings.workbench.sound}
+                        isProjectOwnedReadOnly={isReadOnlyProjectOwnedEditor}
                         markdownEditorPreviewRatio={
                           layout.markdownEditorPreview.ratio
                         }

@@ -192,6 +192,7 @@ export const debugLogReasons = [
   "manual_clear",
   "unsupported_surface",
   "disabled_command",
+  "readOnlyProject",
   "app_modal_open",
   "unsupported_editor",
   "glossary_not_dirty",

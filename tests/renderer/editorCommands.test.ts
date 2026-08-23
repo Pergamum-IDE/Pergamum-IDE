@@ -8,7 +8,9 @@ import { editCommandIds } from "../../src/shared/commandIds";
 import {
   createEditorCommandTitles,
   editorCommandIds,
+  projectOwnedWriteAllowedCommandWhen,
   registerEditorCommands,
+  saveAsCommandWhen,
   saveDocumentCommandWhen
 } from "../../src/renderer/editorCommands";
 import {
@@ -196,7 +198,90 @@ describe("editor commands", () => {
 
   it("declares editor.document.save's when as hasDocument and isDirty", () => {
     expect(saveDocumentCommandWhen).toEqual({
-      allOf: [{ key: "editor.hasDocument" }, { key: "editor.isDirty" }]
+      allOf: [
+        { key: "editor.hasDocument" },
+        { key: "editor.isDirty" },
+        projectOwnedWriteAllowedCommandWhen
+      ]
+    });
+  });
+
+  it("disables project document Save in read-only project sessions", () => {
+    const registry = new CommandRegistry();
+
+    registerEditorCommandSet(registry);
+
+    expect(
+      registry.enablementForContext(editorCommandIds.saveDocument, {
+        "editor.hasDocument": true,
+        "editor.isDirty": true,
+        "editor.document.projectOwned": true,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: false,
+      disabledReason: "readOnlyProject"
+    });
+  });
+
+  it("keeps project document Save enabled in readWrite project sessions", () => {
+    const registry = new CommandRegistry();
+
+    registerEditorCommandSet(registry);
+
+    expect(
+      registry.enablementForContext(editorCommandIds.saveDocument, {
+        "editor.hasDocument": true,
+        "editor.isDirty": true,
+        "editor.document.projectOwned": true,
+        "project.access.readWrite": true,
+        "project.access.readOnly": false
+      })
+    ).toEqual({
+      enabled: true,
+      disabledReason: null
+    });
+  });
+
+  it("does not disable standalone Save because a project session is read-only", () => {
+    const registry = new CommandRegistry();
+
+    registerEditorCommandSet(registry);
+
+    expect(
+      registry.enablementForContext(editorCommandIds.saveDocument, {
+        "editor.hasDocument": true,
+        "editor.isDirty": true,
+        "editor.document.projectOwned": false,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: true,
+      disabledReason: null
+    });
+  });
+
+  it("keeps Save As independent from read-only project write gating", () => {
+    const registry = new CommandRegistry();
+
+    registerEditorCommandSet(registry);
+
+    expect(saveAsCommandWhen).toEqual({
+      allOf: [{ key: "editor.hasDocument" }, { key: "editor.kind.markdown" }]
+    });
+    expect(
+      registry.enablementForContext(editorCommandIds.saveAs, {
+        "editor.hasDocument": true,
+        "editor.kind.markdown": true,
+        "editor.document.projectOwned": true,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: true,
+      disabledReason: null
     });
   });
 

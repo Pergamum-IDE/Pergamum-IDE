@@ -59,12 +59,14 @@ describe("listCommandPaletteEntries", () => {
       title: "保存",
       description: "現在の文書を保存",
       canonicalLabel: "Save Document",
-      enabled: true
+      enabled: true,
+      disabledReason: null
     });
     expect(entries[1]).toMatchObject({
       id: "test.command.openProject",
       title: "プロジェクトを開く",
-      enabled: false
+      enabled: false,
+      disabledReason: null
     });
   });
 
@@ -98,12 +100,13 @@ describe("listCommandPaletteEntries", () => {
         title: "When gated",
         description: undefined,
         canonicalLabel: undefined,
-        enabled: false
+        enabled: false,
+        disabledReason: null
       }
     ]);
     expect(
       listCommandPaletteEntries(registry, { "editor.isDirty": true })
-    ).toMatchObject([{ enabled: true }]);
+    ).toMatchObject([{ enabled: true, disabledReason: null }]);
   });
 
   it("treats a missing snapshot the same as an empty context", () => {
@@ -117,8 +120,59 @@ describe("listCommandPaletteEntries", () => {
     });
 
     expect(listCommandPaletteEntries(registry)).toMatchObject([
-      { enabled: false }
+      { enabled: false, disabledReason: null }
     ]);
+  });
+
+  it("carries readOnlyProject only for read-only disabled commands", () => {
+    const registry = new CommandRegistry();
+
+    registry.register({
+      id: defineCommandId("test.command.projectWrite"),
+      title: "Project write",
+      execute: () => undefined,
+      when: { key: "project.access.readWrite" }
+    });
+    registry.register({
+      id: defineCommandId("test.command.contextMismatch"),
+      title: "Context mismatch",
+      execute: () => undefined,
+      when: { key: "editor.isDirty" }
+    });
+
+    expect(
+      listCommandPaletteEntries(registry, {
+        "project.access.readWrite": false,
+        "project.access.readOnly": true,
+        "editor.isDirty": false
+      })
+    ).toEqual([
+      {
+        id: "test.command.projectWrite",
+        title: "Project write",
+        description: undefined,
+        canonicalLabel: undefined,
+        enabled: false,
+        disabledReason: "readOnlyProject"
+      },
+      {
+        id: "test.command.contextMismatch",
+        title: "Context mismatch",
+        description: undefined,
+        canonicalLabel: undefined,
+        enabled: false,
+        disabledReason: null
+      }
+    ]);
+    expect(
+      listCommandPaletteEntries(registry, {
+        "project.access.readWrite": true,
+        "project.access.readOnly": false
+      })[0]
+    ).toMatchObject({
+      enabled: true,
+      disabledReason: null
+    });
   });
 });
 

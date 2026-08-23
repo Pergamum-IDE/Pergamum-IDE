@@ -8,8 +8,19 @@ import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import type { Translate } from "../shared/i18n";
 import type { EditorId } from "../shared/editorId";
 
+export const projectOwnedWriteAllowedCommandWhen: CommandEnablementExpression = {
+  anyOf: [
+    { not: { key: "editor.document.projectOwned" } },
+    { key: "project.access.readWrite" }
+  ]
+};
+
 export const saveDocumentCommandWhen: CommandEnablementExpression = {
-  allOf: [{ key: "editor.hasDocument" }, { key: "editor.isDirty" }]
+  allOf: [
+    { key: "editor.hasDocument" },
+    { key: "editor.isDirty" },
+    projectOwnedWriteAllowedCommandWhen
+  ]
 };
 
 export const saveAsCommandWhen: CommandEnablementExpression = {

@@ -67,6 +67,25 @@ function buildWhenGatedRegistry(): CommandRegistry {
   return registry;
 }
 
+function buildReadOnlyProjectWriteRegistry(): CommandRegistry {
+  const registry = new CommandRegistry();
+
+  registry.register({
+    id: defineCommandId("test.command.projectWrite"),
+    title: "Project write",
+    execute: () => undefined,
+    when: { key: "project.access.readWrite" }
+  });
+  registry.register({
+    id: defineCommandId("test.command.normalDisabled"),
+    title: "Normal disabled",
+    execute: () => undefined,
+    when: { key: "editor.isDirty" }
+  });
+
+  return registry;
+}
+
 function renderPalette(overrides: {
   registry?: CommandRegistry;
   commandContext?: CommandContext;
@@ -177,6 +196,48 @@ describe("CommandPalette", () => {
     expect(markup).toContain("When Gated");
     expect(markup).not.toContain("commandPaletteItemDisabled");
     expect(markup).toContain('aria-disabled="false"');
+  });
+
+  it("renders the read-only disabled reason in English and Japanese", () => {
+    const registry = buildReadOnlyProjectWriteRegistry();
+    const commandContext = {
+      "project.access.readWrite": false,
+      "project.access.readOnly": true
+    };
+    const englishMarkup = renderPalette({
+      registry,
+      commandContext,
+      translate: realTranslateEn,
+      initialInputValue: ">project"
+    });
+    const japaneseMarkup = renderPalette({
+      registry,
+      commandContext,
+      translate: realTranslateJa,
+      initialInputValue: ">project"
+    });
+
+    expect(englishMarkup).toContain("Unavailable in read-only mode");
+    expect(japaneseMarkup).toContain(
+      "読み取り専用のため使用できません"
+    );
+  });
+
+  it("does not render the read-only reason or shield icon for ordinary disabled commands", () => {
+    const markup = renderPalette({
+      registry: buildReadOnlyProjectWriteRegistry(),
+      commandContext: {
+        "project.access.readWrite": true,
+        "project.access.readOnly": false,
+        "editor.isDirty": false
+      },
+      translate: realTranslateEn,
+      initialInputValue: ">normal"
+    });
+
+    expect(markup).toContain("Normal disabled");
+    expect(markup).not.toContain("Unavailable in read-only mode");
+    expect(markup).not.toContain("feather-shield");
   });
 
   it("uses the original primary label as the result accessible name", () => {
@@ -428,6 +489,61 @@ describe("CommandPalette highlighting and footer model", () => {
         query: "disabled",
         inputValue: ">disabled",
         entries: results,
+        selectedIndex: 0
+      })
+    ).toEqual({
+      statusKey: "commandPalette.footer.disabled",
+      canRunSelected: false
+    });
+  });
+
+  it("uses the read-only disabled status key only for readOnlyProject disabled entries", () => {
+    expect(
+      resolveCommandPaletteFooterModel({
+        mode: "command",
+        query: "save",
+        inputValue: ">save",
+        entries: [
+          {
+            id: defineCommandId("test.command.save"),
+            title: "Save",
+            enabled: false,
+            disabledReason: "readOnlyProject",
+            matches: [],
+            primary: { field: "title", text: "Save", ranges: [] },
+            secondary: {
+              field: "commandId",
+              text: "test.command.save",
+              ranges: []
+            }
+          }
+        ],
+        selectedIndex: 0
+      })
+    ).toEqual({
+      statusKey: "command.disabled.readOnlyProject",
+      canRunSelected: false
+    });
+    expect(
+      resolveCommandPaletteFooterModel({
+        mode: "command",
+        query: "save",
+        inputValue: ">save",
+        entries: [
+          {
+            id: defineCommandId("test.command.save"),
+            title: "Save",
+            enabled: false,
+            disabledReason: null,
+            matches: [],
+            primary: { field: "title", text: "Save", ranges: [] },
+            secondary: {
+              field: "commandId",
+              text: "test.command.save",
+              ranges: []
+            }
+          }
+        ],
         selectedIndex: 0
       })
     ).toEqual({

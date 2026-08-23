@@ -677,6 +677,48 @@ describe("CommandRegistry", () => {
     expect(registry.isEnabledForContext(commandId, {})).toBe(false);
   });
 
+  it("reports readOnlyProject as the context disabled reason", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.projectWrite");
+    const execute = vi.fn();
+    const onCommandIgnored = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Project write",
+      execute,
+      when: { key: "project.access.readWrite" }
+    });
+    registry.setCommandContextProvider(() => ({
+      "project.access.readWrite": false,
+      "project.access.readOnly": true
+    }));
+    registry.setOnCommandIgnored(onCommandIgnored);
+
+    expect(
+      registry.enablementForContext(commandId, {
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: false,
+      disabledReason: "readOnlyProject"
+    });
+
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toMatchObject({
+      commandId,
+      reason: "readOnlyProject"
+    });
+    expect(onCommandIgnored).toHaveBeenCalledWith({
+      commandId,
+      source: "commandPalette",
+      reason: "readOnlyProject"
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid Command ID syntax", () => {
     expect(() => defineCommandId("invalid command")).toThrow(
       InvalidCommandIdError

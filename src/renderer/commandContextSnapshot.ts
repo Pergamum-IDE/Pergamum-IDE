@@ -2,10 +2,13 @@ import type { CommandContext } from "../shared/commandEnablement";
 
 export interface CommandContextSnapshotInput {
   readonly projectIsOpen: boolean;
+  readonly projectAccessReadWrite: boolean;
+  readonly projectAccessReadOnly: boolean;
   readonly editorHasDocument: boolean;
   readonly editorIsDirty: boolean;
   readonly editorKindMarkdown: boolean;
   readonly editorKindGlossary: boolean;
+  readonly editorDocumentProjectOwned: boolean;
   readonly occurrenceTrackingActive: boolean;
 }
 
@@ -33,10 +36,13 @@ export function buildCommandContextSnapshot(
 
   return Object.freeze({
     "project.isOpen": input.projectIsOpen,
+    "project.access.readWrite": input.projectAccessReadWrite,
+    "project.access.readOnly": input.projectAccessReadOnly,
     "editor.hasDocument": input.editorHasDocument,
     "editor.isDirty": input.editorIsDirty,
     "editor.kind.markdown": input.editorKindMarkdown,
     "editor.kind.glossary": input.editorKindGlossary,
+    "editor.document.projectOwned": input.editorDocumentProjectOwned,
     "glossary.occurrences.tracking.active": input.occurrenceTrackingActive
   });
 }

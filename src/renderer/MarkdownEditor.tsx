@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
 import {
+  Compartment,
   EditorSelection,
   EditorState,
   Transaction,
@@ -32,6 +33,7 @@ interface MarkdownEditorProps {
   contextSurface?: EditableContextSurface;
   soundFeedback?: SoundFeedbackPlayer;
   soundSettings?: WorkbenchSoundSettings;
+  readOnly?: boolean;
 }
 
 interface MarkdownEditorSoundTransaction {
@@ -103,13 +105,21 @@ export function MarkdownEditor({
   onPendingSelectionApplied,
   contextSurface,
   soundFeedback,
-  soundSettings
+  soundSettings,
+  readOnly = false
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   const onChangeRef = useRef(onChange);
   const soundFeedbackRef = useRef(soundFeedback);
   const soundSettingsRef = useRef(soundSettings);
+  const readOnlyRef = useRef(readOnly);
+
+  if (!readOnlyCompartmentRef.current) {
+    readOnlyCompartmentRef.current = new Compartment();
+  }
+  const readOnlyCompartment = readOnlyCompartmentRef.current;
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -119,6 +129,10 @@ export function MarkdownEditor({
     soundFeedbackRef.current = soundFeedback;
     soundSettingsRef.current = soundSettings;
   }, [soundFeedback, soundSettings]);
+
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -133,10 +147,16 @@ export function MarkdownEditor({
           basicSetup,
           markdown(),
           EditorView.lineWrapping,
+          readOnlyCompartment.of([
+            EditorState.readOnly.of(readOnly),
+            EditorView.editable.of(!readOnly)
+          ]),
           EditorView.updateListener.of((update) => {
-            const soundEvent = markdownEditorInputSoundEventFromTransactions(
-              update.transactions
-            );
+            const soundEvent = readOnlyRef.current
+              ? null
+              : markdownEditorInputSoundEventFromTransactions(
+                  update.transactions
+                );
 
             if (
               soundEvent &&
@@ -150,7 +170,7 @@ export function MarkdownEditor({
               );
             }
 
-            if (update.docChanged) {
+            if (update.docChanged && !readOnlyRef.current) {
               onChangeRef.current(update.state.doc.toString());
             }
           })
@@ -165,6 +185,21 @@ export function MarkdownEditor({
       viewRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: readOnlyCompartment.reconfigure([
+        EditorState.readOnly.of(readOnly),
+        EditorView.editable.of(!readOnly)
+      ])
+    });
+  }, [readOnly]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -203,7 +238,7 @@ export function MarkdownEditor({
 
   return (
     <div
-      className="editorHost"
+      className={readOnly ? "editorHost editorHost-readOnly" : "editorHost"}
       ref={hostRef}
       {...(contextSurface
         ? { [pergamumContextSurfaceAttribute]: contextSurface }

@@ -57,6 +57,7 @@ interface GlossaryEditorProps {
   onDeleteEntry: () => void;
   onNavigateToPreviousOccurrence: () => void;
   onNavigateToNextOccurrence: () => void;
+  readOnly?: boolean;
 }
 
 export function GlossaryEditor({
@@ -75,7 +76,8 @@ export function GlossaryEditor({
   onDeleteForm,
   onDeleteEntry,
   onNavigateToPreviousOccurrence,
-  onNavigateToNextOccurrence
+  onNavigateToNextOccurrence,
+  readOnly = false
 }: GlossaryEditorProps): JSX.Element {
   const entry = draft.entry;
   const title = draft.canonicalSurface.trim() || canonicalGlossarySurface(entry);
@@ -90,21 +92,27 @@ export function GlossaryEditor({
           <input
             type="text"
             value={form.surface}
+            readOnly={readOnly}
             {...{
               [pergamumContextSurfaceAttribute]: "glossaryFormSurface"
             }}
             onChange={(event) =>
-              onChangeFormSurface(form.id, event.target.value)
+              !readOnly
+                ? onChangeFormSurface(form.id, event.target.value)
+                : undefined
             }
           />
           <select
             value={form.warningPolicy}
             aria-label={translate("glossaryEditor.warningPolicy")}
+            disabled={readOnly}
             onChange={(event) =>
-              onChangeFormWarningPolicy(
-                form.id,
-                event.target.value as GlossaryWarningPolicy
-              )
+              !readOnly
+                ? onChangeFormWarningPolicy(
+                    form.id,
+                    event.target.value as GlossaryWarningPolicy
+                  )
+                : undefined
             }
           >
             {glossaryWarningPolicies.map((warningPolicy) => (
@@ -118,7 +126,12 @@ export function GlossaryEditor({
             className="glossaryEditorRemoveFormButton"
             aria-label={translate("glossaryEditor.removeForm")}
             title={translate("glossaryEditor.removeForm")}
-            onClick={() => onDeleteForm(form.id)}
+            disabled={readOnly}
+            onClick={() => {
+              if (!readOnly) {
+                onDeleteForm(form.id);
+              }
+            }}
           >
             <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteIcon }} />
           </button>
@@ -127,11 +140,16 @@ export function GlossaryEditor({
           matchBoundaryStart={form.matchBoundaryStart}
           matchBoundaryEnd={form.matchBoundaryEnd}
           translate={translate}
+          readOnly={readOnly}
           onChangeMatchBoundaryStart={(matchBoundaryStart) =>
-            onChangeFormMatchBoundaryStart(form.id, matchBoundaryStart)
+            !readOnly
+              ? onChangeFormMatchBoundaryStart(form.id, matchBoundaryStart)
+              : undefined
           }
           onChangeMatchBoundaryEnd={(matchBoundaryEnd) =>
-            onChangeFormMatchBoundaryEnd(form.id, matchBoundaryEnd)
+            !readOnly
+              ? onChangeFormMatchBoundaryEnd(form.id, matchBoundaryEnd)
+              : undefined
           }
         />
       </div>
@@ -149,8 +167,11 @@ export function GlossaryEditor({
           <span>{translate("glossaryEditor.kind")}</span>
           <select
             value={draft.kind}
+            disabled={readOnly}
             onChange={(event) =>
-              onChangeKind(event.target.value as GlossaryEntryKind)
+              !readOnly
+                ? onChangeKind(event.target.value as GlossaryEntryKind)
+                : undefined
             }
           >
             {glossaryEntryKinds.map((kind) => (
@@ -183,7 +204,12 @@ export function GlossaryEditor({
           className="glossaryEditorDeleteButton"
           aria-label={translate("glossaryEditor.deleteEntry")}
           title={translate("glossaryEditor.deleteEntry")}
-          onClick={onDeleteEntry}
+          disabled={readOnly}
+          onClick={() => {
+            if (!readOnly) {
+              onDeleteEntry();
+            }
+          }}
         >
           <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteIcon }} />
         </button>
@@ -198,11 +224,14 @@ export function GlossaryEditor({
               type="text"
               required
               value={draft.canonicalSurface}
+              readOnly={readOnly}
               {...{
                 [pergamumContextSurfaceAttribute]: "glossaryCanonicalInput"
               }}
               onChange={(event) =>
-                onChangeCanonicalSurface(event.target.value)
+                !readOnly
+                  ? onChangeCanonicalSurface(event.target.value)
+                  : undefined
               }
             />
           </label>
@@ -211,8 +240,17 @@ export function GlossaryEditor({
             matchBoundaryStart={draft.canonicalMatchBoundaryStart}
             matchBoundaryEnd={draft.canonicalMatchBoundaryEnd}
             translate={translate}
-            onChangeMatchBoundaryStart={onChangeCanonicalMatchBoundaryStart}
-            onChangeMatchBoundaryEnd={onChangeCanonicalMatchBoundaryEnd}
+            readOnly={readOnly}
+            onChangeMatchBoundaryStart={(matchBoundaryStart) => {
+              if (!readOnly) {
+                onChangeCanonicalMatchBoundaryStart(matchBoundaryStart);
+              }
+            }}
+            onChangeMatchBoundaryEnd={(matchBoundaryEnd) => {
+              if (!readOnly) {
+                onChangeCanonicalMatchBoundaryEnd(matchBoundaryEnd);
+              }
+            }}
           />
         </div>
 
@@ -224,7 +262,12 @@ export function GlossaryEditor({
           <button
             type="button"
             className="glossaryEditorAddForm"
-            onClick={() => onAddForm("alias")}
+            disabled={readOnly}
+            onClick={() => {
+              if (!readOnly) {
+                onAddForm("alias");
+              }
+            }}
           >
             {translate("glossaryEditor.addAlias")}
           </button>
@@ -238,7 +281,12 @@ export function GlossaryEditor({
           <button
             type="button"
             className="glossaryEditorAddForm"
-            onClick={() => onAddForm("variant")}
+            disabled={readOnly}
+            onClick={() => {
+              if (!readOnly) {
+                onAddForm("variant");
+              }
+            }}
           >
             {translate("glossaryEditor.addVariant")}
           </button>
@@ -254,8 +302,9 @@ export function GlossaryEditor({
           >
             <MarkdownEditor
               value={draft.description}
-              onChange={onChangeDescription}
+              onChange={readOnly ? () => undefined : onChangeDescription}
               contextSurface="glossaryDescription"
+              readOnly={readOnly}
             />
           </section>
 
