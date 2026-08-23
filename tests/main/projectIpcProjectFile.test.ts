@@ -48,6 +48,10 @@ import {
   currentActiveProjectFilePath,
   currentProjectAccessMode,
   currentProjectRootPath,
+  defaultProjectWriteOwnershipManager,
+  projectAccessModeFromWriteOwnership,
+  type ProjectWriteOwnership,
+  type ProjectWriteOwnershipManager,
   registerProjectIpc
 } from "../../src/main/projectIpc";
 
@@ -63,6 +67,34 @@ describe("project file IPC foundation", () => {
 
   it("uses readWrite as the default project access mode", () => {
     expect(defaultProjectAccessMode).toEqual({ kind: "readWrite" });
+  });
+
+  it("default write ownership acquisition returns owned", async () => {
+    await expect(
+      defaultProjectWriteOwnershipManager.acquire(
+        path.join(projectRootPath, "Owned.pergamum")
+      )
+    ).resolves.toEqual({ kind: "owned" });
+  });
+
+  it("maps owned write ownership to readWrite access mode", () => {
+    expect(
+      projectAccessModeFromWriteOwnership({
+        kind: "owned"
+      })
+    ).toEqual(defaultProjectAccessMode);
+  });
+
+  it("maps unavailable write ownership to readOnly access mode", () => {
+    expect(
+      projectAccessModeFromWriteOwnership({
+        kind: "unavailable",
+        reason: "lockUnavailable"
+      })
+    ).toEqual({
+      kind: "readOnly",
+      reason: "writeLockUnavailable"
+    });
   });
 
   beforeEach(async () => {
@@ -217,6 +249,53 @@ describe("project file IPC foundation", () => {
       "Secret Draft.pergamum",
       "Secret Draft"
     ]);
+  });
+
+  it("createProject opens read-only when write ownership is unavailable", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Created Readonly.pergamum"
+    );
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: projectFilePath
+    });
+
+    const createProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.createProject,
+      createLoggerMock(),
+      ownershipManager
+    );
+    const project = await createProjectHandler({ sender: {} });
+
+    expect(ownershipManager.acquire).toHaveBeenCalledWith(
+      path.resolve(projectFilePath)
+    );
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Created Readonly"
+    });
+    expect(currentProjectAccessMode()).toEqual({
+      kind: "readOnly",
+      reason: "writeLockUnavailable"
+    });
+
+    const database = await openProjectDatabase(projectFilePath);
+    try {
+      const metadata = await readProjectMetadata(database);
+      expect(metadata.projectName).toBe("Created Readonly");
+    } finally {
+      await database.close();
+    }
   });
 
   it("createProject refuses to overwrite an existing .pergamum file", async () => {
@@ -462,6 +541,91 @@ describe("project file IPC foundation", () => {
     ]);
   });
 
+  it("openProject keeps readWrite access when write ownership is acquired", async () => {
+    const projectFilePath = path.join(projectRootPath, "Owned Open.pergamum");
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "owned"
+    });
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Owned Project"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      ownershipManager
+    );
+    const project = await openProjectHandler({ sender: {} });
+
+    expect(ownershipManager.acquire).toHaveBeenCalledWith(
+      path.resolve(projectFilePath)
+    );
+    expect(project).toMatchObject({
+      accessMode: defaultProjectAccessMode,
+      name: "Owned Project"
+    });
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+  });
+
+  it("openProject opens read-only when write ownership is unavailable", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Unavailable Open.pergamum"
+    );
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Unavailable Project"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      ownershipManager
+    );
+    const project = await openProjectHandler({ sender: {} });
+
+    expect(ownershipManager.acquire).toHaveBeenCalledWith(
+      path.resolve(projectFilePath)
+    );
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Unavailable Project"
+    });
+    expect(currentProjectRootPath()).toBe(projectRootPath);
+    expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
+    expect(currentProjectAccessMode()).toEqual({
+      kind: "readOnly",
+      reason: "writeLockUnavailable"
+    });
+    await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
+      {
+        projectName: "Unavailable Project",
+        projectFilePath: path.resolve(projectFilePath),
+        projectRootPath
+      }
+    ]);
+  });
+
   it("openProject rejects invalid .pergamum without migration or repair", async () => {
     const logger = createLoggerMock();
     const consoleWarnSpy = vi
@@ -568,6 +732,60 @@ describe("project file IPC foundation", () => {
       "2026-08-22T00:00:00.000Z"
     );
     expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+  });
+
+  it("openRecentProject opens read-only when write ownership is unavailable", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Recent Readonly.pergamum"
+    );
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Recent Readonly"
+    });
+    const metadata = await readProjectMetadata(created);
+    await created.close();
+    await writeRecentProjects(userDataPath, [
+      {
+        projectId: metadata.projectId,
+        projectName: metadata.projectName,
+        projectFilePath: path.resolve(projectFilePath),
+        projectRootPath,
+        schemaVersion: metadata.schemaVersion,
+        lastOpenedAt: "2026-08-22T00:00:00.000Z"
+      }
+    ]);
+
+    const openRecentProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openRecentProject,
+      createLoggerMock(),
+      ownershipManager
+    );
+    const project = await openRecentProjectHandler(
+      { sender: {} },
+      { projectFilePath: path.resolve(projectFilePath) }
+    );
+
+    expect(ownershipManager.acquire).toHaveBeenCalledWith(
+      path.resolve(projectFilePath)
+    );
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Recent Readonly"
+    });
+    expect(currentProjectAccessMode()).toEqual({
+      kind: "readOnly",
+      reason: "writeLockUnavailable"
+    });
   });
 
   it("openRecentProject rejects legacy database recent targets without opening or refreshing them", async () => {
@@ -725,11 +943,22 @@ function createLoggerMock(): DebugLogger & {
   };
 }
 
+function createWriteOwnershipManager(
+  ownership: ProjectWriteOwnership
+): ProjectWriteOwnershipManager & {
+  acquire: ReturnType<typeof vi.fn>;
+} {
+  return {
+    acquire: vi.fn().mockResolvedValue(ownership)
+  };
+}
+
 function registeredHandler(
   channel: string,
-  logger: DebugLogger = createLoggerMock()
+  logger: DebugLogger = createLoggerMock(),
+  writeOwnershipManager?: ProjectWriteOwnershipManager
 ): (...args: unknown[]) => unknown {
-  registerProjectIpc(logger);
+  registerProjectIpc(logger, writeOwnershipManager);
 
   const registration = electronMock.handle.mock.calls.find(
     ([registeredChannel]) => registeredChannel === channel

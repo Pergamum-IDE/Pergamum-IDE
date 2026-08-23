@@ -67,6 +67,19 @@ interface ProjectFileOpenResult {
   projectRootPath: string;
 }
 
+export type ProjectWriteOwnership =
+  | {
+      kind: "owned";
+    }
+  | {
+      kind: "unavailable";
+      reason: "lockUnavailable";
+    };
+
+export interface ProjectWriteOwnershipManager {
+  acquire(projectFilePath: string): Promise<ProjectWriteOwnership>;
+}
+
 let currentProjectState: CurrentProjectState | null = null;
 
 const defaultProjectRecoveryDirectoryName = ".pergamum_recovery";
@@ -80,6 +93,24 @@ const createProjectConflictDialogButtonIndex = {
   confirm: 0,
   cancel: 1
 } as const;
+
+export const defaultProjectWriteOwnershipManager: ProjectWriteOwnershipManager = {
+  acquire: async () => ({ kind: "owned" })
+};
+
+export function projectAccessModeFromWriteOwnership(
+  ownership: ProjectWriteOwnership
+): ProjectAccessMode {
+  switch (ownership.kind) {
+    case "owned":
+      return { ...defaultProjectAccessMode };
+    case "unavailable":
+      return {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      };
+  }
+}
 
 export function currentProjectRootPath(): string | null {
   return currentProjectState?.rootPath ?? null;
@@ -372,6 +403,7 @@ function activateProject(project: PergamumProject): void {
 async function createProjectFromParts(
   rootPath: string,
   activeProjectFilePath: string,
+  accessMode: ProjectAccessMode,
   name: string,
   config: PergamumProjectConfig | null
 ): Promise<PergamumProject> {
@@ -380,7 +412,7 @@ async function createProjectFromParts(
   return {
     rootPath,
     activeProjectFilePath,
-    accessMode: { ...defaultProjectAccessMode },
+    accessMode,
     name,
     config,
     documents
@@ -461,7 +493,8 @@ async function recordProjectFileOpenRecently(
 
 async function createProjectFromProjectFile(
   projectFilePath: string,
-  logger: DebugLogger
+  logger: DebugLogger,
+  writeOwnershipManager: ProjectWriteOwnershipManager
 ): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const initialProjectName =
@@ -480,10 +513,13 @@ async function createProjectFromProjectFile(
   };
 
   await writeProjectConfig(projectRootPath, config);
+  const ownership = await writeOwnershipManager.acquire(projectFilePath);
+  const accessMode = projectAccessModeFromWriteOwnership(ownership);
 
   const project = await createProjectFromParts(
     projectRootPath,
     projectFilePath,
+    accessMode,
     metadata.projectName,
     await readProjectConfig(projectRootPath)
   );
@@ -500,16 +536,20 @@ async function createProjectFromProjectFile(
 
 async function openProjectFromProjectFile(
   projectFilePath: string,
-  logger: DebugLogger
+  logger: DebugLogger,
+  writeOwnershipManager: ProjectWriteOwnershipManager
 ): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const database = await openProjectDatabase(projectFilePath, logger);
   const metadata = await readProjectMetadataAndClose(database);
 
   const config = await readProjectConfig(projectRootPath);
+  const ownership = await writeOwnershipManager.acquire(projectFilePath);
+  const accessMode = projectAccessModeFromWriteOwnership(ownership);
   const project = await createProjectFromParts(
     projectRootPath,
     projectFilePath,
+    accessMode,
     metadata.projectName,
     config
   );
@@ -526,7 +566,9 @@ async function openProjectFromProjectFile(
 
 export async function createProject(
   event: IpcMainInvokeEvent,
-  logger: DebugLogger = getDebugLogger()
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
 ): Promise<PergamumProject | null> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
@@ -571,7 +613,8 @@ export async function createProject(
 
     const openedProject = await createProjectFromProjectFile(
       projectFilePath,
-      logger
+      logger,
+      writeOwnershipManager
     );
     await recordProjectFileOpenRecently(openedProject);
 
@@ -607,7 +650,9 @@ export async function createProject(
 
 export async function openProject(
   event: IpcMainInvokeEvent,
-  logger: DebugLogger = getDebugLogger()
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
 ): Promise<PergamumProject | null> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
@@ -639,7 +684,8 @@ export async function openProject(
 
     const openedProject = await openProjectFromProjectFile(
       projectFilePath,
-      logger
+      logger,
+      writeOwnershipManager
     );
     await recordProjectFileOpenRecently(openedProject);
 
@@ -674,14 +720,16 @@ export async function openProject(
 }
 
 export function registerProjectIpc(
-  logger: DebugLogger = getDebugLogger()
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
 ): void {
   ipcMain.handle(PROJECT_CHANNELS.createProject, (event) =>
-    createProject(event, logger)
+    createProject(event, logger, writeOwnershipManager)
   );
 
   ipcMain.handle(PROJECT_CHANNELS.openProject, (event) =>
-    openProject(event, logger)
+    openProject(event, logger, writeOwnershipManager)
   );
 
   ipcMain.handle(
@@ -706,7 +754,8 @@ export function registerProjectIpc(
 
         const openedProject = await openProjectFromProjectFile(
           projectFilePath,
-          logger
+          logger,
+          writeOwnershipManager
         );
         await recordProjectFileOpenRecently(openedProject);
 
