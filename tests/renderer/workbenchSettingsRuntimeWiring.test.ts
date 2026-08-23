@@ -77,6 +77,29 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     );
   });
 
+  it("SettingsPanel exposes Command Palette description controls as advanced settings", () => {
+    const settingsPanelSource = readFileSync(
+      "src/renderer/SettingsPanel.tsx",
+      "utf8"
+    );
+
+    expect(settingsPanelSource).toContain(
+      "settings.application.section.commandPalette"
+    );
+    expect(settingsPanelSource).toContain(
+      "applicationSettingsCommandPaletteDescriptionEnabled"
+    );
+    expect(settingsPanelSource).toContain(
+      "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+    );
+    expect(settingsPanelSource).toContain(
+      "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+    );
+    expect(settingsPanelSource).toContain("advancedControlsDisabled");
+    expect(settingsPanelSource).toContain("settings.unit.ms");
+    expect(settingsPanelSource).toContain("settings.unit.pxPerSecond");
+  });
+
   it("SettingsPanel exposes the #200 sound feedback controls and disables child controls through the parent sound guard", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",

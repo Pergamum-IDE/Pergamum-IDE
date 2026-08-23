@@ -132,6 +132,32 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     ).toBe(getCatalogDefaultValue("editor.fontFamily"));
   });
 
+  it("commandPalette.description defaults derive from the catalog and are concrete application settings", () => {
+    const expected = {
+      enable: getCatalogDefaultValue("commandPalette.description.enable"),
+      marquee: {
+        delay: getCatalogDefaultValue(
+          "commandPalette.description.marquee.delay"
+        ),
+        speed: getCatalogDefaultValue(
+          "commandPalette.description.marquee.speed"
+        )
+      }
+    };
+
+    expect(builtInDefaultSettings.commandPalette.description).toEqual(expected);
+    expect(defaultApplicationSettings.commandPalette.description).toEqual(
+      expected
+    );
+    expect(createDefaultApplicationSettings().commandPalette.description).toEqual(
+      expected
+    );
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined)
+        .commandPalette.description
+    ).toEqual(expected);
+  });
+
   it("resolveEffectiveSettings passes through a valid editor.fontFamily application override", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,

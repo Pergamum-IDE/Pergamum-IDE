@@ -222,6 +222,12 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
         sound: defaultSoundSettings,
         fontFamily: 'Fira Code"; color: red'
       },
+      commandPalette: {
+        description: {
+          enable: true,
+          marquee: { delay: 2000, speed: 40 }
+        }
+      },
       editor: {},
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }

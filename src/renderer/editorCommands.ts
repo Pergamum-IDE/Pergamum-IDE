@@ -43,13 +43,21 @@ export interface EditorCommandController {
 
 export interface EditorCommandTitles {
   openMarkdownDocument: string;
+  openMarkdownDocumentDescription: string;
   saveDocument: string;
+  saveDocumentDescription: string;
   saveAs: string;
+  saveAsDescription: string;
   closeEditor: string;
+  closeEditorDescription: string;
   cutSelection: string;
+  cutSelectionDescription: string;
   copySelection: string;
+  copySelectionDescription: string;
   pasteSelection: string;
+  pasteSelectionDescription: string;
   selectAllSelection: string;
+  selectAllSelectionDescription: string;
 }
 
 type EditorCommand = Command<readonly [], void>;
@@ -59,24 +67,46 @@ export function createEditorCommandTitles(
 ): EditorCommandTitles {
   return {
     openMarkdownDocument: translate("command.editor.document.markdown.open"),
+    openMarkdownDocumentDescription: translate(
+      "command.editor.document.markdown.open.description"
+    ),
     saveDocument: translate("command.editor.document.save"),
+    saveDocumentDescription: translate(
+      "command.editor.document.save.description"
+    ),
     saveAs: translate("command.editor.saveAs"),
+    saveAsDescription: translate("command.editor.saveAs.description"),
     closeEditor: translate("command.editor.document.close"),
+    closeEditorDescription: translate("command.editor.document.close.description"),
     cutSelection: translate("command.editor.selection.cut"),
+    cutSelectionDescription: translate(
+      "command.editor.selection.cut.description"
+    ),
     copySelection: translate("command.editor.selection.copy"),
+    copySelectionDescription: translate(
+      "command.editor.selection.copy.description"
+    ),
     pasteSelection: translate("command.editor.selection.paste"),
-    selectAllSelection: translate("command.editor.selection.selectAll")
+    pasteSelectionDescription: translate(
+      "command.editor.selection.paste.description"
+    ),
+    selectAllSelection: translate("command.editor.selection.selectAll"),
+    selectAllSelectionDescription: translate(
+      "command.editor.selection.selectAll.description"
+    )
   };
 }
 
 function editCommand(
   commandId: EditCommandId,
   title: string,
+  description: string,
   controller: EditorCommandController
 ): EditorCommand {
   return {
     id: commandId,
     title,
+    description,
     execute: () => controller.delegateNativeEditCommand(commandId),
     isEnabled: () => controller.canDelegateNativeEditCommand(commandId)
   };
@@ -90,11 +120,13 @@ export function createEditorCommands(
     {
       id: editorCommandIds.openMarkdownDocument,
       title: titles.openMarkdownDocument,
+      description: titles.openMarkdownDocumentDescription,
       execute: () => controller.openMarkdownDocument()
     },
     {
       id: editorCommandIds.saveDocument,
       title: titles.saveDocument,
+      description: titles.saveDocumentDescription,
       execute: () => {
         if (!controller.canSaveCurrentDocument()) {
           return;
@@ -108,6 +140,7 @@ export function createEditorCommands(
     {
       id: editorCommandIds.saveAs,
       title: titles.saveAs,
+      description: titles.saveAsDescription,
       execute: () => {
         if (!controller.canSaveCurrentDocumentAs()) {
           return;
@@ -121,6 +154,7 @@ export function createEditorCommands(
     {
       id: editorCommandIds.close,
       title: titles.closeEditor,
+      description: titles.closeEditorDescription,
       execute: (options?: { editorId?: EditorId }) =>
         controller.closeEditor(options?.editorId),
       isEnabled: (options?: { editorId?: EditorId }) =>
@@ -132,10 +166,30 @@ export function createEditorCommands(
       // still infers the real arg type from `editorCommandIds.close`
       // itself, not from this array's element type, so this is safe.
     } as unknown as EditorCommand,
-    editCommand(editCommandIds[0], titles.cutSelection, controller),
-    editCommand(editCommandIds[1], titles.copySelection, controller),
-    editCommand(editCommandIds[2], titles.pasteSelection, controller),
-    editCommand(editCommandIds[3], titles.selectAllSelection, controller)
+    editCommand(
+      editCommandIds[0],
+      titles.cutSelection,
+      titles.cutSelectionDescription,
+      controller
+    ),
+    editCommand(
+      editCommandIds[1],
+      titles.copySelection,
+      titles.copySelectionDescription,
+      controller
+    ),
+    editCommand(
+      editCommandIds[2],
+      titles.pasteSelection,
+      titles.pasteSelectionDescription,
+      controller
+    ),
+    editCommand(
+      editCommandIds[3],
+      titles.selectAllSelection,
+      titles.selectAllSelectionDescription,
+      controller
+    )
   ];
 }
 

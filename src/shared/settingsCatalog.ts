@@ -37,12 +37,13 @@ export type SettingScope = (typeof settingScopes)[number];
 // ---------------------------------------------------------------------------
 
 // Deferred public area vocabulary: the area value list depends on ADR-0006
-// area closed-set/UI grouping decisions that have not been made yet. Do not
-// change in this issue.
+// area closed-set/UI grouping decisions that have not been made yet. #215
+// adds commandPalette only for its explicit Command Palette setting keys.
 export const settingAreas = [
   "workbench",
   "editor",
   "preview",
+  "commandPalette",
   "quickAccess",
   "files",
   "debug"
@@ -536,6 +537,37 @@ export const settingsCatalog = defineSettingsCatalog({
     defaultValue: false,
     labelKey: "settings.workbench.sound.keypress.enabled.label",
     descriptionKey: "settings.workbench.sound.keypress.enabled.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "commandPalette.description.enable": defineBooleanSetting({
+    key: "commandPalette.description.enable",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.commandPalette.description.enable.label",
+    descriptionKey: "settings.commandPalette.description.enable.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "commandPalette.description.marquee.delay": defineNumberSetting({
+    key: "commandPalette.description.marquee.delay",
+    scope: "applicationOnly",
+    defaultValue: 2000,
+    labelKey: "settings.commandPalette.description.marquee.delay.label",
+    descriptionKey:
+      "settings.commandPalette.description.marquee.delay.description",
+    numericRange: { min: 0, max: Number.MAX_SAFE_INTEGER, integer: true },
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "commandPalette.description.marquee.speed": defineNumberSetting({
+    key: "commandPalette.description.marquee.speed",
+    scope: "applicationOnly",
+    defaultValue: 40,
+    labelKey: "settings.commandPalette.description.marquee.speed.label",
+    descriptionKey:
+      "settings.commandPalette.description.marquee.speed.description",
+    numericRange: { min: 1, max: Number.MAX_SAFE_INTEGER },
     deprecatedAliases: [],
     migrationNotes: []
   }),

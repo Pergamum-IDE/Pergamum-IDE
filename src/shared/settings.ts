@@ -69,6 +69,20 @@ export interface WorkbenchSoundSettings {
   keypress: WorkbenchSoundToggleSettings;
 }
 
+export interface CommandPaletteDescriptionMarqueeSettings {
+  delay: number;
+  speed: number;
+}
+
+export interface CommandPaletteDescriptionSettings {
+  enable: boolean;
+  marquee: CommandPaletteDescriptionMarqueeSettings;
+}
+
+export interface ApplicationCommandPaletteSettings {
+  description: CommandPaletteDescriptionSettings;
+}
+
 export type NewFileLineEnding = SettingValueOf<"files.newFile.lineEnding">;
 export type NewFileEncoding = SettingValueOf<"files.newFile.encoding">;
 
@@ -103,6 +117,7 @@ export interface ApplicationWorkbenchSettings {
 export interface ApplicationSettings {
   preview: ApplicationPreviewSettings;
   workbench: ApplicationWorkbenchSettings;
+  commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   files: ApplicationFilesSettings;
   recentProjects: RecentProject[];
@@ -114,6 +129,7 @@ export interface ApplicationSettings {
 // to a catalog default.
 export interface SaveApplicationSettingsRequest {
   workbench: ApplicationWorkbenchSettings;
+  commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   files: ApplicationFilesSettings;
 }
@@ -138,6 +154,10 @@ export interface EffectiveWorkbenchSettings {
   fontFamily: string;
 }
 
+export interface EffectiveCommandPaletteSettings {
+  description: CommandPaletteDescriptionSettings;
+}
+
 export interface EffectiveEditorSettings {
   fontFamily: string;
 }
@@ -149,6 +169,7 @@ export interface EffectiveFilesSettings {
 export interface EffectiveSettings {
   preview: EffectivePreviewSettings;
   workbench: EffectiveWorkbenchSettings;
+  commandPalette: EffectiveCommandPaletteSettings;
   editor: EffectiveEditorSettings;
   files: EffectiveFilesSettings;
 }
@@ -190,6 +211,19 @@ export const builtInDefaultSettings: EffectiveSettings = {
       }
     },
     fontFamily: getCatalogDefaultValue("workbench.fontFamily")
+  },
+  commandPalette: {
+    description: {
+      enable: getCatalogDefaultValue("commandPalette.description.enable"),
+      marquee: {
+        delay: getCatalogDefaultValue(
+          "commandPalette.description.marquee.delay"
+        ),
+        speed: getCatalogDefaultValue(
+          "commandPalette.description.marquee.speed"
+        )
+      }
+    }
   },
   editor: {
     fontFamily: getCatalogDefaultValue("editor.fontFamily")
@@ -234,6 +268,17 @@ export const defaultApplicationSettings: ApplicationSettings = {
       }
     }
   },
+  commandPalette: {
+    description: {
+      enable: builtInDefaultSettings.commandPalette.description.enable,
+      marquee: {
+        delay:
+          builtInDefaultSettings.commandPalette.description.marquee.delay,
+        speed:
+          builtInDefaultSettings.commandPalette.description.marquee.speed
+      }
+    }
+  },
   editor: {},
   files: {
     newFile: {
@@ -268,6 +313,17 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
         },
         keypress: {
           enabled: defaultApplicationSettings.workbench.sound.keypress.enabled
+        }
+      }
+    },
+    commandPalette: {
+      description: {
+        enable: defaultApplicationSettings.commandPalette.description.enable,
+        marquee: {
+          delay:
+            defaultApplicationSettings.commandPalette.description.marquee.delay,
+          speed:
+            defaultApplicationSettings.commandPalette.description.marquee.speed
         }
       }
     },
@@ -328,6 +384,15 @@ export function resolveEffectiveSettings(
       fontFamily:
         applicationSettings.workbench.fontFamily ??
         builtInDefaultSettings.workbench.fontFamily
+    },
+    commandPalette: {
+      description: {
+        enable: applicationSettings.commandPalette.description.enable,
+        marquee: {
+          delay: applicationSettings.commandPalette.description.marquee.delay,
+          speed: applicationSettings.commandPalette.description.marquee.speed
+        }
+      }
     },
     // Project-level editor settings remain out of scope for #195; the
     // project config type intentionally does not carry editor settings yet.

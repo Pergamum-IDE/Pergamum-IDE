@@ -12,8 +12,11 @@ export interface ApplicationCommandController {
 
 export interface ApplicationCommandTitles {
   createProject: string;
+  createProjectDescription: string;
   openProject: string;
+  openProjectDescription: string;
   toggleRecentProjects: string;
+  toggleRecentProjectsDescription: string;
 }
 
 type ApplicationCommand = Command<readonly [], void>;
@@ -23,8 +26,17 @@ export function createApplicationCommandTitles(
 ): ApplicationCommandTitles {
   return {
     createProject: translate("command.workspace.project.create"),
+    createProjectDescription: translate(
+      "command.workspace.project.create.description"
+    ),
     openProject: translate("command.workspace.project.open"),
-    toggleRecentProjects: translate("command.workspace.recentProjects.toggle")
+    openProjectDescription: translate(
+      "command.workspace.project.open.description"
+    ),
+    toggleRecentProjects: translate("command.workspace.recentProjects.toggle"),
+    toggleRecentProjectsDescription: translate(
+      "command.workspace.recentProjects.toggle.description"
+    )
   };
 }
 
@@ -36,16 +48,19 @@ export function createApplicationCommands(
     {
       id: applicationCommandIds.createProject,
       title: titles.createProject,
+      description: titles.createProjectDescription,
       execute: () => controller.createProject()
     },
     {
       id: applicationCommandIds.openProject,
       title: titles.openProject,
+      description: titles.openProjectDescription,
       execute: () => controller.openProject()
     },
     {
       id: applicationCommandIds.toggleRecentProjects,
       title: titles.toggleRecentProjects,
+      description: titles.toggleRecentProjectsDescription,
       execute: () => controller.toggleRecentProjects()
     }
   ];

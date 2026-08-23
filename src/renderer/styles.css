@@ -362,7 +362,8 @@ button:active {
 }
 
 .settingsSelect,
-.settingsTextInput {
+.settingsTextInput,
+.settingsNumberInput {
   width: min(100%, 360px);
   min-height: 30px;
   border: 1px solid #a9b4c0;
@@ -375,9 +376,27 @@ button:active {
 }
 
 .settingsSelect:disabled,
-.settingsTextInput:disabled {
+.settingsTextInput:disabled,
+.settingsNumberInput:disabled {
   background: #eef3f8;
   color: #6b7785;
+}
+
+.settingsNumberInput {
+  width: min(100%, 160px);
+}
+
+.settingsNumberInputGroup {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsUnit {
+  color: #52616f;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .settingsAdvancedDisabled {
@@ -410,7 +429,8 @@ button:active {
   }
 
   .settingsSelect,
-  .settingsTextInput {
+  .settingsTextInput,
+  .settingsNumberInput {
     width: 100%;
   }
 }
@@ -2043,10 +2063,47 @@ button:active {
 }
 
 .commandPaletteFooterStatus {
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.commandPaletteFooterStatusText {
+  display: inline-block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.commandPaletteFooterStatusText-marquee {
+  max-width: none;
+  text-overflow: clip;
+  animation-name: commandPaletteDescriptionMarquee;
+  animation-delay: var(--command-palette-description-marquee-delay);
+  animation-duration: var(--command-palette-description-marquee-duration);
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes commandPaletteDescriptionMarquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(
+      calc(-1 * var(--command-palette-description-marquee-distance))
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commandPaletteFooterStatusText-marquee {
+    animation: none;
+    transform: none;
+  }
 }
 
 .commandPaletteFooterHints {

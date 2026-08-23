@@ -13,8 +13,11 @@ const executionOptions = { source: "utilityWindow" } as const;
 describe("utility window commands", () => {
   const titles = {
     open: "Open Utility Window",
+    openDescription: "Show the Utility Window.",
     close: "Close Utility Window",
-    toggle: "Toggle Utility Window"
+    closeDescription: "Hide the Utility Window.",
+    toggle: "Toggle Utility Window",
+    toggleDescription: "Toggle the Utility Window."
   };
 
   it("registers open, close, and toggle commands", () => {
@@ -73,8 +76,11 @@ describe("utility window commands", () => {
   it("derives command titles through translate", () => {
     expect(createUtilityWindowCommandTitles(translate)).toEqual({
       open: "command.workbench.utilityWindow.open",
+      openDescription: "command.workbench.utilityWindow.open.description",
       close: "command.workbench.utilityWindow.close",
-      toggle: "command.workbench.utilityWindow.toggle"
+      closeDescription: "command.workbench.utilityWindow.close.description",
+      toggle: "command.workbench.utilityWindow.toggle",
+      toggleDescription: "command.workbench.utilityWindow.toggle.description"
     });
   });
 });

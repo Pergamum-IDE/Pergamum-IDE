@@ -64,6 +64,12 @@ function saveRequest(
       sound: defaultSoundSettings,
       ...workbench
     },
+    commandPalette: {
+      description: {
+        enable: true,
+        marquee: { delay: 2000, speed: 40 }
+      }
+    },
     editor: {},
     files: {
       newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -307,6 +313,12 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         advancedSettings: { enabled: false },
         sound: defaultSoundSettings
       },
+      commandPalette: {
+        description: {
+          enable: true,
+          marquee: { delay: 2000, speed: 40 }
+        }
+      },
       editor: {},
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -328,6 +340,12 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         advancedSettings: { enabled: false },
         sound: defaultSoundSettings,
         somethingUnknown: true
+      },
+      commandPalette: {
+        description: {
+          enable: true,
+          marquee: { delay: 2000, speed: 40 }
+        }
       },
       editor: {},
       files: {

@@ -272,6 +272,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expectTypeOf(
         getCatalogDefaultValue("workbench.sound.enabled")
       ).toEqualTypeOf<boolean>();
+      expectTypeOf(
+        getCatalogDefaultValue("commandPalette.description.marquee.delay")
+      ).toEqualTypeOf<number>();
     });
 
     it("rejects an invalid/unknown key at the type level", () => {
@@ -625,18 +628,26 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("does not add the fixture-only number type to the production catalog (boolean is now used in production by #174's workbench.statusBar.visible)", () => {
+    it("uses number settings in production for Command Palette description marquee controls", () => {
       const productionTypes = new Set(
         getCatalogEntries().map((entry) => entry.type)
       );
 
-      expect(productionTypes.has("number")).toBe(false);
+      expect(productionTypes.has("number")).toBe(true);
+      expect(
+        getCatalogEntries()
+          .filter((entry) => entry.type === "number")
+          .map((entry) => entry.key)
+      ).toEqual([
+        "commandPalette.description.marquee.delay",
+        "commandPalette.description.marquee.speed"
+      ]);
       expect(
         getCatalogEntries().some((entry) => entry.key === "workbench.fontSize")
       ).toBe(false);
     });
 
-    it("workbench.statusBar.visible (#174), advanced settings (#195), and sound feedback (#200) are the production boolean entries", () => {
+    it("workbench.statusBar.visible (#174), advanced settings (#195), sound feedback (#200), and command descriptions (#215) are the production boolean entries", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
@@ -647,7 +658,8 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
-        "workbench.sound.keypress.enabled"
+        "workbench.sound.keypress.enabled",
+        "commandPalette.description.enable"
       ]);
     });
   });
@@ -755,6 +767,15 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("workbench.sound.enabled").scope).toBe(
         "applicationOnly"
       );
+      expect(getCatalogEntry("commandPalette.description.enable").scope).toBe(
+        "applicationOnly"
+      );
+      expect(
+        getCatalogEntry("commandPalette.description.marquee.delay").scope
+      ).toBe("applicationOnly");
+      expect(
+        getCatalogEntry("commandPalette.description.marquee.speed").scope
+      ).toBe("applicationOnly");
     });
 
     it("represents all three ADR-0006 S-11 scope values", () => {
@@ -777,6 +798,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getSettingArea("workbench.fontFamily")).toBe("workbench");
       expect(getSettingArea("editor.fontFamily")).toBe("editor");
       expect(getSettingArea("preview.renderer")).toBe("preview");
+      expect(getSettingArea("commandPalette.description.enable")).toBe(
+        "commandPalette"
+      );
       expect(getSettingArea("files.newFile.lineEnding")).toBe("files");
     });
 
@@ -816,9 +840,12 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #195 advanced settings guard, and #200 sound feedback entries", () => {
+    it("registers exactly the #150 entries, #174 entries, #195 advanced settings guard, #200 sound feedback entries, and #215 command description settings", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
+          "commandPalette.description.enable",
+          "commandPalette.description.marquee.delay",
+          "commandPalette.description.marquee.speed",
           "editor.fontFamily",
           "files.newFile.encoding",
           "files.newFile.lineEnding",

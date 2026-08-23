@@ -17,9 +17,13 @@ const executionOptions = { source: "utilityWindow" } as const;
 describe("glossary occurrences commands", () => {
   const titles = {
     previous: "Previous occurrence",
+    previousDescription: "Not implemented.",
     next: "Next occurrence",
+    nextDescription: "Not implemented.",
     openEntry: "Open entry",
-    closeTracking: "Close tracking"
+    openEntryDescription: "Not implemented.",
+    closeTracking: "Close tracking",
+    closeTrackingDescription: "Not implemented."
   };
 
   it("registers previous, next, openEntry, and closeTracking commands", () => {
@@ -189,9 +193,16 @@ describe("glossary occurrences commands", () => {
   it("derives command titles through translate", () => {
     expect(createGlossaryOccurrencesCommandTitles(translate)).toEqual({
       previous: "command.glossary.occurrences.previous",
+      previousDescription:
+        "command.glossary.occurrences.previous.description",
       next: "command.glossary.occurrences.next",
+      nextDescription: "command.glossary.occurrences.next.description",
       openEntry: "command.glossary.occurrences.entry.open",
-      closeTracking: "command.glossary.occurrences.tracking.close"
+      openEntryDescription:
+        "command.glossary.occurrences.entry.open.description",
+      closeTracking: "command.glossary.occurrences.tracking.close",
+      closeTrackingDescription:
+        "command.glossary.occurrences.tracking.close.description"
     });
   });
 });
