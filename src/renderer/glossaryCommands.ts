@@ -3,6 +3,7 @@ import {
   type Command,
   type CommandRegistry
 } from "../shared/commandRegistry";
+import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntryId
@@ -26,6 +27,10 @@ export const glossaryCommandIds = {
     boolean
   >("glossary.entry.occurrences.next")
 } as const;
+
+export const glossaryWriteCommandWhen: CommandEnablementExpression = {
+  allOf: [{ key: "project.isOpen" }, { key: "project.access.readWrite" }]
+};
 
 export interface GlossaryCommandController {
   openGlossaryEntry(entryId: GlossaryEntryId): boolean | Promise<boolean>;
@@ -98,6 +103,7 @@ export function createGlossaryCommands(
       id: glossaryCommandIds.createEntry,
       title: titles.createEntry,
       palette: { visible: false },
+      when: glossaryWriteCommandWhen,
       execute: (input) => controller.createGlossaryEntry(input)
     },
     {

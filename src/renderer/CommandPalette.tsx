@@ -172,7 +172,10 @@ export function resolveCommandPaletteFooterModel(input: {
 
   if (selectedEntry && !selectedEntry.enabled) {
     return {
-      statusKey: "commandPalette.footer.disabled",
+      statusKey:
+        selectedEntry.disabledReason === "readOnlyProject"
+          ? "command.disabled.readOnlyProject"
+          : "commandPalette.footer.disabled",
       canRunSelected
     };
   }
@@ -573,10 +576,15 @@ export function CommandPalette({
                     />
                   </div>
                   <div className="commandPaletteItemSecondary">
-                    <CommandPaletteHighlightedText
-                      text={entry.secondary.text}
-                      ranges={entry.secondary.ranges}
-                    />
+                    {!entry.enabled &&
+                    entry.disabledReason === "readOnlyProject" ? (
+                      translate("command.disabled.readOnlyProject")
+                    ) : (
+                      <CommandPaletteHighlightedText
+                        text={entry.secondary.text}
+                        ranges={entry.secondary.ranges}
+                      />
+                    )}
                   </div>
                 </li>
               ))

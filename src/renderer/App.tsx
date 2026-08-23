@@ -70,6 +70,7 @@ import {
   applyStandaloneSaveResult,
   createProjectDocument,
   currentDocumentContent,
+  displayName,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   standaloneSavePath,
@@ -674,6 +675,13 @@ export function App(): JSX.Element {
     applyEditorFontFamily(effectiveSettings.editor.fontFamily);
   }, [effectiveSettings.editor.fontFamily]);
   const isDirty = isCurrentEditorDirty(currentEditor);
+  const isReadOnlyProject = project?.accessMode.kind === "readOnly";
+  const isReadWriteProject = project?.accessMode.kind === "readWrite";
+  const isProjectOwnedCurrentEditor =
+    !isSettingsTabActive &&
+    (currentEditor.kind === "glossaryEntry" ||
+      (currentEditor.kind === "markdown" &&
+        activeMarkdownDocument?.kind === "project"));
   const isSavingGlossaryEntry =
     currentEditor.kind === "glossaryEntry" &&
     currentEditor.draft.saveState === "saving";
@@ -693,6 +701,8 @@ export function App(): JSX.Element {
     () =>
       buildCommandContextSnapshot({
         projectIsOpen: project !== null,
+        projectAccessReadWrite: isReadWriteProject,
+        projectAccessReadOnly: isReadOnlyProject,
         editorHasDocument:
           !isSettingsTabActive && currentEditor.kind === "markdown"
             ? Boolean(activeMarkdownDocument)
@@ -702,14 +712,18 @@ export function App(): JSX.Element {
           !isSettingsTabActive && currentEditor.kind === "markdown",
         editorKindGlossary:
           !isSettingsTabActive && currentEditor.kind === "glossaryEntry",
+        editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
         occurrenceTrackingActive:
           glossaryOccurrenceTrackingState.kind === "active"
       }),
     [
       project,
+      isReadWriteProject,
+      isReadOnlyProject,
       isSettingsTabActive,
       currentEditor.kind,
       activeMarkdownDocument,
+      isProjectOwnedCurrentEditor,
       isDirty,
       glossaryOccurrenceTrackingState.kind
     ]
@@ -1929,6 +1943,28 @@ export function App(): JSX.Element {
     });
   }
 
+  async function showReadOnlyProjectSaveAsSucceededDialog(
+    fileName: string
+  ): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.readOnlyProjectSaveAsSucceeded.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.readOnlyProjectSaveAsSucceeded.message", {
+          fileName
+        })
+      },
+      icon: {
+        kind: "info",
+        tooltip: translate("dialog.icon.info")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
   async function selectStandaloneSaveTarget(
     documentToSave: CurrentDocument
   ): Promise<StandaloneSaveTargetSelection> {
@@ -2511,6 +2547,10 @@ export function App(): JSX.Element {
 
           const documentToSave = targetEditor.document;
           const documentIdToSave = targetOpenDocument.id;
+          const isReadOnlyProjectDocumentSaveAs =
+            isReadOnlyProject &&
+            options.forceSaveAs === true &&
+            isProjectCurrentDocument(documentToSave);
 
           if (
             isProjectCurrentDocument(documentToSave) &&
@@ -2579,6 +2619,27 @@ export function App(): JSX.Element {
 
           if (!savedStandaloneDocument) {
             return "cancelled";
+          }
+
+          if (isReadOnlyProjectDocumentSaveAs) {
+            const fileName = displayName(savedStandaloneDocument.path);
+
+            setStatus({
+              key: "status.savedPath",
+              values: { path: fileName }
+            });
+            logRendererDebugEvent({
+              level: "debug",
+              event: "save.succeeded",
+              details: {
+                editorIdKind,
+                operation: "save",
+                result: "succeeded",
+                saveTargetKind: "standaloneMarkdown"
+              }
+            });
+            await showReadOnlyProjectSaveAsSucceededDialog(fileName);
+            return "saved";
           }
 
           const savedDocument = applyStandaloneSaveResult(

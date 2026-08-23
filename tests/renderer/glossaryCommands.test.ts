@@ -1,9 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { CommandRegistry } from "../../src/shared/commandRegistry";
+import {
+  CommandDisabledError,
+  CommandRegistry
+} from "../../src/shared/commandRegistry";
 import {
   createGlossaryCommandTitles,
   glossaryCommandIds,
+  glossaryWriteCommandWhen,
   registerGlossaryCommands
 } from "../../src/renderer/glossaryCommands";
 
@@ -41,6 +45,12 @@ function registerAllGlossaryCommands(
     },
     allCommandTitles
   );
+
+  registry.setCommandContextProvider(() => ({
+    "project.isOpen": true,
+    "project.access.readWrite": true,
+    "project.access.readOnly": false
+  }));
 }
 
 describe("glossary commands", () => {
@@ -60,6 +70,9 @@ describe("glossary commands", () => {
     );
     expect(registry.get(glossaryCommandIds.createEntry)?.title).toBe(
       "Create glossary entry"
+    );
+    expect(registry.get(glossaryCommandIds.createEntry)?.when).toEqual(
+      glossaryWriteCommandWhen
     );
     expect(registry.get(glossaryCommandIds.previousOccurrence)?.title).toBe(
       "Previous occurrence"
@@ -96,6 +109,38 @@ describe("glossary commands", () => {
       registry.execute(glossaryCommandIds.createEntry, executionOptions, input)
     ).resolves.toBe(true);
     expect(createGlossaryEntry).toHaveBeenCalledWith(input);
+  });
+
+  it("disables Glossary entry create in read-only project sessions", async () => {
+    const registry = new CommandRegistry();
+    const createGlossaryEntry = vi.fn(async () => true);
+    const input = {
+      kind: "place" as const,
+      canonicalSurface: "王都",
+      description: ""
+    };
+
+    registerAllGlossaryCommands(registry, { createGlossaryEntry });
+    registry.setCommandContextProvider(() => ({
+      "project.isOpen": true,
+      "project.access.readWrite": false,
+      "project.access.readOnly": true
+    }));
+
+    expect(
+      registry.enablementForContext(glossaryCommandIds.createEntry, {
+        "project.isOpen": true,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: false,
+      disabledReason: "readOnlyProject"
+    });
+    await expect(
+      registry.execute(glossaryCommandIds.createEntry, executionOptions, input)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
+    expect(createGlossaryEntry).not.toHaveBeenCalled();
   });
 
   it("navigates to the previous Glossary occurrence through a typed entryId command argument", async () => {

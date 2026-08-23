@@ -9,18 +9,24 @@
 
 export type CommandContextKey =
   | "project.isOpen"
+  | "project.access.readWrite"
+  | "project.access.readOnly"
   | "editor.hasDocument"
   | "editor.isDirty"
   | "editor.kind.markdown"
   | "editor.kind.glossary"
+  | "editor.document.projectOwned"
   | "glossary.occurrences.tracking.active";
 
 export const commandContextKeys: readonly CommandContextKey[] = [
   "project.isOpen",
+  "project.access.readWrite",
+  "project.access.readOnly",
   "editor.hasDocument",
   "editor.isDirty",
   "editor.kind.markdown",
   "editor.kind.glossary",
+  "editor.document.projectOwned",
   "glossary.occurrences.tracking.active"
 ] as const;
 
@@ -54,6 +60,13 @@ export type CommandEnablementExpression =
   | CommandEnablementNotExpression
   | CommandEnablementAllOfExpression
   | CommandEnablementAnyOfExpression;
+
+export type CommandDisabledReason = "readOnlyProject";
+
+export interface CommandEnablementResult {
+  readonly enabled: boolean;
+  readonly disabledReason: CommandDisabledReason | null;
+}
 
 /**
  * A copied, value-only snapshot of context key booleans. Known keys that are
@@ -140,33 +153,82 @@ export function validateCommandEnablementExpression(
   }
 }
 
+function disabledReasonForFailedKey(
+  key: CommandContextKey,
+  context: CommandContext
+): CommandDisabledReason | null {
+  if (
+    key === "project.access.readWrite" &&
+    context["project.access.readOnly"] === true
+  ) {
+    return "readOnlyProject";
+  }
+
+  return null;
+}
+
 /**
  * Omitted `when` means enabled. A known key absent from `context` evaluates
  * as false (legitimate missing state, distinct from a registration bug).
  */
+export function evaluateCommandEnablementResult(
+  expression: CommandEnablementExpression | undefined,
+  context: CommandContext
+): CommandEnablementResult {
+  if (!expression) {
+    return { enabled: true, disabledReason: null };
+  }
+
+  if ("key" in expression) {
+    const enabled = context[expression.key] === true;
+
+    return {
+      enabled,
+      disabledReason: enabled
+        ? null
+        : disabledReasonForFailedKey(expression.key, context)
+    };
+  }
+
+  if ("not" in expression) {
+    const child = evaluateCommandEnablementResult(expression.not, context);
+
+    return {
+      enabled: !child.enabled,
+      disabledReason: null
+    };
+  }
+
+  if ("allOf" in expression) {
+    for (const child of expression.allOf) {
+      const result = evaluateCommandEnablementResult(child, context);
+
+      if (!result.enabled) {
+        return result;
+      }
+    }
+
+    return { enabled: true, disabledReason: null };
+  }
+
+  let disabledReason: CommandDisabledReason | null = null;
+
+  for (const child of expression.anyOf) {
+    const result = evaluateCommandEnablementResult(child, context);
+
+    if (result.enabled) {
+      return { enabled: true, disabledReason: null };
+    }
+
+    disabledReason ??= result.disabledReason;
+  }
+
+  return { enabled: false, disabledReason };
+}
+
 export function evaluateCommandEnablement(
   expression: CommandEnablementExpression | undefined,
   context: CommandContext
 ): boolean {
-  if (!expression) {
-    return true;
-  }
-
-  if ("key" in expression) {
-    return context[expression.key] === true;
-  }
-
-  if ("not" in expression) {
-    return !evaluateCommandEnablement(expression.not, context);
-  }
-
-  if ("allOf" in expression) {
-    return expression.allOf.every((child) =>
-      evaluateCommandEnablement(child, context)
-    );
-  }
-
-  return expression.anyOf.some((child) =>
-    evaluateCommandEnablement(child, context)
-  );
+  return evaluateCommandEnablementResult(expression, context).enabled;
 }

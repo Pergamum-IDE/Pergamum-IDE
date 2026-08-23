@@ -108,6 +108,37 @@ describe("file I/O workflow translations (#202)", () => {
     );
   });
 
+  it("defines read-only Save As success dialog strings for ja and en", () => {
+    expect(t("ja", "command.disabled.readOnlyProject")).toBe(
+      "読み取り専用のため使用できません"
+    );
+    expect(t("en", "command.disabled.readOnlyProject")).toBe(
+      "Unavailable in read-only mode"
+    );
+    expect(t("ja", "dialog.icon.info")).toBe("情報");
+    expect(t("en", "dialog.icon.info")).toBe("Information");
+    expect(t("ja", "dialog.readOnlyProjectSaveAsSucceeded.title")).toBe(
+      "読み取り専用プロジェクトから保存しました"
+    );
+    expect(t("en", "dialog.readOnlyProjectSaveAsSucceeded.title")).toBe(
+      "Saved from Read-only Project"
+    );
+    expect(
+      t("ja", "dialog.readOnlyProjectSaveAsSucceeded.message", {
+        fileName: "copy.md"
+      })
+    ).toBe(
+      "保存したファイル:\ncopy.md\n\nプロジェクトの状態に従い、このファイルも読み取り専用として扱われます。\n現在の文書は編集可能なファイルには切り替わりません。"
+    );
+    expect(
+      t("en", "dialog.readOnlyProjectSaveAsSucceeded.message", {
+        fileName: "copy.md"
+      })
+    ).toBe(
+      "Saved file:\ncopy.md\n\nFollowing the project state, this file is also treated as read-only.\nThe current document will not switch to an editable file."
+    );
+  });
+
 });
 
 describe("application settings translations (#181)", () => {
