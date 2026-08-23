@@ -50,6 +50,8 @@ import {
   currentProjectRootPath,
   defaultProjectWriteOwnershipManager,
   projectAccessModeFromWriteOwnership,
+  projectWriteLockDirectoryPath,
+  releaseCurrentProjectWriteOwnership,
   type ProjectWriteOwnership,
   type ProjectWriteOwnershipManager,
   registerProjectIpc
@@ -70,11 +72,44 @@ describe("project file IPC foundation", () => {
   });
 
   it("default write ownership acquisition returns owned", async () => {
-    await expect(
-      defaultProjectWriteOwnershipManager.acquire(
-        path.join(projectRootPath, "Owned.pergamum")
-      )
-    ).resolves.toEqual({ kind: "owned" });
+    const projectFilePath = path.join(projectRootPath, "Owned.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const ownership = await defaultProjectWriteOwnershipManager.acquire(
+      projectFilePath
+    );
+
+    expect(ownership).toEqual({ kind: "owned" });
+    const lockDirectoryStats = await fs.stat(lockDirectoryPath);
+    expect(lockDirectoryStats.isDirectory()).toBe(true);
+
+    await defaultProjectWriteOwnershipManager.release(
+      projectFilePath,
+      ownership
+    );
+    await expect(fs.access(lockDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
+  it("existing lock directory makes write ownership unavailable without removing it", async () => {
+    const projectFilePath = path.join(projectRootPath, "Locked.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    await fs.mkdir(lockDirectoryPath);
+
+    const ownership = await defaultProjectWriteOwnershipManager.acquire(
+      projectFilePath
+    );
+
+    expect(ownership).toEqual({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+
+    await defaultProjectWriteOwnershipManager.release(
+      projectFilePath,
+      ownership
+    );
+    await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
   });
 
   it("maps owned write ownership to readWrite access mode", () => {
@@ -115,6 +150,7 @@ describe("project file IPC foundation", () => {
   });
 
   afterEach(async () => {
+    await releaseCurrentProjectWriteOwnership();
     vi.restoreAllMocks();
     await fs.rm(projectRootPath, {
       recursive: true,
@@ -223,6 +259,10 @@ describe("project file IPC foundation", () => {
     expect(currentProjectRootPath()).toBe(projectRootPath);
     expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
     expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+    const lockDirectoryStats = await fs.stat(
+      projectWriteLockDirectoryPath(projectFilePath)
+    );
+    expect(lockDirectoryStats.isDirectory()).toBe(true);
 
     const database = await openProjectDatabase(projectFilePath);
     try {
@@ -530,6 +570,10 @@ describe("project file IPC foundation", () => {
     expect(currentProjectRootPath()).toBe(projectRootPath);
     expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
     expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+    const openedLockDirectoryStats = await fs.stat(
+      projectWriteLockDirectoryPath(projectFilePath)
+    );
+    expect(openedLockDirectoryStats.isDirectory()).toBe(true);
     await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
       {
         projectId: metadata.projectId,
@@ -624,6 +668,123 @@ describe("project file IPC foundation", () => {
         projectRootPath
       }
     ]);
+  });
+
+  it("openProject falls back to read-only when the lock directory already exists", async () => {
+    const projectFilePath = path.join(projectRootPath, "Locked Open.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Locked Open"
+    });
+    await created.close();
+    await fs.mkdir(lockDirectoryPath);
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    const project = await openProjectHandler({ sender: {} });
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Locked Open"
+    });
+    expect(currentProjectAccessMode()).toEqual({
+      kind: "readOnly",
+      reason: "writeLockUnavailable"
+    });
+    await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
+  });
+
+  it("releaseCurrentProjectWriteOwnership removes the owned lock directory", async () => {
+    const projectFilePath = path.join(projectRootPath, "Release Open.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Release Open"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    const project = await openProjectHandler({ sender: {} });
+
+    expect(project).toMatchObject({
+      accessMode: defaultProjectAccessMode,
+      name: "Release Open"
+    });
+    await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
+
+    await releaseCurrentProjectWriteOwnership();
+
+    expect(currentProjectAccessMode()).toBeNull();
+    await expect(fs.access(lockDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
+  it("project switch releases the previous owned lock and owns the new one", async () => {
+    const secondProjectRootPath = path.join(projectRootPath, "second-root");
+    await fs.mkdir(secondProjectRootPath);
+    const firstProjectFilePath = path.join(
+      projectRootPath,
+      "First Switch.pergamum"
+    );
+    const secondProjectFilePath = path.join(
+      secondProjectRootPath,
+      "Second Switch.pergamum"
+    );
+    const firstLockDirectoryPath = projectWriteLockDirectoryPath(
+      firstProjectFilePath
+    );
+    const secondLockDirectoryPath = projectWriteLockDirectoryPath(
+      secondProjectFilePath
+    );
+    const firstCreated = await createProjectDatabase({
+      projectFilePath: firstProjectFilePath,
+      projectName: "First Switch"
+    });
+    await firstCreated.close();
+    const secondCreated = await createProjectDatabase({
+      projectFilePath: secondProjectFilePath,
+      projectName: "Second Switch"
+    });
+    await secondCreated.close();
+    electronMock.showOpenDialog
+      .mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [firstProjectFilePath]
+      })
+      .mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [secondProjectFilePath]
+      });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+
+    await openProjectHandler({ sender: {} });
+    await expect(fs.access(firstLockDirectoryPath)).resolves.toBeUndefined();
+
+    const secondProject = await openProjectHandler({ sender: {} });
+
+    expect(secondProject).toMatchObject({
+      accessMode: defaultProjectAccessMode,
+      name: "Second Switch"
+    });
+    await expect(fs.access(firstLockDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    await expect(fs.access(secondLockDirectoryPath)).resolves.toBeUndefined();
   });
 
   it("openProject rejects invalid .pergamum without migration or repair", async () => {
@@ -947,9 +1108,11 @@ function createWriteOwnershipManager(
   ownership: ProjectWriteOwnership
 ): ProjectWriteOwnershipManager & {
   acquire: ReturnType<typeof vi.fn>;
+  release: ReturnType<typeof vi.fn>;
 } {
   return {
-    acquire: vi.fn().mockResolvedValue(ownership)
+    acquire: vi.fn().mockResolvedValue(ownership),
+    release: vi.fn().mockResolvedValue(undefined)
   };
 }
 

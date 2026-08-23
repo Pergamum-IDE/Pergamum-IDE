@@ -14,7 +14,10 @@ import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
 import { installApplicationMenu } from "./menu";
-import { registerProjectIpc } from "./projectIpc";
+import {
+  registerProjectIpc,
+  releaseCurrentProjectWriteOwnership
+} from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 
 let mainWindow: BrowserWindow | null = null;
@@ -55,9 +58,11 @@ async function createMainWindow(): Promise<void> {
 
 function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
   app.on("before-quit", () => {
+    void releaseCurrentProjectWriteOwnership();
     logger.flushAndClose();
   });
   app.on("will-quit", () => {
+    void releaseCurrentProjectWriteOwnership();
     logger.flushAndClose();
   });
 

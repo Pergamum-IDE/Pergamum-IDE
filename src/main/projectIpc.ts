@@ -57,6 +57,8 @@ interface CurrentProjectState {
   rootPath: string;
   activeProjectFilePath: string;
   accessMode: ProjectAccessMode;
+  writeOwnership: ProjectWriteOwnership;
+  writeOwnershipManager: ProjectWriteOwnershipManager;
   documentRelativePaths: Set<string>;
 }
 
@@ -78,6 +80,10 @@ export type ProjectWriteOwnership =
 
 export interface ProjectWriteOwnershipManager {
   acquire(projectFilePath: string): Promise<ProjectWriteOwnership>;
+  release(
+    projectFilePath: string,
+    ownership: ProjectWriteOwnership
+  ): Promise<void>;
 }
 
 let currentProjectState: CurrentProjectState | null = null;
@@ -93,10 +99,72 @@ const createProjectConflictDialogButtonIndex = {
   confirm: 0,
   cancel: 1
 } as const;
+const projectWriteLockDirectoryName = ".pergamum.lock";
 
-export const defaultProjectWriteOwnershipManager: ProjectWriteOwnershipManager = {
-  acquire: async () => ({ kind: "owned" })
-};
+export function projectWriteLockDirectoryPath(
+  projectFilePath: string
+): string {
+  return path.join(
+    resolveProjectRoot(projectFilePath),
+    projectWriteLockDirectoryName
+  );
+}
+
+export class ProjectWriteLockOwnershipManager
+  implements ProjectWriteOwnershipManager
+{
+  private readonly ownedLockDirectoryPaths = new Set<string>();
+
+  async acquire(projectFilePath: string): Promise<ProjectWriteOwnership> {
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+
+    if (this.ownedLockDirectoryPaths.has(lockDirectoryPath)) {
+      return { kind: "owned" };
+    }
+
+    try {
+      await fs.mkdir(lockDirectoryPath);
+      this.ownedLockDirectoryPaths.add(lockDirectoryPath);
+      return { kind: "owned" };
+    } catch (error) {
+      if (nodeErrorCode(error) === "EEXIST") {
+        return {
+          kind: "unavailable",
+          reason: "lockUnavailable"
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  async release(
+    projectFilePath: string,
+    ownership: ProjectWriteOwnership
+  ): Promise<void> {
+    if (ownership.kind !== "owned") {
+      return;
+    }
+
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+
+    if (!this.ownedLockDirectoryPaths.has(lockDirectoryPath)) {
+      return;
+    }
+
+    try {
+      await fs.rmdir(lockDirectoryPath);
+    } catch {
+      // Lock release is best-effort; failing to remove it must not break
+      // the project session transition or shutdown path.
+    } finally {
+      this.ownedLockDirectoryPaths.delete(lockDirectoryPath);
+    }
+  }
+}
+
+export const defaultProjectWriteOwnershipManager: ProjectWriteOwnershipManager =
+  new ProjectWriteLockOwnershipManager();
 
 export function projectAccessModeFromWriteOwnership(
   ownership: ProjectWriteOwnership
@@ -389,15 +457,82 @@ async function discoverMarkdownFiles(
   );
 }
 
-function activateProject(project: PergamumProject): void {
+async function releaseWriteOwnership(
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  projectFilePath: string,
+  writeOwnership: ProjectWriteOwnership
+): Promise<void> {
+  try {
+    await writeOwnershipManager.release(projectFilePath, writeOwnership);
+  } catch {
+    // Ownership release is intentionally best-effort.
+  }
+}
+
+async function releaseProjectWriteOwnership(
+  state: CurrentProjectState
+): Promise<void> {
+  await releaseWriteOwnership(
+    state.writeOwnershipManager,
+    state.activeProjectFilePath,
+    state.writeOwnership
+  );
+}
+
+function shouldReleasePreviousProjectWriteOwnership(
+  previousState: CurrentProjectState,
+  nextProjectFilePath: string,
+  nextOwnershipManager: ProjectWriteOwnershipManager,
+  nextOwnership: ProjectWriteOwnership
+): boolean {
+  return !(
+    previousState.activeProjectFilePath === nextProjectFilePath &&
+    previousState.writeOwnershipManager === nextOwnershipManager &&
+    previousState.writeOwnership.kind === "owned" &&
+    nextOwnership.kind === "owned"
+  );
+}
+
+export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
+  const stateToRelease = currentProjectState;
+
+  if (!stateToRelease) {
+    return;
+  }
+
+  currentProjectState = null;
+  await releaseProjectWriteOwnership(stateToRelease);
+}
+
+async function activateProject(
+  project: PergamumProject,
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  writeOwnership: ProjectWriteOwnership
+): Promise<void> {
+  const previousState = currentProjectState;
+
   currentProjectState = {
     rootPath: project.rootPath,
     activeProjectFilePath: project.activeProjectFilePath,
     accessMode: project.accessMode,
+    writeOwnership,
+    writeOwnershipManager,
     documentRelativePaths: new Set(
       project.documents.map((document) => document.relativePath)
     )
   };
+
+  if (
+    previousState &&
+    shouldReleasePreviousProjectWriteOwnership(
+      previousState,
+      project.activeProjectFilePath,
+      writeOwnershipManager,
+      writeOwnership
+    )
+  ) {
+    await releaseProjectWriteOwnership(previousState);
+  }
 }
 
 async function createProjectFromParts(
@@ -515,23 +650,35 @@ async function createProjectFromProjectFile(
   await writeProjectConfig(projectRootPath, config);
   const ownership = await writeOwnershipManager.acquire(projectFilePath);
   const accessMode = projectAccessModeFromWriteOwnership(ownership);
+  let shouldReleaseOwnership = true;
 
-  const project = await createProjectFromParts(
-    projectRootPath,
-    projectFilePath,
-    accessMode,
-    metadata.projectName,
-    await readProjectConfig(projectRootPath)
-  );
+  try {
+    const project = await createProjectFromParts(
+      projectRootPath,
+      projectFilePath,
+      accessMode,
+      metadata.projectName,
+      await readProjectConfig(projectRootPath)
+    );
 
-  activateProject(project);
+    await activateProject(project, writeOwnershipManager, ownership);
+    shouldReleaseOwnership = false;
 
-  return {
-    project,
-    metadata,
-    projectFilePath,
-    projectRootPath
-  };
+    return {
+      project,
+      metadata,
+      projectFilePath,
+      projectRootPath
+    };
+  } finally {
+    if (shouldReleaseOwnership) {
+      await releaseWriteOwnership(
+        writeOwnershipManager,
+        projectFilePath,
+        ownership
+      );
+    }
+  }
 }
 
 async function openProjectFromProjectFile(
@@ -546,22 +693,35 @@ async function openProjectFromProjectFile(
   const config = await readProjectConfig(projectRootPath);
   const ownership = await writeOwnershipManager.acquire(projectFilePath);
   const accessMode = projectAccessModeFromWriteOwnership(ownership);
-  const project = await createProjectFromParts(
-    projectRootPath,
-    projectFilePath,
-    accessMode,
-    metadata.projectName,
-    config
-  );
+  let shouldReleaseOwnership = true;
 
-  activateProject(project);
+  try {
+    const project = await createProjectFromParts(
+      projectRootPath,
+      projectFilePath,
+      accessMode,
+      metadata.projectName,
+      config
+    );
 
-  return {
-    project,
-    metadata,
-    projectFilePath,
-    projectRootPath
-  };
+    await activateProject(project, writeOwnershipManager, ownership);
+    shouldReleaseOwnership = false;
+
+    return {
+      project,
+      metadata,
+      projectFilePath,
+      projectRootPath
+    };
+  } finally {
+    if (shouldReleaseOwnership) {
+      await releaseWriteOwnership(
+        writeOwnershipManager,
+        projectFilePath,
+        ownership
+      );
+    }
+  }
 }
 
 export async function createProject(
