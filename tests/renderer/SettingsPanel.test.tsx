@@ -257,6 +257,42 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     ).toBe(false);
   });
 
+  it("disables Command Palette marquee controls while preserving their values when command descriptions are disabled", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      },
+      commandPalette: {
+        description: {
+          enable: false,
+          marquee: { delay: 3456, speed: 78.5 }
+        }
+      }
+    };
+    const element = settingsPanelElement("en", settings);
+    const descriptionEnabled = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionEnabled"
+    );
+    const marqueeDelay = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+    );
+    const marqueeSpeed = elementById(
+      element,
+      "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
+    );
+
+    expect(descriptionEnabled.props.checked).toBe(false);
+    expect(descriptionEnabled.props.disabled).toBe(false);
+    expect(marqueeDelay.props.disabled).toBe(true);
+    expect(marqueeDelay.props.value).toBe(3456);
+    expect(marqueeSpeed.props.disabled).toBe(true);
+    expect(marqueeSpeed.props.value).toBe(78.5);
+  });
+
   it("saves Command Palette description settings without discarding other application settings", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,

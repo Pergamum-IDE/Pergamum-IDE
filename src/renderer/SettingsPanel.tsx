@@ -89,6 +89,8 @@ export function SettingsPanel({
   const soundControlsDisabled = isLoading || !soundSettings.enabled;
   const commandPaletteDescriptionSettings =
     settings.commandPalette.description;
+  const commandPaletteMarqueeControlsDisabled =
+    advancedControlsDisabled || !commandPaletteDescriptionSettings.enable;
 
   async function changeAdvancedSettingsEnabled(enabled: boolean): Promise<void> {
     if (enabled && !advancedSettingsEnabled) {
@@ -501,7 +503,7 @@ export function SettingsPanel({
                 max={commandPaletteDescriptionDelayEntry.numericRange.max}
                 step={1}
                 value={commandPaletteDescriptionSettings.marquee.delay}
-                disabled={advancedControlsDisabled}
+                disabled={commandPaletteMarqueeControlsDisabled}
                 onChange={(event) =>
                   changeCommandPaletteDescriptionMarqueeValue(
                     "delay",
@@ -544,7 +546,7 @@ export function SettingsPanel({
                 max={commandPaletteDescriptionSpeedEntry.numericRange.max}
                 step="any"
                 value={commandPaletteDescriptionSettings.marquee.speed}
-                disabled={advancedControlsDisabled}
+                disabled={commandPaletteMarqueeControlsDisabled}
                 onChange={(event) =>
                   changeCommandPaletteDescriptionMarqueeValue(
                     "speed",

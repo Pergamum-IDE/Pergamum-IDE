@@ -226,6 +226,26 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       marquee: { delay: 2000, speed: 40 }
     });
   });
+
+  it("falls back Command Palette marquee values that violate range or integer validation", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 1.5, speed: 1000.1 }
+          }
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.commandPalette.description).toEqual({
+      enable: true,
+      marquee: { delay: 2000, speed: 40 }
+    });
+  });
 });
 
 describe("settingsStore Application Settings core controls write path (#195)", () => {
@@ -374,7 +394,31 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         commandPalette: {
           description: {
             enable: true,
+            marquee: { delay: 10001, speed: 40 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 1.5, speed: 40 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
             marquee: { delay: 2000, speed: 0 }
+          }
+        }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 2000, speed: 1001 }
           }
         }
       }),

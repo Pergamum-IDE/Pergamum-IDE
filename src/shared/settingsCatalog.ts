@@ -556,7 +556,7 @@ export const settingsCatalog = defineSettingsCatalog({
     labelKey: "settings.commandPalette.description.marquee.delay.label",
     descriptionKey:
       "settings.commandPalette.description.marquee.delay.description",
-    numericRange: { min: 0, max: Number.MAX_SAFE_INTEGER, integer: true },
+    numericRange: { min: 0, max: 10000, integer: true },
     deprecatedAliases: [],
     migrationNotes: []
   }),
@@ -567,7 +567,7 @@ export const settingsCatalog = defineSettingsCatalog({
     labelKey: "settings.commandPalette.description.marquee.speed.label",
     descriptionKey:
       "settings.commandPalette.description.marquee.speed.description",
-    numericRange: { min: 1, max: Number.MAX_SAFE_INTEGER },
+    numericRange: { min: 1, max: 1000 },
     deprecatedAliases: [],
     migrationNotes: []
   }),

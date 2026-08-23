@@ -647,6 +647,74 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toBe(false);
     });
 
+    it("validates Command Palette description marquee delay as a finite integer from 0 to 10000", () => {
+      const entry = getCatalogEntry("commandPalette.description.marquee.delay");
+
+      expect(entry.type).toBe("number");
+      if (entry.type !== "number") {
+        throw new Error("Expected number setting.");
+      }
+
+      expect(entry.numericRange).toEqual({
+        min: 0,
+        max: 10000,
+        integer: true
+      });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 0)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 10000)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", -1)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 10001)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.delay", 1.5)
+      ).toEqual({ ok: false, failure: "integer" });
+      expect(
+        validateCatalogValue(
+          "commandPalette.description.marquee.delay",
+          Number.POSITIVE_INFINITY
+        )
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("validates Command Palette description marquee speed as a finite number from 1 to 1000", () => {
+      const entry = getCatalogEntry("commandPalette.description.marquee.speed");
+
+      expect(entry.type).toBe("number");
+      if (entry.type !== "number") {
+        throw new Error("Expected number setting.");
+      }
+
+      expect(entry.numericRange).toEqual({ min: 1, max: 1000 });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 1)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 40.5)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 1000)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 0)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.description.marquee.speed", 1000.1)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue(
+          "commandPalette.description.marquee.speed",
+          Number.NaN
+        )
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
     it("workbench.statusBar.visible (#174), advanced settings (#195), sound feedback (#200), and command descriptions (#215) are the production boolean entries", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
