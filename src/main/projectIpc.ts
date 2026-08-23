@@ -53,12 +53,19 @@ import {
 } from "./projectDatabase";
 import {
   findRecentProjectByFilePath,
+  loadSettings,
   recordRecentProject
 } from "./settingsStore";
+import {
+  createProjectWindowTitle,
+  projectWindowTitleStatusFromAccessMode,
+  type ProjectWindowTitleTarget
+} from "./projectWindowTitle";
 
 interface CurrentProjectState {
   rootPath: string;
   activeProjectFilePath: string;
+  projectName: string;
   accessMode: ProjectAccessMode;
   writeOwnership: ProjectWriteOwnership;
   writeOwnershipManager: ProjectWriteOwnershipManager;
@@ -102,10 +109,15 @@ export interface ProjectWriteOwnershipManager {
   ): Promise<void>;
 }
 
+export type ProjectWindowTitleTargetProvider =
+  () => ProjectWindowTitleTarget | null;
+
 let currentProjectState: CurrentProjectState | null = null;
 let pendingReadOnlyProjectOpenState: PendingReadOnlyProjectOpenState | null =
   null;
 let pendingReadOnlyProjectOpenSequence = 0;
+let projectWindowTitleTargetProvider: ProjectWindowTitleTargetProvider | null =
+  null;
 
 const defaultProjectRecoveryDirectoryName = ".pergamum_recovery";
 const createProjectConflictWarningMessage =
@@ -528,6 +540,45 @@ function shouldReleasePreviousProjectWriteOwnership(
   );
 }
 
+export function setProjectWindowTitleTargetProvider(
+  provider: ProjectWindowTitleTargetProvider | null
+): void {
+  projectWindowTitleTargetProvider = provider;
+}
+
+async function requestCurrentProjectWindowTitleUpdate(): Promise<void> {
+  if (!projectWindowTitleTargetProvider) {
+    return;
+  }
+
+  await updateCurrentProjectWindowTitle();
+}
+
+export async function updateCurrentProjectWindowTitle(): Promise<void> {
+  const target = projectWindowTitleTargetProvider?.() ?? null;
+
+  if (!target) {
+    return;
+  }
+
+  try {
+    const settings = await loadSettings();
+    target.setTitle(
+      createProjectWindowTitle({
+        projectName: currentProjectState?.projectName ?? null,
+        titleStatus: currentProjectState
+          ? projectWindowTitleStatusFromAccessMode(
+              currentProjectState.accessMode
+            )
+          : null,
+        language: settings.workbench.language
+      })
+    );
+  } catch {
+    // Window title updates must not affect project open/close lifecycle.
+  }
+}
+
 export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
   await discardPendingReadOnlyProjectOpen();
 
@@ -538,6 +589,7 @@ export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
   }
 
   currentProjectState = null;
+  await requestCurrentProjectWindowTitleUpdate();
   await releaseProjectWriteOwnership(stateToRelease);
 }
 
@@ -551,6 +603,7 @@ async function activateProject(
   currentProjectState = {
     rootPath: project.rootPath,
     activeProjectFilePath: project.activeProjectFilePath,
+    projectName: project.name,
     accessMode: project.accessMode,
     writeOwnership,
     writeOwnershipManager,
@@ -570,6 +623,8 @@ async function activateProject(
   ) {
     await releaseProjectWriteOwnership(previousState);
   }
+
+  await requestCurrentProjectWindowTitleUpdate();
 }
 
 async function createProjectFromParts(
@@ -1051,8 +1106,11 @@ export async function openProject(
 export function registerProjectIpc(
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
-    defaultProjectWriteOwnershipManager
+    defaultProjectWriteOwnershipManager,
+  windowTitleTargetProvider?: ProjectWindowTitleTargetProvider
 ): void {
+  setProjectWindowTitleTargetProvider(windowTitleTargetProvider ?? null);
+
   ipcMain.handle(PROJECT_CHANNELS.createProject, (event) =>
     createProject(event, logger, writeOwnershipManager)
   );
