@@ -95,6 +95,8 @@ export const enTranslations = {
   "dialog.fileOpenFailed.title": "Could not read file",
   "dialog.fileSaveFailed.message": "Pergamum could not save the file. Your text is still kept in the editor. Check the save location and permissions.",
   "dialog.fileSaveFailed.title": "Could not save file",
+  "dialog.readOnlyProjectOpen.message": "This project is already open in another Pergamum instance.\n\nYou can open it in read-only mode.\nEditing and saving are unavailable, but you can view the contents.\n\nDo you want to open the project?",
+  "dialog.readOnlyProjectOpen.title": "Open in read-only mode?",
   "dialog.readOnlyProjectSaveAsSucceeded.message": "Saved file:\n{fileName}\n\nFollowing the project state, this file is also treated as read-only.\nThe current document will not switch to an editable file.",
   "dialog.readOnlyProjectSaveAsSucceeded.title": "Saved from Read-only Project",
   "error.unknown": "Unknown error.",

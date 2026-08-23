@@ -61,6 +61,8 @@ export const PROJECT_CHANNELS = {
   createProject: "projects:createProject",
   openProject: "projects:openProject",
   openRecentProject: "projects:openRecentProject",
+  confirmReadOnlyProjectOpen: "projects:confirmReadOnlyProjectOpen",
+  cancelReadOnlyProjectOpen: "projects:cancelReadOnlyProjectOpen",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument"
 } as const;
@@ -198,6 +200,32 @@ export interface PergamumProject {
   documents: ProjectDocument[];
 }
 
+export interface PendingReadOnlyProjectOpen {
+  kind: "pendingReadOnlyProjectOpen";
+  token: string;
+  project: PergamumProject;
+}
+
+export type ProjectOpenResult =
+  | PergamumProject
+  | PendingReadOnlyProjectOpen
+  | null;
+
+export interface PendingReadOnlyProjectOpenRequest {
+  token: string;
+}
+
+export function isPendingReadOnlyProjectOpen(
+  value: ProjectOpenResult
+): value is PendingReadOnlyProjectOpen {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    value.kind === "pendingReadOnlyProjectOpen"
+  );
+}
+
 export interface OpenRecentProjectRequest {
   projectFilePath: string;
 }
@@ -246,9 +274,13 @@ export interface PergamumApi {
     ) => Promise<WriteMarkdownResult>;
   };
   projects: {
-    createProject: () => Promise<PergamumProject | null>;
-    openProject: () => Promise<PergamumProject | null>;
-    openRecentProject: (projectFilePath: string) => Promise<PergamumProject>;
+    createProject: () => Promise<ProjectOpenResult>;
+    openProject: () => Promise<ProjectOpenResult>;
+    openRecentProject: (projectFilePath: string) => Promise<ProjectOpenResult>;
+    confirmReadOnlyProjectOpen: (
+      token: string
+    ) => Promise<PergamumProject | null>;
+    cancelReadOnlyProjectOpen: (token: string) => Promise<void>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

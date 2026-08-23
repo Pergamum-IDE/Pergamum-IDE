@@ -93,6 +93,8 @@ export const jaTranslations = {
   "dialog.fileOpenFailed.title": "ファイルを読み込めませんでした",
   "dialog.fileSaveFailed.message": "ファイルを保存できませんでした。\n\n編集中の本文はこのタブに保持されています。\n保存先、ファイル名、書き込み権限、空き容量などを確認してください。",
   "dialog.fileSaveFailed.title": "ファイルを保存できませんでした",
+  "dialog.readOnlyProjectOpen.message": "このプロジェクトは既に別のPergamumで開かれています。\n\n読み取り専用で開くことができます。\n編集や保存はできませんが、内容を確認できます。\n\nプロジェクトを開きますか？",
+  "dialog.readOnlyProjectOpen.title": "読み取り専用で開きますか？",
   "dialog.readOnlyProjectSaveAsSucceeded.message": "保存したファイル:\n{fileName}\n\nプロジェクトの状態に従い、このファイルも読み取り専用として扱われます。\n現在の文書は編集可能なファイルには切り替わりません。",
   "dialog.readOnlyProjectSaveAsSucceeded.title": "読み取り専用プロジェクトから保存しました",
   "error.unknown": "不明なエラーです。",

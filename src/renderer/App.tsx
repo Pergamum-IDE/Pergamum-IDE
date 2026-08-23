@@ -8,6 +8,7 @@ import {
 } from "react";
 import type {
   PergamumProject,
+  ProjectOpenResult,
   ProjectDocument,
   SaveApplicationSettingsRequest
 } from "../shared/api";
@@ -213,6 +214,7 @@ import {
   resetOpenDocumentsForProjectContextSwitch
 } from "./projectActivationState";
 import { confirmProjectSwitchWithUnsavedDocuments } from "./projectSwitchConfirmation";
+import { confirmReadOnlyProjectOpenIfNeeded } from "./readOnlyProjectOpenConfirmation";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { SettingsPanel } from "./SettingsPanel";
@@ -1046,6 +1048,20 @@ export function App(): JSX.Element {
       state: openDocumentsState,
       translate,
       choiceDialog
+    });
+  }
+
+  async function resolveProjectOpenResult(
+    result: ProjectOpenResult
+  ): Promise<PergamumProject | null> {
+    return confirmReadOnlyProjectOpenIfNeeded({
+      result,
+      translate,
+      choiceDialog,
+      confirmReadOnlyProjectOpen:
+        window.pergamum.projects.confirmReadOnlyProjectOpen,
+      cancelReadOnlyProjectOpen:
+        window.pergamum.projects.cancelReadOnlyProjectOpen
     });
   }
 
@@ -2843,7 +2859,9 @@ export function App(): JSX.Element {
     }
 
     try {
-      const createdProject = await window.pergamum.projects.createProject();
+      const createdProject = await resolveProjectOpenResult(
+        await window.pergamum.projects.createProject()
+      );
 
       if (!createdProject) {
         setStatus({ key: "status.openProjectCanceled" });
@@ -2873,7 +2891,9 @@ export function App(): JSX.Element {
     }
 
     try {
-      const openedProject = await window.pergamum.projects.openProject();
+      const openedProject = await resolveProjectOpenResult(
+        await window.pergamum.projects.openProject()
+      );
 
       if (!openedProject) {
         setStatus({ key: "status.openProjectCanceled" });
@@ -2903,9 +2923,15 @@ export function App(): JSX.Element {
     }
 
     try {
-      const openedProject = await window.pergamum.projects.openRecentProject(
-        projectFilePath
+      const openedProject = await resolveProjectOpenResult(
+        await window.pergamum.projects.openRecentProject(projectFilePath)
       );
+
+      if (!openedProject) {
+        setStatus({ key: "status.openProjectCanceled" });
+        return;
+      }
+
       const settingsReloadError = await reloadSettingsAfterProjectOpen();
       const openedStatus = await activateProject(openedProject);
 

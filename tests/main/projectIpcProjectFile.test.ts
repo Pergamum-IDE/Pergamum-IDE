@@ -3,7 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultProjectAccessMode, PROJECT_CHANNELS } from "../../src/shared/api";
+import {
+  defaultProjectAccessMode,
+  PROJECT_CHANNELS,
+  type PendingReadOnlyProjectOpen
+} from "../../src/shared/api";
 import type { DebugLogger } from "../../src/main/debugLogger";
 import { projectConfigFileName } from "../../src/main/projectConfigStore";
 import {
@@ -168,7 +172,9 @@ describe("project file IPC foundation", () => {
     expect(electronMock.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining([
         PROJECT_CHANNELS.createProject,
-        PROJECT_CHANNELS.openProject
+        PROJECT_CHANNELS.openProject,
+        PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
+        PROJECT_CHANNELS.cancelReadOnlyProjectOpen
       ])
     );
     expect(electronMock.handle.mock.calls.map(([channel]) => channel)).not.toContain(
@@ -291,7 +297,7 @@ describe("project file IPC foundation", () => {
     ]);
   });
 
-  it("createProject opens read-only when write ownership is unavailable", async () => {
+  it("createProject waits for confirmation when write ownership is unavailable", async () => {
     const projectFilePath = path.join(
       projectRootPath,
       "Created Readonly.pergamum"
@@ -310,11 +316,32 @@ describe("project file IPC foundation", () => {
       createLoggerMock(),
       ownershipManager
     );
-    const project = await createProjectHandler({ sender: {} });
+    const result = await createProjectHandler({ sender: {} });
 
     expect(ownershipManager.acquire).toHaveBeenCalledWith(
       path.resolve(projectFilePath)
     );
+    const pending = expectPendingReadOnlyProjectOpen(result);
+    expect(pending.project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Created Readonly"
+    });
+    expect(currentProjectAccessMode()).toBeNull();
+    await expectSettingsJsonMissing(userDataPath);
+
+    const confirmReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmReadOnlyProjectOpen
+    );
+    const project = await confirmReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
@@ -617,7 +644,7 @@ describe("project file IPC foundation", () => {
     expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
   });
 
-  it("openProject opens read-only when write ownership is unavailable", async () => {
+  it("openProject waits for confirmation when write ownership is unavailable", async () => {
     const projectFilePath = path.join(
       projectRootPath,
       "Unavailable Open.pergamum"
@@ -641,11 +668,34 @@ describe("project file IPC foundation", () => {
       createLoggerMock(),
       ownershipManager
     );
-    const project = await openProjectHandler({ sender: {} });
+    const result = await openProjectHandler({ sender: {} });
 
     expect(ownershipManager.acquire).toHaveBeenCalledWith(
       path.resolve(projectFilePath)
     );
+    const pending = expectPendingReadOnlyProjectOpen(result);
+    expect(pending.project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Unavailable Project"
+    });
+    expect(currentProjectRootPath()).toBeNull();
+    expect(currentActiveProjectFilePath()).toBeNull();
+    expect(currentProjectAccessMode()).toBeNull();
+    await expectSettingsJsonMissing(userDataPath);
+
+    const confirmReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmReadOnlyProjectOpen
+    );
+    const project = await confirmReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
@@ -670,7 +720,7 @@ describe("project file IPC foundation", () => {
     ]);
   });
 
-  it("openProject falls back to read-only when the lock directory already exists", async () => {
+  it("openProject confirms read-only fallback when the lock directory already exists", async () => {
     const projectFilePath = path.join(projectRootPath, "Locked Open.pergamum");
     const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
     const created = await createProjectDatabase({
@@ -685,11 +735,30 @@ describe("project file IPC foundation", () => {
     });
 
     const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
-    const project = await openProjectHandler({ sender: {} });
+    const result = await openProjectHandler({ sender: {} });
 
-    expect(project).toMatchObject({
+    const pending = expectPendingReadOnlyProjectOpen(result);
+    expect(pending.project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Locked Open"
+    });
+    expect(currentProjectAccessMode()).toBeNull();
+    await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
+
+    const confirmReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmReadOnlyProjectOpen
+    );
+    const project = await confirmReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
+    expect(project).toMatchObject({
       accessMode: {
         kind: "readOnly",
         reason: "writeLockUnavailable"
@@ -701,6 +770,86 @@ describe("project file IPC foundation", () => {
       reason: "writeLockUnavailable"
     });
     await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
+  });
+
+  it("canceling a pending read-only open keeps the current project unchanged", async () => {
+    const secondProjectRootPath = path.join(projectRootPath, "cancel-root");
+    await fs.mkdir(secondProjectRootPath);
+    const firstProjectFilePath = path.join(
+      projectRootPath,
+      "Current Project.pergamum"
+    );
+    const secondProjectFilePath = path.join(
+      secondProjectRootPath,
+      "Locked Project.pergamum"
+    );
+    const secondLockDirectoryPath = projectWriteLockDirectoryPath(
+      secondProjectFilePath
+    );
+    const firstCreated = await createProjectDatabase({
+      projectFilePath: firstProjectFilePath,
+      projectName: "Current Project"
+    });
+    await firstCreated.close();
+    const secondCreated = await createProjectDatabase({
+      projectFilePath: secondProjectFilePath,
+      projectName: "Locked Project"
+    });
+    await secondCreated.close();
+    await fs.mkdir(secondLockDirectoryPath);
+    electronMock.showOpenDialog
+      .mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [firstProjectFilePath]
+      })
+      .mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [secondProjectFilePath]
+      });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    const firstProject = await openProjectHandler({ sender: {} });
+
+    expect(firstProject).toMatchObject({
+      accessMode: defaultProjectAccessMode,
+      name: "Current Project"
+    });
+    expect(currentActiveProjectFilePath()).toBe(
+      path.resolve(firstProjectFilePath)
+    );
+
+    const pendingResult = await openProjectHandler({ sender: {} });
+    const pending = expectPendingReadOnlyProjectOpen(pendingResult);
+
+    expect(pending.project).toMatchObject({
+      activeProjectFilePath: path.resolve(secondProjectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Locked Project"
+    });
+    expect(currentProjectRootPath()).toBe(projectRootPath);
+    expect(currentActiveProjectFilePath()).toBe(
+      path.resolve(firstProjectFilePath)
+    );
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+
+    const cancelReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.cancelReadOnlyProjectOpen
+    );
+    await cancelReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
+    expect(currentProjectRootPath()).toBe(projectRootPath);
+    expect(currentActiveProjectFilePath()).toBe(
+      path.resolve(firstProjectFilePath)
+    );
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+    await expect(fs.access(secondLockDirectoryPath)).resolves.toBeUndefined();
+    await expect(readRecentProjects(userDataPath)).resolves.toHaveLength(1);
   });
 
   it("releaseCurrentProjectWriteOwnership removes the owned lock directory", async () => {
@@ -895,7 +1044,7 @@ describe("project file IPC foundation", () => {
     expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
   });
 
-  it("openRecentProject opens read-only when write ownership is unavailable", async () => {
+  it("openRecentProject waits for confirmation when write ownership is unavailable", async () => {
     const projectFilePath = path.join(
       projectRootPath,
       "Recent Readonly.pergamum"
@@ -926,7 +1075,7 @@ describe("project file IPC foundation", () => {
       createLoggerMock(),
       ownershipManager
     );
-    const project = await openRecentProjectHandler(
+    const result = await openRecentProjectHandler(
       { sender: {} },
       { projectFilePath: path.resolve(projectFilePath) }
     );
@@ -934,6 +1083,26 @@ describe("project file IPC foundation", () => {
     expect(ownershipManager.acquire).toHaveBeenCalledWith(
       path.resolve(projectFilePath)
     );
+    const pending = expectPendingReadOnlyProjectOpen(result);
+    expect(pending.project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Recent Readonly"
+    });
+    expect(currentProjectAccessMode()).toBeNull();
+
+    const confirmReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmReadOnlyProjectOpen
+    );
+    const project = await confirmReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
     expect(project).toMatchObject({
       rootPath: projectRootPath,
       activeProjectFilePath: path.resolve(projectFilePath),
@@ -1114,6 +1283,23 @@ function createWriteOwnershipManager(
     acquire: vi.fn().mockResolvedValue(ownership),
     release: vi.fn().mockResolvedValue(undefined)
   };
+}
+
+function expectPendingReadOnlyProjectOpen(
+  value: unknown
+): PendingReadOnlyProjectOpen {
+  expect(value).toMatchObject({
+    kind: "pendingReadOnlyProjectOpen",
+    token: expect.any(String),
+    project: {
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      }
+    }
+  });
+
+  return value as PendingReadOnlyProjectOpen;
 }
 
 function registeredHandler(

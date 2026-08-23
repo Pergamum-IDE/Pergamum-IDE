@@ -139,6 +139,27 @@ describe("file I/O workflow translations (#202)", () => {
     );
   });
 
+  it("defines read-only project open confirmation dialog strings for ja and en", () => {
+    expect(t("ja", "dialog.readOnlyProjectOpen.title")).toBe(
+      "読み取り専用で開きますか？"
+    );
+    expect(t("en", "dialog.readOnlyProjectOpen.title")).toBe(
+      "Open in read-only mode?"
+    );
+    expect(t("ja", "dialog.readOnlyProjectOpen.message")).toBe(
+      "このプロジェクトは既に別のPergamumで開かれています。\n\n" +
+        "読み取り専用で開くことができます。\n" +
+        "編集や保存はできませんが、内容を確認できます。\n\n" +
+        "プロジェクトを開きますか？"
+    );
+    expect(t("en", "dialog.readOnlyProjectOpen.message")).toBe(
+      "This project is already open in another Pergamum instance.\n\n" +
+        "You can open it in read-only mode.\n" +
+        "Editing and saving are unavailable, but you can view the contents.\n\n" +
+        "Do you want to open the project?"
+    );
+  });
+
 });
 
 describe("application settings translations (#181)", () => {

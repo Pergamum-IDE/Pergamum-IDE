@@ -50,6 +50,8 @@ describe("glossary preload API", () => {
     await api.projects.createProject();
     await api.projects.openProject();
     await api.projects.openRecentProject("C:\\Novel\\Novel.pergamum");
+    await api.projects.confirmReadOnlyProjectOpen("pending-token");
+    await api.projects.cancelReadOnlyProjectOpen("pending-token");
 
     expect(api.projects as Record<string, unknown>).not.toHaveProperty(
       "openProjectFile"
@@ -61,6 +63,18 @@ describe("glossary preload API", () => {
         PROJECT_CHANNELS.openRecentProject,
         {
           projectFilePath: "C:\\Novel\\Novel.pergamum"
+        }
+      ],
+      [
+        PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
+        {
+          token: "pending-token"
+        }
+      ],
+      [
+        PROJECT_CHANNELS.cancelReadOnlyProjectOpen,
+        {
+          token: "pending-token"
         }
       ]
     ]);
