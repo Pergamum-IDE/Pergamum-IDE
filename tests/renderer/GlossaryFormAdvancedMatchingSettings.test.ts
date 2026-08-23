@@ -150,6 +150,39 @@ describe("GlossaryFormAdvancedMatchingSettingsView", () => {
     expect(onChangeMatchBoundaryEnd).toHaveBeenCalledWith("none");
   });
 
+  it("disables boundary selectors and ignores selector changes in read-only mode", () => {
+    const onChangeMatchBoundaryStart = vi.fn();
+    const onChangeMatchBoundaryEnd = vi.fn();
+    const element = GlossaryFormAdvancedMatchingSettingsView({
+      matchBoundaryStart: "auto",
+      matchBoundaryEnd: "auto",
+      translate,
+      isExpanded: true,
+      readOnly: true,
+      onToggleExpanded: () => undefined,
+      onChangeMatchBoundaryStart,
+      onChangeMatchBoundaryEnd
+    });
+    const selects = collectElements(
+      element,
+      (child) => child.type === "select"
+    );
+
+    expect(selects).toHaveLength(2);
+    expect(selects[0].props.disabled).toBe(true);
+    expect(selects[1].props.disabled).toBe(true);
+
+    (selects[0].props.onChange as (event: unknown) => void)({
+      target: { value: "strict" }
+    });
+    (selects[1].props.onChange as (event: unknown) => void)({
+      target: { value: "none" }
+    });
+
+    expect(onChangeMatchBoundaryStart).not.toHaveBeenCalled();
+    expect(onChangeMatchBoundaryEnd).not.toHaveBeenCalled();
+  });
+
   it("reports the toggle interaction through onToggleExpanded", () => {
     const onToggleExpanded = vi.fn();
     const element = GlossaryFormAdvancedMatchingSettingsView({

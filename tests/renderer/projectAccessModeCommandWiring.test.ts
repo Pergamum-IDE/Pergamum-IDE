@@ -47,6 +47,56 @@ describe("project access mode command wiring (#211)", () => {
     );
   });
 
+  it("derives read-only editor interaction only from read-only project-owned editors", () => {
+    const source = appSource();
+    const contextBlock = sourceBlock(
+      source,
+      "const isReadOnlyProject =",
+      "const canSave ="
+    );
+
+    expect(contextBlock).toContain(
+      "const isReadOnlyProjectOwnedEditor ="
+    );
+    expect(contextBlock).toContain(
+      "isReadOnlyProject && isProjectOwnedCurrentEditor"
+    );
+    expect(contextBlock).toContain(
+      'activeMarkdownDocument?.kind === "project"'
+    );
+    expect(contextBlock).toContain('currentEditor.kind === "glossaryEntry"');
+  });
+
+  it("passes read-only project-owned editor state into the editor surface", () => {
+    const source = appSource();
+    const editorSurfaceBlock = sourceBlock(
+      source,
+      "<EditorSurface",
+      "{layout.utilityWindow.open ?"
+    );
+
+    expect(editorSurfaceBlock).toContain(
+      "isProjectOwnedReadOnly={isReadOnlyProjectOwnedEditor}"
+    );
+  });
+
+  it("ignores Markdown content changes while the active editor is a read-only project-owned editor", () => {
+    const source = appSource();
+    const setActiveDocumentContentBlock = sourceBlock(
+      source,
+      "function setActiveDocumentContent",
+      "function setActiveGlossaryEntryKind"
+    );
+
+    expect(setActiveDocumentContentBlock).toContain(
+      "if (isReadOnlyProjectOwnedEditor)"
+    );
+    expect(setActiveDocumentContentBlock).toContain("return;");
+    expect(setActiveDocumentContentBlock).toContain(
+      "updateCurrentDocumentContent(document, nextContent)"
+    );
+  });
+
   it("keeps read-only project document Save As as copy-out without switching the editor to a standalone file", () => {
     const source = appSource();
     const saveBlock = sourceBlock(

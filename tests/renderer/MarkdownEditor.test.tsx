@@ -53,6 +53,25 @@ describe("MarkdownEditor", () => {
       `${pergamumContextSurfaceAttribute}="markdownEditor"`
     );
   });
+
+  it("marks read-only instances so project-owned editors can be non-editable", () => {
+    const readOnlyMarkup = renderToStaticMarkup(
+      React.createElement(MarkdownEditor, {
+        value: "body",
+        onChange: () => undefined,
+        readOnly: true
+      })
+    );
+    const readWriteMarkup = renderToStaticMarkup(
+      React.createElement(MarkdownEditor, {
+        value: "body",
+        onChange: () => undefined
+      })
+    );
+
+    expect(readOnlyMarkup).toContain("editorHost-readOnly");
+    expect(readWriteMarkup).not.toContain("editorHost-readOnly");
+  });
 });
 
 describe("MarkdownEditor sound input classification (#200)", () => {

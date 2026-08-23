@@ -620,6 +620,31 @@ describe("workspace navigation", () => {
     expect(markup).not.toContain("chapter-01.md");
   });
 
+  it("passes read-only project access mode to the Glossary create UI", () => {
+    const readOnlyProject: PergamumProject = {
+      ...project,
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      }
+    };
+    const sidebar = WorkspaceSidebar({
+      mode: "glossary",
+      project: readOnlyProject,
+      highlightedProjectDocumentRelativePath: null,
+      highlightedGlossaryEntryId: null,
+      glossaryRefreshToken: 0,
+      translate,
+      onActivateProjectDocument: () => undefined,
+      onActivateGlossaryEntry: () => undefined,
+      onCreateGlossaryEntry: async () => false
+    });
+
+    expect(React.isValidElement(sidebar)).toBe(true);
+    expect(sidebar.type).toBe(GlossarySidebar);
+    expect(sidebar.props.readOnly).toBe(true);
+  });
+
   it("does not call glossary APIs when no project is open", () => {
     const glossaryApi = stubGlossaryApi();
 

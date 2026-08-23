@@ -682,6 +682,8 @@ export function App(): JSX.Element {
     (currentEditor.kind === "glossaryEntry" ||
       (currentEditor.kind === "markdown" &&
         activeMarkdownDocument?.kind === "project"));
+  const isReadOnlyProjectOwnedEditor =
+    isReadOnlyProject && isProjectOwnedCurrentEditor;
   const isSavingGlossaryEntry =
     currentEditor.kind === "glossaryEntry" &&
     currentEditor.draft.saveState === "saving";
@@ -1048,6 +1050,10 @@ export function App(): JSX.Element {
   }
 
   function setActiveDocumentContent(nextContent: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenDocument(state, (document) =>
         updateCurrentDocumentContent(document, nextContent)
@@ -1056,6 +1062,10 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryKind(kind: GlossaryEntryKind): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1066,6 +1076,10 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryDescription(description: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1082,6 +1096,10 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryCanonicalSurface(surface: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1100,6 +1118,10 @@ export function App(): JSX.Element {
   function setActiveGlossaryEntryCanonicalMatchBoundaryStart(
     matchBoundaryStart: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1118,6 +1140,10 @@ export function App(): JSX.Element {
   function setActiveGlossaryEntryCanonicalMatchBoundaryEnd(
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1136,6 +1162,10 @@ export function App(): JSX.Element {
   function addActiveGlossaryEntryForm(
     relation: GlossaryFormRelation
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1152,6 +1182,10 @@ export function App(): JSX.Element {
     formId: string,
     surface: string
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1172,6 +1206,10 @@ export function App(): JSX.Element {
     formId: string,
     warningPolicy: GlossaryWarningPolicy
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1192,6 +1230,10 @@ export function App(): JSX.Element {
     formId: string,
     matchBoundaryStart: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1212,6 +1254,10 @@ export function App(): JSX.Element {
     formId: string,
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -1229,6 +1275,10 @@ export function App(): JSX.Element {
   }
 
   function deleteActiveGlossaryEntryForm(formId: string): void {
+    if (isReadOnlyProjectOwnedEditor) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
@@ -3220,6 +3270,7 @@ export function App(): JSX.Element {
                         translate={translate}
                         soundFeedback={soundFeedback}
                         soundSettings={effectiveSettings.workbench.sound}
+                        isProjectOwnedReadOnly={isReadOnlyProjectOwnedEditor}
                         markdownEditorPreviewRatio={
                           layout.markdownEditorPreview.ratio
                         }

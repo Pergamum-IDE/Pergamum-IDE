@@ -28,6 +28,7 @@ interface GlossaryFormAdvancedMatchingSettingsViewProps {
   matchBoundaryEnd: GlossaryFormMatchBoundary;
   translate: Translate;
   isExpanded: boolean;
+  readOnly?: boolean;
   onToggleExpanded: () => void;
   onChangeMatchBoundaryStart: (value: GlossaryFormMatchBoundary) => void;
   onChangeMatchBoundaryEnd: (value: GlossaryFormMatchBoundary) => void;
@@ -38,6 +39,7 @@ export function GlossaryFormAdvancedMatchingSettingsView({
   matchBoundaryEnd,
   translate,
   isExpanded,
+  readOnly = false,
   onToggleExpanded,
   onChangeMatchBoundaryStart,
   onChangeMatchBoundaryEnd
@@ -65,10 +67,13 @@ export function GlossaryFormAdvancedMatchingSettingsView({
             <select
               value={matchBoundaryStart}
               aria-label={translate("glossaryEditor.matchBoundaryStart")}
+              disabled={readOnly}
               onChange={(event) =>
-                onChangeMatchBoundaryStart(
-                  event.target.value as GlossaryFormMatchBoundary
-                )
+                !readOnly
+                  ? onChangeMatchBoundaryStart(
+                      event.target.value as GlossaryFormMatchBoundary
+                    )
+                  : undefined
               }
             >
               {glossaryFormMatchBoundaries.map((matchBoundary) => (
@@ -89,10 +94,13 @@ export function GlossaryFormAdvancedMatchingSettingsView({
             <select
               value={matchBoundaryEnd}
               aria-label={translate("glossaryEditor.matchBoundaryEnd")}
+              disabled={readOnly}
               onChange={(event) =>
-                onChangeMatchBoundaryEnd(
-                  event.target.value as GlossaryFormMatchBoundary
-                )
+                !readOnly
+                  ? onChangeMatchBoundaryEnd(
+                      event.target.value as GlossaryFormMatchBoundary
+                    )
+                  : undefined
               }
             >
               {glossaryFormMatchBoundaries.map((matchBoundary) => (
@@ -117,6 +125,7 @@ interface GlossaryFormAdvancedMatchingSettingsProps {
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
   translate: Translate;
+  readOnly?: boolean;
   onChangeMatchBoundaryStart: (value: GlossaryFormMatchBoundary) => void;
   onChangeMatchBoundaryEnd: (value: GlossaryFormMatchBoundary) => void;
 }

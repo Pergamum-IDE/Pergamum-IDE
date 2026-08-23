@@ -50,6 +50,7 @@ export function WorkspaceSidebar({
       return (
         <GlossarySidebar
           projectRootPath={project?.rootPath ?? null}
+          readOnly={project?.accessMode.kind === "readOnly"}
           highlightedEntryId={project ? highlightedGlossaryEntryId : null}
           refreshToken={glossaryRefreshToken}
           translate={translate}
