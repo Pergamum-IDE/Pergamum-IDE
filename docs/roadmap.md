@@ -326,13 +326,33 @@ v0.90.0 は「初回 dogfood 配布版」であり、「v1.0 直前の完成版�
 
 ## Phase 4 / v0.4 系: 迷わず触れるようにする
 
-Phase 4 は、操作入口を整理する。
+Phase 4 は、Pergamum を「迷わず触れる」状態へ近づけるための版である。
 
-目的は、Pergamum の機能を command に寄せ、menu / shortcut / context menu / Utility Window から一貫して呼べるようにすることである。
+当初は、Application menu / shortcut / context menu / Command launcher など、操作入口の整理を中心に想定していた。
+
+しかし実装を進める中で、単に入口を増やすだけでは不十分であることが分かった。
+
+ユーザーが迷わず触るためには、以下も同時に必要になる。
+
+```text
+何を操作しているのか分かる
+今どのプロジェクトにいるのか分かる
+書ける状態なのか、読み取り専用なのか分かる
+新規文書がどう保存されるのか分かる
+危ない操作では適切な確認が出る
+コマンドの意味と実行可否が分かる
+設定値が壊れていても安全に復帰できる
+Electron / Chromium 由来の危険操作で作業状態を壊さない
+```
+
+そのため Phase 4 では、command / menu / shortcut / context menu だけでなく、project identity、project file、access mode、dialog、settings、Command Palette、untitled document、Electron shortcut policy も含めて扱う。
 
 ```text
 Command:
   操作の意味
+
+Command Palette:
+  操作の発見・実行・状態確認の入口
 
 Menu:
   見つけられる入口
@@ -343,42 +363,369 @@ Shortcut:
 Context menu:
   選択中の対象に応じた入口
 
-Command tab:
-  支援ウィンドウ内の操作入口
+Dialog:
+  ユーザー判断を安全に受け取る入口
+
+Settings:
+  アプリの振る舞いを安全に調整する入口
+
+Project file:
+  プロジェクトを開く入口
+
+Untitled document:
+  新規文書を保存可能な文書へ移す入口
+
+Window title / status display:
+  現在地と状態を把握する入口
 ```
 
-### v0.4 系で積むもの
+### v0.4 系で進んだもの
+
+Phase 4 では、当初予定していた menu / shortcut / context menu の前に、後続作業を支える基盤が多く進んだ。
+
+完了済みまたは大きく進んだもの:
 
 ```text
-Application menu foundation
-Basic shortcuts foundation
+Command Palette foundation
+Command enablement / disabled reason foundation
+Command Palette status indicator
+Command Palette description footer
+Command metadata description
+Command Palette settings
+Settings Catalog foundation
+Application Settings UI foundation
+settings.json validation
+number setting validation
+binary dialog foundation
+choice dialog foundation
+SQLite DB project file foundation
+.pergamum project file foundation
+project identity foundation
+read-only project access mode
+read-only command disablement
+one-folder-one-instance / write lock foundation
+window title project/access mode display
+debug logging foundation
+long document open performance measurement
+```
+
+これらは当初の「操作入口を整理する」からは横に見えるが、実際には「迷わず触れる」ための土台である。
+
+```text
+Command Palette:
+  何ができるかを見つける
+
+description footer:
+  その command が何をするかを読む
+
+disabled reason:
+  なぜ実行できないかを知る
+
+read-only mode:
+  今は書けない状態だと分かる
+
+window title:
+  どの project を触っているか分かる
+
+dialog:
+  危ない操作を明示的に判断する
+
+settings validation:
+  壊れた設定値で迷子にならない
+
+.pergamum:
+  どれがプロジェクト本体か分かる
+```
+
+### v0.4 系で残っているもの
+
+Phase 4 の残作業は、v0.50 以降の本文処理・session restore・project navigation・release hardening に進む前に片付けたい、操作入口・状態表示・判断ポイントを中心にする。
+
+候補:
+
+```text
+Application Settings dirty / apply flow
+Untitled Markdown document handling
+Safe filename / default untitled name policy
+Startup file open / .pergamum argv handling
+Extension association policy
+Existing project DB migration / naming transition policy
+Application menu items
 Context menu foundation
-Command tab / Command launcher foundation
-Tab close button polish
 About dialog
+Unsafe Electron / Chromium default shortcut suppression
 ```
 
-### Search / replace の扱い
+### Project open / startup file handling
 
-Phase 4 では、基本的な検索入口を扱う。
+`.pergamum` SQLite project file foundation は進んだ。
+
+残る課題は、OSや起動引数から `.pergamum` project file を開く導線である。
 
 ```text
-editor.find.open:
-  CodeMirror search extension を使う
+扱うこと:
+  startup argv から .pergamum を開く
+  .pergamum ダブルクリック導線の前提整理
+  起動時 project open failure の扱い
+  既に開いている project との関係
+  project switching 時の dirty document 確認
+
+扱わないこと:
+  installer 本格対応
+  OS file association 登録の完成
+  DB migration 本格対応
 ```
 
-Phase 4 では、置換は扱わない。
+### Extension association policy
+
+`.pergamum` / `.md` / `.markdown` / `.txt` の意味を整理する。
+
+```text
+扱うこと:
+  .pergamum は Pergamum project file
+  .md / .markdown は Markdown document
+  .txt は現時点では正式 support しない
+  startup / open dialog / save dialog での扱い
+  new Markdown default extension の方針
+
+扱わないこと:
+  plain text document mode
+  encoding detection
+  .txt preview
+  Generic New File command
+```
+
+`.txt` は簡単そうに見えるが、実際には encoding policy / line ending policy / 本文非破壊原則に関わるため、Phase 4 では扱わない。
+
+### Existing project DB migration / naming transition policy
+
+既存の `pergamum.db` から `<projectName>.pergamum` への移行方針は整理しておく。
+
+ただし、破壊的変更が許容される初期開発期間であるため、Phase 4 では本格 migration 機構までは扱わない。
+
+```text
+扱うこと:
+  既存 project DB の扱い方針
+  開発中データをどこまで切り捨て可能とするか
+  naming transition の説明
+
+扱わないこと:
+  DB migration framework
+  backward compatibility guarantee
+  snapshot restore
+```
+
+### Untitled Markdown document handling
+
+新規 Markdown 文書の扱いは、save / save as / close / dirty state / tab close / session restore に影響する。
+
+Phase 6 の session restore に進む前に、最低限の扱いを整理する。
+
+```text
+扱うこと:
+  untitled document の identity
+  untitled tab title
+  default filename
+  safe filename policy
+  save / save as の扱い
+  dirty close confirmation
+  tab close との整合
+
+扱わないこと:
+  generic New File command
+  plain text document mode
+  crash recovery
+  session restore 本格実装
+  recovery store
+```
+
+新規 Markdown の既定拡張子は `.md` / `.markdown` の範囲で扱う。
+`.txt` は Phase 4 の対象外とする。
+
+### Application Settings dirty / apply flow
+
+Application Settings は既に UI と validation が育ってきている。
+
+一方で、設定変更時の dirty state、即時適用、Apply / Cancel、保存失敗時の扱いはまだ整理が必要である。
+
+```text
+扱うこと:
+  settings UI の dirty state
+  apply / cancel flow
+  保存失敗時の表示
+  変更中と保存済み状態の区別
+  settings.json 直接編集時の fallback 方針との整合
+
+扱わないこと:
+  settings foundation の全面作り直し
+  theme customization
+  project-specific settings 本格実装
+```
+
+### Application menu items
+
+Application menu は、Command Palette 以外から操作を見つけるための入口である。
+
+既存 command を menu に載せ、basic shortcut と対応させる。
+
+```text
+扱うこと:
+  File / Edit / View / Help などの基本 menu
+  既存 command との接続
+  basic shortcut
+  read-only / disabled state との整合
+  project / document / settings / about への基本導線
+
+扱わないこと:
+  全 command の網羅
+  keybinding customization
+  plugin command registration
+```
+
+### Context menu foundation
+
+Context menu は、選択中の対象に応じた操作入口である。
+
+Phase 5 以降で本文操作 command を増やす前に、最低限の context menu 基盤を整える。
+
+```text
+扱うこと:
+  editor context menu foundation
+  selection-dependent command entry
+  cut / copy / paste / select all
+  command registry との接続
+
+扱わないこと:
+  全領域の context menu 網羅
+  plugin-provided context menu
+  高度な対象判定
+```
+
+### About dialog
+
+About dialog は、アプリ名・バージョン・ライセンス・基本情報を確認する入口である。
+
+Phase 8 の配布品質で慌てて作るのではなく、Phase 4 のうちに小さく入れておく。
+
+```text
+扱うこと:
+  app name
+  version
+  license
+  repository / project information
+
+扱わないこと:
+  update check
+  crash report
+  telemetry
+```
+
+### Unsafe Electron / Chromium default shortcut suppression
+
+Electron / Chromium 由来の既定ショートカットには、執筆アプリとして危険なものがある。
+
+特に reload 系は、未保存状態や作業中 UI を破壊する可能性があるため、Phase 4 で抑制方針を固める。
+
+```text
+抑制候補:
+  Ctrl+R
+  F5
+  Ctrl+Shift+R
+  Alt+Left
+  Alt+Right
+  BrowserBack
+  BrowserForward
+  Ctrl+P
+```
+
+DevTools 系 shortcut は、開発・dogfood では必要になる。
+
+そのため、完全に削除するのではなく、hidden settings path による明示 opt-in とする。
+
+候補:
+
+```json
+{
+  "workbench": {
+    "devTools": {
+      "enabled": true
+    }
+  }
+}
+```
+
+方針:
+
+```text
+既定:
+  DevTools shortcut は無効
+
+hidden setting:
+  workbench.devTools.enabled が true の場合のみ許可
+
+Settings UI:
+  表示しない
+
+settings.json が不正な場合:
+  既存方針どおり default fallback
+```
+
+対象候補:
+
+```text
+F12
+Ctrl+Shift+I
+Ctrl+Shift+J
+```
+
+ただし、通常の編集 shortcut は壊さない。
+
+```text
+壊さない:
+  Ctrl+C
+  Ctrl+X
+  Ctrl+V
+  Ctrl+A
+  Ctrl+Z
+  Ctrl+Y
+  IME composition
+```
+
+### Search / replace / Quick Access の扱い
+
+Phase 4 では、project-wide search / replace には入らない。
+
+Quick Access prefix families も、現時点では足場が足りないため保留する。
+
+```text
+@ glossary search:
+  Glossary検索・選択・表示基盤が必要
+
+# workspace heading search:
+  Markdown outline解析が必要
+
+no-prefix file open:
+  project file tree / file structure把握が必要
+```
+
+これらは Command Palette / Quick Access の将来拡張候補として残すが、v0.4 系の実装ready項目にはしない。
+
+Phase 4 で扱う検索関連は、必要になった場合でも入口整理に留める。
 
 ```text
 Phase 4 ではやらない:
-  editor.replace.open
+  project-wide search
+  project-wide replace
   bulk replace
-  project-wide search / replace
+  SQLite FTS5 / trigram / BM25
+  Quick Access @ / # / no-prefix 実装
 ```
 
 置換は本文変更を伴うため、本文非破壊原則や明示 command の扱いが固まった後に別 Issue として扱う。
 
 ### v0.4 系で積まないもの
+
+Phase 4 では、後続フェーズの本体には入らない。
 
 ```text
 全キーバインド customization
@@ -386,24 +733,49 @@ Plugin command registration
 VSCode 型 overlay Command Palette
 全 command の網羅
 高度な検索・置換
+Quick Access @ / # / no-prefix 実装
+Glossary検索本格実装
+Markdown outline解析
+Hierarchical File Explorer
+Generic New File command
+Plain text document mode
+encoding detection
+Session restore 本格実装
+Project-wide search / replace
+本文 decoration visibility
+line ending marker
+段落字下げ command
+release hardening 本体
+DB migration framework
+DB snapshot restore
 ```
 
-Command Launcher は、本文中央に大きく overlay しない方針を維持する。
-
-候補:
-
-```text
-支援ウィンドウ > コマンド tab
-Command Lane inside Utility Window
-```
+ただし、後続フェーズに進む前に必要な操作入口・状態表示・判断UIは Phase 4 で可能な限り片付ける。
 
 ### v0.4 系の終了条件
 
 ```text
-キーボード・メニュー・右クリックから、
-最低限の日常操作ができる。
+Command Palette / menu / shortcut / context menu から、
+最低限の日常操作へ迷わず到達できる。
 
-後続機能を command / menu / context menu に載せる準備ができている。
+今どの project を触っているか分かる。
+
+どれが project file なのか分かる。
+
+書ける状態か、読み取り専用か分かる。
+
+新規 Markdown document を、
+安全に保存・閉じることができる。
+
+危ない操作では適切な dialog が出る。
+
+settings.json が壊れていても、
+安全な default に fallback して起動できる。
+
+Electron / Chromium 由来の危険 shortcut で、
+作業状態を誤って壊さない。
+
+後続機能を command / menu / context menu / settings に載せる準備ができている。
 ```
 
 ---
