@@ -25,6 +25,11 @@ import {
   resolveCommandPaletteEnterSelection
 } from "./commandPaletteEntries";
 import {
+  commandPaletteNotImplementedStatusIndicator,
+  resolveDisabledCommandPaletteStatusIndicator,
+  type CommandPaletteStatusIndicator
+} from "./commandPaletteStatusIndicators";
+import {
   lineJumpMessageKey,
   resolveLineJumpFooterModel,
   resolveLineJumpPaletteState,
@@ -238,6 +243,61 @@ export function CommandPaletteHighlightedText({
   }
 
   return <>{nodes}</>;
+}
+
+function CommandPaletteStatusColumn({
+  indicator
+}: {
+  readonly indicator: CommandPaletteStatusIndicator | null;
+}): JSX.Element {
+  return (
+    <span className="commandPaletteStatusColumn" aria-hidden="true">
+      {indicator ? (
+        <span
+          className={`commandPaletteStatusIcon commandPaletteStatusIcon-${indicator.kind}`}
+          data-command-palette-status-icon={indicator.kind}
+          dangerouslySetInnerHTML={{ __html: indicator.iconSvg }}
+        />
+      ) : null}
+    </span>
+  );
+}
+
+function CommandPaletteItemContent({
+  indicator,
+  primary,
+  secondary = null
+}: {
+  readonly indicator: CommandPaletteStatusIndicator | null;
+  readonly primary: ReactNode;
+  readonly secondary?: ReactNode;
+}): JSX.Element {
+  return (
+    <>
+      <CommandPaletteStatusColumn indicator={indicator} />
+      <div className="commandPaletteItemText">
+        <div className="commandPaletteItemPrimary">{primary}</div>
+        {secondary ? (
+          <div className="commandPaletteItemSecondary">{secondary}</div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function CommandPaletteReservedPlaceholder({
+  indicator,
+  children
+}: {
+  readonly indicator: CommandPaletteStatusIndicator | null;
+  readonly children: ReactNode;
+}): JSX.Element {
+  return (
+    <div className="commandPaletteReservedPlaceholder">
+      <CommandPaletteStatusColumn indicator={indicator} />
+      <span className="commandPaletteReservedPlaceholderText">{children}</span>
+    </div>
+  );
 }
 
 export function CommandPalette({
@@ -507,16 +567,17 @@ export function CommandPalette({
                   )}
                   onClick={() => executeLineJumpCandidateAt(index)}
                 >
-                  <div className="commandPaletteItemPrimary">
-                    {translate("commandPalette.lineJump.goToLine", {
+                  <CommandPaletteItemContent
+                    indicator={null}
+                    primary={translate("commandPalette.lineJump.goToLine", {
                       line: candidate.line
                     })}
-                  </div>
-                  <div className="commandPaletteItemSecondary">
-                    {candidate.preview.kind === "empty"
-                      ? translate("commandPalette.lineJump.emptyLine")
-                      : candidate.preview.text}
-                  </div>
+                    secondary={
+                      candidate.preview.kind === "empty"
+                        ? translate("commandPalette.lineJump.emptyLine")
+                        : candidate.preview.text
+                    }
+                  />
                 </li>
               ))}
             </ul>
@@ -530,24 +591,30 @@ export function CommandPalette({
                 className={commandPaletteItemClassName(true, false)}
                 onClick={executeLineJumpResult}
               >
-                <div className="commandPaletteItemPrimary">
-                  {translate("commandPalette.lineJump.goToLine", {
+                <CommandPaletteItemContent
+                  indicator={resolveDisabledCommandPaletteStatusIndicator({
+                    enabled: false,
+                    disabledReason: null
+                  })}
+                  primary={translate("commandPalette.lineJump.goToLine", {
                     line: lineJumpState.line
                   })}
-                </div>
+                />
               </li>
             </ul>
           ) : (
-            <div className="commandPaletteReservedPlaceholder">
+            <CommandPaletteReservedPlaceholder indicator={null}>
               {translate(
                 lineJumpMessageKey(lineJumpState) ?? "commandPalette.lineJump.invalid"
               )}
-            </div>
+            </CommandPaletteReservedPlaceholder>
           )
         ) : reservedKey ? (
-          <div className="commandPaletteReservedPlaceholder">
+          <CommandPaletteReservedPlaceholder
+            indicator={commandPaletteNotImplementedStatusIndicator()}
+          >
             {translate(reservedKey)}
-          </div>
+          </CommandPaletteReservedPlaceholder>
         ) : (
           <ul className="commandPaletteList" role="listbox">
             {entries.length === 0 ? (
@@ -569,23 +636,28 @@ export function CommandPalette({
                   )}
                   onClick={() => executeEntryAt(index)}
                 >
-                  <div className="commandPaletteItemPrimary">
-                    <CommandPaletteHighlightedText
-                      text={entry.primary.text}
-                      ranges={entry.primary.ranges}
-                    />
-                  </div>
-                  <div className="commandPaletteItemSecondary">
-                    {!entry.enabled &&
-                    entry.disabledReason === "readOnlyProject" ? (
-                      translate("command.disabled.readOnlyProject")
-                    ) : (
-                      <CommandPaletteHighlightedText
-                        text={entry.secondary.text}
-                        ranges={entry.secondary.ranges}
-                      />
+                  <CommandPaletteItemContent
+                    indicator={resolveDisabledCommandPaletteStatusIndicator(
+                      entry
                     )}
-                  </div>
+                    primary={
+                      <CommandPaletteHighlightedText
+                        text={entry.primary.text}
+                        ranges={entry.primary.ranges}
+                      />
+                    }
+                    secondary={
+                      !entry.enabled &&
+                      entry.disabledReason === "readOnlyProject" ? (
+                        translate("command.disabled.readOnlyProject")
+                      ) : (
+                        <CommandPaletteHighlightedText
+                          text={entry.secondary.text}
+                          ranges={entry.secondary.ranges}
+                        />
+                      )
+                    }
+                  />
                 </li>
               ))
             )}

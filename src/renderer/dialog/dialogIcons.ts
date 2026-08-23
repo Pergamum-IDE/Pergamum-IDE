@@ -1,18 +1,18 @@
-import infoIconRaw from "../../../assets/icons/dialog/info.svg?raw";
-import warningIconRaw from "../../../assets/icons/dialog/alert-circle.svg?raw";
-import errorIconRaw from "../../../assets/icons/dialog/x-circle.svg?raw";
-import questionIconRaw from "../../../assets/icons/dialog/help-circle.svg?raw";
-import clipboardIconRaw from "../../../assets/icons/dialog/clipboard.svg?raw";
-import alertTriangleIconRaw from "../../../assets/icons/global/alert-triangle.svg?raw";
+import infoIconRaw from "../../../assets/icons/feather/dialog/info.svg?raw";
+import warningIconRaw from "../../../assets/icons/feather/dialog/alert-circle.svg?raw";
+import errorIconRaw from "../../../assets/icons/feather/dialog/x-circle.svg?raw";
+import questionIconRaw from "../../../assets/icons/feather/dialog/help-circle.svg?raw";
+import clipboardIconRaw from "../../../assets/icons/feather/dialog/clipboard.svg?raw";
+import alertTriangleIconRaw from "../../../assets/icons/feather/global/alert-triangle.svg?raw";
 import type {
   AppDialogChoiceIconKind,
   AppDialogIconKind
 } from "./appDialogTypes";
 
 /**
- * Feather Icons (MIT, see assets/icons/LICENSE.txt), mapped per #182 D-6.
- * These are dialog-owned assets under `assets/icons/dialog/`, distinct from
- * the shared icons in `assets/icons/global/`.
+ * Feather Icons (MIT, see assets/icons/feather/LICENSE.txt), mapped per #182 D-6.
+ * These are dialog-owned assets under `assets/icons/feather/dialog/`, distinct from
+ * the shared icons in `assets/icons/feather/global/`.
  * `error` uses `x-circle.svg`, not `error-octagon.svg` — the latter is a
  * pre-existing `x-octagon` asset unrelated to this mapping.
  * `warning` uses the circular `alert-circle.svg`, not `alert-triangle.svg` —

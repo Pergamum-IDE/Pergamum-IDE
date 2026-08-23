@@ -1,9 +1,9 @@
 import type { Translate } from "../shared/i18n";
 import type { SidebarMode } from "./sidebarMode";
-import fileIcon from "../../assets/icons/activity-bar/file.svg?raw";
-import glossaryIcon from "../../assets/icons/activity-bar/glossary.svg?raw";
-import searchIcon from "../../assets/icons/activity-bar/search.svg?raw";
-import settingsIcon from "../../assets/icons/activity-bar/settings.svg?raw";
+import fileIcon from "../../assets/icons/feather/activity-bar/file.svg?raw";
+import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?raw";
+import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
+import settingsIcon from "../../assets/icons/feather/activity-bar/settings.svg?raw";
 
 interface ActivityBarProps {
   activeMode: SidebarMode | null;

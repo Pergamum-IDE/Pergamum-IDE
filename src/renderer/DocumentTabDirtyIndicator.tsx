@@ -1,4 +1,4 @@
-import editIcon from "../../assets/icons/global/edit-2.svg?raw";
+import editIcon from "../../assets/icons/feather/global/edit-2.svg?raw";
 
 export interface DocumentTabDirtyIndicatorProps {
   tooltip: string;

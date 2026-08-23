@@ -1,4 +1,4 @@
-import deleteIcon from "../../assets/icons/glossary/delete.svg?raw";
+import deleteIcon from "../../assets/icons/feather/glossary/delete.svg?raw";
 import {
   glossaryEntryKinds,
   glossaryWarningPolicies,

@@ -20,9 +20,9 @@ import {
 
 const titles = {
   openMarkdownDocument: "Open Markdown file",
-  saveDocument: "Save current editor",
-  saveAs: "Save current editor as",
-  closeEditor: "Close current editor",
+  saveDocument: "Save Current Document",
+  saveAs: "Save current document as",
+  closeEditor: "Close Current Document",
   cutSelection: "Cut",
   copySelection: "Copy",
   pasteSelection: "Paste",

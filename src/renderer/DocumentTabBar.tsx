@@ -23,9 +23,9 @@ import {
   type WorkspaceTab,
   type WorkspaceTabId
 } from "./workspaceTabs";
-import alertTriangleIcon from "../../assets/icons/global/alert-triangle.svg?raw";
-import closeXIcon from "../../assets/icons/global/close-x.svg?raw";
-import shieldIcon from "../../assets/icons/global/shield.svg?raw";
+import alertTriangleIcon from "../../assets/icons/feather/global/alert-triangle.svg?raw";
+import closeXIcon from "../../assets/icons/feather/global/close-x.svg?raw";
+import shieldIcon from "../../assets/icons/feather/global/shield.svg?raw";
 
 interface DocumentTabBarProps {
   tabs: DocumentTab[];
