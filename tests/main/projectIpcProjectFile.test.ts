@@ -56,8 +56,11 @@ import {
   projectAccessModeFromWriteOwnership,
   projectWriteLockDirectoryPath,
   releaseCurrentProjectWriteOwnership,
+  setProjectWindowTitleTargetProvider,
+  updateCurrentProjectWindowTitle,
   type ProjectWriteOwnership,
   type ProjectWriteOwnershipManager,
+  type ProjectWindowTitleTargetProvider,
   registerProjectIpc
 } from "../../src/main/projectIpc";
 
@@ -155,6 +158,7 @@ describe("project file IPC foundation", () => {
 
   afterEach(async () => {
     await releaseCurrentProjectWriteOwnership();
+    setProjectWindowTitleTargetProvider(null);
     vi.restoreAllMocks();
     await fs.rm(projectRootPath, {
       recursive: true,
@@ -189,6 +193,17 @@ describe("project file IPC foundation", () => {
     expect(source).not.toContain("openProjectRoot");
     expect(source).not.toContain("PROJECT_CHANNELS.openProjectFile");
     expect(source).not.toContain("isLegacyProjectDatabaseRecentProject");
+  });
+
+  it("updates the initial window title after the title target provider is registered", async () => {
+    const titleWindow = createTitleWindowMock();
+    setProjectWindowTitleTargetProvider(() => titleWindow);
+
+    await updateCurrentProjectWindowTitle();
+
+    expect(titleWindow.setTitle).toHaveBeenCalledWith(
+      "Pergamum - a novel IDE-"
+    );
   });
 
   it("createProject returns null when the save dialog is canceled", async () => {
@@ -297,6 +312,28 @@ describe("project file IPC foundation", () => {
     ]);
   });
 
+  it("createProject updates the window title to the readWrite project title", async () => {
+    const projectFilePath = path.join(projectRootPath, "Title Create.pergamum");
+    const titleWindow = createTitleWindowMock();
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: projectFilePath
+    });
+
+    const createProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.createProject,
+      createLoggerMock(),
+      undefined,
+      () => titleWindow
+    );
+
+    await createProjectHandler({ sender: {} });
+
+    expect(titleWindow.setTitle).toHaveBeenCalledWith(
+      "Pergamum - Title Create -"
+    );
+  });
+
   it("createProject waits for confirmation when write ownership is unavailable", async () => {
     const projectFilePath = path.join(
       projectRootPath,
@@ -363,6 +400,46 @@ describe("project file IPC foundation", () => {
     } finally {
       await database.close();
     }
+  });
+
+  it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {
+    const projectFilePath = path.join(projectRootPath, "Readonly Title.pergamum");
+    const titleWindow = createTitleWindowMock();
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: projectFilePath
+    });
+
+    const createProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.createProject,
+      createLoggerMock(),
+      ownershipManager,
+      () => titleWindow
+    );
+    const pending = expectPendingReadOnlyProjectOpen(
+      await createProjectHandler({ sender: {} })
+    );
+
+    expect(titleWindow.setTitle).not.toHaveBeenCalled();
+
+    const confirmReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
+      createLoggerMock(),
+      ownershipManager,
+      () => titleWindow
+    );
+    await confirmReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
+    expect(titleWindow.setTitle).toHaveBeenCalledWith(
+      "Pergamum - Readonly Title - [読み取り専用]"
+    );
   });
 
   it("createProject refuses to overwrite an existing .pergamum file", async () => {
@@ -610,6 +687,36 @@ describe("project file IPC foundation", () => {
         schemaVersion: metadata.schemaVersion
       }
     ]);
+  });
+
+  it("openProject updates the window title from DB metadata project name", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Filename Title.pergamum"
+    );
+    const titleWindow = createTitleWindowMock();
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Metadata Title"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      undefined,
+      () => titleWindow
+    );
+
+    await openProjectHandler({ sender: {} });
+
+    expect(titleWindow.setTitle).toHaveBeenCalledWith(
+      "Pergamum - Metadata Title -"
+    );
   });
 
   it("openProject keeps readWrite access when write ownership is acquired", async () => {
@@ -882,6 +989,35 @@ describe("project file IPC foundation", () => {
     });
   });
 
+  it("releaseCurrentProjectWriteOwnership resets the window title to the default title", async () => {
+    const projectFilePath = path.join(projectRootPath, "Close Title.pergamum");
+    const titleWindow = createTitleWindowMock();
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Close Title"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      undefined,
+      () => titleWindow
+    );
+    await openProjectHandler({ sender: {} });
+
+    titleWindow.setTitle.mockClear();
+    await releaseCurrentProjectWriteOwnership();
+
+    expect(titleWindow.setTitle).toHaveBeenCalledWith(
+      "Pergamum - a novel IDE-"
+    );
+  });
+
   it("project switch releases the previous owned lock and owns the new one", async () => {
     const secondProjectRootPath = path.join(projectRootPath, "second-root");
     await fs.mkdir(secondProjectRootPath);
@@ -934,6 +1070,54 @@ describe("project file IPC foundation", () => {
       code: "ENOENT"
     });
     await expect(fs.access(secondLockDirectoryPath)).resolves.toBeUndefined();
+  });
+
+  it("project switch updates the window title to the next project", async () => {
+    const secondProjectRootPath = path.join(projectRootPath, "title-switch");
+    await fs.mkdir(secondProjectRootPath);
+    const firstProjectFilePath = path.join(
+      projectRootPath,
+      "First Title.pergamum"
+    );
+    const secondProjectFilePath = path.join(
+      secondProjectRootPath,
+      "Second Title.pergamum"
+    );
+    const titleWindow = createTitleWindowMock();
+    const firstCreated = await createProjectDatabase({
+      projectFilePath: firstProjectFilePath,
+      projectName: "First Title"
+    });
+    await firstCreated.close();
+    const secondCreated = await createProjectDatabase({
+      projectFilePath: secondProjectFilePath,
+      projectName: "Second Title"
+    });
+    await secondCreated.close();
+    electronMock.showOpenDialog
+      .mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [firstProjectFilePath]
+      })
+      .mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [secondProjectFilePath]
+      });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      undefined,
+      () => titleWindow
+    );
+
+    await openProjectHandler({ sender: {} });
+    await openProjectHandler({ sender: {} });
+
+    expect(titleWindow.setTitle.mock.calls.map(([title]) => title)).toEqual([
+      "Pergamum - First Title -",
+      "Pergamum - Second Title -"
+    ]);
   });
 
   it("openProject rejects invalid .pergamum without migration or repair", async () => {
@@ -1042,6 +1226,42 @@ describe("project file IPC foundation", () => {
       "2026-08-22T00:00:00.000Z"
     );
     expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+  });
+
+  it("openRecentProject updates the window title from DB metadata project name", async () => {
+    const projectFilePath = path.join(projectRootPath, "Recent Title.pergamum");
+    const titleWindow = createTitleWindowMock();
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Recent Title Metadata"
+    });
+    const metadata = await readProjectMetadata(created);
+    await created.close();
+    await writeRecentProjects(userDataPath, [
+      {
+        projectId: metadata.projectId,
+        projectName: metadata.projectName,
+        projectFilePath: path.resolve(projectFilePath),
+        projectRootPath,
+        schemaVersion: metadata.schemaVersion,
+        lastOpenedAt: "2026-08-22T00:00:00.000Z"
+      }
+    ]);
+
+    const openRecentProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openRecentProject,
+      createLoggerMock(),
+      undefined,
+      () => titleWindow
+    );
+    await openRecentProjectHandler(
+      { sender: {} },
+      { projectFilePath: path.resolve(projectFilePath) }
+    );
+
+    expect(titleWindow.setTitle).toHaveBeenCalledWith(
+      "Pergamum - Recent Title Metadata -"
+    );
   });
 
   it("openRecentProject waits for confirmation when write ownership is unavailable", async () => {
@@ -1285,6 +1505,12 @@ function createWriteOwnershipManager(
   };
 }
 
+function createTitleWindowMock(): { setTitle: ReturnType<typeof vi.fn> } {
+  return {
+    setTitle: vi.fn()
+  };
+}
+
 function expectPendingReadOnlyProjectOpen(
   value: unknown
 ): PendingReadOnlyProjectOpen {
@@ -1305,9 +1531,14 @@ function expectPendingReadOnlyProjectOpen(
 function registeredHandler(
   channel: string,
   logger: DebugLogger = createLoggerMock(),
-  writeOwnershipManager?: ProjectWriteOwnershipManager
+  writeOwnershipManager?: ProjectWriteOwnershipManager,
+  windowTitleTargetProvider?: ProjectWindowTitleTargetProvider
 ): (...args: unknown[]) => unknown {
-  registerProjectIpc(logger, writeOwnershipManager);
+  registerProjectIpc(
+    logger,
+    writeOwnershipManager,
+    windowTitleTargetProvider
+  );
 
   const registration = electronMock.handle.mock.calls.find(
     ([registeredChannel]) => registeredChannel === channel

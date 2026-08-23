@@ -281,6 +281,8 @@ export const enTranslations = {
   "welcome.recentProjects": "Recent Projects",
   "welcome.start": "Start",
   "welcome.title": "Pergamum",
+  "windowTitle.defaultSuffix": "a novel IDE",
+  "windowTitle.status.readOnly": "Read-only",
   "workbench.markdownEditorPreviewResizeHandle": "Resize editor and preview",
   "workbench.sidebarResizeHandle": "Resize sidebar",
   "workbench.utilityWindowResizeHandle": "Resize Utility Window",

@@ -15,8 +15,11 @@ import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
 import { installApplicationMenu } from "./menu";
 import {
+  defaultProjectWriteOwnershipManager,
   registerProjectIpc,
-  releaseCurrentProjectWriteOwnership
+  releaseCurrentProjectWriteOwnership,
+  setProjectWindowTitleTargetProvider,
+  updateCurrentProjectWindowTitle
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 
@@ -33,7 +36,6 @@ async function createMainWindow(): Promise<void> {
     height: 800,
     minWidth: 800,
     minHeight: 560,
-    title: "Pergamum",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -46,6 +48,9 @@ async function createMainWindow(): Promise<void> {
     mainWindow = null;
   });
 
+  setProjectWindowTitleTargetProvider(() => mainWindow);
+
+
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     await mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
     return;
@@ -54,6 +59,8 @@ async function createMainWindow(): Promise<void> {
   await mainWindow.loadFile(
     path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
   );
+
+  await updateCurrentProjectWindowTitle();
 }
 
 function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
@@ -126,7 +133,10 @@ app.whenReady().then(async () => {
   registerContextMenuIpc(debugLogger);
   registerFileIpc(debugLogger);
   registerGlossaryIpc(debugLogger);
-  registerProjectIpc(debugLogger);
+  registerProjectIpc(
+    debugLogger,
+    defaultProjectWriteOwnershipManager
+  );
   registerSettingsIpc();
   void createMainWindow();
 
