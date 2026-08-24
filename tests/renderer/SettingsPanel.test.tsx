@@ -512,6 +512,194 @@ describe("SettingsPanelView search UI (#230)", () => {
   });
 });
 
+describe("SettingsPanelView search input polish (#234)", () => {
+  it("renders the updated localized placeholder in ja and en", () => {
+    expect(renderSettingsPanelView("ja")).toContain(
+      "検索語句を入力（例：エディタ、sound）"
+    );
+    expect(renderSettingsPanelView("en")).toContain(
+      "Enter search terms (e.g. editor, sound)"
+    );
+  });
+
+  it("keeps its accessible label distinct from the placeholder and the decorative icon", () => {
+    const element = settingsPanelViewElement("en");
+    const input = elementById(element, "settingsSearchInput");
+
+    expect(input.props["aria-label"]).toBe("Search settings");
+    expect(input.props.placeholder).toBe(
+      "Enter search terms (e.g. editor, sound)"
+    );
+  });
+
+  it("renders a decorative search icon that does not carry its own accessible name", () => {
+    const element = settingsPanelViewElement("en");
+    const icon = collectElements(
+      element,
+      (child) =>
+        typeof child.props.className === "string" &&
+        child.props.className === "settingsSearchIcon"
+    )[0];
+
+    expect(icon).toBeDefined();
+    expect(icon.props["aria-hidden"]).toBe("true");
+    expect(icon.props["aria-label"]).toBeUndefined();
+    expect(icon.props.title).toBeUndefined();
+  });
+
+  it("references the feather search icon asset content", () => {
+    const element = settingsPanelViewElement("en");
+    const icon = collectElements(
+      element,
+      (child) =>
+        typeof child.props.className === "string" &&
+        child.props.className === "settingsSearchIcon"
+    )[0];
+    const html = (
+      icon.props as unknown as {
+        dangerouslySetInnerHTML: { __html: string };
+      }
+    ).dangerouslySetInnerHTML.__html;
+
+    expect(html).toContain("feather-search");
+
+    const source = settingsPanelSource();
+
+    expect(source).toContain(
+      'from "../../assets/icons/feather/global/search.svg?raw"'
+    );
+  });
+
+  it("does not change existing search matching behavior (trim + case-insensitive substring, no fuzzy/kana normalization)", () => {
+    const translate = translateFor("ja");
+
+    expect(
+      getVisibleSettingCatalogItems(
+        "  WORKBENCH.LANGUAGE  ",
+        "files",
+        translate
+      ).map((item) => item.key)
+    ).toEqual(["workbench.language"]);
+    expect(
+      getVisibleSettingCatalogItems("zzz_no_such_setting", "application", translate)
+    ).toEqual([]);
+  });
+});
+
+describe("SettingsPanelView switch control polish (#234)", () => {
+  it("still renders a real <input type=\"checkbox\"> for switch controls", () => {
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.statusBar.visible")
+    });
+    const input = controlElement(element, "workbench.statusBar.visible");
+
+    expect(input.type).toBe("input");
+    expect(input.props.type).toBe("checkbox");
+    expect(input.props.className).toBe("settingsSwitchInput");
+  });
+
+  it("gives the switch input a stable, key-derived id", () => {
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.statusBar.visible")
+    });
+    const input = controlElement(element, "workbench.statusBar.visible");
+
+    expect(input.props.id).toBe("settingControl-workbench.statusBar.visible");
+  });
+
+  it("associates the visible setting label with the switch input via aria-labelledby", () => {
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.statusBar.visible")
+    });
+    const input = controlElement(element, "workbench.statusBar.visible");
+    const label = elementById(
+      element,
+      "settingLabel-workbench.statusBar.visible"
+    );
+
+    expect(input.props["aria-labelledby"]).toBe(label.props.id);
+    expect(label.props.children).toBe("Status bar");
+  });
+
+  it("wraps the visible label and the switch input in a single <label>, so clicking either toggles it (structural support for label-click)", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("workbench.statusBar.visible")
+    });
+    const labelOpenIndex = markup.indexOf('<label class="settingsItemHeader">');
+    const labelCloseIndex = markup.indexOf("</label>", labelOpenIndex);
+    const visibleLabelIndex = markup.indexOf(
+      'id="settingLabel-workbench.statusBar.visible"'
+    );
+    const switchInputIndex = markup.indexOf(
+      'id="settingControl-workbench.statusBar.visible"'
+    );
+
+    expect(labelOpenIndex).toBeGreaterThan(-1);
+    expect(labelCloseIndex).toBeGreaterThan(labelOpenIndex);
+    expect(visibleLabelIndex).toBeGreaterThan(labelOpenIndex);
+    expect(visibleLabelIndex).toBeLessThan(labelCloseIndex);
+    expect(switchInputIndex).toBeGreaterThan(labelOpenIndex);
+    expect(switchInputIndex).toBeLessThan(labelCloseIndex);
+  });
+
+  it("does not wrap non-switch controls in a <label> (only the switch kind changes structurally)", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("editor.fontFamily")
+    });
+
+    expect(markup).toContain('<div class="settingsItemHeader">');
+    expect(markup).not.toContain('<label class="settingsItemHeader">');
+  });
+
+  it("still calls onChangeSettings immediately when the switch is toggled (no Apply/OK/Cancel)", () => {
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.statusBar.visible"),
+      onChangeSettings
+    });
+    const input = controlElement(element, "workbench.statusBar.visible");
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: false } });
+
+    expect(onChangeSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a disabled switch control disabled (sound child gating unaffected by the style change)", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        sound: {
+          enabled: false,
+          dialog: { enabled: true },
+          newline: { enabled: true },
+          keypress: { enabled: false }
+        }
+      }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("workbench.sound.dialog.enabled")
+    });
+    const input = controlElement(element, "workbench.sound.dialog.enabled");
+
+    expect(input.props.disabled).toBe(true);
+  });
+
+  it("disables switch controls while isLoading", () => {
+    const element = settingsPanelViewElement("en", {
+      isLoading: true,
+      searchQuery: isolate("workbench.statusBar.visible")
+    });
+    const input = controlElement(element, "workbench.statusBar.visible");
+
+    expect(input.props.disabled).toBe(true);
+  });
+});
+
 describe("SettingsPanelView edit/save behavior (#230)", () => {
   it("saves immediately when a switch setting changes, with no Apply/OK/Cancel step", () => {
     const onChangeSettings = vi.fn();

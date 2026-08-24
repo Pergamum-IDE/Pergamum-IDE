@@ -305,7 +305,7 @@ export const jaTranslations = {
   "settings.category.sound.label": "サウンド",
   "settings.category.paneLabel": "設定カテゴリ",
   "settings.search.label": "設定を検索",
-  "settings.search.placeholder": "設定を検索",
+  "settings.search.placeholder": "検索語句を入力（例：エディタ、sound）",
   "settings.search.resultsHeading": "検索結果",
   "settings.search.empty": "一致する設定がありません",
   "status.documentOpenFailed": "文書を開けませんでした: {message}",
