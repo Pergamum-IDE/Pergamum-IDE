@@ -32,7 +32,6 @@ interface SettingsPanelViewOptions {
   settings?: ApplicationSettings;
   isLoading?: boolean;
   error?: string | null;
-  onConfirmEnableAdvancedSettings?: () => Promise<boolean>;
   onChangeSettings?: Parameters<typeof SettingsPanelView>[0]["onChangeSettings"];
   selectedCategoryId?: SettingCategory;
   onSelectCategory?: (id: SettingCategory) => void;
@@ -49,8 +48,6 @@ function settingsPanelViewElement(
     isLoading: options.isLoading ?? false,
     error: options.error ?? null,
     translate: translateFor(currentUiLanguage),
-    onConfirmEnableAdvancedSettings:
-      options.onConfirmEnableAdvancedSettings ?? (() => Promise.resolve(true)),
     onChangeSettings: options.onChangeSettings ?? (() => undefined),
     selectedCategoryId: options.selectedCategoryId ?? "application",
     onSelectCategory: options.onSelectCategory ?? (() => undefined),
@@ -130,11 +127,6 @@ function controlElement(
   key: string
 ): React.ReactElement<ElementProps> {
   return elementById(node, `settingControl-${key}`);
-}
-
-async function flushPromises(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
 }
 
 describe("SettingsPanelView catalog-driven rendering (#230)", () => {
@@ -227,7 +219,6 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
         isLoading={false}
         error={null}
         translate={translateFor("en")}
-        onConfirmEnableAdvancedSettings={() => Promise.resolve(true)}
         onChangeSettings={() => undefined}
       />
     );
@@ -319,7 +310,6 @@ describe("SettingsPanelView category behavior (#230)", () => {
     );
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
-      "workbench.advancedSettings.enabled",
       "workbench.language",
       "workbench.statusBar.visible"
     ]);
@@ -372,20 +362,23 @@ describe("SettingsPanelView category behavior (#230)", () => {
     expect(markup).not.toContain("No settings match your search.");
   });
 
-  it("places the Sound category between Command Palette and Advanced in catalog order", () => {
+  it("places the Sound category after Command Palette in catalog order", () => {
     const soundCategory = settingCategoryCatalog.find((c) => c.id === "sound");
     const commandsCategory = settingCategoryCatalog.find(
       (c) => c.id === "commands"
     );
-    const advancedCategory = settingCategoryCatalog.find(
-      (c) => c.id === "advanced"
-    );
 
     expect(soundCategory).toBeDefined();
     expect(commandsCategory).toBeDefined();
-    expect(advancedCategory).toBeDefined();
     expect(soundCategory!.order).toBeGreaterThan(commandsCategory!.order);
-    expect(soundCategory!.order).toBeLessThan(advancedCategory!.order);
+  });
+
+  it("no longer has an 'advanced' category (#232: the legacy Advanced Settings gate is retired, and no replacement category is introduced)", () => {
+    const categoryIds: readonly string[] = settingCategoryCatalog.map(
+      (category) => category.id
+    );
+
+    expect(categoryIds).not.toContain("advanced");
   });
 });
 
@@ -544,14 +537,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     });
   });
 
-  it("saves immediately when a select setting changes", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      }
-    };
+  it("saves immediately when a select setting changes (files.newFile.lineEnding is directly editable, no advanced gate — #232)", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
     const onChangeSettings = vi.fn();
     const element = settingsPanelViewElement("en", {
       settings,
@@ -602,14 +589,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     });
   });
 
-  it("saves immediately when a number setting changes", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      }
-    };
+  it("saves immediately when a number setting changes (commandPalette.description.marquee.delay is directly editable, no advanced gate — #232)", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
     const onChangeSettings = vi.fn();
     const element = settingsPanelViewElement("en", {
       settings,
@@ -644,13 +625,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
   });
 
   it("ignores a non-finite number value instead of saving it", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      }
-    };
+    const settings: ApplicationSettings = defaultApplicationSettings;
     const onChangeSettings = vi.fn();
     const element = settingsPanelViewElement("en", {
       settings,
@@ -689,30 +664,9 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
   });
 });
 
-describe("SettingsPanelView advanced-gated and sound-gated controls (#230, preserved from pre-catalog behavior)", () => {
-  it("disables the advanced-gated files/command palette controls until advanced settings are enabled", () => {
+describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () => {
+  it("files.newFile.lineEnding and files.newFile.encoding are directly editable — no advanced gate", () => {
     const element = settingsPanelViewElement("en", {
-      selectedCategoryId: "files"
-    });
-
-    expect(
-      controlElement(element, "files.newFile.lineEnding").props.disabled
-    ).toBe(true);
-    expect(
-      controlElement(element, "files.newFile.encoding").props.disabled
-    ).toBe(true);
-  });
-
-  it("enables the advanced-gated controls once advanced settings are enabled", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      }
-    };
-    const element = settingsPanelViewElement("en", {
-      settings,
       selectedCategoryId: "files"
     });
 
@@ -724,13 +678,20 @@ describe("SettingsPanelView advanced-gated and sound-gated controls (#230, prese
     ).toBe(false);
   });
 
-  it("additionally disables the marquee number controls when command descriptions are disabled", () => {
+  it("commandPalette.description.enable is directly editable — no advanced gate", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "commands"
+    });
+
+    expect(
+      controlElement(element, "commandPalette.description.enable").props
+        .disabled
+    ).toBe(false);
+  });
+
+  it("marquee number controls are disabled only when command descriptions are disabled, not by any advanced gate", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      },
       commandPalette: {
         description: { enable: false, marquee: { delay: 3456, speed: 78.5 } }
       }
@@ -754,7 +715,22 @@ describe("SettingsPanelView advanced-gated and sound-gated controls (#230, prese
     ).toBe(3456);
   });
 
-  it("disables child sound controls when the parent sound toggle is off, while preserving their stored values", () => {
+  it("marquee number controls are enabled when command descriptions are enabled (the default)", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "commands"
+    });
+
+    expect(
+      controlElement(element, "commandPalette.description.marquee.delay")
+        .props.disabled
+    ).toBe(false);
+    expect(
+      controlElement(element, "commandPalette.description.marquee.speed")
+        .props.disabled
+    ).toBe(false);
+  });
+
+  it("disables child sound controls when the parent sound toggle is off, while preserving their stored values (sound gating is unrelated to advanced and remains)", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       workbench: {
@@ -784,84 +760,26 @@ describe("SettingsPanelView advanced-gated and sound-gated controls (#230, prese
     ).toBe(true);
   });
 
-  it("asks for binary confirmation before enabling advanced settings and only saves when confirmed", async () => {
-    const onConfirmEnableAdvancedSettings = vi.fn().mockResolvedValue(false);
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelViewElement("en", {
-      searchQuery: isolate("workbench.advancedSettings.enabled"),
-      onConfirmEnableAdvancedSettings,
-      onChangeSettings
-    });
-    const input = controlElement(element, "workbench.advancedSettings.enabled");
-    const onChange = input.props.onChange as (event: {
-      target: { checked: boolean };
-    }) => void;
+  it("does not render workbench.advancedSettings.enabled as a setting item anywhere in the catalog-driven view", () => {
+    const markup = renderSettingsPanelView("en", { searchQuery: "advanced" });
 
-    onChange({ target: { checked: true } });
-    await flushPromises();
-
-    expect(onConfirmEnableAdvancedSettings).toHaveBeenCalledTimes(1);
-    expect(onChangeSettings).not.toHaveBeenCalled();
+    expect(markup).not.toContain("workbench.advancedSettings.enabled");
+    expect(markup).not.toContain("Advanced settings");
+    expect(markup).not.toContain("達人向け設定");
   });
 
-  it("saves enabling advanced settings once the user confirms", async () => {
-    const onConfirmEnableAdvancedSettings = vi.fn().mockResolvedValue(true);
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelViewElement("en", {
-      searchQuery: isolate("workbench.advancedSettings.enabled"),
-      onConfirmEnableAdvancedSettings,
-      onChangeSettings
-    });
-    const input = controlElement(element, "workbench.advancedSettings.enabled");
-    const onChange = input.props.onChange as (event: {
-      target: { checked: boolean };
-    }) => void;
+  it("does not show an Advanced settings confirmation dialog anywhere in the settings panel source", () => {
+    const source = settingsPanelSource();
 
-    onChange({ target: { checked: true } });
-    await flushPromises();
-
-    expect(onChangeSettings).toHaveBeenCalledWith({
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      },
-      commandPalette: defaultApplicationSettings.commandPalette,
-      editor: defaultApplicationSettings.editor,
-      files: defaultApplicationSettings.files
-    });
+    expect(source).not.toContain("onConfirmEnableAdvancedSettings");
+    expect(source).not.toContain("advancedSettings");
+    expect(source).not.toContain("enableConfirm");
   });
 
-  it("does not require confirmation to disable advanced settings", async () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      }
-    };
-    const onConfirmEnableAdvancedSettings = vi.fn().mockResolvedValue(false);
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelViewElement("en", {
-      settings,
-      searchQuery: isolate("workbench.advancedSettings.enabled"),
-      onConfirmEnableAdvancedSettings,
-      onChangeSettings
-    });
-    const input = controlElement(element, "workbench.advancedSettings.enabled");
-    const onChange = input.props.onChange as (event: {
-      target: { checked: boolean };
-    }) => void;
+  it("no longer accepts an onConfirmEnableAdvancedSettings prop on SettingsPanel", () => {
+    const source = settingsPanelSource();
 
-    onChange({ target: { checked: false } });
-    await flushPromises();
-
-    expect(onConfirmEnableAdvancedSettings).not.toHaveBeenCalled();
-    expect(onChangeSettings).toHaveBeenCalledWith({
-      workbench: { ...settings.workbench, advancedSettings: { enabled: false } },
-      commandPalette: settings.commandPalette,
-      editor: settings.editor,
-      files: settings.files
-    });
+    expect(source).not.toContain("onConfirmEnableAdvancedSettings:");
   });
 });
 

@@ -49,7 +49,6 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
     workbench: {
       language: "ja",
       statusBar: { visible: true },
-      advancedSettings: { enabled: false },
       sound: defaultSoundSettings
     },
     commandPalette: {
@@ -77,7 +76,6 @@ function validSaveRequest(
     workbench: {
       language: "ja",
       statusBar: { visible: true },
-      advancedSettings: { enabled: false },
       sound: defaultSoundSettings
     },
     commandPalette: {
@@ -111,9 +109,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.advancedSettings.enabled).toBe(
-      getCatalogDefaultValue("workbench.advancedSettings.enabled")
-    );
+    expect(settings.workbench).not.toHaveProperty("advancedSettings");
     expect(settings.editor.fontFamily).toBeUndefined();
     expect(settings.files.newFile).toEqual({
       lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
@@ -132,13 +128,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     });
   });
 
-  it("reads valid advanced flag, editor font, line ending, and encoding values", async () => {
+  it("reads valid editor font, line ending, and encoding values", async () => {
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: true },
           sound: {
             enabled: false,
             dialog: { enabled: true },
@@ -164,7 +159,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.advancedSettings.enabled).toBe(true);
+    expect(settings.workbench).not.toHaveProperty("advancedSettings");
     expect(settings.workbench.sound).toEqual({
       enabled: false,
       dialog: { enabled: true },
@@ -188,7 +183,6 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: "yes" },
           sound: {
             enabled: "yes",
             dialog: { enabled: "yes" },
@@ -214,7 +208,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.advancedSettings.enabled).toBe(false);
+    expect(settings.workbench).not.toHaveProperty("advancedSettings");
     expect(settings.workbench.sound).toEqual(defaultSoundSettings);
     expect(settings.editor.fontFamily).toBeUndefined();
     expect(settings.files.newFile).toEqual({
@@ -246,6 +240,26 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       marquee: { delay: 2000, speed: 40 }
     });
   });
+
+  it("tolerates an obsolete workbench.advancedSettings field left over from an older build without failing to load (#232)", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        workbench: {
+          language: "ja",
+          statusBar: { visible: true },
+          advancedSettings: { enabled: true },
+          sound: defaultSoundSettings
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.workbench.language).toBe("ja");
+    expect(settings.workbench.statusBar).toEqual({ visible: true });
+    expect(settings.workbench.sound).toEqual(defaultSoundSettings);
+    expect(settings.workbench).not.toHaveProperty("advancedSettings");
+  });
 });
 
 describe("settingsStore Application Settings core controls write path (#195)", () => {
@@ -275,7 +289,6 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         workbench: {
           language: "en",
           statusBar: { visible: false },
-          advancedSettings: { enabled: true },
           sound: {
             enabled: false,
             dialog: { enabled: false },
@@ -317,7 +330,6 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     expect(written.workbench).toEqual({
       language: "en",
       statusBar: { visible: false },
-      advancedSettings: { enabled: true },
       sound: {
         enabled: false,
         dialog: { enabled: false },
@@ -335,21 +347,21 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     });
   });
 
-  it("rejects invalid advanced settings, editor font, line ending, and encoding save values", () => {
+  it("rejects a save request still carrying the obsolete workbench.advancedSettings key, and invalid editor font/sound/line ending/encoding save values (#232)", () => {
     for (const invalidRequest of [
       validSaveRequest({
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: "yes" as unknown as boolean },
+          // Obsolete field (#232) — a save request must not carry it.
+          advancedSettings: { enabled: false },
           sound: defaultSoundSettings
-        }
+        } as unknown as SaveApplicationSettingsRequest["workbench"]
       }),
       validSaveRequest({
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: false },
           sound: {
             enabled: "yes" as unknown as boolean,
             dialog: { enabled: true },
@@ -362,7 +374,6 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: false },
           sound: {
             enabled: true,
             dialog: { enabled: "yes" as unknown as boolean },

@@ -495,15 +495,6 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
-  "workbench.advancedSettings.enabled": defineBooleanSetting({
-    key: "workbench.advancedSettings.enabled",
-    scope: "applicationOnly",
-    defaultValue: false,
-    labelKey: "settings.workbench.advancedSettings.enabled.label",
-    descriptionKey: "settings.workbench.advancedSettings.enabled.description",
-    deprecatedAliases: [],
-    migrationNotes: []
-  }),
   "workbench.sound.enabled": defineBooleanSetting({
     key: "workbench.sound.enabled",
     scope: "applicationOnly",

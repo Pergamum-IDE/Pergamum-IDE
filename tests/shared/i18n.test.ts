@@ -4,6 +4,8 @@ import {
   supportedLanguages,
   t
 } from "../../src/shared/i18n";
+import { enTranslations } from "../../src/shared/i18n/en";
+import { jaTranslations } from "../../src/shared/i18n/ja";
 
 const matchBoundaryKeys = [
   "glossaryEditor.advancedMatchingSettings",
@@ -251,7 +253,7 @@ describe("application settings translations (#181)", () => {
 });
 
 describe("Application Settings core control translations (#195)", () => {
-  it("defines Application Settings page, section, and advanced guard labels for ja and en", () => {
+  it("defines Application Settings page and section labels for ja and en", () => {
     for (const language of ["ja", "en"] as const) {
       for (const key of [
         "settings.application.description",
@@ -260,24 +262,30 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.application.section.editor",
         "settings.application.section.files",
         "settings.application.section.commandPalette",
-        "settings.application.section.sound",
-        "settings.application.advanced.enabled.label",
-        "settings.application.advanced.enabled.description",
-        "settings.application.advanced.disabledDescription",
-        "settings.application.advanced.enableConfirm.title",
-        "settings.application.advanced.enableConfirm.message",
-        "settings.application.advanced.enableConfirm.confirm"
+        "settings.application.section.sound"
       ] as const) {
         expect(t(language, key).length).toBeGreaterThan(0);
       }
     }
+  });
 
-    expect(t("ja", "settings.application.advanced.enabled.label")).toBe(
-      "達人向け設定を有効にする"
-    );
-    expect(t("en", "settings.application.advanced.enabled.label")).toBe(
-      "Enable advanced settings"
-    );
+  it("no longer defines the legacy Advanced Settings toggle/confirmation copy (#232)", () => {
+    const legacyKeys = [
+      "settings.application.advanced.enabled.label",
+      "settings.application.advanced.enabled.description",
+      "settings.application.advanced.disabledDescription",
+      "settings.application.advanced.enableConfirm.title",
+      "settings.application.advanced.enableConfirm.message",
+      "settings.application.advanced.enableConfirm.confirm",
+      "settings.workbench.advancedSettings.enabled.label",
+      "settings.workbench.advancedSettings.enabled.description",
+      "settings.category.advanced.label"
+    ];
+
+    for (const key of legacyKeys) {
+      expect(Object.keys(jaTranslations)).not.toContain(key);
+      expect(Object.keys(enTranslations)).not.toContain(key);
+    }
   });
 
   it("defines catalog label and description keys used by Application Settings controls", () => {
@@ -289,8 +297,6 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.workbench.statusBar.visible.description",
         "settings.workbench.fontFamily.label",
         "settings.workbench.fontFamily.description",
-        "settings.workbench.advancedSettings.enabled.label",
-        "settings.workbench.advancedSettings.enabled.description",
         "settings.workbench.sound.enabled.label",
         "settings.workbench.sound.enabled.description",
         "settings.workbench.sound.dialog.enabled.label",

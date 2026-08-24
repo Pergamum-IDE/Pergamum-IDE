@@ -290,8 +290,7 @@ button:active {
 }
 
 .settingsPanelHeader p,
-.settingsDescription,
-.settingsAdvancedDisabled {
+.settingsDescription {
   margin: 0;
   color: #52616f;
   font-size: 13px;
@@ -459,10 +458,6 @@ button:active {
   color: #52616f;
   font-size: 13px;
   line-height: 1.5;
-}
-
-.settingsAdvancedDisabled {
-  color: #8a4c0f;
 }
 
 .settingsSelect {

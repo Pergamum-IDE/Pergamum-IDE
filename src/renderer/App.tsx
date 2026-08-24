@@ -3299,28 +3299,6 @@ export function App(): JSX.Element {
     }
   }
 
-  async function confirmEnableAdvancedSettings(): Promise<boolean> {
-    const result = await confirmDialog({
-      title: translate("settings.application.advanced.enableConfirm.title"),
-      message: {
-        kind: "plainText",
-        text: translate("settings.application.advanced.enableConfirm.message")
-      },
-      icon: {
-        kind: "warning",
-        tooltip: translate("dialog.icon.warning")
-      },
-      clipboardText: null,
-      dismissOnBackdropClick: false,
-      confirmLabel: translate(
-        "settings.application.advanced.enableConfirm.confirm"
-      ),
-      cancelLabel: translate("common.cancel")
-    });
-
-    return result === "confirm";
-  }
-
   return (
     <main
       className="appShell"
@@ -3511,9 +3489,6 @@ export function App(): JSX.Element {
                       isLoading={isSettingsLoading}
                       error={settingsError}
                       translate={translate}
-                      onConfirmEnableAdvancedSettings={
-                        confirmEnableAdvancedSettings
-                      }
                       onChangeSettings={(nextSettings) => {
                         void changeSettings(nextSettings);
                       }}

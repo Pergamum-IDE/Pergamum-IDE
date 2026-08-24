@@ -66,7 +66,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }).toThrow(/duplicate id/);
     });
 
-    it("registers the Settings UI categories, with sound between commands and advanced", () => {
+    it("registers the Settings UI categories, with sound after commands and no legacy advanced category (#232)", () => {
       expect(settingCategoryCatalog.map((category) => category.id)).toEqual([
         "application",
         "appearance",
@@ -75,8 +75,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "files",
         "project",
         "commands",
-        "sound",
-        "advanced"
+        "sound"
       ]);
     });
 
@@ -102,26 +101,26 @@ describe("Settings UI Catalog Schema (#226)", () => {
     it("sorts categories by order, then localized label, then id (stable)", () => {
       const fixture: readonly SettingCategoryCatalogItem[] = [
         { id: "commands", order: 100, labelKey: "z" },
-        { id: "advanced", order: 100, labelKey: "a" },
+        { id: "preview", order: 100, labelKey: "a" },
         { id: "project", order: 50, labelKey: "m" }
       ];
       const translate: SettingSearchTranslate = (key) => key;
 
       expect(
         sortSettingCategoryCatalog(translate, fixture).map((c) => c.id)
-      ).toEqual(["project", "advanced", "commands"]);
+      ).toEqual(["project", "preview", "commands"]);
     });
 
     it("breaks a same-order, same-label tie by id", () => {
       const fixture: readonly SettingCategoryCatalogItem[] = [
         { id: "project", order: 100, labelKey: "same" },
-        { id: "advanced", order: 100, labelKey: "same" }
+        { id: "preview", order: 100, labelKey: "same" }
       ];
       const translate: SettingSearchTranslate = () => "same";
 
       expect(
         sortSettingCategoryCatalog(translate, fixture).map((c) => c.id)
-      ).toEqual(["advanced", "project"]);
+      ).toEqual(["preview", "project"]);
     });
 
     it("sorts the production category catalog without throwing, in ja and en", () => {
@@ -162,14 +161,13 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }
     });
 
-    it("registers exactly the #226 + #228 target settings", () => {
+    it("registers exactly the #226 + #228 target settings, minus the #232-retired workbench.advancedSettings.enabled", () => {
       expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
         [
           "workbench.colorTheme",
           "workbench.fontFamily",
           "workbench.language",
           "workbench.statusBar.visible",
-          "workbench.advancedSettings.enabled",
           "workbench.sound.enabled",
           "workbench.sound.dialog.enabled",
           "workbench.sound.newline.enabled",
@@ -196,35 +194,15 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(getSettingCatalogItem("workbench.fontFamily")).toBeDefined();
     });
 
-    it("marks as advanced exactly the settings gated behind the advanced-settings toggle in the current Settings UI", () => {
-      const advancedKeys = [
-        "files.newFile.lineEnding",
-        "files.newFile.encoding",
-        "commandPalette.description.enable",
-        "commandPalette.description.marquee.delay",
-        "commandPalette.description.marquee.speed"
-      ] as const;
+    it("no longer registers workbench.advancedSettings.enabled (#232: legacy Advanced Settings gate removed)", () => {
+      expect(getSettingCatalogItem("workbench.advancedSettings.enabled")).toBeUndefined();
+    });
 
-      for (const key of advancedKeys) {
-        expect(getSettingCatalogItem(key)?.advanced).toBe(true);
-      }
-
-      const notAdvancedKeys = [
-        "workbench.colorTheme",
-        "workbench.fontFamily",
-        "editor.fontFamily",
-        "preview.renderer",
-        "workbench.advancedSettings.enabled",
-        "workbench.language",
-        "workbench.statusBar.visible",
-        "workbench.sound.enabled",
-        "workbench.sound.dialog.enabled",
-        "workbench.sound.newline.enabled",
-        "workbench.sound.keypress.enabled"
-      ] as const;
-
-      for (const key of notAdvancedKeys) {
-        expect(getSettingCatalogItem(key)?.advanced).toBeFalsy();
+    it("no catalog item declares an 'advanced' property — the field was removed from the schema, not just left unset (#232)", () => {
+      for (const item of settingCatalogItems) {
+        expect(Object.prototype.hasOwnProperty.call(item, "advanced")).toBe(
+          false
+        );
       }
     });
 
@@ -471,7 +449,6 @@ describe("Settings UI Catalog Schema (#226)", () => {
       const newlyCoveredKeys = [
         "workbench.language",
         "workbench.statusBar.visible",
-        "workbench.advancedSettings.enabled",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
@@ -558,23 +535,16 @@ describe("Settings UI Catalog Schema (#226)", () => {
     });
   });
 
-  describe("advanced flag is display-filter metadata only, not a danger/confirmation signal", () => {
-    it("advanced settings remain enumerated and sortable with no filtering applied anywhere in this module", () => {
-      const advancedKeys = settingCatalogItems
-        .filter((item) => item.advanced === true)
-        .map((item) => item.key);
-
-      expect(advancedKeys.length).toBeGreaterThan(0);
-
-      // sortSettingCatalogItems must not drop/hide advanced items.
-      const sortedKeys = sortSettingCatalogItems().map((item) => item.key);
-
-      for (const key of advancedKeys) {
-        expect(sortedKeys).toContain(key);
+  describe("the 'advanced' flag is removed from the schema (#232: legacy Advanced Settings gate retired, no filter introduced)", () => {
+    it("no catalog item exposes an 'advanced' property", () => {
+      for (const item of settingCatalogItems) {
+        expect(Object.prototype.hasOwnProperty.call(item, "advanced")).toBe(
+          false
+        );
       }
     });
 
-    it("this module exports no filter/hide/confirm function — advanced display filtering is a later issue", () => {
+    it("this module exports no filter/hide/confirm function — a future display filter, if any, is a separate issue's schema decision", () => {
       const source = readFileSync(
         "src/shared/settingsUiCatalog.ts",
         "utf8"
@@ -583,6 +553,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(source).not.toMatch(/export function filter/i);
       expect(source).not.toMatch(/export function hideAdvanced/i);
       expect(source).not.toMatch(/export function.*[Cc]onfirm/);
+      expect(source).not.toContain("readonly advanced");
     });
   });
 

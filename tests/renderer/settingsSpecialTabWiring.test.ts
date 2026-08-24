@@ -87,28 +87,19 @@ describe("Settings special tab wiring (#181)", () => {
     expect(editorAreaBodyBlock).toContain("<EditorSurface");
   });
 
-  it("wires Application Settings advanced-enable confirmation through the binary app confirm dialog", () => {
+  it("no longer wires an Advanced Settings enable-confirmation flow, but keeps the generic confirmDialog infrastructure reusable elsewhere (#232)", () => {
     const source = appSource();
-    const functionIndex = source.indexOf(
-      "async function confirmEnableAdvancedSettings"
-    );
-    const returnIndex = source.indexOf("return result === \"confirm\";", functionIndex);
 
-    expect(functionIndex).toBeGreaterThan(-1);
-    expect(returnIndex).toBeGreaterThan(functionIndex);
-
-    const functionBlock = source.slice(functionIndex, returnIndex);
-
-    expect(functionBlock).toContain("confirmDialog({");
-    expect(functionBlock).toContain(
-      'translate("settings.application.advanced.enableConfirm.title")'
+    expect(source).not.toContain("confirmEnableAdvancedSettings");
+    expect(source).not.toContain("onConfirmEnableAdvancedSettings");
+    expect(source).not.toContain(
+      "settings.application.advanced.enableConfirm"
     );
-    expect(functionBlock).toContain('kind: "warning"');
-    expect(functionBlock).toContain("dismissOnBackdropClick: false");
-    expect(functionBlock).not.toContain("choiceDialog");
-    expect(source).toContain(
-      "onConfirmEnableAdvancedSettings={\n                        confirmEnableAdvancedSettings"
-    );
+    // The generic dialog helper itself remains, used by other confirm flows.
+    expect(source).toContain("function confirmDialog(");
+    expect(
+      (source.match(/confirmDialog\(/g) ?? []).length
+    ).toBeGreaterThan(1);
   });
 
   it("closes an active Settings tab without using the dirty document close flow", () => {
