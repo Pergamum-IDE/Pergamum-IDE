@@ -5,12 +5,15 @@ import type { Translate } from "../shared/i18n";
 export { applicationCommandIds };
 
 export interface ApplicationCommandController {
+  openAbout(): void | Promise<void>;
   createProject(): void | Promise<void>;
   openProject(): void | Promise<void>;
   toggleRecentProjects(): void;
 }
 
 export interface ApplicationCommandTitles {
+  openAbout: string;
+  openAboutDescription: string;
   createProject: string;
   createProjectDescription: string;
   openProject: string;
@@ -25,6 +28,8 @@ export function createApplicationCommandTitles(
   translate: Translate
 ): ApplicationCommandTitles {
   return {
+    openAbout: translate("command.app.about.open"),
+    openAboutDescription: translate("command.app.about.open.description"),
     createProject: translate("command.workspace.project.create"),
     createProjectDescription: translate(
       "command.workspace.project.create.description"
@@ -45,6 +50,12 @@ export function createApplicationCommands(
   titles: ApplicationCommandTitles
 ): readonly ApplicationCommand[] {
   return [
+    {
+      id: applicationCommandIds.openAbout,
+      title: titles.openAbout,
+      description: titles.openAboutDescription,
+      execute: () => controller.openAbout()
+    },
     {
       id: applicationCommandIds.createProject,
       title: titles.createProject,

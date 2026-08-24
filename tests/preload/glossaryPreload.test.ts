@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   APPLICATION_MENU_CHANNELS,
+  APP_INFO_CHANNELS,
   CONTEXT_MENU_CHANNELS,
   DEBUG_LOG_CHANNELS,
   EDIT_CHANNELS,
@@ -284,6 +285,31 @@ describe("glossary preload API", () => {
     expect(electronMock.off).toHaveBeenCalledWith(
       APPLICATION_MENU_CHANNELS.command,
       listener
+    );
+  });
+
+  it("exposes app info and fixed external-link actions without arbitrary URLs", async () => {
+    electronMock.invoke.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    await api.appInfo.getAppInfo();
+    await api.appInfo.openRepository();
+    await api.appInfo.openTypewriterSoundsCredit();
+
+    expect(electronMock.invoke.mock.calls).toEqual([
+      [APP_INFO_CHANNELS.getAppInfo],
+      [APP_INFO_CHANNELS.openRepository],
+      [APP_INFO_CHANNELS.openTypewriterSoundsCredit]
+    ]);
+    expect(api.appInfo as Record<string, unknown>).not.toHaveProperty(
+      "openExternal"
+    );
+    expect(api.appInfo as Record<string, unknown>).not.toHaveProperty(
+      "openThirdPartyNotices"
     );
   });
 

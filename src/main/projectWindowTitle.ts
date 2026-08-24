@@ -92,7 +92,7 @@ export function createProjectWindowTitle({
 
   if (!titleStatus) {
     const trailingSeparator =
-      subject.kind === "defaultSuffix" ? "-" : " -";
+      subject.kind === "defaultSuffix" ? " -" : " -";
     return `Pergamum - ${subject.text}${trailingSeparator}`;
   }
 

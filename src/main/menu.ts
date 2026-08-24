@@ -73,13 +73,21 @@ function commandMenuItem(
   };
 }
 
-function macApplicationMenu(language: Language): MenuItemConstructorOptions {
+function macApplicationMenu(
+  language: Language,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
   const appName = applicationName;
 
   return {
     label: appName,
     submenu: [
-      roleItem("about", language, "menu.aboutPergamum"),
+      commandMenuItem(
+        applicationCommandIds.openAbout,
+        language,
+        "menu.aboutPergamum",
+        options
+      ),
       { type: "separator" },
       roleItem("services", language, "menu.services"),
       { type: "separator" },
@@ -267,11 +275,21 @@ function macWindowMenu(language: Language): MenuItemConstructorOptions {
   };
 }
 
-function helpMenu(language: Language): MenuItemConstructorOptions {
+function helpMenu(
+  language: Language,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
   return {
     role: "help",
     label: label(language, "menu.help"),
-    submenu: [roleItem("about", language, "menu.aboutPergamum")]
+    submenu: [
+      commandMenuItem(
+        applicationCommandIds.openAbout,
+        language,
+        "menu.aboutPergamum",
+        options
+      )
+    ]
   };
 }
 
@@ -339,12 +357,12 @@ export function buildApplicationMenu(
   platform: NodeJS.Platform = process.platform
 ): MenuItemConstructorOptions[] {
   const template: MenuItemConstructorOptions[] = [
-    ...(platform === "darwin" ? [macApplicationMenu(language)] : []),
+    ...(platform === "darwin" ? [macApplicationMenu(language, options)] : []),
     fileMenu(language, platform, options),
     editMenu(language),
     viewMenu(language, options),
     ...(platform === "darwin" ? [macWindowMenu(language)] : []),
-    helpMenu(language)
+    helpMenu(language, options)
   ];
 
   return template;

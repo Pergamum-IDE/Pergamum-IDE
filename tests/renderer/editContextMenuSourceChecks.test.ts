@@ -39,6 +39,9 @@ function allSourceText(): string {
  * resolves dismissed and Tab stays inside the modal focus trap; it does not
  * implement app/global shortcut suppression.
  *
+ * InfoDialog.tsx (#221) is the same dialog-local exception: Escape closes the
+ * information modal and Tab stays inside the modal focus trap.
+ *
  * DocumentTabBar.tsx (#184) is the same category of exception again: each
  * tab's `onKeyDown` implements Enter/Space activation for its own
  * `role="tab"` element (a `<div>`, not a native `<button>`, since a nested
@@ -49,6 +52,7 @@ const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
   "ChoiceDialog.tsx",
   "ConfirmDialog.tsx",
+  "InfoDialog.tsx",
   "DocumentTabBar.tsx"
 ]);
 

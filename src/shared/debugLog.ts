@@ -496,6 +496,7 @@ export interface RendererDebugLogRequest {
 }
 
 export const knownDebugLogCommandIds = [
+  applicationCommandIds.openAbout,
   applicationCommandIds.createProject,
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,

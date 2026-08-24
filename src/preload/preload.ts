@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import { nodePlatformToAppPlatform } from "./platform";
 import {
   APPLICATION_MENU_CHANNELS,
+  APP_INFO_CHANNELS,
   CONTEXT_MENU_CHANNELS,
   DEBUG_LOG_CHANNELS,
   EDIT_CHANNELS,
@@ -176,6 +177,12 @@ const pergamumApi: PergamumApi = {
   edit: {
     delegateNativeEdit: (request) =>
       ipcRenderer.invoke(EDIT_CHANNELS.delegateNativeEdit, request)
+  },
+  appInfo: {
+    getAppInfo: () => ipcRenderer.invoke(APP_INFO_CHANNELS.getAppInfo),
+    openRepository: () => ipcRenderer.invoke(APP_INFO_CHANNELS.openRepository),
+    openTypewriterSoundsCredit: () =>
+      ipcRenderer.invoke(APP_INFO_CHANNELS.openTypewriterSoundsCredit)
   }
 };
 
