@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { t, type Language } from "../../src/shared/i18n";
 import {
+  getCatalogEntry,
+  settingsCatalog
+} from "../../src/shared/settingsCatalog";
+import {
   buildSettingSearchText,
   getSettingCategoryCatalogItem,
   getSettingCatalogItem,
@@ -157,11 +161,21 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }
     });
 
-    it("registers exactly the initial #226 target settings", () => {
+    it("registers exactly the #226 + #228 target settings", () => {
       expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
         [
           "workbench.colorTheme",
           "workbench.fontFamily",
+          "workbench.language",
+          "workbench.statusBar.visible",
+          "workbench.advancedSettings.enabled",
+          "workbench.sound.enabled",
+          "workbench.sound.dialog.enabled",
+          "workbench.sound.newline.enabled",
+          "workbench.sound.keypress.enabled",
+          "commandPalette.description.enable",
+          "commandPalette.description.marquee.delay",
+          "commandPalette.description.marquee.speed",
           "editor.fontFamily",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
@@ -170,29 +184,60 @@ describe("Settings UI Catalog Schema (#226)", () => {
       );
     });
 
+    it("covers every key registered in settingsCatalog.ts (#228: no existing Settings UI item is dropped)", () => {
+      expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
+        Object.keys(settingsCatalog).sort()
+      );
+    });
+
     it("uses the actual existing settingsCatalog.ts key for the UI font (workbench.fontFamily), not an invented ui.fontFamily key", () => {
       expect(getSettingCatalogItem("ui.fontFamily")).toBeUndefined();
       expect(getSettingCatalogItem("workbench.fontFamily")).toBeDefined();
     });
 
-    it("files.newFile.lineEnding and files.newFile.encoding are marked advanced", () => {
-      expect(getSettingCatalogItem("files.newFile.lineEnding")?.advanced).toBe(
-        true
-      );
-      expect(getSettingCatalogItem("files.newFile.encoding")?.advanced).toBe(
-        true
-      );
+    it("marks as advanced exactly the settings gated behind the advanced-settings toggle in the current Settings UI", () => {
+      const advancedKeys = [
+        "files.newFile.lineEnding",
+        "files.newFile.encoding",
+        "commandPalette.description.enable",
+        "commandPalette.description.marquee.delay",
+        "commandPalette.description.marquee.speed"
+      ] as const;
+
+      for (const key of advancedKeys) {
+        expect(getSettingCatalogItem(key)?.advanced).toBe(true);
+      }
+
+      const notAdvancedKeys = [
+        "workbench.colorTheme",
+        "workbench.fontFamily",
+        "editor.fontFamily",
+        "preview.renderer",
+        "workbench.advancedSettings.enabled",
+        "workbench.language",
+        "workbench.statusBar.visible",
+        "workbench.sound.enabled",
+        "workbench.sound.dialog.enabled",
+        "workbench.sound.newline.enabled",
+        "workbench.sound.keypress.enabled"
+      ] as const;
+
+      for (const key of notAdvancedKeys) {
+        expect(getSettingCatalogItem(key)?.advanced).toBeFalsy();
+      }
     });
 
     it("select controls list the values actually accepted by settingsCatalog.ts", () => {
       const lineEnding = getSettingCatalogItem("files.newFile.lineEnding");
       const encoding = getSettingCatalogItem("files.newFile.encoding");
       const renderer = getSettingCatalogItem("preview.renderer");
+      const language = getSettingCatalogItem("workbench.language");
 
       if (
         lineEnding?.control.kind !== "select" ||
         encoding?.control.kind !== "select" ||
-        renderer?.control.kind !== "select"
+        renderer?.control.kind !== "select" ||
+        language?.control.kind !== "select"
       ) {
         throw new Error("Expected select controls.");
       }
@@ -205,6 +250,39 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(renderer.control.options.map((o) => o.value)).toEqual([
         "markdown"
       ]);
+      expect(language.control.options.map((o) => o.value)).toEqual([
+        "ja",
+        "en"
+      ]);
+    });
+
+    it("commandPalette marquee delay/speed number controls carry min/max sourced from settingsCatalog.ts, not duplicated literals", () => {
+      const delay = getSettingCatalogItem(
+        "commandPalette.description.marquee.delay"
+      );
+      const speed = getSettingCatalogItem(
+        "commandPalette.description.marquee.speed"
+      );
+
+      if (delay?.control.kind !== "number" || speed?.control.kind !== "number") {
+        throw new Error("Expected number controls.");
+      }
+
+      const delayRange = getCatalogEntry(
+        "commandPalette.description.marquee.delay"
+      ).numericRange;
+      const speedRange = getCatalogEntry(
+        "commandPalette.description.marquee.speed"
+      ).numericRange;
+
+      expect(delay.control).toMatchObject({
+        min: delayRange.min,
+        max: delayRange.max
+      });
+      expect(speed.control).toMatchObject({
+        min: speedRange.min,
+        max: speedRange.max
+      });
     });
 
     it("every item's labelKey / descriptionKey resolves in ja and en", () => {
@@ -386,6 +464,73 @@ describe("Settings UI Catalog Schema (#226)", () => {
           expect(searchText).toContain(t(language, option.labelKey as never));
         }
       }
+    });
+
+    it("#228: search text for the newly covered switch/select/number items includes key, resolved label/description, category label, and (for select) option value/label", () => {
+      const newlyCoveredKeys = [
+        "workbench.language",
+        "workbench.statusBar.visible",
+        "workbench.advancedSettings.enabled",
+        "workbench.sound.enabled",
+        "workbench.sound.dialog.enabled",
+        "workbench.sound.newline.enabled",
+        "workbench.sound.keypress.enabled",
+        "commandPalette.description.enable",
+        "commandPalette.description.marquee.delay",
+        "commandPalette.description.marquee.speed"
+      ] as const;
+
+      for (const key of newlyCoveredKeys) {
+        const item = getSettingCatalogItem(key);
+
+        if (!item) {
+          throw new Error(`expected ${key} to be registered`);
+        }
+
+        for (const language of languages) {
+          const searchText = buildSettingSearchText(
+            item,
+            translateFor(language)
+          );
+
+          expect(searchText).toContain(item.key);
+          expect(searchText).toContain(t(language, item.labelKey as never));
+          expect(searchText).toContain(
+            t(language, item.descriptionKey as never)
+          );
+          expect(searchText).toContain(
+            t(language, settingCategoryLabelKey(item.category) as never)
+          );
+
+          if (item.control.kind === "select") {
+            for (const option of item.control.options) {
+              expect(searchText).toContain(option.value);
+              expect(searchText).toContain(
+                t(language, option.labelKey as never)
+              );
+            }
+          }
+        }
+      }
+    });
+
+    it("workbench.language's select search text includes both ja and en option values and native-name labels", () => {
+      const item = getSettingCatalogItem("workbench.language");
+
+      if (!item || item.control.kind !== "select") {
+        throw new Error("expected workbench.language select control");
+      }
+
+      const searchText = buildSettingSearchText(item, translateFor("en"));
+
+      expect(item.control.options.map((option) => option.value)).toEqual([
+        "ja",
+        "en"
+      ]);
+      expect(searchText).toContain("ja");
+      expect(searchText).toContain("en");
+      expect(searchText).toContain("日本語");
+      expect(searchText).toContain("English");
     });
 
     it("settingControlSearchText returns nothing for non-select controls", () => {

@@ -23,8 +23,10 @@
 
 import {
   getCatalogDefaultValue,
+  getCatalogEntry,
   type SettingKey
 } from "./settingsCatalog";
+import { supportedLanguages, type Language } from "./i18n";
 
 // ---------------------------------------------------------------------------
 // i18n key alias
@@ -321,6 +323,30 @@ function defineSettingCatalog<
 // argument type means an invented key (one not registered in
 // settingsCatalog.ts) fails to compile.
 
+// workbench.language's selectable values are owned by i18n
+// (supportedLanguages), not this module — build the select options from
+// that list rather than hardcoding "ja"/"en" a second time. Each option's
+// labelKey resolves to the language's own native name (e.g. "日本語"),
+// which — like a proper noun — does not change with the current UI
+// language, so the en/ja translations for these keys are identical text.
+const languageOptionLabelKeys: Record<Language, I18nKey> = {
+  ja: "settings.workbench.language.option.ja.label",
+  en: "settings.workbench.language.option.en.label"
+};
+
+const workbenchLanguageOptions: readonly SettingSelectOption[] =
+  supportedLanguages.map((language) => ({
+    value: language,
+    labelKey: languageOptionLabelKeys[language]
+  }));
+
+const commandPaletteMarqueeDelayRange = getCatalogEntry(
+  "commandPalette.description.marquee.delay"
+).numericRange;
+const commandPaletteMarqueeSpeedRange = getCatalogEntry(
+  "commandPalette.description.marquee.speed"
+).numericRange;
+
 // Intentional public UI catalog data — kept public for future Settings Page
 // consumers (#226). Registers only settings that already exist in
 // src/shared/settingsCatalog.ts.
@@ -408,6 +434,116 @@ export const settingCatalogItems = defineSettingCatalog([
       ]
     },
     defaultValue: getCatalogDefaultValue("preview.renderer")
+  },
+  {
+    key: "workbench.advancedSettings.enabled",
+    category: "application",
+    order: 100,
+    labelKey: "settings.workbench.advancedSettings.enabled.label",
+    descriptionKey: "settings.workbench.advancedSettings.enabled.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.advancedSettings.enabled")
+  },
+  {
+    key: "workbench.language",
+    category: "application",
+    order: 200,
+    labelKey: "settings.workbench.language.label",
+    descriptionKey: "settings.workbench.language.description",
+    control: {
+      kind: "select",
+      options: workbenchLanguageOptions
+    },
+    defaultValue: getCatalogDefaultValue("workbench.language")
+  },
+  {
+    key: "workbench.statusBar.visible",
+    category: "application",
+    order: 300,
+    labelKey: "settings.workbench.statusBar.visible.label",
+    descriptionKey: "settings.workbench.statusBar.visible.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.statusBar.visible")
+  },
+  {
+    key: "workbench.sound.enabled",
+    category: "application",
+    order: 400,
+    labelKey: "settings.workbench.sound.enabled.label",
+    descriptionKey: "settings.workbench.sound.enabled.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.sound.enabled")
+  },
+  {
+    key: "workbench.sound.dialog.enabled",
+    category: "application",
+    order: 410,
+    labelKey: "settings.workbench.sound.dialog.enabled.label",
+    descriptionKey: "settings.workbench.sound.dialog.enabled.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.sound.dialog.enabled")
+  },
+  {
+    key: "workbench.sound.newline.enabled",
+    category: "application",
+    order: 420,
+    labelKey: "settings.workbench.sound.newline.enabled.label",
+    descriptionKey: "settings.workbench.sound.newline.enabled.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.sound.newline.enabled")
+  },
+  {
+    key: "workbench.sound.keypress.enabled",
+    category: "application",
+    order: 430,
+    labelKey: "settings.workbench.sound.keypress.enabled.label",
+    descriptionKey: "settings.workbench.sound.keypress.enabled.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.sound.keypress.enabled")
+  },
+  {
+    key: "commandPalette.description.enable",
+    category: "commands",
+    order: 100,
+    labelKey: "settings.commandPalette.description.enable.label",
+    descriptionKey: "settings.commandPalette.description.enable.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("commandPalette.description.enable"),
+    advanced: true
+  },
+  {
+    key: "commandPalette.description.marquee.delay",
+    category: "commands",
+    order: 200,
+    labelKey: "settings.commandPalette.description.marquee.delay.label",
+    descriptionKey:
+      "settings.commandPalette.description.marquee.delay.description",
+    control: {
+      kind: "number",
+      min: commandPaletteMarqueeDelayRange.min,
+      max: commandPaletteMarqueeDelayRange.max
+    },
+    defaultValue: getCatalogDefaultValue(
+      "commandPalette.description.marquee.delay"
+    ),
+    advanced: true
+  },
+  {
+    key: "commandPalette.description.marquee.speed",
+    category: "commands",
+    order: 300,
+    labelKey: "settings.commandPalette.description.marquee.speed.label",
+    descriptionKey:
+      "settings.commandPalette.description.marquee.speed.description",
+    control: {
+      kind: "number",
+      min: commandPaletteMarqueeSpeedRange.min,
+      max: commandPaletteMarqueeSpeedRange.max
+    },
+    defaultValue: getCatalogDefaultValue(
+      "commandPalette.description.marquee.speed"
+    ),
+    advanced: true
   }
 ] satisfies readonly SettingCatalogItem[]);
 

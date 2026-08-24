@@ -279,6 +279,8 @@ export const enTranslations = {
   "settings.workbench.fontFamily.label": "UI font",
   "settings.workbench.language.description": "Application display language.",
   "settings.workbench.language.label": "Display language",
+  "settings.workbench.language.option.ja.label": "日本語",
+  "settings.workbench.language.option.en.label": "English",
   "settings.workbench.sound.dialog.enabled.description": "Play a sound when a dialog appears.",
   "settings.workbench.sound.dialog.enabled.label": "Dialog sound",
   "settings.workbench.sound.enabled.description": "Play short sounds for Pergamum interactions.",
