@@ -32,18 +32,24 @@ describe("workbench.statusBar.visible / workbench.language runtime wiring (#174)
     expect(settingsPanelSource).toContain("settings.languageRestartRequired");
   });
 
-  it("SettingsPanel renders language options from the i18n-owned supportedLanguages list (#186)", () => {
+  it("workbench.language's select options are owned by i18n's supportedLanguages list, not hardcoded in SettingsPanel.tsx (#186, #228, #230: moved into the UI catalog)", () => {
+    const catalogSource = readFileSync(
+      "src/shared/settingsUiCatalog.ts",
+      "utf8"
+    );
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
     );
 
-    expect(settingsPanelSource).toContain("supportedLanguages.map");
-    expect(settingsPanelSource).toContain(
-      "languageDefinitions[language].nativeName"
-    );
+    expect(catalogSource).toContain("supportedLanguages.map");
+    expect(settingsPanelSource).not.toContain("languageDefinitions");
+    expect(settingsPanelSource).not.toContain("supportedLanguages");
     expect(settingsPanelSource).not.toContain('["ja", "en"]');
     expect(settingsPanelSource).not.toContain("languageLabelKey");
+    // SettingsPanel.tsx renders every select control's options generically
+    // from item.control (catalog-driven), not per-setting.
+    expect(settingsPanelSource).toContain("control.options.map");
   });
 });
 
@@ -62,7 +68,7 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(stylesSource).toContain(".editorHost .cm-scroller");
   });
 
-  it("SettingsPanel keeps advanced files controls behind the workbench.advancedSettings.enabled guard", () => {
+  it("SettingsPanel keeps the advanced-gated files/command palette controls behind the workbench.advancedSettings.enabled guard (#230: catalog-driven, same gating behavior)", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
@@ -71,47 +77,46 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(settingsPanelSource).toContain(
       "settings.workbench.advancedSettings.enabled"
     );
-    expect(settingsPanelSource).toContain("advancedControlsDisabled");
-    expect(settingsPanelSource).toContain(
-      "onConfirmEnableAdvancedSettings"
-    );
+    expect(settingsPanelSource).toContain("advancedGatedKeys");
+    expect(settingsPanelSource).toContain('"files.newFile.lineEnding"');
+    expect(settingsPanelSource).toContain('"files.newFile.encoding"');
+    expect(settingsPanelSource).toContain("onConfirmEnableAdvancedSettings");
   });
 
-  it("SettingsPanel exposes Command Palette description controls as advanced settings", () => {
+  it("SettingsPanel keeps Command Palette description controls as advanced-gated settings, with unit suffixes for the marquee number controls (#230: catalog-driven)", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
     );
 
     expect(settingsPanelSource).toContain(
-      "settings.application.section.commandPalette"
+      '"commandPalette.description.enable"'
     );
     expect(settingsPanelSource).toContain(
-      "applicationSettingsCommandPaletteDescriptionEnabled"
+      '"commandPalette.description.marquee.delay"'
     );
     expect(settingsPanelSource).toContain(
-      "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
+      '"commandPalette.description.marquee.speed"'
     );
-    expect(settingsPanelSource).toContain(
-      "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-    );
-    expect(settingsPanelSource).toContain("advancedControlsDisabled");
+    expect(settingsPanelSource).toContain("advancedGatedKeys");
+    expect(settingsPanelSource).toContain("marqueeKeys");
     expect(settingsPanelSource).toContain("settings.unit.ms");
     expect(settingsPanelSource).toContain("settings.unit.pxPerSecond");
   });
 
-  it("SettingsPanel exposes the #200 sound feedback controls and disables child controls through the parent sound guard", () => {
+  it("SettingsPanel exposes the #200 sound feedback controls and disables child controls through the parent sound guard (#230: catalog-driven)", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
     );
 
-    expect(settingsPanelSource).toContain("settings.workbench.sound");
-    expect(settingsPanelSource).toContain("soundControlsDisabled");
-    expect(settingsPanelSource).toContain("applicationSettingsSoundEnabled");
-    expect(settingsPanelSource).toContain("applicationSettingsDialogSound");
-    expect(settingsPanelSource).toContain("applicationSettingsNewlineSound");
-    expect(settingsPanelSource).toContain("applicationSettingsKeypressSound");
+    expect(settingsPanelSource).toContain("settings.workbench.sound.enabled");
+    expect(settingsPanelSource).toContain("soundChildKeys");
+    expect(settingsPanelSource).toContain('"workbench.sound.dialog.enabled"');
+    expect(settingsPanelSource).toContain('"workbench.sound.newline.enabled"');
+    expect(settingsPanelSource).toContain(
+      '"workbench.sound.keypress.enabled"'
+    );
   });
 
   it("App.tsx wires the renderer sound feedback player to dialogs and the Markdown editor surface", () => {

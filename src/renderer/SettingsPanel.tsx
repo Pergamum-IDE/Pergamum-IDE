@@ -1,16 +1,24 @@
+import { useState } from "react";
 import type {
   ApplicationSettings,
   NewFileEncoding,
   NewFileLineEnding,
   SaveApplicationSettingsRequest
 } from "../shared/api";
+import type { Language, Translate, TranslationKey } from "../shared/i18n";
+import { getCatalogDefaultValue, type SettingKey } from "../shared/settingsCatalog";
 import {
-  languageDefinitions,
-  supportedLanguages,
-  type Language,
-  type Translate
-} from "../shared/i18n";
-import { getCatalogEntry } from "../shared/settingsCatalog";
+  buildSettingSearchText,
+  settingCategoryCatalog,
+  settingCategoryLabelKey,
+  settingCatalogItems,
+  sortSettingCatalogItems,
+  sortSettingCategoryCatalog,
+  type I18nKey,
+  type SettingCatalogItem,
+  type SettingCategory,
+  type SettingSearchTranslate
+} from "../shared/settingsUiCatalog";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
@@ -21,14 +29,106 @@ interface SettingsPanelProps {
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
 }
 
-const lineEndingOptions = getCatalogEntry("files.newFile.lineEnding").enumValues;
-const encodingOptions = getCatalogEntry("files.newFile.encoding").enumValues;
-const commandPaletteDescriptionDelayEntry = getCatalogEntry(
-  "commandPalette.description.marquee.delay"
-);
-const commandPaletteDescriptionSpeedEntry = getCatalogEntry(
+// The catalog's i18n keys are typed as the bare, decoupled `I18nKey` (see
+// settingsUiCatalog.ts) rather than the closed `TranslationKey` union, so a
+// single cast point resolves them through the real translate function.
+function translateI18nKey(translate: Translate, key: I18nKey): string {
+  return translate(key as TranslationKey);
+}
+
+function normalizeSearchQuery(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// settings.json <-> catalog key bridge
+//
+// The catalog is display metadata only (ADR-0006 / #226 responsibility
+// split) — it does not know how a dotted key maps into the nested
+// ApplicationSettings/SaveApplicationSettingsRequest shape, and it must not:
+// persistence stays this module's job. These two functions are that bridge.
+// ---------------------------------------------------------------------------
+
+// workbench.colorTheme has no ApplicationSettings field at all (#150: never
+// wired to a store), and preview.renderer has no SaveApplicationSettingsRequest
+// field (Application Settings cannot write it today). Wiring either up is a
+// settings.json/store change outside this issue's scope, so both render
+// read-only here rather than gaining new persistence wiring.
+const unwiredKeys = new Set<SettingKey>([
+  "workbench.colorTheme",
+  "preview.renderer"
+]);
+
+const advancedGatedKeys = new Set<SettingKey>([
+  "files.newFile.lineEnding",
+  "files.newFile.encoding",
+  "commandPalette.description.enable",
+  "commandPalette.description.marquee.delay",
   "commandPalette.description.marquee.speed"
-);
+]);
+
+const marqueeKeys = new Set<SettingKey>([
+  "commandPalette.description.marquee.delay",
+  "commandPalette.description.marquee.speed"
+]);
+
+const soundChildKeys = new Set<SettingKey>([
+  "workbench.sound.dialog.enabled",
+  "workbench.sound.newline.enabled",
+  "workbench.sound.keypress.enabled"
+]);
+
+// Presentational only (unit suffix for a number control) — not part of the
+// UI catalog schema, which has no `unit` field on SettingControl.
+const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
+  "commandPalette.description.marquee.delay": "settings.unit.ms",
+  "commandPalette.description.marquee.speed": "settings.unit.pxPerSecond"
+};
+
+function readSettingValue(key: SettingKey, settings: ApplicationSettings): unknown {
+  switch (key) {
+    case "workbench.colorTheme":
+      return getCatalogDefaultValue("workbench.colorTheme");
+    case "workbench.fontFamily":
+      return (
+        settings.workbench.fontFamily ??
+        getCatalogDefaultValue("workbench.fontFamily")
+      );
+    case "workbench.language":
+      return settings.workbench.language;
+    case "workbench.statusBar.visible":
+      return settings.workbench.statusBar.visible;
+    case "workbench.advancedSettings.enabled":
+      return settings.workbench.advancedSettings.enabled;
+    case "workbench.sound.enabled":
+      return settings.workbench.sound.enabled;
+    case "workbench.sound.dialog.enabled":
+      return settings.workbench.sound.dialog.enabled;
+    case "workbench.sound.newline.enabled":
+      return settings.workbench.sound.newline.enabled;
+    case "workbench.sound.keypress.enabled":
+      return settings.workbench.sound.keypress.enabled;
+    case "commandPalette.description.enable":
+      return settings.commandPalette.description.enable;
+    case "commandPalette.description.marquee.delay":
+      return settings.commandPalette.description.marquee.delay;
+    case "commandPalette.description.marquee.speed":
+      return settings.commandPalette.description.marquee.speed;
+    case "editor.fontFamily":
+      return (
+        settings.editor.fontFamily ?? getCatalogDefaultValue("editor.fontFamily")
+      );
+    case "files.newFile.lineEnding":
+      return settings.files.newFile.lineEnding;
+    case "files.newFile.encoding":
+      return settings.files.newFile.encoding;
+    case "preview.renderer":
+      return settings.preview.renderer;
+  }
+
+  const exhaustiveCheck: never = key;
+  throw new Error(`Unhandled setting key: ${String(exhaustiveCheck)}`);
+}
 
 function fontFamilyValue(value: string): string | undefined {
   const trimmed = value.trim();
@@ -63,120 +163,448 @@ function saveRequest(
   };
 }
 
-function lineEndingLabel(lineEnding: NewFileLineEnding): string {
-  return lineEnding.toUpperCase();
-}
+// Builds the next immediate-save request for a single control edit. Returns
+// null when the key isn't writable yet (unwiredKeys) or the raw value fails
+// a basic shape guard (non-finite number) — the caller then skips saving,
+// matching the pre-#230 per-field guards.
+function buildNextSettings(
+  key: SettingKey,
+  rawValue: unknown,
+  settings: ApplicationSettings
+): SaveApplicationSettingsRequest | null {
+  switch (key) {
+    case "workbench.colorTheme":
+    case "preview.renderer":
+      return null;
+    case "workbench.fontFamily":
+      return saveRequest(settings, {
+        workbench: withFontFamily(
+          settings.workbench,
+          fontFamilyValue(String(rawValue))
+        )
+      });
+    case "editor.fontFamily":
+      return saveRequest(settings, {
+        editor: withFontFamily(settings.editor, fontFamilyValue(String(rawValue)))
+      });
+    case "workbench.language":
+      return saveRequest(settings, {
+        workbench: { ...settings.workbench, language: rawValue as Language }
+      });
+    case "workbench.statusBar.visible":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          statusBar: { visible: Boolean(rawValue) }
+        }
+      });
+    case "workbench.advancedSettings.enabled":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          advancedSettings: { enabled: Boolean(rawValue) }
+        }
+      });
+    case "workbench.sound.enabled":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          sound: { ...settings.workbench.sound, enabled: Boolean(rawValue) }
+        }
+      });
+    case "workbench.sound.dialog.enabled":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          sound: {
+            ...settings.workbench.sound,
+            dialog: { enabled: Boolean(rawValue) }
+          }
+        }
+      });
+    case "workbench.sound.newline.enabled":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          sound: {
+            ...settings.workbench.sound,
+            newline: { enabled: Boolean(rawValue) }
+          }
+        }
+      });
+    case "workbench.sound.keypress.enabled":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          sound: {
+            ...settings.workbench.sound,
+            keypress: { enabled: Boolean(rawValue) }
+          }
+        }
+      });
+    case "commandPalette.description.enable":
+      return saveRequest(settings, {
+        commandPalette: {
+          ...settings.commandPalette,
+          description: {
+            ...settings.commandPalette.description,
+            enable: Boolean(rawValue)
+          }
+        }
+      });
+    case "commandPalette.description.marquee.delay":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
 
-function encodingLabel(encoding: NewFileEncoding): string {
-  if (encoding === "utf8") {
-    return "UTF-8";
+      return saveRequest(settings, {
+        commandPalette: {
+          ...settings.commandPalette,
+          description: {
+            ...settings.commandPalette.description,
+            marquee: {
+              ...settings.commandPalette.description.marquee,
+              delay: rawValue
+            }
+          }
+        }
+      });
+    case "commandPalette.description.marquee.speed":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
+
+      return saveRequest(settings, {
+        commandPalette: {
+          ...settings.commandPalette,
+          description: {
+            ...settings.commandPalette.description,
+            marquee: {
+              ...settings.commandPalette.description.marquee,
+              speed: rawValue
+            }
+          }
+        }
+      });
+    case "files.newFile.lineEnding":
+      return saveRequest(settings, {
+        files: {
+          ...settings.files,
+          newFile: {
+            ...settings.files.newFile,
+            lineEnding: rawValue as NewFileLineEnding
+          }
+        }
+      });
+    case "files.newFile.encoding":
+      return saveRequest(settings, {
+        files: {
+          ...settings.files,
+          newFile: {
+            ...settings.files.newFile,
+            encoding: rawValue as NewFileEncoding
+          }
+        }
+      });
   }
 
-  return encoding;
+  const exhaustiveCheck: never = key;
+  throw new Error(`Unhandled setting key: ${String(exhaustiveCheck)}`);
 }
 
-export function SettingsPanel({
-  settings,
-  isLoading,
-  error,
-  translate,
-  onConfirmEnableAdvancedSettings,
-  onChangeSettings
-}: SettingsPanelProps): JSX.Element {
-  const advancedSettingsEnabled = settings.workbench.advancedSettings.enabled;
-  const advancedControlsDisabled = isLoading || !advancedSettingsEnabled;
-  const soundSettings = settings.workbench.sound;
-  const soundControlsDisabled = isLoading || !soundSettings.enabled;
-  const commandPaletteDescriptionSettings =
-    settings.commandPalette.description;
-  const commandPaletteMarqueeControlsDisabled =
-    advancedControlsDisabled || !commandPaletteDescriptionSettings.enable;
+async function handleSettingChange(
+  item: SettingCatalogItem,
+  rawValue: unknown,
+  settings: ApplicationSettings,
+  onChangeSettings: (settings: SaveApplicationSettingsRequest) => void,
+  onConfirmEnableAdvancedSettings: () => Promise<boolean>
+): Promise<void> {
+  if (item.key === "workbench.advancedSettings.enabled") {
+    const enabling = Boolean(rawValue);
+    const currentlyEnabled = settings.workbench.advancedSettings.enabled;
 
-  async function changeAdvancedSettingsEnabled(enabled: boolean): Promise<void> {
-    if (enabled && !advancedSettingsEnabled) {
+    if (enabling && !currentlyEnabled) {
       const confirmed = await onConfirmEnableAdvancedSettings();
 
       if (!confirmed) {
         return;
       }
     }
-
-    onChangeSettings(
-      saveRequest(settings, {
-        workbench: {
-          ...settings.workbench,
-          advancedSettings: { enabled }
-        }
-      })
-    );
   }
 
-  function changeSoundEnabled(enabled: boolean): void {
-    onChangeSettings(
-      saveRequest(settings, {
-        workbench: {
-          ...settings.workbench,
-          sound: {
-            ...soundSettings,
-            enabled
+  const nextSettings = buildNextSettings(item.key, rawValue, settings);
+
+  if (nextSettings) {
+    onChangeSettings(nextSettings);
+  }
+}
+
+function isSettingDisabled(
+  item: SettingCatalogItem,
+  settings: ApplicationSettings,
+  isLoading: boolean
+): boolean {
+  if (isLoading) {
+    return true;
+  }
+
+  if (unwiredKeys.has(item.key)) {
+    return true;
+  }
+
+  if (
+    advancedGatedKeys.has(item.key) &&
+    !settings.workbench.advancedSettings.enabled
+  ) {
+    return true;
+  }
+
+  if (marqueeKeys.has(item.key) && !settings.commandPalette.description.enable) {
+    return true;
+  }
+
+  if (soundChildKeys.has(item.key) && !settings.workbench.sound.enabled) {
+    return true;
+  }
+
+  return false;
+}
+
+function showsAdvancedDisabledHint(
+  item: SettingCatalogItem,
+  settings: ApplicationSettings
+): boolean {
+  return (
+    advancedGatedKeys.has(item.key) &&
+    !settings.workbench.advancedSettings.enabled
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+// Exported for direct unit testing (trim + case-insensitive substring
+// matching against buildSettingSearchText, per catalog key / localized
+// label / description / select option value / label). Empty query returns
+// the selected category's items in catalog order, unfiltered.
+export function getVisibleSettingCatalogItems(
+  searchQuery: string,
+  selectedCategoryId: SettingCategory,
+  translate: Translate,
+  items: readonly SettingCatalogItem[] = settingCatalogItems
+): readonly SettingCatalogItem[] {
+  const normalizedQuery = normalizeSearchQuery(searchQuery);
+  const sortedItems = sortSettingCatalogItems(items);
+
+  if (normalizedQuery.length === 0) {
+    return sortedItems.filter((item) => item.category === selectedCategoryId);
+  }
+
+  const searchTranslate: SettingSearchTranslate = (key) =>
+    translateI18nKey(translate, key);
+
+  return sortedItems.filter((item) =>
+    buildSettingSearchText(item, searchTranslate)
+      .toLowerCase()
+      .includes(normalizedQuery)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Control rendering
+// ---------------------------------------------------------------------------
+
+interface SettingControlInputProps {
+  item: SettingCatalogItem;
+  value: unknown;
+  disabled: boolean;
+  labelId: string;
+  translate: Translate;
+  onChange: (rawValue: unknown) => void;
+}
+
+function SettingControlInput({
+  item,
+  value,
+  disabled,
+  labelId,
+  translate,
+  onChange
+}: SettingControlInputProps): JSX.Element {
+  const control = item.control;
+  const controlId = `settingControl-${item.key}`;
+
+  switch (control.kind) {
+    case "switch":
+      return (
+        <input
+          id={controlId}
+          type="checkbox"
+          checked={Boolean(value)}
+          disabled={disabled}
+          aria-labelledby={labelId}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+      );
+    case "select":
+      return (
+        <select
+          id={controlId}
+          className="settingsSelect"
+          value={String(value)}
+          disabled={disabled}
+          aria-labelledby={labelId}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {control.options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {translateI18nKey(translate, option.labelKey)}
+            </option>
+          ))}
+        </select>
+      );
+    case "text":
+      return (
+        <input
+          id={controlId}
+          className="settingsTextInput"
+          type="text"
+          value={typeof value === "string" ? value : ""}
+          disabled={disabled}
+          aria-labelledby={labelId}
+          placeholder={
+            control.placeholderKey
+              ? translateI18nKey(translate, control.placeholderKey)
+              : undefined
           }
-        }
-      })
-    );
-  }
+          onChange={(event) => onChange(event.target.value)}
+        />
+      );
+    case "number": {
+      const unitKey = numberUnitKeyByKey[item.key];
 
-  function changeSoundChildEnabled(
-    child: "dialog" | "newline" | "keypress",
-    enabled: boolean
-  ): void {
-    onChangeSettings(
-      saveRequest(settings, {
-        workbench: {
-          ...settings.workbench,
-          sound: {
-            ...soundSettings,
-            [child]: { enabled }
-          }
-        }
-      })
-    );
-  }
-
-  function changeCommandPaletteDescriptionEnabled(enabled: boolean): void {
-    onChangeSettings(
-      saveRequest(settings, {
-        commandPalette: {
-          ...settings.commandPalette,
-          description: {
-            ...commandPaletteDescriptionSettings,
-            enable: enabled
-          }
-        }
-      })
-    );
-  }
-
-  function changeCommandPaletteDescriptionMarqueeValue(
-    field: "delay" | "speed",
-    value: number
-  ): void {
-    if (!Number.isFinite(value)) {
-      return;
+      return (
+        <div className="settingsNumberInputGroup">
+          <input
+            id={controlId}
+            className="settingsNumberInput"
+            type="number"
+            min={control.min}
+            max={control.max}
+            step={control.step ?? "any"}
+            value={typeof value === "number" ? value : 0}
+            disabled={disabled}
+            aria-labelledby={labelId}
+            onChange={(event) => onChange(event.target.valueAsNumber)}
+          />
+          {unitKey ? <span className="settingsUnit">{translate(unitKey)}</span> : null}
+        </div>
+      );
     }
+  }
+}
 
-    onChangeSettings(
-      saveRequest(settings, {
-        commandPalette: {
-          ...settings.commandPalette,
-          description: {
-            ...commandPaletteDescriptionSettings,
-            marquee: {
-              ...commandPaletteDescriptionSettings.marquee,
-              [field]: value
-            }
-          }
-        }
-      })
+interface SettingItemRowProps {
+  item: SettingCatalogItem;
+  settings: ApplicationSettings;
+  isLoading: boolean;
+  translate: Translate;
+  onChange: (item: SettingCatalogItem, rawValue: unknown) => void;
+}
+
+function SettingItemRow({
+  item,
+  settings,
+  isLoading,
+  translate,
+  onChange
+}: SettingItemRowProps): JSX.Element {
+  const value = readSettingValue(item.key, settings);
+  const disabled = isSettingDisabled(item, settings, isLoading);
+  const labelId = `settingLabel-${item.key}`;
+
+  return (
+    <div className="settingsItemRow">
+      <div className="settingsItemHeader">
+        <span id={labelId} className="settingsItemLabel">
+          {translateI18nKey(translate, item.labelKey)}
+        </span>
+        <div className="settingsItemControl">
+          <SettingControlInput
+            item={item}
+            value={value}
+            disabled={disabled}
+            labelId={labelId}
+            translate={translate}
+            onChange={(rawValue) => onChange(item, rawValue)}
+          />
+        </div>
+      </div>
+      <p className="settingsDescription">
+        {translateI18nKey(translate, item.descriptionKey)}
+      </p>
+      {item.key === "workbench.language" ? (
+        <p className="settingsDescription">
+          {translate("settings.languageRestartRequired")}
+        </p>
+      ) : null}
+      <code className="settingsItemKey">{item.key}</code>
+      {showsAdvancedDisabledHint(item, settings) ? (
+        <p className="settingsAdvancedDisabled">
+          {translate("settings.application.advanced.disabledDescription")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Two-pane view (pure — controlled entirely by props, no internal state)
+// ---------------------------------------------------------------------------
+
+interface SettingsPanelViewProps extends SettingsPanelProps {
+  selectedCategoryId: SettingCategory;
+  onSelectCategory: (id: SettingCategory) => void;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+}
+
+export function SettingsPanelView({
+  settings,
+  isLoading,
+  error,
+  translate,
+  onConfirmEnableAdvancedSettings,
+  onChangeSettings,
+  selectedCategoryId,
+  onSelectCategory,
+  searchQuery,
+  onSearchQueryChange
+}: SettingsPanelViewProps): JSX.Element {
+  // Only categories that currently have at least one registered catalog
+  // item are shown in the left pane — settingCategoryCatalog itself keeps
+  // every category (e.g. "project", "advanced" have none registered yet),
+  // this is purely a display-time filter for the pane.
+  const categories = sortSettingCategoryCatalog((key) =>
+    translateI18nKey(translate, key)
+  ).filter((category) =>
+    settingCatalogItems.some((item) => item.category === category.id)
+  );
+  const isSearching = normalizeSearchQuery(searchQuery).length > 0;
+  const visibleItems = getVisibleSettingCatalogItems(
+    searchQuery,
+    selectedCategoryId,
+    translate
+  );
+
+  function handleChange(item: SettingCatalogItem, rawValue: unknown): void {
+    void handleSettingChange(
+      item,
+      rawValue,
+      settings,
+      onChangeSettings,
+      onConfirmEnableAdvancedSettings
     );
   }
 
@@ -192,502 +620,109 @@ export function SettingsPanel({
         <p>{translate("settings.application.description")}</p>
       </header>
 
-      <label className="settingsAdvancedToggle">
-        <input
-          type="checkbox"
-          checked={advancedSettingsEnabled}
-          disabled={isLoading}
-          onChange={(event) => {
-            void changeAdvancedSettingsEnabled(event.target.checked);
-          }}
-        />
-        <span>{translate("settings.application.advanced.enabled.label")}</span>
-      </label>
-      <p className="settingsAdvancedDescription">
-        {translate("settings.application.advanced.enabled.description")}
-      </p>
-
       {error ? <div className="settingsError">{error}</div> : null}
 
-      <section
-        className="settingsSection"
-        aria-labelledby="applicationSettingsGeneral"
-      >
-        <h2 id="applicationSettingsGeneral">
-          {translate("settings.application.section.general")}
-        </h2>
-        <div className="settingsRow">
-          <label className="settingsLabel" htmlFor="applicationSettingsLanguage">
-            {translate("settings.workbench.language.label")}
-          </label>
-          <div className="settingsControl">
-            <select
-              id="applicationSettingsLanguage"
-              className="settingsSelect"
-              value={settings.workbench.language}
-              disabled={isLoading}
-              onChange={(event) =>
-                onChangeSettings(
-                  saveRequest(settings, {
-                    workbench: {
-                      ...settings.workbench,
-                      language: event.target.value as Language
+      <div className="settingsSearch">
+        <input
+          id="settingsSearchInput"
+          className="settingsSearchInput"
+          type="search"
+          value={searchQuery}
+          disabled={isLoading}
+          placeholder={translate("settings.search.placeholder")}
+          aria-label={translate("settings.search.label")}
+          onChange={(event) => onSearchQueryChange(event.target.value)}
+        />
+      </div>
+
+      <div className="settingsBody">
+        <nav
+          className="settingsCategoryPane"
+          aria-label={translate("settings.category.paneLabel")}
+        >
+          <ul className="settingsCategoryList">
+            {categories.map((category) => {
+              const isSelected = !isSearching && category.id === selectedCategoryId;
+
+              return (
+                <li key={category.id}>
+                  <button
+                    type="button"
+                    className={
+                      isSelected
+                        ? "settingsCategoryButton settingsCategoryButtonSelected"
+                        : "settingsCategoryButton"
                     }
-                  })
-                )
-              }
-            >
-              {supportedLanguages.map((language) => (
-                <option key={language} value={language}>
-                  {languageDefinitions[language].nativeName}
-                </option>
-              ))}
-            </select>
-            <p className="settingsDescription">
-              {translate("settings.languageRestartRequired")}
-            </p>
-          </div>
-        </div>
-        <div className="settingsRow">
-          <label className="settingsLabel" htmlFor="applicationSettingsStatusBar">
-            {translate("settings.workbench.statusBar.visible.label")}
-          </label>
-          <div className="settingsControl">
-            <label className="settingsInlineCheckbox">
-              <input
-                id="applicationSettingsStatusBar"
-                type="checkbox"
-                checked={settings.workbench.statusBar.visible}
-                disabled={isLoading}
-                onChange={(event) =>
-                  onChangeSettings(
-                    saveRequest(settings, {
-                      workbench: {
-                        ...settings.workbench,
-                        statusBar: { visible: event.target.checked }
-                      }
-                    })
-                  )
-                }
-              />
-              <span>{translate("settings.showStatusBar")}</span>
-            </label>
-            <p className="settingsDescription">
-              {translate("settings.workbench.statusBar.visible.description")}
-            </p>
-          </div>
-        </div>
-      </section>
+                    aria-current={isSelected ? "true" : undefined}
+                    disabled={isLoading}
+                    onClick={() => onSelectCategory(category.id)}
+                  >
+                    {translateI18nKey(translate, category.labelKey)}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-      <section
-        className="settingsSection"
-        aria-labelledby="applicationSettingsAppearance"
-      >
-        <h2 id="applicationSettingsAppearance">
-          {translate("settings.application.section.appearance")}
-        </h2>
-        <div className="settingsRow">
-          <label className="settingsLabel" htmlFor="applicationSettingsUiFont">
-            {translate("settings.workbench.fontFamily.label")}
-          </label>
-          <div className="settingsControl">
-            <input
-              id="applicationSettingsUiFont"
-              className="settingsTextInput"
-              type="text"
-              value={settings.workbench.fontFamily ?? ""}
-              disabled={isLoading}
-              onChange={(event) =>
-                onChangeSettings(
-                  saveRequest(settings, {
-                    workbench: withFontFamily(
-                      settings.workbench,
-                      fontFamilyValue(event.target.value)
-                    )
-                  })
-                )
-              }
-            />
-            <p className="settingsDescription">
-              {translate("settings.workbench.fontFamily.description")}
-            </p>
-          </div>
-        </div>
-      </section>
+        <div className="settingsItemPane">
+          <h2 className="settingsItemPaneHeading">
+            {isSearching
+              ? translate("settings.search.resultsHeading")
+              : translateI18nKey(
+                  translate,
+                  settingCategoryLabelKey(selectedCategoryId)
+                )}
+          </h2>
 
-      <section
-        className="settingsSection"
-        aria-labelledby="applicationSettingsEditor"
-      >
-        <h2 id="applicationSettingsEditor">
-          {translate("settings.application.section.editor")}
-        </h2>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsEditorFont"
-          >
-            {translate("settings.editor.fontFamily.label")}
-          </label>
-          <div className="settingsControl">
-            <input
-              id="applicationSettingsEditorFont"
-              className="settingsTextInput"
-              type="text"
-              value={settings.editor.fontFamily ?? ""}
-              disabled={isLoading}
-              onChange={(event) =>
-                onChangeSettings(
-                  saveRequest(settings, {
-                    editor: withFontFamily(
-                      settings.editor,
-                      fontFamilyValue(event.target.value)
-                    )
-                  })
-                )
-              }
-            />
-            <p className="settingsDescription">
-              {translate("settings.editor.fontFamily.description")}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="settingsSection"
-        aria-labelledby="applicationSettingsFiles"
-      >
-        <h2 id="applicationSettingsFiles">
-          {translate("settings.application.section.files")}
-        </h2>
-        <div className="settingsRow">
-          <label className="settingsLabel" htmlFor="applicationSettingsLineEnding">
-            {translate("settings.files.newFile.lineEnding.label")}
-          </label>
-          <div className="settingsControl">
-            <select
-              id="applicationSettingsLineEnding"
-              className="settingsSelect"
-              value={settings.files.newFile.lineEnding}
-              disabled={advancedControlsDisabled}
-              onChange={(event) =>
-                onChangeSettings(
-                  saveRequest(settings, {
-                    files: {
-                      ...settings.files,
-                      newFile: {
-                        ...settings.files.newFile,
-                        lineEnding: event.target.value as NewFileLineEnding
-                      }
-                    }
-                  })
-                )
-              }
-            >
-              {lineEndingOptions.map((lineEnding) => (
-                <option key={lineEnding} value={lineEnding}>
-                  {lineEndingLabel(lineEnding)}
-                </option>
-              ))}
-            </select>
-            <p className="settingsDescription">
-              {translate("settings.files.newFile.lineEnding.description")}
-            </p>
-            {!advancedSettingsEnabled ? (
-              <p className="settingsAdvancedDisabled">
-                {translate("settings.application.advanced.disabledDescription")}
+          {visibleItems.length === 0 ? (
+            isSearching ? (
+              <p className="settingsSearchEmpty">
+                {translate("settings.search.empty")}
               </p>
-            ) : null}
-          </div>
-        </div>
-        <div className="settingsRow">
-          <label className="settingsLabel" htmlFor="applicationSettingsEncoding">
-            {translate("settings.files.newFile.encoding.label")}
-          </label>
-          <div className="settingsControl">
-            <select
-              id="applicationSettingsEncoding"
-              className="settingsSelect"
-              value={settings.files.newFile.encoding}
-              disabled={advancedControlsDisabled}
-              onChange={(event) =>
-                onChangeSettings(
-                  saveRequest(settings, {
-                    files: {
-                      ...settings.files,
-                      newFile: {
-                        ...settings.files.newFile,
-                        encoding: event.target.value as NewFileEncoding
-                      }
-                    }
-                  })
-                )
-              }
-            >
-              {encodingOptions.map((encoding) => (
-                <option key={encoding} value={encoding}>
-                  {encodingLabel(encoding)}
-                </option>
+            ) : null
+          ) : (
+            <div className="settingsItemList">
+              {visibleItems.map((item) => (
+                <SettingItemRow
+                  key={item.key}
+                  item={item}
+                  settings={settings}
+                  isLoading={isLoading}
+                  translate={translate}
+                  onChange={handleChange}
+                />
               ))}
-            </select>
-            <p className="settingsDescription">
-              {translate("settings.files.newFile.encoding.description")}
-            </p>
-            {!advancedSettingsEnabled ? (
-              <p className="settingsAdvancedDisabled">
-                {translate("settings.application.advanced.disabledDescription")}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="settingsSection"
-        aria-labelledby="applicationSettingsCommandPalette"
-      >
-        <h2 id="applicationSettingsCommandPalette">
-          {translate("settings.application.section.commandPalette")}
-        </h2>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsCommandPaletteDescriptionEnabled"
-          >
-            {translate("settings.commandPalette.description.enable.label")}
-          </label>
-          <div className="settingsControl">
-            <label className="settingsInlineCheckbox">
-              <input
-                id="applicationSettingsCommandPaletteDescriptionEnabled"
-                type="checkbox"
-                checked={commandPaletteDescriptionSettings.enable}
-                disabled={advancedControlsDisabled}
-                onChange={(event) =>
-                  changeCommandPaletteDescriptionEnabled(event.target.checked)
-                }
-              />
-              <span>
-                {translate("settings.commandPalette.description.enable.label")}
-              </span>
-            </label>
-            <p className="settingsDescription">
-              {translate(
-                "settings.commandPalette.description.enable.description"
-              )}
-            </p>
-            {!advancedSettingsEnabled ? (
-              <p className="settingsAdvancedDisabled">
-                {translate("settings.application.advanced.disabledDescription")}
-              </p>
-            ) : null}
-          </div>
-        </div>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-          >
-            {translate(
-              "settings.commandPalette.description.marquee.delay.label"
-            )}
-          </label>
-          <div className="settingsControl">
-            <div className="settingsNumberInputGroup">
-              <input
-                id="applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-                className="settingsNumberInput"
-                type="number"
-                min={commandPaletteDescriptionDelayEntry.numericRange.min}
-                max={commandPaletteDescriptionDelayEntry.numericRange.max}
-                step={1}
-                value={commandPaletteDescriptionSettings.marquee.delay}
-                disabled={commandPaletteMarqueeControlsDisabled}
-                onChange={(event) =>
-                  changeCommandPaletteDescriptionMarqueeValue(
-                    "delay",
-                    event.target.valueAsNumber
-                  )
-                }
-              />
-              <span className="settingsUnit">
-                {translate("settings.unit.ms")}
-              </span>
             </div>
-            <p className="settingsDescription">
-              {translate(
-                "settings.commandPalette.description.marquee.delay.description"
-              )}
-            </p>
-            {!advancedSettingsEnabled ? (
-              <p className="settingsAdvancedDisabled">
-                {translate("settings.application.advanced.disabledDescription")}
-              </p>
-            ) : null}
-          </div>
+          )}
         </div>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-          >
-            {translate(
-              "settings.commandPalette.description.marquee.speed.label"
-            )}
-          </label>
-          <div className="settingsControl">
-            <div className="settingsNumberInputGroup">
-              <input
-                id="applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-                className="settingsNumberInput"
-                type="number"
-                min={commandPaletteDescriptionSpeedEntry.numericRange.min}
-                max={commandPaletteDescriptionSpeedEntry.numericRange.max}
-                step="any"
-                value={commandPaletteDescriptionSettings.marquee.speed}
-                disabled={commandPaletteMarqueeControlsDisabled}
-                onChange={(event) =>
-                  changeCommandPaletteDescriptionMarqueeValue(
-                    "speed",
-                    event.target.valueAsNumber
-                  )
-                }
-              />
-              <span className="settingsUnit">
-                {translate("settings.unit.pxPerSecond")}
-              </span>
-            </div>
-            <p className="settingsDescription">
-              {translate(
-                "settings.commandPalette.description.marquee.speed.description"
-              )}
-            </p>
-            {!advancedSettingsEnabled ? (
-              <p className="settingsAdvancedDisabled">
-                {translate("settings.application.advanced.disabledDescription")}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="settingsSection"
-        aria-labelledby="applicationSettingsSound"
-      >
-        <h2 id="applicationSettingsSound">
-          {translate("settings.application.section.sound")}
-        </h2>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsSoundEnabled"
-          >
-            {translate("settings.workbench.sound.enabled.label")}
-          </label>
-          <div className="settingsControl">
-            <label className="settingsInlineCheckbox">
-              <input
-                id="applicationSettingsSoundEnabled"
-                type="checkbox"
-                checked={soundSettings.enabled}
-                disabled={isLoading}
-                onChange={(event) =>
-                  changeSoundEnabled(event.target.checked)
-                }
-              />
-              <span>{translate("settings.workbench.sound.enabled.label")}</span>
-            </label>
-            <p className="settingsDescription">
-              {translate("settings.workbench.sound.enabled.description")}
-            </p>
-          </div>
-        </div>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsDialogSound"
-          >
-            {translate("settings.workbench.sound.dialog.enabled.label")}
-          </label>
-          <div className="settingsControl">
-            <label className="settingsInlineCheckbox">
-              <input
-                id="applicationSettingsDialogSound"
-                type="checkbox"
-                checked={soundSettings.dialog.enabled}
-                disabled={soundControlsDisabled}
-                onChange={(event) =>
-                  changeSoundChildEnabled("dialog", event.target.checked)
-                }
-              />
-              <span>
-                {translate("settings.workbench.sound.dialog.enabled.label")}
-              </span>
-            </label>
-            <p className="settingsDescription">
-              {translate("settings.workbench.sound.dialog.enabled.description")}
-            </p>
-          </div>
-        </div>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsNewlineSound"
-          >
-            {translate("settings.workbench.sound.newline.enabled.label")}
-          </label>
-          <div className="settingsControl">
-            <label className="settingsInlineCheckbox">
-              <input
-                id="applicationSettingsNewlineSound"
-                type="checkbox"
-                checked={soundSettings.newline.enabled}
-                disabled={soundControlsDisabled}
-                onChange={(event) =>
-                  changeSoundChildEnabled("newline", event.target.checked)
-                }
-              />
-              <span>
-                {translate("settings.workbench.sound.newline.enabled.label")}
-              </span>
-            </label>
-            <p className="settingsDescription">
-              {translate("settings.workbench.sound.newline.enabled.description")}
-            </p>
-          </div>
-        </div>
-        <div className="settingsRow">
-          <label
-            className="settingsLabel"
-            htmlFor="applicationSettingsKeypressSound"
-          >
-            {translate("settings.workbench.sound.keypress.enabled.label")}
-          </label>
-          <div className="settingsControl">
-            <label className="settingsInlineCheckbox">
-              <input
-                id="applicationSettingsKeypressSound"
-                type="checkbox"
-                checked={soundSettings.keypress.enabled}
-                disabled={soundControlsDisabled}
-                onChange={(event) =>
-                  changeSoundChildEnabled("keypress", event.target.checked)
-                }
-              />
-              <span>
-                {translate("settings.workbench.sound.keypress.enabled.label")}
-              </span>
-            </label>
-            <p className="settingsDescription">
-              {translate(
-                "settings.workbench.sound.keypress.enabled.description"
-              )}
-            </p>
-          </div>
-        </div>
-      </section>
+      </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stateful entry point — owns the ephemeral (non-persisted) selected
+// category / search query UI state and delegates all rendering to the pure
+// SettingsPanelView above.
+// ---------------------------------------------------------------------------
+
+export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
+  const [selectedCategoryId, setSelectedCategoryId] = useState<SettingCategory>(
+    settingCategoryCatalog[0].id
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+
+  return (
+    <SettingsPanelView
+      {...props}
+      selectedCategoryId={selectedCategoryId}
+      onSelectCategory={(id) => {
+        setSelectedCategoryId(id);
+        setSearchQuery("");
+      }}
+      searchQuery={searchQuery}
+      onSearchQueryChange={setSearchQuery}
+    />
   );
 }

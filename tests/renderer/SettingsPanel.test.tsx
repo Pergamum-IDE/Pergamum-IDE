@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -6,50 +7,73 @@ import {
   type ApplicationSettings
 } from "../../src/shared/settings";
 import { t, type Language, type Translate } from "../../src/shared/i18n";
-import { SettingsPanel } from "../../src/renderer/SettingsPanel";
+import {
+  settingCategoryCatalog,
+  type SettingCategory
+} from "../../src/shared/settingsUiCatalog";
+import {
+  SettingsPanel,
+  SettingsPanelView,
+  getVisibleSettingCatalogItems
+} from "../../src/renderer/SettingsPanel";
 
 type ElementProps = Record<string, unknown> & {
   children?: React.ReactNode;
 };
 
+const settingsPanelSource = () =>
+  readFileSync("src/renderer/SettingsPanel.tsx", "utf8");
+
 function translateFor(language: Language): Translate {
   return (key, values) => t(language, key, values);
 }
 
-function settingsPanelElement(
+interface SettingsPanelViewOptions {
+  settings?: ApplicationSettings;
+  isLoading?: boolean;
+  error?: string | null;
+  onConfirmEnableAdvancedSettings?: () => Promise<boolean>;
+  onChangeSettings?: Parameters<typeof SettingsPanelView>[0]["onChangeSettings"];
+  selectedCategoryId?: SettingCategory;
+  onSelectCategory?: (id: SettingCategory) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
+}
+
+function settingsPanelViewElement(
   currentUiLanguage: Language,
-  settings: ApplicationSettings = defaultApplicationSettings,
-  onConfirmEnableAdvancedSettings: () => Promise<boolean> = () =>
-    Promise.resolve(true),
-  onChangeSettings: Parameters<typeof SettingsPanel>[0]["onChangeSettings"] =
-    () => undefined
+  options: SettingsPanelViewOptions = {}
 ): JSX.Element {
-  return SettingsPanel({
-    settings,
-    isLoading: false,
-    error: null,
+  return SettingsPanelView({
+    settings: options.settings ?? defaultApplicationSettings,
+    isLoading: options.isLoading ?? false,
+    error: options.error ?? null,
     translate: translateFor(currentUiLanguage),
-    onConfirmEnableAdvancedSettings,
-    onChangeSettings
+    onConfirmEnableAdvancedSettings:
+      options.onConfirmEnableAdvancedSettings ?? (() => Promise.resolve(true)),
+    onChangeSettings: options.onChangeSettings ?? (() => undefined),
+    selectedCategoryId: options.selectedCategoryId ?? "application",
+    onSelectCategory: options.onSelectCategory ?? (() => undefined),
+    searchQuery: options.searchQuery ?? "",
+    onSearchQueryChange: options.onSearchQueryChange ?? (() => undefined)
   });
 }
 
-function renderSettingsPanel(currentUiLanguage: Language): string {
-  return renderToStaticMarkup(settingsPanelElement(currentUiLanguage));
+function renderSettingsPanelView(
+  currentUiLanguage: Language,
+  options: SettingsPanelViewOptions = {}
+): string {
+  return renderToStaticMarkup(
+    settingsPanelViewElement(currentUiLanguage, options)
+  );
 }
 
-function extractLanguageOptions(markup: string): Array<[string, string]> {
-  const languageSelect =
-    markup.match(
-      /<select\b[^>]*id="applicationSettingsLanguage"[^>]*>[\s\S]*?<\/select>/
-    )?.[0] ?? "";
-
-  return Array.from(
-    languageSelect.matchAll(
-      /<option\b[^>]*value="([^"]+)"[^>]*>([^<]*)<\/option>/g
-    ),
-    (match) => [match[1] ?? "", match[2] ?? ""]
-  );
+// A search query that isolates exactly one catalog item regardless of which
+// category is currently selected — the setting key is unique, so this is a
+// reliable way to reach a single item's control without tracking its
+// category in every test.
+function isolate(key: string): string {
+  return key;
 }
 
 function collectElements(
@@ -60,6 +84,21 @@ function collectElements(
 
   React.Children.forEach(node, (child) => {
     if (!React.isValidElement<ElementProps>(child)) {
+      return;
+    }
+
+    // SettingsPanelView is composed of nested function components
+    // (SettingItemRow, SettingControlInput, ...). Their rendered output
+    // lives behind a function call, not in `props.children` — so expand
+    // custom component elements by invoking them (they are all pure/
+    // stateless, so a direct call is safe) and recurse into that output
+    // instead of into their own (unrelated) children prop.
+    if (typeof child.type === "function") {
+      const rendered = (
+        child.type as (props: ElementProps) => React.ReactNode
+      )(child.props);
+
+      elements.push(...collectElements(rendered, predicate));
       return;
     }
 
@@ -86,214 +125,426 @@ function elementById(
   return element;
 }
 
+function controlElement(
+  node: React.ReactNode,
+  key: string
+): React.ReactElement<ElementProps> {
+  return elementById(node, `settingControl-${key}`);
+}
+
 async function flushPromises(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
 }
 
-describe("SettingsPanel language selector (#186)", () => {
-  it("renders native language names when the current UI language is Japanese", () => {
-    expect(extractLanguageOptions(renderSettingsPanel("ja"))).toEqual([
-      ["ja", "日本語"],
-      ["en", "English"]
-    ]);
+describe("SettingsPanelView catalog-driven rendering (#230)", () => {
+  it("renders the localized label of every category that has registered items in the left pane", () => {
+    const markup = renderSettingsPanelView("ja");
+
+    for (const label of [
+      "アプリケーション",
+      "外観",
+      "エディタ",
+      "プレビュー",
+      "ファイル",
+      "コマンドパレット",
+      "サウンド"
+    ]) {
+      expect(markup).toContain(label);
+    }
   });
 
-  it("renders the same native language names when the current UI language is English", () => {
-    expect(extractLanguageOptions(renderSettingsPanel("en"))).toEqual([
-      ["ja", "日本語"],
-      ["en", "English"]
-    ]);
+  it("does not show a category in the left pane when it has no registered catalog items (project, advanced)", () => {
+    const element = settingsPanelViewElement("ja");
+    const buttons = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsCategoryButton")
+    );
+    const labels = buttons.map((button) =>
+      React.Children.toArray(button.props.children).join("")
+    );
+
+    expect(labels).not.toContain("プロジェクト");
+    expect(labels).not.toContain("詳細設定");
+    expect(labels).toHaveLength(7);
+  });
+
+  it("shows only the selected category's settings in the right pane", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "editor"
+    });
+
+    expect(controlElement(element, "editor.fontFamily")).toBeDefined();
+    expect(() => controlElement(element, "workbench.language")).toThrow();
+    expect(() => controlElement(element, "files.newFile.lineEnding")).toThrow();
+  });
+
+  it("shows label, description, and the internal setting key for an item", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("editor.fontFamily")
+    });
+
+    expect(markup).toContain("Editor font");
+    expect(markup).toContain(
+      "Font family used for Markdown editor body text. Enter an unquoted CSS font-family list."
+    );
+    expect(markup).toContain("<code");
+    expect(markup).toContain("editor.fontFamily</code>");
+  });
+
+  it("does not hardcode any individual setting's label/description i18n key — those are read from the catalog item, not embedded per-field", () => {
+    const source = settingsPanelSource();
+    const perItemKeysThatMustNotBeHardcoded = [
+      "settings.workbench.language.label",
+      "settings.workbench.language.description",
+      "settings.workbench.statusBar.visible.label",
+      "settings.workbench.sound.enabled.label",
+      "settings.editor.fontFamily.label",
+      "settings.files.newFile.lineEnding.label",
+      "settings.files.newFile.lineEnding.option.lf.label",
+      "settings.commandPalette.description.marquee.delay.label",
+      "settings.preview.renderer.label"
+    ];
+
+    for (const key of perItemKeysThatMustNotBeHardcoded) {
+      expect(source).not.toContain(`"${key}"`);
+    }
+
+    // Rendering instead goes through the catalog objects.
+    expect(source).toContain("settingCatalogItems");
+    expect(source).toContain("settingCategoryCatalog");
+    expect(source).toContain("item.labelKey");
+    expect(source).toContain("item.descriptionKey");
+  });
+
+  it("mounts through the real hook-owning SettingsPanel entry point without crashing, defaulting to the first catalog category and an empty search", () => {
+    const markup = renderToStaticMarkup(
+      <SettingsPanel
+        settings={defaultApplicationSettings}
+        isLoading={false}
+        error={null}
+        translate={translateFor("en")}
+        onConfirmEnableAdvancedSettings={() => Promise.resolve(true)}
+        onChangeSettings={() => undefined}
+      />
+    );
+
+    // "application" is the first category in settingCategoryCatalog order.
+    expect(markup).toContain("Application");
+    expect(markup).toContain("settingControl-workbench.language");
   });
 });
 
-describe("SettingsPanel application settings core controls (#195)", () => {
-  it("renders the Application Settings title, description, and section headings", () => {
-    const markup = renderSettingsPanel("ja");
+describe("SettingsPanelView category behavior (#230)", () => {
+  it("renders categories in catalog order", () => {
+    const element = settingsPanelViewElement("en");
+    const buttons = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsCategoryButton")
+    );
 
-    expect(markup).toContain("アプリケーション設定");
-    expect(markup).toContain("Pergamum のアプリケーション全体に適用される設定です。");
-    expect(markup).toContain("一般");
-    expect(markup).toContain("外観");
-    expect(markup).toContain("エディタ");
-    expect(markup).toContain("コマンドパレット");
-    expect(markup).toContain("サウンド");
-    expect(markup).toContain("ファイル");
+    // Static rendering resolves children to plain text at this point, so
+    // read the translated label back out of each button's children.
+    const labels = buttons.map((button) =>
+      React.Children.toArray(button.props.children).join("")
+    );
+
+    expect(labels).toEqual([
+      "Application",
+      "Appearance",
+      "Editor",
+      "Preview",
+      "Files",
+      "Command Palette",
+      "Sound"
+    ]);
   });
 
-  it("renders core setting controls for language, status bar, UI font, editor font, sound, command palette, line ending, and encoding", () => {
-    const element = settingsPanelElement("en");
+  it("marks only the selected category's button as current", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "files"
+    });
+    const buttons = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsCategoryButton")
+    );
+    const current = buttons.filter((button) => button.props["aria-current"]);
 
-    expect(elementById(element, "applicationSettingsLanguage").type).toBe(
-      "select"
-    );
-    expect(elementById(element, "applicationSettingsStatusBar").type).toBe(
-      "input"
-    );
-    expect(elementById(element, "applicationSettingsUiFont").type).toBe(
-      "input"
-    );
-    expect(elementById(element, "applicationSettingsEditorFont").type).toBe(
-      "input"
-    );
-    expect(elementById(element, "applicationSettingsSoundEnabled").type).toBe(
-      "input"
-    );
-    expect(elementById(element, "applicationSettingsDialogSound").type).toBe(
-      "input"
-    );
-    expect(elementById(element, "applicationSettingsNewlineSound").type).toBe(
-      "input"
-    );
-    expect(elementById(element, "applicationSettingsKeypressSound").type).toBe(
-      "input"
-    );
+    expect(current).toHaveLength(1);
     expect(
-      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
-        .type
-    ).toBe("input");
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-      ).type
-    ).toBe("input");
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-      ).type
-    ).toBe("input");
-    expect(elementById(element, "applicationSettingsLineEnding").type).toBe(
-      "select"
-    );
-    expect(elementById(element, "applicationSettingsEncoding").type).toBe(
-      "select"
-    );
+      React.Children.toArray(current[0]?.props.children).join("")
+    ).toBe("Files");
   });
 
-  it("renders Command Palette controls with catalog-backed defaults and units", () => {
-    const element = settingsPanelElement("en");
-    const markup = renderSettingsPanel("en");
+  it("clicking a category button invokes onSelectCategory with that category's id", () => {
+    const onSelectCategory = vi.fn();
+    const element = settingsPanelViewElement("en", { onSelectCategory });
+    const buttons = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsCategoryButton")
+    );
+    const filesButton = buttons.find(
+      (button) =>
+        React.Children.toArray(button.props.children).join("") === "Files"
+    );
 
-    expect(
-      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
-        .props.checked
-    ).toBe(true);
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-      ).props.value
-    ).toBe(2000);
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-      ).props.value
-    ).toBe(40);
-    expect(markup).toContain("ms");
-    expect(markup).toContain("px/sec");
+    expect(filesButton).toBeDefined();
+    (filesButton?.props.onClick as () => void)();
+
+    expect(onSelectCategory).toHaveBeenCalledWith("files");
   });
 
-  it("disables the advanced files and Command Palette controls until advanced settings are enabled", () => {
-    const element = settingsPanelElement("en");
+  it("orders items within the selected category by catalog order (application category)", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "application"
+    });
+    const keyElements = collectElements(
+      element,
+      (child) =>
+        child.type === "code" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsItemKey")
+    );
 
-    expect(elementById(element, "applicationSettingsLineEnding").props.disabled).toBe(
-      true
-    );
-    expect(elementById(element, "applicationSettingsEncoding").props.disabled).toBe(
-      true
-    );
-    expect(
-      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
-        .props.disabled
-    ).toBe(true);
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-      ).props.disabled
-    ).toBe(true);
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-      ).props.disabled
-    ).toBe(true);
+    expect(keyElements.map((el) => el.props.children)).toEqual([
+      "workbench.advancedSettings.enabled",
+      "workbench.language",
+      "workbench.statusBar.visible"
+    ]);
   });
 
-  it("enables the advanced files and Command Palette controls when advanced settings are enabled", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
+  it("orders items within the selected category by catalog order (sound category)", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "sound"
+    });
+    const keyElements = collectElements(
+      element,
+      (child) =>
+        child.type === "code" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsItemKey")
+    );
+
+    expect(keyElements.map((el) => el.props.children)).toEqual([
+      "workbench.sound.enabled",
+      "workbench.sound.dialog.enabled",
+      "workbench.sound.newline.enabled",
+      "workbench.sound.keypress.enabled"
+    ]);
+  });
+
+  it("orders items within the selected category by catalog order (files category)", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "files"
+    });
+    const keyElements = collectElements(
+      element,
+      (child) =>
+        child.type === "code" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsItemKey")
+    );
+
+    expect(keyElements.map((el) => el.props.children)).toEqual([
+      "files.newFile.lineEnding",
+      "files.newFile.encoding"
+    ]);
+  });
+
+  it("does not show any empty-category message during normal category browsing, even for a category with no registered items (e.g. project, reached directly by prop)", () => {
+    const markup = renderSettingsPanelView("en", {
+      selectedCategoryId: "project"
+    });
+
+    expect(markup).not.toContain("this category");
+    expect(markup).not.toContain("No settings match your search.");
+  });
+
+  it("places the Sound category between Command Palette and Advanced in catalog order", () => {
+    const soundCategory = settingCategoryCatalog.find((c) => c.id === "sound");
+    const commandsCategory = settingCategoryCatalog.find(
+      (c) => c.id === "commands"
+    );
+    const advancedCategory = settingCategoryCatalog.find(
+      (c) => c.id === "advanced"
+    );
+
+    expect(soundCategory).toBeDefined();
+    expect(commandsCategory).toBeDefined();
+    expect(advancedCategory).toBeDefined();
+    expect(soundCategory!.order).toBeGreaterThan(commandsCategory!.order);
+    expect(soundCategory!.order).toBeLessThan(advancedCategory!.order);
+  });
+});
+
+describe("getVisibleSettingCatalogItems search behavior (#230)", () => {
+  const translate = translateFor("ja");
+
+  it("finds a setting by its internal key", () => {
+    const items = getVisibleSettingCatalogItems(
+      "files.newFile.lineEnding",
+      "application",
+      translate
+    );
+
+    expect(items.map((item) => item.key)).toEqual(["files.newFile.lineEnding"]);
+  });
+
+  it("finds a setting by its localized label", () => {
+    const items = getVisibleSettingCatalogItems(
+      "ステータスバー",
+      "editor",
+      translate
+    );
+
+    expect(items.map((item) => item.key)).toEqual([
+      "workbench.statusBar.visible"
+    ]);
+  });
+
+  it("finds a setting by its localized description", () => {
+    const items = getVisibleSettingCatalogItems(
+      "打鍵",
+      "editor",
+      translate
+    );
+
+    expect(items.map((item) => item.key)).toEqual([
+      "workbench.sound.keypress.enabled"
+    ]);
+  });
+
+  it("finds a select setting by option value", () => {
+    const items = getVisibleSettingCatalogItems("crlf", "application", translate);
+
+    expect(items.map((item) => item.key)).toEqual(["files.newFile.lineEnding"]);
+  });
+
+  it("finds a select setting by localized option label", () => {
+    const items = getVisibleSettingCatalogItems(
+      "UTF-8",
+      "application",
+      translate
+    );
+
+    expect(items.map((item) => item.key)).toContain("files.newFile.encoding");
+  });
+
+  it("trims whitespace and matches case-insensitively", () => {
+    const items = getVisibleSettingCatalogItems(
+      "  WORKBENCH.LANGUAGE  ",
+      "files",
+      translate
+    );
+
+    expect(items.map((item) => item.key)).toEqual(["workbench.language"]);
+  });
+
+  it("returns the selected category's items, in catalog order, for an empty query", () => {
+    const items = getVisibleSettingCatalogItems("", "files", translate);
+
+    expect(items.map((item) => item.key)).toEqual([
+      "files.newFile.lineEnding",
+      "files.newFile.encoding"
+    ]);
+  });
+
+  it("returns an empty list for a query that matches nothing", () => {
+    const items = getVisibleSettingCatalogItems(
+      "zzz_no_such_setting",
+      "application",
+      translate
+    );
+
+    expect(items).toEqual([]);
+  });
+});
+
+describe("SettingsPanelView search UI (#230)", () => {
+  it("renders a search input wired to searchQuery / onSearchQueryChange", () => {
+    const onSearchQueryChange = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: "font",
+      onSearchQueryChange
+    });
+    const input = elementById(element, "settingsSearchInput");
+
+    expect(input.props.value).toBe("font");
+
+    (input.props.onChange as (event: { target: { value: string } }) => void)({
+      target: { value: "sound" }
+    });
+
+    expect(onSearchQueryChange).toHaveBeenCalledWith("sound");
+  });
+
+  it("shows the search results heading and flattens matches across categories while searching", () => {
+    const markup = renderSettingsPanelView("en", {
+      selectedCategoryId: "editor",
+      searchQuery: "sound"
+    });
+
+    expect(markup).toContain("Search results");
+    expect(markup).toContain("settingControl-workbench.sound.enabled");
+  });
+
+  it("shows the search empty state for a query with no matches", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: "zzz_no_such_setting"
+    });
+
+    expect(markup).toContain("No settings match your search.");
+  });
+
+  it("falls back to the normal category view once the query is cleared", () => {
+    const markup = renderSettingsPanelView("en", {
+      selectedCategoryId: "editor",
+      searchQuery: ""
+    });
+
+    expect(markup).toContain("settingControl-editor.fontFamily");
+    expect(markup).not.toContain("settingControl-workbench.language");
+  });
+});
+
+describe("SettingsPanelView edit/save behavior (#230)", () => {
+  it("saves immediately when a switch setting changes, with no Apply/OK/Cancel step", () => {
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.statusBar.visible"),
+      onChangeSettings
+    });
+    const input = controlElement(element, "workbench.statusBar.visible");
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: false } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
       workbench: {
         ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
-      }
-    };
-    const element = settingsPanelElement("en", settings);
-
-    expect(elementById(element, "applicationSettingsLineEnding").props.disabled).toBe(
-      false
-    );
-    expect(elementById(element, "applicationSettingsEncoding").props.disabled).toBe(
-      false
-    );
-    expect(
-      elementById(element, "applicationSettingsCommandPaletteDescriptionEnabled")
-        .props.disabled
-    ).toBe(false);
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-      ).props.disabled
-    ).toBe(false);
-    expect(
-      elementById(
-        element,
-        "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-      ).props.disabled
-    ).toBe(false);
-  });
-
-  it("disables Command Palette marquee controls while preserving their values when command descriptions are disabled", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        advancedSettings: { enabled: true }
+        statusBar: { visible: false }
       },
-      commandPalette: {
-        description: {
-          enable: false,
-          marquee: { delay: 3456, speed: 78.5 }
-        }
-      }
-    };
-    const element = settingsPanelElement("en", settings);
-    const descriptionEnabled = elementById(
-      element,
-      "applicationSettingsCommandPaletteDescriptionEnabled"
-    );
-    const marqueeDelay = elementById(
-      element,
-      "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-    );
-    const marqueeSpeed = elementById(
-      element,
-      "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-    );
-
-    expect(descriptionEnabled.props.checked).toBe(false);
-    expect(descriptionEnabled.props.disabled).toBe(false);
-    expect(marqueeDelay.props.disabled).toBe(true);
-    expect(marqueeDelay.props.value).toBe(3456);
-    expect(marqueeSpeed.props.disabled).toBe(true);
-    expect(marqueeSpeed.props.value).toBe(78.5);
+      commandPalette: defaultApplicationSettings.commandPalette,
+      editor: defaultApplicationSettings.editor,
+      files: defaultApplicationSettings.files
+    });
   });
 
-  it("saves Command Palette description settings without discarding other application settings", () => {
+  it("saves immediately when a select setting changes", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       workbench: {
@@ -302,55 +553,83 @@ describe("SettingsPanel application settings core controls (#195)", () => {
       }
     };
     const onChangeSettings = vi.fn();
-    const element = settingsPanelElement(
-      "en",
+    const element = settingsPanelViewElement("en", {
       settings,
-      () => Promise.resolve(true),
+      searchQuery: isolate("files.newFile.lineEnding"),
       onChangeSettings
-    );
-    const descriptionEnabled = elementById(
-      element,
-      "applicationSettingsCommandPaletteDescriptionEnabled"
-    );
-    const marqueeDelay = elementById(
-      element,
-      "applicationSettingsCommandPaletteDescriptionMarqueeDelay"
-    );
-    const marqueeSpeed = elementById(
-      element,
-      "applicationSettingsCommandPaletteDescriptionMarqueeSpeed"
-    );
+    });
+    const select = controlElement(element, "files.newFile.lineEnding");
+    const onChange = select.props.onChange as (event: {
+      target: { value: string };
+    }) => void;
 
-    (
-      descriptionEnabled.props.onChange as (event: {
-        target: { checked: boolean };
-      }) => void
-    )({ target: { checked: false } });
-    (
-      marqueeDelay.props.onChange as (event: {
-        target: { valueAsNumber: number };
-      }) => void
-    )({ target: { valueAsNumber: 2500 } });
-    (
-      marqueeSpeed.props.onChange as (event: {
-        target: { valueAsNumber: number };
-      }) => void
-    )({ target: { valueAsNumber: 64 } });
+    onChange({ target: { value: "crlf" } });
 
-    expect(onChangeSettings).toHaveBeenNthCalledWith(1, {
+    expect(onChangeSettings).toHaveBeenCalledWith({
       workbench: settings.workbench,
-      commandPalette: {
-        description: {
-          ...settings.commandPalette.description,
-          enable: false
-        }
-      },
+      commandPalette: settings.commandPalette,
       editor: settings.editor,
+      files: {
+        ...settings.files,
+        newFile: { ...settings.files.newFile, lineEnding: "crlf" }
+      }
+    });
+  });
+
+  it("saves immediately when a text setting changes, omitting an empty fontFamily rather than sending an empty string", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: { fontFamily: "Fira Code" }
+    };
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("editor.fontFamily"),
+      onChangeSettings
+    });
+    const input = controlElement(element, "editor.fontFamily");
+    const onChange = input.props.onChange as (event: {
+      target: { value: string };
+    }) => void;
+
+    onChange({ target: { value: "   " } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: {},
       files: settings.files
     });
-    expect(onChangeSettings).toHaveBeenNthCalledWith(2, {
+  });
+
+  it("saves immediately when a number setting changes", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      }
+    };
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("commandPalette.description.marquee.delay"),
+      onChangeSettings
+    });
+    const input = controlElement(
+      element,
+      "commandPalette.description.marquee.delay"
+    );
+    const onChange = input.props.onChange as (event: {
+      target: { valueAsNumber: number };
+    }) => void;
+
+    onChange({ target: { valueAsNumber: 2500 } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
       workbench: settings.workbench,
       commandPalette: {
+        ...settings.commandPalette,
         description: {
           ...settings.commandPalette.description,
           marquee: {
@@ -362,40 +641,120 @@ describe("SettingsPanel application settings core controls (#195)", () => {
       editor: settings.editor,
       files: settings.files
     });
-    expect(onChangeSettings).toHaveBeenNthCalledWith(3, {
-      workbench: settings.workbench,
-      commandPalette: {
-        description: {
-          ...settings.commandPalette.description,
-          marquee: {
-            ...settings.commandPalette.description.marquee,
-            speed: 64
-          }
-        }
-      },
-      editor: settings.editor,
-      files: settings.files
+  });
+
+  it("ignores a non-finite number value instead of saving it", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      }
+    };
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("commandPalette.description.marquee.speed"),
+      onChangeSettings
     });
+    const input = controlElement(
+      element,
+      "commandPalette.description.marquee.speed"
+    );
+    const onChange = input.props.onChange as (event: {
+      target: { valueAsNumber: number };
+    }) => void;
+
+    onChange({ target: { valueAsNumber: Number.NaN } });
+
+    expect(onChangeSettings).not.toHaveBeenCalled();
   });
 
-  it("renders sound feedback controls with the catalog-backed default states", () => {
-    const element = settingsPanelElement("en");
+  it("preserves the save-failure display: the error prop still renders as a settingsError message", () => {
+    const markup = renderSettingsPanelView("en", {
+      error: "Settings save failed: disk full"
+    });
 
-    expect(elementById(element, "applicationSettingsSoundEnabled").props.checked).toBe(
-      true
-    );
-    expect(elementById(element, "applicationSettingsDialogSound").props.checked).toBe(
-      true
-    );
-    expect(elementById(element, "applicationSettingsNewlineSound").props.checked).toBe(
-      false
-    );
-    expect(elementById(element, "applicationSettingsKeypressSound").props.checked).toBe(
-      false
-    );
+    expect(markup).toContain("settingsError");
+    expect(markup).toContain("Settings save failed: disk full");
   });
 
-  it("disables child sound controls when the global sound feedback setting is off while keeping their stored values visible", () => {
+  it("does not introduce Apply / OK / Cancel or a dirty-state concept", () => {
+    const source = settingsPanelSource();
+
+    expect(source).not.toMatch(/\bdirty\b/i);
+    expect(source).not.toContain("Apply");
+    expect(source).not.toContain("onApply");
+    expect(source).not.toContain("onCancel");
+  });
+});
+
+describe("SettingsPanelView advanced-gated and sound-gated controls (#230, preserved from pre-catalog behavior)", () => {
+  it("disables the advanced-gated files/command palette controls until advanced settings are enabled", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "files"
+    });
+
+    expect(
+      controlElement(element, "files.newFile.lineEnding").props.disabled
+    ).toBe(true);
+    expect(
+      controlElement(element, "files.newFile.encoding").props.disabled
+    ).toBe(true);
+  });
+
+  it("enables the advanced-gated controls once advanced settings are enabled", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "files"
+    });
+
+    expect(
+      controlElement(element, "files.newFile.lineEnding").props.disabled
+    ).toBe(false);
+    expect(
+      controlElement(element, "files.newFile.encoding").props.disabled
+    ).toBe(false);
+  });
+
+  it("additionally disables the marquee number controls when command descriptions are disabled", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      },
+      commandPalette: {
+        description: { enable: false, marquee: { delay: 3456, speed: 78.5 } }
+      }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "commands"
+    });
+
+    expect(
+      controlElement(element, "commandPalette.description.enable").props
+        .disabled
+    ).toBe(false);
+    expect(
+      controlElement(element, "commandPalette.description.marquee.delay")
+        .props.disabled
+    ).toBe(true);
+    expect(
+      controlElement(element, "commandPalette.description.marquee.delay")
+        .props.value
+    ).toBe(3456);
+  });
+
+  it("disables child sound controls when the parent sound toggle is off, while preserving their stored values", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       workbench: {
@@ -408,120 +767,33 @@ describe("SettingsPanel application settings core controls (#195)", () => {
         }
       }
     };
-    const element = settingsPanelElement("en", settings);
-
-    expect(elementById(element, "applicationSettingsDialogSound").props.disabled).toBe(
-      true
-    );
-    expect(elementById(element, "applicationSettingsNewlineSound").props.disabled).toBe(
-      true
-    );
-    expect(elementById(element, "applicationSettingsKeypressSound").props.disabled).toBe(
-      true
-    );
-    expect(elementById(element, "applicationSettingsDialogSound").props.checked).toBe(
-      true
-    );
-    expect(elementById(element, "applicationSettingsNewlineSound").props.checked).toBe(
-      true
-    );
-  });
-
-  it("saves the parent sound toggle without discarding child sound settings", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        sound: {
-          enabled: true,
-          dialog: { enabled: false },
-          newline: { enabled: true },
-          keypress: { enabled: false }
-        }
-      }
-    };
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelElement(
-      "en",
+    const element = settingsPanelViewElement("en", {
       settings,
-      () => Promise.resolve(true),
-      onChangeSettings
-    );
-    const soundEnabled = elementById(element, "applicationSettingsSoundEnabled");
-    const onChange = soundEnabled.props.onChange as (event: {
-      target: { checked: boolean };
-    }) => void;
-
-    onChange({ target: { checked: false } });
-
-    expect(onChangeSettings).toHaveBeenCalledWith({
-      workbench: {
-        ...settings.workbench,
-        sound: {
-          enabled: false,
-          dialog: { enabled: false },
-          newline: { enabled: true },
-          keypress: { enabled: false }
-        }
-      },
-      commandPalette: settings.commandPalette,
-      editor: settings.editor,
-      files: settings.files
+      selectedCategoryId: "sound"
     });
-  });
 
-  it("saves each child sound toggle independently when sound feedback is enabled", () => {
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelElement(
-      "en",
-      defaultApplicationSettings,
-      () => Promise.resolve(true),
-      onChangeSettings
-    );
-    const keypressSound = elementById(
-      element,
-      "applicationSettingsKeypressSound"
-    );
-    const onChange = keypressSound.props.onChange as (event: {
-      target: { checked: boolean };
-    }) => void;
-
-    onChange({ target: { checked: true } });
-
-    expect(onChangeSettings).toHaveBeenCalledWith({
-      workbench: {
-        ...defaultApplicationSettings.workbench,
-        sound: {
-          ...defaultApplicationSettings.workbench.sound,
-          keypress: { enabled: true }
-        }
-      },
-      commandPalette: defaultApplicationSettings.commandPalette,
-      editor: defaultApplicationSettings.editor,
-      files: defaultApplicationSettings.files
-    });
+    expect(
+      controlElement(element, "workbench.sound.dialog.enabled").props.disabled
+    ).toBe(true);
+    expect(
+      controlElement(element, "workbench.sound.dialog.enabled").props.checked
+    ).toBe(true);
+    expect(
+      controlElement(element, "workbench.sound.keypress.enabled").props
+        .disabled
+    ).toBe(true);
   });
 
   it("asks for binary confirmation before enabling advanced settings and only saves when confirmed", async () => {
     const onConfirmEnableAdvancedSettings = vi.fn().mockResolvedValue(false);
     const onChangeSettings = vi.fn();
-    const element = settingsPanelElement(
-      "en",
-      defaultApplicationSettings,
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.advancedSettings.enabled"),
       onConfirmEnableAdvancedSettings,
       onChangeSettings
-    );
-    const checkbox = collectElements(
-      element,
-      (child) =>
-        child.type === "input" &&
-        child.props.type === "checkbox" &&
-        child.props.checked === false
-    )[0];
-
-    expect(checkbox).toBeDefined();
-
-    const onChange = checkbox.props.onChange as (event: {
+    });
+    const input = controlElement(element, "workbench.advancedSettings.enabled");
+    const onChange = input.props.onChange as (event: {
       target: { checked: boolean };
     }) => void;
 
@@ -530,12 +802,24 @@ describe("SettingsPanel application settings core controls (#195)", () => {
 
     expect(onConfirmEnableAdvancedSettings).toHaveBeenCalledTimes(1);
     expect(onChangeSettings).not.toHaveBeenCalled();
+  });
 
-    onConfirmEnableAdvancedSettings.mockResolvedValue(true);
+  it("saves enabling advanced settings once the user confirms", async () => {
+    const onConfirmEnableAdvancedSettings = vi.fn().mockResolvedValue(true);
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.advancedSettings.enabled"),
+      onConfirmEnableAdvancedSettings,
+      onChangeSettings
+    });
+    const input = controlElement(element, "workbench.advancedSettings.enabled");
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
     onChange({ target: { checked: true } });
     await flushPromises();
 
-    expect(onChangeSettings).toHaveBeenCalledTimes(1);
     expect(onChangeSettings).toHaveBeenCalledWith({
       workbench: {
         ...defaultApplicationSettings.workbench,
@@ -547,73 +831,117 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     });
   });
 
-  it("does not enable advanced settings while the enable confirmation remains pending, matching backdrop-click no-op behavior", async () => {
-    const onConfirmEnableAdvancedSettings = vi.fn(
-      () => new Promise<boolean>(() => undefined)
-    );
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelElement(
-      "en",
-      defaultApplicationSettings,
-      onConfirmEnableAdvancedSettings,
-      onChangeSettings
-    );
-    const checkbox = collectElements(
-      element,
-      (child) =>
-        child.type === "input" &&
-        child.props.type === "checkbox" &&
-        child.props.checked === false
-    )[0];
-
-    expect(checkbox).toBeDefined();
-
-    const onChange = checkbox.props.onChange as (event: {
-      target: { checked: boolean };
-    }) => void;
-
-    onChange({ target: { checked: true } });
-    await flushPromises();
-
-    expect(onConfirmEnableAdvancedSettings).toHaveBeenCalledTimes(1);
-    expect(onChangeSettings).not.toHaveBeenCalled();
-    expect(checkbox.props.checked).toBe(false);
-  });
-
-  it("clears optional font settings by omitting fontFamily instead of sending undefined", () => {
+  it("does not require confirmation to disable advanced settings", async () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       workbench: {
         ...defaultApplicationSettings.workbench,
-        fontFamily: "Inter"
-      },
-      editor: { fontFamily: "Fira Code" }
+        advancedSettings: { enabled: true }
+      }
     };
+    const onConfirmEnableAdvancedSettings = vi.fn().mockResolvedValue(false);
     const onChangeSettings = vi.fn();
-    const element = settingsPanelElement(
-      "en",
+    const element = settingsPanelViewElement("en", {
       settings,
-      () => Promise.resolve(true),
+      searchQuery: isolate("workbench.advancedSettings.enabled"),
+      onConfirmEnableAdvancedSettings,
       onChangeSettings
-    );
-
-    const uiFont = elementById(element, "applicationSettingsUiFont");
-    const onChange = uiFont.props.onChange as (event: {
-      target: { value: string };
+    });
+    const input = controlElement(element, "workbench.advancedSettings.enabled");
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
     }) => void;
 
-    onChange({ target: { value: "   " } });
+    onChange({ target: { checked: false } });
+    await flushPromises();
 
+    expect(onConfirmEnableAdvancedSettings).not.toHaveBeenCalled();
     expect(onChangeSettings).toHaveBeenCalledWith({
-      workbench: {
-        language: settings.workbench.language,
-        statusBar: settings.workbench.statusBar,
-        advancedSettings: settings.workbench.advancedSettings,
-        sound: settings.workbench.sound
-      },
+      workbench: { ...settings.workbench, advancedSettings: { enabled: false } },
       commandPalette: settings.commandPalette,
       editor: settings.editor,
       files: settings.files
     });
+  });
+});
+
+describe("SettingsPanelView language options (#230: catalog-driven, not languageDefinitions.nativeName)", () => {
+  it("renders workbench.language's options from the catalog's select control, resolved through i18n, in ja", () => {
+    const markup = renderSettingsPanelView("ja", {
+      searchQuery: isolate("workbench.language")
+    });
+
+    expect(markup).toContain("日本語");
+    expect(markup).toContain("English");
+  });
+
+  it("renders the same native option labels regardless of the current UI language", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("workbench.language")
+    });
+
+    expect(markup).toContain("日本語");
+    expect(markup).toContain("English");
+  });
+
+  it("shows the restart-required notice under the language control", () => {
+    const markupEn = renderSettingsPanelView("en", {
+      searchQuery: isolate("workbench.language")
+    });
+    const markupJa = renderSettingsPanelView("ja", {
+      searchQuery: isolate("workbench.language")
+    });
+
+    expect(markupEn).toContain(t("en", "settings.languageRestartRequired"));
+    expect(markupJa).toContain(t("ja", "settings.languageRestartRequired"));
+  });
+
+  it("does not read language options from languageDefinitions.nativeName directly — that now lives in the catalog (#228)", () => {
+    const source = settingsPanelSource();
+
+    expect(source).not.toContain("languageDefinitions");
+    expect(source).not.toContain("supportedLanguages");
+  });
+});
+
+describe("SettingsPanelView non-goals guard (#230)", () => {
+  it("does not implement an advanced-settings display filter — advanced items remain listed regardless of the advanced toggle", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "files"
+    });
+    const keyElements = collectElements(
+      element,
+      (child) =>
+        child.type === "code" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsItemKey")
+    );
+
+    expect(keyElements.map((el) => el.props.children)).toContain(
+      "files.newFile.lineEnding"
+    );
+    expect(keyElements.map((el) => el.props.children)).toContain(
+      "files.newFile.encoding"
+    );
+  });
+
+  it("does not implement reset-to-default", () => {
+    const source = settingsPanelSource();
+
+    expect(source).not.toMatch(/reset.?to.?default/i);
+  });
+
+  it("does not render valueWarning UI", () => {
+    const source = settingsPanelSource();
+
+    expect(source).not.toContain("valueWarning");
+    expect(source).not.toContain("SettingValueWarning");
+  });
+
+  it("does not reference project settings expansion", () => {
+    const source = settingsPanelSource();
+
+    expect(source).not.toContain("ProjectSettings");
+    expect(source).not.toContain("pergamum.json");
   });
 });

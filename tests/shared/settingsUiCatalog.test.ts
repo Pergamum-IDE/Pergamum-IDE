@@ -66,7 +66,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }).toThrow(/duplicate id/);
     });
 
-    it("registers exactly the initial #226 categories", () => {
+    it("registers the Settings UI categories, with sound between commands and advanced", () => {
       expect(settingCategoryCatalog.map((category) => category.id)).toEqual([
         "application",
         "appearance",
@@ -75,6 +75,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "files",
         "project",
         "commands",
+        "sound",
         "advanced"
       ]);
     });

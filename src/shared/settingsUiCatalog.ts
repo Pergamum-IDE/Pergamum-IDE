@@ -56,6 +56,7 @@ export type SettingCategory =
   | "files"
   | "project"
   | "commands"
+  | "sound"
   | "advanced";
 
 export interface SettingCategoryCatalogItem {
@@ -120,7 +121,15 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
   {
     id: "commands",
     order: 700,
+    // Labeled "Command Palette" / "コマンドパレット", not the broader
+    // "Commands" — only commandPalette.* settings are registered here so
+    // far. Revisit if outline/glossary palette settings are added later.
     labelKey: "settings.category.commands.label"
+  },
+  {
+    id: "sound",
+    order: 800,
+    labelKey: "settings.category.sound.label"
   },
   {
     id: "advanced",
@@ -467,8 +476,8 @@ export const settingCatalogItems = defineSettingCatalog([
   },
   {
     key: "workbench.sound.enabled",
-    category: "application",
-    order: 400,
+    category: "sound",
+    order: 100,
     labelKey: "settings.workbench.sound.enabled.label",
     descriptionKey: "settings.workbench.sound.enabled.description",
     control: { kind: "switch" },
@@ -476,8 +485,8 @@ export const settingCatalogItems = defineSettingCatalog([
   },
   {
     key: "workbench.sound.dialog.enabled",
-    category: "application",
-    order: 410,
+    category: "sound",
+    order: 200,
     labelKey: "settings.workbench.sound.dialog.enabled.label",
     descriptionKey: "settings.workbench.sound.dialog.enabled.description",
     control: { kind: "switch" },
@@ -485,8 +494,8 @@ export const settingCatalogItems = defineSettingCatalog([
   },
   {
     key: "workbench.sound.newline.enabled",
-    category: "application",
-    order: 420,
+    category: "sound",
+    order: 300,
     labelKey: "settings.workbench.sound.newline.enabled.label",
     descriptionKey: "settings.workbench.sound.newline.enabled.description",
     control: { kind: "switch" },
@@ -494,8 +503,8 @@ export const settingCatalogItems = defineSettingCatalog([
   },
   {
     key: "workbench.sound.keypress.enabled",
-    category: "application",
-    order: 430,
+    category: "sound",
+    order: 400,
     labelKey: "settings.workbench.sound.keypress.enabled.label",
     descriptionKey: "settings.workbench.sound.keypress.enabled.description",
     control: { kind: "switch" },

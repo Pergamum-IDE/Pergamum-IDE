@@ -290,7 +290,6 @@ button:active {
 }
 
 .settingsPanelHeader p,
-.settingsAdvancedDescription,
 .settingsDescription,
 .settingsAdvancedDisabled {
   margin: 0;
@@ -299,66 +298,129 @@ button:active {
   line-height: 1.5;
 }
 
-.settingsAdvancedToggle,
-.settingsInlineCheckbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #25313d;
+.settingsSearch {
+  max-width: 420px;
+}
+
+.settingsSearchInput {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid #a9b4c0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #182531;
+  font: inherit;
   font-size: 13px;
+  padding: 4px 10px;
 }
 
-.settingsAdvancedToggle input,
-.settingsInlineCheckbox input {
+.settingsSearchInput:disabled {
+  background: #eef3f8;
+  color: #6b7785;
+}
+
+.settingsBody {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  gap: 28px;
+}
+
+.settingsCategoryPane {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.settingsCategoryList {
+  display: flex;
   margin: 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
 }
 
-.settingsAdvancedToggle {
+.settingsCategoryButton {
+  width: 100%;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #25313d;
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.settingsCategoryButton:disabled {
+  color: #9aa7b3;
+  cursor: default;
+}
+
+.settingsCategoryButtonSelected {
+  background: #e3e8ee;
   font-weight: 700;
 }
 
-.settingsAdvancedDescription {
-  max-width: 760px;
-  margin-top: -14px;
-}
-
-.settingsSection {
+.settingsItemPane {
   display: flex;
-  max-width: 860px;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
-.settingsSection h2 {
+.settingsItemPaneHeading {
   margin: 0;
-  padding-top: 6px;
-  border-top: 1px solid #e3e8ee;
   color: #17212b;
   font-size: 15px;
   line-height: 1.4;
 }
 
-.settingsRow {
-  display: grid;
-  grid-template-columns: minmax(140px, 220px) minmax(0, 520px);
-  gap: 14px;
-  align-items: start;
+.settingsSearchEmpty {
+  margin: 0;
+  color: #52616f;
+  font-size: 13px;
 }
 
-.settingsLabel {
+.settingsItemList {
+  display: flex;
+  max-width: 720px;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settingsItemRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e3e8ee;
+}
+
+.settingsItemHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.settingsItemLabel {
   color: #25313d;
   font-size: 13px;
   font-weight: 700;
-  line-height: 30px;
-  text-align: end;
 }
 
-.settingsControl {
+.settingsItemControl {
   display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.settingsItemKey {
+  color: #8a97a3;
+  font-size: 12px;
 }
 
 .settingsSelect,
@@ -418,14 +480,24 @@ button:active {
     padding: 22px 20px 34px;
   }
 
-  .settingsRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
+  .settingsBody {
+    flex-direction: column;
+    gap: 18px;
   }
 
-  .settingsLabel {
-    line-height: 1.4;
-    text-align: start;
+  .settingsCategoryPane {
+    width: 100%;
+  }
+
+  .settingsCategoryList {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settingsItemHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   .settingsSelect,
