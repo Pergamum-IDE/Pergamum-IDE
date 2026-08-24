@@ -288,6 +288,20 @@ describe("Application Settings core control translations (#195)", () => {
     }
   });
 
+  it("defines the search-example placeholder for the Settings search input, distinct from its accessible label (#234)", () => {
+    expect(t("ja", "settings.search.placeholder")).toBe(
+      "検索語句を入力（例：エディタ、sound）"
+    );
+    expect(t("en", "settings.search.placeholder")).toBe(
+      "Enter search terms (e.g. editor, sound)"
+    );
+    expect(t("ja", "settings.search.label")).toBe("設定を検索");
+    expect(t("en", "settings.search.label")).toBe("Search settings");
+    expect(t("ja", "settings.search.placeholder")).not.toBe(
+      t("ja", "settings.search.label")
+    );
+  });
+
   it("defines catalog label and description keys used by Application Settings controls", () => {
     for (const language of ["ja", "en"] as const) {
       for (const key of [

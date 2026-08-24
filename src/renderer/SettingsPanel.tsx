@@ -19,6 +19,7 @@ import {
   type SettingCategory,
   type SettingSearchTranslate
 } from "../shared/settingsUiCatalog";
+import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
@@ -391,6 +392,7 @@ function SettingControlInput({
       return (
         <input
           id={controlId}
+          className="settingsSwitchInput"
           type="checkbox"
           checked={Boolean(value)}
           disabled={disabled}
@@ -474,10 +476,15 @@ function SettingItemRow({
   const value = readSettingValue(item.key, settings);
   const disabled = isSettingDisabled(item, settings, isLoading);
   const labelId = `settingLabel-${item.key}`;
+  // Switch controls wrap the visible label and the checkbox in a single
+  // <label> so clicking either the label text or the switch itself toggles
+  // it (native <label> click-forwarding) — not changed for other control
+  // kinds, which keep the plain aria-labelledby association.
+  const HeaderTag = item.control.kind === "switch" ? "label" : "div";
 
   return (
     <div className="settingsItemRow">
-      <div className="settingsItemHeader">
+      <HeaderTag className="settingsItemHeader">
         <span id={labelId} className="settingsItemLabel">
           {translateI18nKey(translate, item.labelKey)}
         </span>
@@ -491,7 +498,7 @@ function SettingItemRow({
             onChange={(rawValue) => onChange(item, rawValue)}
           />
         </div>
-      </div>
+      </HeaderTag>
       <p className="settingsDescription">
         {translateI18nKey(translate, item.descriptionKey)}
       </p>
@@ -562,6 +569,11 @@ export function SettingsPanelView({
       {error ? <div className="settingsError">{error}</div> : null}
 
       <div className="settingsSearch">
+        <span
+          className="settingsSearchIcon"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: searchIcon }}
+        />
         <input
           id="settingsSearchInput"
           className="settingsSearchInput"

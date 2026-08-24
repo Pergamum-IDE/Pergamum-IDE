@@ -307,7 +307,7 @@ export const enTranslations = {
   "settings.category.sound.label": "Sound",
   "settings.category.paneLabel": "Settings categories",
   "settings.search.label": "Search settings",
-  "settings.search.placeholder": "Search settings",
+  "settings.search.placeholder": "Enter search terms (e.g. editor, sound)",
   "settings.search.resultsHeading": "Search results",
   "settings.search.empty": "No settings match your search.",
   "status.documentOpenFailed": "Document open failed: {message}",
