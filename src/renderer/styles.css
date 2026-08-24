@@ -2293,6 +2293,7 @@ button:active {
 }
 
 .appDialogBody {
+  min-width: 0;
   padding-block: 16px;
   padding-inline: var(--app-dialog-horizontal-padding);
 }
@@ -2306,6 +2307,52 @@ button:active {
 
 .appDialogMessage {
   margin: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+.appDialogMessage-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.appDialogMessageText {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.appDialogPathBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.appDialogPathBlockLabel {
+  font: inherit;
+}
+
+.appDialogPathBlockValue {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 4px;
+  background: #f7f8fa;
+  color: var(--app-dialog-foreground);
+  font-family: var(
+    --pergamum-editor-font-family,
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    monospace
+  );
+  font-size: 0.9rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  user-select: text;
   white-space: pre-wrap;
 }
 

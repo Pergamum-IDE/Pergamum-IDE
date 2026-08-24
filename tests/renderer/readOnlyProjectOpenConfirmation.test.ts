@@ -30,7 +30,7 @@ describe("buildReadOnlyProjectOpenChoiceDialogOptions", () => {
         text:
           "このプロジェクトは既に別のPergamumで開かれています。\n\n" +
           "読み取り専用で開くことができます。\n" +
-          "編集や保存はできませんが、内容を確認できます。\n\n" +
+          "編集や通常保存はできませんが、内容を確認したり、別ファイルとして保存したりできます。\n\n" +
           "プロジェクトを開きますか？"
       }
     });
@@ -41,7 +41,7 @@ describe("buildReadOnlyProjectOpenChoiceDialogOptions", () => {
         text:
           "This project is already open in another Pergamum instance.\n\n" +
           "You can open it in read-only mode.\n" +
-          "Editing and saving are unavailable, but you can view the contents.\n\n" +
+          "Editing and normal Save are unavailable, but you can view the contents or save a copy with Save As.\n\n" +
           "Do you want to open the project?"
       }
     });

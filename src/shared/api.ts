@@ -141,9 +141,21 @@ export interface SaveMarkdownRequest {
   content: string;
 }
 
-export interface SaveMarkdownResult {
+export type SaveMarkdownRejectedReason = "protected" | "unverifiable";
+
+export interface SaveMarkdownSavedResult {
+  kind: "saved";
   path: string;
 }
+
+export interface SaveMarkdownRejectedResult {
+  kind: "rejected";
+  reason: SaveMarkdownRejectedReason;
+}
+
+export type SaveMarkdownResult =
+  | SaveMarkdownSavedResult
+  | SaveMarkdownRejectedResult;
 
 export interface SelectMarkdownSavePathRequest {
   defaultPath: string | null;
@@ -158,13 +170,18 @@ export interface WriteMarkdownRequest {
   content: string;
 }
 
-export interface WriteMarkdownResult {
+export interface WriteMarkdownSavedResult {
+  kind: "saved";
   path: string;
   encoding: "utf8";
   lineEnding: MarkdownLineEnding;
   byteLength: number;
   characterLength: number;
 }
+
+export type WriteMarkdownResult =
+  | WriteMarkdownSavedResult
+  | SaveMarkdownRejectedResult;
 
 export interface PergamumProjectConfig {
   name?: string;

@@ -214,8 +214,33 @@ describe("editor commands", () => {
       allOf: [
         { key: "editor.hasDocument" },
         { key: "editor.isDirty" },
+        {
+          not: {
+            key: "activeEditor.saveBlockedByReadOnlyProjectRootForUi"
+          }
+        },
         projectOwnedWriteAllowedCommandWhen
       ]
+    });
+  });
+
+  it("disables Save when UI containment blocks the active editor path", () => {
+    const registry = new CommandRegistry();
+
+    registerEditorCommandSet(registry);
+
+    expect(
+      registry.enablementForContext(editorCommandIds.saveDocument, {
+        "editor.hasDocument": true,
+        "editor.isDirty": true,
+        "editor.document.projectOwned": false,
+        "activeEditor.saveBlockedByReadOnlyProjectRootForUi": true,
+        "project.access.readWrite": false,
+        "project.access.readOnly": true
+      })
+    ).toEqual({
+      enabled: false,
+      disabledReason: "readOnlyProject"
     });
   });
 
@@ -289,6 +314,7 @@ describe("editor commands", () => {
         "editor.hasDocument": true,
         "editor.kind.markdown": true,
         "editor.document.projectOwned": true,
+        "activeEditor.saveBlockedByReadOnlyProjectRootForUi": true,
         "project.access.readWrite": false,
         "project.access.readOnly": true
       })

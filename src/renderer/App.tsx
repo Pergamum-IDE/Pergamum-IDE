@@ -11,6 +11,7 @@ import type {
   PergamumProject,
   ProjectOpenResult,
   ProjectDocument,
+  SaveMarkdownRejectedReason,
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import type {
@@ -51,6 +52,7 @@ import {
   type TranslationValues
 } from "../shared/i18n";
 import { resolveEffectiveSettings } from "../shared/settings";
+import { isPathEqualOrInsideDirectory } from "../shared/saveTargetPolicy";
 import { ActivityBar } from "./ActivityBar";
 import { AboutDialog } from "./dialog/AboutDialog";
 import {
@@ -99,11 +101,13 @@ import {
   type DialogControllerPendingRequest
 } from "./dialog/dialogController";
 import {
+  AppDialogError,
   getDialogActionOrder,
   type AppChoiceDialogOptions,
   type AppChoiceDialogResult,
   type AppConfirmDialogOptions,
-  type AppConfirmDialogResult
+  type AppConfirmDialogResult,
+  type AppDialogChoiceId
 } from "./dialog/appDialogTypes";
 import { runEditorCloseFlow } from "./documentTabCloseFlow";
 import {
@@ -131,6 +135,10 @@ import {
   editorCommandIds,
   registerEditorCommands
 } from "./editorCommands";
+import {
+  validateStandaloneSaveTargetForSaveAsUi,
+  type StandaloneSaveTargetPolicyResult
+} from "./saveAsTargetUiPolicy";
 import {
   createLineJumpCommandTitles,
   registerLineJumpCommands
@@ -265,7 +273,12 @@ interface StatusMessage {
   values?: TranslationValues;
 }
 
-type SaveFileOutcome = "saved" | "cancelled" | "failed" | "ignored";
+type SaveFileOutcome =
+  | "saved"
+  | "cancelled"
+  | "rejected"
+  | "failed"
+  | "ignored";
 
 interface SaveFileOptions {
   readonly editorId?: EditorId;
@@ -281,6 +294,11 @@ type StandaloneSaveTargetSelection =
       readonly kind: "cancelled";
       readonly reason: "standalone_save_canceled";
     };
+
+const readOnlyProjectSaveAsChoiceIds = {
+  save: "save",
+  cancel: "cancel"
+} as const satisfies Record<string, AppDialogChoiceId>;
 
 function errorMessage(error: unknown, translate: Translate): string {
   return error instanceof Error ? error.message : translate("error.unknown");
@@ -306,6 +324,20 @@ function projectContextForProject(
   project: PergamumProject | null
 ): ActiveProjectContext | null {
   return project ? { rootPath: project.rootPath } : null;
+}
+
+function projectDocumentPathForReadOnlyRootUi(
+  project: PergamumProject,
+  document: CurrentDocument
+): string | null {
+  switch (document.kind) {
+    case "file":
+      return document.path;
+    case "project":
+      return `${project.rootPath}/${document.relativePath}`;
+    case "untitled":
+      return null;
+  }
 }
 
 function debugEditorIdKind(editorId: EditorId): DebugLogEditorIdKind {
@@ -710,6 +742,39 @@ export function App(): JSX.Element {
     !isSettingsTabActive &&
     currentEditor.kind === "markdown" &&
     Boolean(activeMarkdownDocument);
+
+  function isInsideCurrentReadOnlyProjectRootForUi(filePath: string): boolean {
+    if (!project || !isReadOnlyProject) {
+      return false;
+    }
+
+    try {
+      return isPathEqualOrInsideDirectory(
+        filePath,
+        project.rootPath,
+        window.pergamum.platform
+      );
+    } catch {
+      return true;
+    }
+  }
+
+  const activeEditorSaveBlockedByReadOnlyProjectRootForUi =
+    !isSettingsTabActive &&
+    currentEditor.kind === "markdown" &&
+    activeMarkdownDocument &&
+    project
+      ? (() => {
+          const documentPath = projectDocumentPathForReadOnlyRootUi(
+            project,
+            activeMarkdownDocument
+          );
+
+          return documentPath
+            ? isInsideCurrentReadOnlyProjectRootForUi(documentPath)
+            : false;
+        })()
+      : false;
   const commandContext = useMemo(
     () =>
       buildCommandContextSnapshot({
@@ -726,6 +791,7 @@ export function App(): JSX.Element {
         editorKindGlossary:
           !isSettingsTabActive && currentEditor.kind === "glossaryEntry",
         editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
+        activeEditorSaveBlockedByReadOnlyProjectRootForUi,
         occurrenceTrackingActive:
           glossaryOccurrenceTrackingState.kind === "active"
       }),
@@ -737,6 +803,7 @@ export function App(): JSX.Element {
       currentEditor.kind,
       activeMarkdownDocument,
       isProjectOwnedCurrentEditor,
+      activeEditorSaveBlockedByReadOnlyProjectRootForUi,
       isDirty,
       glossaryOccurrenceTrackingState.kind
     ]
@@ -2072,25 +2139,104 @@ export function App(): JSX.Element {
     });
   }
 
-  async function showReadOnlyProjectSaveAsSucceededDialog(
-    fileName: string
+  async function confirmReadOnlyProjectSaveAsInsideRoot(
+    selectedPath: string
+  ): Promise<boolean> {
+    let result: AppChoiceDialogResult;
+
+    try {
+      result = await choiceDialog({
+        title: translate("dialog.readOnlyProjectSaveAsInsideRoot.title"),
+        message: {
+          kind: "plainTextWithPathBlock",
+          beforeText: translate(
+            "dialog.readOnlyProjectSaveAsInsideRoot.message"
+          ),
+          pathBlock: {
+            label: translate(
+              "dialog.readOnlyProjectSaveAsInsideRoot.targetLabel"
+            ),
+            value: selectedPath
+          },
+          afterText: translate(
+            "dialog.readOnlyProjectSaveAsInsideRoot.messageAfterTarget"
+          )
+        },
+        icon: {
+          kind: "warning",
+          tooltip: translate("dialog.icon.warning")
+        },
+        choices: [
+          {
+            id: readOnlyProjectSaveAsChoiceIds.save,
+            label: translate("dialog.readOnlyProjectSaveAsInsideRoot.save"),
+            role: "primary"
+          },
+          {
+            id: readOnlyProjectSaveAsChoiceIds.cancel,
+            label: translate("common.cancel"),
+            role: "cancel"
+          }
+        ],
+        primaryChoiceId: readOnlyProjectSaveAsChoiceIds.save,
+        cancelChoiceId: readOnlyProjectSaveAsChoiceIds.cancel,
+        initialFocusChoiceId: readOnlyProjectSaveAsChoiceIds.cancel,
+        clipboardText: null,
+        dismissOnBackdropClick: false
+      });
+    } catch (error) {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return false;
+      }
+
+      throw error;
+    }
+
+    return (
+      result.kind === "chosen" &&
+      result.id === readOnlyProjectSaveAsChoiceIds.save
+    );
+  }
+
+  async function showSaveAsRejectedDialog(
+    reason: SaveMarkdownRejectedReason,
+    targetPath: string
   ): Promise<void> {
+    const titleKey =
+      `dialog.saveAsRejected.${reason}.title` as TranslationKey;
+    const messageKey =
+      `dialog.saveAsRejected.${reason}.message` as TranslationKey;
+
     await confirmDialog({
-      title: translate("dialog.readOnlyProjectSaveAsSucceeded.title"),
+      title: translate(titleKey),
       message: {
-        kind: "plainText",
-        text: translate("dialog.readOnlyProjectSaveAsSucceeded.message", {
-          fileName
-        })
+        kind: "plainTextWithPathBlock",
+        beforeText: "",
+        pathBlock: {
+          label: translate("dialog.saveAsRejected.targetLabel"),
+          value: targetPath
+        },
+        afterText: translate(messageKey)
       },
       icon: {
-        kind: "info",
-        tooltip: translate("dialog.icon.info")
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
       },
       clipboardText: null,
       dismissOnBackdropClick: false,
-      confirmLabel: translate("common.ok"),
+      confirmLabel: translate("common.close"),
       cancelLabel: null
+    });
+  }
+
+  async function validateStandaloneSaveTargetForSaveAs(
+    filePath: string
+  ): Promise<StandaloneSaveTargetPolicyResult> {
+    return validateStandaloneSaveTargetForSaveAsUi({
+      filePath,
+      currentProjectRootPath: project?.rootPath ?? null,
+      isReadOnlyProject,
+      platform: window.pergamum.platform
     });
   }
 
@@ -2676,10 +2822,6 @@ export function App(): JSX.Element {
 
           const documentToSave = targetEditor.document;
           const documentIdToSave = targetOpenDocument.id;
-          const isReadOnlyProjectDocumentSaveAs =
-            isReadOnlyProject &&
-            options.forceSaveAs === true &&
-            isProjectCurrentDocument(documentToSave);
 
           if (
             isProjectCurrentDocument(documentToSave) &&
@@ -2716,6 +2858,7 @@ export function App(): JSX.Element {
             options.forceSaveAs === true
               ? null
               : standaloneSavePath(documentToSave);
+          let selectedSaveAsTargetPath: string | null = null;
           const savedStandaloneDocument = existingSavePath
             ? await window.pergamum.files.writeMarkdown(
                 existingSavePath,
@@ -2740,6 +2883,37 @@ export function App(): JSX.Element {
                   return null;
                 }
 
+                selectedSaveAsTargetPath = selectedTarget.path;
+
+                const targetPolicy =
+                  await validateStandaloneSaveTargetForSaveAs(
+                    selectedTarget.path
+                  );
+
+                if (targetPolicy.kind === "rejected") {
+                  return targetPolicy;
+                }
+
+                if (
+                  targetPolicy.requiresReadOnlyProjectConfirmation &&
+                  !(await confirmReadOnlyProjectSaveAsInsideRoot(
+                    selectedTarget.path
+                  ))
+                ) {
+                  setStatus({ key: "status.saveCanceled" });
+                  logRendererDebugEvent({
+                    level: "debug",
+                    event: "save.skipped",
+                    details: {
+                      editorIdKind,
+                      operation: "save",
+                      result: "cancelled",
+                      reason: "standalone_save_canceled"
+                    }
+                  });
+                  return null;
+                }
+
                 return window.pergamum.files.writeMarkdown(
                   selectedTarget.path,
                   documentToSave.content
@@ -2750,25 +2924,18 @@ export function App(): JSX.Element {
             return "cancelled";
           }
 
-          if (isReadOnlyProjectDocumentSaveAs) {
-            const fileName = displayName(savedStandaloneDocument.path);
+          if (savedStandaloneDocument.kind === "rejected") {
+            const rejectedTargetPath =
+              selectedSaveAsTargetPath ?? existingSavePath;
 
-            setStatus({
-              key: "status.savedPath",
-              values: { path: fileName }
-            });
-            logRendererDebugEvent({
-              level: "debug",
-              event: "save.succeeded",
-              details: {
-                editorIdKind,
-                operation: "save",
-                result: "succeeded",
-                saveTargetKind: "standaloneMarkdown"
-              }
-            });
-            await showReadOnlyProjectSaveAsSucceededDialog(fileName);
-            return "saved";
+            if (rejectedTargetPath) {
+              await showSaveAsRejectedDialog(
+                savedStandaloneDocument.reason,
+                rejectedTargetPath
+              );
+            }
+
+            return "rejected";
           }
 
           const savedDocument = applyStandaloneSaveResult(

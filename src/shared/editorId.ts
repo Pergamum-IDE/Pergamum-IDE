@@ -304,6 +304,12 @@ export function createEditorIdForPath(
   return createFileEditorIdFromCanonicalPath(canonicalPath);
 }
 
+export function createFileEditorIdForPath(path: string): EditorId {
+  return createFileEditorIdFromCanonicalPath(
+    canonicalizeAbsolutePath(path, "File editor path")
+  );
+}
+
 export function createProjectDocumentEditorId(
   relativePath: string,
   activeProjectContext: ActiveProjectContext | null

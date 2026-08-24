@@ -11,11 +11,16 @@ const electronMock = vi.hoisted(() => ({
 
 const fsMock = vi.hoisted(() => ({
   readFile: vi.fn(),
+  realpath: vi.fn(),
   writeFile: vi.fn()
 }));
 
 const projectIpcMock = vi.hoisted(() => ({
-  currentProjectRootPath: vi.fn<() => string | null>()
+  currentActiveProjectFilePath: vi.fn<() => string | null>(),
+  currentProjectRootPath: vi.fn<() => string | null>(),
+  projectWriteLockDirectoryPath: vi.fn((projectFilePath: string) =>
+    projectFilePath.replace(/[^\\/]+$/, ".pergamum.lock")
+  )
 }));
 
 vi.mock("electron", () => ({
@@ -36,7 +41,9 @@ vi.mock("node:fs", () => ({
 }));
 
 vi.mock("../../src/main/projectIpc", () => ({
-  currentProjectRootPath: projectIpcMock.currentProjectRootPath
+  currentActiveProjectFilePath: projectIpcMock.currentActiveProjectFilePath,
+  currentProjectRootPath: projectIpcMock.currentProjectRootPath,
+  projectWriteLockDirectoryPath: projectIpcMock.projectWriteLockDirectoryPath
 }));
 
 import { registerFileIpc } from "../../src/main/fileIpc";
@@ -99,20 +106,52 @@ describe("file IPC", () => {
     electronMock.showOpenDialog.mockReset();
     electronMock.showSaveDialog.mockReset();
     fsMock.readFile.mockReset();
+    fsMock.realpath.mockReset();
     fsMock.writeFile.mockReset();
+    projectIpcMock.currentActiveProjectFilePath.mockReset();
     projectIpcMock.currentProjectRootPath.mockReset();
+    projectIpcMock.currentActiveProjectFilePath.mockReturnValue(null);
+    projectIpcMock.currentProjectRootPath.mockReturnValue(null);
+    projectIpcMock.projectWriteLockDirectoryPath.mockClear();
+    fsMock.realpath.mockImplementation(async (filePath: string) => filePath);
   });
 
-  it("rejects standalone Save As inside the active project before disk write", async () => {
+  it("allows Save As selection inside the active project for renderer policy validation", async () => {
     projectIpcMock.currentProjectRootPath.mockReturnValue("C:\\Novel");
     electronMock.showSaveDialog.mockResolvedValue({
       canceled: false,
       filePath: "C:\\Novel\\new-document.md"
     });
 
+    const selectMarkdownSavePath = registeredHandler(
+      FILE_CHANNELS.selectMarkdownSavePath
+    );
+
+    await expect(
+      selectMarkdownSavePath(
+        {
+          sender: {}
+        },
+        {
+          defaultPath: null
+        }
+      )
+    ).resolves.toEqual({ path: "C:\\Novel\\new-document.md" });
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects protected project database Save As targets before disk write", async () => {
+    const rawPath = "C:\\Novel\\Novel.PERGAMUM";
+
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: rawPath
+    });
+
     const saveMarkdown = registeredHandler(FILE_CHANNELS.saveMarkdown);
 
-    await expectSanitizedFileIoRejection(
+    await expect(
       saveMarkdown(
         {
           sender: {}
@@ -121,39 +160,79 @@ describe("file IPC", () => {
           path: null,
           content: "content"
         }
-      ) as Promise<unknown>,
-      "invalidPath",
-      ["C:\\Novel\\new-document.md"]
-    );
+      )
+    ).resolves.toEqual({ kind: "rejected", reason: "protected" });
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(JSON.stringify(fsMock.writeFile.mock.calls)).not.toContain(rawPath);
+  });
+
+  it("rejects protected SQLite sidecar suffixes case-insensitively before disk write", async () => {
+    const writeMarkdown = registeredHandler(FILE_CHANNELS.writeMarkdown);
+
+    await expect(
+      writeMarkdown(
+        { sender: {} },
+        {
+          path: "C:\\Novel\\Draft.PERGAMUM-WAL",
+          content: "content"
+        }
+      )
+    ).resolves.toEqual({ kind: "rejected", reason: "protected" });
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
   });
 
-  it("sanitizes selectMarkdownSavePath rejection inside the active project", async () => {
-    const rawPath = "C:\\Novel\\new-document.md";
-
-    projectIpcMock.currentProjectRootPath.mockReturnValue("C:\\Novel");
-    electronMock.showSaveDialog.mockResolvedValue({
-      canceled: false,
-      filePath: rawPath
-    });
-
-    const selectMarkdownSavePath = registeredHandler(
-      FILE_CHANNELS.selectMarkdownSavePath
+  it("rejects the current project lock directory and paths under it before disk write", async () => {
+    projectIpcMock.currentActiveProjectFilePath.mockReturnValue(
+      "C:\\Novel\\Novel.pergamum"
     );
 
-    await expectSanitizedFileIoRejection(
-      selectMarkdownSavePath(
+    const writeMarkdown = registeredHandler(FILE_CHANNELS.writeMarkdown);
+
+    await expect(
+      writeMarkdown(
+        { sender: {} },
         {
-          sender: {}
-        },
-        {
-          defaultPath: null
+          path: "C:\\Novel\\.pergamum.lock",
+          content: "content"
         }
-      ) as Promise<unknown>,
-      "invalidPath",
-      [rawPath]
+      )
+    ).resolves.toEqual({ kind: "rejected", reason: "protected" });
+    await expect(
+      writeMarkdown(
+        { sender: {} },
+        {
+          path: "C:\\Novel\\.pergamum.lock\\state.md",
+          content: "content"
+        }
+      )
+    ).resolves.toEqual({ kind: "rejected", reason: "protected" });
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects unverifiable protected-target classification before disk write", async () => {
+    projectIpcMock.currentActiveProjectFilePath.mockReturnValue(
+      "C:\\Novel\\Novel.pergamum"
     );
+    fsMock.realpath.mockRejectedValue(
+      Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" })
+    );
+
+    const writeMarkdown = registeredHandler(FILE_CHANNELS.writeMarkdown);
+
+    await expect(
+      writeMarkdown(
+        { sender: {} },
+        {
+          path: "D:\\Outside\\chapter.md",
+          content: "content"
+        }
+      )
+    ).resolves.toEqual({ kind: "rejected", reason: "unverifiable" });
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
   });
 
   it("allows standalone Save As outside the active project", async () => {
@@ -177,6 +256,7 @@ describe("file IPC", () => {
         }
       )
     ).resolves.toEqual({
+      kind: "saved",
       path: "D:\\Outside\\new-document.md"
     });
 
@@ -252,6 +332,7 @@ describe("file IPC", () => {
         }
       )
     ).resolves.toEqual({
+      kind: "saved",
       path: "D:\\Outside\\secret-draft.md",
       encoding: "utf8",
       lineEnding: "crlf",

@@ -25,6 +25,7 @@ export type DirtyCloseChoiceId =
 export type DirtyCloseSaveResult =
   | "saved"
   | "cancelled"
+  | "rejected"
   | "failed"
   | "ignored";
 

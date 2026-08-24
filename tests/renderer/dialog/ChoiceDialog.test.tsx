@@ -401,14 +401,62 @@ describe("ChoiceDialog structure (#192)", () => {
     expect(markup).toContain("&lt;script&gt;");
   });
 
+  it("renders a dedicated selectable path block with the editor font and safe wrapping", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const bodyCss = cssRuleBlock(styles, ".appDialogBody");
+    const messageCss = cssRuleBlock(styles, ".appDialogMessage");
+    const pathBlockLabelCss = cssRuleBlock(
+      styles,
+      ".appDialogPathBlockLabel"
+    );
+    const pathBlockValueCss = cssRuleBlock(
+      styles,
+      ".appDialogPathBlockValue"
+    );
+    const selectedPath = String.raw`C:\Users\writer\Pergamum Projects\Read Only Project\chapters\..\very-long-selected-save-as-target-file-name  01.md`;
+    const markup = renderDialog({
+      options: baseOptions({
+        message: {
+          kind: "plainTextWithPathBlock",
+          beforeText: "読み取り専用で開かれています。",
+          pathBlock: {
+            label: "保存先:",
+            value: selectedPath
+          },
+          afterText: "保存しますか？"
+        }
+      })
+    });
+
+    expect(markup).toContain("appDialogPathBlock");
+    expect(markup).toContain(">保存先:<");
+    expect(markup).toContain(`>${selectedPath}<`);
+    expect(bodyCss).toContain("min-width: 0");
+    expect(messageCss).toContain("white-space: pre-wrap");
+    expect(messageCss).toContain("overflow-wrap: anywhere");
+    expect(messageCss).toContain("user-select: text");
+    expect(pathBlockLabelCss).toContain("font: inherit");
+    expect(pathBlockLabelCss).not.toContain("--pergamum-editor-font-family");
+    expect(pathBlockValueCss).toContain("--pergamum-editor-font-family");
+    expect(pathBlockValueCss).toContain("overflow-wrap: anywhere");
+    expect(pathBlockValueCss).toContain("user-select: text");
+    expect(pathBlockValueCss).toContain("white-space: pre-wrap");
+    expect(pathBlockValueCss).not.toContain("overflow-x");
+  });
+
   it("does not use dangerouslySetInnerHTML for message rendering", () => {
     const source = readFileSync("src/renderer/dialog/ChoiceDialog.tsx", "utf8");
+    const messageSource = readFileSync(
+      "src/renderer/dialog/DialogMessage.tsx",
+      "utf8"
+    );
     const bodySection = source.slice(
       source.indexOf("appDialogBody"),
       source.indexOf("appDialogFooter")
     );
 
     expect(bodySection).not.toContain("dangerouslySetInnerHTML");
+    expect(messageSource).not.toContain("dangerouslySetInnerHTML");
   });
 });
 

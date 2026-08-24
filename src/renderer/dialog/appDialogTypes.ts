@@ -22,16 +22,27 @@ export type AppDialogIcon =
 // Message (#182 D-7)
 // ---------------------------------------------------------------------------
 
+export interface AppDialogPathBlock {
+  readonly label: string;
+  readonly value: string;
+}
+
 /**
- * `kind` is kept even though there is only one variant today: it preserves
- * the discriminated-union shape so a future `markdown` variant can be added
- * without changing call-site structure, and it stops callers from passing a
- * raw string as `message`.
+ * `kind` preserves the discriminated-union shape and stops callers from
+ * passing a raw string as `message`. Both variants render text as React text
+ * children, not HTML or Markdown.
  */
-export type AppDialogMessage = {
-  kind: "plainText";
-  text: string;
-};
+export type AppDialogMessage =
+  | {
+      readonly kind: "plainText";
+      readonly text: string;
+    }
+  | {
+      readonly kind: "plainTextWithPathBlock";
+      readonly beforeText: string;
+      readonly pathBlock: AppDialogPathBlock;
+      readonly afterText: string;
+    };
 
 // ---------------------------------------------------------------------------
 // Tone (#182 D-12 / D-13)

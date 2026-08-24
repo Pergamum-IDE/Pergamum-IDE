@@ -16,6 +16,7 @@ export type CommandContextKey =
   | "editor.kind.markdown"
   | "editor.kind.glossary"
   | "editor.document.projectOwned"
+  | "activeEditor.saveBlockedByReadOnlyProjectRootForUi"
   | "glossary.occurrences.tracking.active";
 
 export const commandContextKeys: readonly CommandContextKey[] = [
@@ -27,6 +28,7 @@ export const commandContextKeys: readonly CommandContextKey[] = [
   "editor.kind.markdown",
   "editor.kind.glossary",
   "editor.document.projectOwned",
+  "activeEditor.saveBlockedByReadOnlyProjectRootForUi",
   "glossary.occurrences.tracking.active"
 ] as const;
 
@@ -167,6 +169,21 @@ function disabledReasonForFailedKey(
   return null;
 }
 
+function disabledReasonForFailedNot(
+  expression: CommandEnablementExpression,
+  context: CommandContext
+): CommandDisabledReason | null {
+  if (
+    "key" in expression &&
+    expression.key === "activeEditor.saveBlockedByReadOnlyProjectRootForUi" &&
+    context["activeEditor.saveBlockedByReadOnlyProjectRootForUi"] === true
+  ) {
+    return "readOnlyProject";
+  }
+
+  return null;
+}
+
 /**
  * Omitted `when` means enabled. A known key absent from `context` evaluates
  * as false (legitimate missing state, distinct from a registration bug).
@@ -195,7 +212,9 @@ export function evaluateCommandEnablementResult(
 
     return {
       enabled: !child.enabled,
-      disabledReason: null
+      disabledReason: child.enabled
+        ? disabledReasonForFailedNot(expression.not, context)
+        : null
     };
   }
 

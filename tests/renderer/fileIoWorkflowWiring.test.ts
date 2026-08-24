@@ -163,4 +163,28 @@ describe("file I/O workflow wiring (#202)", () => {
     expect(saveFileBlock).toContain("window.pergamum.files.writeMarkdown");
     expect(saveFileBlock).not.toContain("window.pergamum.files.saveMarkdown");
   });
+
+  it("routes untitled Save through the existing Save As target selection path", () => {
+    const source = appSource();
+    const saveFileBlock = sourceBlock(
+      source,
+      "async function saveFile(",
+      "async function readProjectDocument"
+    );
+    const standaloneSaveBlock = sourceBlock(
+      saveFileBlock,
+      "const existingSavePath =",
+      "const savedDocument = applyStandaloneSaveResult"
+    );
+
+    expect(standaloneSaveBlock).toContain(
+      "standaloneSavePath(documentToSave)"
+    );
+    expect(standaloneSaveBlock).toContain(
+      "await selectStandaloneSaveTarget(documentToSave)"
+    );
+    expect(standaloneSaveBlock).toContain(
+      "await validateStandaloneSaveTargetForSaveAs"
+    );
+  });
 });

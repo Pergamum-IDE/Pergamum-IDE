@@ -13,6 +13,7 @@ const baseInput = {
   editorKindMarkdown: true,
   editorKindGlossary: false,
   editorDocumentProjectOwned: true,
+  activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
   occurrenceTrackingActive: false
 };
 
@@ -27,6 +28,7 @@ describe("buildCommandContextSnapshot", () => {
       "editor.kind.markdown": true,
       "editor.kind.glossary": false,
       "editor.document.projectOwned": true,
+      "activeEditor.saveBlockedByReadOnlyProjectRootForUi": false,
       "glossary.occurrences.tracking.active": false
     });
   });

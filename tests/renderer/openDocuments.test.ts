@@ -29,6 +29,7 @@ import {
 } from "../../src/renderer/openDocuments";
 import {
   createEditorIdForPath,
+  createFileEditorIdForPath,
   createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   createUntitledEditorId,
@@ -117,35 +118,49 @@ describe("OpenDocumentsState", () => {
     expect(state.documents[0].editor.document.content).toBe("project content");
   });
 
-  it("rejects a file CurrentDocument that would be identified as a projectDocument without open state", () => {
-    expect(() =>
-      openOrActivateDocument(
-        createInitialOpenDocumentsState(),
-        createFileDocument({
-          path: "C:\\Novel\\chapter-01.md",
-          content: "content"
-        }),
-        projectContext
+  it("keeps a file CurrentDocument inside the project root as a standalone file editor", () => {
+    const state = openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createFileDocument({
+        path: "C:\\Novel\\chapter-01.md",
+        content: "content"
+      }),
+      projectContext
+    );
+
+    expect(state.documents).toHaveLength(1);
+    expect(
+      editorIdEquals(
+        state.activeDocumentId,
+        createFileEditorIdForPath("C:\\Novel\\chapter-01.md")
       )
-    ).toThrow("CurrentEditor kind does not match its EditorId.");
+    ).toBe(true);
+    expect(state.documents[0].editor.kind).toBe("markdown");
+    expect(state.documents[0].editor.document.kind).toBe("file");
   });
 
-  it("rejects a file CurrentDocument that would be identified as an already-open projectDocument", () => {
+  it("keeps a file CurrentDocument distinct from an already-open projectDocument at the same path", () => {
     const state = createOpenDocumentsStateWithDocument(
       createProjectDocument(firstProjectDocument, "project content"),
       projectContext
     );
 
-    expect(() =>
-      openOrActivateDocument(
-        state,
-        createFileDocument({
-          path: "C:\\Novel\\chapter-01.md",
-          content: "content"
-        }),
-        projectContext
+    const nextState = openOrActivateDocument(
+      state,
+      createFileDocument({
+        path: "C:\\Novel\\chapter-01.md",
+        content: "content"
+      }),
+      projectContext
+    );
+
+    expect(nextState.documents).toHaveLength(2);
+    expect(
+      nextState.documents.some(
+        (document) => document.editor.kind === "markdown" &&
+          document.editor.document.kind === "file"
       )
-    ).toThrow("CurrentEditor kind does not match its EditorId.");
+    ).toBe(true);
   });
 
   it("matches Windows project listings case-insensitively without changing display paths", () => {
@@ -291,7 +306,7 @@ describe("OpenDocumentsState", () => {
     ).toBe(false);
   });
 
-  it("rejects replacement with a file CurrentDocument that would be identified as a projectDocument", () => {
+  it("allows replacement with a file CurrentDocument inside the project root", () => {
     const existingProjectDocument = createProjectDocument(
       firstProjectDocument,
       "existing"
@@ -308,17 +323,23 @@ describe("OpenDocumentsState", () => {
 
     const untitledEditorId = state.activeDocumentId;
 
-    expect(() =>
-      replaceOpenDocument(
-        state,
-        untitledEditorId,
-        createFileDocument({
-          path: "C:\\Novel\\chapter-01.md",
-          content: "saved"
-        }),
-        projectContext
+    const result = replaceOpenDocument(
+      state,
+      untitledEditorId,
+      createFileDocument({
+        path: "C:\\Novel\\chapter-01.md",
+        content: "saved"
+      }),
+      projectContext
+    );
+
+    expect(result.didCollide).toBe(false);
+    expect(
+      editorIdEquals(
+        result.state.activeDocumentId,
+        createFileEditorIdForPath("C:\\Novel\\chapter-01.md")
       )
-    ).toThrow("CurrentEditor kind does not match its EditorId.");
+    ).toBe(true);
   });
 
   it("replaces the initial untitled tab when a project document is opened", () => {
