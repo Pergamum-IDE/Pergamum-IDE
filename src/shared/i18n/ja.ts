@@ -277,6 +277,8 @@ export const jaTranslations = {
   "settings.workbench.fontFamily.label": "UIフォント",
   "settings.workbench.language.description": "アプリケーションの表示言語です。",
   "settings.workbench.language.label": "表示言語",
+  "settings.workbench.language.option.ja.label": "日本語",
+  "settings.workbench.language.option.en.label": "English",
   "settings.workbench.sound.dialog.enabled.description": "ダイアログが表示されたときに音を鳴らします。",
   "settings.workbench.sound.dialog.enabled.label": "ダイアログ表示音",
   "settings.workbench.sound.enabled.description": "Pergamum の操作に短い音を付けます。",
