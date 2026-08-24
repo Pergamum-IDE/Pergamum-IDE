@@ -56,8 +56,7 @@ export type SettingCategory =
   | "files"
   | "project"
   | "commands"
-  | "sound"
-  | "advanced";
+  | "sound";
 
 export interface SettingCategoryCatalogItem {
   readonly id: SettingCategory;
@@ -130,11 +129,6 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     id: "sound",
     order: 800,
     labelKey: "settings.category.sound.label"
-  },
-  {
-    id: "advanced",
-    order: 900,
-    labelKey: "settings.category.advanced.label"
   }
 ] satisfies readonly SettingCategoryCatalogItem[]);
 
@@ -270,26 +264,8 @@ export interface SettingCatalogItem<TValue = unknown> {
   readonly defaultValue: TValue;
 
   /**
-   * Marks this item as a future "Show advanced settings" filter target.
-   * Filtering behavior is implemented in a later issue.
-   *
-   * `advanced` means only: eligible for that future display filter. It does
-   * NOT mean dangerous, expert-only, or requiring confirmation — those are
-   * different concerns and must not be inferred from this flag.
-   *
-   * Future invariant (to be enforced by the filter's implementation, not
-   * here): an advanced setting whose value has been changed from its
-   * default must remain visible even when the advanced filter is off. The
-   * Settings screen must not lie about the current configuration by hiding
-   * a non-default value.
-   */
-  readonly advanced?: boolean;
-
-  /**
    * Optional warning tied to specific values (e.g. a non-UTF-8
-   * files.newFile.encoding). Separate from `advanced` — `advanced` is
-   * display-filter metadata, `valueWarning` is a risk carried by a
-   * particular value. Warning UI is implemented in a later issue.
+   * files.newFile.encoding). Warning UI is implemented in a later issue.
    */
   readonly valueWarning?: SettingValueWarning<TValue>;
 }
@@ -406,8 +382,7 @@ export const settingCatalogItems = defineSettingCatalog([
         }
       ]
     },
-    defaultValue: getCatalogDefaultValue("files.newFile.lineEnding"),
-    advanced: true
+    defaultValue: getCatalogDefaultValue("files.newFile.lineEnding")
   },
   {
     key: "files.newFile.encoding",
@@ -424,8 +399,7 @@ export const settingCatalogItems = defineSettingCatalog([
         }
       ]
     },
-    defaultValue: getCatalogDefaultValue("files.newFile.encoding"),
-    advanced: true
+    defaultValue: getCatalogDefaultValue("files.newFile.encoding")
   },
   {
     key: "preview.renderer",
@@ -443,15 +417,6 @@ export const settingCatalogItems = defineSettingCatalog([
       ]
     },
     defaultValue: getCatalogDefaultValue("preview.renderer")
-  },
-  {
-    key: "workbench.advancedSettings.enabled",
-    category: "application",
-    order: 100,
-    labelKey: "settings.workbench.advancedSettings.enabled.label",
-    descriptionKey: "settings.workbench.advancedSettings.enabled.description",
-    control: { kind: "switch" },
-    defaultValue: getCatalogDefaultValue("workbench.advancedSettings.enabled")
   },
   {
     key: "workbench.language",
@@ -517,8 +482,7 @@ export const settingCatalogItems = defineSettingCatalog([
     labelKey: "settings.commandPalette.description.enable.label",
     descriptionKey: "settings.commandPalette.description.enable.description",
     control: { kind: "switch" },
-    defaultValue: getCatalogDefaultValue("commandPalette.description.enable"),
-    advanced: true
+    defaultValue: getCatalogDefaultValue("commandPalette.description.enable")
   },
   {
     key: "commandPalette.description.marquee.delay",
@@ -534,8 +498,7 @@ export const settingCatalogItems = defineSettingCatalog([
     },
     defaultValue: getCatalogDefaultValue(
       "commandPalette.description.marquee.delay"
-    ),
-    advanced: true
+    )
   },
   {
     key: "commandPalette.description.marquee.speed",
@@ -551,8 +514,7 @@ export const settingCatalogItems = defineSettingCatalog([
     },
     defaultValue: getCatalogDefaultValue(
       "commandPalette.description.marquee.speed"
-    ),
-    advanced: true
+    )
   }
 ] satisfies readonly SettingCatalogItem[]);
 

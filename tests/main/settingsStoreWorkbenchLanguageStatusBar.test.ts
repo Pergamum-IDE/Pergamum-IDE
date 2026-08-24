@@ -60,7 +60,6 @@ function saveRequest(
 ): SaveApplicationSettingsRequest {
   return {
     workbench: {
-      advancedSettings: { enabled: false },
       sound: defaultSoundSettings,
       ...workbench
     },
@@ -310,7 +309,6 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       workbench: {
         language: "ja",
         statusBar: { visible: true },
-        advancedSettings: { enabled: false },
         sound: defaultSoundSettings
       },
       commandPalette: {
@@ -337,7 +335,6 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       workbench: {
         language: "ja",
         statusBar: { visible: true },
-        advancedSettings: { enabled: false },
         sound: defaultSoundSettings,
         somethingUnknown: true
       },

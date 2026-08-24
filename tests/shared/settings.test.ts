@@ -107,20 +107,16 @@ describe("workbench.fontFamily wiring (#173)", () => {
 });
 
 describe("Application Settings core defaults and effective settings (#195)", () => {
-  it("workbench.advancedSettings.enabled derives from the catalog default and is concrete, not sparse", () => {
-    const catalogDefault = getCatalogDefaultValue(
-      "workbench.advancedSettings.enabled"
+  it("no longer has a workbench.advancedSettings field on any settings shape (#232: legacy Advanced Settings gate removed)", () => {
+    expect(builtInDefaultSettings.workbench).not.toHaveProperty(
+      "advancedSettings"
     );
-
-    expect(builtInDefaultSettings.workbench.advancedSettings.enabled).toBe(
-      catalogDefault
-    );
-    expect(defaultApplicationSettings.workbench.advancedSettings.enabled).toBe(
-      catalogDefault
+    expect(defaultApplicationSettings.workbench).not.toHaveProperty(
+      "advancedSettings"
     );
     expect(
-      createDefaultApplicationSettings().workbench.advancedSettings.enabled
-    ).toBe(catalogDefault);
+      createDefaultApplicationSettings().workbench
+    ).not.toHaveProperty("advancedSettings");
   });
 
   it("editor.fontFamily falls through to the catalog default when application settings omit it", () => {

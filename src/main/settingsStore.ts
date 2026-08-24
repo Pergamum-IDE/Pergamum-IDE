@@ -110,19 +110,6 @@ function readWorkbenchStatusBarSettings(
   };
 }
 
-function readWorkbenchAdvancedSettings(
-  value: unknown
-): ApplicationSettings["workbench"]["advancedSettings"] {
-  const enabled = isObject(value) ? value.enabled : undefined;
-
-  return {
-    enabled: resolveCatalogValue(
-      "workbench.advancedSettings.enabled",
-      enabled
-    ).value
-  };
-}
-
 function readWorkbenchSoundToggleSettings(
   key:
     | "workbench.sound.dialog.enabled"
@@ -181,9 +168,6 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     workbenchValue?.language
   ).value;
   const statusBar = readWorkbenchStatusBarSettings(workbenchValue?.statusBar);
-  const advancedSettings = readWorkbenchAdvancedSettings(
-    workbenchValue?.advancedSettings
-  );
   const sound = readWorkbenchSoundSettings(workbenchValue?.sound);
 
   if (
@@ -191,13 +175,12 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     typeof workbenchValue.fontFamily !== "string" ||
     !validateCatalogValue("workbench.fontFamily", workbenchValue.fontFamily).ok
   ) {
-    return { language, statusBar, advancedSettings, sound };
+    return { language, statusBar, sound };
   }
 
   return {
     language,
     statusBar,
-    advancedSettings,
     sound,
     fontFamily: workbenchValue.fontFamily
   };
@@ -405,11 +388,10 @@ function parsePreviewSettingsForWrite(
 }
 
 // Same validate-and-reject-the-whole-write style as parsePreviewSettingsForWrite:
-// an invalid language/statusBar.visible/advancedSettings.enabled/sound/fontFamily
-// rejects the save request rather than silently dropping just that field
-// (#173 D-9). An absent fontFamily key is valid and preserves sparse storage
-// (#173 D-7); language, statusBar, advancedSettings, and sound are required
-// concrete values.
+// an invalid language/statusBar.visible/sound/fontFamily rejects the save
+// request rather than silently dropping just that field (#173 D-9). An
+// absent fontFamily key is valid and preserves sparse storage (#173 D-7);
+// language, statusBar, and sound are required concrete values.
 function parseWorkbenchStatusBarSettingsForWrite(
   value: unknown
 ): ApplicationSettings["workbench"]["statusBar"] {
@@ -433,31 +415,6 @@ function parseWorkbenchStatusBarSettingsForWrite(
   }
 
   return { visible: resolution.value };
-}
-
-function parseWorkbenchAdvancedSettingsForWrite(
-  value: unknown
-): ApplicationSettings["workbench"]["advancedSettings"] {
-  if (!isObject(value)) {
-    throw new Error("Invalid application settings.");
-  }
-
-  const keys = Object.keys(value);
-
-  if (keys.length !== 1 || !keys.includes("enabled")) {
-    throw new Error("Invalid application settings.");
-  }
-
-  const resolution = resolveCatalogValue(
-    "workbench.advancedSettings.enabled",
-    value.enabled
-  );
-
-  if (!resolution.ok) {
-    throw new Error("Invalid application settings.");
-  }
-
-  return { enabled: resolution.value };
 }
 
 function parseWorkbenchSoundToggleSettingsForWrite(
@@ -540,13 +497,12 @@ function parseWorkbenchSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
-  const expectedKeyCount = hasFontFamily ? 5 : 4;
+  const expectedKeyCount = hasFontFamily ? 4 : 3;
 
   if (
     keys.length !== expectedKeyCount ||
     !keys.includes("language") ||
     !keys.includes("statusBar") ||
-    !keys.includes("advancedSettings") ||
     !keys.includes("sound")
   ) {
     throw new Error("Invalid application settings.");
@@ -562,16 +518,12 @@ function parseWorkbenchSettingsForWrite(
   }
 
   const statusBar = parseWorkbenchStatusBarSettingsForWrite(value.statusBar);
-  const advancedSettings = parseWorkbenchAdvancedSettingsForWrite(
-    value.advancedSettings
-  );
   const sound = parseWorkbenchSoundSettingsForWrite(value.sound);
 
   if (!hasFontFamily) {
     return {
       language: languageResolution.value,
       statusBar,
-      advancedSettings,
       sound
     };
   }
@@ -586,7 +538,6 @@ function parseWorkbenchSettingsForWrite(
   return {
     language: languageResolution.value,
     statusBar,
-    advancedSettings,
     sound,
     fontFamily: value.fontFamily
   };

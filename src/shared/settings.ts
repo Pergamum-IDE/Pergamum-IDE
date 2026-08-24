@@ -54,10 +54,6 @@ export interface WorkbenchStatusBarSettings {
   visible: boolean;
 }
 
-export interface WorkbenchAdvancedSettings {
-  enabled: boolean;
-}
-
 export interface WorkbenchSoundToggleSettings {
   enabled: boolean;
 }
@@ -109,7 +105,6 @@ export interface ApplicationFilesSettings {
 export interface ApplicationWorkbenchSettings {
   language: Language;
   statusBar: WorkbenchStatusBarSettings;
-  advancedSettings: WorkbenchAdvancedSettings;
   sound: WorkbenchSoundSettings;
   fontFamily?: string;
 }
@@ -149,7 +144,6 @@ export interface EffectivePreviewSettings {
 export interface EffectiveWorkbenchSettings {
   language: Language;
   statusBar: WorkbenchStatusBarSettings;
-  advancedSettings: WorkbenchAdvancedSettings;
   sound: WorkbenchSoundSettings;
   fontFamily: string;
 }
@@ -194,9 +188,6 @@ export const builtInDefaultSettings: EffectiveSettings = {
     language: getCatalogDefaultValue("workbench.language"),
     statusBar: {
       visible: getCatalogDefaultValue("workbench.statusBar.visible")
-    },
-    advancedSettings: {
-      enabled: getCatalogDefaultValue("workbench.advancedSettings.enabled")
     },
     sound: {
       enabled: getCatalogDefaultValue("workbench.sound.enabled"),
@@ -252,9 +243,6 @@ export const defaultApplicationSettings: ApplicationSettings = {
     statusBar: {
       visible: builtInDefaultSettings.workbench.statusBar.visible
     },
-    advancedSettings: {
-      enabled: builtInDefaultSettings.workbench.advancedSettings.enabled
-    },
     sound: {
       enabled: builtInDefaultSettings.workbench.sound.enabled,
       dialog: {
@@ -298,10 +286,6 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       language: defaultApplicationSettings.workbench.language,
       statusBar: {
         visible: defaultApplicationSettings.workbench.statusBar.visible
-      },
-      advancedSettings: {
-        enabled:
-          defaultApplicationSettings.workbench.advancedSettings.enabled
       },
       sound: {
         enabled: defaultApplicationSettings.workbench.sound.enabled,
@@ -365,9 +349,6 @@ export function resolveEffectiveSettings(
       language: applicationSettings.workbench.language,
       statusBar: {
         visible: applicationSettings.workbench.statusBar.visible
-      },
-      advancedSettings: {
-        enabled: applicationSettings.workbench.advancedSettings.enabled
       },
       sound: {
         enabled: applicationSettings.workbench.sound.enabled,

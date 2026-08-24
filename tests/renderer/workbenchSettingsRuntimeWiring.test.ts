@@ -68,22 +68,22 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(stylesSource).toContain(".editorHost .cm-scroller");
   });
 
-  it("SettingsPanel keeps the advanced-gated files/command palette controls behind the workbench.advancedSettings.enabled guard (#230: catalog-driven, same gating behavior)", () => {
+  it("SettingsPanel no longer gates files.newFile.* behind the legacy Advanced Settings toggle (#232)", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
     );
 
-    expect(settingsPanelSource).toContain(
-      "settings.workbench.advancedSettings.enabled"
+    expect(settingsPanelSource).not.toContain("advancedGatedKeys");
+    expect(settingsPanelSource).not.toContain(
+      "workbench.advancedSettings.enabled"
     );
-    expect(settingsPanelSource).toContain("advancedGatedKeys");
+    expect(settingsPanelSource).not.toContain("onConfirmEnableAdvancedSettings");
     expect(settingsPanelSource).toContain('"files.newFile.lineEnding"');
     expect(settingsPanelSource).toContain('"files.newFile.encoding"');
-    expect(settingsPanelSource).toContain("onConfirmEnableAdvancedSettings");
   });
 
-  it("SettingsPanel keeps Command Palette description controls as advanced-gated settings, with unit suffixes for the marquee number controls (#230: catalog-driven)", () => {
+  it("SettingsPanel keeps Command Palette description controls directly editable, with unit suffixes for the marquee number controls, and no advanced gate (#232: catalog-driven)", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
@@ -98,7 +98,7 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(settingsPanelSource).toContain(
       '"commandPalette.description.marquee.speed"'
     );
-    expect(settingsPanelSource).toContain("advancedGatedKeys");
+    expect(settingsPanelSource).not.toContain("advancedGatedKeys");
     expect(settingsPanelSource).toContain("marqueeKeys");
     expect(settingsPanelSource).toContain("settings.unit.ms");
     expect(settingsPanelSource).toContain("settings.unit.pxPerSecond");

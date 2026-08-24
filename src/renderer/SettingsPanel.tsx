@@ -25,7 +25,6 @@ interface SettingsPanelProps {
   isLoading: boolean;
   error: string | null;
   translate: Translate;
-  onConfirmEnableAdvancedSettings: () => Promise<boolean>;
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
 }
 
@@ -59,14 +58,6 @@ const unwiredKeys = new Set<SettingKey>([
   "preview.renderer"
 ]);
 
-const advancedGatedKeys = new Set<SettingKey>([
-  "files.newFile.lineEnding",
-  "files.newFile.encoding",
-  "commandPalette.description.enable",
-  "commandPalette.description.marquee.delay",
-  "commandPalette.description.marquee.speed"
-]);
-
 const marqueeKeys = new Set<SettingKey>([
   "commandPalette.description.marquee.delay",
   "commandPalette.description.marquee.speed"
@@ -98,8 +89,6 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.workbench.language;
     case "workbench.statusBar.visible":
       return settings.workbench.statusBar.visible;
-    case "workbench.advancedSettings.enabled":
-      return settings.workbench.advancedSettings.enabled;
     case "workbench.sound.enabled":
       return settings.workbench.sound.enabled;
     case "workbench.sound.dialog.enabled":
@@ -196,13 +185,6 @@ function buildNextSettings(
         workbench: {
           ...settings.workbench,
           statusBar: { visible: Boolean(rawValue) }
-        }
-      });
-    case "workbench.advancedSettings.enabled":
-      return saveRequest(settings, {
-        workbench: {
-          ...settings.workbench,
-          advancedSettings: { enabled: Boolean(rawValue) }
         }
       });
     case "workbench.sound.enabled":
@@ -312,26 +294,12 @@ function buildNextSettings(
   throw new Error(`Unhandled setting key: ${String(exhaustiveCheck)}`);
 }
 
-async function handleSettingChange(
+function handleSettingChange(
   item: SettingCatalogItem,
   rawValue: unknown,
   settings: ApplicationSettings,
-  onChangeSettings: (settings: SaveApplicationSettingsRequest) => void,
-  onConfirmEnableAdvancedSettings: () => Promise<boolean>
-): Promise<void> {
-  if (item.key === "workbench.advancedSettings.enabled") {
-    const enabling = Boolean(rawValue);
-    const currentlyEnabled = settings.workbench.advancedSettings.enabled;
-
-    if (enabling && !currentlyEnabled) {
-      const confirmed = await onConfirmEnableAdvancedSettings();
-
-      if (!confirmed) {
-        return;
-      }
-    }
-  }
-
+  onChangeSettings: (settings: SaveApplicationSettingsRequest) => void
+): void {
   const nextSettings = buildNextSettings(item.key, rawValue, settings);
 
   if (nextSettings) {
@@ -352,13 +320,6 @@ function isSettingDisabled(
     return true;
   }
 
-  if (
-    advancedGatedKeys.has(item.key) &&
-    !settings.workbench.advancedSettings.enabled
-  ) {
-    return true;
-  }
-
   if (marqueeKeys.has(item.key) && !settings.commandPalette.description.enable) {
     return true;
   }
@@ -368,16 +329,6 @@ function isSettingDisabled(
   }
 
   return false;
-}
-
-function showsAdvancedDisabledHint(
-  item: SettingCatalogItem,
-  settings: ApplicationSettings
-): boolean {
-  return (
-    advancedGatedKeys.has(item.key) &&
-    !settings.workbench.advancedSettings.enabled
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -550,11 +501,6 @@ function SettingItemRow({
         </p>
       ) : null}
       <code className="settingsItemKey">{item.key}</code>
-      {showsAdvancedDisabledHint(item, settings) ? (
-        <p className="settingsAdvancedDisabled">
-          {translate("settings.application.advanced.disabledDescription")}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -575,7 +521,6 @@ export function SettingsPanelView({
   isLoading,
   error,
   translate,
-  onConfirmEnableAdvancedSettings,
   onChangeSettings,
   selectedCategoryId,
   onSelectCategory,
@@ -584,8 +529,8 @@ export function SettingsPanelView({
 }: SettingsPanelViewProps): JSX.Element {
   // Only categories that currently have at least one registered catalog
   // item are shown in the left pane — settingCategoryCatalog itself keeps
-  // every category (e.g. "project", "advanced" have none registered yet),
-  // this is purely a display-time filter for the pane.
+  // every category (e.g. "project" has none registered yet), this is
+  // purely a display-time filter for the pane.
   const categories = sortSettingCategoryCatalog((key) =>
     translateI18nKey(translate, key)
   ).filter((category) =>
@@ -599,13 +544,7 @@ export function SettingsPanelView({
   );
 
   function handleChange(item: SettingCatalogItem, rawValue: unknown): void {
-    void handleSettingChange(
-      item,
-      rawValue,
-      settings,
-      onChangeSettings,
-      onConfirmEnableAdvancedSettings
-    );
+    handleSettingChange(item, rawValue, settings, onChangeSettings);
   }
 
   return (
