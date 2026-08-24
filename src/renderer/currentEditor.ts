@@ -1,6 +1,7 @@
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import {
   createEditorIdForPath,
+  createFileEditorIdForPath,
   createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   type ActiveProjectContext,
@@ -100,10 +101,7 @@ export function editorIdForCurrentEditor(
     case "markdown":
       switch (editor.document.kind) {
         case "file":
-          return createEditorIdForPath(
-            editor.document.path,
-            activeProjectContext
-          );
+          return createFileEditorIdForPath(editor.document.path);
         case "project":
           return createProjectDocumentEditorId(
             editor.document.relativePath,

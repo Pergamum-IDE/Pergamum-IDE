@@ -1,7 +1,7 @@
 import type {
   MarkdownFile,
   ProjectDocument,
-  SaveMarkdownResult
+  WriteMarkdownSavedResult
 } from "../shared/api";
 
 export const initialDocumentContent =
@@ -125,7 +125,7 @@ export function markCurrentDocumentSaved(
 
 export function applyStandaloneSaveResult(
   document: CurrentDocument,
-  result: SaveMarkdownResult
+  result: WriteMarkdownSavedResult
 ): FileCurrentDocument {
   return {
     kind: "file",

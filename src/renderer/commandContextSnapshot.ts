@@ -9,6 +9,7 @@ export interface CommandContextSnapshotInput {
   readonly editorKindMarkdown: boolean;
   readonly editorKindGlossary: boolean;
   readonly editorDocumentProjectOwned: boolean;
+  readonly activeEditorSaveBlockedByReadOnlyProjectRootForUi: boolean;
   readonly occurrenceTrackingActive: boolean;
 }
 
@@ -43,6 +44,8 @@ export function buildCommandContextSnapshot(
     "editor.kind.markdown": input.editorKindMarkdown,
     "editor.kind.glossary": input.editorKindGlossary,
     "editor.document.projectOwned": input.editorDocumentProjectOwned,
+    "activeEditor.saveBlockedByReadOnlyProjectRootForUi":
+      input.activeEditorSaveBlockedByReadOnlyProjectRootForUi,
     "glossary.occurrences.tracking.active": input.occurrenceTrackingActive
   });
 }

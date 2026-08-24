@@ -75,6 +75,32 @@ describe("ConfirmDialog structure (#182)", () => {
     expect(markup).toContain("メッセージ本文");
   });
 
+  it("renders a shared path block without rewriting the displayed path", () => {
+    const selectedPath = String.raw`C:\Project\Read Only\chapters\..\Draft  01.pergamum`;
+    const markup = renderDialog({
+      options: baseOptions({
+        message: {
+          kind: "plainTextWithPathBlock",
+          beforeText: "",
+          pathBlock: {
+            label: "Save location:",
+            value: selectedPath
+          },
+          afterText:
+            "The selected save location is a Pergamum project file or internal management file."
+        }
+      })
+    });
+
+    expect(markup).toContain("appDialogPathBlock");
+    expect(markup).toContain(">Save location:<");
+    expect(markup).toContain(`>${selectedPath}<`);
+    expect(markup).toContain(
+      "The selected save location is a Pergamum project file or internal management file."
+    );
+    expect(markup).not.toContain('class="appDialogMessageText"></p>');
+  });
+
   it("preserves newline characters in the message (pre-wrap class + literal newline in output)", () => {
     const markup = renderDialog({
       options: baseOptions({

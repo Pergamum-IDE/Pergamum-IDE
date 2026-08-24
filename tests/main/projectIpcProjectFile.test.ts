@@ -402,6 +402,56 @@ describe("project file IPC foundation", () => {
     }
   });
 
+  it("rejects project document Save when the current project is read-only", async () => {
+    const projectFilePath = path.join(projectRootPath, "Readonly Save.pergamum");
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: projectFilePath
+    });
+
+    const createProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.createProject,
+      createLoggerMock(),
+      ownershipManager
+    );
+    const pending = expectPendingReadOnlyProjectOpen(
+      await createProjectHandler({ sender: {} })
+    );
+    const confirmReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmReadOnlyProjectOpen
+    );
+
+    await confirmReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
+    const saveProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.saveProjectDocument
+    );
+    const relativePath = "chapter.md";
+    const content = "SECRET_MANUSCRIPT_TEXT_MARKER";
+
+    await expectSanitizedProjectRejection(
+      saveProjectDocumentHandler(
+        { sender: {} },
+        {
+          relativePath,
+          content
+        }
+      ) as Promise<unknown>,
+      "invalidPath",
+      [projectRootPath, relativePath, content]
+    );
+    await expect(
+      fs.access(path.join(projectRootPath, relativePath))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {
     const projectFilePath = path.join(projectRootPath, "Readonly Title.pergamum");
     const titleWindow = createTitleWindowMock();

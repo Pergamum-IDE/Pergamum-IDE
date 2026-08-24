@@ -22,6 +22,7 @@ import {
   type ClipboardAdapter
 } from "./clipboardAdapter";
 import { dialogCopyButtonIconSvg, dialogIconSvgByKind } from "./dialogIcons";
+import { DialogMessage } from "./DialogMessage";
 
 export interface ConfirmDialogProps {
   options: AppConfirmDialogOptions;
@@ -227,9 +228,7 @@ export function ConfirmDialog({
           </h2>
         </div>
         <div className="appDialogBody">
-          <p id={messageId} className="appDialogMessage">
-            {options.message.text}
-          </p>
+          <DialogMessage id={messageId} message={options.message} />
         </div>
         <div className="appDialogFooter">
           <div className="appDialogFooterCopy">

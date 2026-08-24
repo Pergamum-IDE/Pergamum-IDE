@@ -142,6 +142,24 @@ describe("evaluateCommandEnablement", () => {
     });
   });
 
+  it("reports readOnlyProject when read-only root UI containment blocks Save", () => {
+    expect(
+      evaluateCommandEnablementResult(
+        {
+          not: {
+            key: "activeEditor.saveBlockedByReadOnlyProjectRootForUi"
+          }
+        },
+        {
+          "activeEditor.saveBlockedByReadOnlyProjectRootForUi": true
+        }
+      )
+    ).toEqual({
+      enabled: false,
+      disabledReason: "readOnlyProject"
+    });
+  });
+
   it("keeps read-only reason behind ordinary allOf prerequisites", () => {
     const expression: CommandEnablementExpression = {
       allOf: [

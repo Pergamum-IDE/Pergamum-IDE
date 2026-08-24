@@ -18,7 +18,11 @@ import {
   type WriteMarkdownRequest,
   type WriteMarkdownResult
 } from "../shared/api";
-import { createEditorIdForPath } from "../shared/editorId";
+import type { AppPlatform } from "../shared/platform";
+import {
+  isPathEqualOrInsideDirectory,
+  isProtectedPergamumDataFilePath
+} from "../shared/saveTargetPolicy";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
   debugLogExtensionForPath,
@@ -32,7 +36,11 @@ import {
   markdownWriteMetadata,
   sanitizedFileIoError
 } from "./markdownFileIo";
-import { currentProjectRootPath } from "./projectIpc";
+import {
+  currentActiveProjectFilePath,
+  currentProjectRootPath,
+  projectWriteLockDirectoryPath
+} from "./projectIpc";
 
 const markdownFilters = [
   {
@@ -123,26 +131,129 @@ function ensureMarkdownExtension(filePath: string): string {
   return `${filePath}.md`;
 }
 
-function assertStandaloneSaveTargetAllowed(
-  filePath: string,
-  projectRootPath: string | null
-): void {
-  if (!projectRootPath) {
-    return;
+function nodePlatformToAppPlatform(platform: NodeJS.Platform): AppPlatform {
+  switch (platform) {
+    case "win32":
+      return "windows";
+    case "darwin":
+      return "macos";
+    case "linux":
+      return "linux";
+    default:
+      return "other";
   }
+}
 
-  const editorId = createEditorIdForPath(filePath, {
-    rootPath: projectRootPath
-  });
+function nodeErrorCode(error: unknown): string | null {
+  return typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+    ? (error as { code: string }).code
+    : null;
+}
 
-  if (editorId.kind === "projectDocument") {
-    const error = new Error(
-      "Standalone save inside the active project is not supported."
-    ) as Error & { code: string };
-    error.code = "ERR_UNSUPPORTED_SAVE_TARGET";
+async function realpathIfExists(filePath: string): Promise<string | null> {
+  try {
+    return await fs.realpath(filePath);
+  } catch (error) {
+    if (nodeErrorCode(error) === "ENOENT") {
+      return null;
+    }
 
     throw error;
   }
+}
+
+async function realpathForSaveTarget(filePath: string): Promise<string | null> {
+  const absolutePath = path.resolve(filePath);
+  let existingTargetRealpath: string | null;
+
+  try {
+    existingTargetRealpath = await realpathIfExists(absolutePath);
+  } catch {
+    return null;
+  }
+
+  if (existingTargetRealpath) {
+    return existingTargetRealpath;
+  }
+
+  try {
+    const parentRealpath = await fs.realpath(path.dirname(absolutePath));
+
+    return path.join(parentRealpath, path.basename(absolutePath));
+  } catch {
+    return null;
+  }
+}
+
+async function protectedTargetRejectionReason(
+  filePath: string
+): Promise<"protected" | "unverifiable" | null> {
+  if (isProtectedPergamumDataFilePath(filePath)) {
+    return "protected";
+  }
+
+  const projectFilePath = currentActiveProjectFilePath();
+
+  if (!projectFilePath) {
+    return null;
+  }
+
+  const platform = nodePlatformToAppPlatform(process.platform);
+  const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+  const resolvedLockDirectoryPath = path.resolve(lockDirectoryPath);
+
+  try {
+    if (
+      isPathEqualOrInsideDirectory(
+        path.resolve(filePath),
+        resolvedLockDirectoryPath,
+        platform
+      )
+    ) {
+      return "protected";
+    }
+  } catch {
+    return "unverifiable";
+  }
+
+  const targetRealpath = await realpathForSaveTarget(filePath);
+
+  if (!targetRealpath) {
+    return "unverifiable";
+  }
+
+  const lockDirectoryCandidates = [resolvedLockDirectoryPath];
+  let lockDirectoryRealpath: string | null;
+
+  try {
+    lockDirectoryRealpath = await realpathIfExists(lockDirectoryPath);
+  } catch {
+    return "unverifiable";
+  }
+
+  if (lockDirectoryRealpath) {
+    lockDirectoryCandidates.push(lockDirectoryRealpath);
+  }
+
+  return lockDirectoryCandidates.some((candidate) =>
+    isPathEqualOrInsideDirectory(targetRealpath, candidate, platform)
+  )
+    ? "protected"
+    : null;
+}
+
+async function classifyStandaloneSaveTarget(
+  filePath: string
+): Promise<
+  | { kind: "allowed" }
+  | { kind: "rejected"; reason: "protected" | "unverifiable" }
+> {
+  const reason = await protectedTargetRejectionReason(filePath);
+
+  return reason ? { kind: "rejected", reason } : { kind: "allowed" };
 }
 
 async function selectMarkdownSavePath(
@@ -164,7 +275,6 @@ async function selectMarkdownSavePath(
   }
 
   const filePath = ensureMarkdownExtension(result.filePath);
-  assertStandaloneSaveTargetAllowed(filePath, currentProjectRootPath());
 
   return {
     path: filePath
@@ -178,7 +288,13 @@ async function writeStandaloneMarkdown(
   startedAt: number
 ): Promise<WriteMarkdownResult> {
   const normalizedPath = ensureMarkdownExtension(filePath);
-  assertStandaloneSaveTargetAllowed(normalizedPath, currentProjectRootPath());
+  const targetClassification =
+    await classifyStandaloneSaveTarget(normalizedPath);
+
+  if (targetClassification.kind === "rejected") {
+    return targetClassification;
+  }
+
   const metadata = markdownWriteMetadata(content);
 
   await fs.writeFile(normalizedPath, content, "utf8");
@@ -206,6 +322,7 @@ async function writeStandaloneMarkdown(
   });
 
   return {
+    kind: "saved",
     path: normalizedPath,
     encoding: metadata.encoding,
     lineEnding: metadata.lineEnding,
@@ -346,7 +463,12 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           startedAt
         );
 
+        if (result.kind === "rejected") {
+          return result;
+        }
+
         return {
+          kind: "saved",
           path: result.path
         };
       } catch (error) {

@@ -27,6 +27,12 @@ import {
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult
 } from "../shared/api";
+import type { AppPlatform } from "../shared/platform";
+import {
+  isPathEqualOrInsideDirectory,
+  projectWriteLockDirectoryPathForProjectRoot,
+  isProtectedPergamumDataFilePath
+} from "../shared/saveTargetPolicy";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
   debugLogExtensionForPath,
@@ -130,14 +136,24 @@ const createProjectConflictDialogButtonIndex = {
   confirm: 0,
   cancel: 1
 } as const;
-const projectWriteLockDirectoryName = ".pergamum.lock";
+function nodePlatformToAppPlatform(platform: NodeJS.Platform): AppPlatform {
+  switch (platform) {
+    case "win32":
+      return "windows";
+    case "darwin":
+      return "macos";
+    case "linux":
+      return "linux";
+    default:
+      return "other";
+  }
+}
 
 export function projectWriteLockDirectoryPath(
   projectFilePath: string
 ): string {
-  return path.join(
-    resolveProjectRoot(projectFilePath),
-    projectWriteLockDirectoryName
+  return projectWriteLockDirectoryPathForProjectRoot(
+    resolveProjectRoot(projectFilePath)
   );
 }
 
@@ -237,6 +253,45 @@ export function requireCurrentActiveProjectFilePath(): string {
   }
 
   return currentProjectState.activeProjectFilePath;
+}
+
+function unsupportedProjectSaveTargetError(): Error & { code: string } {
+  const error = new Error(
+    "Project document save is not available for the current project."
+  ) as Error & { code: string };
+  error.code = "ERR_UNSUPPORTED_SAVE_TARGET";
+
+  return error;
+}
+
+function assertCurrentProjectDocumentSaveAllowed(): void {
+  if (currentProjectState?.accessMode.kind === "readOnly") {
+    throw unsupportedProjectSaveTargetError();
+  }
+}
+
+function assertProjectDocumentSaveTargetAllowed(documentPath: string): void {
+  if (isProtectedPergamumDataFilePath(documentPath)) {
+    throw unsupportedProjectSaveTargetError();
+  }
+
+  const lockDirectoryPath = projectWriteLockDirectoryPath(
+    requireCurrentActiveProjectFilePath()
+  );
+
+  try {
+    if (
+      isPathEqualOrInsideDirectory(
+        path.resolve(documentPath),
+        path.resolve(lockDirectoryPath),
+        nodePlatformToAppPlatform(process.platform)
+      )
+    ) {
+      throw unsupportedProjectSaveTargetError();
+    }
+  } catch {
+    throw unsupportedProjectSaveTargetError();
+  }
 }
 
 export function requireCurrentProjectAccessMode(): ProjectAccessMode {
@@ -1287,7 +1342,9 @@ export function registerProjectIpc(
 
       try {
         request = parseSaveProjectDocumentRequest(rawRequest);
+        assertCurrentProjectDocumentSaveAllowed();
         const documentPath = resolveProjectDocumentPath(request.relativePath);
+        assertProjectDocumentSaveTargetAllowed(documentPath);
         const metadata = markdownWriteMetadata(request.content);
         await fs.writeFile(documentPath, request.content, "utf8");
         const rootPath = requireCurrentProjectRootPath();

@@ -108,7 +108,7 @@ describe("file I/O workflow translations (#202)", () => {
     );
   });
 
-  it("defines read-only Save As success dialog strings for ja and en", () => {
+  it("defines read-only Save As policy dialog strings for ja and en", () => {
     expect(t("ja", "command.disabled.readOnlyProject")).toBe(
       "読み取り専用のため使用できません"
     );
@@ -117,25 +117,87 @@ describe("file I/O workflow translations (#202)", () => {
     );
     expect(t("ja", "dialog.icon.info")).toBe("情報");
     expect(t("en", "dialog.icon.info")).toBe("Information");
-    expect(t("ja", "dialog.readOnlyProjectSaveAsSucceeded.title")).toBe(
-      "読み取り専用プロジェクトから保存しました"
+    expect(t("ja", "dialog.readOnlyProjectSaveAsInsideRoot.title")).toBe(
+      "このプロジェクトは使用中として記録されています"
     );
-    expect(t("en", "dialog.readOnlyProjectSaveAsSucceeded.title")).toBe(
-      "Saved from Read-only Project"
+    expect(t("en", "dialog.readOnlyProjectSaveAsInsideRoot.title")).toBe(
+      "This project is recorded as in use"
     );
-    expect(
-      t("ja", "dialog.readOnlyProjectSaveAsSucceeded.message", {
-        fileName: "copy.md"
-      })
-    ).toBe(
-      "保存したファイル:\ncopy.md\n\nプロジェクトの状態に従い、このファイルも読み取り専用として扱われます。\n現在の文書は編集可能なファイルには切り替わりません。"
+    expect(t("ja", "dialog.readOnlyProjectSaveAsInsideRoot.message")).toBe(
+      "このプロジェクトは使用中として記録されているため、読み取り専用で開かれています。"
     );
     expect(
-      t("en", "dialog.readOnlyProjectSaveAsSucceeded.message", {
-        fileName: "copy.md"
-      })
+      t("ja", "dialog.readOnlyProjectSaveAsInsideRoot.messageAfterTarget")
     ).toBe(
-      "Saved file:\ncopy.md\n\nFollowing the project state, this file is also treated as read-only.\nThe current document will not switch to an editable file."
+      "選択した保存先は、この読み取り専用プロジェクトの配下です。\n" +
+        "ここへ保存すると、このプロジェクト内に新しいファイルを書き込みます。\n\n" +
+        "そのファイルは、現在のプロジェクト状態にすぐ反映されない可能性があります。\n\n" +
+        "保存しますか？"
+    );
+    expect(t("en", "dialog.readOnlyProjectSaveAsInsideRoot.message")).toBe(
+      "This project is open in read-only mode because it is recorded as in use."
+    );
+    expect(
+      t("en", "dialog.readOnlyProjectSaveAsInsideRoot.messageAfterTarget")
+    ).toBe(
+      "The selected save location is inside this read-only project.\n" +
+        "Saving here will write a new file into this project.\n\n" +
+        "That file may not be reflected in the current project state immediately.\n\n" +
+        "Save anyway?"
+    );
+    expect(t("ja", "dialog.readOnlyProjectSaveAsInsideRoot.targetLabel")).toBe(
+      "保存先:"
+    );
+    expect(t("en", "dialog.readOnlyProjectSaveAsInsideRoot.targetLabel")).toBe(
+      "Target file:"
+    );
+    expect(t("ja", "dialog.readOnlyProjectSaveAsInsideRoot.message")).not.toContain(
+      "{path}"
+    );
+    expect(t("en", "dialog.readOnlyProjectSaveAsInsideRoot.message")).not.toContain(
+      "{path}"
+    );
+    expect(t("ja", "dialog.readOnlyProjectSaveAsInsideRoot.save")).toBe(
+      "理解して保存"
+    );
+    expect(t("en", "dialog.readOnlyProjectSaveAsInsideRoot.save")).toBe(
+      "Save Anyway"
+    );
+    expect(t("ja", "dialog.saveAsRejected.protected.title")).toBe(
+      "この場所には保存できません"
+    );
+    expect(t("en", "dialog.saveAsRejected.protected.title")).toBe(
+      "Cannot save to this location"
+    );
+    expect(t("ja", "dialog.saveAsRejected.protected.message")).toBe(
+      "選択された保存先は Pergamum のプロジェクトファイルまたは内部管理ファイルです。\n\n" +
+        "プロジェクトを破損する可能性があるため、この場所には保存できません。\n" +
+        "別の場所または別のファイル名を選択してください。"
+    );
+    expect(t("en", "dialog.saveAsRejected.protected.message")).toBe(
+      "The selected save location is a Pergamum project file or internal management file.\n\n" +
+        "Saving there could damage the project, so Pergamum cannot save to this location.\n" +
+        "Choose another location or file name."
+    );
+    expect(t("ja", "dialog.saveAsRejected.targetLabel")).toBe("保存先:");
+    expect(t("en", "dialog.saveAsRejected.targetLabel")).toBe(
+      "Save location:"
+    );
+    expect(t("ja", "dialog.saveAsRejected.unverifiable.title")).toBe(
+      "保存先を検証できませんでした"
+    );
+    expect(t("en", "dialog.saveAsRejected.unverifiable.title")).toBe(
+      "Could not verify save location"
+    );
+    expect(t("ja", "dialog.saveAsRejected.unverifiable.message")).toBe(
+      "選択された保存先が Pergamum の内部管理ファイルでないことを確認できませんでした。\n\n" +
+        "安全のため、この場所には保存しません。\n" +
+        "時間をおいて再度お試しください。問題が続く場合は、別の場所を選択してください。"
+    );
+    expect(t("en", "dialog.saveAsRejected.unverifiable.message")).toBe(
+      "Pergamum could not verify that the selected save location is not an internal management file.\n\n" +
+        "For safety, Pergamum will not save to this location.\n" +
+        "Choose another location."
     );
   });
 
@@ -149,13 +211,13 @@ describe("file I/O workflow translations (#202)", () => {
     expect(t("ja", "dialog.readOnlyProjectOpen.message")).toBe(
       "このプロジェクトは既に別のPergamumで開かれています。\n\n" +
         "読み取り専用で開くことができます。\n" +
-        "編集や保存はできませんが、内容を確認できます。\n\n" +
+        "編集や通常保存はできませんが、内容を確認したり、別ファイルとして保存したりできます。\n\n" +
         "プロジェクトを開きますか？"
     );
     expect(t("en", "dialog.readOnlyProjectOpen.message")).toBe(
       "This project is already open in another Pergamum instance.\n\n" +
         "You can open it in read-only mode.\n" +
-        "Editing and saving are unavailable, but you can view the contents.\n\n" +
+        "Editing and normal Save are unavailable, but you can view the contents or save a copy with Save As.\n\n" +
         "Do you want to open the project?"
     );
   });

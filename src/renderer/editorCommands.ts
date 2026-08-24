@@ -19,6 +19,7 @@ export const saveDocumentCommandWhen: CommandEnablementExpression = {
   allOf: [
     { key: "editor.hasDocument" },
     { key: "editor.isDirty" },
+    { not: { key: "activeEditor.saveBlockedByReadOnlyProjectRootForUi" } },
     projectOwnedWriteAllowedCommandWhen
   ]
 };
