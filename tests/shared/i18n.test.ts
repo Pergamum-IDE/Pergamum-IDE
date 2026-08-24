@@ -302,6 +302,15 @@ describe("Application Settings core control translations (#195)", () => {
     );
   });
 
+  it("defines the unwired-setting future-version notice for ja and en (#236)", () => {
+    expect(t("ja", "settings.unwiredSettingNotice")).toBe(
+      "この設定は今後のバージョンで有効化予定です。"
+    );
+    expect(t("en", "settings.unwiredSettingNotice")).toBe(
+      "This setting is planned for a future version."
+    );
+  });
+
   it("defines catalog label and description keys used by Application Settings controls", () => {
     for (const language of ["ja", "en"] as const) {
       for (const key of [

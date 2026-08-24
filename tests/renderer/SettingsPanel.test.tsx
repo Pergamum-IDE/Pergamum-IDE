@@ -1010,6 +1010,87 @@ describe("SettingsPanelView language options (#230: catalog-driven, not language
   });
 });
 
+describe("SettingsPanelView unwired settings clarity (#236)", () => {
+  it("keeps workbench.colorTheme and preview.renderer visible and rendered", () => {
+    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+      const element = settingsPanelViewElement("en", {
+        searchQuery: isolate(key)
+      });
+
+      expect(controlElement(element, key)).toBeDefined();
+    }
+  });
+
+  it("keeps workbench.colorTheme and preview.renderer controls disabled", () => {
+    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+      const element = settingsPanelViewElement("en", {
+        searchQuery: isolate(key)
+      });
+
+      expect(controlElement(element, key).props.disabled).toBe(true);
+    }
+  });
+
+  it("shows the localized planned-for-future-version notice for unwired items, in ja and en", () => {
+    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+      const markupEn = renderSettingsPanelView("en", {
+        searchQuery: isolate(key)
+      });
+      const markupJa = renderSettingsPanelView("ja", {
+        searchQuery: isolate(key)
+      });
+
+      expect(markupEn).toContain(t("en", "settings.unwiredSettingNotice"));
+      expect(markupJa).toContain(t("ja", "settings.unwiredSettingNotice"));
+    }
+  });
+
+  it("does not show the unwired notice for a normal wired item", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("editor.fontFamily")
+    });
+
+    expect(markup).not.toContain(t("en", "settings.unwiredSettingNotice"));
+  });
+
+  it("search still finds workbench.colorTheme and preview.renderer by key, from any selected category", () => {
+    const translate = translateFor("en");
+
+    expect(
+      getVisibleSettingCatalogItems(
+        "workbench.colorTheme",
+        "commands",
+        translate
+      ).map((item) => item.key)
+    ).toEqual(["workbench.colorTheme"]);
+    expect(
+      getVisibleSettingCatalogItems(
+        "preview.renderer",
+        "commands",
+        translate
+      ).map((item) => item.key)
+    ).toEqual(["preview.renderer"]);
+  });
+
+  it("does not introduce save behavior for unwired settings even if a change handler were invoked", () => {
+    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+      const onChangeSettings = vi.fn();
+      const element = settingsPanelViewElement("en", {
+        searchQuery: isolate(key),
+        onChangeSettings
+      });
+      const input = controlElement(element, key);
+      const onChange = input.props.onChange as
+        | ((event: { target: { value: string; checked: boolean } }) => void)
+        | undefined;
+
+      onChange?.({ target: { value: "something-else", checked: true } });
+
+      expect(onChangeSettings).not.toHaveBeenCalled();
+    }
+  });
+});
+
 describe("SettingsPanelView non-goals guard (#230)", () => {
   it("does not implement an advanced-settings display filter — advanced items remain listed regardless of the advanced toggle", () => {
     const element = settingsPanelViewElement("en", {

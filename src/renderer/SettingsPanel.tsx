@@ -507,6 +507,11 @@ function SettingItemRow({
           {translate("settings.languageRestartRequired")}
         </p>
       ) : null}
+      {unwiredKeys.has(item.key) ? (
+        <p className="settingsDescription">
+          {translate("settings.unwiredSettingNotice")}
+        </p>
+      ) : null}
       <code className="settingsItemKey">{item.key}</code>
     </div>
   );
