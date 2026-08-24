@@ -2206,6 +2206,7 @@ button:active {
 }
 
 .appDialog {
+  --app-dialog-horizontal-padding: 16px;
   display: flex;
   flex-direction: column;
   min-width: 320px;
@@ -2218,11 +2219,32 @@ button:active {
   box-shadow: 0 8px 24px rgba(15, 23, 32, 0.28);
 }
 
+.appInfoDialog {
+  --app-dialog-horizontal-padding: 20px;
+  width: min(560px, calc(100vw - 32px));
+  max-width: 560px;
+  max-height: calc(100vh - 48px);
+}
+
+.appInfoDialogHiddenTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .appDialogHeader {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  padding-block: 12px;
+  padding-inline: var(--app-dialog-horizontal-padding);
   background: var(--app-dialog-header-background);
   color: var(--app-dialog-header-foreground);
 }
@@ -2271,7 +2293,15 @@ button:active {
 }
 
 .appDialogBody {
-  padding: 16px;
+  padding-block: 16px;
+  padding-inline: var(--app-dialog-horizontal-padding);
+}
+
+.appInfoDialogBody {
+  min-height: 0;
+  overflow: auto;
+  padding-block: 20px;
+  padding-inline: var(--app-dialog-horizontal-padding);
 }
 
 .appDialogMessage {
@@ -2284,8 +2314,12 @@ button:active {
   align-items: center;
   gap: 12px;
   padding-block: 12px;
-  padding-inline: 16px;
+  padding-inline: var(--app-dialog-horizontal-padding);
   border-top: 1px solid var(--app-dialog-border);
+}
+
+.appInfoDialogFooter {
+  justify-content: flex-end;
 }
 
 .appDialogFooterCopy {
@@ -2448,4 +2482,292 @@ button:active {
   min-width: 0;
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+.aboutDialogContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.aboutDialogBranding {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  padding-block-start: 2px;
+  padding-inline: 20px 24px;
+}
+
+.aboutDialogAppIcon {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.aboutDialogLogo {
+  display: block;
+  width: min(320px, calc(100% - 72px));
+  max-height: 74px;
+  flex: 0 1 320px;
+  min-width: 0;
+  object-fit: contain;
+}
+
+.aboutDialogTagline,
+.aboutDialogSection p {
+  margin: 0;
+}
+
+.aboutDialogTagline {
+  color: #2b2b2b;
+  font-weight: 600;
+  text-align: center;
+}
+
+.aboutDialogMetadata {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding-block-start: 2px;
+}
+
+.aboutDialogMetadataRow {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.aboutDialogMetadata dt {
+  color: #52616f;
+  font-weight: 700;
+}
+
+.aboutDialogMetadata dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aboutDialogSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.aboutDialogSection + .aboutDialogSection {
+  margin-block-start: 2px;
+}
+
+.aboutDialogSection h3 {
+  margin: 0;
+  color: #52616f;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.aboutDialogLinkButton {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  border: 0;
+  background: transparent;
+  color: #2563a8;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: start;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.aboutDialogLinkButton:hover {
+  background: transparent;
+  color: #1f4f86;
+  text-decoration: underline;
+}
+
+.aboutDialogLinkButton:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.aboutDialogExternalLinkIcon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: -0.125em;
+}
+
+.aboutDialogFooterContent {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.aboutDialogTechnicalInfoControl {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.aboutDialogCopyTechnicalButton {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.aboutDialogCopyTechnicalButton:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.aboutDialogCopyTechnicalIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.aboutDialogCopyToast {
+  position: absolute;
+  inset-block-end: calc(100% + 8px);
+  inset-inline-start: 0;
+  max-width: min(220px, calc(100vw - 64px));
+  animation: aboutDialogCopyToastOpacity
+    var(--about-dialog-copy-feedback-animation-ms) linear forwards;
+  border: 1px solid #17212b;
+  border-radius: 6px;
+  background: #17212b;
+  box-shadow: 0 8px 20px rgba(15, 23, 32, 0.22);
+  color: #ffffff;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  padding-block: 6px;
+  padding-inline: 9px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes aboutDialogCopyToastOpacity {
+  0% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.aboutDialogCopyToast::after {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-start: 14px;
+  width: 8px;
+  height: 8px;
+  border-inline-end: 1px solid #17212b;
+  border-block-end: 1px solid #17212b;
+  background: inherit;
+  content: "";
+  transform: translateY(-4px) rotate(45deg);
+}
+
+.aboutDialogCopyToast-failed {
+  border-color: #7a1f1f;
+  background: #7a1f1f;
+}
+
+@media (max-width: 480px) {
+  .appInfoDialog {
+    width: calc(100vw - 24px);
+    min-width: 0;
+    max-height: calc(100vh - 24px);
+  }
+
+  .aboutDialogBranding {
+    gap: 10px;
+    padding-inline: 10px 14px;
+  }
+
+  .aboutDialogAppIcon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .aboutDialogLogo {
+    width: min(260px, calc(100% - 58px));
+  }
+
+  .aboutDialogFooterContent {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .aboutDialogTechnicalInfoControl {
+    align-items: flex-start;
+  }
+
+  .aboutDialogCopyTechnicalButton,
+  .aboutDialogFooterContent .appDialogActions,
+  .aboutDialogFooterContent .appDialogButton-confirm {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aboutDialogCopyToast {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+@media (forced-colors: active) {
+  .aboutDialogLogo,
+  .aboutDialogAppIcon {
+    forced-color-adjust: none;
+  }
+
+  .aboutDialogLinkButton,
+  .aboutDialogLinkButton:hover {
+    color: LinkText;
+  }
+
+  .aboutDialogTagline {
+    color: CanvasText;
+  }
+
+  .aboutDialogCopyToast {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .aboutDialogCopyToast::after {
+    border-color: CanvasText;
+  }
+
+  .aboutDialogCopyToast-failed {
+    border-color: Highlight;
+    background: Canvas;
+    color: CanvasText;
+  }
 }

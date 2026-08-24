@@ -102,6 +102,18 @@ export const EDIT_CHANNELS = {
   delegateNativeEdit: "edit:delegateNativeEdit"
 } as const;
 
+export const APP_INFO_CHANNELS = {
+  getAppInfo: "appInfo:getAppInfo",
+  openRepository: "appInfo:openRepository",
+  openTypewriterSoundsCredit: "appInfo:openTypewriterSoundsCredit"
+} as const;
+
+export const APP_INFO_EXTERNAL_LINKS = {
+  repository: "https://github.com/Pergamum-IDE/Pergamum-IDE",
+  typewriterSoundsCredit:
+    "https://opengameart.org/content/typewriter-sounds"
+} as const;
+
 export type MarkdownLineEnding =
   | "lf"
   | "crlf"
@@ -247,6 +259,25 @@ export interface GlossarySurfaceLookupRequest {
   surface: string;
 }
 
+export interface PergamumRuntimeInfo {
+  electron: string;
+  chromium: string;
+  node: string;
+  v8: string;
+  osType: string;
+  osRelease: string;
+  platform: string;
+  arch: string;
+}
+
+export interface PergamumAppInfo {
+  name: string;
+  version: string;
+  license: string;
+  copyright: string;
+  runtime: PergamumRuntimeInfo;
+}
+
 export interface PergamumApi {
   /**
    * Renderer-safe application platform (#182), resolved once at preload
@@ -324,5 +355,10 @@ export interface PergamumApi {
     delegateNativeEdit: (
       request: NativeEditDelegationRequest
     ) => Promise<boolean>;
+  };
+  appInfo: {
+    getAppInfo: () => Promise<PergamumAppInfo>;
+    openRepository: () => Promise<void>;
+    openTypewriterSoundsCredit: () => Promise<void>;
   };
 }

@@ -18,7 +18,7 @@ describe("project window title", () => {
         language: "ja"
       })
     ).toBe(defaultProjectWindowTitle);
-    expect(defaultProjectWindowTitle).toBe("Pergamum - a novel IDE-");
+    expect(defaultProjectWindowTitle).toBe("Pergamum - a novel IDE -");
   });
 
   it("builds a project title without a status suffix for readWrite access", () => {

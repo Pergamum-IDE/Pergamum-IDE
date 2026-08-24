@@ -2,6 +2,7 @@ import { defineCommandId } from "./commandRegistry";
 import type { EditorId } from "./editorId";
 
 export const applicationCommandIds = {
+  openAbout: defineCommandId("app.about.open"),
   createProject: defineCommandId("workspace.project.create"),
   openProject: defineCommandId("workspace.project.open"),
   toggleRecentProjects: defineCommandId("workspace.recentProjects.toggle")
@@ -44,6 +45,7 @@ export function isEditCommandId(commandId: string): commandId is EditCommandId {
  * View menu items such as the Command Palette (#130).
  */
 export const applicationMenuCommandIds = [
+  applicationCommandIds.openAbout,
   applicationCommandIds.createProject,
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,

@@ -7,6 +7,7 @@ import {
   type MouseEvent as ReactMouseEvent
 } from "react";
 import type {
+  PergamumAppInfo,
   PergamumProject,
   ProjectOpenResult,
   ProjectDocument,
@@ -51,6 +52,7 @@ import {
 } from "../shared/i18n";
 import { resolveEffectiveSettings } from "../shared/settings";
 import { ActivityBar } from "./ActivityBar";
+import { AboutDialog } from "./dialog/AboutDialog";
 import {
   applicationCommandIds,
   createApplicationCommandTitles,
@@ -362,6 +364,10 @@ export function App(): JSX.Element {
 
   const soundFeedback = soundFeedbackRef.current;
   const dialogOpenerRef = useRef<Element | null>(null);
+  const aboutDialogOpenerRef = useRef<Element | null>(null);
+  const isAboutDialogPendingOrOpenRef = useRef(false);
+  const [aboutDialogAppInfo, setAboutDialogAppInfo] =
+    useState<PergamumAppInfo | null>(null);
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
       dialogController.getPendingRequest()
@@ -478,6 +484,9 @@ export function App(): JSX.Element {
     Promise.resolve()
   );
   const openProjectCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
+  const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
   const openMarkdownDocumentCommandRef = useRef<() => Promise<void>>(() =>
@@ -744,6 +753,7 @@ export function App(): JSX.Element {
     registerApplicationCommands(
       registry,
       {
+        openAbout: () => openAboutDialogCommandRef.current(),
         createProject: () => createProjectCommandRef.current(),
         openProject: () => openProjectCommandRef.current(),
         toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
@@ -932,7 +942,10 @@ export function App(): JSX.Element {
 
     registry.setCommandContextProvider(() => commandContextRef.current);
     registry.setCommandExecutionBlocker(() =>
-      dialogController.getPendingRequest() ? "app_modal_open" : null
+      dialogController.getPendingRequest() ||
+      isAboutDialogPendingOrOpenRef.current
+        ? "app_modal_open"
+        : null
     );
     registry.setOnCommandIgnored((event) => {
       logRendererDebugEvent({
@@ -1352,6 +1365,56 @@ export function App(): JSX.Element {
 
     setIsSettingsTabOpen(false);
     setActiveSpecialTabId((current) => (current === tabId ? null : current));
+  }
+
+  async function openAboutDialog(): Promise<void> {
+    if (isAboutDialogPendingOrOpenRef.current) {
+      return;
+    }
+
+    if (typeof document !== "undefined") {
+      aboutDialogOpenerRef.current = document.activeElement;
+    }
+
+    isAboutDialogPendingOrOpenRef.current = true;
+
+    try {
+      const appInfo = await window.pergamum.appInfo.getAppInfo();
+
+      setAboutDialogAppInfo(appInfo);
+      playDialogShownSound(
+        soundFeedback,
+        effectiveSettings.workbench.sound,
+        reportSoundPlaybackFailure
+      );
+    } catch (error) {
+      isAboutDialogPendingOrOpenRef.current = false;
+      throw error;
+    }
+  }
+
+  function closeAboutDialog(): void {
+    isAboutDialogPendingOrOpenRef.current = false;
+    setAboutDialogAppInfo(null);
+  }
+
+  function reportAboutExternalLinkFailure(error: unknown): void {
+    setStatus({
+      key: "status.commandFailed",
+      values: { message: errorMessage(error, translate) }
+    });
+  }
+
+  function openAboutRepository(): void {
+    void window.pergamum.appInfo
+      .openRepository()
+      .catch(reportAboutExternalLinkFailure);
+  }
+
+  function openAboutTypewriterSoundsCredit(): void {
+    void window.pergamum.appInfo
+      .openTypewriterSoundsCredit()
+      .catch(reportAboutExternalLinkFailure);
   }
 
   function canCloseEditorNow(editorId?: EditorId): boolean {
@@ -2951,6 +3014,7 @@ export function App(): JSX.Element {
 
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
+  openAboutDialogCommandRef.current = openAboutDialog;
   openMarkdownDocumentCommandRef.current = openFile;
   saveCurrentDocumentCommandRef.current = async () => {
     await saveFile();
@@ -3478,6 +3542,18 @@ export function App(): JSX.Element {
           }}
           onClose={() => setIsCommandPaletteOpen(false)}
           lineJumpEditorSnapshot={lineJumpEditorSnapshot}
+        />
+      ) : null}
+
+      {aboutDialogAppInfo ? (
+        <AboutDialog
+          appInfo={aboutDialogAppInfo}
+          translate={translate}
+          clipboardAdapter={navigatorClipboardAdapter}
+          opener={aboutDialogOpenerRef.current}
+          onClose={closeAboutDialog}
+          onOpenRepository={openAboutRepository}
+          onOpenTypewriterSoundsCredit={openAboutTypewriterSoundsCredit}
         />
       ) : null}
 

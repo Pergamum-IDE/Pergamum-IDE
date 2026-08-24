@@ -6,8 +6,12 @@ import {
   createApplicationCommandTitles,
   registerApplicationCommands
 } from "../../src/renderer/applicationCommands";
+import { listCommandPaletteEntries } from "../../src/renderer/commandPaletteEntries";
 
 const titles = {
+  openAbout: "About Pergamum",
+  openAboutDescription:
+    "Show Pergamum version, license, and repository information.",
   createProject: "Create Project",
   createProjectDescription: "Create a new Pergamum project.",
   openProject: "Open Project",
@@ -20,12 +24,13 @@ const titles = {
 const executionOptions = { source: "toolbar" } as const;
 
 describe("application commands", () => {
-  it("registers app-level project and Recent Projects commands", () => {
+  it("registers app-level About, project, and Recent Projects commands", () => {
     const registry = new CommandRegistry();
 
     registerApplicationCommands(
       registry,
       {
+        openAbout: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
         toggleRecentProjects: () => undefined
@@ -34,6 +39,7 @@ describe("application commands", () => {
     );
 
     expect(registry.list().map((command) => command.id)).toEqual([
+      "app.about.open",
       "workspace.project.create",
       "workspace.project.open",
       "workspace.recentProjects.toggle"
@@ -42,6 +48,7 @@ describe("application commands", () => {
 
   it("routes app commands to their controller methods", async () => {
     const registry = new CommandRegistry();
+    const openAbout = vi.fn();
     const createProject = vi.fn();
     const openProject = vi.fn();
     const toggleRecentProjects = vi.fn();
@@ -49,6 +56,7 @@ describe("application commands", () => {
     registerApplicationCommands(
       registry,
       {
+        openAbout,
         createProject,
         openProject,
         toggleRecentProjects
@@ -56,6 +64,7 @@ describe("application commands", () => {
       titles
     );
 
+    await registry.execute(applicationCommandIds.openAbout, executionOptions);
     await registry.execute(
       applicationCommandIds.createProject,
       executionOptions
@@ -66,15 +75,41 @@ describe("application commands", () => {
       executionOptions
     );
 
+    expect(openAbout).toHaveBeenCalledTimes(1);
     expect(createProject).toHaveBeenCalledTimes(1);
     expect(openProject).toHaveBeenCalledTimes(1);
     expect(toggleRecentProjects).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes About command metadata to the Command Palette", () => {
+    const registry = new CommandRegistry();
+
+    registerApplicationCommands(
+      registry,
+      {
+        openAbout: () => undefined,
+        createProject: () => undefined,
+        openProject: () => undefined,
+        toggleRecentProjects: () => undefined
+      },
+      titles
+    );
+
+    expect(listCommandPaletteEntries(registry)[0]).toMatchObject({
+      id: applicationCommandIds.openAbout,
+      title: titles.openAbout,
+      description: titles.openAboutDescription,
+      enabled: true,
+      disabledReason: null
+    });
   });
 
   it("creates localized command titles from command i18n keys", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createApplicationCommandTitles(translate)).toEqual({
+      openAbout: "translated:command.app.about.open",
+      openAboutDescription: "translated:command.app.about.open.description",
       createProject: "translated:command.workspace.project.create",
       createProjectDescription:
         "translated:command.workspace.project.create.description",

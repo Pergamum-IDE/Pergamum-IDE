@@ -12,14 +12,21 @@ describe("application menu command registration", () => {
     registerApplicationCommands(
       registry,
       {
+        openAbout: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
         toggleRecentProjects: () => undefined
       },
       {
+        openAbout: "About Pergamum",
+        openAboutDescription:
+          "Show Pergamum version, license, and repository information.",
         createProject: "Create Project",
+        createProjectDescription: "Create Project",
         openProject: "Open Project",
-        toggleRecentProjects: "Toggle Recent Projects"
+        openProjectDescription: "Open Project",
+        toggleRecentProjects: "Toggle Recent Projects",
+        toggleRecentProjectsDescription: "Toggle Recent Projects"
       }
     );
     registerEditorCommands(

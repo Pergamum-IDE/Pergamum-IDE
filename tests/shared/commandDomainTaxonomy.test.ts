@@ -39,14 +39,21 @@ function buildCoreCommandRegistry(): CommandRegistry {
   registerApplicationCommands(
     registry,
     {
+      openAbout: () => undefined,
       createProject: () => undefined,
       openProject: () => undefined,
       toggleRecentProjects: () => undefined
     },
     {
+      openAbout: "About Pergamum",
+      openAboutDescription:
+        "Show Pergamum version, license, and repository information.",
       createProject: "Create Project",
+      createProjectDescription: "Create Project",
       openProject: "Open Project",
-      toggleRecentProjects: "Toggle Recent Projects"
+      openProjectDescription: "Open Project",
+      toggleRecentProjects: "Toggle Recent Projects",
+      toggleRecentProjectsDescription: "Toggle Recent Projects"
     }
   );
   registerEditorCommands(
@@ -184,14 +191,11 @@ describe("command domain taxonomy", () => {
     expect(reservedNamespaceCommandIds).toEqual([]);
   });
 
-  it("no longer registers any command under the deprecated app domain (#130)", () => {
-    // DEPRECATED_APP_COMMAND_IDS was removed once the last app.* command ID
-    // was renamed; this replaces the old "frozen list" assertion with a
-    // direct check that the deprecated domain is empty going forward.
+  it("keeps the app domain limited to the About command added by #221", () => {
     const registeredAppCommandIds = registeredCoreCommandIds().filter(
       (commandId) => firstCommandIdSegment(commandId) === "app"
     );
 
-    expect(registeredAppCommandIds).toEqual([]);
+    expect(registeredAppCommandIds).toEqual(["app.about.open"]);
   });
 });

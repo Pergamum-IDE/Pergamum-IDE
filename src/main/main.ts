@@ -2,6 +2,7 @@ import { app, BrowserWindow } from "electron";
 import started from "electron-squirrel-startup";
 import path from "node:path";
 import { parseDebugModeFromArgv } from "./debugMode";
+import { registerAppInfoIpc } from "./appInfoIpc";
 import {
   createDebugLogger,
   createDebugLogRuntimeDetails,
@@ -138,6 +139,7 @@ app.whenReady().then(async () => {
     defaultProjectWriteOwnershipManager
   );
   registerSettingsIpc();
+  registerAppInfoIpc();
   void createMainWindow();
 
   app.on("activate", () => {

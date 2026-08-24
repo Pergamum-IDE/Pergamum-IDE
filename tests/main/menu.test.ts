@@ -86,6 +86,7 @@ describe("application menu", () => {
 
   it("keeps the application-menu-sendable allowlist a superset of the File menu", () => {
     for (const commandId of [
+      applicationCommandIds.openAbout,
       applicationCommandIds.createProject,
       applicationCommandIds.openProject,
       editorCommandIds.openMarkdownDocument,
@@ -97,6 +98,36 @@ describe("application menu", () => {
       expect(applicationMenuCommandIds).toContain(commandId);
     }
     expect(applicationMenuCommandIds).toContain(commandPaletteCommandIds.open);
+  });
+
+  it("routes About menu items through the custom app.about.open command", () => {
+    const { window, send } = menuWindowMock();
+    const helpItems = helpMenuItems("win32", { getMainWindow: () => window });
+    const macAppItems = submenuItems(
+      findTopLevelMenu(
+        buildApplicationMenu("en", { getMainWindow: () => window }, "darwin"),
+        "Pergamum"
+      )
+    );
+
+    helpItems.find((item) => item.label === "About Pergamum")?.click?.(
+      {} as never,
+      null as never,
+      {} as never
+    );
+    macAppItems.find((item) => item.label === "About Pergamum")?.click?.(
+      {} as never,
+      null as never,
+      {} as never
+    );
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      applicationCommandIds.openAbout
+    );
+    expect(
+      [...helpItems, ...macAppItems].some((item) => item.role === "about")
+    ).toBe(false);
   });
 
   it("rejects command IDs outside the File menu allowlist in main", () => {
@@ -402,6 +433,15 @@ function viewMenuItems(
 ): MenuItemConstructorOptions[] {
   return submenuItems(
     findTopLevelMenu(buildApplicationMenu("en", options, platform), "View")
+  );
+}
+
+function helpMenuItems(
+  platform: NodeJS.Platform,
+  options: ApplicationMenuOptions = emptyMenuOptions()
+): MenuItemConstructorOptions[] {
+  return submenuItems(
+    findTopLevelMenu(buildApplicationMenu("en", options, platform), "Help")
   );
 }
 

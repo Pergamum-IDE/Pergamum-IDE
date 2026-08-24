@@ -202,7 +202,7 @@ describe("project file IPC foundation", () => {
     await updateCurrentProjectWindowTitle();
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE-"
+      "Pergamum - a novel IDE -"
     );
   });
 
@@ -1014,7 +1014,7 @@ describe("project file IPC foundation", () => {
     await releaseCurrentProjectWriteOwnership();
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE-"
+      "Pergamum - a novel IDE -"
     );
   });
 
