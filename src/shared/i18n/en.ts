@@ -263,6 +263,7 @@ export const enTranslations = {
   "settings.files.newFile.lineEnding.label": "New file line ending",
   "settings.language": "Language",
   "settings.languageRestartRequired": "Language changes take effect after restart.",
+  "settings.unwiredSettingNotice": "This setting is planned for a future version.",
   "settings.showStatusBar": "Show status bar",
   "settings.title": "Settings",
   "settings.unit.ms": "ms",

@@ -261,6 +261,7 @@ export const jaTranslations = {
   "settings.files.newFile.lineEnding.label": "新規ファイルの改行コード",
   "settings.language": "言語",
   "settings.languageRestartRequired": "言語設定は再起動後に反映されます。",
+  "settings.unwiredSettingNotice": "この設定は今後のバージョンで有効化予定です。",
   "settings.showStatusBar": "ステータスバーを表示",
   "settings.title": "設定",
   "settings.unit.ms": "ms",
