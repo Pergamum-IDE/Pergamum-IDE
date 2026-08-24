@@ -117,7 +117,6 @@ describe("file IPC", () => {
   });
 
   it("allows Save As selection inside the active project for renderer policy validation", async () => {
-    projectIpcMock.currentProjectRootPath.mockReturnValue("C:\\Novel");
     electronMock.showSaveDialog.mockResolvedValue({
       canceled: false,
       filePath: "C:\\Novel\\new-document.md"
@@ -236,7 +235,6 @@ describe("file IPC", () => {
   });
 
   it("allows standalone Save As outside the active project", async () => {
-    projectIpcMock.currentProjectRootPath.mockReturnValue("C:\\Novel");
     electronMock.showSaveDialog.mockResolvedValue({
       canceled: false,
       filePath: "D:\\Outside\\new-document.md"
@@ -276,7 +274,6 @@ describe("file IPC", () => {
       { code: "EPERM", path: rawPath }
     );
 
-    projectIpcMock.currentProjectRootPath.mockReturnValue(null);
     fsMock.writeFile.mockRejectedValue(writeError);
 
     const saveMarkdown = registeredHandler(
