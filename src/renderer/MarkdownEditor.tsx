@@ -14,6 +14,8 @@ import {
   type EditableContextSurface
 } from "../shared/editContextMenu";
 import type { WorkbenchSoundSettings } from "../shared/settings";
+import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
+import { lineEndMarkerFeature } from "./editorVisibility/lineEndMarkerFeature";
 import {
   playMarkdownEditorInputSound,
   type MarkdownEditorInputSoundEvent,
@@ -111,6 +113,7 @@ export function MarkdownEditor({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
+  const visibilityCompartmentRef = useRef<Compartment | null>(null);
   const onChangeRef = useRef(onChange);
   const soundFeedbackRef = useRef(soundFeedback);
   const soundSettingsRef = useRef(soundSettings);
@@ -120,6 +123,11 @@ export function MarkdownEditor({
     readOnlyCompartmentRef.current = new Compartment();
   }
   const readOnlyCompartment = readOnlyCompartmentRef.current;
+
+  if (!visibilityCompartmentRef.current) {
+    visibilityCompartmentRef.current = new Compartment();
+  }
+  const visibilityCompartment = visibilityCompartmentRef.current;
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -151,6 +159,9 @@ export function MarkdownEditor({
             EditorState.readOnly.of(readOnly),
             EditorView.editable.of(!readOnly)
           ]),
+          visibilityCompartment.of(
+            createVisibilityExtension([lineEndMarkerFeature])
+          ),
           EditorView.updateListener.of((update) => {
             const soundEvent = readOnlyRef.current
               ? null

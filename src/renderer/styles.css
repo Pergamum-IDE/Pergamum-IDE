@@ -1511,6 +1511,15 @@ label.settingsItemHeader {
   line-height: 1.55;
 }
 
+/* #248: visibility decoration markers are display-only annotations drawn
+   over the document; they must never look like real editable text. */
+.pergamum-line-end-marker {
+  color: #9aa7b4;
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+}
+
 .preview {
   flex: 1;
   min-height: 0;
