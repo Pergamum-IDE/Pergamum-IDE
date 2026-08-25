@@ -28,7 +28,8 @@ import {
   type ReadProjectDocumentRequest,
   type RecordRecentProjectInput,
   type SaveProjectDocumentRequest,
-  type SaveProjectDocumentResult
+  type SaveProjectDocumentResult,
+  type StartupProjectOpenResult
 } from "../shared/api";
 import type { AppPlatform } from "../shared/platform";
 import {
@@ -47,7 +48,8 @@ import {
 import {
   decodeMarkdownBytes,
   markdownWriteMetadata,
-  sanitizedFileIoError
+  sanitizedFileIoError,
+  type SanitizedFileIoError
 } from "./markdownFileIo";
 import { projectConfigFileName, readProjectConfig } from "./projectConfigStore";
 import {
@@ -490,6 +492,40 @@ async function pathExists(targetPath: string): Promise<boolean> {
 
     throw error;
   }
+}
+
+async function isDirectoryPath(targetPath: string): Promise<boolean> {
+  try {
+    return (await fs.stat(targetPath)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isSanitizedFileIoError(error: unknown): error is SanitizedFileIoError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === "PERGAMUM_FILE_IO_FAILED" &&
+    "reason" in error &&
+    typeof (error as { reason: unknown }).reason === "string" &&
+    error instanceof Error
+  );
+}
+
+function startupProjectOpenFailureResult(
+  error: unknown
+): StartupProjectOpenResult {
+  const safeError = isSanitizedFileIoError(error)
+    ? error
+    : sanitizedFileIoError(error);
+
+  return {
+    kind: "startupProjectOpenFailed",
+    reason: safeError.reason,
+    message: safeError.message
+  };
 }
 
 function projectFileDialogFilters() {
@@ -1320,13 +1356,63 @@ export async function openProject(
   }
 }
 
+export async function openStartupProject(
+  rawProjectFilePath: string,
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
+): Promise<ProjectOpenResult> {
+  const startedAt = Date.now();
+  let projectRef: string | undefined;
+
+  try {
+    const projectFilePath = resolveProjectFilePath(rawProjectFilePath);
+
+    if (await isDirectoryPath(projectFilePath)) {
+      return null;
+    }
+
+    projectRef = logger.projectRefForKey(projectFilePath);
+
+    const openedProject = await openProjectFromProjectFile(
+      projectFilePath,
+      logger,
+      writeOwnershipManager
+    );
+    return projectOpenResultForOpenedProject(
+      openedProject,
+      logger,
+      projectRef,
+      "open",
+      startedAt
+    );
+  } catch (error) {
+    const safeError = sanitizedFileIoError(error);
+    logger.log({
+      level: "error",
+      event: "project.open.failed",
+      details: {
+        ...(projectRef ? { projectRef } : {}),
+        operation: "open",
+        result: "failed",
+        durationMs: durationSince(startedAt),
+        error: safeError
+      }
+    });
+
+    throw safeError;
+  }
+}
+
 export function registerProjectIpc(
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
     defaultProjectWriteOwnershipManager,
-  windowTitleTargetProvider?: ProjectWindowTitleTargetProvider
+  windowTitleTargetProvider?: ProjectWindowTitleTargetProvider,
+  startupProjectFilePath?: string | null
 ): void {
   setProjectWindowTitleTargetProvider(windowTitleTargetProvider ?? null);
+  let pendingStartupProjectFilePath = startupProjectFilePath ?? null;
 
   ipcMain.handle(PROJECT_CHANNELS.createProject, (event) =>
     createProject(event, logger, writeOwnershipManager)
@@ -1334,6 +1420,31 @@ export function registerProjectIpc(
 
   ipcMain.handle(PROJECT_CHANNELS.openProject, (event) =>
     openProject(event, logger, writeOwnershipManager)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.openStartupProject,
+    async (): Promise<StartupProjectOpenResult> => {
+      const projectFilePath = pendingStartupProjectFilePath;
+      pendingStartupProjectFilePath = null;
+
+      if (!projectFilePath) {
+        return { kind: "noStartupProjectOpen" };
+      }
+
+      try {
+        return {
+          kind: "startupProjectOpenResult",
+          result: await openStartupProject(
+            projectFilePath,
+            logger,
+            writeOwnershipManager
+          )
+        };
+      } catch (error) {
+        return startupProjectOpenFailureResult(error);
+      }
+    }
   );
 
   ipcMain.handle(

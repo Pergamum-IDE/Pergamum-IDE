@@ -10,6 +10,7 @@ import type {
   UpdateGlossaryEntryInput
 } from "./glossary";
 import type {
+  DebugLogReason,
   DebugLogSnapshot,
   RendererDebugLogRequest,
   SanitizedDebugLogEvent
@@ -60,6 +61,7 @@ export const FILE_CHANNELS = {
 export const PROJECT_CHANNELS = {
   createProject: "projects:createProject",
   openProject: "projects:openProject",
+  openStartupProject: "projects:openStartupProject",
   openRecentProject: "projects:openRecentProject",
   confirmReadOnlyProjectOpen: "projects:confirmReadOnlyProjectOpen",
   cancelReadOnlyProjectOpen: "projects:cancelReadOnlyProjectOpen",
@@ -251,6 +253,15 @@ export type ProjectOpenResult =
   | PendingReadOnlyProjectOpen
   | null;
 
+export type StartupProjectOpenResult =
+  | { kind: "noStartupProjectOpen" }
+  | { kind: "startupProjectOpenResult"; result: ProjectOpenResult }
+  | {
+      kind: "startupProjectOpenFailed";
+      reason: DebugLogReason;
+      message: string;
+    };
+
 export interface PendingReadOnlyProjectOpenRequest {
   token: string;
 }
@@ -335,6 +346,7 @@ export interface PergamumApi {
   projects: {
     createProject: () => Promise<ProjectOpenResult>;
     openProject: () => Promise<ProjectOpenResult>;
+    openStartupProject: () => Promise<StartupProjectOpenResult>;
     openRecentProject: (projectFilePath: string) => Promise<ProjectOpenResult>;
     confirmReadOnlyProjectOpen: (
       token: string
