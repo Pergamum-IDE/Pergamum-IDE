@@ -96,7 +96,7 @@ describe("project access mode command wiring (#211)", () => {
     );
     expect(setActiveDocumentContentBlock).toContain("return;");
     expect(setActiveDocumentContentBlock).toContain(
-      "updateCurrentDocumentContent(document, nextContent)"
+      "updateCurrentDocumentContent(\n          document,\n          nextContent,\n          nextLineEndingBreaks\n        )"
     );
   });
 

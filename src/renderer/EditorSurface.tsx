@@ -5,7 +5,10 @@ import {
   documentLineCount,
   documentMaxLineLength
 } from "../shared/documentMetrics";
-import type { WorkbenchSoundSettings } from "../shared/settings";
+import type {
+  NewFileLineEnding,
+  WorkbenchSoundSettings
+} from "../shared/settings";
 import type {
   GlossaryEntryKind,
   GlossaryFormMatchBoundary,
@@ -18,6 +21,10 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import type { CurrentEditor } from "./currentEditor";
+import {
+  lineEndingBreakSetToArray,
+  type LineEndingBreakSet
+} from "./editorLineEndingField";
 import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
 import { GlossaryEditor } from "./GlossaryEditor";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
@@ -317,6 +324,13 @@ interface EditorSurfaceProps {
   activeDocumentKey: string;
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
+  /**
+   * `files.newFile.lineEnding` (#253) — the fallback kind for a brand new
+   * line break created in a document with no existing tracked breaks at
+   * all. Never used to decide an *existing* break's kind or as a save-time
+   * conversion target.
+   */
+  newFileLineEndingFallback: NewFileLineEnding;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -325,7 +339,10 @@ interface EditorSurfaceProps {
   isProjectOwnedReadOnly: boolean;
   markdownEditorPreviewRatio: number;
   onChangeMarkdownEditorPreviewRatio: (ratio: number) => void;
-  onChangeMarkdownContent: (content: string) => void;
+  onChangeMarkdownContent: (
+    content: string,
+    lineEndingBreaks: LineEndingBreakSet
+  ) => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
   onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
@@ -420,6 +437,7 @@ export function EditorSurface({
   editor,
   activeDocumentKey,
   previewUpdateDelayMs,
+  newFileLineEndingFallback,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -460,6 +478,7 @@ export function EditorSurface({
           document={editor.document}
           documentKey={activeDocumentKey}
           previewUpdateDelayMs={previewUpdateDelayMs}
+          newFileLineEndingFallback={newFileLineEndingFallback}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
@@ -527,13 +546,17 @@ interface MarkdownEditorSurfaceProps {
   document: CurrentDocument;
   documentKey: string;
   previewUpdateDelayMs: number;
+  newFileLineEndingFallback: NewFileLineEnding;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
   soundFeedback: SoundFeedbackPlayer;
   soundSettings: WorkbenchSoundSettings;
   readOnly: boolean;
-  onChangeMarkdownContent: (content: string) => void;
+  onChangeMarkdownContent: (
+    content: string,
+    lineEndingBreaks: LineEndingBreakSet
+  ) => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
   ratio: number;
@@ -571,6 +594,7 @@ function MarkdownEditorSurface({
   document,
   documentKey,
   previewUpdateDelayMs,
+  newFileLineEndingFallback,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -591,6 +615,17 @@ function MarkdownEditorSurface({
   onViewportChanged
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
+  // #253: only converted to a plain array (an O(n) walk of the tracked
+  // breaks) when the document identity itself changes — never per
+  // keystroke. For the same documentKey, MarkdownEditor ignores this prop
+  // entirely after its initial mount/reconfigure, so recomputing it on
+  // every edit would be pure waste (and, for a document with many tracked
+  // breaks, a real per-keystroke cost this Issue explicitly avoids).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initialLineEndingBreaks = useMemo(
+    () => lineEndingBreakSetToArray(document.lineEndingBreaks),
+    [documentKey]
+  );
   // #250: the preview is rendered from a debounced trailing view of
   // `content`, not `content` itself — see useDebouncedPreviewContent. The
   // CodeMirror editor below still receives `content` directly and is
@@ -735,6 +770,9 @@ function MarkdownEditorSurface({
         <MarkdownEditor
           value={content}
           onChange={onChangeMarkdownContent}
+          documentKey={documentKey}
+          initialLineEndingBreaks={initialLineEndingBreaks}
+          newFileLineEndingFallback={newFileLineEndingFallback}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}
           contextSurface="markdownEditor"
