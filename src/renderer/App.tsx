@@ -84,6 +84,11 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import {
+  lineEndingBreakSetToArray,
+  type LineEndingBreakSet
+} from "./editorLineEndingField";
+import { serializeLineEndings } from "./lineEndingTracking";
+import {
   createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
   currentEditorGlossaryEntryId,
@@ -1147,14 +1152,21 @@ export function App(): JSX.Element {
     });
   }
 
-  function setActiveDocumentContent(nextContent: string): void {
+  function setActiveDocumentContent(
+    nextContent: string,
+    nextLineEndingBreaks: LineEndingBreakSet
+  ): void {
     if (isReadOnlyProjectOwnedEditor) {
       return;
     }
 
     setOpenDocumentsState((state) =>
       updateActiveOpenDocument(state, (document) =>
-        updateCurrentDocumentContent(document, nextContent)
+        updateCurrentDocumentContent(
+          document,
+          nextContent,
+          nextLineEndingBreaks
+        )
       )
     );
   }
@@ -2824,6 +2836,18 @@ export function App(): JSX.Element {
 
           const documentToSave = targetEditor.document;
           const documentIdToSave = targetOpenDocument.id;
+          // #253: reconstruct the original (or newly-inherited) per-break
+          // line endings from the tracked kinds before writing — the
+          // canonical `content` itself is always CodeMirror's "\n"-only
+          // normalized text (see lineEndingTracking.ts). This is the only
+          // place a full-document line-ending pass happens on save; it
+          // never runs per keystroke. Both the project and standalone save
+          // branches below use this same serialized string, so the two
+          // save paths share one line-ending semantics.
+          const serializedContentToSave = serializeLineEndings(
+            documentToSave.content,
+            lineEndingBreakSetToArray(documentToSave.lineEndingBreaks)
+          );
 
           if (
             isProjectCurrentDocument(documentToSave) &&
@@ -2832,7 +2856,7 @@ export function App(): JSX.Element {
             const savedProjectDocument =
               await window.pergamum.projects.saveProjectDocument(
                 documentToSave.relativePath,
-                documentToSave.content
+                serializedContentToSave
               );
 
             replaceSavedDocument(
@@ -2864,7 +2888,7 @@ export function App(): JSX.Element {
           const savedStandaloneDocument = existingSavePath
             ? await window.pergamum.files.writeMarkdown(
                 existingSavePath,
-                documentToSave.content
+                serializedContentToSave
               )
             : await (async () => {
                 const selectedTarget =
@@ -2918,7 +2942,7 @@ export function App(): JSX.Element {
 
                 return window.pergamum.files.writeMarkdown(
                   selectedTarget.path,
-                  documentToSave.content
+                  serializedContentToSave
                 );
               })();
 
@@ -3555,6 +3579,9 @@ export function App(): JSX.Element {
                         )}
                         previewUpdateDelayMs={
                           effectiveSettings.preview.updateDelayMs
+                        }
+                        newFileLineEndingFallback={
+                          effectiveSettings.files.newFile.lineEnding
                         }
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}
