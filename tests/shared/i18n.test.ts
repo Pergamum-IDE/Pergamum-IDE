@@ -222,6 +222,50 @@ describe("file I/O workflow translations (#202)", () => {
         "Editing and normal Save are unavailable, but you can view the contents or save a copy with Save As.\n\n" +
         "Do you want to open the project?"
     );
+    expect(
+      t("ja", "dialog.readOnlyProjectOpen.messageWithOwner", {
+        openedAt: "2026-08-25 08:21:00",
+        hostname: "writer-host"
+      })
+    ).toBe(
+      "このプロジェクトは既に別の Pergamum で開かれています。\n\n" +
+        "2026-08-25 08:21:00 から writer-host で開かれています。\n\n" +
+        "読み取り専用で開くことができます。\n" +
+        "編集や通常保存はできませんが、内容を確認したり、別ファイルとして保存したりできます。\n\n" +
+        "プロジェクトを開きますか？"
+    );
+    expect(
+      t("en", "dialog.readOnlyProjectOpen.messageWithOwner", {
+        openedAt: "2026-08-25 08:21:00",
+        hostname: "writer-host"
+      })
+    ).toBe(
+      "This project is already open in another Pergamum instance.\n\n" +
+        "It has been open on writer-host since 2026-08-25 08:21:00.\n\n" +
+        "You can open it in read-only mode.\n" +
+        "Editing and normal Save are unavailable, but you can view the contents or save a copy with Save As.\n\n" +
+        "Do you want to open the project?"
+    );
+    expect(t("ja", "dialog.readOnlyProjectOpen.lockSetupFailedMessage")).toBe(
+      "このプロジェクトの書き込みロックを作成できませんでした。\n\n" +
+        "ファイルシステムの権限、同期中のフォルダ、または一時的なファイル操作の失敗が原因の可能性があります。\n\n" +
+        "読み取り専用で開くことができます。\n" +
+        "編集や通常保存はできませんが、内容を確認したり、別ファイルとして保存したりできます。\n\n" +
+        "プロジェクトを開きますか？"
+    );
+    expect(t("en", "dialog.readOnlyProjectOpen.lockSetupFailedMessage")).toBe(
+      "Pergamum could not create a writable lock for this project.\n\n" +
+        "This may be caused by file system permissions, a syncing folder, or a temporary file operation failure.\n\n" +
+        "You can open it in read-only mode.\n" +
+        "Editing and normal Save are unavailable, but you can view the contents or save a copy with Save As.\n\n" +
+        "Do you want to open the project?"
+    );
+    expect(t("ja", "dialog.readOnlyProjectOpen.openReadOnly")).toBe(
+      "理解したうえで読み取り専用で開く"
+    );
+    expect(t("en", "dialog.readOnlyProjectOpen.openReadOnly")).toBe(
+      "Open Read-Only, I Understand"
+    );
   });
 
 });

@@ -47,16 +47,16 @@ describe("buildReadOnlyProjectOpenChoiceDialogOptions", () => {
     });
   });
 
-  it("uses concrete open and cancel labels without generic confirmation labels", () => {
+  it("uses concrete read-only open and cancel labels without generic confirmation labels", () => {
     const jaOptions = buildReadOnlyProjectOpenChoiceDialogOptions(translateJa);
     const enOptions = buildReadOnlyProjectOpenChoiceDialogOptions(translateEn);
 
     expect(jaOptions.choices.map((choice) => choice.label)).toEqual([
-      "開く",
+      "理解したうえで読み取り専用で開く",
       "キャンセル"
     ]);
     expect(enOptions.choices.map((choice) => choice.label)).toEqual([
-      "Open",
+      "Open Read-Only, I Understand",
       "Cancel"
     ]);
     expect(jaOptions.choices.map((choice) => choice.label)).not.toContain("OK");
@@ -79,7 +79,7 @@ describe("buildReadOnlyProjectOpenChoiceDialogOptions", () => {
     expect(options.choices).toEqual([
       {
         id: readOnlyProjectOpenChoiceIds.open,
-        label: "Open",
+        label: "Open Read-Only, I Understand",
         role: "primary"
       },
       {
@@ -94,6 +94,44 @@ describe("buildReadOnlyProjectOpenChoiceDialogOptions", () => {
       readOnlyProjectOpenChoiceIds.cancel
     );
     expect(choiceDialogDismissesOnBackdropClick(options)).toBe(false);
+  });
+
+  it("shows sanitized owner metadata when it is available", () => {
+    const options = buildReadOnlyProjectOpenChoiceDialogOptions(translateJa, {
+      ...createPendingReadOnlyProjectOpen(),
+      lockOwner: {
+        hostname: "writer-workstation",
+        openedAt: "2026-08-25 08:21:00"
+      }
+    });
+
+    expect(options.message).toEqual({
+      kind: "plainText",
+      text:
+        "このプロジェクトは既に別の Pergamum で開かれています。\n\n" +
+        "2026-08-25 08:21:00 から writer-workstation で開かれています。\n\n" +
+        "読み取り専用で開くことができます。\n" +
+        "編集や通常保存はできませんが、内容を確認したり、別ファイルとして保存したりできます。\n\n" +
+        "プロジェクトを開きますか？"
+    });
+  });
+
+  it("shows lock setup failure copy without owner metadata", () => {
+    const options = buildReadOnlyProjectOpenChoiceDialogOptions(translateEn, {
+      ...createPendingReadOnlyProjectOpen(),
+      readOnlyReason: "lockSetupFailed",
+      lockOwner: null
+    });
+
+    expect(options.message).toEqual({
+      kind: "plainText",
+      text:
+        "Pergamum could not create a writable lock for this project.\n\n" +
+        "This may be caused by file system permissions, a syncing folder, or a temporary file operation failure.\n\n" +
+        "You can open it in read-only mode.\n" +
+        "Editing and normal Save are unavailable, but you can view the contents or save a copy with Save As.\n\n" +
+        "Do you want to open the project?"
+    });
   });
 
   it("keeps open before cancel through the ChoiceDialog ordering helper", () => {
@@ -154,7 +192,7 @@ describe("confirmReadOnlyProjectOpenIfNeeded", () => {
     ).resolves.toBe(confirmedProject);
 
     expect(choiceDialog).toHaveBeenCalledWith(
-      buildReadOnlyProjectOpenChoiceDialogOptions(translateJa)
+      buildReadOnlyProjectOpenChoiceDialogOptions(translateJa, pending)
     );
     expect(confirmReadOnlyProjectOpen).toHaveBeenCalledWith(pending.token);
     expect(cancelReadOnlyProjectOpen).not.toHaveBeenCalled();
@@ -255,6 +293,8 @@ function createPendingReadOnlyProjectOpen(): PendingReadOnlyProjectOpen {
   return {
     kind: "pendingReadOnlyProjectOpen",
     token: "pending-read-only-project-open:test",
-    project: createProject()
+    project: createProject(),
+    readOnlyReason: "lockUnavailable",
+    lockOwner: null
   };
 }

@@ -1,5 +1,6 @@
 import {
   isPendingReadOnlyProjectOpen,
+  type PendingReadOnlyProjectOpen,
   type PergamumProject,
   type ProjectOpenResult
 } from "../shared/api";
@@ -21,14 +22,33 @@ type ReadOnlyProjectOpenChoiceIds = typeof readOnlyProjectOpenChoiceIds;
 export type ReadOnlyProjectOpenChoiceId =
   ReadOnlyProjectOpenChoiceIds[keyof ReadOnlyProjectOpenChoiceIds];
 
+function readOnlyProjectOpenMessage(
+  translate: Translate,
+  pending?: PendingReadOnlyProjectOpen
+): string {
+  if (pending?.readOnlyReason === "lockSetupFailed") {
+    return translate("dialog.readOnlyProjectOpen.lockSetupFailedMessage");
+  }
+
+  if (pending?.lockOwner) {
+    return translate("dialog.readOnlyProjectOpen.messageWithOwner", {
+      hostname: pending.lockOwner.hostname,
+      openedAt: pending.lockOwner.openedAt
+    });
+  }
+
+  return translate("dialog.readOnlyProjectOpen.message");
+}
+
 export function buildReadOnlyProjectOpenChoiceDialogOptions(
-  translate: Translate
+  translate: Translate,
+  pending?: PendingReadOnlyProjectOpen
 ): AppChoiceDialogOptions {
   return {
     title: translate("dialog.readOnlyProjectOpen.title"),
     message: {
       kind: "plainText",
-      text: translate("dialog.readOnlyProjectOpen.message")
+      text: readOnlyProjectOpenMessage(translate, pending)
     },
     icon: {
       kind: "info",
@@ -37,7 +57,7 @@ export function buildReadOnlyProjectOpenChoiceDialogOptions(
     choices: [
       {
         id: readOnlyProjectOpenChoiceIds.open,
-        label: translate("common.open"),
+        label: translate("dialog.readOnlyProjectOpen.openReadOnly"),
         role: "primary"
       },
       {
@@ -78,7 +98,7 @@ export async function confirmReadOnlyProjectOpenIfNeeded(
 
   try {
     result = await deps.choiceDialog(
-      buildReadOnlyProjectOpenChoiceDialogOptions(deps.translate)
+      buildReadOnlyProjectOpenChoiceDialogOptions(deps.translate, deps.result)
     );
   } catch (error) {
     if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {

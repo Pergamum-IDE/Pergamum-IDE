@@ -229,10 +229,21 @@ export interface PergamumProject {
   documents: ProjectDocument[];
 }
 
+export interface ProjectLockOwnerInfo {
+  hostname: string;
+  openedAt: string;
+}
+
+export type PendingReadOnlyProjectOpenReason =
+  | "lockUnavailable"
+  | "lockSetupFailed";
+
 export interface PendingReadOnlyProjectOpen {
   kind: "pendingReadOnlyProjectOpen";
   token: string;
   project: PergamumProject;
+  readOnlyReason: PendingReadOnlyProjectOpenReason;
+  lockOwner: ProjectLockOwnerInfo | null;
 }
 
 export type ProjectOpenResult =
