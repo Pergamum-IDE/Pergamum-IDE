@@ -74,7 +74,8 @@ const soundChildKeys = new Set<SettingKey>([
 // UI catalog schema, which has no `unit` field on SettingControl.
 const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
   "commandPalette.description.marquee.delay": "settings.unit.ms",
-  "commandPalette.description.marquee.speed": "settings.unit.pxPerSecond"
+  "commandPalette.description.marquee.speed": "settings.unit.pxPerSecond",
+  "preview.updateDelayMs": "settings.unit.ms"
 };
 
 function readSettingValue(key: SettingKey, settings: ApplicationSettings): unknown {
@@ -114,6 +115,8 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.files.newFile.encoding;
     case "preview.renderer":
       return settings.preview.renderer;
+    case "preview.updateDelayMs":
+      return settings.preview.updateDelayMs;
   }
 
   const exhaustiveCheck: never = key;
@@ -146,6 +149,7 @@ function saveRequest(
   overrides: Partial<SaveApplicationSettingsRequest>
 ): SaveApplicationSettingsRequest {
   return {
+    preview: overrides.preview ?? settings.preview,
     workbench: overrides.workbench ?? settings.workbench,
     commandPalette: overrides.commandPalette ?? settings.commandPalette,
     editor: overrides.editor ?? settings.editor,
@@ -288,6 +292,14 @@ function buildNextSettings(
             encoding: rawValue as NewFileEncoding
           }
         }
+      });
+    case "preview.updateDelayMs":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
+
+      return saveRequest(settings, {
+        preview: { ...settings.preview, updateDelayMs: rawValue }
       });
   }
 

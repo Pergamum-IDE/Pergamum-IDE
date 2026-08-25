@@ -298,6 +298,8 @@ export const enTranslations = {
   "settings.preview.renderer.description": "Selects the renderer used for the document preview. Currently only Markdown is available.",
   "settings.preview.renderer.label": "Preview renderer",
   "settings.preview.renderer.option.markdown.label": "Markdown",
+  "settings.preview.updateDelayMs.description": "Delay before updating the preview after editing stops. Lower values make the preview follow edits more quickly, but may reduce editing responsiveness in long documents.",
+  "settings.preview.updateDelayMs.label": "Preview update delay",
   "settings.files.newFile.lineEnding.option.lf.label": "LF",
   "settings.files.newFile.lineEnding.option.crlf.label": "CRLF",
   "settings.files.newFile.encoding.option.utf8.label": "UTF-8",

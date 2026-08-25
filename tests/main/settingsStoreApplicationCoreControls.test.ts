@@ -45,7 +45,7 @@ const recentProject = {
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
-    preview: { renderer: "markdown" },
+    preview: { renderer: "markdown", updateDelayMs: 10000 },
     workbench: {
       language: "ja",
       statusBar: { visible: true },
@@ -73,6 +73,7 @@ function validSaveRequest(
   overrides: Partial<SaveApplicationSettingsRequest> = {}
 ): SaveApplicationSettingsRequest {
   return {
+    preview: { renderer: "markdown", updateDelayMs: 10000 },
     workbench: {
       language: "ja",
       statusBar: { visible: true },
@@ -125,6 +126,10 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           "commandPalette.description.marquee.speed"
         )
       }
+    });
+    expect(settings.preview).toEqual({
+      renderer: getCatalogDefaultValue("preview.renderer"),
+      updateDelayMs: getCatalogDefaultValue("preview.updateDelayMs")
     });
   });
 
@@ -271,7 +276,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     fsMock.mkdir.mockResolvedValue(undefined);
   });
 
-  it("writes workbench/commandPalette/editor/files settings while preserving preview and recent projects", async () => {
+  it("writes preview/workbench/commandPalette/editor/files settings from the request, while preserving only recent projects from disk (#250 follow-up: preview is now write-through, not preserved)", async () => {
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({
         recentProjects: [recentProject],
@@ -319,7 +324,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.preview).toEqual({ renderer: "markdown" });
+    expect(written.preview).toEqual({
+      renderer: "markdown",
+      updateDelayMs: 10000
+    });
     expect(written.recentProjects).toEqual([recentProject]);
     expect(written.commandPalette).toEqual({
       description: {
@@ -345,6 +353,49 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         encoding: "utf8"
       }
     });
+  });
+
+  it("writes a changed preview.updateDelayMs to settings.json (#250 follow-up: the user setting is genuinely persisted, not silently dropped)", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({ preview: { renderer: "markdown", updateDelayMs: 10000 } })
+    );
+
+    await saveApplicationSettings(
+      validSaveRequest({
+        preview: { renderer: "markdown", updateDelayMs: 10000 }
+      })
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+
+    expect(written.preview).toEqual({
+      renderer: "markdown",
+      updateDelayMs: 10000
+    });
+  });
+
+  it("writes preview.updateDelayMs of 0 (explicit 'don't wait') to settings.json", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({ preview: { renderer: "markdown", updateDelayMs: 10000 } })
+    );
+
+    await saveApplicationSettings(
+      validSaveRequest({
+        preview: { renderer: "markdown", updateDelayMs: 0 }
+      })
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+
+    expect(written.preview).toEqual({ renderer: "markdown", updateDelayMs: 0 });
   });
 
   it("rejects a save request still carrying the obsolete workbench.advancedSettings key, and invalid editor font/sound/line ending/encoding save values (#232)", () => {
@@ -440,6 +491,18 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         files: {
           newFile: { lineEnding: "lf", encoding: "shift_jis" as "utf8" }
         }
+      }),
+      validSaveRequest({
+        preview: { renderer: "markdown", updateDelayMs: -1 }
+      }),
+      validSaveRequest({
+        preview: { renderer: "markdown", updateDelayMs: 600001 }
+      }),
+      validSaveRequest({
+        preview: { renderer: "markdown", updateDelayMs: 150.5 }
+      }),
+      validSaveRequest({
+        preview: { renderer: "html" as "markdown", updateDelayMs: 10000 }
       })
     ]) {
       expect(() =>

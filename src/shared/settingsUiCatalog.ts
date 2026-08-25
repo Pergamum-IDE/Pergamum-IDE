@@ -331,6 +331,9 @@ const commandPaletteMarqueeDelayRange = getCatalogEntry(
 const commandPaletteMarqueeSpeedRange = getCatalogEntry(
   "commandPalette.description.marquee.speed"
 ).numericRange;
+const previewUpdateDelayRange = getCatalogEntry(
+  "preview.updateDelayMs"
+).numericRange;
 
 // Intentional public UI catalog data — kept public for future Settings Page
 // consumers (#226). Registers only settings that already exist in
@@ -417,6 +420,20 @@ export const settingCatalogItems = defineSettingCatalog([
       ]
     },
     defaultValue: getCatalogDefaultValue("preview.renderer")
+  },
+  {
+    key: "preview.updateDelayMs",
+    category: "preview",
+    order: 200,
+    labelKey: "settings.preview.updateDelayMs.label",
+    descriptionKey: "settings.preview.updateDelayMs.description",
+    control: {
+      kind: "number",
+      min: previewUpdateDelayRange.min,
+      max: previewUpdateDelayRange.max,
+      step: 1000
+    },
+    defaultValue: getCatalogDefaultValue("preview.updateDelayMs")
   },
   {
     key: "workbench.language",

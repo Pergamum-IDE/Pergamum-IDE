@@ -625,7 +625,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("uses number settings in production for Command Palette description marquee controls", () => {
+    it("uses number settings in production for Command Palette description marquee controls and the Preview update delay", () => {
       const productionTypes = new Set(
         getCatalogEntries().map((entry) => entry.type)
       );
@@ -637,7 +637,8 @@ describe("Settings Catalog Foundation (#150)", () => {
           .map((entry) => entry.key)
       ).toEqual([
         "commandPalette.description.marquee.delay",
-        "commandPalette.description.marquee.speed"
+        "commandPalette.description.marquee.speed",
+        "preview.updateDelayMs"
       ]);
       expect(
         getCatalogEntries().some((entry) => entry.key === "workbench.fontSize")
@@ -710,6 +711,67 @@ describe("Settings Catalog Foundation (#150)", () => {
           Number.NaN
         )
       ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("validates preview.updateDelayMs as a finite integer from 0 to 600000, defaulting to 10000 (#250 follow-up)", () => {
+      const entry = getCatalogEntry("preview.updateDelayMs");
+
+      expect(entry.type).toBe("number");
+      if (entry.type !== "number") {
+        throw new Error("Expected number setting.");
+      }
+
+      expect(entry.defaultValue).toBe(10000);
+      expect(entry.scope).toBe("applicationOnly");
+      expect(entry.numericRange).toEqual({
+        min: 0,
+        max: 600000,
+        integer: true
+      });
+
+      // 0 is a valid, explicit "don't intentionally wait" choice.
+      expect(validateCatalogValue("preview.updateDelayMs", 0)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("preview.updateDelayMs", 600000)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("preview.updateDelayMs", 10000)).toEqual({
+        ok: true
+      });
+      // The UI step (1000ms) is presentation-only metadata, not a
+      // validation constraint — values that aren't a multiple of it are
+      // still valid integers within range.
+      expect(validateCatalogValue("preview.updateDelayMs", 333)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("preview.updateDelayMs", 2500)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("preview.updateDelayMs", -1)).toEqual({
+        ok: false,
+        failure: "numericRange"
+      });
+      expect(validateCatalogValue("preview.updateDelayMs", 600001)).toEqual({
+        ok: false,
+        failure: "numericRange"
+      });
+      // Not just the boundary — a value far past the max is rejected too.
+      expect(validateCatalogValue("preview.updateDelayMs", 999999)).toEqual({
+        ok: false,
+        failure: "numericRange"
+      });
+      expect(validateCatalogValue("preview.updateDelayMs", 1.5)).toEqual({
+        ok: false,
+        failure: "integer"
+      });
+      expect(
+        validateCatalogValue("preview.updateDelayMs", Number.POSITIVE_INFINITY)
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+      expect(validateCatalogValue("preview.updateDelayMs", "10000")).toEqual({
+        ok: false,
+        failure: "typeMismatch"
+      });
     });
 
     it("workbench.statusBar.visible (#174), sound feedback (#200), and command descriptions (#215) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
@@ -840,6 +902,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(
         getCatalogEntry("commandPalette.description.marquee.speed").scope
       ).toBe("applicationOnly");
+      expect(getCatalogEntry("preview.updateDelayMs").scope).toBe(
+        "applicationOnly"
+      );
     });
 
     it("represents all three ADR-0006 S-11 scope values", () => {
@@ -904,7 +969,7 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, and #215 command description settings (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, and #250 preview.updateDelayMs (#232: workbench.advancedSettings.enabled removed)", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
           "commandPalette.description.enable",
@@ -914,6 +979,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "files.newFile.encoding",
           "files.newFile.lineEnding",
           "preview.renderer",
+          "preview.updateDelayMs",
           "workbench.colorTheme",
           "workbench.fontFamily",
           "workbench.sound.enabled",

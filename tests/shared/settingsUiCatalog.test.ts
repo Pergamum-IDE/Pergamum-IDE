@@ -178,7 +178,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.fontFamily",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
-          "preview.renderer"
+          "preview.renderer",
+          "preview.updateDelayMs"
         ].sort()
       );
     });
@@ -262,6 +263,25 @@ describe("Settings UI Catalog Schema (#226)", () => {
         min: speedRange.min,
         max: speedRange.max
       });
+    });
+
+    it("preview.updateDelayMs is a number control in the preview category, with min/max sourced from settingsCatalog.ts and a UI-only step of 1000 (#250 follow-up)", () => {
+      const item = getSettingCatalogItem("preview.updateDelayMs");
+
+      if (item?.control.kind !== "number") {
+        throw new Error("Expected a number control.");
+      }
+
+      const range = getCatalogEntry("preview.updateDelayMs").numericRange;
+
+      expect(item.category).toBe("preview");
+      expect(item.control).toEqual({
+        kind: "number",
+        min: range.min,
+        max: range.max,
+        step: 1000
+      });
+      expect(item.defaultValue).toBe(10000);
     });
 
     it("every item's labelKey / descriptionKey resolves in ja and en", () => {

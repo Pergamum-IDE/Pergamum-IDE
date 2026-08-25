@@ -602,6 +602,21 @@ export const settingsCatalog = defineSettingsCatalog({
     descriptionKey: "settings.preview.renderer.description",
     deprecatedAliases: [],
     migrationNotes: []
+  }),
+  // #250 follow-up: how long the preview waits, after editing stops, before
+  // re-rendering. A user-scope (applicationOnly, like the Command Palette
+  // marquee timings above) tuning knob for how often Preview
+  // layout/paint is allowed to interrupt editor input — not a "make preview
+  // faster" setting. 0 is a valid, explicit choice (no intentional wait).
+  "preview.updateDelayMs": defineNumberSetting({
+    key: "preview.updateDelayMs",
+    scope: "applicationOnly",
+    defaultValue: 10000,
+    labelKey: "settings.preview.updateDelayMs.label",
+    descriptionKey: "settings.preview.updateDelayMs.description",
+    numericRange: { min: 0, max: 600000, integer: true },
+    deprecatedAliases: [],
+    migrationNotes: []
   })
 });
 
