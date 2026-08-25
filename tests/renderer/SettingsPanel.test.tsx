@@ -422,7 +422,11 @@ describe("getVisibleSettingCatalogItems search behavior (#230)", () => {
   it("finds a select setting by option value", () => {
     const items = getVisibleSettingCatalogItems("crlf", "application", translate);
 
-    expect(items.map((item) => item.key)).toEqual(["files.newFile.lineEnding"]);
+    // #252 added editor.lineEnding.expected, which also has a "crlf" option
+    // value — both settings legitimately match this query now.
+    expect(items.map((item) => item.key).sort()).toEqual(
+      ["editor.lineEnding.expected", "files.newFile.lineEnding"].sort()
+    );
   });
 
   it("finds a select setting by localized option label", () => {
@@ -756,7 +760,10 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
   it("saves immediately when a text setting changes, omitting an empty fontFamily rather than sending an empty string", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      editor: { fontFamily: "Fira Code" }
+      editor: {
+        fontFamily: "Fira Code",
+        lineEnding: defaultApplicationSettings.editor.lineEnding
+      }
     };
     const onChangeSettings = vi.fn();
     const element = settingsPanelViewElement("en", {
@@ -775,7 +782,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
-      editor: {},
+      editor: { lineEnding: settings.editor.lineEnding },
       files: settings.files
     });
   });
@@ -1212,5 +1219,25 @@ describe("SettingsPanelView non-goals guard (#230)", () => {
 
     expect(source).not.toContain("ProjectSettings");
     expect(source).not.toContain("pergamum.json");
+  });
+});
+
+describe("line-ending marker glyph select renders in the editor font (#252 follow-up)", () => {
+  it("applies the editor-font class to editor.lineEnding.markerGlyph's select, so the glyph previews in the same font as the editor", () => {
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("editor.lineEnding.markerGlyph")
+    });
+    const select = controlElement(element, "editor.lineEnding.markerGlyph");
+
+    expect(select.props.className).toContain("settingsSelect-editorFont");
+  });
+
+  it("does not apply the editor-font class to an unrelated select control", () => {
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("files.newFile.lineEnding")
+    });
+    const select = controlElement(element, "files.newFile.lineEnding");
+
+    expect(select.props.className).not.toContain("settingsSelect-editorFont");
   });
 });

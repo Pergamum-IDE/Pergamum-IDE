@@ -6,6 +6,7 @@ import {
   StateEffect,
   StateField,
   Transaction,
+  type ChangeSet,
   type Extension,
   type TransactionSpec
 } from "@codemirror/state";
@@ -297,6 +298,67 @@ function findNewBreaks(
 }
 
 /**
+ * #253 follow-up: removes, in *old* (pre-edit) coordinate space, any
+ * tracked break that this transaction actually deletes — before
+ * `RangeSet.map` runs, not after.
+ *
+ * A break is stored as a point range at the exact position of its
+ * normalized "\n" character. `ChangeDesc.mapPos`'s `MapMode.TrackDel` (the
+ * default for a `RangeValue`) only reports a position as deleted when it
+ * falls strictly *inside* a deleted range (`from < pos && pos < to`) — a
+ * position that exactly *equals* the deletion's own start is treated as
+ * the boundary just before the deletion and survives `.map()` unchanged
+ * (confirmed directly against `@codemirror/state`'s `ChangeDesc.mapPos`
+ * source, not assumed). Since a break's own character is always the first
+ * character removed by any deletion that touches it, its position always
+ * equals that deletion's start for the common case of deleting exactly
+ * one line break (e.g. Backspace/Delete on it) — so this boundary case is
+ * the ordinary case here, not a rare corner case.
+ *
+ * This removal must happen in OLD coordinates, before mapping: once a
+ * deleted break and an adjacent surviving break are both mapped into new
+ * coordinates, they can land on the same new position (e.g. deleting the
+ * first of two adjacent breaks shifts the second one back onto the
+ * deleted one's old position), and at that point there is no way to tell
+ * which of the two entries at that position was the one that should have
+ * been removed. In old coordinates their positions are still distinct, so
+ * only the exact deleted one is ever touched.
+ *
+ * Cost: one `oldSet.iter(fromA)` exact-position lookup (the same O(log n)
+ * chunk-skip lookup `findKindAtOrAfter` above already uses) per changed
+ * region that actually deletes something (`toA > fromA`), and — only when
+ * that lookup finds a break exactly there — one `RangeSet.update` scoped
+ * to `[fromA, fromA + 1)`. Nothing here scans the whole break set, the
+ * whole document, or runs on transactions that don't delete anything.
+ */
+function removeBreaksDeletedAtChangeStarts(
+  oldSet: LineEndingBreakSet,
+  changes: ChangeSet
+): LineEndingBreakSet {
+  let result = oldSet;
+
+  changes.iterChangedRanges((fromA, toA) => {
+    if (toA <= fromA) {
+      return; // Pure insertion at this position — nothing was deleted.
+    }
+
+    const cursor = oldSet.iter(fromA);
+
+    if (!cursor.value || cursor.from !== fromA) {
+      return; // No tracked break sits exactly at this deletion's start.
+    }
+
+    result = result.update({
+      filter: (from) => from !== fromA,
+      filterFrom: fromA,
+      filterTo: fromA + 1
+    });
+  });
+
+  return result;
+}
+
+/**
  * Builds the StateField that tracks per-break line-ending kind across
  * edits. `initialBreaks` seeds it (from lineEndingTracking.ts's raw-content
  * analysis, run once at document open).
@@ -333,7 +395,20 @@ export function createLineEndingTrackingField(
         return value;
       }
 
-      const next = value.map(tr.changes);
+      // Order matters: remove deleted-start breaks in OLD coordinates
+      // first (see removeBreaksDeletedAtChangeStarts above for why),
+      // *then* map the survivors, *then* add newly inserted breaks. Newly
+      // inserted breaks are added after mapping, so this removal step
+      // never touches them.
+      const retainedOldBreaks = removeBreaksDeletedAtChangeStarts(
+        value,
+        tr.changes
+      );
+      const next = retainedOldBreaks.map(tr.changes);
+      // findNewBreaks still takes the original, unfiltered `value` — new
+      // break inheritance (following -> preceding -> fallback) is decided
+      // from the full pre-edit document, not from the deletion-corrected
+      // set above.
       const newRanges = findNewBreaks(
         value,
         tr,

@@ -7,15 +7,21 @@ import {
   EditorSelection,
   EditorState,
   Transaction,
-  type AnnotationType
+  type AnnotationType,
+  type StateField
 } from "@codemirror/state";
 import {
   pergamumContextSurfaceAttribute,
   type EditableContextSurface
 } from "../shared/editContextMenu";
-import type { NewFileLineEnding, WorkbenchSoundSettings } from "../shared/settings";
+import type {
+  ExpectedLineEnding,
+  LineEndingMarkerGlyph,
+  NewFileLineEnding,
+  WorkbenchSoundSettings
+} from "../shared/settings";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
-import { lineEndMarkerFeature } from "./editorVisibility/lineEndMarkerFeature";
+import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
 import {
   buildLineEndingBreakSet,
   createLineEndingTrackingExtension,
@@ -60,6 +66,20 @@ interface MarkdownEditorProps {
    * conversion target.
    */
   newFileLineEndingFallback?: NewFileLineEnding;
+  /**
+   * `editor.lineEnding.expected` (#252) — diagnostic-only: what the
+   * line-ending marker/distribution UI compares each tracked break's
+   * actual kind against. Never used to decide a new break's kind, convert
+   * an existing break, or affect Save. Changing it never makes the
+   * document dirty.
+   */
+  expectedLineEnding?: ExpectedLineEnding;
+  /**
+   * `editor.lineEnding.markerGlyph` (#252) — one glyph shown at every
+   * tracked line break, regardless of its kind. Expected vs. unexpected is
+   * shown via marker variant/styling, not by choosing a different glyph.
+   */
+  markerGlyph?: LineEndingMarkerGlyph;
   pendingSelection?: MarkdownEditorPendingSelection | null;
   onPendingSelectionApplied?: () => void;
   contextSurface?: EditableContextSurface;
@@ -143,6 +163,8 @@ export function MarkdownEditor({
   documentKey = defaultMarkdownEditorDocumentKey,
   initialLineEndingBreaks = [],
   newFileLineEndingFallback = "lf",
+  expectedLineEnding = "lf",
+  markerGlyph = "⏎",
   pendingSelection,
   onPendingSelectionApplied,
   contextSurface,
@@ -168,6 +190,18 @@ export function MarkdownEditor({
   // the next new break without needing to recreate the field mid-document.
   const newFileLineEndingFallbackRef = useRef<LineEndingKind>(
     newFileLineEndingFallback
+  );
+  // #252: read fresh by the line-ending marker feature's detect() on every
+  // decoration recompute, so a runtime Settings change is honored without
+  // rebuilding the feature or the tracking field — mirrors
+  // newFileLineEndingFallbackRef above.
+  const expectedLineEndingRef = useRef<ExpectedLineEnding>(expectedLineEnding);
+  const markerGlyphRef = useRef<LineEndingMarkerGlyph>(markerGlyph);
+  // Set once, at mount, so the settings-reconfigure effect below can build
+  // a fresh marker feature against the SAME tracking field instance — the
+  // field itself is never recreated (see the mount effect for why).
+  const lineEndingFieldRef = useRef<StateField<LineEndingBreakSet> | null>(
+    null
   );
 
   if (!readOnlyCompartmentRef.current) {
@@ -198,6 +232,14 @@ export function MarkdownEditor({
   }, [newFileLineEndingFallback]);
 
   useEffect(() => {
+    expectedLineEndingRef.current = expectedLineEnding;
+  }, [expectedLineEnding]);
+
+  useEffect(() => {
+    markerGlyphRef.current = markerGlyph;
+  }, [markerGlyph]);
+
+  useEffect(() => {
     if (!hostRef.current) {
       return undefined;
     }
@@ -217,6 +259,7 @@ export function MarkdownEditor({
         initialLineEndingBreaks,
         () => newFileLineEndingFallbackRef.current
       );
+    lineEndingFieldRef.current = lineEndingField;
 
     const view = new EditorView({
       parent: hostRef.current,
@@ -231,7 +274,14 @@ export function MarkdownEditor({
             EditorView.editable.of(!readOnly)
           ]),
           visibilityCompartment.of(
-            createVisibilityExtension([lineEndMarkerFeature])
+            createVisibilityExtension(
+              createLineEndingVisibilityFeatures(
+                markerGlyph,
+                lineEndingField,
+                () => expectedLineEndingRef.current,
+                () => markerGlyphRef.current
+              )
+            )
           ),
           lineEndingExtension,
           EditorView.updateListener.of((update) => {
@@ -291,6 +341,36 @@ export function MarkdownEditor({
       ])
     });
   }, [readOnly]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const lineEndingField = lineEndingFieldRef.current;
+
+    if (!view || !lineEndingField) {
+      return;
+    }
+
+    // #252: expectedLineEndingRef/markerGlyphRef are already read live by
+    // the marker feature's detect()/createDecoration() on every natural
+    // recompute (doc edit or scroll) — but a Settings-only change (no
+    // edit, no scroll) would otherwise leave stale decorations on screen
+    // until the next one. Reconfiguring the compartment forces an
+    // immediate recompute by mounting a fresh ViewPlugin instance, without
+    // recreating the EditorView or the #253 tracking field itself (the
+    // same StateField instance is passed through unchanged).
+    view.dispatch({
+      effects: visibilityCompartment.reconfigure(
+        createVisibilityExtension(
+          createLineEndingVisibilityFeatures(
+            markerGlyph,
+            lineEndingField,
+            () => expectedLineEndingRef.current,
+            () => markerGlyphRef.current
+          )
+        )
+      )
+    });
+  }, [expectedLineEnding, markerGlyph]);
 
   useEffect(() => {
     const view = viewRef.current;

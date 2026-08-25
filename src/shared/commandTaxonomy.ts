@@ -8,7 +8,11 @@ export const CORE_COMMAND_DOMAINS = [
   "search",
   "import",
   "export",
-  "app"
+  "app",
+  // #252: read-only editor diagnostics/assistance (line-ending
+  // distribution today; paragraph indentation, invisible characters, and
+  // other document diagnostics are expected to join this domain later).
+  "assist"
 ] as const;
 
 export type CoreCommandDomain = (typeof CORE_COMMAND_DOMAINS)[number];

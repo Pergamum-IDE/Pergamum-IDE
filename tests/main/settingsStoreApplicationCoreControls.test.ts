@@ -28,6 +28,13 @@ import {
 import type { SaveApplicationSettingsRequest } from "../../src/shared/settings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
+// #252: editor.lineEnding.* is always-resolved (non-sparse), unlike
+// fontFamily — every save request's `editor` must carry it.
+const defaultLineEndingSettings = {
+  expected: getCatalogDefaultValue("editor.lineEnding.expected"),
+  markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
+};
+
 const defaultSoundSettings = {
   enabled: true,
   dialog: { enabled: true },
@@ -85,7 +92,7 @@ function validSaveRequest(
         marquee: { delay: 2000, speed: 40 }
       }
     },
-    editor: {},
+    editor: { lineEnding: defaultLineEndingSettings },
     files: {
       newFile: {
         lineEnding: "lf",
@@ -302,7 +309,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           },
           fontFamily: "Inter"
         },
-        editor: { fontFamily: "Fira Code" },
+        editor: {
+          fontFamily: "Fira Code",
+          lineEnding: defaultLineEndingSettings
+        },
         commandPalette: {
           description: {
             enable: false,
@@ -346,7 +356,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       },
       fontFamily: "Inter"
     });
-    expect(written.editor).toEqual({ fontFamily: "Fira Code" });
+    expect(written.editor).toEqual({
+      fontFamily: "Fira Code",
+      lineEnding: defaultLineEndingSettings
+    });
     expect(written.files).toEqual({
       newFile: {
         lineEnding: "crlf",
@@ -434,7 +447,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         }
       }),
       validSaveRequest({
-        editor: { fontFamily: 'Fira Code"; color: red' }
+        editor: {
+          fontFamily: 'Fira Code"; color: red',
+          lineEnding: defaultLineEndingSettings
+        }
       }),
       validSaveRequest({
         commandPalette: {

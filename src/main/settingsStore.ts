@@ -230,18 +230,36 @@ function readCommandPaletteSettings(
   };
 }
 
+function readLineEndingSettings(
+  value: unknown
+): ApplicationSettings["editor"]["lineEnding"] {
+  const lineEndingValue = isObject(value) ? value : undefined;
+
+  return {
+    expected: resolveCatalogValue(
+      "editor.lineEnding.expected",
+      lineEndingValue?.expected
+    ).value,
+    markerGlyph: resolveCatalogValue(
+      "editor.lineEnding.markerGlyph",
+      lineEndingValue?.markerGlyph
+    ).value
+  };
+}
+
 function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   const editorValue = isObject(value) ? value : undefined;
+  const lineEnding = readLineEndingSettings(editorValue?.lineEnding);
 
   if (
     editorValue === undefined ||
     typeof editorValue.fontFamily !== "string" ||
     !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
   ) {
-    return {};
+    return { lineEnding };
   }
 
-  return { fontFamily: editorValue.fontFamily };
+  return { fontFamily: editorValue.fontFamily, lineEnding };
 }
 
 function readNewFileSettings(
@@ -632,6 +650,42 @@ function parseCommandPaletteSettingsForWrite(
   };
 }
 
+function parseLineEndingSettingsForWrite(
+  value: unknown
+): ApplicationSettings["editor"]["lineEnding"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 2 ||
+    !keys.includes("expected") ||
+    !keys.includes("markerGlyph")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const expectedResolution = resolveCatalogValue(
+    "editor.lineEnding.expected",
+    value.expected
+  );
+  const markerGlyphResolution = resolveCatalogValue(
+    "editor.lineEnding.markerGlyph",
+    value.markerGlyph
+  );
+
+  if (!expectedResolution.ok || !markerGlyphResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    expected: expectedResolution.value,
+    markerGlyph: markerGlyphResolution.value
+  };
+}
+
 function parseEditorSettingsForWrite(
   value: unknown
 ): ApplicationSettings["editor"] {
@@ -641,13 +695,16 @@ function parseEditorSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
+  const hasLineEnding = keys.includes("lineEnding");
 
-  if (keys.length !== (hasFontFamily ? 1 : 0)) {
+  if (!hasLineEnding || keys.length !== (hasFontFamily ? 2 : 1)) {
     throw new Error("Invalid application settings.");
   }
 
+  const lineEnding = parseLineEndingSettingsForWrite(value.lineEnding);
+
   if (!hasFontFamily) {
-    return {};
+    return { lineEnding };
   }
 
   if (
@@ -658,7 +715,8 @@ function parseEditorSettingsForWrite(
   }
 
   return {
-    fontFamily: value.fontFamily
+    fontFamily: value.fontFamily,
+    lineEnding
   };
 }
 

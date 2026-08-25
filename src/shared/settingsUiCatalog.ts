@@ -367,6 +367,62 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.fontFamily")
   },
   {
+    key: "editor.lineEnding.expected",
+    category: "editor",
+    order: 200,
+    labelKey: "settings.editor.lineEnding.expected.label",
+    descriptionKey: "settings.editor.lineEnding.expected.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "lf",
+          labelKey: "settings.editor.lineEnding.expected.option.lf.label"
+        },
+        {
+          value: "crlf",
+          labelKey: "settings.editor.lineEnding.expected.option.crlf.label"
+        },
+        {
+          value: "cr",
+          labelKey: "settings.editor.lineEnding.expected.option.cr.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("editor.lineEnding.expected")
+  },
+  {
+    key: "editor.lineEnding.markerGlyph",
+    category: "editor",
+    order: 300,
+    labelKey: "settings.editor.lineEnding.markerGlyph.label",
+    // #252 issue text: font coverage for ⏎/↵/↓ varies, so the description
+    // must warn that the glyph may not render depending on the user's font.
+    descriptionKey: "settings.editor.lineEnding.markerGlyph.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "none",
+          labelKey: "settings.editor.lineEnding.markerGlyph.option.none.label"
+        },
+        {
+          value: "⏎",
+          labelKey: "settings.editor.lineEnding.markerGlyph.option.returnSymbol.label"
+        },
+        {
+          value: "↵",
+          labelKey: "settings.editor.lineEnding.markerGlyph.option.downLeftArrow.label"
+        },
+        {
+          value: "↓",
+          labelKey: "settings.editor.lineEnding.markerGlyph.option.downArrow.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
+  },
+  {
     key: "files.newFile.lineEnding",
     category: "files",
     order: 100,

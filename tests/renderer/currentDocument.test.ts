@@ -20,6 +20,7 @@ import {
   analyzeLineEndings,
   serializeLineEndings
 } from "../../src/renderer/lineEndingTracking";
+import { computeLineEndingDistribution } from "../../src/renderer/lineEndingDistribution";
 
 /**
  * Drives the real production tracking field (StateField + history +
@@ -386,5 +387,32 @@ describe("dirty detection considers line-ending tracking state, not just content
 
     expect(contentOnlyMatch.content).toBe(document.savedContent);
     expect(isCurrentDocumentDirty(contentOnlyMatch)).toBe(true);
+  });
+});
+
+describe("editor.lineEnding.expected never affects dirty state or document content (#252)", () => {
+  it("leaves content, savedContent, and the tracked/saved break sets byte- and reference-identical across every possible expected kind", () => {
+    const raw = "A\r\nB\nC";
+    const document = createFileDocument({ path: "C:/x.md", content: raw });
+    expect(isCurrentDocumentDirty(document)).toBe(false);
+
+    const contentBefore = document.content;
+    const savedContentBefore = document.savedContent;
+    const breaksBefore = document.lineEndingBreaks;
+    const savedBreaksBefore = document.savedLineEndingBreaks;
+
+    // editor.lineEnding.expected is a Settings value, not a CurrentDocument
+    // field — computeLineEndingDistribution (the only #252 consumer that
+    // takes an expected kind) is a pure read: calling it with every
+    // possible value must never mutate the document it read from.
+    for (const expectedKind of ["lf", "crlf", "cr"] as const) {
+      computeLineEndingDistribution(document.lineEndingBreaks, expectedKind);
+
+      expect(document.content).toBe(contentBefore);
+      expect(document.savedContent).toBe(savedContentBefore);
+      expect(document.lineEndingBreaks).toBe(breaksBefore);
+      expect(document.savedLineEndingBreaks).toBe(savedBreaksBefore);
+      expect(isCurrentDocumentDirty(document)).toBe(false);
+    }
   });
 });
