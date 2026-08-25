@@ -1,4 +1,8 @@
+import type { StateField } from "@codemirror/state";
 import type { Decoration } from "@codemirror/view";
+import type { LineEndingBreakSet } from "../editorLineEndingField";
+import type { LineEndingKind } from "../lineEndingTracking";
+import type { LineEndingMarkerGlyph } from "../../shared/settings";
 import {
   createTextMarkerDecoration,
   type VisibilityDetectionContext,
@@ -7,43 +11,105 @@ import {
 } from "./visibilityFeature";
 
 /**
- * Phase 5-1 proof-of-operation feature: shows a fixed placeholder marker at
- * every line end so the decoration/visibility foundation can be verified
- * end to end.
- *
- * The marker is deliberately meaningless right now. Mapping it to the
- * actual line ending kind (CRLF/LF/CR) is Phase 5-2's responsibility and is
- * explicitly out of scope here.
+ * #252: the #248 placeholder line-end marker, now integrated with #253's
+ * per-break line-ending tracking. Shows `editor.lineEnding.markerGlyph` at
+ * every tracked break in the visible range, styled as "expected" or
+ * "unexpected" depending on whether the break's actual kind matches
+ * `editor.lineEnding.expected` — a read-only diagnostic. This feature never
+ * writes to the document and never decides a save-time conversion; that
+ * stays #253's responsibility (see lineEndingTracking.ts).
  */
 
 export const lineEndMarkerClassName = "pergamum-line-end-marker";
-export const lineEndMarkerText = "⏎";
+export const lineEndMarkerUnexpectedClassName =
+  "pergamum-line-end-marker-unexpected";
 
-function detectLineEnds(
-  context: VisibilityDetectionContext
-): readonly VisibilityMarker[] {
-  const { doc, from, to } = context;
-  const markers: VisibilityMarker[] = [];
+/**
+ * Builds the feature. `lineEndingField` is the same `StateField` instance
+ * #253's tracking extension installs (see MarkdownEditor.tsx) — this
+ * feature only ever reads it via `state.field(lineEndingField, false)`,
+ * never `lineEndingBreakSetToArray`, so a keystroke that touches no line
+ * break costs this feature nothing extra beyond the viewport-bounded
+ * `RangeSet.between` scan below.
+ *
+ * `getExpectedKind`/`getMarkerGlyph` are read fresh on every `detect()`
+ * call rather than captured once, so a runtime Settings change is honored
+ * on the next decoration recompute without rebuilding this feature or
+ * reconfiguring the tracking field itself — the same live-getter pattern
+ * #253 uses for `files.newFile.lineEnding`.
+ */
+export function createLineEndingMarkerFeature(
+  lineEndingField: StateField<LineEndingBreakSet>,
+  getExpectedKind: () => LineEndingKind,
+  getMarkerGlyph: () => string
+): VisibilityFeature {
+  function detect(
+    context: VisibilityDetectionContext
+  ): readonly VisibilityMarker[] {
+    const breaks = context.state.field(lineEndingField, false);
 
-  // The last line of the whole document never has a following line break,
-  // so it gets no marker. Only lines that overlap [from, to) are scanned,
-  // which keeps this bounded by the visible range rather than doc size.
-  const firstLine = doc.lineAt(from).number;
-  const lastEligibleLine = Math.min(doc.lineAt(to).number, doc.lines - 1);
+    if (!breaks) {
+      return [];
+    }
 
-  for (let lineNumber = firstLine; lineNumber <= lastEligibleLine; lineNumber++) {
-    markers.push({ position: doc.line(lineNumber).to });
+    const expectedKind = getExpectedKind();
+    const markers: VisibilityMarker[] = [];
+
+    // RangeSet.between only visits ranges overlapping [from, to) — the
+    // document's own last line (which has no trailing break at all) is
+    // never in this set to begin with, so no separate "skip the last
+    // line" check is needed here (unlike the #248 placeholder feature,
+    // which derived markers from line boundaries rather than tracked
+    // breaks).
+    breaks.between(context.from, context.to, (position, _to, value) => {
+      markers.push({
+        position,
+        variant: value.kind === expectedKind ? "expected" : "unexpected"
+      });
+    });
+
+    return markers;
   }
 
-  return markers;
+  function createDecoration(marker: VisibilityMarker): Decoration {
+    const className =
+      marker.variant === "unexpected"
+        ? `${lineEndMarkerClassName} ${lineEndMarkerUnexpectedClassName}`
+        : lineEndMarkerClassName;
+
+    return createTextMarkerDecoration(getMarkerGlyph(), className);
+  }
+
+  return {
+    id: "lineEndingMarker",
+    detect,
+    createDecoration
+  };
 }
 
-function createLineEndDecoration(): Decoration {
-  return createTextMarkerDecoration(lineEndMarkerText, lineEndMarkerClassName);
-}
+/**
+ * #252 follow-up: `editor.lineEnding.markerGlyph`'s explicit `"none"` value
+ * means "draw no inline marker at all" — decided here, once, at the point
+ * the visibility feature list is built (mount, and the settings-reconfigure
+ * effect), rather than inside `detect()`/`createDecoration()` above. This
+ * keeps the feature itself unaware of "no marker" as a concept: when a
+ * glyph *is* selected, its expected/unexpected detection and color-coding
+ * semantics are exactly as before this change. `"none"` never affects
+ * #253's tracking (`lineEndingField` keeps updating regardless) or the
+ * Line Ending Distribution query/dialog, since neither depends on this
+ * feature being installed.
+ */
+export function createLineEndingVisibilityFeatures(
+  markerGlyph: LineEndingMarkerGlyph,
+  lineEndingField: StateField<LineEndingBreakSet>,
+  getExpectedKind: () => LineEndingKind,
+  getMarkerGlyph: () => string
+): VisibilityFeature[] {
+  if (markerGlyph === "none") {
+    return [];
+  }
 
-export const lineEndMarkerFeature: VisibilityFeature = {
-  id: "lineEndMarker",
-  detect: detectLineEnds,
-  createDecoration: createLineEndDecoration
-};
+  return [
+    createLineEndingMarkerFeature(lineEndingField, getExpectedKind, getMarkerGlyph)
+  ];
+}

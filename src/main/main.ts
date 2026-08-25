@@ -14,7 +14,7 @@ import { registerContextMenuIpc } from "./contextMenuIpc";
 import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
-import { installApplicationMenu } from "./menu";
+import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import {
   defaultProjectWriteOwnershipManager,
   registerProjectIpc,
@@ -137,6 +137,7 @@ app.whenReady().then(async () => {
     getMainWindow: () => mainWindow,
     debugLogger
   });
+  registerApplicationMenuIpc();
   registerDebugLogIpc(debugLogger);
   registerContextMenuIpc(debugLogger);
   registerFileIpc(debugLogger);

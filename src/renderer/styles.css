@@ -543,6 +543,20 @@ label.settingsItemHeader {
   height: 30px;
 }
 
+/* #252 follow-up: render the line-ending marker glyph options in the same
+   font as the editor, so the user previews the glyph as it will actually
+   appear in the editor rather than in the Settings page's UI font. */
+.settingsSelect-editorFont,
+.settingsSelect-editorFont option {
+  font-family: var(
+    --pergamum-editor-font-family,
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    monospace
+  );
+}
+
 .settingsError {
   max-width: 760px;
   color: #9a3412;
@@ -1512,12 +1526,34 @@ label.settingsItemHeader {
 }
 
 /* #248: visibility decoration markers are display-only annotations drawn
-   over the document; they must never look like real editable text. */
+   over the document; they must never look like real editable text.
+   #252 follow-up: the base ("expected") marker deliberately reuses the
+   existing muted/secondary sidebar foreground token (not a bespoke color)
+   so it reads as quiet UI chrome — visible on close inspection, but never
+   competing with body text — rather than as content. There is no dark
+   theme implementation anywhere in this codebase yet (no
+   prefers-color-scheme / [data-theme] rule exists), so this has only been
+   confirmed against the current light palette; the token indirection at
+   least means both marker colors move together with the rest of the UI
+   if/when a dark theme is introduced, rather than staying pinned to a
+   light-only hex value. */
 .pergamum-line-end-marker {
-  color: #9aa7b4;
+  color: var(--workspace-sidebar-muted-foreground);
   opacity: 0.7;
   pointer-events: none;
   user-select: none;
+}
+
+/* #252: an "unexpected" line ending (its actual kind differs from
+   editor.lineEnding.expected) is a diagnostic, not an error — reuses the
+   app's existing warning color (not the error color) so it reads as
+   "differs from what you expect here," not "this is broken," while still
+   standing out clearly against the deliberately low-contrast expected
+   marker above. Same glyph, size, and position as the expected marker —
+   only color/opacity differ. */
+.pergamum-line-end-marker-unexpected {
+  color: var(--app-dialog-icon-warning);
+  opacity: 1;
 }
 
 .preview {
@@ -2972,4 +3008,93 @@ label.settingsItemHeader {
     background: Canvas;
     color: CanvasText;
   }
+}
+
+/* #252: Line Ending Distribution dialog — read-only, no chart library, a
+   small rows-of-data layout rather than a bespoke per-kind component. */
+.lineEndingDistributionDialogContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* #252 follow-up: the grid lives on the shared `.lineEndingDistributionRows`
+   container, not per-row — CSS Grid sizes `max-content` columns from every
+   item assigned to that column across the whole container, not per row in
+   isolation. `.lineEndingDistributionRow`/`dd` are `display: contents` so
+   their children (label, bar track, value) become direct items of that one
+   grid, auto-placed three per row in DOM order. This is what makes the
+   label column, the bar column, and the value column each a single
+   consistent width/position across all three rows: the bar column
+   (`minmax(0, 1fr)`) is one shared track, so its start/end/width never
+   depends on that row's own label or value text length, and only the fill
+   div's own `width: N%` (a child *inside* the fixed-width track) varies. */
+.lineEndingDistributionRows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 10px;
+  margin: 0;
+}
+
+.lineEndingDistributionRow {
+  display: contents;
+}
+
+.lineEndingDistributionRow dt {
+  color: #52616f;
+  font-weight: 700;
+}
+
+.lineEndingDistributionRow dd {
+  display: contents;
+  margin: 0;
+}
+
+.lineEndingDistributionBarTrack {
+  min-width: 0;
+  height: 8px;
+  border-radius: 4px;
+  background: #e4e9ee;
+  overflow: hidden;
+}
+
+.lineEndingDistributionBarFill {
+  height: 100%;
+  background: #3d6a8a;
+  border-radius: inherit;
+}
+
+.lineEndingDistributionRowValue {
+  color: #2b2b2b;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lineEndingDistributionSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding-block-start: 4px;
+  border-block-start: 1px solid #e4e9ee;
+}
+
+.lineEndingDistributionSummaryRow {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.lineEndingDistributionSummaryRow dt {
+  color: #52616f;
+  font-weight: 700;
+}
+
+.lineEndingDistributionSummaryRow dd {
+  margin: 0;
+  min-width: 0;
 }

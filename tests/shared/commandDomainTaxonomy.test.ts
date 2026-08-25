@@ -6,6 +6,7 @@ import {
   RESERVED_COMMAND_NAMESPACE_ROOTS
 } from "../../src/shared/commandTaxonomy";
 import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
+import { registerAssistCommands } from "../../src/renderer/assistCommands";
 import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
@@ -147,6 +148,15 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     { openCommandPalette: () => undefined },
     { open: "Command Palette", openDescription: "Open the Command Palette" }
+  );
+  registerAssistCommands(
+    registry,
+    { showLineEndingDistribution: () => undefined },
+    {
+      showLineEndingDistribution: "Show Line Ending Distribution",
+      showLineEndingDistributionDescription:
+        "Show the distribution of LF, CRLF, and CR line endings in the current document."
+    }
   );
 
   return registry;

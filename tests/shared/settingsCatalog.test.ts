@@ -936,8 +936,11 @@ describe("Settings Catalog Foundation (#150)", () => {
     it("getCatalogEntriesByArea returns only that area's entries", () => {
       const editorEntries = getCatalogEntriesByArea("editor");
 
-      expect(editorEntries).toHaveLength(1);
-      expect(editorEntries[0]?.key).toBe("editor.fontFamily");
+      expect(editorEntries.map((entry) => entry.key).sort()).toEqual([
+        "editor.fontFamily",
+        "editor.lineEnding.expected",
+        "editor.lineEnding.markerGlyph"
+      ]);
     });
 
     it("has no free-form category field on catalog entries", () => {
@@ -969,13 +972,15 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, and #250 preview.updateDelayMs (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, and #252 editor.lineEnding.* (#232: workbench.advancedSettings.enabled removed)", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
           "commandPalette.description.enable",
           "commandPalette.description.marquee.delay",
           "commandPalette.description.marquee.speed",
           "editor.fontFamily",
+          "editor.lineEnding.expected",
+          "editor.lineEnding.markerGlyph",
           "files.newFile.encoding",
           "files.newFile.lineEnding",
           "preview.renderer",
@@ -1001,6 +1006,24 @@ describe("Settings Catalog Foundation (#150)", () => {
     it("workbench.colorTheme's default value is 'Pergamum Light'", () => {
       expect(getCatalogDefaultValue("workbench.colorTheme")).toBe(
         "Pergamum Light"
+      );
+    });
+
+    it("editor.lineEnding.expected's enum values are exactly ['lf', 'crlf', 'cr'], with default 'lf'", () => {
+      expect(getCatalogEntry("editor.lineEnding.expected").enumValues).toEqual([
+        "lf",
+        "crlf",
+        "cr"
+      ]);
+      expect(getCatalogDefaultValue("editor.lineEnding.expected")).toBe("lf");
+    });
+
+    it("editor.lineEnding.markerGlyph's enum values are exactly 'none' plus the three glyphs, with default '⏎' (#252 follow-up: 'none' is an explicit value, not the default)", () => {
+      expect(
+        getCatalogEntry("editor.lineEnding.markerGlyph").enumValues
+      ).toEqual(["none", "⏎", "↵", "↓"]);
+      expect(getCatalogDefaultValue("editor.lineEnding.markerGlyph")).toBe(
+        "none"
       );
     });
 

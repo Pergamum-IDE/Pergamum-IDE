@@ -5,6 +5,7 @@ import { APPLICATION_MENU_CHANNELS } from "../../src/shared/api";
 import {
   applicationCommandIds,
   applicationMenuCommandIds,
+  assistCommandIds,
   commandPaletteCommandIds,
   editorCommandIds
 } from "../../src/shared/commandIds";
@@ -14,21 +15,29 @@ const electronMock = vi.hoisted(() => ({
     template
   })),
   setApplicationMenu: vi.fn(),
-  getPath: vi.fn()
+  getApplicationMenu: vi.fn(),
+  getPath: vi.fn(),
+  ipcMainOn: vi.fn()
 }));
 
 vi.mock("electron", () => ({
   Menu: {
     buildFromTemplate: electronMock.buildFromTemplate,
-    setApplicationMenu: electronMock.setApplicationMenu
+    setApplicationMenu: electronMock.setApplicationMenu,
+    getApplicationMenu: electronMock.getApplicationMenu
   },
   app: {
     getPath: electronMock.getPath
+  },
+  ipcMain: {
+    on: electronMock.ipcMainOn
   }
 }));
 
 import {
+  applyApplicationMenuEnablement,
   buildApplicationMenu,
+  registerApplicationMenuIpc,
   sendApplicationMenuCommand,
   type ApplicationMenuOptions,
   type ApplicationMenuTargetWindow
@@ -380,6 +389,182 @@ describe("application menu", () => {
     const source = readFileSync("src/main/menu.ts", "utf8");
 
     expect(source).not.toContain("F4");
+  });
+
+  describe("Assist menu (#252)", () => {
+    it("places Assist between View and Help on Windows/Linux", () => {
+      const template = buildApplicationMenu("en", emptyMenuOptions(), "win32");
+      const labels = template.map((item) => item.label);
+
+      expect(labels.indexOf("Assist")).toBeGreaterThan(labels.indexOf("View"));
+      expect(labels.indexOf("Help")).toBeGreaterThan(labels.indexOf("Assist"));
+    });
+
+    it("places Assist between View and Help on macOS too, ahead of Window", () => {
+      const template = buildApplicationMenu("en", emptyMenuOptions(), "darwin");
+      const labels = template.map((item) => item.label);
+
+      expect(labels.indexOf("Assist")).toBeGreaterThan(labels.indexOf("View"));
+      expect(labels.indexOf("Window")).toBeGreaterThan(labels.indexOf("Assist"));
+      expect(labels.indexOf("Help")).toBeGreaterThan(labels.indexOf("Window"));
+    });
+
+    it("renders 支援 as the Assist menu label in Japanese", () => {
+      const template = buildApplicationMenu("ja", emptyMenuOptions(), "win32");
+
+      expect(template.map((item) => item.label)).toContain("支援");
+    });
+
+    it("sends assist.lineEndingDistribution.show from the Assist menu item", () => {
+      const { window, send } = menuWindowMock();
+      const assistItems = submenuItems(
+        findTopLevelMenu(
+          buildApplicationMenu("en", { getMainWindow: () => window }, "win32"),
+          "Assist"
+        )
+      );
+
+      clickCommandItems(assistItems);
+
+      expect(send).toHaveBeenCalledWith(
+        APPLICATION_MENU_CHANNELS.command,
+        assistCommandIds.showLineEndingDistribution
+      );
+    });
+
+    it("includes assist.lineEndingDistribution.show in the application-menu-sendable allowlist", () => {
+      expect(applicationMenuCommandIds).toContain(
+        assistCommandIds.showLineEndingDistribution
+      );
+    });
+  });
+
+  describe("command menu item ids (#252 follow-up)", () => {
+    it("gives every command-backed menu item a stable id matching its command id", () => {
+      const fileItems = fileMenuItems("win32");
+      const assistItems = submenuItems(
+        findTopLevelMenu(
+          buildApplicationMenu("en", emptyMenuOptions(), "win32"),
+          "Assist"
+        )
+      );
+
+      expect(
+        fileItemByLabel(fileItems, "Save").id
+      ).toBe(editorCommandIds.saveDocument);
+      expect(
+        fileItemByLabel(fileItems, "Save As...").id
+      ).toBe(editorCommandIds.saveAs);
+      expect(assistItems[0]?.id).toBe(
+        assistCommandIds.showLineEndingDistribution
+      );
+    });
+  });
+});
+
+describe("applyApplicationMenuEnablement / registerApplicationMenuIpc (#252 follow-up)", () => {
+  it("sets MenuItem.enabled for each command id present in the enablement map", () => {
+    const saveItem = { id: editorCommandIds.saveDocument, enabled: true };
+    const assistItem = {
+      id: assistCommandIds.showLineEndingDistribution,
+      enabled: true
+    };
+    const getMenuItemById = vi.fn((id: string) =>
+      id === saveItem.id ? saveItem : id === assistItem.id ? assistItem : null
+    );
+    electronMock.getApplicationMenu.mockReturnValue({ getMenuItemById });
+
+    applyApplicationMenuEnablement({
+      [editorCommandIds.saveDocument]: false,
+      [assistCommandIds.showLineEndingDistribution]: false
+    });
+
+    expect(saveItem.enabled).toBe(false);
+    expect(assistItem.enabled).toBe(false);
+  });
+
+  it("re-enables a previously disabled item when the map says true", () => {
+    const assistItem = {
+      id: assistCommandIds.showLineEndingDistribution,
+      enabled: false
+    };
+    electronMock.getApplicationMenu.mockReturnValue({
+      getMenuItemById: () => assistItem
+    });
+
+    applyApplicationMenuEnablement({
+      [assistCommandIds.showLineEndingDistribution]: true
+    });
+
+    expect(assistItem.enabled).toBe(true);
+  });
+
+  it("does nothing when there is no application menu installed yet", () => {
+    electronMock.getApplicationMenu.mockReturnValue(null);
+
+    expect(() =>
+      applyApplicationMenuEnablement({
+        [assistCommandIds.showLineEndingDistribution]: false
+      })
+    ).not.toThrow();
+  });
+
+  it("ignores a command id that isn't found on the current menu", () => {
+    electronMock.getApplicationMenu.mockReturnValue({
+      getMenuItemById: () => null
+    });
+
+    expect(() =>
+      applyApplicationMenuEnablement({ "workspace.files.focus": false })
+    ).not.toThrow();
+  });
+
+  it("registers an ipcMain handler on the setEnablement channel", () => {
+    registerApplicationMenuIpc();
+
+    expect(electronMock.ipcMainOn).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.setEnablement,
+      expect.any(Function)
+    );
+  });
+
+  it("applies a valid enablement payload received over IPC", () => {
+    registerApplicationMenuIpc();
+    const handler = electronMock.ipcMainOn.mock.calls.find(
+      (call) => call[0] === APPLICATION_MENU_CHANNELS.setEnablement
+    )?.[1];
+    const assistItem = {
+      id: assistCommandIds.showLineEndingDistribution,
+      enabled: true
+    };
+    electronMock.getApplicationMenu.mockReturnValue({
+      getMenuItemById: () => assistItem
+    });
+
+    handler?.({} as never, {
+      [assistCommandIds.showLineEndingDistribution]: false
+    });
+
+    expect(assistItem.enabled).toBe(false);
+  });
+
+  it("ignores a malformed IPC payload without throwing, and never reaches the menu for it", () => {
+    registerApplicationMenuIpc();
+    const handler = electronMock.ipcMainOn.mock.calls.find(
+      (call) => call[0] === APPLICATION_MENU_CHANNELS.setEnablement
+    )?.[1];
+    const callsBefore = electronMock.getApplicationMenu.mock.calls.length;
+
+    expect(() => handler?.({} as never, "not an object")).not.toThrow();
+    expect(() => handler?.({} as never, null)).not.toThrow();
+    expect(() => handler?.({} as never, [])).not.toThrow();
+    expect(() =>
+      handler?.({} as never, { "invalid.id": "not a boolean" })
+    ).not.toThrow();
+
+    expect(electronMock.getApplicationMenu.mock.calls.length).toBe(
+      callsBefore
+    );
   });
 });
 

@@ -1,11 +1,16 @@
 import {
   Menu,
+  ipcMain,
   type BrowserWindow,
   type MenuItemConstructorOptions
 } from "electron";
-import { APPLICATION_MENU_CHANNELS } from "../shared/api";
+import {
+  APPLICATION_MENU_CHANNELS,
+  type ApplicationMenuEnablementMap
+} from "../shared/api";
 import {
   applicationCommandIds,
+  assistCommandIds,
   commandPaletteCommandIds,
   editorCommandIds,
   isApplicationMenuCommandId,
@@ -61,6 +66,11 @@ function commandMenuItem(
   accelerator?: string
 ): MenuItemConstructorOptions {
   return {
+    // #252 follow-up: gives applyApplicationMenuEnablement a stable way to
+    // find this item later via Menu.getMenuItemById, so `when`-based
+    // enablement (e.g. editor.kind.markdown) can be reflected as a real
+    // disabled state without rebuilding the whole menu.
+    id: commandId,
     label: label(language, key),
     accelerator,
     click: () => {
@@ -263,6 +273,28 @@ function commandPaletteF1MenuItem(
   };
 }
 
+/**
+ * #252: foundation for future line-ending diagnostics, paragraph
+ * indentation, invisible characters, and document diagnostics — only the
+ * line-ending distribution item is added here.
+ */
+function assistMenu(
+  language: Language,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: label(language, "menu.assist"),
+    submenu: [
+      commandMenuItem(
+        assistCommandIds.showLineEndingDistribution,
+        language,
+        "menu.assist.showLineEndingDistribution",
+        options
+      )
+    ]
+  };
+}
+
 function macWindowMenu(language: Language): MenuItemConstructorOptions {
   return {
     label: label(language, "menu.window"),
@@ -361,6 +393,7 @@ export function buildApplicationMenu(
     fileMenu(language, platform, options),
     editMenu(language),
     viewMenu(language, options),
+    assistMenu(language, options),
     ...(platform === "darwin" ? [macWindowMenu(language)] : []),
     helpMenu(language, options)
   ];
@@ -386,4 +419,52 @@ export async function installApplicationMenu(
   Menu.setApplicationMenu(
     createApplicationMenu(settings.workbench.language, options)
   );
+}
+
+function isApplicationMenuEnablementMap(
+  value: unknown
+): value is ApplicationMenuEnablementMap {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.entries(value).every(
+    ([commandId, enabled]) =>
+      isApplicationMenuCommandId(commandId) && typeof enabled === "boolean"
+  );
+}
+
+/**
+ * #252 follow-up: the native menu is built once at startup and never
+ * rebuilt — this updates individual `MenuItem.enabled` flags in place (via
+ * the stable `id: commandId` set on every command menu item by
+ * `commandMenuItem` above) instead of reconstructing the whole menu, so a
+ * live `CommandContext` change (e.g. Application Settings becoming the
+ * active tab, which makes `editor.kind.markdown` false) is reflected
+ * immediately without flicker or losing menu state.
+ */
+export function applyApplicationMenuEnablement(
+  enablement: ApplicationMenuEnablementMap
+): void {
+  const menu = Menu.getApplicationMenu();
+
+  if (!menu) {
+    return;
+  }
+
+  for (const [commandId, enabled] of Object.entries(enablement)) {
+    const item = menu.getMenuItemById(commandId);
+
+    if (item) {
+      item.enabled = enabled;
+    }
+  }
+}
+
+export function registerApplicationMenuIpc(): void {
+  ipcMain.on(APPLICATION_MENU_CHANNELS.setEnablement, (_event, payload) => {
+    if (isApplicationMenuEnablementMap(payload)) {
+      applyApplicationMenuEnablement(payload);
+    }
+  });
 }

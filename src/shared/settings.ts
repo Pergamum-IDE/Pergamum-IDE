@@ -89,8 +89,26 @@ export interface ApplicationCommandPaletteSettings {
 export type NewFileLineEnding = SettingValueOf<"files.newFile.lineEnding">;
 export type NewFileEncoding = SettingValueOf<"files.newFile.encoding">;
 
+// #252: `expected` is a diagnostic-only setting — what marker/distribution
+// UI treats as "the line ending you expect to see" — never a save-time
+// conversion target. It must stay fully separate from #253's
+// files.newFile.lineEnding (which decides a *new* break's kind) and from
+// the per-break kinds actually tracked/saved. `markerGlyph` is one glyph
+// used for every line-ending kind; expected/unexpected is shown via marker
+// variant/styling, not by choosing a different glyph per kind.
+export type ExpectedLineEnding = SettingValueOf<"editor.lineEnding.expected">;
+export type LineEndingMarkerGlyph = SettingValueOf<
+  "editor.lineEnding.markerGlyph"
+>;
+
+export interface ApplicationEditorLineEndingSettings {
+  expected: ExpectedLineEnding;
+  markerGlyph: LineEndingMarkerGlyph;
+}
+
 export interface ApplicationEditorSettings {
   fontFamily?: string;
+  lineEnding: ApplicationEditorLineEndingSettings;
 }
 
 export interface ApplicationNewFileSettings {
@@ -163,6 +181,7 @@ export interface EffectiveCommandPaletteSettings {
 
 export interface EffectiveEditorSettings {
   fontFamily: string;
+  lineEnding: ApplicationEditorLineEndingSettings;
 }
 
 export interface EffectiveFilesSettings {
@@ -234,7 +253,11 @@ export const builtInDefaultSettings: EffectiveSettings = {
     }
   },
   editor: {
-    fontFamily: getCatalogDefaultValue("editor.fontFamily")
+    fontFamily: getCatalogDefaultValue("editor.fontFamily"),
+    lineEnding: {
+      expected: getCatalogDefaultValue("editor.lineEnding.expected"),
+      markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
+    }
   },
   files: {
     newFile: {
@@ -285,7 +308,12 @@ export const defaultApplicationSettings: ApplicationSettings = {
       }
     }
   },
-  editor: {},
+  editor: {
+    lineEnding: {
+      expected: builtInDefaultSettings.editor.lineEnding.expected,
+      markerGlyph: builtInDefaultSettings.editor.lineEnding.markerGlyph
+    }
+  },
   files: {
     newFile: {
       lineEnding: builtInDefaultSettings.files.newFile.lineEnding,
@@ -330,7 +358,12 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
         }
       }
     },
-    editor: {},
+    editor: {
+      lineEnding: {
+        expected: defaultApplicationSettings.editor.lineEnding.expected,
+        markerGlyph: defaultApplicationSettings.editor.lineEnding.markerGlyph
+      }
+    },
     files: {
       newFile: {
         lineEnding: defaultApplicationSettings.files.newFile.lineEnding,
@@ -403,7 +436,11 @@ export function resolveEffectiveSettings(
     editor: {
       fontFamily:
         applicationSettings.editor.fontFamily ??
-        builtInDefaultSettings.editor.fontFamily
+        builtInDefaultSettings.editor.fontFamily,
+      // applicationOnly (#252), like files.newFile.lineEnding: always a
+      // concrete value already (resolved through the catalog at
+      // settings.json read time), so no fallback needed here.
+      lineEnding: applicationSettings.editor.lineEnding
     },
     files: {
       newFile: {

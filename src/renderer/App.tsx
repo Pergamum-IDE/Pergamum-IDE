@@ -14,9 +14,10 @@ import type {
   SaveMarkdownRejectedReason,
   SaveApplicationSettingsRequest
 } from "../shared/api";
-import type {
-  ApplicationMenuCommandId,
-  EditCommandId
+import {
+  applicationMenuCommandIds,
+  type ApplicationMenuCommandId,
+  type EditCommandId
 } from "../shared/commandIds";
 import type { CommandContext } from "../shared/commandEnablement";
 import type {
@@ -149,6 +150,15 @@ import {
   createLineJumpCommandTitles,
   registerLineJumpCommands
 } from "./lineJumpCommands";
+import {
+  createAssistCommandTitles,
+  registerAssistCommands
+} from "./assistCommands";
+import { LineEndingDistributionDialog } from "./dialog/LineEndingDistributionDialog";
+import {
+  computeLineEndingDistribution,
+  type LineEndingDistribution
+} from "./lineEndingDistribution";
 import {
   createLineJumpEditorSnapshot,
   documentLineStartOffset
@@ -406,6 +416,10 @@ export function App(): JSX.Element {
   const isAboutDialogPendingOrOpenRef = useRef(false);
   const [aboutDialogAppInfo, setAboutDialogAppInfo] =
     useState<PergamumAppInfo | null>(null);
+  const lineEndingDistributionDialogOpenerRef = useRef<Element | null>(null);
+  const isLineEndingDistributionDialogPendingOrOpenRef = useRef(false);
+  const [lineEndingDistributionData, setLineEndingDistributionData] =
+    useState<LineEndingDistribution | null>(null);
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
       dialogController.getPendingRequest()
@@ -551,6 +565,9 @@ export function App(): JSX.Element {
     () => false
   );
   const goToLineCommandRef = useRef<(line: number) => void>(() => undefined);
+  const showLineEndingDistributionCommandRef = useRef<() => void>(
+    () => undefined
+  );
   /**
    * Holds the current live command context. Read lazily by the
    * CommandRegistry's injected context provider so `when` re-evaluation at
@@ -860,6 +877,14 @@ export function App(): JSX.Element {
       },
       createLineJumpCommandTitles(translate)
     );
+    registerAssistCommands(
+      registry,
+      {
+        showLineEndingDistribution: () =>
+          showLineEndingDistributionCommandRef.current()
+      },
+      createAssistCommandTitles(translate)
+    );
     registerWorkspaceCommands(
       registry,
       {
@@ -1017,7 +1042,8 @@ export function App(): JSX.Element {
     registry.setCommandContextProvider(() => commandContextRef.current);
     registry.setCommandExecutionBlocker(() =>
       dialogController.getPendingRequest() ||
-      isAboutDialogPendingOrOpenRef.current
+      isAboutDialogPendingOrOpenRef.current ||
+      isLineEndingDistributionDialogPendingOrOpenRef.current
         ? "app_modal_open"
         : null
     );
@@ -1052,6 +1078,26 @@ export function App(): JSX.Element {
     sidebarMode,
     translate
   ]);
+  // #252 follow-up: the native Electron application menu is built once at
+  // startup and otherwise never touched, so it does not automatically
+  // reflect `when`-based enablement (e.g. `editor.kind.markdown` going
+  // false while Application Settings is the active tab). Push the same
+  // enablement the Command Palette already uses
+  // (`CommandRegistry.isEnabledForContext`) to main whenever it changes,
+  // so `assist.lineEndingDistribution.show` (and any other menu command
+  // that declares a `when`) is grayed out consistently in both surfaces.
+  useEffect(() => {
+    const enablement: Record<string, boolean> = {};
+
+    for (const commandId of applicationMenuCommandIds) {
+      enablement[commandId] = commandRegistry.isEnabledForContext(
+        commandId,
+        commandContext
+      );
+    }
+
+    window.pergamum.applicationMenu.setEnablement(enablement);
+  }, [commandRegistry, commandContext]);
   useEffect(
     () =>
       window.pergamum.contextMenu.onCommandSelected((selection) => {
@@ -1477,6 +1523,43 @@ export function App(): JSX.Element {
   function closeAboutDialog(): void {
     isAboutDialogPendingOrOpenRef.current = false;
     setAboutDialogAppInfo(null);
+  }
+
+  /**
+   * #252: this dialog's data is derived synchronously from the active
+   * document's #253 tracking state and the current
+   * `editor.lineEnding.expected` setting — no IPC round trip, unlike
+   * openAboutDialog above. It never mutates the document.
+   */
+  function openLineEndingDistributionDialog(): void {
+    if (
+      isLineEndingDistributionDialogPendingOrOpenRef.current ||
+      !activeMarkdownDocument
+    ) {
+      return;
+    }
+
+    if (typeof document !== "undefined") {
+      lineEndingDistributionDialogOpenerRef.current = document.activeElement;
+    }
+
+    isLineEndingDistributionDialogPendingOrOpenRef.current = true;
+    setLineEndingDistributionData(
+      computeLineEndingDistribution(
+        activeMarkdownDocument.lineEndingBreaks,
+        effectiveSettings.editor.lineEnding.expected
+      )
+    );
+    playDialogShownSound(
+      soundFeedback,
+      effectiveSettings.workbench.sound,
+      reportSoundPlaybackFailure
+    );
+  }
+
+  function closeLineEndingDistributionDialog(): void {
+    isLineEndingDistributionDialogPendingOrOpenRef.current = false;
+    setLineEndingDistributionData(null);
   }
 
   function reportAboutExternalLinkFailure(error: unknown): void {
@@ -3259,6 +3342,8 @@ export function App(): JSX.Element {
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
   openAboutDialogCommandRef.current = openAboutDialog;
+  showLineEndingDistributionCommandRef.current =
+    openLineEndingDistributionDialog;
   openMarkdownDocumentCommandRef.current = openFile;
   saveCurrentDocumentCommandRef.current = async () => {
     await saveFile();
@@ -3583,6 +3668,12 @@ export function App(): JSX.Element {
                         newFileLineEndingFallback={
                           effectiveSettings.files.newFile.lineEnding
                         }
+                        expectedLineEnding={
+                          effectiveSettings.editor.lineEnding.expected
+                        }
+                        markerGlyph={
+                          effectiveSettings.editor.lineEnding.markerGlyph
+                        }
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}
                         translate={translate}
@@ -3782,6 +3873,15 @@ export function App(): JSX.Element {
           onClose={closeAboutDialog}
           onOpenRepository={openAboutRepository}
           onOpenTypewriterSoundsCredit={openAboutTypewriterSoundsCredit}
+        />
+      ) : null}
+
+      {lineEndingDistributionData ? (
+        <LineEndingDistributionDialog
+          distribution={lineEndingDistributionData}
+          translate={translate}
+          opener={lineEndingDistributionDialogOpenerRef.current}
+          onClose={closeLineEndingDistributionDialog}
         />
       ) : null}
 

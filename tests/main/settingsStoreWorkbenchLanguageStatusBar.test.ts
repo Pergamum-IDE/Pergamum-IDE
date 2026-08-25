@@ -32,6 +32,12 @@ const languageDefault = getCatalogDefaultValue("workbench.language");
 const statusBarVisibleDefault = getCatalogDefaultValue(
   "workbench.statusBar.visible"
 );
+// #252: editor.lineEnding.* is always-resolved (non-sparse), unlike
+// fontFamily — every save request's `editor` must carry it.
+const defaultLineEndingSettings = {
+  expected: getCatalogDefaultValue("editor.lineEnding.expected"),
+  markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
+};
 const defaultSoundSettings = {
   enabled: true,
   dialog: { enabled: true },
@@ -70,7 +76,7 @@ function saveRequest(
         marquee: { delay: 2000, speed: 40 }
       }
     },
-    editor: {},
+    editor: { lineEnding: defaultLineEndingSettings },
     files: {
       newFile: { lineEnding: "lf", encoding: "utf8" }
     }
@@ -321,7 +327,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
           marquee: { delay: 2000, speed: 40 }
         }
       },
-      editor: {},
+      editor: { lineEnding: defaultLineEndingSettings },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
       },
@@ -348,7 +354,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
           marquee: { delay: 2000, speed: 40 }
         }
       },
-      editor: {},
+      editor: { lineEnding: defaultLineEndingSettings },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
       }

@@ -27,11 +27,20 @@ import {
  * object (rather than `doc` alone) specifically so it can grow additional
  * fields later (e.g. per-document metadata a future feature needs) without
  * changing every feature's signature again.
+ *
+ * `state` (#252) is the full `EditorState` the decorations are being
+ * computed for — added so a feature can read another CodeMirror
+ * `StateField` (e.g. #253's per-break line-ending tracking field) via
+ * `state.field(someField, false)`. `doc` remains a separate, explicit
+ * field (rather than requiring every feature to write `context.state.doc`)
+ * since it predates this addition and every existing feature already reads
+ * it directly.
  */
 export interface VisibilityDetectionContext {
   readonly doc: Text;
   readonly from: number;
   readonly to: number;
+  readonly state: EditorState;
 }
 
 /**
@@ -145,7 +154,8 @@ export function computeViewportVisibilityDecorations(
     const context: VisibilityDetectionContext = {
       doc: source.state.doc,
       from: range.from,
-      to: range.to
+      to: range.to,
+      state: source.state
     };
 
     for (const feature of features) {

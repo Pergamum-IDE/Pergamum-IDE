@@ -161,7 +161,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }
     });
 
-    it("registers exactly the #226 + #228 target settings, minus the #232-retired workbench.advancedSettings.enabled", () => {
+    it("registers exactly the #226 + #228 target settings plus #252 editor.lineEnding.*, minus the #232-retired workbench.advancedSettings.enabled", () => {
       expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
         [
           "workbench.colorTheme",
@@ -176,6 +176,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "commandPalette.description.marquee.delay",
           "commandPalette.description.marquee.speed",
           "editor.fontFamily",
+          "editor.lineEnding.expected",
+          "editor.lineEnding.markerGlyph",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
           "preview.renderer",
@@ -212,12 +214,18 @@ describe("Settings UI Catalog Schema (#226)", () => {
       const encoding = getSettingCatalogItem("files.newFile.encoding");
       const renderer = getSettingCatalogItem("preview.renderer");
       const language = getSettingCatalogItem("workbench.language");
+      const expectedLineEnding = getSettingCatalogItem(
+        "editor.lineEnding.expected"
+      );
+      const markerGlyph = getSettingCatalogItem("editor.lineEnding.markerGlyph");
 
       if (
         lineEnding?.control.kind !== "select" ||
         encoding?.control.kind !== "select" ||
         renderer?.control.kind !== "select" ||
-        language?.control.kind !== "select"
+        language?.control.kind !== "select" ||
+        expectedLineEnding?.control.kind !== "select" ||
+        markerGlyph?.control.kind !== "select"
       ) {
         throw new Error("Expected select controls.");
       }
@@ -233,6 +241,17 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(language.control.options.map((o) => o.value)).toEqual([
         "ja",
         "en"
+      ]);
+      expect(expectedLineEnding.control.options.map((o) => o.value)).toEqual([
+        "lf",
+        "crlf",
+        "cr"
+      ]);
+      expect(markerGlyph.control.options.map((o) => o.value)).toEqual([
+        "none",
+        "⏎",
+        "↵",
+        "↓"
       ]);
     });
 

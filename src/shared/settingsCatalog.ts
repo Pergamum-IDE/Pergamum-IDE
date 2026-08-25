@@ -573,6 +573,36 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  // #252: diagnostic-only setting for the line-ending marker/distribution
+  // UI — never used to decide an existing break's kind, a new break's
+  // inherited kind, or a save-time conversion. Kept fully separate from
+  // files.newFile.lineEnding below (#253's new-break fallback).
+  "editor.lineEnding.expected": defineEnumSetting({
+    key: "editor.lineEnding.expected",
+    scope: "applicationOnly",
+    enumValues: ["lf", "crlf", "cr"],
+    defaultValue: "lf",
+    labelKey: "settings.editor.lineEnding.expected.label",
+    descriptionKey: "settings.editor.lineEnding.expected.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  // #252: one glyph used for every line-ending kind — expected/unexpected
+  // is shown via marker variant/styling, not by picking a different glyph
+  // per kind. #252 follow-up: "none" is an explicit, first-class value (not
+  // an empty string / null) meaning "draw no inline marker at all" — #253's
+  // tracking and the Line Ending Distribution query/dialog are unaffected
+  // by this value; see createLineEndingVisibilityFeatures.
+  "editor.lineEnding.markerGlyph": defineEnumSetting({
+    key: "editor.lineEnding.markerGlyph",
+    scope: "applicationOnly",
+    enumValues: ["none", "⏎", "↵", "↓"],
+    defaultValue: "none",
+    labelKey: "settings.editor.lineEnding.markerGlyph.label",
+    descriptionKey: "settings.editor.lineEnding.markerGlyph.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "files.newFile.lineEnding": defineEnumSetting({
     key: "files.newFile.lineEnding",
     scope: "applicationOnly",

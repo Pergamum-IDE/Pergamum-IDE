@@ -27,6 +27,8 @@ export type { AppPlatform } from "./platform";
 export type {
   ApplicationSettings,
   EffectiveSettings,
+  ExpectedLineEnding,
+  LineEndingMarkerGlyph,
   NewFileEncoding,
   NewFileLineEnding,
   PreviewRendererId,
@@ -92,8 +94,20 @@ export const DEBUG_LOG_CHANNELS = {
 } as const;
 
 export const APPLICATION_MENU_CHANNELS = {
-  command: "applicationMenu:command"
+  command: "applicationMenu:command",
+  setEnablement: "applicationMenu:setEnablement"
 } as const;
+
+/**
+ * #252 follow-up: renderer -> main push of live command enablement (from
+ * `CommandRegistry.isEnabledForContext`, the same evaluation the Command
+ * Palette already uses), keyed by `ApplicationMenuCommandId`, so the
+ * native Electron menu — built once at startup and otherwise never
+ * touched — can reflect `when` (e.g. `editor.kind.markdown`) as a real
+ * disabled state. Commands not present in the map are left as they are;
+ * a command that never declares a `when` is simply always sent as `true`.
+ */
+export type ApplicationMenuEnablementMap = Record<string, boolean>;
 
 export const CONTEXT_MENU_CHANNELS = {
   popupEditMenu: "contextMenu:popupEditMenu",
@@ -384,6 +398,7 @@ export interface PergamumApi {
   };
   applicationMenu: {
     onCommand: (callback: (commandId: string) => void) => () => void;
+    setEnablement: (enablement: ApplicationMenuEnablementMap) => void;
   };
   contextMenu: {
     popupEditMenu: (request: EditContextMenuPopupRequest) => Promise<boolean>;

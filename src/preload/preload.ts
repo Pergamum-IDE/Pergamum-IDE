@@ -151,6 +151,9 @@ const pergamumApi: PergamumApi = {
       return () => {
         ipcRenderer.off(APPLICATION_MENU_CHANNELS.command, listener);
       };
+    },
+    setEnablement: (enablement) => {
+      ipcRenderer.send(APPLICATION_MENU_CHANNELS.setEnablement, enablement);
     }
   },
   contextMenu: {

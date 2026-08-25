@@ -6,6 +6,8 @@ import {
   documentMaxLineLength
 } from "../shared/documentMetrics";
 import type {
+  ExpectedLineEnding,
+  LineEndingMarkerGlyph,
   NewFileLineEnding,
   WorkbenchSoundSettings
 } from "../shared/settings";
@@ -331,6 +333,17 @@ interface EditorSurfaceProps {
    * conversion target.
    */
   newFileLineEndingFallback: NewFileLineEnding;
+  /**
+   * `editor.lineEnding.expected` (#252) — diagnostic-only comparison
+   * target for the line-ending marker/distribution UI. Never affects Save
+   * or new-break inheritance, and never makes the document dirty.
+   */
+  expectedLineEnding: ExpectedLineEnding;
+  /**
+   * `editor.lineEnding.markerGlyph` (#252) — one glyph shown at every
+   * tracked line break.
+   */
+  markerGlyph: LineEndingMarkerGlyph;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -438,6 +451,8 @@ export function EditorSurface({
   activeDocumentKey,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
+  expectedLineEnding,
+  markerGlyph,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -479,6 +494,8 @@ export function EditorSurface({
           documentKey={activeDocumentKey}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
+          expectedLineEnding={expectedLineEnding}
+          markerGlyph={markerGlyph}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
@@ -547,6 +564,8 @@ interface MarkdownEditorSurfaceProps {
   documentKey: string;
   previewUpdateDelayMs: number;
   newFileLineEndingFallback: NewFileLineEnding;
+  expectedLineEnding: ExpectedLineEnding;
+  markerGlyph: LineEndingMarkerGlyph;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -595,6 +614,8 @@ function MarkdownEditorSurface({
   documentKey,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
+  expectedLineEnding,
+  markerGlyph,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -773,6 +794,8 @@ function MarkdownEditorSurface({
           documentKey={documentKey}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}
+          expectedLineEnding={expectedLineEnding}
+          markerGlyph={markerGlyph}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}
           contextSurface="markdownEditor"

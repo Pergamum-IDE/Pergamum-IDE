@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type {
   ApplicationSettings,
+  ExpectedLineEnding,
+  LineEndingMarkerGlyph,
   NewFileEncoding,
   NewFileLineEnding,
   SaveApplicationSettingsRequest
@@ -109,6 +111,10 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return (
         settings.editor.fontFamily ?? getCatalogDefaultValue("editor.fontFamily")
       );
+    case "editor.lineEnding.expected":
+      return settings.editor.lineEnding.expected;
+    case "editor.lineEnding.markerGlyph":
+      return settings.editor.lineEnding.markerGlyph;
     case "files.newFile.lineEnding":
       return settings.files.newFile.lineEnding;
     case "files.newFile.encoding":
@@ -180,6 +186,26 @@ function buildNextSettings(
     case "editor.fontFamily":
       return saveRequest(settings, {
         editor: withFontFamily(settings.editor, fontFamilyValue(String(rawValue)))
+      });
+    case "editor.lineEnding.expected":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          lineEnding: {
+            ...settings.editor.lineEnding,
+            expected: rawValue as ExpectedLineEnding
+          }
+        }
+      });
+    case "editor.lineEnding.markerGlyph":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          lineEnding: {
+            ...settings.editor.lineEnding,
+            markerGlyph: rawValue as LineEndingMarkerGlyph
+          }
+        }
       });
     case "workbench.language":
       return saveRequest(settings, {
@@ -416,7 +442,11 @@ function SettingControlInput({
       return (
         <select
           id={controlId}
-          className="settingsSelect"
+          className={
+            item.key === "editor.lineEnding.markerGlyph"
+              ? "settingsSelect settingsSelect-editorFont"
+              : "settingsSelect"
+          }
           value={String(value)}
           disabled={disabled}
           aria-labelledby={labelId}

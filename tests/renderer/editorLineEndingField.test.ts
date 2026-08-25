@@ -488,3 +488,142 @@ function mountViewLike(
     }
   };
 }
+
+/**
+ * #253 follow-up: boundary-delete tracking bug (found during #252 dogfood).
+ * `RangeSet.map`'s default `MapMode.TrackDel` only drops a point strictly
+ * *inside* a deleted range — a point exactly at the deletion's start
+ * survives unchanged. A break's own position always equals the deletion's
+ * start when exactly one character (its own "\n") is deleted, so this was
+ * not a rare edge case: it fired on the ordinary "delete a single line
+ * break" edit (e.g. Backspace/Delete on it). These tests drive the real
+ * production `createLineEndingTrackingExtension` — no test-only
+ * reimplementation of the tracking logic.
+ */
+describe("boundary-delete tracking (#253 follow-up)", () => {
+  it.each(["lf", "crlf", "cr"] as const)(
+    "removes a %s break when exactly its own single normalized character is deleted",
+    (kind) => {
+      let { state, field } = stateWithField("A\nB", [{ position: 1, kind }]);
+
+      state = dispatch(state, { changes: { from: 1, to: 2 } });
+
+      expect(state.doc.toString()).toBe("AB");
+      expect(lineEndingBreakSetToArray(state.field(field))).toEqual([]);
+    }
+  );
+
+  it("does not collateral-delete the immediately following break when the earlier one is boundary-deleted", () => {
+    // "A\n\nB": break 1 (crlf) at position 1, break 2 (lf) at position 2 —
+    // deleting break 1 alone must not also remove break 2, even though
+    // after mapping they would otherwise land on the same new position.
+    let { state, field } = stateWithField("A\n\nB", [
+      { position: 1, kind: "crlf" },
+      { position: 2, kind: "lf" }
+    ]);
+
+    state = dispatch(state, { changes: { from: 1, to: 2 } });
+
+    expect(state.doc.toString()).toBe("A\nB");
+    expect(lineEndingBreakSetToArray(state.field(field))).toEqual([
+      { position: 1, kind: "lf" }
+    ]);
+  });
+
+  it("does not collateral-delete the preceding break when the later one is boundary-deleted", () => {
+    let { state, field } = stateWithField("A\n\nB", [
+      { position: 1, kind: "crlf" },
+      { position: 2, kind: "lf" }
+    ]);
+
+    state = dispatch(state, { changes: { from: 2, to: 3 } });
+
+    expect(state.doc.toString()).toBe("A\nB");
+    expect(lineEndingBreakSetToArray(state.field(field))).toEqual([
+      { position: 1, kind: "crlf" }
+    ]);
+  });
+
+  it("boundary-deletes a break and adds a newly inserted break in the same transaction, without cross-contamination", () => {
+    // One transaction, two independent change regions: region 1
+    // boundary-deletes the crlf break at position 1; region 2 (unrelated,
+    // at the document's end) appends "\nD", creating a brand new break.
+    // The surviving break (position 3, cr) must map correctly, the
+    // boundary-deleted one must be gone, and the new break must inherit
+    // its kind from #253's existing rule (nearest preceding break — cr —
+    // since nothing follows it) exactly as before this fix.
+    let { state, field } = stateWithField("A\nB\nC", [
+      { position: 1, kind: "crlf" },
+      { position: 3, kind: "cr" }
+    ]);
+
+    state = dispatch(state, {
+      changes: [
+        { from: 1, to: 2 },
+        { from: state.doc.length, to: state.doc.length, insert: "\nD" }
+      ]
+    });
+
+    expect(state.doc.toString()).toBe("AB\nC\nD");
+    expect(lineEndingBreakSetToArray(state.field(field))).toEqual([
+      { position: 2, kind: "cr" },
+      { position: 4, kind: "cr" }
+    ]);
+  });
+
+  it("removes only the boundary-deleted break in a mixed document, keeping the others' kinds and shifted positions", () => {
+    // "A<CRLF>B<LF>C<CR>D" -> canonical "A\nB\nC\nD"
+    let { state, field } = stateWithField("A\nB\nC\nD", [
+      { position: 1, kind: "crlf" },
+      { position: 3, kind: "lf" },
+      { position: 5, kind: "cr" }
+    ]);
+
+    state = dispatch(state, { changes: { from: 1, to: 2 } });
+
+    expect(state.doc.toString()).toBe("AB\nC\nD");
+    const breaks = lineEndingBreakSetToArray(state.field(field));
+    expect(breaks).toHaveLength(2);
+    expect(breaks).toEqual([
+      { position: 2, kind: "lf" },
+      { position: 4, kind: "cr" }
+    ]);
+  });
+
+  it("still removes a break that sits strictly inside a larger deleted range (existing #253 behavior preserved)", () => {
+    let { state, field } = stateWithField("aaa\nbbb\nccc", [
+      { position: 3, kind: "crlf" },
+      { position: 7, kind: "cr" }
+    ]);
+
+    // Delete "aaa\n" (positions 0-4) — the break at position 3 is
+    // strictly interior to [0,4), not at its start boundary.
+    state = dispatch(state, { changes: { from: 0, to: 4 } });
+
+    expect(lineEndingBreakSetToArray(state.field(field))).toEqual([
+      { position: 3, kind: "cr" }
+    ]);
+  });
+
+  it("supports Undo/Redo of a boundary-deleted break via the existing snapshot mechanism", () => {
+    const view = mountViewLike("A\nB", [{ position: 1, kind: "crlf" }]);
+
+    view.dispatch({ changes: { from: 1, to: 2 } });
+    expect(view.state.doc.toString()).toBe("AB");
+    expect(lineEndingBreakSetToArray(view.state.field(view.field))).toEqual(
+      []
+    );
+
+    undo(view);
+    expect(view.state.doc.toString()).toBe("A\nB");
+    expect(lineEndingBreakSetToArray(view.state.field(view.field))).toEqual([
+      { position: 1, kind: "crlf" }
+    ]);
+
+    redo(view);
+    expect(view.state.doc.toString()).toBe("AB");
+    expect(lineEndingBreakSetToArray(view.state.field(view.field))).toEqual(
+      []
+    );
+  });
+});

@@ -12,6 +12,12 @@ export const commandPaletteCommandIds = {
   open: defineCommandId("workbench.commandPalette.open")
 } as const;
 
+export const assistCommandIds = {
+  showLineEndingDistribution: defineCommandId(
+    "assist.lineEndingDistribution.show"
+  )
+} as const;
+
 export const editorCommandIds = {
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),
@@ -53,7 +59,8 @@ export const applicationMenuCommandIds = [
   editorCommandIds.saveAs,
   editorCommandIds.close,
   applicationCommandIds.toggleRecentProjects,
-  commandPaletteCommandIds.open
+  commandPaletteCommandIds.open,
+  assistCommandIds.showLineEndingDistribution
 ] as const;
 
 export type ApplicationMenuCommandId =
