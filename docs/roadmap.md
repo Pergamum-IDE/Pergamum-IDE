@@ -24,7 +24,6 @@ roadmap.md:
 この文書に書かれている項目は、必ずしも実装を約束するものではない。
 実際に着手する前には、個別の GitHub Issue として、スコープ・非スコープ・受け入れ条件・テスト観点を定義する。
 
-この文書は法律ではない。
 古くなった設計詳細は残しすぎず、必要なら Issue / PR / ADR / 実装を参照する。
 
 ---
@@ -86,78 +85,32 @@ Export:
 
 ## 現在地
 
-Phase 3 は完了済み。
-
-Phase 3 では、本文を書く場と周辺作業の場を分離し、Glossary / Navigation / Utility Window / Debug logging / Runtime baseline の基礎を整えた。
-
-```text
-Phase 3:
-  つながりすぎないようにする
-```
-
-次は Phase 4 に入る。
-
-Phase 4 では、後続機能を無理なく載せるため、操作入口を command / menu / shortcut / context menu に寄せる。
+Phase 4 は v0.50.0 で完了済み。
 
 ```text
 Phase 4:
   迷わず触れるようにする
 ```
 
-以降の大きな流れは以下。
+v0.50.0 は、Phase 4 完了を示す milestone version とする。
+
+次は Phase 5 に進む。
 
 ```text
-Phase 4:
-  迷わず触れるようにする
-
 Phase 5:
   触りすぎないようにする
-
-Phase 6:
-  閉じても戻れるようにする
-
-Phase 7:
-  プロジェクトを歩けるようにする
-
-Phase 8:
-  他人の手に渡せるようにする
-
-v0.90.0:
-  毎日開けるようにする
 ```
 
 ---
 
-## Runtime baseline
+## Runtime / packaging baseline
 
-Phase 3 終了時点の runtime baseline は以下。
-
-```text
-Node.js:
-  24 baseline
-
-Electron:
-  43 baseline
-
-Vite:
-  8 baseline
-
-markdown-it:
-  latest baseline
-
-better-sqlite3:
-  updated
-
-Native module workflow:
-  established
-```
-
-Runtime version details are recorded here as a baseline snapshot.
-The current source of truth is `package.json` / `package-lock.json`.
+Runtime version details の正本は `package.json` / `package-lock.json` とする。
+この文書には、更新漏れしやすい個別バージョン番号を詳細に残さない。
 
 ### Native module 更新ルール
 
-`better-sqlite3` 更新時に発生した ABI mismatch を受け、以下を標準化する。
+Dependency 更新では、以下を標準的な確認観点として扱う。
 
 ```text
 npm install success
@@ -165,7 +118,7 @@ npm install success
 Electron packaged application success
 ```
 
-Native module を含む更新では、以下を必須工程として扱う。
+特に native module を含む更新では、以下を必須工程として扱う。
 
 ```text
 dependency update
@@ -179,7 +132,7 @@ dogfood
 
 ### CI と dogfood
 
-Phase 4 以降、CI と dogfood は別の品質確認工程として扱う。
+CI と dogfood は別の品質確認工程として扱う。
 
 ```text
 CI:
@@ -189,7 +142,7 @@ Dogfood:
   実際のユーザー経路
 ```
 
-Native module / file handling / save behavior / packaged exe など、CI だけでは拾いにくい領域は dogfood で確認する。
+Native module / file handling / save behavior / packaged exe / installer / file association など、CI だけでは拾いにくい領域は dogfood で確認する。
 
 ---
 
@@ -214,24 +167,34 @@ Glossary editing foundation
 
 完了済み。
 
-主な完了項目:
+主な完了領域:
 
 ```text
-Boundary resolver foundation
-Glossary match boundary start / end model
-Advanced matching settings UI
+Glossary match boundary foundation
 Glossary occurrence navigation foundation
-Workbench resizable panes
-Sidebar collapse
-Utility Window shell
-Glossary occurrences tab
-Glossary entry deletion
-Glossary navigator search
+Workbench / Utility Window foundation
 Debug mode JSONL logging foundation
-Utility Window debug log tab
-Runtime baseline update
-Native module workflow establishment
+Runtime / native module workflow establishment
 ```
+
+### Phase 4 / v0.50.0: 迷わず触れるようにする
+
+完了済み。
+
+Phase 4 は、Pergamum が project-file based desktop application として成立するための基盤を整えたフェーズである。
+
+主な完了領域:
+
+```text
+Command / Dialog foundation
+Settings foundation
+Project file / project identity foundation
+Read-only / write-lock access management
+Startup .pergamum open flow
+Windows installer / .pergamum file association
+```
+
+これにより Pergamum は、`.pergamum` project file を持ち、Windows 上でダブルクリック起動できるデスクトップアプリとしての形を得た。
 
 ### Debug logging
 
@@ -244,73 +207,20 @@ Debug logging の正本は該当 Issue / PR / 実装とする。
 
 ---
 
-## 積み残しのもの
-
-ここには、foundation は完了したが、完成品としてはまだ残っている派生作業を置く。
-すぐにやるとは限らない。
-
-```text
-Workbench:
-  layout 永続化
-  sidebar width 永続化
-  editor / preview split ratio 永続化
-  utility window height 永続化
-
-Occurrences:
-  range anchoring
-  文書編集後の occurrence 再計算
-  cursor-position-aware navigation
-  複数 entry tracking
-
-Debug Log:
-  検索
-  export
-  full file viewer
-  issue report 連携
-
-Glossary:
-  forms management polish
-  warning policy 説明文の整理
-  duplicate surface feedback
-  form 並び順の整理
-```
-
-### layout 永続化の扱い
-
-v0.90.0 では layout 永続化を必須にしない。
-
-初期の session restore では以下を優先する。
-
-```text
-復元する:
-  last opened project
-  open documents
-  active editor
-
-復元しない:
-  pane width
-  editor / preview split ratio
-  utility window height
-```
-
-layout 永続化は、後続 Issue として扱う。
-
----
-
 ## マイナーバージョン別ロードマップ
 
-| Version | Phase | 合言葉 | 主に積むもの | この版では積まないもの |
+| Version | Phase | 合言葉 | 主に積んだ / 積むもの | この版では積まないもの |
 | --- | ---: | --- | --- | --- |
-| v0.40 系 | Phase 4 | 迷わず触れるようにする | Application menu、basic shortcuts、context menu、Command tab、tab close、About | 全キーバインド customization、Plugin command、VSCode 型 overlay |
-| v0.50 系 | Phase 5 | 触りすぎないようにする | Editor decoration visibility、改行検出、行末マーカー、不可視文字表示、段落字下げ command | `.txt` support、encoding detection、line ending 変換 |
-| v0.60 系 | Phase 6 | 閉じても戻れるようにする | Session restore、settings foundation、recent projects、preferences entry point | layout 永続化、theme customization、project convention 本格実装 |
-| v0.70 系 | Phase 7 | プロジェクトを歩けるようにする | 階層 File Explorer、expand/collapse、open、refresh、外部変更検知 | D&D、external drop/import、Project 全文検索 |
-| v0.80 系 | Phase 8 | 他人の手に渡せるようにする | DB snapshot generation、UI polish、packaged dogfood、README/FAQ | DB restore、migration、Export |
-| v0.90.0 | Release | 毎日開けるようにする | 締め、release notes、known limitations、exe 配布 | 新規大型機能 |
+| v0.50.0 | Phase 4 完了 | 迷わず触れるようにする | `.pergamum` project file、Settings foundation、read-only handling、write lock、startup argv open、Windows installer / association | Phase 5 本文処理、session restore、project explorer |
+| v0.51.x | Phase 5 | 触りすぎないようにする | Editor decoration visibility、line ending marker、paragraph indentation support | `.txt` support、encoding detection、line ending 変換 |
+| v0.60.x | Phase 6 | 閉じても戻れるようにする | Session restore、recent projects、continuity settings | layout 永続化、project convention 本格実装 |
+| v0.70.x | Phase 7 | プロジェクトを歩けるようにする | 階層 File Explorer、expand/collapse、open、refresh、外部変更検知 | D&D、external drop/import、Project 全文検索 |
+| v0.80.x | Phase 8 | 他人の手に渡せるようにする | DB snapshot generation、UI polish、packaged dogfood、README/FAQ、release quality 整理 | DB restore、migration、Export |
+| v0.90.x | Release | 毎日開けるようにする | 締め、release notes、known limitations、配布準備 | 新規大型機能 |
 
-### v0.90.0 表記について
+### v0.90.x 表記について
 
-`v0.90.0` は、v1.0 前に v0.9x 系で複数回 dogfood 配布する余地を残すための表記である。
+`v0.90.x` は、v1.0 前に v0.9x 系で複数回 dogfood 配布する余地を残すための表記である。
 
 候補:
 
@@ -320,660 +230,72 @@ v0.91.x
 v0.92.x
 ```
 
-v0.90.0 は「初回 dogfood 配布版」であり、「v1.0 直前の完成版」ではない。
+v0.90.x は「初回 dogfood 配布系列」であり、「v1.0 直前の完成版」ではない。
 
 ---
 
-## Phase 4 / v0.4 系: 迷わず触れるようにする
-
-Phase 4 は、Pergamum を「迷わず触れる」状態へ近づけるための版である。
-
-当初は、Application menu / shortcut / context menu / Command launcher など、操作入口の整理を中心に想定していた。
-
-しかし実装を進める中で、単に入口を増やすだけでは不十分であることが分かった。
-
-ユーザーが迷わず触るためには、以下も同時に必要になる。
-
-```text
-何を操作しているのか分かる
-今どのプロジェクトにいるのか分かる
-書ける状態なのか、読み取り専用なのか分かる
-新規文書がどう保存されるのか分かる
-危ない操作では適切な確認が出る
-コマンドの意味と実行可否が分かる
-設定値が壊れていても安全に復帰できる
-Electron / Chromium 由来の危険操作で作業状態を壊さない
-```
-
-そのため Phase 4 では、command / menu / shortcut / context menu だけでなく、project identity、project file、access mode、dialog、settings、Command Palette、untitled document、Electron shortcut policy も含めて扱う。
-
-```text
-Command:
-  操作の意味
-
-Command Palette:
-  操作の発見・実行・状態確認の入口
-
-Menu:
-  見つけられる入口
-
-Shortcut:
-  速く呼ぶ入口
-
-Context menu:
-  選択中の対象に応じた入口
-
-Dialog:
-  ユーザー判断を安全に受け取る入口
-
-Settings:
-  アプリの振る舞いを安全に調整する入口
-
-Project file:
-  プロジェクトを開く入口
-
-Untitled document:
-  新規文書を保存可能な文書へ移す入口
-
-Window title / status display:
-  現在地と状態を把握する入口
-```
-
-### v0.4 系で進んだもの
-
-Phase 4 では、当初予定していた menu / shortcut / context menu の前に、後続作業を支える基盤が多く進んだ。
-
-完了済みまたは大きく進んだもの:
-
-```text
-Command Palette foundation
-Command enablement / disabled reason foundation
-Command Palette status indicator
-Command Palette description footer
-Command metadata description
-Command Palette settings
-Settings Catalog foundation
-Application Settings UI foundation
-settings.json validation
-number setting validation
-binary dialog foundation
-choice dialog foundation
-SQLite DB project file foundation
-.pergamum project file foundation
-project identity foundation
-read-only project access mode
-read-only command disablement
-one-folder-one-instance / write lock foundation
-window title project/access mode display
-debug logging foundation
-long document open performance measurement
-```
-
-これらは当初の「操作入口を整理する」からは横に見えるが、実際には「迷わず触れる」ための土台である。
-
-```text
-Command Palette:
-  何ができるかを見つける
-
-description footer:
-  その command が何をするかを読む
-
-disabled reason:
-  なぜ実行できないかを知る
-
-read-only mode:
-  今は書けない状態だと分かる
-
-window title:
-  どの project を触っているか分かる
-
-dialog:
-  危ない操作を明示的に判断する
-
-settings validation:
-  壊れた設定値で迷子にならない
-
-.pergamum:
-  どれがプロジェクト本体か分かる
-```
-
-### v0.4 系で残っているもの
-
-Phase 4 の残作業は、v0.50 以降の本文処理・session restore・project navigation・release hardening に進む前に片付けたい、操作入口・状態表示・判断ポイントを中心にする。
-
-候補:
-
-```text
-Application Settings dirty / apply flow
-Untitled Markdown document handling
-Safe filename / default untitled name policy
-Startup file open / .pergamum argv handling
-Extension association policy
-Existing project DB migration / naming transition policy
-Application menu items
-Context menu foundation
-About dialog
-Unsafe Electron / Chromium default shortcut suppression
-```
-
-### Project open / startup file handling
-
-`.pergamum` SQLite project file foundation は進んだ。
-
-残る課題は、OSや起動引数から `.pergamum` project file を開く導線である。
-
-```text
-扱うこと:
-  startup argv から .pergamum を開く
-  .pergamum ダブルクリック導線の前提整理
-  起動時 project open failure の扱い
-  既に開いている project との関係
-  project switching 時の dirty document 確認
-
-扱わないこと:
-  installer 本格対応
-  OS file association 登録の完成
-  DB migration 本格対応
-```
-
-### Extension association policy
-
-`.pergamum` / `.md` / `.markdown` / `.txt` の意味を整理する。
-
-```text
-扱うこと:
-  .pergamum は Pergamum project file
-  .md / .markdown は Markdown document
-  .txt は現時点では正式 support しない
-  startup / open dialog / save dialog での扱い
-  new Markdown default extension の方針
-
-扱わないこと:
-  plain text document mode
-  encoding detection
-  .txt preview
-  Generic New File command
-```
-
-`.txt` は簡単そうに見えるが、実際には encoding policy / line ending policy / 本文非破壊原則に関わるため、Phase 4 では扱わない。
-
-### Existing project DB migration / naming transition policy
-
-既存の `pergamum.db` から `<projectName>.pergamum` への移行方針は整理しておく。
-
-ただし、破壊的変更が許容される初期開発期間であるため、Phase 4 では本格 migration 機構までは扱わない。
-
-```text
-扱うこと:
-  既存 project DB の扱い方針
-  開発中データをどこまで切り捨て可能とするか
-  naming transition の説明
-
-扱わないこと:
-  DB migration framework
-  backward compatibility guarantee
-  snapshot restore
-```
-
-### Untitled Markdown document handling
-
-新規 Markdown 文書の扱いは、save / save as / close / dirty state / tab close / session restore に影響する。
-
-Phase 6 の session restore に進む前に、最低限の扱いを整理する。
-
-```text
-扱うこと:
-  untitled document の identity
-  untitled tab title
-  default filename
-  safe filename policy
-  save / save as の扱い
-  dirty close confirmation
-  tab close との整合
-
-扱わないこと:
-  generic New File command
-  plain text document mode
-  crash recovery
-  session restore 本格実装
-  recovery store
-```
-
-新規 Markdown の既定拡張子は `.md` / `.markdown` の範囲で扱う。
-`.txt` は Phase 4 の対象外とする。
-
-### Application Settings dirty / apply flow
-
-Application Settings は既に UI と validation が育ってきている。
-
-一方で、設定変更時の dirty state、即時適用、Apply / Cancel、保存失敗時の扱いはまだ整理が必要である。
-
-```text
-扱うこと:
-  settings UI の dirty state
-  apply / cancel flow
-  保存失敗時の表示
-  変更中と保存済み状態の区別
-  settings.json 直接編集時の fallback 方針との整合
-
-扱わないこと:
-  settings foundation の全面作り直し
-  theme customization
-  project-specific settings 本格実装
-```
-
-### Application menu items
-
-Application menu は、Command Palette 以外から操作を見つけるための入口である。
-
-既存 command を menu に載せ、basic shortcut と対応させる。
-
-```text
-扱うこと:
-  File / Edit / View / Help などの基本 menu
-  既存 command との接続
-  basic shortcut
-  read-only / disabled state との整合
-  project / document / settings / about への基本導線
-
-扱わないこと:
-  全 command の網羅
-  keybinding customization
-  plugin command registration
-```
-
-### Context menu foundation
-
-Context menu は、選択中の対象に応じた操作入口である。
-
-Phase 5 以降で本文操作 command を増やす前に、最低限の context menu 基盤を整える。
-
-```text
-扱うこと:
-  editor context menu foundation
-  selection-dependent command entry
-  cut / copy / paste / select all
-  command registry との接続
-
-扱わないこと:
-  全領域の context menu 網羅
-  plugin-provided context menu
-  高度な対象判定
-```
-
-### About dialog
-
-About dialog は、アプリ名・バージョン・ライセンス・基本情報を確認する入口である。
-
-Phase 8 の配布品質で慌てて作るのではなく、Phase 4 のうちに小さく入れておく。
-
-```text
-扱うこと:
-  app name
-  version
-  license
-  repository / project information
-
-扱わないこと:
-  update check
-  crash report
-  telemetry
-```
-
-### Unsafe Electron / Chromium default shortcut suppression
-
-Electron / Chromium 由来の既定ショートカットには、執筆アプリとして危険なものがある。
-
-特に reload 系は、未保存状態や作業中 UI を破壊する可能性があるため、Phase 4 で抑制方針を固める。
-
-```text
-抑制候補:
-  Ctrl+R
-  F5
-  Ctrl+Shift+R
-  Alt+Left
-  Alt+Right
-  BrowserBack
-  BrowserForward
-  Ctrl+P
-```
-
-DevTools 系 shortcut は、開発・dogfood では必要になる。
-
-そのため、完全に削除するのではなく、hidden settings path による明示 opt-in とする。
-
-候補:
-
-```json
-{
-  "workbench": {
-    "devTools": {
-      "enabled": true
-    }
-  }
-}
-```
-
-方針:
-
-```text
-既定:
-  DevTools shortcut は無効
-
-hidden setting:
-  workbench.devTools.enabled が true の場合のみ許可
-
-Settings UI:
-  表示しない
-
-settings.json が不正な場合:
-  既存方針どおり default fallback
-```
-
-対象候補:
-
-```text
-F12
-Ctrl+Shift+I
-Ctrl+Shift+J
-```
-
-ただし、通常の編集 shortcut は壊さない。
-
-```text
-壊さない:
-  Ctrl+C
-  Ctrl+X
-  Ctrl+V
-  Ctrl+A
-  Ctrl+Z
-  Ctrl+Y
-  IME composition
-```
-
-### Search / replace / Quick Access の扱い
-
-Phase 4 では、project-wide search / replace には入らない。
-
-Quick Access prefix families も、現時点では足場が足りないため保留する。
-
-```text
-@ glossary search:
-  Glossary検索・選択・表示基盤が必要
-
-# workspace heading search:
-  Markdown outline解析が必要
-
-no-prefix file open:
-  project file tree / file structure把握が必要
-```
-
-これらは Command Palette / Quick Access の将来拡張候補として残すが、v0.4 系の実装ready項目にはしない。
-
-Phase 4 で扱う検索関連は、必要になった場合でも入口整理に留める。
-
-```text
-Phase 4 ではやらない:
-  project-wide search
-  project-wide replace
-  bulk replace
-  SQLite FTS5 / trigram / BM25
-  Quick Access @ / # / no-prefix 実装
-```
-
-置換は本文変更を伴うため、本文非破壊原則や明示 command の扱いが固まった後に別 Issue として扱う。
-
-### v0.4 系で積まないもの
-
-Phase 4 では、後続フェーズの本体には入らない。
-
-```text
-全キーバインド customization
-Plugin command registration
-VSCode 型 overlay Command Palette
-全 command の網羅
-高度な検索・置換
-Quick Access @ / # / no-prefix 実装
-Glossary検索本格実装
-Markdown outline解析
-Hierarchical File Explorer
-Generic New File command
-Plain text document mode
-encoding detection
-Session restore 本格実装
-Project-wide search / replace
-本文 decoration visibility
-line ending marker
-段落字下げ command
-release hardening 本体
-DB migration framework
-DB snapshot restore
-```
-
-ただし、後続フェーズに進む前に必要な操作入口・状態表示・判断UIは Phase 4 で可能な限り片付ける。
-
-### v0.4 系の終了条件
-
-```text
-Command Palette / menu / shortcut / context menu から、
-最低限の日常操作へ迷わず到達できる。
-
-今どの project を触っているか分かる。
-
-どれが project file なのか分かる。
-
-書ける状態か、読み取り専用か分かる。
-
-新規 Markdown document を、
-安全に保存・閉じることができる。
-
-危ない操作では適切な dialog が出る。
-
-settings.json が壊れていても、
-安全な default に fallback して起動できる。
-
-Electron / Chromium 由来の危険 shortcut で、
-作業状態を誤って壊さない。
-
-後続機能を command / menu / context menu / settings に載せる準備ができている。
-```
-
----
-
-## Phase 5 / v0.5 系: 触りすぎないようにする
+## Phase 5 / v0.51.x: 触りすぎないようにする
 
 Phase 5 は、本文そのものを扱う。
 
 対象:
 
 ```text
-文字
-空白
-改行
-エンコード
+Markdown 本文
+行末
+段落字下げ
+補助表示
 ```
 
 Pergamum は本文を勝手に変更しない。
+Phase 5 では、この基本方針を editor / text handling に適用する。
+
+### Phase 5 の焦点
+
+Phase 5 は、次の巨大インフラフェーズにしない。
+Markdown 本文を勝手に変更せず、まず「見える」「明示 command でだけ変える」ための基盤に絞る。
+
+主な対象:
 
 ```text
-本文:
-  作者の正本
+Phase 5-1:
+  Editor decoration visibility foundation
 
-Editor:
-  解釈・表示・警告する層
+Phase 5-2:
+  Text line ending detection and editor marker display foundation
 
-Command:
-  ユーザーが明示した場合のみ変更する層
-
-Export:
-  正本とは別の派生物を生成する層
+Phase 5-3:
+  Japanese paragraph indentation support
 ```
 
-禁止:
+### Phase 5 で扱うこと
 
 ```text
-勝手な normalize
-勝手な encoding 変換
-勝手な改行変更
-勝手な space 置換
+本文を変更しない補助表示
+line ending の可視化
+段落字下げの可視化
+段落字下げを明示 command で扱うための基盤
 ```
 
-許可:
+### Phase 5 で扱わないこと
 
 ```text
-表示
-警告
-提案
-明示 command による変更
-明示 export による派生物生成
-```
-
-### v0.5 系で積むもの
-
-```text
-Editor decoration visibility foundation
-Text line ending detection and editor marker display foundation
-Japanese paragraph indentation commands and indent marker display foundation
-```
-
-### Phase 5-1: Editor decoration visibility foundation
-
-目的:
-
-```text
-Editor 上で、本文を変更せずに補助表示を行うための
-CodeMirror decoration 基盤を整える。
-```
-
-やること:
-
-```text
-CodeMirror decoration による visibility extension の土台を作る
-表示対象を追加しやすい構造にする
-表示文字・CSS class・有効/無効状態の責務を分ける
-本文内容は変更しない
-```
-
-やらないこと:
-
-```text
-行末種別の検出
-段落字下げ command
-Unicode space-like linter
-settings.json 対応
-自動修正
-```
-
-この Issue は、Phase 5-2 / Phase 5-3 の土台である。
-
-### Phase 5-2: Text line ending detection and editor marker display foundation
-
-目的:
-
-```text
-Markdown file の LF / CRLF / CR を検出し、
-Editor 上で行末マーカーとして見えるようにする。
-```
-
-やること:
-
-```text
-Markdown file load 時に line ending kind を検出する
-LF / CRLF / CR を区別する
-Editor 上で行末マーカーを表示する
-marker mapping を中央集約する
-表示文字は当面ハードコードでよい
-```
-
-やらないこと:
-
-```text
-改行コード変換
-保存時 line ending policy 適用
-settings.json 対応
-設定 UI
-自動修正
 .txt support
 encoding detection
+line ending 変換
+自動整形
+自動修正
+Settings persistence / resolution の全面実装
 ```
 
-marker mapping は将来 settings.json から差し替えられる形にする。
-ただし UI は自由入力ではなく preset dropdown を基本候補とする。
+`.txt` support は Phase 5 に含めない。
+詳細は保留・駐車場を参照する。
 
-### Phase 5-3: Japanese paragraph indentation commands and indent marker display foundation
-
-日本語小説向けの段落字下げ支援。
-
-原則:
-
-```text
-自動:
-  NG
-
-Command:
-  OK
-```
-
-候補 command:
-
-```text
-editor.japaneseParagraphIndent.add
-editor.japaneseParagraphIndent.remove
-```
-
-対象:
-
-```text
-U+3000 IDEOGRAPHIC SPACE
-または設定された段落字下げ文字
-```
-
-動作:
-
-```text
-追加:
-  行頭に1文字追加
-  既存なら何もしない
-  空行は対象外
-
-削除:
-  行頭の段落字下げ文字を1文字削除
-```
-
-Undo 対象とする。
-
-同時に、行頭の段落字下げ文字を Editor 上で見えるようにする。
-ただし、本文は変更しない。
-
-### Phase 5 後半候補
-
-Phase 5 全体では、最終的に `.txt` support まで扱う可能性がある。
-ただし、`.txt` support は v0.5 系や v0.90.0 の必須ではない。
-
-候補:
-
-```text
-Text document line ending policy foundation
-Configurable Japanese paragraph indent character foundation
-Unicode space-like character linter foundation
-Plain text document support foundation
-```
-
-`.txt` support は簡単そうに見えるが、実際には以下が絡む。
-
-```text
-encoding policy
-line ending policy
-本文非破壊原則
-```
-
-そのため、Phase 5 後半または v1.0 以降の候補として扱う。
-
-### v0.5 系の終了条件
+### Phase 5 の終了条件
 
 ```text
 Markdown 本文を勝手に変えずに、
-改行・段落字下げ・行末が見える。
+行末（改行コード種別）と段落字下げが見える。
 
 段落字下げは、
 明示 command でだけ変更できる。
@@ -981,33 +303,25 @@ Markdown 本文を勝手に変えずに、
 
 ---
 
-## Phase 6 / v0.6 系: 閉じても戻れるようにする
+## Phase 6 / v0.60.x: 閉じても戻れるようにする
 
 Phase 6 は、dogfood 摩擦を下げる。
 
 目的は、アプリを閉じて再起動しても、前回の作業状態へ戻れるようにすることである。
 
-### v0.6 系で積むもの
+### Phase 6 で扱うこと
 
 ```text
 Session restore foundation
-settings foundation
 recent projects foundation
-preferences entry point
-```
-
-候補:
-
-```text
 last opened project restore
 open documents restore
 active editor restore
-recent project list
 起動時に前回プロジェクトを開くかどうか
-最小限の settings 読み書き
+continuity settings
 ```
 
-### settings と session state の区別
+### Settings と session state の区別
 
 `settings` と `session state` は分ける。
 
@@ -1035,6 +349,25 @@ session state:
   active editor
 ```
 
+### Phase 6 における Settings の扱い
+
+Settings Catalog / Settings Page foundation は Phase 4 で完了済みとする。
+
+Phase 6 では、Settings foundation の作り直しではなく、session restore / recent projects / continuity に必要な範囲の persistence / resolution のみを扱う。
+
+```text
+Phase 6 で扱う:
+  session restore に必要な最小限の settings persistence / resolution
+  起動時動作に関わる continuity settings
+
+Phase 6 で扱わない:
+  wired settings の全面拡張
+  workbench.colorTheme wiring
+  preview.renderer wiring
+  Settings dirty / apply flow
+  project-specific settings の本格実装
+```
+
 ### Session restore の欠損ファイル扱い
 
 Session restore は best-effort とする。
@@ -1049,18 +382,16 @@ Session restore は best-effort とする。
 外部変更検知は Phase 7 で扱う。
 Phase 6 では、復元時点で開けない document を安全にスキップできればよい。
 
-### v0.6 系で積まないもの
+### Phase 6 で扱わないこと
 
 ```text
 layout 永続化
 pane width restore
 editor / preview split ratio restore
 utility window height restore
-theme customization
-project-specific manuscript convention の本格実装
 ```
 
-### v0.6 系の終了条件
+### Phase 6 の終了条件
 
 ```text
 アプリを閉じて再起動しても、
@@ -1072,13 +403,13 @@ project-specific manuscript convention の本格実装
 
 ---
 
-## Phase 7 / v0.7 系: プロジェクトを歩けるようにする
+## Phase 7 / v0.70.x: プロジェクトを歩けるようにする
 
 Phase 7 は、File Explorer / Project Navigation の版。
 
 目的は、小説プロジェクトのフォルダ構造を自然に扱えるようにすることである。
 
-### v0.7 系で積むもの
+### Phase 7 で扱うこと
 
 ```text
 Hierarchical file explorer foundation
@@ -1091,7 +422,7 @@ missing / unreadable file state
 
 ### フォルダ内変更検知
 
-v0.7 系では、フォルダ内変更検知を入れる価値が高い。
+Phase 7 では、フォルダ内変更検知を入れる価値が高い。
 
 方針:
 
@@ -1123,7 +454,7 @@ rename / move を推測する
 dirty editor を勝手に上書きする
 ```
 
-### v0.7.x 追加候補
+### v0.70.x 追加候補
 
 ```text
 create file
@@ -1137,7 +468,7 @@ move command
 
 ### D&D の扱い
 
-D&D は v0.7.0 では入れない。
+D&D は Phase 7 では入れない。
 
 理由:
 
@@ -1155,7 +486,7 @@ move command の UI である。
 4. その move command の UI として D&D を追加する
 ```
 
-v0.7 では、後で D&D を載せられるように以下を守る。
+Phase 7 では、後で D&D を載せられるように以下を守る。
 
 ```text
 File Explorer node が直接 fs 操作しない
@@ -1166,7 +497,7 @@ project root 外への移動は禁止する
 Navigator selection と active editor highlight を混ぜない
 ```
 
-### v0.7 系で積まないもの
+### Phase 7 で扱わないこと
 
 ```text
 internal drag and drop move
@@ -1177,7 +508,10 @@ Asset Manager
 章構成管理
 ```
 
-### v0.7 系の終了条件
+Project 全体検索は重要だが、Phase 7 の初期には含めない。
+File Explorer / Project Navigation の基盤ができた後、v1.0 候補または後続 Phase として判断する。
+
+### Phase 7 の終了条件
 
 ```text
 小説プロジェクトの chapters / notes / worldbuilding / drafts を
@@ -1189,23 +523,24 @@ File Explorer が refresh によって追える。
 
 ---
 
-## Phase 8 / v0.8 系: 他人の手に渡せるようにする
+## Phase 8 / v0.80.x: 他人の手に渡せるようにする
 
 Phase 8 は、release hardening の版。
 
 目的は、自分以外の人に exe を渡しても、最低限 dogfood できる状態へ近づけることである。
 
-### v0.8 系で積むもの
+### Phase 8 で扱うこと
 
 ```text
 DB snapshot generation
 snapshot JSON generation
 packaged exe dogfood flow
 README / FAQ 整理
-UI Polish
+UI polish
 error / empty / loading state 整理
 Debug log 周辺整理
 issue report に必要な情報整理
+release quality checklist
 ```
 
 DB snapshot の位置づけ:
@@ -1229,7 +564,26 @@ packaged app smoke test checklist
 known limitations draft
 ```
 
-### v0.8 系で積まないもの
+### 配布品質 / リリース品質の分離
+
+Windows installer と `.pergamum` association は Phase 4 で入った。
+ただし、配布品質としてはまだ別途整理すべき作業がある。
+
+以下は通常の機能開発とは分けて管理する。
+
+```text
+code signing
+auto update
+GitHub Release artifacts
+installer branding polish
+macOS file association
+Linux MIME integration
+release note / changelog
+tag / release operation
+CI artifact publication
+```
+
+### Phase 8 で扱わないこと
 
 ```text
 DB snapshot restore
@@ -1237,10 +591,9 @@ DB migration
 Crash recovery 本格実装
 Export / output foundation
 installer 高度化
-Color theme full customization
 ```
 
-### v0.8 系の終了条件
+### Phase 8 の終了条件
 
 ```text
 自分以外の人が exe を起動して、
@@ -1249,19 +602,19 @@ Color theme full customization
 
 ---
 
-## v0.90.0: 初回 dogfood 配布版
+## v0.90.x: 初回 dogfood 配布系列
 
-v0.90.0 は新機能追加版ではなく、締め版とする。
+v0.90.x は新規大型機能追加系列ではなく、締めの系列とする。
 
 ```text
-v0.90.0:
+v0.90.x:
   毎日開けるようにする
 ```
 
-### v0.90.0 でやること
+### v0.90.x でやること
 
 ```text
-v0.4〜v0.8 の未完了項目の剪定
+v0.51.x〜v0.80.x の未完了項目の剪定
 release notes
 README / FAQ final pass
 packaged exe 配布
@@ -1270,22 +623,15 @@ known limitations
 upgrade / data warning
 ```
 
-### v0.90.0 で積まないもの
+### v0.90.x で積まないもの
 
 ```text
 新規大型機能
-Git
-Terminal
-Plugin API
-Export
-Cloud
-layout 永続化
-DB migration
-DB snapshot restore
-.txt support 必須化
 ```
 
-### v0.90.0 の終了条件
+その他の全体非スコープは「当面やらないこと」にまとめる。
+
+### v0.90.x の終了条件
 
 ```text
 作者本人が日常 dogfood できる。
@@ -1293,8 +639,155 @@ DB snapshot restore
 壊れる可能性がある領域と、未実装領域が明示されている。
 ```
 
-v0.90.0 は「全部できる」ではない。
+v0.90.x は「全部できる」ではない。
 ここから使いながら育てられる状態を目指す。
+
+---
+
+## 積み残しと判断時期
+
+ここには、foundation は完了したが、完成品としてはまだ残っている派生作業や、どの Phase に入れるか未確定の作業を置く。
+すぐにやるとは限らない。
+
+### Workbench
+
+```text
+項目:
+  layout 永続化
+  sidebar width 永続化
+  editor / preview split ratio 永続化
+  utility window height 永続化
+
+判断時期:
+  v0.90.x 以降の UX 改善候補
+```
+
+### Occurrences
+
+```text
+項目:
+  range anchoring
+  文書編集後の occurrence 再計算
+  cursor-position-aware navigation
+  複数 entry tracking
+
+判断時期:
+  v1.0 候補
+```
+
+### Debug Log
+
+```text
+項目:
+  検索
+  export
+  full file viewer
+  issue report 連携
+
+判断時期:
+  Phase 8 または v1.0 候補
+```
+
+### Glossary
+
+```text
+項目:
+  forms management polish
+  warning policy 説明文の整理
+  duplicate surface feedback
+  form 並び順の整理
+
+判断時期:
+  v1.0 候補
+```
+
+### Settings
+
+```text
+項目:
+  settings persistence
+  user / project / default resolution
+  wired settings expansion
+  workbench.colorTheme wiring
+  preview.renderer wiring
+  Settings dirty / apply flow
+
+判断時期:
+  Phase 6 で continuity に必要な最小範囲を扱う。
+  それ以外は v1.0 候補として判断する。
+```
+
+### Project / file operations
+
+```text
+項目:
+  Untitled Markdown document handling
+  Safe filename / default untitled name policy
+  Existing project DB migration / naming transition policy
+  second-instance policy
+
+判断時期:
+  Untitled Markdown document handling:
+    Phase 6 前、または v0.90.x までの dogfood 改善候補
+
+  second-instance policy:
+    Phase 6 / session restore 周辺で判断する
+
+  Existing project DB migration / naming transition policy:
+    v1.0 でデータ互換性を重視する段階で判断する
+```
+
+### Text handling policy
+
+```text
+項目:
+  Text document line ending policy
+  Configurable Japanese paragraph indent character
+  Unicode space-like character linter
+
+判断時期:
+  Phase 5 の可視化基盤が入った後に判断する。
+  本文変更を伴うものは、明示 command / export の扱いが固まってから扱う。
+  v1.0 候補。
+```
+
+Phase 5 では line ending / paragraph indentation を「見える」状態にする。
+保存時の line ending 適用、段落字下げ文字の設定化、space-like character linter は Phase 5 には自動的に含めない。
+
+### Search / project-wide navigation
+
+```text
+項目:
+  Project 全文検索
+  project-wide replace
+  Quick Access @ / # / no-prefix
+  Markdown outline search
+  SQLite FTS5 / trigram / BM25
+
+判断時期:
+  Phase 7 の File Explorer / Project Navigation 基盤後に判断する。
+  v1.0 または v1.x 候補。
+```
+
+置換は本文変更を伴うため、本文非破壊原則や明示 command の扱いが固まった後に別 Issue として扱う。
+
+### Performance / preview rendering
+
+```text
+項目:
+  long document open performance follow-up
+  preview rendering cost follow-up
+  content-visibility / containment verification
+  decoration rendering cost observation
+
+判断時期:
+  Phase 5 の editor decoration 作業と隣接して判断する。
+  ただし、Phase 5 の必須スコープには自動的に含めない。
+```
+
+測定と対処は分ける。
+Phase 4 では long document open performance measurement が進んだ。
+preview / decoration / layout cost への対処は後続候補として扱う。
 
 ---
 
@@ -1315,14 +808,16 @@ Crash recovery
 Export / output foundation
 FAQ / Help
 built-in light / dark theme foundation
-Plain text document support
+Project-wide search
 ```
+
+上記に加え、「積み残しと判断時期」で v1.0 候補としたものを含む。
 
 v1.0 では、ユーザーのデータを壊さないことを重視する。
 
 ```text
-v0.90.0:
-  dogfood 可能な配布版
+v0.90.x:
+  dogfood 可能な配布系列
 
 v1.0:
   データを壊さず日常運用できる安定版
@@ -1348,6 +843,7 @@ EPUB / PDF / DOCX 出力
 internal drag and drop move
 external file / folder import
 advanced theme customization
+Plain text document support
 ```
 
 Terminal は Git 統合とセットで考える。
@@ -1376,7 +872,7 @@ packaging / CI / security が重くなる
 
 ## 当面やらないこと
 
-以下は v0.90.0 までの必須スコープに入れない。
+以下は v0.90.x までの必須スコープに入れない。
 
 ```text
 Git 統合
@@ -1395,25 +891,7 @@ DB migration
 Color theme full customization
 任意 CSS テーマ
 external file drop / import
-.txt support 必須化
-```
-
-ただし、一部は積み残しとして意識する。
-
-```text
-layout 永続化:
-  v0.90.0 ではやらないが、UX 上の積み残しとして認識する。
-
-D&D:
-  v0.7 ではやらない。
-  明示 move command ができてから UI として検討する。
-
-Export:
-  本文正本ではなく派生物生成として将来扱う。
-
-.txt support:
-  Phase 5 の後半候補ではあるが、
-  v0.90.0 の必須条件にはしない。
+.txt support
 ```
 
 ---
@@ -1442,8 +920,6 @@ Renderer をどこまで触らせるか
 署名 / trust model をどうするか
 ```
 
----
-
 ### Git integration
 
 初期リリースでは外す方向。
@@ -1464,8 +940,6 @@ commit helper
 history viewer
 diff viewer
 ```
-
----
 
 ### Custom kind
 
@@ -1500,8 +974,6 @@ kind key をどう扱うか
 既存 entry との互換性
 ```
 
----
-
 ### tags
 
 Glossary entry に tags を付ける案。
@@ -1519,7 +991,19 @@ Glossary entry に tags を付ける案。
 
 現時点では Future Work。
 
----
+### Plain text document support
+
+`.txt` support は Phase 5 には含めない。
+
+`.txt` は簡単そうに見えるが、実際には以下が絡む。
+
+```text
+encoding policy
+line ending policy
+本文非破壊原則
+```
+
+そのため、v1.x 以降の候補として扱う。
 
 ### Export / output
 
@@ -1548,13 +1032,11 @@ Export:
 
 機械置換や体裁調整は、本文保存ではなく export command に閉じ込める。
 
----
-
 ### Color theme foundation
 
 長時間執筆・編集するために、カラーテーマを切り替えられるようにする。
 
-v0.90.0 では必須にしない。
+v0.90.x では必須にしない。
 v1.0 以降の候補とする。
 
 初期候補:
@@ -1584,149 +1066,29 @@ built-in themes:
 現時点では、以下の順で進める。
 
 ```text
-1. roadmap.md の剪定
-2. Phase 4-0: Include renderer .test.tsx files in Vitest config
-3. Phase 4-1: Command ID naming and command inventory
-4. Phase 4-2: Application menu / basic shortcuts / context menu foundation
-5. Phase 4-3: Command tab / Command launcher foundation
-6. Phase 5-1: Editor decoration visibility foundation
-7. Phase 5-2: Text line ending detection and editor marker display foundation
-8. Phase 5-3: Japanese paragraph indentation commands and indent marker display foundation
-9. Phase 6-1: Session restore foundation
-10. Phase 6-2: settings foundation
-11. Phase 7-1: Hierarchical file explorer foundation
+1. Phase 5-1: Editor decoration visibility foundation
+2. Phase 5-2: Text line ending detection and editor marker display foundation
+3. Phase 5-3: Japanese paragraph indentation support
+4. Phase 6-1: Session restore foundation
+5. Phase 6-2: Recent projects / continuity settings foundation
+6. Phase 7-1: Hierarchical file explorer foundation
 ```
+
+Issue 化待ちは先頭 1〜3 件を目安にする。
+詳細なスコープ・非スコープ・受け入れ条件・テスト観点は、それぞれの Issue で定義する。
 
 理由:
 
 ```text
-roadmap.md:
-  古い設計詳細を削り、地図としての役割に戻す。
-
-Phase 4:
-  後続機能の入口を command / menu / shortcut / context menu にそろえる。
-
 Phase 5:
   本文非破壊原則を text handling に適用する。
 
 Phase 6:
-  毎日開けるための session restore / settings を整える。
+  毎日開けるための session restore / recent projects を整える。
 
 Phase 7:
   小説プロジェクトを自然に歩けるようにする。
 ```
-
----
-
-## 直近の段取りメモ
-
-このセクションは、次に Issue を切るための一時メモである。
-
-実装スコープの正本ではない。
-Issue 化した時点で、詳細は Issue 側へ移す。
-実装が完了したら、このセクションから削るか、必要な結論だけを完了済み・ADR・AGENTS.md へ移す。
-
-このセクションは、最大で次の 1〜3 Issue 分までを目安とする。
-完了済みの詳細設計を roadmap.md に長く残さない。
-
-### Phase 4: command ID naming
-
-Phase 4 では、Application menu / shortcut / context menu / Command tab から同じ command を呼ぶ。
-
-そのため、新規 command ID は原則として以下に寄せる。
-
-```text
-{domain}.{target}.{verb}
-```
-
-例:
-
-```text
-app.preferences.open
-editor.document.save
-editor.tab.close
-glossary.entry.open
-glossary.occurrences.next
-glossary.occurrences.previous
-utility.command.open
-```
-
-domain 候補:
-
-```text
-app
-editor
-glossary
-utility
-view
-project
-file
-```
-
-verb 候補:
-
-```text
-open
-close
-save
-create
-delete
-toggle
-next
-previous
-refresh
-rename
-move
-```
-
-規則:
-
-```text
-verb は末尾に置く
-verb に目的語を含めない
-複合的な対象は target 側で表現する
-UI の置き場所を command ID に含めない
-shortcut / menu / context menu / command tab は同じ command を呼ぶ
-```
-
-Phase 4 では、既存 command ID を即座に破壊的変更するかどうかは個別 Issue で判断する。
-ただし、新規 command ID は原則として `{domain}.{target}.{verb}` に寄せる。
-
-### Phase 4-0: renderer .test.tsx
-
-Phase 4 で UI component が増える前に、renderer `.test.tsx` を Vitest 実行対象へ含める。
-
-目的:
-
-```text
-.test.tsx ファイルを Vitest 実行対象に含める
-既存の非実行テストを実行対象にする
-必要に応じて file naming / config を整理する
-```
-
-非スコープ:
-
-```text
-UI テスト基盤の全面刷新
-testing-library 導入
-E2E テスト導入
-```
-
-### Phase 4-1: command inventory
-
-Phase 4 の最初に、既存 command ID を棚卸しする。
-
-目的:
-
-```text
-既存 command ID を一覧化する
-命名規則から外れているものを確認する
-破壊的変更するか、旧 ID を残すかを判断する
-menu / shortcut / context menu / command tab へ載せる対象を整理する
-```
-
-この段階では、すべての command ID を無理に改名しない。
-後続 Issue の実装を妨げる揺れだけを優先して整理する。
 
 ---
 
@@ -1735,7 +1097,23 @@ menu / shortcut / context menu / command tab へ載せる対象を整理する
 この文書は、完璧に保つ必要はない。
 大きな方針・近い候補・保留事項を忘れないために更新する。
 
-運用案:
+### 非スコープ記述の扱い
+
+```text
+各 Phase の「扱わないこと」:
+  その Phase で読者が期待しやすい誤解だけを書く
+
+当面やらないこと:
+  v0.90.x までの全体非スコープを一元管理する
+
+積み残しと判断時期:
+  行き先と判断時期を管理する
+```
+
+同じ非スコープ項目を複数箇所に重複して書きすぎない。
+方針が変わったときに更新箇所が増えすぎるためである。
+
+### 運用ルール
 
 ```text
 Issue を作る前:
@@ -1752,9 +1130,9 @@ Issue が完了した後:
   古い記述を消す
   または保留・却下として明示する
 
-直近の段取りメモ:
-  最大で次の 1〜3 Issue 分までを目安にする
-  実装が完了したら削るか、必要な結論だけを ADR / AGENTS.md へ移す
+直近の推奨順:
+  先頭 1〜3 Issue 分を目安にする
+  詳細なスコープ・非スコープ・受け入れ条件・テスト観点は Issue 側で定義する
 
 古い設計詳細:
   roadmap.md に残しすぎない
