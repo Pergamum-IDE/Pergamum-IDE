@@ -15,9 +15,33 @@
     "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.tests.json",
     "test": "vitest run",
     "build": "npm run typecheck && electron-forge package",
+    "build:installer": "npm run typecheck && electron-forge package && electron-builder --win nsis",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make"
+  },
+  "build": {
+    "directories": {
+      "output": "dist-installer"
+    },
+    "files": [
+      ".vite/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "fileAssociations": [
+        {
+          "ext": "pergamum",
+          "name": "Pergamum Project",
+          "description": "Pergamum Project File",
+          "icon": "assets/icons/file-associations/pergamum/pergamum-scroll-file-icon.ico"
+        }
+      ]
+    },
+    "nsis": {
+      "perMachine": true
+    }
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
@@ -47,6 +71,7 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^6.0.5",
     "electron": "43.4.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.9.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"

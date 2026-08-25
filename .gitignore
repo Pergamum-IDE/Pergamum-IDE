@@ -1,11 +1,14 @@
 node_modules/
 dist/
 dist-electron/
+dist-installer/
 .vite/
 npm-debug.log*
 *.local
 out/
 .claude/
 review-notes/
+scripts/
 *.ps1
+
 

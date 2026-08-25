@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="title desc">
+  <title id="title">Pergamum scroll file icon</title>
+  <desc id="desc">A transparent-background parchment scroll icon for .pergamum project files.</desc>
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7E7B8"/>
+      <stop offset="0.45" stop-color="#E8CC83"/>
+      <stop offset="1" stop-color="#C99C47"/>
+    </linearGradient>
+    <linearGradient id="paperSoft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFF1C8"/>
+      <stop offset="0.55" stop-color="#E7C878"/>
+      <stop offset="1" stop-color="#B77B2C"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF4CE"/>
+      <stop offset="1" stop-color="#BD8433"/>
+    </linearGradient>
+    <radialGradient id="curl" cx="45%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#FFF3CA"/>
+      <stop offset="0.52" stop-color="#E3BD68"/>
+      <stop offset="1" stop-color="#9A5D20"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.22"/>
+    </filter>
+    <filter id="softInset" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>
+      <feOffset dx="0" dy="2" result="offset"/>
+      <feComposite in="offset" in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="inner"/>
+      <feColorMatrix in="inner" type="matrix" values="0 0 0 0 0.54  0 0 0 0 0.33  0 0 0 0 0.12  0 0 0 0.45 0"/>
+      <feComposite in="SourceGraphic" operator="over"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <!-- main sheet -->
+    <path d="M222 259
+             C260 246 300 252 338 250
+             H732
+             C758 250 776 270 776 296
+             V735
+             C776 762 758 781 731 781
+             H316
+             C282 781 253 789 222 775
+             Z"
+          fill="url(#paper)" stroke="#7E4F1F" stroke-width="18" stroke-linejoin="round"/>
+
+    <!-- subtle paper center highlight -->
+    <path d="M284 310 H681 C698 310 710 322 710 339 V694 C710 711 698 723 681 723 H284 Z"
+          fill="#FFF1C4" opacity="0.30"/>
+
+    <!-- parchment texture lines -->
+    <path d="M304 384 C404 363 524 374 668 356" fill="none" stroke="#9B6A2B" stroke-width="10" opacity="0.18" stroke-linecap="round"/>
+    <path d="M296 515 C430 492 548 528 690 503" fill="none" stroke="#9B6A2B" stroke-width="9" opacity="0.14" stroke-linecap="round"/>
+    <path d="M302 640 C406 622 533 636 677 616" fill="none" stroke="#9B6A2B" stroke-width="8" opacity="0.12" stroke-linecap="round"/>
+
+    <!-- left edge, like the ASCII vertical side -->
+    <path d="M222 268 V771" fill="none" stroke="#6F4319" stroke-width="24" stroke-linecap="round"/>
+    <path d="M253 281 V759" fill="none" stroke="#FFF0C2" stroke-width="10" opacity="0.50" stroke-linecap="round"/>
+
+    <!-- top scroll bar -->
+    <path d="M190 196
+             H765
+             C799 196 825 222 825 256
+             C825 290 799 316 765 316
+             H190
+             C166 316 146 289 146 256
+             C146 223 166 196 190 196 Z"
+          fill="url(#paperSoft)" stroke="#6F4319" stroke-width="20" stroke-linejoin="round"/>
+    <path d="M195 229 H722" fill="none" stroke="#FFF4D4" stroke-width="12" opacity="0.55" stroke-linecap="round"/>
+    <path d="M196 292 H720" fill="none" stroke="#8B5B22" stroke-width="10" opacity="0.32" stroke-linecap="round"/>
+
+    <!-- top right curl, shaped like a P loop -->
+    <path d="M759 198
+             C852 195 911 243 900 303
+             C887 374 780 375 744 319
+             C790 330 837 319 848 284
+             C860 247 823 224 759 225 Z"
+          fill="url(#curl)" stroke="#6F4319" stroke-width="18" stroke-linejoin="round"/>
+    <path d="M777 241
+             C824 241 850 262 843 290
+             C836 319 793 324 764 305"
+          fill="none" stroke="#FFF0C2" stroke-width="13" opacity="0.65" stroke-linecap="round"/>
+
+    <!-- bottom scroll bar -->
+    <path d="M190 708
+             H765
+             C799 708 825 734 825 768
+             C825 802 799 828 765 828
+             H190
+             C166 828 146 801 146 768
+             C146 735 166 708 190 708 Z"
+          fill="url(#edge)" stroke="#6F4319" stroke-width="20" stroke-linejoin="round"/>
+    <path d="M195 741 H722" fill="none" stroke="#FFF4D4" stroke-width="12" opacity="0.50" stroke-linecap="round"/>
+    <path d="M196 804 H720" fill="none" stroke="#8B5B22" stroke-width="10" opacity="0.35" stroke-linecap="round"/>
+
+    <!-- bottom right curl, shaped like a lower p loop -->
+    <path d="M759 710
+             C848 714 906 766 892 827
+             C877 892 783 889 746 834
+             C789 845 831 835 844 803
+             C859 766 823 739 759 737 Z"
+          fill="url(#curl)" stroke="#6F4319" stroke-width="18" stroke-linejoin="round"/>
+    <path d="M777 754
+             C822 758 848 781 840 809
+             C832 837 790 840 763 821"
+          fill="none" stroke="#FFF0C2" stroke-width="13" opacity="0.62" stroke-linecap="round"/>
+  </g>
+</svg>

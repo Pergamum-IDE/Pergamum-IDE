@@ -23,6 +23,7 @@ import {
   updateCurrentProjectWindowTitle
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
+import { installAppShutdownCleanup } from "./shutdownCleanup";
 import { extractStartupProjectFilePathFromArgv } from "./startupProjectArgv";
 
 let mainWindow: BrowserWindow | null = null;
@@ -66,13 +67,12 @@ async function createMainWindow(): Promise<void> {
 }
 
 function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
-  app.on("before-quit", () => {
-    void releaseCurrentProjectWriteOwnership();
-    logger.flushAndClose();
-  });
-  app.on("will-quit", () => {
-    void releaseCurrentProjectWriteOwnership();
-    logger.flushAndClose();
+  installAppShutdownCleanup(app, async () => {
+    try {
+      await releaseCurrentProjectWriteOwnership();
+    } finally {
+      logger.flushAndClose();
+    }
   });
 
   process.on("uncaughtException", (error) => {
