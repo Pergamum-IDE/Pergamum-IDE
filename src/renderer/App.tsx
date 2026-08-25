@@ -33,6 +33,7 @@ import {
 import {
   createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
+  serializeEditorId,
   type ActiveProjectContext,
   type EditorId
 } from "../shared/editorId";
@@ -3549,6 +3550,12 @@ export function App(): JSX.Element {
                     <>
                       <EditorSurface
                         editor={currentEditor}
+                        activeDocumentKey={serializeEditorId(
+                          openDocumentsState.activeDocumentId
+                        )}
+                        previewUpdateDelayMs={
+                          effectiveSettings.preview.updateDelayMs
+                        }
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}
                         translate={translate}

@@ -88,12 +88,18 @@ function readRecentProjects(value: unknown): RecentProject[] {
 function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
   if (!isObject(value)) {
     return {
-      renderer: resolveCatalogValue("preview.renderer", undefined).value
+      renderer: resolveCatalogValue("preview.renderer", undefined).value,
+      updateDelayMs: resolveCatalogValue("preview.updateDelayMs", undefined)
+        .value
     };
   }
 
   return {
-    renderer: resolveCatalogValue("preview.renderer", value.renderer).value
+    renderer: resolveCatalogValue("preview.renderer", value.renderer).value,
+    updateDelayMs: resolveCatalogValue(
+      "preview.updateDelayMs",
+      value.updateDelayMs
+    ).value
   };
 }
 
@@ -342,7 +348,8 @@ export function parseSaveApplicationSettingsRequest(
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 4 ||
+    keys.length !== 5 ||
+    !keys.includes("preview") ||
     !keys.includes("workbench") ||
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
@@ -352,6 +359,7 @@ export function parseSaveApplicationSettingsRequest(
   }
 
   return {
+    preview: parsePreviewSettingsForWrite(value.preview),
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
@@ -369,21 +377,28 @@ function parsePreviewSettingsForWrite(
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 1 ||
+    keys.length !== 2 ||
     !keys.includes("renderer") ||
-    value.renderer === undefined
+    !keys.includes("updateDelayMs") ||
+    value.renderer === undefined ||
+    value.updateDelayMs === undefined
   ) {
     throw new Error("Invalid application settings.");
   }
 
-  const resolution = resolveCatalogValue("preview.renderer", value.renderer);
+  const rendererResolution = resolveCatalogValue("preview.renderer", value.renderer);
+  const updateDelayMsResolution = resolveCatalogValue(
+    "preview.updateDelayMs",
+    value.updateDelayMs
+  );
 
-  if (!resolution.ok) {
+  if (!rendererResolution.ok || !updateDelayMsResolution.ok) {
     throw new Error("Invalid application settings.");
   }
 
   return {
-    renderer: resolution.value
+    renderer: rendererResolution.value,
+    updateDelayMs: updateDelayMsResolution.value
   };
 }
 
@@ -775,6 +790,7 @@ export async function saveApplicationSettings(
 
   return saveSettings({
     ...settings,
+    preview: settingsRequest.preview,
     workbench: settingsRequest.workbench,
     commandPalette: settingsRequest.commandPalette,
     editor: settingsRequest.editor,

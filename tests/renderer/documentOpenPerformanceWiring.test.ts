@@ -347,19 +347,49 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       );
     });
 
-    it("measures preview render duration around markdownPreviewRenderer.render without logging inside the render body", () => {
+    it("measures preview render duration around markdownPreviewRenderer.render (inside the memoized useMemoizedPreviewRender hook, #250 follow-up) without logging inside the render body", () => {
       expect(editorSurfaceSource).toContain(
-        "const previewRenderStartedAt = performance.now();"
+        "const startedAt = performance.now();"
       );
       expect(editorSurfaceSource).toContain(
-        "const previewHtml = markdownPreviewRenderer.render(content);"
+        "const html = markdownPreviewRenderer.render(previewSourceContent);"
       );
       expect(editorSurfaceSource).toContain(
-        "const previewRenderDurationMs = performance.now() - previewRenderStartedAt;"
+        "durationMs: performance.now() - startedAt"
+      );
+      expect(editorSurfaceSource).toContain(
+        "const previewRender = useMemoizedPreviewRender(previewSourceContent);"
+      );
+      expect(editorSurfaceSource).toContain(
+        "const previewHtml = previewRender.html;"
+      );
+      expect(editorSurfaceSource).toContain(
+        "const previewRenderStartedAt = previewRender.startedAt;"
+      );
+      expect(editorSurfaceSource).toContain(
+        "const previewRenderDurationMs = previewRender.durationMs;"
       );
       // No logRendererDebugEvent import/usage here — logging stays centralized
       // in App.tsx; this component only measures and reports via callback.
       expect(editorSurfaceSource).not.toContain("logRendererDebugEvent");
+    });
+
+    it("markdown-it only re-runs when previewSourceContent changes (#250 follow-up: production, not just the test harness, is memoized)", () => {
+      const hookStart = editorSurfaceSource.indexOf(
+        "export function useMemoizedPreviewRender("
+      );
+      const hookEnd = editorSurfaceSource.indexOf(
+        "interface EditorSurfaceProps",
+        hookStart
+      );
+
+      expect(hookStart).toBeGreaterThan(-1);
+      expect(hookEnd).toBeGreaterThan(hookStart);
+
+      const hookBody = editorSurfaceSource.slice(hookStart, hookEnd);
+
+      expect(hookBody).toContain("useMemo(() => {");
+      expect(hookBody).toContain("}, [previewSourceContent]);");
     });
 
     it("fires the one-shot measurement effect only when documentOpenId changes, not on every content edit — works the same regardless of which open path set it", () => {

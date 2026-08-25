@@ -296,6 +296,8 @@ export const jaTranslations = {
   "settings.preview.renderer.description": "文書プレビューに使用するレンダラーを選択します。現在はMarkdownのみ使用できます。",
   "settings.preview.renderer.label": "プレビューレンダラー",
   "settings.preview.renderer.option.markdown.label": "Markdown",
+  "settings.preview.updateDelayMs.description": "編集が止まってからプレビューを更新するまでの待機時間です。値を小さくするとプレビューが素早く追従しますが、長い文書では編集中の応答性が低下する場合があります。",
+  "settings.preview.updateDelayMs.label": "プレビュー更新待機時間",
   "settings.files.newFile.lineEnding.option.lf.label": "LF",
   "settings.files.newFile.lineEnding.option.crlf.label": "CRLF",
   "settings.files.newFile.encoding.option.utf8.label": "UTF-8",

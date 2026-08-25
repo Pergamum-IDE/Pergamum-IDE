@@ -48,6 +48,13 @@ export type RecordRecentProjectInput = Omit<RecentProject, "lastOpenedAt">;
 
 export interface ApplicationPreviewSettings {
   renderer: PreviewRendererId;
+  /**
+   * #250 follow-up: milliseconds to wait, after editing stops, before
+   * updating the preview. applicationOnly scope — no project override
+   * (unlike `renderer`), so this is always resolved from
+   * ApplicationSettings/the catalog default, never ProjectSettings.
+   */
+  updateDelayMs: number;
 }
 
 export interface WorkbenchStatusBarSettings {
@@ -123,6 +130,7 @@ export interface ApplicationSettings {
 // save request preserves the sparse value (#173 D-7); it does not reset them
 // to a catalog default.
 export interface SaveApplicationSettingsRequest {
+  preview: ApplicationPreviewSettings;
   workbench: ApplicationWorkbenchSettings;
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
@@ -139,6 +147,7 @@ export interface ProjectSettings {
 
 export interface EffectivePreviewSettings {
   renderer: PreviewRendererId;
+  updateDelayMs: number;
 }
 
 export interface EffectiveWorkbenchSettings {
@@ -180,9 +189,17 @@ export interface EffectiveSettings {
 export const defaultPreviewRenderer: PreviewRendererId =
   getCatalogDefaultValue("preview.renderer");
 
+// #250 follow-up: same compatibility-wrapper rationale as
+// defaultPreviewRenderer above — the catalog is the only source of truth
+// for this default.
+export const defaultPreviewUpdateDelayMs: number = getCatalogDefaultValue(
+  "preview.updateDelayMs"
+);
+
 export const builtInDefaultSettings: EffectiveSettings = {
   preview: {
-    renderer: defaultPreviewRenderer
+    renderer: defaultPreviewRenderer,
+    updateDelayMs: defaultPreviewUpdateDelayMs
   },
   workbench: {
     language: getCatalogDefaultValue("workbench.language"),
@@ -236,7 +253,8 @@ export const builtInDefaultSettings: EffectiveSettings = {
 // top-level language/showStatusBar fields they replace.
 export const defaultApplicationSettings: ApplicationSettings = {
   preview: {
-    renderer: builtInDefaultSettings.preview.renderer
+    renderer: builtInDefaultSettings.preview.renderer,
+    updateDelayMs: builtInDefaultSettings.preview.updateDelayMs
   },
   workbench: {
     language: builtInDefaultSettings.workbench.language,
@@ -280,7 +298,8 @@ export const defaultApplicationSettings: ApplicationSettings = {
 export function createDefaultApplicationSettings(): ApplicationSettings {
   return {
     preview: {
-      renderer: defaultApplicationSettings.preview.renderer
+      renderer: defaultApplicationSettings.preview.renderer,
+      updateDelayMs: defaultApplicationSettings.preview.updateDelayMs
     },
     workbench: {
       language: defaultApplicationSettings.workbench.language,
@@ -339,7 +358,11 @@ export function resolveEffectiveSettings(
       renderer:
         projectSettings?.preview?.renderer ??
         applicationSettings.preview.renderer ??
-        builtInDefaultSettings.preview.renderer
+        builtInDefaultSettings.preview.renderer,
+      // applicationOnly (#250 follow-up): no project override, unlike
+      // renderer above. Always a concrete value already (resolved through
+      // the catalog at settings.json read time), so no fallback needed here.
+      updateDelayMs: applicationSettings.preview.updateDelayMs
     },
     // The whole workbench area is applicationOnly (#173, #174): Application
     // > Default only, no project scope in the chain. language and

@@ -55,6 +55,49 @@ describe("existing implementation alignment: preview.renderer (#150)", () => {
   });
 });
 
+describe("preview.updateDelayMs wiring (#250 follow-up)", () => {
+  it("builtInDefaultSettings / defaultApplicationSettings / createDefaultApplicationSettings all derive from the same catalog-backed default", () => {
+    const catalogDefault = getCatalogDefaultValue("preview.updateDelayMs");
+
+    expect(catalogDefault).toBe(10000);
+    expect(builtInDefaultSettings.preview.updateDelayMs).toBe(catalogDefault);
+    expect(defaultApplicationSettings.preview.updateDelayMs).toBe(
+      catalogDefault
+    );
+    expect(createDefaultApplicationSettings().preview.updateDelayMs).toBe(
+      catalogDefault
+    );
+  });
+
+  it("resolveEffectiveSettings passes updateDelayMs straight through from application settings — applicationOnly scope, no project override", () => {
+    expect(
+      resolveEffectiveSettings(
+        { ...defaultApplicationSettings, preview: { renderer: "markdown", updateDelayMs: 800 } },
+        undefined
+      ).preview.updateDelayMs
+    ).toBe(800);
+
+    // A ProjectSettings.preview shape has no updateDelayMs field at all
+    // (unlike renderer) — passing one through anyway must not change the
+    // resolved value, since this setting has no project scope in the chain.
+    expect(
+      resolveEffectiveSettings(
+        { ...defaultApplicationSettings, preview: { renderer: "markdown", updateDelayMs: 800 } },
+        { preview: { renderer: "markdown" } }
+      ).preview.updateDelayMs
+    ).toBe(800);
+  });
+
+  it("0 is a valid effective value — no fallback kicks in for the explicit 'don't wait' choice", () => {
+    expect(
+      resolveEffectiveSettings(
+        { ...defaultApplicationSettings, preview: { renderer: "markdown", updateDelayMs: 0 } },
+        undefined
+      ).preview.updateDelayMs
+    ).toBe(0);
+  });
+});
+
 describe("workbench.fontFamily wiring (#173)", () => {
   it("builtInDefaultSettings.workbench.fontFamily derives from the catalog default", () => {
     expect(builtInDefaultSettings.workbench.fontFamily).toBe(

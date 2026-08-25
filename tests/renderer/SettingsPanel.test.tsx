@@ -715,6 +715,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { checked: false } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
         statusBar: { visible: false }
@@ -741,6 +742,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { value: "crlf" } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
       editor: settings.editor,
@@ -770,6 +772,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { value: "   " } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
       editor: {},
@@ -796,6 +799,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { valueAsNumber: 2500 } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: {
         ...settings.commandPalette,
@@ -968,6 +972,84 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
     const source = settingsPanelSource();
 
     expect(source).not.toContain("onConfirmEnableAdvancedSettings:");
+  });
+});
+
+describe("SettingsPanelView preview.updateDelayMs (#250 follow-up)", () => {
+  it("appears in the preview category, editable (unlike preview.renderer)", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "preview"
+    });
+
+    const control = controlElement(element, "preview.updateDelayMs");
+
+    expect(control).toBeDefined();
+    expect(control.props.disabled).toBe(false);
+  });
+
+  it("resolves a non-empty label and description in ja and en", () => {
+    for (const language of ["en", "ja"] as const) {
+      const markup = renderSettingsPanelView(language, {
+        searchQuery: isolate("preview.updateDelayMs")
+      });
+
+      expect(markup).toContain(
+        t(language, "settings.preview.updateDelayMs.label")
+      );
+      expect(markup).toContain(
+        t(language, "settings.preview.updateDelayMs.description")
+      );
+    }
+  });
+
+  it("does not show the unwired-setting notice — it's a real, saveable user setting", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("preview.updateDelayMs")
+    });
+
+    expect(markup).not.toContain(t("en", "settings.unwiredSettingNotice"));
+  });
+
+  it("shows the stored value and the ms unit, with min/max/step wired from the catalog", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      preview: { renderer: "markdown", updateDelayMs: 10000 }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "preview"
+    });
+
+    const control = controlElement(element, "preview.updateDelayMs");
+
+    expect(control.props.value).toBe(10000);
+    expect(control.props.min).toBe(0);
+    expect(control.props.max).toBe(600000);
+    expect(control.props.step).toBe(1000);
+  });
+
+  it("saves immediately when changed, carrying the rest of preview settings through unchanged", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("preview.updateDelayMs"),
+      onChangeSettings
+    });
+    const input = controlElement(element, "preview.updateDelayMs");
+    const onChange = input.props.onChange as (event: {
+      target: { valueAsNumber: number };
+    }) => void;
+
+    onChange({ target: { valueAsNumber: 10000 } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: { ...settings.preview, updateDelayMs: 10000 },
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: settings.editor,
+      files: settings.files
+    });
   });
 });
 

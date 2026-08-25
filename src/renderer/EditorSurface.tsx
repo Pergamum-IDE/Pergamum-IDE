@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { DebugLogViewportChangeSource } from "../shared/debugLog";
 import {
   documentCharCount,
@@ -218,8 +218,105 @@ function useIsNarrowMarkdownWorkspace(): boolean {
   return isNarrow;
 }
 
+/**
+ * #250: the Markdown preview is rebuilt (markdown-it parse + a full,
+ * non-incremental `innerHTML` replace of the preview pane) from whatever
+ * content this hook returns. On a long document that work is expensive
+ * enough that doing it synchronously on every keystroke — as the editor's
+ * own render previously did — visibly delayed the *next* keystroke, since
+ * it shared the same synchronous render/commit as the CodeMirror update.
+ * This value intentionally lags `content` by up to `updateDelayMs` (the
+ * user's `preview.updateDelayMs` setting — #250 follow-up) so the editor
+ * never waits on it; only the last edit in a fast burst actually triggers a
+ * preview render. `updateDelayMs === 0` needs no special case: it's just a
+ * `setTimeout(..., 0)`, which still yields once before running rather than
+ * executing synchronously in the same task as the edit — exactly "don't
+ * intentionally wait," without forking the implementation.
+ *
+ * Keyed on `documentKey` (the active tab's identity) rather than `content`
+ * alone: switching to a different open document must show *that*
+ * document's preview immediately, never a stale pending update queued for
+ * the previously active one. Adopting the new document's content happens
+ * synchronously during render (the documented React pattern for resetting
+ * state when a prop identifying "which thing this is" changes), so a tab
+ * switch never flashes the old document's preview even for one frame.
+ *
+ * `updateDelayMs` is also a dependency of the scheduling effect: changing
+ * the setting while an update is pending cancels that stale-delay timer
+ * (the effect cleanup) and reschedules with the new delay from "now",
+ * using the same current content — never a leftover timer running on the
+ * old delay.
+ */
+export function useDebouncedPreviewContent(
+  documentKey: string,
+  content: string,
+  updateDelayMs: number
+): string {
+  const [state, setState] = useState({ documentKey, content });
+
+  if (state.documentKey !== documentKey) {
+    setState({ documentKey, content });
+  }
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setState((previous) =>
+        previous.documentKey === documentKey
+          ? { documentKey, content }
+          : previous
+      );
+    }, updateDelayMs);
+
+    return () => clearTimeout(timeoutId);
+  }, [documentKey, content, updateDelayMs]);
+
+  return state.content;
+}
+
+export interface PreviewRenderResult {
+  readonly html: string;
+  readonly startedAt: number;
+  readonly durationMs: number;
+}
+
+/**
+ * #250 follow-up: `MarkdownEditorSurface` re-renders on every keystroke
+ * (its `content` prop — the CodeMirror-bound canonical value — updates
+ * immediately), but markdown-it must only re-run when `previewSourceContent`
+ * (the debounced value from useDebouncedPreviewContent) actually changes.
+ * Exported — rather than inlined as a bare `useMemo` in the component — so
+ * tests exercise this exact production memoization instead of a
+ * reimplementation that could silently drift from it.
+ *
+ * html/startedAt/durationMs all come from the same memoized computation, so
+ * they stay consistent for whichever render actually produced this html —
+ * including on a document switch, where useDebouncedPreviewContent adopts
+ * the new document's content synchronously during render, so this recomputes
+ * fresh on that same render (preserving the #152/#154/#161 document-open
+ * timing semantics, which read these values from render's closure).
+ */
+export function useMemoizedPreviewRender(
+  previewSourceContent: string
+): PreviewRenderResult {
+  return useMemo(() => {
+    const startedAt = performance.now();
+    const html = markdownPreviewRenderer.render(previewSourceContent);
+
+    return { html, startedAt, durationMs: performance.now() - startedAt };
+  }, [previewSourceContent]);
+}
+
 interface EditorSurfaceProps {
   editor: CurrentEditor;
+  /**
+   * Stable identity of the active tab (#250) — used only to know when the
+   * user has switched to a *different* open document, so a debounced
+   * preview update in flight for the previous one is never applied after
+   * the switch. Not used for anything else.
+   */
+  activeDocumentKey: string;
+  /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
+  previewUpdateDelayMs: number;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -321,6 +418,8 @@ interface EditorSurfaceProps {
 
 export function EditorSurface({
   editor,
+  activeDocumentKey,
+  previewUpdateDelayMs,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -359,6 +458,8 @@ export function EditorSurface({
       return (
         <MarkdownEditorSurface
           document={editor.document}
+          documentKey={activeDocumentKey}
+          previewUpdateDelayMs={previewUpdateDelayMs}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
@@ -424,6 +525,8 @@ export function EditorSurface({
 
 interface MarkdownEditorSurfaceProps {
   document: CurrentDocument;
+  documentKey: string;
+  previewUpdateDelayMs: number;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -466,6 +569,8 @@ interface MarkdownEditorSurfaceProps {
 
 function MarkdownEditorSurface({
   document,
+  documentKey,
+  previewUpdateDelayMs,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -486,9 +591,22 @@ function MarkdownEditorSurface({
   onViewportChanged
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
-  const previewRenderStartedAt = performance.now();
-  const previewHtml = markdownPreviewRenderer.render(content);
-  const previewRenderDurationMs = performance.now() - previewRenderStartedAt;
+  // #250: the preview is rendered from a debounced trailing view of
+  // `content`, not `content` itself — see useDebouncedPreviewContent. The
+  // CodeMirror editor below still receives `content` directly and is
+  // unaffected by preview timing.
+  const previewSourceContent = useDebouncedPreviewContent(
+    documentKey,
+    content,
+    previewUpdateDelayMs
+  );
+  // #250 follow-up: see useMemoizedPreviewRender above — markdown-it only
+  // re-runs when previewSourceContent changes, not on every keystroke
+  // rerender of this component.
+  const previewRender = useMemoizedPreviewRender(previewSourceContent);
+  const previewHtml = previewRender.html;
+  const previewRenderStartedAt = previewRender.startedAt;
+  const previewRenderDurationMs = previewRender.durationMs;
   const { entries, surfaceIndex } = useGlossaryEntriesForMatching(
     projectRootPath,
     glossaryRefreshToken
