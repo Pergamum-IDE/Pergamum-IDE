@@ -50,6 +50,7 @@ describe("glossary preload API", () => {
 
     await api.projects.createProject();
     await api.projects.openProject();
+    await api.projects.openStartupProject();
     await api.projects.openRecentProject("C:\\Novel\\Novel.pergamum");
     await api.projects.confirmReadOnlyProjectOpen("pending-token");
     await api.projects.cancelReadOnlyProjectOpen("pending-token");
@@ -60,6 +61,7 @@ describe("glossary preload API", () => {
     expect(electronMock.invoke.mock.calls).toEqual([
       [PROJECT_CHANNELS.createProject],
       [PROJECT_CHANNELS.openProject],
+      [PROJECT_CHANNELS.openStartupProject],
       [
         PROJECT_CHANNELS.openRecentProject,
         {

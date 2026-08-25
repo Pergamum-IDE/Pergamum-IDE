@@ -518,6 +518,7 @@ export function App(): JSX.Element {
   const openProjectCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
+  const startupProjectOpenAttemptedRef = useRef(false);
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -3146,6 +3147,48 @@ export function App(): JSX.Element {
     }
   }
 
+  async function openStartupProject(): Promise<void> {
+    try {
+      const startupProjectOpenResult =
+        await window.pergamum.projects.openStartupProject();
+
+      if (startupProjectOpenResult.kind === "noStartupProjectOpen") {
+        return;
+      }
+
+      if (startupProjectOpenResult.kind === "startupProjectOpenFailed") {
+        setStatus({
+          key: "status.projectOpenFailed",
+          values: { message: startupProjectOpenResult.message }
+        });
+        return;
+      }
+
+      const openedProject = await resolveProjectOpenResult(
+        startupProjectOpenResult.result
+      );
+
+      if (!openedProject) {
+        setStatus({ key: "status.openProjectCanceled" });
+        return;
+      }
+
+      const settingsReloadError = await reloadSettingsAfterProjectOpen();
+      const openedStatus = await activateProject(openedProject);
+
+      if (!openedStatus) {
+        return;
+      }
+
+      setStatus(projectOpenStatus(openedStatus, settingsReloadError, translate));
+    } catch (error) {
+      setStatus({
+        key: "status.projectOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    }
+  }
+
   async function openRecentProject(projectFilePath: string): Promise<void> {
     if (!(await confirmProjectSwitch())) {
       setStatus({ key: "status.openProjectCanceled" });
@@ -3178,6 +3221,15 @@ export function App(): JSX.Element {
       });
     }
   }
+
+  useEffect(() => {
+    if (isSettingsLoading || startupProjectOpenAttemptedRef.current) {
+      return;
+    }
+
+    startupProjectOpenAttemptedRef.current = true;
+    void openStartupProject();
+  }, [isSettingsLoading]);
 
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;

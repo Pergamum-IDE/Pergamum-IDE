@@ -23,6 +23,7 @@ import {
   updateCurrentProjectWindowTitle
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
+import { extractStartupProjectFilePathFromArgv } from "./startupProjectArgv";
 
 let mainWindow: BrowserWindow | null = null;
 const pergamumDebugMode = parseDebugModeFromArgv(process.argv);
@@ -104,6 +105,12 @@ function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
 }
 
 app.whenReady().then(async () => {
+  const startupProjectFilePath = extractStartupProjectFilePathFromArgv(
+    process.argv,
+    {
+      isPackaged: app.isPackaged
+    }
+  );
   const debugLogger = createDebugLogger({
     enabled: pergamumDebugMode,
     runtime: createDebugLogRuntimeDetails(app, pergamumDebugMode),
@@ -136,7 +143,9 @@ app.whenReady().then(async () => {
   registerGlossaryIpc(debugLogger);
   registerProjectIpc(
     debugLogger,
-    defaultProjectWriteOwnershipManager
+    defaultProjectWriteOwnershipManager,
+    undefined,
+    startupProjectFilePath
   );
   registerSettingsIpc();
   registerAppInfoIpc();

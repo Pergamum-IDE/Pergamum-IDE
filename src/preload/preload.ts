@@ -67,6 +67,8 @@ const pergamumApi: PergamumApi = {
   projects: {
     createProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.createProject),
     openProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.openProject),
+    openStartupProject: () =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.openStartupProject),
     openRecentProject: (projectFilePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.openRecentProject, {
         projectFilePath

@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   defaultProjectAccessMode,
   PROJECT_CHANNELS,
-  type PendingReadOnlyProjectOpen
+  type PendingReadOnlyProjectOpen,
+  type ProjectOpenResult
 } from "../../src/shared/api";
 import type { DebugLogger } from "../../src/main/debugLogger";
 import { projectConfigFileName } from "../../src/main/projectConfigStore";
@@ -387,6 +388,7 @@ describe("project file IPC foundation", () => {
       expect.arrayContaining([
         PROJECT_CHANNELS.createProject,
         PROJECT_CHANNELS.openProject,
+        PROJECT_CHANNELS.openStartupProject,
         PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
         PROJECT_CHANNELS.cancelReadOnlyProjectOpen
       ])
@@ -1634,6 +1636,211 @@ describe("project file IPC foundation", () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
+  it("openStartupProject returns no request when no startup path was captured", async () => {
+    const openStartupProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openStartupProject
+    );
+
+    await expect(openStartupProjectHandler({ sender: {} })).resolves.toEqual({
+      kind: "noStartupProjectOpen"
+    });
+    expect(electronMock.showOpenDialog).not.toHaveBeenCalled();
+    expect(currentProjectRootPath()).toBeNull();
+  });
+
+  it("openStartupProject opens a valid captured .pergamum file without showing the open dialog", async () => {
+    const projectFilePath = path.join(projectRootPath, "Startup Open.pergamum");
+    await fs.writeFile(path.join(projectRootPath, "startup.md"), "# Startup\n");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Startup Open"
+    });
+    await created.close();
+
+    const openStartupProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openStartupProject,
+      createLoggerMock(),
+      undefined,
+      undefined,
+      projectFilePath
+    );
+    const project = expectStartupProjectOpenResult(
+      await openStartupProjectHandler({ sender: {} })
+    );
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: defaultProjectAccessMode,
+      name: "Startup Open",
+      documents: [
+        {
+          relativePath: "startup.md",
+          name: "startup.md"
+        }
+      ]
+    });
+    expect(electronMock.showOpenDialog).not.toHaveBeenCalled();
+    expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
+    await expect(readRecentProjects(userDataPath)).resolves.toHaveLength(1);
+  });
+
+  it("openStartupProject consumes the captured project path only once", async () => {
+    const projectFilePath = path.join(projectRootPath, "Startup Once.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Startup Once"
+    });
+    await created.close();
+
+    const openStartupProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openStartupProject,
+      createLoggerMock(),
+      undefined,
+      undefined,
+      projectFilePath
+    );
+
+    expectStartupProjectOpenResult(
+      await openStartupProjectHandler({ sender: {} })
+    );
+    await expect(openStartupProjectHandler({ sender: {} })).resolves.toEqual({
+      kind: "noStartupProjectOpen"
+    });
+  });
+
+  it("openStartupProject does not treat a directory ending in .pergamum as a project file", async () => {
+    const projectDirectoryPath = path.join(
+      projectRootPath,
+      "Startup Directory.pergamum"
+    );
+    await fs.mkdir(projectDirectoryPath);
+    const ownershipManager = createWriteOwnershipManager({ kind: "owned" });
+
+    const openStartupProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openStartupProject,
+      createLoggerMock(),
+      ownershipManager,
+      undefined,
+      projectDirectoryPath
+    );
+
+    expectStartupProjectOpenResult(
+      await openStartupProjectHandler({ sender: {} })
+    );
+    expect(ownershipManager.acquire).not.toHaveBeenCalled();
+    expect(currentProjectRootPath()).toBeNull();
+    await expectSettingsJsonMissing(userDataPath);
+  });
+
+  it("openStartupProject converts a missing .pergamum file into a controlled failure result without unsafe path surfaces", async () => {
+    const logger = createLoggerMock();
+    const projectFilePath = path.join(projectRootPath, "Missing Startup.pergamum");
+    const openStartupProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openStartupProject,
+      logger,
+      undefined,
+      undefined,
+      projectFilePath
+    );
+
+    expectStartupProjectOpenFailedResult(
+      await openStartupProjectHandler({ sender: {} }),
+      "unknown"
+    );
+    expectNoUnsafeSurface(logger, [
+      projectRootPath,
+      projectFilePath,
+      "Missing Startup.pergamum"
+    ]);
+    expect(currentProjectRootPath()).toBeNull();
+  });
+
+  it("openStartupProject converts an invalid startup path into a controlled failure result", async () => {
+    const logger = createLoggerMock();
+    const projectFilePath = path.join(projectRootPath, "Startup Draft.md");
+    const openStartupProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openStartupProject,
+      logger,
+      undefined,
+      undefined,
+      projectFilePath
+    );
+
+    expectStartupProjectOpenFailedResult(
+      await openStartupProjectHandler({ sender: {} }),
+      "unknown"
+    );
+    expectNoUnsafeSurface(logger, [
+      projectRootPath,
+      projectFilePath,
+      "Startup Draft.md"
+    ]);
+    expect(currentProjectRootPath()).toBeNull();
+  });
+
+  it("openStartupProject waits for read-only confirmation when write ownership is unavailable", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Startup Readonly.pergamum"
+    );
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Startup Readonly"
+    });
+    await created.close();
+
+    const openStartupProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openStartupProject,
+      createLoggerMock(),
+      ownershipManager,
+      undefined,
+      projectFilePath
+    );
+    const pending = expectPendingReadOnlyProjectOpen(
+      expectStartupProjectOpenResult(
+        await openStartupProjectHandler({ sender: {} })
+      )
+    );
+
+    expect(pending.project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Startup Readonly"
+    });
+    expect(currentProjectAccessMode()).toBeNull();
+
+    const confirmReadOnlyProjectOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmReadOnlyProjectOpen
+    );
+    const project = await confirmReadOnlyProjectOpenHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: {
+        kind: "readOnly",
+        reason: "writeLockUnavailable"
+      },
+      name: "Startup Readonly"
+    });
+    expect(currentProjectAccessMode()).toEqual({
+      kind: "readOnly",
+      reason: "writeLockUnavailable"
+    });
+  });
+
   it("openRecentProject opens a registered .pergamum entry by projectFilePath and refreshes recent projects", async () => {
     const projectFilePath = path.join(projectRootPath, "Recent File.pergamum");
     const created = await createProjectDatabase({
@@ -1997,16 +2204,37 @@ function expectPendingReadOnlyProjectOpen(
   return value as PendingReadOnlyProjectOpen;
 }
 
+function expectStartupProjectOpenResult(value: unknown): ProjectOpenResult {
+  expect(value).toMatchObject({
+    kind: "startupProjectOpenResult"
+  });
+
+  return (value as { result: ProjectOpenResult }).result;
+}
+
+function expectStartupProjectOpenFailedResult(
+  value: unknown,
+  reason: string
+): void {
+  expect(value).toMatchObject({
+    kind: "startupProjectOpenFailed",
+    reason,
+    message: `File I/O failed: ${reason}`
+  });
+}
+
 function registeredHandler(
   channel: string,
   logger: DebugLogger = createLoggerMock(),
   writeOwnershipManager?: ProjectWriteOwnershipManager,
-  windowTitleTargetProvider?: ProjectWindowTitleTargetProvider
+  windowTitleTargetProvider?: ProjectWindowTitleTargetProvider,
+  startupProjectFilePath?: string | null
 ): (...args: unknown[]) => unknown {
   registerProjectIpc(
     logger,
     writeOwnershipManager,
-    windowTitleTargetProvider
+    windowTitleTargetProvider,
+    startupProjectFilePath
   );
 
   const registration = electronMock.handle.mock.calls.find(
