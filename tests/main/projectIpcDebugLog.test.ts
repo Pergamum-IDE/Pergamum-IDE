@@ -10,7 +10,8 @@ const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
   fromWebContents: vi.fn(() => undefined),
   showOpenDialog: vi.fn(),
-  getPath: vi.fn()
+  getPath: vi.fn(),
+  getVersion: vi.fn()
 }));
 
 vi.mock("electron", () => ({
@@ -24,13 +25,15 @@ vi.mock("electron", () => ({
     handle: electronMock.handle
   },
   app: {
-    getPath: electronMock.getPath
+    getPath: electronMock.getPath,
+    getVersion: electronMock.getVersion
   }
 }));
 
 import {
   currentActiveProjectFilePath,
   currentProjectRootPath,
+  releaseCurrentProjectWriteOwnership,
   registerProjectIpc,
   requireCurrentActiveProjectFilePath,
   requireCurrentProjectRootPath
@@ -46,6 +49,7 @@ describe("project IPC debug logging", () => {
     electronMock.fromWebContents.mockReset().mockReturnValue(undefined);
     electronMock.showOpenDialog.mockReset();
     electronMock.getPath.mockReset();
+    electronMock.getVersion.mockReset().mockReturnValue("9.8.7-test");
     projectRootPath = await fs.mkdtemp(
       path.join(os.tmpdir(), "pergamum-project-ipc-debug-")
     );
@@ -63,6 +67,7 @@ describe("project IPC debug logging", () => {
   });
 
   afterEach(async () => {
+    await releaseCurrentProjectWriteOwnership();
     await fs.rm(projectRootPath, {
       recursive: true,
       force: true

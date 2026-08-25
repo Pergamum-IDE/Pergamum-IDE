@@ -1,4 +1,5 @@
 import {
+  app,
   BrowserWindow,
   dialog,
   ipcMain,
@@ -9,6 +10,7 @@ import {
   type SaveDialogOptions
 } from "electron";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   defaultProjectAccessMode,
@@ -17,6 +19,7 @@ import {
   type PendingReadOnlyProjectOpen,
   type PendingReadOnlyProjectOpenRequest,
   type PergamumProject,
+  type ProjectLockOwnerInfo,
   type PergamumProjectConfig,
   type ProjectAccessMode,
   type ProjectDocument,
@@ -67,6 +70,13 @@ import {
   projectWindowTitleStatusFromAccessMode,
   type ProjectWindowTitleTarget
 } from "./projectWindowTitle";
+import {
+  createProjectLockOwnerMetadata,
+  projectLockOwnerHandleContent,
+  projectLockOwnerHandlePath,
+  projectLockOwnerMetadataPath,
+  readProjectLockOwnerInfo
+} from "./projectLockOwnerMetadata";
 
 interface CurrentProjectState {
   rootPath: string;
@@ -104,15 +114,49 @@ export type ProjectWriteOwnership =
     }
   | {
       kind: "unavailable";
-      reason: "lockUnavailable";
+      reason: "lockUnavailable" | "lockSetupFailed";
+      lockOwner?: ProjectLockOwnerInfo | null;
     };
 
+export interface ProjectWriteLockAcquireContext {
+  readonly projectId: string;
+  readonly sessionId: string;
+}
+
 export interface ProjectWriteOwnershipManager {
-  acquire(projectFilePath: string): Promise<ProjectWriteOwnership>;
+  acquire(
+    projectFilePath: string,
+    context?: ProjectWriteLockAcquireContext
+  ): Promise<ProjectWriteOwnership>;
   release(
     projectFilePath: string,
     ownership: ProjectWriteOwnership
   ): Promise<void>;
+}
+
+export interface ProjectWriteLockFileHandle {
+  writeFile(data: string, encoding: BufferEncoding): Promise<void>;
+  close(): Promise<void>;
+}
+
+export interface ProjectWriteLockFileSystem {
+  mkdir(path: string): Promise<void>;
+  writeFile(
+    path: string,
+    data: string,
+    options: { encoding: BufferEncoding; flag: string }
+  ): Promise<void>;
+  open(path: string, flags: string): Promise<ProjectWriteLockFileHandle>;
+  unlink(path: string): Promise<void>;
+  rmdir(path: string): Promise<void>;
+  readFile(path: string, encoding: BufferEncoding): Promise<string>;
+}
+
+export interface ProjectWriteLockRuntimeMetadataProvider {
+  now(): Date;
+  hostname(): string;
+  appVersion(): string;
+  pid(): number;
 }
 
 export type ProjectWindowTitleTargetProvider =
@@ -157,31 +201,136 @@ export function projectWriteLockDirectoryPath(
   );
 }
 
+const defaultProjectWriteLockRuntimeMetadataProvider: ProjectWriteLockRuntimeMetadataProvider =
+  {
+    now: () => new Date(),
+    hostname: () => os.hostname(),
+    appVersion: () => app.getVersion(),
+    pid: () => process.pid
+  };
+
+async function bestEffortCloseProjectWriteLockHandle(
+  ownerHandle: ProjectWriteLockFileHandle | null
+): Promise<void> {
+  if (!ownerHandle) {
+    return;
+  }
+
+  try {
+    await ownerHandle.close();
+  } catch {
+    // Lock handle close is best-effort during cleanup.
+  }
+}
+
+async function bestEffortCleanupProjectWriteLockArtifacts(
+  fileSystem: ProjectWriteLockFileSystem,
+  lockDirectoryPath: string
+): Promise<void> {
+  try {
+    await fileSystem.unlink(projectLockOwnerMetadataPath(lockDirectoryPath));
+  } catch {
+    // Missing or undeletable metadata must not break lock release.
+  }
+
+  try {
+    await fileSystem.unlink(projectLockOwnerHandlePath(lockDirectoryPath));
+  } catch {
+    // Missing or undeletable handle marker must not break lock release.
+  }
+
+  try {
+    await fileSystem.rmdir(lockDirectoryPath);
+  } catch {
+    // Lock release is best-effort; failing to remove it must not break
+    // the project session transition or shutdown path.
+  }
+}
+
 export class ProjectWriteLockOwnershipManager
   implements ProjectWriteOwnershipManager
 {
-  private readonly ownedLockDirectoryPaths = new Set<string>();
+  private readonly ownedLocks = new Map<
+    string,
+    { readonly ownerHandle: ProjectWriteLockFileHandle }
+  >();
 
-  async acquire(projectFilePath: string): Promise<ProjectWriteOwnership> {
+  constructor(
+    private readonly fileSystem: ProjectWriteLockFileSystem =
+      fs as unknown as ProjectWriteLockFileSystem,
+    private readonly metadataProvider: ProjectWriteLockRuntimeMetadataProvider =
+      defaultProjectWriteLockRuntimeMetadataProvider
+  ) {}
+
+  async acquire(
+    projectFilePath: string,
+    context?: ProjectWriteLockAcquireContext
+  ): Promise<ProjectWriteOwnership> {
     const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
 
-    if (this.ownedLockDirectoryPaths.has(lockDirectoryPath)) {
+    if (this.ownedLocks.has(lockDirectoryPath)) {
       return { kind: "owned" };
     }
 
     try {
-      await fs.mkdir(lockDirectoryPath);
-      this.ownedLockDirectoryPaths.add(lockDirectoryPath);
-      return { kind: "owned" };
+      await this.fileSystem.mkdir(lockDirectoryPath);
     } catch (error) {
       if (nodeErrorCode(error) === "EEXIST") {
         return {
           kind: "unavailable",
-          reason: "lockUnavailable"
+          reason: "lockUnavailable",
+          lockOwner: await readProjectLockOwnerInfo(
+            this.fileSystem,
+            lockDirectoryPath
+          )
         };
       }
 
-      throw error;
+      return {
+        kind: "unavailable",
+        reason: "lockSetupFailed",
+        lockOwner: null
+      };
+    }
+
+    let ownerHandle: ProjectWriteLockFileHandle | null = null;
+
+    try {
+      const now = this.metadataProvider.now();
+      const metadata = createProjectLockOwnerMetadata({
+        projectId: context?.projectId ?? "unknown-project",
+        sessionId: context?.sessionId ?? "unknown-session",
+        pid: this.metadataProvider.pid(),
+        hostname: this.metadataProvider.hostname(),
+        appVersion: this.metadataProvider.appVersion(),
+        now
+      });
+
+      await this.fileSystem.writeFile(
+        projectLockOwnerMetadataPath(lockDirectoryPath),
+        `${JSON.stringify(metadata, null, 2)}\n`,
+        { encoding: "utf8", flag: "wx" }
+      );
+      ownerHandle = await this.fileSystem.open(
+        projectLockOwnerHandlePath(lockDirectoryPath),
+        "wx"
+      );
+      await ownerHandle.writeFile(projectLockOwnerHandleContent, "utf8");
+      this.ownedLocks.set(lockDirectoryPath, { ownerHandle });
+
+      return { kind: "owned" };
+    } catch {
+      await bestEffortCloseProjectWriteLockHandle(ownerHandle);
+      await bestEffortCleanupProjectWriteLockArtifacts(
+        this.fileSystem,
+        lockDirectoryPath
+      );
+
+      return {
+        kind: "unavailable",
+        reason: "lockSetupFailed",
+        lockOwner: null
+      };
     }
   }
 
@@ -194,19 +343,18 @@ export class ProjectWriteLockOwnershipManager
     }
 
     const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const ownedLock = this.ownedLocks.get(lockDirectoryPath);
 
-    if (!this.ownedLockDirectoryPaths.has(lockDirectoryPath)) {
+    if (!ownedLock) {
       return;
     }
 
-    try {
-      await fs.rmdir(lockDirectoryPath);
-    } catch {
-      // Lock release is best-effort; failing to remove it must not break
-      // the project session transition or shutdown path.
-    } finally {
-      this.ownedLockDirectoryPaths.delete(lockDirectoryPath);
-    }
+    this.ownedLocks.delete(lockDirectoryPath);
+    await bestEffortCloseProjectWriteLockHandle(ownedLock.ownerHandle);
+    await bestEffortCleanupProjectWriteLockArtifacts(
+      this.fileSystem,
+      lockDirectoryPath
+    );
   }
 }
 
@@ -855,7 +1003,15 @@ async function createPendingReadOnlyProjectOpen(
   return {
     kind: "pendingReadOnlyProjectOpen",
     token,
-    project: openedProject.project
+    project: openedProject.project,
+    readOnlyReason:
+      openedProject.writeOwnership.kind === "unavailable"
+        ? openedProject.writeOwnership.reason
+        : "lockUnavailable",
+    lockOwner:
+      openedProject.writeOwnership.kind === "unavailable"
+        ? openedProject.writeOwnership.lockOwner ?? null
+        : null
   };
 }
 
@@ -939,7 +1095,10 @@ async function createProjectFromProjectFile(
   };
 
   await writeProjectConfig(projectRootPath, config);
-  const ownership = await writeOwnershipManager.acquire(projectFilePath);
+  const ownership = await writeOwnershipManager.acquire(projectFilePath, {
+    projectId: metadata.projectId,
+    sessionId: logger.sessionId ?? "unknown-session"
+  });
   const accessMode = projectAccessModeFromWriteOwnership(ownership);
   let shouldReleaseOwnership = true;
 
@@ -983,7 +1142,10 @@ async function openProjectFromProjectFile(
   const metadata = await readProjectMetadataAndClose(database);
 
   const config = await readProjectConfig(projectRootPath);
-  const ownership = await writeOwnershipManager.acquire(projectFilePath);
+  const ownership = await writeOwnershipManager.acquire(projectFilePath, {
+    projectId: metadata.projectId,
+    sessionId: logger.sessionId ?? "unknown-session"
+  });
   const accessMode = projectAccessModeFromWriteOwnership(ownership);
   let shouldReleaseOwnership = true;
 
