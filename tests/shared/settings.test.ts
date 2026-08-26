@@ -200,7 +200,7 @@ describe("Application Settings core defaults and effective settings (#195)", () 
   it("resolveEffectiveSettings passes through a valid editor.fontFamily application override", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      editor: { fontFamily: "Fira Code" }
+      editor: { ...defaultApplicationSettings.editor, fontFamily: "Fira Code" }
     };
 
     expect(
@@ -222,10 +222,28 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     ).toEqual(defaults.files.newFile);
   });
 
+  it("paragraph indent defaults derive from the catalog and are concrete application settings", () => {
+    const expected = {
+      excludeLeadingCharacters: getCatalogDefaultValue(
+        "editor.paragraphIndent.excludeLeadingCharacters"
+      )
+    };
+
+    expect(builtInDefaultSettings.editor.paragraphIndent).toEqual(expected);
+    expect(defaultApplicationSettings.editor.paragraphIndent).toEqual(expected);
+    expect(createDefaultApplicationSettings().editor.paragraphIndent).toEqual(
+      expected
+    );
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined).editor
+        .paragraphIndent
+    ).toEqual(expected);
+  });
+
   it("does not add Project Settings shape for #195 Application Settings controls", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      editor: { fontFamily: "Fira Code" },
+      editor: { ...defaultApplicationSettings.editor, fontFamily: "Fira Code" },
       files: { newFile: { lineEnding: "crlf", encoding: "utf8" } }
     };
     const effective = resolveEffectiveSettings(applicationSettings, {});

@@ -178,6 +178,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.fontFamily",
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
+          "editor.paragraphIndent.excludeLeadingCharacters",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
           "preview.renderer",
@@ -301,6 +302,18 @@ describe("Settings UI Catalog Schema (#226)", () => {
         step: 1000
       });
       expect(item.defaultValue).toBe(10000);
+    });
+
+    it("editor.paragraphIndent.excludeLeadingCharacters is an Editor text control with an empty default", () => {
+      const item = getSettingCatalogItem(
+        "editor.paragraphIndent.excludeLeadingCharacters"
+      );
+
+      expect(item).toMatchObject({
+        category: "editor",
+        control: { kind: "text" },
+        defaultValue: ""
+      });
     });
 
     it("every item's labelKey / descriptionKey resolves in ja and en", () => {

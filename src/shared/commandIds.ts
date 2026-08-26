@@ -15,7 +15,9 @@ export const commandPaletteCommandIds = {
 export const assistCommandIds = {
   showLineEndingDistribution: defineCommandId(
     "assist.lineEndingDistribution.show"
-  )
+  ),
+  insertParagraphIndent: defineCommandId("assist.paragraphIndent.insert"),
+  removeParagraphIndent: defineCommandId("assist.paragraphIndent.remove")
 } as const;
 
 export const editorCommandIds = {
@@ -60,7 +62,9 @@ export const applicationMenuCommandIds = [
   editorCommandIds.close,
   applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open,
-  assistCommandIds.showLineEndingDistribution
+  assistCommandIds.showLineEndingDistribution,
+  assistCommandIds.insertParagraphIndent,
+  assistCommandIds.removeParagraphIndent
 ] as const;
 
 export type ApplicationMenuCommandId =

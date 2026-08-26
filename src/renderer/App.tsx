@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -129,6 +130,7 @@ import {
   type DocumentOpenAggregateMetrics,
   type ViewportSizeDetails
 } from "./EditorSurface";
+import type { MarkdownEditorParagraphIndentController } from "./MarkdownEditor";
 import {
   createContextMenuInteractionIdFactory,
   delegatedContextSurfaceFromDocument,
@@ -159,6 +161,11 @@ import {
   computeLineEndingDistribution,
   type LineEndingDistribution
 } from "./lineEndingDistribution";
+import {
+  computeParagraphIndentInsertTransform,
+  computeParagraphIndentRemoveTransform,
+  type ParagraphIndentCounts
+} from "./paragraphIndentTransform";
 import {
   createLineJumpEditorSnapshot,
   documentLineStartOffset
@@ -568,6 +575,16 @@ export function App(): JSX.Element {
   const showLineEndingDistributionCommandRef = useRef<() => void>(
     () => undefined
   );
+  const insertParagraphIndentCommandRef = useRef<() => void>(() => undefined);
+  const removeParagraphIndentCommandRef = useRef<() => void>(() => undefined);
+  const paragraphIndentControllerRef =
+    useRef<MarkdownEditorParagraphIndentController | null>(null);
+  const handleParagraphIndentControllerChange = useCallback(
+    (controller: MarkdownEditorParagraphIndentController | null) => {
+      paragraphIndentControllerRef.current = controller;
+    },
+    []
+  );
   /**
    * Holds the current live command context. Read lazily by the
    * CommandRegistry's injected context provider so `when` re-evaluation at
@@ -881,7 +898,9 @@ export function App(): JSX.Element {
       registry,
       {
         showLineEndingDistribution: () =>
-          showLineEndingDistributionCommandRef.current()
+          showLineEndingDistributionCommandRef.current(),
+        insertParagraphIndent: () => insertParagraphIndentCommandRef.current(),
+        removeParagraphIndent: () => removeParagraphIndentCommandRef.current()
       },
       createAssistCommandTitles(translate)
     );
@@ -1560,6 +1579,79 @@ export function App(): JSX.Element {
   function closeLineEndingDistributionDialog(): void {
     isLineEndingDistributionDialogPendingOrOpenRef.current = false;
     setLineEndingDistributionData(null);
+  }
+
+  function showParagraphIndentResultDialog(
+    operation: "insert" | "remove",
+    counts: ParagraphIndentCounts
+  ): void {
+    void confirmDialog({
+      title: translate(
+        operation === "insert"
+          ? "dialog.paragraphIndent.insert.title"
+          : "dialog.paragraphIndent.remove.title"
+      ),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.paragraphIndent.result.message", {
+          changedLineCount: counts.changedLineCount,
+          skippedLineCount: counts.skippedLineCount,
+          emptyLineCount: counts.emptyLineCount
+        })
+      },
+      icon: {
+        kind: "info",
+        tooltip: translate("dialog.icon.info")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    }).catch((error) => {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return;
+      }
+
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    });
+  }
+
+  function applyParagraphIndentOperation(
+    operation: "insert" | "remove"
+  ): void {
+    if (
+      isSettingsTabActive ||
+      currentEditor.kind !== "markdown" ||
+      !activeMarkdownDocument ||
+      isReadOnlyProjectOwnedEditor
+    ) {
+      return;
+    }
+
+    const content = currentDocumentContent(activeMarkdownDocument);
+    const transform =
+      operation === "insert"
+        ? computeParagraphIndentInsertTransform(
+            content,
+            effectiveSettings.editor.paragraphIndent.excludeLeadingCharacters
+          )
+        : computeParagraphIndentRemoveTransform(content);
+
+    if (transform.changes.length > 0) {
+      const applied =
+        paragraphIndentControllerRef.current?.applyParagraphIndentChanges(
+          transform.changes
+        ) ?? false;
+
+      if (!applied) {
+        return;
+      }
+    }
+
+    showParagraphIndentResultDialog(operation, transform.counts);
   }
 
   function reportAboutExternalLinkFailure(error: unknown): void {
@@ -3344,6 +3436,10 @@ export function App(): JSX.Element {
   openAboutDialogCommandRef.current = openAboutDialog;
   showLineEndingDistributionCommandRef.current =
     openLineEndingDistributionDialog;
+  insertParagraphIndentCommandRef.current = () =>
+    applyParagraphIndentOperation("insert");
+  removeParagraphIndentCommandRef.current = () =>
+    applyParagraphIndentOperation("remove");
   openMarkdownDocumentCommandRef.current = openFile;
   saveCurrentDocumentCommandRef.current = async () => {
     await saveFile();
@@ -3687,6 +3783,9 @@ export function App(): JSX.Element {
                           handleChangeMarkdownEditorPreviewRatio
                         }
                         onChangeMarkdownContent={setActiveDocumentContent}
+                        onParagraphIndentControllerChange={
+                          handleParagraphIndentControllerChange
+                        }
                         onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
                         onChangeGlossaryEntryDescription={
                           setActiveGlossaryEntryDescription

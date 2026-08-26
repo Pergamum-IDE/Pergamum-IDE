@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-describe("Assist / Line Ending Distribution command wiring (#252)", () => {
+describe("Assist command dialog wiring (#252/#257)", () => {
   it("routes assist.lineEndingDistribution.show through the App command registry into the dialog's state", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 
@@ -82,5 +82,49 @@ describe("Assist / Line Ending Distribution command wiring (#252)", () => {
     expect(source).toContain(
       "markerGlyph={\n                          effectiveSettings.editor.lineEnding.markerGlyph\n                        }"
     );
+  });
+
+  it("routes paragraph indent commands through App into the active MarkdownEditor controller", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+
+    expect(source).toContain(
+      "insertParagraphIndent: () => insertParagraphIndentCommandRef.current()"
+    );
+    expect(source).toContain(
+      "removeParagraphIndent: () => removeParagraphIndentCommandRef.current()"
+    );
+    expect(source).toContain(
+      'insertParagraphIndentCommandRef.current = () =>\n    applyParagraphIndentOperation("insert")'
+    );
+    expect(source).toContain(
+      'removeParagraphIndentCommandRef.current = () =>\n    applyParagraphIndentOperation("remove")'
+    );
+    expect(source).toContain("computeParagraphIndentInsertTransform(");
+    expect(source).toContain("computeParagraphIndentRemoveTransform(content)");
+    expect(source).toContain(
+      "paragraphIndentControllerRef.current?.applyParagraphIndentChanges("
+    );
+  });
+
+  it("uses the existing confirm dialog mechanism for paragraph indent completion notifications", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const dialogIndex = source.indexOf(
+      "function showParagraphIndentResultDialog"
+    );
+    const applyIndex = source.indexOf("function applyParagraphIndentOperation");
+
+    expect(dialogIndex).toBeGreaterThan(-1);
+    expect(applyIndex).toBeGreaterThan(dialogIndex);
+
+    const dialogBlock = source.slice(dialogIndex, applyIndex);
+
+    expect(dialogBlock).toContain("void confirmDialog({");
+    expect(dialogBlock).toContain("dialog.paragraphIndent.result.message");
+    expect(dialogBlock).toContain("changedLineCount");
+    expect(dialogBlock).toContain("skippedLineCount");
+    expect(dialogBlock).toContain("emptyLineCount");
+    expect(dialogBlock).toContain("cancelLabel: null");
+    expect(source).not.toContain("ParagraphIndentDialogController");
+    expect(source).not.toContain("ParagraphIndentDialogContext");
   });
 });

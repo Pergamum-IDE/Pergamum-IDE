@@ -28,11 +28,17 @@ import {
 import type { SaveApplicationSettingsRequest } from "../../src/shared/settings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
-// #252: editor.lineEnding.* is always-resolved (non-sparse), unlike
-// fontFamily — every save request's `editor` must carry it.
+// #252/#257: editor.lineEnding.* and editor.paragraphIndent.* are
+// always-resolved (non-sparse), unlike fontFamily — every save request's
+// `editor` must carry them.
 const defaultLineEndingSettings = {
   expected: getCatalogDefaultValue("editor.lineEnding.expected"),
   markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
+};
+const defaultParagraphIndentSettings = {
+  excludeLeadingCharacters: getCatalogDefaultValue(
+    "editor.paragraphIndent.excludeLeadingCharacters"
+  )
 };
 
 const defaultSoundSettings = {
@@ -92,7 +98,10 @@ function validSaveRequest(
         marquee: { delay: 2000, speed: 40 }
       }
     },
-    editor: { lineEnding: defaultLineEndingSettings },
+    editor: {
+      lineEnding: defaultLineEndingSettings,
+      paragraphIndent: defaultParagraphIndentSettings
+    },
     files: {
       newFile: {
         lineEnding: "lf",
@@ -153,7 +162,10 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
             keypress: { enabled: false }
           }
         },
-        editor: { fontFamily: "Fira Code" },
+        editor: {
+          fontFamily: "Fira Code",
+          paragraphIndent: { excludeLeadingCharacters: "「『（" }
+        },
         files: {
           newFile: {
             lineEnding: "crlf",
@@ -179,6 +191,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       keypress: { enabled: false }
     });
     expect(settings.editor.fontFamily).toBe("Fira Code");
+    expect(settings.editor.paragraphIndent).toEqual({
+      excludeLeadingCharacters: "「『（"
+    });
     expect(settings.files.newFile).toEqual({
       lineEnding: "crlf",
       encoding: "utf8"
@@ -202,7 +217,10 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
             keypress: { enabled: "yes" }
           }
         },
-        editor: { fontFamily: 'Fira Code"; color: red' },
+        editor: {
+          fontFamily: 'Fira Code"; color: red',
+          paragraphIndent: { excludeLeadingCharacters: 42 }
+        },
         files: {
           newFile: {
             lineEnding: "cr",
@@ -223,6 +241,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.workbench).not.toHaveProperty("advancedSettings");
     expect(settings.workbench.sound).toEqual(defaultSoundSettings);
     expect(settings.editor.fontFamily).toBeUndefined();
+    expect(settings.editor.paragraphIndent).toEqual(
+      defaultParagraphIndentSettings
+    );
     expect(settings.files.newFile).toEqual({
       lineEnding: "lf",
       encoding: "utf8"
@@ -311,7 +332,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         },
         editor: {
           fontFamily: "Fira Code",
-          lineEnding: defaultLineEndingSettings
+          lineEnding: defaultLineEndingSettings,
+          paragraphIndent: { excludeLeadingCharacters: "「『" }
         },
         commandPalette: {
           description: {
@@ -358,7 +380,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     });
     expect(written.editor).toEqual({
       fontFamily: "Fira Code",
-      lineEnding: defaultLineEndingSettings
+      lineEnding: defaultLineEndingSettings,
+      paragraphIndent: { excludeLeadingCharacters: "「『" }
     });
     expect(written.files).toEqual({
       newFile: {
@@ -449,7 +472,16 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       validSaveRequest({
         editor: {
           fontFamily: 'Fira Code"; color: red',
-          lineEnding: defaultLineEndingSettings
+          lineEnding: defaultLineEndingSettings,
+          paragraphIndent: defaultParagraphIndentSettings
+        }
+      }),
+      validSaveRequest({
+        editor: {
+          lineEnding: defaultLineEndingSettings,
+          paragraphIndent: {
+            excludeLeadingCharacters: 42 as unknown as string
+          }
         }
       }),
       validSaveRequest({

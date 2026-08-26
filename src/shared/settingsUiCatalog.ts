@@ -367,6 +367,18 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.fontFamily")
   },
   {
+    key: "editor.paragraphIndent.excludeLeadingCharacters",
+    category: "editor",
+    order: 150,
+    labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+    descriptionKey:
+      "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
+    control: { kind: "text" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.paragraphIndent.excludeLeadingCharacters"
+    )
+  },
+  {
     key: "editor.lineEnding.expected",
     category: "editor",
     order: 200,

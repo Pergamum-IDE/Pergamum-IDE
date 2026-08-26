@@ -151,11 +151,19 @@ function buildCoreCommandRegistry(): CommandRegistry {
   );
   registerAssistCommands(
     registry,
-    { showLineEndingDistribution: () => undefined },
+    {
+      showLineEndingDistribution: () => undefined,
+      insertParagraphIndent: () => undefined,
+      removeParagraphIndent: () => undefined
+    },
     {
       showLineEndingDistribution: "Show Line Ending Distribution",
       showLineEndingDistributionDescription:
-        "Show the distribution of LF, CRLF, and CR line endings in the current document."
+        "Show the distribution of LF, CRLF, and CR line endings in the current document.",
+      insertParagraphIndent: "Insert Paragraph Indents",
+      insertParagraphIndentDescription: "Insert paragraph indents",
+      removeParagraphIndent: "Remove Paragraph Indents",
+      removeParagraphIndentDescription: "Remove paragraph indents"
     }
   );
 

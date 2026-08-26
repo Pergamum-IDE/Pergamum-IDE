@@ -247,19 +247,35 @@ function readLineEndingSettings(
   };
 }
 
+function readParagraphIndentSettings(
+  value: unknown
+): ApplicationSettings["editor"]["paragraphIndent"] {
+  const paragraphIndentValue = isObject(value) ? value : undefined;
+
+  return {
+    excludeLeadingCharacters: resolveCatalogValue(
+      "editor.paragraphIndent.excludeLeadingCharacters",
+      paragraphIndentValue?.excludeLeadingCharacters
+    ).value
+  };
+}
+
 function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   const editorValue = isObject(value) ? value : undefined;
   const lineEnding = readLineEndingSettings(editorValue?.lineEnding);
+  const paragraphIndent = readParagraphIndentSettings(
+    editorValue?.paragraphIndent
+  );
 
   if (
     editorValue === undefined ||
     typeof editorValue.fontFamily !== "string" ||
     !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
   ) {
-    return { lineEnding };
+    return { lineEnding, paragraphIndent };
   }
 
-  return { fontFamily: editorValue.fontFamily, lineEnding };
+  return { fontFamily: editorValue.fontFamily, lineEnding, paragraphIndent };
 }
 
 function readNewFileSettings(
@@ -686,6 +702,33 @@ function parseLineEndingSettingsForWrite(
   };
 }
 
+function parseParagraphIndentSettingsForWrite(
+  value: unknown
+): ApplicationSettings["editor"]["paragraphIndent"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("excludeLeadingCharacters")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const excludeLeadingCharactersResolution = resolveCatalogValue(
+    "editor.paragraphIndent.excludeLeadingCharacters",
+    value.excludeLeadingCharacters
+  );
+
+  if (!excludeLeadingCharactersResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    excludeLeadingCharacters: excludeLeadingCharactersResolution.value
+  };
+}
+
 function parseEditorSettingsForWrite(
   value: unknown
 ): ApplicationSettings["editor"] {
@@ -696,15 +739,23 @@ function parseEditorSettingsForWrite(
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
   const hasLineEnding = keys.includes("lineEnding");
+  const hasParagraphIndent = keys.includes("paragraphIndent");
 
-  if (!hasLineEnding || keys.length !== (hasFontFamily ? 2 : 1)) {
+  if (
+    !hasLineEnding ||
+    !hasParagraphIndent ||
+    keys.length !== (hasFontFamily ? 3 : 2)
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   const lineEnding = parseLineEndingSettingsForWrite(value.lineEnding);
+  const paragraphIndent = parseParagraphIndentSettingsForWrite(
+    value.paragraphIndent
+  );
 
   if (!hasFontFamily) {
-    return { lineEnding };
+    return { lineEnding, paragraphIndent };
   }
 
   if (
@@ -716,7 +767,8 @@ function parseEditorSettingsForWrite(
 
   return {
     fontFamily: value.fontFamily,
-    lineEnding
+    lineEnding,
+    paragraphIndent
   };
 }
 
