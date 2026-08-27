@@ -2,11 +2,22 @@
 
 ## Status
 
-Proposed
+Proposed（partially superseded — 下記「Amendments」を参照）
 
 ## Date
 
 2026-08-22
+
+## Amendments
+
+### 2026-08-27 — working-copy Recovery の保存先について ADR-0009 により部分 supersede
+
+本 ADR のうち、`.pergamum_recovery/`（project-local recovery directory）を **working-copy Recovery（未保存 Markdown 本文・未保存 `GlossaryEntryDraft` 内容と、その reconciliation metadata）の保存先とする判断** は、**ADR-0009 Working Copy Persistence and Recovery Model により superseded された。**
+
+- working-copy Recovery の保存先は ADR-0009 を正とする。application `userData` 側の専用 Recovery store を使用し、`.pergamum_recovery/` を working-copy Recovery store として使用しない。理由は ADR-0009 が定義する（persisted state と Recovery を同一 failure domain に置かない）。
+- 本 ADR の他の判断は引き続き有効である。すなわち `.pergamum` project file、project root、project name / project metadata schema、project boundary、同一 project root 内の複数 `.pergamum` file の許容、one-folder-one-instance policy の前提、OS file association 方針は変更しない。
+- `.pergamum_recovery/` の将来用途（削除する、derived data 専用にする 等）、および `project.recoveryDirectoryName` 設定の今後の扱い（有効性・用途）は本 amendment / ADR-0009 では決定しない。**working-copy Recovery には使用しない**、という境界のみを確定する。
+- 以下の本文（特に「Project-local recovery directory」節）は履歴として残す。working-copy Recovery の保存先に関する記述は、上記のとおり ADR-0009 に置き換わっている。
 
 ## Context
 
@@ -441,6 +452,9 @@ Fallback は以下の順序とする。
 ---
 
 ## Project-local recovery directory
+
+> **Note（2026-08-27, ADR-0009 による部分 supersede）:**
+> 本節が `.pergamum_recovery/` を working-copy Recovery（未保存本文・dirty document recovery data・crash recovery data・save failure recovery support data）の保存先とする点は、ADR-0009 により superseded された。working-copy Recovery の保存先は application `userData` 側の専用 Recovery store とし、`.pergamum_recovery/` は working-copy Recovery store として使用しない。本節は履歴として残す。
 
 Pergamum は、project root 配下に project-local recovery directory を持つ。
 
