@@ -109,10 +109,29 @@ function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
 function readWorkbenchStatusBarSettings(
   value: unknown
 ): ApplicationSettings["workbench"]["statusBar"] {
-  const visible = isObject(value) ? value.visible : undefined;
+  const statusBarValue = isObject(value) ? value : undefined;
 
   return {
-    visible: resolveCatalogValue("workbench.statusBar.visible", visible).value
+    visible: resolveCatalogValue(
+      "workbench.statusBar.visible",
+      statusBarValue?.visible
+    ).value,
+    characterCount: readWorkbenchStatusBarCharacterCountSettings(
+      statusBarValue?.characterCount
+    )
+  };
+}
+
+function readWorkbenchStatusBarCharacterCountSettings(
+  value: unknown
+): ApplicationSettings["workbench"]["statusBar"]["characterCount"] {
+  const characterCountValue = isObject(value) ? value : undefined;
+
+  return {
+    visible: resolveCatalogValue(
+      "workbench.statusBar.characterCount.visible",
+      characterCountValue?.visible
+    ).value
   };
 }
 
@@ -247,19 +266,61 @@ function readLineEndingSettings(
   };
 }
 
+function readCharacterCountExcludeSettings(
+  value: unknown
+): ApplicationSettings["editor"]["characterCount"]["exclude"] {
+  const excludeValue = isObject(value) ? value : undefined;
+
+  return {
+    whitespace: resolveCatalogValue(
+      "editor.characterCount.exclude.whitespace",
+      excludeValue?.whitespace
+    ).value,
+    lineBreaks: resolveCatalogValue(
+      "editor.characterCount.exclude.lineBreaks",
+      excludeValue?.lineBreaks
+    ).value,
+    headings: resolveCatalogValue(
+      "editor.characterCount.exclude.headings",
+      excludeValue?.headings
+    ).value,
+    markdownSyntax: resolveCatalogValue(
+      "editor.characterCount.exclude.markdownSyntax",
+      excludeValue?.markdownSyntax
+    ).value,
+    markdownComments: resolveCatalogValue(
+      "editor.characterCount.exclude.markdownComments",
+      excludeValue?.markdownComments
+    ).value
+  };
+}
+
+function readCharacterCountSettings(
+  value: unknown
+): ApplicationSettings["editor"]["characterCount"] {
+  const characterCountValue = isObject(value) ? value : undefined;
+
+  return {
+    exclude: readCharacterCountExcludeSettings(characterCountValue?.exclude)
+  };
+}
+
 function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   const editorValue = isObject(value) ? value : undefined;
   const lineEnding = readLineEndingSettings(editorValue?.lineEnding);
+  const characterCount = readCharacterCountSettings(
+    editorValue?.characterCount
+  );
 
   if (
     editorValue === undefined ||
     typeof editorValue.fontFamily !== "string" ||
     !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
   ) {
-    return { lineEnding };
+    return { lineEnding, characterCount };
   }
 
-  return { fontFamily: editorValue.fontFamily, lineEnding };
+  return { fontFamily: editorValue.fontFamily, lineEnding, characterCount };
 }
 
 function readNewFileSettings(
@@ -434,12 +495,46 @@ function parseWorkbenchStatusBarSettingsForWrite(
 
   const keys = Object.keys(value);
 
-  if (keys.length !== 1 || !keys.includes("visible")) {
+  if (
+    keys.length !== 2 ||
+    !keys.includes("visible") ||
+    !keys.includes("characterCount")
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   const resolution = resolveCatalogValue(
     "workbench.statusBar.visible",
+    value.visible
+  );
+
+  if (!resolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    visible: resolution.value,
+    characterCount: parseWorkbenchStatusBarCharacterCountSettingsForWrite(
+      value.characterCount
+    )
+  };
+}
+
+function parseWorkbenchStatusBarCharacterCountSettingsForWrite(
+  value: unknown
+): ApplicationSettings["workbench"]["statusBar"]["characterCount"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("visible")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const resolution = resolveCatalogValue(
+    "workbench.statusBar.characterCount.visible",
     value.visible
   );
 
@@ -686,6 +781,84 @@ function parseLineEndingSettingsForWrite(
   };
 }
 
+function parseCharacterCountExcludeSettingsForWrite(
+  value: unknown
+): ApplicationSettings["editor"]["characterCount"]["exclude"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 5 ||
+    !keys.includes("whitespace") ||
+    !keys.includes("lineBreaks") ||
+    !keys.includes("headings") ||
+    !keys.includes("markdownSyntax") ||
+    !keys.includes("markdownComments")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const whitespaceResolution = resolveCatalogValue(
+    "editor.characterCount.exclude.whitespace",
+    value.whitespace
+  );
+  const lineBreaksResolution = resolveCatalogValue(
+    "editor.characterCount.exclude.lineBreaks",
+    value.lineBreaks
+  );
+  const headingsResolution = resolveCatalogValue(
+    "editor.characterCount.exclude.headings",
+    value.headings
+  );
+  const markdownSyntaxResolution = resolveCatalogValue(
+    "editor.characterCount.exclude.markdownSyntax",
+    value.markdownSyntax
+  );
+  const markdownCommentsResolution = resolveCatalogValue(
+    "editor.characterCount.exclude.markdownComments",
+    value.markdownComments
+  );
+
+  if (
+    !whitespaceResolution.ok ||
+    !lineBreaksResolution.ok ||
+    !headingsResolution.ok ||
+    !markdownSyntaxResolution.ok ||
+    !markdownCommentsResolution.ok
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    whitespace: whitespaceResolution.value,
+    lineBreaks: lineBreaksResolution.value,
+    headings: headingsResolution.value,
+    markdownSyntax: markdownSyntaxResolution.value,
+    markdownComments: markdownCommentsResolution.value
+  };
+}
+
+function parseCharacterCountSettingsForWrite(
+  value: unknown
+): ApplicationSettings["editor"]["characterCount"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("exclude")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    exclude: parseCharacterCountExcludeSettingsForWrite(value.exclude)
+  };
+}
+
 function parseEditorSettingsForWrite(
   value: unknown
 ): ApplicationSettings["editor"] {
@@ -696,15 +869,23 @@ function parseEditorSettingsForWrite(
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
   const hasLineEnding = keys.includes("lineEnding");
+  const hasCharacterCount = keys.includes("characterCount");
 
-  if (!hasLineEnding || keys.length !== (hasFontFamily ? 2 : 1)) {
+  if (
+    !hasLineEnding ||
+    !hasCharacterCount ||
+    keys.length !== (hasFontFamily ? 3 : 2)
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   const lineEnding = parseLineEndingSettingsForWrite(value.lineEnding);
+  const characterCount = parseCharacterCountSettingsForWrite(
+    value.characterCount
+  );
 
   if (!hasFontFamily) {
-    return { lineEnding };
+    return { lineEnding, characterCount };
   }
 
   if (
@@ -716,7 +897,8 @@ function parseEditorSettingsForWrite(
 
   return {
     fontFamily: value.fontFamily,
-    lineEnding
+    lineEnding,
+    characterCount
   };
 }
 

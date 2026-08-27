@@ -362,6 +362,8 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.workbench.language.description",
         "settings.workbench.statusBar.visible.label",
         "settings.workbench.statusBar.visible.description",
+        "settings.workbench.statusBar.characterCount.visible.label",
+        "settings.workbench.statusBar.characterCount.visible.description",
         "settings.workbench.fontFamily.label",
         "settings.workbench.fontFamily.description",
         "settings.workbench.sound.enabled.label",
@@ -382,6 +384,16 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.unit.pxPerSecond",
         "settings.editor.fontFamily.label",
         "settings.editor.fontFamily.description",
+        "settings.editor.characterCount.exclude.whitespace.label",
+        "settings.editor.characterCount.exclude.whitespace.description",
+        "settings.editor.characterCount.exclude.lineBreaks.label",
+        "settings.editor.characterCount.exclude.lineBreaks.description",
+        "settings.editor.characterCount.exclude.headings.label",
+        "settings.editor.characterCount.exclude.headings.description",
+        "settings.editor.characterCount.exclude.markdownSyntax.label",
+        "settings.editor.characterCount.exclude.markdownSyntax.description",
+        "settings.editor.characterCount.exclude.markdownComments.label",
+        "settings.editor.characterCount.exclude.markdownComments.description",
         "settings.files.newFile.lineEnding.label",
         "settings.files.newFile.lineEnding.description",
         "settings.files.newFile.encoding.label",
@@ -390,6 +402,13 @@ describe("Application Settings core control translations (#195)", () => {
         expect(t(language, key).length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("defines the status-bar character count message for ja and en (#259)", () => {
+    expect(t("ja", "status.characterCount", { count: 123 })).toBe("123文字");
+    expect(t("en", "status.characterCount", { count: 123 })).toBe(
+      "123 characters"
+    );
   });
 });
 

@@ -774,18 +774,24 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("workbench.statusBar.visible (#174), sound feedback (#200), and command descriptions (#215) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), and command descriptions (#215) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
 
       expect(booleanEntries.map((entry) => entry.key)).toEqual([
         "workbench.statusBar.visible",
+        "workbench.statusBar.characterCount.visible",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
         "workbench.sound.keypress.enabled",
-        "commandPalette.description.enable"
+        "commandPalette.description.enable",
+        "editor.characterCount.exclude.whitespace",
+        "editor.characterCount.exclude.lineBreaks",
+        "editor.characterCount.exclude.headings",
+        "editor.characterCount.exclude.markdownSyntax",
+        "editor.characterCount.exclude.markdownComments"
       ]);
     });
   });
@@ -890,6 +896,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("workbench.statusBar.visible").scope).toBe(
         "applicationOnly"
       );
+      expect(
+        getCatalogEntry("workbench.statusBar.characterCount.visible").scope
+      ).toBe("applicationOnly");
       expect(getCatalogEntry("workbench.sound.enabled").scope).toBe(
         "applicationOnly"
       );
@@ -905,6 +914,15 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("preview.updateDelayMs").scope).toBe(
         "applicationOnly"
       );
+      for (const key of [
+        "editor.characterCount.exclude.whitespace",
+        "editor.characterCount.exclude.lineBreaks",
+        "editor.characterCount.exclude.headings",
+        "editor.characterCount.exclude.markdownSyntax",
+        "editor.characterCount.exclude.markdownComments"
+      ] as const) {
+        expect(getCatalogEntry(key).scope).toBe("applicationOnly");
+      }
     });
 
     it("represents all three ADR-0006 S-11 scope values", () => {
@@ -937,6 +955,11 @@ describe("Settings Catalog Foundation (#150)", () => {
       const editorEntries = getCatalogEntriesByArea("editor");
 
       expect(editorEntries.map((entry) => entry.key).sort()).toEqual([
+        "editor.characterCount.exclude.headings",
+        "editor.characterCount.exclude.lineBreaks",
+        "editor.characterCount.exclude.markdownComments",
+        "editor.characterCount.exclude.markdownSyntax",
+        "editor.characterCount.exclude.whitespace",
         "editor.fontFamily",
         "editor.lineEnding.expected",
         "editor.lineEnding.markerGlyph"
@@ -972,12 +995,17 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, and #252 editor.lineEnding.* (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, and #259 character count settings (#232: workbench.advancedSettings.enabled removed)", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
           "commandPalette.description.enable",
           "commandPalette.description.marquee.delay",
           "commandPalette.description.marquee.speed",
+          "editor.characterCount.exclude.headings",
+          "editor.characterCount.exclude.lineBreaks",
+          "editor.characterCount.exclude.markdownComments",
+          "editor.characterCount.exclude.markdownSyntax",
+          "editor.characterCount.exclude.whitespace",
           "editor.fontFamily",
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
@@ -992,6 +1020,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.sound.newline.enabled",
           "workbench.sound.keypress.enabled",
           "workbench.language",
+          "workbench.statusBar.characterCount.visible",
           "workbench.statusBar.visible"
         ].sort()
       );
@@ -1101,6 +1130,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(Object.keys(settingsCatalog)).toContain(
         "workbench.statusBar.visible"
       );
+      expect(Object.keys(settingsCatalog)).toContain(
+        "workbench.statusBar.characterCount.visible"
+      );
     });
 
     it("workbench.language is applicationOnly", () => {
@@ -1113,6 +1145,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("workbench.statusBar.visible").scope).toBe(
         "applicationOnly"
       );
+      expect(
+        getCatalogEntry("workbench.statusBar.characterCount.visible").scope
+      ).toBe("applicationOnly");
     });
 
     it("workbench.language's default matches the current built-in default language", () => {
@@ -1123,6 +1158,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogDefaultValue("workbench.statusBar.visible")).toBe(
         true
       );
+      expect(
+        getCatalogDefaultValue("workbench.statusBar.characterCount.visible")
+      ).toBe(true);
     });
 
     it("workbench.language's enum values match the i18n-owned supported UI languages", () => {
@@ -1136,6 +1174,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("workbench.statusBar.visible").type).toBe(
         "boolean"
       );
+      expect(
+        getCatalogEntry("workbench.statusBar.characterCount.visible").type
+      ).toBe("boolean");
     });
 
     it("validates workbench.language against ja/en and rejects anything else", () => {
@@ -1165,6 +1206,12 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(
         validateCatalogValue("workbench.statusBar.visible", "true")
       ).toEqual({ ok: false, failure: "typeMismatch" });
+      expect(
+        validateCatalogValue("workbench.statusBar.characterCount.visible", true)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("workbench.statusBar.characterCount.visible", "true")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
     it("declares no deprecated aliases for either key — legacy top-level language/showStatusBar are not preserved as aliases", () => {
@@ -1173,6 +1220,10 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
       expect(
         getCatalogEntry("workbench.statusBar.visible").deprecatedAliases
+      ).toEqual([]);
+      expect(
+        getCatalogEntry("workbench.statusBar.characterCount.visible")
+          .deprecatedAliases
       ).toEqual([]);
     });
   });
@@ -1312,6 +1363,15 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(settingsStoreSource).toContain('"workbench.sound.dialog.enabled"');
       expect(settingsStoreSource).toContain('"workbench.sound.newline.enabled"');
       expect(settingsStoreSource).toContain('"workbench.sound.keypress.enabled"');
+      expect(settingsStoreSource).toContain(
+        '"workbench.statusBar.characterCount.visible"'
+      );
+      expect(settingsStoreSource).toContain(
+        '"editor.characterCount.exclude.whitespace"'
+      );
+      expect(settingsStoreSource).toContain(
+        '"editor.characterCount.exclude.markdownComments"'
+      );
       expect(settingsSource).toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
       expect(settingsSource).toContain(
         'getCatalogDefaultValue("files.newFile.lineEnding")'
@@ -1334,6 +1394,12 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(settingsSource).toContain(
         'getCatalogDefaultValue("workbench.sound.keypress.enabled")'
       );
+      expect(settingsSource).toMatch(
+        /getCatalogDefaultValue\(\s*"workbench\.statusBar\.characterCount\.visible"\s*\)/
+      );
+      expect(settingsSource).toMatch(
+        /getCatalogDefaultValue\(\s*"editor\.characterCount\.exclude\.markdownSyntax"\s*\)/
+      );
       expect(rendererSource).toMatch(/CatalogValue\("editor\.fontFamily"/);
       expect(rendererSource).toMatch(
         /CatalogDefaultValue\("editor\.fontFamily"/
@@ -1350,7 +1416,13 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.sound.enabled",
           "workbench.sound.dialog.enabled",
           "workbench.sound.newline.enabled",
-          "workbench.sound.keypress.enabled"
+          "workbench.sound.keypress.enabled",
+          "workbench.statusBar.characterCount.visible",
+          "editor.characterCount.exclude.whitespace",
+          "editor.characterCount.exclude.lineBreaks",
+          "editor.characterCount.exclude.headings",
+          "editor.characterCount.exclude.markdownSyntax",
+          "editor.characterCount.exclude.markdownComments"
         ])
       );
 
@@ -1378,7 +1450,13 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
-        "workbench.sound.keypress.enabled"
+        "workbench.sound.keypress.enabled",
+        "workbench.statusBar.characterCount.visible",
+        "editor.characterCount.exclude.whitespace",
+        "editor.characterCount.exclude.lineBreaks",
+        "editor.characterCount.exclude.headings",
+        "editor.characterCount.exclude.markdownSyntax",
+        "editor.characterCount.exclude.markdownComments"
       ]) {
         expect(projectConfigStoreSource).not.toContain(applicationSettingsOnlyKey);
       }

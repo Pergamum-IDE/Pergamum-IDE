@@ -64,6 +64,10 @@ import {
 } from "./applicationCommands";
 import { subscribeApplicationMenuCommands } from "./applicationMenuBridge";
 import {
+  CHARACTER_COUNT_UPDATE_DEBOUNCE_MS,
+  countMarkdownDocumentCharacters
+} from "./characterCount";
+import {
   applyEditorFontFamily,
   applyWorkbenchFontFamily
 } from "./workbenchFontFamily";
@@ -391,6 +395,10 @@ export function App(): JSX.Element {
 
   const dialogController = dialogControllerRef.current;
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
+  const [statusBarCharacterCount, setStatusBarCharacterCount] = useState<{
+    readonly documentKey: string;
+    readonly count: number;
+  } | null>(null);
   const soundPlaybackWarningReportedRef = useRef(false);
 
   function reportSoundPlaybackFailure(): void {
@@ -741,6 +749,47 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyEditorFontFamily(effectiveSettings.editor.fontFamily);
   }, [effectiveSettings.editor.fontFamily]);
+  const shouldComputeStatusBarCharacterCount =
+    effectiveSettings.workbench.statusBar.visible &&
+    effectiveSettings.workbench.statusBar.characterCount.visible &&
+    !isSettingsTabActive &&
+    currentEditor.kind === "markdown";
+  const statusBarCharacterCountDocumentKey = shouldComputeStatusBarCharacterCount
+    ? serializeEditorId(activeDocument.id)
+    : null;
+  const statusBarCharacterCountContent =
+    shouldComputeStatusBarCharacterCount && currentEditor.kind === "markdown"
+      ? currentDocumentContent(currentEditor.document)
+      : "";
+  useEffect(() => {
+    if (
+      !shouldComputeStatusBarCharacterCount ||
+      statusBarCharacterCountDocumentKey === null
+    ) {
+      setStatusBarCharacterCount(null);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setStatusBarCharacterCount({
+        documentKey: statusBarCharacterCountDocumentKey,
+        count: countMarkdownDocumentCharacters(statusBarCharacterCountContent, {
+          exclude: effectiveSettings.editor.characterCount.exclude
+        })
+      });
+    }, CHARACTER_COUNT_UPDATE_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    shouldComputeStatusBarCharacterCount,
+    statusBarCharacterCountDocumentKey,
+    statusBarCharacterCountContent,
+    effectiveSettings.editor.characterCount.exclude.whitespace,
+    effectiveSettings.editor.characterCount.exclude.lineBreaks,
+    effectiveSettings.editor.characterCount.exclude.headings,
+    effectiveSettings.editor.characterCount.exclude.markdownSyntax,
+    effectiveSettings.editor.characterCount.exclude.markdownComments
+  ]);
   const isDirty = isCurrentEditorDirty(currentEditor);
   const isReadOnlyProject = project?.accessMode.kind === "readOnly";
   const isReadWriteProject = project?.accessMode.kind === "readWrite";
@@ -838,6 +887,17 @@ export function App(): JSX.Element {
       t(displayLanguage, key, values),
     [displayLanguage]
   );
+  const statusBarNumberFormatter = useMemo(
+    () => new Intl.NumberFormat(displayLanguage),
+    [displayLanguage]
+  );
+  const statusBarCharacterCountText =
+    statusBarCharacterCountDocumentKey !== null &&
+    statusBarCharacterCount?.documentKey === statusBarCharacterCountDocumentKey
+      ? translate("status.characterCount", {
+          count: statusBarNumberFormatter.format(statusBarCharacterCount.count)
+        })
+      : null;
   const commandRegistry = useMemo(() => {
     const registry = new CommandRegistry();
 
@@ -3833,7 +3893,14 @@ export function App(): JSX.Element {
 
       {effectiveSettings.workbench.statusBar.visible ? (
         <footer className="statusBar">
-          {translate(status.key, status.values)}
+          <span className="statusBarMessage">
+            {translate(status.key, status.values)}
+          </span>
+          {statusBarCharacterCountText ? (
+            <span className="statusBarCharacterCount">
+              {statusBarCharacterCountText}
+            </span>
+          ) : null}
         </footer>
       ) : null}
 

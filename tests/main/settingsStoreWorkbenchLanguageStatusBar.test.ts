@@ -38,6 +38,36 @@ const defaultLineEndingSettings = {
   expected: getCatalogDefaultValue("editor.lineEnding.expected"),
   markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
 };
+const defaultCharacterCountSettings = {
+  exclude: {
+    whitespace: getCatalogDefaultValue(
+      "editor.characterCount.exclude.whitespace"
+    ),
+    lineBreaks: getCatalogDefaultValue(
+      "editor.characterCount.exclude.lineBreaks"
+    ),
+    headings: getCatalogDefaultValue(
+      "editor.characterCount.exclude.headings"
+    ),
+    markdownSyntax: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownSyntax"
+    ),
+    markdownComments: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownComments"
+    )
+  }
+};
+function statusBarSettings(
+  visible: boolean,
+  characterCountVisible = getCatalogDefaultValue(
+    "workbench.statusBar.characterCount.visible"
+  )
+) {
+  return {
+    visible,
+    characterCount: { visible: characterCountVisible }
+  };
+}
 const defaultSoundSettings = {
   enabled: true,
   dialog: { enabled: true },
@@ -76,7 +106,10 @@ function saveRequest(
         marquee: { delay: 2000, speed: 40 }
       }
     },
-    editor: { lineEnding: defaultLineEndingSettings },
+    editor: {
+      lineEnding: defaultLineEndingSettings,
+      characterCount: defaultCharacterCountSettings
+    },
     files: {
       newFile: { lineEnding: "lf", encoding: "utf8" }
     }
@@ -113,6 +146,21 @@ describe("settingsStore workbench.language / workbench.statusBar.visible read pa
     expect(settings.workbench.statusBar.visible).toBe(false);
   });
 
+  it("reads a valid nested workbench.statusBar.characterCount.visible from settings.json (#259)", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        workbench: {
+          language: "ja",
+          statusBar: statusBarSettings(true, false)
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.workbench.statusBar.characterCount.visible).toBe(false);
+  });
+
   it("ignores a legacy top-level language key — reads the catalog default instead", async () => {
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({ language: "en" })
@@ -147,6 +195,9 @@ describe("settingsStore workbench.language / workbench.statusBar.visible read pa
     const settings = await loadSettings();
 
     expect(settings.workbench.statusBar.visible).toBe(statusBarVisibleDefault);
+    expect(settings.workbench.statusBar.characterCount.visible).toBe(
+      getCatalogDefaultValue("workbench.statusBar.characterCount.visible")
+    );
   });
 
   it("falls back to the catalog default (without failing startup) when workbench.language is invalid", async () => {
@@ -168,6 +219,25 @@ describe("settingsStore workbench.language / workbench.statusBar.visible read pa
 
     expect(settings.workbench.statusBar.visible).toBe(statusBarVisibleDefault);
   });
+
+  it("falls back to the catalog default when workbench.statusBar.characterCount.visible is invalid (#259)", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        workbench: {
+          statusBar: {
+            visible: true,
+            characterCount: { visible: "yes" }
+          }
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.workbench.statusBar.characterCount.visible).toBe(
+      getCatalogDefaultValue("workbench.statusBar.characterCount.visible")
+    );
+  });
 });
 
 describe("settingsStore workbench.language / workbench.statusBar.visible write path (#174)", () => {
@@ -185,7 +255,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     );
 
     await saveApplicationSettings(
-      saveRequest({ language: "en", statusBar: { visible: true } })
+      saveRequest({ language: "en", statusBar: statusBarSettings(true) })
     );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
@@ -204,7 +274,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     );
 
     await saveApplicationSettings(
-      saveRequest({ language: "ja", statusBar: { visible: false } })
+      saveRequest({ language: "ja", statusBar: statusBarSettings(false) })
     );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
@@ -217,13 +287,36 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     expect(written.showStatusBar).toBeUndefined();
   });
 
+  it("writes a nested workbench.statusBar.characterCount.visible on save (#259)", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        workbench: { language: "ja", statusBar: statusBarSettings(true) }
+      })
+    );
+
+    await saveApplicationSettings(
+      saveRequest({
+        language: "ja",
+        statusBar: statusBarSettings(true, false)
+      })
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+
+    expect(written.workbench.statusBar).toEqual(statusBarSettings(true, false));
+  });
+
   it("does not write a legacy top-level language key", async () => {
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({ workbench: { language: "ja", statusBar: { visible: true } } })
     );
 
     await saveApplicationSettings(
-      saveRequest({ language: "en", statusBar: { visible: true } })
+      saveRequest({ language: "en", statusBar: statusBarSettings(true) })
     );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
@@ -241,7 +334,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     );
 
     await saveApplicationSettings(
-      saveRequest({ language: "ja", statusBar: { visible: false } })
+      saveRequest({ language: "ja", statusBar: statusBarSettings(false) })
     );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
@@ -256,7 +349,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
   it("rejects a save request with an invalid workbench.language and never writes settings.json", () => {
     const invalidSaveRequest = saveRequest({
       language: "fr",
-      statusBar: { visible: true }
+      statusBar: statusBarSettings(true)
     });
 
     expect(() =>
@@ -268,7 +361,22 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
   it("rejects a save request with an invalid workbench.statusBar.visible and never writes settings.json", () => {
     const invalidSaveRequest = saveRequest({
       language: "ja",
-      statusBar: { visible: "yes" }
+      statusBar: { ...statusBarSettings(true), visible: "yes" }
+    });
+
+    expect(() =>
+      parseSaveApplicationSettingsRequest(invalidSaveRequest)
+    ).toThrow("Invalid application settings.");
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects a save request with an invalid workbench.statusBar.characterCount.visible and never writes settings.json (#259)", () => {
+    const invalidSaveRequest = saveRequest({
+      language: "ja",
+      statusBar: {
+        visible: true,
+        characterCount: { visible: "yes" }
+      }
     });
 
     expect(() =>
@@ -293,7 +401,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     await saveApplicationSettings(
       saveRequest({
         language: "ja",
-        statusBar: { visible: false },
+        statusBar: statusBarSettings(false),
         fontFamily: "Fira Code"
       })
     );
@@ -318,7 +426,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     const invalidSaveRequest = {
       workbench: {
         language: "ja",
-        statusBar: { visible: true },
+        statusBar: statusBarSettings(true),
         sound: defaultSoundSettings
       },
       commandPalette: {
@@ -327,7 +435,10 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
           marquee: { delay: 2000, speed: 40 }
         }
       },
-      editor: { lineEnding: defaultLineEndingSettings },
+      editor: {
+        lineEnding: defaultLineEndingSettings,
+        characterCount: defaultCharacterCountSettings
+      },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
       },
@@ -344,7 +455,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     const invalidSaveRequest = {
       workbench: {
         language: "ja",
-        statusBar: { visible: true },
+        statusBar: statusBarSettings(true),
         sound: defaultSoundSettings,
         somethingUnknown: true
       },
@@ -354,7 +465,10 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
           marquee: { delay: 2000, speed: 40 }
         }
       },
-      editor: { lineEnding: defaultLineEndingSettings },
+      editor: {
+        lineEnding: defaultLineEndingSettings,
+        characterCount: defaultCharacterCountSettings
+      },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
       }
@@ -372,7 +486,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     );
 
     await saveApplicationSettings(
-      saveRequest({ language: "ja", statusBar: { visible: false } })
+      saveRequest({ language: "ja", statusBar: statusBarSettings(false) })
     );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
