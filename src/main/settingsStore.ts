@@ -185,6 +185,27 @@ function readWorkbenchSoundSettings(
 // path can preserve sparse settings.json storage instead of writing
 // "system-ui" back. The catalog default for fontFamily is applied later, in
 // resolveEffectiveSettings — not baked in here.
+// #266: workbench.notification is sparse like fontFamily below — a missing or
+// invalid on-disk durationMs is read-time rejected (returns
+// undefined) so the write path can preserve sparse settings.json storage; the
+// catalog default is applied later, in resolveEffectiveSettings.
+function readWorkbenchNotificationSettings(
+  value: unknown
+): ApplicationSettings["workbench"]["notification"] {
+  if (
+    !isObject(value) ||
+    typeof value.durationMs !== "number" ||
+    !validateCatalogValue(
+      "workbench.notification.durationMs",
+      value.durationMs
+    ).ok
+  ) {
+    return undefined;
+  }
+
+  return { durationMs: value.durationMs };
+}
+
 function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"] {
   const workbenchValue = isObject(value) ? value : undefined;
 
@@ -195,20 +216,29 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
   const statusBar = readWorkbenchStatusBarSettings(workbenchValue?.statusBar);
   const sound = readWorkbenchSoundSettings(workbenchValue?.sound);
 
-  if (
-    workbenchValue === undefined ||
-    typeof workbenchValue.fontFamily !== "string" ||
-    !validateCatalogValue("workbench.fontFamily", workbenchValue.fontFamily).ok
-  ) {
-    return { language, statusBar, sound };
-  }
-
-  return {
+  const workbench: ApplicationSettings["workbench"] = {
     language,
     statusBar,
-    sound,
-    fontFamily: workbenchValue.fontFamily
+    sound
   };
+
+  if (
+    workbenchValue !== undefined &&
+    typeof workbenchValue.fontFamily === "string" &&
+    validateCatalogValue("workbench.fontFamily", workbenchValue.fontFamily).ok
+  ) {
+    workbench.fontFamily = workbenchValue.fontFamily;
+  }
+
+  const notification = readWorkbenchNotificationSettings(
+    workbenchValue?.notification
+  );
+
+  if (notification) {
+    workbench.notification = notification;
+  }
+
+  return workbench;
 }
 
 function readCommandPaletteDescriptionSettings(
@@ -637,6 +667,35 @@ function parseWorkbenchSoundSettingsForWrite(
   };
 }
 
+// #266: strict shape/value validation, mirroring the other workbench
+// sub-settings — an invalid durationMs rejects the whole save request
+// rather than silently dropping just that field. The key itself stays
+// optional in the request (see parseWorkbenchSettingsForWrite).
+function parseWorkbenchNotificationSettingsForWrite(
+  value: unknown
+): NonNullable<ApplicationSettings["workbench"]["notification"]> {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("durationMs")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const resolution = resolveCatalogValue(
+    "workbench.notification.durationMs",
+    value.durationMs
+  );
+
+  if (!resolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return { durationMs: resolution.value };
+}
+
 function parseWorkbenchSettingsForWrite(
   value: unknown
 ): ApplicationSettings["workbench"] {
@@ -646,7 +705,9 @@ function parseWorkbenchSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
-  const expectedKeyCount = hasFontFamily ? 4 : 3;
+  const hasNotification = keys.includes("notification");
+  const expectedKeyCount =
+    3 + (hasFontFamily ? 1 : 0) + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -669,12 +730,20 @@ function parseWorkbenchSettingsForWrite(
   const statusBar = parseWorkbenchStatusBarSettingsForWrite(value.statusBar);
   const sound = parseWorkbenchSoundSettingsForWrite(value.sound);
 
+  const workbench: ApplicationSettings["workbench"] = {
+    language: languageResolution.value,
+    statusBar,
+    sound
+  };
+
+  if (hasNotification) {
+    workbench.notification = parseWorkbenchNotificationSettingsForWrite(
+      value.notification
+    );
+  }
+
   if (!hasFontFamily) {
-    return {
-      language: languageResolution.value,
-      statusBar,
-      sound
-    };
+    return workbench;
   }
 
   if (
@@ -684,12 +753,9 @@ function parseWorkbenchSettingsForWrite(
     throw new Error("Invalid application settings.");
   }
 
-  return {
-    language: languageResolution.value,
-    statusBar,
-    sound,
-    fontFamily: value.fontFamily
-  };
+  workbench.fontFamily = value.fontFamily;
+
+  return workbench;
 }
 
 function parseCommandPaletteDescriptionSettingsForWrite(

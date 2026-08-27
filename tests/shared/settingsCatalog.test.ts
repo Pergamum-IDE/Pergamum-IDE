@@ -649,7 +649,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("uses number settings in production for Command Palette description marquee controls and the Preview update delay", () => {
+    it("uses number settings in production for Command Palette description marquee controls, the Preview update delay, and the Notification display time in ms (#266)", () => {
       const productionTypes = new Set(
         getCatalogEntries().map((entry) => entry.type)
       );
@@ -662,7 +662,8 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqual([
         "commandPalette.description.marquee.delay",
         "commandPalette.description.marquee.speed",
-        "preview.updateDelayMs"
+        "preview.updateDelayMs",
+        "workbench.notification.durationMs"
       ]);
       expect(
         getCatalogEntries().some((entry) => entry.key === "workbench.fontSize")
@@ -1020,9 +1021,10 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, and #259 character count settings (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, #259 character count settings, and #266 workbench.notification.durationMs (#232: workbench.advancedSettings.enabled removed)", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
+          "workbench.notification.durationMs",
           "commandPalette.description.enable",
           "commandPalette.description.marquee.delay",
           "commandPalette.description.marquee.speed",

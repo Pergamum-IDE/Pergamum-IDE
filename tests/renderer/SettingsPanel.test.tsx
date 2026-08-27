@@ -8,6 +8,7 @@ import {
 } from "../../src/shared/settings";
 import { t, type Language, type Translate } from "../../src/shared/i18n";
 import {
+  settingCatalogItems,
   settingCategoryCatalog,
   type SettingCategory
 } from "../../src/shared/settingsUiCatalog";
@@ -23,6 +24,8 @@ type ElementProps = Record<string, unknown> & {
 
 const settingsPanelSource = () =>
   readFileSync("src/renderer/SettingsPanel.tsx", "utf8");
+
+const stylesSource = () => readFileSync("src/renderer/styles.css", "utf8");
 
 function translateFor(language: Language): Translate {
   return (key, values) => t(language, key, values);
@@ -313,7 +316,8 @@ describe("SettingsPanelView category behavior (#230)", () => {
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "workbench.language",
-      "workbench.statusBar.visible"
+      "workbench.statusBar.visible",
+      "workbench.notification.durationMs"
     ]);
   });
 
@@ -1445,5 +1449,87 @@ describe("line-ending marker glyph select renders in the editor font (#252 follo
     const select = controlElement(element, "files.newFile.lineEnding");
 
     expect(select.props.className).not.toContain("settingsSelect-editorFont");
+  });
+});
+
+describe("Settings number control right-alignment (common style)", () => {
+  const numberKeys = settingCatalogItems
+    .filter((item) => item.control.kind === "number")
+    .map((item) => item.key);
+  const nonNumberKeys = settingCatalogItems
+    .filter((item) => item.control.kind !== "number")
+    .map((item) => item.key);
+
+  it("covers every number control that must be right-aligned (#266 + the pre-existing ones)", () => {
+    // Guards against a catalog change silently dropping one of these from
+    // the number-control set the common style targets.
+    expect([...numberKeys].sort()).toEqual(
+      [
+        "commandPalette.description.marquee.delay",
+        "commandPalette.description.marquee.speed",
+        "preview.updateDelayMs",
+        "workbench.notification.durationMs"
+      ].sort()
+    );
+  });
+
+  it("renders every number control with the shared settingsNumberInput class (no per-key styling)", () => {
+    for (const key of numberKeys) {
+      const control = controlElement(
+        settingsPanelViewElement("en", { searchQuery: isolate(key) }),
+        key
+      );
+
+      expect(control.props.type).toBe("number");
+      expect(String(control.props.className).split(/\s+/)).toContain(
+        "settingsNumberInput"
+      );
+    }
+  });
+
+  it("never puts the settingsNumberInput class on a text / select / switch control", () => {
+    for (const key of nonNumberKeys) {
+      const control = controlElement(
+        settingsPanelViewElement("en", { searchQuery: isolate(key) }),
+        key
+      );
+
+      expect(String(control.props.className)).not.toContain(
+        "settingsNumberInput"
+      );
+    }
+  });
+
+  it("right-aligns via the dedicated .settingsNumberInput rule in styles.css, not via a shared or per-key rule", () => {
+    const css = stylesSource();
+
+    // The number-only rule block — the one that also narrows its width —
+    // carries the alignment. Anchored on that width so it can't be confused
+    // with the shared `.settingsSelect, .settingsTextInput, .settingsNumberInput`
+    // box rule or the responsive override.
+    const anchor = ".settingsNumberInput {\n  width: min(100%, 160px);";
+    const start = css.indexOf(anchor);
+    expect(start).toBeGreaterThan(-1);
+    const numberRule = css.slice(start, css.indexOf("}", start));
+
+    expect(numberRule).toMatch(/text-align:\s*(end|right)\b/);
+
+    // The shared box rule for select/text/number must NOT itself set
+    // text-align (that would drag select/text along).
+    const sharedSelector =
+      ".settingsSelect,\n.settingsTextInput,\n.settingsNumberInput {";
+    const sharedStart = css.indexOf(sharedSelector);
+    expect(sharedStart).toBeGreaterThan(-1);
+    const sharedRule = css.slice(
+      sharedStart,
+      css.indexOf("}", sharedStart)
+    );
+    expect(sharedRule).not.toMatch(/text-align/);
+
+    // No standalone .settingsTextInput / .settingsSelect rule sets text-align,
+    // and there is no per-setting number-input alignment rule.
+    expect(css).not.toMatch(/\.settingsTextInput\s*\{[^}]*text-align/);
+    expect(css).not.toMatch(/\.settingsSelect\s*\{[^}]*text-align/);
+    expect(css).not.toMatch(/settingControl-[\w.]+/);
   });
 });

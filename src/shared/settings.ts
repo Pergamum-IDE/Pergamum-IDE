@@ -70,6 +70,17 @@ export interface WorkbenchSoundToggleSettings {
   enabled: boolean;
 }
 
+// #266: how long an information NotificationToast stays on screen before it
+// auto-dismisses, in milliseconds (the unit the NotificationController timer
+// consumes directly). Stored sparsely (optional) on
+// ApplicationWorkbenchSettings, mirroring workbench.fontFamily (#173 D-7): an
+// absent value is not written back as the catalog default, and
+// resolveEffectiveSettings is what falls through to the default.
+// EffectiveWorkbenchSettings.notification is always concrete.
+export interface WorkbenchNotificationSettings {
+  durationMs: number;
+}
+
 export interface WorkbenchSoundSettings {
   enabled: boolean;
   dialog: WorkbenchSoundToggleSettings;
@@ -158,6 +169,9 @@ export interface ApplicationWorkbenchSettings {
   statusBar: WorkbenchStatusBarSettings;
   sound: WorkbenchSoundSettings;
   fontFamily?: string;
+  // #266: sparse, like fontFamily — absence means "use the catalog default";
+  // it is never eagerly written back as the default.
+  notification?: WorkbenchNotificationSettings;
 }
 
 export interface ApplicationSettings {
@@ -199,6 +213,7 @@ export interface EffectiveWorkbenchSettings {
   statusBar: WorkbenchStatusBarSettings;
   sound: WorkbenchSoundSettings;
   fontFamily: string;
+  notification: WorkbenchNotificationSettings;
 }
 
 export interface EffectiveCommandPaletteSettings {
@@ -243,6 +258,12 @@ export const defaultPreviewUpdateDelayMs: number = getCatalogDefaultValue(
   "preview.updateDelayMs"
 );
 
+// #266: same compatibility-wrapper rationale as defaultPreviewUpdateDelayMs —
+// the catalog is the only source of truth for this default.
+export const defaultNotificationDurationMs: number = getCatalogDefaultValue(
+  "workbench.notification.durationMs"
+);
+
 export const builtInDefaultSettings: EffectiveSettings = {
   preview: {
     renderer: defaultPreviewRenderer,
@@ -270,7 +291,12 @@ export const builtInDefaultSettings: EffectiveSettings = {
         enabled: getCatalogDefaultValue("workbench.sound.keypress.enabled")
       }
     },
-    fontFamily: getCatalogDefaultValue("workbench.fontFamily")
+    fontFamily: getCatalogDefaultValue("workbench.fontFamily"),
+    notification: {
+      durationMs: getCatalogDefaultValue(
+        "workbench.notification.durationMs"
+      )
+    }
   },
   commandPalette: {
     description: {
@@ -528,7 +554,15 @@ export function resolveEffectiveSettings(
       },
       fontFamily:
         applicationSettings.workbench.fontFamily ??
-        builtInDefaultSettings.workbench.fontFamily
+        builtInDefaultSettings.workbench.fontFamily,
+      // #266: applicationOnly, and sparse like fontFamily — fall through to
+      // the catalog-backed default when settings.json omits it (or when the
+      // read path rejected an invalid on-disk value).
+      notification: {
+        durationMs:
+          applicationSettings.workbench.notification?.durationMs ??
+          builtInDefaultSettings.workbench.notification.durationMs
+      }
     },
     commandPalette: {
       description: {

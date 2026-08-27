@@ -85,7 +85,8 @@ const characterCountExcludeKeys = new Set<SettingKey>([
 const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
   "commandPalette.description.marquee.delay": "settings.unit.ms",
   "commandPalette.description.marquee.speed": "settings.unit.pxPerSecond",
-  "preview.updateDelayMs": "settings.unit.ms"
+  "preview.updateDelayMs": "settings.unit.ms",
+  "workbench.notification.durationMs": "settings.unit.ms"
 };
 
 function readSettingValue(key: SettingKey, settings: ApplicationSettings): unknown {
@@ -103,6 +104,11 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.workbench.statusBar.visible;
     case "workbench.statusBar.characterCount.visible":
       return settings.workbench.statusBar.characterCount.visible;
+    case "workbench.notification.durationMs":
+      return (
+        settings.workbench.notification?.durationMs ??
+        getCatalogDefaultValue("workbench.notification.durationMs")
+      );
     case "workbench.sound.enabled":
       return settings.workbench.sound.enabled;
     case "workbench.sound.dialog.enabled":
@@ -261,6 +267,17 @@ function buildNextSettings(
             ...settings.workbench.statusBar,
             characterCount: { visible: Boolean(rawValue) }
           }
+        }
+      });
+    case "workbench.notification.durationMs":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
+
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          notification: { durationMs: rawValue }
         }
       });
     case "workbench.sound.enabled":

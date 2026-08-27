@@ -253,6 +253,8 @@ import { confirmProjectSwitchWithUnsavedDocuments } from "./projectSwitchConfirm
 import { confirmReadOnlyProjectOpenIfNeeded } from "./readOnlyProjectOpenConfirmation";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
+import { NotificationHost } from "./notification/NotificationHost";
+import { NotificationController } from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
@@ -451,6 +453,27 @@ export function App(): JSX.Element {
     [dialogController]
   );
   useEffect(() => () => dialogController.dispose(), [dialogController]);
+
+  /**
+   * #266: application-level information-notification channel
+   * (`NotificationToast`). Like `dialogController` above it is created once
+   * and owned by `App` (not a mounted provider) because callers dispatch
+   * through it with a `translate` bound to `displayLanguage`. `NotificationHost`
+   * renders the stack; this controller owns state + per-toast auto-dismiss
+   * timers. Never used for warnings/errors — those stay with the dialogs.
+   */
+  const notificationControllerRef = useRef<NotificationController | null>(null);
+
+  if (!notificationControllerRef.current) {
+    notificationControllerRef.current = new NotificationController();
+  }
+
+  const notificationController = notificationControllerRef.current;
+
+  useEffect(
+    () => () => notificationController.dispose(),
+    [notificationController]
+  );
 
   const dialogActionOrder = useMemo(
     () => getDialogActionOrder(window.pergamum.platform),
@@ -772,6 +795,13 @@ export function App(): JSX.Element {
     () => resolveEffectiveSettings(settings, project?.config?.settings),
     [settings, project?.config?.settings]
   );
+  // #266: NotificationToast auto-dismiss duration, in milliseconds — the
+  // Settings value is already stored in the unit the controller's timer
+  // consumes, so it passes straight through (no conversion). Kept in sync
+  // with the controller by NotificationHost; toasts already on screen keep
+  // their original timer.
+  const notificationAutoDismissMs =
+    effectiveSettings.workbench.notification.durationMs;
   useEffect(() => {
     applyWorkbenchFontFamily(effectiveSettings.workbench.fontFamily);
   }, [effectiveSettings.workbench.fontFamily]);
@@ -2119,8 +2149,23 @@ export function App(): JSX.Element {
       activeProjectContext
     );
 
+    // #266: notify on *open* of an external Markdown file (a project is open
+    // and the picked file is outside its root, `kind === "file"`), but not
+    // when the file is already open in a tab — that path only re-activates
+    // the existing tab, and `Open ≠ Activate`. The dispatch happens after a
+    // confirmed successful open, below.
+    const openedEditorId = editorIdForCurrentDocument(
+      openedDocument,
+      activeProjectContext
+    );
+    const isNewExternalMarkdownOpen =
+      openedDocument.kind === "file" &&
+      project !== null &&
+      (openedEditorId === null ||
+        !hasOpenDocument(openDocumentsState, openedEditorId));
+
     try {
-      await completeInstrumentedDocumentOpen(documentOpenId, startedAt, () =>
+      const didOpen = await completeInstrumentedDocumentOpen(documentOpenId, startedAt, () =>
         openDocument(openedDocument)
       );
 
@@ -2128,6 +2173,12 @@ export function App(): JSX.Element {
         key: "status.openedFile",
         values: { name: openedDocument.name }
       });
+
+      if (didOpen && isNewExternalMarkdownOpen) {
+        notificationController.notify({
+          message: translate("notification.externalMarkdownOpened")
+        });
+      }
     } catch (error) {
       setStatus({
         key: "status.documentOpenFailed",
@@ -4097,6 +4148,12 @@ export function App(): JSX.Element {
           onResult={(result) => dialogController.resolve(result)}
         />
       ) : null}
+
+      <NotificationHost
+        controller={notificationController}
+        translate={translate}
+        autoDismissMs={notificationAutoDismissMs}
+      />
     </main>
   );
 }
