@@ -131,3 +131,36 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(appSource).toContain("soundFeedback={soundFeedback}");
   });
 });
+
+describe("status bar character count runtime wiring (#259)", () => {
+  it("App.tsx computes the status-bar character count only behind the status bar and character-count visibility settings", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+
+    expect(appSource).toContain("countMarkdownDocumentCharacters");
+    expect(appSource).toContain("CHARACTER_COUNT_UPDATE_DEBOUNCE_MS");
+    expect(appSource).toContain("shouldComputeStatusBarCharacterCount");
+    expect(appSource).toContain(
+      "effectiveSettings.workbench.statusBar.visible"
+    );
+    expect(appSource).toContain(
+      "effectiveSettings.workbench.statusBar.characterCount.visible"
+    );
+    expect(appSource).toContain("currentEditor.kind === \"markdown\"");
+    expect(appSource).toContain("!isSettingsTabActive");
+  });
+
+  it("keeps the Markdown Preview renderer parser configuration unchanged", () => {
+    const previewSource = readFileSync(
+      "src/renderer/preview/markdownPreviewRenderer.ts",
+      "utf8"
+    );
+    const editorSurfaceSource = readFileSync(
+      "src/renderer/EditorSurface.tsx",
+      "utf8"
+    );
+
+    expect(previewSource).toContain("html: false");
+    expect(previewSource).not.toContain("characterCount");
+    expect(editorSurfaceSource).not.toContain("countMarkdownDocumentCharacters");
+  });
+});

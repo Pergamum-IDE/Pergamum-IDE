@@ -423,6 +423,77 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
   },
   {
+    key: "workbench.statusBar.characterCount.visible",
+    category: "editor",
+    order: 400,
+    labelKey: "settings.workbench.statusBar.characterCount.visible.label",
+    descriptionKey:
+      "settings.workbench.statusBar.characterCount.visible.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "workbench.statusBar.characterCount.visible"
+    )
+  },
+  {
+    key: "editor.characterCount.exclude.whitespace",
+    category: "editor",
+    order: 410,
+    labelKey: "settings.editor.characterCount.exclude.whitespace.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.whitespace.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.characterCount.exclude.whitespace"
+    )
+  },
+  {
+    key: "editor.characterCount.exclude.lineBreaks",
+    category: "editor",
+    order: 420,
+    labelKey: "settings.editor.characterCount.exclude.lineBreaks.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.lineBreaks.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.characterCount.exclude.lineBreaks"
+    )
+  },
+  {
+    key: "editor.characterCount.exclude.headings",
+    category: "editor",
+    order: 430,
+    labelKey: "settings.editor.characterCount.exclude.headings.label",
+    descriptionKey: "settings.editor.characterCount.exclude.headings.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.characterCount.exclude.headings"
+    )
+  },
+  {
+    key: "editor.characterCount.exclude.markdownSyntax",
+    category: "editor",
+    order: 440,
+    labelKey: "settings.editor.characterCount.exclude.markdownSyntax.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.markdownSyntax.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownSyntax"
+    )
+  },
+  {
+    key: "editor.characterCount.exclude.markdownComments",
+    category: "editor",
+    order: 450,
+    labelKey: "settings.editor.characterCount.exclude.markdownComments.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.markdownComments.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownComments"
+    )
+  },
+  {
     key: "files.newFile.lineEnding",
     category: "files",
     order: 100,

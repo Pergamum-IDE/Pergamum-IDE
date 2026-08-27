@@ -200,7 +200,7 @@ describe("Application Settings core defaults and effective settings (#195)", () 
   it("resolveEffectiveSettings passes through a valid editor.fontFamily application override", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      editor: { fontFamily: "Fira Code" }
+      editor: { ...defaultApplicationSettings.editor, fontFamily: "Fira Code" }
     };
 
     expect(
@@ -225,7 +225,7 @@ describe("Application Settings core defaults and effective settings (#195)", () 
   it("does not add Project Settings shape for #195 Application Settings controls", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      editor: { fontFamily: "Fira Code" },
+      editor: { ...defaultApplicationSettings.editor, fontFamily: "Fira Code" },
       files: { newFile: { lineEnding: "crlf", encoding: "utf8" } }
     };
     const effective = resolveEffectiveSettings(applicationSettings, {});
@@ -235,6 +235,38 @@ describe("Application Settings core defaults and effective settings (#195)", () 
       lineEnding: "crlf",
       encoding: "utf8"
     });
+  });
+
+  it("editor.characterCount defaults derive from the catalog and pass through effective settings (#259)", () => {
+    const expected = {
+      exclude: {
+        whitespace: getCatalogDefaultValue(
+          "editor.characterCount.exclude.whitespace"
+        ),
+        lineBreaks: getCatalogDefaultValue(
+          "editor.characterCount.exclude.lineBreaks"
+        ),
+        headings: getCatalogDefaultValue(
+          "editor.characterCount.exclude.headings"
+        ),
+        markdownSyntax: getCatalogDefaultValue(
+          "editor.characterCount.exclude.markdownSyntax"
+        ),
+        markdownComments: getCatalogDefaultValue(
+          "editor.characterCount.exclude.markdownComments"
+        )
+      }
+    };
+
+    expect(builtInDefaultSettings.editor.characterCount).toEqual(expected);
+    expect(defaultApplicationSettings.editor.characterCount).toEqual(expected);
+    expect(createDefaultApplicationSettings().editor.characterCount).toEqual(
+      expected
+    );
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined).editor
+        .characterCount
+    ).toEqual(expected);
   });
 });
 
@@ -291,6 +323,9 @@ describe("workbench.language / workbench.statusBar.visible wiring (#174)", () =>
     expect(builtInDefaultSettings.workbench.statusBar.visible).toBe(
       getCatalogDefaultValue("workbench.statusBar.visible")
     );
+    expect(
+      builtInDefaultSettings.workbench.statusBar.characterCount.visible
+    ).toBe(getCatalogDefaultValue("workbench.statusBar.characterCount.visible"));
   });
 
   it("defaultApplicationSettings / createDefaultApplicationSettings carry a concrete workbench.language and workbench.statusBar.visible (not sparse, unlike fontFamily)", () => {
@@ -298,17 +333,27 @@ describe("workbench.language / workbench.statusBar.visible wiring (#174)", () =>
     const statusBarVisibleDefault = getCatalogDefaultValue(
       "workbench.statusBar.visible"
     );
+    const characterCountVisibleDefault = getCatalogDefaultValue(
+      "workbench.statusBar.characterCount.visible"
+    );
 
     expect(defaultApplicationSettings.workbench.language).toBe(languageDefault);
     expect(defaultApplicationSettings.workbench.statusBar.visible).toBe(
       statusBarVisibleDefault
     );
+    expect(
+      defaultApplicationSettings.workbench.statusBar.characterCount.visible
+    ).toBe(characterCountVisibleDefault);
     expect(createDefaultApplicationSettings().workbench.language).toBe(
       languageDefault
     );
     expect(
       createDefaultApplicationSettings().workbench.statusBar.visible
     ).toBe(statusBarVisibleDefault);
+    expect(
+      createDefaultApplicationSettings().workbench.statusBar.characterCount
+        .visible
+    ).toBe(characterCountVisibleDefault);
   });
 
   it("resolveEffectiveSettings passes applicationSettings.workbench.language straight through", () => {
@@ -328,7 +373,10 @@ describe("workbench.language / workbench.statusBar.visible wiring (#174)", () =>
       ...defaultApplicationSettings,
       workbench: {
         ...defaultApplicationSettings.workbench,
-        statusBar: { visible: false }
+        statusBar: {
+          ...defaultApplicationSettings.workbench.statusBar,
+          visible: false
+        }
       }
     };
 
@@ -344,7 +392,10 @@ describe("workbench.language / workbench.statusBar.visible wiring (#174)", () =>
       workbench: {
         ...defaultApplicationSettings.workbench,
         language: "en",
-        statusBar: { visible: false }
+        statusBar: {
+          ...defaultApplicationSettings.workbench.statusBar,
+          visible: false
+        }
       }
     };
     const effective = resolveEffectiveSettings(applicationSettings, {});
