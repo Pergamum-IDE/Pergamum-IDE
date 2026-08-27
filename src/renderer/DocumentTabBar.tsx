@@ -29,7 +29,13 @@ import shieldIcon from "../../assets/icons/feather/global/shield.svg?raw";
 
 interface DocumentTabBarProps {
   tabs: DocumentTab[];
-  activeDocumentId: EditorId;
+  /**
+   * The active document tab, or `null` in the #262 zero-tab state (only a
+   * special tab such as Application Settings is open). Always passed by the
+   * caller; used solely to derive `activeWorkspaceTabId` when it is not passed
+   * explicitly.
+   */
+  activeDocumentId: EditorId | null;
   projectAccessMode?: ProjectAccessMode | null;
   activeWorkspaceTabId?: WorkspaceTabId;
   specialTabs?: SpecialWorkspaceTab[];
@@ -46,7 +52,9 @@ export function DocumentTabBar({
   tabs,
   activeDocumentId,
   projectAccessMode = null,
-  activeWorkspaceTabId = documentWorkspaceTabId(activeDocumentId),
+  activeWorkspaceTabId = activeDocumentId
+    ? documentWorkspaceTabId(activeDocumentId)
+    : undefined,
   specialTabs = [],
   translate,
   onSelectDocument,
@@ -56,6 +64,13 @@ export function DocumentTabBar({
   isUtilityWindowOpen,
   onToggleUtilityWindow
 }: DocumentTabBarProps): JSX.Element {
+  function isWorkspaceTabActive(tabId: WorkspaceTabId): boolean {
+    return (
+      activeWorkspaceTabId !== undefined &&
+      workspaceTabIdEquals(activeWorkspaceTabId, tabId)
+    );
+  }
+
   const utilityWindowLabel = translate("utilityWindow.label");
   const closeTabLabel = translate("tabs.closeTab");
   const unsavedLabel = translate("tabs.unsaved");
@@ -117,7 +132,7 @@ export function DocumentTabBar({
 
   function renderDocumentTab(tab: DocumentTab): JSX.Element {
     const tabId = documentWorkspaceTabId(tab.id);
-    const isActive = workspaceTabIdEquals(activeWorkspaceTabId, tabId);
+    const isActive = isWorkspaceTabActive(tabId);
     const isHovered =
       hoveredDocumentId !== null &&
       editorIdEquals(tab.id, hoveredDocumentId);
@@ -204,7 +219,7 @@ export function DocumentTabBar({
 
   function renderSpecialTab(tab: SpecialWorkspaceTab): JSX.Element {
     const tabId = specialWorkspaceTabId(tab.id);
-    const isActive = workspaceTabIdEquals(activeWorkspaceTabId, tabId);
+    const isActive = isWorkspaceTabActive(tabId);
 
     return (
       <div

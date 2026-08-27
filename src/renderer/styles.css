@@ -2012,6 +2012,9 @@ label.settingsItemHeader {
 }
 
 .statusBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-height: 28px;
   border-top: 1px solid #d3dae2;
   background: #f2f5f8;
@@ -2028,6 +2031,20 @@ label.settingsItemHeader {
     "Segoe UI",
     sans-serif
   );
+}
+
+.statusBarMessage {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusBarCharacterCount {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .commandPaletteBackdrop {

@@ -41,6 +41,35 @@ const defaultParagraphIndentSettings = {
   )
 };
 
+const defaultCharacterCountSettings = {
+  exclude: {
+    whitespace: getCatalogDefaultValue(
+      "editor.characterCount.exclude.whitespace"
+    ),
+    lineBreaks: getCatalogDefaultValue(
+      "editor.characterCount.exclude.lineBreaks"
+    ),
+    headings: getCatalogDefaultValue(
+      "editor.characterCount.exclude.headings"
+    ),
+    markdownSyntax: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownSyntax"
+    ),
+    markdownComments: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownComments"
+    )
+  }
+};
+
+const defaultStatusBarSettings = {
+  visible: getCatalogDefaultValue("workbench.statusBar.visible"),
+  characterCount: {
+    visible: getCatalogDefaultValue(
+      "workbench.statusBar.characterCount.visible"
+    )
+  }
+};
+
 const defaultSoundSettings = {
   enabled: true,
   dialog: { enabled: true },
@@ -89,7 +118,7 @@ function validSaveRequest(
     preview: { renderer: "markdown", updateDelayMs: 10000 },
     workbench: {
       language: "ja",
-      statusBar: { visible: true },
+      statusBar: defaultStatusBarSettings,
       sound: defaultSoundSettings
     },
     commandPalette: {
@@ -100,7 +129,8 @@ function validSaveRequest(
     },
     editor: {
       lineEnding: defaultLineEndingSettings,
-      paragraphIndent: defaultParagraphIndentSettings
+      paragraphIndent: defaultParagraphIndentSettings,
+      characterCount: defaultCharacterCountSettings
     },
     files: {
       newFile: {
@@ -127,6 +157,10 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     const settings = await loadSettings();
 
     expect(settings.workbench).not.toHaveProperty("advancedSettings");
+    expect(settings.workbench.statusBar).toEqual(defaultStatusBarSettings);
+    expect(settings.editor.characterCount).toEqual(
+      defaultCharacterCountSettings
+    );
     expect(settings.editor.fontFamily).toBeUndefined();
     expect(settings.files.newFile).toEqual({
       lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
@@ -289,7 +323,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     const settings = await loadSettings();
 
     expect(settings.workbench.language).toBe("ja");
-    expect(settings.workbench.statusBar).toEqual({ visible: true });
+    expect(settings.workbench.statusBar).toEqual(defaultStatusBarSettings);
     expect(settings.workbench.sound).toEqual(defaultSoundSettings);
     expect(settings.workbench).not.toHaveProperty("advancedSettings");
   });
@@ -321,7 +355,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       validSaveRequest({
         workbench: {
           language: "en",
-          statusBar: { visible: false },
+          statusBar: {
+            ...defaultStatusBarSettings,
+            visible: false
+          },
           sound: {
             enabled: false,
             dialog: { enabled: false },
@@ -333,7 +370,13 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         editor: {
           fontFamily: "Fira Code",
           lineEnding: defaultLineEndingSettings,
-          paragraphIndent: { excludeLeadingCharacters: "「『" }
+          paragraphIndent: { excludeLeadingCharacters: "「『" },
+          characterCount: {
+            exclude: {
+              ...defaultCharacterCountSettings.exclude,
+              headings: true
+            }
+          }
         },
         commandPalette: {
           description: {
@@ -369,7 +412,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     });
     expect(written.workbench).toEqual({
       language: "en",
-      statusBar: { visible: false },
+      statusBar: {
+        ...defaultStatusBarSettings,
+        visible: false
+      },
       sound: {
         enabled: false,
         dialog: { enabled: false },
@@ -381,7 +427,13 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     expect(written.editor).toEqual({
       fontFamily: "Fira Code",
       lineEnding: defaultLineEndingSettings,
-      paragraphIndent: { excludeLeadingCharacters: "「『" }
+      paragraphIndent: { excludeLeadingCharacters: "「『" },
+      characterCount: {
+        exclude: {
+          ...defaultCharacterCountSettings.exclude,
+          headings: true
+        }
+      }
     });
     expect(written.files).toEqual({
       newFile: {
@@ -439,7 +491,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       validSaveRequest({
         workbench: {
           language: "ja",
-          statusBar: { visible: true },
+          statusBar: defaultStatusBarSettings,
           // Obsolete field (#232) — a save request must not carry it.
           advancedSettings: { enabled: false },
           sound: defaultSoundSettings
@@ -448,7 +500,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       validSaveRequest({
         workbench: {
           language: "ja",
-          statusBar: { visible: true },
+          statusBar: defaultStatusBarSettings,
           sound: {
             enabled: "yes" as unknown as boolean,
             dialog: { enabled: true },
@@ -460,7 +512,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       validSaveRequest({
         workbench: {
           language: "ja",
-          statusBar: { visible: true },
+          statusBar: defaultStatusBarSettings,
           sound: {
             enabled: true,
             dialog: { enabled: "yes" as unknown as boolean },
@@ -473,7 +525,18 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         editor: {
           fontFamily: 'Fira Code"; color: red',
           lineEnding: defaultLineEndingSettings,
-          paragraphIndent: defaultParagraphIndentSettings
+          paragraphIndent: defaultParagraphIndentSettings,
+          characterCount: defaultCharacterCountSettings
+        }
+      }),
+      validSaveRequest({
+        workbench: {
+          language: "ja",
+          statusBar: {
+            visible: true,
+            characterCount: { visible: "yes" as unknown as boolean }
+          },
+          sound: defaultSoundSettings
         }
       }),
       validSaveRequest({
@@ -481,6 +544,19 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           lineEnding: defaultLineEndingSettings,
           paragraphIndent: {
             excludeLeadingCharacters: 42 as unknown as string
+          },
+          characterCount: defaultCharacterCountSettings
+        }
+      }),
+      validSaveRequest({
+        editor: {
+          lineEnding: defaultLineEndingSettings,
+          paragraphIndent: defaultParagraphIndentSettings,
+          characterCount: {
+            exclude: {
+              ...defaultCharacterCountSettings.exclude,
+              markdownSyntax: "yes" as unknown as boolean
+            }
           }
         }
       }),

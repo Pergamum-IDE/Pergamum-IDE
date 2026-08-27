@@ -161,13 +161,14 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }
     });
 
-    it("registers exactly the #226 + #228 target settings plus #252 editor.lineEnding.*, minus the #232-retired workbench.advancedSettings.enabled", () => {
+    it("registers exactly the #226 + #228 target settings plus #252 editor.lineEnding.* and #259 character count settings, minus the #232-retired workbench.advancedSettings.enabled", () => {
       expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
         [
           "workbench.colorTheme",
           "workbench.fontFamily",
           "workbench.language",
           "workbench.statusBar.visible",
+          "workbench.statusBar.characterCount.visible",
           "workbench.sound.enabled",
           "workbench.sound.dialog.enabled",
           "workbench.sound.newline.enabled",
@@ -176,6 +177,11 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "commandPalette.description.marquee.delay",
           "commandPalette.description.marquee.speed",
           "editor.fontFamily",
+          "editor.characterCount.exclude.whitespace",
+          "editor.characterCount.exclude.lineBreaks",
+          "editor.characterCount.exclude.headings",
+          "editor.characterCount.exclude.markdownSyntax",
+          "editor.characterCount.exclude.markdownComments",
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
@@ -316,6 +322,49 @@ describe("Settings UI Catalog Schema (#226)", () => {
       });
     });
 
+    it("places all character count settings together in the editor category, with visibility before exclusions (#259 taxonomy)", () => {
+      const keys = [
+        "workbench.statusBar.characterCount.visible",
+        "editor.characterCount.exclude.whitespace",
+        "editor.characterCount.exclude.lineBreaks",
+        "editor.characterCount.exclude.headings",
+        "editor.characterCount.exclude.markdownSyntax",
+        "editor.characterCount.exclude.markdownComments"
+      ] as const;
+
+      const items = keys.map((key) => {
+        const item = getSettingCatalogItem(key);
+
+        if (!item) {
+          throw new Error(`Expected ${key} to be registered.`);
+        }
+
+        return item;
+      });
+
+      expect(items.map((item) => item.category)).toEqual([
+        "editor",
+        "editor",
+        "editor",
+        "editor",
+        "editor",
+        "editor"
+      ]);
+
+      expect(items.map((item) => item.order)).toEqual([
+        400,
+        410,
+        420,
+        430,
+        440,
+        450
+      ]);
+
+      expect(getSettingCatalogItem("workbench.statusBar.visible")?.category).toBe(
+        "application"
+      );
+    });
+
     it("every item's labelKey / descriptionKey resolves in ja and en", () => {
       for (const item of settingCatalogItems) {
         for (const language of languages) {
@@ -339,7 +388,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
               t(language, option.labelKey as never).length
             ).toBeGreaterThan(0);
 
-            if (option.descriptionKey) {
+            if ("descriptionKey" in option && option.descriptionKey) {
               expect(
                 t(language, option.descriptionKey as never).length
               ).toBeGreaterThan(0);
@@ -501,13 +550,19 @@ describe("Settings UI Catalog Schema (#226)", () => {
       const newlyCoveredKeys = [
         "workbench.language",
         "workbench.statusBar.visible",
+        "workbench.statusBar.characterCount.visible",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
         "workbench.sound.keypress.enabled",
         "commandPalette.description.enable",
         "commandPalette.description.marquee.delay",
-        "commandPalette.description.marquee.speed"
+        "commandPalette.description.marquee.speed",
+        "editor.characterCount.exclude.whitespace",
+        "editor.characterCount.exclude.lineBreaks",
+        "editor.characterCount.exclude.headings",
+        "editor.characterCount.exclude.markdownSyntax",
+        "editor.characterCount.exclude.markdownComments"
       ] as const;
 
       for (const key of newlyCoveredKeys) {
@@ -623,12 +678,12 @@ describe("Settings UI Catalog Schema (#226)", () => {
 
     it("no initial catalog item declares a valueWarning yet (reserved for the future non-UTF-8 warning issue)", () => {
       for (const item of settingCatalogItems) {
-        expect(item.valueWarning).toBeUndefined();
+        expect("valueWarning" in item ? item.valueWarning : undefined).toBeUndefined();
       }
     });
 
     it("buildSettingSearchText never resolves or includes a valueWarning's messageKey", () => {
-      const item: SettingCatalogItem<string> = {
+      const item: SettingCatalogItem<unknown> = {
         key: "files.newFile.encoding",
         category: "files",
         order: 200,

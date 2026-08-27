@@ -59,6 +59,11 @@ export interface ApplicationPreviewSettings {
 
 export interface WorkbenchStatusBarSettings {
   visible: boolean;
+  characterCount: WorkbenchStatusBarCharacterCountSettings;
+}
+
+export interface WorkbenchStatusBarCharacterCountSettings {
+  visible: boolean;
 }
 
 export interface WorkbenchSoundToggleSettings {
@@ -113,10 +118,23 @@ export interface ApplicationEditorParagraphIndentSettings {
   excludeLeadingCharacters: ParagraphIndentExcludeLeadingCharacters;
 }
 
+export interface ApplicationEditorCharacterCountExcludeSettings {
+  whitespace: boolean;
+  lineBreaks: boolean;
+  headings: boolean;
+  markdownSyntax: boolean;
+  markdownComments: boolean;
+}
+
+export interface ApplicationEditorCharacterCountSettings {
+  exclude: ApplicationEditorCharacterCountExcludeSettings;
+}
+
 export interface ApplicationEditorSettings {
   fontFamily?: string;
   lineEnding: ApplicationEditorLineEndingSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
+  characterCount: ApplicationEditorCharacterCountSettings;
 }
 
 export interface ApplicationNewFileSettings {
@@ -191,6 +209,7 @@ export interface EffectiveEditorSettings {
   fontFamily: string;
   lineEnding: ApplicationEditorLineEndingSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
+  characterCount: ApplicationEditorCharacterCountSettings;
 }
 
 export interface EffectiveFilesSettings {
@@ -232,7 +251,12 @@ export const builtInDefaultSettings: EffectiveSettings = {
   workbench: {
     language: getCatalogDefaultValue("workbench.language"),
     statusBar: {
-      visible: getCatalogDefaultValue("workbench.statusBar.visible")
+      visible: getCatalogDefaultValue("workbench.statusBar.visible"),
+      characterCount: {
+        visible: getCatalogDefaultValue(
+          "workbench.statusBar.characterCount.visible"
+        )
+      }
     },
     sound: {
       enabled: getCatalogDefaultValue("workbench.sound.enabled"),
@@ -271,6 +295,25 @@ export const builtInDefaultSettings: EffectiveSettings = {
       excludeLeadingCharacters: getCatalogDefaultValue(
         "editor.paragraphIndent.excludeLeadingCharacters"
       )
+    },
+    characterCount: {
+      exclude: {
+        whitespace: getCatalogDefaultValue(
+          "editor.characterCount.exclude.whitespace"
+        ),
+        lineBreaks: getCatalogDefaultValue(
+          "editor.characterCount.exclude.lineBreaks"
+        ),
+        headings: getCatalogDefaultValue(
+          "editor.characterCount.exclude.headings"
+        ),
+        markdownSyntax: getCatalogDefaultValue(
+          "editor.characterCount.exclude.markdownSyntax"
+        ),
+        markdownComments: getCatalogDefaultValue(
+          "editor.characterCount.exclude.markdownComments"
+        )
+      }
     }
   },
   files: {
@@ -296,7 +339,11 @@ export const defaultApplicationSettings: ApplicationSettings = {
   workbench: {
     language: builtInDefaultSettings.workbench.language,
     statusBar: {
-      visible: builtInDefaultSettings.workbench.statusBar.visible
+      visible: builtInDefaultSettings.workbench.statusBar.visible,
+      characterCount: {
+        visible:
+          builtInDefaultSettings.workbench.statusBar.characterCount.visible
+      }
     },
     sound: {
       enabled: builtInDefaultSettings.workbench.sound.enabled,
@@ -330,6 +377,20 @@ export const defaultApplicationSettings: ApplicationSettings = {
     paragraphIndent: {
       excludeLeadingCharacters:
         builtInDefaultSettings.editor.paragraphIndent.excludeLeadingCharacters
+    },
+    characterCount: {
+      exclude: {
+        whitespace:
+          builtInDefaultSettings.editor.characterCount.exclude.whitespace,
+        lineBreaks:
+          builtInDefaultSettings.editor.characterCount.exclude.lineBreaks,
+        headings:
+          builtInDefaultSettings.editor.characterCount.exclude.headings,
+        markdownSyntax:
+          builtInDefaultSettings.editor.characterCount.exclude.markdownSyntax,
+        markdownComments:
+          builtInDefaultSettings.editor.characterCount.exclude.markdownComments
+      }
     }
   },
   files: {
@@ -350,7 +411,11 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
     workbench: {
       language: defaultApplicationSettings.workbench.language,
       statusBar: {
-        visible: defaultApplicationSettings.workbench.statusBar.visible
+        visible: defaultApplicationSettings.workbench.statusBar.visible,
+        characterCount: {
+          visible:
+            defaultApplicationSettings.workbench.statusBar.characterCount.visible
+        }
       },
       sound: {
         enabled: defaultApplicationSettings.workbench.sound.enabled,
@@ -385,6 +450,22 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
         excludeLeadingCharacters:
           defaultApplicationSettings.editor.paragraphIndent
             .excludeLeadingCharacters
+      },
+      characterCount: {
+        exclude: {
+          whitespace:
+            defaultApplicationSettings.editor.characterCount.exclude.whitespace,
+          lineBreaks:
+            defaultApplicationSettings.editor.characterCount.exclude.lineBreaks,
+          headings:
+            defaultApplicationSettings.editor.characterCount.exclude.headings,
+          markdownSyntax:
+            defaultApplicationSettings.editor.characterCount.exclude
+              .markdownSyntax,
+          markdownComments:
+            defaultApplicationSettings.editor.characterCount.exclude
+              .markdownComments
+        }
       }
     },
     files: {
@@ -427,7 +508,11 @@ export function resolveEffectiveSettings(
     workbench: {
       language: applicationSettings.workbench.language,
       statusBar: {
-        visible: applicationSettings.workbench.statusBar.visible
+        visible: applicationSettings.workbench.statusBar.visible,
+        characterCount: {
+          visible:
+            applicationSettings.workbench.statusBar.characterCount.visible
+        }
       },
       sound: {
         enabled: applicationSettings.workbench.sound.enabled,
@@ -464,7 +549,8 @@ export function resolveEffectiveSettings(
       // concrete value already (resolved through the catalog at
       // settings.json read time), so no fallback needed here.
       lineEnding: applicationSettings.editor.lineEnding,
-      paragraphIndent: applicationSettings.editor.paragraphIndent
+  paragraphIndent: applicationSettings.editor.paragraphIndent,
+  characterCount: applicationSettings.editor.characterCount
     },
     files: {
       newFile: {

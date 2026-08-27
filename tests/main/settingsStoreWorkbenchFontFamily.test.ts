@@ -34,6 +34,37 @@ const defaultSoundSettings = {
   newline: { enabled: false },
   keypress: { enabled: false }
 };
+const defaultStatusBarSettings = {
+  visible: getCatalogDefaultValue("workbench.statusBar.visible"),
+  characterCount: {
+    visible: getCatalogDefaultValue(
+      "workbench.statusBar.characterCount.visible"
+    )
+  }
+};
+const defaultLineEndingSettings = {
+  expected: getCatalogDefaultValue("editor.lineEnding.expected"),
+  markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
+};
+const defaultCharacterCountSettings = {
+  exclude: {
+    whitespace: getCatalogDefaultValue(
+      "editor.characterCount.exclude.whitespace"
+    ),
+    lineBreaks: getCatalogDefaultValue(
+      "editor.characterCount.exclude.lineBreaks"
+    ),
+    headings: getCatalogDefaultValue(
+      "editor.characterCount.exclude.headings"
+    ),
+    markdownSyntax: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownSyntax"
+    ),
+    markdownComments: getCatalogDefaultValue(
+      "editor.characterCount.exclude.markdownComments"
+    )
+  }
+};
 const recentProjectInput = {
   projectId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
   projectName: "proj",
@@ -162,7 +193,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
 
     expect(written.workbench).toEqual({
       language: "ja",
-      statusBar: { visible: true },
+      statusBar: defaultStatusBarSettings,
       sound: defaultSoundSettings,
       fontFamily: "Fira Code"
     });
@@ -182,7 +213,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
 
     expect(written.workbench).toEqual({
       language: "ja",
-      statusBar: { visible: true },
+      statusBar: defaultStatusBarSettings,
       sound: defaultSoundSettings
     });
     expect(JSON.stringify(written)).not.toContain(catalogDefault);
@@ -204,7 +235,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
 
     expect(written.workbench).toEqual({
       language: "ja",
-      statusBar: { visible: true },
+      statusBar: defaultStatusBarSettings,
       sound: defaultSoundSettings
     });
     expect(JSON.stringify(written)).not.toContain("color: red");
@@ -214,7 +245,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
     const invalidSaveRequest = {
       workbench: {
         language: "ja",
-        statusBar: { visible: true },
+        statusBar: defaultStatusBarSettings,
         sound: defaultSoundSettings,
         fontFamily: 'Fira Code"; color: red'
       },
@@ -224,7 +255,10 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
           marquee: { delay: 2000, speed: 40 }
         }
       },
-      editor: {},
+      editor: {
+        lineEnding: defaultLineEndingSettings,
+        characterCount: defaultCharacterCountSettings
+      },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
       }

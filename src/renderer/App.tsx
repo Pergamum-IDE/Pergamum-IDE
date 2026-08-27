@@ -65,6 +65,10 @@ import {
 } from "./applicationCommands";
 import { subscribeApplicationMenuCommands } from "./applicationMenuBridge";
 import {
+  CHARACTER_COUNT_UPDATE_DEBOUNCE_MS,
+  countMarkdownDocumentCharacters
+} from "./characterCount";
+import {
   applyEditorFontFamily,
   applyWorkbenchFontFamily
 } from "./workbenchFontFamily";
@@ -230,7 +234,6 @@ import {
   editorIdForCurrentDocument,
   findOpenDocument,
   hasOpenDocument,
-  isOnlyInitialUntitledDocument,
   openOrActivateEditor,
   replaceOpenDocument,
   resolveCloseTargetEditorId,
@@ -267,6 +270,7 @@ import {
   utilityWindowCommandIds
 } from "./utilityWindowCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
+import { shouldShowWelcomeSurface } from "./welcomeSurface";
 import {
   clampSidebarWidth,
   clampUtilityWindowHeight,
@@ -288,7 +292,8 @@ import {
   documentWorkspaceTabId,
   specialWorkspaceTabId,
   type SpecialTabId,
-  type SpecialWorkspaceTab
+  type SpecialWorkspaceTab,
+  type WorkspaceTabId
 } from "./workspaceTabs";
 
 interface StatusMessage {
@@ -363,8 +368,10 @@ function projectDocumentPathForReadOnlyRootUi(
   }
 }
 
-function debugEditorIdKind(editorId: EditorId): DebugLogEditorIdKind {
-  return editorId.kind;
+function debugEditorIdKind(
+  editorId: EditorId | null | undefined
+): DebugLogEditorIdKind {
+  return editorId?.kind ?? "unknown";
 }
 
 function debugSaveTargetKind(editor: CurrentEditor): DebugLogSaveTargetKind {
@@ -398,6 +405,10 @@ export function App(): JSX.Element {
 
   const dialogController = dialogControllerRef.current;
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
+  const [statusBarCharacterCount, setStatusBarCharacterCount] = useState<{
+    readonly documentKey: string;
+    readonly count: number;
+  } | null>(null);
   const soundPlaybackWarningReportedRef = useRef(false);
 
   function reportSoundPlaybackFailure(): void {
@@ -662,17 +673,26 @@ export function App(): JSX.Element {
   );
   const nextDocumentOpenId = useMemo(() => createDocumentOpenIdFactory(), []);
 
+  // #262: `activeDocument` / `currentEditor` are null in the zero-tab state
+  // (no open document tab). The Welcome surface is shown then; downstream code
+  // guards on these being non-null rather than assuming an active editor.
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentEditor = activeCurrentEditor(openDocumentsState);
-  const activeMarkdownDocument = markdownDocumentForEditor(currentEditor);
+  const activeMarkdownDocument = currentEditor
+    ? markdownDocumentForEditor(currentEditor)
+    : null;
+  const hasOpenDocumentTab = openDocumentsState.documents.length > 0;
+  // When the Settings tab is the only open tab (zero document tabs), it is the
+  // active surface even though `activeSpecialTabId` may not have been set.
   const isSettingsTabActive =
-    isSettingsTabOpen && activeSpecialTabId === "settings";
+    isSettingsTabOpen &&
+    (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
 
   useEffect(() => {
-    if (currentEditor.kind === "markdown") {
+    if (currentEditor?.kind === "markdown" && activeDocument) {
       lastActiveMarkdownEditorIdRef.current = activeDocument.id;
     }
-  }, [currentEditor, activeDocument.id]);
+  }, [currentEditor, activeDocument?.id]);
   useEffect(() => {
     function handleWindowResize(): void {
       const sidebarContainerWidth = mainAreaRef.current?.clientWidth;
@@ -738,7 +758,7 @@ export function App(): JSX.Element {
   );
   useEffect(() => {
     imeCompositionSaveGuard.clearPendingSave("active_editor_changed");
-  }, [activeDocument.id, imeCompositionSaveGuard]);
+  }, [activeDocument?.id, imeCompositionSaveGuard]);
   useEffect(() => {
     imeCompositionSaveGuard.clearPendingSave("project_context_changed");
   }, [activeProjectContext?.rootPath, imeCompositionSaveGuard]);
@@ -758,30 +778,75 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyEditorFontFamily(effectiveSettings.editor.fontFamily);
   }, [effectiveSettings.editor.fontFamily]);
-  const isDirty = isCurrentEditorDirty(currentEditor);
+  // #262: with no active editor (`currentEditor === null`) this is false, so
+  // the debounced count below never runs and the Status Bar shows nothing —
+  // the #259 character-count algorithm/settings/debounce are untouched.
+  const shouldComputeStatusBarCharacterCount =
+    effectiveSettings.workbench.statusBar.visible &&
+    effectiveSettings.workbench.statusBar.characterCount.visible &&
+    !isSettingsTabActive &&
+    currentEditor?.kind === "markdown";
+  const statusBarCharacterCountDocumentKey =
+    shouldComputeStatusBarCharacterCount && activeDocument
+      ? serializeEditorId(activeDocument.id)
+      : null;
+  const statusBarCharacterCountContent =
+    shouldComputeStatusBarCharacterCount && currentEditor?.kind === "markdown"
+      ? currentDocumentContent(currentEditor.document)
+      : "";
+  useEffect(() => {
+    if (
+      !shouldComputeStatusBarCharacterCount ||
+      statusBarCharacterCountDocumentKey === null
+    ) {
+      setStatusBarCharacterCount(null);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setStatusBarCharacterCount({
+        documentKey: statusBarCharacterCountDocumentKey,
+        count: countMarkdownDocumentCharacters(statusBarCharacterCountContent, {
+          exclude: effectiveSettings.editor.characterCount.exclude
+        })
+      });
+    }, CHARACTER_COUNT_UPDATE_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    shouldComputeStatusBarCharacterCount,
+    statusBarCharacterCountDocumentKey,
+    statusBarCharacterCountContent,
+    effectiveSettings.editor.characterCount.exclude.whitespace,
+    effectiveSettings.editor.characterCount.exclude.lineBreaks,
+    effectiveSettings.editor.characterCount.exclude.headings,
+    effectiveSettings.editor.characterCount.exclude.markdownSyntax,
+    effectiveSettings.editor.characterCount.exclude.markdownComments
+  ]);
+  const isDirty = currentEditor ? isCurrentEditorDirty(currentEditor) : false;
   const isReadOnlyProject = project?.accessMode.kind === "readOnly";
   const isReadWriteProject = project?.accessMode.kind === "readWrite";
   const isProjectOwnedCurrentEditor =
     !isSettingsTabActive &&
-    (currentEditor.kind === "glossaryEntry" ||
-      (currentEditor.kind === "markdown" &&
+    (currentEditor?.kind === "glossaryEntry" ||
+      (currentEditor?.kind === "markdown" &&
         activeMarkdownDocument?.kind === "project"));
   const isReadOnlyProjectOwnedEditor =
     isReadOnlyProject && isProjectOwnedCurrentEditor;
   const isSavingGlossaryEntry =
-    currentEditor.kind === "glossaryEntry" &&
+    currentEditor?.kind === "glossaryEntry" &&
     currentEditor.draft.saveState === "saving";
   const canSaveGlossaryEntry =
-    currentEditor.kind === "glossaryEntry" &&
+    currentEditor?.kind === "glossaryEntry" &&
     !isSavingGlossaryEntry &&
     currentEditor.draft.canonicalSurface.trim().length > 0;
   const canSave =
-    !isSettingsTabActive && currentEditor.kind === "markdown"
+    !isSettingsTabActive && currentEditor?.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
       : !isSettingsTabActive && canSaveGlossaryEntry;
   const canSaveAs =
     !isSettingsTabActive &&
-    currentEditor.kind === "markdown" &&
+    currentEditor?.kind === "markdown" &&
     Boolean(activeMarkdownDocument);
 
   function isInsideCurrentReadOnlyProjectRootForUi(filePath: string): boolean {
@@ -802,7 +867,7 @@ export function App(): JSX.Element {
 
   const activeEditorSaveBlockedByReadOnlyProjectRootForUi =
     !isSettingsTabActive &&
-    currentEditor.kind === "markdown" &&
+    currentEditor?.kind === "markdown" &&
     activeMarkdownDocument &&
     project
       ? (() => {
@@ -823,14 +888,14 @@ export function App(): JSX.Element {
         projectAccessReadWrite: isReadWriteProject,
         projectAccessReadOnly: isReadOnlyProject,
         editorHasDocument:
-          !isSettingsTabActive && currentEditor.kind === "markdown"
+          !isSettingsTabActive && currentEditor?.kind === "markdown"
             ? Boolean(activeMarkdownDocument)
-            : !isSettingsTabActive && currentEditor.kind === "glossaryEntry",
+            : !isSettingsTabActive && currentEditor?.kind === "glossaryEntry",
         editorIsDirty: !isSettingsTabActive && isDirty,
         editorKindMarkdown:
-          !isSettingsTabActive && currentEditor.kind === "markdown",
+          !isSettingsTabActive && currentEditor?.kind === "markdown",
         editorKindGlossary:
-          !isSettingsTabActive && currentEditor.kind === "glossaryEntry",
+          !isSettingsTabActive && currentEditor?.kind === "glossaryEntry",
         editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
         activeEditorSaveBlockedByReadOnlyProjectRootForUi,
         occurrenceTrackingActive:
@@ -841,7 +906,7 @@ export function App(): JSX.Element {
       isReadWriteProject,
       isReadOnlyProject,
       isSettingsTabActive,
-      currentEditor.kind,
+      currentEditor?.kind,
       activeMarkdownDocument,
       isProjectOwnedCurrentEditor,
       activeEditorSaveBlockedByReadOnlyProjectRootForUi,
@@ -855,6 +920,17 @@ export function App(): JSX.Element {
       t(displayLanguage, key, values),
     [displayLanguage]
   );
+  const statusBarNumberFormatter = useMemo(
+    () => new Intl.NumberFormat(displayLanguage),
+    [displayLanguage]
+  );
+  const statusBarCharacterCountText =
+    statusBarCharacterCountDocumentKey !== null &&
+    statusBarCharacterCount?.documentKey === statusBarCharacterCountDocumentKey
+      ? translate("status.characterCount", {
+          count: statusBarNumberFormatter.format(statusBarCharacterCount.count)
+        })
+      : null;
   const commandRegistry = useMemo(() => {
     const registry = new CommandRegistry();
 
@@ -1122,7 +1198,7 @@ export function App(): JSX.Element {
       window.pergamum.contextMenu.onCommandSelected((selection) => {
         void executeContextMenuEditCommand(selection, {
           commandRegistry,
-          editorIdKind: debugEditorIdKind(activeDocument.id),
+          editorIdKind: debugEditorIdKind(activeDocument?.id),
           delegatedSurface: delegatedContextSurfaceFromDocument(),
           hasSelection: hasSelectionInDocument(),
           log: logRendererDebugEvent,
@@ -1152,12 +1228,14 @@ export function App(): JSX.Element {
           });
         });
       }),
-    [activeDocument.id, commandRegistry, translate]
+    [activeDocument?.id, commandRegistry, translate]
   );
-  const shouldShowWelcome =
-    !isSettingsTabOpen &&
-    project === null &&
-    isOnlyInitialUntitledDocument(openDocumentsState);
+  // #262: Welcome is shown exactly when there are zero open tabs of any kind —
+  // independent of whether a project is open.
+  const shouldShowWelcome = shouldShowWelcomeSurface({
+    openDocumentsState,
+    isSettingsTabOpen
+  });
   const activeActivityMode = resolveActiveActivityMode(
     sidebarMode,
     layout.sidebar.collapsed,
@@ -1180,9 +1258,11 @@ export function App(): JSX.Element {
         : [],
     [isSettingsTabOpen, translate]
   );
-  const activeWorkspaceTabId = isSettingsTabActive
+  const activeWorkspaceTabId: WorkspaceTabId | undefined = isSettingsTabActive
     ? specialWorkspaceTabId("settings")
-    : documentWorkspaceTabId(openDocumentsState.activeDocumentId);
+    : openDocumentsState.activeDocumentId
+      ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+      : undefined;
   if (!editorNavigationRef.current) {
     editorNavigationRef.current = new EditorNavigation({
       resolveEditor,
@@ -1624,7 +1704,7 @@ export function App(): JSX.Element {
   ): void {
     if (
       isSettingsTabActive ||
-      currentEditor.kind !== "markdown" ||
+      currentEditor?.kind !== "markdown" ||
       !activeMarkdownDocument ||
       isReadOnlyProjectOwnedEditor
     ) {
@@ -1833,7 +1913,7 @@ export function App(): JSX.Element {
     handleEditContextMenuEvent(event, {
       commandRegistry,
       nextInteractionId: nextContextMenuInteractionId,
-      editorIdKind: debugEditorIdKind(activeDocument.id),
+      editorIdKind: debugEditorIdKind(activeDocument?.id),
       hasSelection: () => hasSelectionInDocument(),
       log: logRendererDebugEvent,
       popupEditMenu: window.pergamum.contextMenu.popupEditMenu
@@ -1846,7 +1926,7 @@ export function App(): JSX.Element {
       level: "debug",
       event: "ime.composition.started",
       details: {
-        editorIdKind: debugEditorIdKind(activeDocument.id),
+        editorIdKind: debugEditorIdKind(activeDocument?.id),
         hasPendingSave: imeCompositionSaveGuard.hasPendingSave(),
         hasScheduledSave: imeCompositionSaveGuard.hasScheduledSave()
       }
@@ -1861,7 +1941,7 @@ export function App(): JSX.Element {
       level: "debug",
       event: "ime.composition.ended",
       details: {
-        editorIdKind: debugEditorIdKind(activeDocument.id),
+        editorIdKind: debugEditorIdKind(activeDocument?.id),
         hasPendingSave: imeCompositionSaveGuard.hasPendingSave(),
         hasScheduledSave: imeCompositionSaveGuard.hasScheduledSave()
       }
@@ -2444,9 +2524,9 @@ export function App(): JSX.Element {
   }
 
   async function saveGlossaryEntry(): Promise<void> {
-    const editorIdKind = debugEditorIdKind(activeDocument.id);
+    const editorIdKind = debugEditorIdKind(activeDocument?.id);
 
-    if (activeDocument.editor.kind !== "glossaryEntry") {
+    if (activeDocument?.editor.kind !== "glossaryEntry") {
       logRendererDebugEvent({
         level: "debug",
         event: "save.skipped",
@@ -2600,7 +2680,7 @@ export function App(): JSX.Element {
   }
 
   async function deleteActiveGlossaryEntry(): Promise<void> {
-    if (activeDocument.editor.kind !== "glossaryEntry") {
+    if (activeDocument?.editor.kind !== "glossaryEntry") {
       return;
     }
 
@@ -2685,7 +2765,7 @@ export function App(): JSX.Element {
     direction: GlossaryOccurrenceDirection
   ): Promise<boolean> {
     if (
-      activeDocument.editor.kind !== "glossaryEntry" ||
+      activeDocument?.editor.kind !== "glossaryEntry" ||
       activeDocument.editor.draft.entry.id !== entryId
     ) {
       return false;
@@ -2917,7 +2997,7 @@ export function App(): JSX.Element {
       ? findOpenDocument(openDocumentsState, options.editorId)
       : activeDocument;
     const editorIdKind = debugEditorIdKind(
-      targetOpenDocument?.id ?? options.editorId ?? activeDocument.id
+      targetOpenDocument?.id ?? options.editorId ?? activeDocument?.id
     );
 
     if (!targetOpenDocument || (!options.editorId && isSettingsTabActive)) {
@@ -3455,7 +3535,7 @@ export function App(): JSX.Element {
   canSaveCurrentDocumentCommandRef.current = () => canSave;
   canSaveCurrentDocumentAsCommandRef.current = () => canSaveAs;
   goToLineCommandRef.current = (line) => {
-    if (currentEditor.kind !== "markdown") {
+    if (currentEditor?.kind !== "markdown") {
       return;
     }
 
@@ -3481,7 +3561,7 @@ export function App(): JSX.Element {
   // lazily split (see createLineJumpEditorSnapshot), so it costs nothing on
   // renders where the Palette isn't open in line mode.
   const lineJumpEditorSnapshot =
-    !isSettingsTabActive && currentEditor.kind === "markdown"
+    !isSettingsTabActive && currentEditor?.kind === "markdown"
       ? createLineJumpEditorSnapshot(
           currentDocumentContent(currentEditor.document)
         )
@@ -3570,7 +3650,9 @@ export function App(): JSX.Element {
           <span>
             {isSettingsTabActive
               ? translate("settings.application.title")
-              : currentEditorTitle(currentEditor)}
+              : currentEditor
+                ? currentEditorTitle(currentEditor)
+                : ""}
           </span>
           {!isSettingsTabActive && isDirty ? (
             <span className="dirtyIndicator">
@@ -3681,10 +3763,14 @@ export function App(): JSX.Element {
                       mode={sidebarMode}
                       project={project}
                       highlightedProjectDocumentRelativePath={
-                        currentEditorProjectRelativePath(currentEditor)
+                        currentEditor
+                          ? currentEditorProjectRelativePath(currentEditor)
+                          : null
                       }
                       highlightedGlossaryEntryId={
-                        currentEditorGlossaryEntryId(currentEditor)
+                        currentEditor
+                          ? currentEditorGlossaryEntryId(currentEditor)
+                          : null
                       }
                       glossaryRefreshToken={glossaryRefreshToken}
                       translate={translate}
@@ -3751,12 +3837,12 @@ export function App(): JSX.Element {
                         void changeSettings(nextSettings);
                       }}
                     />
-                  ) : (
+                  ) : activeDocument ? (
                     <>
                       <EditorSurface
-                        editor={currentEditor}
+                        editor={activeDocument.editor}
                         activeDocumentKey={serializeEditorId(
-                          openDocumentsState.activeDocumentId
+                          activeDocument.id
                         )}
                         previewUpdateDelayMs={
                           effectiveSettings.preview.updateDelayMs
@@ -3817,7 +3903,7 @@ export function App(): JSX.Element {
                           void deleteActiveGlossaryEntry();
                         }}
                         onNavigateToPreviousGlossaryOccurrence={() => {
-                          if (currentEditor.kind === "glossaryEntry") {
+                          if (currentEditor?.kind === "glossaryEntry") {
                             executeUiCommand(
                               glossaryCommandIds.previousOccurrence,
                               { source: "editorSurface" },
@@ -3826,7 +3912,7 @@ export function App(): JSX.Element {
                           }
                         }}
                         onNavigateToNextGlossaryOccurrence={() => {
-                          if (currentEditor.kind === "glossaryEntry") {
+                          if (currentEditor?.kind === "glossaryEntry") {
                             executeUiCommand(
                               glossaryCommandIds.nextOccurrence,
                               { source: "editorSurface" },
@@ -3922,7 +4008,7 @@ export function App(): JSX.Element {
                         </>
                       ) : null}
                     </>
-                  )}
+                  ) : null}
                 </section>
               </section>
             </section>
@@ -3932,7 +4018,14 @@ export function App(): JSX.Element {
 
       {effectiveSettings.workbench.statusBar.visible ? (
         <footer className="statusBar">
-          {translate(status.key, status.values)}
+          <span className="statusBarMessage">
+            {translate(status.key, status.values)}
+          </span>
+          {statusBarCharacterCountText ? (
+            <span className="statusBarCharacterCount">
+              {statusBarCharacterCountText}
+            </span>
+          ) : null}
         </footer>
       ) : null}
 

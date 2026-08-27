@@ -15,6 +15,7 @@ describe("document aggregate metrics (#161)", () => {
   it("documentCharCount is the JS string UTF-16 code unit length", () => {
     expect(documentCharCount("abc")).toBe(3);
     expect(documentCharCount("吾輩は猫である")).toBe(7);
+    expect(documentCharCount("𠮷野家")).toBe(4);
   });
 
   it("documentLineCount counts logical lines split on LF", () => {

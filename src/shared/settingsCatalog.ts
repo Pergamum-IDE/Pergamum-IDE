@@ -496,6 +496,16 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "workbench.statusBar.characterCount.visible": defineBooleanSetting({
+    key: "workbench.statusBar.characterCount.visible",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.workbench.statusBar.characterCount.visible.label",
+    descriptionKey:
+      "settings.workbench.statusBar.characterCount.visible.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "workbench.sound.enabled": defineBooleanSetting({
     key: "workbench.sound.enabled",
     scope: "applicationOnly",
@@ -614,6 +624,56 @@ export const settingsCatalog = defineSettingsCatalog({
     defaultValue: "none",
     labelKey: "settings.editor.lineEnding.markerGlyph.label",
     descriptionKey: "settings.editor.lineEnding.markerGlyph.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.characterCount.exclude.whitespace": defineBooleanSetting({
+    key: "editor.characterCount.exclude.whitespace",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.editor.characterCount.exclude.whitespace.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.whitespace.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.characterCount.exclude.lineBreaks": defineBooleanSetting({
+    key: "editor.characterCount.exclude.lineBreaks",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.editor.characterCount.exclude.lineBreaks.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.lineBreaks.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.characterCount.exclude.headings": defineBooleanSetting({
+    key: "editor.characterCount.exclude.headings",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.editor.characterCount.exclude.headings.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.headings.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.characterCount.exclude.markdownSyntax": defineBooleanSetting({
+    key: "editor.characterCount.exclude.markdownSyntax",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.editor.characterCount.exclude.markdownSyntax.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.markdownSyntax.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.characterCount.exclude.markdownComments": defineBooleanSetting({
+    key: "editor.characterCount.exclude.markdownComments",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.editor.characterCount.exclude.markdownComments.label",
+    descriptionKey:
+      "settings.editor.characterCount.exclude.markdownComments.description",
     deprecatedAliases: [],
     migrationNotes: []
   }),

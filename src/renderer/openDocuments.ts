@@ -1,8 +1,4 @@
-import {
-  createUntitledDocument,
-  isInitialUntitledDocument,
-  type CurrentDocument
-} from "./currentDocument";
+import type { CurrentDocument } from "./currentDocument";
 import {
   createUntitledEditorId,
   editorIdEquals,
@@ -24,9 +20,21 @@ export interface OpenDocument {
   editor: CurrentEditor;
 }
 
+/**
+ * #262: the "zero-tab" state — `documents: []` with `activeDocumentId: null` —
+ * is a legitimate runtime state (Pergamum shows the Welcome surface then), not
+ * a transient or a placeholder-pending state. Every state mutation must keep
+ * this invariant intact:
+ *
+ *   documents.length === 0  ⟺  activeDocumentId === null
+ *   documents.length  >  0  ⟹  activeDocumentId points at one of `documents`
+ *
+ * A non-null `activeDocumentId` that does not match any open document, or a
+ * null `activeDocumentId` while documents exist, is never valid.
+ */
 export interface OpenDocumentsState {
   documents: OpenDocument[];
-  activeDocumentId: EditorId;
+  activeDocumentId: EditorId | null;
   nextUntitledId: number;
 }
 
@@ -67,21 +75,18 @@ function assertEditorIdentityCompatible(
   }
 }
 
+/**
+ * #262: the initial state has no open tabs and no active editor. It does not
+ * fabricate a placeholder `Untitled.md` document — an Untitled Markdown tab
+ * only exists once one is actually created.
+ */
 export function createInitialOpenDocumentsState(
   nextUntitledId = 1
 ): OpenDocumentsState {
-  const untitledId = nextUntitledId;
-  const activeDocumentId = createUntitledEditorId(untitledId);
-
   return {
-    documents: [
-      {
-        id: activeDocumentId,
-        editor: createMarkdownCurrentEditor(createUntitledDocument())
-      }
-    ],
-    activeDocumentId,
-    nextUntitledId: untitledId + 1
+    documents: [],
+    activeDocumentId: null,
+    nextUntitledId
   };
 }
 
@@ -108,7 +113,22 @@ export function createOpenDocumentsStateWithEditor(
   );
 
   if (!stableId) {
-    return createInitialOpenDocumentsState(nextUntitledId);
+    // An Untitled editor has no stable identity, so it gets a session-local
+    // EditorId — the same allocation `openOrActivateEditor` uses. Only
+    // `createInitialOpenDocumentsState` produces the zero-tab state; a real
+    // editor passed here always becomes a one-tab state.
+    const activeDocumentId = createUntitledEditorId(nextUntitledId);
+
+    return {
+      documents: [
+        {
+          id: activeDocumentId,
+          editor
+        }
+      ],
+      activeDocumentId,
+      nextUntitledId: nextUntitledId + 1
+    };
   }
 
   assertEditorIdentityCompatible(editor, stableId);
@@ -125,12 +145,20 @@ export function createOpenDocumentsStateWithEditor(
   };
 }
 
-export function activeOpenDocument(state: OpenDocumentsState): OpenDocument {
-  const activeDocument = state.documents.find(
-    (document) => editorIdEquals(document.id, state.activeDocumentId)
-  );
+export function activeOpenDocument(
+  state: OpenDocumentsState
+): OpenDocument | null {
+  const { activeDocumentId } = state;
 
-  return activeDocument ?? state.documents[0];
+  if (activeDocumentId === null) {
+    return null;
+  }
+
+  return (
+    state.documents.find((document) =>
+      editorIdEquals(document.id, activeDocumentId)
+    ) ?? null
+  );
 }
 
 export function findOpenDocument(
@@ -147,7 +175,8 @@ export function findOpenDocument(
 export function activeCurrentDocument(
   state: OpenDocumentsState
 ): CurrentDocument {
-  const document = markdownDocumentForEditor(activeOpenDocument(state).editor);
+  const active = activeOpenDocument(state);
+  const document = active && markdownDocumentForEditor(active.editor);
 
   if (!document) {
     throw new Error("Active editor is not a Markdown document.");
@@ -158,24 +187,13 @@ export function activeCurrentDocument(
 
 export function activeCurrentEditor(
   state: OpenDocumentsState
-): CurrentEditor {
-  return activeOpenDocument(state).editor;
+): CurrentEditor | null {
+  return activeOpenDocument(state)?.editor ?? null;
 }
 
 export function hasDirtyOpenDocuments(state: OpenDocumentsState): boolean {
   return state.documents.some((openDocument) =>
     isCurrentEditorDirty(openDocument.editor)
-  );
-}
-
-export function isOnlyInitialUntitledDocument(
-  state: OpenDocumentsState
-): boolean {
-  return (
-    state.documents.length === 1 &&
-    state.documents[0].editor.kind === "markdown" &&
-    state.documents[0].editor.document.kind === "untitled" &&
-    isInitialUntitledDocument(state.documents[0].editor.document)
   );
 }
 
@@ -259,19 +277,6 @@ export function openOrActivateEditor(
     return activateOpenDocument(state, stableId);
   }
 
-  if (isOnlyInitialUntitledDocument(state)) {
-    return {
-      ...state,
-      documents: [
-        {
-          id: stableId,
-          editor
-        }
-      ],
-      activeDocumentId: stableId
-    };
-  }
-
   return {
     ...state,
     documents: [
@@ -290,8 +295,9 @@ export function openOrActivateEditor(
  * `editorId` must refer to a currently open document — a stale/unrelated ID
  * resolves to `null` rather than silently falling back to the active editor,
  * so a close request never closes an editor other than the one asked for.
- * Omitting `editorId` targets the active editor, which always exists by
- * construction (`OpenDocumentsState` is never empty).
+ * Omitting `editorId` targets the active editor — or resolves to `null` when
+ * there is no active editor (#262 zero-tab state), so there is nothing to
+ * close.
  */
 export function resolveCloseTargetEditorId(
   state: OpenDocumentsState,
@@ -330,10 +336,19 @@ export function closeOpenEditor(
   );
 
   if (remainingDocuments.length === 0) {
-    return createInitialOpenDocumentsState(state.nextUntitledId);
+    // #262: closing the last tab returns to the zero-tab state (Welcome),
+    // preserving `nextUntitledId` — it never re-seeds a placeholder document.
+    return {
+      ...state,
+      documents: [],
+      activeDocumentId: null
+    };
   }
 
-  if (!editorIdEquals(state.activeDocumentId, editorId)) {
+  if (
+    state.activeDocumentId === null ||
+    !editorIdEquals(state.activeDocumentId, editorId)
+  ) {
     return {
       ...state,
       documents: remainingDocuments
@@ -385,6 +400,10 @@ export function updateActiveOpenDocument(
   state: OpenDocumentsState,
   updateDocument: (document: CurrentDocument) => CurrentDocument
 ): OpenDocumentsState {
+  if (state.activeDocumentId === null) {
+    return state;
+  }
+
   return updateOpenDocument(state, state.activeDocumentId, updateDocument);
 }
 
@@ -392,6 +411,10 @@ export function updateActiveOpenEditor(
   state: OpenDocumentsState,
   updateEditor: (editor: CurrentEditor) => CurrentEditor
 ): OpenDocumentsState {
+  if (state.activeDocumentId === null) {
+    return state;
+  }
+
   return updateOpenEditor(state, state.activeDocumentId, updateEditor);
 }
 
@@ -454,6 +477,7 @@ export function replaceOpenEditor(
       ...state,
       documents,
       activeDocumentId:
+        state.activeDocumentId !== null &&
         editorIdEquals(state.activeDocumentId, editorId)
           ? nextId
           : state.activeDocumentId

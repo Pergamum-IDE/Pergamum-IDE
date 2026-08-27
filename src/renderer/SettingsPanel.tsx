@@ -72,6 +72,14 @@ const soundChildKeys = new Set<SettingKey>([
   "workbench.sound.keypress.enabled"
 ]);
 
+const characterCountExcludeKeys = new Set<SettingKey>([
+  "editor.characterCount.exclude.whitespace",
+  "editor.characterCount.exclude.lineBreaks",
+  "editor.characterCount.exclude.headings",
+  "editor.characterCount.exclude.markdownSyntax",
+  "editor.characterCount.exclude.markdownComments"
+]);
+
 // Presentational only (unit suffix for a number control) — not part of the
 // UI catalog schema, which has no `unit` field on SettingControl.
 const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
@@ -93,6 +101,8 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.workbench.language;
     case "workbench.statusBar.visible":
       return settings.workbench.statusBar.visible;
+    case "workbench.statusBar.characterCount.visible":
+      return settings.workbench.statusBar.characterCount.visible;
     case "workbench.sound.enabled":
       return settings.workbench.sound.enabled;
     case "workbench.sound.dialog.enabled":
@@ -117,6 +127,16 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.editor.lineEnding.expected;
     case "editor.lineEnding.markerGlyph":
       return settings.editor.lineEnding.markerGlyph;
+    case "editor.characterCount.exclude.whitespace":
+      return settings.editor.characterCount.exclude.whitespace;
+    case "editor.characterCount.exclude.lineBreaks":
+      return settings.editor.characterCount.exclude.lineBreaks;
+    case "editor.characterCount.exclude.headings":
+      return settings.editor.characterCount.exclude.headings;
+    case "editor.characterCount.exclude.markdownSyntax":
+      return settings.editor.characterCount.exclude.markdownSyntax;
+    case "editor.characterCount.exclude.markdownComments":
+      return settings.editor.characterCount.exclude.markdownComments;
     case "files.newFile.lineEnding":
       return settings.files.newFile.lineEnding;
     case "files.newFile.encoding":
@@ -227,7 +247,20 @@ function buildNextSettings(
       return saveRequest(settings, {
         workbench: {
           ...settings.workbench,
-          statusBar: { visible: Boolean(rawValue) }
+          statusBar: {
+            ...settings.workbench.statusBar,
+            visible: Boolean(rawValue)
+          }
+        }
+      });
+    case "workbench.statusBar.characterCount.visible":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          statusBar: {
+            ...settings.workbench.statusBar,
+            characterCount: { visible: Boolean(rawValue) }
+          }
         }
       });
     case "workbench.sound.enabled":
@@ -311,6 +344,71 @@ function buildNextSettings(
           }
         }
       });
+    case "editor.characterCount.exclude.whitespace":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          characterCount: {
+            ...settings.editor.characterCount,
+            exclude: {
+              ...settings.editor.characterCount.exclude,
+              whitespace: Boolean(rawValue)
+            }
+          }
+        }
+      });
+    case "editor.characterCount.exclude.lineBreaks":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          characterCount: {
+            ...settings.editor.characterCount,
+            exclude: {
+              ...settings.editor.characterCount.exclude,
+              lineBreaks: Boolean(rawValue)
+            }
+          }
+        }
+      });
+    case "editor.characterCount.exclude.headings":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          characterCount: {
+            ...settings.editor.characterCount,
+            exclude: {
+              ...settings.editor.characterCount.exclude,
+              headings: Boolean(rawValue)
+            }
+          }
+        }
+      });
+    case "editor.characterCount.exclude.markdownSyntax":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          characterCount: {
+            ...settings.editor.characterCount,
+            exclude: {
+              ...settings.editor.characterCount.exclude,
+              markdownSyntax: Boolean(rawValue)
+            }
+          }
+        }
+      });
+    case "editor.characterCount.exclude.markdownComments":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          characterCount: {
+            ...settings.editor.characterCount,
+            exclude: {
+              ...settings.editor.characterCount.exclude,
+              markdownComments: Boolean(rawValue)
+            }
+          }
+        }
+      });
     case "files.newFile.lineEnding":
       return saveRequest(settings, {
         files: {
@@ -376,6 +474,13 @@ function isSettingDisabled(
   }
 
   if (soundChildKeys.has(item.key) && !settings.workbench.sound.enabled) {
+    return true;
+  }
+
+  if (
+    characterCountExcludeKeys.has(item.key) &&
+    !settings.workbench.statusBar.characterCount.visible
+  ) {
     return true;
   }
 

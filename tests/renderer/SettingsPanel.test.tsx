@@ -193,7 +193,9 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
       "settings.workbench.language.label",
       "settings.workbench.language.description",
       "settings.workbench.statusBar.visible.label",
+      "settings.workbench.statusBar.characterCount.visible.label",
       "settings.workbench.sound.enabled.label",
+      "settings.editor.characterCount.exclude.markdownSyntax.label",
       "settings.editor.fontFamily.label",
       "settings.files.newFile.lineEnding.label",
       "settings.files.newFile.lineEnding.option.lf.label",
@@ -315,6 +317,32 @@ describe("SettingsPanelView category behavior (#230)", () => {
     ]);
   });
 
+  it("orders character count settings together within the selected editor category (#259 taxonomy)", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "editor"
+    });
+    const keyElements = collectElements(
+      element,
+      (child) =>
+        child.type === "code" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsItemKey")
+    );
+
+    expect(keyElements.map((el) => el.props.children)).toEqual([
+      "editor.fontFamily",
+      "editor.paragraphIndent.excludeLeadingCharacters",
+      "editor.lineEnding.expected",
+      "editor.lineEnding.markerGlyph",
+      "workbench.statusBar.characterCount.visible",
+      "editor.characterCount.exclude.whitespace",
+      "editor.characterCount.exclude.lineBreaks",
+      "editor.characterCount.exclude.headings",
+      "editor.characterCount.exclude.markdownSyntax",
+      "editor.characterCount.exclude.markdownComments"
+    ]);
+  });
+
   it("orders items within the selected category by catalog order (sound category)", () => {
     const element = settingsPanelViewElement("en", {
       selectedCategoryId: "sound"
@@ -403,7 +431,8 @@ describe("getVisibleSettingCatalogItems search behavior (#230)", () => {
     );
 
     expect(items.map((item) => item.key)).toEqual([
-      "workbench.statusBar.visible"
+      "workbench.statusBar.visible",
+      "workbench.statusBar.characterCount.visible"
     ]);
   });
 
@@ -722,10 +751,78 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
-        statusBar: { visible: false }
+        statusBar: {
+          ...defaultApplicationSettings.workbench.statusBar,
+          visible: false
+        }
       },
       commandPalette: defaultApplicationSettings.commandPalette,
       editor: defaultApplicationSettings.editor,
+      files: defaultApplicationSettings.files
+    });
+  });
+
+  it("saves immediately when the status-bar character count visibility switch changes (#259)", () => {
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.statusBar.characterCount.visible"),
+      onChangeSettings
+    });
+    const input = controlElement(
+      element,
+      "workbench.statusBar.characterCount.visible"
+    );
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: false } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: defaultApplicationSettings.preview,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        statusBar: {
+          ...defaultApplicationSettings.workbench.statusBar,
+          characterCount: { visible: false }
+        }
+      },
+      commandPalette: defaultApplicationSettings.commandPalette,
+      editor: defaultApplicationSettings.editor,
+      files: defaultApplicationSettings.files
+    });
+  });
+
+  it("saves immediately when a character-count exclusion switch changes (#259)", () => {
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("editor.characterCount.exclude.markdownSyntax"),
+      onChangeSettings
+    });
+    const input = controlElement(
+      element,
+      "editor.characterCount.exclude.markdownSyntax"
+    );
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: false } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: defaultApplicationSettings.preview,
+      workbench: defaultApplicationSettings.workbench,
+      commandPalette: defaultApplicationSettings.commandPalette,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        characterCount: {
+          ...defaultApplicationSettings.editor.characterCount,
+          exclude: {
+            ...defaultApplicationSettings.editor.characterCount.exclude,
+            markdownSyntax: false
+          }
+        }
+      },
       files: defaultApplicationSettings.files
     });
   });
@@ -761,9 +858,9 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       editor: {
+        ...defaultApplicationSettings.editor,
         fontFamily: "Fira Code",
-        lineEnding: defaultApplicationSettings.editor.lineEnding,
-        paragraphIndent: defaultApplicationSettings.editor.paragraphIndent
+        lineEnding: defaultApplicationSettings.editor.lineEnding
       }
     };
     const onChangeSettings = vi.fn();
@@ -785,7 +882,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       commandPalette: settings.commandPalette,
       editor: {
         lineEnding: settings.editor.lineEnding,
-        paragraphIndent: settings.editor.paragraphIndent
+        paragraphIndent: settings.editor.paragraphIndent,
+        characterCount: settings.editor.characterCount
       },
       files: settings.files
     });
@@ -1010,6 +1108,61 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
       controlElement(element, "workbench.sound.keypress.enabled").props
         .disabled
     ).toBe(true);
+  });
+
+  it("disables character-count exclude controls when the status-bar character count toggle is off, preserving their stored values (#259)", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        statusBar: {
+          ...defaultApplicationSettings.workbench.statusBar,
+          characterCount: { visible: false }
+        }
+      },
+      editor: {
+        ...defaultApplicationSettings.editor,
+        characterCount: {
+          exclude: {
+            ...defaultApplicationSettings.editor.characterCount.exclude,
+            whitespace: false,
+            markdownSyntax: true
+          }
+        }
+      }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "editor"
+    });
+
+    expect(
+      controlElement(element, "editor.characterCount.exclude.whitespace").props
+        .disabled
+    ).toBe(true);
+    expect(
+      controlElement(element, "editor.characterCount.exclude.whitespace").props
+        .checked
+    ).toBe(false);
+    expect(
+      controlElement(element, "editor.characterCount.exclude.markdownSyntax")
+        .props.disabled
+    ).toBe(true);
+  });
+
+  it("enables character-count exclude controls when the status-bar character count toggle is on (#259)", () => {
+    const element = settingsPanelViewElement("en", {
+      selectedCategoryId: "editor"
+    });
+
+    expect(
+      controlElement(element, "editor.characterCount.exclude.whitespace").props
+        .disabled
+    ).toBe(false);
+    expect(
+      controlElement(element, "editor.characterCount.exclude.markdownComments")
+        .props.disabled
+    ).toBe(false);
   });
 
   it("does not render workbench.advancedSettings.enabled as a setting item anywhere in the catalog-driven view", () => {

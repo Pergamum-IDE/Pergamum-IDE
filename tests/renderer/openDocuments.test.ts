@@ -23,9 +23,11 @@ import {
   openOrActivateEditor,
   openOrActivateDocument,
   replaceOpenDocument,
+  createOpenDocumentsStateWithEditor,
   resolveCloseTargetEditorId,
   updateActiveOpenDocument,
-  updateActiveOpenEditor
+  updateActiveOpenEditor,
+  type OpenDocumentsState
 } from "../../src/renderer/openDocuments";
 import {
   createEditorIdForPath,
@@ -268,42 +270,60 @@ describe("OpenDocumentsState", () => {
   });
 
   it("keeps untitled EditorIds session-stable while allocating new untitled IDs", () => {
-    const initialState = createInitialOpenDocumentsState();
-    const initialEditorId = initialState.activeDocumentId;
-    const updatedState = updateActiveOpenDocument(initialState, (document) =>
-      updateCurrentDocumentContent(document, "changed")
+    const firstState = openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createUntitledDocument(),
+      projectContext
     );
+    const firstEditorId = firstState.activeDocumentId;
     const nextState = openOrActivateDocument(
-      updatedState,
+      firstState,
       createUntitledDocument(),
       projectContext
     );
 
-    expect(editorIdEquals(updatedState.activeDocumentId, initialEditorId)).toBe(
-      true
-    );
+    expect(
+      editorIdEquals(firstEditorId as EditorId, createUntitledEditorId(1))
+    ).toBe(true);
+    // Opening the second Untitled tab must not renumber the first.
+    expect(
+      editorIdEquals(firstState.activeDocumentId as EditorId, firstEditorId as EditorId)
+    ).toBe(true);
     expect(nextState.documents).toHaveLength(2);
     expect(
-      editorIdEquals(nextState.activeDocumentId, createUntitledEditorId(2))
+      editorIdEquals(
+        nextState.activeDocumentId as EditorId,
+        createUntitledEditorId(2)
+      )
     ).toBe(true);
     expect(nextState.nextUntitledId).toBe(3);
   });
 
-  it("does not reuse untitled session IDs after an OpenDocumentsState reset", () => {
-    const firstState = createInitialOpenDocumentsState();
-    const resetState = createInitialOpenDocumentsState(
-      firstState.nextUntitledId
+  it("does not reuse untitled session IDs across an OpenDocumentsState reset", () => {
+    const firstState = openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createUntitledDocument(),
+      projectContext
+    );
+    // A reset threads `nextUntitledId` forward from the state being replaced.
+    const resetState = openOrActivateDocument(
+      createInitialOpenDocumentsState(firstState.nextUntitledId),
+      createUntitledDocument(),
+      projectContext
     );
 
     expect(
-      editorIdEquals(firstState.activeDocumentId, createUntitledEditorId(1))
+      editorIdEquals(
+        firstState.activeDocumentId as EditorId,
+        createUntitledEditorId(1)
+      )
     ).toBe(true);
     expect(
-      editorIdEquals(resetState.activeDocumentId, createUntitledEditorId(2))
+      editorIdEquals(
+        resetState.activeDocumentId as EditorId,
+        createUntitledEditorId(2)
+      )
     ).toBe(true);
-    expect(
-      editorIdEquals(firstState.activeDocumentId, resetState.activeDocumentId)
-    ).toBe(false);
   });
 
   it("allows replacement with a file CurrentDocument inside the project root", () => {
@@ -342,7 +362,7 @@ describe("OpenDocumentsState", () => {
     ).toBe(true);
   });
 
-  it("replaces the initial untitled tab when a project document is opened", () => {
+  it("opens a project document into the empty zero-tab initial state (#262)", () => {
     const state = openOrActivateDocument(
       createInitialOpenDocumentsState(),
       createProjectDocument(secondProjectDocument, "second"),
@@ -609,7 +629,7 @@ describe("OpenDocumentsState", () => {
     );
   });
 
-  it("falls back to the existing initial state when closing the last open tab", () => {
+  it("returns to the empty zero-tab state when closing the last open tab (#262)", () => {
     const glossaryEditorId = createGlossaryEntryEditorId(
       glossaryEntry.id,
       projectContext
@@ -622,25 +642,147 @@ describe("OpenDocumentsState", () => {
 
     const nextState = closeOpenEditor(seededState, glossaryEditorId);
 
-    expect(nextState.documents).toHaveLength(1);
-    expect(nextState.documents[0].editor.kind).toBe("markdown");
+    // #262: no placeholder Untitled tab is re-seeded — `nextUntitledId` is
+    // preserved so future Untitled tabs still get fresh session IDs.
+    expect(nextState.documents).toHaveLength(0);
+    expect(nextState.activeDocumentId).toBeNull();
+    expect(nextState.nextUntitledId).toBe(5);
+  });
+});
+
+describe("OpenDocumentsState zero-tab invariant (#262)", () => {
+  function expectConsistent(state: OpenDocumentsState): void {
+    if (state.documents.length === 0) {
+      expect(state.activeDocumentId).toBeNull();
+      return;
+    }
+
+    expect(state.activeDocumentId).not.toBeNull();
     expect(
-      editorIdEquals(nextState.activeDocumentId, createUntitledEditorId(6))
+      state.documents.some((document) =>
+        editorIdEquals(document.id, state.activeDocumentId as EditorId)
+      )
     ).toBe(true);
-    expect(nextState.nextUntitledId).toBe(7);
+  }
+
+  it("the initial state has no tabs, no active editor, and no placeholder document", () => {
+    const state = createInitialOpenDocumentsState();
+
+    expect(state.documents).toEqual([]);
+    expect(state.activeDocumentId).toBeNull();
+    expectConsistent(state);
+  });
+
+  it("only createInitialOpenDocumentsState makes a zero-tab state — a real Untitled document seeds a one-tab state", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createUntitledDocument(),
+      null
+    );
+
+    expect(state.documents).toHaveLength(1);
+    expect(state.activeDocumentId).not.toBeNull();
+    expect(
+      editorIdEquals(
+        state.activeDocumentId as EditorId,
+        createUntitledEditorId(1)
+      )
+    ).toBe(true);
+    expect(state.documents[0].editor.document.kind).toBe("untitled");
+    expect(state.nextUntitledId).toBe(2);
+    expectConsistent(state);
+  });
+
+  it("createOpenDocumentsStateWithEditor allocates a session-local EditorId for an Untitled editor", () => {
+    const state = createOpenDocumentsStateWithEditor(
+      createMarkdownCurrentEditor(createUntitledDocument()),
+      null,
+      5
+    );
+
+    expect(state.documents).toHaveLength(1);
+    expect(
+      editorIdEquals(
+        state.activeDocumentId as EditorId,
+        createUntitledEditorId(5)
+      )
+    ).toBe(true);
+    expect(state.nextUntitledId).toBe(6);
+    expectConsistent(state);
+  });
+
+  it("holds through open / activate / close / reset transitions", () => {
+    const projectDocumentEditorId = createProjectDocumentEditorId(
+      "chapter-01.md",
+      projectContext
+    );
+
+    let state: OpenDocumentsState = createInitialOpenDocumentsState();
+    expectConsistent(state);
+
+    // open -> 1 tab, active is the opened document
+    state = openOrActivateDocument(
+      state,
+      createProjectDocument(firstProjectDocument, "content"),
+      projectContext
+    );
+    expectConsistent(state);
+    expect(
+      editorIdEquals(
+        state.activeDocumentId as EditorId,
+        projectDocumentEditorId
+      )
+    ).toBe(true);
+
+    // open a second tab, then re-activate the first
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+    expectConsistent(state);
+    state = activateOpenDocument(state, projectDocumentEditorId);
+    expectConsistent(state);
+
+    // close the inactive tab -> still consistent, still 1 tab
+    state = closeOpenEditor(
+      state,
+      createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+    );
+    expectConsistent(state);
+    expect(state.documents).toHaveLength(1);
+
+    // close the last tab -> back to the zero-tab state
+    state = closeOpenEditor(state, projectDocumentEditorId);
+    expectConsistent(state);
+    expect(state.documents).toHaveLength(0);
+
+    // reset (project context switch) keeps it consistent and empty
+    state = createInitialOpenDocumentsState(state.nextUntitledId);
+    expectConsistent(state);
+    expect(state.documents).toHaveLength(0);
   });
 });
 
 describe("resolveCloseTargetEditorId (#184)", () => {
   it("resolves to the active editor when no editorId is given", () => {
-    const state = createInitialOpenDocumentsState();
+    const state = openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createUntitledDocument(),
+      projectContext
+    );
 
     expect(
       editorIdEquals(
         resolveCloseTargetEditorId(state, undefined) as EditorId,
-        state.activeDocumentId
+        state.activeDocumentId as EditorId
       )
     ).toBe(true);
+  });
+
+  it("resolves to null when there are no open tabs (#262 zero-tab state)", () => {
+    expect(
+      resolveCloseTargetEditorId(createInitialOpenDocumentsState(), undefined)
+    ).toBeNull();
   });
 
   it("resolves an explicit editorId that is open, even if it is not active", () => {
@@ -684,20 +826,30 @@ describe("resolveCloseTargetEditorId (#184)", () => {
 
 describe("isOpenDocumentDirty (#184)", () => {
   it("is false for a clean document", () => {
-    const state = createInitialOpenDocumentsState();
+    const state = openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createUntitledDocument(),
+      projectContext
+    );
 
-    expect(isOpenDocumentDirty(state, state.activeDocumentId)).toBe(false);
+    expect(
+      isOpenDocumentDirty(state, state.activeDocumentId as EditorId)
+    ).toBe(false);
   });
 
   it("is true once the document's content has changed", () => {
-    const initialState = createInitialOpenDocumentsState();
+    const initialState = openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createUntitledDocument(),
+      projectContext
+    );
     const dirtyState = updateActiveOpenDocument(initialState, (document) =>
       updateCurrentDocumentContent(document, "changed")
     );
 
-    expect(isOpenDocumentDirty(dirtyState, dirtyState.activeDocumentId)).toBe(
-      true
-    );
+    expect(
+      isOpenDocumentDirty(dirtyState, dirtyState.activeDocumentId as EditorId)
+    ).toBe(true);
   });
 
   it("is false for an editorId that is not open", () => {
