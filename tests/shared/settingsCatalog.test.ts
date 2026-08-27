@@ -264,6 +264,9 @@ describe("Settings Catalog Foundation (#150)", () => {
         string
       >();
       expectTypeOf(
+        getCatalogDefaultValue("editor.paragraphIndent.excludeLeadingCharacters")
+      ).toEqualTypeOf<string>();
+      expectTypeOf(
         getCatalogDefaultValue("workbench.colorTheme")
       ).toEqualTypeOf<string>();
       expectTypeOf(
@@ -334,6 +337,27 @@ describe("Settings Catalog Foundation (#150)", () => {
         ok: false,
         failure: "emptyString"
       });
+    });
+
+    it("allows an empty string only for paragraph indent excluded leading characters", () => {
+      expect(
+        validateCatalogValue(
+          "editor.paragraphIndent.excludeLeadingCharacters",
+          ""
+        )
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue(
+          "editor.paragraphIndent.excludeLeadingCharacters",
+          "「『（"
+        )
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue(
+          "editor.paragraphIndent.excludeLeadingCharacters",
+          42
+        )
+      ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
     it("rejects a string longer than maxLength", () => {
@@ -962,7 +986,8 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.whitespace",
         "editor.fontFamily",
         "editor.lineEnding.expected",
-        "editor.lineEnding.markerGlyph"
+        "editor.lineEnding.markerGlyph",
+        "editor.paragraphIndent.excludeLeadingCharacters"
       ]);
     });
 
@@ -1009,6 +1034,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.fontFamily",
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
+          "editor.paragraphIndent.excludeLeadingCharacters",
           "files.newFile.encoding",
           "files.newFile.lineEnding",
           "preview.renderer",
@@ -1054,6 +1080,20 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogDefaultValue("editor.lineEnding.markerGlyph")).toBe(
         "none"
       );
+    });
+
+    it("editor.paragraphIndent.excludeLeadingCharacters is an applicationOnly free-form string with an empty default", () => {
+      const entry = getCatalogEntry(
+        "editor.paragraphIndent.excludeLeadingCharacters"
+      );
+
+      expect(entry).toMatchObject({
+        type: "string",
+        scope: "applicationOnly",
+        defaultValue: "",
+        allowedCharacters: "none",
+        allowEmptyString: true
+      });
     });
 
     it("files.newFile.lineEnding's enum values are exactly ['lf', 'crlf']", () => {
@@ -1356,6 +1396,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(settingsStoreSource).toContain("resolveCatalogValue");
       expect(settingsStoreSource).toContain('"files.newFile.lineEnding"');
       expect(settingsStoreSource).toContain('"files.newFile.encoding"');
+      expect(settingsStoreSource).toContain(
+        '"editor.paragraphIndent.excludeLeadingCharacters"'
+      );
       expect(settingsStoreSource).not.toContain(
         '"workbench.advancedSettings.enabled"'
       );
@@ -1378,6 +1421,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
       expect(settingsSource).toContain(
         'getCatalogDefaultValue("files.newFile.encoding")'
+      );
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue(\n        "editor.paragraphIndent.excludeLeadingCharacters"\n      )'
       );
       expect(settingsSource).not.toContain(
         'getCatalogDefaultValue("workbench.advancedSettings.enabled")'
@@ -1410,6 +1456,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(Object.keys(settingsCatalog)).toEqual(
         expect.arrayContaining([
           "editor.fontFamily",
+          "editor.paragraphIndent.excludeLeadingCharacters",
           "workbench.colorTheme",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
@@ -1445,6 +1492,7 @@ describe("Settings Catalog Foundation (#150)", () => {
 
       for (const applicationSettingsOnlyKey of [
         "editor.fontFamily",
+        "editor.paragraphIndent.excludeLeadingCharacters",
         "files.newFile.lineEnding",
         "files.newFile.encoding",
         "workbench.sound.enabled",

@@ -31,6 +31,7 @@ export type {
   LineEndingMarkerGlyph,
   NewFileEncoding,
   NewFileLineEnding,
+  ParagraphIndentExcludeLeadingCharacters,
   PreviewRendererId,
   RecordRecentProjectInput,
   ProjectSettings,

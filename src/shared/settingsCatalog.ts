@@ -60,10 +60,9 @@ export type SettingValueType = "boolean" | "string" | "number" | "enum";
 /**
  * `fontFamilyName` / `themeName` are allowlist policies (see the character
  * pattern constants below for the exact allowed character sets). `none` is
- * an explicit placeholder for a string setting with no character policy yet
- * — it still rejects non-string, empty (after trim), and over-length
- * values. The production catalog never uses `none`; it exists for fixture
- * catalog tests only.
+ * an explicit placeholder for a string setting with no character policy.
+ * `none` is used for free-form string settings whose validation is limited
+ * to type/length/empty-string policy rather than a character allowlist.
  */
 export type AllowedCharacterPolicy = "fontFamilyName" | "themeName" | "none";
 
@@ -99,6 +98,7 @@ export interface StringSettingEntry<TKey extends string = string>
   readonly defaultValue: string;
   readonly maxLength: number;
   readonly allowedCharacters: AllowedCharacterPolicy;
+  readonly allowEmptyString?: boolean;
 }
 
 export interface EnumSettingEntry<
@@ -215,7 +215,7 @@ function validateStringValue(
     return { ok: false, failure: "typeMismatch" };
   }
 
-  if (value.trim().length === 0) {
+  if (value.trim().length === 0 && entry.allowEmptyString !== true) {
     return { ok: false, failure: "emptyString" };
   }
 
@@ -324,6 +324,7 @@ export interface DefineStringSettingInput<TKey extends string>
   defaultValue: string;
   maxLength: number;
   allowedCharacters: AllowedCharacterPolicy;
+  allowEmptyString?: boolean;
 }
 
 // Intentional public catalog DSL helper (ADR-0006 S-9 typed string setting
@@ -580,6 +581,19 @@ export const settingsCatalog = defineSettingsCatalog({
     descriptionKey: "settings.editor.fontFamily.description",
     maxLength: 128,
     allowedCharacters: "fontFamilyName",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.paragraphIndent.excludeLeadingCharacters": defineStringSetting({
+    key: "editor.paragraphIndent.excludeLeadingCharacters",
+    scope: "applicationOnly",
+    defaultValue: "",
+    labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+    descriptionKey:
+      "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
+    maxLength: 256,
+    allowedCharacters: "none",
+    allowEmptyString: true,
     deprecatedAliases: [],
     migrationNotes: []
   }),

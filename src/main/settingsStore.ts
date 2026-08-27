@@ -266,6 +266,19 @@ function readLineEndingSettings(
   };
 }
 
+function readParagraphIndentSettings(
+  value: unknown
+): ApplicationSettings["editor"]["paragraphIndent"] {
+  const paragraphIndentValue = isObject(value) ? value : undefined;
+
+  return {
+    excludeLeadingCharacters: resolveCatalogValue(
+      "editor.paragraphIndent.excludeLeadingCharacters",
+      paragraphIndentValue?.excludeLeadingCharacters
+    ).value
+  };
+}
+
 function readCharacterCountExcludeSettings(
   value: unknown
 ): ApplicationSettings["editor"]["characterCount"]["exclude"] {
@@ -308,6 +321,9 @@ function readCharacterCountSettings(
 function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   const editorValue = isObject(value) ? value : undefined;
   const lineEnding = readLineEndingSettings(editorValue?.lineEnding);
+  const paragraphIndent = readParagraphIndentSettings(
+    editorValue?.paragraphIndent
+  );
   const characterCount = readCharacterCountSettings(
     editorValue?.characterCount
   );
@@ -317,10 +333,15 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     typeof editorValue.fontFamily !== "string" ||
     !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
   ) {
-    return { lineEnding, characterCount };
+    return { lineEnding, paragraphIndent, characterCount };
   }
 
-  return { fontFamily: editorValue.fontFamily, lineEnding, characterCount };
+  return {
+    fontFamily: editorValue.fontFamily,
+    lineEnding,
+    paragraphIndent,
+    characterCount
+  };
 }
 
 function readNewFileSettings(
@@ -781,6 +802,33 @@ function parseLineEndingSettingsForWrite(
   };
 }
 
+function parseParagraphIndentSettingsForWrite(
+  value: unknown
+): ApplicationSettings["editor"]["paragraphIndent"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("excludeLeadingCharacters")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const excludeLeadingCharactersResolution = resolveCatalogValue(
+    "editor.paragraphIndent.excludeLeadingCharacters",
+    value.excludeLeadingCharacters
+  );
+
+  if (!excludeLeadingCharactersResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    excludeLeadingCharacters: excludeLeadingCharactersResolution.value
+  };
+}
+
 function parseCharacterCountExcludeSettingsForWrite(
   value: unknown
 ): ApplicationSettings["editor"]["characterCount"]["exclude"] {
@@ -869,23 +917,32 @@ function parseEditorSettingsForWrite(
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
   const hasLineEnding = keys.includes("lineEnding");
+  const hasParagraphIndent = keys.includes("paragraphIndent");
   const hasCharacterCount = keys.includes("characterCount");
 
   if (
     !hasLineEnding ||
+    !hasParagraphIndent ||
     !hasCharacterCount ||
-    keys.length !== (hasFontFamily ? 3 : 2)
+    keys.length !== (hasFontFamily ? 4 : 3)
   ) {
     throw new Error("Invalid application settings.");
   }
 
   const lineEnding = parseLineEndingSettingsForWrite(value.lineEnding);
+  const paragraphIndent = parseParagraphIndentSettingsForWrite(
+    value.paragraphIndent
+  );
   const characterCount = parseCharacterCountSettingsForWrite(
     value.characterCount
   );
 
   if (!hasFontFamily) {
-    return { lineEnding, characterCount };
+    return {
+      lineEnding,
+      paragraphIndent,
+      characterCount
+    };
   }
 
   if (
@@ -898,6 +955,7 @@ function parseEditorSettingsForWrite(
   return {
     fontFamily: value.fontFamily,
     lineEnding,
+    paragraphIndent,
     characterCount
   };
 }

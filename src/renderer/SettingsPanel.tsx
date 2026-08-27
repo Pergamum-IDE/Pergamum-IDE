@@ -121,6 +121,8 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return (
         settings.editor.fontFamily ?? getCatalogDefaultValue("editor.fontFamily")
       );
+    case "editor.paragraphIndent.excludeLeadingCharacters":
+      return settings.editor.paragraphIndent.excludeLeadingCharacters;
     case "editor.lineEnding.expected":
       return settings.editor.lineEnding.expected;
     case "editor.lineEnding.markerGlyph":
@@ -206,6 +208,16 @@ function buildNextSettings(
     case "editor.fontFamily":
       return saveRequest(settings, {
         editor: withFontFamily(settings.editor, fontFamilyValue(String(rawValue)))
+      });
+    case "editor.paragraphIndent.excludeLeadingCharacters":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          paragraphIndent: {
+            ...settings.editor.paragraphIndent,
+            excludeLeadingCharacters: String(rawValue)
+          }
+        }
       });
     case "editor.lineEnding.expected":
       return saveRequest(settings, {

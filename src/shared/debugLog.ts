@@ -1,5 +1,6 @@
 import {
   applicationCommandIds,
+  assistCommandIds,
   commandPaletteCommandIds,
   editCommandIds,
   editorCommandIds
@@ -505,6 +506,9 @@ export const knownDebugLogCommandIds = [
   editorCommandIds.close,
   applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open,
+  assistCommandIds.showLineEndingDistribution,
+  assistCommandIds.insertParagraphIndent,
+  assistCommandIds.removeParagraphIndent,
   ...editCommandIds,
   "workspace.files.focus",
   "workspace.search.focus",

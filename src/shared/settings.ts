@@ -105,10 +105,17 @@ export type ExpectedLineEnding = SettingValueOf<"editor.lineEnding.expected">;
 export type LineEndingMarkerGlyph = SettingValueOf<
   "editor.lineEnding.markerGlyph"
 >;
+export type ParagraphIndentExcludeLeadingCharacters = SettingValueOf<
+  "editor.paragraphIndent.excludeLeadingCharacters"
+>;
 
 export interface ApplicationEditorLineEndingSettings {
   expected: ExpectedLineEnding;
   markerGlyph: LineEndingMarkerGlyph;
+}
+
+export interface ApplicationEditorParagraphIndentSettings {
+  excludeLeadingCharacters: ParagraphIndentExcludeLeadingCharacters;
 }
 
 export interface ApplicationEditorCharacterCountExcludeSettings {
@@ -126,6 +133,7 @@ export interface ApplicationEditorCharacterCountSettings {
 export interface ApplicationEditorSettings {
   fontFamily?: string;
   lineEnding: ApplicationEditorLineEndingSettings;
+  paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
 }
 
@@ -200,6 +208,7 @@ export interface EffectiveCommandPaletteSettings {
 export interface EffectiveEditorSettings {
   fontFamily: string;
   lineEnding: ApplicationEditorLineEndingSettings;
+  paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
 }
 
@@ -282,6 +291,11 @@ export const builtInDefaultSettings: EffectiveSettings = {
       expected: getCatalogDefaultValue("editor.lineEnding.expected"),
       markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
     },
+    paragraphIndent: {
+      excludeLeadingCharacters: getCatalogDefaultValue(
+        "editor.paragraphIndent.excludeLeadingCharacters"
+      )
+    },
     characterCount: {
       exclude: {
         whitespace: getCatalogDefaultValue(
@@ -360,6 +374,10 @@ export const defaultApplicationSettings: ApplicationSettings = {
       expected: builtInDefaultSettings.editor.lineEnding.expected,
       markerGlyph: builtInDefaultSettings.editor.lineEnding.markerGlyph
     },
+    paragraphIndent: {
+      excludeLeadingCharacters:
+        builtInDefaultSettings.editor.paragraphIndent.excludeLeadingCharacters
+    },
     characterCount: {
       exclude: {
         whitespace:
@@ -427,6 +445,11 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       lineEnding: {
         expected: defaultApplicationSettings.editor.lineEnding.expected,
         markerGlyph: defaultApplicationSettings.editor.lineEnding.markerGlyph
+      },
+      paragraphIndent: {
+        excludeLeadingCharacters:
+          defaultApplicationSettings.editor.paragraphIndent
+            .excludeLeadingCharacters
       },
       characterCount: {
         exclude: {
@@ -526,7 +549,8 @@ export function resolveEffectiveSettings(
       // concrete value already (resolved through the catalog at
       // settings.json read time), so no fallback needed here.
       lineEnding: applicationSettings.editor.lineEnding,
-      characterCount: applicationSettings.editor.characterCount
+  paragraphIndent: applicationSettings.editor.paragraphIndent,
+  characterCount: applicationSettings.editor.characterCount
     },
     files: {
       newFile: {

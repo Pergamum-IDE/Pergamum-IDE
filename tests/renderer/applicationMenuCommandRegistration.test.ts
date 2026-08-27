@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applicationMenuCommandIds } from "../../src/shared/commandIds";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
 import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
+import { registerAssistCommands } from "../../src/renderer/assistCommands";
 import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 
@@ -34,7 +35,9 @@ describe("application menu command registration", () => {
       {
         openMarkdownDocument: () => undefined,
         saveCurrentDocument: () => undefined,
+        saveCurrentDocumentAs: () => undefined,
         canSaveCurrentDocument: () => true,
+        canSaveCurrentDocumentAs: () => true,
         closeEditor: () => undefined,
         canCloseEditor: () => true,
         delegateNativeEditCommand: () => undefined,
@@ -42,12 +45,37 @@ describe("application menu command registration", () => {
       },
       {
         openMarkdownDocument: "Open Markdown File",
+        openMarkdownDocumentDescription: "Open Markdown File",
         saveDocument: "Save",
+        saveDocumentDescription: "Save",
+        saveAs: "Save As",
+        saveAsDescription: "Save As",
         closeEditor: "Close Current Document",
+        closeEditorDescription: "Close Current Document",
         cutSelection: "Cut",
+        cutSelectionDescription: "Cut",
         copySelection: "Copy",
+        copySelectionDescription: "Copy",
         pasteSelection: "Paste",
-        selectAllSelection: "Select All"
+        pasteSelectionDescription: "Paste",
+        selectAllSelection: "Select All",
+        selectAllSelectionDescription: "Select All"
+      }
+    );
+    registerAssistCommands(
+      registry,
+      {
+        showLineEndingDistribution: () => undefined,
+        insertParagraphIndent: () => undefined,
+        removeParagraphIndent: () => undefined
+      },
+      {
+        showLineEndingDistribution: "Show Line Ending Distribution",
+        showLineEndingDistributionDescription: "Show line endings",
+        insertParagraphIndent: "Insert Paragraph Indents",
+        insertParagraphIndentDescription: "Insert paragraph indents",
+        removeParagraphIndent: "Remove Paragraph Indents",
+        removeParagraphIndentDescription: "Remove paragraph indents"
       }
     );
     registerCommandPaletteCommands(

@@ -274,9 +274,8 @@ function commandPaletteF1MenuItem(
 }
 
 /**
- * #252: foundation for future line-ending diagnostics, paragraph
- * indentation, invisible characters, and document diagnostics — only the
- * line-ending distribution item is added here.
+ * Assist menu for document-level support commands. It currently hosts
+ * line-ending diagnostics and paragraph indentation bulk operations.
  */
 function assistMenu(
   language: Language,
@@ -289,6 +288,18 @@ function assistMenu(
         assistCommandIds.showLineEndingDistribution,
         language,
         "menu.assist.showLineEndingDistribution",
+        options
+      ),
+      commandMenuItem(
+        assistCommandIds.insertParagraphIndent,
+        language,
+        "menu.assist.paragraphIndent.insert",
+        options
+      ),
+      commandMenuItem(
+        assistCommandIds.removeParagraphIndent,
+        language,
+        "menu.assist.paragraphIndent.remove",
         options
       )
     ]

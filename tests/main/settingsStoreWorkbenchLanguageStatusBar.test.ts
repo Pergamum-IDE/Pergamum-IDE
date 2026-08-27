@@ -32,11 +32,17 @@ const languageDefault = getCatalogDefaultValue("workbench.language");
 const statusBarVisibleDefault = getCatalogDefaultValue(
   "workbench.statusBar.visible"
 );
-// #252: editor.lineEnding.* is always-resolved (non-sparse), unlike
-// fontFamily — every save request's `editor` must carry it.
+// #252/#257: editor.lineEnding.* and editor.paragraphIndent.* are
+// always-resolved (non-sparse), unlike fontFamily — every save request's
+// `editor` must carry them.
 const defaultLineEndingSettings = {
   expected: getCatalogDefaultValue("editor.lineEnding.expected"),
   markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
+};
+const defaultParagraphIndentSettings = {
+  excludeLeadingCharacters: getCatalogDefaultValue(
+    "editor.paragraphIndent.excludeLeadingCharacters"
+  )
 };
 const defaultCharacterCountSettings = {
   exclude: {
@@ -108,6 +114,7 @@ function saveRequest(
     },
     editor: {
       lineEnding: defaultLineEndingSettings,
+      paragraphIndent: defaultParagraphIndentSettings,
       characterCount: defaultCharacterCountSettings
     },
     files: {
@@ -437,6 +444,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       },
       editor: {
         lineEnding: defaultLineEndingSettings,
+        paragraphIndent: defaultParagraphIndentSettings,
         characterCount: defaultCharacterCountSettings
       },
       files: {
@@ -467,6 +475,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       },
       editor: {
         lineEnding: defaultLineEndingSettings,
+        paragraphIndent: defaultParagraphIndentSettings,
         characterCount: defaultCharacterCountSettings
       },
       files: {

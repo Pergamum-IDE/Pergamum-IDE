@@ -2,6 +2,7 @@ import type { Command, CommandRegistry } from "../shared/commandRegistry";
 import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import { assistCommandIds } from "../shared/commandIds";
 import type { Translate } from "../shared/i18n";
+import { projectOwnedWriteAllowedCommandWhen } from "./editorCommands";
 
 export { assistCommandIds };
 
@@ -16,13 +17,27 @@ export const showLineEndingDistributionCommandWhen: CommandEnablementExpression 
     key: "editor.kind.markdown"
   };
 
+export const paragraphIndentCommandWhen: CommandEnablementExpression = {
+  allOf: [
+    { key: "editor.hasDocument" },
+    { key: "editor.kind.markdown" },
+    projectOwnedWriteAllowedCommandWhen
+  ]
+};
+
 export interface AssistCommandController {
   showLineEndingDistribution(): void;
+  insertParagraphIndent(): void;
+  removeParagraphIndent(): void;
 }
 
 export interface AssistCommandTitles {
   showLineEndingDistribution: string;
   showLineEndingDistributionDescription: string;
+  insertParagraphIndent: string;
+  insertParagraphIndentDescription: string;
+  removeParagraphIndent: string;
+  removeParagraphIndentDescription: string;
 }
 
 type AssistCommand = Command<readonly [], void>;
@@ -36,6 +51,14 @@ export function createAssistCommandTitles(
     ),
     showLineEndingDistributionDescription: translate(
       "command.assist.lineEndingDistribution.show.description"
+    ),
+    insertParagraphIndent: translate("command.assist.paragraphIndent.insert"),
+    insertParagraphIndentDescription: translate(
+      "command.assist.paragraphIndent.insert.description"
+    ),
+    removeParagraphIndent: translate("command.assist.paragraphIndent.remove"),
+    removeParagraphIndentDescription: translate(
+      "command.assist.paragraphIndent.remove.description"
     )
   };
 }
@@ -51,6 +74,20 @@ export function createAssistCommands(
       description: titles.showLineEndingDistributionDescription,
       when: showLineEndingDistributionCommandWhen,
       execute: () => controller.showLineEndingDistribution()
+    },
+    {
+      id: assistCommandIds.insertParagraphIndent,
+      title: titles.insertParagraphIndent,
+      description: titles.insertParagraphIndentDescription,
+      when: paragraphIndentCommandWhen,
+      execute: () => controller.insertParagraphIndent()
+    },
+    {
+      id: assistCommandIds.removeParagraphIndent,
+      title: titles.removeParagraphIndent,
+      description: titles.removeParagraphIndentDescription,
+      when: paragraphIndentCommandWhen,
+      execute: () => controller.removeParagraphIndent()
     }
   ];
 }

@@ -184,6 +184,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.characterCount.exclude.markdownComments",
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
+          "editor.paragraphIndent.excludeLeadingCharacters",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
           "preview.renderer",
@@ -309,6 +310,18 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(item.defaultValue).toBe(10000);
     });
 
+    it("editor.paragraphIndent.excludeLeadingCharacters is an Editor text control with an empty default", () => {
+      const item = getSettingCatalogItem(
+        "editor.paragraphIndent.excludeLeadingCharacters"
+      );
+
+      expect(item).toMatchObject({
+        category: "editor",
+        control: { kind: "text" },
+        defaultValue: ""
+      });
+    });
+
     it("places all character count settings together in the editor category, with visibility before exclusions (#259 taxonomy)", () => {
       const keys = [
         "workbench.statusBar.characterCount.visible",
@@ -318,6 +331,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments"
       ] as const;
+
       const items = keys.map((key) => {
         const item = getSettingCatalogItem(key);
 
@@ -336,6 +350,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "editor",
         "editor"
       ]);
+
       expect(items.map((item) => item.order)).toEqual([
         400,
         410,
@@ -344,6 +359,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         440,
         450
       ]);
+
       expect(getSettingCatalogItem("workbench.statusBar.visible")?.category).toBe(
         "application"
       );
@@ -372,7 +388,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
               t(language, option.labelKey as never).length
             ).toBeGreaterThan(0);
 
-            if (option.descriptionKey) {
+            if ("descriptionKey" in option && option.descriptionKey) {
               expect(
                 t(language, option.descriptionKey as never).length
               ).toBeGreaterThan(0);
@@ -662,12 +678,12 @@ describe("Settings UI Catalog Schema (#226)", () => {
 
     it("no initial catalog item declares a valueWarning yet (reserved for the future non-UTF-8 warning issue)", () => {
       for (const item of settingCatalogItems) {
-        expect(item.valueWarning).toBeUndefined();
+        expect("valueWarning" in item ? item.valueWarning : undefined).toBeUndefined();
       }
     });
 
     it("buildSettingSearchText never resolves or includes a valueWarning's messageKey", () => {
-      const item: SettingCatalogItem<string> = {
+      const item: SettingCatalogItem<unknown> = {
         key: "files.newFile.encoding",
         category: "files",
         order: 200,

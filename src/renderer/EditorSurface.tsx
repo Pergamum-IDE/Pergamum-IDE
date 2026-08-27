@@ -30,7 +30,10 @@ import {
 import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
 import { GlossaryEditor } from "./GlossaryEditor";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
-import { MarkdownEditor } from "./MarkdownEditor";
+import {
+  MarkdownEditor,
+  type MarkdownEditorParagraphIndentController
+} from "./MarkdownEditor";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
@@ -356,6 +359,9 @@ interface EditorSurfaceProps {
     content: string,
     lineEndingBreaks: LineEndingBreakSet
   ) => void;
+  onParagraphIndentControllerChange: (
+    controller: MarkdownEditorParagraphIndentController | null
+  ) => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
   onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
@@ -462,6 +468,7 @@ export function EditorSurface({
   markdownEditorPreviewRatio,
   onChangeMarkdownEditorPreviewRatio,
   onChangeMarkdownContent,
+  onParagraphIndentControllerChange,
   onChangeGlossaryEntryKind,
   onChangeGlossaryEntryDescription,
   onChangeGlossaryEntryCanonicalSurface,
@@ -503,6 +510,7 @@ export function EditorSurface({
           soundSettings={soundSettings}
           readOnly={isProjectOwnedReadOnly}
           onChangeMarkdownContent={onChangeMarkdownContent}
+          onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           pendingSelection={pendingMarkdownSelection}
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
@@ -576,6 +584,9 @@ interface MarkdownEditorSurfaceProps {
     content: string,
     lineEndingBreaks: LineEndingBreakSet
   ) => void;
+  onParagraphIndentControllerChange: (
+    controller: MarkdownEditorParagraphIndentController | null
+  ) => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
   ratio: number;
@@ -623,6 +634,7 @@ function MarkdownEditorSurface({
   soundSettings,
   readOnly,
   onChangeMarkdownContent,
+  onParagraphIndentControllerChange,
   pendingSelection,
   onPendingSelectionApplied,
   ratio,
@@ -791,6 +803,7 @@ function MarkdownEditorSurface({
         <MarkdownEditor
           value={content}
           onChange={onChangeMarkdownContent}
+          onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           documentKey={documentKey}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}

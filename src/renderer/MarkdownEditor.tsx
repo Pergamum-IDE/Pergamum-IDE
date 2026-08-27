@@ -7,6 +7,7 @@ import {
   EditorSelection,
   EditorState,
   Transaction,
+  type ChangeSpec,
   type AnnotationType,
   type StateField
 } from "@codemirror/state";
@@ -34,6 +35,7 @@ import {
   type MarkdownEditorInputSoundEvent,
   type SoundFeedbackPlayer
 } from "./soundFeedback";
+import type { ParagraphIndentChange } from "./paragraphIndentTransform";
 
 interface MarkdownEditorPendingSelection {
   start: number;
@@ -86,6 +88,15 @@ interface MarkdownEditorProps {
   soundFeedback?: SoundFeedbackPlayer;
   soundSettings?: WorkbenchSoundSettings;
   readOnly?: boolean;
+  onParagraphIndentControllerChange?: (
+    controller: MarkdownEditorParagraphIndentController | null
+  ) => void;
+}
+
+export interface MarkdownEditorParagraphIndentController {
+  applyParagraphIndentChanges(
+    changes: readonly ParagraphIndentChange[]
+  ): boolean;
 }
 
 interface MarkdownEditorSoundTransaction {
@@ -170,7 +181,8 @@ export function MarkdownEditor({
   contextSurface,
   soundFeedback,
   soundSettings,
-  readOnly = false
+  readOnly = false,
+  onParagraphIndentControllerChange
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -326,6 +338,39 @@ export function MarkdownEditor({
     // it for a genuinely different document, not a re-run of this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!onParagraphIndentControllerChange) {
+      return undefined;
+    }
+
+    const controller: MarkdownEditorParagraphIndentController = {
+      applyParagraphIndentChanges: (changes) => {
+        const view = viewRef.current;
+
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        if (changes.length === 0) {
+          return true;
+        }
+
+        const codeMirrorChanges: ChangeSpec[] = changes.map((change) => ({
+          from: change.from,
+          to: change.to,
+          insert: change.insert
+        }));
+
+        view.dispatch({ changes: codeMirrorChanges });
+        return true;
+      }
+    };
+
+    onParagraphIndentControllerChange(controller);
+
+    return () => onParagraphIndentControllerChange(null);
+  }, [onParagraphIndentControllerChange]);
 
   useEffect(() => {
     const view = viewRef.current;

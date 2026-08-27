@@ -331,6 +331,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "editor.fontFamily",
+      "editor.paragraphIndent.excludeLeadingCharacters",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
       "workbench.statusBar.characterCount.visible",
@@ -881,7 +882,57 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       commandPalette: settings.commandPalette,
       editor: {
         lineEnding: settings.editor.lineEnding,
+        paragraphIndent: settings.editor.paragraphIndent,
         characterCount: settings.editor.characterCount
+      },
+      files: settings.files
+    });
+  });
+
+  it("saves paragraph indent excluded leading characters as a free-form text setting, including an empty string", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        paragraphIndent: { excludeLeadingCharacters: "「『" }
+      }
+    };
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("editor.paragraphIndent.excludeLeadingCharacters"),
+      onChangeSettings
+    });
+    const input = controlElement(
+      element,
+      "editor.paragraphIndent.excludeLeadingCharacters"
+    );
+    const onChange = input.props.onChange as (event: {
+      target: { value: string };
+    }) => void;
+
+    onChange({ target: { value: "" } });
+
+    expect(onChangeSettings).toHaveBeenLastCalledWith({
+      preview: settings.preview,
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: {
+        ...settings.editor,
+        paragraphIndent: { excludeLeadingCharacters: "" }
+      },
+      files: settings.files
+    });
+
+    onChange({ target: { value: "「『（〖" } });
+
+    expect(onChangeSettings).toHaveBeenLastCalledWith({
+      preview: settings.preview,
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: {
+        ...settings.editor,
+        paragraphIndent: { excludeLeadingCharacters: "「『（〖" }
       },
       files: settings.files
     });

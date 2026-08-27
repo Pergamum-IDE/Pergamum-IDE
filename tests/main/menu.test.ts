@@ -415,7 +415,22 @@ describe("application menu", () => {
       expect(template.map((item) => item.label)).toContain("支援");
     });
 
-    it("sends assist.lineEndingDistribution.show from the Assist menu item", () => {
+    it("renders paragraph indent items in the Japanese Assist menu", () => {
+      const assistItems = submenuItems(
+        findTopLevelMenu(
+          buildApplicationMenu("ja", emptyMenuOptions(), "win32"),
+          "支援"
+        )
+      );
+
+      expect(assistItems.map((item) => item.label)).toEqual([
+        "改行コード分布...",
+        "段落字下げ一括挿入",
+        "段落字下げ一括削除"
+      ]);
+    });
+
+    it("sends Assist menu command IDs from command menu items", () => {
       const { window, send } = menuWindowMock();
       const assistItems = submenuItems(
         findTopLevelMenu(
@@ -426,15 +441,22 @@ describe("application menu", () => {
 
       clickCommandItems(assistItems);
 
-      expect(send).toHaveBeenCalledWith(
-        APPLICATION_MENU_CHANNELS.command,
-        assistCommandIds.showLineEndingDistribution
-      );
+      expect(send.mock.calls.map((call) => call[1])).toEqual([
+        assistCommandIds.showLineEndingDistribution,
+        assistCommandIds.insertParagraphIndent,
+        assistCommandIds.removeParagraphIndent
+      ]);
     });
 
-    it("includes assist.lineEndingDistribution.show in the application-menu-sendable allowlist", () => {
+    it("includes Assist command IDs in the application-menu-sendable allowlist", () => {
       expect(applicationMenuCommandIds).toContain(
         assistCommandIds.showLineEndingDistribution
+      );
+      expect(applicationMenuCommandIds).toContain(
+        assistCommandIds.insertParagraphIndent
+      );
+      expect(applicationMenuCommandIds).toContain(
+        assistCommandIds.removeParagraphIndent
       );
     });
   });
@@ -458,6 +480,8 @@ describe("application menu", () => {
       expect(assistItems[0]?.id).toBe(
         assistCommandIds.showLineEndingDistribution
       );
+      expect(assistItems[1]?.id).toBe(assistCommandIds.insertParagraphIndent);
+      expect(assistItems[2]?.id).toBe(assistCommandIds.removeParagraphIndent);
     });
   });
 });
