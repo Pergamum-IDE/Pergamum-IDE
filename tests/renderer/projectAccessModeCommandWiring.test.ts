@@ -67,7 +67,7 @@ describe("project access mode command wiring (#211)", () => {
     expect(contextBlock).toContain(
       'activeMarkdownDocument?.kind === "project"'
     );
-    expect(contextBlock).toContain('currentEditor.kind === "glossaryEntry"');
+    expect(contextBlock).toContain('currentEditor?.kind === "glossaryEntry"');
   });
 
   it("passes read-only project-owned editor state into the editor surface", () => {

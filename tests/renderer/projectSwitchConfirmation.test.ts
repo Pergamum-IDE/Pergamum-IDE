@@ -11,22 +11,32 @@ import {
 } from "../../src/renderer/dialog/appDialogTypes";
 import {
   createInitialOpenDocumentsState,
+  openOrActivateDocument,
   updateActiveOpenDocument,
   type OpenDocumentsState
 } from "../../src/renderer/openDocuments";
-import { updateCurrentDocumentContent } from "../../src/renderer/currentDocument";
+import {
+  createUntitledDocument,
+  updateCurrentDocumentContent
+} from "../../src/renderer/currentDocument";
 import { t, type Translate } from "../../src/shared/i18n";
 
 const translateJa: Translate = (key, values) => t("ja", key, values);
 const translateEn: Translate = (key, values) => t("en", key, values);
 
+// #262: the zero-tab initial state genuinely has no unsaved documents.
 function cleanState(): OpenDocumentsState {
   return createInitialOpenDocumentsState();
 }
 
 function dirtyState(): OpenDocumentsState {
-  return updateActiveOpenDocument(createInitialOpenDocumentsState(), (document) =>
-    updateCurrentDocumentContent(document, "changed")
+  return updateActiveOpenDocument(
+    openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createUntitledDocument(),
+      null
+    ),
+    (document) => updateCurrentDocumentContent(document, "changed")
   );
 }
 

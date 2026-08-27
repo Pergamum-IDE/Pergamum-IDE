@@ -12,21 +12,31 @@ import {
 } from "../../src/renderer/dialog/appDialogTypes";
 import {
   createInitialOpenDocumentsState,
+  openOrActivateDocument,
   updateActiveOpenDocument
 } from "../../src/renderer/openDocuments";
-import { updateCurrentDocumentContent } from "../../src/renderer/currentDocument";
+import {
+  createUntitledDocument,
+  updateCurrentDocumentContent
+} from "../../src/renderer/currentDocument";
 import { t, type Translate } from "../../src/shared/i18n";
 import { createProjectDocumentEditorId } from "../../src/shared/editorId";
 
 const translateJa: Translate = (key, values) => t("ja", key, values);
 const translateEn: Translate = (key, values) => t("en", key, values);
 
+// #262: the zero-tab initial state has no active editor to close, so these
+// helpers seed a real single Untitled Markdown tab.
 function cleanState() {
-  return createInitialOpenDocumentsState();
+  return openOrActivateDocument(
+    createInitialOpenDocumentsState(),
+    createUntitledDocument(),
+    null
+  );
 }
 
 function dirtyState() {
-  return updateActiveOpenDocument(createInitialOpenDocumentsState(), (document) =>
+  return updateActiveOpenDocument(cleanState(), (document) =>
     updateCurrentDocumentContent(document, "changed")
   );
 }

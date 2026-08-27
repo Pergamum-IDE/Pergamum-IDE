@@ -21,7 +21,7 @@ describe("line jump wiring (#140 / #148)", () => {
     // canSaveCurrentDocumentCommandRef), so command execution always sees
     // the editor active at activation time, not a stale Palette-open-time
     // snapshot (#128 current-editor requirement).
-    expect(body).toContain('if (currentEditor.kind !== "markdown") {');
+    expect(body).toContain('if (currentEditor?.kind !== "markdown") {');
   });
 
   it("does not jump directly into editor internals: it computes an offset and reuses the existing pendingMarkdownSelection channel", () => {
@@ -66,7 +66,7 @@ describe("line jump wiring (#140 / #148)", () => {
     const propsBlock = source.slice(componentIndex, closeIndex);
 
     expect(start).toBeGreaterThan(-1);
-    expect(body).toContain('currentEditor.kind === "markdown"');
+    expect(body).toContain('currentEditor?.kind === "markdown"');
     expect(body).toContain("createLineJumpEditorSnapshot(");
     expect(body).toContain("currentDocumentContent(currentEditor.document)");
     expect(propsBlock).toContain(
