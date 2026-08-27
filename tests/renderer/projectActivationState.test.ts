@@ -4,7 +4,6 @@ import {
   createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
-  isProjectScopedEditorId,
   type ActiveProjectContext
 } from "../../src/shared/editorId";
 import type { GlossaryEntry } from "../../src/shared/glossary";
@@ -74,19 +73,11 @@ function oldProjectScopedOpenDocuments(): OpenDocumentsState {
   );
 }
 
-function expectOnlyUntitledEditor(state: OpenDocumentsState): void {
-  expect(state.documents).toHaveLength(1);
-  expect(state.documents[0].editor.kind).toBe("markdown");
-  expect(state.documents[0].editor.kind === "markdown").toBe(true);
-  expect(
-    state.documents[0].editor.kind === "markdown" &&
-      state.documents[0].editor.document.kind
-  ).toBe("untitled");
-  expect(isProjectScopedEditorId(state.activeDocumentId)).toBe(false);
-  expect(state.documents.some((document) => document.id.kind === "glossaryEntry"))
-    .toBe(false);
-  expect(state.documents.some((document) => document.id.kind === "projectDocument"))
-    .toBe(false);
+// #262: a Project Context switch resets to the zero-tab state (Welcome) — no
+// placeholder Untitled editor is seeded.
+function expectEmptyZeroTabState(state: OpenDocumentsState): void {
+  expect(state.documents).toHaveLength(0);
+  expect(state.activeDocumentId).toBeNull();
 }
 
 function deferred<TResult>(): {
@@ -126,7 +117,7 @@ describe("project activation state", () => {
       oldProjectScopedOpenDocuments()
     );
 
-    expectOnlyUntitledEditor(resetState);
+    expectEmptyZeroTabState(resetState);
   });
 
   it("does not restore an old Glossary Editor when first Project document loading fails", async () => {
@@ -148,7 +139,7 @@ describe("project activation state", () => {
       loadedDocument
     ).resolves.toBeNull();
 
-    expectOnlyUntitledEditor(state);
+    expectEmptyZeroTabState(state);
   });
 
   it("does not let an old Project activation overwrite a newer Project activation", async () => {
@@ -194,7 +185,7 @@ describe("project activation state", () => {
       )
     );
     await projectBDocument;
-    expectOnlyUntitledEditor(state);
+    expectEmptyZeroTabState(state);
 
     projectCLoad.resolve(
       createProjectDocument(newDocument, "new content"),
@@ -293,7 +284,7 @@ describe("project activation state", () => {
       oldProjectScopedOpenDocuments()
     );
 
-    expectOnlyUntitledEditor(state);
+    expectEmptyZeroTabState(state);
   });
 
   it("treats a captured Project activation generation as stale after a Project switch", () => {

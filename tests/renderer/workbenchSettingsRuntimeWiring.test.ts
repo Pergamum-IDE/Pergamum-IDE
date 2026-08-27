@@ -145,7 +145,7 @@ describe("status bar character count runtime wiring (#259)", () => {
     expect(appSource).toContain(
       "effectiveSettings.workbench.statusBar.characterCount.visible"
     );
-    expect(appSource).toContain("currentEditor.kind === \"markdown\"");
+    expect(appSource).toContain("currentEditor?.kind === \"markdown\"");
     expect(appSource).toContain("!isSettingsTabActive");
   });
 
