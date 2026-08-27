@@ -550,3 +550,44 @@ describe("glossary occurrence navigation translations", () => {
     );
   });
 });
+
+describe("NotificationToast foundation translations (#266)", () => {
+  it("defines the external-Markdown-open notification message for ja and en", () => {
+    expect(t("ja", "notification.externalMarkdownOpened")).toBe(
+      "プロジェクト外のファイルを開きました"
+    );
+    expect(t("en", "notification.externalMarkdownOpened")).toBe(
+      "Opened a file from outside the project"
+    );
+  });
+
+  it("defines the toast dismiss-button accessible name for ja and en", () => {
+    expect(t("ja", "notification.dismiss")).toBe("通知を閉じる");
+    expect(t("en", "notification.dismiss")).toBe("Dismiss notification");
+  });
+
+  it("defines the Settings label/description for the notification display time (#266) and the description explains the 0 = no auto-dismiss case", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "settings.workbench.notification.durationMs.label",
+        "settings.workbench.notification.durationMs.description"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+
+    expect(t("ja", "settings.workbench.notification.durationMs.description")).toContain(
+      "0"
+    );
+    expect(t("en", "settings.workbench.notification.durationMs.description")).toContain(
+      "0"
+    );
+  });
+
+  it("reuses the existing settings.unit.ms unit label for the notification display time control (#266: no new spelled-out unit key)", () => {
+    expect(t("ja", "settings.unit.ms")).toBe("ms");
+    expect(t("en", "settings.unit.ms")).toBe("ms");
+    expect(Object.keys(jaTranslations)).not.toContain("settings.unit.milliseconds");
+    expect(Object.keys(enTranslations)).not.toContain("settings.unit.milliseconds");
+  });
+});

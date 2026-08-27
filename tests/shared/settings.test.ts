@@ -3,6 +3,7 @@ import {
   builtInDefaultSettings,
   createDefaultApplicationSettings,
   defaultApplicationSettings,
+  defaultNotificationDurationMs,
   defaultPreviewRenderer,
   isPreviewRendererId,
   resolveEffectiveSettings,
@@ -420,5 +421,81 @@ describe("workbench.language / workbench.statusBar.visible wiring (#174)", () =>
 
     expect(effective.workbench.language).toBe("en");
     expect(effective.workbench.statusBar.visible).toBe(false);
+  });
+});
+
+describe("workbench.notification.durationMs wiring (#266)", () => {
+  it("defaultNotificationDurationMs is the catalog default (10000 ms)", () => {
+    expect(defaultNotificationDurationMs).toBe(
+      getCatalogDefaultValue("workbench.notification.durationMs")
+    );
+    expect(defaultNotificationDurationMs).toBe(10000);
+  });
+
+  it("builtInDefaultSettings.workbench.notification.durationMs derives from the catalog default", () => {
+    expect(
+      builtInDefaultSettings.workbench.notification.durationMs
+    ).toBe(
+      getCatalogDefaultValue("workbench.notification.durationMs")
+    );
+  });
+
+  it("defaultApplicationSettings / createDefaultApplicationSettings leave workbench.notification unset (sparse, like fontFamily)", () => {
+    expect(defaultApplicationSettings.workbench.notification).toBeUndefined();
+    expect(
+      createDefaultApplicationSettings().workbench.notification
+    ).toBeUndefined();
+  });
+
+  it("resolveEffectiveSettings falls through to the catalog default (10000 ms) when workbench.notification is absent", () => {
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined).workbench
+        .notification.durationMs
+    ).toBe(10000);
+  });
+
+  it("resolveEffectiveSettings passes through a valid custom millisecond duration", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        notification: { durationMs: 30000 }
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, undefined).workbench
+        .notification.durationMs
+    ).toBe(30000);
+  });
+
+  it("workbench.notification has no project-scope fallthrough — applicationOnly", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        notification: { durationMs: 30000 }
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, {}).workbench.notification
+        .durationMs
+    ).toBe(30000);
+  });
+
+  it("0 is a valid effective value — the explicit 'do not auto-dismiss' choice, no fallback to the default", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        notification: { durationMs: 0 }
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, undefined).workbench
+        .notification.durationMs
+    ).toBe(0);
   });
 });

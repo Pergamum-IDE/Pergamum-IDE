@@ -39,6 +39,12 @@
   --color-project-read-only: #2563a8;
   --command-palette-status-unavailable: #52616f;
   --command-palette-status-not-implemented: #52616f;
+  --notification-toast-background: #ffffff;
+  --notification-toast-foreground: #25313d;
+  --notification-toast-border: #d3dae2;
+  --notification-toast-shadow: rgba(15, 36, 56, 0.24);
+  --notification-toast-close-foreground: #52616f;
+  --notification-toast-focus-ring: #7aa7d9;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -524,6 +530,9 @@ label.settingsItemHeader {
 
 .settingsNumberInput {
   width: min(100%, 160px);
+  /* Right-align numeric entry across every Settings number control (not
+     text/select), so digits line up and are easier to scan/compare. */
+  text-align: end;
 }
 
 .settingsNumberInputGroup {
@@ -3114,4 +3123,94 @@ label.settingsItemHeader {
 .lineEndingDistributionSummaryRow dd {
   margin: 0;
   min-width: 0;
+}
+
+/* Notification foundation (#266): non-modal, information-only toast stack.
+   Bottom-right, stacked upward (column-reverse => newest nearest the
+   corner). The container never blocks pointer input; each toast re-enables
+   it. No backdrop, no focus management — a toast appearing must not disturb
+   the editor. */
+
+.notificationHost {
+  position: fixed;
+  inset-inline-end: 1rem;
+  inset-block-end: 1rem;
+  z-index: 900;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-inline-size: min(22.5rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.notificationToast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  border: 1px solid var(--notification-toast-border);
+  border-radius: 0.375rem;
+  background: var(--notification-toast-background);
+  color: var(--notification-toast-foreground);
+  box-shadow: 0 8px 24px var(--notification-toast-shadow);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  pointer-events: auto;
+  animation: notificationToastIn 160ms ease-out;
+}
+
+.notificationToastMessage {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  padding-block-start: 0.125rem;
+}
+
+.notificationToastClose {
+  flex: 0 0 auto;
+  inline-size: 1.5rem;
+  min-inline-size: 1.5rem;
+  block-size: 1.5rem;
+  min-block-size: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--notification-toast-close-foreground);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notificationToastClose:hover {
+  background: rgba(15, 36, 56, 0.08);
+}
+
+.notificationToastClose:focus-visible {
+  outline: 2px solid var(--notification-toast-focus-ring);
+  outline-offset: 1px;
+}
+
+@keyframes notificationToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notificationToast {
+    animation: none;
+  }
 }

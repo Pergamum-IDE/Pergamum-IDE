@@ -721,6 +721,26 @@ export const settingsCatalog = defineSettingsCatalog({
     numericRange: { min: 0, max: 600000, integer: true },
     deprecatedAliases: [],
     migrationNotes: []
+  }),
+  // #266: how long an information NotificationToast stays on screen before it
+  // auto-dismisses. applicationOnly (a user-scope tuning knob, like the
+  // Command Palette marquee timings and preview.updateDelayMs above). Named
+  // with the same `Ms` suffix as preview.updateDelayMs — the value the
+  // NotificationController's timer consumes directly, no unit conversion in
+  // between. Range 0..600000 (= up to 10min); 0 is an explicit "do not
+  // auto-dismiss" choice (the toast then only closes on manual dismiss), and
+  // 1..600000 is the millisecond delay. An invalid on-disk value falls back
+  // to this default (10000) rather than breaking startup, per the existing
+  // catalog resolution policy.
+  "workbench.notification.durationMs": defineNumberSetting({
+    key: "workbench.notification.durationMs",
+    scope: "applicationOnly",
+    defaultValue: 10000,
+    labelKey: "settings.workbench.notification.durationMs.label",
+    descriptionKey: "settings.workbench.notification.durationMs.description",
+    numericRange: { min: 0, max: 600000, integer: true },
+    deprecatedAliases: [],
+    migrationNotes: []
   })
 });
 

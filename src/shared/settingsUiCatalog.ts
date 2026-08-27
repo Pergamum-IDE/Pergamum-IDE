@@ -334,6 +334,9 @@ const commandPaletteMarqueeSpeedRange = getCatalogEntry(
 const previewUpdateDelayRange = getCatalogEntry(
   "preview.updateDelayMs"
 ).numericRange;
+const notificationDurationRange = getCatalogEntry(
+  "workbench.notification.durationMs"
+).numericRange;
 
 // Intentional public UI catalog data — kept public for future Settings Page
 // consumers (#226). Registers only settings that already exist in
@@ -594,6 +597,23 @@ export const settingCatalogItems = defineSettingCatalog([
     descriptionKey: "settings.workbench.statusBar.visible.description",
     control: { kind: "switch" },
     defaultValue: getCatalogDefaultValue("workbench.statusBar.visible")
+  },
+  {
+    key: "workbench.notification.durationMs",
+    category: "application",
+    order: 400,
+    labelKey: "settings.workbench.notification.durationMs.label",
+    descriptionKey:
+      "settings.workbench.notification.durationMs.description",
+    control: {
+      kind: "number",
+      min: notificationDurationRange.min,
+      max: notificationDurationRange.max,
+      step: 1000
+    },
+    defaultValue: getCatalogDefaultValue(
+      "workbench.notification.durationMs"
+    )
   },
   {
     key: "workbench.sound.enabled",

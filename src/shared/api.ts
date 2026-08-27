@@ -36,7 +36,8 @@ export type {
   RecordRecentProjectInput,
   ProjectSettings,
   RecentProject,
-  SaveApplicationSettingsRequest
+  SaveApplicationSettingsRequest,
+  WorkbenchNotificationSettings
 } from "./settings";
 export type {
   CreateGlossaryEntryInput,
