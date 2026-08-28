@@ -16,11 +16,13 @@ import {
   type EditableContextSurface
 } from "../shared/editContextMenu";
 import type {
+  ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
   LineEndingMarkerGlyph,
   NewFileLineEnding,
   WorkbenchSoundSettings
 } from "../shared/settings";
+import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
 import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
 import {
@@ -87,6 +89,16 @@ interface MarkdownEditorProps {
    * shown via marker variant/styling, not by choosing a different glyph.
    */
   markerGlyph?: LineEndingMarkerGlyph;
+  /**
+   * `editor.whitespace.*` (#256) — which whitespace categories to paint
+   * display-only markers for (ideographic space, ASCII space, tab, other
+   * Unicode `Zs`). Independent of #252's line-ending marker. Toggling any
+   * of these never edits the document, never makes it dirty, and never
+   * touches selection/caret; it only reconfigures a CodeMirror compartment
+   * (see the effect below). Omitted by non-file editors (GlossaryEditor's
+   * description field), which then render no whitespace markers at all.
+   */
+  whitespaceSettings?: ApplicationEditorWhitespaceSettings;
   pendingSelection?: MarkdownEditorPendingSelection | null;
   onPendingSelectionApplied?: () => void;
   contextSurface?: EditableContextSurface;
@@ -228,6 +240,17 @@ export function markdownEditorInputSoundEventFromTransactions(
 
 const defaultMarkdownEditorDocumentKey = "single-document";
 
+// #256: the "prop omitted" default — no whitespace markers at all. Only the
+// Markdown editor surface passes real `editor.whitespace.*` settings;
+// non-file editors that reuse this component get exactly the pre-#256
+// rendering.
+const noWhitespaceRendering: ApplicationEditorWhitespaceSettings = {
+  renderIdeographicSpace: false,
+  renderAsciiSpace: false,
+  renderTab: false,
+  renderOtherUnicodeSpace: false
+};
+
 export function MarkdownEditor({
   value,
   onChange,
@@ -241,6 +264,7 @@ export function MarkdownEditor({
   newFileLineEndingFallback = "lf",
   expectedLineEnding = "lf",
   markerGlyph = "⏎",
+  whitespaceSettings,
   pendingSelection,
   onPendingSelectionApplied,
   contextSurface,
@@ -260,6 +284,10 @@ export function MarkdownEditor({
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   const visibilityCompartmentRef = useRef<Compartment | null>(null);
+  // #256: owns the whitespace-marker layer so a runtime Settings change is
+  // a compartment reconfigure (tearing down / rebuilding just this layer),
+  // never an EditorView rebuild.
+  const whitespaceCompartmentRef = useRef<Compartment | null>(null);
   const onChangeRef = useRef(onChange);
   // #272: read from a ref by the mount effect's cleanup (which is []-deps
   // and must not re-subscribe) so the outgoing View State is reported with
@@ -288,6 +316,13 @@ export function MarkdownEditor({
   // newFileLineEndingFallbackRef above.
   const expectedLineEndingRef = useRef<ExpectedLineEnding>(expectedLineEnding);
   const markerGlyphRef = useRef<LineEndingMarkerGlyph>(markerGlyph);
+  // #256: read fresh by the whitespace-marker layer on every measure (doc
+  // edit, scroll, geometry change, or a compartment reconfigure), so a
+  // runtime toggle and a post-document-switch first render both use the
+  // current effective settings without recreating the owning EditorView.
+  const whitespaceSettingsRef = useRef<ApplicationEditorWhitespaceSettings>(
+    whitespaceSettings ?? noWhitespaceRendering
+  );
   // Set once, at mount, so the settings-reconfigure effect below can build
   // a fresh marker feature against the SAME tracking field instance — the
   // field itself is never recreated (see the mount effect for why).
@@ -305,6 +340,11 @@ export function MarkdownEditor({
     visibilityCompartmentRef.current = new Compartment();
   }
   const visibilityCompartment = visibilityCompartmentRef.current;
+
+  if (!whitespaceCompartmentRef.current) {
+    whitespaceCompartmentRef.current = new Compartment();
+  }
+  const whitespaceCompartment = whitespaceCompartmentRef.current;
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -384,6 +424,9 @@ export function MarkdownEditor({
             )
           ),
           lineEndingExtension,
+          whitespaceCompartment.of(
+            whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
+          ),
           EditorView.updateListener.of((update) => {
             const soundEvent = readOnlyRef.current
               ? null
@@ -541,6 +584,38 @@ export function MarkdownEditor({
       )
     });
   }, [expectedLineEnding, markerGlyph]);
+
+  useEffect(() => {
+    // Keep the live getter fresh BEFORE the reconfigure below, so the fresh
+    // layer's first measure already sees the new settings. This also covers
+    // a document switch that doesn't change these four values: the getter
+    // stays current, so the next measure for the new document uses the
+    // current effective settings, never a stale snapshot.
+    whitespaceSettingsRef.current = whitespaceSettings ?? noWhitespaceRendering;
+
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    // #256: a Settings-only change is reflected by reconfiguring the
+    // compartment — this tears down and rebuilds just the whitespace
+    // marker layer (or installs an empty extension when every category is
+    // now off) without recreating the EditorView or any other extension.
+    // It dispatches only `effects`, so it is not a document change: no
+    // edit, no dirty, no undo entry, no selection/caret move.
+    view.dispatch({
+      effects: whitespaceCompartment.reconfigure(
+        whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
+      )
+    });
+  }, [
+    whitespaceSettings?.renderIdeographicSpace,
+    whitespaceSettings?.renderAsciiSpace,
+    whitespaceSettings?.renderTab,
+    whitespaceSettings?.renderOtherUnicodeSpace
+  ]);
 
   useEffect(() => {
     const view = viewRef.current;
