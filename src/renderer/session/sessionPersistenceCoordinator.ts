@@ -81,6 +81,15 @@ export interface SessionPersistenceCoordinatorOptions {
    * rest of the run. Never called for transient logical conditions.
    */
   readonly onSuspended?: (reason: SessionStorageFailureReason) => void;
+  /**
+   * #274: when true, the coordinator holds ALL automatic persistence
+   * (continuous flushes, view-state-dirty nudges) until
+   * `resolveColdStartRestore()` is called. Cold-start Session restore uses
+   * this so the very first durable write already carries the adopted
+   * `sessionId` and the restored editors — never a throwaway snapshot under
+   * a freshly-minted sessionId that would grow the restore set.
+   */
+  readonly deferInitialFlush?: boolean;
 }
 
 const DEFAULT_DEBOUNCE_MS = 400;
@@ -92,7 +101,7 @@ const defaultScheduler: SessionPersistenceScheduler = {
 };
 
 export class SessionPersistenceCoordinator {
-  private readonly sessionId: string;
+  private sessionId: string;
   private readonly transport: SessionPersistenceTransport;
   private readonly captureActiveEditorViewState: CaptureActiveEditorViewState;
   private readonly scheduler: SessionPersistenceScheduler;
@@ -115,6 +124,12 @@ export class SessionPersistenceCoordinator {
   /** A `transport.persist` that outran the slow-I/O threshold and may still
    *  be running. We never issue a new automatic write while this is set. */
   private slowInFlightPersist: Promise<void> | null = null;
+  /** #274: while true, automatic persistence is held until cold-start
+   *  Session restore resolves (`resolveColdStartRestore`). */
+  private coldStartDeferred: boolean;
+  /** #274: once any snapshot has been persisted, `adoptSessionId` is
+   *  refused — a later id change would orphan the record already written. */
+  private hasPersisted = false;
 
   constructor(options: SessionPersistenceCoordinatorOptions) {
     this.sessionId = options.sessionId;
@@ -127,10 +142,54 @@ export class SessionPersistenceCoordinator {
     this.slowIoThresholdMs =
       options.slowIoThresholdMs ?? SESSION_PERSISTENCE_SLOW_IO_THRESHOLD_MS;
     this.onSuspended = options.onSuspended;
+    this.coldStartDeferred = options.deferInitialFlush ?? false;
   }
 
   getState(): SessionPersistenceState {
     return this.suspended ? "suspended" : "active";
+  }
+
+  /**
+   * #274: adopt the restored Session's identity BEFORE any snapshot has been
+   * persisted, so continuous persistence overwrites that same
+   * `data/<sessionId>.json` rather than creating a second restore-set entry
+   * under a throwaway id. No-op once a write has happened or once cold start
+   * has resolved.
+   */
+  adoptSessionId(sessionId: string): void {
+    if (this.stopped || this.hasPersisted || !this.coldStartDeferred) {
+      return;
+    }
+
+    this.sessionId = sessionId;
+  }
+
+  /**
+   * #274: cold-start Session restore has finished (or was skipped). Release
+   * the held automatic persistence.
+   *
+   * `scheduleNow` — when a Session was actually restored, the host's
+   * `setState` (adopted sessionId + restored editors) will re-run
+   * `updateSessionInputs`, which now schedules the flush with the CORRECT
+   * inputs; scheduling here would race a stale pre-adopt snapshot. When
+   * nothing was restored, pass `scheduleNow: true` so the current (fresh /
+   * launch-target) state is still persisted.
+   */
+  resolveColdStartRestore(options: { scheduleNow?: boolean } = {}): void {
+    if (!this.coldStartDeferred) {
+      return;
+    }
+
+    this.coldStartDeferred = false;
+
+    if (
+      options.scheduleNow === true &&
+      !this.stopped &&
+      !this.suspended &&
+      this.inputs
+    ) {
+      this.scheduleFlush();
+    }
   }
 
   /**
@@ -172,6 +231,13 @@ export class SessionPersistenceCoordinator {
 
     this.inputs = inputs;
     this.pruneViewStateCache(inputs);
+
+    // #274: while cold-start restore is in flight the inputs are retained
+    // but no flush is scheduled — `resolveColdStartRestore()` releases it.
+    if (this.coldStartDeferred) {
+      return;
+    }
+
     this.scheduleFlush();
   }
 
@@ -202,6 +268,10 @@ export class SessionPersistenceCoordinator {
       this.viewStateCache.set(key, viewState);
     }
 
+    if (this.coldStartDeferred) {
+      return;
+    }
+
     this.scheduleFlush();
   }
 
@@ -217,7 +287,7 @@ export class SessionPersistenceCoordinator {
    * ignores it (no I/O).
    */
   markViewStateDirty(): void {
-    if (this.stopped || this.suspended) {
+    if (this.stopped || this.suspended || this.coldStartDeferred) {
       return;
     }
 
@@ -275,8 +345,9 @@ export class SessionPersistenceCoordinator {
    * continuous persistence already keeps the durable snapshot current.
    */
   flushNow(): Promise<void> {
-    if (this.stopped || this.suspended) {
-      // Best-effort only; nothing to flush when SUSPENDED.
+    if (this.stopped || this.suspended || this.coldStartDeferred) {
+      // Best-effort only; nothing to flush when SUSPENDED or while cold-start
+      // restore is still holding automatic persistence.
       return this.flushInFlight;
     }
 
@@ -403,8 +474,9 @@ export class SessionPersistenceCoordinator {
     }
 
     // Ordinary continuous persistence must not run once SUSPENDED — not even
-    // a flush that was already queued on the chain before the transition.
-    if (!isDurableCommit && this.suspended) {
+    // a flush that was already queued on the chain before the transition —
+    // nor while cold-start restore is still holding automatic persistence.
+    if (!isDurableCommit && (this.suspended || this.coldStartDeferred)) {
       return;
     }
 
@@ -484,6 +556,7 @@ export class SessionPersistenceCoordinator {
     }
 
     this.lastPersistedSerialization = serialization;
+    this.hasPersisted = true;
   }
 
   /**

@@ -616,6 +616,161 @@ export function parseSessionRecord(value: unknown): SessionRecord | null {
   };
 }
 
+/**
+ * A canonical ISO-8601 UTC timestamp exactly as Pergamum persists it
+ * (`new Date().toISOString()` — always the `YYYY-MM-DDTHH:mm:ss.sssZ`
+ * form). A truncated / re-formatted / hand-edited timestamp is rejected
+ * rather than silently coerced (`parseSessionRecord` falls back to epoch;
+ * the strict path must not).
+ */
+function isCanonicalIsoTimestamp(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0) {
+    return false;
+  }
+
+  const millis = Date.parse(value);
+
+  if (Number.isNaN(millis)) {
+    return false;
+  }
+
+  return new Date(millis).toISOString() === value;
+}
+
+/**
+ * #274: the STRICT counterpart of `parseSessionRecord`, for accepting a
+ * cold-start RESTORE candidate.
+ *
+ * `parseSessionRecord` is deliberately fail-soft: a missing / structurally
+ * invalid `projectContext` / editor entry / `activeEditor` / `window` /
+ * `updatedAt` is dropped or coerced and the rest of the record is still
+ * returned. That partial salvage is right for #272 diagnostics and for
+ * reading a partially-written record back in — but a cold-start restore
+ * candidate must be all-or-nothing on the Session *core* (Issue #274
+ * "Level A"): any core field that is missing, or present but not
+ * structurally valid, ⇒ skip the whole Session, with NO repair
+ * (no sort, no renumber, no coercion).
+ *
+ * The one exception is Editor View State (Issue #274 "Level B"): a malformed
+ * `viewState` on an otherwise valid editor entry is NOT a core failure —
+ * `parseSessionEditor` nulls it out and keeps the entry, so this strict
+ * check still passes and the Session stays a candidate.
+ *
+ * Returns `null` (⇒ skip the whole Session) when:
+ *   - `parseSessionRecord` itself rejects it (bad `schemaVersion` /
+ *     `sessionId` / `instanceRunId`, or not an object), OR
+ *   - any of the current-schema top-level fields `projectContext`,
+ *     `window`, `activeEditor`, `editors`, `updatedAt` is MISSING (explicit
+ *     `null` is a legal value for `projectContext` / `window` /
+ *     `activeEditor`; a missing key is untrusted core structure), OR
+ *   - `updatedAt` is not a canonical ISO-8601 UTC timestamp, OR
+ *   - `projectContext` is non-`null` but not a valid `SessionProjectContext`,
+ *     OR `window` is non-`null` but not a valid `WindowSessionState`, OR
+ *     `activeEditor` is non-`null` but not a valid `SessionEditorIdentity`
+ *     (an identity that parses but simply does not match any restored
+ *     editor is fine — that is the downstream active-editor fallback), OR
+ *   - `editors` is not an array, or ANY entry is not a structurally valid
+ *     editor record (a malformed per-entry `viewState` does NOT count), OR
+ *   - two editors share an identity, OR
+ *   - the persisted editor `order` is not already the current schema's
+ *     canonical `0..n-1` sequence in array order (no gaps, no duplicates,
+ *     no out-of-order entries) — the strict path does NOT sort / renumber.
+ *
+ * It never repairs, rewrites, migrates, salvages, or deletes anything — it
+ * only decides whether the record can be trusted as-is.
+ */
+export function parseSessionRecordStrict(value: unknown): SessionRecord | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  // Every current-schema top-level field must be PRESENT. `null` is a legal
+  // explicit value for projectContext / window / activeEditor ("no
+  // project" / "no window captured" / "no active editor"); a MISSING key is
+  // untrusted core structure ⇒ skip the whole Session.
+  if (
+    !("projectContext" in value) ||
+    !("window" in value) ||
+    !("activeEditor" in value) ||
+    !("editors" in value) ||
+    !("updatedAt" in value)
+  ) {
+    return null;
+  }
+
+  if (!isCanonicalIsoTimestamp(value.updatedAt)) {
+    return null;
+  }
+
+  // Project Context: non-null but structurally invalid ⇒ skip.
+  if (
+    value.projectContext !== null &&
+    parseSessionProjectContext(value.projectContext) === null
+  ) {
+    return null;
+  }
+
+  // Window state: non-null but structurally invalid ⇒ skip.
+  if (
+    value.window !== null &&
+    parseWindowSessionState(value.window) === null
+  ) {
+    return null;
+  }
+
+  // Active editor identity: non-null but structurally invalid ⇒ skip.
+  if (
+    value.activeEditor !== null &&
+    parseSessionEditorIdentity(value.activeEditor) === null
+  ) {
+    return null;
+  }
+
+  // Editors: an array of structurally valid editor records. A malformed
+  // per-entry `viewState` does NOT fail here (parseSessionEditor keeps the
+  // entry with `viewState: null`).
+  if (!Array.isArray(value.editors)) {
+    return null;
+  }
+
+  const parsedEditors: SessionEditor[] = [];
+
+  for (const entry of value.editors) {
+    const parsed = parseSessionEditor(entry);
+
+    if (parsed === null) {
+      return null;
+    }
+
+    parsedEditors.push(parsed);
+  }
+
+  // The persisted `order` must already be the canonical 0..n-1 sequence in
+  // array order — no gaps, duplicates, or out-of-order entries. No repair.
+  if (parsedEditors.some((editor, index) => editor.order !== index)) {
+    return null;
+  }
+
+  // No two editors may share an identity.
+  const identityKeys = new Set<string>();
+
+  for (const editor of parsedEditors) {
+    const key = sessionEditorIdentityKey(sessionEditorIdentity(editor));
+
+    if (identityKeys.has(key)) {
+      return null;
+    }
+
+    identityKeys.add(key);
+  }
+
+  // Core is trustworthy — reuse the existing parser / normalization. Every
+  // sub-part it touches has already been validated above, so its output is
+  // the record exactly as persisted (no salvage / renumber actually
+  // applied).
+  return parseSessionRecord(value);
+}
+
 // ---------------------------------------------------------------------------
 // Manifest validation
 // ---------------------------------------------------------------------------

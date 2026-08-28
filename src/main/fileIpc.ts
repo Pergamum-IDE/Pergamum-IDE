@@ -105,6 +105,20 @@ function parseSelectMarkdownSavePathRequest(
   };
 }
 
+function parseReadMarkdownFileRequest(value: unknown): { path: string } {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("path" in value) ||
+    typeof (value as { path?: unknown }).path !== "string" ||
+    (value as { path: string }).path.length === 0
+  ) {
+    throw new Error("Invalid markdown read request.");
+  }
+
+  return { path: (value as { path: string }).path };
+}
+
 function parseWriteMarkdownRequest(value: unknown): WriteMarkdownRequest {
   if (
     typeof value !== "object" ||
@@ -419,6 +433,80 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             saveTargetKind: "standaloneMarkdown",
             pathKind: "unknown",
             extension: filePath ? debugLogExtensionForPath(filePath) : "unknown",
+            pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
+            operation: "read",
+            result: "failed",
+            reason: safeError.reason,
+            durationMs: durationSince(startedAt),
+            error: safeError
+          }
+        });
+
+        throw safeError;
+      }
+    }
+  );
+
+  ipcMain.handle(
+    FILE_CHANNELS.readMarkdownFile,
+    async (_event, rawRequest: unknown): Promise<MarkdownFile> => {
+      const startedAt = Date.now();
+      let filePath: string | null = null;
+
+      try {
+        filePath = parseReadMarkdownFileRequest(rawRequest).path;
+
+        const bytes = await fs.readFile(filePath);
+        const decoded = decodeMarkdownBytes(bytes);
+
+        logger.log({
+          level: "debug",
+          event: "document.open.fileRead.completed",
+          details: {
+            documentRef: logger.documentRefForKey(filePath),
+            extension: debugLogExtensionForPath(filePath),
+            pathDepth: debugLogPathDepth(filePath),
+            lineCount: debugLogLineCount(decoded.content),
+            lineEndingKind: decoded.lineEnding,
+            sizeBucket: debugLogSizeBucket(decoded.byteLength),
+            fileSizeBytes: decoded.byteLength,
+            byteLength: decoded.byteLength,
+            characterLength: decoded.characterLength,
+            hadBom: decoded.hadBom,
+            encodingAssumption: decoded.encoding,
+            operation: "read",
+            result: "succeeded",
+            durationMs: durationSince(startedAt)
+          }
+        });
+
+        return {
+          path: filePath,
+          content: decoded.content,
+          metadata: {
+            encoding: decoded.encoding,
+            lineEnding: decoded.lineEnding,
+            byteLength: decoded.byteLength,
+            characterLength: decoded.characterLength,
+            hadBom: decoded.hadBom
+          }
+        };
+      } catch (error) {
+        const safeError = sanitizedFileIoError(error);
+
+        logger.log({
+          level: "error",
+          event: "document.open.failed",
+          details: {
+            ...(filePath
+              ? { documentRef: logger.documentRefForKey(filePath) }
+              : {}),
+            editorIdKind: "file",
+            saveTargetKind: "standaloneMarkdown",
+            pathKind: "unknown",
+            extension: filePath
+              ? debugLogExtensionForPath(filePath)
+              : "unknown",
             pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
             operation: "read",
             result: "failed",

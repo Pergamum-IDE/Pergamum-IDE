@@ -2,9 +2,14 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * #272 is the "write it out" side only. These source-level guards make the
- * scope boundary explicit: no cold-start restore, and Session persistence
- * never reaches into Recovery / the Project DB / the Project directory.
+ * Source-level scope guards for Session persistence (#272) and cold-start
+ * Session restore (#274):
+ *
+ *   - Session persistence / restore never reach into Recovery, the Project
+ *     DB, or a Project directory (their own storage lane).
+ *   - A failed restore is a READ operation — it never escalates to a
+ *     destructive maintenance operation (delete / repair / rewrite /
+ *     synthesize).
  */
 
 function stripComments(source: string): string {
@@ -19,16 +24,36 @@ function read(relativePath: string): string {
 
 const sessionModules = [
   "src/shared/session.ts",
+  "src/shared/sessionRestore.ts",
   "src/shared/uuidv7.ts",
   "src/shared/sessionPersistenceFailure.ts",
   "src/main/sessionStore.ts",
   "src/main/sessionStoreIpc.ts",
+  "src/main/sessionRestoreRead.ts",
+  "src/main/coldStartRestoreIpc.ts",
+  "src/main/windowStateRestore.ts",
   "src/main/sessionManifestLock.ts",
   "src/main/windowSessionState.ts",
   "src/main/atomicFileWrite.ts",
   "src/renderer/session/sessionSnapshot.ts",
   "src/renderer/session/sessionPersistenceCoordinator.ts",
+  "src/renderer/session/coldStartRestore.ts",
   "src/renderer/explicitProjectCloseCommit.ts"
+].map((path) => ({ path, source: read(path) }));
+
+/**
+ * Modules that make up the #274 cold-start restore read/reconstruct path.
+ * `sessionStore.ts` is deliberately excluded — it owns the (#272) write
+ * side too; its read-only `readRestoreSetForColdStart` is covered by
+ * behavior tests instead.
+ */
+const restoreModules = [
+  "src/shared/sessionRestore.ts",
+  "src/main/sessionRestoreRead.ts",
+  "src/main/coldStartRestoreIpc.ts",
+  "src/main/windowStateRestore.ts",
+  "src/main/startupLaunchTarget.ts",
+  "src/renderer/session/coldStartRestore.ts"
 ].map((path) => ({ path, source: read(path) }));
 
 describe("Session persistence stays in its own storage lane (#272)", () => {
@@ -49,25 +74,56 @@ describe("Session persistence stays in its own storage lane (#272)", () => {
   });
 });
 
-describe("#272 does not implement cold-start Session Restore", () => {
-  it("main startup never reads the restore set back", () => {
+describe("#274 cold-start restore is read/reconstruct only — no destructive fallback", () => {
+  it("no restore module deletes / repairs / rewrites Session, manifest, Recovery, or authoritative data", () => {
+    for (const { path, source } of restoreModules) {
+      // No filesystem removal / write of Session, manifest, or Recovery data.
+      expect(source, path).not.toMatch(
+        /\b(rm|rmdir|unlink|rmSync|unlinkSync)\b/
+      );
+      expect(source, path).not.toMatch(
+        /writeFile|writeFileSync|writeFileAtomic|persistSession|removeSessionFromRestoreSet/
+      );
+      expect(source, path).not.toMatch(/\.pergamum_recovery/);
+      expect(source, path).not.toMatch(/recovery/i);
+      // No Project DB / Project directory maintenance (a filename-extension
+      // import is fine; opening / repairing the DB is not).
+      expect(source, path).not.toMatch(
+        /better-sqlite3|openProjectDatabase|createProjectDatabase|readProjectMetadata/
+      );
+      expect(source, path).not.toMatch(/projectConfigStore|pergamum\.json/);
+      // No manifest repair / schema rewrite from the restore path.
+      expect(source, path).not.toMatch(
+        /manifestRepair|repairManifest|rewriteSchema|migrateSession/
+      );
+    }
+  });
+
+  it("the cold-start read + IPC modules never mutate the store", () => {
+    for (const path of [
+      "src/main/sessionRestoreRead.ts",
+      "src/main/coldStartRestoreIpc.ts"
+    ]) {
+      const source = read(path);
+      // They only ever call the read-only cold-start reader.
+      expect(source, path).not.toMatch(/\.persistSession\(|\.removeSessionFromRestoreSet\(/);
+    }
+  });
+
+  it("the renderer restore coordinator never synthesizes a fake editor body / empty replacement", () => {
+    const source = read("src/renderer/session/coldStartRestore.ts");
+    expect(source).not.toMatch(/createUntitledDocument|initialDocumentContent/);
+    // untitled editors are skipped, not rebuilt.
+    expect(source).toMatch(/case "untitled":[\s\S]{0,400}return null/);
+  });
+
+  it("main reads the restore set only through the bounded cold-start reader", () => {
     const main = read("src/main/main.ts");
-    expect(main).not.toMatch(/readRestoreSet/);
-    expect(main).not.toMatch(/restoreSession|applySession|reopenFromSession/);
-  });
-
-  it("the renderer has no Session restore/apply wiring", () => {
-    const app = read("src/renderer/App.tsx");
-    expect(app).not.toMatch(/readRestoreSet|restoreSession|applySessionRecord/);
-  });
-
-  it("the coordinator only writes out — it never reads a restore set", () => {
-    const coordinator = read(
-      "src/renderer/session/sessionPersistenceCoordinator.ts"
-    );
-    // `dropFromRestoreSet` (membership removal) is write-side and allowed;
-    // reading the set back is not.
-    expect(coordinator).not.toMatch(/readRestoreSet|restoreSession|applySession/);
+    // The bounded reader is used; the raw unbounded reader is not called
+    // from startup, and no repair/rewrite is invoked.
+    expect(main).toMatch(/readColdStartRestoreSet\(/);
+    expect(main).not.toMatch(/\.readRestoreSet\(\)/);
+    expect(main).not.toMatch(/repairSession|rewriteSession|deleteSession/);
   });
 });
 

@@ -51,6 +51,8 @@ const pergamumApi: PergamumApi = {
   files: {
     openMarkdown: (documentOpenId) =>
       ipcRenderer.invoke(FILE_CHANNELS.openMarkdown, { documentOpenId }),
+    readMarkdownFile: (filePath) =>
+      ipcRenderer.invoke(FILE_CHANNELS.readMarkdownFile, { path: filePath }),
     saveMarkdown: (filePath, content) =>
       ipcRenderer.invoke(FILE_CHANNELS.saveMarkdown, {
         path: filePath,
@@ -71,6 +73,11 @@ const pergamumApi: PergamumApi = {
     openProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.openProject),
     openStartupProject: () =>
       ipcRenderer.invoke(PROJECT_CHANNELS.openStartupProject),
+    openProjectByFilePath: (projectFilePath, expectedProjectId) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.openProjectByFilePath, {
+        projectFilePath,
+        expectedProjectId
+      }),
     openRecentProject: (projectFilePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.openRecentProject, {
         projectFilePath
@@ -107,6 +114,8 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(SESSION_CHANNELS.dropSessionFromRestoreSet, {
         sessionId
       }),
+    getColdStartRestore: () =>
+      ipcRenderer.invoke(SESSION_CHANNELS.getColdStartRestore),
     onStorageFailure: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
         const reason =
