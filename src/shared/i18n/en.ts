@@ -127,6 +127,8 @@ export const enTranslations = {
   "dialog.unsavedChanges.title": "Unsaved Changes",
   "dialog.projectCloseFailed.message": "Pergamum could not close the project.\nYour working state is still kept. Try again later.",
   "dialog.projectCloseFailed.title": "Could not close project",
+  "dialog.sessionPersistenceSuspended.message": "Pergamum has suspended automatic saving of its workspace information because it could not be written.\n\nCheck the free space and health of your installation drive.\nThis error occurs in a feature separate from editing and saving your documents, but the current tabs and window state may not be restorable the next time Pergamum starts.",
+  "dialog.sessionPersistenceSuspended.title": "Automatic workspace saving suspended",
   "dialog.icon.error": "Error",
   "dialog.icon.info": "Information",
   "dialog.icon.warning": "Warning",

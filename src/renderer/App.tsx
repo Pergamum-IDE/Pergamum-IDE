@@ -143,7 +143,19 @@ import {
   type DocumentOpenAggregateMetrics,
   type ViewportSizeDetails
 } from "./EditorSurface";
-import type { MarkdownEditorParagraphIndentController } from "./MarkdownEditor";
+import type {
+  MarkdownEditorParagraphIndentController,
+  MarkdownEditorViewStateController
+} from "./MarkdownEditor";
+import type { EditorViewState } from "./editorViewState";
+import { createUuidv7 } from "../shared/uuidv7";
+import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
+import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
+import { runExplicitProjectCloseCommit } from "./explicitProjectCloseCommit";
+import {
+  isSessionStorageFailure,
+  type SessionStorageFailureReason
+} from "../shared/sessionPersistenceFailure";
 import {
   createContextMenuInteractionIdFactory,
   delegatedContextSurfaceFromDocument,
@@ -468,9 +480,12 @@ export function App(): JSX.Element {
 
   useEffect(
     () =>
-      dialogController.subscribe(() =>
-        setPendingDialogRequest(dialogController.getPendingRequest())
-      ),
+      dialogController.subscribe(() => {
+        setPendingDialogRequest(dialogController.getPendingRequest());
+        // A modal just opened or closed — if a suspension Error dialog is
+        // owed and dialogs are now idle, present it (#272 PO decision).
+        presentSessionPersistenceSuspendedDialogIfIdleRef.current();
+      }),
     [dialogController]
   );
   useEffect(() => () => dialogController.dispose(), [dialogController]);
@@ -646,6 +661,88 @@ export function App(): JSX.Element {
     },
     []
   );
+  // #272: Session persistence seam. `App` only *observes* already-derived
+  // session inputs and forwards them to the coordinator, plus exposes a
+  // read-only Editor View State handle (#273). All serialization, debounce,
+  // atomic write and disk I/O live outside `App` (coordinator + main).
+  const markdownEditorViewStateControllerRef =
+    useRef<MarkdownEditorViewStateController | null>(null);
+  const handleMarkdownEditorViewStateControllerChange = useCallback(
+    (controller: MarkdownEditorViewStateController | null) => {
+      markdownEditorViewStateControllerRef.current = controller;
+    },
+    []
+  );
+  const rendererSessionIdRef = useRef<string>("");
+
+  if (!rendererSessionIdRef.current) {
+    rendererSessionIdRef.current = createUuidv7();
+  }
+
+  const rendererSessionId = rendererSessionIdRef.current;
+  // #272 (PO decision): fired ONCE when Session persistence goes
+  // ACTIVE → SUSPENDED. Ref-indirected so the coordinator (created once)
+  // always reaches the current handler.
+  const sessionPersistenceSuspendedHandlerRef = useRef<
+    (reason: SessionStorageFailureReason) => void
+  >(() => undefined);
+  // Re-attempts the deferred suspension Error dialog whenever dialogs go
+  // idle (called from the dialog-controller subscription).
+  const presentSessionPersistenceSuspendedDialogIfIdleRef = useRef<
+    () => void
+  >(() => undefined);
+  const sessionPersistenceRef = useRef<SessionPersistenceCoordinator | null>(
+    null
+  );
+
+  if (!sessionPersistenceRef.current) {
+    sessionPersistenceRef.current = new SessionPersistenceCoordinator({
+      sessionId: rendererSessionId,
+      transport: {
+        persist: (snapshot) => window.pergamum.session.persist(snapshot),
+        dropFromRestoreSet: (sessionId) =>
+          window.pergamum.session.dropFromRestoreSet(sessionId)
+      },
+      onSuspended: (reason) =>
+        sessionPersistenceSuspendedHandlerRef.current(reason),
+      captureActiveEditorViewState: () => {
+        const state = openDocumentsStateRef.current;
+        const active = activeOpenDocument(state);
+        const editor = activeCurrentEditor(state);
+
+        if (!active || editor?.kind !== "markdown") {
+          return null;
+        }
+
+        return {
+          key: serializeEditorId(active.id),
+          viewState:
+            markdownEditorViewStateControllerRef.current?.captureViewState() ??
+            null
+        };
+      }
+    });
+  }
+
+  const sessionPersistence = sessionPersistenceRef.current;
+  // #272 (review Blocker 3): the outgoing Markdown editor's final View State,
+  // captured by MarkdownEditor at the active-editor-switch / unmount
+  // boundary (never per keystroke), so a fast tab switch before the
+  // persistence debounce never loses it.
+  const handleMarkdownViewStateSnapshot = useCallback(
+    (outgoingDocumentKey: string, viewState: EditorViewState | null) => {
+      sessionPersistence.recordEditorViewState(outgoingDocumentKey, viewState);
+    },
+    [sessionPersistence]
+  );
+  // #272 (review Blocker 4): a caret/selection/scroll-only change in the
+  // active Markdown editor never touches React state, so nothing else would
+  // schedule a Session flush for it. This is the cheap "flush is owed"
+  // signal — it does NOT capture, hash, serialize, or IPC; the actual
+  // View State capture still happens once, at flush time.
+  const handleMarkdownViewStateDirty = useCallback(() => {
+    sessionPersistence.markViewStateDirty();
+  }, [sessionPersistence]);
   /**
    * Holds the current live command context. Read lazily by the
    * CommandRegistry's injected context provider so `when` re-evaluation at
@@ -827,6 +924,37 @@ export function App(): JSX.Element {
   const activeProjectContext = useMemo(
     () => projectContextForProject(project),
     [project]
+  );
+  // #272: recomputed whenever the Project or the open-editor set changes.
+  // Cheap (no serialization / hashing) — the coordinator debounces and
+  // captures Editor View State at most once per flush.
+  const sessionSnapshotInputs = useMemo(
+    () =>
+      buildSessionSnapshotInputs(
+        rendererSessionId,
+        project,
+        openDocumentsState
+      ),
+    [rendererSessionId, project, openDocumentsState]
+  );
+  useEffect(() => {
+    sessionPersistence.updateSessionInputs(sessionSnapshotInputs);
+  }, [sessionPersistence, sessionSnapshotInputs]);
+  useEffect(
+    () => () => sessionPersistence.dispose(),
+    [sessionPersistence]
+  );
+  // #272 (PO decision): a storage-class failure on a main-driven
+  // (window-event) Session re-persist — which the coordinator never awaited
+  // — SUSPENDS the coordinator so it stops ordinary continuous persistence.
+  useEffect(
+    () =>
+      window.pergamum.session.onStorageFailure((reason) => {
+        sessionPersistence.suspendFromStorageFailure(
+          reason as SessionStorageFailureReason
+        );
+      }),
+    [sessionPersistence]
   );
   useEffect(() => {
     imeCompositionSaveGuard.clearPendingSave("active_editor_changed");
@@ -2613,6 +2741,83 @@ export function App(): JSX.Element {
     });
   }
 
+  /**
+   * #272 (PO decision): Session automatic persistence has SUSPENDED because
+   * the Session store could not be written. It MUST be presented to the
+   * user as an Error dialog (not a NotificationToast, not a warning) — and
+   * "presented", not merely "attempted". If another modal is open when the
+   * suspension happens, the Error dialog is deferred and shown once that
+   * modal closes. Exactly one Error dialog per ACTIVE → SUSPENDED
+   * transition. Deliberately distinct from a Markdown document Save failure,
+   * and it never touches editing / saving.
+   *
+   * `owed`  — a suspension Error dialog is due but not yet on screen.
+   * `shown` — it has actually been presented (never present a second one).
+   */
+  const sessionPersistenceSuspendedDialogOwedRef = useRef(false);
+  const sessionPersistenceSuspendedDialogShownRef = useRef(false);
+
+  async function showSessionPersistenceSuspendedDialog(): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.sessionPersistenceSuspended.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.sessionPersistenceSuspended.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  function presentSessionPersistenceSuspendedDialogIfIdle(): void {
+    if (
+      !sessionPersistenceSuspendedDialogOwedRef.current ||
+      sessionPersistenceSuspendedDialogShownRef.current
+    ) {
+      return;
+    }
+
+    // Another modal is open — wait. The dialog-controller subscription
+    // effect calls this again when it closes.
+    if (dialogController.getPendingRequest() !== null) {
+      return;
+    }
+
+    sessionPersistenceSuspendedDialogOwedRef.current = false;
+    sessionPersistenceSuspendedDialogShownRef.current = true;
+
+    void showSessionPersistenceSuspendedDialog().catch(() => {
+      // Could not present after all (a modal opened in the same tick).
+      // Re-arm and try again when dialogs are next idle.
+      sessionPersistenceSuspendedDialogShownRef.current = false;
+      sessionPersistenceSuspendedDialogOwedRef.current = true;
+    });
+  }
+
+  function handleSessionPersistenceSuspended(
+    _reason: SessionStorageFailureReason
+  ): void {
+    if (
+      sessionPersistenceSuspendedDialogShownRef.current ||
+      sessionPersistenceSuspendedDialogOwedRef.current
+    ) {
+      return;
+    }
+
+    sessionPersistenceSuspendedDialogOwedRef.current = true;
+    presentSessionPersistenceSuspendedDialogIfIdle();
+  }
+  sessionPersistenceSuspendedHandlerRef.current =
+    handleSessionPersistenceSuspended;
+  presentSessionPersistenceSuspendedDialogIfIdleRef.current =
+    presentSessionPersistenceSuspendedDialogIfIdle;
+
   async function confirmReadOnlyProjectSaveAsInsideRoot(
     selectedPath: string
   ): Promise<boolean> {
@@ -3656,6 +3861,11 @@ export function App(): JSX.Element {
       return;
     }
 
+    // #272 (review): explicit Project Close's durable commit boundary — see
+    // runExplicitProjectCloseCommit. The post-close Session snapshot is made
+    // durable (awaited) BEFORE the main-process Project Close runs, so
+    // "Project Close SUCCESS ⇒ durable Session is post-close" always holds.
+    // If the post-close Session cannot be persisted, the Project stays open.
     let shouldShowCloseFailedDialog = false;
     lifecycleOperationInProgressRef.current = true;
     try {
@@ -3669,12 +3879,60 @@ export function App(): JSX.Element {
         dirtyResolution.status === "discarded"
       ) {
         const commitBarrierToken = dirtyResolution.commitBarrierToken;
+        // Built from CURRENT state — the Project is not closed yet.
+        const preCloseSessionInputs = buildSessionSnapshotInputs(
+          rendererSessionId,
+          project,
+          openDocumentsStateRef.current
+        );
+        const prospectivePostCloseSessionInputs = buildSessionSnapshotInputs(
+          rendererSessionId,
+          null,
+          removeProjectScopedOpenEditors(openDocumentsStateRef.current)
+        );
 
-        if (await commitExplicitProjectClose()) {
-          resetRendererProjectAfterExplicitClose(commitBarrierToken);
-        } else {
-          exitLifecycleCommitBarrier(commitBarrierToken);
-          shouldShowCloseFailedDialog = true;
+        const closeResult = await runExplicitProjectCloseCommit({
+          commitPostCloseSession: () =>
+            sessionPersistence.commitNow(prospectivePostCloseSessionInputs),
+          closeProjectInMain: () => commitExplicitProjectClose(),
+          rollbackSession: () =>
+            sessionPersistence.commitNow(preCloseSessionInputs),
+          applyRendererPostCloseState: () =>
+            resetRendererProjectAfterExplicitClose(commitBarrierToken),
+          exitCommitBarrier: () =>
+            exitLifecycleCommitBarrier(commitBarrierToken)
+        });
+
+        switch (closeResult.status) {
+          case "closed":
+            break;
+          case "sessionCommitFailed":
+            setStatus({
+              key: "status.projectCloseFailed",
+              values: { message: errorMessage(closeResult.error, translate) }
+            });
+            // A storage-class session-commit failure has already SUSPENDED
+            // Session persistence and shown the single suspension Error
+            // dialog; do not stack the generic "could not close project"
+            // dialog on top. Non-storage failures still get the generic
+            // dialog. Either way, the Project is NOT closed.
+            shouldShowCloseFailedDialog = !isSessionStorageFailure(
+              closeResult.error
+            );
+            break;
+          case "mainCloseFailed":
+            // commitExplicitProjectClose already surfaced the main-close
+            // reason; a rollback failure is more severe, so overwrite.
+            if (!closeResult.rolledBack) {
+              setStatus({
+                key: "status.projectCloseFailed",
+                values: {
+                  message: errorMessage(closeResult.rollbackError, translate)
+                }
+              });
+            }
+            shouldShowCloseFailedDialog = true;
+            break;
         }
       }
     } finally {
@@ -3707,7 +3965,28 @@ export function App(): JSX.Element {
           dirtyResolution.status === "discarded"
         ) {
           commitBarrierToken = dirtyResolution.commitBarrierToken;
-          decision = { status: "approved", requestId: request.requestId };
+
+          if (request.isFinalWindow) {
+            // #272: the final window close keeps this Session in the restore
+            // set; a best-effort flush is enough (durability is continuous).
+            void sessionPersistence.flushNow();
+            decision = { status: "approved", requestId: request.requestId };
+          } else {
+            // #272 (review Blocker 5): an ordinary non-final window close
+            // removes this Session from the future restore set. That removal
+            // MUST be durable before we approve the close — otherwise a
+            // manifest write failure would let the closed Session revive on
+            // next launch. On failure, decline the close (safe: the window
+            // stays open, the user can retry).
+            try {
+              await sessionPersistence.dropFromRestoreSet();
+              decision = { status: "approved", requestId: request.requestId };
+            } catch {
+              exitLifecycleCommitBarrier(commitBarrierToken);
+              commitBarrierToken = null;
+              decision = { status: "cancelled", requestId: request.requestId };
+            }
+          }
         } else {
           decision = { status: "cancelled", requestId: request.requestId };
         }
@@ -3753,6 +4032,10 @@ export function App(): JSX.Element {
       }
 
       const commitBarrierToken = dirtyResolution.commitBarrierToken;
+
+      // #272: explicitApplicationQuit keeps the restore set; a best-effort
+      // flush is an optimization, never a correctness dependency.
+      void sessionPersistence.flushNow();
 
       try {
         await window.pergamum.lifecycle.quitApplication({
@@ -4314,6 +4597,11 @@ export function App(): JSX.Element {
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }
+                        onViewStateControllerChange={
+                          handleMarkdownEditorViewStateControllerChange
+                        }
+                        onViewStateSnapshot={handleMarkdownViewStateSnapshot}
+                        onViewStateDirty={handleMarkdownViewStateDirty}
                         onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
                         onChangeGlossaryEntryDescription={
                           setActiveGlossaryEntryDescription

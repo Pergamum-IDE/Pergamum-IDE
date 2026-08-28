@@ -10,6 +10,7 @@ import {
   GLOSSARY_CHANNELS,
   LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
+  SESSION_CHANNELS,
   SETTINGS_CHANNELS,
   type PergamumApi
 } from "../shared/api";
@@ -98,6 +99,29 @@ const pergamumApi: PergamumApi = {
     getSettings: () => ipcRenderer.invoke(SETTINGS_CHANNELS.getSettings),
     saveSettings: (settings) =>
       ipcRenderer.invoke(SETTINGS_CHANNELS.saveSettings, settings)
+  },
+  session: {
+    persist: (snapshot) =>
+      ipcRenderer.invoke(SESSION_CHANNELS.persistSession, snapshot),
+    dropFromRestoreSet: (sessionId) =>
+      ipcRenderer.invoke(SESSION_CHANNELS.dropSessionFromRestoreSet, {
+        sessionId
+      }),
+    onStorageFailure: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+        const reason =
+          isRecord(payload) && typeof payload.reason === "string"
+            ? payload.reason
+            : "writeFailed";
+        callback(reason);
+      };
+
+      ipcRenderer.on(SESSION_CHANNELS.storageFailure, listener);
+
+      return () => {
+        ipcRenderer.off(SESSION_CHANNELS.storageFailure, listener);
+      };
+    }
   },
   glossary: {
     create: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.create, input),

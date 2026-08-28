@@ -29,6 +29,7 @@ import type {
   QuitApplicationResult
 } from "./lifecycle";
 import type { AppPlatform } from "./platform";
+import type { RendererSessionSnapshot } from "./session";
 
 export type { AppPlatform } from "./platform";
 export type {
@@ -104,6 +105,14 @@ export const LIFECYCLE_CHANNELS = {
 export const SETTINGS_CHANNELS = {
   getSettings: "settings:getSettings",
   saveSettings: "settings:saveSettings"
+} as const;
+
+export const SESSION_CHANNELS = {
+  persistSession: "session:persistSession",
+  dropSessionFromRestoreSet: "session:dropSessionFromRestoreSet",
+  /** main → renderer: a storage-class Session persistence failure occurred
+   *  for a write the renderer was not awaiting (window-driven re-persist). */
+  storageFailure: "session:storageFailure"
 } as const;
 
 export const GLOSSARY_CHANNELS = {
@@ -412,6 +421,25 @@ export interface PergamumApi {
     saveSettings: (
       settings: SaveApplicationSettingsRequest
     ) => Promise<ApplicationSettings>;
+  };
+  /**
+   * #272: continuous Session persistence (the "write it out" side only —
+   * no cold-start restore here). The renderer pushes a
+   * `RendererSessionSnapshot`; the main process enriches it with
+   * instanceRunId / projectId / live Window state and writes it durably
+   * under `<userData>/sessions/`.
+   */
+  session: {
+    persist: (snapshot: RendererSessionSnapshot) => Promise<void>;
+    dropFromRestoreSet: (sessionId: string) => Promise<void>;
+    /**
+     * Subscribe to "the main process hit a storage-class Session
+     * persistence failure for a write you were not awaiting" (window-driven
+     * re-persist). The renderer moves its coordinator to SUSPENDED.
+     */
+    onStorageFailure: (
+      callback: (reason: string) => void
+    ) => () => void;
   };
   glossary: {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;

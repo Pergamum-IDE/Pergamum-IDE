@@ -53,26 +53,61 @@ describe("renderer explicit project close failure wiring (#271)", () => {
       "const commitBarrierToken = dirtyResolution.commitBarrierToken",
       dirtyResolutionIndex
     );
-    const commitCallIndex = closeProjectBlock.indexOf(
-      "await commitExplicitProjectClose()",
+    // #272 review: the ordering / failure semantics now live in
+    // runExplicitProjectCloseCommit; closeProject wires the steps.
+    const runCommitIndex = closeProjectBlock.indexOf(
+      "await runExplicitProjectCloseCommit({",
       tokenIndex
     );
-    const resetCallIndex = closeProjectBlock.indexOf(
-      "resetRendererProjectAfterExplicitClose(commitBarrierToken)",
-      commitCallIndex
+    const commitPostCloseIndex = closeProjectBlock.indexOf(
+      "commitPostCloseSession:",
+      runCommitIndex
     );
-    const failedBranchIndex = closeProjectBlock.indexOf(
-      "exitLifecycleCommitBarrier(commitBarrierToken)",
-      commitCallIndex
+    const closeInMainIndex = closeProjectBlock.indexOf(
+      "closeProjectInMain: () => commitExplicitProjectClose()",
+      runCommitIndex
+    );
+    const applyRendererIndex = closeProjectBlock.indexOf(
+      "resetRendererProjectAfterExplicitClose(commitBarrierToken)",
+      runCommitIndex
     );
 
     expect(dirtyResolutionIndex).toBeGreaterThan(-1);
     expect(tokenIndex).toBeGreaterThan(dirtyResolutionIndex);
-    expect(commitCallIndex).toBeGreaterThan(tokenIndex);
-    expect(resetCallIndex).toBeGreaterThan(commitCallIndex);
-    expect(failedBranchIndex).toBeGreaterThan(commitCallIndex);
-    expect(failedBranchIndex).toBeLessThan(
-      closeProjectBlock.indexOf("await showProjectCloseFailedDialog()")
+    expect(runCommitIndex).toBeGreaterThan(tokenIndex);
+    // post-close Session commit is wired as the first step.
+    expect(commitPostCloseIndex).toBeGreaterThan(runCommitIndex);
+    expect(commitPostCloseIndex).toBeLessThan(closeInMainIndex);
+    expect(closeInMainIndex).toBeGreaterThan(-1);
+    // renderer post-close state is only applied via applyRendererPostCloseState.
+    expect(applyRendererIndex).toBeGreaterThan(-1);
+    expect(closeProjectBlock).toContain(
+      "applyRendererPostCloseState: () =>"
     );
+
+    // runExplicitProjectCloseCommit itself: renderer post-close state is
+    // applied ONLY on a successful main close, and the barrier is released
+    // on every non-success outcome.
+    const helper = readFileSync(
+      "src/renderer/explicitProjectCloseCommit.ts",
+      "utf8"
+    );
+    const commitPostClose = helper.indexOf("await steps.commitPostCloseSession()");
+    const sessionFailReturn = helper.indexOf(
+      'return { status: "sessionCommitFailed"'
+    );
+    const closeInMain = helper.indexOf("await steps.closeProjectInMain()");
+    const applyRenderer = helper.indexOf(
+      "steps.applyRendererPostCloseState()"
+    );
+    const rollback = helper.indexOf("await steps.rollbackSession()");
+
+    expect(commitPostClose).toBeGreaterThan(-1);
+    expect(sessionFailReturn).toBeGreaterThan(commitPostClose);
+    expect(closeInMain).toBeGreaterThan(sessionFailReturn);
+    expect(applyRenderer).toBeGreaterThan(closeInMain);
+    expect(rollback).toBeGreaterThan(closeInMain);
+    // The session-commit-failure early return happens BEFORE closeProjectInMain.
+    expect(sessionFailReturn).toBeLessThan(closeInMain);
   });
 });

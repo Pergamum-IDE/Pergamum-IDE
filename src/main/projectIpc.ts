@@ -85,6 +85,9 @@ import {
 interface CurrentProjectState {
   rootPath: string;
   activeProjectFilePath: string;
+  // #272: metadata.project_id of the open Project — the Session Store's
+  // Project *identity* (distinct from activeProjectFilePath, its *locator*).
+  projectId: string;
   projectName: string;
   accessMode: ProjectAccessMode;
   writeOwnership: ProjectWriteOwnership;
@@ -385,6 +388,11 @@ export function currentProjectRootPath(): string | null {
 
 export function currentActiveProjectFilePath(): string | null {
   return currentProjectState?.activeProjectFilePath ?? null;
+}
+
+/** #272: the open Project's identity (`metadata.project_id`), or null. */
+export function currentProjectId(): string | null {
+  return currentProjectState?.projectId ?? null;
 }
 
 export function currentProjectAccessMode(): ProjectAccessMode | null {
@@ -903,6 +911,7 @@ export async function closeCurrentProject(): Promise<CloseCurrentProjectResult> 
 
 async function activateProject(
   project: PergamumProject,
+  projectId: string,
   writeOwnershipManager: ProjectWriteOwnershipManager,
   writeOwnership: ProjectWriteOwnership
 ): Promise<void> {
@@ -911,6 +920,7 @@ async function activateProject(
   currentProjectState = {
     rootPath: project.rootPath,
     activeProjectFilePath: project.activeProjectFilePath,
+    projectId,
     projectName: project.name,
     accessMode: project.accessMode,
     writeOwnership,
@@ -1049,6 +1059,7 @@ async function finalizeProjectFileOpen(
 ): Promise<PergamumProject> {
   await activateProject(
     openedProject.project,
+    openedProject.metadata.projectId,
     openedProject.writeOwnershipManager,
     openedProject.writeOwnership
   );
