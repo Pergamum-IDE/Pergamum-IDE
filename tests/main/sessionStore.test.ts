@@ -506,16 +506,115 @@ describe("SessionStore — cross-process manifest coordination (#272 review Bloc
       };
     }
 
-    // WITHOUT a shared lock (each instance gets a no-op lock): lost update.
+    // A single-use N-party read rendezvous, created here and used ONLY by
+    // the no-lock case below (never module scope, never shared with the
+    // real-lock case). `parties` callers each get a promise that resolves
+    // only once every party has entered.
+    //
+    // The deadline is a fail-fast guard for a BROKEN test seam (e.g. the
+    // store stops reading the manifest through this filesystem) — it is
+    // NOT a timing control: the race is made deterministic by the
+    // rendezvous itself; the deadline only turns a never-arriving party
+    // into a fast, legible failure instead of a multi-second hang.
+    function makeReadRendezvous(
+      purpose: string,
+      parties: number,
+      deadlineMs = 2000
+    ): () => Promise<void> {
+      let arrived = 0;
+      let release!: () => void;
+      let fail!: (error: Error) => void;
+      const gate = new Promise<void>((resolve, reject) => {
+        release = resolve;
+        fail = reject;
+      });
+      // Not unref'd: on the happy path `clearTimeout` below cancels it; on
+      // a broken seam it must be able to fire and reject even if nothing
+      // else is keeping the loop alive.
+      const timer = setTimeout(() => {
+        fail(
+          new Error(
+            `${purpose} timed out: expected ${parties} arrivals, got ${arrived}`
+          )
+        );
+      }, deadlineMs);
+
+      return () => {
+        arrived += 1;
+        if (arrived >= parties) {
+          clearTimeout(timer);
+          release();
+        }
+        return gate;
+      };
+    }
+
+    // A SessionStoreFileSystem whose ONLY difference from the real one is
+    // that the manifest read, after completing, blocks until every
+    // concurrent writer has also finished its manifest read (via
+    // `afterManifestRead`). Real atomic write (unique temp file + rename)
+    // and real read/remove otherwise, so two concurrent manifest writes
+    // cannot corrupt each other at the byte level and the lost *update*
+    // (read-modify-write) is the only race left. Used ONLY for the no-lock
+    // case.
+    function rendezvousReadFs(
+      afterManifestRead: () => Promise<void>
+    ): SessionStoreFileSystem {
+      const real = createSessionStoreFileSystemWithAtomicWrite({});
+
+      return {
+        ...real,
+        readFile: async (filePath) => {
+          if (path.basename(filePath) !== SESSION_MANIFEST_FILE_NAME) {
+            return real.readFile(filePath);
+          }
+
+          // 1) do the real read; 2) hold the settled value / error;
+          // 3) wait for every writer's read to settle; 4) only then hand
+          //    it back — so both writers read-modify-write from the
+          //    identical (here: absent -> empty) manifest.
+          let settled:
+            | { ok: true; value: string }
+            | { ok: false; error: unknown };
+          try {
+            settled = { ok: true, value: await real.readFile(filePath) };
+          } catch (error) {
+            settled = { ok: false, error };
+          }
+
+          await afterManifestRead();
+
+          if (settled.ok) {
+            return settled.value;
+          }
+          throw settled.error;
+        }
+      };
+    }
+
+    // WITHOUT a shared lock (each instance gets a no-op lock): the
+    // rendezvous forces both writers to finish reading the (absent ->
+    // empty) manifest before either writes it back, so exactly one write
+    // lands in the final manifest.
+    //
+    // Which writer wins is intentionally nondeterministic — the write
+    // order, once the reads are aligned, is deliberately left
+    // unconstrained. This assertion verifies the lost update by session
+    // COUNT only; it must never assert which of X / Y survives, or the
+    // flake returns.
     const noLock = { run: <T,>(op: () => Promise<T>) => op() };
+    const bothWritersHaveRead = makeReadRendezvous(
+      "session manifest read rendezvous",
+      2
+    );
     const rawA = createSessionStore({
       baseDirectory: sessionsDir,
-      fileSystem: delayingFs(),
+      fileSystem: rendezvousReadFs(bothWritersHaveRead),
       manifestLock: noLock
     });
     const rawB = createSessionStore({
       baseDirectory: sessionsDir,
-      fileSystem: delayingFs(),
+      fileSystem: rendezvousReadFs(bothWritersHaveRead),
       manifestLock: noLock
     });
     await Promise.all([
@@ -524,9 +623,13 @@ describe("SessionStore — cross-process manifest coordination (#272 review Bloc
     ]);
     expect(
       (await store.readRestoreSet()).manifest.sessions.length
-    ).toBe(1); // one write clobbered the other
+    ).toBe(1); // one write clobbered the other; which one is not asserted
 
-    // WITH the real shared filesystem lock: both land.
+    // WITH the real shared filesystem lock: both land. Uses a plain
+    // delaying filesystem with NO rendezvous — the real lock serializes
+    // A's whole read-modify-write ahead of B regardless of timing, and a
+    // 2-party read barrier here would instead DEADLOCK (A holds the lock
+    // and waits at the barrier while B waits for the lock).
     await fs.rm(manifestPath(), { force: true });
     const lockedA = createSessionStore({
       baseDirectory: sessionsDir,

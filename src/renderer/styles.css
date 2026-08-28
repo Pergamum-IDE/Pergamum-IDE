@@ -1565,6 +1565,110 @@ label.settingsItemHeader {
   opacity: 1;
 }
 
+/* #256: configurable whitespace markers, drawn on a CodeMirror `layer()`
+   (see whitespaceMarkerLayer.ts) — NOT `Decoration.mark`. The layer is a
+   separate absolutely-positioned `<div class="cm-layer …">` under
+   `.cm-scroller`, a sibling of `.cm-content`, never contenteditable, and
+   `aria-hidden` (set by the layer view). Each marker is an absolutely
+   positioned child `<div>` sized to the measured character box; its glyph
+   is a `background` only. Because the marker DOM lives outside
+   `.cm-content`, the browser / CodeMirror DOM rebuilds during IME
+   composition never touch it, so already-shown markers do not flicker.
+
+   The marker <div> gets `font-size` set (in JS) to its measured box
+   height, so the `em`-based glyph sizes below follow editor font size /
+   zoom. `currentColor` + low opacity keeps every marker well below
+   body-text contrast. Four categories, distinguished by shape: filled dot
+   (ASCII), hollow square (ideographic / full-width), right arrow (tab),
+   hollow ring (other Unicode Zs). Layout of the body is never affected:
+   the layer wrapper has `contain: size style` and the markers are
+   `position: absolute`. */
+.pergamum-whitespace-layer {
+  /* Clicks must fall through to the contenteditable so caret placement on
+     a whitespace character is unchanged. */
+  pointer-events: none;
+}
+
+.pergamum-whitespace-layer-marker {
+  position: absolute;
+  color: var(--workspace-sidebar-muted-foreground);
+  opacity: 0.62;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* ASCII space (U+0020): a small centred filled dot. */
+.pergamum-whitespace-layer-marker-ascii {
+  background-image: radial-gradient(
+    circle at center,
+    currentColor 0 0.04em,
+    transparent 0.05em
+  );
+}
+
+/* Ideographic space (U+3000): a centred hollow square, reads as a
+   full-width space. Four fixed hairline edges; the square stays 0.34em
+   regardless of the marker box width. */
+.pergamum-whitespace-layer-marker-ideographic {
+  background-image:
+    linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position:
+    center calc(50% - 0.17em),
+    center calc(50% + 0.17em),
+    calc(50% - 0.17em) center,
+    calc(50% + 0.17em) center;
+  background-size:
+    0.34em 1px,
+    0.34em 1px,
+    1px 0.34em,
+    1px 0.34em;
+}
+
+/* Tab (U+0009): a left-anchored right-pointing arrow. Fixed size, so the
+   tab's (naturally wide, tab-stop-dependent) box does not stretch it. */
+.pergamum-whitespace-layer-marker-tab {
+  background-image:
+    linear-gradient(currentColor, currentColor),
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.55px),
+      currentColor calc(50% - 0.55px) calc(50% + 0.55px),
+      transparent calc(50% + 0.55px)
+    ),
+    linear-gradient(
+      -45deg,
+      transparent calc(50% - 0.55px),
+      currentColor calc(50% - 0.55px) calc(50% + 0.55px),
+      transparent calc(50% + 0.55px)
+    );
+  background-repeat: no-repeat;
+  background-position:
+    0.12em center,
+    0.4em calc(50% - 0.08em),
+    0.4em calc(50% + 0.08em);
+  background-size:
+    0.42em 1px,
+    0.14em 0.14em,
+    0.14em 0.14em;
+}
+
+/* Other Unicode Zs (NBSP, THIN SPACE, NARROW NO-BREAK SPACE, ...): a
+   centred hollow ring — distinct from the filled ASCII dot and the
+   ideographic square. Fixed radius via the gradient stops. */
+.pergamum-whitespace-layer-marker-other {
+  background-image: radial-gradient(
+    circle at center,
+    transparent 0 0.035em,
+    currentColor 0.045em 0.075em,
+    transparent 0.085em
+  );
+}
+
 .preview {
   flex: 1;
   min-height: 0;

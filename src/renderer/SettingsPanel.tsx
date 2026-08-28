@@ -133,6 +133,14 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.editor.lineEnding.expected;
     case "editor.lineEnding.markerGlyph":
       return settings.editor.lineEnding.markerGlyph;
+    case "editor.whitespace.renderIdeographicSpace":
+      return settings.editor.whitespace.renderIdeographicSpace;
+    case "editor.whitespace.renderAsciiSpace":
+      return settings.editor.whitespace.renderAsciiSpace;
+    case "editor.whitespace.renderTab":
+      return settings.editor.whitespace.renderTab;
+    case "editor.whitespace.renderOtherUnicodeSpace":
+      return settings.editor.whitespace.renderOtherUnicodeSpace;
     case "editor.characterCount.exclude.whitespace":
       return settings.editor.characterCount.exclude.whitespace;
     case "editor.characterCount.exclude.lineBreaks":
@@ -266,6 +274,46 @@ function buildNextSettings(
           statusBar: {
             ...settings.workbench.statusBar,
             characterCount: { visible: Boolean(rawValue) }
+          }
+        }
+      });
+    case "editor.whitespace.renderIdeographicSpace":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          whitespace: {
+            ...settings.editor.whitespace,
+            renderIdeographicSpace: Boolean(rawValue)
+          }
+        }
+      });
+    case "editor.whitespace.renderAsciiSpace":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          whitespace: {
+            ...settings.editor.whitespace,
+            renderAsciiSpace: Boolean(rawValue)
+          }
+        }
+      });
+    case "editor.whitespace.renderTab":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          whitespace: {
+            ...settings.editor.whitespace,
+            renderTab: Boolean(rawValue)
+          }
+        }
+      });
+    case "editor.whitespace.renderOtherUnicodeSpace":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          whitespace: {
+            ...settings.editor.whitespace,
+            renderOtherUnicodeSpace: Boolean(rawValue)
           }
         }
       });

@@ -186,6 +186,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.whitespace.renderAsciiSpace",
+          "editor.whitespace.renderIdeographicSpace",
+          "editor.whitespace.renderOtherUnicodeSpace",
+          "editor.whitespace.renderTab",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
           "preview.renderer",
@@ -321,6 +325,45 @@ describe("Settings UI Catalog Schema (#226)", () => {
         control: { kind: "text" },
         defaultValue: ""
       });
+    });
+
+    it("places the four #256 whitespace switches in the editor category, independently and before character count settings", () => {
+      const keys = [
+        "editor.whitespace.renderIdeographicSpace",
+        "editor.whitespace.renderAsciiSpace",
+        "editor.whitespace.renderTab",
+        "editor.whitespace.renderOtherUnicodeSpace"
+      ] as const;
+
+      const items = keys.map((key) => {
+        const item = getSettingCatalogItem(key);
+
+        if (!item) {
+          throw new Error(`Expected ${key} to be registered.`);
+        }
+
+        return item;
+      });
+
+      expect(items.map((item) => item.category)).toEqual([
+        "editor",
+        "editor",
+        "editor",
+        "editor"
+      ]);
+      expect(items.map((item) => item.control)).toEqual([
+        { kind: "switch" },
+        { kind: "switch" },
+        { kind: "switch" },
+        { kind: "switch" }
+      ]);
+      expect(items.map((item) => item.order)).toEqual([320, 330, 340, 350]);
+      expect(items.map((item) => item.defaultValue)).toEqual([
+        true,
+        false,
+        false,
+        true
+      ]);
     });
 
     it("places all character count settings together in the editor category, with visibility before exclusions (#259 taxonomy)", () => {
@@ -559,6 +602,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "commandPalette.description.enable",
         "commandPalette.description.marquee.delay",
         "commandPalette.description.marquee.speed",
+        "editor.whitespace.renderIdeographicSpace",
+        "editor.whitespace.renderAsciiSpace",
+        "editor.whitespace.renderTab",
+        "editor.whitespace.renderOtherUnicodeSpace",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
         "editor.characterCount.exclude.headings",

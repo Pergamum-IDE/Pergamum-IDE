@@ -6,6 +6,7 @@ import {
   documentMaxLineLength
 } from "../shared/documentMetrics";
 import type {
+  ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
   LineEndingMarkerGlyph,
   NewFileLineEnding,
@@ -350,6 +351,12 @@ interface EditorSurfaceProps {
    * tracked line break.
    */
   markerGlyph: LineEndingMarkerGlyph;
+  /**
+   * `editor.whitespace.*` (#256) — display-only whitespace marker
+   * toggles, passed straight through to the Markdown editor. Never
+   * affects Save, dirty state, or selection.
+   */
+  whitespaceSettings: ApplicationEditorWhitespaceSettings;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -478,6 +485,7 @@ export function EditorSurface({
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  whitespaceSettings,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -529,6 +537,7 @@ export function EditorSurface({
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
+          whitespaceSettings={whitespaceSettings}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
@@ -607,6 +616,7 @@ interface MarkdownEditorSurfaceProps {
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
   markerGlyph: LineEndingMarkerGlyph;
+  whitespaceSettings: ApplicationEditorWhitespaceSettings;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -674,6 +684,7 @@ function MarkdownEditorSurface({
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  whitespaceSettings,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -870,6 +881,7 @@ function MarkdownEditorSurface({
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
+          whitespaceSettings={whitespaceSettings}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}
           contextSurface="markdownEditor"

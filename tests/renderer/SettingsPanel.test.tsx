@@ -199,6 +199,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
       "settings.workbench.statusBar.characterCount.visible.label",
       "settings.workbench.sound.enabled.label",
       "settings.editor.characterCount.exclude.markdownSyntax.label",
+      "settings.editor.whitespace.renderIdeographicSpace.label",
       "settings.editor.fontFamily.label",
       "settings.files.newFile.lineEnding.label",
       "settings.files.newFile.lineEnding.option.lf.label",
@@ -338,6 +339,10 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "editor.paragraphIndent.excludeLeadingCharacters",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
+      "editor.whitespace.renderIdeographicSpace",
+      "editor.whitespace.renderAsciiSpace",
+      "editor.whitespace.renderTab",
+      "editor.whitespace.renderOtherUnicodeSpace",
       "workbench.statusBar.characterCount.visible",
       "editor.characterCount.exclude.whitespace",
       "editor.characterCount.exclude.lineBreaks",
@@ -831,6 +836,39 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     });
   });
 
+  it("saves immediately when a whitespace rendering switch changes (#256)", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("editor.whitespace.renderAsciiSpace"),
+      onChangeSettings
+    });
+    const input = controlElement(
+      element,
+      "editor.whitespace.renderAsciiSpace"
+    );
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: true } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: settings.preview,
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: {
+        ...settings.editor,
+        whitespace: {
+          ...settings.editor.whitespace,
+          renderAsciiSpace: true
+        }
+      },
+      files: settings.files
+    });
+  });
+
   it("saves immediately when a select setting changes (files.newFile.lineEnding is directly editable, no advanced gate — #232)", () => {
     const settings: ApplicationSettings = defaultApplicationSettings;
     const onChangeSettings = vi.fn();
@@ -886,6 +924,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       commandPalette: settings.commandPalette,
       editor: {
         lineEnding: settings.editor.lineEnding,
+        whitespace: settings.editor.whitespace,
         paragraphIndent: settings.editor.paragraphIndent,
         characterCount: settings.editor.characterCount
       },
@@ -1166,6 +1205,45 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
     expect(
       controlElement(element, "editor.characterCount.exclude.markdownComments")
         .props.disabled
+    ).toBe(false);
+  });
+
+  it("renders the four #256 whitespace checkboxes independently in Settings > Editor", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        whitespace: {
+          renderIdeographicSpace: true,
+          renderAsciiSpace: false,
+          renderTab: false,
+          renderOtherUnicodeSpace: true
+        }
+      }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "editor"
+    });
+
+    expect(
+      controlElement(element, "editor.whitespace.renderIdeographicSpace").props
+        .checked
+    ).toBe(true);
+    expect(
+      controlElement(element, "editor.whitespace.renderAsciiSpace").props
+        .checked
+    ).toBe(false);
+    expect(
+      controlElement(element, "editor.whitespace.renderTab").props.checked
+    ).toBe(false);
+    expect(
+      controlElement(element, "editor.whitespace.renderOtherUnicodeSpace").props
+        .checked
+    ).toBe(true);
+    expect(
+      controlElement(element, "editor.whitespace.renderAsciiSpace").props
+        .disabled
     ).toBe(false);
   });
 

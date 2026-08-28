@@ -5070,6 +5070,9 @@ export function App(): JSX.Element {
                         markerGlyph={
                           effectiveSettings.editor.lineEnding.markerGlyph
                         }
+                        whitespaceSettings={
+                          effectiveSettings.editor.whitespace
+                        }
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}
                         translate={translate}

@@ -125,6 +125,13 @@ export interface ApplicationEditorLineEndingSettings {
   markerGlyph: LineEndingMarkerGlyph;
 }
 
+export interface ApplicationEditorWhitespaceSettings {
+  renderIdeographicSpace: boolean;
+  renderAsciiSpace: boolean;
+  renderTab: boolean;
+  renderOtherUnicodeSpace: boolean;
+}
+
 export interface ApplicationEditorParagraphIndentSettings {
   excludeLeadingCharacters: ParagraphIndentExcludeLeadingCharacters;
 }
@@ -144,6 +151,7 @@ export interface ApplicationEditorCharacterCountSettings {
 export interface ApplicationEditorSettings {
   fontFamily?: string;
   lineEnding: ApplicationEditorLineEndingSettings;
+  whitespace: ApplicationEditorWhitespaceSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
 }
@@ -223,6 +231,7 @@ export interface EffectiveCommandPaletteSettings {
 export interface EffectiveEditorSettings {
   fontFamily: string;
   lineEnding: ApplicationEditorLineEndingSettings;
+  whitespace: ApplicationEditorWhitespaceSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
 }
@@ -317,6 +326,18 @@ export const builtInDefaultSettings: EffectiveSettings = {
       expected: getCatalogDefaultValue("editor.lineEnding.expected"),
       markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
     },
+    whitespace: {
+      renderIdeographicSpace: getCatalogDefaultValue(
+        "editor.whitespace.renderIdeographicSpace"
+      ),
+      renderAsciiSpace: getCatalogDefaultValue(
+        "editor.whitespace.renderAsciiSpace"
+      ),
+      renderTab: getCatalogDefaultValue("editor.whitespace.renderTab"),
+      renderOtherUnicodeSpace: getCatalogDefaultValue(
+        "editor.whitespace.renderOtherUnicodeSpace"
+      )
+    },
     paragraphIndent: {
       excludeLeadingCharacters: getCatalogDefaultValue(
         "editor.paragraphIndent.excludeLeadingCharacters"
@@ -400,6 +421,15 @@ export const defaultApplicationSettings: ApplicationSettings = {
       expected: builtInDefaultSettings.editor.lineEnding.expected,
       markerGlyph: builtInDefaultSettings.editor.lineEnding.markerGlyph
     },
+    whitespace: {
+      renderIdeographicSpace:
+        builtInDefaultSettings.editor.whitespace.renderIdeographicSpace,
+      renderAsciiSpace:
+        builtInDefaultSettings.editor.whitespace.renderAsciiSpace,
+      renderTab: builtInDefaultSettings.editor.whitespace.renderTab,
+      renderOtherUnicodeSpace:
+        builtInDefaultSettings.editor.whitespace.renderOtherUnicodeSpace
+    },
     paragraphIndent: {
       excludeLeadingCharacters:
         builtInDefaultSettings.editor.paragraphIndent.excludeLeadingCharacters
@@ -471,6 +501,15 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       lineEnding: {
         expected: defaultApplicationSettings.editor.lineEnding.expected,
         markerGlyph: defaultApplicationSettings.editor.lineEnding.markerGlyph
+      },
+      whitespace: {
+        renderIdeographicSpace:
+          defaultApplicationSettings.editor.whitespace.renderIdeographicSpace,
+        renderAsciiSpace:
+          defaultApplicationSettings.editor.whitespace.renderAsciiSpace,
+        renderTab: defaultApplicationSettings.editor.whitespace.renderTab,
+        renderOtherUnicodeSpace:
+          defaultApplicationSettings.editor.whitespace.renderOtherUnicodeSpace
       },
       paragraphIndent: {
         excludeLeadingCharacters:
@@ -583,8 +622,9 @@ export function resolveEffectiveSettings(
       // concrete value already (resolved through the catalog at
       // settings.json read time), so no fallback needed here.
       lineEnding: applicationSettings.editor.lineEnding,
-  paragraphIndent: applicationSettings.editor.paragraphIndent,
-  characterCount: applicationSettings.editor.characterCount
+      whitespace: applicationSettings.editor.whitespace,
+      paragraphIndent: applicationSettings.editor.paragraphIndent,
+      characterCount: applicationSettings.editor.characterCount
     },
     files: {
       newFile: {
