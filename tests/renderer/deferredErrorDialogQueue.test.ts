@@ -16,6 +16,7 @@ describe("DeferredErrorDialogQueue (#274 — guaranteed-recognition Error dialog
     const present = vi.fn(() => Promise.resolve());
 
     q.arm("a");
+    expect(q.hasOutstanding()).toBe(true);
     q.pump({ isDialogPending: () => false, present });
     await flush();
     expect(present).not.toHaveBeenCalled();
@@ -27,6 +28,32 @@ describe("DeferredErrorDialogQueue (#274 — guaranteed-recognition Error dialog
     expect(present).toHaveBeenCalledExactlyOnceWith("a");
     expect(q.isShown("a")).toBe(true);
     expect(q.isOwed("a")).toBe(false);
+    expect(q.hasOutstanding()).toBe(false);
+  });
+
+  it("reports an Error dialog as outstanding until its presentation promise resolves", async () => {
+    const q = make();
+    let resolvePresentation: () => void = () => undefined;
+    const pendingPresentation = new Promise<void>((resolve) => {
+      resolvePresentation = resolve;
+    });
+    const present = vi.fn(() => pendingPresentation);
+
+    q.arm("a");
+    q.markReady();
+    const presentation = q.pump({ isDialogPending: () => false, present });
+
+    expect(q.hasOutstanding()).toBe(true);
+    expect(q.isOwed("a")).toBe(false);
+    expect(q.isShown("a")).toBe(true);
+
+    await Promise.resolve();
+    expect(present).toHaveBeenCalledExactlyOnceWith("a");
+    expect(q.hasOutstanding()).toBe(true);
+
+    resolvePresentation();
+    await presentation;
+    expect(q.hasOutstanding()).toBe(false);
   });
 
   it("BLOCKER regression 1: while a modal is open the Error stays owed, then presents exactly once when idle", async () => {
@@ -68,6 +95,7 @@ describe("DeferredErrorDialogQueue (#274 — guaranteed-recognition Error dialog
     // The first present rejected — must NOT be considered shown.
     expect(q.isShown("a")).toBe(false);
     expect(q.isOwed("a")).toBe(true);
+    expect(q.hasOutstanding()).toBe(true);
 
     // A later idle re-drive presents it successfully.
     q.pump({ isDialogPending: () => false, present });

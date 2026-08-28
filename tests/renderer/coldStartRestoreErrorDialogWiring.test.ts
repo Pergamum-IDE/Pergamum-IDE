@@ -50,16 +50,26 @@ describe("cold-start restore Error dialog wiring (#274)", () => {
     expect(projectFailed).not.toContain("showProjectRestoreFailedDialog(");
   });
 
-  it("marks the queue ready + pumps ONLY after the whole restore sequence settles (finally)", () => {
+  it("marks the restore body settled in finally, then readies the queue only after deferred routing settles", () => {
     const effectStart = app.indexOf(
       "coldStartRestoreAttemptedRef.current = true;"
     );
     const effectBody = app.slice(effectStart, effectStart + 1400);
-    // markReady is in a `.finally(...)` on runColdStartRestore, not before it.
+    // #280: `.finally(...)` marks the restore body boundary only; deferred
+    // Markdown launch routing is observed by a later effect.
     expect(effectBody).toMatch(
-      /\.finally\(\(\) => \{[\s\S]*deferredRestoreErrorDialogs\.markReady\(\)[\s\S]*pumpDeferredRestoreErrorDialogsRef\.current\(\)/
+      /\.finally\(\(\) => \{[\s\S]*setColdStartRestoreSettled\(true\)/
     );
+    expect(effectBody).not.toContain("deferredRestoreErrorDialogs.markReady()");
     expect(effectBody).toContain("runColdStartRestore(coldStartRestoreDeps)");
+
+    const readyEffect = app.slice(
+      app.indexOf("deferredRestoreErrorDialogsReadyRef.current = true"),
+      app.indexOf("createProjectCommandRef.current = createProject;")
+    );
+    expect(readyEffect).toContain("coldStartMarkdownLaunchRoutingSettled");
+    expect(readyEffect).toContain("deferredRestoreErrorDialogs.markReady()");
+    expect(readyEffect).toContain("pumpDeferredRestoreErrorDialogsRef.current()");
   });
 
   it("the dialog-controller subscription re-drives the queue when a modal closes", () => {

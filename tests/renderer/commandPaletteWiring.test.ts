@@ -32,8 +32,12 @@ describe("command palette wiring", () => {
     expect(propsBlock).toContain(
       'executeUiCommand(commandId, { source: "commandPalette" }, ...args);'
     );
-    expect(propsBlock).toContain("setIsCommandPaletteOpen(false);");
-    expect(propsBlock).toContain("onClose={() => setIsCommandPaletteOpen(false)}");
+    expect(propsBlock).toContain(
+      "closeCommandPaletteAndRestoreMarkdownFocus();"
+    );
+    expect(propsBlock).toContain(
+      "onClose={closeCommandPaletteAndRestoreMarkdownFocus}"
+    );
   });
 
   it("reuses the existing IME composition guard instead of a new tracking mechanism", () => {
