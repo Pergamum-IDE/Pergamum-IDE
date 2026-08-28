@@ -38,12 +38,14 @@ import {
   type CommandId
 } from "../shared/commandRegistry";
 import {
+  createEditorIdForPath,
   createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   serializeEditorId,
   type ActiveProjectContext,
   type EditorId
 } from "../shared/editorId";
+import { decideMarkdownScope } from "../shared/sessionRestore";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
@@ -85,6 +87,7 @@ import {
 import { buildCommandContextSnapshot } from "./commandContextSnapshot";
 import {
   applyStandaloneSaveResult,
+  createFileDocument,
   createProjectDocument,
   currentDocumentContent,
   displayName,
@@ -117,6 +120,7 @@ import {
   DialogController,
   type DialogControllerPendingRequest
 } from "./dialog/dialogController";
+import { DeferredErrorDialogQueue } from "./dialog/deferredErrorDialogQueue";
 import {
   AppDialogError,
   getDialogActionOrder,
@@ -151,6 +155,11 @@ import type { EditorViewState } from "./editorViewState";
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
 import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
+import {
+  runColdStartRestore,
+  type ColdStartRestoreDeps,
+  type RestoreUnavailableReason
+} from "./session/coldStartRestore";
 import { runExplicitProjectCloseCommit } from "./explicitProjectCloseCommit";
 import {
   isSessionStorageFailure,
@@ -482,9 +491,10 @@ export function App(): JSX.Element {
     () =>
       dialogController.subscribe(() => {
         setPendingDialogRequest(dialogController.getPendingRequest());
-        // A modal just opened or closed — if a suspension Error dialog is
-        // owed and dialogs are now idle, present it (#272 PO decision).
+        // A modal opened / closed — present any owed deferred Error dialog
+        // now that dialogs may be idle (#272 suspension, #274 restore).
         presentSessionPersistenceSuspendedDialogIfIdleRef.current();
+        pumpDeferredRestoreErrorDialogsRef.current();
       }),
     [dialogController]
   );
@@ -621,7 +631,9 @@ export function App(): JSX.Element {
   const quitApplicationCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
-  const startupProjectOpenAttemptedRef = useRef(false);
+  // #274: cold-start Session restore + launch routing runs exactly once,
+  // after settings are ready. Replaces the bare startup-project open.
+  const coldStartRestoreAttemptedRef = useRef(false);
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -673,13 +685,14 @@ export function App(): JSX.Element {
     },
     []
   );
-  const rendererSessionIdRef = useRef<string>("");
-
-  if (!rendererSessionIdRef.current) {
-    rendererSessionIdRef.current = createUuidv7();
-  }
-
-  const rendererSessionId = rendererSessionIdRef.current;
+  // #274: starts as a freshly-minted id; if cold-start restore selects a
+  // Session, that Session's `sessionId` is ADOPTED here (same working
+  // environment identity, new `instanceRunId`) before any snapshot is
+  // persisted — so continuous persistence overwrites that record instead of
+  // growing the restore set.
+  const [rendererSessionId, setRendererSessionId] = useState<string>(() =>
+    createUuidv7()
+  );
   // #272 (PO decision): fired ONCE when Session persistence goes
   // ACTIVE → SUSPENDED. Ref-indirected so the coordinator (created once)
   // always reaches the current handler.
@@ -698,6 +711,8 @@ export function App(): JSX.Element {
   if (!sessionPersistenceRef.current) {
     sessionPersistenceRef.current = new SessionPersistenceCoordinator({
       sessionId: rendererSessionId,
+      // #274: hold automatic persistence until cold-start restore resolves.
+      deferInitialFlush: true,
       transport: {
         persist: (snapshot) => window.pergamum.session.persist(snapshot),
         dropFromRestoreSet: (sessionId) =>
@@ -743,6 +758,52 @@ export function App(): JSX.Element {
   const handleMarkdownViewStateDirty = useCallback(() => {
     sessionPersistence.markViewStateDirty();
   }, [sessionPersistence]);
+  // #274: persisted #273 View States awaiting re-apply, keyed by
+  // serializedEditorId. Populated by cold-start restore; each entry is
+  // consumed (applied or digest-rejected) the first time its editor shows.
+  const pendingRestoreViewStatesRef = useRef<Map<string, unknown>>(new Map());
+  const [pendingRestoreViewStateVersion, setPendingRestoreViewStateVersion] =
+    useState(0);
+  const handleRestoreActiveEditorViewStateApplied = useCallback(
+    (key: string) => {
+      if (pendingRestoreViewStatesRef.current.delete(key)) {
+        setPendingRestoreViewStateVersion((version) => version + 1);
+      }
+    },
+    []
+  );
+  // #274: guaranteed-recognition Error dialogs for cold-start restore
+  // problems ("Session restore unavailable" / "Project restore failed").
+  // Mirrors the #272 SUSPENDED-persistence dialog contract: an Error that
+  // becomes due is *presented* exactly once, not merely *attempted* once.
+  // The queue holds each Error `owed` until the cold-start restore sequence
+  // (launch routing / any read-only-project confirmation) has settled, then
+  // presents from an idle boundary so it never collides with a
+  // launch-routing modal. See src/renderer/dialog/deferredErrorDialogQueue.
+  const deferredRestoreErrorDialogsRef =
+    useRef<DeferredErrorDialogQueue | null>(null);
+
+  if (!deferredRestoreErrorDialogsRef.current) {
+    deferredRestoreErrorDialogsRef.current = new DeferredErrorDialogQueue([
+      "restoreUnavailable",
+      "projectRestoreFailed"
+    ]);
+  }
+
+  const deferredRestoreErrorDialogs = deferredRestoreErrorDialogsRef.current;
+  // Re-drives the queue whenever dialogs go idle (dialog-controller
+  // subscription) and once after the cold-start sequence settles.
+  // Ref-indirected like the #272 presenter (subscription effect is
+  // created once).
+  const pumpDeferredRestoreErrorDialogsRef = useRef<() => void>(
+    () => undefined
+  );
+  // #274: a Markdown launch target awaiting routing into the restored
+  // working environment (handled by a follow-up effect, with fresh state).
+  const [
+    pendingMarkdownLaunchTargetForRestore,
+    setPendingMarkdownLaunchTargetForRestore
+  ] = useState<string | null>(null);
   /**
    * Holds the current live command context. Read lazily by the
    * CommandRegistry's injected context provider so `when` re-evaluation at
@@ -837,6 +898,20 @@ export function App(): JSX.Element {
   const activeMarkdownDocument = currentEditor
     ? markdownDocumentForEditor(currentEditor)
     : null;
+  // #274: the pending restore View State for the currently active editor,
+  // handed to EditorSurface → MarkdownEditor for a one-shot #273 apply.
+  const restoreActiveEditorViewState = useMemo(() => {
+    if (!activeDocument) {
+      return null;
+    }
+
+    const key = serializeEditorId(activeDocument.id);
+    const viewState = pendingRestoreViewStatesRef.current.get(key);
+
+    return viewState ? { key, viewState } : null;
+    // pendingRestoreViewStateVersion bumps when an entry is consumed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDocument?.id, pendingRestoreViewStateVersion]);
   const hasOpenDocumentTab = openDocumentsState.documents.length > 0;
   // When the Settings tab is the only open tab (zero document tabs), it is the
   // active surface even though `activeSpecialTabId` may not have been set.
@@ -4219,14 +4294,226 @@ export function App(): JSX.Element {
     }
   }
 
+  // #274: pure "put this Error dialog on screen" helpers. Owed/shown
+  // bookkeeping and the idle-boundary sequencing live in
+  // `presentOwedRestoreDialogsIfIdle` below, mirroring the #272 SUSPENDED
+  // persistence dialog.
+  function showSessionRestoreUnavailableDialog(): Promise<void> {
+    return confirmDialog({
+      title: translate("dialog.sessionRestoreUnavailable.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.sessionRestoreUnavailable.message")
+      },
+      icon: { kind: "error", tooltip: translate("dialog.icon.error") },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    }).then(() => undefined);
+  }
+
+  function showProjectRestoreFailedDialog(): Promise<void> {
+    return confirmDialog({
+      title: translate("dialog.projectRestoreFailed.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.projectRestoreFailed.message")
+      },
+      icon: { kind: "error", tooltip: translate("dialog.icon.error") },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    }).then(() => undefined);
+  }
+
+  // #274: re-drive the deferred restore-Error queue. Presents at most one
+  // owed-and-unshown Error, only once the cold-start sequence is ready AND
+  // the dialog controller is idle; a rejected presentation
+  // (`dialogAlreadyOpen`, race) re-arms `owed` inside the queue. Safe to
+  // call repeatedly (dialog-controller subscription, post-restore boundary).
+  function pumpDeferredRestoreErrorDialogs(): void {
+    deferredRestoreErrorDialogs.pump({
+      isDialogPending: () => dialogController.getPendingRequest() !== null,
+      present: (id) =>
+        id === "restoreUnavailable"
+          ? showSessionRestoreUnavailableDialog()
+          : showProjectRestoreFailedDialog()
+    });
+  }
+  pumpDeferredRestoreErrorDialogsRef.current = pumpDeferredRestoreErrorDialogs;
+
+  // #274: apply the assembled restored working environment. Bypasses the
+  // ordinary project-activation path (no "first document auto-open"). Only
+  // touches stable setState / refs, so it is safe to call from the
+  // cold-start closure.
+  function applyRestoredEnvironment(env: {
+    readonly project: PergamumProject | null;
+    readonly openDocuments: OpenDocumentsState;
+    readonly pendingViewStates: ReadonlyMap<string, unknown>;
+  }): void {
+    editorNavigation.reset();
+    projectActivationLifetimeRef.current.startProjectContextSwitch();
+    projectActivationLifetimeRef.current.markExplicitEditorActivation();
+    lastActiveMarkdownEditorIdRef.current = null;
+    setPendingMarkdownSelection(null);
+    setGlossaryOccurrenceTrackingState(
+      inactiveGlossaryOccurrenceTrackingState
+    );
+    pendingRestoreViewStatesRef.current = new Map(env.pendingViewStates);
+    setPendingRestoreViewStateVersion((version) => version + 1);
+    setProject(env.project);
+    openDocumentsStateRef.current = env.openDocuments;
+    setOpenDocumentsState(env.openDocuments);
+  }
+
+  async function openStandaloneMarkdownByPathForRestore(
+    filePath: string
+  ): Promise<void> {
+    try {
+      const file = await window.pergamum.files.readMarkdownFile(filePath);
+
+      await openDocument(createFileDocument(file));
+    } catch (error) {
+      setStatus({
+        key: "status.documentOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    }
+  }
+
+  // #274: route a Markdown launch target into the (now committed) restored
+  // working environment. Runs from a follow-up effect so `project` /
+  // `activeProjectContext` / the EditorNavigation adapter are all fresh.
+  async function routeMarkdownLaunchTargetNow(filePath: string): Promise<void> {
+    const scope = decideMarkdownScope({
+      markdownPath: filePath,
+      projectRootPath: project?.rootPath ?? null,
+      platform: window.pergamum.platform
+    });
+
+    if (scope === "insideProject" && project && activeProjectContext) {
+      const editorId = createEditorIdForPath(filePath, activeProjectContext);
+
+      if (
+        editorId.kind === "projectDocument" &&
+        project.documents.some(
+          (document) => document.relativePath === editorId.relativePath
+        )
+      ) {
+        if (findOpenDocument(openDocumentsState, editorId)) {
+          openEditorFromUi(editorId);
+        } else {
+          await activateProjectDocument(editorId.relativePath);
+        }
+
+        return;
+      }
+    }
+
+    // Ambiguous / outside the restored Project scope → standalone.
+    await openStandaloneMarkdownByPathForRestore(filePath);
+  }
+
+  const coldStartRestoreDeps: ColdStartRestoreDeps = {
+    platform: window.pergamum.platform,
+    getColdStartRestore: () => window.pergamum.session.getColdStartRestore(),
+    openProjectByFilePath: (projectFilePath, expectedProjectId) =>
+      window.pergamum.projects.openProjectByFilePath(
+        projectFilePath,
+        expectedProjectId
+      ),
+    resolveProjectOpenResult: (result) => resolveProjectOpenResult(result),
+    reloadSettingsAfterProjectOpen: async () => {
+      await reloadSettingsAfterProjectOpen();
+    },
+    openLaunchTargetProjectNormally: async () => {
+      await openStartupProject();
+      return null;
+    },
+    readProjectDocumentContent: async (relativePath) =>
+      (await window.pergamum.projects.readProjectDocument(relativePath)).content,
+    readMarkdownFile: (filePath) =>
+      window.pergamum.files.readMarkdownFile(filePath),
+    getGlossaryEntryById: (entryId) =>
+      window.pergamum.glossary.getById(entryId),
+    applyRestoredEnvironment: (env) => applyRestoredEnvironment(env),
+    adoptSessionId: (sessionId) => {
+      setRendererSessionId(sessionId);
+      sessionPersistence.adoptSessionId(sessionId);
+    },
+    finishColdStart: (sessionWasRestored) => {
+      sessionPersistence.resolveColdStartRestore({
+        scheduleNow: !sessionWasRestored
+      });
+    },
+    routeMarkdownLaunchTarget: (filePath) => {
+      setPendingMarkdownLaunchTargetForRestore(filePath);
+    },
+    // #274: arm the Error as owed only. Presentation is deferred to an idle
+    // boundary so it never collides with a launch-routing modal (e.g. a
+    // read-only-project confirmation from the `.pergamum` ordinary open).
+    notifyRestoreUnavailable: (_reason: RestoreUnavailableReason) => {
+      deferredRestoreErrorDialogs.arm("restoreUnavailable");
+    },
+    notifyProjectRestoreFailed: () => {
+      deferredRestoreErrorDialogs.arm("projectRestoreFailed");
+    },
+    notifyEditorSkipped: (resourceName) => {
+      notificationController.notify({
+        message: translate("notification.sessionRestore.editorSkipped", {
+          name: resourceName
+        })
+      });
+    }
+  };
+
   useEffect(() => {
-    if (isSettingsLoading || startupProjectOpenAttemptedRef.current) {
+    if (isSettingsLoading || coldStartRestoreAttemptedRef.current) {
       return;
     }
 
-    startupProjectOpenAttemptedRef.current = true;
-    void openStartupProject();
+    coldStartRestoreAttemptedRef.current = true;
+    void runColdStartRestore(coldStartRestoreDeps)
+      .catch((error) => {
+        // The restore sequence is best-effort; a failure here must never
+        // block startup. Release the held persistence so continuous #272
+        // persistence resumes normally.
+        sessionPersistence.resolveColdStartRestore({ scheduleNow: true });
+        logRendererDebugEvent({
+          level: "error",
+          event: "command.failed",
+          details: {
+            commandId: "session.coldStartRestore",
+            operation: "unknown",
+            result: "failed",
+            statusKey: "status.commandFailed",
+            error: rendererDebugErrorInfo(error)
+          }
+        });
+      })
+      .finally(() => {
+        // #274: the restore sequence (incl. launch routing / any read-only
+        // confirmation) has settled — now present any owed restore Error
+        // dialog. If a modal is still open it stays owed; the
+        // dialog-controller subscription retries when things go idle.
+        deferredRestoreErrorDialogs.markReady();
+        pumpDeferredRestoreErrorDialogsRef.current();
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSettingsLoading]);
+
+  useEffect(() => {
+    if (pendingMarkdownLaunchTargetForRestore === null) {
+      return;
+    }
+
+    const filePath = pendingMarkdownLaunchTargetForRestore;
+    setPendingMarkdownLaunchTargetForRestore(null);
+    void routeMarkdownLaunchTargetNow(filePath);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMarkdownLaunchTargetForRestore]);
 
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
@@ -4602,6 +4889,12 @@ export function App(): JSX.Element {
                         }
                         onViewStateSnapshot={handleMarkdownViewStateSnapshot}
                         onViewStateDirty={handleMarkdownViewStateDirty}
+                        restoreActiveEditorViewState={
+                          restoreActiveEditorViewState
+                        }
+                        onRestoreActiveEditorViewStateApplied={
+                          handleRestoreActiveEditorViewStateApplied
+                        }
                         onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
                         onChangeGlossaryEntryDescription={
                           setActiveGlossaryEntryDescription

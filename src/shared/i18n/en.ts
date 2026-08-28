@@ -127,6 +127,12 @@ export const enTranslations = {
   "dialog.unsavedChanges.title": "Unsaved Changes",
   "dialog.projectCloseFailed.message": "Pergamum could not close the project.\nYour working state is still kept. Try again later.",
   "dialog.projectCloseFailed.title": "Could not close project",
+  "dialog.projectRestoreFailed.message":
+    "The project that was open last time could not be restored.\n\nIts project file (.pergamum) may be missing, unreadable, or replaced by a different project.\nNo documents or project contents have been deleted.",
+  "dialog.projectRestoreFailed.title": "Could not restore project",
+  "dialog.sessionRestoreUnavailable.message":
+    "Pergamum could not read its saved workspace information, so it started without restoring it.\n\nNo documents or project contents have been deleted.",
+  "dialog.sessionRestoreUnavailable.title": "Could not restore workspace information",
   "dialog.sessionPersistenceSuspended.message": "Pergamum has suspended automatic saving of its workspace information because it could not be written.\n\nCheck the free space and health of your installation drive.\nThis error occurs in a feature separate from editing and saving your documents, but the current tabs and window state may not be restorable the next time Pergamum starts.",
   "dialog.sessionPersistenceSuspended.title": "Automatic workspace saving suspended",
   "dialog.icon.error": "Error",
@@ -284,6 +290,8 @@ export const enTranslations = {
   "menu.zoomOut": "Zoom Out",
   "notification.dismiss": "Dismiss notification",
   "notification.externalMarkdownOpened": "Opened a file from outside the project",
+  "notification.sessionRestore.editorSkipped":
+    "{name} could not be restored, so that tab was not opened",
   "project.label": "Project: {name}",
   "projectAccess.readOnly.label": "Read-only",
   "projectAccess.readOnly.tooltip": "Opened in read-only mode",

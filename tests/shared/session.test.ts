@@ -12,6 +12,7 @@ import {
   parseSessionManifestStrict,
   parseSessionProjectContext,
   parseSessionRecord,
+  parseSessionRecordStrict,
   parseWindowSessionState,
   sessionDataFileName,
   sessionEditorIdentitiesEqual,
@@ -555,6 +556,245 @@ describe("parseSessionRecord (#272)", () => {
     });
     expect(noProject?.projectContext).toBeNull();
     expect(noProject?.editors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("parseSessionRecordStrict (#274) — cold-start restore candidate", () => {
+  function validRecord(): SessionRecord {
+    return {
+      schemaVersion: SESSION_SCHEMA_VERSION,
+      sessionId: sid("strict"),
+      instanceRunId: RUN_ID,
+      updatedAt: "2026-08-28T00:00:00.000Z",
+      projectContext: {
+        projectId: PROJECT_ID,
+        projectFilePath: "C:/n/s.pergamum",
+        rootPath: "C:/n"
+      },
+      window: {
+        normalBounds: { x: 0, y: 0, width: 800, height: 600 },
+        mode: "normal"
+      },
+      editors: [
+        { kind: "projectMarkdown", order: 0, relativePath: "01.md", viewState: null },
+        { kind: "standaloneMarkdown", order: 1, filePath: "/x.md", viewState: null }
+      ],
+      activeEditor: { kind: "standaloneMarkdown", filePath: "/x.md" }
+    };
+  }
+
+  it("accepts a fully valid current-schema record (same shape as parseSessionRecord)", () => {
+    expect(parseSessionRecordStrict(validRecord())).toEqual(
+      parseSessionRecord(validRecord())
+    );
+  });
+
+  it("accepts a project-open zero-tab record", () => {
+    const parsed = parseSessionRecordStrict({
+      ...validRecord(),
+      editors: [],
+      activeEditor: null
+    });
+    expect(parsed?.projectContext).not.toBeNull();
+    expect(parsed?.editors).toEqual([]);
+  });
+
+  it("rejects the same schema failures as parseSessionRecord (whole Session skip)", () => {
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), schemaVersion: 999 })
+    ).toBeNull();
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), sessionId: "session-1" })
+    ).toBeNull();
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), instanceRunId: "run-x" })
+    ).toBeNull();
+    expect(parseSessionRecordStrict(42)).toBeNull();
+  });
+
+  it("Level A: a structurally invalid Project Context skips the whole Session", () => {
+    // parseSessionRecord would fail-soft this to projectContext: null.
+    expect(parseSessionRecord({ ...validRecord(), projectContext: { projectId: "nope" } })?.projectContext).toBeNull();
+    expect(
+      parseSessionRecordStrict({
+        ...validRecord(),
+        projectContext: { projectId: "nope", projectFilePath: "/p", rootPath: "/p" }
+      })
+    ).toBeNull();
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), projectContext: { projectId: PROJECT_ID } })
+    ).toBeNull();
+  });
+
+  it("Level A: a structurally invalid editor record skips the whole Session", () => {
+    expect(
+      parseSessionRecordStrict({
+        ...validRecord(),
+        editors: [
+          { kind: "projectMarkdown", order: 0, relativePath: "ok.md", viewState: null },
+          { kind: "projectMarkdown", order: 1, viewState: null } // missing relativePath
+        ]
+      })
+    ).toBeNull();
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), editors: [{ kind: "bogus", order: 0 }] })
+    ).toBeNull();
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), editors: "not-an-array" })
+    ).toBeNull();
+  });
+
+  it("Level A: a structurally invalid active editor identity skips the whole Session", () => {
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), activeEditor: { kind: "projectMarkdown" } })
+    ).toBeNull();
+    expect(
+      parseSessionRecordStrict({ ...validRecord(), activeEditor: { kind: "bogus", id: 1 } })
+    ).toBeNull();
+  });
+
+  it("Level A: a structurally invalid Window state skips the whole Session", () => {
+    expect(
+      parseSessionRecordStrict({
+        ...validRecord(),
+        window: { normalBounds: { x: 0, y: 0, width: 0, height: 0 }, mode: "x" }
+      })
+    ).toBeNull();
+  });
+
+  it("an active editor identity that parses but matches no editor is NOT a core failure", () => {
+    const parsed = parseSessionRecordStrict({
+      ...validRecord(),
+      activeEditor: { kind: "standaloneMarkdown", filePath: "/not-open.md" }
+    });
+    expect(parsed).not.toBeNull();
+    // downstream fallback territory — parseSessionRecord nulls it here
+    expect(parsed?.activeEditor).toBeNull();
+  });
+
+  it("Level B: a malformed Editor View State only — the Session stays a candidate", () => {
+    const parsed = parseSessionRecordStrict({
+      ...validRecord(),
+      editors: [
+        {
+          kind: "standaloneMarkdown",
+          order: 0,
+          filePath: "/x.md",
+          viewState: { contentDigest: { algorithm: "md5", digest: "zzz" }, selection: "bad" }
+        }
+      ]
+    });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.editors).toHaveLength(1);
+    expect(parsed?.editors[0].viewState).toBeNull();
+  });
+
+  it("does not repair / rewrite the value it is handed", () => {
+    const input = validRecord();
+    const snapshot = JSON.stringify(input);
+    parseSessionRecordStrict(input);
+    expect(JSON.stringify(input)).toBe(snapshot);
+  });
+
+  // --- BLOCKER 1: explicit required top-level fields, no fail-soft coercion
+
+  it("a MISSING projectContext / window / activeEditor / editors / updatedAt key skips the whole Session", () => {
+    for (const key of [
+      "projectContext",
+      "window",
+      "activeEditor",
+      "editors",
+      "updatedAt"
+    ] as const) {
+      const { [key]: _omit, ...rest } = validRecord();
+      expect(parseSessionRecordStrict(rest), `missing ${key}`).toBeNull();
+    }
+  });
+
+  it("explicit null projectContext / window / activeEditor is accepted", () => {
+    const parsed = parseSessionRecordStrict({
+      ...validRecord(),
+      projectContext: null,
+      window: null,
+      activeEditor: null,
+      editors: []
+    });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.projectContext).toBeNull();
+    expect(parsed?.window).toBeNull();
+    expect(parsed?.activeEditor).toBeNull();
+  });
+
+  it("an invalid / non-canonical updatedAt skips the whole Session", () => {
+    for (const updatedAt of [
+      "",
+      "not-a-date",
+      "2026-08-28",
+      "2026-08-28T00:00:00Z", // no milliseconds — not what toISOString() emits
+      "2026-08-28T00:00:00.000+09:00", // not UTC canonical
+      1_724_800_000_000,
+      null
+    ]) {
+      expect(
+        parseSessionRecordStrict({ ...validRecord(), updatedAt }),
+        JSON.stringify(updatedAt)
+      ).toBeNull();
+    }
+    // The canonical form Pergamum actually persists is accepted.
+    expect(
+      parseSessionRecordStrict({
+        ...validRecord(),
+        updatedAt: new Date("2026-08-28T12:34:56.789Z").toISOString()
+      })
+    ).not.toBeNull();
+  });
+
+  it("duplicate editor identity skips the whole Session (no dedupe)", () => {
+    expect(
+      parseSessionRecordStrict({
+        ...validRecord(),
+        editors: [
+          { kind: "standaloneMarkdown", order: 0, filePath: "/dup.md", viewState: null },
+          { kind: "standaloneMarkdown", order: 1, filePath: "/dup.md", viewState: null }
+        ],
+        activeEditor: null
+      })
+    ).toBeNull();
+  });
+
+  it("a non-canonical editor `order` (gapped / duplicate / out-of-order) skips the whole Session (no sort / renumber)", () => {
+    const twoEditors = (o0: number, o1: number) => ({
+      ...validRecord(),
+      editors: [
+        { kind: "standaloneMarkdown", order: o0, filePath: "/a.md", viewState: null },
+        { kind: "standaloneMarkdown", order: o1, filePath: "/b.md", viewState: null }
+      ],
+      activeEditor: null
+    });
+
+    expect(parseSessionRecordStrict(twoEditors(0, 2)), "gapped").toBeNull();
+    expect(parseSessionRecordStrict(twoEditors(1, 0)), "out-of-order").toBeNull();
+    expect(parseSessionRecordStrict(twoEditors(0, 0)), "duplicate").toBeNull();
+    expect(parseSessionRecordStrict(twoEditors(1, 2)), "not-starting-at-0").toBeNull();
+    // The canonical 0..n-1 sequence in array order is accepted.
+    expect(parseSessionRecordStrict(twoEditors(0, 1))).not.toBeNull();
+  });
+
+  it("#272 parseSessionRecord is NOT affected — it still fail-soft coerces", () => {
+    const { updatedAt: _u, projectContext: _p, ...rest } = validRecord();
+    const parsed = parseSessionRecord({
+      ...rest,
+      editors: [
+        { kind: "standaloneMarkdown", order: 5, filePath: "/a.md", viewState: null },
+        { kind: "standaloneMarkdown", order: 2, filePath: "/b.md", viewState: null }
+      ]
+    });
+    // fail-soft: missing updatedAt → epoch, missing projectContext → null,
+    // gapped/out-of-order order → sorted + renumbered 0..n-1.
+    expect(parsed).not.toBeNull();
+    expect(parsed?.projectContext).toBeNull();
+    expect(parsed?.updatedAt).toBe(new Date(0).toISOString());
+    expect(parsed?.editors.map((e) => e.order)).toEqual([0, 1]);
   });
 });
 

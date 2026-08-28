@@ -2261,6 +2261,75 @@ describe("project file IPC foundation", () => {
     expect(consoleWarnSpy).not.toHaveBeenCalled();
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
+
+  // -------------------------------------------------------------------------
+  // #274: openProjectByFilePath — cold-start Session restore project reopen
+  // -------------------------------------------------------------------------
+
+  async function makeValidProject(name: string): Promise<{
+    projectFilePath: string;
+    projectId: string;
+  }> {
+    const projectFilePath = path.join(projectRootPath, `${name}.pergamum`);
+    await fs.writeFile(path.join(projectRootPath, `${name}.md`), `# ${name}\n`);
+    const created = await createProjectDatabase({ projectFilePath, projectName: name });
+    await created.close();
+    const opened = await openProjectDatabase(projectFilePath);
+    const metadata = await readProjectMetadata(opened);
+    await opened.close();
+
+    return { projectFilePath, projectId: metadata.projectId };
+  }
+
+  it("openProjectByFilePath reopens a project when the saved identity matches", async () => {
+    const { projectFilePath, projectId } = await makeValidProject("Restore Match");
+    const handler = registeredHandler(PROJECT_CHANNELS.openProjectByFilePath);
+
+    const result = (await handler(
+      { sender: {} },
+      { projectFilePath, expectedProjectId: projectId }
+    )) as { kind: string; result?: unknown };
+
+    expect(result.kind).toBe("opened");
+    expect(result.result).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      name: "Restore Match"
+    });
+    expect(electronMock.showOpenDialog).not.toHaveBeenCalled();
+  });
+
+  it("openProjectByFilePath reports identityMismatch for a different project at the path", async () => {
+    const { projectFilePath } = await makeValidProject("Restore Mismatch");
+    const handler = registeredHandler(PROJECT_CHANNELS.openProjectByFilePath);
+
+    const result = (await handler(
+      { sender: {} },
+      {
+        projectFilePath,
+        expectedProjectId: "0190a000-0000-7000-8000-0000000000ff"
+      }
+    )) as { kind: string };
+
+    expect(result.kind).toBe("identityMismatch");
+    // The mismatched reopen must not leave the project open / owned.
+    expect(currentActiveProjectFilePath()).toBeNull();
+  });
+
+  it("openProjectByFilePath returns a controlled failure for a missing .pergamum", async () => {
+    const handler = registeredHandler(PROJECT_CHANNELS.openProjectByFilePath);
+
+    const result = (await handler(
+      { sender: {} },
+      {
+        projectFilePath: path.join(projectRootPath, "Gone.pergamum"),
+        expectedProjectId: "0190a000-0000-7000-8000-0000000000ff"
+      }
+    )) as { kind: string; reason?: string };
+
+    expect(result.kind).toBe("failed");
+    expect(typeof result.reason).toBe("string");
+  });
 });
 
 function createLoggerMock(): DebugLogger & {

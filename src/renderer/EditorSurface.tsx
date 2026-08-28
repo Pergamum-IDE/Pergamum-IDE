@@ -372,6 +372,12 @@ interface EditorSurfaceProps {
     viewState: EditorViewState | null
   ) => void;
   onViewStateDirty: () => void;
+  /** #274: persisted #273 View State to re-apply once for the active
+   *  Markdown editor's document (null when nothing is pending). */
+  restoreActiveEditorViewState:
+    | { readonly key: string; readonly viewState: unknown }
+    | null;
+  onRestoreActiveEditorViewStateApplied: (key: string) => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
   onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
@@ -482,6 +488,8 @@ export function EditorSurface({
   onViewStateControllerChange,
   onViewStateSnapshot,
   onViewStateDirty,
+  restoreActiveEditorViewState,
+  onRestoreActiveEditorViewStateApplied,
   onChangeGlossaryEntryKind,
   onChangeGlossaryEntryDescription,
   onChangeGlossaryEntryCanonicalSurface,
@@ -527,6 +535,8 @@ export function EditorSurface({
           onViewStateControllerChange={onViewStateControllerChange}
           onViewStateSnapshot={onViewStateSnapshot}
           onViewStateDirty={onViewStateDirty}
+          restoreViewState={restoreActiveEditorViewState}
+          onRestoreViewStateApplied={onRestoreActiveEditorViewStateApplied}
           pendingSelection={pendingMarkdownSelection}
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
@@ -611,6 +621,10 @@ interface MarkdownEditorSurfaceProps {
     viewState: EditorViewState | null
   ) => void;
   onViewStateDirty: () => void;
+  restoreViewState:
+    | { readonly key: string; readonly viewState: unknown }
+    | null;
+  onRestoreViewStateApplied: (key: string) => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
   ratio: number;
@@ -662,6 +676,8 @@ function MarkdownEditorSurface({
   onViewStateControllerChange,
   onViewStateSnapshot,
   onViewStateDirty,
+  restoreViewState,
+  onRestoreViewStateApplied,
   pendingSelection,
   onPendingSelectionApplied,
   ratio,
@@ -834,6 +850,8 @@ function MarkdownEditorSurface({
           onViewStateControllerChange={onViewStateControllerChange}
           onViewStateSnapshot={onViewStateSnapshot}
           onViewStateDirty={onViewStateDirty}
+          restoreViewState={restoreViewState}
+          onRestoreViewStateApplied={onRestoreViewStateApplied}
           documentKey={documentKey}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}

@@ -38,13 +38,26 @@ function startupRuntimeArguments(
   return remainingArguments;
 }
 
+/**
+ * The positional (non-option) runtime arguments Pergamum was launched with,
+ * with the dev-mode script-path argument already dropped. Shared by
+ * `extractStartupProjectFilePathFromArgv` and #274's cold-start launch
+ * target extraction so both see the exact same argument set.
+ */
+export function startupPositionalArguments(
+  argv: readonly string[],
+  options: StartupProjectArgvOptions
+): string[] {
+  return startupRuntimeArguments(argv, options).filter(
+    (argument) => hasText(argument) && !isOptionArgument(argument)
+  );
+}
+
 export function extractStartupProjectFilePathFromArgv(
   argv: readonly string[],
   options: StartupProjectArgvOptions
 ): string | null {
-  const positionalArguments = startupRuntimeArguments(argv, options).filter(
-    (argument) => hasText(argument) && !isOptionArgument(argument)
-  );
+  const positionalArguments = startupPositionalArguments(argv, options);
 
   if (positionalArguments.length !== 1) {
     return null;

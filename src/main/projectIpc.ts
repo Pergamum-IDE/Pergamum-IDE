@@ -17,6 +17,8 @@ import {
   PROJECT_CHANNELS,
   type CloseCurrentProjectRequest,
   type CloseCurrentProjectResult,
+  type OpenProjectByFilePathRequest,
+  type OpenProjectByFilePathResult,
   type OpenRecentProjectRequest,
   type PendingReadOnlyProjectOpen,
   type PendingReadOnlyProjectOpenRequest,
@@ -653,6 +655,25 @@ function parseSaveProjectDocumentRequest(
   return {
     relativePath: value.relativePath,
     content: value.content
+  };
+}
+
+function parseOpenProjectByFilePathRequest(
+  value: unknown
+): OpenProjectByFilePathRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.projectFilePath !== "string" ||
+    value.projectFilePath.length === 0 ||
+    typeof value.expectedProjectId !== "string" ||
+    value.expectedProjectId.length === 0
+  ) {
+    throw new Error("Invalid open-project-by-file-path request.");
+  }
+
+  return {
+    projectFilePath: value.projectFilePath,
+    expectedProjectId: value.expectedProjectId
   };
 }
 
@@ -1484,6 +1505,89 @@ export async function openStartupProject(
   }
 }
 
+/**
+ * #274: reopen a project from an arbitrary `.pergamum` path for cold-start
+ * Session restore. Goes through the SAME open lifecycle as every other open
+ * (metadata validation, write ownership / write-lock, read-only fallback,
+ * read-only confirmation, error handling) — Session Restore never gets an
+ * unsafe shortcut. After the metadata is read, the reopened
+ * `metadata.project_id` MUST equal the identity the Session saved; a
+ * mismatch means the `.pergamum` at that path is a different project now,
+ * which is a Project restore failure, never a guess.
+ */
+export async function openProjectByFilePath(
+  rawProjectFilePath: string,
+  expectedProjectId: string,
+  logger: DebugLogger = getDebugLogger(),
+  writeOwnershipManager: ProjectWriteOwnershipManager =
+    defaultProjectWriteOwnershipManager
+): Promise<OpenProjectByFilePathResult> {
+  const startedAt = Date.now();
+  let projectRef: string | undefined;
+
+  try {
+    const projectFilePath = resolveProjectFilePath(rawProjectFilePath);
+
+    if (await isDirectoryPath(projectFilePath)) {
+      return {
+        kind: "failed",
+        reason: "notFound",
+        message: "Project file was not found."
+      };
+    }
+
+    projectRef = logger.projectRefForKey(projectFilePath);
+
+    const openedProject = await openProjectFromProjectFile(
+      projectFilePath,
+      logger,
+      writeOwnershipManager
+    );
+
+    if (openedProject.metadata.projectId !== expectedProjectId) {
+      // Different project at this locator now — release what we just
+      // acquired and report the mismatch. Never adopt the other identity.
+      await releaseWriteOwnershipBestEffort(
+        openedProject.writeOwnershipManager,
+        openedProject.projectFilePath,
+        openedProject.writeOwnership
+      );
+
+      return { kind: "identityMismatch" };
+    }
+
+    return {
+      kind: "opened",
+      result: await projectOpenResultForOpenedProject(
+        openedProject,
+        logger,
+        projectRef,
+        "open",
+        startedAt
+      )
+    };
+  } catch (error) {
+    const safeError = sanitizedFileIoError(error);
+    logger.log({
+      level: "error",
+      event: "project.open.failed",
+      details: {
+        ...(projectRef ? { projectRef } : {}),
+        operation: "open",
+        result: "failed",
+        durationMs: durationSince(startedAt),
+        error: safeError
+      }
+    });
+
+    return {
+      kind: "failed",
+      reason: safeError.reason,
+      message: safeError.message
+    };
+  }
+}
+
 export function registerProjectIpc(
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
@@ -1532,6 +1636,23 @@ export function registerProjectIpc(
       } catch (error) {
         return startupProjectOpenFailureResult(error);
       }
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.openProjectByFilePath,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<OpenProjectByFilePathResult> => {
+      const request = parseOpenProjectByFilePathRequest(rawRequest);
+
+      return openProjectByFilePath(
+        request.projectFilePath,
+        request.expectedProjectId,
+        logger,
+        writeOwnershipManager
+      );
     }
   );
 

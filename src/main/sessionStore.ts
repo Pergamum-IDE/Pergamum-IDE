@@ -41,6 +41,7 @@ import {
   parseSessionManifest,
   parseSessionManifestStrict,
   parseSessionRecord,
+  parseSessionRecordStrict,
   sessionDataFileName,
   SESSION_DATA_DIRECTORY_NAME,
   SESSION_MANIFEST_FILE_NAME,
@@ -105,8 +106,39 @@ export interface SessionRestoreSetReadResult {
   readonly skipped: readonly SessionSkip[];
 }
 
+/**
+ * #274: the manifest read outcome for cold-start restore. Unlike
+ * `readRestoreSet` (which collapses every manifest problem to "empty"), the
+ * cold-start reader must tell "the restore set is genuinely empty / first
+ * run" apart from "the manifest could not be used" — the latter is a
+ * user-visible "restore unavailable" condition, never silently repaired,
+ * overwritten, or deleted.
+ */
+export type ColdStartManifestOutcome =
+  | { readonly kind: "empty" }
+  | { readonly kind: "usable"; readonly manifest: SessionManifest }
+  | {
+      readonly kind: "unavailable";
+      readonly reason: "unreadable" | "malformed" | "unsupportedSchema";
+    };
+
+export interface ColdStartRestoreSetReadResult {
+  readonly manifestOutcome: ColdStartManifestOutcome;
+  /** Valid, manifest-listed Session records, in manifest order. Empty
+   *  unless `manifestOutcome.kind === "usable"`. */
+  readonly sessions: readonly SessionRecord[];
+  readonly skipped: readonly SessionSkip[];
+}
+
 export interface SessionStore {
   readRestoreSet(): Promise<SessionRestoreSetReadResult>;
+  /**
+   * #274: cold-start restore read. Read-only. Distinguishes a missing
+   * manifest (first run → `empty`) from an unreadable / malformed /
+   * unsupported-schema one (`unavailable`). Never writes, repairs, or
+   * deletes anything.
+   */
+  readRestoreSetForColdStart(): Promise<ColdStartRestoreSetReadResult>;
   /** Make `record` durable, then ensure the manifest lists it. */
   persistSession(record: SessionRecord): Promise<void>;
   /** Drop `sessionId` from the manifest, then best-effort delete its file. */
@@ -301,8 +333,18 @@ export function createSessionStore(
     );
   }
 
+  /**
+   * `parse` selects how strictly the untrusted record is validated:
+   *   - `parseSessionRecord` (default) — #272's fail-soft parser: a
+   *     malformed core sub-part is dropped, the rest of the record kept.
+   *   - `parseSessionRecordStrict` — #274's cold-start restore-candidate
+   *     rule: any structurally invalid core sub-part ⇒ the whole record is
+   *     rejected (`invalidRecord`). A malformed Editor View State is still
+   *     tolerated (nulled), not a core failure.
+   */
   async function readSessionRecord(
-    sessionId: string
+    sessionId: string,
+    parse: (value: unknown) => SessionRecord | null = parseSessionRecord
   ): Promise<{ record: SessionRecord } | { skip: SessionSkip }> {
     let raw: string;
 
@@ -326,7 +368,7 @@ export function createSessionStore(
       return { skip: { sessionId, reason: "malformedJson" } };
     }
 
-    const record = parseSessionRecord(parsed);
+    const record = parse(parsed);
 
     if (!record) {
       return { skip: { sessionId, reason: "invalidRecord" } };
@@ -355,6 +397,76 @@ export function createSessionStore(
     }
 
     return { manifest, sessions, skipped };
+  }
+
+  /**
+   * #274: cold-start manifest read. A genuinely absent manifest (ENOENT) is
+   * `empty` (first run). Anything present-but-unusable (unreadable, invalid
+   * JSON, structurally malformed, unsupported future `schemaVersion`) is
+   * `unavailable` — the bytes are left completely untouched.
+   */
+  async function readManifestForColdStart(): Promise<ColdStartManifestOutcome> {
+    let raw: string;
+
+    try {
+      raw = await fileSystem.readFile(manifestPath);
+    } catch (error) {
+      if (nodeErrorCode(error) === "ENOENT") {
+        return { kind: "empty" };
+      }
+
+      return { kind: "unavailable", reason: "unreadable" };
+    }
+
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { kind: "unavailable", reason: "malformed" };
+    }
+
+    const result = parseSessionManifestStrict(parsed, now());
+
+    if (isSessionManifestParseFailure(result)) {
+      return {
+        kind: "unavailable",
+        reason:
+          result.kind === "unsupportedSchema" ? "unsupportedSchema" : "malformed"
+      };
+    }
+
+    return { kind: "usable", manifest: result };
+  }
+
+  async function readRestoreSetForColdStart(): Promise<ColdStartRestoreSetReadResult> {
+    const manifestOutcome = await readManifestForColdStart();
+
+    if (manifestOutcome.kind !== "usable") {
+      return { manifestOutcome, sessions: [], skipped: [] };
+    }
+
+    const sessions: SessionRecord[] = [];
+    const skipped: SessionSkip[] = [];
+
+    for (const sessionId of manifestOutcome.manifest.sessions) {
+      // #274: STRICT core validation for restore candidates — a structurally
+      // invalid Project Context / editor record / active editor identity /
+      // Window state ⇒ the whole Session is skipped, never partially
+      // salvaged. A malformed Editor View State is still tolerated.
+      const result = await readSessionRecord(
+        sessionId,
+        parseSessionRecordStrict
+      );
+
+      if ("record" in result) {
+        sessions.push(result.record);
+      } else {
+        skipped.push(result.skip);
+      }
+    }
+
+    return { manifestOutcome, sessions, skipped };
   }
 
   async function persistSession(record: SessionRecord): Promise<void> {
@@ -421,6 +533,7 @@ export function createSessionStore(
 
   return {
     readRestoreSet,
+    readRestoreSetForColdStart,
     persistSession,
     removeSessionFromRestoreSet
   };

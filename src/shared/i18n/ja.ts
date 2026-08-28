@@ -125,6 +125,12 @@ export const jaTranslations = {
   "dialog.unsavedChanges.title": "未保存の変更があります",
   "dialog.projectCloseFailed.message": "プロジェクトを閉じられませんでした。\n編集中の内容は保持されています。時間をおいて再度お試しください。",
   "dialog.projectCloseFailed.title": "プロジェクトを閉じられませんでした",
+  "dialog.projectRestoreFailed.message":
+    "前回開いていたプロジェクトを復元できませんでした。\n\nプロジェクトファイル（.pergamum）が見つからないか、読み込めないか、別のプロジェクトに置き換わっている可能性があります。\n文書やプロジェクトの内容が削除されたわけではありません。",
+  "dialog.projectRestoreFailed.title": "プロジェクトを復元できませんでした",
+  "dialog.sessionRestoreUnavailable.message":
+    "Pergamumの作業情報を読み込めなかったため、復元せずに起動しました。\n\n文書やProjectの内容が削除されたわけではありません。",
+  "dialog.sessionRestoreUnavailable.title": "作業情報を復元できませんでした",
   "dialog.sessionPersistenceSuspended.message": "Pergamumの作業情報を保存できないため、自動保存を一時停止しました。\n\nインストールドライブの空き容量やディスクの状態を確認してください。\nこのエラーは文書の編集・保存とは別の機能で発生していますが、次回起動時に現在のタブやウィンドウ状態を復元できない場合があります。",
   "dialog.sessionPersistenceSuspended.title": "作業情報の自動保存を停止しました",
   "dialog.icon.error": "エラー",
@@ -282,6 +288,8 @@ export const jaTranslations = {
   "menu.zoomOut": "縮小",
   "notification.dismiss": "通知を閉じる",
   "notification.externalMarkdownOpened": "プロジェクト外のファイルを開きました",
+  "notification.sessionRestore.editorSkipped":
+    "{name} を復元できなかったため、このタブは開いていません",
   "project.label": "プロジェクト: {name}",
   "projectAccess.readOnly.label": "読み取り専用",
   "projectAccess.readOnly.tooltip": "読み取り専用で開いています",

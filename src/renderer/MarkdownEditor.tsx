@@ -37,6 +37,7 @@ import {
 } from "./soundFeedback";
 import type { ParagraphIndentChange } from "./paragraphIndentTransform";
 import {
+  applyEditorViewState,
   captureEditorViewState,
   type EditorViewState
 } from "./editorViewState";
@@ -127,6 +128,17 @@ interface MarkdownEditorProps {
    * fire per selection / scroll event.
    */
   onViewStateDirty?: () => void;
+  /**
+   * #274: a persisted #273 View State to re-apply once, when the editor
+   * first shows the document identified by `key` (which must equal
+   * `documentKey`). Applied via `applyEditorViewState`, so the digest gate
+   * is honored — a content mismatch resets to a safe default instead of
+   * restoring a stale caret. Never blocks the document from opening.
+   */
+  restoreViewState?: { readonly key: string; readonly viewState: unknown } | null;
+  /** #274: fired once after `restoreViewState` for `key` has been consumed
+   *  (applied or digest-rejected) so the parent can drop it. */
+  onRestoreViewStateApplied?: (key: string) => void;
 }
 
 export interface MarkdownEditorParagraphIndentController {
@@ -227,7 +239,9 @@ export function MarkdownEditor({
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onViewStateSnapshot,
-  onViewStateDirty
+  onViewStateDirty,
+  restoreViewState,
+  onRestoreViewStateApplied
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -589,6 +603,36 @@ export function MarkdownEditor({
     view.focus();
     onPendingSelectionApplied?.();
   }, [pendingSelection, onPendingSelectionApplied]);
+
+  // #274: re-apply a persisted #273 View State exactly once for the document
+  // this editor is now showing. Declared after the document-switch effect so
+  // the content is already in place; `applyEditorViewState` digest-gates
+  // internally (mismatch → safe reset), and a failure here never affects the
+  // document being open.
+  const appliedRestoreViewStateKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (
+      !view ||
+      !restoreViewState ||
+      restoreViewState.key !== documentKey ||
+      appliedRestoreViewStateKeyRef.current === restoreViewState.key
+    ) {
+      return;
+    }
+
+    appliedRestoreViewStateKeyRef.current = restoreViewState.key;
+
+    try {
+      applyEditorViewState(view, restoreViewState.viewState);
+    } catch {
+      // View State restore is strictly best-effort; never fail the open.
+    }
+
+    onRestoreViewStateApplied?.(restoreViewState.key);
+  }, [restoreViewState, documentKey, onRestoreViewStateApplied]);
 
   return (
     <div

@@ -29,7 +29,8 @@ import type {
   QuitApplicationResult
 } from "./lifecycle";
 import type { AppPlatform } from "./platform";
-import type { RendererSessionSnapshot } from "./session";
+import type { RendererSessionSnapshot, SessionRecord } from "./session";
+import type { ColdStartLaunchTarget } from "./sessionRestore";
 
 export type { AppPlatform } from "./platform";
 export type {
@@ -79,6 +80,9 @@ export type {
 
 export const FILE_CHANNELS = {
   openMarkdown: "files:openMarkdown",
+  /** #274: read a Markdown file by absolute path — no dialog. Used to
+   *  reopen a standalone Markdown editor / route a Markdown launch target. */
+  readMarkdownFile: "files:readMarkdownFile",
   saveMarkdown: "files:saveMarkdown",
   selectMarkdownSavePath: "files:selectMarkdownSavePath",
   writeMarkdown: "files:writeMarkdown"
@@ -88,6 +92,10 @@ export const PROJECT_CHANNELS = {
   createProject: "projects:createProject",
   openProject: "projects:openProject",
   openStartupProject: "projects:openStartupProject",
+  /** #274: reopen a project from an arbitrary `.pergamum` path through the
+   *  normal open lifecycle (metadata / write-lock / read-only policy), with
+   *  a saved-identity check. Used only by cold-start Session restore. */
+  openProjectByFilePath: "projects:openProjectByFilePath",
   openRecentProject: "projects:openRecentProject",
   confirmReadOnlyProjectOpen: "projects:confirmReadOnlyProjectOpen",
   cancelReadOnlyProjectOpen: "projects:cancelReadOnlyProjectOpen",
@@ -110,6 +118,9 @@ export const SETTINGS_CHANNELS = {
 export const SESSION_CHANNELS = {
   persistSession: "session:persistSession",
   dropSessionFromRestoreSet: "session:dropSessionFromRestoreSet",
+  /** #274: renderer → main, once at cold start — the bounded restore-set
+   *  read result plus the launch target extracted from argv. */
+  getColdStartRestore: "session:getColdStartRestore",
   /** main → renderer: a storage-class Session persistence failure occurred
    *  for a write the renderer was not awaiting (window-driven re-persist). */
   storageFailure: "session:storageFailure"
@@ -315,6 +326,51 @@ export type StartupProjectOpenResult =
       message: string;
     };
 
+/**
+ * #274: result of reopening a project from an arbitrary `.pergamum` path
+ * during cold-start Session restore.
+ *
+ *   - `opened`           → proceed through the normal open result
+ *                          (`resolveProjectOpenResult` / read-only confirm)
+ *   - `identityMismatch` → the `.pergamum` at that path is a DIFFERENT
+ *                          project than the Session saved; Project restore
+ *                          failed, never guessed
+ *   - `failed`           → missing / unreadable / other open error
+ */
+export type OpenProjectByFilePathResult =
+  | { kind: "opened"; result: ProjectOpenResult }
+  | { kind: "identityMismatch" }
+  | { kind: "failed"; reason: DebugLogReason; message: string };
+
+export interface OpenProjectByFilePathRequest {
+  projectFilePath: string;
+  expectedProjectId: string;
+}
+
+/**
+ * #274: cold-start restore payload handed to the renderer once at startup.
+ * `SessionRecord`s here are already validated current-schema cores; the
+ * renderer selects at most one to restore.
+ */
+export type ColdStartRestoreRead =
+  | {
+      kind: "ok";
+      sessions: SessionRecord[];
+      manifestListedSessionCount: number;
+      skippedSessionCount: number;
+    }
+  | { kind: "empty" }
+  | {
+      kind: "manifestUnavailable";
+      reason: "unreadable" | "malformed" | "unsupportedSchema";
+    }
+  | { kind: "timedOut" };
+
+export interface ColdStartRestorePayload {
+  read: ColdStartRestoreRead;
+  launchTarget: ColdStartLaunchTarget | null;
+}
+
 export interface PendingReadOnlyProjectOpenRequest {
   token: string;
 }
@@ -384,6 +440,9 @@ export interface PergamumApi {
      * file path or content.
      */
     openMarkdown: (documentOpenId: string) => Promise<MarkdownFile | null>;
+    /** #274: read a Markdown file by absolute path (no dialog). Rejects
+     *  with a sanitized error when the file is missing / unreadable. */
+    readMarkdownFile: (filePath: string) => Promise<MarkdownFile>;
     saveMarkdown: (
       path: string | null,
       content: string
@@ -400,6 +459,12 @@ export interface PergamumApi {
     createProject: () => Promise<ProjectOpenResult>;
     openProject: () => Promise<ProjectOpenResult>;
     openStartupProject: () => Promise<StartupProjectOpenResult>;
+    /** #274: reopen a project from a saved `.pergamum` path with a
+     *  saved-identity check, for cold-start Session restore only. */
+    openProjectByFilePath: (
+      projectFilePath: string,
+      expectedProjectId: string
+    ) => Promise<OpenProjectByFilePathResult>;
     openRecentProject: (projectFilePath: string) => Promise<ProjectOpenResult>;
     confirmReadOnlyProjectOpen: (
       token: string
@@ -432,6 +497,9 @@ export interface PergamumApi {
   session: {
     persist: (snapshot: RendererSessionSnapshot) => Promise<void>;
     dropFromRestoreSet: (sessionId: string) => Promise<void>;
+    /** #274: fetch the cold-start restore payload (bounded restore-set read
+     *  result + launch target). Meant to be consumed once at startup. */
+    getColdStartRestore: () => Promise<ColdStartRestorePayload>;
     /**
      * Subscribe to "the main process hit a storage-class Session
      * persistence failure for a write you were not awaiting" (window-driven
