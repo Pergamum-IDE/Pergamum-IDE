@@ -273,6 +273,9 @@ describe("Settings Catalog Foundation (#150)", () => {
         getCatalogDefaultValue("workbench.sound.enabled")
       ).toEqualTypeOf<boolean>();
       expectTypeOf(
+        getCatalogDefaultValue("editor.whitespace.renderIdeographicSpace")
+      ).toEqualTypeOf<boolean>();
+      expectTypeOf(
         getCatalogDefaultValue("commandPalette.description.marquee.delay")
       ).toEqualTypeOf<number>();
     });
@@ -812,6 +815,10 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.sound.newline.enabled",
         "workbench.sound.keypress.enabled",
         "commandPalette.description.enable",
+        "editor.whitespace.renderIdeographicSpace",
+        "editor.whitespace.renderAsciiSpace",
+        "editor.whitespace.renderTab",
+        "editor.whitespace.renderOtherUnicodeSpace",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
         "editor.characterCount.exclude.headings",
@@ -940,6 +947,10 @@ describe("Settings Catalog Foundation (#150)", () => {
         "applicationOnly"
       );
       for (const key of [
+        "editor.whitespace.renderIdeographicSpace",
+        "editor.whitespace.renderAsciiSpace",
+        "editor.whitespace.renderTab",
+        "editor.whitespace.renderOtherUnicodeSpace",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
         "editor.characterCount.exclude.headings",
@@ -988,7 +999,11 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.fontFamily",
         "editor.lineEnding.expected",
         "editor.lineEnding.markerGlyph",
-        "editor.paragraphIndent.excludeLeadingCharacters"
+        "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.whitespace.renderAsciiSpace",
+        "editor.whitespace.renderIdeographicSpace",
+        "editor.whitespace.renderOtherUnicodeSpace",
+        "editor.whitespace.renderTab"
       ]);
     });
 
@@ -1037,6 +1052,10 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.whitespace.renderAsciiSpace",
+          "editor.whitespace.renderIdeographicSpace",
+          "editor.whitespace.renderOtherUnicodeSpace",
+          "editor.whitespace.renderTab",
           "files.newFile.encoding",
           "files.newFile.lineEnding",
           "preview.renderer",
@@ -1096,6 +1115,30 @@ describe("Settings Catalog Foundation (#150)", () => {
         allowedCharacters: "none",
         allowEmptyString: true
       });
+    });
+
+    it("editor.whitespace.* are applicationOnly boolean settings with the required #256 defaults", () => {
+      const expectedDefaults = {
+        "editor.whitespace.renderIdeographicSpace": true,
+        "editor.whitespace.renderAsciiSpace": false,
+        "editor.whitespace.renderTab": false,
+        "editor.whitespace.renderOtherUnicodeSpace": true
+      } as const;
+
+      for (const [key, defaultValue] of Object.entries(expectedDefaults)) {
+        const settingKey = key as keyof typeof expectedDefaults;
+        const entry = getCatalogEntry(settingKey);
+
+        expect(entry.scope).toBe("applicationOnly");
+        expect(entry.type).toBe("boolean");
+        expect(getCatalogDefaultValue(settingKey)).toBe(defaultValue);
+        expect(validateCatalogValue(settingKey, true)).toEqual({ ok: true });
+        expect(validateCatalogValue(settingKey, false)).toEqual({ ok: true });
+        expect(validateCatalogValue(settingKey, "true")).toEqual({
+          ok: false,
+          failure: "typeMismatch"
+        });
+      }
     });
 
     it("files.newFile.lineEnding's enum values are exactly ['lf', 'crlf']", () => {
@@ -1417,6 +1460,12 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(settingsStoreSource).toContain(
         '"editor.characterCount.exclude.markdownComments"'
       );
+      expect(settingsStoreSource).toContain(
+        '"editor.whitespace.renderIdeographicSpace"'
+      );
+      expect(settingsStoreSource).toContain(
+        '"editor.whitespace.renderOtherUnicodeSpace"'
+      );
       expect(settingsSource).toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
       expect(settingsSource).toContain(
         'getCatalogDefaultValue("files.newFile.lineEnding")'
@@ -1448,6 +1497,12 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(settingsSource).toMatch(
         /getCatalogDefaultValue\(\s*"editor\.characterCount\.exclude\.markdownSyntax"\s*\)/
       );
+      expect(settingsSource).toMatch(
+        /getCatalogDefaultValue\(\s*"editor\.whitespace\.renderIdeographicSpace"\s*\)/
+      );
+      expect(settingsSource).toMatch(
+        /getCatalogDefaultValue\(\s*"editor\.whitespace\.renderOtherUnicodeSpace"\s*\)/
+      );
       expect(rendererSource).toMatch(/CatalogValue\("editor\.fontFamily"/);
       expect(rendererSource).toMatch(
         /CatalogDefaultValue\("editor\.fontFamily"/
@@ -1471,7 +1526,11 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.characterCount.exclude.lineBreaks",
           "editor.characterCount.exclude.headings",
           "editor.characterCount.exclude.markdownSyntax",
-          "editor.characterCount.exclude.markdownComments"
+          "editor.characterCount.exclude.markdownComments",
+          "editor.whitespace.renderIdeographicSpace",
+          "editor.whitespace.renderAsciiSpace",
+          "editor.whitespace.renderTab",
+          "editor.whitespace.renderOtherUnicodeSpace"
         ])
       );
 
@@ -1506,7 +1565,11 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.lineBreaks",
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
-        "editor.characterCount.exclude.markdownComments"
+        "editor.characterCount.exclude.markdownComments",
+        "editor.whitespace.renderIdeographicSpace",
+        "editor.whitespace.renderAsciiSpace",
+        "editor.whitespace.renderTab",
+        "editor.whitespace.renderOtherUnicodeSpace"
       ]) {
         expect(projectConfigStoreSource).not.toContain(applicationSettingsOnlyKey);
       }

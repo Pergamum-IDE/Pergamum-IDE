@@ -627,6 +627,44 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "editor.whitespace.renderIdeographicSpace": defineBooleanSetting({
+    key: "editor.whitespace.renderIdeographicSpace",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.editor.whitespace.renderIdeographicSpace.label",
+    descriptionKey:
+      "settings.editor.whitespace.renderIdeographicSpace.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.whitespace.renderAsciiSpace": defineBooleanSetting({
+    key: "editor.whitespace.renderAsciiSpace",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.editor.whitespace.renderAsciiSpace.label",
+    descriptionKey: "settings.editor.whitespace.renderAsciiSpace.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.whitespace.renderTab": defineBooleanSetting({
+    key: "editor.whitespace.renderTab",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.editor.whitespace.renderTab.label",
+    descriptionKey: "settings.editor.whitespace.renderTab.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.whitespace.renderOtherUnicodeSpace": defineBooleanSetting({
+    key: "editor.whitespace.renderOtherUnicodeSpace",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.editor.whitespace.renderOtherUnicodeSpace.label",
+    descriptionKey:
+      "settings.editor.whitespace.renderOtherUnicodeSpace.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "editor.characterCount.exclude.whitespace": defineBooleanSetting({
     key: "editor.characterCount.exclude.whitespace",
     scope: "applicationOnly",

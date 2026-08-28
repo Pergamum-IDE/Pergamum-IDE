@@ -438,6 +438,48 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
   },
   {
+    key: "editor.whitespace.renderIdeographicSpace",
+    category: "editor",
+    order: 320,
+    labelKey: "settings.editor.whitespace.renderIdeographicSpace.label",
+    descriptionKey:
+      "settings.editor.whitespace.renderIdeographicSpace.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.whitespace.renderIdeographicSpace"
+    )
+  },
+  {
+    key: "editor.whitespace.renderAsciiSpace",
+    category: "editor",
+    order: 330,
+    labelKey: "settings.editor.whitespace.renderAsciiSpace.label",
+    descriptionKey: "settings.editor.whitespace.renderAsciiSpace.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("editor.whitespace.renderAsciiSpace")
+  },
+  {
+    key: "editor.whitespace.renderTab",
+    category: "editor",
+    order: 340,
+    labelKey: "settings.editor.whitespace.renderTab.label",
+    descriptionKey: "settings.editor.whitespace.renderTab.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("editor.whitespace.renderTab")
+  },
+  {
+    key: "editor.whitespace.renderOtherUnicodeSpace",
+    category: "editor",
+    order: 350,
+    labelKey: "settings.editor.whitespace.renderOtherUnicodeSpace.label",
+    descriptionKey:
+      "settings.editor.whitespace.renderOtherUnicodeSpace.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue(
+      "editor.whitespace.renderOtherUnicodeSpace"
+    )
+  },
+  {
     key: "workbench.statusBar.characterCount.visible",
     category: "editor",
     order: 400,

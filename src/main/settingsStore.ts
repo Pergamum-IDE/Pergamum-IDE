@@ -296,6 +296,31 @@ function readLineEndingSettings(
   };
 }
 
+function readWhitespaceSettings(
+  value: unknown
+): ApplicationSettings["editor"]["whitespace"] {
+  const whitespaceValue = isObject(value) ? value : undefined;
+
+  return {
+    renderIdeographicSpace: resolveCatalogValue(
+      "editor.whitespace.renderIdeographicSpace",
+      whitespaceValue?.renderIdeographicSpace
+    ).value,
+    renderAsciiSpace: resolveCatalogValue(
+      "editor.whitespace.renderAsciiSpace",
+      whitespaceValue?.renderAsciiSpace
+    ).value,
+    renderTab: resolveCatalogValue(
+      "editor.whitespace.renderTab",
+      whitespaceValue?.renderTab
+    ).value,
+    renderOtherUnicodeSpace: resolveCatalogValue(
+      "editor.whitespace.renderOtherUnicodeSpace",
+      whitespaceValue?.renderOtherUnicodeSpace
+    ).value
+  };
+}
+
 function readParagraphIndentSettings(
   value: unknown
 ): ApplicationSettings["editor"]["paragraphIndent"] {
@@ -351,6 +376,7 @@ function readCharacterCountSettings(
 function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   const editorValue = isObject(value) ? value : undefined;
   const lineEnding = readLineEndingSettings(editorValue?.lineEnding);
+  const whitespace = readWhitespaceSettings(editorValue?.whitespace);
   const paragraphIndent = readParagraphIndentSettings(
     editorValue?.paragraphIndent
   );
@@ -363,12 +389,13 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     typeof editorValue.fontFamily !== "string" ||
     !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
   ) {
-    return { lineEnding, paragraphIndent, characterCount };
+    return { lineEnding, whitespace, paragraphIndent, characterCount };
   }
 
   return {
     fontFamily: editorValue.fontFamily,
     lineEnding,
+    whitespace,
     paragraphIndent,
     characterCount
   };
@@ -868,6 +895,59 @@ function parseLineEndingSettingsForWrite(
   };
 }
 
+function parseWhitespaceSettingsForWrite(
+  value: unknown
+): ApplicationSettings["editor"]["whitespace"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 4 ||
+    !keys.includes("renderIdeographicSpace") ||
+    !keys.includes("renderAsciiSpace") ||
+    !keys.includes("renderTab") ||
+    !keys.includes("renderOtherUnicodeSpace")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const renderIdeographicSpaceResolution = resolveCatalogValue(
+    "editor.whitespace.renderIdeographicSpace",
+    value.renderIdeographicSpace
+  );
+  const renderAsciiSpaceResolution = resolveCatalogValue(
+    "editor.whitespace.renderAsciiSpace",
+    value.renderAsciiSpace
+  );
+  const renderTabResolution = resolveCatalogValue(
+    "editor.whitespace.renderTab",
+    value.renderTab
+  );
+  const renderOtherUnicodeSpaceResolution = resolveCatalogValue(
+    "editor.whitespace.renderOtherUnicodeSpace",
+    value.renderOtherUnicodeSpace
+  );
+
+  if (
+    !renderIdeographicSpaceResolution.ok ||
+    !renderAsciiSpaceResolution.ok ||
+    !renderTabResolution.ok ||
+    !renderOtherUnicodeSpaceResolution.ok
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    renderIdeographicSpace: renderIdeographicSpaceResolution.value,
+    renderAsciiSpace: renderAsciiSpaceResolution.value,
+    renderTab: renderTabResolution.value,
+    renderOtherUnicodeSpace: renderOtherUnicodeSpaceResolution.value
+  };
+}
+
 function parseParagraphIndentSettingsForWrite(
   value: unknown
 ): ApplicationSettings["editor"]["paragraphIndent"] {
@@ -983,19 +1063,22 @@ function parseEditorSettingsForWrite(
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
   const hasLineEnding = keys.includes("lineEnding");
+  const hasWhitespace = keys.includes("whitespace");
   const hasParagraphIndent = keys.includes("paragraphIndent");
   const hasCharacterCount = keys.includes("characterCount");
 
   if (
     !hasLineEnding ||
+    !hasWhitespace ||
     !hasParagraphIndent ||
     !hasCharacterCount ||
-    keys.length !== (hasFontFamily ? 4 : 3)
+    keys.length !== (hasFontFamily ? 5 : 4)
   ) {
     throw new Error("Invalid application settings.");
   }
 
   const lineEnding = parseLineEndingSettingsForWrite(value.lineEnding);
+  const whitespace = parseWhitespaceSettingsForWrite(value.whitespace);
   const paragraphIndent = parseParagraphIndentSettingsForWrite(
     value.paragraphIndent
   );
@@ -1006,6 +1089,7 @@ function parseEditorSettingsForWrite(
   if (!hasFontFamily) {
     return {
       lineEnding,
+      whitespace,
       paragraphIndent,
       characterCount
     };
@@ -1021,6 +1105,7 @@ function parseEditorSettingsForWrite(
   return {
     fontFamily: value.fontFamily,
     lineEnding,
+    whitespace,
     paragraphIndent,
     characterCount
   };

@@ -241,6 +241,50 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     ).toEqual(expected);
   });
 
+  it("editor.whitespace defaults derive from the catalog and pass through effective settings (#256 plumbing)", () => {
+    const expected = {
+      renderIdeographicSpace: getCatalogDefaultValue(
+        "editor.whitespace.renderIdeographicSpace"
+      ),
+      renderAsciiSpace: getCatalogDefaultValue(
+        "editor.whitespace.renderAsciiSpace"
+      ),
+      renderTab: getCatalogDefaultValue("editor.whitespace.renderTab"),
+      renderOtherUnicodeSpace: getCatalogDefaultValue(
+        "editor.whitespace.renderOtherUnicodeSpace"
+      )
+    };
+
+    expect(builtInDefaultSettings.editor.whitespace).toEqual(expected);
+    expect(defaultApplicationSettings.editor.whitespace).toEqual(expected);
+    expect(createDefaultApplicationSettings().editor.whitespace).toEqual(
+      expected
+    );
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined).editor
+        .whitespace
+    ).toEqual(expected);
+  });
+
+  it("resolveEffectiveSettings passes through editor.whitespace runtime changes without a project override (#256 plumbing)", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        whitespace: {
+          renderIdeographicSpace: false,
+          renderAsciiSpace: true,
+          renderTab: true,
+          renderOtherUnicodeSpace: false
+        }
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, {}).editor.whitespace
+    ).toEqual(applicationSettings.editor.whitespace);
+  });
+
   it("does not add Project Settings shape for #195 Application Settings controls", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,

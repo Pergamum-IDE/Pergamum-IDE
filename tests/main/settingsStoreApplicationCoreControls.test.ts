@@ -35,6 +35,20 @@ const defaultLineEndingSettings = {
   expected: getCatalogDefaultValue("editor.lineEnding.expected"),
   markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
 };
+
+const defaultWhitespaceSettings = {
+  renderIdeographicSpace: getCatalogDefaultValue(
+    "editor.whitespace.renderIdeographicSpace"
+  ),
+  renderAsciiSpace: getCatalogDefaultValue(
+    "editor.whitespace.renderAsciiSpace"
+  ),
+  renderTab: getCatalogDefaultValue("editor.whitespace.renderTab"),
+  renderOtherUnicodeSpace: getCatalogDefaultValue(
+    "editor.whitespace.renderOtherUnicodeSpace"
+  )
+};
+
 const defaultParagraphIndentSettings = {
   excludeLeadingCharacters: getCatalogDefaultValue(
     "editor.paragraphIndent.excludeLeadingCharacters"
@@ -129,6 +143,7 @@ function validSaveRequest(
     },
     editor: {
       lineEnding: defaultLineEndingSettings,
+      whitespace: defaultWhitespaceSettings,
       paragraphIndent: defaultParagraphIndentSettings,
       characterCount: defaultCharacterCountSettings
     },
@@ -158,6 +173,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
 
     expect(settings.workbench).not.toHaveProperty("advancedSettings");
     expect(settings.workbench.statusBar).toEqual(defaultStatusBarSettings);
+    expect(settings.editor.whitespace).toEqual(defaultWhitespaceSettings);
     expect(settings.editor.characterCount).toEqual(
       defaultCharacterCountSettings
     );
@@ -198,6 +214,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
         },
         editor: {
           fontFamily: "Fira Code",
+          whitespace: {
+            renderIdeographicSpace: false,
+            renderAsciiSpace: true,
+            renderTab: true,
+            renderOtherUnicodeSpace: false
+          },
           paragraphIndent: { excludeLeadingCharacters: "「『（" }
         },
         files: {
@@ -225,6 +247,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       keypress: { enabled: false }
     });
     expect(settings.editor.fontFamily).toBe("Fira Code");
+    expect(settings.editor.whitespace).toEqual({
+      renderIdeographicSpace: false,
+      renderAsciiSpace: true,
+      renderTab: true,
+      renderOtherUnicodeSpace: false
+    });
     expect(settings.editor.paragraphIndent).toEqual({
       excludeLeadingCharacters: "「『（"
     });
@@ -253,6 +281,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
         },
         editor: {
           fontFamily: 'Fira Code"; color: red',
+          whitespace: {
+            renderIdeographicSpace: "yes",
+            renderAsciiSpace: "yes",
+            renderTab: "yes",
+            renderOtherUnicodeSpace: "yes"
+          },
           paragraphIndent: { excludeLeadingCharacters: 42 }
         },
         files: {
@@ -275,6 +309,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.workbench).not.toHaveProperty("advancedSettings");
     expect(settings.workbench.sound).toEqual(defaultSoundSettings);
     expect(settings.editor.fontFamily).toBeUndefined();
+    expect(settings.editor.whitespace).toEqual(defaultWhitespaceSettings);
     expect(settings.editor.paragraphIndent).toEqual(
       defaultParagraphIndentSettings
     );
@@ -370,6 +405,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         editor: {
           fontFamily: "Fira Code",
           lineEnding: defaultLineEndingSettings,
+          whitespace: {
+            renderIdeographicSpace: false,
+            renderAsciiSpace: true,
+            renderTab: true,
+            renderOtherUnicodeSpace: false
+          },
           paragraphIndent: { excludeLeadingCharacters: "「『" },
           characterCount: {
             exclude: {
@@ -427,6 +468,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     expect(written.editor).toEqual({
       fontFamily: "Fira Code",
       lineEnding: defaultLineEndingSettings,
+      whitespace: {
+        renderIdeographicSpace: false,
+        renderAsciiSpace: true,
+        renderTab: true,
+        renderOtherUnicodeSpace: false
+      },
       paragraphIndent: { excludeLeadingCharacters: "「『" },
       characterCount: {
         exclude: {
@@ -525,6 +572,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         editor: {
           fontFamily: 'Fira Code"; color: red',
           lineEnding: defaultLineEndingSettings,
+          whitespace: defaultWhitespaceSettings,
           paragraphIndent: defaultParagraphIndentSettings,
           characterCount: defaultCharacterCountSettings
         }
@@ -542,6 +590,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       validSaveRequest({
         editor: {
           lineEnding: defaultLineEndingSettings,
+          whitespace: defaultWhitespaceSettings,
           paragraphIndent: {
             excludeLeadingCharacters: 42 as unknown as string
           },
@@ -551,6 +600,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       validSaveRequest({
         editor: {
           lineEnding: defaultLineEndingSettings,
+          whitespace: defaultWhitespaceSettings,
           paragraphIndent: defaultParagraphIndentSettings,
           characterCount: {
             exclude: {
@@ -558,6 +608,17 @@ describe("settingsStore Application Settings core controls write path (#195)", (
               markdownSyntax: "yes" as unknown as boolean
             }
           }
+        }
+      }),
+      validSaveRequest({
+        editor: {
+          lineEnding: defaultLineEndingSettings,
+          whitespace: {
+            ...defaultWhitespaceSettings,
+            renderAsciiSpace: "yes" as unknown as boolean
+          },
+          paragraphIndent: defaultParagraphIndentSettings,
+          characterCount: defaultCharacterCountSettings
         }
       }),
       validSaveRequest({

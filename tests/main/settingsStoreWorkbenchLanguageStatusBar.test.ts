@@ -39,6 +39,20 @@ const defaultLineEndingSettings = {
   expected: getCatalogDefaultValue("editor.lineEnding.expected"),
   markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
 };
+
+const defaultWhitespaceSettings = {
+  renderIdeographicSpace: getCatalogDefaultValue(
+    "editor.whitespace.renderIdeographicSpace"
+  ),
+  renderAsciiSpace: getCatalogDefaultValue(
+    "editor.whitespace.renderAsciiSpace"
+  ),
+  renderTab: getCatalogDefaultValue("editor.whitespace.renderTab"),
+  renderOtherUnicodeSpace: getCatalogDefaultValue(
+    "editor.whitespace.renderOtherUnicodeSpace"
+  )
+};
+
 const defaultParagraphIndentSettings = {
   excludeLeadingCharacters: getCatalogDefaultValue(
     "editor.paragraphIndent.excludeLeadingCharacters"
@@ -114,6 +128,7 @@ function saveRequest(
     },
     editor: {
       lineEnding: defaultLineEndingSettings,
+      whitespace: defaultWhitespaceSettings,
       paragraphIndent: defaultParagraphIndentSettings,
       characterCount: defaultCharacterCountSettings
     },
@@ -444,6 +459,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       },
       editor: {
         lineEnding: defaultLineEndingSettings,
+        whitespace: defaultWhitespaceSettings,
         paragraphIndent: defaultParagraphIndentSettings,
         characterCount: defaultCharacterCountSettings
       },
@@ -475,6 +491,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       },
       editor: {
         lineEnding: defaultLineEndingSettings,
+        whitespace: defaultWhitespaceSettings,
         paragraphIndent: defaultParagraphIndentSettings,
         characterCount: defaultCharacterCountSettings
       },
