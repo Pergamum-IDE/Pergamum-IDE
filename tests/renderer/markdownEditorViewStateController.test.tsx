@@ -3,11 +3,13 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MarkdownEditor,
+  type MarkdownEditorFocusRequest,
   type MarkdownEditorViewStateController
 } from "../../src/renderer/MarkdownEditor";
+import { computeEditorContentDigest } from "../../src/renderer/editorContentDigest";
 import type { EditorViewState } from "../../src/renderer/editorViewState";
 
 let container: HTMLDivElement | null = null;
@@ -199,5 +201,120 @@ describe("MarkdownEditor onViewStateDirty signal (#272 review Blocker 4)", () =>
   it("mounts without an onViewStateDirty prop (it is optional)", () => {
     const { controller } = mount("no dirty handler wired");
     expect(controller()).not.toBeNull();
+  });
+});
+
+describe("MarkdownEditor cold-start focus request seam (#280)", () => {
+  function mountWithFocusRequest(props: {
+    readonly documentKey: string;
+    readonly focusRequest: MarkdownEditorFocusRequest | null;
+    readonly restoreViewState?: EditorViewState | null;
+    readonly onRestoreViewStateApplied?: (key: string) => void;
+    readonly onFocusRequestApplied?: (requestId: number) => void;
+  }) {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let controller: MarkdownEditorViewStateController | null = null;
+
+    function render(next: {
+      readonly documentKey: string;
+      readonly focusRequest: MarkdownEditorFocusRequest | null;
+      readonly restoreViewState?: EditorViewState | null;
+    }): void {
+      act(() => {
+        root!.render(
+          React.createElement(MarkdownEditor, {
+            value: "content",
+            documentKey: next.documentKey,
+            onChange: () => undefined,
+            onViewStateControllerChange: (nextController) => {
+              controller = nextController;
+            },
+            restoreViewState: next.restoreViewState
+              ? {
+                  key: next.documentKey,
+                  viewState: next.restoreViewState
+                }
+              : null,
+            onRestoreViewStateApplied: props.onRestoreViewStateApplied,
+            focusRequest: next.focusRequest,
+            onFocusRequestApplied: props.onFocusRequestApplied
+          })
+        );
+      });
+    }
+
+    render(props);
+
+    return { controller: () => controller, render };
+  }
+
+  it("focuses exactly once when the request documentKey matches the current editor", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const applied: number[] = [];
+    const request = { id: 1, documentKey: "editor:A" };
+    const { render } = mountWithFocusRequest({
+      documentKey: "editor:A",
+      focusRequest: request,
+      onFocusRequestApplied: (requestId) => {
+        applied.push(requestId);
+      }
+    });
+
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(applied).toEqual([1]);
+
+    render({ documentKey: "editor:A", focusRequest: request });
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(applied).toEqual([1]);
+
+    focus.mockRestore();
+  });
+
+  it("does not focus or consume a stale request for another documentKey", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const applied: number[] = [];
+
+    mountWithFocusRequest({
+      documentKey: "editor:B",
+      focusRequest: { id: 2, documentKey: "editor:A" },
+      onFocusRequestApplied: (requestId) => {
+        applied.push(requestId);
+      }
+    });
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+
+    focus.mockRestore();
+  });
+
+  it("does not change the current selection when restoring focus", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const restoredState: EditorViewState = {
+      contentDigest: computeEditorContentDigest("content"),
+      selection: { anchor: 2, head: 5 },
+      scroll: { top: 0, left: 0 }
+    };
+    const { controller, render } = mountWithFocusRequest({
+      documentKey: "editor:A",
+      focusRequest: null,
+      restoreViewState: restoredState
+    });
+    const beforeFocus = controller()?.captureViewState();
+
+    render({
+      documentKey: "editor:A",
+      focusRequest: { id: 3, documentKey: "editor:A" }
+    });
+
+    const afterFocus = controller()?.captureViewState();
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(afterFocus?.selection).toEqual(beforeFocus?.selection);
+    expect(afterFocus?.selection).toEqual({ anchor: 2, head: 5 });
+
+    focus.mockRestore();
   });
 });

@@ -33,6 +33,7 @@ import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
   MarkdownEditor,
   type MarkdownEditorParagraphIndentController,
+  type MarkdownEditorFocusRequest,
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import type { EditorViewState } from "./editorViewState";
@@ -378,6 +379,8 @@ interface EditorSurfaceProps {
     | { readonly key: string; readonly viewState: unknown }
     | null;
   onRestoreActiveEditorViewStateApplied: (key: string) => void;
+  markdownEditorFocusRequest: MarkdownEditorFocusRequest | null;
+  onMarkdownEditorFocusRequestApplied: (requestId: number) => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
   onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
@@ -490,6 +493,8 @@ export function EditorSurface({
   onViewStateDirty,
   restoreActiveEditorViewState,
   onRestoreActiveEditorViewStateApplied,
+  markdownEditorFocusRequest,
+  onMarkdownEditorFocusRequestApplied,
   onChangeGlossaryEntryKind,
   onChangeGlossaryEntryDescription,
   onChangeGlossaryEntryCanonicalSurface,
@@ -537,6 +542,8 @@ export function EditorSurface({
           onViewStateDirty={onViewStateDirty}
           restoreViewState={restoreActiveEditorViewState}
           onRestoreViewStateApplied={onRestoreActiveEditorViewStateApplied}
+          focusRequest={markdownEditorFocusRequest}
+          onFocusRequestApplied={onMarkdownEditorFocusRequestApplied}
           pendingSelection={pendingMarkdownSelection}
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
@@ -625,6 +632,8 @@ interface MarkdownEditorSurfaceProps {
     | { readonly key: string; readonly viewState: unknown }
     | null;
   onRestoreViewStateApplied: (key: string) => void;
+  focusRequest: MarkdownEditorFocusRequest | null;
+  onFocusRequestApplied: (requestId: number) => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
   ratio: number;
@@ -678,6 +687,8 @@ function MarkdownEditorSurface({
   onViewStateDirty,
   restoreViewState,
   onRestoreViewStateApplied,
+  focusRequest,
+  onFocusRequestApplied,
   pendingSelection,
   onPendingSelectionApplied,
   ratio,
@@ -852,6 +863,8 @@ function MarkdownEditorSurface({
           onViewStateDirty={onViewStateDirty}
           restoreViewState={restoreViewState}
           onRestoreViewStateApplied={onRestoreViewStateApplied}
+          focusRequest={focusRequest}
+          onFocusRequestApplied={onFocusRequestApplied}
           documentKey={documentKey}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}

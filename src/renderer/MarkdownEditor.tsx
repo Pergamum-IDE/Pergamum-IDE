@@ -139,6 +139,12 @@ interface MarkdownEditorProps {
   /** #274: fired once after `restoreViewState` for `key` has been consumed
    *  (applied or digest-rejected) so the parent can drop it. */
   onRestoreViewStateApplied?: (key: string) => void;
+  /**
+   * Imperative focus stays inside the CodeMirror owner. Callers provide only
+   * the target document identity and a one-shot request id.
+   */
+  focusRequest?: MarkdownEditorFocusRequest | null;
+  onFocusRequestApplied?: (requestId: number) => void;
 }
 
 export interface MarkdownEditorParagraphIndentController {
@@ -151,6 +157,11 @@ export interface MarkdownEditorViewStateController {
   /** Read-only snapshot of the current CodeMirror View State, or `null`
    *  when no editor view is mounted. */
   captureViewState(): EditorViewState | null;
+}
+
+export interface MarkdownEditorFocusRequest {
+  readonly id: number;
+  readonly documentKey: string;
 }
 
 interface MarkdownEditorSoundTransaction {
@@ -241,7 +252,9 @@ export function MarkdownEditor({
   onViewStateSnapshot,
   onViewStateDirty,
   restoreViewState,
-  onRestoreViewStateApplied
+  onRestoreViewStateApplied,
+  focusRequest,
+  onFocusRequestApplied
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -281,6 +294,7 @@ export function MarkdownEditor({
   const lineEndingFieldRef = useRef<StateField<LineEndingBreakSet> | null>(
     null
   );
+  const appliedFocusRequestIdRef = useRef<number | null>(null);
 
   if (!readOnlyCompartmentRef.current) {
     readOnlyCompartmentRef.current = new Compartment();
@@ -633,6 +647,23 @@ export function MarkdownEditor({
 
     onRestoreViewStateApplied?.(restoreViewState.key);
   }, [restoreViewState, documentKey, onRestoreViewStateApplied]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (
+      !view ||
+      !focusRequest ||
+      focusRequest.documentKey !== documentKey ||
+      appliedFocusRequestIdRef.current === focusRequest.id
+    ) {
+      return;
+    }
+
+    appliedFocusRequestIdRef.current = focusRequest.id;
+    view.focus();
+    onFocusRequestApplied?.(focusRequest.id);
+  }, [focusRequest, documentKey, onFocusRequestApplied]);
 
   return (
     <div

@@ -148,9 +148,12 @@ import {
   type ViewportSizeDetails
 } from "./EditorSurface";
 import type {
+  MarkdownEditorFocusRequest,
   MarkdownEditorParagraphIndentController,
   MarkdownEditorViewStateController
 } from "./MarkdownEditor";
+import { resolveColdStartMarkdownFocusPolicy } from "./coldStartMarkdownFocusPolicy";
+import { resolveCommandPaletteFocusRestorePolicy } from "./commandPaletteFocusRestorePolicy";
 import type { EditorViewState } from "./editorViewState";
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
@@ -634,6 +637,24 @@ export function App(): JSX.Element {
   // #274: cold-start Session restore + launch routing runs exactly once,
   // after settings are ready. Replaces the bare startup-project open.
   const coldStartRestoreAttemptedRef = useRef(false);
+  const [coldStartRestoreSettled, setColdStartRestoreSettled] =
+    useState(false);
+  const [
+    coldStartMarkdownFocusArmed,
+    setColdStartMarkdownFocusArmed
+  ] = useState(false);
+  const [
+    coldStartMarkdownLaunchRoutingInFlight,
+    setColdStartMarkdownLaunchRoutingInFlight
+  ] = useState(false);
+  const [markdownEditorFocusRequest, setMarkdownEditorFocusRequest] =
+    useState<MarkdownEditorFocusRequest | null>(null);
+  const coldStartMarkdownFocusRequestedRef = useRef(false);
+  const [
+    commandPaletteMarkdownFocusRestorePending,
+    setCommandPaletteMarkdownFocusRestorePending
+  ] = useState(false);
+  const nextMarkdownEditorFocusRequestIdRef = useRef(1);
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -791,6 +812,11 @@ export function App(): JSX.Element {
   }
 
   const deferredRestoreErrorDialogs = deferredRestoreErrorDialogsRef.current;
+  const [
+    deferredRestoreErrorDialogVersion,
+    setDeferredRestoreErrorDialogVersion
+  ] = useState(0);
+  const deferredRestoreErrorDialogsReadyRef = useRef(false);
   // Re-drives the queue whenever dialogs go idle (dialog-controller
   // subscription) and once after the cold-start sequence settles.
   // Ref-indirected like the #272 presenter (subscription effect is
@@ -898,26 +924,160 @@ export function App(): JSX.Element {
   const activeMarkdownDocument = currentEditor
     ? markdownDocumentForEditor(currentEditor)
     : null;
+  const activeDocumentKey = activeDocument
+    ? serializeEditorId(activeDocument.id)
+    : null;
   // #274: the pending restore View State for the currently active editor,
   // handed to EditorSurface → MarkdownEditor for a one-shot #273 apply.
   const restoreActiveEditorViewState = useMemo(() => {
-    if (!activeDocument) {
+    if (!activeDocumentKey) {
       return null;
     }
 
-    const key = serializeEditorId(activeDocument.id);
-    const viewState = pendingRestoreViewStatesRef.current.get(key);
+    const viewState = pendingRestoreViewStatesRef.current.get(
+      activeDocumentKey
+    );
 
-    return viewState ? { key, viewState } : null;
+    return viewState ? { key: activeDocumentKey, viewState } : null;
     // pendingRestoreViewStateVersion bumps when an entry is consumed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDocument?.id, pendingRestoreViewStateVersion]);
+  }, [activeDocumentKey, pendingRestoreViewStateVersion]);
   const hasOpenDocumentTab = openDocumentsState.documents.length > 0;
   // When the Settings tab is the only open tab (zero document tabs), it is the
   // active surface even though `activeSpecialTabId` may not have been set.
   const isSettingsTabActive =
     isSettingsTabOpen &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
+  const activeEditorFocusSurface = isSettingsTabActive
+    ? "special"
+    : currentEditor?.kind === "markdown"
+      ? "markdown"
+      : currentEditor?.kind === "glossaryEntry"
+        ? "glossary"
+        : "empty";
+  const isActiveRestoreViewStatePending =
+    activeDocumentKey !== null &&
+    pendingRestoreViewStatesRef.current.has(activeDocumentKey);
+  const coldStartMarkdownLaunchRoutingSettled =
+    pendingMarkdownLaunchTargetForRestore === null &&
+    !coldStartMarkdownLaunchRoutingInFlight;
+  const isAppModalSurfacePendingOrOpen =
+    pendingDialogRequest !== null ||
+    isCommandPaletteOpen ||
+    isAboutDialogPendingOrOpenRef.current ||
+    aboutDialogAppInfo !== null ||
+    isLineEndingDistributionDialogPendingOrOpenRef.current ||
+    lineEndingDistributionData !== null;
+  const isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose =
+    pendingDialogRequest !== null ||
+    isAboutDialogPendingOrOpenRef.current ||
+    aboutDialogAppInfo !== null ||
+    isLineEndingDistributionDialogPendingOrOpenRef.current ||
+    lineEndingDistributionData !== null;
+
+  const requestMarkdownEditorFocus = useCallback((documentKey: string) => {
+    setMarkdownEditorFocusRequest({
+      id: nextMarkdownEditorFocusRequestIdRef.current,
+      documentKey
+    });
+    nextMarkdownEditorFocusRequestIdRef.current += 1;
+  }, []);
+
+  const handleMarkdownEditorFocusRequestApplied = useCallback(
+    (requestId: number) => {
+      setMarkdownEditorFocusRequest((current) =>
+        current?.id === requestId ? null : current
+      );
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (
+      markdownEditorFocusRequest &&
+      markdownEditorFocusRequest.documentKey !== activeDocumentKey
+    ) {
+      setMarkdownEditorFocusRequest(null);
+    }
+  }, [markdownEditorFocusRequest, activeDocumentKey]);
+
+  useEffect(() => {
+    const result = resolveColdStartMarkdownFocusPolicy({
+      coldStartRestoreSettled,
+      coldStartMarkdownFocusArmed,
+      launchRoutingSettled: coldStartMarkdownLaunchRoutingSettled,
+      deferredRestoreErrorDialogOutstanding:
+        deferredRestoreErrorDialogs.hasOutstanding(),
+      modalSurfacePendingOrOpen:
+        isAppModalSurfacePendingOrOpen ||
+        commandPaletteMarkdownFocusRestorePending,
+      hasOpenDocumentTab,
+      activeSurface: activeEditorFocusSurface,
+      activeDocumentKey,
+      pendingRestoreViewStateKey: isActiveRestoreViewStatePending
+        ? activeDocumentKey
+        : null,
+      documentHasFocus:
+        typeof document !== "undefined" && document.hasFocus(),
+      focusAlreadyRequested: coldStartMarkdownFocusRequestedRef.current
+    });
+
+    if (result.kind !== "requestFocus") {
+      return;
+    }
+
+    coldStartMarkdownFocusRequestedRef.current = true;
+    requestMarkdownEditorFocus(result.documentKey);
+  }, [
+    activeDocumentKey,
+    activeEditorFocusSurface,
+    coldStartMarkdownFocusArmed,
+    coldStartMarkdownLaunchRoutingSettled,
+    coldStartRestoreSettled,
+    commandPaletteMarkdownFocusRestorePending,
+    deferredRestoreErrorDialogVersion,
+    hasOpenDocumentTab,
+    isActiveRestoreViewStatePending,
+    isAppModalSurfacePendingOrOpen,
+    requestMarkdownEditorFocus
+  ]);
+
+  useEffect(() => {
+    if (!commandPaletteMarkdownFocusRestorePending || isCommandPaletteOpen) {
+      return;
+    }
+
+    const result = resolveCommandPaletteFocusRestorePolicy({
+      focusRestorePending: commandPaletteMarkdownFocusRestorePending,
+      focusClaimingSurfacePendingOrOpen:
+        isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose ||
+        deferredRestoreErrorDialogs.hasOutstanding() ||
+        isActiveRestoreViewStatePending,
+      hasOpenDocumentTab,
+      activeSurface: activeEditorFocusSurface,
+      activeDocumentKey
+    });
+
+    setCommandPaletteMarkdownFocusRestorePending(false);
+
+    if (result.kind === "requestFocus") {
+      if (coldStartMarkdownFocusArmed) {
+        coldStartMarkdownFocusRequestedRef.current = true;
+      }
+      requestMarkdownEditorFocus(result.documentKey);
+    }
+  }, [
+    activeDocumentKey,
+    activeEditorFocusSurface,
+    coldStartMarkdownFocusArmed,
+    commandPaletteMarkdownFocusRestorePending,
+    deferredRestoreErrorDialogVersion,
+    hasOpenDocumentTab,
+    isCommandPaletteOpen,
+    isActiveRestoreViewStatePending,
+    isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose,
+    requestMarkdownEditorFocus
+  ]);
 
   useEffect(() => {
     if (currentEditor?.kind === "markdown" && activeDocument) {
@@ -1992,6 +2152,11 @@ export function App(): JSX.Element {
   function closeLineEndingDistributionDialog(): void {
     isLineEndingDistributionDialogPendingOrOpenRef.current = false;
     setLineEndingDistributionData(null);
+  }
+
+  function closeCommandPaletteAndRestoreMarkdownFocus(): void {
+    setIsCommandPaletteOpen(false);
+    setCommandPaletteMarkdownFocusRestorePending(true);
   }
 
   function showParagraphIndentResultDialog(
@@ -4334,13 +4499,20 @@ export function App(): JSX.Element {
   // (`dialogAlreadyOpen`, race) re-arms `owed` inside the queue. Safe to
   // call repeatedly (dialog-controller subscription, post-restore boundary).
   function pumpDeferredRestoreErrorDialogs(): void {
-    deferredRestoreErrorDialogs.pump({
+    const presentation = deferredRestoreErrorDialogs.pump({
       isDialogPending: () => dialogController.getPendingRequest() !== null,
       present: (id) =>
         id === "restoreUnavailable"
           ? showSessionRestoreUnavailableDialog()
           : showProjectRestoreFailedDialog()
     });
+
+    if (presentation) {
+      setDeferredRestoreErrorDialogVersion((version) => version + 1);
+      void presentation.finally(() => {
+        setDeferredRestoreErrorDialogVersion((version) => version + 1);
+      });
+    }
   }
   pumpDeferredRestoreErrorDialogsRef.current = pumpDeferredRestoreErrorDialogs;
 
@@ -4357,6 +4529,9 @@ export function App(): JSX.Element {
     projectActivationLifetimeRef.current.startProjectContextSwitch();
     projectActivationLifetimeRef.current.markExplicitEditorActivation();
     lastActiveMarkdownEditorIdRef.current = null;
+    coldStartMarkdownFocusRequestedRef.current = false;
+    setMarkdownEditorFocusRequest(null);
+    setCommandPaletteMarkdownFocusRestorePending(false);
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(
       inactiveGlossaryOccurrenceTrackingState
@@ -4447,6 +4622,7 @@ export function App(): JSX.Element {
       sessionPersistence.resolveColdStartRestore({
         scheduleNow: !sessionWasRestored
       });
+      setColdStartMarkdownFocusArmed(sessionWasRestored);
     },
     routeMarkdownLaunchTarget: (filePath) => {
       setPendingMarkdownLaunchTargetForRestore(filePath);
@@ -4455,10 +4631,14 @@ export function App(): JSX.Element {
     // boundary so it never collides with a launch-routing modal (e.g. a
     // read-only-project confirmation from the `.pergamum` ordinary open).
     notifyRestoreUnavailable: (_reason: RestoreUnavailableReason) => {
-      deferredRestoreErrorDialogs.arm("restoreUnavailable");
+      if (deferredRestoreErrorDialogs.arm("restoreUnavailable")) {
+        setDeferredRestoreErrorDialogVersion((version) => version + 1);
+      }
     },
     notifyProjectRestoreFailed: () => {
-      deferredRestoreErrorDialogs.arm("projectRestoreFailed");
+      if (deferredRestoreErrorDialogs.arm("projectRestoreFailed")) {
+        setDeferredRestoreErrorDialogVersion((version) => version + 1);
+      }
     },
     notifyEditorSkipped: (resourceName) => {
       notificationController.notify({
@@ -4494,12 +4674,10 @@ export function App(): JSX.Element {
         });
       })
       .finally(() => {
-        // #274: the restore sequence (incl. launch routing / any read-only
-        // confirmation) has settled — now present any owed restore Error
-        // dialog. If a modal is still open it stays owed; the
-        // dialog-controller subscription retries when things go idle.
-        deferredRestoreErrorDialogs.markReady();
-        pumpDeferredRestoreErrorDialogsRef.current();
+        // #280: this marks the restore body only. Deferred Markdown launch
+        // routing is observed separately below before restore Error dialogs
+        // are allowed to present or editor focus is requested.
+        setColdStartRestoreSettled(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSettingsLoading]);
@@ -4511,9 +4689,33 @@ export function App(): JSX.Element {
 
     const filePath = pendingMarkdownLaunchTargetForRestore;
     setPendingMarkdownLaunchTargetForRestore(null);
-    void routeMarkdownLaunchTargetNow(filePath);
+    setColdStartMarkdownLaunchRoutingInFlight(true);
+    void routeMarkdownLaunchTargetNow(filePath).finally(() => {
+      setColdStartMarkdownLaunchRoutingInFlight(false);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMarkdownLaunchTargetForRestore]);
+
+  useEffect(() => {
+    if (
+      !coldStartRestoreSettled ||
+      !coldStartMarkdownLaunchRoutingSettled ||
+      deferredRestoreErrorDialogsReadyRef.current
+    ) {
+      return;
+    }
+
+    deferredRestoreErrorDialogsReadyRef.current = true;
+    // #274/#280: only after the restore body and deferred launch routing have
+    // settled may owed restore Error dialogs present from an idle boundary.
+    deferredRestoreErrorDialogs.markReady();
+    pumpDeferredRestoreErrorDialogsRef.current();
+    setDeferredRestoreErrorDialogVersion((version) => version + 1);
+  }, [
+    coldStartMarkdownLaunchRoutingSettled,
+    coldStartRestoreSettled,
+    deferredRestoreErrorDialogs
+  ]);
 
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
@@ -4895,6 +5097,12 @@ export function App(): JSX.Element {
                         onRestoreActiveEditorViewStateApplied={
                           handleRestoreActiveEditorViewStateApplied
                         }
+                        markdownEditorFocusRequest={
+                          markdownEditorFocusRequest
+                        }
+                        onMarkdownEditorFocusRequestApplied={
+                          handleMarkdownEditorFocusRequestApplied
+                        }
                         onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
                         onChangeGlossaryEntryDescription={
                           setActiveGlossaryEntryDescription
@@ -5061,7 +5269,7 @@ export function App(): JSX.Element {
           descriptionSettings={effectiveSettings.commandPalette.description}
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);
-            setIsCommandPaletteOpen(false);
+            closeCommandPaletteAndRestoreMarkdownFocus();
           }}
           onBlockedCommand={(commandId) => {
             logRendererDebugEvent({
@@ -5074,7 +5282,7 @@ export function App(): JSX.Element {
               }
             });
           }}
-          onClose={() => setIsCommandPaletteOpen(false)}
+          onClose={closeCommandPaletteAndRestoreMarkdownFocus}
           lineJumpEditorSnapshot={lineJumpEditorSnapshot}
         />
       ) : null}

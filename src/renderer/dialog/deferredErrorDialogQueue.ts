@@ -16,8 +16,10 @@
  *
  * `pump()` presents at most ONE owed-and-unshown dialog per call, only when
  * `ready` and the dialog controller is idle. A rejected presentation rolls
- * `shown` back and re-arms `owed`. The caller re-invokes `pump()` whenever
- * dialogs go idle (the dialog-controller subscription).
+ * `shown` back and re-arms `owed`. When a dialog starts presenting, `pump()`
+ * returns its completion promise so callers with follow-up policies can
+ * re-check after dismissal. The caller re-invokes `pump()` whenever dialogs
+ * go idle (the dialog-controller subscription).
  *
  * It holds no React / DOM / `DialogController` reference — the caller
  * injects `isDialogPending` and `present` — so the sequencing rules are
@@ -38,6 +40,7 @@ export interface DeferredErrorDialogPumpDeps {
 export class DeferredErrorDialogQueue {
   private readonly owed = new Set<string>();
   private readonly shown = new Set<string>();
+  private readonly presenting = new Set<string>();
   private ready = false;
 
   /** `priority` lists the cause ids in presentation order. */
@@ -74,15 +77,19 @@ export class DeferredErrorDialogQueue {
     return this.shown.has(id);
   }
 
+  hasOutstanding(): boolean {
+    return this.owed.size > 0 || this.presenting.size > 0;
+  }
+
   /**
    * Present the highest-priority owed-and-unshown Error dialog, if `ready`
    * and no modal is open. Starts at most one presentation per call. On a
    * rejected `present`, `shown` is rolled back and `owed` re-armed so the
-   * dialog is never permanently lost.
+   * dialog is never permanently lost. Returns `null` when nothing starts.
    */
-  pump(deps: DeferredErrorDialogPumpDeps): void {
+  pump(deps: DeferredErrorDialogPumpDeps): Promise<void> | null {
     if (!this.ready || deps.isDialogPending()) {
-      return;
+      return null;
     }
 
     const next = this.priority.find(
@@ -90,17 +97,22 @@ export class DeferredErrorDialogQueue {
     );
 
     if (next === undefined) {
-      return;
+      return null;
     }
 
     this.owed.delete(next);
     this.shown.add(next);
+    this.presenting.add(next);
 
-    void Promise.resolve()
+    return Promise.resolve()
       .then(() => deps.present(next))
+      .then(() => undefined)
       .catch(() => {
         this.shown.delete(next);
         this.owed.add(next);
+      })
+      .finally(() => {
+        this.presenting.delete(next);
       });
   }
 }
