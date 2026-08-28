@@ -6,18 +6,24 @@ export { applicationCommandIds };
 
 export interface ApplicationCommandController {
   openAbout(): void | Promise<void>;
+  quitApplication(): void | Promise<void>;
   createProject(): void | Promise<void>;
   openProject(): void | Promise<void>;
+  closeProject(): void | Promise<void>;
   toggleRecentProjects(): void;
 }
 
 export interface ApplicationCommandTitles {
   openAbout: string;
   openAboutDescription: string;
+  quitApplication: string;
+  quitApplicationDescription: string;
   createProject: string;
   createProjectDescription: string;
   openProject: string;
   openProjectDescription: string;
+  closeProject: string;
+  closeProjectDescription: string;
   toggleRecentProjects: string;
   toggleRecentProjectsDescription: string;
 }
@@ -30,6 +36,8 @@ export function createApplicationCommandTitles(
   return {
     openAbout: translate("command.app.about.open"),
     openAboutDescription: translate("command.app.about.open.description"),
+    quitApplication: translate("command.app.quit"),
+    quitApplicationDescription: translate("command.app.quit.description"),
     createProject: translate("command.workspace.project.create"),
     createProjectDescription: translate(
       "command.workspace.project.create.description"
@@ -37,6 +45,10 @@ export function createApplicationCommandTitles(
     openProject: translate("command.workspace.project.open"),
     openProjectDescription: translate(
       "command.workspace.project.open.description"
+    ),
+    closeProject: translate("command.workspace.project.close"),
+    closeProjectDescription: translate(
+      "command.workspace.project.close.description"
     ),
     toggleRecentProjects: translate("command.workspace.recentProjects.toggle"),
     toggleRecentProjectsDescription: translate(
@@ -57,6 +69,12 @@ export function createApplicationCommands(
       execute: () => controller.openAbout()
     },
     {
+      id: applicationCommandIds.quitApplication,
+      title: titles.quitApplication,
+      description: titles.quitApplicationDescription,
+      execute: () => controller.quitApplication()
+    },
+    {
       id: applicationCommandIds.createProject,
       title: titles.createProject,
       description: titles.createProjectDescription,
@@ -67,6 +85,13 @@ export function createApplicationCommands(
       title: titles.openProject,
       description: titles.openProjectDescription,
       execute: () => controller.openProject()
+    },
+    {
+      id: applicationCommandIds.closeProject,
+      title: titles.closeProject,
+      description: titles.closeProjectDescription,
+      when: { key: "project.isOpen" },
+      execute: () => controller.closeProject()
     },
     {
       id: applicationCommandIds.toggleRecentProjects,

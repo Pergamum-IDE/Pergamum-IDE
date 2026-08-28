@@ -12,18 +12,47 @@ import {
 } from "../../src/renderer/dialog/appDialogTypes";
 import {
   createInitialOpenDocumentsState,
+  openOrActivateEditor,
   openOrActivateDocument,
-  updateActiveOpenDocument
+  updateActiveOpenDocument,
+  updateActiveOpenEditor
 } from "../../src/renderer/openDocuments";
 import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
 import { t, type Translate } from "../../src/shared/i18n";
 import { createProjectDocumentEditorId } from "../../src/shared/editorId";
+import type { GlossaryEntry } from "../../src/shared/glossary";
+import { updateGlossaryEntryDraftDescription } from "../../src/renderer/glossaryEntryDraft";
 
 const translateJa: Translate = (key, values) => t("ja", key, values);
 const translateEn: Translate = (key, values) => t("en", key, values);
+const tabTargetName = "Chapter 1.md";
+const projectContext = { rootPath: "C:\\Novel" };
+
+const glossaryEntry: GlossaryEntry = {
+  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+  kind: "place",
+  description: "王国の首都",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  forms: [
+    {
+      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
+      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+      surface: "王都",
+      relation: null,
+      warningPolicy: null,
+      isCanonical: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      matchBoundaryStart: "auto",
+      matchBoundaryEnd: "auto"
+    }
+  ]
+};
 
 // #262: the zero-tab initial state has no active editor to close, so these
 // helpers seed a real single Untitled Markdown tab.
@@ -41,21 +70,50 @@ function dirtyState() {
   );
 }
 
+function dirtyGlossaryState() {
+  return updateActiveOpenEditor(
+    openOrActivateEditor(
+      createInitialOpenDocumentsState(),
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    ),
+    (editor) =>
+      editor.kind === "glossaryEntry"
+        ? {
+            ...editor,
+            draft: updateGlossaryEntryDraftDescription(
+              editor.draft,
+              "変更後の説明"
+            )
+          }
+        : editor
+  );
+}
+
 describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
   it("uses icon.kind 'warning', not an SVG file name", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
 
     expect(options.icon).toEqual({ kind: "warning", tooltip: "Warning" });
   });
 
   it("passes clipboardText: null", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
 
     expect(options.clipboardText).toBeNull();
   });
 
   it("is a three-choice dialog with stable IDs and roles", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
 
     expect(options.choices).toEqual([
       {
@@ -81,7 +139,10 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
   });
 
   it("adds a supplemental alert-triangle icon only to the dirty-close discard choice", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
     const saveChoice = options.choices.find(
       (choice) => choice.id === dirtyCloseChoiceIds.saveAndClose
     );
@@ -102,7 +163,10 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
   });
 
   it("uses stable choice IDs, not labels", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateJa);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateJa,
+      tabTargetName
+    );
 
     expect(options.choices.map((choice) => choice.id)).toEqual([
       "saveAndClose",
@@ -119,18 +183,26 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
     );
   });
 
-  it("uses translated strings for the title and message", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+  it("uses translated strings for the title and target-name prompt", () => {
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
 
     expect(options.title).toBe("Unsaved Changes");
     expect(options.message).toEqual({
       kind: "plainText",
-      text: "This tab has unsaved changes.\nClosing it will discard the unsaved changes."
+      text:
+        "Chapter 1.md has unsaved changes.\n" +
+        "Choose whether to save the changes before closing."
     });
   });
 
   it("disables backdrop-click dismissal — an accidental backdrop click must not discard unsaved changes (#184 follow-up)", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
 
     expect(options.dismissOnBackdropClick).toBe(false);
     expect(choiceDialogDismissesOnBackdropClick(options)).toBe(false);
@@ -170,7 +242,10 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
   });
 
   it("orders choices save / discard / cancel on every platform through the choice foundation", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
 
     for (const platform of ["windows", "linux", "macos", "other"] as const) {
       expect(
@@ -182,7 +257,10 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
   });
 
   it("does not use the old macOS/other horizontal order for dirty-close choices", () => {
-    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const options = buildDirtyCloseChoiceDialogOptions(
+      translateEn,
+      tabTargetName
+    );
 
     for (const platform of ["macos", "other"] as const) {
       expect(
@@ -232,6 +310,12 @@ describe("runEditorCloseFlow (#184/#192)", () => {
     });
 
     expect(choiceDialog).toHaveBeenCalledTimes(1);
+    expect(choiceDialog.mock.calls[0]?.[0].message).toEqual({
+      kind: "plainText",
+      text:
+        "Untitled.mdには保存されていない変更があります。\n" +
+        "閉じる前に変更を保存するか選択してください。"
+    });
     expect(saveDirtyEditorBeforeClose).toHaveBeenCalledWith(
       state.activeDocumentId
     );
@@ -382,6 +466,34 @@ describe("runEditorCloseFlow (#184/#192)", () => {
     });
 
     expect(choiceDialog).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("uses the glossary tab title in the shared unsaved-changes prompt", async () => {
+    const state = dirtyGlossaryState();
+    const choiceDialog = vi.fn().mockResolvedValue({
+      kind: "chosen",
+      id: dirtyCloseChoiceIds.cancel
+    });
+    const saveDirtyEditorBeforeClose = vi.fn();
+    const onClose = vi.fn();
+
+    await runEditorCloseFlow(undefined, {
+      state,
+      translate: translateJa,
+      choiceDialog,
+      saveDirtyEditorBeforeClose,
+      onClose
+    });
+
+    expect(choiceDialog).toHaveBeenCalledTimes(1);
+    expect(choiceDialog.mock.calls[0]?.[0].message).toEqual({
+      kind: "plainText",
+      text:
+        "王都には保存されていない変更があります。\n" +
+        "閉じる前に変更を保存するか選択してください。"
+    });
     expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });

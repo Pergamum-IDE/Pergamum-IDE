@@ -584,7 +584,7 @@ describe("ConfirmDialog button accelerators (#184 follow-up)", () => {
     const mnemonicPattern = /\(&[A-Za-z]\)/;
 
     for (const translate of [translateEn, translateJa]) {
-      expect(translate("dialog.dirtyClose.discardAndClose")).not.toMatch(
+      expect(translate("dialog.unsavedChanges.discardAndClose")).not.toMatch(
         mnemonicPattern
       );
       expect(translate("common.cancel")).not.toMatch(mnemonicPattern);

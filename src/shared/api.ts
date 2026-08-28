@@ -20,9 +20,30 @@ import type {
   EditContextMenuPopupRequest,
   NativeEditDelegationRequest
 } from "./editContextMenu";
+import type {
+  CloseCurrentProjectRequest,
+  CloseCurrentProjectResult,
+  LifecycleCloseDecision,
+  LifecycleWindowCloseRequest,
+  QuitApplicationRequest,
+  QuitApplicationResult
+} from "./lifecycle";
 import type { AppPlatform } from "./platform";
 
 export type { AppPlatform } from "./platform";
+export type {
+  CloseCurrentProjectRequest,
+  CloseCurrentProjectResult,
+  DirtyWorkingCopy,
+  DirtyWorkingCopyKind,
+  DirtyWorkingCopyScope,
+  LifecycleCloseDecision,
+  LifecycleIntent,
+  LifecycleWindowCloseRequest,
+  QuitApplicationRequest,
+  QuitApplicationResult,
+  SaveWorkingCopyOutcome
+} from "./lifecycle";
 
 export type {
   ApplicationSettings,
@@ -70,7 +91,14 @@ export const PROJECT_CHANNELS = {
   confirmReadOnlyProjectOpen: "projects:confirmReadOnlyProjectOpen",
   cancelReadOnlyProjectOpen: "projects:cancelReadOnlyProjectOpen",
   readProjectDocument: "projects:readProjectDocument",
-  saveProjectDocument: "projects:saveProjectDocument"
+  saveProjectDocument: "projects:saveProjectDocument",
+  closeCurrentProject: "projects:closeCurrentProject"
+} as const;
+
+export const LIFECYCLE_CHANNELS = {
+  windowCloseRequested: "lifecycle:windowCloseRequested",
+  respondWindowCloseRequest: "lifecycle:respondWindowCloseRequest",
+  quitApplication: "lifecycle:quitApplication"
 } as const;
 
 export const SETTINGS_CHANNELS = {
@@ -375,6 +403,9 @@ export interface PergamumApi {
       relativePath: string,
       content: string
     ) => Promise<SaveProjectDocumentResult>;
+    closeCurrentProject: (
+      request: CloseCurrentProjectRequest
+    ) => Promise<CloseCurrentProjectResult>;
   };
   settings: {
     getSettings: () => Promise<ApplicationSettings>;
@@ -401,6 +432,17 @@ export interface PergamumApi {
   applicationMenu: {
     onCommand: (callback: (commandId: string) => void) => () => void;
     setEnablement: (enablement: ApplicationMenuEnablementMap) => void;
+  };
+  lifecycle: {
+    onWindowCloseRequest: (
+      callback: (request: LifecycleWindowCloseRequest) => void
+    ) => () => void;
+    respondWindowCloseRequest: (
+      decision: LifecycleCloseDecision
+    ) => Promise<void>;
+    quitApplication: (
+      request: QuitApplicationRequest
+    ) => Promise<QuitApplicationResult>;
   };
   contextMenu: {
     popupEditMenu: (request: EditContextMenuPopupRequest) => Promise<boolean>;

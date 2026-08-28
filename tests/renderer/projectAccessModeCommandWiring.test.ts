@@ -70,7 +70,7 @@ describe("project access mode command wiring (#211)", () => {
     expect(contextBlock).toContain('currentEditor?.kind === "glossaryEntry"');
   });
 
-  it("passes read-only project-owned editor state into the editor surface", () => {
+  it("passes read-only editor state into the editor surface", () => {
     const source = appSource();
     const editorSurfaceBlock = sourceBlock(
       source,
@@ -79,7 +79,7 @@ describe("project access mode command wiring (#211)", () => {
     );
 
     expect(editorSurfaceBlock).toContain(
-      "isProjectOwnedReadOnly={isReadOnlyProjectOwnedEditor}"
+      "isProjectOwnedReadOnly={isEditorReadOnly}"
     );
   });
 
@@ -92,7 +92,7 @@ describe("project access mode command wiring (#211)", () => {
     );
 
     expect(setActiveDocumentContentBlock).toContain(
-      "if (isReadOnlyProjectOwnedEditor)"
+      "if (!canMutateActiveWorkingCopy())"
     );
     expect(setActiveDocumentContentBlock).toContain("return;");
     expect(setActiveDocumentContentBlock).toContain(

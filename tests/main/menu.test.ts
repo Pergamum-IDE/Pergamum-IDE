@@ -51,21 +51,33 @@ describe("application menu", () => {
     expect(findTopLevelMenu(template, "File")).toBeTruthy();
   });
 
-  it("keeps Quit in the Windows and Linux File menus", () => {
+  it("keeps Quit as a command-routed item in the Windows and Linux File menus", () => {
     for (const platform of ["win32", "linux"] as const) {
       const fileItems = fileMenuItems(platform);
 
-      expect(fileItems.some((item) => item.role === "quit")).toBe(true);
+      expect(
+        fileItems.some(
+          (item) => item.id === applicationCommandIds.quitApplication
+        )
+      ).toBe(true);
     }
   });
 
-  it("keeps Quit out of the macOS File menu and in the macOS App menu", () => {
+  it("keeps command-routed Quit out of the macOS File menu and in the macOS App menu", () => {
     const template = buildApplicationMenu("en", emptyMenuOptions(), "darwin");
     const fileItems = submenuItems(findTopLevelMenu(template, "File"));
     const appItems = submenuItems(findTopLevelMenu(template, "Pergamum"));
 
-    expect(fileItems.some((item) => item.role === "quit")).toBe(false);
-    expect(appItems.some((item) => item.role === "quit")).toBe(true);
+    expect(
+      fileItems.some(
+        (item) => item.id === applicationCommandIds.quitApplication
+      )
+    ).toBe(false);
+    expect(
+      appItems.some(
+        (item) => item.id === applicationCommandIds.quitApplication
+      )
+    ).toBe(true);
   });
 
   it("preserves the macOS File menu Close role", () => {
@@ -85,19 +97,23 @@ describe("application menu", () => {
     expect(send.mock.calls.map((call) => call[1])).toEqual([
       applicationCommandIds.createProject,
       applicationCommandIds.openProject,
+      applicationCommandIds.closeProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
       editorCommandIds.saveAs,
       applicationCommandIds.toggleRecentProjects,
-      editorCommandIds.close
+      editorCommandIds.close,
+      applicationCommandIds.quitApplication
     ]);
   });
 
   it("keeps the application-menu-sendable allowlist a superset of the File menu", () => {
     for (const commandId of [
       applicationCommandIds.openAbout,
+      applicationCommandIds.quitApplication,
       applicationCommandIds.createProject,
       applicationCommandIds.openProject,
+      applicationCommandIds.closeProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
       editorCommandIds.saveAs,

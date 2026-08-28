@@ -41,18 +41,24 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     {
       openAbout: () => undefined,
+      quitApplication: () => undefined,
       createProject: () => undefined,
       openProject: () => undefined,
+      closeProject: () => undefined,
       toggleRecentProjects: () => undefined
     },
     {
       openAbout: "About Pergamum",
       openAboutDescription:
         "Show Pergamum version, license, and repository information.",
+      quitApplication: "Quit Pergamum",
+      quitApplicationDescription: "Quit Pergamum",
       createProject: "Create Project",
       createProjectDescription: "Create Project",
       openProject: "Open Project",
       openProjectDescription: "Open Project",
+      closeProject: "Close Project",
+      closeProjectDescription: "Close Project",
       toggleRecentProjects: "Toggle Recent Projects",
       toggleRecentProjectsDescription: "Toggle Recent Projects"
     }
@@ -209,11 +215,11 @@ describe("command domain taxonomy", () => {
     expect(reservedNamespaceCommandIds).toEqual([]);
   });
 
-  it("keeps the app domain limited to the About command added by #221", () => {
+  it("keeps the app domain limited to application-level commands", () => {
     const registeredAppCommandIds = registeredCoreCommandIds().filter(
       (commandId) => firstCommandIdSegment(commandId) === "app"
     );
 
-    expect(registeredAppCommandIds).toEqual(["app.about.open"]);
+    expect(registeredAppCommandIds).toEqual(["app.about.open", "app.quit"]);
   });
 });

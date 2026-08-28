@@ -14,18 +14,24 @@ describe("application menu command registration", () => {
       registry,
       {
         openAbout: () => undefined,
+        quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
+        closeProject: () => undefined,
         toggleRecentProjects: () => undefined
       },
       {
         openAbout: "About Pergamum",
         openAboutDescription:
           "Show Pergamum version, license, and repository information.",
+        quitApplication: "Quit Pergamum",
+        quitApplicationDescription: "Quit Pergamum",
         createProject: "Create Project",
         createProjectDescription: "Create Project",
         openProject: "Open Project",
         openProjectDescription: "Open Project",
+        closeProject: "Close Project",
+        closeProjectDescription: "Close Project",
         toggleRecentProjects: "Toggle Recent Projects",
         toggleRecentProjectsDescription: "Toggle Recent Projects"
       }

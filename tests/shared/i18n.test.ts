@@ -63,10 +63,58 @@ describe("glossary entry deletion translations", () => {
   });
 });
 
-describe("dirty close choice dogfood translations (#192)", () => {
-  it("defines the save-and-close choice label for ja and en", () => {
-    expect(t("ja", "dialog.dirtyClose.saveAndClose")).toBe("保存して閉じる");
-    expect(t("en", "dialog.dirtyClose.saveAndClose")).toBe("Save and Close");
+describe("unsaved-changes close dialog translations (#192/#271)", () => {
+  it("defines the shared prompt and close choice labels for ja and en", () => {
+    expect(
+      t("ja", "dialog.unsavedChanges.prompt", {
+        targetName: "第一章.md"
+      })
+    ).toBe(
+      "第一章.mdには保存されていない変更があります。\n" +
+        "閉じる前に変更を保存するか選択してください。"
+    );
+    expect(
+      t("en", "dialog.unsavedChanges.prompt", {
+        targetName: "Chapter 1.md"
+      })
+    ).toBe(
+      "Chapter 1.md has unsaved changes.\n" +
+        "Choose whether to save the changes before closing."
+    );
+    expect(t("ja", "dialog.unsavedChanges.title")).toBe(
+      "未保存の変更があります"
+    );
+    expect(t("en", "dialog.unsavedChanges.title")).toBe("Unsaved Changes");
+    expect(t("ja", "dialog.unsavedChanges.saveAndClose")).toBe(
+      "保存して閉じる"
+    );
+    expect(t("en", "dialog.unsavedChanges.saveAndClose")).toBe(
+      "Save and Close"
+    );
+    expect(t("ja", "dialog.unsavedChanges.saveAllAndClose")).toBe(
+      "すべて保存して閉じる"
+    );
+    expect(t("en", "dialog.unsavedChanges.saveAllAndClose")).toBe(
+      "Save All and Close"
+    );
+    expect(t("ja", "dialog.unsavedChanges.discardAndClose")).toBe(
+      "変更を破棄して閉じる"
+    );
+    expect(t("en", "dialog.unsavedChanges.discardAndClose")).toBe(
+      "Discard Changes and Close"
+    );
+    expect(t("ja", "dialog.unsavedChanges.cancel")).toBe("キャンセル");
+    expect(t("en", "dialog.unsavedChanges.cancel")).toBe("Cancel");
+  });
+
+  it("does not leave old dirty-close dialog namespaces in the dictionaries", () => {
+    for (const key of Object.keys(jaTranslations)) {
+      expect(key).not.toMatch(/^dialog\.(dirtyClose|lifecycleDirty)\./);
+    }
+
+    for (const key of Object.keys(enTranslations)) {
+      expect(key).not.toMatch(/^dialog\.(dirtyClose|lifecycleDirty)\./);
+    }
   });
 
   it("defines the non-blocking sound playback warning status message", () => {

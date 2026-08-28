@@ -12,11 +12,17 @@ const titles = {
   openAbout: "About Pergamum",
   openAboutDescription:
     "Show Pergamum version, license, and repository information.",
+  quitApplication: "Quit Pergamum",
+  quitApplicationDescription:
+    "Quit Pergamum. Check for unsaved changes before exiting.",
   createProject: "Create Project",
   createProjectDescription: "Create a new Pergamum project.",
   openProject: "Open Project",
   openProjectDescription:
     "Open an existing project. Check for unsaved changes before switching projects.",
+  closeProject: "Close Project",
+  closeProjectDescription:
+    "Close the current project. Check for unsaved changes before closing.",
   toggleRecentProjects: "Toggle Recent Projects",
   toggleRecentProjectsDescription:
     "Switch between recently opened projects. Check for unsaved changes before switching projects."
@@ -31,8 +37,10 @@ describe("application commands", () => {
       registry,
       {
         openAbout: () => undefined,
+        quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
+        closeProject: () => undefined,
         toggleRecentProjects: () => undefined
       },
       titles
@@ -40,8 +48,10 @@ describe("application commands", () => {
 
     expect(registry.list().map((command) => command.id)).toEqual([
       "app.about.open",
+      "app.quit",
       "workspace.project.create",
       "workspace.project.open",
+      "workspace.project.close",
       "workspace.recentProjects.toggle"
     ]);
   });
@@ -49,16 +59,21 @@ describe("application commands", () => {
   it("routes app commands to their controller methods", async () => {
     const registry = new CommandRegistry();
     const openAbout = vi.fn();
+    const quitApplication = vi.fn();
     const createProject = vi.fn();
     const openProject = vi.fn();
+    const closeProject = vi.fn();
     const toggleRecentProjects = vi.fn();
+    registry.setCommandContextProvider(() => ({ "project.isOpen": true }));
 
     registerApplicationCommands(
       registry,
       {
         openAbout,
+        quitApplication,
         createProject,
         openProject,
+        closeProject,
         toggleRecentProjects
       },
       titles
@@ -66,18 +81,25 @@ describe("application commands", () => {
 
     await registry.execute(applicationCommandIds.openAbout, executionOptions);
     await registry.execute(
+      applicationCommandIds.quitApplication,
+      executionOptions
+    );
+    await registry.execute(
       applicationCommandIds.createProject,
       executionOptions
     );
     await registry.execute(applicationCommandIds.openProject, executionOptions);
+    await registry.execute(applicationCommandIds.closeProject, executionOptions);
     await registry.execute(
       applicationCommandIds.toggleRecentProjects,
       executionOptions
     );
 
     expect(openAbout).toHaveBeenCalledTimes(1);
+    expect(quitApplication).toHaveBeenCalledTimes(1);
     expect(createProject).toHaveBeenCalledTimes(1);
     expect(openProject).toHaveBeenCalledTimes(1);
+    expect(closeProject).toHaveBeenCalledTimes(1);
     expect(toggleRecentProjects).toHaveBeenCalledTimes(1);
   });
 
@@ -88,8 +110,10 @@ describe("application commands", () => {
       registry,
       {
         openAbout: () => undefined,
+        quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
+        closeProject: () => undefined,
         toggleRecentProjects: () => undefined
       },
       titles
@@ -110,12 +134,17 @@ describe("application commands", () => {
     expect(createApplicationCommandTitles(translate)).toEqual({
       openAbout: "translated:command.app.about.open",
       openAboutDescription: "translated:command.app.about.open.description",
+      quitApplication: "translated:command.app.quit",
+      quitApplicationDescription: "translated:command.app.quit.description",
       createProject: "translated:command.workspace.project.create",
       createProjectDescription:
         "translated:command.workspace.project.create.description",
       openProject: "translated:command.workspace.project.open",
       openProjectDescription:
         "translated:command.workspace.project.open.description",
+      closeProject: "translated:command.workspace.project.close",
+      closeProjectDescription:
+        "translated:command.workspace.project.close.description",
       toggleRecentProjects: "translated:command.workspace.recentProjects.toggle",
       toggleRecentProjectsDescription:
         "translated:command.workspace.recentProjects.toggle.description"

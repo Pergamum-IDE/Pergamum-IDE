@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,7 +14,11 @@ import type {
   ProjectOpenResult,
   ProjectDocument,
   SaveMarkdownRejectedReason,
-  SaveApplicationSettingsRequest
+  SaveApplicationSettingsRequest,
+  DirtyWorkingCopy,
+  LifecycleCloseDecision,
+  LifecycleWindowCloseRequest,
+  SaveWorkingCopyOutcome
 } from "../shared/api";
 import {
   applicationMenuCommandIds,
@@ -123,6 +128,10 @@ import {
 } from "./dialog/appDialogTypes";
 import { runEditorCloseFlow } from "./documentTabCloseFlow";
 import {
+  resolveDirtyWorkingCopies,
+  type DirtyWorkingCopyResolutionResult
+} from "./dirtyWorkingCopyResolution";
+import {
   durationSincePerformanceMark,
   logRendererDebugEvent,
   rendererDebugErrorInfo
@@ -225,6 +234,12 @@ import {
 } from "./glossaryOccurrencesCommands";
 import { createImeCompositionSaveGuard } from "./imeCompositionSaveGuard";
 import {
+  canMutateWorkingCopy,
+  createLifecycleCommitBarrier,
+  type LifecycleCommitBarrierIntent,
+  type LifecycleCommitBarrierToken
+} from "./lifecycleCommitBarrier";
+import {
   activeCurrentEditor,
   activeOpenDocument,
   activateOpenDocument,
@@ -235,6 +250,7 @@ import {
   findOpenDocument,
   hasOpenDocument,
   openOrActivateEditor,
+  removeProjectScopedOpenEditors,
   replaceOpenDocument,
   resolveCloseTargetEditorId,
   updateActiveOpenDocument,
@@ -304,15 +320,18 @@ interface StatusMessage {
 }
 
 type SaveFileOutcome =
-  | "saved"
-  | "cancelled"
-  | "rejected"
-  | "failed"
-  | "ignored";
+  SaveWorkingCopyOutcome;
 
 interface SaveFileOptions {
   readonly editorId?: EditorId;
   readonly forceSaveAs?: boolean;
+}
+
+let lifecycleRequestSequence = 0;
+
+function createRendererLifecycleRequestId(intent: string): string {
+  lifecycleRequestSequence += 1;
+  return `${intent}:${Date.now()}:${lifecycleRequestSequence}`;
 }
 
 type StandaloneSaveTargetSelection =
@@ -391,6 +410,8 @@ export function App(): JSX.Element {
   const [project, setProject] = useState<PergamumProject | null>(null);
   const [openDocumentsState, setOpenDocumentsState] =
     useState<OpenDocumentsState>(createInitialOpenDocumentsState);
+  const openDocumentsStateRef = useRef(openDocumentsState);
+  openDocumentsStateRef.current = openDocumentsState;
   /**
    * Inlines what `DialogProvider`/`useDialog` (#182) do internally rather
    * than mounting that provider: it needs a `translate` bound to
@@ -579,6 +600,12 @@ export function App(): JSX.Element {
   const openProjectCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
+  const closeProjectCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
+  const quitApplicationCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
   const startupProjectOpenAttemptedRef = useRef(false);
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
@@ -628,6 +655,15 @@ export function App(): JSX.Element {
   const executeUiCommandRef = useRef<
     (commandId: ApplicationMenuCommandId) => void
   >(() => undefined);
+  const handleLifecycleWindowCloseRequestRef = useRef<
+    (request: LifecycleWindowCloseRequest) => Promise<void>
+  >(() => Promise.resolve());
+  const lifecycleOperationInProgressRef = useRef(false);
+  const lifecycleCommitBarrierRef = useRef(createLifecycleCommitBarrier());
+  const projectCloseBarrierReleaseAfterCommitRef =
+    useRef<LifecycleCommitBarrierToken | null>(null);
+  const [lifecycleCommitBarrierIntent, setLifecycleCommitBarrierIntent] =
+    useState<LifecycleCommitBarrierIntent | null>(null);
   const mainAreaRef = useRef<HTMLElement | null>(null);
   const editorAreaBodyRef = useRef<HTMLElement | null>(null);
   const sidebarWidthAtDragStartRef = useRef(layout.sidebar.width);
@@ -775,6 +811,19 @@ export function App(): JSX.Element {
       ),
     [imeCompositionSaveGuard]
   );
+  useEffect(
+    () =>
+      window.pergamum.lifecycle.onWindowCloseRequest((request) => {
+        void handleLifecycleWindowCloseRequestRef.current(request).catch(() => {
+          void window.pergamum.lifecycle.respondWindowCloseRequest({
+            status: "failed",
+            requestId: request.requestId,
+            reason: "rendererUnavailable"
+          });
+        });
+      }),
+    []
+  );
   const activeProjectContext = useMemo(
     () => projectContextForProject(project),
     [project]
@@ -878,6 +927,50 @@ export function App(): JSX.Element {
     !isSettingsTabActive &&
     currentEditor?.kind === "markdown" &&
     Boolean(activeMarkdownDocument);
+  const isLifecycleCommitBarrierActive =
+    lifecycleCommitBarrierIntent !== null;
+  const isEditorReadOnly = !canMutateWorkingCopy({
+    lifecycleCommitBarrierActive: isLifecycleCommitBarrierActive,
+    isReadOnlyProjectOwnedEditor
+  });
+
+  function isLifecycleCommitBarrierActiveNow(): boolean {
+    return lifecycleCommitBarrierRef.current.isActive();
+  }
+
+  function enterLifecycleCommitBarrier(
+    intent: LifecycleCommitBarrierIntent
+  ): LifecycleCommitBarrierToken {
+    const token = lifecycleCommitBarrierRef.current.enter(intent);
+    setLifecycleCommitBarrierIntent(intent);
+    return token;
+  }
+
+  function exitLifecycleCommitBarrier(
+    token: LifecycleCommitBarrierToken
+  ): void {
+    if (lifecycleCommitBarrierRef.current.exit(token)) {
+      setLifecycleCommitBarrierIntent(null);
+    }
+  }
+
+  function canMutateActiveWorkingCopy(): boolean {
+    return canMutateWorkingCopy({
+      lifecycleCommitBarrierActive: isLifecycleCommitBarrierActiveNow(),
+      isReadOnlyProjectOwnedEditor
+    });
+  }
+
+  useLayoutEffect(() => {
+    const token = projectCloseBarrierReleaseAfterCommitRef.current;
+
+    if (!token) {
+      return;
+    }
+
+    projectCloseBarrierReleaseAfterCommitRef.current = null;
+    exitLifecycleCommitBarrier(token);
+  });
 
   function isInsideCurrentReadOnlyProjectRootForUi(filePath: string): boolean {
     if (!project || !isReadOnlyProject) {
@@ -968,8 +1061,10 @@ export function App(): JSX.Element {
       registry,
       {
         openAbout: () => openAboutDialogCommandRef.current(),
+        quitApplication: () => quitApplicationCommandRef.current(),
         createProject: () => createProjectCommandRef.current(),
         openProject: () => openProjectCommandRef.current(),
+        closeProject: () => closeProjectCommandRef.current(),
         toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
       },
       createApplicationCommandTitles(translate)
@@ -1166,6 +1261,7 @@ export function App(): JSX.Element {
 
     registry.setCommandContextProvider(() => commandContextRef.current);
     registry.setCommandExecutionBlocker(() =>
+      isLifecycleCommitBarrierActiveNow() ||
       dialogController.getPendingRequest() ||
       isAboutDialogPendingOrOpenRef.current ||
       isLineEndingDistributionDialogPendingOrOpenRef.current
@@ -1331,7 +1427,7 @@ export function App(): JSX.Element {
     nextContent: string,
     nextLineEndingBreaks: LineEndingBreakSet
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1347,7 +1443,7 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryKind(kind: GlossaryEntryKind): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1361,7 +1457,7 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryDescription(description: string): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1381,7 +1477,7 @@ export function App(): JSX.Element {
   }
 
   function setActiveGlossaryEntryCanonicalSurface(surface: string): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1403,7 +1499,7 @@ export function App(): JSX.Element {
   function setActiveGlossaryEntryCanonicalMatchBoundaryStart(
     matchBoundaryStart: GlossaryFormMatchBoundary
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1425,7 +1521,7 @@ export function App(): JSX.Element {
   function setActiveGlossaryEntryCanonicalMatchBoundaryEnd(
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1447,7 +1543,7 @@ export function App(): JSX.Element {
   function addActiveGlossaryEntryForm(
     relation: GlossaryFormRelation
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1467,7 +1563,7 @@ export function App(): JSX.Element {
     formId: string,
     surface: string
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1491,7 +1587,7 @@ export function App(): JSX.Element {
     formId: string,
     warningPolicy: GlossaryWarningPolicy
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1515,7 +1611,7 @@ export function App(): JSX.Element {
     formId: string,
     matchBoundaryStart: GlossaryFormMatchBoundary
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1539,7 +1635,7 @@ export function App(): JSX.Element {
     formId: string,
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1560,7 +1656,7 @@ export function App(): JSX.Element {
   }
 
   function deleteActiveGlossaryEntryForm(formId: string): void {
-    if (isReadOnlyProjectOwnedEditor) {
+    if (!canMutateActiveWorkingCopy()) {
       return;
     }
 
@@ -1599,6 +1695,10 @@ export function App(): JSX.Element {
   }
 
   function activateDocument(documentId: EditorId): void {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     openEditorFromUi(documentId);
     setActiveSpecialTabId(null);
   }
@@ -1736,6 +1836,7 @@ export function App(): JSX.Element {
       isSettingsTabActive ||
       currentEditor?.kind !== "markdown" ||
       !activeMarkdownDocument ||
+      isLifecycleCommitBarrierActiveNow() ||
       isReadOnlyProjectOwnedEditor
     ) {
       return;
@@ -1794,6 +1895,10 @@ export function App(): JSX.Element {
   async function closeEditorWithConfirmation(
     editorId?: EditorId
   ): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     if (!editorId && isSettingsTabActive) {
       closeSpecialTab("settings");
       return;
@@ -1869,6 +1974,10 @@ export function App(): JSX.Element {
     editorId: EditorId,
     options?: OpenEditorOptions<CurrentEditor>
   ): void {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     void openEditorFromExplicitActivation(editorId, options).catch((error) => {
       setStatus({
         key: "status.documentOpenFailed",
@@ -1878,6 +1987,10 @@ export function App(): JSX.Element {
   }
 
   async function openDocument(document: CurrentDocument): Promise<boolean> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return false;
+    }
+
     const editorId = editorIdForCurrentDocument(
       document,
       activeProjectContext
@@ -2099,6 +2212,10 @@ export function App(): JSX.Element {
   }
 
   async function openFile(): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     const documentOpenId = nextDocumentOpenId();
     const startedAt = performance.now();
 
@@ -2412,12 +2529,13 @@ export function App(): JSX.Element {
     document: CurrentDocument
   ): boolean {
     const replacement = replaceOpenDocument(
-      openDocumentsState,
+      openDocumentsStateRef.current,
       documentId,
       document,
       activeProjectContext
     );
 
+    openDocumentsStateRef.current = replacement.state;
     setOpenDocumentsState(replacement.state);
 
     return replacement.didCollide;
@@ -2447,6 +2565,42 @@ export function App(): JSX.Element {
       message: {
         kind: "plainText",
         text: translate("dialog.fileSaveFailed.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  async function showGlossarySaveFailedDialog(): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.glossarySaveFailed.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.glossarySaveFailed.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  async function showProjectCloseFailedDialog(): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.projectCloseFailed.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.projectCloseFailed.message")
       },
       icon: {
         kind: "error",
@@ -2574,10 +2728,16 @@ export function App(): JSX.Element {
     return { kind: "selected", path: selected.path };
   }
 
-  async function saveGlossaryEntry(): Promise<void> {
-    const editorIdKind = debugEditorIdKind(activeDocument?.id);
+  async function saveGlossaryEntryByEditorId(
+    editorId: EditorId
+  ): Promise<SaveFileOutcome> {
+    const editorIdKind = debugEditorIdKind(editorId);
+    const targetOpenDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      editorId
+    );
 
-    if (activeDocument?.editor.kind !== "glossaryEntry") {
+    if (!targetOpenDocument || targetOpenDocument.editor.kind !== "glossaryEntry") {
       logRendererDebugEvent({
         level: "debug",
         event: "save.skipped",
@@ -2588,11 +2748,11 @@ export function App(): JSX.Element {
           reason: "unsupported_editor"
         }
       });
-      return;
+      return "ignored";
     }
 
-    const documentIdToSave = activeDocument.id;
-    const draftToSave = activeDocument.editor.draft;
+    const documentIdToSave = targetOpenDocument.id;
+    const draftToSave = targetOpenDocument.editor.draft;
 
     if (!isGlossaryEntryDraftDirty(draftToSave)) {
       logRendererDebugEvent({
@@ -2605,7 +2765,7 @@ export function App(): JSX.Element {
           reason: "glossary_not_dirty"
         }
       });
-      return;
+      return "ignored";
     }
 
     if (draftToSave.saveState === "saving") {
@@ -2619,19 +2779,22 @@ export function App(): JSX.Element {
           reason: "glossary_already_saving"
         }
       });
-      return;
+      return "ignored";
     }
 
     const projectGeneration =
       projectActivationLifetimeRef.current.captureProjectActivationGeneration();
 
-    setOpenDocumentsState((state) =>
-      updateOpenEditor(state, documentIdToSave, (editor) =>
+    const savingState = updateOpenEditor(
+      openDocumentsStateRef.current,
+      documentIdToSave,
+      (editor) =>
         editor.kind === "glossaryEntry"
           ? { ...editor, draft: markGlossaryEntryDraftSaving(editor.draft) }
           : editor
-      )
     );
+    openDocumentsStateRef.current = savingState;
+    setOpenDocumentsState(savingState);
 
     try {
       const savedEntry = await window.pergamum.glossary.update(
@@ -2653,11 +2816,13 @@ export function App(): JSX.Element {
             reason: "project_context_changed"
           }
         });
-        return;
+        return "ignored";
       }
 
-      setOpenDocumentsState((state) =>
-        updateOpenEditor(state, documentIdToSave, (editor) =>
+      const savedState = updateOpenEditor(
+        openDocumentsStateRef.current,
+        documentIdToSave,
+        (editor) =>
           editor.kind === "glossaryEntry"
             ? {
                 ...editor,
@@ -2667,8 +2832,9 @@ export function App(): JSX.Element {
                 )
               }
             : editor
-        )
       );
+      openDocumentsStateRef.current = savedState;
+      setOpenDocumentsState(savedState);
       setGlossaryRefreshToken((token) => token + 1);
       setStatus({
         key: "status.savedPath",
@@ -2684,6 +2850,7 @@ export function App(): JSX.Element {
           saveTargetKind: "glossaryEntry"
         }
       });
+      return "saved";
     } catch (error) {
       logRendererDebugEvent({
         level: "error",
@@ -2710,27 +2877,36 @@ export function App(): JSX.Element {
             reason: "project_context_changed"
           }
         });
-        return;
+        return "ignored";
       }
 
-      setOpenDocumentsState((state) =>
-        updateOpenEditor(state, documentIdToSave, (editor) =>
+      const failedState = updateOpenEditor(
+        openDocumentsStateRef.current,
+        documentIdToSave,
+        (editor) =>
           editor.kind === "glossaryEntry"
             ? {
                 ...editor,
                 draft: markGlossaryEntryDraftSaveFailed(editor.draft)
               }
             : editor
-        )
       );
+      openDocumentsStateRef.current = failedState;
+      setOpenDocumentsState(failedState);
       setStatus({
         key: "status.saveFailed",
         values: { message: errorMessage(error, translate) }
       });
+      await showGlossarySaveFailedDialog();
+      return "failed";
     }
   }
 
   async function deleteActiveGlossaryEntry(): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     if (activeDocument?.editor.kind !== "glossaryEntry") {
       return;
     }
@@ -3044,8 +3220,13 @@ export function App(): JSX.Element {
   async function saveFile(
     options: SaveFileOptions = {}
   ): Promise<SaveFileOutcome> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return "ignored";
+    }
+
+    const latestOpenDocumentsState = openDocumentsStateRef.current;
     const targetOpenDocument = options.editorId
-      ? findOpenDocument(openDocumentsState, options.editorId)
+      ? findOpenDocument(latestOpenDocumentsState, options.editorId)
       : activeDocument;
     const editorIdKind = debugEditorIdKind(
       targetOpenDocument?.id ?? options.editorId ?? activeDocument?.id
@@ -3121,8 +3302,7 @@ export function App(): JSX.Element {
             return "ignored";
           }
 
-          await saveGlossaryEntry();
-          return "saved";
+          return saveGlossaryEntryByEditorId(targetOpenDocument.id);
         }
 
         try {
@@ -3402,6 +3582,197 @@ export function App(): JSX.Element {
     };
   }
 
+  async function resolveDirtyForLifecycle(
+    intent:
+      | "explicitProjectClose"
+      | "ordinaryWindowClose"
+      | "explicitApplicationQuit",
+    targetName: string
+  ): Promise<DirtyWorkingCopyResolutionResult> {
+    return resolveDirtyWorkingCopies(intent, {
+      getState: () => openDocumentsStateRef.current,
+      translate,
+      targetName,
+      choiceDialog,
+      saveDirtyWorkingCopy: (workingCopy: DirtyWorkingCopy) =>
+        saveFile({ editorId: workingCopy.editorId }),
+      enterCommitBarrier: enterLifecycleCommitBarrier
+    });
+  }
+
+  function resetRendererProjectAfterExplicitClose(
+    commitBarrierToken: LifecycleCommitBarrierToken
+  ): void {
+    if (!lifecycleCommitBarrierRef.current.isCurrent(commitBarrierToken)) {
+      return;
+    }
+
+    projectCloseBarrierReleaseAfterCommitRef.current = commitBarrierToken;
+    projectActivationLifetimeRef.current.startProjectContextSwitch();
+    editorNavigation.reset();
+    lastActiveMarkdownEditorIdRef.current = null;
+    setPendingMarkdownSelection(null);
+    setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
+    const nextOpenDocumentsState = removeProjectScopedOpenEditors(
+      openDocumentsStateRef.current
+    );
+    openDocumentsStateRef.current = nextOpenDocumentsState;
+    setOpenDocumentsState(nextOpenDocumentsState);
+    setProject(null);
+    setStatus({ key: "status.projectClosed" });
+  }
+
+  async function commitExplicitProjectClose(): Promise<boolean> {
+    try {
+      const result = await window.pergamum.projects.closeCurrentProject({
+        requestId: createRendererLifecycleRequestId("explicitProjectClose"),
+        intent: "explicitProjectClose"
+      });
+
+      if (result.status === "failed") {
+        setStatus({
+          key: "status.projectCloseFailed",
+          values: { message: result.reason }
+        });
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      setStatus({
+        key: "status.projectCloseFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    }
+  }
+
+  async function closeProject(): Promise<void> {
+    if (
+      !project ||
+      lifecycleOperationInProgressRef.current ||
+      isLifecycleCommitBarrierActiveNow()
+    ) {
+      return;
+    }
+
+    let shouldShowCloseFailedDialog = false;
+    lifecycleOperationInProgressRef.current = true;
+    try {
+      const dirtyResolution = await resolveDirtyForLifecycle(
+        "explicitProjectClose",
+        project.name
+      );
+
+      if (
+        dirtyResolution.status === "resolved" ||
+        dirtyResolution.status === "discarded"
+      ) {
+        const commitBarrierToken = dirtyResolution.commitBarrierToken;
+
+        if (await commitExplicitProjectClose()) {
+          resetRendererProjectAfterExplicitClose(commitBarrierToken);
+        } else {
+          exitLifecycleCommitBarrier(commitBarrierToken);
+          shouldShowCloseFailedDialog = true;
+        }
+      }
+    } finally {
+      lifecycleOperationInProgressRef.current = false;
+    }
+
+    if (shouldShowCloseFailedDialog) {
+      await showProjectCloseFailedDialog();
+    }
+  }
+
+  async function handleLifecycleWindowCloseRequest(
+    request: LifecycleWindowCloseRequest
+  ): Promise<void> {
+    let decision: LifecycleCloseDecision;
+    let commitBarrierToken: LifecycleCommitBarrierToken | null = null;
+
+    if (lifecycleOperationInProgressRef.current) {
+      decision = { status: "cancelled", requestId: request.requestId };
+    } else {
+      lifecycleOperationInProgressRef.current = true;
+      try {
+        const dirtyResolution = await resolveDirtyForLifecycle(
+          request.intent,
+          "Pergamum"
+        );
+
+        if (
+          dirtyResolution.status === "resolved" ||
+          dirtyResolution.status === "discarded"
+        ) {
+          commitBarrierToken = dirtyResolution.commitBarrierToken;
+          decision = { status: "approved", requestId: request.requestId };
+        } else {
+          decision = { status: "cancelled", requestId: request.requestId };
+        }
+      } catch {
+        decision = {
+          status: "failed",
+          requestId: request.requestId,
+          reason: "dirtyResolutionFailed"
+        };
+      } finally {
+        lifecycleOperationInProgressRef.current = false;
+      }
+    }
+
+    try {
+      await window.pergamum.lifecycle.respondWindowCloseRequest(decision);
+    } catch (error) {
+      if (commitBarrierToken) {
+        exitLifecycleCommitBarrier(commitBarrierToken);
+      }
+
+      throw error;
+    }
+  }
+
+  async function quitApplication(): Promise<void> {
+    if (lifecycleOperationInProgressRef.current) {
+      return;
+    }
+
+    lifecycleOperationInProgressRef.current = true;
+    try {
+      const dirtyResolution = await resolveDirtyForLifecycle(
+        "explicitApplicationQuit",
+        "Pergamum"
+      );
+
+      if (
+        dirtyResolution.status !== "resolved" &&
+        dirtyResolution.status !== "discarded"
+      ) {
+        return;
+      }
+
+      const commitBarrierToken = dirtyResolution.commitBarrierToken;
+
+      try {
+        await window.pergamum.lifecycle.quitApplication({
+          requestId: createRendererLifecycleRequestId("explicitApplicationQuit"),
+          intent: "explicitApplicationQuit"
+        });
+      } catch (error) {
+        exitLifecycleCommitBarrier(commitBarrierToken);
+        throw error;
+      }
+    } catch (error) {
+      setStatus({
+        key: "status.quitFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    } finally {
+      lifecycleOperationInProgressRef.current = false;
+    }
+  }
+
   async function reloadSettingsAfterProjectOpen(): Promise<StatusMessage | null> {
     try {
       await reloadSettings();
@@ -3415,6 +3786,10 @@ export function App(): JSX.Element {
   }
 
   async function createProject(): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     if (!(await confirmProjectSwitch())) {
       setStatus({ key: "status.openProjectCanceled" });
       return;
@@ -3447,6 +3822,10 @@ export function App(): JSX.Element {
   }
 
   async function openProject(): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     if (!(await confirmProjectSwitch())) {
       setStatus({ key: "status.openProjectCanceled" });
       return;
@@ -3521,6 +3900,10 @@ export function App(): JSX.Element {
   }
 
   async function openRecentProject(projectFilePath: string): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     if (!(await confirmProjectSwitch())) {
       setStatus({ key: "status.openProjectCanceled" });
       return;
@@ -3564,7 +3947,11 @@ export function App(): JSX.Element {
 
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
+  closeProjectCommandRef.current = closeProject;
+  quitApplicationCommandRef.current = quitApplication;
   openAboutDialogCommandRef.current = openAboutDialog;
+  handleLifecycleWindowCloseRequestRef.current =
+    handleLifecycleWindowCloseRequest;
   showLineEndingDistributionCommandRef.current =
     openLineEndingDistributionDialog;
   insertParagraphIndentCommandRef.current = () =>
@@ -3619,6 +4006,10 @@ export function App(): JSX.Element {
       : null;
 
   async function activateProjectDocument(relativePath: string): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
     const document = project?.documents.find(
       (projectDocument) => projectDocument.relativePath === relativePath
     );
@@ -3912,7 +4303,7 @@ export function App(): JSX.Element {
                         translate={translate}
                         soundFeedback={soundFeedback}
                         soundSettings={effectiveSettings.workbench.sound}
-                        isProjectOwnedReadOnly={isReadOnlyProjectOwnedEditor}
+                        isProjectOwnedReadOnly={isEditorReadOnly}
                         markdownEditorPreviewRatio={
                           layout.markdownEditorPreview.ratio
                         }

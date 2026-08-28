@@ -24,6 +24,7 @@ import {
   openOrActivateDocument,
   replaceOpenDocument,
   createOpenDocumentsStateWithEditor,
+  removeProjectScopedOpenEditors,
   resolveCloseTargetEditorId,
   updateActiveOpenDocument,
   updateActiveOpenEditor,
@@ -647,6 +648,137 @@ describe("OpenDocumentsState", () => {
     expect(nextState.documents).toHaveLength(0);
     expect(nextState.activeDocumentId).toBeNull();
     expect(nextState.nextUntitledId).toBe(5);
+  });
+
+  it("removes only project-scoped editors for explicit Project Close", () => {
+    const standalonePath = "C:\\Outside\\memo.md";
+    let state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "project content"),
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+    state = openOrActivateDocument(
+      state,
+      createFileDocument({
+        path: standalonePath,
+        content: "standalone content"
+      }),
+      projectContext
+    );
+    state = openOrActivateDocument(
+      state,
+      createUntitledDocument(),
+      projectContext
+    );
+
+    const nextState = removeProjectScopedOpenEditors(state);
+
+    expect(documentTabs(nextState).map((tab) => tab.title)).toEqual([
+      "memo.md",
+      "Untitled.md"
+    ]);
+    expect(
+      nextState.documents.map((openDocument) =>
+        openDocument.editor.kind === "markdown"
+          ? openDocument.editor.document.kind
+          : openDocument.editor.kind
+      )
+    ).toEqual(["file", "untitled"]);
+    expect(
+      editorIdEquals(nextState.activeDocumentId, createUntitledEditorId(1))
+    ).toBe(true);
+    expect(nextState.nextUntitledId).toBe(2);
+  });
+
+  it("keeps an active standalone editor active after explicit Project Close filtering", () => {
+    const standalonePath = "C:\\Outside\\memo.md";
+    const standaloneEditorId = createFileEditorIdForPath(standalonePath);
+    let state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "project content"),
+      projectContext
+    );
+    state = openOrActivateDocument(
+      state,
+      createFileDocument({
+        path: standalonePath,
+        content: "standalone content"
+      }),
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+    state = activateOpenDocument(state, standaloneEditorId);
+
+    const nextState = removeProjectScopedOpenEditors(state);
+
+    expect(documentTabs(nextState).map((tab) => tab.title)).toEqual([
+      "memo.md"
+    ]);
+    expect(editorIdEquals(nextState.activeDocumentId, standaloneEditorId)).toBe(
+      true
+    );
+  });
+
+  it("uses the existing close fallback when the active project editor is removed", () => {
+    const standalonePath = "C:\\Outside\\memo.md";
+    const projectDocumentEditorId = createProjectDocumentEditorId(
+      firstProjectDocument.relativePath,
+      projectContext
+    );
+    const standaloneEditorId = createFileEditorIdForPath(standalonePath);
+    let state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "project content"),
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+    state = openOrActivateDocument(
+      state,
+      createFileDocument({
+        path: standalonePath,
+        content: "standalone content"
+      }),
+      projectContext
+    );
+    state = activateOpenDocument(state, projectDocumentEditorId);
+
+    const nextState = removeProjectScopedOpenEditors(state);
+
+    expect(documentTabs(nextState).map((tab) => tab.title)).toEqual([
+      "memo.md"
+    ]);
+    expect(editorIdEquals(nextState.activeDocumentId, standaloneEditorId)).toBe(
+      true
+    );
+  });
+
+  it("returns to zero-tab when explicit Project Close removes every open editor", () => {
+    let state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "project content"),
+      projectContext,
+      7
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    const nextState = removeProjectScopedOpenEditors(state);
+
+    expect(nextState.documents).toEqual([]);
+    expect(nextState.activeDocumentId).toBeNull();
+    expect(nextState.nextUntitledId).toBe(7);
   });
 });
 
