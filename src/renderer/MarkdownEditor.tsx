@@ -36,6 +36,10 @@ import {
   type SoundFeedbackPlayer
 } from "./soundFeedback";
 import type { ParagraphIndentChange } from "./paragraphIndentTransform";
+import {
+  captureEditorViewState,
+  type EditorViewState
+} from "./editorViewState";
 
 interface MarkdownEditorPendingSelection {
   start: number;
@@ -91,12 +95,50 @@ interface MarkdownEditorProps {
   onParagraphIndentControllerChange?: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
+  /**
+   * #272: hands the parent an imperative handle for reading this editor's
+   * live CodeMirror View State (#273) as plain serializable data. Mirrors
+   * `onParagraphIndentControllerChange` — the parent keeps the handle in a
+   * ref and calls it from the Session persistence seam, never on the input
+   * path. Capture is strictly read-only (no focus move, no dispatch, no IME
+   * interaction — see captureEditorViewState).
+   */
+  onViewStateControllerChange?: (
+    controller: MarkdownEditorViewStateController | null
+  ) => void;
+  /**
+   * #272 (review Blocker 3): fired at the low-frequency lifecycle boundary
+   * where this editor stops showing `outgoingDocumentKey` — i.e. right
+   * before the shared CodeMirror view is re-pointed at a newly activated
+   * document, and once more (with the last active key) just before the view
+   * is destroyed on unmount. Lets the parent cache the *outgoing* editor's
+   * final View State so a tab switch that beats the persistence debounce
+   * never loses it. NEVER fired per keystroke; capture stays read-only.
+   */
+  onViewStateSnapshot?: (
+    outgoingDocumentKey: string,
+    viewState: EditorViewState | null
+  ) => void;
+  /**
+   * #272 (PO decision): a CHEAP "this editor's #273 View State changed
+   * without a document edit" signal — caret / selection moved, or the
+   * viewport scrolled. The parent only uses it to schedule a coalesced
+   * Session flush; NOTHING is captured / hashed / serialized here. Safe to
+   * fire per selection / scroll event.
+   */
+  onViewStateDirty?: () => void;
 }
 
 export interface MarkdownEditorParagraphIndentController {
   applyParagraphIndentChanges(
     changes: readonly ParagraphIndentChange[]
   ): boolean;
+}
+
+export interface MarkdownEditorViewStateController {
+  /** Read-only snapshot of the current CodeMirror View State, or `null`
+   *  when no editor view is mounted. */
+  captureViewState(): EditorViewState | null;
 }
 
 interface MarkdownEditorSoundTransaction {
@@ -182,13 +224,23 @@ export function MarkdownEditor({
   soundFeedback,
   soundSettings,
   readOnly = false,
-  onParagraphIndentControllerChange
+  onParagraphIndentControllerChange,
+  onViewStateControllerChange,
+  onViewStateSnapshot,
+  onViewStateDirty
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   const visibilityCompartmentRef = useRef<Compartment | null>(null);
   const onChangeRef = useRef(onChange);
+  // #272: read from a ref by the mount effect's cleanup (which is []-deps
+  // and must not re-subscribe) so the outgoing View State is reported with
+  // the latest handler right before the view is destroyed.
+  const onViewStateSnapshotRef = useRef(onViewStateSnapshot);
+  // #272: read by the (mount-only) CodeMirror updateListener; kept fresh so
+  // the current coordinator's cheap dirty-signal is always the one called.
+  const onViewStateDirtyRef = useRef(onViewStateDirty);
   const soundFeedbackRef = useRef(soundFeedback);
   const soundSettingsRef = useRef(soundSettings);
   const readOnlyRef = useRef(readOnly);
@@ -229,6 +281,14 @@ export function MarkdownEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  useEffect(() => {
+    onViewStateSnapshotRef.current = onViewStateSnapshot;
+  }, [onViewStateSnapshot]);
+
+  useEffect(() => {
+    onViewStateDirtyRef.current = onViewStateDirty;
+  }, [onViewStateDirty]);
 
   useEffect(() => {
     soundFeedbackRef.current = soundFeedback;
@@ -321,6 +381,18 @@ export function MarkdownEditor({
                 update.state.field(lineEndingField)
               );
             }
+
+            // #272 (PO decision): a View-State-only change (caret / selection
+            // moved, or the viewport scrolled) with NO document edit still
+            // needs a coalesced Session flush. A doc edit is already covered
+            // by the React state update above, so it is excluded here. This
+            // is a bare, cheap signal — no capture / hash / serialization.
+            if (
+              !update.docChanged &&
+              (update.selectionSet || update.viewportChanged)
+            ) {
+              onViewStateDirtyRef.current?.();
+            }
           })
         ]
       })
@@ -329,6 +401,13 @@ export function MarkdownEditor({
     viewRef.current = view;
 
     return () => {
+      // #272: report this editor's final View State (keyed by whatever
+      // document it is currently showing) before the view is torn down, so
+      // an unmount that races the persistence debounce still preserves it.
+      onViewStateSnapshotRef.current?.(
+        documentKeyRef.current,
+        captureEditorViewState(view)
+      );
       view.destroy();
       viewRef.current = null;
     };
@@ -371,6 +450,24 @@ export function MarkdownEditor({
 
     return () => onParagraphIndentControllerChange(null);
   }, [onParagraphIndentControllerChange]);
+
+  useEffect(() => {
+    if (!onViewStateControllerChange) {
+      return undefined;
+    }
+
+    const controller: MarkdownEditorViewStateController = {
+      captureViewState: () => {
+        const view = viewRef.current;
+
+        return view ? captureEditorViewState(view) : null;
+      }
+    };
+
+    onViewStateControllerChange(controller);
+
+    return () => onViewStateControllerChange(null);
+  }, [onViewStateControllerChange]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -437,6 +534,13 @@ export function MarkdownEditor({
     // document while leaving the tracking field at the new document's
     // breaks.
     if (documentKeyRef.current !== documentKey) {
+      // #272: capture the OUTGOING document's final View State (still shown
+      // by the shared view at this instant) before it is replaced. This is
+      // an active-editor-switch boundary, not a per-keystroke path.
+      onViewStateSnapshotRef.current?.(
+        documentKeyRef.current,
+        captureEditorViewState(view)
+      );
       documentKeyRef.current = documentKey;
 
       view.dispatch(

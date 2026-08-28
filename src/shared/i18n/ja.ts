@@ -125,6 +125,8 @@ export const jaTranslations = {
   "dialog.unsavedChanges.title": "未保存の変更があります",
   "dialog.projectCloseFailed.message": "プロジェクトを閉じられませんでした。\n編集中の内容は保持されています。時間をおいて再度お試しください。",
   "dialog.projectCloseFailed.title": "プロジェクトを閉じられませんでした",
+  "dialog.sessionPersistenceSuspended.message": "Pergamumの作業情報を保存できないため、自動保存を一時停止しました。\n\nインストールドライブの空き容量やディスクの状態を確認してください。\nこのエラーは文書の編集・保存とは別の機能で発生していますが、次回起動時に現在のタブやウィンドウ状態を復元できない場合があります。",
+  "dialog.sessionPersistenceSuspended.title": "作業情報の自動保存を停止しました",
   "dialog.icon.error": "エラー",
   "dialog.icon.info": "情報",
   "dialog.icon.warning": "警告",

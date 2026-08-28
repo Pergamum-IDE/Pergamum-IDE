@@ -32,8 +32,10 @@ import { GlossaryEditor } from "./GlossaryEditor";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
   MarkdownEditor,
-  type MarkdownEditorParagraphIndentController
+  type MarkdownEditorParagraphIndentController,
+  type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
+import type { EditorViewState } from "./editorViewState";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
@@ -362,6 +364,14 @@ interface EditorSurfaceProps {
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
+  onViewStateControllerChange: (
+    controller: MarkdownEditorViewStateController | null
+  ) => void;
+  onViewStateSnapshot: (
+    outgoingDocumentKey: string,
+    viewState: EditorViewState | null
+  ) => void;
+  onViewStateDirty: () => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
   onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
@@ -469,6 +479,9 @@ export function EditorSurface({
   onChangeMarkdownEditorPreviewRatio,
   onChangeMarkdownContent,
   onParagraphIndentControllerChange,
+  onViewStateControllerChange,
+  onViewStateSnapshot,
+  onViewStateDirty,
   onChangeGlossaryEntryKind,
   onChangeGlossaryEntryDescription,
   onChangeGlossaryEntryCanonicalSurface,
@@ -511,6 +524,9 @@ export function EditorSurface({
           readOnly={isProjectOwnedReadOnly}
           onChangeMarkdownContent={onChangeMarkdownContent}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
+          onViewStateControllerChange={onViewStateControllerChange}
+          onViewStateSnapshot={onViewStateSnapshot}
+          onViewStateDirty={onViewStateDirty}
           pendingSelection={pendingMarkdownSelection}
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
@@ -587,6 +603,14 @@ interface MarkdownEditorSurfaceProps {
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
+  onViewStateControllerChange: (
+    controller: MarkdownEditorViewStateController | null
+  ) => void;
+  onViewStateSnapshot: (
+    outgoingDocumentKey: string,
+    viewState: EditorViewState | null
+  ) => void;
+  onViewStateDirty: () => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
   ratio: number;
@@ -635,6 +659,9 @@ function MarkdownEditorSurface({
   readOnly,
   onChangeMarkdownContent,
   onParagraphIndentControllerChange,
+  onViewStateControllerChange,
+  onViewStateSnapshot,
+  onViewStateDirty,
   pendingSelection,
   onPendingSelectionApplied,
   ratio,
@@ -804,6 +831,9 @@ function MarkdownEditorSurface({
           value={content}
           onChange={onChangeMarkdownContent}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
+          onViewStateControllerChange={onViewStateControllerChange}
+          onViewStateSnapshot={onViewStateSnapshot}
+          onViewStateDirty={onViewStateDirty}
           documentKey={documentKey}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}

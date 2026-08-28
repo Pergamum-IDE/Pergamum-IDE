@@ -1,6 +1,3 @@
-import { v7 as uuidv7 } from "uuid";
-import { validateUuidv7 } from "../shared/glossary";
-
-export function createUuidv7(): string {
-  return validateUuidv7(uuidv7().toLowerCase());
-}
+// Re-exported from the shared implementation so main and renderer mint
+// UUIDv7 identities the exact same way (#272).
+export { createUuidv7 } from "../shared/uuidv7";

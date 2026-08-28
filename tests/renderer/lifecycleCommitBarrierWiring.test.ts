@@ -131,8 +131,10 @@ describe("renderer lifecycle commit barrier wiring (#271)", () => {
       "const commitBarrierToken = dirtyResolution.commitBarrierToken",
       dirtyResolutionIndex
     );
+    // #272 review: the commit is orchestrated by runExplicitProjectCloseCommit,
+    // which receives the barrier token through its step closures.
     const commitIndex = closeProjectBlock.indexOf(
-      "await commitExplicitProjectClose()",
+      "await runExplicitProjectCloseCommit({",
       tokenIndex
     );
     const resetIndex = closeProjectBlock.indexOf(

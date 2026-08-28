@@ -16,6 +16,8 @@ import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import {
+  currentActiveProjectFilePath,
+  currentProjectId,
   defaultProjectWriteOwnershipManager,
   registerProjectIpc,
   releaseCurrentProjectWriteOwnership,
@@ -23,6 +25,13 @@ import {
   updateCurrentProjectWindowTitle
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
+import { SESSION_CHANNELS } from "../shared/api";
+import { createUuidv7 } from "./ids";
+import { createSessionStore } from "./sessionStore";
+import {
+  createSessionStoreController,
+  type SessionStoreController
+} from "./sessionStoreIpc";
 import { installAppShutdownCleanup } from "./shutdownCleanup";
 import { extractStartupProjectFilePathFromArgv } from "./startupProjectArgv";
 import {
@@ -32,7 +41,10 @@ import {
 
 let mainWindow: BrowserWindow | null = null;
 let windowLifecycleController: WindowLifecycleController | null = null;
+let sessionStoreController: SessionStoreController | null = null;
 const pergamumDebugMode = parseDebugModeFromArgv(process.argv);
+// #272: one process-run identity for the lifetime of this Pergamum process.
+const instanceRunId = createUuidv7();
 
 if (started) {
   app.quit();
@@ -53,8 +65,10 @@ async function createMainWindow(): Promise<void> {
   });
 
   windowLifecycleController?.registerWindow(mainWindow);
+  sessionStoreController?.attachWindow(mainWindow);
 
   mainWindow.on("closed", () => {
+    sessionStoreController?.detachWindow();
     mainWindow = null;
   });
 
@@ -169,6 +183,29 @@ app.whenReady().then(async () => {
   );
   registerSettingsIpc();
   registerAppInfoIpc();
+
+  // #272: durable Session restore-set persistence (write-out side only).
+  sessionStoreController = createSessionStoreController({
+    ipcMain,
+    sessionStore: createSessionStore({
+      baseDirectory: path.join(app.getPath("userData"), "sessions")
+    }),
+    instanceRunId,
+    getMainWindow: () => mainWindow,
+    getCurrentProjectId: () => currentProjectId(),
+    getCurrentProjectFilePath: () => currentActiveProjectFilePath(),
+    // A storage-class failure on a window-driven re-persist: tell the
+    // renderer coordinator to SUSPEND (it shows the single Error dialog).
+    onSessionStorageFailure: (reason) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(SESSION_CHANNELS.storageFailure, {
+          reason
+        });
+      }
+    }
+  });
+  sessionStoreController.registerIpc();
+
   void createMainWindow();
 
   app.on("activate", () => {
