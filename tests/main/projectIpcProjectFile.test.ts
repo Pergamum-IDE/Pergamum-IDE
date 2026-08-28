@@ -55,6 +55,7 @@ import {
   currentActiveProjectFilePath,
   currentProjectAccessMode,
   currentProjectRootPath,
+  closeCurrentProject,
   defaultProjectWriteOwnershipManager,
   projectAccessModeFromWriteOwnership,
   ProjectWriteLockOwnershipManager,
@@ -390,7 +391,8 @@ describe("project file IPC foundation", () => {
         PROJECT_CHANNELS.openProject,
         PROJECT_CHANNELS.openStartupProject,
         PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
-        PROJECT_CHANNELS.cancelReadOnlyProjectOpen
+        PROJECT_CHANNELS.cancelReadOnlyProjectOpen,
+        PROJECT_CHANNELS.closeCurrentProject
       ])
     );
     expect(electronMock.handle.mock.calls.map(([channel]) => channel)).not.toContain(
@@ -1481,6 +1483,120 @@ describe("project file IPC foundation", () => {
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
       "Pergamum - a novel IDE -"
     );
+  });
+
+  it("closeCurrentProject returns noProject when no project is active", async () => {
+    await expect(closeCurrentProject()).resolves.toEqual({
+      status: "noProject"
+    });
+  });
+
+  it("closeCurrentProject releases ownership, clears state, and updates the window title", async () => {
+    const projectFilePath = path.join(projectRootPath, "Close Success.pergamum");
+    const titleWindow = createTitleWindowMock();
+    const ownership: ProjectWriteOwnership = { kind: "owned" };
+    const ownershipManager = createWriteOwnershipManager(ownership);
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Close Success"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      ownershipManager,
+      () => titleWindow
+    );
+    await openProjectHandler({ sender: {} });
+    titleWindow.setTitle.mockClear();
+
+    await expect(closeCurrentProject()).resolves.toEqual({
+      status: "closed"
+    });
+
+    expect(ownershipManager.release).toHaveBeenCalledWith(
+      path.resolve(projectFilePath),
+      ownership
+    );
+    expect(currentProjectRootPath()).toBeNull();
+    expect(currentActiveProjectFilePath()).toBeNull();
+    expect(currentProjectAccessMode()).toBeNull();
+    expect(titleWindow.setTitle).toHaveBeenCalledWith(
+      "Pergamum - a novel IDE -"
+    );
+  });
+
+  it("closeCurrentProject returns releaseFailed and keeps main project state when release throws", async () => {
+    const projectFilePath = path.join(projectRootPath, "Close Failure.pergamum");
+    const ownership: ProjectWriteOwnership = { kind: "owned" };
+    const ownershipManager = createWriteOwnershipManager(ownership);
+    ownershipManager.release.mockRejectedValue(new Error("release failed"));
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Close Failure"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      ownershipManager
+    );
+    await openProjectHandler({ sender: {} });
+
+    await expect(closeCurrentProject()).resolves.toEqual({
+      status: "failed",
+      reason: "releaseFailed"
+    });
+
+    expect(currentProjectRootPath()).toBe(projectRootPath);
+    expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+  });
+
+  it("releaseCurrentProjectWriteOwnership keeps shutdown cleanup best-effort when release throws", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Shutdown Best Effort.pergamum"
+    );
+    const ownership: ProjectWriteOwnership = { kind: "owned" };
+    const ownershipManager = createWriteOwnershipManager(ownership);
+    ownershipManager.release.mockRejectedValue(new Error("release failed"));
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Shutdown Best Effort"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      createLoggerMock(),
+      ownershipManager
+    );
+    await openProjectHandler({ sender: {} });
+
+    await expect(releaseCurrentProjectWriteOwnership()).resolves.toBeUndefined();
+
+    expect(ownershipManager.release).toHaveBeenCalledWith(
+      path.resolve(projectFilePath),
+      ownership
+    );
+    expect(currentProjectRootPath()).toBeNull();
+    expect(currentActiveProjectFilePath()).toBeNull();
+    expect(currentProjectAccessMode()).toBeNull();
   });
 
   it("project switch releases the previous owned lock and owns the new one", async () => {

@@ -79,7 +79,7 @@ describe("app modal command blocking (#190)", () => {
     );
 
     const pendingChoice = controller.choice(
-      buildDirtyCloseChoiceDialogOptions(translateEn)
+      buildDirtyCloseChoiceDialogOptions(translateEn, "Draft.md")
     );
 
     await expect(

@@ -33,6 +33,7 @@ export interface ApplicationMenuTargetWindow {
 
 export interface ApplicationMenuOptions {
   getMainWindow(): ApplicationMenuTargetWindow | null;
+  requestApplicationQuit?: () => void;
   debugLogger?: Pick<DebugLogger, "log">;
 }
 
@@ -63,7 +64,8 @@ function commandMenuItem(
   language: Language,
   key: TranslationKey,
   options: ApplicationMenuOptions,
-  accelerator?: string
+  accelerator?: string,
+  values?: Record<string, string | number>
 ): MenuItemConstructorOptions {
   return {
     // #252 follow-up: gives applyApplicationMenuEnablement a stable way to
@@ -71,7 +73,7 @@ function commandMenuItem(
     // enablement (e.g. editor.kind.markdown) can be reflected as a real
     // disabled state without rebuilding the whole menu.
     id: commandId,
-    label: label(language, key),
+    label: label(language, key, values),
     accelerator,
     click: () => {
       sendApplicationMenuCommand(
@@ -83,14 +85,37 @@ function commandMenuItem(
   };
 }
 
-function macApplicationMenu(
+function quitApplicationMenuItem(
   language: Language,
-  options: ApplicationMenuOptions
+  options: ApplicationMenuOptions,
+  accelerator: string
 ): MenuItemConstructorOptions {
   const appName = applicationName;
 
   return {
-    label: appName,
+    id: applicationCommandIds.quitApplication,
+    label: label(language, "menu.quit", { appName }),
+    accelerator,
+    click: () => {
+      const sentToRenderer = sendApplicationMenuCommand(
+        options.getMainWindow,
+        applicationCommandIds.quitApplication,
+        options.debugLogger
+      );
+
+      if (!sentToRenderer) {
+        options.requestApplicationQuit?.();
+      }
+    }
+  };
+}
+
+function macApplicationMenu(
+  language: Language,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: applicationName,
     submenu: [
       commandMenuItem(
         applicationCommandIds.openAbout,
@@ -101,11 +126,11 @@ function macApplicationMenu(
       { type: "separator" },
       roleItem("services", language, "menu.services"),
       { type: "separator" },
-      roleItem("hide", language, "menu.hide", { appName }),
+      roleItem("hide", language, "menu.hide", { appName: applicationName }),
       roleItem("hideOthers", language, "menu.hideOthers"),
       roleItem("unhide", language, "menu.showAll"),
       { type: "separator" },
-      roleItem("quit", language, "menu.quit", { appName })
+      quitApplicationMenuItem(language, options, "Command+Q")
     ]
   };
 }
@@ -141,7 +166,6 @@ function fileMenu(
   platform: NodeJS.Platform,
   options: ApplicationMenuOptions
 ): MenuItemConstructorOptions {
-  const appName = applicationName;
   const commandItems: MenuItemConstructorOptions[] = [
     commandMenuItem(
       applicationCommandIds.createProject,
@@ -156,6 +180,13 @@ function fileMenu(
       options,
       "CommandOrControl+Shift+O"
     ),
+    commandMenuItem(
+      applicationCommandIds.closeProject,
+      language,
+      "menu.closeProject",
+      options
+    ),
+    { type: "separator" },
     commandMenuItem(
       editorCommandIds.openMarkdownDocument,
       language,
@@ -198,7 +229,7 @@ function fileMenu(
             ...commandItems,
             editorCloseWindowsLinuxMenuItem(options),
             { type: "separator" },
-            roleItem("quit", language, "menu.quit", { appName })
+            quitApplicationMenuItem(language, options, "CommandOrControl+Q")
           ]
   };
 }

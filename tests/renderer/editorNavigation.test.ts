@@ -106,7 +106,7 @@ describe("EditorNavigation", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 
     expect(source).toMatch(
-      /function activateDocument\(documentId: EditorId\): void \{\s+openEditorFromUi\(documentId\);/
+      /function activateDocument\(documentId: EditorId\): void \{\s+if \(isLifecycleCommitBarrierActiveNow\(\)\) \{\s+return;\s+\}\s+openEditorFromUi\(documentId\);/
     );
     // openFile() and activateProjectDocument() route through openDocument()
     // / openEditorFromExplicitActivation() via the shared #152 instrumented-

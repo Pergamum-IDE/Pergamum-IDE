@@ -15,6 +15,8 @@ import path from "node:path";
 import {
   defaultProjectAccessMode,
   PROJECT_CHANNELS,
+  type CloseCurrentProjectRequest,
+  type CloseCurrentProjectResult,
   type OpenRecentProjectRequest,
   type PendingReadOnlyProjectOpen,
   type PendingReadOnlyProjectOpenRequest,
@@ -678,6 +680,24 @@ function parsePendingReadOnlyProjectOpenRequest(
   };
 }
 
+function parseCloseCurrentProjectRequest(
+  value: unknown
+): CloseCurrentProjectRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.requestId !== "string" ||
+    value.requestId.length === 0 ||
+    value.intent !== "explicitProjectClose"
+  ) {
+    throw new Error("Invalid project close request.");
+  }
+
+  return {
+    requestId: value.requestId,
+    intent: value.intent
+  };
+}
+
 function resolveProjectDocumentPath(relativePath: string): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
@@ -743,22 +763,44 @@ async function discoverMarkdownFiles(
   );
 }
 
-async function releaseWriteOwnership(
+async function releaseWriteOwnershipStrict(
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  projectFilePath: string,
+  writeOwnership: ProjectWriteOwnership
+): Promise<void> {
+  await writeOwnershipManager.release(projectFilePath, writeOwnership);
+}
+
+async function releaseWriteOwnershipBestEffort(
   writeOwnershipManager: ProjectWriteOwnershipManager,
   projectFilePath: string,
   writeOwnership: ProjectWriteOwnership
 ): Promise<void> {
   try {
-    await writeOwnershipManager.release(projectFilePath, writeOwnership);
+    await releaseWriteOwnershipStrict(
+      writeOwnershipManager,
+      projectFilePath,
+      writeOwnership
+    );
   } catch {
     // Ownership release is intentionally best-effort.
   }
 }
 
-async function releaseProjectWriteOwnership(
+async function releaseProjectWriteOwnershipStrict(
   state: CurrentProjectState
 ): Promise<void> {
-  await releaseWriteOwnership(
+  await releaseWriteOwnershipStrict(
+    state.writeOwnershipManager,
+    state.activeProjectFilePath,
+    state.writeOwnership
+  );
+}
+
+async function releaseProjectWriteOwnershipBestEffort(
+  state: CurrentProjectState
+): Promise<void> {
+  await releaseWriteOwnershipBestEffort(
     state.writeOwnershipManager,
     state.activeProjectFilePath,
     state.writeOwnership
@@ -829,7 +871,34 @@ export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
 
   currentProjectState = null;
   await requestCurrentProjectWindowTitleUpdate();
-  await releaseProjectWriteOwnership(stateToRelease);
+  await releaseProjectWriteOwnershipBestEffort(stateToRelease);
+}
+
+export async function closeCurrentProject(): Promise<CloseCurrentProjectResult> {
+  const stateToClose = currentProjectState;
+
+  if (!stateToClose) {
+    await discardPendingReadOnlyProjectOpen();
+    return { status: "noProject" };
+  }
+
+  try {
+    try {
+      await releaseProjectWriteOwnershipStrict(stateToClose);
+    } catch {
+      return { status: "failed", reason: "releaseFailed" };
+    }
+
+    await discardPendingReadOnlyProjectOpen();
+    if (currentProjectState === stateToClose) {
+      currentProjectState = null;
+    }
+    await requestCurrentProjectWindowTitleUpdate();
+
+    return { status: "closed" };
+  } catch {
+    return { status: "failed", reason: "unexpected" };
+  }
 }
 
 async function activateProject(
@@ -860,7 +929,7 @@ async function activateProject(
       writeOwnership
     )
   ) {
-    await releaseProjectWriteOwnership(previousState);
+    await releaseProjectWriteOwnershipBestEffort(previousState);
   }
 
   await requestCurrentProjectWindowTitleUpdate();
@@ -1010,7 +1079,7 @@ async function discardPendingReadOnlyProjectOpen(): Promise<void> {
   }
 
   pendingReadOnlyProjectOpenState = null;
-  await releaseWriteOwnership(
+  await releaseWriteOwnershipBestEffort(
     pending.openedProject.writeOwnershipManager,
     pending.openedProject.projectFilePath,
     pending.openedProject.writeOwnership
@@ -1159,7 +1228,7 @@ async function createProjectFromProjectFile(
     };
   } finally {
     if (shouldReleaseOwnership) {
-      await releaseWriteOwnership(
+      await releaseWriteOwnershipBestEffort(
         writeOwnershipManager,
         projectFilePath,
         ownership
@@ -1206,7 +1275,7 @@ async function openProjectFromProjectFile(
     };
   } finally {
     if (shouldReleaseOwnership) {
-      await releaseWriteOwnership(
+      await releaseWriteOwnershipBestEffort(
         writeOwnershipManager,
         projectFilePath,
         ownership
@@ -1420,6 +1489,14 @@ export function registerProjectIpc(
 
   ipcMain.handle(PROJECT_CHANNELS.openProject, (event) =>
     openProject(event, logger, writeOwnershipManager)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.closeCurrentProject,
+    async (_event, rawRequest: unknown): Promise<CloseCurrentProjectResult> => {
+      parseCloseCurrentProjectRequest(rawRequest);
+      return closeCurrentProject();
+    }
   );
 
   ipcMain.handle(

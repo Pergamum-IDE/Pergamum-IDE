@@ -5,6 +5,10 @@ import {
   type ActiveProjectContext,
   type EditorId
 } from "../shared/editorId";
+import type {
+  DirtyWorkingCopy,
+  DirtyWorkingCopyScope
+} from "../shared/lifecycle";
 import {
   createMarkdownCurrentEditor,
   currentEditorTitle,
@@ -192,9 +196,47 @@ export function activeCurrentEditor(
 }
 
 export function hasDirtyOpenDocuments(state: OpenDocumentsState): boolean {
-  return state.documents.some((openDocument) =>
+  return hasDirtyWorkingCopies(state);
+}
+
+function dirtyWorkingCopyScopeForEditor(
+  editor: CurrentEditor
+): DirtyWorkingCopyScope {
+  if (editor.kind === "glossaryEntry") {
+    return "glossary";
+  }
+
+  switch (editor.document.kind) {
+    case "project":
+      return "projectDocument";
+    case "file":
+      return "standaloneMarkdown";
+    case "untitled":
+      return "untitledMarkdown";
+  }
+}
+
+export function getDirtyWorkingCopies(
+  state: OpenDocumentsState
+): DirtyWorkingCopy[] {
+  return state.documents.flatMap((openDocument) =>
     isCurrentEditorDirty(openDocument.editor)
+      ? [
+          {
+            editorId: openDocument.id,
+            kind: openDocument.editor.kind,
+            scope: dirtyWorkingCopyScopeForEditor(openDocument.editor),
+            title: currentEditorTitle(openDocument.editor)
+          }
+        ]
+      : []
   );
+}
+
+export function hasDirtyWorkingCopies(
+  state: OpenDocumentsState
+): boolean {
+  return getDirtyWorkingCopies(state).length > 0;
 }
 
 function isExternalMarkdownFileEditor(editor: CurrentEditor): boolean {
@@ -362,6 +404,27 @@ export function closeOpenEditor(
     documents: remainingDocuments,
     activeDocumentId: remainingDocuments[fallbackIndex].id
   };
+}
+
+function isProjectScopedOpenEditor(openDocument: OpenDocument): boolean {
+  const { editor } = openDocument;
+
+  return (
+    editor.kind === "glossaryEntry" ||
+    (editor.kind === "markdown" && editor.document.kind === "project")
+  );
+}
+
+export function removeProjectScopedOpenEditors(
+  state: OpenDocumentsState
+): OpenDocumentsState {
+  return state.documents.reduce(
+    (nextState, openDocument) =>
+      isProjectScopedOpenEditor(openDocument)
+        ? closeOpenEditor(nextState, openDocument.id)
+        : nextState,
+    state
+  );
 }
 
 export function updateOpenDocument(

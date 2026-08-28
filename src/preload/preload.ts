@@ -8,6 +8,7 @@ import {
   EDIT_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
+  LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
   SETTINGS_CHANNELS,
   type PergamumApi
@@ -89,7 +90,9 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectDocument, {
         relativePath,
         content
-      })
+      }),
+    closeCurrentProject: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.closeCurrentProject, request)
   },
   settings: {
     getSettings: () => ipcRenderer.invoke(SETTINGS_CHANNELS.getSettings),
@@ -155,6 +158,40 @@ const pergamumApi: PergamumApi = {
     setEnablement: (enablement) => {
       ipcRenderer.send(APPLICATION_MENU_CHANNELS.setEnablement, enablement);
     }
+  },
+  lifecycle: {
+    onWindowCloseRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: unknown
+      ) => {
+        if (
+          isRecord(request) &&
+          typeof request.requestId === "string" &&
+          request.intent === "ordinaryWindowClose" &&
+          typeof request.isFinalWindow === "boolean"
+        ) {
+          callback({
+            requestId: request.requestId,
+            intent: request.intent,
+            isFinalWindow: request.isFinalWindow
+          });
+        }
+      };
+
+      ipcRenderer.on(LIFECYCLE_CHANNELS.windowCloseRequested, listener);
+
+      return () => {
+        ipcRenderer.off(LIFECYCLE_CHANNELS.windowCloseRequested, listener);
+      };
+    },
+    respondWindowCloseRequest: (decision) =>
+      ipcRenderer.invoke(
+        LIFECYCLE_CHANNELS.respondWindowCloseRequest,
+        decision
+      ),
+    quitApplication: (request) =>
+      ipcRenderer.invoke(LIFECYCLE_CHANNELS.quitApplication, request)
   },
   contextMenu: {
     popupEditMenu: (request) =>

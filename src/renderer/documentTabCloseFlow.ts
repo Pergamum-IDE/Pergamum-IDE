@@ -1,5 +1,6 @@
 import type { Translate } from "../shared/i18n";
 import type { EditorId } from "../shared/editorId";
+import type { SaveWorkingCopyOutcome } from "../shared/lifecycle";
 import {
   AppDialogError,
   type AppChoiceDialogOptions,
@@ -7,10 +8,12 @@ import {
   type AppDialogChoiceId
 } from "./dialog/appDialogTypes";
 import {
+  findOpenDocument,
   isOpenDocumentDirty,
   resolveCloseTargetEditorId,
   type OpenDocumentsState
 } from "./openDocuments";
+import { currentEditorTitle } from "./currentEditor";
 
 /** Stable choice IDs for the temporary #192 dirty-close dogfood dialog. */
 export const dirtyCloseChoiceIds = {
@@ -22,12 +25,7 @@ export const dirtyCloseChoiceIds = {
 export type DirtyCloseChoiceId =
   (typeof dirtyCloseChoiceIds)[keyof typeof dirtyCloseChoiceIds];
 
-export type DirtyCloseSaveResult =
-  | "saved"
-  | "cancelled"
-  | "rejected"
-  | "failed"
-  | "ignored";
+export type DirtyCloseSaveResult = SaveWorkingCopyOutcome;
 
 /**
  * The #192 dirty-close dogfood dialog options: a temporary three-choice
@@ -41,13 +39,14 @@ export type DirtyCloseSaveResult =
  * open; the explicit cancel button resolves a chosen cancel ID.
  */
 export function buildDirtyCloseChoiceDialogOptions(
-  translate: Translate
+  translate: Translate,
+  targetName: string
 ): AppChoiceDialogOptions {
   return {
-    title: translate("dialog.dirtyClose.title"),
+    title: translate("dialog.unsavedChanges.title"),
     message: {
       kind: "plainText",
-      text: translate("dialog.dirtyClose.message")
+      text: translate("dialog.unsavedChanges.prompt", { targetName })
     },
     icon: {
       kind: "warning",
@@ -56,18 +55,18 @@ export function buildDirtyCloseChoiceDialogOptions(
     choices: [
       {
         id: dirtyCloseChoiceIds.saveAndClose,
-        label: translate("dialog.dirtyClose.saveAndClose"),
+        label: translate("dialog.unsavedChanges.saveAndClose"),
         role: "primary"
       },
       {
         id: dirtyCloseChoiceIds.discardAndClose,
-        label: translate("dialog.dirtyClose.discardAndClose"),
+        label: translate("dialog.unsavedChanges.discardAndClose"),
         role: "destructive",
         icon: { kind: "alertTriangle" }
       },
       {
         id: dirtyCloseChoiceIds.cancel,
-        label: translate("common.cancel"),
+        label: translate("dialog.unsavedChanges.cancel"),
         role: "cancel"
       }
     ],
@@ -111,11 +110,20 @@ export async function runEditorCloseFlow(
   }
 
   if (isOpenDocumentDirty(deps.state, targetId)) {
+    const targetOpenDocument = findOpenDocument(deps.state, targetId);
+
+    if (!targetOpenDocument) {
+      return;
+    }
+
     let result: AppChoiceDialogResult;
 
     try {
       result = await deps.choiceDialog(
-        buildDirtyCloseChoiceDialogOptions(deps.translate)
+        buildDirtyCloseChoiceDialogOptions(
+          deps.translate,
+          currentEditorTitle(targetOpenDocument.editor)
+        )
       );
     } catch (error) {
       if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {

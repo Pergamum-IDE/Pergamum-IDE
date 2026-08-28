@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, powerMonitor } from "electron";
 import started from "electron-squirrel-startup";
 import path from "node:path";
 import { parseDebugModeFromArgv } from "./debugMode";
@@ -25,8 +25,13 @@ import {
 import { registerSettingsIpc } from "./settingsIpc";
 import { installAppShutdownCleanup } from "./shutdownCleanup";
 import { extractStartupProjectFilePathFromArgv } from "./startupProjectArgv";
+import {
+  createWindowLifecycleController,
+  type WindowLifecycleController
+} from "./windowLifecycle";
 
 let mainWindow: BrowserWindow | null = null;
+let windowLifecycleController: WindowLifecycleController | null = null;
 const pergamumDebugMode = parseDebugModeFromArgv(process.argv);
 
 if (started) {
@@ -46,6 +51,8 @@ async function createMainWindow(): Promise<void> {
       sandbox: true
     }
   });
+
+  windowLifecycleController?.registerWindow(mainWindow);
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -133,8 +140,20 @@ app.whenReady().then(async () => {
   });
   debugLogger.openFileSink(resolveDebugLogsDirectory(app));
 
+  windowLifecycleController = createWindowLifecycleController({
+    app,
+    ipcMain,
+    getOpenWindowCount: () =>
+      BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
+        .length,
+    systemTerminationSource: powerMonitor
+  });
+
   await installApplicationMenu({
     getMainWindow: () => mainWindow,
+    requestApplicationQuit: () => {
+      windowLifecycleController?.requestApplicationQuit();
+    },
     debugLogger
   });
   registerApplicationMenuIpc();

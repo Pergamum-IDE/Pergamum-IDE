@@ -3,8 +3,10 @@ import type { EditorId } from "./editorId";
 
 export const applicationCommandIds = {
   openAbout: defineCommandId("app.about.open"),
+  quitApplication: defineCommandId("app.quit"),
   createProject: defineCommandId("workspace.project.create"),
   openProject: defineCommandId("workspace.project.open"),
+  closeProject: defineCommandId("workspace.project.close"),
   toggleRecentProjects: defineCommandId("workspace.recentProjects.toggle")
 } as const;
 
@@ -54,8 +56,10 @@ export function isEditCommandId(commandId: string): commandId is EditCommandId {
  */
 export const applicationMenuCommandIds = [
   applicationCommandIds.openAbout,
+  applicationCommandIds.quitApplication,
   applicationCommandIds.createProject,
   applicationCommandIds.openProject,
+  applicationCommandIds.closeProject,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
   editorCommandIds.saveAs,
