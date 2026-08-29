@@ -14,6 +14,25 @@ describe("About dialog command wiring (#221)", () => {
     expect(source).toContain("<AboutDialog");
   });
 
+  it("routes About hidden staff credits through the app NotificationController with typed icon and anchor placement (#298)", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = source.indexOf("function showAboutStaffCredits(");
+    const end = source.indexOf("/**", start);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    const block = source.slice(start, end);
+
+    expect(block).toContain("notificationController.notify({");
+    expect(block).toContain("message: aboutCreditsHeading(aboutDialogAppInfo)");
+    expect(block).toContain('icon: { kind: "preset", name: "pergamum" }');
+    expect(block).toContain("placement,");
+    expect(block).toContain('motion: { kind: "fade" }');
+    expect(block).toContain("detailRows: aboutCreditsRows()");
+    expect(source).toContain("onShowStaffCredits={showAboutStaffCredits}");
+  });
+
   it("treats the About dialog as an app modal command blocker without using the confirm/choice controller", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const blockerIndex = source.indexOf("registry.setCommandExecutionBlocker(");

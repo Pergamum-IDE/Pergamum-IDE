@@ -4,6 +4,7 @@ import {
   createDefaultApplicationSettings,
   defaultApplicationSettings,
   defaultNotificationDurationMs,
+  defaultNotificationOutputEnabled,
   defaultPreviewRenderer,
   isPreviewRendererId,
   resolveEffectiveSettings,
@@ -528,7 +529,7 @@ describe("workbench.notification.durationMs wiring (#266)", () => {
     ).toBe(30000);
   });
 
-  it("0 is a valid effective value — the explicit 'do not auto-dismiss' choice, no fallback to the default", () => {
+  it("0 remains a valid effective base value — no fallback to the default", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
       workbench: {
@@ -541,5 +542,57 @@ describe("workbench.notification.durationMs wiring (#266)", () => {
       resolveEffectiveSettings(applicationSettings, undefined).workbench
         .notification.durationMs
     ).toBe(0);
+  });
+});
+
+describe("notification.output.enabled wiring (#298)", () => {
+  it("defaultNotificationOutputEnabled is the catalog default (true)", () => {
+    expect(defaultNotificationOutputEnabled).toBe(
+      getCatalogDefaultValue("notification.output.enabled")
+    );
+    expect(defaultNotificationOutputEnabled).toBe(true);
+  });
+
+  it("builtInDefaultSettings.notification.output.enabled derives from the catalog default", () => {
+    expect(builtInDefaultSettings.notification.output.enabled).toBe(
+      getCatalogDefaultValue("notification.output.enabled")
+    );
+  });
+
+  it("defaultApplicationSettings / createDefaultApplicationSettings leave notification unset (sparse, like workbench.notification)", () => {
+    expect(defaultApplicationSettings.notification).toBeUndefined();
+    expect(createDefaultApplicationSettings().notification).toBeUndefined();
+  });
+
+  it("resolveEffectiveSettings falls through to the catalog default when notification.output.enabled is absent", () => {
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined)
+        .notification.output.enabled
+    ).toBe(true);
+  });
+
+  it("resolveEffectiveSettings passes through false without affecting status bar settings", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      notification: { output: { enabled: false } }
+    };
+    const effective = resolveEffectiveSettings(applicationSettings, undefined);
+
+    expect(effective.notification.output.enabled).toBe(false);
+    expect(effective.workbench.statusBar.visible).toBe(
+      defaultApplicationSettings.workbench.statusBar.visible
+    );
+  });
+
+  it("notification.output has no project-scope fallthrough — applicationOnly", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      notification: { output: { enabled: false } }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, {}).notification.output
+        .enabled
+    ).toBe(false);
   });
 });

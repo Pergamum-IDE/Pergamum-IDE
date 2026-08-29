@@ -161,9 +161,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }
     });
 
-    it("registers exactly the #226 + #228 target settings plus #252 editor.lineEnding.*, #259 character count settings, and #266 workbench.notification.durationMs, minus the #232-retired workbench.advancedSettings.enabled", () => {
+    it("registers exactly the #226 + #228 target settings plus #252 editor.lineEnding.*, #259 character count settings, #266 workbench.notification.durationMs, and #298 notification.output.enabled, minus the #232-retired workbench.advancedSettings.enabled", () => {
       expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
         [
+          "notification.output.enabled",
           "workbench.notification.durationMs",
           "workbench.colorTheme",
           "workbench.fontFamily",

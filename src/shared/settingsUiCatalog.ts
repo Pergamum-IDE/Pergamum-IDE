@@ -658,6 +658,15 @@ export const settingCatalogItems = defineSettingCatalog([
     )
   },
   {
+    key: "notification.output.enabled",
+    category: "application",
+    order: 390,
+    labelKey: "settings.notification.output.enabled.label",
+    descriptionKey: "settings.notification.output.enabled.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("notification.output.enabled")
+  },
+  {
     key: "workbench.sound.enabled",
     category: "sound",
     order: 100,

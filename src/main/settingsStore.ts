@@ -103,6 +103,41 @@ function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
   };
 }
 
+function readNotificationOutputSettings(
+  value: unknown
+): ApplicationSettings["notification"] {
+  if (!isObject(value)) {
+    return undefined;
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("output")) {
+    return undefined;
+  }
+
+  const outputValue = value.output;
+
+  if (!isObject(outputValue)) {
+    return undefined;
+  }
+
+  const outputKeys = Object.keys(outputValue);
+
+  if (outputKeys.length !== 1 || !outputKeys.includes("enabled")) {
+    return undefined;
+  }
+
+  const enabledResolution = resolveCatalogValue(
+    "notification.output.enabled",
+    outputValue.enabled
+  );
+
+  return enabledResolution.ok
+    ? { output: { enabled: enabledResolution.value } }
+    : undefined;
+}
+
 // Like readPreviewSettings above: default and validation both come from the
 // catalog, so a missing or invalid on-disk workbench.statusBar.visible
 // falls back to the catalog default rather than failing startup.
@@ -431,8 +466,11 @@ function readSettingsValue(value: unknown): ApplicationSettings {
     return createDefaultApplicationSettings();
   }
 
+  const notification = readNotificationOutputSettings(value.notification);
+
   return {
     preview: readPreviewSettings(value.preview),
+    ...(notification ? { notification } : {}),
     workbench: readWorkbenchSettings(value.workbench),
     commandPalette: readCommandPaletteSettings(value.commandPalette),
     editor: readEditorSettings(value.editor),
@@ -503,9 +541,11 @@ export function parseSaveApplicationSettingsRequest(
   }
 
   const keys = Object.keys(value);
+  const hasNotification = keys.includes("notification");
+  const expectedKeyCount = 5 + (hasNotification ? 1 : 0);
 
   if (
-    keys.length !== 5 ||
+    keys.length !== expectedKeyCount ||
     !keys.includes("preview") ||
     !keys.includes("workbench") ||
     !keys.includes("commandPalette") ||
@@ -517,11 +557,61 @@ export function parseSaveApplicationSettingsRequest(
 
   return {
     preview: parsePreviewSettingsForWrite(value.preview),
+    ...(hasNotification
+      ? {
+          notification: parseNotificationSettingsForWrite(
+            value.notification
+          )
+        }
+      : {}),
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     files: parseFilesSettingsForWrite(value.files)
   };
+}
+
+function parseNotificationSettingsForWrite(
+  value: unknown
+): NonNullable<ApplicationSettings["notification"]> {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("output")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    output: parseNotificationOutputSettingsForWrite(value.output)
+  };
+}
+
+function parseNotificationOutputSettingsForWrite(
+  value: unknown
+): NonNullable<ApplicationSettings["notification"]>["output"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("enabled")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const resolution = resolveCatalogValue(
+    "notification.output.enabled",
+    value.enabled
+  );
+
+  if (!resolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return { enabled: resolution.value };
 }
 
 function parsePreviewSettingsForWrite(
@@ -1171,9 +1261,11 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   }
 
   const keys = Object.keys(value);
+  const hasNotification = keys.includes("notification");
+  const expectedKeyCount = 6 + (hasNotification ? 1 : 0);
 
   if (
-    keys.length !== 6 ||
+    keys.length !== expectedKeyCount ||
     !keys.includes("preview") ||
     !keys.includes("workbench") ||
     !keys.includes("commandPalette") ||
@@ -1186,6 +1278,13 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
 
   return {
     preview: parsePreviewSettingsForWrite(value.preview),
+    ...(hasNotification
+      ? {
+          notification: parseNotificationSettingsForWrite(
+            value.notification
+          )
+        }
+      : {}),
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
@@ -1236,15 +1335,20 @@ export async function saveApplicationSettings(
   settingsRequest: SaveApplicationSettingsRequest
 ): Promise<ApplicationSettings> {
   const settings = await loadSettings();
-
-  return saveSettings({
+  const nextSettings: ApplicationSettings = {
     ...settings,
     preview: settingsRequest.preview,
     workbench: settingsRequest.workbench,
     commandPalette: settingsRequest.commandPalette,
     editor: settingsRequest.editor,
     files: settingsRequest.files
-  });
+  };
+
+  if (settingsRequest.notification !== undefined) {
+    nextSettings.notification = settingsRequest.notification;
+  }
+
+  return saveSettings(nextSettings);
 }
 
 export async function recordRecentProject(

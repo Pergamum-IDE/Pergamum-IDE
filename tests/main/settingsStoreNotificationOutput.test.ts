@@ -26,10 +26,6 @@ import {
 import type { SaveApplicationSettingsRequest } from "../../src/shared/settings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
-const durationDefault = getCatalogDefaultValue(
-  "workbench.notification.durationMs"
-);
-
 const defaultSoundSettings = {
   enabled: true,
   dialog: { enabled: true },
@@ -48,7 +44,6 @@ const defaultLineEndingSettings = {
   expected: getCatalogDefaultValue("editor.lineEnding.expected"),
   markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
 };
-
 const defaultWhitespaceSettings = {
   renderIdeographicSpace: getCatalogDefaultValue(
     "editor.whitespace.renderIdeographicSpace"
@@ -61,7 +56,6 @@ const defaultWhitespaceSettings = {
     "editor.whitespace.renderOtherUnicodeSpace"
   )
 };
-
 const defaultParagraphIndentSettings = {
   excludeLeadingCharacters: getCatalogDefaultValue(
     "editor.paragraphIndent.excludeLeadingCharacters"
@@ -94,15 +88,14 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
 }
 
 function saveRequest(
-  workbench: Record<string, unknown>
+  overrides: Partial<SaveApplicationSettingsRequest>
 ): SaveApplicationSettingsRequest {
   return {
     preview: { renderer: "markdown", updateDelayMs: 10000 },
     workbench: {
       language: "ja",
       statusBar: defaultStatusBarSettings,
-      sound: defaultSoundSettings,
-      ...workbench
+      sound: defaultSoundSettings
     },
     commandPalette: {
       description: { enable: true, marquee: { delay: 2000, speed: 40 } }
@@ -113,85 +106,56 @@ function saveRequest(
       paragraphIndent: defaultParagraphIndentSettings,
       characterCount: defaultCharacterCountSettings
     },
-    files: { newFile: { lineEnding: "lf", encoding: "utf8" } }
+    files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
+    ...overrides
   } as SaveApplicationSettingsRequest;
 }
 
-describe("settingsStore workbench.notification.durationMs read path (#266)", () => {
+describe("settingsStore notification.output.enabled read path (#298)", () => {
   beforeEach(() => {
     fsMock.readFile.mockReset();
     fsMock.writeFile.mockReset();
     fsMock.mkdir.mockReset();
   });
 
-  it("the catalog default is 10000 ms", () => {
-    expect(durationDefault).toBe(10000);
-  });
-
-  it("leaves workbench.notification unset when the key is missing (sparse, like fontFamily)", async () => {
-    fsMock.readFile.mockResolvedValue(onDiskSettings({ workbench: {} }));
+  it("leaves notification unset when the key is missing", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.notification).toBeUndefined();
+    expect(settings.notification).toBeUndefined();
   });
 
-  it("reads a valid custom millisecond duration from settings.json", async () => {
-    fsMock.readFile.mockResolvedValue(
-      onDiskSettings({
-        workbench: { notification: { durationMs: 30000 } }
-      })
-    );
-
-    const settings = await loadSettings();
-
-    expect(settings.workbench.notification).toEqual({ durationMs: 30000 });
-  });
-
-  it("accepts the persisted bounds 0 and 600000", async () => {
-    for (const value of [0, 600000]) {
+  it("reads valid true and false values from settings.json", async () => {
+    for (const enabled of [true, false]) {
       fsMock.readFile.mockResolvedValue(
-        onDiskSettings({
-          workbench: { notification: { durationMs: value } }
-        })
+        onDiskSettings({ notification: { output: { enabled } } })
       );
 
       const settings = await loadSettings();
 
-      expect(settings.workbench.notification).toEqual({ durationMs: value });
+      expect(settings.notification).toEqual({ output: { enabled } });
     }
   });
 
-  it("rejects an out-of-range durationMs at read time without failing startup", async () => {
-    for (const value of [-1, 600001, 1_000_000]) {
-      fsMock.readFile.mockResolvedValue(
-        onDiskSettings({
-          workbench: { notification: { durationMs: value } }
-        })
-      );
+  it("rejects malformed output settings at read time without failing startup", async () => {
+    for (const notification of [
+      { output: { enabled: "false" } },
+      { output: { enabled: 0 } },
+      { output: { enabled: false, extra: true } },
+      { output: null },
+      true
+    ]) {
+      fsMock.readFile.mockResolvedValue(onDiskSettings({ notification }));
 
       const settings = await loadSettings();
 
-      expect(settings.workbench.notification).toBeUndefined();
-    }
-  });
-
-  it("rejects a non-integer / non-number durationMs at read time without failing startup", async () => {
-    for (const bad of [10000.5, "10000", true, null, Number.NaN]) {
-      fsMock.readFile.mockResolvedValue(
-        onDiskSettings({
-          workbench: { notification: { durationMs: bad } }
-        })
-      );
-
-      const settings = await loadSettings();
-
-      expect(settings.workbench.notification).toBeUndefined();
+      expect(settings.notification).toBeUndefined();
     }
   });
 });
 
-describe("settingsStore workbench.notification.durationMs write path (#266)", () => {
+describe("settingsStore notification.output.enabled write path (#298)", () => {
   beforeEach(() => {
     fsMock.readFile.mockReset();
     fsMock.writeFile.mockReset();
@@ -200,11 +164,11 @@ describe("settingsStore workbench.notification.durationMs write path (#266)", ()
     fsMock.mkdir.mockResolvedValue(undefined);
   });
 
-  it("persists a valid custom millisecond duration under workbench.notification", async () => {
-    fsMock.readFile.mockResolvedValue(onDiskSettings({ workbench: {} }));
+  it("persists a valid notification output setting", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
 
     await saveApplicationSettings(
-      saveRequest({ notification: { durationMs: 25000 } })
+      saveRequest({ notification: { output: { enabled: false } } })
     );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
@@ -213,27 +177,11 @@ describe("settingsStore workbench.notification.durationMs write path (#266)", ()
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.workbench.notification).toEqual({ durationMs: 25000 });
+    expect(written.notification).toEqual({ output: { enabled: false } });
   });
 
-  it("persists the explicit 0 base duration value", async () => {
-    fsMock.readFile.mockResolvedValue(onDiskSettings({ workbench: {} }));
-
-    await saveApplicationSettings(
-      saveRequest({ notification: { durationMs: 0 } })
-    );
-
-    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
-      string,
-      string
-    ];
-    const written = JSON.parse(writtenContent);
-
-    expect(written.workbench.notification).toEqual({ durationMs: 0 });
-  });
-
-  it("a save request omitting workbench.notification leaves it absent, not written as the default", async () => {
-    fsMock.readFile.mockResolvedValue(onDiskSettings({ workbench: {} }));
+  it("a save request omitting notification leaves it absent, not written as the default", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
 
     await saveApplicationSettings(saveRequest({}));
 
@@ -243,44 +191,33 @@ describe("settingsStore workbench.notification.durationMs write path (#266)", ()
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.workbench.notification).toBeUndefined();
+    expect(written.notification).toBeUndefined();
   });
 
-  it("rejects a save request with an out-of-range durationMs and never writes settings.json", () => {
-    for (const value of [-1, 600001]) {
-      expect(() =>
-        parseSaveApplicationSettingsRequest(
-          saveRequest({ notification: { durationMs: value } })
-        )
-      ).toThrow("Invalid application settings.");
-    }
-    expect(fsMock.writeFile).not.toHaveBeenCalled();
-  });
-
-  it("rejects a save request with a non-integer durationMs and never writes settings.json", () => {
-    expect(() =>
-      parseSaveApplicationSettingsRequest(
-        saveRequest({ notification: { durationMs: 12500.5 } })
-      )
-    ).toThrow("Invalid application settings.");
-    expect(fsMock.writeFile).not.toHaveBeenCalled();
-  });
-
-  it("rejects a save request whose workbench.notification carries an unknown key", () => {
+  it("rejects a non-boolean enabled value and never writes settings.json", () => {
     expect(() =>
       parseSaveApplicationSettingsRequest(
         saveRequest({
-          notification: { durationMs: 10000, somethingElse: true }
+          notification: {
+            output: { enabled: "false" as unknown as boolean }
+          }
         })
       )
     ).toThrow("Invalid application settings.");
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
   });
 
-  it("still accepts the default catalog value (10000) as an explicit custom value", () => {
+  it("rejects unknown keys inside notification.output", () => {
     expect(() =>
       parseSaveApplicationSettingsRequest(
-        saveRequest({ notification: { durationMs: durationDefault } })
+        saveRequest({
+          notification: {
+            output: { enabled: true, extra: true } as unknown as {
+              enabled: boolean;
+            }
+          }
+        })
       )
-    ).not.toThrow();
+    ).toThrow("Invalid application settings.");
   });
 });

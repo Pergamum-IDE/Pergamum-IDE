@@ -84,7 +84,9 @@ export type {
 
 export type {
   ApplicationSettings,
+  ApplicationNotificationSettings,
   EffectiveSettings,
+  NotificationOutputSettings,
   ExpectedLineEnding,
   LineEndingMarkerGlyph,
   NewFileEncoding,

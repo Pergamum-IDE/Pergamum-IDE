@@ -9,6 +9,8 @@ import {
 import { t, type Translate } from "../../../src/shared/i18n";
 import {
   AboutDialog,
+  aboutCreditsHeading,
+  aboutCreditsRows,
   formatAboutTechnicalInformation
 } from "../../../src/renderer/dialog/AboutDialog";
 import type { ClipboardAdapter } from "../../../src/renderer/dialog/clipboardAdapter";
@@ -44,7 +46,8 @@ function renderAboutDialog(): string {
       opener: null,
       onClose: noop,
       onOpenRepository: noop,
-      onOpenTypewriterSoundsCredit: noop
+      onOpenTypewriterSoundsCredit: noop,
+      onShowStaffCredits: noop
     })
   );
 }
@@ -75,6 +78,8 @@ describe("AboutDialog (#221)", () => {
 
     expect(markup).toContain("aboutDialogAppIcon");
     expect(markup).toContain("Pergamum app icon");
+    expect(markup).toContain("aboutDialogAppIconButton");
+    expect(markup).toContain('aria-label="Show staff credits"');
     expect(markup).toContain("aboutDialogLogo");
     expect(markup).toContain("Pergamum logo");
     expect(markup).toContain("appInfoDialogHiddenTitle");
@@ -136,6 +141,9 @@ describe("AboutDialog (#221)", () => {
     expect(source).not.toContain('className="appDialogButtonLabel"');
     expect(source).toContain("onOpenRepository");
     expect(source).toContain("onOpenTypewriterSoundsCredit");
+    expect(source).toContain("onShowStaffCredits");
+    expect(source).toContain('kind: "anchorRect"');
+    expect(source).toContain("getBoundingClientRect");
     expect((source.match(/\{"\\u00a0"\}/g) ?? []).length).toBe(2);
     expect(source).not.toContain("openThirdPartyNotices");
     expect(source).not.toContain("onOpenThirdPartyNotices");
@@ -145,6 +153,20 @@ describe("AboutDialog (#221)", () => {
     expect(source).not.toContain("navigator.clipboard");
     expect(source).not.toContain("openExternal");
     expect(source).not.toContain("dangerouslySetInnerHTML");
+  });
+
+  it("keeps hidden staff credits as structured plain text rows, using the runtime app version", () => {
+    expect(aboutCreditsHeading(testAppInfo)).toBe(
+      "Pergamum Ver.9.8.7-test : Staff Credit"
+    );
+    expect(aboutCreditsRows()).toEqual([
+      { label: "AI Conductor / Product Owner", value: "Kentaro Motoki" },
+      { label: "System Architect", value: "ChatGPT" },
+      { label: "Reviewers", value: "Claude, Gemini" },
+      { label: "Programmers", value: "Claude Code, Codex, Antigravity" },
+      { label: "Special Thanks", value: "My Friends" },
+      { label: "Gopher / Dogfood Tester", value: "Kentaro Motoki" }
+    ]);
   });
 
   it("does not render a Third-party notices link or external-link icon", () => {
@@ -204,6 +226,7 @@ describe("AboutDialog (#221)", () => {
   it("keeps the About branding layout centered and adds forced-colors affordance CSS", () => {
     const styles = readFileSync("src/renderer/styles.css", "utf8");
     const brandingCss = cssRuleBlock(styles, ".aboutDialogBranding");
+    const appIconButtonCss = cssRuleBlock(styles, ".aboutDialogAppIconButton");
     const taglineCss = cssRuleBlock(styles, ".aboutDialogTagline");
     const externalLinkIconCss = cssRuleBlock(
       styles,
@@ -218,6 +241,8 @@ describe("AboutDialog (#221)", () => {
     expect(brandingCss).toContain("align-items: center");
     expect(brandingCss).toContain("justify-content: center");
     expect(brandingCss).toContain("padding-inline");
+    expect(appIconButtonCss).toContain("inline-size: 54px");
+    expect(appIconButtonCss).toContain("background: transparent");
     expect(taglineCss).toContain("color: #2b2b2b");
     expect(linkButtonCss).toContain("display: inline-block");
     expect(linkButtonCss).toContain("max-width: 100%");
