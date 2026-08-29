@@ -753,6 +753,48 @@ function resolveProjectDocumentPath(relativePath: string): string {
   return resolvedPath;
 }
 
+/**
+ * #287 follow-up: make a Markdown file that was created inside the current
+ * project's root AFTER the project was opened (for example a `.recovered.md`
+ * file written next to its origin document) a first-class project document,
+ * so it can be read and saved through the project document IPC without
+ * reopening the project.
+ *
+ * Returns the project-root-relative path — forward-slash separated, the same
+ * form `discoverMarkdownFiles` produces — when `absolutePath` is a `.md`
+ * file inside the open project root; otherwise `null` (no project open, path
+ * outside the root, or not a `.md` file). Idempotent.
+ */
+export function registerCurrentProjectDocumentPath(
+  absolutePath: string
+): string | null {
+  if (!currentProjectState) {
+    return null;
+  }
+
+  const relativePath = path.relative(
+    currentProjectState.rootPath,
+    path.resolve(absolutePath)
+  );
+
+  if (
+    relativePath.length === 0 ||
+    relativePath.startsWith("..") ||
+    path.isAbsolute(relativePath)
+  ) {
+    return null;
+  }
+
+  if (path.extname(relativePath).toLowerCase() !== ".md") {
+    return null;
+  }
+
+  const normalized = normalizeRelativePath(relativePath);
+  currentProjectState.documentRelativePaths.add(normalized);
+
+  return normalized;
+}
+
 async function discoverMarkdownFiles(
   rootPath: string
 ): Promise<ProjectDocument[]> {

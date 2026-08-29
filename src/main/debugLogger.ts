@@ -130,6 +130,13 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "recovery.document.persist.failed": "error",
   "recovery.document.deleted": "debug",
   "recovery.document.delete.failed": "error",
+  "recovery.candidates.dialog.shown": "debug",
+  "recovery.candidates.listed": "debug",
+  "recovery.document.restored": "info",
+  "recovery.document.restore.failed": "error",
+  "recovery.document.discarded": "info",
+  "recovery.document.discard.failed": "error",
+  "recovery.report.copied": "debug",
   "app.uncaughtException": "error",
   "app.unhandledRejection": "error"
 };

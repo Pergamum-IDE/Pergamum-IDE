@@ -83,6 +83,7 @@ interface Harness {
   upsert: ReturnType<typeof vi.fn>;
   del: ReturnType<typeof vi.fn>;
   flushErrors: Array<{ documentKey: string; operation: string }>;
+  onPersisted: ReturnType<typeof vi.fn>;
 }
 
 function makeHarness(
@@ -106,6 +107,7 @@ function makeHarness(
       ((): RecoveryDocumentWriteResult => ({ ok: true, mode: "deleted" }))
   );
   const flushErrors: Harness["flushErrors"] = [];
+  const onPersisted = vi.fn();
 
   const coordinator = new RecoveryPayloadCoordinator({
     transport: { upsert, delete: del },
@@ -116,10 +118,11 @@ function makeHarness(
       flushErrors.push({
         documentKey: info.documentKey,
         operation: info.operation
-      })
+      }),
+    onPersisted
   });
 
-  return { coordinator, clock, upsert, del, flushErrors };
+  return { coordinator, clock, upsert, del, flushErrors, onPersisted };
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +386,89 @@ describe("RecoveryPayloadCoordinator — failure handling", () => {
     h.coordinator.updateDirtyDocuments([dirty("file:C:/a.md", "v2")]);
     await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
     expect(h.upsert).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("RecoveryPayloadCoordinator — onPersisted (backup-saved hint)", () => {
+  it("fires once after a confirmed dirty-payload upsert", async () => {
+    const h = makeHarness();
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/a.md", "v1")]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+
+    expect(h.upsert).toHaveBeenCalledTimes(1);
+    expect(h.onPersisted).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT fire for a delete after a normal Save", async () => {
+    const h = makeHarness();
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/a.md", "v1")]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+    h.onPersisted.mockClear();
+
+    h.coordinator.onSaveSucceeded({
+      oldKey: "file:C:/a.md",
+      newKey: "file:C:/a.md",
+      postSavePayload: null
+    });
+    await h.clock.advance(1);
+
+    expect(h.del).toHaveBeenCalledTimes(1);
+    expect(h.onPersisted).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire for a skipped (non-owner / unavailable) upsert", async () => {
+    const h = makeHarness({
+      upsertImpl: () => ({ ok: false, skipped: "not-owner" })
+    });
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/a.md", "v1")]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+
+    expect(h.upsert).toHaveBeenCalledTimes(1);
+    expect(h.onPersisted).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire for a failed upsert", async () => {
+    const h = makeHarness({
+      upsertImpl: () => ({ ok: false, error: "persist-failed" })
+    });
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/a.md", "v1")]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+
+    expect(h.flushErrors).toEqual([
+      { documentKey: "file:C:/a.md", operation: "upsert" }
+    ]);
+    expect(h.onPersisted).not.toHaveBeenCalled();
+  });
+
+  it("never fires while disabled (Recovery non-owner)", async () => {
+    const h = makeHarness({ enabled: false });
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/a.md", "v1")]);
+    h.coordinator.onSaveSucceeded({
+      oldKey: "file:C:/a.md",
+      newKey: "file:C:/a.md",
+      postSavePayload: payload("file:C:/a.md", "v2")
+    });
+    await h.clock.advance(RECOVERY_MAX_FLUSH_MS + 10_000);
+
+    expect(h.onPersisted).not.toHaveBeenCalled();
+  });
+
+  it("fires for the post-save-edit upsert but not for the paired delete", async () => {
+    const h = makeHarness();
+    h.coordinator.updateDirtyDocuments([dirty("untitled:u", "typed")]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+    h.onPersisted.mockClear();
+
+    // Untitled first Save with an in-flight edit: upsert new key, delete old.
+    h.coordinator.onSaveSucceeded({
+      oldKey: "untitled:u",
+      newKey: "file:C:/x.md",
+      postSavePayload: payload("file:C:/x.md", "typed + more")
+    });
+    await h.clock.advance(1);
+
+    expect(h.del).toHaveBeenCalledWith("untitled:u");
+    expect(h.onPersisted).toHaveBeenCalledTimes(1);
   });
 });
 

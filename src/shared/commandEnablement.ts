@@ -17,7 +17,8 @@ export type CommandContextKey =
   | "editor.kind.glossary"
   | "editor.document.projectOwned"
   | "activeEditor.saveBlockedByReadOnlyProjectRootForUi"
-  | "glossary.occurrences.tracking.active";
+  | "glossary.occurrences.tracking.active"
+  | "recovery.owner";
 
 export const commandContextKeys: readonly CommandContextKey[] = [
   "project.isOpen",
@@ -29,7 +30,8 @@ export const commandContextKeys: readonly CommandContextKey[] = [
   "editor.kind.glossary",
   "editor.document.projectOwned",
   "activeEditor.saveBlockedByReadOnlyProjectRootForUi",
-  "glossary.occurrences.tracking.active"
+  "glossary.occurrences.tracking.active",
+  "recovery.owner"
 ] as const;
 
 export function isCommandContextKey(

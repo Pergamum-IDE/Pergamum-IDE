@@ -139,7 +139,19 @@ const pergamumApi: PergamumApi = {
     upsertDocument: (payload) =>
       ipcRenderer.invoke(RECOVERY_CHANNELS.upsertDocument, payload),
     deleteDocument: (documentKey) =>
-      ipcRenderer.invoke(RECOVERY_CHANNELS.deleteDocument, { documentKey })
+      ipcRenderer.invoke(RECOVERY_CHANNELS.deleteDocument, { documentKey }),
+    listCandidates: () =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.listCandidates),
+    restoreCandidates: (request) =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.restoreCandidates, request),
+    finalizeRestoredCandidates: (request) =>
+      ipcRenderer.invoke(
+        RECOVERY_CHANNELS.finalizeRestoredCandidates,
+        request
+      ),
+    discardCandidates: (request) =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.discardCandidates, request),
+    getReport: () => ipcRenderer.invoke(RECOVERY_CHANNELS.getReport)
   },
   glossary: {
     create: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.create, input),

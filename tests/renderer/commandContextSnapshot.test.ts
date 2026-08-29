@@ -14,7 +14,8 @@ const baseInput = {
   editorKindGlossary: false,
   editorDocumentProjectOwned: true,
   activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
-  occurrenceTrackingActive: false
+  occurrenceTrackingActive: false,
+  recoveryOwner: false
 };
 
 describe("buildCommandContextSnapshot", () => {
@@ -29,7 +30,8 @@ describe("buildCommandContextSnapshot", () => {
       "editor.kind.glossary": false,
       "editor.document.projectOwned": true,
       "activeEditor.saveBlockedByReadOnlyProjectRootForUi": false,
-      "glossary.occurrences.tracking.active": false
+      "glossary.occurrences.tracking.active": false,
+      "recovery.owner": false
     });
   });
 

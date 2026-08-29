@@ -57,6 +57,7 @@ import {
   currentProjectRootPath,
   closeCurrentProject,
   defaultProjectWriteOwnershipManager,
+  registerCurrentProjectDocumentPath,
   projectAccessModeFromWriteOwnership,
   ProjectWriteLockOwnershipManager,
   projectWriteLockDirectoryPath,
@@ -758,6 +759,78 @@ describe("project file IPC foundation", () => {
     expect(
       rootEntries.filter((name) => name.includes(".pergamum-tmp-"))
     ).toEqual([]);
+  });
+
+  it("registerCurrentProjectDocumentPath makes a file created after open readable + saveable", async () => {
+    const projectFilePath = path.join(projectRootPath, "Late Add.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Late Add"
+    });
+    await created.close();
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "# Chapter\nbody\n",
+      "utf8"
+    );
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+    const saveHandler = registeredHandler(PROJECT_CHANNELS.saveProjectDocument);
+
+    // A recovered sibling created AFTER open is not yet a project document.
+    const recoveredAbsolute = path.join(
+      projectRootPath,
+      "chapter.recovered.md"
+    );
+    await fs.writeFile(recoveredAbsolute, "# Chapter\nrecovered body\n", "utf8");
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "chapter.recovered.md" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+
+    // A path outside the project root is rejected (null, no mutation).
+    expect(
+      registerCurrentProjectDocumentPath(
+        path.join(os.tmpdir(), "outside.recovered.md")
+      )
+    ).toBeNull();
+    // A non-Markdown path is rejected.
+    expect(
+      registerCurrentProjectDocumentPath(
+        path.join(projectRootPath, "notes.txt")
+      )
+    ).toBeNull();
+
+    // Registering the in-project recovered file returns its root-relative,
+    // forward-slash path and makes both read and save succeed.
+    expect(registerCurrentProjectDocumentPath(recoveredAbsolute)).toBe(
+      "chapter.recovered.md"
+    );
+
+    const readResult = (await readHandler(
+      { sender: {} },
+      { relativePath: "chapter.recovered.md" }
+    )) as { content: string };
+    expect(readResult.content).toBe("# Chapter\nrecovered body\n");
+
+    await expect(
+      saveHandler(
+        { sender: {} },
+        { relativePath: "chapter.recovered.md", content: "# Chapter\nedited\n" }
+      )
+    ).resolves.toEqual({ relativePath: "chapter.recovered.md" });
+    expect(readFileSync(recoveredAbsolute, "utf8")).toBe("# Chapter\nedited\n");
+
+    // Idempotent.
+    expect(registerCurrentProjectDocumentPath(recoveredAbsolute)).toBe(
+      "chapter.recovered.md"
+    );
   });
 
   it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {

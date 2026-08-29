@@ -14,6 +14,10 @@ export const commandPaletteCommandIds = {
   open: defineCommandId("workbench.commandPalette.open")
 } as const;
 
+export const recoveryCommandIds = {
+  showDocuments: defineCommandId("recovery.documents.show")
+} as const;
+
 export const assistCommandIds = {
   showLineEndingDistribution: defineCommandId(
     "assist.lineEndingDistribution.show"

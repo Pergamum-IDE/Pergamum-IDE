@@ -12,6 +12,7 @@ import { registerEditorCommands } from "../../src/renderer/editorCommands";
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
+import { registerRecoveryCommands } from "../../src/renderer/recovery/recoveryCommands";
 import { registerUtilityWindowCommands } from "../../src/renderer/utilityWindowCommands";
 import { registerWorkspaceCommands } from "../../src/renderer/workspaceCommands";
 
@@ -170,6 +171,14 @@ function buildCoreCommandRegistry(): CommandRegistry {
       insertParagraphIndentDescription: "Insert paragraph indents",
       removeParagraphIndent: "Remove Paragraph Indents",
       removeParagraphIndentDescription: "Remove paragraph indents"
+    }
+  );
+  registerRecoveryCommands(
+    registry,
+    { showRecoveryDocuments: () => undefined },
+    {
+      showRecoveryDocuments: "Recover Unsaved Changes",
+      showRecoveryDocumentsDescription: "Recover Unsaved Changes"
     }
   );
 

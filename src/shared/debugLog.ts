@@ -80,6 +80,13 @@ export const debugLogEventNames = [
   "recovery.document.persist.failed",
   "recovery.document.deleted",
   "recovery.document.delete.failed",
+  "recovery.candidates.dialog.shown",
+  "recovery.candidates.listed",
+  "recovery.document.restored",
+  "recovery.document.restore.failed",
+  "recovery.document.discarded",
+  "recovery.document.discard.failed",
+  "recovery.report.copied",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;

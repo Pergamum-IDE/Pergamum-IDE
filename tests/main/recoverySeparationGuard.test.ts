@@ -128,4 +128,65 @@ describe("#286 manuscript body stays only in Recovery.db payload_text", () => {
     );
     expect(sessionCoordinator).not.toMatch(/upsertDocument|payloadText/);
   });
+
+  // -----------------------------------------------------------------------
+  // #287: the Recovery candidate preview snippet is display-only. It is
+  // allowed in the Recovery dialog, but never in a log, the report, the
+  // Session Store, or the project DB.
+  // -----------------------------------------------------------------------
+
+  it("no Session / project-DB / debug-log module references previewSnippet or recoveryCandidate", () => {
+    for (const modulePath of MANUSCRIPT_FREE_MODULES) {
+      const source = read(modulePath);
+      expect(source, modulePath).not.toMatch(/previewSnippet/);
+      expect(source, modulePath).not.toMatch(/recoveryCandidate/i);
+      expect(source, modulePath).not.toMatch(/payload_text/);
+    }
+  });
+
+  it("the debug log detail allowlist has no snippet / preview key", () => {
+    const sanitizer = read("src/main/debugLogSanitizer.ts");
+    expect(sanitizer).not.toMatch(/case "previewSnippet"/);
+    expect(sanitizer).not.toMatch(/case "snippet"/);
+    expect(sanitizer).not.toMatch(/case "preview"/);
+    expect(sanitizer).not.toMatch(/case "report"/);
+  });
+
+  it("the Recovery candidate DTO carries booleans + basename, never raw paths or the raw body", () => {
+    const store = read("src/main/recoveryCandidateStore.ts");
+    expect(store).toMatch(/buildRecoveryPreviewSnippet/);
+    const toCandidate = store.slice(
+      store.indexOf("function toCandidate"),
+      store.indexOf("function listRecoveryCandidates")
+    );
+    // The DTO object literal must not assign a raw-path or raw-body FIELD
+    // (reading `row.file_path` to compute the `hasFilePath` boolean is fine).
+    expect(toCandidate).not.toMatch(/\bfilePath:\s*row\./);
+    expect(toCandidate).not.toMatch(/\bdocumentKey:\s*row\./);
+    expect(toCandidate).not.toMatch(/\bsourceUri:\s*row\./);
+    expect(toCandidate).not.toMatch(/payloadText:\s*row\.payload_text/);
+    expect(toCandidate).toMatch(/hasFilePath:\s*hasPath\(row\.file_path\)/);
+    expect(toCandidate).toMatch(/previewSnippet:\s*buildRecoveryPreviewSnippet/);
+  });
+
+  it("the Recovery report is body-free by construction", () => {
+    const report = read("src/main/recoveryReport.ts");
+    expect(report).not.toMatch(/payload_text|payloadText|previewSnippet/);
+    // Only booleans + the basename displayName describe the path.
+    expect(report).toMatch(/hasFilePath/);
+    expect(report).toMatch(/hasProjectFilePath/);
+    expect(report).not.toMatch(/candidate\.sourceUri|candidate\.documentKey/);
+  });
+
+  it("Recovery UI never uses a NotificationToast for a recovery alert", () => {
+    for (const modulePath of [
+      "src/renderer/recovery/RecoveryCandidateDialog.tsx",
+      "src/renderer/recovery/recoveryCommands.ts",
+      "src/renderer/recovery/recoveryCandidateListState.ts"
+    ]) {
+      expect(read(modulePath)).not.toMatch(
+        /notificationController|NotificationHost|\.notify\(/
+      );
+    }
+  });
 });
