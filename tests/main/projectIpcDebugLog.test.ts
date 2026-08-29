@@ -14,6 +14,14 @@ const electronMock = vi.hoisted(() => ({
   getVersion: vi.fn()
 }));
 
+const atomicWriteMock = vi.hoisted(() => ({
+  writeFileAtomic: vi.fn<(target: string, data: string) => Promise<void>>()
+}));
+
+vi.mock("../../src/main/atomicFileWrite", () => ({
+  writeFileAtomic: atomicWriteMock.writeFileAtomic
+}));
+
 vi.mock("electron", () => ({
   BrowserWindow: {
     fromWebContents: electronMock.fromWebContents
@@ -50,6 +58,8 @@ describe("project IPC debug logging", () => {
     electronMock.showOpenDialog.mockReset();
     electronMock.getPath.mockReset();
     electronMock.getVersion.mockReset().mockReturnValue("9.8.7-test");
+    atomicWriteMock.writeFileAtomic.mockReset();
+    atomicWriteMock.writeFileAtomic.mockResolvedValue(undefined);
     projectRootPath = await fs.mkdtemp(
       path.join(os.tmpdir(), "pergamum-project-ipc-debug-")
     );
@@ -255,29 +265,26 @@ describe("project IPC debug logging", () => {
       new Error(`EPERM: operation not permitted, open '${rawPath}'`),
       { code: "EPERM", path: rawPath }
     );
-    const writeFileSpy = vi.spyOn(fs, "writeFile").mockRejectedValueOnce(
-      writeError
+    // The atomic writer rejects (temp write / fsync / rename failure); it
+    // propagates the original fs error with its `.code`, so the save path
+    // still surfaces a sanitized, non-cleaning file I/O failure.
+    atomicWriteMock.writeFileAtomic.mockRejectedValueOnce(writeError);
+
+    const saveProjectDocument = registeredHandler(
+      PROJECT_CHANNELS.saveProjectDocument
     );
 
-    try {
-      const saveProjectDocument = registeredHandler(
-        PROJECT_CHANNELS.saveProjectDocument
-      );
-
-      await expectSanitizedFileIoRejection(
-        saveProjectDocument(
-          { sender: {} },
-          {
-            relativePath: "known.md",
-            content: manuscriptMarker
-          }
-        ) as Promise<unknown>,
-        "permissionDenied",
-        [rawPath, projectRootPath, manuscriptMarker]
-      );
-    } finally {
-      writeFileSpy.mockRestore();
-    }
+    await expectSanitizedFileIoRejection(
+      saveProjectDocument(
+        { sender: {} },
+        {
+          relativePath: "known.md",
+          content: manuscriptMarker
+        }
+      ) as Promise<unknown>,
+      "permissionDenied",
+      [rawPath, projectRootPath, manuscriptMarker]
+    );
 
     const documentSaveFailureLogs = logger.log.mock.calls
       .map(([input]) => input)

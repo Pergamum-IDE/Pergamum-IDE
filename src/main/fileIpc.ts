@@ -23,6 +23,7 @@ import {
   isPathEqualOrInsideDirectory,
   isProtectedPergamumDataFilePath
 } from "../shared/saveTargetPolicy";
+import { writeFileAtomic } from "./atomicFileWrite";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
   debugLogExtensionForPath,
@@ -311,7 +312,12 @@ async function writeStandaloneMarkdown(
 
   const metadata = markdownWriteMetadata(content);
 
-  await fs.writeFile(normalizedPath, content, "utf8");
+  // Crash-safe manuscript write: a temp sibling file is written + fsync'd,
+  // then atomically renamed over the target. An interrupted save can never
+  // leave the previous good file truncated / half-overwritten. Save success
+  // therefore means "the atomic replace completed"; any failure throws here
+  // and is surfaced as a non-cleaning file I/O error below.
+  await writeFileAtomic(normalizedPath, content);
 
   logger.log({
     level: "debug",
