@@ -30,7 +30,8 @@ import type { DebugLogRecoveryJournalMode } from "../shared/debugLog";
 import type { DebugLogger } from "./debugLogger";
 import {
   createRecoveryStoreLock,
-  type RecoveryStoreLock
+  type RecoveryStoreLock,
+  type RecoveryStoreLockStaleTakeoverInfo
 } from "./recoveryStoreLock";
 import {
   openRecoveryStoreDatabase,
@@ -38,6 +39,10 @@ import {
   type OpenRecoveryStoreDatabaseOptions,
   type RecoveryStoreDatabaseHandle
 } from "./recoveryStoreDatabase";
+import {
+  probeProcessLiveness as defaultProbeProcessLiveness,
+  type ProcessLiveness
+} from "./processLiveness";
 
 type RecoveryStoreLogger = Pick<DebugLogger, "log">;
 
@@ -65,6 +70,8 @@ export interface InitializeRecoveryStoreOptions {
     ) => Promise<RecoveryStoreDatabaseHandle>;
     readonly createStoreId?: () => string;
     readonly renameForArchive?: (from: string, to: string) => Promise<void>;
+    /** #293: liveness probe for the stale-`Recovery.lock` reclamation path. */
+    readonly probeProcessLiveness?: (pid: number) => ProcessLiveness;
   };
 }
 
@@ -110,6 +117,29 @@ export function recoveryStoreOwnerDatabase(): BetterSqliteDatabase | null {
 
 function normalizeJournalMode(value: string): DebugLogRecoveryJournalMode {
   return value.toLowerCase() === "wal" ? "wal" : "other";
+}
+
+/**
+ * #293: body-free / path-safe details for the stale-`Recovery.lock` events.
+ * The dead owner's `pid` / `appVersion` / `createdAt` come straight from the
+ * leftover `owner.json`; the archived directory name and every store path
+ * are deliberately NOT logged (a `pathKind: "appData"` marker stands in).
+ */
+function staleTakeoverLogDetails(
+  info: RecoveryStoreLockStaleTakeoverInfo,
+  instanceRunId: string,
+  startedAt: number,
+  result: "succeeded" | "failed" | "ignored"
+): Record<string, unknown> {
+  return {
+    pathKind: "appData",
+    result,
+    instanceRunId,
+    ownerPid: info.ownerPid,
+    ownerAppVersion: info.ownerAppVersion,
+    ownerCreatedAt: info.ownerCreatedAt,
+    durationMs: Math.max(0, Date.now() - startedAt)
+  };
 }
 
 function normalizeSynchronous(value: number): "full" | "other" {
@@ -171,17 +201,84 @@ export async function initializeRecoveryStore(
   }
 
   const lock = createLock(paths.lockDirectoryPath);
+  const probeProcessLiveness =
+    options.deps?.probeProcessLiveness ?? defaultProbeProcessLiveness;
   const acquireResult = await lock.acquire(
     createRecoveryStoreOwnerInfo({
       instanceRunId: options.instanceRunId,
       pid: pid(),
       appVersion: options.appVersion,
       now: now()
-    })
+    }),
+    { staleReclamation: { probeProcessLiveness, now } }
   );
+  const staleTakeover = acquireResult.staleTakeover;
 
-  if (acquireResult !== "acquired") {
-    // Another live instance owns the store. Say nothing, do nothing.
+  if (staleTakeover) {
+    if (staleTakeover.phase === "refused") {
+      // A lock exists but its recorded owner probes alive / unknown — this
+      // is a REFUSAL, not a stale lock. No archive, no reacquire, no DB.
+      logger.log({
+        level: "debug",
+        event: "recovery.store.lock.reclamation.refused",
+        details: {
+          ...staleTakeoverLogDetails(
+            staleTakeover,
+            options.instanceRunId,
+            startedAt,
+            "ignored"
+          ),
+          reason: "locked"
+        }
+      });
+    } else {
+      // Dead owner: announce the stale lock before acting on it. The
+      // outcome-specific event (archived / reacquire.succeeded / *.failed)
+      // follows below.
+      logger.log({
+        level: "debug",
+        event: "recovery.store.lock.stale.detected",
+        details: staleTakeoverLogDetails(
+          staleTakeover,
+          options.instanceRunId,
+          startedAt,
+          "ignored"
+        )
+      });
+    }
+  }
+
+  if (acquireResult.outcome !== "acquired") {
+    // #293: surface a failed stale-lock reclamation attempt (the plain
+    // "held by a live instance" and the missing/malformed-marker cases
+    // carry no `staleTakeover` / a `refused` phase and log only
+    // `recovery.store.init.skipped`, exactly as before).
+    if (staleTakeover?.phase === "archiveFailed") {
+      logger.log({
+        level: "error",
+        event: "recovery.store.lock.stale.archive.failed",
+        details: staleTakeoverLogDetails(
+          staleTakeover,
+          options.instanceRunId,
+          startedAt,
+          "failed"
+        )
+      });
+    } else if (staleTakeover?.phase === "reacquireFailed") {
+      logger.log({
+        level: "error",
+        event: "recovery.store.lock.reacquire.failed",
+        details: staleTakeoverLogDetails(
+          staleTakeover,
+          options.instanceRunId,
+          startedAt,
+          "failed"
+        )
+      });
+    }
+
+    // Another instance owns the store (or a stale lock could not be safely
+    // reclaimed). Say nothing to the user, do nothing.
     currentStatus = {
       kind: "nonOwner",
       recoveryDirectoryPath: paths.recoveryDirectoryPath,
@@ -203,6 +300,32 @@ export async function initializeRecoveryStore(
     });
 
     return currentStatus;
+  }
+
+  if (staleTakeover?.phase === "reacquired") {
+    // #293: we took over a lock left by a killed owner — the archived
+    // directory is kept for forensics; `Recovery.db` is opened, not
+    // recreated, further down.
+    logger.log({
+      level: "info",
+      event: "recovery.store.lock.stale.archived",
+      details: staleTakeoverLogDetails(
+        staleTakeover,
+        options.instanceRunId,
+        startedAt,
+        "succeeded"
+      )
+    });
+    logger.log({
+      level: "info",
+      event: "recovery.store.lock.reacquire.succeeded",
+      details: staleTakeoverLogDetails(
+        staleTakeover,
+        options.instanceRunId,
+        startedAt,
+        "succeeded"
+      )
+    });
   }
 
   currentLock = lock;

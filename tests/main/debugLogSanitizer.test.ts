@@ -514,4 +514,61 @@ describe("debug log details sanitizer", () => {
     expect(sanitized).not.toHaveProperty("stackSummary");
     expect(JSON.stringify(sanitized)).not.toContain("secret.md");
   });
+
+  it("keeps the #293 stale-lock owner diagnostics only in safe scalar form", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        pathKind: "appData",
+        result: "succeeded",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: "2026-08-29T08:06:16.724Z"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      pathKind: "appData",
+      result: "succeeded",
+      ownerPid: 62368,
+      ownerAppVersion: "0.60.0",
+      ownerCreatedAt: "2026-08-29T08:06:16.724Z"
+    });
+  });
+
+  it("silently omits #293 owner diagnostics that are malformed or path-like", () => {
+    // A recognized key with a bad value is dropped WITHOUT surfacing its
+    // name or value (and without counting as an unknown key).
+    const details = sanitizeDebugLogDetails(
+      {
+        ownerPid: 0,
+        ownerAppVersion: "C:\\Users\\name\\Recovery\\Recovery.lock",
+        ownerCreatedAt: "not-a-timestamp"
+      },
+      context()
+    );
+
+    expect(details).toBeUndefined();
+
+    // Alongside a valid key, only the good value survives.
+    const mixed = sanitizeDebugLogDetails(
+      {
+        pathKind: "appData",
+        ownerPid: -5,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: `2026-08-29T08:06:16.724Z${" ".repeat(64)}`
+      },
+      context()
+    );
+    expect(mixed).toEqual({ pathKind: "appData", ownerAppVersion: "0.60.0" });
+    expect(JSON.stringify(mixed)).not.toContain("Recovery.lock");
+    expect(mixed).not.toHaveProperty("ownerPid");
+    expect(mixed).not.toHaveProperty("ownerCreatedAt");
+  });
+
+  it("rejects a non-integer ownerPid", () => {
+    expect(
+      sanitizeDebugLogDetails({ pathKind: "appData", ownerPid: 1.5 }, context())
+    ).toEqual({ pathKind: "appData" });
+  });
 });

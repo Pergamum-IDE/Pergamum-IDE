@@ -376,6 +376,42 @@ describe("debug log catalog", () => {
     );
   });
 
+  it("includes the #293 stale Recovery.lock recovery events, none implying a body/path leak", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "recovery.store.lock.reclamation.refused",
+        "recovery.store.lock.stale.detected",
+        "recovery.store.lock.stale.archived",
+        "recovery.store.lock.stale.archive.failed",
+        "recovery.store.lock.reacquire.succeeded",
+        "recovery.store.lock.reacquire.failed"
+      ])
+    );
+    expect(
+      debugLogEventNames.filter((name) => name.includes("payload"))
+    ).toEqual([]);
+    expect(debugLogEventNames).not.toContain("recovery.store.lock.path");
+
+    type HasOwnerPid = "ownerPid" extends keyof DebugLogDetails ? true : false;
+    type HasOwnerAppVersion = "ownerAppVersion" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasOwnerCreatedAt = "ownerCreatedAt" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasOwnerPid: HasOwnerPid = true;
+    const hasOwnerAppVersion: HasOwnerAppVersion = true;
+    const hasOwnerCreatedAt: HasOwnerCreatedAt = true;
+    expect(hasOwnerPid).toBe(true);
+    expect(hasOwnerAppVersion).toBe(true);
+    expect(hasOwnerCreatedAt).toBe(true);
+
+    // No raw-path-shaped detail key was added.
+    type HasOwnerPath = "ownerPath" extends keyof DebugLogDetails ? true : false;
+    const hasOwnerPath: HasOwnerPath = false;
+    expect(hasOwnerPath).toBe(false);
+  });
+
   it("includes the Recovery document payload persistence events (Phase 6-4-3)", () => {
     expect(debugLogEventNames).toEqual(
       expect.arrayContaining([
