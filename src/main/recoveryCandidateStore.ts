@@ -7,6 +7,16 @@
  * display-only `previewSnippet`, and paths are reduced to
  * `hasFilePath` / `hasProjectFilePath` booleans. Restore reads the raw
  * path through `getRecoveryRestoreRows`, which stays main-side.
+ *
+ * #288 follow-up: Recovery is for dirty working copies left behind by a
+ * *previous* run / abnormal termination — never a UI for the current
+ * process's own live dirty documents. Every read here filters out rows
+ * whose `origin_instance_run_id` equals the current app `instanceRunId`,
+ * so a clean run that has merely persisted its own Recovery backups shows
+ * nothing. Those current-run rows stay in `Recovery.db`; if this process
+ * is later hard-killed they become visible to the next run (which has a
+ * different `instanceRunId`). This filter is enforced main-side, not by
+ * renderer hiding.
  */
 
 import type { Database as BetterSqliteDatabase } from "better-sqlite3";
@@ -85,9 +95,15 @@ function toCandidate(row: DocumentRow): RecoveryCandidate {
   };
 }
 
-/** Every Recovery row as a candidate, most-recently-updated first. */
+/**
+ * Every *previous-run* Recovery row as a candidate, most-recently-updated
+ * first. Rows whose `origin_instance_run_id` equals `currentInstanceRunId`
+ * (this process's own live dirty backups) are excluded — see the file
+ * header.
+ */
 export function listRecoveryCandidates(
-  database: BetterSqliteDatabase
+  database: BetterSqliteDatabase,
+  currentInstanceRunId: string
 ): RecoveryCandidate[] {
   const rows = database
     .prepare(
@@ -95,30 +111,59 @@ export function listRecoveryCandidates(
               project_file_path, file_path, document_encoding, document_lineend,
               payload_text, updated_at
        FROM documents
+       WHERE origin_instance_run_id <> @currentInstanceRunId
        ORDER BY updated_at DESC, id DESC`
     )
-    .all() as DocumentRow[];
+    .all({ currentInstanceRunId }) as DocumentRow[];
 
   return rows.map(toCandidate);
+}
+
+/**
+ * `true` when at least one previous-run Recovery row exists (i.e. there is
+ * something the Recovery dialog could actually show). Drives the
+ * `recovery.hasRecoverableCandidates` command context key. Current-run
+ * rows never count.
+ */
+export function hasRecoverableCandidates(
+  database: BetterSqliteDatabase,
+  currentInstanceRunId: string
+): boolean {
+  const row = database
+    .prepare(
+      `SELECT 1 FROM documents
+       WHERE origin_instance_run_id <> @currentInstanceRunId
+       LIMIT 1`
+    )
+    .get({ currentInstanceRunId });
+
+  return row !== undefined;
 }
 
 /**
  * The raw rows (including `file_path` and `payload_text`) needed to write a
  * restore. Returned in the same order as `recoveryIds`, skipping ids with
  * no matching row.
+ *
+ * #288 follow-up: a current-run row (`origin_instance_run_id ===
+ * currentInstanceRunId`) is never returned even if its id is passed
+ * explicitly, so a hidden live dirty document can't be restored through
+ * the normal dialog flow.
  */
 export function getRecoveryRestoreRows(
   database: BetterSqliteDatabase,
-  recoveryIds: readonly string[]
+  recoveryIds: readonly string[],
+  currentInstanceRunId: string
 ): RecoveryRestoreRow[] {
   const select = database.prepare(
     `SELECT id, document_type, display_name, file_path, payload_text
-     FROM documents WHERE id = ?`
+     FROM documents
+     WHERE id = @id AND origin_instance_run_id <> @currentInstanceRunId`
   );
   const rows: RecoveryRestoreRow[] = [];
 
   for (const recoveryId of recoveryIds) {
-    const row = select.get(recoveryId) as
+    const row = select.get({ id: recoveryId, currentInstanceRunId }) as
       | {
           id: string;
           document_type: string;

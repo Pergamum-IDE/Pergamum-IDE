@@ -28,6 +28,7 @@ import type {
   QuitApplicationRequest,
   QuitApplicationResult
 } from "./lifecycle";
+import type { Language } from "./i18n";
 import type { AppPlatform } from "./platform";
 import type { RecoveryStoreStatus } from "./recovery";
 import type {
@@ -40,6 +41,7 @@ import type {
   RecoveryDiscardResult,
   RecoveryFinalizeRequest,
   RecoveryFinalizeResult,
+  RecoveryHasRecoverableResult,
   RecoveryReportResult,
   RecoveryRestoreRequest,
   RecoveryRestoreResult
@@ -60,6 +62,7 @@ export type {
   RecoveryCandidateListResult,
   RecoveryDiscardResult,
   RecoveryFinalizeResult,
+  RecoveryHasRecoverableResult,
   RecoveryReportResult,
   RecoveryRestoreItem,
   RecoveryRestoreItemResult,
@@ -188,7 +191,10 @@ export const RECOVERY_CHANNELS = {
    *  destructive confirmation. */
   discardCandidates: "recovery:discardCandidates",
   /** Phase 6-4-4: build a body-free Recovery report for the clipboard. */
-  getReport: "recovery:getReport"
+  getReport: "recovery:getReport",
+  /** #288 follow-up: whether any previous-run Recovery candidates exist
+   *  (drives the `recovery.hasRecoverableCandidates` command context key). */
+  hasRecoverableCandidates: "recovery:hasRecoverableCandidates"
 } as const;
 
 export const GLOSSARY_CHANNELS = {
@@ -606,8 +612,12 @@ export interface PergamumApi {
     discardCandidates: (
       request: RecoveryDiscardRequest
     ) => Promise<RecoveryDiscardResult>;
-    /** Phase 6-4-4: body-free Recovery report text. */
-    getReport: () => Promise<RecoveryReportResult>;
+    /** Phase 6-4-4: body-free Recovery report text. #288 follow-up: the
+     *  heading/disclaimer are emitted in the given UI language only. */
+    getReport: (language: Language) => Promise<RecoveryReportResult>;
+    /** #288 follow-up: whether at least one previous-run Recovery candidate
+     *  exists. Current-run dirty backups never count. */
+    hasRecoverableCandidates: () => Promise<RecoveryHasRecoverableResult>;
   };
   glossary: {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;

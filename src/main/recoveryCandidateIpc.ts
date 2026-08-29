@@ -18,6 +18,7 @@
 import type { Database as BetterSqliteDatabase } from "better-sqlite3";
 import type { IpcMain } from "electron";
 import { RECOVERY_CHANNELS } from "../shared/api";
+import { defaultLanguage, isLanguage } from "../shared/i18n";
 import type { RecoveryStoreStatus } from "../shared/recovery";
 import {
   parseRecoveryDiscardRequest,
@@ -26,6 +27,7 @@ import {
   type RecoveryCandidateListResult,
   type RecoveryDiscardResult,
   type RecoveryFinalizeResult,
+  type RecoveryHasRecoverableResult,
   type RecoveryReportResult,
   type RecoveryRestoreItemResult,
   type RecoveryRestoreResult
@@ -34,6 +36,7 @@ import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
   deleteRecoveryRowsById,
   getRecoveryRestoreRows,
+  hasRecoverableCandidates,
   listRecoveryCandidates
 } from "./recoveryCandidateStore";
 import { buildRecoveryReport } from "./recoveryReport";
@@ -104,7 +107,10 @@ export function registerRecoveryCandidateIpc(
         return { ok: false, skipped: owner.skipped };
       }
 
-      const candidates = listRecoveryCandidates(owner.database);
+      const candidates = listRecoveryCandidates(
+        owner.database,
+        deps.instanceRunId
+      );
 
       logger.log({
         level: "debug",
@@ -116,6 +122,25 @@ export function registerRecoveryCandidateIpc(
       });
 
       return { ok: true, candidates };
+    }
+  );
+
+  ipcMain.handle(
+    RECOVERY_CHANNELS.hasRecoverableCandidates,
+    (): RecoveryHasRecoverableResult => {
+      const owner = resolveRecoveryOwner(deps);
+
+      if (owner.kind === "skip") {
+        return { ok: false, skipped: owner.skipped };
+      }
+
+      return {
+        ok: true,
+        hasRecoverable: hasRecoverableCandidates(
+          owner.database,
+          deps.instanceRunId
+        )
+      };
     }
   );
 
@@ -139,7 +164,8 @@ export function registerRecoveryCandidateIpc(
       );
       const rows = getRecoveryRestoreRows(
         owner.database,
-        request.items.map((item) => item.recoveryId)
+        request.items.map((item) => item.recoveryId),
+        deps.instanceRunId
       );
       const results: RecoveryRestoreItemResult[] = [];
 
@@ -287,7 +313,7 @@ export function registerRecoveryCandidateIpc(
 
   ipcMain.handle(
     RECOVERY_CHANNELS.getReport,
-    (): RecoveryReportResult => {
+    (_event, rawLanguage: unknown): RecoveryReportResult => {
       const owner = resolveRecoveryOwner(deps);
 
       if (owner.kind === "skip") {
@@ -298,7 +324,11 @@ export function registerRecoveryCandidateIpc(
         statusKind: owner.status.kind,
         appVersion: deps.appVersion,
         generatedAt: now().toISOString(),
-        candidates: listRecoveryCandidates(owner.database)
+        candidates: listRecoveryCandidates(
+          owner.database,
+          deps.instanceRunId
+        ),
+        language: isLanguage(rawLanguage) ? rawLanguage : defaultLanguage
       });
 
       return { ok: true, report };

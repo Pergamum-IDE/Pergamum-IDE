@@ -7,12 +7,16 @@ import {
 } from "react";
 import type { Translate, TranslationKey } from "../../shared/i18n";
 import type { RecoveryCandidate } from "../../shared/recoveryCandidate";
+import checkSquareIconUrl from "../../../assets/icons/feather/dialog/check-square.svg?url";
+import clipboardIconUrl from "../../../assets/icons/feather/dialog/clipboard.svg?url";
+import xCircleIconUrl from "../../../assets/icons/feather/dialog/x-circle.svg?url";
 import {
   performClipboardCopy,
   type ClipboardAdapter
 } from "../dialog/clipboardAdapter";
 import { InfoDialog } from "../dialog/InfoDialog";
 import {
+  recoveryUpdatedAtDisplayDate,
   isRecoverySortKey,
   nextRecoverySortState,
   pruneRecoverySelection,
@@ -118,8 +122,12 @@ export function RecoveryCandidateDialog({
     []
   );
 
+  // Restore is gated on an actual selection first — not merely on candidates
+  // existing. Zero selected rows must disable the button whether or not any
+  // candidates are present; `busy` disables it while a restore is in flight.
   const hasSelection = selectedIds.size > 0;
-  const restoreDisabled = busy || !hasSelection || candidates.length === 0;
+  const canRestore = !busy && hasSelection && candidates.length > 0;
+  const restoreDisabled = !canRestore;
 
   function showCopyFeedback(next: Exclude<CopyState, "idle">): void {
     if (copyTimerRef.current !== null) {
@@ -152,7 +160,10 @@ export function RecoveryCandidateDialog({
   }
 
   async function handleRestore(): Promise<void> {
-    if (restoreDisabled) {
+    // The primary guard is the selection itself: never restore with an empty
+    // selection, even if the button's disabled state has regressed, and never
+    // pass an empty id list downstream (which must not restore "everything").
+    if (busy || selectedIds.size === 0 || candidates.length === 0) {
       return;
     }
     setBusy(true);
@@ -190,6 +201,12 @@ export function RecoveryCandidateDialog({
       : copyState === "failed"
         ? translate("dialog.recovery.reportCopyFailed")
         : null;
+  const copyReportIconUrl =
+    copyState === "copied"
+      ? checkSquareIconUrl
+      : copyState === "failed"
+        ? xCircleIconUrl
+        : clipboardIconUrl;
   const copyToastStyle = {
     "--about-dialog-copy-feedback-animation-ms": `${COPY_FEEDBACK_MS}ms`
   } as CSSProperties;
@@ -200,17 +217,24 @@ export function RecoveryCandidateDialog({
       opener={opener}
       onClose={onClose}
       footer={
-        <div className="aboutDialogFooterContent">
+        <div className="aboutDialogFooterContent recoveryCandidateDialogFooterContent">
           <div className="aboutDialogTechnicalInfoControl">
             <button
               type="button"
-              className="appDialogButton recoveryCandidateDialogReportButton"
+              className="appDialogButton aboutDialogCopyTechnicalButton recoveryCandidateDialogReportButton"
+              aria-label={translate("dialog.recovery.copyReport")}
+              title={translate("dialog.recovery.copyReport")}
               disabled={busy}
               onClick={() => {
                 void handleCopyReport();
               }}
             >
-              {translate("dialog.recovery.copyReport")}
+              <img
+                className="aboutDialogCopyTechnicalIcon"
+                src={copyReportIconUrl}
+                alt=""
+                aria-hidden="true"
+              />
             </button>
             {copyFeedback ? (
               <span
@@ -309,7 +333,7 @@ export function RecoveryCandidateDialog({
                       />
                     </td>
                     <td>{candidate.displayName}</td>
-                    <td>{candidate.updatedAt}</td>
+                    <td>{recoveryUpdatedAtDisplayDate(candidate.updatedAt)}</td>
                     <td className="recoveryCandidateDialogNumber">
                       {candidate.characterCount}
                     </td>

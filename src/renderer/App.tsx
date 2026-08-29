@@ -809,6 +809,11 @@ export function App(): JSX.Element {
         // flush, or a non-owner / unavailable skip. Body-free: no key,
         // path, or manuscript text.
         setStatus({ key: "status.recoveryBackupSaved" });
+        // #288 follow-up: re-check candidate availability. Current-run
+        // backups are excluded main-side, so this stays false unless a
+        // previous-run row also exists — the command must not light up
+        // just because we persisted our own live dirty document.
+        void recoveryHasRecoverableRefreshRef.current();
       }
     });
   }
@@ -821,6 +826,17 @@ export function App(): JSX.Element {
   const [recoveryStoreStatusKind, setRecoveryStoreStatusKind] = useState<
     "owner" | "nonOwner" | "unavailable" | "unknown"
   >("unknown");
+  // #288 follow-up: whether at least one *previous-run* Recovery candidate
+  // exists (a row whose origin instance run id differs from this run's).
+  // `recovery.owner` alone is true for a clean run too, so the
+  // "Recover Unsaved Changes..." command additionally gates on this — it
+  // must never be enabled merely because this run persisted its own live
+  // dirty-document backups. Refreshed after store init, candidate
+  // listing, restore/finalize, and each Recovery backup persistence.
+  const [
+    recoveryHasRecoverableCandidates,
+    setRecoveryHasRecoverableCandidates
+  ] = useState(false);
   // #287: the Recovery candidate dialog's current data (null = closed).
   const [recoveryCandidateDialogData, setRecoveryCandidateDialogData] =
     useState<readonly RecoveryCandidate[] | null>(null);
@@ -828,6 +844,12 @@ export function App(): JSX.Element {
   const isRecoveryCandidateDialogPendingOrOpenRef = useRef(false);
   const recoveryAutoShowAttemptedRef = useRef(false);
   const showRecoveryDocumentsCommandRef = useRef<() => void>(() => undefined);
+  // #288 follow-up: latest "re-check previous-run candidate availability"
+  // impl, so the once-created Recovery payload coordinator's onPersisted
+  // callback can trigger it without capturing a stale closure.
+  const recoveryHasRecoverableRefreshRef = useRef<() => Promise<void>>(
+    () => Promise.resolve()
+  );
 
   // #272 (review Blocker 3): the outgoing Markdown editor's final View State,
   // captured by MarkdownEditor at the active-editor-switch / unmount
@@ -1287,6 +1309,10 @@ export function App(): JSX.Element {
         if (isOwner) {
           feedRecoveryDirtyDocumentsRef.current();
         }
+        // #288 follow-up: seed the `recovery.hasRecoverableCandidates`
+        // command context key from the store as soon as ownership is
+        // known (a non-owner resolves it to false).
+        void recoveryHasRecoverableRefreshRef.current();
       })
       .catch(() => {
         setRecoveryStoreStatusKind("unavailable");
@@ -1514,7 +1540,8 @@ export function App(): JSX.Element {
         activeEditorSaveBlockedByReadOnlyProjectRootForUi,
         occurrenceTrackingActive:
           glossaryOccurrenceTrackingState.kind === "active",
-        recoveryOwner: recoveryStoreStatusKind === "owner"
+        recoveryOwner: recoveryStoreStatusKind === "owner",
+        recoveryHasRecoverableCandidates
       }),
     [
       project,
@@ -1527,7 +1554,8 @@ export function App(): JSX.Element {
       activeEditorSaveBlockedByReadOnlyProjectRootForUi,
       isDirty,
       glossaryOccurrenceTrackingState.kind,
-      recoveryStoreStatusKind
+      recoveryStoreStatusKind,
+      recoveryHasRecoverableCandidates
     ]
   );
   commandContextRef.current = commandContext;
@@ -2298,6 +2326,25 @@ export function App(): JSX.Element {
   // Discard, or finalize after a successful restore.
   // -------------------------------------------------------------------------
 
+  // #288 follow-up: re-query whether any previous-run Recovery candidates
+  // exist and publish it to the `recovery.hasRecoverableCandidates` command
+  // context key. A non-owner / unavailable instance (or any failure)
+  // resolves to `false`. Current-run dirty backups are filtered out
+  // main-side, so persisting our own live edits never flips this true.
+  async function refreshRecoveryHasRecoverableCandidates(): Promise<void> {
+    try {
+      const result =
+        await window.pergamum.recovery.hasRecoverableCandidates();
+      setRecoveryHasRecoverableCandidates(
+        result.ok ? result.hasRecoverable : false
+      );
+    } catch {
+      setRecoveryHasRecoverableCandidates(false);
+    }
+  }
+  recoveryHasRecoverableRefreshRef.current =
+    refreshRecoveryHasRecoverableCandidates;
+
   async function openRecoveryCandidateDialog(): Promise<void> {
     if (
       isRecoveryCandidateDialogPendingOrOpenRef.current ||
@@ -2321,6 +2368,9 @@ export function App(): JSX.Element {
       }
 
       setRecoveryCandidateDialogData(result.candidates);
+      // The list is already previous-run-only (main-side filter), so its
+      // emptiness is exactly the availability signal.
+      setRecoveryHasRecoverableCandidates(result.candidates.length > 0);
       logRendererDebugEvent({
         level: "debug",
         event: "recovery.candidates.dialog.shown",
@@ -2350,6 +2400,7 @@ export function App(): JSX.Element {
       const result = await window.pergamum.recovery.listCandidates();
       if (result.ok) {
         setRecoveryCandidateDialogData(result.candidates);
+        setRecoveryHasRecoverableCandidates(result.candidates.length > 0);
       }
     } catch {
       // Keep the current list on a transient failure.
@@ -2480,6 +2531,10 @@ export function App(): JSX.Element {
     }
 
     await refreshRecoveryCandidateDialog();
+    // #288 follow-up: finalize deletes the restored previous-run rows, so
+    // the command may need to go disabled even if the dialog was closed
+    // mid-flow.
+    await refreshRecoveryHasRecoverableCandidates();
 
     if (openedIds.length > 0) {
       setStatus({
@@ -2493,7 +2548,7 @@ export function App(): JSX.Element {
 
   async function getRecoveryReportTextForDialog(): Promise<string | null> {
     try {
-      const result = await window.pergamum.recovery.getReport();
+      const result = await window.pergamum.recovery.getReport(displayLanguage);
       return result.ok ? result.report : null;
     } catch {
       return null;
@@ -5158,7 +5213,13 @@ export function App(): JSX.Element {
     void window.pergamum.recovery
       .listCandidates()
       .then((result) => {
-        if (result.ok && result.candidates.length > 0) {
+        if (!result.ok) {
+          return;
+        }
+        // #288 follow-up: the list is previous-run-only, so a non-empty
+        // list is exactly "there is something to recover".
+        setRecoveryHasRecoverableCandidates(result.candidates.length > 0);
+        if (result.candidates.length > 0) {
           void openRecoveryCandidateDialog();
         }
       })

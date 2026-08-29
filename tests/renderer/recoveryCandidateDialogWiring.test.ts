@@ -33,6 +33,70 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     expect(dialogFile).not.toMatch(/DialogController|dialogController/);
   });
 
+  it("gates the show-documents command on both recovery.owner and previous-run candidate availability (#288)", () => {
+    const recoveryCommandsSource = readFileSync(
+      "src/renderer/recovery/recoveryCommands.ts",
+      "utf8"
+    );
+    // The command's `when` requires BOTH keys — owner alone is true for a
+    // clean run and would surface the current run's own dirty backups.
+    expect(recoveryCommandsSource).toMatch(
+      /allOf:\s*\[[^\]]*"recovery\.owner"[^\]]*"recovery\.hasRecoverableCandidates"/s
+    );
+
+    // App publishes the availability into the command context snapshot…
+    expect(appSource).toMatch(
+      /buildCommandContextSnapshot\(\{[\s\S]*recoveryHasRecoverableCandidates[\s\S]*\}\)/
+    );
+    expect(appSource).toContain(
+      "recoveryOwner: recoveryStoreStatusKind === \"owner\","
+    );
+    // …fed from a dedicated main-side check (not renderer-side hiding).
+    expect(appSource).toContain(
+      "window.pergamum.recovery.hasRecoverableCandidates()"
+    );
+  });
+
+  it("refreshes previous-run candidate availability after store init, listing, restore, and each Recovery backup persist (#288)", () => {
+    // A once-created coordinator callback triggers the latest refresh via a ref.
+    expect(appSource).toContain(
+      "void recoveryHasRecoverableRefreshRef.current();"
+    );
+    const onPersisted = appSource.slice(
+      appSource.indexOf("onPersisted: () => {"),
+      appSource.indexOf(
+        "const recoveryPayloadCoordinator =",
+        appSource.indexOf("onPersisted: () => {")
+      )
+    );
+    expect(onPersisted).toContain('setStatus({ key: "status.recoveryBackupSaved" });');
+    expect(onPersisted).toContain(
+      "void recoveryHasRecoverableRefreshRef.current();"
+    );
+
+    // Store-status resolution seeds it; restore/finalize re-checks it.
+    const storeStatusStart = appSource.indexOf(".getStoreStatus()");
+    const storeStatusEffect = appSource.slice(
+      storeStatusStart,
+      appSource.indexOf(".catch(() => {", storeStatusStart)
+    );
+    expect(storeStatusEffect).toContain(
+      "void recoveryHasRecoverableRefreshRef.current();"
+    );
+    const restoreFn = appSource.slice(
+      appSource.indexOf("async function handleRecoveryRestoreSelected"),
+      appSource.indexOf("async function getRecoveryReportTextForDialog")
+    );
+    expect(restoreFn).toContain(
+      "await refreshRecoveryHasRecoverableCandidates();"
+    );
+
+    // Listing the (already previous-run-only) candidates keeps the key in sync.
+    expect(appSource).toContain(
+      "setRecoveryHasRecoverableCandidates(result.candidates.length > 0)"
+    );
+  });
+
   it("gates the startup auto-show on owner + settled cold start + no open modal, once per process", () => {
     const effect = appSource.slice(
       appSource.indexOf("one-shot startup auto-show of the Recovery candidate"),

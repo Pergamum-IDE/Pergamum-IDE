@@ -57,6 +57,17 @@ export type RecoveryCandidateListResult =
   | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
 
 /**
+ * #288 follow-up: whether at least one *previous-run* Recovery row exists
+ * (a row whose `origin_instance_run_id` differs from this app instance's
+ * `instanceRunId`). Drives the `recovery.hasRecoverableCandidates` command
+ * context key. A non-owner / unavailable instance resolves to
+ * `{ ok: false, skipped }`, which the renderer treats as "no candidates".
+ */
+export type RecoveryHasRecoverableResult =
+  | { readonly ok: true; readonly hasRecoverable: boolean }
+  | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
+
+/**
  * One restore request item.
  *
  * `targetPath` is set by the renderer when the candidate has no usable
