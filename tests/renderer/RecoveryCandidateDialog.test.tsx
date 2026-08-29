@@ -57,6 +57,8 @@ function baseProps() {
     opener: null,
     onClose: vi.fn(),
     onRestoreSelected: vi.fn(async () => undefined),
+    onDiscardSelected: vi.fn(async () => undefined),
+    onDiscardAll: vi.fn(async () => undefined),
     getReportText: vi.fn(
       async (): Promise<string | null> => "report-text"
     ),
@@ -65,7 +67,7 @@ function baseProps() {
 }
 
 describe("RecoveryCandidateDialog markup", () => {
-  it("puts Copy Recovery Report in the lower-left footer, with only Restore / Close on the right", () => {
+  it("puts Copy Recovery Report in the lower-left footer, with recovery actions on the right", () => {
     const markup = renderToStaticMarkup(
       <RecoveryCandidateDialog {...baseProps()} />
     );
@@ -73,9 +75,10 @@ describe("RecoveryCandidateDialog markup", () => {
     expect(markup).toMatch(
       /aboutDialogTechnicalInfoControl[^]*復旧レポートをコピー/
     );
-    // The lower-right action stack is Restore then Close — no discard.
+    // The lower-right action stack contains explicit discard actions,
+    // restore, then Close.
     expect(markup).toMatch(
-      /recoveryCandidateDialogActions[^]*選択したものを復元[^]*閉じる/
+      /recoveryCandidateDialogActions[^]*選択した復旧候補を破棄\.\.\.[^]*すべての復旧候補を破棄\.\.\.[^]*選択したものを復元[^]*後で決める/
     );
     // The report button is NOT inside the action stack.
     const actions = markup.slice(markup.indexOf("recoveryCandidateDialogActions"));
@@ -137,12 +140,82 @@ describe("RecoveryCandidateDialog markup", () => {
     expect(markup).not.toContain("2026-08-29T12:45:00.000Z");
   });
 
-  it("renders no destructive discard button", () => {
+  it("renders explicit destructive discard buttons", () => {
     const markup = renderToStaticMarkup(
       <RecoveryCandidateDialog {...baseProps()} />
     );
-    expect(markup).not.toContain("選択したものを破棄");
-    expect(markup).not.toContain("appDialogButton-choice-destructive");
+    expect(markup).toContain("選択した復旧候補を破棄...");
+    expect(markup).toContain("すべての復旧候補を破棄...");
+    expect(markup).toContain("appDialogButton-choice-destructive");
+  });
+
+  it("wires the ionicons hourglass + trash assets as bundled imports, not inline SVG strings", () => {
+    const source = readFileSync(
+      "src/renderer/recovery/RecoveryCandidateDialog.tsx",
+      "utf8"
+    );
+    expect(source).toContain(
+      'assets/icons/ionicons/dialog/hourglass-outline.svg?url'
+    );
+    expect(source).toContain(
+      'assets/icons/ionicons/dialog/trash-bin-outline.svg?url'
+    );
+    expect(source).not.toContain("reload-outline.svg?url");
+    // No hand-rolled inline SVG markup in the component.
+    expect(source).not.toMatch(/<svg[\s>]/);
+  });
+
+  it("omits targetless discard icons and shows a pending icon for targetful discard", () => {
+    const markup = renderToStaticMarkup(
+      <RecoveryCandidateDialog {...baseProps()} />
+    );
+    const discardButtons = [
+      ...markup.matchAll(
+        /<button[^>]*recoveryDiscardButton[^>]*>([\s\S]*?)<\/button>/g
+      )
+    ];
+    expect(discardButtons).toHaveLength(2);
+    const selectedDiscard = discardButtons.find(([, inner]) =>
+      inner.includes("選択した復旧候補を破棄...")
+    )![1];
+    const discardAll = discardButtons.find(([, inner]) =>
+      inner.includes("すべての復旧候補を破棄...")
+    )![1];
+
+    expect(selectedDiscard).not.toContain("recoveryDiscardButtonIcon");
+    // The all-discard icon is the button's first child (leading edge) and is
+    // decorative; the visible label alone conveys the action.
+    expect(discardAll).toMatch(
+      /^<span class="recoveryDiscardButtonIcon"[^>]*aria-hidden="true"[^>]*><\/span>/
+    );
+    expect(discardAll).toContain("--recovery-discard-button-icon");
+    expect(discardAll).toContain("data:image/svg+xml");
+    expect(discardAll).not.toContain("<img");
+    expect(discardAll).not.toContain("alt=");
+    expect(markup).toContain("<span>選択した復旧候補を破棄...</span>");
+    expect(markup).toContain("<span>すべての復旧候補を破棄...</span>");
+  });
+
+  it("uses a currentColor CSS mask for discard icons and does not render reload/spinner UI", () => {
+    const markup = renderToStaticMarkup(
+      <RecoveryCandidateDialog {...baseProps()} />
+    );
+    expect(markup).not.toContain("recoveryDiscardPendingIcon");
+    expect(markup).not.toContain("reload-outline");
+
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    const start = css.indexOf(".recoveryDiscardButtonIcon {");
+    expect(start).toBeGreaterThan(-1);
+    const block = css.slice(start, css.indexOf("}", start));
+    expect(block).toContain("background-color: currentColor");
+    expect(block).toContain(
+      "mask: var(--recovery-discard-button-icon) center / contain no-repeat"
+    );
+    expect(block).toContain(
+      "-webkit-mask: var(--recovery-discard-button-icon) center / contain no-repeat"
+    );
+    expect(css).not.toContain("recoveryDiscardPendingSpin");
+    expect(css).not.toContain("rotate(360deg)");
   });
 
   it("gives disabled dialog buttons a visible disabled style", () => {
@@ -176,6 +249,26 @@ describe("RecoveryCandidateDialog markup", () => {
     );
     expect(markup).toContain("復元できる未保存の編集内容はありません。");
     expect(markup).not.toContain('role="grid"');
+  });
+
+  it("uses Decide Later while candidates remain and Close when there are none", () => {
+    const withCandidates = renderToStaticMarkup(
+      <RecoveryCandidateDialog {...baseProps()} />
+    );
+    expect(withCandidates).toContain("後で決める");
+    expect(withCandidates).not.toMatch(/<button[^>]*>閉じる<\/button>/);
+
+    const emptyJa = renderToStaticMarkup(
+      <RecoveryCandidateDialog {...baseProps()} candidates={[]} />
+    );
+    expect(emptyJa).toMatch(/<button[^>]*>閉じる<\/button>/);
+    expect(emptyJa).not.toContain("後で決める");
+
+    const withCandidatesEn = renderToStaticMarkup(
+      <RecoveryCandidateDialog {...baseProps()} translate={translateEn} />
+    );
+    expect(withCandidatesEn).toContain("Decide Later");
+    expect(withCandidatesEn).not.toMatch(/<button[^>]*>Close<\/button>/);
   });
 });
 
@@ -211,10 +304,29 @@ describe("RecoveryCandidateDialog behavior", () => {
       "thead input[type=checkbox]"
     )!;
   }
+  function candidateRows(): HTMLTableRowElement[] {
+    return [...container.querySelectorAll<HTMLTableRowElement>("tbody tr")];
+  }
   function footerButton(label: string): HTMLButtonElement {
     return [...container.querySelectorAll<HTMLButtonElement>("button")].find(
       (b) => b.textContent?.trim() === label
     )!;
+  }
+  function discardButtonIcon(button: HTMLButtonElement): HTMLElement | null {
+    return button.querySelector<HTMLElement>(".recoveryDiscardButtonIcon");
+  }
+  function requireDiscardButtonIcon(button: HTMLButtonElement): HTMLElement {
+    const icon = discardButtonIcon(button);
+    expect(icon).not.toBeNull();
+    return icon!;
+  }
+  function discardButtonIconUrl(button: HTMLButtonElement): string {
+    return requireDiscardButtonIcon(button).style.getPropertyValue(
+      "--recovery-discard-button-icon"
+    );
+  }
+  function discardButtonIconPayload(button: HTMLButtonElement): string {
+    return decodeURIComponent(discardButtonIconUrl(button));
   }
   function reportCopyButton(): HTMLButtonElement {
     return container.querySelector<HTMLButtonElement>(
@@ -338,7 +450,7 @@ describe("RecoveryCandidateDialog behavior", () => {
       const props = baseProps();
       render(props);
       expect(footerButton(RESTORE_LABEL).disabled).toBe(true);
-      expect(footerButton("閉じる").disabled).toBe(false);
+      expect(footerButton("後で決める").disabled).toBe(false);
     });
   });
 
@@ -359,14 +471,82 @@ describe("RecoveryCandidateDialog behavior", () => {
     expect(rowCheckboxes().some((c) => c.checked)).toBe(false);
   });
 
-  it("Close calls onClose and never a restore / delete path", () => {
+  it("candidate row clicks toggle selection without requiring the checkbox target", () => {
+    render(baseProps());
+    const rows = candidateRows();
+    expect(rows).toHaveLength(2);
+    expect(rowCheckboxes()[0].checked).toBe(false);
+    expect(rows[0].getAttribute("aria-selected")).toBe("false");
+
+    act(() => rows[0].click());
+    expect(rowCheckboxes()[0].checked).toBe(true);
+    expect(rows[0].getAttribute("aria-selected")).toBe("true");
+
+    act(() => rows[0].click());
+    expect(rowCheckboxes()[0].checked).toBe(false);
+    expect(rows[0].getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("checkbox clicks toggle exactly once and keep the header checkbox behavior intact", () => {
+    render(baseProps());
+
+    act(() => rowCheckboxes()[0].click());
+    expect(rowCheckboxes()[0].checked).toBe(true);
+    expect(rowCheckboxes().filter((checkbox) => checkbox.checked)).toHaveLength(
+      1
+    );
+    expect(headerCheckbox().indeterminate).toBe(true);
+
+    act(() => rowCheckboxes()[0].click());
+    expect(rowCheckboxes()[0].checked).toBe(false);
+    expect(rowCheckboxes().some((checkbox) => checkbox.checked)).toBe(false);
+
+    act(() => headerCheckbox().click());
+    expect(rowCheckboxes().every((checkbox) => checkbox.checked)).toBe(true);
+    act(() => headerCheckbox().click());
+    expect(rowCheckboxes().some((checkbox) => checkbox.checked)).toBe(false);
+  });
+
+  it("keeps native checkbox controls for keyboard Space toggling", () => {
+    render(baseProps());
+    const checkbox = rowCheckboxes()[0];
+    expect(checkbox.tagName).toBe("INPUT");
+    expect(checkbox.type).toBe("checkbox");
+
+    const source = readFileSync(
+      "src/renderer/recovery/RecoveryCandidateDialog.tsx",
+      "utf8"
+    );
+    expect(source).toContain('type="checkbox"');
+    expect(source).not.toContain("onKeyDown");
+  });
+
+  it("styles hover and selected recovery rows", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    expect(css).toContain(".recoveryCandidateDialogRow:hover");
+    expect(css).toContain(".recoveryCandidateDialogRow-selected");
+    expect(css).toContain(".recoveryCandidateDialogRow-selected:hover");
+  });
+
+  it("Decide Later calls onClose and never a restore / delete path", () => {
     const props = baseProps();
+    render(props);
+    act(() => footerButton("後で決める").click());
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(props.onRestoreSelected).not.toHaveBeenCalled();
+    expect(props.onDiscardSelected).not.toHaveBeenCalled();
+    expect(props.onDiscardAll).not.toHaveBeenCalled();
+  });
+
+  it("Close uses the same close path when no candidates remain", () => {
+    const props = baseProps();
+    props.candidates = [];
     render(props);
     act(() => footerButton("閉じる").click());
     expect(props.onClose).toHaveBeenCalledTimes(1);
     expect(props.onRestoreSelected).not.toHaveBeenCalled();
-    // There is no discard control on this surface at all.
-    expect(footerButton("選択したものを破棄")).toBeUndefined();
+    expect(props.onDiscardSelected).not.toHaveBeenCalled();
+    expect(props.onDiscardAll).not.toHaveBeenCalled();
   });
 
   it("Restore Selected passes the selected recoveryIds", async () => {
@@ -378,6 +558,211 @@ describe("RecoveryCandidateDialog behavior", () => {
       footerButton("選択したものを復元").click();
     });
     expect(props.onRestoreSelected).toHaveBeenCalledWith(["id-2"]);
+  });
+
+  describe("explicit discard 5s destructive delay (#300)", () => {
+    const DISCARD_SELECTED = "選択した復旧候補を破棄...";
+    const DISCARD_ALL = "すべての復旧候補を破棄...";
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function advance(ms: number): void {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    }
+
+    it("Discard Selected stays disabled with no selection", () => {
+      render(baseProps());
+      const selectedButton = footerButton(DISCARD_SELECTED);
+      expect(selectedButton.disabled).toBe(true);
+      expect(discardButtonIcon(selectedButton)).toBeNull();
+      advance(6000);
+      expect(selectedButton.disabled).toBe(true);
+      expect(discardButtonIcon(selectedButton)).toBeNull();
+    });
+
+    it("Discard Selected is still disabled right after selecting, then arms after 5s", async () => {
+      const props = baseProps();
+      render(props);
+
+      act(() => rowCheckboxes()[0].click());
+      const selectedButton = footerButton(DISCARD_SELECTED);
+      expect(selectedButton.disabled).toBe(true);
+      expect(discardButtonIconPayload(selectedButton)).toContain(
+        "M145.61 464"
+      );
+
+      advance(4999);
+      expect(selectedButton.disabled).toBe(true);
+      expect(discardButtonIconPayload(selectedButton)).toContain(
+        "M145.61 464"
+      );
+
+      advance(1);
+      expect(selectedButton.disabled).toBe(false);
+      expect(discardButtonIconPayload(selectedButton)).toContain("m432 144");
+
+      await act(async () => {
+        selectedButton.click();
+      });
+      expect(props.onDiscardSelected).toHaveBeenCalledWith(["id-2"]);
+      expect(props.onDiscardAll).not.toHaveBeenCalled();
+    });
+
+    it("changing the selection restarts the Discard Selected 5s wait", async () => {
+      const props = baseProps();
+      render(props);
+
+      act(() => rowCheckboxes()[0].click());
+      advance(5000);
+      expect(footerButton(DISCARD_SELECTED).disabled).toBe(false);
+
+      // Add a second row → the selection changed → re-arm.
+      act(() => rowCheckboxes()[1].click());
+      expect(footerButton(DISCARD_SELECTED).disabled).toBe(true);
+
+      advance(4999);
+      expect(footerButton(DISCARD_SELECTED).disabled).toBe(true);
+      advance(1);
+      expect(footerButton(DISCARD_SELECTED).disabled).toBe(false);
+
+      await act(async () => {
+        footerButton(DISCARD_SELECTED).click();
+      });
+      expect(props.onDiscardSelected).toHaveBeenCalledWith(["id-2", "id-1"]);
+    });
+
+    it("clearing the selection returns Discard Selected to disabled", () => {
+      render(baseProps());
+      act(() => rowCheckboxes()[0].click());
+      advance(5000);
+      expect(footerButton(DISCARD_SELECTED).disabled).toBe(false);
+
+      act(() => rowCheckboxes()[0].click()); // unselect
+      const selectedButton = footerButton(DISCARD_SELECTED);
+      expect(selectedButton.disabled).toBe(true);
+      expect(discardButtonIcon(selectedButton)).toBeNull();
+      advance(6000);
+      expect(selectedButton.disabled).toBe(true);
+      expect(discardButtonIcon(selectedButton)).toBeNull();
+    });
+
+    it("Discard All arms 5s after open, independent of selection, then passes every listed id", async () => {
+      const props = baseProps();
+      render(props);
+
+      expect(footerButton(DISCARD_ALL).disabled).toBe(true);
+      expect(discardButtonIconPayload(footerButton(DISCARD_ALL))).toContain(
+        "M145.61 464"
+      );
+      advance(4999);
+      expect(footerButton(DISCARD_ALL).disabled).toBe(true);
+      advance(1);
+      expect(footerButton(DISCARD_ALL).disabled).toBe(false);
+      expect(discardButtonIconPayload(footerButton(DISCARD_ALL))).toContain(
+        "m432 144"
+      );
+      // Never selected a row — Discard All does not depend on selectedCount.
+      expect(rowCheckboxes().some((c) => c.checked)).toBe(false);
+
+      await act(async () => {
+        footerButton(DISCARD_ALL).click();
+      });
+      expect(props.onDiscardAll).toHaveBeenCalledWith(["id-1", "id-2"]);
+      expect(props.onDiscardSelected).not.toHaveBeenCalled();
+    });
+
+    it("Discard All stays disabled with no candidates and shows no icon", () => {
+      const props = baseProps();
+      props.candidates = [];
+      render(props);
+
+      const discardAllButton = footerButton(DISCARD_ALL);
+      expect(discardAllButton.disabled).toBe(true);
+      expect(discardButtonIcon(discardAllButton)).toBeNull();
+      advance(6000);
+      expect(discardAllButton.disabled).toBe(true);
+      expect(discardButtonIcon(discardAllButton)).toBeNull();
+    });
+
+    it("a changed candidate set restarts the Discard All 5s wait", () => {
+      const props = baseProps();
+      render(props);
+      advance(5000);
+      expect(footerButton(DISCARD_ALL).disabled).toBe(false);
+
+      act(() => {
+        root.render(
+          <RecoveryCandidateDialog
+            {...props}
+            candidates={[twoCandidates[0]]}
+          />
+        );
+      });
+      expect(footerButton(DISCARD_ALL).disabled).toBe(true);
+      advance(5000);
+      expect(footerButton(DISCARD_ALL).disabled).toBe(false);
+    });
+
+    it("a candidate list that goes empty disables Discard All", () => {
+      const props = baseProps();
+      render(props);
+      advance(5000);
+      expect(footerButton(DISCARD_ALL).disabled).toBe(false);
+
+      act(() => {
+        root.render(<RecoveryCandidateDialog {...props} candidates={[]} />);
+      });
+      const discardAllButton = footerButton(DISCARD_ALL);
+      expect(discardAllButton.disabled).toBe(true);
+      expect(discardButtonIcon(discardAllButton)).toBeNull();
+      advance(6000);
+      expect(discardAllButton.disabled).toBe(true);
+      expect(discardButtonIcon(discardAllButton)).toBeNull();
+    });
+
+    it("shows an hourglass icon while waiting, then switches to trash when armed", () => {
+      render(baseProps());
+      const allButton = () => footerButton(DISCARD_ALL);
+      expect(
+        requireDiscardButtonIcon(allButton()).getAttribute("aria-hidden")
+      ).toBe(
+        "true"
+      );
+      const pendingIcon = discardButtonIconPayload(allButton());
+      expect(pendingIcon).toContain("M145.61 464");
+      expect(pendingIcon).not.toContain("m432 144");
+      expect(
+        allButton().querySelector(".recoveryDiscardPendingIcon")
+      ).toBeNull();
+      expect(allButton().innerHTML).not.toContain("reload-outline");
+      expect(allButton().disabled).toBe(true);
+
+      advance(5000);
+      expect(allButton().disabled).toBe(false);
+      const readyIcon = discardButtonIconPayload(allButton());
+      expect(readyIcon).toContain("m432 144");
+      expect(readyIcon).not.toContain("M145.61 464");
+    });
+
+    it("still routes through onDiscard* (parent-side confirmation) after the delay", async () => {
+      const props = baseProps();
+      render(props);
+      act(() => rowCheckboxes()[0].click());
+      advance(5000);
+      await act(async () => {
+        footerButton(DISCARD_SELECTED).click();
+      });
+      // The dialog never deletes a row itself — it hands off to the parent,
+      // which shows the destructive confirm dialog.
+      expect(props.onDiscardSelected).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("Copy Recovery Report copies the fetched text and reports the copy", async () => {
@@ -449,7 +834,7 @@ describe("RecoveryCandidateDialog behavior", () => {
     act(() => {
       reportCopyButton().click();
     });
-    expect(footerButton("閉じる").disabled).toBe(false);
+    expect(footerButton("後で決める").disabled).toBe(false);
     await act(async () => {
       resolveReport("report-text");
     });

@@ -173,10 +173,16 @@ export const jaTranslations = {
   "dialog.recovery.column.preview": "本文冒頭",
   "dialog.recovery.column.updatedAt": "最終更新",
   "dialog.recovery.copyReport": "復旧レポートをコピー",
+  "dialog.recovery.decideLater": "後で決める",
+  "dialog.recovery.discardAll": "すべての復旧候補を破棄...",
+  "dialog.recovery.discardAllConfirm.message":
+    "すべての復旧候補を破棄します。この操作は元に戻せません。元の文書や現在開いている文書には影響しません。",
+  "dialog.recovery.discardAllConfirm.title": "すべての復旧候補を破棄しますか？",
   "dialog.recovery.discardConfirm.confirm": "破棄する",
-  "dialog.recovery.discardConfirm.message": "選択した {count} 件の復旧候補を完全に削除します。\nこの操作は取り消せません。元のファイルには影響しません。",
+  "dialog.recovery.discardConfirm.message":
+    "選択した復旧候補を破棄します。この操作は元に戻せません。元の文書や現在開いている文書には影響しません。",
   "dialog.recovery.discardConfirm.title": "選択した復旧候補を破棄しますか？",
-  "dialog.recovery.discardSelected": "選択したものを破棄",
+  "dialog.recovery.discardSelected": "選択した復旧候補を破棄...",
   "dialog.recovery.emptyState": "復元できる未保存の編集内容はありません。",
   "dialog.recovery.explainRestore": "復元すると新しい .recovered.md ファイルが作成されます。元のファイルや既存の復元ファイルは上書きされません。",
   "dialog.recovery.previewEmpty": "—",
@@ -311,6 +317,8 @@ export const jaTranslations = {
   "menu.zoomOut": "縮小",
   "notification.dismiss": "通知を閉じる",
   "notification.externalMarkdownOpened": "プロジェクト外のファイルを開きました",
+  "notification.recoveryCandidatesReminder":
+    "{count} 件の未解決の復旧候補が残っています",
   "notification.sessionRestore.editorSkipped":
     "{name} を復元できなかったため、このタブは開いていません",
   "project.label": "プロジェクト: {name}",

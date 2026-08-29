@@ -158,7 +158,13 @@ describe("initializeRecoveryStore (Phase 6-4-2)", () => {
     }
 
     const metadata = readMetadata(recoveryDbPath());
-    for (const key of Object.values(recoveryStoreMetadataKeys)) {
+    for (const key of [
+      recoveryStoreMetadataKeys.schemaVersion,
+      recoveryStoreMetadataKeys.storeId,
+      recoveryStoreMetadataKeys.createdAt,
+      recoveryStoreMetadataKeys.createdWithAppVersion,
+      recoveryStoreMetadataKeys.lastOpenedWithAppVersion
+    ]) {
       expect(metadata[key]).toBeTruthy();
     }
     expect(metadata[recoveryStoreMetadataKeys.schemaVersion]).toBe(

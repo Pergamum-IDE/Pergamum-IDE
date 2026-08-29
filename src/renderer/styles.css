@@ -3311,6 +3311,28 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
+.recoveryCandidateDialogRow {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.recoveryCandidateDialogRow:hover {
+  background: #f6f9fb;
+}
+
+.recoveryCandidateDialogRow:focus-within {
+  background: #edf5fc;
+}
+
+.recoveryCandidateDialogRow-selected {
+  background: #e7f1fb;
+}
+
+.recoveryCandidateDialogRow-selected:hover,
+.recoveryCandidateDialogRow-selected:focus-within {
+  background: #dcecf9;
+}
+
 .recoveryCandidateDialogCheckboxCol {
   width: 1%;
   white-space: nowrap;
@@ -3355,6 +3377,11 @@ label.settingsItemHeader {
   gap: 8px;
 }
 
+.recoveryCandidateDialogActions .appDialogButton {
+  white-space: normal;
+  text-align: center;
+}
+
 /* #288 follow-up: bottom-align the report copy icon button with the Close
    button. The right side is a vertical Restore/Close stack; without this the
    centered left control floats above the Close button's baseline. */
@@ -3365,6 +3392,36 @@ label.settingsItemHeader {
 .recoveryCandidateDialogReportButton:disabled {
   cursor: default;
   opacity: 0.62;
+}
+
+/* #300: explicit-discard buttons. The masked icon follows currentColor, so
+   the pending hourglass and ready trash glyph both match the destructive
+   button label without rewriting the reusable SVG assets. */
+.recoveryDiscardButton {
+  position: relative;
+}
+
+.recoveryDiscardButton-hasIcon {
+  padding-inline: 34px;
+}
+
+.recoveryDiscardButtonIcon {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 10px;
+  inline-size: 16px;
+  block-size: 16px;
+  margin-top: -8px;
+  background-color: currentColor;
+  mask: var(--recovery-discard-button-icon) center / contain no-repeat;
+  -webkit-mask: var(--recovery-discard-button-icon) center / contain no-repeat;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recoveryCandidateDialogRow {
+    transition: none;
+  }
 }
 
 @media (max-width: 480px) {

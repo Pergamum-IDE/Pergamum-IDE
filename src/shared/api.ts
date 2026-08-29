@@ -42,9 +42,11 @@ import type {
   RecoveryFinalizeRequest,
   RecoveryFinalizeResult,
   RecoveryHasRecoverableResult,
+  RecoveryMarkCandidatesSeenResult,
   RecoveryReportResult,
   RecoveryRestoreRequest,
-  RecoveryRestoreResult
+  RecoveryRestoreResult,
+  RecoveryStartupPresentationResult
 } from "./recoveryCandidate";
 import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
@@ -63,10 +65,12 @@ export type {
   RecoveryDiscardResult,
   RecoveryFinalizeResult,
   RecoveryHasRecoverableResult,
+  RecoveryMarkCandidatesSeenResult,
   RecoveryReportResult,
   RecoveryRestoreItem,
   RecoveryRestoreItemResult,
-  RecoveryRestoreResult
+  RecoveryRestoreResult,
+  RecoveryStartupPresentationResult
 } from "./recoveryCandidate";
 export type {
   CloseCurrentProjectRequest,
@@ -183,6 +187,10 @@ export const RECOVERY_CHANNELS = {
   deleteDocument: "recovery:deleteDocument",
   /** Phase 6-4-4: list Recovery candidates for the candidate dialog. */
   listCandidates: "recovery:listCandidates",
+  /** #300: owner-only startup policy for previous-run candidate display. */
+  evaluateStartupCandidates: "recovery:evaluateStartupCandidates",
+  /** #300: mark the current previous-run candidate set as seen. */
+  markCandidatesSeen: "recovery:markCandidatesSeen",
   /** Phase 6-4-4: write selected candidates to `.recovered.md` files
    *  (atomic). Does NOT delete any Recovery row. */
   restoreCandidates: "recovery:restoreCandidates",
@@ -601,6 +609,10 @@ export interface PergamumApi {
     /** Phase 6-4-4: candidate list for the Recovery dialog (owner only;
      *  a non-owner gets `{ ok: false, skipped }` and no DB is opened). */
     listCandidates: () => Promise<RecoveryCandidateListResult>;
+    /** #300: startup presentation decision for previous-run candidates. */
+    evaluateStartupCandidates: () => Promise<RecoveryStartupPresentationResult>;
+    /** #300: persist the currently visible previous-run candidate signature. */
+    markCandidatesSeen: () => Promise<RecoveryMarkCandidatesSeenResult>;
     /** Phase 6-4-4: write selected candidates to `.recovered.md`
      *  (atomic). Never deletes a Recovery row. */
     restoreCandidates: (

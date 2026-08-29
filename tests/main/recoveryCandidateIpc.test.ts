@@ -7,6 +7,7 @@ import { openRecoveryStoreDatabase } from "../../src/main/recoveryStoreDatabase"
 import { upsertRecoveryDocument } from "../../src/main/recoveryDocumentStore";
 import { listRecoveryCandidates } from "../../src/main/recoveryCandidateStore";
 import { registerRecoveryCandidateIpc } from "../../src/main/recoveryCandidateIpc";
+import { readLastSeenRecoverySetSignature } from "../../src/main/recoveryCandidateSeenState";
 import type { RecoveryStoreStatus } from "../../src/shared/recovery";
 import type { RecoveryDocumentPayload } from "../../src/shared/recoveryDocument";
 import type { RecoveryRestoreFileSystem } from "../../src/main/recoveryRestore";
@@ -187,6 +188,84 @@ describe("recovery candidate IPC — owner", () => {
     expect(serialized).not.toContain("/novel/chapter-03.md");
   });
 
+  it("startup evaluates an unseen previous-run candidate set as auto-show without leaking body/path", () => {
+    seedTwoRows();
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const result = h.invoke(RECOVERY_CHANNELS.evaluateStartupCandidates) as {
+      ok: true;
+      presentation: {
+        kind: string;
+        candidateCount: number;
+        signature?: string;
+        candidates?: Array<{ recoveryId: string }>;
+      };
+    };
+
+    expect(result.ok).toBe(true);
+    expect(result.presentation.kind).toBe("autoShow");
+    expect(result.presentation.candidateCount).toBe(2);
+    expect(result.presentation.signature).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.presentation.candidates?.map((c) => c.recoveryId).sort()).toEqual([
+      "row-1",
+      "row-2"
+    ]);
+    expect(readLastSeenRecoverySetSignature(handle!.database)).toBeNull();
+    const serialized = JSON.stringify(result) + JSON.stringify(h.logEvents);
+    expect(serialized).not.toContain(BODY_MARKER);
+    expect(serialized).not.toContain("/novel/chapter-03.md");
+  });
+
+  it("startup requests only a reminder for an already-seen candidate set", () => {
+    seedTwoRows();
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const first = h.invoke(RECOVERY_CHANNELS.markCandidatesSeen) as {
+      ok: true;
+      signature: string | null;
+    };
+    const second = h.invoke(RECOVERY_CHANNELS.evaluateStartupCandidates) as {
+      ok: true;
+      presentation: { kind: string; candidateCount: number; signature?: string };
+    };
+
+    expect(second.presentation).toEqual({
+      kind: "reminder",
+      candidateCount: 2,
+      signature: first.signature
+    });
+  });
+
+  it("manual display markCandidatesSeen saves the current previous-run signature", () => {
+    seedTwoRows();
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    expect(readLastSeenRecoverySetSignature(handle!.database)).toBeNull();
+
+    const result = h.invoke(RECOVERY_CHANNELS.markCandidatesSeen) as {
+      ok: true;
+      candidateCount: number;
+      signature: string | null;
+    };
+
+    expect(result.candidateCount).toBe(2);
+    expect(result.signature).toMatch(/^[a-f0-9]{64}$/);
+    expect(readLastSeenRecoverySetSignature(handle!.database)).toBe(
+      result.signature
+    );
+  });
+
+  it("startup ignores current-run rows for auto-show/signature/reminder", () => {
+    seedCurrentRunRow();
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    expect(h.invoke(RECOVERY_CHANNELS.evaluateStartupCandidates)).toEqual({
+      ok: true,
+      presentation: { kind: "none", candidateCount: 0 }
+    });
+    expect(readLastSeenRecoverySetSignature(handle!.database)).toBeNull();
+  });
+
   it("restoreCandidates writes .recovered files atomically and does NOT delete rows", () => {
     seedTwoRows();
     const h = buildHarness({ status: ownerStatus(), withDatabase: true });
@@ -331,6 +410,7 @@ describe("recovery candidate IPC — owner", () => {
   it("discardCandidates deletes selected rows and logs a body-free count", () => {
     seedTwoRows();
     const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+    h.invoke(RECOVERY_CHANNELS.evaluateStartupCandidates);
 
     const result = h.invoke(RECOVERY_CHANNELS.discardCandidates, {
       recoveryIds: ["row-2"]
@@ -343,6 +423,15 @@ describe("recovery candidate IPC — owner", () => {
     expect(
       h.logEvents.find((e) => e.event === "recovery.document.discarded")?.details
     ).toMatchObject({ count: 1 });
+
+    const nextStartup = h.invoke(
+      RECOVERY_CHANNELS.evaluateStartupCandidates
+    ) as {
+      ok: true;
+      presentation: { kind: string; candidateCount: number };
+    };
+    expect(nextStartup.presentation.kind).toBe("reminder");
+    expect(nextStartup.presentation.candidateCount).toBe(1);
   });
 
   it("getReport returns a body-free report and does not mutate rows", () => {
@@ -563,6 +652,14 @@ describe("recovery candidate IPC — non-owner / unavailable", () => {
         status?.kind === "nonOwner" ? "not-owner" : "unavailable";
 
       expect(h.invoke(RECOVERY_CHANNELS.listCandidates)).toEqual({
+        ok: false,
+        skipped: expectedSkip
+      });
+      expect(h.invoke(RECOVERY_CHANNELS.evaluateStartupCandidates)).toEqual({
+        ok: false,
+        skipped: expectedSkip
+      });
+      expect(h.invoke(RECOVERY_CHANNELS.markCandidatesSeen)).toEqual({
         ok: false,
         skipped: expectedSkip
       });

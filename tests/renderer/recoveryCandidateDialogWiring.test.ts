@@ -74,7 +74,7 @@ describe("Recovery candidate dialog wiring (#287)", () => {
       "void recoveryHasRecoverableRefreshRef.current();"
     );
 
-    // Store-status resolution seeds it; restore/finalize re-checks it.
+    // Store-status resolution seeds it; restore/finalize/discard re-check it.
     const storeStatusStart = appSource.indexOf(".getStoreStatus()");
     const storeStatusEffect = appSource.slice(
       storeStatusStart,
@@ -90,6 +90,13 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     expect(restoreFn).toContain(
       "await refreshRecoveryHasRecoverableCandidates();"
     );
+    const discardFn = appSource.slice(
+      appSource.indexOf("async function discardRecoveryCandidates"),
+      appSource.indexOf("async function handleRecoveryRestoreSelected")
+    );
+    expect(discardFn).toContain(
+      "await refreshRecoveryHasRecoverableCandidates();"
+    );
 
     // Listing the (already previous-run-only) candidates keeps the key in sync.
     expect(appSource).toContain(
@@ -97,9 +104,9 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     );
   });
 
-  it("gates the startup auto-show on owner + settled cold start + no open modal, once per process", () => {
+  it("gates startup recovery presentation on owner + settled cold start + no open modal, once per process", () => {
     const effect = appSource.slice(
-      appSource.indexOf("one-shot startup auto-show of the Recovery candidate"),
+      appSource.indexOf("one-shot startup presentation of previous-run Recovery candidates"),
       appSource.indexOf("createProjectCommandRef.current = createProject;")
     );
     expect(effect).toContain("recoveryAutoShowAttemptedRef.current");
@@ -109,7 +116,28 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     expect(effect).toContain("!deferredRestoreErrorDialogsReadyRef.current");
     expect(effect).toContain("isAppModalSurfacePendingOrOpen");
     expect(effect).toContain("recoveryAutoShowAttemptedRef.current = true;");
-    expect(effect).toContain("result.candidates.length > 0");
+    expect(effect).toContain("window.pergamum.recovery");
+    expect(effect).toContain(".evaluateStartupCandidates()");
+    expect(effect).toContain('case "autoShow":');
+    expect(effect).toContain("showRecoveryCandidateDialog(presentation.candidates, null)");
+    expect(effect).toContain(".markCandidatesSeen()");
+    expect(effect).toContain('case "reminder":');
+    expect(effect).toContain("requestRecoveryReminderToast(presentation.candidateCount)");
+  });
+
+  it("requests a non-warning recovery reminder toast with the Recovery command action (#300)", () => {
+    const reminderFn = appSource.slice(
+      appSource.indexOf("function requestRecoveryReminderToast"),
+      appSource.indexOf("function showRecoveryCandidateDialog")
+    );
+
+    expect(reminderFn).toContain("notificationController.notify({");
+    expect(reminderFn).toContain("notificationToastPriority.recoveryReminder");
+    expect(reminderFn).toContain('translate("notification.recoveryCandidatesReminder"');
+    expect(reminderFn).toContain('icon: { kind: "preset", name: "recovery" }');
+    expect(reminderFn).toContain('kind: "command"');
+    expect(reminderFn).toContain("commandId: recoveryCommandIds.showDocuments");
+    expect(reminderFn).not.toMatch(/warning|error/i);
   });
 
   it("only opens the dialog for the Recovery owner", () => {
@@ -119,6 +147,7 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     );
     expect(openFn).toContain('recoveryStoreStatusKind !== "owner"');
     expect(openFn).toContain("window.pergamum.recovery.listCandidates()");
+    expect(openFn).toContain(".markCandidatesSeen()");
   });
 
   it("close never deletes / finalizes a Recovery row", () => {
@@ -131,22 +160,92 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     );
   });
 
-  it("the candidate dialog has no destructive discard wiring", () => {
-    // #287 follow-up: the dialog is recover-or-close only.
+  it("the candidate dialog exposes explicit discard only through a destructive confirmation", () => {
     const dialogJsx = appSource.slice(
       appSource.indexOf("<RecoveryCandidateDialog"),
       appSource.indexOf("/>", appSource.indexOf("<RecoveryCandidateDialog"))
     );
-    expect(dialogJsx).not.toContain("onDiscardSelected");
-    expect(dialogJsx).not.toContain("confirmDiscard");
-    expect(appSource).not.toContain("async function handleRecoveryDiscardSelected");
-    expect(appSource).not.toContain("async function confirmRecoveryDiscard");
+    expect(dialogJsx).toContain("onDiscardSelected={handleRecoveryDiscardSelected}");
+    expect(dialogJsx).toContain("onDiscardAll={handleRecoveryDiscardAll}");
+    expect(appSource).toContain("async function handleRecoveryDiscardSelected");
+    expect(appSource).toContain("async function handleRecoveryDiscardAll");
+    const confirmFn = appSource.slice(
+      appSource.indexOf("async function confirmRecoveryDiscard"),
+      appSource.indexOf("async function discardRecoveryCandidates")
+    );
+    expect(confirmFn).toContain("confirmDialog({");
+    expect(confirmFn).toContain('tone: "destructive"');
+    expect(confirmFn).toContain("dialog.recovery.discardConfirm.message");
+    expect(confirmFn).toContain("dialog.recovery.discardAllConfirm.message");
+    const discardFn = appSource.slice(
+      appSource.indexOf("async function discardRecoveryCandidates"),
+      appSource.indexOf("async function handleRecoveryRestoreSelected")
+    );
+    expect(discardFn).toContain("window.pergamum.recovery.discardCandidates({");
+    expect(discardFn).toContain("await refreshRecoveryCandidateDialog();");
+    expect(discardFn).toContain("await refreshRecoveryHasRecoverableCandidates();");
     const dialogFile = readFileSync(
       "src/renderer/recovery/RecoveryCandidateDialog.tsx",
       "utf8"
     );
-    expect(dialogFile).not.toContain("dialog.recovery.discardSelected");
-    expect(dialogFile).not.toContain("onDiscardSelected");
+    expect(dialogFile).toContain("dialog.recovery.discardSelected");
+    expect(dialogFile).toContain("dialog.recovery.discardAll");
+    expect(dialogFile).toContain("onDiscardSelected");
+    expect(dialogFile).toContain("onDiscardAll");
+  });
+
+  it("keeps the discard delay UI on hourglass/trash icons, with no reload spinner", () => {
+    const dialogFile = readFileSync(
+      "src/renderer/recovery/RecoveryCandidateDialog.tsx",
+      "utf8"
+    );
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(dialogFile).toContain(
+      "assets/icons/ionicons/dialog/hourglass-outline.svg?url"
+    );
+    expect(dialogFile).toContain(
+      "assets/icons/ionicons/dialog/trash-bin-outline.svg?url"
+    );
+    expect(dialogFile).not.toContain("reload-outline.svg?url");
+    expect(dialogFile).toContain("discardButtonIconStyle");
+    expect(styles).toContain("background-color: currentColor");
+    expect(styles).toContain("mask: var(--recovery-discard-button-icon)");
+    expect(styles).not.toContain("recoveryDiscardPendingSpin");
+  });
+
+  it("allows body row selection without double-toggling checkbox clicks", () => {
+    const dialogFile = readFileSync(
+      "src/renderer/recovery/RecoveryCandidateDialog.tsx",
+      "utf8"
+    );
+
+    expect(dialogFile).toContain(
+      "onClick={() => handleRowCheckbox(candidate.recoveryId)}"
+    );
+    expect(dialogFile).toContain("aria-selected={selected}");
+    expect(dialogFile).toContain("event.stopPropagation()");
+    expect(dialogFile).toContain('type="checkbox"');
+    expect(dialogFile).not.toContain("onKeyDown");
+  });
+
+  it("switches the footer close label by candidate count without changing the close handler", () => {
+    const dialogFile = readFileSync(
+      "src/renderer/recovery/RecoveryCandidateDialog.tsx",
+      "utf8"
+    );
+    const closeLabelBlock = dialogFile.slice(
+      dialogFile.indexOf("const closeButtonLabel ="),
+      dialogFile.indexOf(
+        "return (",
+        dialogFile.indexOf("const closeButtonLabel =")
+      )
+    );
+
+    expect(closeLabelBlock).toContain("candidates.length > 0");
+    expect(closeLabelBlock).toContain("dialog.recovery.decideLater");
+    expect(closeLabelBlock).toContain("common.close");
+    expect(dialogFile).toContain("onClick={onClose}");
   });
 
   it("restore is two-phase: write, open, then finalize only opened rows", () => {

@@ -175,10 +175,17 @@ export const enTranslations = {
   "dialog.recovery.column.preview": "Preview",
   "dialog.recovery.column.updatedAt": "Last updated",
   "dialog.recovery.copyReport": "Copy Recovery Report",
+  "dialog.recovery.decideLater": "Decide Later",
+  "dialog.recovery.discardAll": "Discard All Recovery Candidates...",
+  "dialog.recovery.discardAllConfirm.message":
+    "All Recovery candidates will be permanently discarded. This cannot be undone. Original documents and currently open documents are not affected.",
+  "dialog.recovery.discardAllConfirm.title":
+    "Discard all Recovery candidates?",
   "dialog.recovery.discardConfirm.confirm": "Discard",
-  "dialog.recovery.discardConfirm.message": "{count} selected Recovery item(s) will be permanently deleted.\nThis cannot be undone. Your original files are not affected.",
+  "dialog.recovery.discardConfirm.message":
+    "The selected Recovery candidates will be permanently discarded. This cannot be undone. Original documents and currently open documents are not affected.",
   "dialog.recovery.discardConfirm.title": "Discard the selected Recovery items?",
-  "dialog.recovery.discardSelected": "Discard Selected",
+  "dialog.recovery.discardSelected": "Discard Selected Recovery Candidates...",
   "dialog.recovery.emptyState": "There are no unsaved changes to recover.",
   "dialog.recovery.explainRestore": "Restoring creates new .recovered.md files. Your original files and any existing recovered files are never overwritten.",
   "dialog.recovery.previewEmpty": "—",
@@ -313,6 +320,8 @@ export const enTranslations = {
   "menu.zoomOut": "Zoom Out",
   "notification.dismiss": "Dismiss notification",
   "notification.externalMarkdownOpened": "Opened a file from outside the project",
+  "notification.recoveryCandidatesReminder":
+    "{count} unresolved Recovery candidate(s) remain.",
   "notification.sessionRestore.editorSkipped":
     "{name} could not be restored, so that tab was not opened",
   "project.label": "Project: {name}",

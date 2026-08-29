@@ -6,6 +6,7 @@ import { openRecoveryStoreDatabase } from "../../src/main/recoveryStoreDatabase"
 import { upsertRecoveryDocument } from "../../src/main/recoveryDocumentStore";
 import {
   deleteRecoveryRowsById,
+  deletePreviousRunRecoveryRowsById,
   getRecoveryRestoreRows,
   hasRecoverableCandidates,
   listRecoveryCandidates,
@@ -291,6 +292,47 @@ describe("deleteRecoveryRowsById", () => {
     expect(listRecoveryCandidates(db, OTHER_RUN).map((c) => c.recoveryId)).toEqual([
       "row-2"
     ]);
+  });
+
+  it("deletePreviousRunRecoveryRowsById refuses current-run backup ids", () => {
+    const db = handle!.database;
+    upsertRecoveryDocument(
+      db,
+      filePayload({
+        documentKey: "file:C:/Novel/secret-dir/previous.md",
+        sourceUri: "file://C:/Novel/secret-dir/previous.md",
+        filePath: "C:/Novel/secret-dir/previous.md",
+        displayName: "previous.md"
+      }),
+      ctx("2026-08-29T12:39:00.000Z", "0198d95f-97d8-7000-8000-000000prev")
+    );
+    upsertRecoveryDocument(
+      db,
+      filePayload({
+        documentKey: "file:C:/Novel/secret-dir/current.md",
+        sourceUri: "file://C:/Novel/secret-dir/current.md",
+        filePath: "C:/Novel/secret-dir/current.md",
+        displayName: "current.md"
+      }),
+      ctx("2026-08-29T12:40:00.000Z", SEED_RUN)
+    );
+
+    const { deleted, missing, failed } = deletePreviousRunRecoveryRowsById(
+      db,
+      ["row-1", "row-2"],
+      SEED_RUN
+    );
+
+    expect(deleted).toEqual(["row-1"]);
+    expect(missing).toEqual(["row-2"]);
+    expect(failed).toEqual([]);
+    expect(
+      (
+        db
+          .prepare("SELECT COUNT(*) AS n FROM documents WHERE id = 'row-2'")
+          .get() as { n: number }
+      ).n
+    ).toBe(1);
   });
 });
 

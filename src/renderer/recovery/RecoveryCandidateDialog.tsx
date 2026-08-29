@@ -10,6 +10,8 @@ import type { RecoveryCandidate } from "../../shared/recoveryCandidate";
 import checkSquareIconUrl from "../../../assets/icons/feather/dialog/check-square.svg?url";
 import clipboardIconUrl from "../../../assets/icons/feather/dialog/clipboard.svg?url";
 import xCircleIconUrl from "../../../assets/icons/feather/dialog/x-circle.svg?url";
+import hourglassIconUrl from "../../../assets/icons/ionicons/dialog/hourglass-outline.svg?url";
+import trashBinIconUrl from "../../../assets/icons/ionicons/dialog/trash-bin-outline.svg?url";
 import {
   performClipboardCopy,
   type ClipboardAdapter
@@ -35,10 +37,15 @@ export interface RecoveryCandidateDialogProps {
   translate: Translate;
   clipboardAdapter: ClipboardAdapter;
   opener: Element | null;
+  trapFocus?: boolean;
   onClose: () => void;
   /** Restore the given rows: parent writes `.recovered.md`, opens each,
    *  then finalizes (deletes) the rows it opened. */
   onRestoreSelected: (recoveryIds: readonly string[]) => Promise<void>;
+  /** Discard selected rows after parent-side destructive confirmation. */
+  onDiscardSelected: (recoveryIds: readonly string[]) => Promise<void>;
+  /** Discard all listed rows after parent-side destructive confirmation. */
+  onDiscardAll: (recoveryIds: readonly string[]) => Promise<void>;
   /** Fetch the body-free Recovery report text, or `null` on failure. */
   getReportText: () => Promise<string | null>;
   /** Called after the report is successfully copied. */
@@ -47,6 +54,22 @@ export interface RecoveryCandidateDialogProps {
 
 type CopyState = "idle" | "copied" | "failed";
 const COPY_FEEDBACK_MS = 3000;
+
+/**
+ * #300: an explicit discard is destructive and irreversible, so its button
+ * can't be pressed the instant it becomes relevant. It "arms" only after
+ * this delay, during which an hourglass icon is shown on the button's
+ * leading edge. The timer restarts whenever the thing being discarded changes
+ * (the selection for "discard selected"; the candidate set for
+ * "discard all"). The confirmation dialog still runs afterwards — this
+ * delay is friction, not a replacement for it.
+ */
+const DISCARD_ARM_DELAY_MS = 5000;
+
+type DiscardButtonIconState = "pending" | "ready";
+type DiscardButtonIconStyle = CSSProperties & {
+  "--recovery-discard-button-icon": string;
+};
 
 const SORTABLE_COLUMNS: readonly {
   key: RecoverySortKey;
@@ -68,13 +91,47 @@ function ariaSortFor(
   return sort.direction === "asc" ? "ascending" : "descending";
 }
 
+function discardButtonIconState(
+  hasTarget: boolean,
+  armed: boolean
+): DiscardButtonIconState | null {
+  if (!hasTarget) {
+    return null;
+  }
+  return armed ? "ready" : "pending";
+}
+
+function discardButtonIconStyle(
+  state: DiscardButtonIconState
+): DiscardButtonIconStyle {
+  const iconUrl = state === "ready" ? trashBinIconUrl : hourglassIconUrl;
+  return {
+    "--recovery-discard-button-icon": `url("${iconUrl}")`
+  };
+}
+
+function recoveryCandidateRowClassName(selected: boolean): string {
+  return selected
+    ? "recoveryCandidateDialogRow recoveryCandidateDialogRow-selected"
+    : "recoveryCandidateDialogRow";
+}
+
+function recoveryDiscardButtonClassName(hasIcon: boolean): string {
+  return hasIcon
+    ? "appDialogButton appDialogButton-choice-destructive recoveryDiscardButton recoveryDiscardButton-hasIcon"
+    : "appDialogButton appDialogButton-choice-destructive recoveryDiscardButton";
+}
+
 export function RecoveryCandidateDialog({
   candidates,
   translate,
   clipboardAdapter,
   opener,
+  trapFocus = true,
   onClose,
   onRestoreSelected,
+  onDiscardSelected,
+  onDiscardAll,
   getReportText,
   onReportCopied
 }: RecoveryCandidateDialogProps): JSX.Element {
@@ -122,12 +179,82 @@ export function RecoveryCandidateDialog({
     []
   );
 
+  // #300: per-button "armed after the destructive delay" keys. Storing the
+  // armed target key prevents a just-changed selection/candidate set from
+  // rendering as ready for even one frame.
+  const [discardSelectedArmedKey, setDiscardSelectedArmedKey] = useState<
+    string | null
+  >(null);
+  const [discardAllArmedKey, setDiscardAllArmedKey] = useState<string | null>(
+    null
+  );
+  const selectedDiscardKey = useMemo(
+    () =>
+      listedIds
+        .filter((recoveryId) => selectedIds.has(recoveryId))
+        .sort()
+        .join("\u001f"),
+    [listedIds, selectedIds]
+  );
+  useEffect(() => {
+    setDiscardSelectedArmedKey(null);
+    if (selectedDiscardKey.length === 0) {
+      return;
+    }
+    const timer = setTimeout(
+      () => setDiscardSelectedArmedKey(selectedDiscardKey),
+      DISCARD_ARM_DELAY_MS
+    );
+    return () => clearTimeout(timer);
+  }, [selectedDiscardKey]);
+
+  const candidateSetKey = useMemo(
+    () =>
+      candidates
+        .map(
+          (candidate) =>
+            `${candidate.recoveryId}\u001f${candidate.updatedAt}\u001f${candidate.characterCount}`
+        )
+        .sort()
+        .join("\u001e"),
+    [candidates]
+  );
+  useEffect(() => {
+    setDiscardAllArmedKey(null);
+    if (candidateSetKey.length === 0) {
+      return;
+    }
+    const timer = setTimeout(
+      () => setDiscardAllArmedKey(candidateSetKey),
+      DISCARD_ARM_DELAY_MS
+    );
+    return () => clearTimeout(timer);
+  }, [candidateSetKey]);
+  const discardSelectedArmed =
+    selectedDiscardKey.length > 0 &&
+    discardSelectedArmedKey === selectedDiscardKey;
+  const discardAllArmed =
+    candidateSetKey.length > 0 && discardAllArmedKey === candidateSetKey;
+
   // Restore is gated on an actual selection first — not merely on candidates
   // existing. Zero selected rows must disable the button whether or not any
   // candidates are present; `busy` disables it while a restore is in flight.
   const hasSelection = selectedIds.size > 0;
   const canRestore = !busy && hasSelection && candidates.length > 0;
+  const canDiscardSelected =
+    !busy && hasSelection && candidates.length > 0 && discardSelectedArmed;
+  const canDiscardAll = !busy && candidates.length > 0 && discardAllArmed;
   const restoreDisabled = !canRestore;
+  const discardSelectedDisabled = !canDiscardSelected;
+  const discardAllDisabled = !canDiscardAll;
+  const discardSelectedIconState = discardButtonIconState(
+    hasSelection && candidates.length > 0,
+    discardSelectedArmed
+  );
+  const discardAllIconState = discardButtonIconState(
+    candidates.length > 0,
+    discardAllArmed
+  );
 
   function showCopyFeedback(next: Exclude<CopyState, "idle">): void {
     if (copyTimerRef.current !== null) {
@@ -174,6 +301,39 @@ export function RecoveryCandidateDialog({
     }
   }
 
+  async function handleDiscardSelected(): Promise<void> {
+    // The armed flag is the primary guard: never discard before the
+    // destructive delay has elapsed, even if the disabled state regressed.
+    if (
+      busy ||
+      selectedIds.size === 0 ||
+      candidates.length === 0 ||
+      !discardSelectedArmed
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await onDiscardSelected([...selectedIds]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDiscardAll(): Promise<void> {
+    if (busy || candidates.length === 0 || !discardAllArmed) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await onDiscardAll(listedIds);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleCopyReport(): Promise<void> {
     if (busy) {
       return;
@@ -210,12 +370,17 @@ export function RecoveryCandidateDialog({
   const copyToastStyle = {
     "--about-dialog-copy-feedback-animation-ms": `${COPY_FEEDBACK_MS}ms`
   } as CSSProperties;
+  const closeButtonLabel =
+    candidates.length > 0
+      ? translate("dialog.recovery.decideLater")
+      : translate("common.close");
 
   return (
     <InfoDialog
       title={translate("dialog.recovery.title")}
       opener={opener}
       onClose={onClose}
+      trapFocus={trapFocus}
       footer={
         <div className="aboutDialogFooterContent recoveryCandidateDialogFooterContent">
           <div className="aboutDialogTechnicalInfoControl">
@@ -250,6 +415,44 @@ export function RecoveryCandidateDialog({
           <div className="appDialogActions recoveryCandidateDialogActions">
             <button
               type="button"
+              className={recoveryDiscardButtonClassName(
+                discardSelectedIconState !== null
+              )}
+              disabled={discardSelectedDisabled}
+              onClick={() => {
+                void handleDiscardSelected();
+              }}
+            >
+              {discardSelectedIconState !== null ? (
+                <span
+                  className="recoveryDiscardButtonIcon"
+                  style={discardButtonIconStyle(discardSelectedIconState)}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <span>{translate("dialog.recovery.discardSelected")}</span>
+            </button>
+            <button
+              type="button"
+              className={recoveryDiscardButtonClassName(
+                discardAllIconState !== null
+              )}
+              disabled={discardAllDisabled}
+              onClick={() => {
+                void handleDiscardAll();
+              }}
+            >
+              {discardAllIconState !== null ? (
+                <span
+                  className="recoveryDiscardButtonIcon"
+                  style={discardButtonIconStyle(discardAllIconState)}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <span>{translate("dialog.recovery.discardAll")}</span>
+            </button>
+            <button
+              type="button"
               className="appDialogButton appDialogButton-confirm"
               disabled={restoreDisabled}
               onClick={() => {
@@ -264,7 +467,7 @@ export function RecoveryCandidateDialog({
               autoFocus
               onClick={onClose}
             >
-              {translate("common.close")}
+              {closeButtonLabel}
             </button>
           </div>
         </div>
@@ -320,37 +523,48 @@ export function RecoveryCandidateDialog({
                 </tr>
               </thead>
               <tbody>
-                {sortedCandidates.map((candidate) => (
-                  <tr key={candidate.recoveryId}>
-                    <td className="recoveryCandidateDialogCheckboxCol">
-                      <input
-                        type="checkbox"
-                        aria-label={candidate.displayName}
-                        checked={selectedIds.has(candidate.recoveryId)}
-                        onChange={() =>
-                          handleRowCheckbox(candidate.recoveryId)
-                        }
-                      />
-                    </td>
-                    <td>{candidate.displayName}</td>
-                    <td>{recoveryUpdatedAtDisplayDate(candidate.updatedAt)}</td>
-                    <td className="recoveryCandidateDialogNumber">
-                      {candidate.characterCount}
-                    </td>
-                    <td>
-                      {translate(
-                        candidate.documentType === "markdown.untitled"
-                          ? "dialog.recovery.type.untitled"
-                          : "dialog.recovery.type.file"
-                      )}
-                    </td>
-                    <td className="recoveryCandidateDialogPreview">
-                      {candidate.previewSnippet.length > 0
-                        ? candidate.previewSnippet
-                        : translate("dialog.recovery.previewEmpty")}
-                    </td>
-                  </tr>
-                ))}
+                {sortedCandidates.map((candidate) => {
+                  const selected = selectedIds.has(candidate.recoveryId);
+                  return (
+                    <tr
+                      key={candidate.recoveryId}
+                      className={recoveryCandidateRowClassName(selected)}
+                      aria-selected={selected}
+                      onClick={() => handleRowCheckbox(candidate.recoveryId)}
+                    >
+                      <td className="recoveryCandidateDialogCheckboxCol">
+                        <input
+                          type="checkbox"
+                          aria-label={candidate.displayName}
+                          checked={selected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() =>
+                            handleRowCheckbox(candidate.recoveryId)
+                          }
+                        />
+                      </td>
+                      <td>{candidate.displayName}</td>
+                      <td>
+                        {recoveryUpdatedAtDisplayDate(candidate.updatedAt)}
+                      </td>
+                      <td className="recoveryCandidateDialogNumber">
+                        {candidate.characterCount}
+                      </td>
+                      <td>
+                        {translate(
+                          candidate.documentType === "markdown.untitled"
+                            ? "dialog.recovery.type.untitled"
+                            : "dialog.recovery.type.file"
+                        )}
+                      </td>
+                      <td className="recoveryCandidateDialogPreview">
+                        {candidate.previewSnippet.length > 0
+                          ? candidate.previewSnippet
+                          : translate("dialog.recovery.previewEmpty")}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
