@@ -119,6 +119,24 @@ function sanitizeNonNegativeNumber(value: unknown): number | undefined {
     : undefined;
 }
 
+function sanitizePositiveInteger(value: unknown): number | undefined {
+  const integer = sanitizeNonNegativeInteger(value);
+
+  return integer !== undefined && integer > 0 ? integer : undefined;
+}
+
+/**
+ * #293: echo an ISO-8601 timestamp verbatim when it is short and parses,
+ * otherwise drop it. Never derived from a path or manuscript text.
+ */
+function sanitizeIsoTimestamp(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length === 0 || value.length > 40) {
+    return undefined;
+  }
+
+  return Number.isNaN(Date.parse(value)) ? undefined : value;
+}
+
 function sanitizeBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
@@ -727,6 +745,30 @@ export function sanitizeDebugLogDetails(
 
         if (schemaVersion !== undefined) {
           sanitized.schemaVersion = schemaVersion;
+        }
+        break;
+      }
+      case "ownerPid": {
+        const ownerPid = sanitizePositiveInteger(value);
+
+        if (ownerPid !== undefined) {
+          sanitized.ownerPid = ownerPid;
+        }
+        break;
+      }
+      case "ownerAppVersion": {
+        const ownerAppVersion = sanitizeSafeCode(value);
+
+        if (ownerAppVersion) {
+          sanitized.ownerAppVersion = ownerAppVersion;
+        }
+        break;
+      }
+      case "ownerCreatedAt": {
+        const ownerCreatedAt = sanitizeIsoTimestamp(value);
+
+        if (ownerCreatedAt) {
+          sanitized.ownerCreatedAt = ownerCreatedAt;
         }
         break;
       }

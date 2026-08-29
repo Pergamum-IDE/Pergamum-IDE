@@ -76,6 +76,12 @@ export const debugLogEventNames = [
   "recovery.store.init.failed",
   "recovery.store.schema.archived",
   "recovery.store.lock.released",
+  "recovery.store.lock.reclamation.refused",
+  "recovery.store.lock.stale.detected",
+  "recovery.store.lock.stale.archived",
+  "recovery.store.lock.stale.archive.failed",
+  "recovery.store.lock.reacquire.succeeded",
+  "recovery.store.lock.reacquire.failed",
   "recovery.document.persisted",
   "recovery.document.persist.failed",
   "recovery.document.deleted",
@@ -477,6 +483,16 @@ export interface DebugLogDetails {
   schemaVersion?: number;
   journalMode?: DebugLogRecoveryJournalMode;
   synchronous?: DebugLogRecoverySynchronousLevel;
+
+  /**
+   * #293: the owner recorded in a stale `Recovery.lock/owner.json` left by
+   * a killed process. Diagnostics only — `ownerPid` is that dead process's
+   * OS pid, `ownerAppVersion` its app version string, `ownerCreatedAt` its
+   * ISO lock-acquire timestamp. No path, no manuscript text, no store name.
+   */
+  ownerPid?: number;
+  ownerAppVersion?: string;
+  ownerCreatedAt?: string;
 
   error?: SanitizedErrorInfo;
 }

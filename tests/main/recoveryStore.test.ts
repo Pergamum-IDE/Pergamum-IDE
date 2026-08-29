@@ -19,6 +19,10 @@ import {
   recoveryStoreStatus,
   shutdownRecoveryStore
 } from "../../src/main/recoveryStore";
+import { createRecoveryStoreLock } from "../../src/main/recoveryStoreLock";
+import { upsertRecoveryDocument } from "../../src/main/recoveryDocumentStore";
+import { listRecoveryCandidates } from "../../src/main/recoveryCandidateStore";
+import type { RecoveryDocumentPayload } from "../../src/shared/recoveryDocument";
 
 let userDataPath = "";
 let projectRootPath = "";
@@ -171,7 +175,7 @@ describe("initializeRecoveryStore (Phase 6-4-2)", () => {
     expect(handle?.database.pragma("synchronous", { simple: true })).toBe(2);
   });
 
-  it("is a silent non-owner when another instance holds the lock: no DB opened, no failure surfaced", async () => {
+  it("is a silent non-owner when another LIVE instance holds the lock: no DB opened, no failure surfaced", async () => {
     const lockDir = path.join(
       userDataPath,
       recoveryStoreDirectoryName,
@@ -190,28 +194,38 @@ describe("initializeRecoveryStore (Phase 6-4-2)", () => {
     );
 
     const logger = createLoggerMock();
-    const status = await initializeRecoveryStore(
-      baseOptions(logger, "0198d95f-97d8-7000-8000-000000000004")
-    );
+    const status = await initializeRecoveryStore({
+      ...baseOptions(logger, "0198d95f-97d8-7000-8000-000000000004"),
+      deps: { probeProcessLiveness: () => "alive" }
+    });
 
     expect(status).toMatchObject({
       kind: "nonOwner",
       reason: "lockUnavailable"
     });
-    // The non-owner opens nothing.
+    // The non-owner opens nothing; the holder's lock is left untouched.
     expect(__recoveryStoreDatabaseForTests()).toBeNull();
     await expect(fs.access(recoveryDbPath())).rejects.toMatchObject({
       code: "ENOENT"
     });
+    await expect(fs.access(lockDir)).resolves.toBeUndefined();
+    const lockDirEntries = await fs.readdir(
+      path.join(userDataPath, recoveryStoreDirectoryName)
+    );
+    expect(
+      lockDirEntries.filter((name) => name.includes(".stale-"))
+    ).toEqual([]);
 
     const events = loggedEventNames(logger);
-    expect(events).toEqual([
-      "recovery.store.init.started",
-      "recovery.store.init.skipped"
-    ]);
+    expect(events).toContain("recovery.store.init.started");
+    expect(events).toContain("recovery.store.init.skipped");
+    // A live owner is a REFUSAL, never "stale detected".
+    expect(events).toContain("recovery.store.lock.reclamation.refused");
+    expect(events).not.toContain("recovery.store.lock.stale.detected");
     // Nothing that could drive a user-facing error / notification.
     expect(events).not.toContain("recovery.store.init.failed");
     expect(events).not.toContain("recovery.store.init.succeeded");
+    expect(events).not.toContain("recovery.store.lock.stale.archived");
     for (const [entry] of logger.log.mock.calls) {
       expect(entry.level).not.toBe("error");
     }
@@ -227,9 +241,11 @@ describe("initializeRecoveryStore (Phase 6-4-2)", () => {
     // this process's module state is dropped, WITHOUT releasing the lock.
     __resetRecoveryStoreForTests();
 
-    const second = await initializeRecoveryStore(
-      baseOptions(createLoggerMock(), "0198d95f-97d8-7000-8000-00000000000b")
-    );
+    const second = await initializeRecoveryStore({
+      ...baseOptions(createLoggerMock(), "0198d95f-97d8-7000-8000-00000000000b"),
+      // The first instance's process is still alive → no stale takeover.
+      deps: { probeProcessLiveness: () => "alive" }
+    });
     expect(second.kind).toBe("nonOwner");
   });
 
@@ -376,6 +392,293 @@ describe("initializeRecoveryStore (Phase 6-4-2)", () => {
     );
     expect(paths.lockDirectoryPath).toBe(
       path.join("/home/w/.config/Pergamum", "Recovery", "Recovery.lock")
+    );
+  });
+});
+
+describe("initializeRecoveryStore — stale Recovery.lock recovery (#293)", () => {
+  const DEAD_OWNER = {
+    instanceRunId: "0198d95f-97d8-7000-8000-0000000000ff",
+    pid: 62368,
+    createdAt: new Date("2026-08-29T08:06:16.724Z").toISOString(),
+    appVersion: "0.60.0"
+  };
+  const CANDIDATE_MARKER = "SECRET_MANUSCRIPT_BODY_293";
+
+  function recoveryDirPath(): string {
+    return path.join(userDataPath, recoveryStoreDirectoryName);
+  }
+  function lockDirPath(): string {
+    return path.join(recoveryDirPath(), recoveryStoreLockDirectoryName);
+  }
+
+  async function seedStaleLock(
+    owner: Record<string, unknown> = DEAD_OWNER
+  ): Promise<void> {
+    await fs.mkdir(lockDirPath(), { recursive: true });
+    await fs.writeFile(
+      path.join(lockDirPath(), recoveryStoreLockOwnerFileName),
+      `${JSON.stringify(owner, null, 2)}\n`,
+      "utf8"
+    );
+  }
+
+  function candidatePayload(): RecoveryDocumentPayload {
+    return {
+      documentKey: "file:/novel/chapter-03.md",
+      documentType: "markdown.file",
+      sourceUri: "file:///novel/chapter-03.md",
+      displayName: "chapter-03.md",
+      projectId: null,
+      projectFilePath: "/novel/Novel.pergamum",
+      filePath: "/novel/chapter-03.md",
+      documentEncoding: "utf-8",
+      documentLineend: "lf",
+      baseMtimeMs: null,
+      baseSize: 5,
+      baseSha256: "a".repeat(64),
+      payloadText: `# Chapter\n${CANDIDATE_MARKER}`
+    };
+  }
+
+  /** Create a real Recovery.db (schema v1) holding one candidate, then let
+   *  go of the lock so a stale one can be seeded in its place. */
+  async function seedRecoveryDbWithCandidate(): Promise<string> {
+    const first = await initializeRecoveryStore(
+      baseOptions(createLoggerMock(), "0198d95f-97d8-7000-8000-0000000000a1")
+    );
+    if (first.kind !== "owner") throw new Error("seed: expected owner");
+    const handle = __recoveryStoreDatabaseForTests();
+    if (!handle) throw new Error("seed: no db handle");
+    upsertRecoveryDocument(handle.database, candidatePayload(), {
+      instanceRunId: "0198d95f-97d8-7000-8000-0000000000a1",
+      appVersion: "9.8.7-test",
+      now: () => new Date("2026-08-29T08:00:00.000Z"),
+      createRowId: () => "row-seed-1"
+    });
+    await shutdownRecoveryStore();
+    __resetRecoveryStoreForTests();
+    return first.storeId;
+  }
+
+  it("takes over a stale lock from a dead owner and OPENS the existing Recovery.db (candidate still listable)", async () => {
+    const seededStoreId = await seedRecoveryDbWithCandidate();
+    await seedStaleLock();
+
+    const logger = createLoggerMock();
+    const status = await initializeRecoveryStore({
+      ...baseOptions(logger, "0198d95f-97d8-7000-8000-0000000000b2"),
+      deps: { probeProcessLiveness: () => "dead" }
+    });
+
+    expect(status.kind).toBe("owner");
+    if (status.kind !== "owner") return;
+    // The DB was OPENED, not recreated.
+    expect(status.storeId).toBe(seededStoreId);
+
+    const handle = __recoveryStoreDatabaseForTests();
+    expect(handle).not.toBeNull();
+    const candidates = listRecoveryCandidates(handle!.database);
+    expect(candidates.map((c) => c.recoveryId)).toEqual(["row-seed-1"]);
+
+    const events = loggedEventNames(logger);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        "recovery.store.lock.stale.detected",
+        "recovery.store.lock.stale.archived",
+        "recovery.store.lock.reacquire.succeeded",
+        "recovery.store.init.succeeded"
+      ])
+    );
+    // stale.detected precedes the archive/reacquire it announces.
+    expect(events.indexOf("recovery.store.lock.stale.detected")).toBeLessThan(
+      events.indexOf("recovery.store.lock.stale.archived")
+    );
+    expect(
+      events.indexOf("recovery.store.lock.reacquire.succeeded")
+    ).toBeLessThan(events.indexOf("recovery.store.init.succeeded"));
+    expect(events).not.toContain("recovery.store.init.skipped");
+    // A dead-owner takeover is never a "refusal".
+    expect(events).not.toContain("recovery.store.lock.reclamation.refused");
+
+    // The stale lock was renamed aside, never deleted.
+    const entries = await fs.readdir(recoveryDirPath());
+    expect(entries.filter((n) => n.includes(".stale-"))).toHaveLength(1);
+
+    // Body-free / path-safe logs.
+    const serialized = JSON.stringify(
+      logger.log.mock.calls.map(([entry]) => entry)
+    );
+    expect(serialized).not.toContain(CANDIDATE_MARKER);
+    expect(serialized).not.toContain("payload_text");
+    expect(serialized).not.toContain(userDataPath);
+    expect(serialized).not.toContain(recoveryStoreDatabaseFileName);
+    expect(serialized).not.toContain(".stale-");
+    // The dead owner's diagnostics DO appear (as scalar fields).
+    const archived = logger.log.mock.calls
+      .map(([entry]) => entry)
+      .find(
+        (e: { event: string }) =>
+          e.event === "recovery.store.lock.stale.archived"
+      ) as { details: Record<string, unknown> };
+    expect(archived.details).toMatchObject({
+      pathKind: "appData",
+      result: "succeeded",
+      ownerPid: 62368,
+      ownerAppVersion: "0.60.0",
+      ownerCreatedAt: DEAD_OWNER.createdAt
+    });
+  });
+
+  it.each(["alive", "unknown"] as const)(
+    "refuses takeover when the owner probes %s: reclamation.refused, nonOwner, DB not opened",
+    async (liveness) => {
+      await seedRecoveryDbWithCandidate();
+      await seedStaleLock();
+
+      const logger = createLoggerMock();
+      const status = await initializeRecoveryStore({
+        ...baseOptions(logger, "0198d95f-97d8-7000-8000-0000000000c3"),
+        deps: { probeProcessLiveness: () => liveness }
+      });
+
+      expect(status.kind).toBe("nonOwner");
+      expect(__recoveryStoreDatabaseForTests()).toBeNull();
+      // The stale lock is left exactly as found.
+      await expect(fs.access(lockDirPath())).resolves.toBeUndefined();
+      const entries = await fs.readdir(recoveryDirPath());
+      expect(entries.filter((n) => n.includes(".stale-"))).toEqual([]);
+
+      const events = loggedEventNames(logger);
+      expect(events).toContain("recovery.store.lock.reclamation.refused");
+      // alive / unknown is NOT a stale lock.
+      expect(events).not.toContain("recovery.store.lock.stale.detected");
+      expect(events).not.toContain("recovery.store.lock.stale.archived");
+      expect(events).toContain("recovery.store.init.skipped");
+      expect(events).not.toContain("recovery.store.init.succeeded");
+
+      const refused = logger.log.mock.calls
+        .map(([entry]) => entry)
+        .find(
+          (e: { event: string }) =>
+            e.event === "recovery.store.lock.reclamation.refused"
+        ) as { level: string; details: Record<string, unknown> };
+      expect(refused.level).toBe("debug");
+      expect(refused.details).toMatchObject({
+        pathKind: "appData",
+        result: "ignored",
+        reason: "locked",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: DEAD_OWNER.createdAt
+      });
+    }
+  );
+
+  it("archive failure: nonOwner, Recovery.db untouched, DB not opened", async () => {
+    await seedRecoveryDbWithCandidate();
+    await seedStaleLock();
+    const dbBytesBefore = await fs.readFile(recoveryDbPath());
+
+    const logger = createLoggerMock();
+    const status = await initializeRecoveryStore({
+      ...baseOptions(logger, "0198d95f-97d8-7000-8000-0000000000d4"),
+      deps: {
+        probeProcessLiveness: () => "dead",
+        createLock: (lockDirectoryPath) =>
+          createRecoveryStoreLock({
+            lockDirectoryPath,
+            fileSystem: {
+              mkdir: (p) => fs.mkdir(p).then(() => undefined),
+              writeFile: (p, d, o) => fs.writeFile(p, d, o),
+              rm: (p, o) => fs.rm(p, o),
+              rmdir: (p) => fs.rmdir(p),
+              readFile: (p) => fs.readFile(p, "utf8"),
+              rename: () => Promise.reject(new Error("rename boom")),
+              stat: async (p) => {
+                const s = await fs.stat(p);
+                return { isDirectory: () => s.isDirectory() };
+              }
+            }
+          })
+      }
+    });
+
+    expect(status.kind).toBe("nonOwner");
+    expect(__recoveryStoreDatabaseForTests()).toBeNull();
+    const events = loggedEventNames(logger);
+    // A dead owner: stale.detected fires before the archive it announces.
+    expect(events.indexOf("recovery.store.lock.stale.detected")).toBeLessThan(
+      events.indexOf("recovery.store.lock.stale.archive.failed")
+    );
+    expect(events).not.toContain("recovery.store.lock.reclamation.refused");
+    // Recovery.db is byte-identical; no sidecars were deleted.
+    expect(await fs.readFile(recoveryDbPath())).toEqual(dbBytesBefore);
+    const entries = await fs.readdir(recoveryDirPath());
+    expect(entries).toContain(recoveryStoreDatabaseFileName);
+  });
+
+  it("reacquire mkdir failure: nonOwner, DB not opened, Recovery.db preserved", async () => {
+    await seedRecoveryDbWithCandidate();
+    await seedStaleLock();
+    const dbBytesBefore = await fs.readFile(recoveryDbPath());
+
+    let mkdirCalls = 0;
+    const logger = createLoggerMock();
+    const status = await initializeRecoveryStore({
+      ...baseOptions(logger, "0198d95f-97d8-7000-8000-0000000000e5"),
+      deps: {
+        probeProcessLiveness: () => "dead",
+        createLock: (lockDirectoryPath) =>
+          createRecoveryStoreLock({
+            lockDirectoryPath,
+            fileSystem: {
+              mkdir: (p) => {
+                mkdirCalls += 1;
+                return mkdirCalls >= 2
+                  ? Promise.reject(new Error("mkdir boom"))
+                  : fs.mkdir(p).then(() => undefined);
+              },
+              writeFile: (p, d, o) => fs.writeFile(p, d, o),
+              rm: (p, o) => fs.rm(p, o),
+              rmdir: (p) => fs.rmdir(p),
+              readFile: (p) => fs.readFile(p, "utf8"),
+              rename: (a, b) => fs.rename(a, b).then(() => undefined),
+              stat: async (p) => {
+                const s = await fs.stat(p);
+                return { isDirectory: () => s.isDirectory() };
+              }
+            }
+          })
+      }
+    });
+
+    expect(status.kind).toBe("nonOwner");
+    expect(__recoveryStoreDatabaseForTests()).toBeNull();
+    const events = loggedEventNames(logger);
+    expect(events.indexOf("recovery.store.lock.stale.detected")).toBeLessThan(
+      events.indexOf("recovery.store.lock.reacquire.failed")
+    );
+    expect(events).not.toContain("recovery.store.lock.reclamation.refused");
+    expect(await fs.readFile(recoveryDbPath())).toEqual(dbBytesBefore);
+  });
+
+  it("never deletes Recovery.db / -wal / -shm across any stale-lock branch", async () => {
+    await seedRecoveryDbWithCandidate();
+    // Force WAL sidecars to exist by opening once more via a takeover.
+    await seedStaleLock();
+    await initializeRecoveryStore({
+      ...baseOptions(createLoggerMock(), "0198d95f-97d8-7000-8000-0000000000f6"),
+      deps: { probeProcessLiveness: () => "dead" }
+    });
+    await shutdownRecoveryStore();
+    __resetRecoveryStoreForTests();
+
+    const entries = await fs.readdir(recoveryDirPath());
+    expect(entries).toContain(recoveryStoreDatabaseFileName);
+    // The archived stale lock dir is retained for forensics.
+    expect(entries.filter((n) => n.includes(".stale-")).length).toBeGreaterThan(
+      0
     );
   });
 });
