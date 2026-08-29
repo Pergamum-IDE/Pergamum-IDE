@@ -53,10 +53,6 @@ export interface SessionSnapshotInputs {
   readonly activeEditor: SessionEditorIdentity | null;
 }
 
-function untitledIdFromEditorId(editorId: EditorId): string | null {
-  return editorId.kind === "untitled" ? String(editorId.sessionId) : null;
-}
-
 function sessionEditorFromOpenEditor(
   editorId: EditorId,
   editor: CurrentEditor,
@@ -98,17 +94,13 @@ function sessionEditorFromOpenEditor(
         viewStateKey
       };
     case "untitled": {
-      const untitledId = untitledIdFromEditorId(editorId);
-
-      if (untitledId === null) {
-        return null;
-      }
-
+      // Phase 6-4-3: the Session references the document model's stable
+      // UUIDv7, never the session-local `EditorId.sessionId` counter.
       return {
         editor: {
           kind: "untitled",
           order,
-          untitledId,
+          untitledId: editor.document.untitledId,
           viewState: null
         },
         viewStateKey

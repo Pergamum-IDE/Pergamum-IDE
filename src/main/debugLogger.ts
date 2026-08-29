@@ -126,6 +126,10 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "recovery.store.init.failed": "error",
   "recovery.store.schema.archived": "info",
   "recovery.store.lock.released": "debug",
+  "recovery.document.persisted": "debug",
+  "recovery.document.persist.failed": "error",
+  "recovery.document.deleted": "debug",
+  "recovery.document.delete.failed": "error",
   "app.uncaughtException": "error",
   "app.unhandledRejection": "error"
 };

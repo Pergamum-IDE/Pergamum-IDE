@@ -57,10 +57,12 @@ import {
 } from "./windowLifecycle";
 import {
   initializeRecoveryStore,
+  recoveryStoreOwnerDatabase,
   recoveryStoreStatus,
   shutdownRecoveryStore
 } from "./recoveryStore";
 import { registerRecoveryStoreIpc } from "./recoveryStoreIpc";
+import { registerRecoveryDocumentIpc } from "./recoveryDocumentIpc";
 
 let mainWindow: BrowserWindow | null = null;
 let windowLifecycleController: WindowLifecycleController | null = null;
@@ -339,6 +341,16 @@ app.whenReady().then(async () => {
     });
   }
   registerRecoveryStoreIpc(ipcMain, recoveryStoreStatus);
+  // #286: renderer → main dirty Markdown payload persistence. Owner-only
+  // (the handlers guard on `recoveryStoreStatus()`); a non-owner instance
+  // silently returns `{ ok: false, skipped }`.
+  registerRecoveryDocumentIpc(ipcMain, {
+    getStatus: recoveryStoreStatus,
+    getOwnerDatabase: recoveryStoreOwnerDatabase,
+    instanceRunId,
+    appVersion: app.getVersion(),
+    logger: debugLogger
+  });
 
   void createMainWindow(true);
 

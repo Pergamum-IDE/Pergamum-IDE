@@ -1,14 +1,25 @@
 import type {
   MarkdownFile,
+  MarkdownFileReadMetadata,
+  MarkdownLineEnding,
   ProjectDocument,
   WriteMarkdownSavedResult
 } from "../shared/api";
+import { createUuidv7 } from "../shared/uuidv7";
 import {
   buildLineEndingBreakSet,
   lineEndingBreakSetsEqual,
   type LineEndingBreakSet
 } from "./editorLineEndingField";
 import { analyzeLineEndings, normalizeLineEndings } from "./lineEndingTracking";
+
+/**
+ * The encoding DETECTED from a document's source file, kept so a later
+ * Recovery restore can re-save it the same way. Pergamum's write pipeline
+ * only ever emits BOM-less UTF-8 (#284 / ADR-0009 S-34), so a re-saved file
+ * is always `"utf-8"`.
+ */
+export type DocumentReadEncoding = "utf-8" | "utf-8-bom";
 
 export const initialDocumentContent =
   "# Untitled\n\nStart writing in Markdown.\n\n**Bold** text renders in the preview.";
@@ -46,16 +57,28 @@ interface BaseCurrentDocument {
 export interface UntitledCurrentDocument extends BaseCurrentDocument {
   kind: "untitled";
   path: null;
+  /**
+   * Phase 6-4-3: a stable UUIDv7 minted the moment the Untitled document is
+   * created. This — NOT the session-local `EditorId.sessionId` counter — is
+   * the identity Session / Recovery / UI reference (`untitled:<uuidv7>`).
+   */
+  untitledId: string;
 }
 
 export interface FileCurrentDocument extends BaseCurrentDocument {
   kind: "file";
   path: string;
+  /** Encoding / line ending detected from the source file on load (kept for
+   *  Recovery so a restore re-saves with the same attributes). */
+  readEncoding: DocumentReadEncoding;
+  readLineEnding: MarkdownLineEnding;
 }
 
 export interface ProjectCurrentDocument extends BaseCurrentDocument {
   kind: "project";
   relativePath: string;
+  readEncoding: DocumentReadEncoding;
+  readLineEnding: MarkdownLineEnding;
 }
 
 export type CurrentDocument =
@@ -63,7 +86,15 @@ export type CurrentDocument =
   | FileCurrentDocument
   | ProjectCurrentDocument;
 
-export function createUntitledDocument(): UntitledCurrentDocument {
+function readEncodingFromMetadata(
+  metadata: MarkdownFileReadMetadata | undefined
+): DocumentReadEncoding {
+  return metadata?.hadBom ? "utf-8-bom" : "utf-8";
+}
+
+export function createUntitledDocument(
+  createUntitledId: () => string = createUuidv7
+): UntitledCurrentDocument {
   const breaks = buildLineEndingBreakSet(
     analyzeLineEndings(initialDocumentContent)
   );
@@ -71,6 +102,7 @@ export function createUntitledDocument(): UntitledCurrentDocument {
   return {
     kind: "untitled",
     path: null,
+    untitledId: createUntitledId(),
     name: "Untitled.md",
     content: initialDocumentContent,
     savedContent: initialDocumentContent,
@@ -90,6 +122,8 @@ export function createFileDocument(file: MarkdownFile): FileCurrentDocument {
     kind: "file",
     path: file.path,
     name: displayName(file.path),
+    readEncoding: readEncodingFromMetadata(file.metadata),
+    readLineEnding: file.metadata?.lineEnding ?? "unknown",
     content: normalizedContent,
     savedContent: normalizedContent,
     lineEndingBreaks: breaks,
@@ -99,7 +133,8 @@ export function createFileDocument(file: MarkdownFile): FileCurrentDocument {
 
 export function createProjectDocument(
   document: ProjectDocument,
-  content: string
+  content: string,
+  metadata?: MarkdownFileReadMetadata
 ): ProjectCurrentDocument {
   const normalizedContent = normalizeLineEndings(content);
   const breaks = buildLineEndingBreakSet(analyzeLineEndings(content));
@@ -108,11 +143,21 @@ export function createProjectDocument(
     kind: "project",
     relativePath: document.relativePath,
     name: document.name,
+    readEncoding: readEncodingFromMetadata(metadata),
+    readLineEnding: metadata?.lineEnding ?? "unknown",
     content: normalizedContent,
     savedContent: normalizedContent,
     lineEndingBreaks: breaks,
     savedLineEndingBreaks: breaks
   };
+}
+
+/** The source line ending the document reports, or `"unknown"` when the
+ *  document has no source file (Untitled). */
+export function documentReadLineEnding(
+  document: CurrentDocument
+): MarkdownLineEnding {
+  return document.kind === "untitled" ? "unknown" : document.readLineEnding;
 }
 
 export function displayName(filePath: string): string {
@@ -212,6 +257,11 @@ export function applyStandaloneSaveResult(
     kind: "file",
     path: result.path,
     name: displayName(result.path),
+    // The file Pergamum just wrote is BOM-less UTF-8 (#284). Line endings
+    // carry forward from the source document (Save As preserves them);
+    // Untitled has none to carry, so it becomes "unknown".
+    readEncoding: "utf-8",
+    readLineEnding: documentReadLineEnding(document),
     content: document.content,
     savedContent: document.content,
     // Content/tracking didn't change — only the file identity (e.g. Save

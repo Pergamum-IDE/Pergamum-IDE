@@ -33,7 +33,7 @@ function dirtyState(): OpenDocumentsState {
   return updateActiveOpenDocument(
     openOrActivateDocument(
       createInitialOpenDocumentsState(),
-      createUntitledDocument(),
+      createUntitledDocument(() => "0198d95f-97d8-7000-8000-000000000001"),
       null
     ),
     (document) => updateCurrentDocumentContent(document, "changed")

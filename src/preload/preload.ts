@@ -135,7 +135,11 @@ const pergamumApi: PergamumApi = {
   },
   recovery: {
     getStoreStatus: () =>
-      ipcRenderer.invoke(RECOVERY_CHANNELS.getStoreStatus)
+      ipcRenderer.invoke(RECOVERY_CHANNELS.getStoreStatus),
+    upsertDocument: (payload) =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.upsertDocument, payload),
+    deleteDocument: (documentKey) =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.deleteDocument, { documentKey })
   },
   glossary: {
     create: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.create, input),

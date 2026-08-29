@@ -77,8 +77,12 @@ function projectEditor(document: ProjectDocument) {
   );
 }
 
-function untitledEditor() {
-  return createMarkdownCurrentEditor(createUntitledDocument());
+function untitledEditor(
+  untitledId = "0198d95f-97d8-7000-8000-000000000001"
+) {
+  return createMarkdownCurrentEditor(
+    createUntitledDocument(() => untitledId)
+  );
 }
 
 function viewState(digestChar: string): EditorViewState {
@@ -117,7 +121,12 @@ describe("buildSessionSnapshotInputs (#272)", () => {
         filePath: "C:/notes/scratch.md",
         viewState: null
       },
-      { kind: "untitled", order: 2, untitledId: "1", viewState: null },
+      {
+        kind: "untitled",
+        order: 2,
+        untitledId: "0198d95f-97d8-7000-8000-000000000001",
+        viewState: null
+      },
       {
         kind: "glossaryEntry",
         order: 3,
@@ -258,9 +267,20 @@ describe("buildSessionSnapshotInputs (#272)", () => {
   });
 
   it("distinguishes multiple untitled editors by identity + order", () => {
-    let state = createOpenDocumentsStateWithEditor(untitledEditor(), null);
-    state = openOrActivateEditor(state, untitledEditor(), null);
-    state = openOrActivateEditor(state, untitledEditor(), null);
+    let state = createOpenDocumentsStateWithEditor(
+      untitledEditor("0198d95f-97d8-7000-8000-000000000001"),
+      null
+    );
+    state = openOrActivateEditor(
+      state,
+      untitledEditor("0198d95f-97d8-7000-8000-000000000002"),
+      null
+    );
+    state = openOrActivateEditor(
+      state,
+      untitledEditor("0198d95f-97d8-7000-8000-000000000003"),
+      null
+    );
 
     const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state);
     const untitledIds = inputs.editors.map(
