@@ -64,7 +64,11 @@ import {
 import { resolveEffectiveSettings } from "../shared/settings";
 import { isPathEqualOrInsideDirectory } from "../shared/saveTargetPolicy";
 import { ActivityBar } from "./ActivityBar";
-import { AboutDialog } from "./dialog/AboutDialog";
+import {
+  AboutDialog,
+  aboutCreditsHeading,
+  aboutCreditsRows
+} from "./dialog/AboutDialog";
 import {
   applicationCommandIds,
   createApplicationCommandTitles,
@@ -307,6 +311,10 @@ import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { NotificationHost } from "./notification/NotificationHost";
 import { NotificationController } from "./notification/notificationController";
+import type {
+  NotificationToastAction,
+  NotificationToastPlacement
+} from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
@@ -1368,6 +1376,8 @@ export function App(): JSX.Element {
   // their original timer.
   const notificationAutoDismissMs =
     effectiveSettings.workbench.notification.durationMs;
+  const notificationOutputEnabled =
+    effectiveSettings.notification.output.enabled;
   useEffect(() => {
     applyWorkbenchFontFamily(effectiveSettings.workbench.fontFamily);
   }, [effectiveSettings.workbench.fontFamily]);
@@ -2283,6 +2293,25 @@ export function App(): JSX.Element {
     setAboutDialogAppInfo(null);
   }
 
+  function showAboutStaffCredits(
+    placement: NotificationToastPlacement
+  ): void {
+    if (!aboutDialogAppInfo) {
+      return;
+    }
+
+    notificationController.notify({
+      lane: "internal",
+      priority: 20,
+      message: aboutCreditsHeading(aboutDialogAppInfo),
+      icon: { kind: "preset", name: "pergamum" },
+      placement,
+      motion: { kind: "fade" },
+      detailRows: aboutCreditsRows(),
+      durationMs: 15_000
+    });
+  }
+
   /**
    * #252: this dialog's data is derived synchronously from the active
    * document's #253 tracking state and the current
@@ -2801,6 +2830,23 @@ export function App(): JSX.Element {
         values: { message: errorMessage(error, translate) }
       });
     });
+  }
+
+  function isNotificationActionEnabled(
+    action: NotificationToastAction
+  ): boolean {
+    return commandRegistry.isEnabledForContext(
+      action.commandId,
+      commandContextRef.current
+    );
+  }
+
+  function executeNotificationAction(action: NotificationToastAction): void {
+    if (!isNotificationActionEnabled(action)) {
+      return;
+    }
+
+    executeUiCommand(action.commandId, { source: "unknown" });
   }
 
   executeUiCommandRef.current = (commandId) => {
@@ -5818,6 +5864,7 @@ export function App(): JSX.Element {
           onClose={closeAboutDialog}
           onOpenRepository={openAboutRepository}
           onOpenTypewriterSoundsCredit={openAboutTypewriterSoundsCredit}
+          onShowStaffCredits={showAboutStaffCredits}
         />
       ) : null}
 
@@ -5874,6 +5921,9 @@ export function App(): JSX.Element {
         controller={notificationController}
         translate={translate}
         autoDismissMs={notificationAutoDismissMs}
+        outputEnabled={notificationOutputEnabled}
+        isActionEnabled={isNotificationActionEnabled}
+        onExecuteAction={executeNotificationAction}
       />
     </main>
   );

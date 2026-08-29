@@ -622,7 +622,7 @@ describe("NotificationToast foundation translations (#266)", () => {
     expect(t("en", "notification.dismiss")).toBe("Dismiss notification");
   });
 
-  it("defines the Settings label/description for the notification display time (#266) and the description explains the 0 = no auto-dismiss case", () => {
+  it("defines the Settings label/description for the notification display time (#266/#298) and explains zero plus the safe clamp", () => {
     for (const language of ["ja", "en"] as const) {
       for (const key of [
         "settings.workbench.notification.durationMs.label",
@@ -635,8 +635,35 @@ describe("NotificationToast foundation translations (#266)", () => {
     expect(t("ja", "settings.workbench.notification.durationMs.description")).toContain(
       "0"
     );
+    expect(t("ja", "settings.workbench.notification.durationMs.description")).toContain(
+      "自動的に消えません"
+    );
+    expect(t("ja", "settings.workbench.notification.durationMs.description")).toContain(
+      "3000"
+    );
     expect(t("en", "settings.workbench.notification.durationMs.description")).toContain(
       "0"
+    );
+    expect(t("en", "settings.workbench.notification.durationMs.description")).toContain(
+      "until dismissed"
+    );
+    expect(t("en", "settings.workbench.notification.durationMs.description")).toContain(
+      "3000"
+    );
+  });
+
+  it("defines the Settings label/description for notification.output.enabled (#298)", () => {
+    expect(t("ja", "settings.notification.output.enabled.label")).toBe(
+      "アプリ内通知を表示"
+    );
+    expect(t("en", "settings.notification.output.enabled.label")).toBe(
+      "Show in-app notifications"
+    );
+    expect(t("ja", "settings.notification.output.enabled.description")).toContain(
+      "警告やエラー"
+    );
+    expect(t("en", "settings.notification.output.enabled.description")).toContain(
+      "Warnings and errors"
     );
   });
 

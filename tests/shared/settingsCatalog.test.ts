@@ -673,6 +673,24 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toBe(false);
     });
 
+    it("registers notification.output.enabled as the production notification boolean setting (#298)", () => {
+      const entry = getCatalogEntry("notification.output.enabled");
+
+      expect(entry.type).toBe("boolean");
+      expect(entry.scope).toBe("applicationOnly");
+      expect(getCatalogDefaultValue("notification.output.enabled")).toBe(true);
+      expect(validateCatalogValue("notification.output.enabled", true)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("notification.output.enabled", false)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("notification.output.enabled", "true")).toEqual({
+        ok: false,
+        failure: "typeMismatch"
+      });
+    });
+
     it("validates Command Palette description marquee delay as a finite integer from 0 to 10000", () => {
       const entry = getCatalogEntry("commandPalette.description.marquee.delay");
 
@@ -802,7 +820,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), and command descriptions (#215) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), command descriptions (#215), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
@@ -823,7 +841,8 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.lineBreaks",
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
-        "editor.characterCount.exclude.markdownComments"
+        "editor.characterCount.exclude.markdownComments",
+        "notification.output.enabled"
       ]);
     });
   });
@@ -969,9 +988,12 @@ describe("Settings Catalog Foundation (#150)", () => {
       ]);
     });
 
-    it("gets scope from catalog metadata, not from a key-prefix heuristic (two applicationOnly keys under different areas)", () => {
+    it("gets scope from catalog metadata, not from a key-prefix heuristic (applicationOnly keys under different areas)", () => {
       expect(getCatalogEntry("workbench.fontFamily").scope).toBe(
         getCatalogEntry("files.newFile.lineEnding").scope
+      );
+      expect(getCatalogEntry("notification.output.enabled").scope).toBe(
+        getCatalogEntry("workbench.fontFamily").scope
       );
     });
   });
@@ -985,6 +1007,9 @@ describe("Settings Catalog Foundation (#150)", () => {
         "commandPalette"
       );
       expect(getSettingArea("files.newFile.lineEnding")).toBe("files");
+      expect(getSettingArea("notification.output.enabled")).toBe(
+        "notification"
+      );
     });
 
     it("getCatalogEntriesByArea returns only that area's entries", () => {
@@ -1036,9 +1061,10 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, #259 character count settings, and #266 workbench.notification.durationMs (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, #259 character count settings, #266 workbench.notification.durationMs, and #298 notification.output.enabled (#232: workbench.advancedSettings.enabled removed)", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
+          "notification.output.enabled",
           "workbench.notification.durationMs",
           "commandPalette.description.enable",
           "commandPalette.description.marquee.delay",

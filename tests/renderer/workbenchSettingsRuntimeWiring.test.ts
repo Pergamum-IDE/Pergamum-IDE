@@ -12,6 +12,42 @@ describe("workbench.statusBar.visible / workbench.language runtime wiring (#174)
     expect(appSource).not.toContain("showStatusBar");
   });
 
+  it("notification.output.enabled is only passed to NotificationHost and does not gate the status bar", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const statusBarStart = appSource.indexOf(
+      "{effectiveSettings.workbench.statusBar.visible ? ("
+    );
+    const statusBarEnd = appSource.indexOf("<NotificationHost", statusBarStart);
+    const statusBarBlock = appSource.slice(statusBarStart, statusBarEnd);
+
+    expect(statusBarStart).toBeGreaterThan(-1);
+    expect(statusBarEnd).toBeGreaterThan(statusBarStart);
+    expect(statusBarBlock).toContain(
+      "effectiveSettings.workbench.statusBar.visible"
+    );
+    expect(statusBarBlock).not.toContain("notificationOutputEnabled");
+    expect(statusBarBlock).not.toContain(
+      "effectiveSettings.notification.output.enabled"
+    );
+  });
+
+  it("notification.output.enabled does not gate Error dialogs or the Recovery modal", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const dialogsStart = appSource.indexOf("{recoveryCandidateDialogData");
+    const dialogsEnd = appSource.indexOf("<NotificationHost", dialogsStart);
+    const modalBlock = appSource.slice(dialogsStart, dialogsEnd);
+
+    expect(dialogsStart).toBeGreaterThan(-1);
+    expect(dialogsEnd).toBeGreaterThan(dialogsStart);
+    expect(modalBlock).toContain("<RecoveryCandidateDialog");
+    expect(modalBlock).toContain("<ConfirmDialog");
+    expect(modalBlock).toContain("<ChoiceDialog");
+    expect(modalBlock).not.toContain("notificationOutputEnabled");
+    expect(modalBlock).not.toContain(
+      "effectiveSettings.notification.output.enabled"
+    );
+  });
+
   it("useApplicationSettings.ts sources displayLanguage from loadedSettings.workbench.language, not a legacy top-level field", () => {
     const hookSource = readFileSync(
       "src/renderer/useApplicationSettings.ts",

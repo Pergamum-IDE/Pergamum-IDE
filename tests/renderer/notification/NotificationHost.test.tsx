@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t, type Translate } from "../../../src/shared/i18n";
+import { applicationCommandIds } from "../../../src/shared/commandIds";
 import { NotificationController } from "../../../src/renderer/notification/notificationController";
 import { NotificationHost } from "../../../src/renderer/notification/NotificationHost";
 
@@ -32,7 +34,12 @@ afterEach(() => {
 
 function mount(
   controller: NotificationController,
-  autoDismissMs = 10_000
+  autoDismissMs = 10_000,
+  outputEnabled = true,
+  actionOptions: Pick<
+    React.ComponentProps<typeof NotificationHost>,
+    "isActionEnabled" | "onExecuteAction"
+  > = {}
 ): void {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -43,17 +50,29 @@ function mount(
       React.createElement(NotificationHost, {
         controller,
         translate,
-        autoDismissMs
+        autoDismissMs,
+        outputEnabled,
+        ...actionOptions
       })
     );
   });
 }
 
 function hostElement(): HTMLElement {
-  const host = container!.querySelector(".notificationHost");
+  const host = container!.querySelector(".notificationHost-viewport");
 
   if (!(host instanceof HTMLElement)) {
-    throw new Error("notification host not rendered");
+    throw new Error("notification viewport host not rendered");
+  }
+
+  return host;
+}
+
+function anchorHostElement(): HTMLElement {
+  const host = container!.querySelector(".notificationHost-anchorLayer");
+
+  if (!(host instanceof HTMLElement)) {
+    throw new Error("notification anchor host not rendered");
   }
 
   return host;
@@ -75,6 +94,12 @@ describe("NotificationHost (#266)", () => {
     expect(host.tagName).toBe("OL");
     expect(host.getAttribute("aria-live")).toBe("polite");
     expect(host.querySelectorAll(".notificationToast")).toHaveLength(0);
+
+    const anchorHost = anchorHostElement();
+
+    expect(anchorHost.tagName).toBe("OL");
+    expect(anchorHost.getAttribute("aria-live")).toBe("polite");
+    expect(anchorHost.querySelectorAll(".notificationToast")).toHaveLength(0);
   });
 
   it("shows a toast with its message when the controller receives a notification", () => {
@@ -111,17 +136,73 @@ describe("NotificationHost (#266)", () => {
     expect(toastMessages()).toEqual(["second"]);
   });
 
-  it("stacks multiple toasts in insertion order in the DOM", () => {
+  it("renders multiple toasts in the controller's priority-sorted DOM order", () => {
     const controller = new NotificationController();
     mount(controller);
 
     act(() => {
-      controller.notify({ message: "one" });
-      controller.notify({ message: "two" });
-      controller.notify({ message: "three" });
+      controller.notify({ message: "one", priority: 10 });
+      controller.notify({ message: "two", priority: 30 });
+      controller.notify({ message: "three", priority: 20 });
     });
 
-    expect(toastMessages()).toEqual(["one", "two", "three"]);
+    expect(toastMessages()).toEqual(["two", "three", "one"]);
+  });
+
+  it("renders anchorRect toasts in a dedicated layer above dialogs without raising viewport toasts", () => {
+    const controller = new NotificationController();
+    mount(controller);
+
+    act(() => {
+      controller.notify({ message: "viewport" });
+      controller.notify({
+        message: "anchored",
+        placement: {
+          kind: "anchorRect",
+          rect: { x: 20, y: 30, width: 40, height: 50 },
+          preferredPlacement: "below"
+        }
+      });
+    });
+
+    expect(
+      [...hostElement().querySelectorAll(".notificationToastMessage")].map(
+        (node) => node.textContent ?? ""
+      )
+    ).toEqual(["viewport"]);
+    expect(
+      [
+        ...anchorHostElement().querySelectorAll(".notificationToastMessage")
+      ].map((node) => node.textContent ?? "")
+    ).toEqual(["anchored"]);
+
+    const anchoredToast = anchorHostElement().querySelector(
+      ".notificationToast"
+    ) as HTMLElement;
+
+    expect(anchoredToast.style.position).toBe("fixed");
+    expect(anchoredToast.style.insetBlockStart).toBe("88px");
+  });
+
+  it("keeps only the anchor layer above the app modal z-index", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    const ruleBlock = (selector: string): string => {
+      const start = css.indexOf(selector);
+      const end = css.indexOf("\n}", start);
+
+      expect(start).toBeGreaterThan(-1);
+      expect(end).toBeGreaterThan(start);
+
+      return css.slice(start, end + 2);
+    };
+
+    const viewportHostBlock = ruleBlock(".notificationHost-viewport");
+    const anchorHostBlock = ruleBlock(".notificationHost-anchorLayer");
+    const appDialogBackdropBlock = ruleBlock(".appDialogBackdrop");
+
+    expect(appDialogBackdropBlock).toContain("z-index: 1000");
+    expect(viewportHostBlock).toContain("z-index: 900");
+    expect(anchorHostBlock).toContain("z-index: 1001");
   });
 
   it("pushes the autoDismissMs prop into the controller so toasts auto-dismiss", () => {
@@ -134,7 +215,7 @@ describe("NotificationHost (#266)", () => {
     expect(toastMessages()).toEqual(["auto"]);
 
     act(() => {
-      vi.advanceTimersByTime(4_999);
+      vi.advanceTimersByTime(5_499);
     });
     expect(toastMessages()).toEqual(["auto"]);
 
@@ -144,7 +225,7 @@ describe("NotificationHost (#266)", () => {
     expect(toastMessages()).toEqual([]);
   });
 
-  it("keeps a toast on screen indefinitely when autoDismissMs is 0", () => {
+  it("does not auto-dismiss when autoDismissMs is 0", () => {
     const controller = new NotificationController();
     mount(controller, 0);
 
@@ -153,10 +234,60 @@ describe("NotificationHost (#266)", () => {
     });
 
     act(() => {
-      vi.advanceTimersByTime(600_000);
+      vi.advanceTimersByTime(2_999);
     });
 
     expect(toastMessages()).toEqual(["sticky"]);
+
+    act(() => {
+      vi.advanceTimersByTime(1_000_000);
+    });
+
+    expect(toastMessages()).toEqual(["sticky"]);
+  });
+
+  it("suppresses and clears toasts when notification output is disabled", () => {
+    const controller = new NotificationController();
+    mount(controller, 10_000, false);
+
+    act(() => {
+      controller.notify({ message: "hidden" });
+    });
+
+    expect(toastMessages()).toEqual([]);
+  });
+
+  it("renders command actions as accessible buttons and rechecks disabled actions on click", () => {
+    const controller = new NotificationController();
+    const onExecuteAction = vi.fn();
+    mount(controller, 10_000, true, {
+      isActionEnabled: () => false,
+      onExecuteAction
+    });
+
+    act(() => {
+      controller.notify({
+        message: "action",
+        action: {
+          kind: "command",
+          commandId: applicationCommandIds.toggleRecentProjects,
+          labelKey: "common.close"
+        }
+      });
+    });
+
+    const action = container!.querySelector(
+      ".notificationToastAction"
+    ) as HTMLButtonElement;
+
+    expect(action.type).toBe("button");
+    expect(action.getAttribute("aria-disabled")).toBe("true");
+
+    act(() => {
+      action.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onExecuteAction).not.toHaveBeenCalled();
   });
 
   it("does not move focus when a toast appears", () => {
@@ -170,6 +301,30 @@ describe("NotificationHost (#266)", () => {
 
     act(() => {
       controller.notify({ message: "no focus steal" });
+    });
+
+    expect(document.activeElement).toBe(sentinel);
+    sentinel.remove();
+  });
+
+  it("does not move focus when an anchored toast appears", () => {
+    const controller = new NotificationController();
+    mount(controller);
+
+    const sentinel = document.createElement("input");
+    document.body.appendChild(sentinel);
+    sentinel.focus();
+    expect(document.activeElement).toBe(sentinel);
+
+    act(() => {
+      controller.notify({
+        message: "anchored focus",
+        placement: {
+          kind: "anchorRect",
+          rect: { x: 20, y: 30, width: 40, height: 50 },
+          preferredPlacement: "below"
+        }
+      });
     });
 
     expect(document.activeElement).toBe(sentinel);

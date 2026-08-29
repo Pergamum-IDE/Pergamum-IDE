@@ -2,7 +2,8 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent
 } from "react";
 import type { PergamumAppInfo } from "../../shared/api";
 import { APP_INFO_EXTERNAL_LINKS } from "../../shared/api";
@@ -18,6 +19,10 @@ import {
   type ClipboardAdapter
 } from "./clipboardAdapter";
 import { InfoDialog } from "./InfoDialog";
+import type {
+  NotificationToastDetailRow,
+  NotificationToastPlacement
+} from "../notification/notificationController";
 
 export interface AboutDialogProps {
   appInfo: PergamumAppInfo;
@@ -27,6 +32,7 @@ export interface AboutDialogProps {
   onClose: () => void;
   onOpenRepository: () => void;
   onOpenTypewriterSoundsCredit: () => void;
+  onShowStaffCredits: (placement: NotificationToastPlacement) => void;
 }
 
 type TechnicalInfoCopyState = "idle" | "copied" | "failed";
@@ -56,6 +62,21 @@ export function formatAboutTechnicalInformation(
   ].join("\n");
 }
 
+export function aboutCreditsHeading(appInfo: PergamumAppInfo): string {
+  return `Pergamum Ver.${normalizedTechnicalInfoValue(appInfo.version)} : Staff Credit`;
+}
+
+export function aboutCreditsRows(): readonly NotificationToastDetailRow[] {
+  return [
+    { label: "AI Conductor / Product Owner", value: "Kentaro Motoki" },
+    { label: "System Architect", value: "ChatGPT" },
+    { label: "Reviewers", value: "Claude, Gemini" },
+    { label: "Programmers", value: "Claude Code, Codex, Antigravity" },
+    { label: "Special Thanks", value: "My Friends" },
+    { label: "Gopher / Dogfood Tester", value: "Kentaro Motoki" }
+  ];
+}
+
 export function AboutDialog({
   appInfo,
   translate,
@@ -63,7 +84,8 @@ export function AboutDialog({
   opener,
   onClose,
   onOpenRepository,
-  onOpenTypewriterSoundsCredit
+  onOpenTypewriterSoundsCredit,
+  onShowStaffCredits
 }: AboutDialogProps): JSX.Element {
   const [copyState, setCopyState] =
     useState<TechnicalInfoCopyState>("idle");
@@ -136,6 +158,23 @@ export function AboutDialog({
     showCopyFeedback(copySucceeded ? "copied" : "failed");
   }
 
+  function handleShowStaffCredits(
+    event: ReactMouseEvent<HTMLButtonElement>
+  ): void {
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    onShowStaffCredits({
+      kind: "anchorRect",
+      rect: {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height
+      },
+      preferredPlacement: "below"
+    });
+  }
+
   return (
     <InfoDialog
       title={translate("dialog.about.title")}
@@ -188,11 +227,19 @@ export function AboutDialog({
     >
       <div className="aboutDialogContent">
         <div className="aboutDialogBranding">
-          <img
-            className="aboutDialogAppIcon"
-            src={appIconUrl}
-            alt={translate("dialog.about.appIconAlt")}
-          />
+          <button
+            type="button"
+            className="aboutDialogAppIconButton"
+            aria-label={translate("dialog.about.showStaffCredits")}
+            title={translate("dialog.about.showStaffCredits")}
+            onClick={handleShowStaffCredits}
+          >
+            <img
+              className="aboutDialogAppIcon"
+              src={appIconUrl}
+              alt={translate("dialog.about.appIconAlt")}
+            />
+          </button>
           <img
             className="aboutDialogLogo"
             src={logoUrl}

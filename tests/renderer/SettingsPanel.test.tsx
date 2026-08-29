@@ -318,6 +318,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "workbench.language",
       "workbench.statusBar.visible",
+      "notification.output.enabled",
       "workbench.notification.durationMs"
     ]);
   });
@@ -796,6 +797,29 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
           characterCount: { visible: false }
         }
       },
+      commandPalette: defaultApplicationSettings.commandPalette,
+      editor: defaultApplicationSettings.editor,
+      files: defaultApplicationSettings.files
+    });
+  });
+
+  it("saves immediately when the notification output switch changes (#298)", () => {
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("notification.output.enabled"),
+      onChangeSettings
+    });
+    const input = controlElement(element, "notification.output.enabled");
+    const onChange = input.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: false } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      preview: defaultApplicationSettings.preview,
+      notification: { output: { enabled: false } },
+      workbench: defaultApplicationSettings.workbench,
       commandPalette: defaultApplicationSettings.commandPalette,
       editor: defaultApplicationSettings.editor,
       files: defaultApplicationSettings.files

@@ -104,6 +104,11 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.workbench.statusBar.visible;
     case "workbench.statusBar.characterCount.visible":
       return settings.workbench.statusBar.characterCount.visible;
+    case "notification.output.enabled":
+      return (
+        settings.notification?.output.enabled ??
+        getCatalogDefaultValue("notification.output.enabled")
+      );
     case "workbench.notification.durationMs":
       return (
         settings.workbench.notification?.durationMs ??
@@ -190,13 +195,20 @@ function saveRequest(
   settings: ApplicationSettings,
   overrides: Partial<SaveApplicationSettingsRequest>
 ): SaveApplicationSettingsRequest {
-  return {
+  const request: SaveApplicationSettingsRequest = {
     preview: overrides.preview ?? settings.preview,
     workbench: overrides.workbench ?? settings.workbench,
     commandPalette: overrides.commandPalette ?? settings.commandPalette,
     editor: overrides.editor ?? settings.editor,
     files: overrides.files ?? settings.files
   };
+  const notification = overrides.notification ?? settings.notification;
+
+  if (notification !== undefined) {
+    request.notification = notification;
+  }
+
+  return request;
 }
 
 // Builds the next immediate-save request for a single control edit. Returns
@@ -276,6 +288,10 @@ function buildNextSettings(
             characterCount: { visible: Boolean(rawValue) }
           }
         }
+      });
+    case "notification.output.enabled":
+      return saveRequest(settings, {
+        notification: { output: { enabled: Boolean(rawValue) } }
       });
     case "editor.whitespace.renderIdeographicSpace":
       return saveRequest(settings, {

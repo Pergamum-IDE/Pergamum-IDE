@@ -81,6 +81,14 @@ export interface WorkbenchNotificationSettings {
   durationMs: number;
 }
 
+export interface NotificationOutputSettings {
+  enabled: boolean;
+}
+
+export interface ApplicationNotificationSettings {
+  output: NotificationOutputSettings;
+}
+
 export interface WorkbenchSoundSettings {
   enabled: boolean;
   dialog: WorkbenchSoundToggleSettings;
@@ -184,6 +192,7 @@ export interface ApplicationWorkbenchSettings {
 
 export interface ApplicationSettings {
   preview: ApplicationPreviewSettings;
+  notification?: ApplicationNotificationSettings;
   workbench: ApplicationWorkbenchSettings;
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
@@ -197,6 +206,7 @@ export interface ApplicationSettings {
 // to a catalog default.
 export interface SaveApplicationSettingsRequest {
   preview: ApplicationPreviewSettings;
+  notification?: ApplicationNotificationSettings;
   workbench: ApplicationWorkbenchSettings;
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
@@ -214,6 +224,10 @@ export interface ProjectSettings {
 export interface EffectivePreviewSettings {
   renderer: PreviewRendererId;
   updateDelayMs: number;
+}
+
+export interface EffectiveNotificationSettings {
+  output: NotificationOutputSettings;
 }
 
 export interface EffectiveWorkbenchSettings {
@@ -242,6 +256,7 @@ export interface EffectiveFilesSettings {
 
 export interface EffectiveSettings {
   preview: EffectivePreviewSettings;
+  notification: EffectiveNotificationSettings;
   workbench: EffectiveWorkbenchSettings;
   commandPalette: EffectiveCommandPaletteSettings;
   editor: EffectiveEditorSettings;
@@ -273,10 +288,18 @@ export const defaultNotificationDurationMs: number = getCatalogDefaultValue(
   "workbench.notification.durationMs"
 );
 
+export const defaultNotificationOutputEnabled: boolean =
+  getCatalogDefaultValue("notification.output.enabled");
+
 export const builtInDefaultSettings: EffectiveSettings = {
   preview: {
     renderer: defaultPreviewRenderer,
     updateDelayMs: defaultPreviewUpdateDelayMs
+  },
+  notification: {
+    output: {
+      enabled: defaultNotificationOutputEnabled
+    }
   },
   workbench: {
     language: getCatalogDefaultValue("workbench.language"),
@@ -565,6 +588,13 @@ export function resolveEffectiveSettings(
       // renderer above. Always a concrete value already (resolved through
       // the catalog at settings.json read time), so no fallback needed here.
       updateDelayMs: applicationSettings.preview.updateDelayMs
+    },
+    notification: {
+      output: {
+        enabled:
+          applicationSettings.notification?.output.enabled ??
+          builtInDefaultSettings.notification.output.enabled
+      }
     },
     // The whole workbench area is applicationOnly (#173, #174): Application
     // > Default only, no project scope in the chain. language and

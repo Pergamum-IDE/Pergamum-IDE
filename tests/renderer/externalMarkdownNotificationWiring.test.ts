@@ -77,6 +77,11 @@ describe("external Markdown NotificationToast wiring (#266)", () => {
       "const notificationAutoDismissMs =\n" +
         "    effectiveSettings.workbench.notification.durationMs;"
     );
+    expect(source).toContain("outputEnabled={notificationOutputEnabled}");
+    expect(source).toContain(
+      "const notificationOutputEnabled =\n" +
+        "    effectiveSettings.notification.output.enabled;"
+    );
   });
 
   it("creates one app-owned NotificationController and disposes it on unmount", () => {
