@@ -41,6 +41,7 @@ import {
   projectWriteLockDirectoryPathForProjectRoot,
   isProtectedPergamumDataFilePath
 } from "../shared/saveTargetPolicy";
+import { writeFileAtomic } from "./atomicFileWrite";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
   debugLogExtensionForPath,
@@ -1828,7 +1829,12 @@ export function registerProjectIpc(
         const documentPath = resolveProjectDocumentPath(request.relativePath);
         assertProjectDocumentSaveTargetAllowed(documentPath);
         const metadata = markdownWriteMetadata(request.content);
-        await fs.writeFile(documentPath, request.content, "utf8");
+        // Crash-safe manuscript write (temp sibling file → fsync → atomic
+        // rename). An interrupted save cannot leave the previous good
+        // document truncated / half-written; "saved" means the atomic
+        // replace completed. Any failure throws here and is reported as a
+        // non-cleaning file I/O error below (dirty state is preserved).
+        await writeFileAtomic(documentPath, request.content);
         const rootPath = requireCurrentProjectRootPath();
         const documentRef = logger.documentRefForKey(
           projectDocumentRefKey(rootPath, request.relativePath)

@@ -715,6 +715,51 @@ describe("project file IPC foundation", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("saveProjectDocument writes atomically, preserving exact bytes and leaving no temp file", async () => {
+    const projectFilePath = path.join(projectRootPath, "Atomic Save.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Atomic Save"
+    });
+    await created.close();
+    const documentPath = path.join(projectRootPath, "chapter.md");
+    await fs.writeFile(documentPath, "# Old chapter\nprevious body\n", "utf8");
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const saveProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.saveProjectDocument
+    );
+    // Mixed CRLF / LF, no trailing newline — the renderer already
+    // reconstructed the on-disk line endings, so main must persist these
+    // exact bytes with no normalization / BOM re-attachment.
+    const content = "# New chapter\r\nrewritten body\nlast line";
+
+    await expect(
+      saveProjectDocumentHandler(
+        { sender: {} },
+        { relativePath: "chapter.md", content }
+      )
+    ).resolves.toEqual({ relativePath: "chapter.md" });
+
+    // Byte-exact round trip: the previous good file is fully swapped, not
+    // appended to, and line endings are untouched.
+    expect(readFileSync(documentPath, "utf8")).toBe(content);
+
+    // Atomic replace only: no `*.pergamum-tmp-*` sibling is left behind in
+    // the manuscript folder on success.
+    const rootEntries = await fs.readdir(projectRootPath);
+    expect(rootEntries).toContain("chapter.md");
+    expect(
+      rootEntries.filter((name) => name.includes(".pergamum-tmp-"))
+    ).toEqual([]);
+  });
+
   it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {
     const projectFilePath = path.join(projectRootPath, "Readonly Title.pergamum");
     const titleWindow = createTitleWindowMock();

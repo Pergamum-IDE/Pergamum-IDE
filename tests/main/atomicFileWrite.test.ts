@@ -37,6 +37,20 @@ describe("writeFileAtomic (#272)", () => {
     expect(await fs.readFile(target, "utf8")).toBe("NEW");
   });
 
+  it("writes the string byte-for-byte with no line-ending / BOM transform", async () => {
+    const target = path.join(workDir, "chapter.md");
+    // Mixed CRLF / CR / LF, a leading BOM, and no trailing newline — every
+    // byte must survive so a Markdown save through this helper preserves the
+    // renderer-reconstructed on-disk line endings exactly.
+    const content = "﻿# Title\r\nalpha\rbeta\ngamma";
+    await fs.writeFile(target, "stale bytes that must be fully replaced", "utf8");
+
+    await writeFileAtomic(target, content);
+
+    expect(await fs.readFile(target, "utf8")).toBe(content);
+    expect(await fs.readFile(target)).toEqual(Buffer.from(content, "utf8"));
+  });
+
   it("leaves the previous target intact and no stray temp when the rename fails", async () => {
     const target = path.join(workDir, "file.json");
     await fs.writeFile(target, "GOOD", "utf8");

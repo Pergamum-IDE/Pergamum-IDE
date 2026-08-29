@@ -15,6 +15,10 @@ const fsMock = vi.hoisted(() => ({
   writeFile: vi.fn()
 }));
 
+const atomicWriteMock = vi.hoisted(() => ({
+  writeFileAtomic: vi.fn<(target: string, data: string) => Promise<void>>()
+}));
+
 const projectIpcMock = vi.hoisted(() => ({
   currentActiveProjectFilePath: vi.fn<() => string | null>(),
   currentProjectRootPath: vi.fn<() => string | null>(),
@@ -38,6 +42,10 @@ vi.mock("electron", () => ({
 
 vi.mock("node:fs", () => ({
   promises: fsMock
+}));
+
+vi.mock("../../src/main/atomicFileWrite", () => ({
+  writeFileAtomic: atomicWriteMock.writeFileAtomic
 }));
 
 vi.mock("../../src/main/projectIpc", () => ({
@@ -108,6 +116,8 @@ describe("file IPC", () => {
     fsMock.readFile.mockReset();
     fsMock.realpath.mockReset();
     fsMock.writeFile.mockReset();
+    atomicWriteMock.writeFileAtomic.mockReset();
+    atomicWriteMock.writeFileAtomic.mockResolvedValue(undefined);
     projectIpcMock.currentActiveProjectFilePath.mockReset();
     projectIpcMock.currentProjectRootPath.mockReset();
     projectIpcMock.currentActiveProjectFilePath.mockReturnValue(null);
@@ -138,6 +148,7 @@ describe("file IPC", () => {
     ).resolves.toEqual({ path: "C:\\Novel\\new-document.md" });
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
   });
 
   it("rejects protected project database Save As targets before disk write", async () => {
@@ -163,7 +174,10 @@ describe("file IPC", () => {
     ).resolves.toEqual({ kind: "rejected", reason: "protected" });
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
-    expect(JSON.stringify(fsMock.writeFile.mock.calls)).not.toContain(rawPath);
+    expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
+    expect(JSON.stringify(atomicWriteMock.writeFileAtomic.mock.calls)).not.toContain(
+      rawPath
+    );
   });
 
   it("rejects protected SQLite sidecar suffixes case-insensitively before disk write", async () => {
@@ -180,6 +194,7 @@ describe("file IPC", () => {
     ).resolves.toEqual({ kind: "rejected", reason: "protected" });
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
   });
 
   it("rejects the current project lock directory and paths under it before disk write", async () => {
@@ -209,6 +224,7 @@ describe("file IPC", () => {
     ).resolves.toEqual({ kind: "rejected", reason: "protected" });
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
   });
 
   it("rejects unverifiable protected-target classification before disk write", async () => {
@@ -232,6 +248,7 @@ describe("file IPC", () => {
     ).resolves.toEqual({ kind: "rejected", reason: "unverifiable" });
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
   });
 
   it("allows standalone Save As outside the active project", async () => {
@@ -239,7 +256,6 @@ describe("file IPC", () => {
       canceled: false,
       filePath: "D:\\Outside\\new-document.md"
     });
-    fsMock.writeFile.mockResolvedValue(undefined);
 
     const saveMarkdown = registeredHandler(FILE_CHANNELS.saveMarkdown);
 
@@ -258,11 +274,32 @@ describe("file IPC", () => {
       path: "D:\\Outside\\new-document.md"
     });
 
-    expect(fsMock.writeFile).toHaveBeenCalledWith(
+    // Manuscript bytes go through the crash-safe atomic writer, never a
+    // plain in-place `fs.writeFile` overwrite.
+    expect(atomicWriteMock.writeFileAtomic).toHaveBeenCalledWith(
       "D:\\Outside\\new-document.md",
-      "content",
-      "utf8"
+      "content"
     );
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("saveMarkdown to an existing path routes through the atomic writer with the exact bytes", async () => {
+    const saveMarkdown = registeredHandler(FILE_CHANNELS.saveMarkdown);
+    const content = "alpha\r\nbeta\ngamma";
+
+    await expect(
+      saveMarkdown(
+        { sender: {} },
+        { path: "D:\\Outside\\chapter.md", content }
+      )
+    ).resolves.toEqual({ kind: "saved", path: "D:\\Outside\\chapter.md" });
+
+    expect(atomicWriteMock.writeFileAtomic).toHaveBeenCalledWith(
+      "D:\\Outside\\chapter.md",
+      content
+    );
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(electronMock.showSaveDialog).not.toHaveBeenCalled();
   });
 
   it("throws a sanitized legacy saveMarkdown write failure without exposing the raw path", async () => {
@@ -274,7 +311,9 @@ describe("file IPC", () => {
       { code: "EPERM", path: rawPath }
     );
 
-    fsMock.writeFile.mockRejectedValue(writeError);
+    // The atomic writer propagates the original node fs error (with its
+    // `.code`), so failure classification is unchanged.
+    atomicWriteMock.writeFileAtomic.mockRejectedValue(writeError);
 
     const saveMarkdown = registeredHandler(
       FILE_CHANNELS.saveMarkdown,
@@ -318,8 +357,6 @@ describe("file IPC", () => {
       logger as unknown as DebugLogger
     );
 
-    fsMock.writeFile.mockResolvedValue(undefined);
-
     await expect(
       writeMarkdown(
         { sender: {} },
@@ -337,11 +374,13 @@ describe("file IPC", () => {
       characterLength: manuscriptMarker.length
     });
 
-    expect(fsMock.writeFile).toHaveBeenCalledWith(
+    // Atomic write of the exact (line-ending-preserving) bytes; the raw
+    // string is handed to the helper untouched, no UTF-8 transform here.
+    expect(atomicWriteMock.writeFileAtomic).toHaveBeenCalledWith(
       "D:\\Outside\\secret-draft.md",
-      manuscriptMarker,
-      "utf8"
+      manuscriptMarker
     );
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
 
     const call = logger.log.mock.calls.find(
       ([entry]) => entry.event === "save.succeeded"
@@ -377,7 +416,7 @@ describe("file IPC", () => {
       logger as unknown as DebugLogger
     );
 
-    fsMock.writeFile.mockRejectedValue(writeError);
+    atomicWriteMock.writeFileAtomic.mockRejectedValue(writeError);
 
     await expectSanitizedFileIoRejection(
       writeMarkdown(
