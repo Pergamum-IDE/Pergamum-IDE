@@ -363,7 +363,7 @@ describe("debug log catalog", () => {
     );
   });
 
-  it("includes the Recovery Store lifecycle events (Phase 6-4-2), and no dirty-payload event", () => {
+  it("includes the Recovery Store lifecycle events (Phase 6-4-2)", () => {
     expect(debugLogEventNames).toEqual(
       expect.arrayContaining([
         "recovery.store.init.started",
@@ -374,10 +374,22 @@ describe("debug log catalog", () => {
         "recovery.store.lock.released"
       ])
     );
-    // Phase 6-4-2 handles no body text; a payload / flush event is out of
-    // scope and must not be introduced here.
-    expect(debugLogEventNames).not.toContain("recovery.store.payload.flushed");
-    expect(debugLogEventNames).not.toContain("recovery.document.upserted");
+  });
+
+  it("includes the Recovery document payload persistence events (Phase 6-4-3)", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "recovery.document.persisted",
+        "recovery.document.persist.failed",
+        "recovery.document.deleted",
+        "recovery.document.delete.failed"
+      ])
+    );
+    // No event name carries or implies the body text itself.
+    expect(
+      debugLogEventNames.filter((name) => name.includes("payload"))
+    ).toEqual([]);
+    expect(debugLogEventNames).not.toContain("recovery.document.body");
   });
 
   it("exposes instanceRunId / schemaVersion / journalMode / synchronous as allowlisted detail keys, each a specific name", () => {

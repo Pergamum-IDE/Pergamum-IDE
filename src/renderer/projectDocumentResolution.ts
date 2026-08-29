@@ -55,7 +55,7 @@ export function currentDocumentForOpenedFile(
       throw new Error("Project document is not listed in the active project.");
     }
 
-    return createProjectDocument(projectDocument, file.content);
+    return createProjectDocument(projectDocument, file.content, file.metadata);
   }
 
   return createFileDocument(file);

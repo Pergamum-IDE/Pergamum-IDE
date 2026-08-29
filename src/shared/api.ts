@@ -30,11 +30,21 @@ import type {
 } from "./lifecycle";
 import type { AppPlatform } from "./platform";
 import type { RecoveryStoreStatus } from "./recovery";
+import type {
+  RecoveryDocumentPayload,
+  RecoveryDocumentWriteResult
+} from "./recoveryDocument";
 import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
 
 export type { AppPlatform } from "./platform";
 export type { RecoveryStoreOwnerInfo, RecoveryStoreStatus } from "./recovery";
+export type {
+  RecoveryDocumentPayload,
+  RecoveryDocumentType,
+  RecoveryDocumentWriteMode,
+  RecoveryDocumentWriteResult
+} from "./recoveryDocument";
 export type {
   CloseCurrentProjectRequest,
   CloseCurrentProjectResult,
@@ -134,7 +144,18 @@ export const RECOVERY_CHANNELS = {
    * any instance to call — a non-owner gets its `nonOwner` status back and
    * no `Recovery.db` is opened as a side effect.
    */
-  getStoreStatus: "recovery:getStoreStatus"
+  getStoreStatus: "recovery:getStoreStatus",
+  /**
+   * Phase 6-4-3: UPSERT the full dirty Markdown working-copy body into
+   * `Recovery.db`. A non-owner / unavailable instance returns a silent
+   * `{ ok: false, skipped }` and writes nothing.
+   */
+  upsertDocument: "recovery:upsertDocument",
+  /**
+   * Phase 6-4-3: DELETE a Recovery row — Save-success cleanup ONLY. Never
+   * wired to tab close or a discard action in this phase.
+   */
+  deleteDocument: "recovery:deleteDocument"
 } as const;
 
 export const GLOSSARY_CHANNELS = {
@@ -527,6 +548,15 @@ export interface PergamumApi {
    */
   recovery: {
     getStoreStatus: () => Promise<RecoveryStoreStatus | null>;
+    /** Phase 6-4-3: flush the full dirty Markdown body. Resolves with a
+     *  silent `skipped` result on a non-owner / unavailable instance. */
+    upsertDocument: (
+      payload: RecoveryDocumentPayload
+    ) => Promise<RecoveryDocumentWriteResult>;
+    /** Phase 6-4-3: Save-success cleanup for one document key. */
+    deleteDocument: (
+      documentKey: string
+    ) => Promise<RecoveryDocumentWriteResult>;
   };
   glossary: {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;

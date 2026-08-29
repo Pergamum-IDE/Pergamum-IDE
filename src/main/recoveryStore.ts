@@ -16,6 +16,7 @@
  * `payload_text` — that is Phase 6-4-3.
  */
 
+import type { Database as BetterSqliteDatabase } from "better-sqlite3";
 import { promises as nodeFs } from "node:fs";
 import path from "node:path";
 import {
@@ -93,6 +94,18 @@ export function recoveryStorePaths(userDataPath: string): RecoveryStorePaths {
 /** The Recovery Store view for this run, or `null` before initialisation. */
 export function recoveryStoreStatus(): RecoveryStoreStatus | null {
   return currentStatus;
+}
+
+/**
+ * Phase 6-4-3: the live `Recovery.db` connection — but ONLY when this
+ * instance is the Recovery owner. A non-owner / unavailable run gets
+ * `null`, so no caller can accidentally read or write the store it does not
+ * own.
+ */
+export function recoveryStoreOwnerDatabase(): BetterSqliteDatabase | null {
+  return currentStatus?.kind === "owner" && currentHandle
+    ? currentHandle.database
+    : null;
 }
 
 function normalizeJournalMode(value: string): DebugLogRecoveryJournalMode {

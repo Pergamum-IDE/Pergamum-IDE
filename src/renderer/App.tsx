@@ -158,6 +158,12 @@ import type { EditorViewState } from "./editorViewState";
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
 import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
+import { RecoveryPayloadCoordinator } from "./recovery/recoveryPayloadCoordinator";
+import {
+  buildRecoveryDirtyDocuments,
+  buildRecoveryDocumentPayload,
+  recoveryDocumentKeyForDocument
+} from "./recovery/recoveryDocumentPayload";
 import {
   runColdStartRestore,
   type ColdStartRestoreDeps,
@@ -761,6 +767,39 @@ export function App(): JSX.Element {
   }
 
   const sessionPersistence = sessionPersistenceRef.current;
+
+  // #286: continuous dirty Markdown payload persistence into
+  // `<userData>/Recovery/Recovery.db`. Starts disabled — enabled only once
+  // the Recovery Store status confirms this instance is the owner. Session
+  // Store, the project DB, and the debug log NEVER carry the body text.
+  const recoveryPayloadCoordinatorRef =
+    useRef<RecoveryPayloadCoordinator | null>(null);
+  if (!recoveryPayloadCoordinatorRef.current) {
+    recoveryPayloadCoordinatorRef.current = new RecoveryPayloadCoordinator({
+      enabled: false,
+      transport: {
+        upsert: (payload) => window.pergamum.recovery.upsertDocument(payload),
+        delete: (documentKey) =>
+          window.pergamum.recovery.deleteDocument(documentKey)
+      },
+      onFlushError: ({ operation, error }) => {
+        // Body-free diagnostics only — the manuscript is never logged.
+        logRendererDebugEvent({
+          level: "error",
+          event:
+            operation === "delete"
+              ? "recovery.document.delete.failed"
+              : "recovery.document.persist.failed",
+          details: {
+            result: "failed",
+            error: rendererDebugErrorInfo(error)
+          }
+        });
+      }
+    });
+  }
+  const recoveryPayloadCoordinator = recoveryPayloadCoordinatorRef.current;
+
   // #272 (review Blocker 3): the outgoing Markdown editor's final View State,
   // captured by MarkdownEditor at the active-editor-switch / unmount
   // boundary (never per keystroke), so a fast tab switch before the
@@ -1178,6 +1217,57 @@ export function App(): JSX.Element {
   useEffect(
     () => () => sessionPersistence.dispose(),
     [sessionPersistence]
+  );
+  // #286: feed the CURRENT dirty Markdown working copies to the Recovery
+  // coordinator. Render-assigned so any caller (the dirty-docs effect below,
+  // and the owner-enable effect) always sees the latest state / project.
+  // A tab close / return-to-clean simply leaves the set — its Recovery row
+  // is NOT deleted here (Save success and Phase 6-4-4 explicit discard are
+  // the only deletion triggers).
+  const feedRecoveryDirtyDocumentsRef = useRef<() => void>(() => undefined);
+  feedRecoveryDirtyDocumentsRef.current = () => {
+    recoveryPayloadCoordinator.updateDirtyDocuments(
+      buildRecoveryDirtyDocuments(openDocumentsStateRef.current, {
+        project,
+        activeProjectContext
+      })
+    );
+  };
+  // #286: enable Recovery payload persistence only for the Recovery owner.
+  // A non-owner / unavailable instance leaves the coordinator a no-op — no
+  // IPC, no UI, no user notification. Right after enabling, re-feed the
+  // current dirty set so an edit made BEFORE ownership was resolved (when
+  // the first feed was a disabled no-op) is still flushed on cadence.
+  useEffect(() => {
+    let cancelled = false;
+    void window.pergamum.recovery
+      .getStoreStatus()
+      .then((status) => {
+        if (cancelled) {
+          return;
+        }
+        const isOwner = status?.kind === "owner";
+        recoveryPayloadCoordinator.setEnabled(isOwner);
+        if (isOwner) {
+          feedRecoveryDirtyDocumentsRef.current();
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [recoveryPayloadCoordinator]);
+  useEffect(() => {
+    feedRecoveryDirtyDocumentsRef.current();
+  }, [
+    recoveryPayloadCoordinator,
+    openDocumentsState,
+    project,
+    activeProjectContext
+  ]);
+  useEffect(
+    () => () => recoveryPayloadCoordinator.dispose(),
+    [recoveryPayloadCoordinator]
   );
   // #272 (PO decision): a storage-class failure on a main-driven
   // (window-event) Session re-persist — which the coordinator never awaited
@@ -2909,6 +2999,53 @@ export function App(): JSX.Element {
     return replacement.didCollide;
   }
 
+  /**
+   * #286: retire the Recovery snapshot that a completed atomic Markdown save
+   * made durable. MUST be called only AFTER the write resolved (#284
+   * atomic-write ordering). Handles the Save / Save As / Untitled-first-save
+   * identity transition: any edit made after the save began is re-flushed
+   * under the NEW `document_key`, and only then is the pre-save key's row
+   * deleted — the new key is never a delete target.
+   */
+  function retireRecoverySnapshotAfterSave(
+    preSaveRecoveryKey: string | null,
+    savedDocument: CurrentDocument
+  ): void {
+    if (!preSaveRecoveryKey) {
+      return;
+    }
+
+    const recoveryContext = { project, activeProjectContext };
+    const savedEditorId = editorIdForCurrentDocument(
+      savedDocument,
+      activeProjectContext
+    );
+    const liveOpenDocument = savedEditorId
+      ? findOpenDocument(openDocumentsStateRef.current, savedEditorId)
+      : null;
+    const liveDocument = liveOpenDocument
+      ? markdownDocumentForEditor(liveOpenDocument.editor)
+      : null;
+    const targetDocument = liveDocument ?? savedDocument;
+    const newKey = recoveryDocumentKeyForDocument(
+      targetDocument,
+      recoveryContext
+    );
+    const stillDirty = liveOpenDocument
+      ? isCurrentEditorDirty(liveOpenDocument.editor)
+      : false;
+    const postSavePayload =
+      stillDirty && liveDocument
+        ? buildRecoveryDocumentPayload(liveDocument, recoveryContext)
+        : null;
+
+    recoveryPayloadCoordinator.onSaveSucceeded({
+      oldKey: preSaveRecoveryKey,
+      newKey,
+      postSavePayload
+    });
+  }
+
   async function showFileOpenFailedDialog(): Promise<void> {
     await confirmDialog({
       title: translate("dialog.fileOpenFailed.title"),
@@ -3767,6 +3904,13 @@ export function App(): JSX.Element {
 
           const documentToSave = targetEditor.document;
           const documentIdToSave = targetOpenDocument.id;
+          // #286: the document identity BEFORE this save, so its Recovery
+          // row can be retired after the atomic write succeeds (Save As /
+          // Untitled first save change the identity).
+          const preSaveRecoveryKey = recoveryDocumentKeyForDocument(
+            documentToSave,
+            { project, activeProjectContext }
+          );
           // #253: reconstruct the original (or newly-inherited) per-break
           // line endings from the tracked kinds before writing — the
           // canonical `content` itself is always CodeMirror's "\n"-only
@@ -3790,9 +3934,14 @@ export function App(): JSX.Element {
                 serializedContentToSave
               );
 
-            replaceSavedDocument(
-              documentIdToSave,
-              markCurrentDocumentSaved(documentToSave)
+            const savedProjectSnapshot =
+              markCurrentDocumentSaved(documentToSave);
+            replaceSavedDocument(documentIdToSave, savedProjectSnapshot);
+            // #286: atomic project-document write succeeded → retire its
+            // Recovery snapshot (post-save edits are re-flushed first).
+            retireRecoverySnapshotAfterSave(
+              preSaveRecoveryKey,
+              savedProjectSnapshot
             );
             setStatus({
               key: "status.savedPath",
@@ -3903,6 +4052,10 @@ export function App(): JSX.Element {
             documentIdToSave,
             savedDocument
           );
+          // #286: atomic standalone / Save As / Untitled-first-save write
+          // succeeded → retire the pre-save Recovery snapshot; a Save As
+          // moves protection to the new file `document_key` first.
+          retireRecoverySnapshotAfterSave(preSaveRecoveryKey, savedDocument);
 
           setStatus(
             didCollide
@@ -3968,7 +4121,11 @@ export function App(): JSX.Element {
       document.relativePath
     );
 
-    return createProjectDocument(document, loadedDocument.content);
+    return createProjectDocument(
+      document,
+      loadedDocument.content,
+      loadedDocument.metadata
+    );
   }
 
   async function activateProject(
@@ -4210,6 +4367,9 @@ export function App(): JSX.Element {
             // #272: the final window close keeps this Session in the restore
             // set; a best-effort flush is enough (durability is continuous).
             void sessionPersistence.flushNow();
+            // #286: best-effort Recovery payload flush on normal shutdown —
+            // failing to flush here NEVER deletes an existing Recovery row.
+            void recoveryPayloadCoordinator.flushNow();
             decision = { status: "approved", requestId: request.requestId };
           } else {
             // #272 (review Blocker 5): an ordinary non-final window close
@@ -4276,6 +4436,9 @@ export function App(): JSX.Element {
       // #272: explicitApplicationQuit keeps the restore set; a best-effort
       // flush is an optimization, never a correctness dependency.
       void sessionPersistence.flushNow();
+      // #286: best-effort Recovery payload flush; a missed flush never
+      // deletes a Recovery row.
+      void recoveryPayloadCoordinator.flushNow();
 
       try {
         await window.pergamum.lifecycle.quitApplication({
