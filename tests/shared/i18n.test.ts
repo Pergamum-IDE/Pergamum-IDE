@@ -622,6 +622,15 @@ describe("NotificationToast foundation translations (#266)", () => {
     expect(t("en", "notification.dismiss")).toBe("Dismiss notification");
   });
 
+  it("defines the Recovery reminder notification message for ja and en (#300)", () => {
+    expect(t("ja", "notification.recoveryCandidatesReminder", { count: 2 })).toBe(
+      "2 件の未解決の復旧候補が残っています"
+    );
+    expect(t("en", "notification.recoveryCandidatesReminder", { count: 2 })).toBe(
+      "2 unresolved Recovery candidate(s) remain."
+    );
+  });
+
   it("defines the Settings label/description for the notification display time (#266/#298) and explains zero plus the safe clamp", () => {
     for (const language of ["ja", "en"] as const) {
       for (const key of [
@@ -672,5 +681,36 @@ describe("NotificationToast foundation translations (#266)", () => {
     expect(t("en", "settings.unit.ms")).toBe("ms");
     expect(Object.keys(jaTranslations)).not.toContain("settings.unit.milliseconds");
     expect(Object.keys(enTranslations)).not.toContain("settings.unit.milliseconds");
+  });
+});
+
+describe("Recovery explicit discard translations (#300)", () => {
+  it("defines selected/all destructive confirmation copy for ja and en", () => {
+    expect(t("ja", "dialog.recovery.discardSelected")).toBe(
+      "選択した復旧候補を破棄..."
+    );
+    expect(t("ja", "dialog.recovery.discardAll")).toBe(
+      "すべての復旧候補を破棄..."
+    );
+    expect(t("ja", "dialog.recovery.decideLater")).toBe("後で決める");
+    expect(t("ja", "dialog.recovery.discardConfirm.message", { count: 2 })).toBe(
+      "選択した復旧候補を破棄します。この操作は元に戻せません。元の文書や現在開いている文書には影響しません。"
+    );
+    expect(t("ja", "dialog.recovery.discardAllConfirm.message", { count: 2 })).toBe(
+      "すべての復旧候補を破棄します。この操作は元に戻せません。元の文書や現在開いている文書には影響しません。"
+    );
+    expect(t("en", "dialog.recovery.discardSelected")).toBe(
+      "Discard Selected Recovery Candidates..."
+    );
+    expect(t("en", "dialog.recovery.discardAll")).toBe(
+      "Discard All Recovery Candidates..."
+    );
+    expect(t("en", "dialog.recovery.decideLater")).toBe("Decide Later");
+    expect(t("en", "dialog.recovery.discardConfirm.message", { count: 2 })).toContain(
+      "Original documents and currently open documents are not affected."
+    );
+    expect(t("en", "dialog.recovery.discardAllConfirm.message", { count: 2 })).toContain(
+      "Original documents and currently open documents are not affected."
+    );
   });
 });

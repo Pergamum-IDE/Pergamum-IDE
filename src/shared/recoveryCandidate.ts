@@ -67,6 +67,43 @@ export type RecoveryHasRecoverableResult =
   | { readonly ok: true; readonly hasRecoverable: boolean }
   | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
 
+export type RecoveryStartupPresentation =
+  | { readonly kind: "none"; readonly candidateCount: 0 }
+  | {
+      readonly kind: "autoShow";
+      readonly candidateCount: number;
+      readonly signature: string;
+      readonly candidates: readonly RecoveryCandidate[];
+    }
+  | {
+      readonly kind: "reminder";
+      readonly candidateCount: number;
+      readonly signature: string;
+    };
+
+/**
+ * #300: one-shot startup presentation decision for *previous-run* Recovery
+ * candidates. Main owns both the candidate query and the seen-signature
+ * metadata read/write so non-owner instances stay silent and the renderer
+ * never receives raw path/body fields.
+ */
+export type RecoveryStartupPresentationResult =
+  | { readonly ok: true; readonly presentation: RecoveryStartupPresentation }
+  | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
+
+/**
+ * #300: mark the currently visible previous-run candidate set as seen.
+ * The renderer supplies no signature; main computes and persists it from
+ * the store's current previous-run candidates.
+ */
+export type RecoveryMarkCandidatesSeenResult =
+  | {
+      readonly ok: true;
+      readonly candidateCount: number;
+      readonly signature: string | null;
+    }
+  | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
+
 /**
  * One restore request item.
  *

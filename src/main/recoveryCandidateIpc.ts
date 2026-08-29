@@ -2,6 +2,8 @@
  * Phase 6-4-4: renderer → main IPC for the Recovery candidate dialog.
  *
  *   recovery:listCandidates              — list rows for the dialog
+ *   recovery:evaluateStartupCandidates   — decide auto-show vs reminder
+ *   recovery:markCandidatesSeen          — persist the current seen set
  *   recovery:restoreCandidates           — write `.recovered.md` files (atomic).
  *                                          NEVER deletes a Recovery row.
  *   recovery:finalizeRestoredCandidates  — delete rows the renderer opened
@@ -28,13 +30,19 @@ import {
   type RecoveryDiscardResult,
   type RecoveryFinalizeResult,
   type RecoveryHasRecoverableResult,
+  type RecoveryMarkCandidatesSeenResult,
   type RecoveryReportResult,
   type RecoveryRestoreItemResult,
-  type RecoveryRestoreResult
+  type RecoveryRestoreResult,
+  type RecoveryStartupPresentationResult
 } from "../shared/recoveryCandidate";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
-  deleteRecoveryRowsById,
+  evaluateStartupRecoveryPresentation,
+  markCurrentRecoveryCandidateSetSeen
+} from "./recoveryCandidateSeenState";
+import {
+  deletePreviousRunRecoveryRowsById,
   getRecoveryRestoreRows,
   hasRecoverableCandidates,
   listRecoveryCandidates
@@ -122,6 +130,47 @@ export function registerRecoveryCandidateIpc(
       });
 
       return { ok: true, candidates };
+    }
+  );
+
+  ipcMain.handle(
+    RECOVERY_CHANNELS.evaluateStartupCandidates,
+    (): RecoveryStartupPresentationResult => {
+      const owner = resolveRecoveryOwner(deps);
+
+      if (owner.kind === "skip") {
+        return { ok: false, skipped: owner.skipped };
+      }
+
+      return {
+        ok: true,
+        presentation: evaluateStartupRecoveryPresentation(
+          owner.database,
+          deps.instanceRunId
+        )
+      };
+    }
+  );
+
+  ipcMain.handle(
+    RECOVERY_CHANNELS.markCandidatesSeen,
+    (): RecoveryMarkCandidatesSeenResult => {
+      const owner = resolveRecoveryOwner(deps);
+
+      if (owner.kind === "skip") {
+        return { ok: false, skipped: owner.skipped };
+      }
+
+      const snapshot = markCurrentRecoveryCandidateSetSeen(
+        owner.database,
+        deps.instanceRunId
+      );
+
+      return {
+        ok: true,
+        candidateCount: snapshot.candidateCount,
+        signature: snapshot.signature
+      };
     }
   );
 
@@ -244,10 +293,13 @@ export function registerRecoveryCandidateIpc(
         return { ok: false, skipped: owner.skipped };
       }
 
-      const { deleted } = deleteRecoveryRowsById(
+      const { deleted } = deletePreviousRunRecoveryRowsById(
         owner.database,
-        request.recoveryIds
+        request.recoveryIds,
+        deps.instanceRunId
       );
+
+      markCurrentRecoveryCandidateSetSeen(owner.database, deps.instanceRunId);
 
       for (const recoveryId of deleted) {
         logger.log({
@@ -280,10 +332,13 @@ export function registerRecoveryCandidateIpc(
         return { ok: false, skipped: owner.skipped };
       }
 
-      const { deleted, failed } = deleteRecoveryRowsById(
+      const { deleted, failed } = deletePreviousRunRecoveryRowsById(
         owner.database,
-        request.recoveryIds
+        request.recoveryIds,
+        deps.instanceRunId
       );
+
+      markCurrentRecoveryCandidateSetSeen(owner.database, deps.instanceRunId);
 
       logger.log({
         level: "info",

@@ -42,7 +42,8 @@ export const recoveryStoreMetadataKeys = {
   storeId: "store_id",
   createdAt: "created_at",
   createdWithAppVersion: "created_with_app_version",
-  lastOpenedWithAppVersion: "last_opened_with_app_version"
+  lastOpenedWithAppVersion: "last_opened_with_app_version",
+  lastSeenRecoverySetSignature: "lastSeenRecoverySetSignature"
 } as const;
 
 /**

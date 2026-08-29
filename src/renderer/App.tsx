@@ -171,6 +171,7 @@ import {
 import { RecoveryCandidateDialog } from "./recovery/RecoveryCandidateDialog";
 import {
   createRecoveryCommandTitles,
+  recoveryCommandIds,
   registerRecoveryCommands
 } from "./recovery/recoveryCommands";
 import type { RecoveryCandidate } from "../shared/recoveryCandidate";
@@ -310,7 +311,10 @@ import { confirmReadOnlyProjectOpenIfNeeded } from "./readOnlyProjectOpenConfirm
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { NotificationHost } from "./notification/NotificationHost";
-import { NotificationController } from "./notification/notificationController";
+import {
+  NotificationController,
+  notificationToastPriority
+} from "./notification/notificationController";
 import type {
   NotificationToastAction,
   NotificationToastPlacement
@@ -851,6 +855,7 @@ export function App(): JSX.Element {
   const recoveryCandidateDialogOpenerRef = useRef<Element | null>(null);
   const isRecoveryCandidateDialogPendingOrOpenRef = useRef(false);
   const recoveryAutoShowAttemptedRef = useRef(false);
+  const recoveryReminderNotificationIdRef = useRef<string | null>(null);
   const showRecoveryDocumentsCommandRef = useRef<() => void>(() => undefined);
   // #288 follow-up: latest "re-check previous-run candidate availability"
   // impl, so the once-created Recovery payload coordinator's onPersisted
@@ -2374,6 +2379,56 @@ export function App(): JSX.Element {
   recoveryHasRecoverableRefreshRef.current =
     refreshRecoveryHasRecoverableCandidates;
 
+  function dismissRecoveryReminderToast(): void {
+    const notificationId = recoveryReminderNotificationIdRef.current;
+
+    if (notificationId !== null) {
+      notificationController.dismiss(notificationId);
+      recoveryReminderNotificationIdRef.current = null;
+    }
+  }
+
+  function requestRecoveryReminderToast(candidateCount: number): void {
+    dismissRecoveryReminderToast();
+
+    recoveryReminderNotificationIdRef.current = notificationController.notify({
+      lane: "internal",
+      priority: notificationToastPriority.recoveryReminder,
+      message: translate("notification.recoveryCandidatesReminder", {
+        count: candidateCount
+      }),
+      icon: { kind: "preset", name: "recovery" },
+      action: {
+        kind: "command",
+        commandId: recoveryCommandIds.showDocuments,
+        labelKey: "command.recovery.documents.show"
+      }
+    });
+  }
+
+  function showRecoveryCandidateDialog(
+    candidates: readonly RecoveryCandidate[],
+    opener: Element | null
+  ): void {
+    recoveryCandidateDialogOpenerRef.current = opener;
+    isRecoveryCandidateDialogPendingOrOpenRef.current = true;
+    setRecoveryCandidateDialogData(candidates);
+    // The list is already previous-run-only (main-side filter), so its
+    // emptiness is exactly the availability signal.
+    setRecoveryHasRecoverableCandidates(candidates.length > 0);
+    dismissRecoveryReminderToast();
+    logRendererDebugEvent({
+      level: "debug",
+      event: "recovery.candidates.dialog.shown",
+      details: { count: candidates.length }
+    });
+    playDialogShownSound(
+      soundFeedback,
+      effectiveSettings.workbench.sound,
+      reportSoundPlaybackFailure
+    );
+  }
+
   async function openRecoveryCandidateDialog(): Promise<void> {
     if (
       isRecoveryCandidateDialogPendingOrOpenRef.current ||
@@ -2396,20 +2451,15 @@ export function App(): JSX.Element {
         return;
       }
 
-      setRecoveryCandidateDialogData(result.candidates);
-      // The list is already previous-run-only (main-side filter), so its
-      // emptiness is exactly the availability signal.
-      setRecoveryHasRecoverableCandidates(result.candidates.length > 0);
-      logRendererDebugEvent({
-        level: "debug",
-        event: "recovery.candidates.dialog.shown",
-        details: { count: result.candidates.length }
-      });
-      playDialogShownSound(
-        soundFeedback,
-        effectiveSettings.workbench.sound,
-        reportSoundPlaybackFailure
+      showRecoveryCandidateDialog(
+        result.candidates,
+        recoveryCandidateDialogOpenerRef.current
       );
+      if (result.candidates.length > 0) {
+        await window.pergamum.recovery
+          .markCandidatesSeen()
+          .catch(() => undefined);
+      }
     } catch {
       isRecoveryCandidateDialogPendingOrOpenRef.current = false;
     }
@@ -2430,16 +2480,109 @@ export function App(): JSX.Element {
       if (result.ok) {
         setRecoveryCandidateDialogData(result.candidates);
         setRecoveryHasRecoverableCandidates(result.candidates.length > 0);
+        if (result.candidates.length === 0) {
+          dismissRecoveryReminderToast();
+        }
       }
     } catch {
       // Keep the current list on a transient failure.
     }
   }
 
-  // #287 dogfood follow-up: the candidate dialog no longer offers a
-  // destructive "discard" action — this recovery surface is recover-or-close
-  // only, and Close never mutates a row. The `recovery:discardCandidates`
-  // IPC channel is kept for a later explicit-discard entry point.
+  async function confirmRecoveryDiscard(
+    kind: "selected" | "all",
+    recoveryIds: readonly string[]
+  ): Promise<boolean> {
+    if (recoveryIds.length === 0) {
+      return false;
+    }
+
+    try {
+      const result = await confirmDialog({
+        title: translate(
+          kind === "selected"
+            ? "dialog.recovery.discardConfirm.title"
+            : "dialog.recovery.discardAllConfirm.title"
+        ),
+        message: {
+          kind: "plainText",
+          text: translate(
+            kind === "selected"
+              ? "dialog.recovery.discardConfirm.message"
+              : "dialog.recovery.discardAllConfirm.message",
+            { count: recoveryIds.length }
+          )
+        },
+        icon: {
+          kind: "warning",
+          tooltip: translate("dialog.icon.warning")
+        },
+        clipboardText: null,
+        dismissOnBackdropClick: false,
+        tone: "destructive",
+        confirmLabel: translate("dialog.recovery.discardConfirm.confirm")
+      });
+
+      return result === "confirm";
+    } catch (error) {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return false;
+      }
+
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    }
+  }
+
+  async function discardRecoveryCandidates(
+    kind: "selected" | "all",
+    recoveryIds: readonly string[]
+  ): Promise<void> {
+    if (!(await confirmRecoveryDiscard(kind, recoveryIds))) {
+      return;
+    }
+
+    try {
+      const result = await window.pergamum.recovery.discardCandidates({
+        recoveryIds
+      });
+
+      if (!result.ok) {
+        return;
+      }
+
+      await refreshRecoveryCandidateDialog();
+      await refreshRecoveryHasRecoverableCandidates();
+      dismissRecoveryReminderToast();
+
+      if (result.deleted.length > 0) {
+        setStatus({
+          key: "status.recoveryDiscarded",
+          values: { count: result.deleted.length }
+        });
+      }
+    } catch (error) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    }
+  }
+
+  async function handleRecoveryDiscardSelected(
+    recoveryIds: readonly string[]
+  ): Promise<void> {
+    await discardRecoveryCandidates("selected", recoveryIds);
+  }
+
+  async function handleRecoveryDiscardAll(
+    recoveryIds: readonly string[]
+  ): Promise<void> {
+    await discardRecoveryCandidates("all", recoveryIds);
+  }
 
   async function handleRecoveryRestoreSelected(
     recoveryIds: readonly string[]
@@ -5237,12 +5380,15 @@ export function App(): JSX.Element {
     deferredRestoreErrorDialogs
   ]);
 
-  // #287: one-shot startup auto-show of the Recovery candidate dialog.
+  // #300: one-shot startup presentation of previous-run Recovery candidates.
   // Owner only. Runs after cold-start restore + launch routing have settled
   // and after any deferred cold-start restore-Error dialogs have had their
   // turn, and only while no other modal is up (it re-runs when those
-  // clear). Closing the dialog never re-arms this for the process; the
-  // Command Palette can still reopen it.
+  // clear). A never-seen candidate set opens the Recovery dialog once and is
+  // marked seen main-side; a previously seen set only shows a low-key
+  // reminder toast. Closing the dialog never deletes rows and never re-arms
+  // startup presentation for this process; the Command Palette can still
+  // reopen it.
   useEffect(() => {
     if (
       recoveryAutoShowAttemptedRef.current ||
@@ -5257,16 +5403,27 @@ export function App(): JSX.Element {
 
     recoveryAutoShowAttemptedRef.current = true;
     void window.pergamum.recovery
-      .listCandidates()
+      .evaluateStartupCandidates()
       .then((result) => {
         if (!result.ok) {
           return;
         }
-        // #288 follow-up: the list is previous-run-only, so a non-empty
-        // list is exactly "there is something to recover".
-        setRecoveryHasRecoverableCandidates(result.candidates.length > 0);
-        if (result.candidates.length > 0) {
-          void openRecoveryCandidateDialog();
+
+        const { presentation } = result;
+
+        switch (presentation.kind) {
+          case "none":
+            setRecoveryHasRecoverableCandidates(false);
+            return;
+          case "autoShow":
+            showRecoveryCandidateDialog(presentation.candidates, null);
+            void window.pergamum.recovery
+              .markCandidatesSeen()
+              .catch(() => undefined);
+            return;
+          case "reminder":
+            setRecoveryHasRecoverableCandidates(true);
+            requestRecoveryReminderToast(presentation.candidateCount);
         }
       })
       .catch(() => undefined);
@@ -5883,8 +6040,11 @@ export function App(): JSX.Element {
           translate={translate}
           clipboardAdapter={navigatorClipboardAdapter}
           opener={recoveryCandidateDialogOpenerRef.current}
+          trapFocus={pendingDialogRequest === null}
           onClose={closeRecoveryCandidateDialog}
           onRestoreSelected={handleRecoveryRestoreSelected}
+          onDiscardSelected={handleRecoveryDiscardSelected}
+          onDiscardAll={handleRecoveryDiscardAll}
           getReportText={getRecoveryReportTextForDialog}
           onReportCopied={(count) =>
             logRendererDebugEvent({

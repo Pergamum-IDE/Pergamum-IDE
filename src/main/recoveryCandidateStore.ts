@@ -220,3 +220,37 @@ export function deleteRecoveryRowsById(
 
   return { deleted, missing, failed };
 }
+
+/**
+ * Delete previous-run Recovery candidate rows only. A current-run backup id
+ * is reported as missing, preserving #288's rule that live backups from this
+ * process are not part of the candidate surface.
+ */
+export function deletePreviousRunRecoveryRowsById(
+  database: BetterSqliteDatabase,
+  recoveryIds: readonly string[],
+  currentInstanceRunId: string
+): { deleted: string[]; missing: string[]; failed: string[] } {
+  const del = database.prepare(
+    `DELETE FROM documents
+     WHERE id = @id AND origin_instance_run_id <> @currentInstanceRunId`
+  );
+  const deleted: string[] = [];
+  const missing: string[] = [];
+  const failed: string[] = [];
+
+  for (const recoveryId of recoveryIds) {
+    try {
+      const result = del.run({ id: recoveryId, currentInstanceRunId });
+      if (result.changes > 0) {
+        deleted.push(recoveryId);
+      } else {
+        missing.push(recoveryId);
+      }
+    } catch {
+      failed.push(recoveryId);
+    }
+  }
+
+  return { deleted, missing, failed };
+}

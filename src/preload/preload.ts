@@ -142,6 +142,10 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(RECOVERY_CHANNELS.deleteDocument, { documentKey }),
     listCandidates: () =>
       ipcRenderer.invoke(RECOVERY_CHANNELS.listCandidates),
+    evaluateStartupCandidates: () =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.evaluateStartupCandidates),
+    markCandidatesSeen: () =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.markCandidatesSeen),
     restoreCandidates: (request) =>
       ipcRenderer.invoke(RECOVERY_CHANNELS.restoreCandidates, request),
     finalizeRestoredCandidates: (request) =>
