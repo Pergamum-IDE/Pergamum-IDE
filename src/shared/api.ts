@@ -29,10 +29,12 @@ import type {
   QuitApplicationResult
 } from "./lifecycle";
 import type { AppPlatform } from "./platform";
+import type { RecoveryStoreStatus } from "./recovery";
 import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
 
 export type { AppPlatform } from "./platform";
+export type { RecoveryStoreOwnerInfo, RecoveryStoreStatus } from "./recovery";
 export type {
   CloseCurrentProjectRequest,
   CloseCurrentProjectResult,
@@ -124,6 +126,15 @@ export const SESSION_CHANNELS = {
   /** main → renderer: a storage-class Session persistence failure occurred
    *  for a write the renderer was not awaiting (window-driven re-persist). */
   storageFailure: "session:storageFailure"
+} as const;
+
+export const RECOVERY_CHANNELS = {
+  /**
+   * Phase 6-4-2: read the Recovery Store's status for this run. Safe for
+   * any instance to call — a non-owner gets its `nonOwner` status back and
+   * no `Recovery.db` is opened as a side effect.
+   */
+  getStoreStatus: "recovery:getStoreStatus"
 } as const;
 
 export const GLOSSARY_CHANNELS = {
@@ -508,6 +519,14 @@ export interface PergamumApi {
     onStorageFailure: (
       callback: (reason: string) => void
     ) => () => void;
+  };
+  /**
+   * Phase 6-4-2: read-only view of the Recovery Store (app `userData`-side
+   * dedicated store). `getStoreStatus` never opens `Recovery.db`; a
+   * non-owner instance simply learns it is a non-owner.
+   */
+  recovery: {
+    getStoreStatus: () => Promise<RecoveryStoreStatus | null>;
   };
   glossary: {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;

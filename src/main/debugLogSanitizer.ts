@@ -15,6 +15,8 @@ import {
   debugLogPathKinds,
   debugLogPlatforms,
   debugLogReasons,
+  debugLogRecoveryJournalModes,
+  debugLogRecoverySynchronousLevels,
   debugLogResults,
   debugLogSaveTargetKinds,
   debugLogSizeBuckets,
@@ -39,6 +41,8 @@ import {
   type DebugLogPathKind,
   type DebugLogPlatform,
   type DebugLogReason,
+  type DebugLogRecoveryJournalMode,
+  type DebugLogRecoverySynchronousLevel,
   type DebugLogResult,
   type DebugLogSaveTargetKind,
   type DebugLogSizeBucket,
@@ -707,6 +711,35 @@ export function sanitizeDebugLogDetails(
         sanitized.viewportChangeSource =
           enumOrUnknown<DebugLogViewportChangeSource>(
             debugLogViewportChangeSources,
+            value
+          );
+        break;
+      case "instanceRunId": {
+        const instanceRunId = sanitizeSafeCode(value);
+
+        if (instanceRunId) {
+          sanitized.instanceRunId = instanceRunId;
+        }
+        break;
+      }
+      case "schemaVersion": {
+        const schemaVersion = sanitizeNonNegativeInteger(value);
+
+        if (schemaVersion !== undefined) {
+          sanitized.schemaVersion = schemaVersion;
+        }
+        break;
+      }
+      case "journalMode":
+        sanitized.journalMode = enumOrUnknown<DebugLogRecoveryJournalMode>(
+          debugLogRecoveryJournalModes,
+          value
+        );
+        break;
+      case "synchronous":
+        sanitized.synchronous =
+          enumOrUnknown<DebugLogRecoverySynchronousLevel>(
+            debugLogRecoverySynchronousLevels,
             value
           );
         break;
