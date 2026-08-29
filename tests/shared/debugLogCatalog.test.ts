@@ -7,6 +7,8 @@ import {
   debugLogEditorKinds,
   debugLogEventNames,
   debugLogReasons,
+  debugLogRecoveryJournalModes,
+  debugLogRecoverySynchronousLevels,
   debugLogViewportChangeSources,
   type DebugLogDetails
 } from "../../src/shared/debugLog";
@@ -359,5 +361,62 @@ describe("debug log catalog", () => {
         "unknown"
       ])
     );
+  });
+
+  it("includes the Recovery Store lifecycle events (Phase 6-4-2), and no dirty-payload event", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "recovery.store.init.started",
+        "recovery.store.init.succeeded",
+        "recovery.store.init.skipped",
+        "recovery.store.init.failed",
+        "recovery.store.schema.archived",
+        "recovery.store.lock.released"
+      ])
+    );
+    // Phase 6-4-2 handles no body text; a payload / flush event is out of
+    // scope and must not be introduced here.
+    expect(debugLogEventNames).not.toContain("recovery.store.payload.flushed");
+    expect(debugLogEventNames).not.toContain("recovery.document.upserted");
+  });
+
+  it("exposes instanceRunId / schemaVersion / journalMode / synchronous as allowlisted detail keys, each a specific name", () => {
+    type HasInstanceRunId = "instanceRunId" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasSchemaVersion = "schemaVersion" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasJournalMode = "journalMode" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasSynchronous = "synchronous" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasInstanceRunId: HasInstanceRunId = true;
+    const hasSchemaVersion: HasSchemaVersion = true;
+    const hasJournalMode: HasJournalMode = true;
+    const hasSynchronous: HasSynchronous = true;
+
+    expect(hasInstanceRunId).toBe(true);
+    expect(hasSchemaVersion).toBe(true);
+    expect(hasJournalMode).toBe(true);
+    expect(hasSynchronous).toBe(true);
+  });
+
+  it("defines closed Recovery PRAGMA catalogs, not free-form strings", () => {
+    expect([...debugLogRecoveryJournalModes]).toEqual([
+      "wal",
+      "other",
+      "unknown"
+    ]);
+    expect([...debugLogRecoverySynchronousLevels]).toEqual([
+      "full",
+      "other",
+      "unknown"
+    ]);
+    // A raw SQLite journal mode must never survive verbatim into the log.
+    expect([...debugLogRecoveryJournalModes]).not.toContain("delete");
+    expect([...debugLogRecoveryJournalModes]).not.toContain("memory");
   });
 });

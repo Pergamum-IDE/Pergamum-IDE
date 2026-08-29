@@ -70,6 +70,12 @@ export const debugLogEventNames = [
   "save.succeeded",
   "save.failed",
   "glossary.occurrences.scan.failed",
+  "recovery.store.init.started",
+  "recovery.store.init.succeeded",
+  "recovery.store.init.skipped",
+  "recovery.store.init.failed",
+  "recovery.store.schema.archived",
+  "recovery.store.lock.released",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -298,6 +304,30 @@ export type DebugLogEncodingAssumption =
   (typeof debugLogEncodingAssumptions)[number];
 
 /**
+ * Closed catalog for the Recovery Store's `Recovery.db` `PRAGMA
+ * journal_mode` result (Phase 6-4-2). Only "wal" is a healthy value; any
+ * other reported mode collapses to "other" so a stray value can never leak
+ * a path or free-form string into the log.
+ */
+export const debugLogRecoveryJournalModes = ["wal", "other", "unknown"] as const;
+
+export type DebugLogRecoveryJournalMode =
+  (typeof debugLogRecoveryJournalModes)[number];
+
+/**
+ * Closed catalog for the Recovery Store's `Recovery.db` `PRAGMA
+ * synchronous` result (Phase 6-4-2). "full" is the required value.
+ */
+export const debugLogRecoverySynchronousLevels = [
+  "full",
+  "other",
+  "unknown"
+] as const;
+
+export type DebugLogRecoverySynchronousLevel =
+  (typeof debugLogRecoverySynchronousLevels)[number];
+
+/**
  * Closed enum for `layout.viewport.changed`'s optional `viewportChangeSource`
  * detail (#162). Deliberately its own key/catalog rather than reusing the
  * generic `source` detail (`DebugLogCommandExecutionSource`, used by command
@@ -423,6 +453,19 @@ export interface DebugLogDetails {
   previewPaneHeight?: number;
   /** Best-effort trigger attribution for `layout.viewport.changed` (#162). */
   viewportChangeSource?: DebugLogViewportChangeSource;
+
+  /**
+   * Recovery Store (Phase 6-4-2). `instanceRunId` is the owning run's
+   * process-run id (an opaque UUIDv7, safe to log). `schemaVersion` is the
+   * `Recovery.db` `metadata.schema_version` observed at init / archive.
+   * `journalMode` / `synchronous` are the read-back PRAGMA results on the
+   * owner connection. No path, no `payload_text`, no manuscript text is
+   * ever carried here.
+   */
+  instanceRunId?: string;
+  schemaVersion?: number;
+  journalMode?: DebugLogRecoveryJournalMode;
+  synchronous?: DebugLogRecoverySynchronousLevel;
 
   error?: SanitizedErrorInfo;
 }

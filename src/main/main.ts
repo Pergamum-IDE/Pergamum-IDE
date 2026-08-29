@@ -55,6 +55,12 @@ import {
   createWindowLifecycleController,
   type WindowLifecycleController
 } from "./windowLifecycle";
+import {
+  initializeRecoveryStore,
+  recoveryStoreStatus,
+  shutdownRecoveryStore
+} from "./recoveryStore";
+import { registerRecoveryStoreIpc } from "./recoveryStoreIpc";
 
 let mainWindow: BrowserWindow | null = null;
 let windowLifecycleController: WindowLifecycleController | null = null;
@@ -172,6 +178,9 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
 function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
   installAppShutdownCleanup(app, async () => {
     try {
+      // #285: release the Recovery Store ownership lock (owner only) before
+      // the project write lock, so a normal quit leaves nothing behind.
+      await shutdownRecoveryStore(logger);
       await releaseCurrentProjectWriteOwnership();
     } finally {
       logger.flushAndClose();
@@ -311,6 +320,25 @@ app.whenReady().then(async () => {
     getColdStartPayload: () => coldStartPayload!,
     getColdStartWebContentsId: () => coldStartWebContentsId
   });
+
+  // #285: bring up the app-userData Recovery Store. First-come owner lock;
+  // a non-owner instance stays silent. A failure here NEVER blocks startup
+  // — the status is simply held as `unavailable`.
+  try {
+    await initializeRecoveryStore({
+      userDataPath: app.getPath("userData"),
+      instanceRunId,
+      appVersion: app.getVersion(),
+      logger: debugLogger
+    });
+  } catch (error) {
+    debugLogger.log({
+      level: "error",
+      event: "recovery.store.init.failed",
+      details: { pathKind: "appData", reason: "unknown", error }
+    });
+  }
+  registerRecoveryStoreIpc(ipcMain, recoveryStoreStatus);
 
   void createMainWindow(true);
 

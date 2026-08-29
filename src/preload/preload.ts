@@ -10,6 +10,7 @@ import {
   GLOSSARY_CHANNELS,
   LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
+  RECOVERY_CHANNELS,
   SESSION_CHANNELS,
   SETTINGS_CHANNELS,
   type PergamumApi
@@ -131,6 +132,10 @@ const pergamumApi: PergamumApi = {
         ipcRenderer.off(SESSION_CHANNELS.storageFailure, listener);
       };
     }
+  },
+  recovery: {
+    getStoreStatus: () =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.getStoreStatus)
   },
   glossary: {
     create: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.create, input),
