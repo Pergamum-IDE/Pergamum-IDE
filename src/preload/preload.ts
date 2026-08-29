@@ -151,7 +151,10 @@ const pergamumApi: PergamumApi = {
       ),
     discardCandidates: (request) =>
       ipcRenderer.invoke(RECOVERY_CHANNELS.discardCandidates, request),
-    getReport: () => ipcRenderer.invoke(RECOVERY_CHANNELS.getReport)
+    getReport: (language) =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.getReport, language),
+    hasRecoverableCandidates: () =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.hasRecoverableCandidates)
   },
   glossary: {
     create: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.create, input),

@@ -2797,6 +2797,14 @@ label.settingsItemHeader {
   outline-offset: 2px;
 }
 
+/* A disabled dialog button (e.g. Restore Selected with an empty selection)
+   must read as disabled, not just refuse clicks. Without this the primary
+   confirm button keeps its full-strength fill and looks enabled. */
+.appDialogButton:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
 .appDialogButton-confirm {
   background: var(--app-dialog-confirm-background);
   color: var(--app-dialog-confirm-foreground);
@@ -3326,6 +3334,13 @@ label.settingsItemHeader {
   gap: 8px;
 }
 
+/* #288 follow-up: bottom-align the report copy icon button with the Close
+   button. The right side is a vertical Restore/Close stack; without this the
+   centered left control floats above the Close button's baseline. */
+.recoveryCandidateDialogFooterContent {
+  align-items: flex-end;
+}
+
 .recoveryCandidateDialogReportButton:disabled {
   cursor: default;
   opacity: 0.62;
@@ -3334,6 +3349,13 @@ label.settingsItemHeader {
 @media (max-width: 480px) {
   .recoveryCandidateDialogActions {
     width: 100%;
+  }
+
+  /* Footer stacks vertically at this width (see .aboutDialogFooterContent);
+     restore the full-width stretch the bottom alignment would otherwise
+     override. */
+  .recoveryCandidateDialogFooterContent {
+    align-items: stretch;
   }
 }
 

@@ -39,6 +39,24 @@ export function isRecoverySortKey(value: string): value is RecoverySortKey {
 }
 
 /**
+ * #288 follow-up: the dialog's "Last updated" column shows `yyyy-MM-dd` only.
+ * Sorting still compares the full `candidate.updatedAt` value (see
+ * `keyComparison`), and the Recovery report keeps the full timestamp — this
+ * helper is display-only.
+ */
+export function recoveryUpdatedAtDisplayDate(updatedAt: string): string {
+  const isoDateMatch = /^(\d{4}-\d{2}-\d{2})/.exec(updatedAt);
+  if (isoDateMatch) {
+    return isoDateMatch[1];
+  }
+
+  const parsed = new Date(updatedAt);
+  return Number.isNaN(parsed.getTime())
+    ? updatedAt
+    : parsed.toISOString().slice(0, 10);
+}
+
+/**
  * Header click: re-clicking the active key toggles asc/desc; clicking a
  * different key switches to it, ascending.
  */

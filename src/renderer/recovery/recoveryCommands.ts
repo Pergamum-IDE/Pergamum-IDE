@@ -2,8 +2,13 @@
  * Phase 6-4-4: the Command Palette entry that opens the Recovery candidate
  * dialog. Palette-only in this issue — no application-menu item.
  *
- * `when: recovery.owner` keeps the command out of the palette for a
- * Recovery non-owner / unavailable instance, so a non-owner sees no UI.
+ * Enablement requires BOTH:
+ *   - `recovery.owner` — this process owns `Recovery.db` (keeps the command
+ *     out of the palette for a non-owner / unavailable instance), and
+ *   - `recovery.hasRecoverableCandidates` — at least one *previous-run*
+ *     Recovery row exists. `recovery.owner` alone is true for a normal
+ *     clean run too, so on its own it would surface the current run's own
+ *     live dirty-document backups as if they were recoverable (#288).
  */
 
 import type { Command, CommandRegistry } from "../../shared/commandRegistry";
@@ -14,7 +19,10 @@ import type { Translate } from "../../shared/i18n";
 export { recoveryCommandIds };
 
 export const showRecoveryDocumentsCommandWhen: CommandEnablementExpression = {
-  key: "recovery.owner"
+  allOf: [
+    { key: "recovery.owner" },
+    { key: "recovery.hasRecoverableCandidates" }
+  ]
 };
 
 export interface RecoveryCommandController {

@@ -436,7 +436,7 @@ export const jaTranslations = {
   "status.projectOpenFailed": "プロジェクトを開けませんでした: {message}",
   "status.quitFailed": "Pergamumを終了できませんでした: {message}",
   "status.recentProjectOpenFailed": "最近のプロジェクトを開けませんでした: {message}",
-  "status.recoveryBackupSaved": "復旧用バックアップを保存しました。",
+  "status.recoveryBackupSaved": "復旧用バックアップを保存しました",
   "status.recoveryDiscarded": "{count} 件の復旧候補を破棄しました",
   "status.recoveryRestoreFailed": "一部の項目を復元できませんでした",
   "status.recoveryRestored": "{count} 件を .recovered.md として復元しました",

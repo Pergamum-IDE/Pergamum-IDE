@@ -60,7 +60,7 @@ function buildHarness(options: {
       getOwnerDatabase: () =>
         options.withDatabase && handle ? handle.database : null,
       appVersion: "9.8.7-test",
-      instanceRunId: "0198d95f-97d8-7000-8000-00000000run",
+      instanceRunId: HARNESS_RUN_ID,
       now: () => new Date("2026-08-29T12:41:00.000Z"),
       restoreFileSystem,
       ...(options.registerRestoredProjectDocument
@@ -94,9 +94,16 @@ function buildHarness(options: {
   };
 }
 
-function ctx(now: string) {
+// The instance run id the IPC harness runs as, and the id used to seed
+// "previous run" rows (visible as recovery candidates). Seeding with
+// HARNESS_RUN_ID instead marks a row as this run's own live backup, which
+// the candidate/report layer must hide (#288).
+const HARNESS_RUN_ID = "0198d95f-97d8-7000-8000-00000000run";
+const PREVIOUS_RUN_ID = "0198d95f-97d8-7000-8000-000000000old";
+
+function ctx(now: string, instanceRunId: string = PREVIOUS_RUN_ID) {
   return {
-    instanceRunId: "0198d95f-97d8-7000-8000-00000000run",
+    instanceRunId,
     appVersion: "9.8.7-test",
     now: () => new Date(now),
     createRowId: () => `row-${(rowSeq += 1)}`
@@ -201,7 +208,7 @@ describe("recovery candidate IPC — owner", () => {
 
       // Rows are still present (two-phase restore).
       expect(
-        listRecoveryCandidates(handle!.database).map((c) => c.recoveryId).sort()
+        listRecoveryCandidates(handle!.database, HARNESS_RUN_ID).map((c) => c.recoveryId).sort()
       ).toEqual(["row-1", "row-2"]);
 
       const restored = h.logEvents.filter(
@@ -300,7 +307,7 @@ describe("recovery candidate IPC — owner", () => {
         true
       );
       expect(
-        listRecoveryCandidates(handle!.database).map((c) => c.recoveryId)
+        listRecoveryCandidates(handle!.database, HARNESS_RUN_ID).map((c) => c.recoveryId)
       ).toContain("row-1");
     });
   });
@@ -314,7 +321,7 @@ describe("recovery candidate IPC — owner", () => {
     }) as { ok: true; deleted: string[] };
     expect(result.deleted).toEqual(["row-1"]);
     expect(
-      listRecoveryCandidates(handle!.database).map((c) => c.recoveryId)
+      listRecoveryCandidates(handle!.database, HARNESS_RUN_ID).map((c) => c.recoveryId)
     ).toEqual(["row-2"]);
     expect(
       h.logEvents.some((e) => e.event === "recovery.document.deleted")
@@ -331,7 +338,7 @@ describe("recovery candidate IPC — owner", () => {
     expect(result.deleted).toEqual(["row-2"]);
     expect(result.failed).toEqual([]);
     expect(
-      listRecoveryCandidates(handle!.database).map((c) => c.recoveryId)
+      listRecoveryCandidates(handle!.database, HARNESS_RUN_ID).map((c) => c.recoveryId)
     ).toEqual(["row-1"]);
     expect(
       h.logEvents.find((e) => e.event === "recovery.document.discarded")?.details
@@ -341,9 +348,9 @@ describe("recovery candidate IPC — owner", () => {
   it("getReport returns a body-free report and does not mutate rows", () => {
     seedTwoRows();
     const h = buildHarness({ status: ownerStatus(), withDatabase: true });
-    const before = listRecoveryCandidates(handle!.database).length;
+    const before = listRecoveryCandidates(handle!.database, HARNESS_RUN_ID).length;
 
-    const result = h.invoke(RECOVERY_CHANNELS.getReport) as {
+    const result = h.invoke(RECOVERY_CHANNELS.getReport, "en") as {
       ok: true;
       report: string;
     };
@@ -354,7 +361,184 @@ describe("recovery candidate IPC — owner", () => {
     );
     expect(result.report).not.toContain(BODY_MARKER);
     expect(result.report).not.toContain("/novel/chapter-03.md");
-    expect(listRecoveryCandidates(handle!.database).length).toBe(before);
+    expect(listRecoveryCandidates(handle!.database, HARNESS_RUN_ID).length).toBe(before);
+  });
+
+  it("getReport emits the heading/disclaimer in the requested UI language only", () => {
+    seedTwoRows();
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const ja = h.invoke(RECOVERY_CHANNELS.getReport, "ja") as {
+      ok: true;
+      report: string;
+    };
+    expect(ja.report).toContain("Pergamum 復旧レポート");
+    expect(ja.report).toContain(
+      "前回終了または障害の原因を特定するものではありません。"
+    );
+    expect(ja.report).not.toContain(
+      "It does not identify the cause of the previous shutdown or failure."
+    );
+
+    const en = h.invoke(RECOVERY_CHANNELS.getReport, "en") as {
+      ok: true;
+      report: string;
+    };
+    expect(en.report).toContain("Pergamum Recovery Report");
+    expect(en.report).toContain(
+      "It does not identify the cause of the previous shutdown or failure."
+    );
+    expect(en.report).not.toContain(
+      "前回終了または障害の原因を特定するものではありません。"
+    );
+
+    // An unknown / missing language falls back to the default (ja) rather
+    // than emitting both languages.
+    const fallback = h.invoke(RECOVERY_CHANNELS.getReport, "fr") as {
+      ok: true;
+      report: string;
+    };
+    expect(fallback.report).toContain("Pergamum 復旧レポート");
+    expect(fallback.report).not.toContain("Pergamum Recovery Report");
+  });
+
+  // -----------------------------------------------------------------------
+  // #288 follow-up: previous-run vs current-run candidate semantics.
+  // -----------------------------------------------------------------------
+
+  function seedCurrentRunRow(displayName = "live.md"): void {
+    upsertRecoveryDocument(
+      handle!.database,
+      filePayload({
+        documentKey: `file:/novel/${displayName}`,
+        sourceUri: `file:///novel/${displayName}`,
+        filePath: `/novel/${displayName}`,
+        displayName
+      }),
+      ctx("2026-08-29T12:50:00.000Z", HARNESS_RUN_ID)
+    );
+  }
+
+  it("hasRecoverableCandidates is true only when a previous-run row exists", () => {
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    // zero rows
+    expect(
+      h.invoke(RECOVERY_CHANNELS.hasRecoverableCandidates)
+    ).toEqual({ ok: true, hasRecoverable: false });
+
+    // only this run's own live backup
+    seedCurrentRunRow();
+    expect(
+      h.invoke(RECOVERY_CHANNELS.hasRecoverableCandidates)
+    ).toEqual({ ok: true, hasRecoverable: false });
+
+    // a previous-run row appears
+    seedTwoRows();
+    expect(
+      h.invoke(RECOVERY_CHANNELS.hasRecoverableCandidates)
+    ).toEqual({ ok: true, hasRecoverable: true });
+  });
+
+  it("listCandidates hides current-run rows and keeps them in Recovery.db", () => {
+    seedCurrentRunRow("live-a.md");
+    seedCurrentRunRow("live-b.md");
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const listed = h.invoke(RECOVERY_CHANNELS.listCandidates) as {
+      ok: true;
+      candidates: Array<{ displayName: string }>;
+    };
+    expect(listed.candidates).toEqual([]);
+
+    // Both current-run rows are still stored (visible to a future run).
+    expect(
+      (
+        handle!.database
+          .prepare("SELECT COUNT(*) AS n FROM documents")
+          .get() as { n: number }
+      ).n
+    ).toBe(2);
+  });
+
+  it("listCandidates / getReport expose only previous-run rows from a mixed store", () => {
+    seedTwoRows(); // row-1, row-2 — previous run
+    seedCurrentRunRow("live.md"); // row-3 — this run
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const listed = h.invoke(RECOVERY_CHANNELS.listCandidates) as {
+      ok: true;
+      candidates: Array<{ recoveryId: string; displayName: string }>;
+    };
+    expect(listed.candidates.map((c) => c.recoveryId).sort()).toEqual([
+      "row-1",
+      "row-2"
+    ]);
+    expect(listed.candidates.map((c) => c.displayName)).not.toContain(
+      "live.md"
+    );
+
+    const report = (
+      h.invoke(RECOVERY_CHANNELS.getReport, "en") as {
+        ok: true;
+        report: string;
+      }
+    ).report;
+    expect(report).toContain("candidates: 2");
+    expect(report).not.toContain("live.md");
+    expect(report).not.toContain(BODY_MARKER);
+    expect(report).not.toContain("/novel/chapter-03.md");
+    expect(report).not.toContain("document_key");
+    expect(report).not.toContain("source_uri");
+  });
+
+  it("getReport reports candidates: 0 when only current-run rows exist", () => {
+    seedCurrentRunRow();
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const report = (
+      h.invoke(RECOVERY_CHANNELS.getReport, "en") as {
+        ok: true;
+        report: string;
+      }
+    ).report;
+    expect(report).toContain("candidates: 0");
+  });
+
+  it("restoreCandidates refuses a hidden current-run row id", async () => {
+    seedCurrentRunRow("live.md"); // row-1, current run
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const result = (await h.invoke(RECOVERY_CHANNELS.restoreCandidates, {
+      items: [{ recoveryId: "row-1" }]
+    })) as { ok: true; results: unknown[] };
+
+    // No restore row was resolved → nothing written, row untouched.
+    expect(result.results).toEqual([]);
+    expect(h.writes).toEqual([]);
+    expect(
+      (
+        handle!.database
+          .prepare("SELECT COUNT(*) AS n FROM documents")
+          .get() as { n: number }
+      ).n
+    ).toBe(1);
+  });
+
+  it("finalizing previous-run rows never deletes unrelated current-run rows", () => {
+    seedTwoRows(); // row-1, row-2 — previous run
+    seedCurrentRunRow("live.md"); // row-3 — this run
+    const h = buildHarness({ status: ownerStatus(), withDatabase: true });
+
+    const result = h.invoke(RECOVERY_CHANNELS.finalizeRestoredCandidates, {
+      recoveryIds: ["row-1", "row-2"]
+    }) as { ok: true; deleted: string[] };
+    expect(result.deleted.sort()).toEqual(["row-1", "row-2"]);
+
+    const remaining = handle!.database
+      .prepare("SELECT id FROM documents")
+      .all() as Array<{ id: string }>;
+    expect(remaining.map((r) => r.id)).toEqual(["row-3"]);
   });
 });
 
@@ -399,6 +583,9 @@ describe("recovery candidate IPC — non-owner / unavailable", () => {
         ok: false,
         skipped: expectedSkip
       });
+      expect(
+        h.invoke(RECOVERY_CHANNELS.hasRecoverableCandidates)
+      ).toEqual({ ok: false, skipped: expectedSkip });
 
       expect(h.logEvents).toEqual([]);
       expect(h.writes).toEqual([]);

@@ -478,7 +478,12 @@ describe("initializeRecoveryStore — stale Recovery.lock recovery (#293)", () =
 
     const handle = __recoveryStoreDatabaseForTests();
     expect(handle).not.toBeNull();
-    const candidates = listRecoveryCandidates(handle!.database);
+    // The seed row was written by a *previous* run ("…a1"); this run is
+    // "…b2", so it is a listable previous-run candidate (#288).
+    const candidates = listRecoveryCandidates(
+      handle!.database,
+      "0198d95f-97d8-7000-8000-0000000000b2"
+    );
     expect(candidates.map((c) => c.recoveryId)).toEqual(["row-seed-1"]);
 
     const events = loggedEventNames(logger);

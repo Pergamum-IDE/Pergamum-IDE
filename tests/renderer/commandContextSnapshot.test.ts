@@ -15,7 +15,8 @@ const baseInput = {
   editorDocumentProjectOwned: true,
   activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
   occurrenceTrackingActive: false,
-  recoveryOwner: false
+  recoveryOwner: false,
+  recoveryHasRecoverableCandidates: false
 };
 
 describe("buildCommandContextSnapshot", () => {
@@ -31,8 +32,19 @@ describe("buildCommandContextSnapshot", () => {
       "editor.document.projectOwned": true,
       "activeEditor.saveBlockedByReadOnlyProjectRootForUi": false,
       "glossary.occurrences.tracking.active": false,
-      "recovery.owner": false
+      "recovery.owner": false,
+      "recovery.hasRecoverableCandidates": false
     });
+  });
+
+  it("copies recoveryHasRecoverableCandidates into recovery.hasRecoverableCandidates", () => {
+    expect(
+      buildCommandContextSnapshot({
+        ...baseInput,
+        recoveryOwner: true,
+        recoveryHasRecoverableCandidates: true
+      })["recovery.hasRecoverableCandidates"]
+    ).toBe(true);
   });
 
   it("returns a frozen (semantically immutable) snapshot", () => {

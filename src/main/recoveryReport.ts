@@ -13,8 +13,13 @@
  *
  * It also states plainly that it does not identify the cause of the
  * previous shutdown or failure.
+ *
+ * #288 follow-up: the heading + disclaimer are emitted in the current UI
+ * language only — never both languages at once. The technical fields stay
+ * stable ASCII keys regardless of language.
  */
 
+import type { Language } from "../shared/i18n";
 import type { RecoveryCandidate } from "../shared/recoveryCandidate";
 import type { RecoveryStoreStatus } from "../shared/recovery";
 
@@ -23,14 +28,24 @@ export interface BuildRecoveryReportInput {
   readonly appVersion: string | null;
   readonly generatedAt: string;
   readonly candidates: readonly RecoveryCandidate[];
+  /** Current UI language; selects the heading/disclaimer language. */
+  readonly language: Language;
 }
 
-const DISCLAIMER_EN =
-  "This report describes Recovery candidates found by Pergamum. " +
-  "It does not identify the cause of the previous shutdown or failure.";
-const DISCLAIMER_JA =
-  "このレポートは Pergamum が検出した復旧候補の情報です。" +
-  "前回終了または障害の原因を特定するものではありません。";
+const REPORT_TEXT: Record<Language, { heading: string; disclaimer: string }> = {
+  en: {
+    heading: "Pergamum Recovery Report",
+    disclaimer:
+      "This report describes Recovery candidates found by Pergamum. " +
+      "It does not identify the cause of the previous shutdown or failure."
+  },
+  ja: {
+    heading: "Pergamum 復旧レポート",
+    disclaimer:
+      "このレポートは Pergamum が検出した復旧候補の情報です。" +
+      "前回終了または障害の原因を特定するものではありません。"
+  }
+};
 
 function candidateBlock(candidate: RecoveryCandidate): string {
   return [
@@ -47,10 +62,10 @@ function candidateBlock(candidate: RecoveryCandidate): string {
 }
 
 export function buildRecoveryReport(input: BuildRecoveryReportInput): string {
+  const text = REPORT_TEXT[input.language];
   const header = [
-    "Pergamum Recovery Report",
-    DISCLAIMER_EN,
-    DISCLAIMER_JA,
+    text.heading,
+    text.disclaimer,
     "",
     `generatedAt: ${input.generatedAt}`,
     `appVersion: ${input.appVersion ?? "unknown"}`,
