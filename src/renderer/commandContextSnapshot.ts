@@ -11,6 +11,7 @@ export interface CommandContextSnapshotInput {
   readonly editorDocumentProjectOwned: boolean;
   readonly activeEditorSaveBlockedByReadOnlyProjectRootForUi: boolean;
   readonly occurrenceTrackingActive: boolean;
+  readonly recoveryOwner: boolean;
 }
 
 export class ConflictingEditorKindError extends Error {
@@ -46,6 +47,7 @@ export function buildCommandContextSnapshot(
     "editor.document.projectOwned": input.editorDocumentProjectOwned,
     "activeEditor.saveBlockedByReadOnlyProjectRootForUi":
       input.activeEditorSaveBlockedByReadOnlyProjectRootForUi,
-    "glossary.occurrences.tracking.active": input.occurrenceTrackingActive
+    "glossary.occurrences.tracking.active": input.occurrenceTrackingActive,
+    "recovery.owner": input.recoveryOwner
   });
 }

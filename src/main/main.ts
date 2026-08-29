@@ -19,6 +19,7 @@ import {
   currentActiveProjectFilePath,
   currentProjectId,
   defaultProjectWriteOwnershipManager,
+  registerCurrentProjectDocumentPath,
   registerProjectIpc,
   releaseCurrentProjectWriteOwnership,
   setProjectWindowTitleTargetProvider,
@@ -63,6 +64,7 @@ import {
 } from "./recoveryStore";
 import { registerRecoveryStoreIpc } from "./recoveryStoreIpc";
 import { registerRecoveryDocumentIpc } from "./recoveryDocumentIpc";
+import { registerRecoveryCandidateIpc } from "./recoveryCandidateIpc";
 
 let mainWindow: BrowserWindow | null = null;
 let windowLifecycleController: WindowLifecycleController | null = null;
@@ -350,6 +352,18 @@ app.whenReady().then(async () => {
     instanceRunId,
     appVersion: app.getVersion(),
     logger: debugLogger
+  });
+  // #287: Recovery candidate dialog — list / restore / discard / report.
+  // Owner-only; a non-owner instance gets a silent `{ ok: false, skipped }`.
+  registerRecoveryCandidateIpc(ipcMain, {
+    getStatus: recoveryStoreStatus,
+    getOwnerDatabase: recoveryStoreOwnerDatabase,
+    instanceRunId,
+    appVersion: app.getVersion(),
+    logger: debugLogger,
+    // #287 follow-up: a recovered file written inside the open project root
+    // becomes a project document so the renderer opens it project-owned.
+    registerRestoredProjectDocument: registerCurrentProjectDocumentPath
   });
 
   void createMainWindow(true);

@@ -392,6 +392,26 @@ describe("debug log catalog", () => {
     expect(debugLogEventNames).not.toContain("recovery.document.body");
   });
 
+  it("includes the Recovery candidate dialog events (Phase 6-4-4)", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "recovery.candidates.dialog.shown",
+        "recovery.candidates.listed",
+        "recovery.document.restored",
+        "recovery.document.restore.failed",
+        "recovery.document.discarded",
+        "recovery.document.discard.failed",
+        "recovery.report.copied"
+      ])
+    );
+    // No event name implies a body / snippet leak.
+    expect(
+      debugLogEventNames.filter((name) => name.includes("snippet"))
+    ).toEqual([]);
+    expect(debugLogEventNames).not.toContain("recovery.report.contents");
+    expect(debugLogEventNames).not.toContain("recovery.document.preview");
+  });
+
   it("exposes instanceRunId / schemaVersion / journalMode / synchronous as allowlisted detail keys, each a specific name", () => {
     type HasInstanceRunId = "instanceRunId" extends keyof DebugLogDetails
       ? true

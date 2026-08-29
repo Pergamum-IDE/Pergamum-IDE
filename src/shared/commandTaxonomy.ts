@@ -12,7 +12,10 @@ export const CORE_COMMAND_DOMAINS = [
   // #252: read-only editor diagnostics/assistance (line-ending
   // distribution today; paragraph indentation, invisible characters, and
   // other document diagnostics are expected to join this domain later).
-  "assist"
+  "assist",
+  // #287: Document Recovery — listing / restoring / discarding unsaved
+  // working-copy content from the app-userData Recovery Store.
+  "recovery"
 ] as const;
 
 export type CoreCommandDomain = (typeof CORE_COMMAND_DOMAINS)[number];

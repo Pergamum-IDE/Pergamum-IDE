@@ -14,6 +14,13 @@ export interface InfoDialogProps {
   children: ReactNode;
   footer: ReactNode;
   hideVisualTitle?: boolean;
+  /**
+   * Whether this dialog traps Tab focus within itself. Defaults to `true`.
+   * Set `false` while a nested modal (e.g. a stacked destructive-confirm
+   * dialog) owns focus, so the outer trap does not yank focus back out of
+   * the child. `Escape → onClose` is unaffected.
+   */
+  trapFocus?: boolean;
   onClose: () => void;
 }
 
@@ -40,6 +47,7 @@ export function InfoDialog({
   children,
   footer,
   hideVisualTitle = false,
+  trapFocus = true,
   onClose
 }: InfoDialogProps): JSX.Element {
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -76,7 +84,7 @@ export function InfoDialog({
       return;
     }
 
-    if (event.key !== "Tab" || !dialogRef.current) {
+    if (event.key !== "Tab" || !trapFocus || !dialogRef.current) {
       return;
     }
 

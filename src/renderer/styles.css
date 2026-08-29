@@ -3229,6 +3229,114 @@ label.settingsItemHeader {
   min-width: 0;
 }
 
+/* Recovery candidate dialog (#287): a checkbox grid on the shared
+   InfoDialog shell + the About-dialog footer composition (lower-left
+   secondary action, lower-right action stack). */
+.recoveryCandidateDialogContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.recoveryCandidateDialogExplain {
+  margin: 0;
+  color: #52616f;
+}
+
+.recoveryCandidateDialogEmpty {
+  margin: 0;
+  padding-block: 16px;
+  color: #52616f;
+  text-align: center;
+}
+
+.recoveryCandidateDialogTableWrap {
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  border: 1px solid #e4e9ee;
+  border-radius: 6px;
+}
+
+.recoveryCandidateDialogTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.recoveryCandidateDialogTable th,
+.recoveryCandidateDialogTable td {
+  padding-block: 6px;
+  padding-inline: 10px;
+  text-align: start;
+  border-block-end: 1px solid #eef1f4;
+  vertical-align: top;
+}
+
+.recoveryCandidateDialogTable thead th {
+  position: sticky;
+  inset-block-start: 0;
+  background: #f5f7f9;
+  color: #52616f;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.recoveryCandidateDialogCheckboxCol {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.recoveryCandidateDialogSortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recoveryCandidateDialogSortButton:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.recoveryCandidateDialogSortIndicator {
+  min-width: 0.9em;
+}
+
+.recoveryCandidateDialogNumber {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.recoveryCandidateDialogPreview {
+  color: #2b2b2b;
+  white-space: nowrap;
+}
+
+.recoveryCandidateDialogActions {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.recoveryCandidateDialogReportButton:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+@media (max-width: 480px) {
+  .recoveryCandidateDialogActions {
+    width: 100%;
+  }
+}
+
 /* Notification foundation (#266): non-modal, information-only toast stack.
    Bottom-right, stacked upward (column-reverse => newest nearest the
    corner). The container never blocks pointer input; each toast re-enables

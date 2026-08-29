@@ -60,6 +60,15 @@ export interface RecoveryPayloadCoordinatorOptions {
     readonly operation: "upsert" | "delete";
     readonly error: unknown;
   }) => void;
+  /**
+   * Fired once per Recovery `upsert` that the transport confirmed durable
+   * (`{ ok: true }`). Used only for a lightweight, body-free "backup saved"
+   * status-bar hint. NOT fired for a `delete`, a failed upsert, or a
+   * `skipped` (non-owner / unavailable) result — so a silent non-owner
+   * instance never produces the hint. Carries no argument: no document key,
+   * path, or body ever reaches it.
+   */
+  readonly onPersisted?: () => void;
 }
 
 const defaultScheduler: RecoveryPayloadScheduler = {
@@ -85,6 +94,7 @@ export class RecoveryPayloadCoordinator {
   private readonly idleMs: number;
   private readonly maxMs: number;
   private readonly onFlushError?: RecoveryPayloadCoordinatorOptions["onFlushError"];
+  private readonly onPersisted?: RecoveryPayloadCoordinatorOptions["onPersisted"];
 
   private enabled: boolean;
   private stopped = false;
@@ -114,6 +124,7 @@ export class RecoveryPayloadCoordinator {
     this.idleMs = options.idleMs ?? RECOVERY_IDLE_FLUSH_MS;
     this.maxMs = options.maxMs ?? RECOVERY_MAX_FLUSH_MS;
     this.onFlushError = options.onFlushError;
+    this.onPersisted = options.onPersisted;
     this.enabled = options.enabled ?? false;
   }
 
@@ -231,6 +242,7 @@ export class RecoveryPayloadCoordinator {
         if (isOk(result)) {
           this.lastFlushedByKey.set(newKey, JSON.stringify(postSavePayload));
           this.pendingByKey.set(newKey, postSavePayload);
+          this.onPersisted?.();
         } else if (isError(result)) {
           this.onFlushError?.({
             documentKey: newKey,
@@ -324,6 +336,7 @@ export class RecoveryPayloadCoordinator {
 
         if (isOk(result)) {
           this.lastFlushedByKey.set(key, serialized);
+          this.onPersisted?.();
           // Only clear the pending slot if it was not overwritten by a
           // newer edit while the write was in flight.
           if (this.pendingByKey.get(key) === payload) {

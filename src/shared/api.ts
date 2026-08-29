@@ -34,6 +34,16 @@ import type {
   RecoveryDocumentPayload,
   RecoveryDocumentWriteResult
 } from "./recoveryDocument";
+import type {
+  RecoveryCandidateListResult,
+  RecoveryDiscardRequest,
+  RecoveryDiscardResult,
+  RecoveryFinalizeRequest,
+  RecoveryFinalizeResult,
+  RecoveryReportResult,
+  RecoveryRestoreRequest,
+  RecoveryRestoreResult
+} from "./recoveryCandidate";
 import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
 
@@ -45,6 +55,16 @@ export type {
   RecoveryDocumentWriteMode,
   RecoveryDocumentWriteResult
 } from "./recoveryDocument";
+export type {
+  RecoveryCandidate,
+  RecoveryCandidateListResult,
+  RecoveryDiscardResult,
+  RecoveryFinalizeResult,
+  RecoveryReportResult,
+  RecoveryRestoreItem,
+  RecoveryRestoreItemResult,
+  RecoveryRestoreResult
+} from "./recoveryCandidate";
 export type {
   CloseCurrentProjectRequest,
   CloseCurrentProjectResult,
@@ -155,7 +175,20 @@ export const RECOVERY_CHANNELS = {
    * Phase 6-4-3: DELETE a Recovery row — Save-success cleanup ONLY. Never
    * wired to tab close or a discard action in this phase.
    */
-  deleteDocument: "recovery:deleteDocument"
+  deleteDocument: "recovery:deleteDocument",
+  /** Phase 6-4-4: list Recovery candidates for the candidate dialog. */
+  listCandidates: "recovery:listCandidates",
+  /** Phase 6-4-4: write selected candidates to `.recovered.md` files
+   *  (atomic). Does NOT delete any Recovery row. */
+  restoreCandidates: "recovery:restoreCandidates",
+  /** Phase 6-4-4: delete Recovery rows the renderer confirmed it opened
+   *  after a successful restore. */
+  finalizeRestoredCandidates: "recovery:finalizeRestoredCandidates",
+  /** Phase 6-4-4: discard (delete) selected Recovery rows after the
+   *  destructive confirmation. */
+  discardCandidates: "recovery:discardCandidates",
+  /** Phase 6-4-4: build a body-free Recovery report for the clipboard. */
+  getReport: "recovery:getReport"
 } as const;
 
 export const GLOSSARY_CHANNELS = {
@@ -557,6 +590,24 @@ export interface PergamumApi {
     deleteDocument: (
       documentKey: string
     ) => Promise<RecoveryDocumentWriteResult>;
+    /** Phase 6-4-4: candidate list for the Recovery dialog (owner only;
+     *  a non-owner gets `{ ok: false, skipped }` and no DB is opened). */
+    listCandidates: () => Promise<RecoveryCandidateListResult>;
+    /** Phase 6-4-4: write selected candidates to `.recovered.md`
+     *  (atomic). Never deletes a Recovery row. */
+    restoreCandidates: (
+      request: RecoveryRestoreRequest
+    ) => Promise<RecoveryRestoreResult>;
+    /** Phase 6-4-4: delete the Recovery rows the renderer opened. */
+    finalizeRestoredCandidates: (
+      request: RecoveryFinalizeRequest
+    ) => Promise<RecoveryFinalizeResult>;
+    /** Phase 6-4-4: discard (delete) selected Recovery rows. */
+    discardCandidates: (
+      request: RecoveryDiscardRequest
+    ) => Promise<RecoveryDiscardResult>;
+    /** Phase 6-4-4: body-free Recovery report text. */
+    getReport: () => Promise<RecoveryReportResult>;
   };
   glossary: {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;

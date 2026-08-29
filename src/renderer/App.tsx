@@ -164,6 +164,12 @@ import {
   buildRecoveryDocumentPayload,
   recoveryDocumentKeyForDocument
 } from "./recovery/recoveryDocumentPayload";
+import { RecoveryCandidateDialog } from "./recovery/RecoveryCandidateDialog";
+import {
+  createRecoveryCommandTitles,
+  registerRecoveryCommands
+} from "./recovery/recoveryCommands";
+import type { RecoveryCandidate } from "../shared/recoveryCandidate";
 import {
   runColdStartRestore,
   type ColdStartRestoreDeps,
@@ -795,10 +801,33 @@ export function App(): JSX.Element {
             error: rendererDebugErrorInfo(error)
           }
         });
+      },
+      onPersisted: () => {
+        // Dogfood observability: a brief status-bar hint that a dirty
+        // Markdown Recovery backup was actually written. Fires only for a
+        // confirmed `upsert` — never for a delete after Save, a failed
+        // flush, or a non-owner / unavailable skip. Body-free: no key,
+        // path, or manuscript text.
+        setStatus({ key: "status.recoveryBackupSaved" });
       }
     });
   }
   const recoveryPayloadCoordinator = recoveryPayloadCoordinatorRef.current;
+
+  // #287: the Recovery Store status kind for this run (from
+  // `recovery.getStoreStatus`). Drives the `recovery.owner` command context
+  // key and the one-shot startup auto-show. A non-owner / unavailable
+  // instance never sees any Recovery UI.
+  const [recoveryStoreStatusKind, setRecoveryStoreStatusKind] = useState<
+    "owner" | "nonOwner" | "unavailable" | "unknown"
+  >("unknown");
+  // #287: the Recovery candidate dialog's current data (null = closed).
+  const [recoveryCandidateDialogData, setRecoveryCandidateDialogData] =
+    useState<readonly RecoveryCandidate[] | null>(null);
+  const recoveryCandidateDialogOpenerRef = useRef<Element | null>(null);
+  const isRecoveryCandidateDialogPendingOrOpenRef = useRef(false);
+  const recoveryAutoShowAttemptedRef = useRef(false);
+  const showRecoveryDocumentsCommandRef = useRef<() => void>(() => undefined);
 
   // #272 (review Blocker 3): the outgoing Markdown editor's final View State,
   // captured by MarkdownEditor at the active-editor-switch / unmount
@@ -1006,13 +1035,17 @@ export function App(): JSX.Element {
     isAboutDialogPendingOrOpenRef.current ||
     aboutDialogAppInfo !== null ||
     isLineEndingDistributionDialogPendingOrOpenRef.current ||
-    lineEndingDistributionData !== null;
+    lineEndingDistributionData !== null ||
+    isRecoveryCandidateDialogPendingOrOpenRef.current ||
+    recoveryCandidateDialogData !== null;
   const isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose =
     pendingDialogRequest !== null ||
     isAboutDialogPendingOrOpenRef.current ||
     aboutDialogAppInfo !== null ||
     isLineEndingDistributionDialogPendingOrOpenRef.current ||
-    lineEndingDistributionData !== null;
+    lineEndingDistributionData !== null ||
+    isRecoveryCandidateDialogPendingOrOpenRef.current ||
+    recoveryCandidateDialogData !== null;
 
   const requestMarkdownEditorFocus = useCallback((documentKey: string) => {
     setMarkdownEditorFocusRequest({
@@ -1247,12 +1280,17 @@ export function App(): JSX.Element {
           return;
         }
         const isOwner = status?.kind === "owner";
+        // #287: publish the status kind for the `recovery.owner` command
+        // context key and the startup auto-show.
+        setRecoveryStoreStatusKind(status?.kind ?? "unavailable");
         recoveryPayloadCoordinator.setEnabled(isOwner);
         if (isOwner) {
           feedRecoveryDirtyDocumentsRef.current();
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        setRecoveryStoreStatusKind("unavailable");
+      });
     return () => {
       cancelled = true;
     };
@@ -1475,7 +1513,8 @@ export function App(): JSX.Element {
         editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
         activeEditorSaveBlockedByReadOnlyProjectRootForUi,
         occurrenceTrackingActive:
-          glossaryOccurrenceTrackingState.kind === "active"
+          glossaryOccurrenceTrackingState.kind === "active",
+        recoveryOwner: recoveryStoreStatusKind === "owner"
       }),
     [
       project,
@@ -1487,7 +1526,8 @@ export function App(): JSX.Element {
       isProjectOwnedCurrentEditor,
       activeEditorSaveBlockedByReadOnlyProjectRootForUi,
       isDirty,
-      glossaryOccurrenceTrackingState.kind
+      glossaryOccurrenceTrackingState.kind,
+      recoveryStoreStatusKind
     ]
   );
   commandContextRef.current = commandContext;
@@ -1557,6 +1597,13 @@ export function App(): JSX.Element {
         removeParagraphIndent: () => removeParagraphIndentCommandRef.current()
       },
       createAssistCommandTitles(translate)
+    );
+    registerRecoveryCommands(
+      registry,
+      {
+        showRecoveryDocuments: () => showRecoveryDocumentsCommandRef.current()
+      },
+      createRecoveryCommandTitles(translate)
     );
     registerWorkspaceCommands(
       registry,
@@ -1717,7 +1764,8 @@ export function App(): JSX.Element {
       isLifecycleCommitBarrierActiveNow() ||
       dialogController.getPendingRequest() ||
       isAboutDialogPendingOrOpenRef.current ||
-      isLineEndingDistributionDialogPendingOrOpenRef.current
+      isLineEndingDistributionDialogPendingOrOpenRef.current ||
+      isRecoveryCandidateDialogPendingOrOpenRef.current
         ? "app_modal_open"
         : null
     );
@@ -2242,6 +2290,214 @@ export function App(): JSX.Element {
   function closeLineEndingDistributionDialog(): void {
     isLineEndingDistributionDialogPendingOrOpenRef.current = false;
     setLineEndingDistributionData(null);
+  }
+
+  // -------------------------------------------------------------------------
+  // #287: Recovery candidate dialog (owner-only). Closing never deletes a
+  // row; deletion happens only via Save success (#286), a confirmed
+  // Discard, or finalize after a successful restore.
+  // -------------------------------------------------------------------------
+
+  async function openRecoveryCandidateDialog(): Promise<void> {
+    if (
+      isRecoveryCandidateDialogPendingOrOpenRef.current ||
+      recoveryStoreStatusKind !== "owner"
+    ) {
+      return;
+    }
+
+    if (typeof document !== "undefined") {
+      recoveryCandidateDialogOpenerRef.current = document.activeElement;
+    }
+
+    isRecoveryCandidateDialogPendingOrOpenRef.current = true;
+
+    try {
+      const result = await window.pergamum.recovery.listCandidates();
+
+      if (!result.ok) {
+        isRecoveryCandidateDialogPendingOrOpenRef.current = false;
+        return;
+      }
+
+      setRecoveryCandidateDialogData(result.candidates);
+      logRendererDebugEvent({
+        level: "debug",
+        event: "recovery.candidates.dialog.shown",
+        details: { count: result.candidates.length }
+      });
+      playDialogShownSound(
+        soundFeedback,
+        effectiveSettings.workbench.sound,
+        reportSoundPlaybackFailure
+      );
+    } catch {
+      isRecoveryCandidateDialogPendingOrOpenRef.current = false;
+    }
+  }
+
+  function closeRecoveryCandidateDialog(): void {
+    isRecoveryCandidateDialogPendingOrOpenRef.current = false;
+    setRecoveryCandidateDialogData(null);
+  }
+
+  async function refreshRecoveryCandidateDialog(): Promise<void> {
+    if (!isRecoveryCandidateDialogPendingOrOpenRef.current) {
+      return;
+    }
+
+    try {
+      const result = await window.pergamum.recovery.listCandidates();
+      if (result.ok) {
+        setRecoveryCandidateDialogData(result.candidates);
+      }
+    } catch {
+      // Keep the current list on a transient failure.
+    }
+  }
+
+  // #287 dogfood follow-up: the candidate dialog no longer offers a
+  // destructive "discard" action — this recovery surface is recover-or-close
+  // only, and Close never mutates a row. The `recovery:discardCandidates`
+  // IPC channel is kept for a later explicit-discard entry point.
+
+  async function handleRecoveryRestoreSelected(
+    recoveryIds: readonly string[]
+  ): Promise<void> {
+    if (recoveryIds.length === 0 || recoveryCandidateDialogData === null) {
+      return;
+    }
+
+    const byId = new Map(
+      recoveryCandidateDialogData.map((candidate) => [
+        candidate.recoveryId,
+        candidate
+      ])
+    );
+    const items: { recoveryId: string; targetPath?: string }[] = [];
+
+    for (const recoveryId of recoveryIds) {
+      const candidate = byId.get(recoveryId);
+      if (!candidate) {
+        continue;
+      }
+
+      if (
+        candidate.documentType === "markdown.untitled" ||
+        !candidate.hasFilePath
+      ) {
+        // Untitled has no source directory — always ask for a save
+        // location (project root is only the default). Cancel keeps the row.
+        const defaultPath = project
+          ? `${project.rootPath.replace(/[\\/]+$/, "")}/${candidate.displayName}`
+          : candidate.displayName;
+        const selected =
+          await window.pergamum.files.selectMarkdownSavePath(defaultPath);
+        if (!selected) {
+          continue;
+        }
+        items.push({ recoveryId, targetPath: selected.path });
+      } else {
+        items.push({ recoveryId });
+      }
+    }
+
+    if (items.length === 0) {
+      return;
+    }
+
+    let restore;
+    try {
+      restore = await window.pergamum.recovery.restoreCandidates({ items });
+    } catch (error) {
+      setStatus({ key: "status.recoveryRestoreFailed" });
+      logRendererDebugEvent({
+        level: "error",
+        event: "recovery.document.restore.failed",
+        details: { result: "failed", error: rendererDebugErrorInfo(error) }
+      });
+      return;
+    }
+
+    if (!restore.ok) {
+      setStatus({ key: "status.recoveryRestoreFailed" });
+      return;
+    }
+
+    // Phase 6-4-4 two-phase restore: open each written file, then finalize
+    // (delete) ONLY the rows whose file opened as a new tab. A write /
+    // open failure keeps the row.
+    const openedIds: string[] = [];
+    for (const written of restore.results) {
+      if (written.status !== "written" || !written.writtenPath) {
+        continue;
+      }
+      try {
+        if (written.projectRelativePath && project && activeProjectContext) {
+          // #287 follow-up: the recovered file landed inside the open
+          // project root — open it as a project-owned Markdown document so
+          // the tab is not flagged as an external / project-outside file.
+          const projectFile = await window.pergamum.projects.readProjectDocument(
+            written.projectRelativePath
+          );
+          await openDocument(
+            createProjectDocument(
+              {
+                relativePath: written.projectRelativePath,
+                name:
+                  written.projectRelativePath.split("/").pop() ??
+                  written.projectRelativePath
+              },
+              projectFile.content,
+              projectFile.metadata
+            )
+          );
+        } else {
+          const file = await window.pergamum.files.readMarkdownFile(
+            written.writtenPath
+          );
+          await openDocument(createFileDocument(file));
+        }
+        openedIds.push(written.recoveryId);
+      } catch (error) {
+        logRendererDebugEvent({
+          level: "error",
+          event: "recovery.document.restore.failed",
+          details: { result: "failed", error: rendererDebugErrorInfo(error) }
+        });
+      }
+    }
+
+    if (openedIds.length > 0) {
+      try {
+        await window.pergamum.recovery.finalizeRestoredCandidates({
+          recoveryIds: openedIds
+        });
+      } catch {
+        // The recovered files are already on disk — a finalize failure just
+        // leaves the rows, which is safe.
+      }
+    }
+
+    await refreshRecoveryCandidateDialog();
+
+    if (openedIds.length > 0) {
+      setStatus({
+        key: "status.recoveryRestored",
+        values: { count: openedIds.length }
+      });
+    } else {
+      setStatus({ key: "status.recoveryRestoreFailed" });
+    }
+  }
+
+  async function getRecoveryReportTextForDialog(): Promise<string | null> {
+    try {
+      const result = await window.pergamum.recovery.getReport();
+      return result.ok ? result.report : null;
+    } catch {
+      return null;
+    }
   }
 
   function closeCommandPaletteAndRestoreMarkdownFocus(): void {
@@ -4880,6 +5136,42 @@ export function App(): JSX.Element {
     deferredRestoreErrorDialogs
   ]);
 
+  // #287: one-shot startup auto-show of the Recovery candidate dialog.
+  // Owner only. Runs after cold-start restore + launch routing have settled
+  // and after any deferred cold-start restore-Error dialogs have had their
+  // turn, and only while no other modal is up (it re-runs when those
+  // clear). Closing the dialog never re-arms this for the process; the
+  // Command Palette can still reopen it.
+  useEffect(() => {
+    if (
+      recoveryAutoShowAttemptedRef.current ||
+      recoveryStoreStatusKind !== "owner" ||
+      !coldStartRestoreSettled ||
+      !coldStartMarkdownLaunchRoutingSettled ||
+      !deferredRestoreErrorDialogsReadyRef.current ||
+      isAppModalSurfacePendingOrOpen
+    ) {
+      return;
+    }
+
+    recoveryAutoShowAttemptedRef.current = true;
+    void window.pergamum.recovery
+      .listCandidates()
+      .then((result) => {
+        if (result.ok && result.candidates.length > 0) {
+          void openRecoveryCandidateDialog();
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    recoveryStoreStatusKind,
+    coldStartRestoreSettled,
+    coldStartMarkdownLaunchRoutingSettled,
+    isAppModalSurfacePendingOrOpen,
+    deferredRestoreErrorDialogVersion
+  ]);
+
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
   closeProjectCommandRef.current = closeProject;
@@ -4889,6 +5181,9 @@ export function App(): JSX.Element {
     handleLifecycleWindowCloseRequest;
   showLineEndingDistributionCommandRef.current =
     openLineEndingDistributionDialog;
+  showRecoveryDocumentsCommandRef.current = () => {
+    void openRecoveryCandidateDialog();
+  };
   insertParagraphIndentCommandRef.current = () =>
     applyParagraphIndentOperation("insert");
   removeParagraphIndentCommandRef.current = () =>
@@ -5471,6 +5766,25 @@ export function App(): JSX.Element {
           translate={translate}
           opener={lineEndingDistributionDialogOpenerRef.current}
           onClose={closeLineEndingDistributionDialog}
+        />
+      ) : null}
+
+      {recoveryCandidateDialogData !== null ? (
+        <RecoveryCandidateDialog
+          candidates={recoveryCandidateDialogData}
+          translate={translate}
+          clipboardAdapter={navigatorClipboardAdapter}
+          opener={recoveryCandidateDialogOpenerRef.current}
+          onClose={closeRecoveryCandidateDialog}
+          onRestoreSelected={handleRecoveryRestoreSelected}
+          getReportText={getRecoveryReportTextForDialog}
+          onReportCopied={(count) =>
+            logRendererDebugEvent({
+              level: "debug",
+              event: "recovery.report.copied",
+              details: { count }
+            })
+          }
         />
       ) : null}
 
