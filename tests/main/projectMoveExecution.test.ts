@@ -348,8 +348,8 @@ describe("moveEntries (#325) — real conflict at execution time", () => {
   });
 });
 
-describe("moveEntries (#325) — module boundaries", () => {
-  it("imports no Recovery / IPC / renderer module and mutates only via fs.rename", () => {
+describe("moveEntries — module boundaries (#325 / #326)", () => {
+  it("stays free of Recovery Store internals, IPC, and renderer code; mutates only via fs.rename", () => {
     const source = require("node:fs").readFileSync(
       "src/main/projectMoveExecution.ts",
       "utf8"
@@ -362,13 +362,237 @@ describe("moveEntries (#325) — module boundaries", () => {
       (match) => match[1]
     );
 
-    // No Recovery re-key (#326 consumes `successfulPathPairs` instead).
-    expect(importLines.join("\n")).not.toMatch(/recover/i);
-    expect(source).not.toContain("rekeyRecoveryDocumentPaths");
+    // #326 re-key is an injected hook only — never a direct call into the
+    // Recovery Store. A type-only import from the shared recoveryDocument
+    // module is fine; the Store module / helper are not touched.
+    expect(source).not.toContain("rekeyRecoveryDocumentPaths(");
+    expect(importLines.join("\n")).not.toMatch(/recoveryDocumentPathRekey/);
+    expect(importLines.join("\n")).not.toMatch(/recoveryStore/i);
+    expect(importLines.join("\n")).not.toMatch(/better-sqlite3/);
     // No IPC / renderer wiring.
     expect(importLines.join("\n")).not.toMatch(/electron|\.\.\/renderer/);
     expect(source).not.toContain("ipcMain.handle");
     // The ONLY filesystem call is fs.rename.
     expect([...new Set(fsCalls)]).toEqual(["rename"]);
+  });
+});
+
+describe("moveEntries (#326) — Recovery re-key integration", () => {
+  function okRekey(): {
+    ok: true;
+    rekeyed: number;
+    noRow: number;
+    collisions: number;
+    errors: number;
+    outcomes: [];
+  } {
+    return {
+      ok: true,
+      rekeyed: 0,
+      noRow: 0,
+      collisions: 0,
+      errors: 0,
+      outcomes: []
+    };
+  }
+
+  it("does not call Recovery re-key on a validation failure", async () => {
+    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+
+    const result = await moveEntries(
+      input({ sourceRelativePaths: ["missing.md"] }),
+      { rekeyRecoveryPaths }
+    );
+
+    expect(rekeyRecoveryPaths).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect("recoveryRekey" in result).toBe(false);
+  });
+
+  it("does not call Recovery re-key when every rename failed", async () => {
+    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+
+    const result = await moveEntries(
+      input({ sourceRelativePaths: ["a.md", "b.md"] }),
+      {
+        rename: () => {
+          const error = new Error("x") as NodeJS.ErrnoException;
+          error.code = "EPERM";
+          return Promise.reject(error);
+        },
+        rekeyRecoveryPaths
+      }
+    );
+
+    expect(rekeyRecoveryPaths).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    expect(result.successfulPathPairs).toEqual([]);
+    expect(result.recoveryRekey).toEqual({
+      skipped: "no-successful-path-pairs"
+    });
+  });
+
+  it("calls Recovery re-key with ALL successful path pairs on a full success", async () => {
+    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+
+    const result = await moveEntries(
+      input({ sourceRelativePaths: ["a.md", "b.md", "c.md"] }),
+      { rekeyRecoveryPaths }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(rekeyRecoveryPaths).toHaveBeenCalledTimes(1);
+    expect(rekeyRecoveryPaths).toHaveBeenCalledWith([
+      {
+        oldAbsolutePath: path.join(projectRoot, "a.md"),
+        newAbsolutePath: path.join(projectRoot, "Dest", "a.md")
+      },
+      {
+        oldAbsolutePath: path.join(projectRoot, "b.md"),
+        newAbsolutePath: path.join(projectRoot, "Dest", "b.md")
+      },
+      {
+        oldAbsolutePath: path.join(projectRoot, "c.md"),
+        newAbsolutePath: path.join(projectRoot, "Dest", "c.md")
+      }
+    ]);
+    // The pair list handed to the caller is unchanged by re-key.
+    expect(result.successfulPathPairs).toEqual(
+      rekeyRecoveryPaths.mock.calls[0][0]
+    );
+  });
+
+  it("calls Recovery re-key with the moved entries only on a partial failure", async () => {
+    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+    const rename: NonNullable<MoveEntriesDeps["rename"]> = async (
+      oldPath,
+      newPath
+    ) => {
+      if (path.basename(oldPath) === "b.md") {
+        const error = new Error("x") as NodeJS.ErrnoException;
+        error.code = "EACCES";
+        throw error;
+      }
+      await fs.rename(oldPath, newPath);
+    };
+
+    const result = await moveEntries(
+      input({ sourceRelativePaths: ["a.md", "b.md", "c.md"] }),
+      { rename, rekeyRecoveryPaths }
+    );
+
+    expect(result.ok).toBe(false);
+    expect(rekeyRecoveryPaths).toHaveBeenCalledWith([
+      {
+        oldAbsolutePath: path.join(projectRoot, "a.md"),
+        newAbsolutePath: path.join(projectRoot, "Dest", "a.md")
+      },
+      {
+        oldAbsolutePath: path.join(projectRoot, "c.md"),
+        newAbsolutePath: path.join(projectRoot, "Dest", "c.md")
+      }
+    ]);
+  });
+
+  it("keeps an all-successful Move ok:true when Recovery re-key reports failure", async () => {
+    const result = await moveEntries(
+      input({ sourceRelativePaths: ["a.md", "b.md"] }),
+      {
+        rekeyRecoveryPaths: () => ({
+          ok: true,
+          rekeyed: 0,
+          noRow: 0,
+          collisions: 1,
+          errors: 2,
+          outcomes: []
+        })
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.recoveryRekey).toMatchObject({
+      ok: true,
+      collisions: 1,
+      errors: 2
+    });
+  });
+
+  it("keeps an all-successful Move ok:true when the re-key hook throws", async () => {
+    const result = await moveEntries(
+      input({ sourceRelativePaths: ["a.md"] }),
+      {
+        rekeyRecoveryPaths: () => {
+          throw new Error("recovery store exploded");
+        }
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.validation).toEqual({ ok: true });
+    expect(result.recoveryRekey).toEqual({ failed: "threw" });
+    // The move itself really happened.
+    expect(await exists("Dest/a.md")).toBe(true);
+  });
+
+  it("does not alter partial-failure semantics when the re-key hook throws", async () => {
+    const rename: NonNullable<MoveEntriesDeps["rename"]> = async (
+      oldPath,
+      newPath
+    ) => {
+      if (path.basename(oldPath) === "b.md") {
+        const error = new Error("x") as NodeJS.ErrnoException;
+        error.code = "EACCES";
+        throw error;
+      }
+      await fs.rename(oldPath, newPath);
+    };
+
+    const result = await moveEntries(
+      input({ sourceRelativePaths: ["a.md", "b.md"] }),
+      {
+        rename,
+        rekeyRecoveryPaths: () => Promise.reject(new Error("boom"))
+      }
+    );
+
+    expect(result.ok).toBe(false); // still partial failure, from execution only
+    expect(result.validation).toEqual({ ok: true });
+    expect(result.results.map((r) => [r.sourceRelativePath, r.status])).toEqual([
+      ["a.md", "moved"],
+      ["b.md", "failed"]
+    ]);
+    expect(result.recoveryRekey).toEqual({ failed: "threw" });
+  });
+
+  it("passes a store-skipped re-key result through as diagnostic metadata", async () => {
+    const result = await moveEntries(input({ sourceRelativePaths: ["a.md"] }), {
+      rekeyRecoveryPaths: () => ({ ok: false, skipped: "not-owner" })
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.recoveryRekey).toEqual({ ok: false, skipped: "not-owner" });
+  });
+
+  it("omits recoveryRekey entirely when no hook is supplied", async () => {
+    const result = await moveEntries(input({ sourceRelativePaths: ["a.md"] }));
+
+    expect(result.ok).toBe(true);
+    expect("recoveryRekey" in result).toBe(false);
+  });
+
+  it("awaits an async re-key hook", async () => {
+    const rekeyRecoveryPaths = vi.fn(
+      async (): Promise<ReturnType<typeof okRekey>> => {
+        await Promise.resolve();
+        return okRekey();
+      }
+    );
+
+    const result = await moveEntries(input({ sourceRelativePaths: ["a.md"] }), {
+      rekeyRecoveryPaths
+    });
+
+    expect(rekeyRecoveryPaths).toHaveBeenCalledTimes(1);
+    expect(result.recoveryRekey).toMatchObject({ ok: true });
   });
 });

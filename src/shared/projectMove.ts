@@ -16,6 +16,8 @@
  * the follow-up Move UI issue.
  */
 
+import type { RecoveryPathRekeyResult } from "./recoveryDocument";
+
 /**
  * Stable internal reason values. No user-facing prose — a follow-up UI issue
  * maps these to i18n keys.
@@ -196,12 +198,32 @@ export interface MoveEntryPathPair {
 }
 
 /**
- * `ok: true` only when Phase A passed AND every `fs.rename` succeeded.
+ * #326: best-effort Recovery re-key metadata attached to a Move result. It
+ * is DIAGNOSTIC ONLY — it never influences `MoveEntriesResult.ok`.
+ *
+ *   - a #320 `RecoveryPathRekeyResult` when the re-key hook ran,
+ *   - `{ skipped: "no-successful-path-pairs" }` when nothing moved so the
+ *     hook was deliberately not called,
+ *   - `{ failed: "threw" }` when the hook threw (Move already completed;
+ *     the throw is swallowed).
+ *
+ * Absent entirely when no re-key hook was supplied.
+ */
+export type MoveEntriesRecoveryRekey =
+  | RecoveryPathRekeyResult
+  | { readonly skipped: "no-successful-path-pairs" }
+  | { readonly failed: "threw" };
+
+/**
+ * `ok: true` only when Phase A passed AND every `fs.rename` succeeded —
+ * Recovery re-key (`recoveryRekey`) is best-effort and never affects it.
  *
  *   - validation failure → `ok: false`, `validation.ok: false`, empty
- *     `results` / `successfulPathPairs`, and NO `fs.rename` was attempted.
+ *     `results` / `successfulPathPairs`, NO `fs.rename` and NO Recovery
+ *     re-key attempted.
  *   - partial execution failure → `ok: false`, `validation.ok: true`,
- *     per-entry `results`, `successfulPathPairs` for the moved entries only.
+ *     per-entry `results`, `successfulPathPairs` for the moved entries only,
+ *     and the moved pairs handed to Recovery re-key.
  */
 export type MoveEntriesResult =
   | {
@@ -209,10 +231,12 @@ export type MoveEntriesResult =
       readonly validation: { readonly ok: true };
       readonly results: readonly MoveEntryExecutionResult[];
       readonly successfulPathPairs: readonly MoveEntryPathPair[];
+      readonly recoveryRekey?: MoveEntriesRecoveryRekey;
     }
   | {
       readonly ok: false;
       readonly validation: MoveEntriesValidationResult | { readonly ok: true };
       readonly results: readonly MoveEntryExecutionResult[];
       readonly successfulPathPairs: readonly MoveEntryPathPair[];
+      readonly recoveryRekey?: MoveEntriesRecoveryRekey;
     };
