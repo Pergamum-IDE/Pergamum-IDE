@@ -139,3 +139,80 @@ export function moveEntryNamesConflict(
     rightName.normalize("NFC").toLowerCase()
   );
 }
+
+// ---------------------------------------------------------------------------
+// #325: Move v1 — Phase B execution (`fs.rename`).
+//
+// `moveEntries` runs Phase A first; only a fully `ok: true` validation
+// proceeds to sequential renames. Each rename is caught per entry — a
+// failure never rolls back an earlier success and never stops a later entry
+// (Phase A already vetted the batch; a Phase B failure is TOCTOU / external
+// process / permission / disk / lock, and a half-rollback would only make
+// the on-disk state harder to reason about). No user-facing prose: i18n
+// belongs to the follow-up Move UI issue.
+// ---------------------------------------------------------------------------
+
+/** Stable internal reason values for an execution-time `fs.rename` failure. */
+export type MoveEntryExecutionFailureReason =
+  /** The source vanished between validation and the rename (ENOENT). */
+  | "source-missing-during-execution"
+  /** The destination name was taken between validation and the rename
+   *  (EEXIST / ENOTEMPTY). */
+  | "destination-conflict-during-execution"
+  /** The OS refused the rename (EACCES / EPERM). */
+  | "permission-denied"
+  /** Any other `fs.rename` failure. */
+  | "rename-failed";
+
+export const MOVE_ENTRY_EXECUTION_FAILURE_REASONS: readonly MoveEntryExecutionFailureReason[] =
+  [
+    "source-missing-during-execution",
+    "destination-conflict-during-execution",
+    "permission-denied",
+    "rename-failed"
+  ];
+
+interface MoveEntryLocation {
+  readonly sourceRelativePath: string;
+  readonly destinationRelativePath: string;
+  readonly sourceAbsolutePath: string;
+  readonly destinationAbsolutePath: string;
+}
+
+export type MoveEntryExecutionResult =
+  | ({ readonly status: "moved" } & MoveEntryLocation)
+  | ({
+      readonly status: "failed";
+      readonly reason: MoveEntryExecutionFailureReason;
+    } & MoveEntryLocation);
+
+/**
+ * One successfully-moved file's old → new absolute path. #326 hands these to
+ * the #320 best-effort Recovery re-key mechanism.
+ */
+export interface MoveEntryPathPair {
+  readonly oldAbsolutePath: string;
+  readonly newAbsolutePath: string;
+}
+
+/**
+ * `ok: true` only when Phase A passed AND every `fs.rename` succeeded.
+ *
+ *   - validation failure → `ok: false`, `validation.ok: false`, empty
+ *     `results` / `successfulPathPairs`, and NO `fs.rename` was attempted.
+ *   - partial execution failure → `ok: false`, `validation.ok: true`,
+ *     per-entry `results`, `successfulPathPairs` for the moved entries only.
+ */
+export type MoveEntriesResult =
+  | {
+      readonly ok: true;
+      readonly validation: { readonly ok: true };
+      readonly results: readonly MoveEntryExecutionResult[];
+      readonly successfulPathPairs: readonly MoveEntryPathPair[];
+    }
+  | {
+      readonly ok: false;
+      readonly validation: MoveEntriesValidationResult | { readonly ok: true };
+      readonly results: readonly MoveEntryExecutionResult[];
+      readonly successfulPathPairs: readonly MoveEntryPathPair[];
+    };
