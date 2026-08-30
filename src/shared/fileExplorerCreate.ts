@@ -45,6 +45,26 @@ export function isReservedFileExplorerName(rawName: string): boolean {
   return lower.startsWith(STALE_LOCK_NAME_PREFIX);
 }
 
+/**
+ * #311: true when any segment of a project-relative path is a reserved /
+ * hidden name (see {@link isReservedFileExplorerName}). Direct
+ * `projects:listFileExplorerChildren` requests are rejected — without a
+ * filesystem scan — when this returns true, e.g. `.git`,
+ * `foo/.pergamum_recovery`, `foo/.pergamum.lock.stale-20260830`. Accepts
+ * `/` or `\` separators; the project root (`null` / empty) is never reserved.
+ */
+export function pathHasReservedFileExplorerSegment(
+  relativePath: string | null
+): boolean {
+  if (relativePath === null || relativePath.length === 0) {
+    return false;
+  }
+
+  return relativePath
+    .split(/[/\\]/)
+    .some((segment) => isReservedFileExplorerName(segment));
+}
+
 export type FileExplorerNameValidationError =
   | "empty"
   | "dot"

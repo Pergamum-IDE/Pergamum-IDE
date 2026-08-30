@@ -34,7 +34,7 @@ describe("debug log IPC", () => {
       level: "debug",
       event: "command.invoked",
       details: {
-        commandId: "workspace.files.focus",
+        commandId: "workspace.files.toggle",
         fileName: "must-not-be-trusted.md"
       }
     };
@@ -100,7 +100,7 @@ describe("debug log IPC", () => {
       timestamp: "2026-08-14T22:00:22.000+09:00",
       level: "debug",
       event: "command.invoked",
-      details: { commandId: "workspace.files.focus" }
+      details: { commandId: "workspace.files.toggle" }
     });
     registeredListener(DEBUG_LOG_CHANNELS.unsubscribe)({ sender });
     subscriber?.({
@@ -116,7 +116,7 @@ describe("debug log IPC", () => {
       timestamp: "2026-08-14T22:00:22.000+09:00",
       level: "debug",
       event: "command.invoked",
-      details: { commandId: "workspace.files.focus" }
+      details: { commandId: "workspace.files.toggle" }
     });
     expect(sender.send.mock.calls[0][1]).not.toHaveProperty("sessionId");
     expect(unsubscribeFromLogger).toHaveBeenCalledTimes(1);

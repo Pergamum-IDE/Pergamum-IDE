@@ -159,7 +159,7 @@ describe("application menu", () => {
     const { window, send } = menuWindowMock();
 
     expect(
-      sendApplicationMenuCommand(() => window, "workspace.files.focus")
+      sendApplicationMenuCommand(() => window, "workspace.files.toggle")
     ).toBe(false);
     expect(send).not.toHaveBeenCalled();
   });
@@ -250,7 +250,7 @@ describe("application menu", () => {
     );
     sendApplicationMenuCommand(
       () => destroyedWebContentsWindow,
-      "workspace.files.focus",
+      "workspace.files.toggle",
       debugLogger
     );
 
@@ -270,7 +270,7 @@ describe("application menu", () => {
         reason: "web_contents_destroyed"
       },
       {
-        commandId: "workspace.files.focus",
+        commandId: "workspace.files.toggle",
         operation: "command",
         result: "ignored",
         trigger: "unknown",
@@ -555,7 +555,7 @@ describe("applyApplicationMenuEnablement / registerApplicationMenuIpc (#252 foll
     });
 
     expect(() =>
-      applyApplicationMenuEnablement({ "workspace.files.focus": false })
+      applyApplicationMenuEnablement({ "workspace.files.toggle": false })
     ).not.toThrow();
   });
 

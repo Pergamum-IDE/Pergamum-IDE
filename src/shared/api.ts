@@ -385,7 +385,11 @@ export type FileExplorerUnavailableReason =
   | "noProject"
   | "outsideProjectRoot"
   | "notDirectory"
-  | "unreadable";
+  | "unreadable"
+  // #311: the request targets a Pergamum reserved / hidden path segment
+  // (e.g. `.git`, `.pergamum_recovery`, `foo/.pergamum.lock.stale-…`). The
+  // directory is never scanned for these.
+  | "reserved";
 
 export type ListFileExplorerChildrenResult =
   | {

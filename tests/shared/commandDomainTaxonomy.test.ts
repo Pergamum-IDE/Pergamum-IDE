@@ -9,6 +9,7 @@ import { registerApplicationCommands } from "../../src/renderer/applicationComma
 import { registerAssistCommands } from "../../src/renderer/assistCommands";
 import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
+import { registerFileExplorerCommands } from "../../src/renderer/fileExplorerCommands";
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
@@ -102,10 +103,24 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openApplicationSettings: () => undefined
     },
     {
-      focusFiles: "Focus File Explorer",
+      toggleFiles: "Toggle File Explorer",
       focusSearch: "Focus Search",
       focusGlossary: "Focus Glossary",
       openApplicationSettings: "Open Application Settings"
+    }
+  );
+  registerFileExplorerCommands(
+    registry,
+    {
+      requestFileExplorerCreate: () => undefined
+    },
+    {
+      createMarkdownFile: "Create New Markdown File",
+      createMarkdownFileDescription:
+        "Create a Markdown file at the current File Explorer selection.",
+      createFolder: "Create New Folder",
+      createFolderDescription:
+        "Create a folder at the current File Explorer selection."
     }
   );
   registerUtilityWindowCommands(

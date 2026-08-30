@@ -8,7 +8,7 @@ const openGlossaryEntryCommandId = defineCommandId<
   readonly [entryId: string],
   string
 >("glossary.entry.open");
-const focusFilesCommandId = defineCommandId("workspace.files.focus");
+const toggleFilesCommandId = defineCommandId("workspace.files.toggle");
 
 const registry = new CommandRegistry();
 const executionOptions = { source: "commandPalette" } as const;
@@ -25,17 +25,17 @@ const openGlossaryEntryCommand: Command<
 
 registry.register(openGlossaryEntryCommand);
 registry.register({
-  id: focusFilesCommandId,
+  id: toggleFilesCommandId,
   title: "Focus files",
   execute: () => undefined
 });
 
 void registry.execute(openGlossaryEntryCommandId, executionOptions, "entry-1");
 void registry.isEnabled(openGlossaryEntryCommandId, "entry-1");
-void registry.execute(focusFilesCommandId, executionOptions);
+void registry.execute(toggleFilesCommandId, executionOptions);
 
 // @ts-expect-error Command execution options are required.
-void registry.execute(focusFilesCommandId);
+void registry.execute(toggleFilesCommandId);
 
 // @ts-expect-error Command arguments are required by each CommandId.
 void registry.execute(openGlossaryEntryCommandId, executionOptions);
@@ -47,4 +47,4 @@ void registry.execute(openGlossaryEntryCommandId, executionOptions, 1);
 void registry.isEnabled(openGlossaryEntryCommandId, 1);
 
 // @ts-expect-error No-argument commands cannot receive arguments.
-void registry.execute(focusFilesCommandId, executionOptions, "entry-1");
+void registry.execute(toggleFilesCommandId, executionOptions, "entry-1");

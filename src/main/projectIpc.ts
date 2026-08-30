@@ -45,6 +45,7 @@ import {
   applyMarkdownFileExtension,
   fileExplorerCreateFailureReasonFromErrorCode,
   fileExplorerCreateFailureReasonFromValidationError,
+  pathHasReservedFileExplorerSegment,
   validateFileExplorerName,
   type FileExplorerCreateFailureReason
 } from "../shared/fileExplorerCreate";
@@ -1093,6 +1094,24 @@ function resolveFileExplorerDirectoryPath(directoryRelativePath: string | null):
     return {
       kind: "unavailable",
       reason: "outsideProjectRoot"
+    };
+  }
+
+  // #311: reject a request into any reserved / hidden path segment
+  // (`.git`, `.pergamum_recovery`, `pergamum.json`, `.pergamum.lock.stale-…`,
+  // OS noise, and Pergamum data files) before touching the filesystem. These
+  // never appear in a listing (see isHiddenFileExplorerEntry); a direct
+  // request for one must not scan the directory either.
+  if (
+    pathHasReservedFileExplorerSegment(normalizedDirectoryRelativePath) ||
+    (normalizedDirectoryRelativePath !== null &&
+      normalizedDirectoryRelativePath
+        .split("/")
+        .some((segment) => isProtectedPergamumDataFilePath(segment)))
+  ) {
+    return {
+      kind: "unavailable",
+      reason: "reserved"
     };
   }
 

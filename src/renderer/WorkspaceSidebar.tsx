@@ -1,7 +1,10 @@
 import type { PergamumProject } from "../shared/api";
 import type { CreateGlossaryEntryInput, GlossaryEntryId } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
-import { FileExplorer } from "./FileExplorer";
+import {
+  FileExplorer,
+  type FileExplorerCreateEntryRequest
+} from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
 import type { SidebarMode } from "./sidebarMode";
@@ -12,8 +15,12 @@ interface WorkspaceSidebarProps {
   highlightedProjectDocumentRelativePath: string | null;
   highlightedGlossaryEntryId: GlossaryEntryId | null;
   glossaryRefreshToken: number;
+  /** #311: Command Palette "Create New File / Folder" request, forwarded to
+   *  the File Explorer so it opens the shared create dialog. */
+  fileExplorerCreateEntryRequest: FileExplorerCreateEntryRequest | null;
   translate: Translate;
   onActivateProjectDocument: (relativePath: string) => void;
+  onFileExplorerCreateEntryRequestHandled: () => void;
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
   onCreateGlossaryEntry: (
     input: CreateGlossaryEntryInput
@@ -26,8 +33,10 @@ export function WorkspaceSidebar({
   highlightedProjectDocumentRelativePath,
   highlightedGlossaryEntryId,
   glossaryRefreshToken,
+  fileExplorerCreateEntryRequest,
   translate,
   onActivateProjectDocument,
+  onFileExplorerCreateEntryRequestHandled,
   onActivateGlossaryEntry,
   onCreateGlossaryEntry
 }: WorkspaceSidebarProps): JSX.Element {
@@ -42,6 +51,10 @@ export function WorkspaceSidebar({
           }
           readOnly={project?.accessMode.kind === "readOnly"}
           translate={translate}
+          createEntryRequest={fileExplorerCreateEntryRequest}
+          onCreateEntryRequestHandled={
+            onFileExplorerCreateEntryRequestHandled
+          }
           onActivateDocument={onActivateProjectDocument}
         />
       );

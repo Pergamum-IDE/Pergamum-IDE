@@ -23,7 +23,7 @@ describe("application menu renderer bridge", () => {
   it("ignores command IDs outside the application menu allowlist", () => {
     const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
-    expect(invokeApplicationMenuCommand("workspace.files.focus", execute)).toBe(
+    expect(invokeApplicationMenuCommand("workspace.files.toggle", execute)).toBe(
       false
     );
     expect(execute).not.toHaveBeenCalled();
@@ -74,8 +74,8 @@ describe("application menu renderer bridge", () => {
       () => execute
     );
 
-    listener?.("workspace.files.focus");
+    listener?.("workspace.files.toggle");
 
-    expect(execute).toHaveBeenCalledWith("workspace.files.focus");
+    expect(execute).toHaveBeenCalledWith("workspace.files.toggle");
   });
 });

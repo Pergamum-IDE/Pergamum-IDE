@@ -343,7 +343,7 @@ describe("workspace navigation", () => {
         }
       },
       {
-        focusFiles: "Focus File Explorer",
+        toggleFiles: "Focus File Explorer",
         focusSearch: "Focus Search",
         focusGlossary: "Focus Glossary",
         openApplicationSettings: "Open Application Settings"

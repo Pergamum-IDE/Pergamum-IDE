@@ -276,9 +276,19 @@ describe("CommandPalette", () => {
         "Select all text in the current editor."
       ],
       [
-        "command.workspace.files.focus.description",
-        "ファイルエクスプローラーを表示します。",
-        "Show the File Explorer."
+        "command.workspace.files.toggle.description",
+        "ファイルエクスプローラーを表示または非表示にします。",
+        "Show or hide the File Explorer."
+      ],
+      [
+        "command.workspace.files.createMarkdownFile.description",
+        "ファイルエクスプローラーの選択位置に Markdown ファイルを作成します。",
+        "Create a Markdown file at the current File Explorer selection."
+      ],
+      [
+        "command.workspace.files.createFolder.description",
+        "ファイルエクスプローラーの選択位置にフォルダを作成します。",
+        "Create a folder at the current File Explorer selection."
       ],
       [
         "command.workspace.search.focus.description",

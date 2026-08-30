@@ -3225,6 +3225,66 @@ describe("project file IPC foundation", () => {
     });
   });
 
+  it("rejects direct File Explorer list requests for reserved / hidden path segments without scanning", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Explorer Reserved.pergamum"
+    );
+    // The reserved-segment guard rejects before touching the filesystem, so
+    // none of these paths need to exist on disk.
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Reserved"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+
+    const readdirSpy = vi.spyOn(fs, "readdir");
+    const lstatSpy = vi.spyOn(fs, "lstat");
+
+    for (const directoryRelativePath of [
+      ".git",
+      ".pergamum_recovery",
+      ".pergamum.lock",
+      ".pergamum.lock.stale-20260830T000000Z",
+      "pergamum.json",
+      ".DS_Store",
+      "Thumbs.db",
+      "desktop.ini",
+      "foo/.git",
+      "foo/.pergamum_recovery"
+    ]) {
+      readdirSpy.mockClear();
+      lstatSpy.mockClear();
+
+      await expect(
+        listFileExplorerChildrenHandler(
+          { sender: {} },
+          { directoryRelativePath }
+        )
+      ).resolves.toEqual({
+        kind: "unavailable",
+        directoryRelativePath: null,
+        reason: "reserved"
+      });
+
+      expect(readdirSpy).not.toHaveBeenCalled();
+      expect(lstatSpy).not.toHaveBeenCalled();
+    }
+
+    readdirSpy.mockRestore();
+    lstatSpy.mockRestore();
+  });
+
   it("returns an unavailable File Explorer result when a folder cannot be read", async () => {
     const logger = createLoggerMock();
     const projectFilePath = path.join(projectRootPath, "Explorer Unreadable.pergamum");

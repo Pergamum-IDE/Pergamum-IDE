@@ -336,7 +336,10 @@ import {
   utilityWindowCommandIds
 } from "./utilityWindowCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
-import { shouldShowWelcomeSurface } from "./welcomeSurface";
+import {
+  shouldShowFullScreenWelcomeSurface,
+  shouldShowWelcomeSurface
+} from "./welcomeSurface";
 import {
   clampSidebarWidth,
   clampUtilityWindowHeight,
@@ -353,6 +356,11 @@ import {
   workspaceCommandIds,
   workspaceFocusCommandIdForMode
 } from "./workspaceCommands";
+import {
+  createFileExplorerCommandTitles,
+  registerFileExplorerCommands
+} from "./fileExplorerCommands";
+import type { FileExplorerCreateEntryRequest } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import {
   documentWorkspaceTabId,
@@ -643,6 +651,14 @@ export function App(): JSX.Element {
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
+  // #311: a Command Palette "Create New File / Folder" request handed to the
+  // File Explorer. `token` is a session-monotonic counter (never reused) so a
+  // repeat command re-opens the dialog; the state is cleared to null once the
+  // File Explorer has consumed it, so a later sidebar remount cannot replay a
+  // stale request.
+  const fileExplorerCreateRequestSeqRef = useRef(0);
+  const [fileExplorerCreateEntryRequest, setFileExplorerCreateEntryRequest] =
+    useState<FileExplorerCreateEntryRequest | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<GlossaryOccurrenceRange | null>(null);
   /**
@@ -1724,6 +1740,36 @@ export function App(): JSX.Element {
       },
       createWorkspaceCommandTitles(translate)
     );
+    registerFileExplorerCommands(
+      registry,
+      {
+        requestFileExplorerCreate: (kind) => {
+          // #311: reveal the File Explorer without ever collapsing it (this
+          // is not the Activity Bar toggle), then hand it a create request.
+          setSidebarMode("files");
+          setLayout((current) =>
+            current.sidebar.collapsed
+              ? {
+                  ...current,
+                  sidebar: {
+                    collapsed: false,
+                    width: clampSidebarWidth(
+                      current.sidebar.width,
+                      mainAreaRef.current?.clientWidth
+                    )
+                  }
+                }
+              : current
+          );
+          fileExplorerCreateRequestSeqRef.current += 1;
+          setFileExplorerCreateEntryRequest({
+            kind,
+            token: fileExplorerCreateRequestSeqRef.current
+          });
+        }
+      },
+      createFileExplorerCommandTitles(translate)
+    );
     registerUtilityWindowCommands(
       registry,
       {
@@ -1937,8 +1983,15 @@ export function App(): JSX.Element {
       }),
     [activeDocument?.id, commandRegistry, translate]
   );
-  // #262: Welcome is shown exactly when there are zero open tabs of any kind —
-  // independent of whether a project is open.
+  // #262: Welcome shows on zero open tabs of any kind, regardless of project.
+  // Blocker (#311 dogfood): but only the no-open case swaps the whole
+  // workbench (sidebar included) for it — with an open Project the sidebar /
+  // File Explorer stay mounted and side-nav controlled, scoped to editor area.
+  const shouldShowFullScreenWelcome = shouldShowFullScreenWelcomeSurface({
+    openDocumentsState,
+    isSettingsTabOpen,
+    projectIsOpen: project !== null
+  });
   const shouldShowWelcome = shouldShowWelcomeSurface({
     openDocumentsState,
     isSettingsTabOpen
@@ -5667,6 +5720,26 @@ export function App(): JSX.Element {
     }
   }
 
+  // #262 Welcome content. Rendered full-screen (replacing the workbench) only
+  // in the no-project zero-tab state; with a project open it is scoped to the
+  // editor area so the File Explorer / sidebar stay mounted (#311 dogfood
+  // blocker).
+  const welcomeScreen = (
+    <WelcomeScreen
+      recentProjects={settings.recentProjects}
+      translate={translate}
+      onCreateProject={() => {
+        void createProject();
+      }}
+      onOpenProject={() => {
+        void openProject();
+      }}
+      onOpenRecentProject={(projectFilePath) => {
+        void openRecentProject(projectFilePath);
+      }}
+    />
+  );
+
   return (
     <main
       className="appShell"
@@ -5767,20 +5840,8 @@ export function App(): JSX.Element {
             />
           ) : null}
 
-          {shouldShowWelcome ? (
-            <WelcomeScreen
-              recentProjects={settings.recentProjects}
-              translate={translate}
-              onCreateProject={() => {
-                void createProject();
-              }}
-              onOpenProject={() => {
-                void openProject();
-              }}
-              onOpenRecentProject={(projectFilePath) => {
-                void openRecentProject(projectFilePath);
-              }}
-            />
+          {shouldShowFullScreenWelcome ? (
+            welcomeScreen
           ) : (
             <section className="mainArea" ref={mainAreaRef}>
               {!layout.sidebar.collapsed ? (
@@ -5803,9 +5864,15 @@ export function App(): JSX.Element {
                           : null
                       }
                       glossaryRefreshToken={glossaryRefreshToken}
+                      fileExplorerCreateEntryRequest={
+                        fileExplorerCreateEntryRequest
+                      }
                       translate={translate}
                       onActivateProjectDocument={(relativePath) => {
                         void activateProjectDocument(relativePath);
+                      }}
+                      onFileExplorerCreateEntryRequestHandled={() => {
+                        setFileExplorerCreateEntryRequest(null);
                       }}
                       onActivateGlossaryEntry={(entryId) => {
                         executeUiCommand(
@@ -6058,6 +6125,12 @@ export function App(): JSX.Element {
                         </>
                       ) : null}
                     </>
+                  ) : shouldShowWelcome ? (
+                    /* #262 / #311 dogfood blocker: with a project open the
+                       zero-tab Welcome is scoped to the editor body — the
+                       sidebar / File Explorer stay mounted and stay under the
+                       sole control of the side navigation. */
+                    welcomeScreen
                   ) : null}
                 </section>
               </section>
