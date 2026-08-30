@@ -363,6 +363,34 @@ describe("OpenDocumentsState", () => {
     ).toBe(true);
   });
 
+  it("replaces a clean project document with a renamed project document identity", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "existing"),
+      projectContext
+    );
+    const result = replaceOpenDocument(
+      state,
+      createProjectDocumentEditorId("chapter-01.md", projectContext),
+      createProjectDocument(
+        {
+          relativePath: "chapter-renamed.md",
+          name: "chapter-renamed.md"
+        },
+        "existing"
+      ),
+      projectContext
+    );
+
+    expect(result.didCollide).toBe(false);
+    expect(
+      editorIdEquals(
+        result.state.activeDocumentId,
+        createProjectDocumentEditorId("chapter-renamed.md", projectContext)
+      )
+    ).toBe(true);
+    expect(documentTabs(result.state)[0].title).toBe("chapter-renamed.md");
+  });
+
   it("opens a project document into the empty zero-tab initial state (#262)", () => {
     const state = openOrActivateDocument(
       createInitialOpenDocumentsState(),

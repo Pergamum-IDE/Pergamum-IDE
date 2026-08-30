@@ -37,6 +37,8 @@ import {
   type ProjectOpenResult,
   type ReadProjectDocumentRequest,
   type RecordRecentProjectInput,
+  type RenameFileExplorerEntryRequest,
+  type RenameFileExplorerEntryResult,
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult,
   type StartupProjectOpenResult
@@ -49,6 +51,11 @@ import {
   validateFileExplorerName,
   type FileExplorerCreateFailureReason
 } from "../shared/fileExplorerCreate";
+import {
+  fileExplorerRenameFailureReasonFromErrorCode,
+  validateFileExplorerRenameName,
+  type FileExplorerRenameFailureReason
+} from "../shared/fileExplorerRename";
 import type { AppPlatform } from "../shared/platform";
 import {
   isPathEqualOrInsideDirectory,
@@ -1024,6 +1031,23 @@ function parseListFileExplorerChildrenRequest(
   };
 }
 
+function parseRenameFileExplorerEntryRequest(
+  value: unknown
+): RenameFileExplorerEntryRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.sourceRelativePath !== "string" ||
+    typeof value.newName !== "string"
+  ) {
+    throw new Error("Invalid File Explorer rename request.");
+  }
+
+  return {
+    sourceRelativePath: value.sourceRelativePath,
+    newName: value.newName
+  };
+}
+
 function fileExplorerUnavailableResult(
   directoryRelativePath: string | null,
   reason: FileExplorerUnavailableReason
@@ -1052,6 +1076,35 @@ function normalizeFileExplorerDirectoryRelativePath(
   }
 
   const normalized = directoryRelativePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+
+  if (
+    segments.some(
+      (segment) =>
+        segment.length === 0 || segment === "." || segment === ".."
+    )
+  ) {
+    throw new Error("File Explorer path must stay inside the project root.");
+  }
+
+  return segments.join("/");
+}
+
+function normalizeFileExplorerEntryRelativePath(relativePath: string): string {
+  if (relativePath.length === 0) {
+    throw new Error("File Explorer entry path must not be empty.");
+  }
+
+  if (
+    relativePath.includes("\0") ||
+    path.isAbsolute(relativePath) ||
+    path.win32.isAbsolute(relativePath) ||
+    path.posix.isAbsolute(relativePath)
+  ) {
+    throw new Error("File Explorer path must be project-relative.");
+  }
+
+  const normalized = relativePath.replace(/\\/g, "/");
   const segments = normalized.split("/");
 
   if (
@@ -1591,6 +1644,294 @@ async function createFileExplorerEntry(
       name: target.name,
       relativePath: target.relativePath
     }
+  };
+}
+
+// -------------------------------------------------------------------------
+// #313: File Explorer Rename v1 — single Markdown file rename and empty
+// folder rename only. This stays filesystem-scoped: no Project DB rewrite,
+// no subtree move, no dirty-editor knowledge in main.
+// -------------------------------------------------------------------------
+
+function fileExplorerEntryNameFromRelativePath(relativePath: string): string {
+  return relativePath.split("/").pop() ?? relativePath;
+}
+
+function fileExplorerParentDirectoryRelativePath(
+  relativePath: string
+): string | null {
+  const slashIndex = relativePath.lastIndexOf("/");
+
+  return slashIndex === -1 ? null : relativePath.slice(0, slashIndex);
+}
+
+type FileExplorerRenameTarget =
+  | {
+      kind: "ok";
+      projectState: CurrentProjectState;
+      entryKind: FileExplorerEntry["kind"];
+      oldRelativePath: string;
+      newRelativePath: string;
+      newName: string;
+      parentDirectoryRelativePath: string | null;
+      sourcePath: string;
+      targetPath: string;
+    }
+  | { kind: "error"; reason: FileExplorerRenameFailureReason };
+
+function fileExplorerRenameReasonFromUnavailable(
+  reason: FileExplorerUnavailableReason
+): FileExplorerRenameFailureReason {
+  switch (reason) {
+    case "noProject":
+      return "noProject";
+    case "notDirectory":
+      return "notDirectory";
+    case "reserved":
+      return "reservedName";
+    case "outsideProjectRoot":
+    case "invalidRequest":
+    case "unreadable":
+      return "outsideProjectRoot";
+  }
+}
+
+async function resolveFileExplorerRenameTarget(
+  request: RenameFileExplorerEntryRequest
+): Promise<FileExplorerRenameTarget> {
+  if (!currentProjectState) {
+    return { kind: "error", reason: "noProject" };
+  }
+
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { kind: "error", reason: "readOnlyProject" };
+  }
+
+  let sourceRelativePath: string;
+
+  try {
+    sourceRelativePath = normalizeFileExplorerEntryRelativePath(
+      request.sourceRelativePath
+    );
+  } catch {
+    return {
+      kind: "error",
+      reason:
+        request.sourceRelativePath.length === 0
+          ? "cannotRenameProjectRoot"
+          : "outsideProjectRoot"
+    };
+  }
+
+  if (
+    pathHasReservedFileExplorerSegment(sourceRelativePath) ||
+    sourceRelativePath
+      .split("/")
+      .some((segment) => isProtectedPergamumDataFilePath(segment))
+  ) {
+    return { kind: "error", reason: "reservedName" };
+  }
+
+  const parentDirectoryRelativePath =
+    fileExplorerParentDirectoryRelativePath(sourceRelativePath);
+  const parent = resolveFileExplorerDirectoryPath(
+    parentDirectoryRelativePath
+  );
+
+  if (parent.kind === "unavailable") {
+    return {
+      kind: "error",
+      reason: fileExplorerRenameReasonFromUnavailable(parent.reason)
+    };
+  }
+
+  const traversalFailureReason =
+    await fileExplorerDirectoryTraversalFailureReason(
+      parent.rootPath,
+      parent.directoryRelativePath
+    );
+
+  if (traversalFailureReason) {
+    return {
+      kind: "error",
+      reason:
+        traversalFailureReason === "notDirectory"
+          ? "notDirectory"
+          : "sourceMissing"
+    };
+  }
+
+  const sourcePath = path.resolve(parent.rootPath, sourceRelativePath);
+  const relativeFromRoot = path.relative(parent.rootPath, sourcePath);
+
+  if (
+    relativeFromRoot.length === 0 ||
+    relativeFromRoot.startsWith("..") ||
+    path.isAbsolute(relativeFromRoot)
+  ) {
+    return { kind: "error", reason: "outsideProjectRoot" };
+  }
+
+  let sourceStats: Awaited<ReturnType<typeof fs.lstat>>;
+
+  try {
+    sourceStats = await fs.lstat(sourcePath);
+  } catch (error) {
+    return {
+      kind: "error",
+      reason: fileExplorerRenameFailureReasonFromErrorCode(
+        nodeErrorCode(error)
+      )
+    };
+  }
+
+  if (sourceStats.isSymbolicLink()) {
+    return { kind: "error", reason: "notFile" };
+  }
+
+  if (!sourceStats.isFile() && !sourceStats.isDirectory()) {
+    return { kind: "error", reason: "notFile" };
+  }
+
+  const entryKind: FileExplorerEntry["kind"] = sourceStats.isDirectory()
+    ? "folder"
+    : "file";
+
+  if (
+    entryKind === "file" &&
+    !isProjectMarkdownDocumentPath(sourceRelativePath)
+  ) {
+    return { kind: "error", reason: "unsupportedExtension" };
+  }
+
+  const nameValidation = validateFileExplorerRenameName({
+    kind: entryKind,
+    originalName: fileExplorerEntryNameFromRelativePath(sourceRelativePath),
+    newName: request.newName
+  });
+
+  if (!nameValidation.ok) {
+    return { kind: "error", reason: nameValidation.reason };
+  }
+
+  if (isProtectedPergamumDataFilePath(nameValidation.name)) {
+    return { kind: "error", reason: "reservedName" };
+  }
+
+  const targetPath = path.join(parent.directoryPath, nameValidation.name);
+  const targetRelativeFromRoot = path.relative(parent.rootPath, targetPath);
+
+  if (
+    targetRelativeFromRoot.length === 0 ||
+    targetRelativeFromRoot.startsWith("..") ||
+    path.isAbsolute(targetRelativeFromRoot)
+  ) {
+    return { kind: "error", reason: "outsideProjectRoot" };
+  }
+
+  const targetRelativePath = normalizeRelativePath(targetRelativeFromRoot);
+
+  if (
+    pathHasReservedFileExplorerSegment(targetRelativePath) ||
+    targetRelativePath
+      .split("/")
+      .some((segment) => isProtectedPergamumDataFilePath(segment))
+  ) {
+    return { kind: "error", reason: "reservedName" };
+  }
+
+  if (sameFileSystemPath(sourcePath, targetPath)) {
+    return { kind: "error", reason: "samePath" };
+  }
+
+  try {
+    await fs.lstat(targetPath);
+    return { kind: "error", reason: "alreadyExists" };
+  } catch (error) {
+    if (nodeErrorCode(error) !== "ENOENT") {
+      return {
+        kind: "error",
+        reason: fileExplorerRenameFailureReasonFromErrorCode(
+          nodeErrorCode(error)
+        )
+      };
+    }
+  }
+
+  if (entryKind === "folder") {
+    let childNames: string[];
+
+    try {
+      childNames = await fs.readdir(sourcePath);
+    } catch (error) {
+      return {
+        kind: "error",
+        reason: fileExplorerRenameFailureReasonFromErrorCode(
+          nodeErrorCode(error)
+        )
+      };
+    }
+
+    if (childNames.length > 0) {
+      return { kind: "error", reason: "folderNotEmpty" };
+    }
+  }
+
+  return {
+    kind: "ok",
+    projectState: parent.projectState,
+    entryKind,
+    oldRelativePath: sourceRelativePath,
+    newRelativePath: targetRelativePath,
+    newName: nameValidation.name,
+    parentDirectoryRelativePath: parent.directoryRelativePath,
+    sourcePath,
+    targetPath
+  };
+}
+
+async function renameFileExplorerEntry(
+  rawRequest: unknown
+): Promise<RenameFileExplorerEntryResult> {
+  let request: RenameFileExplorerEntryRequest;
+
+  try {
+    request = parseRenameFileExplorerEntryRequest(rawRequest);
+  } catch {
+    return { ok: false, reason: "invalidName" };
+  }
+
+  const target = await resolveFileExplorerRenameTarget(request);
+
+  if (target.kind === "error") {
+    return { ok: false, reason: target.reason };
+  }
+
+  try {
+    await fs.rename(target.sourcePath, target.targetPath);
+  } catch (error) {
+    return {
+      ok: false,
+      reason: fileExplorerRenameFailureReasonFromErrorCode(
+        nodeErrorCode(error)
+      )
+    };
+  }
+
+  if (target.entryKind === "file") {
+    target.projectState.documentRelativePaths.delete(target.oldRelativePath);
+    target.projectState.documentRelativePaths.add(target.newRelativePath);
+  }
+
+  return {
+    ok: true,
+    oldRelativePath: target.oldRelativePath,
+    newEntry: {
+      kind: target.entryKind,
+      name: target.newName,
+      relativePath: target.newRelativePath
+    },
+    parentDirectoryRelativePath: target.parentDirectoryRelativePath
   };
 }
 
@@ -2779,6 +3120,15 @@ export function registerProjectIpc(
       rawRequest: unknown
     ): Promise<CreateFileExplorerEntryResult> =>
       createFileExplorerEntry(rawRequest, "folder", logger)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.renameFileExplorerEntry,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<RenameFileExplorerEntryResult> =>
+      renameFileExplorerEntry(rawRequest)
   );
 
   ipcMain.handle(

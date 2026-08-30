@@ -1,9 +1,10 @@
-import type { PergamumProject } from "../shared/api";
+import type { FileExplorerEntry, PergamumProject } from "../shared/api";
 import type { CreateGlossaryEntryInput, GlossaryEntryId } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
   FileExplorer,
-  type FileExplorerCreateEntryRequest
+  type FileExplorerCreateEntryRequest,
+  type FileExplorerRenameEntryRequest
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
@@ -18,9 +19,17 @@ interface WorkspaceSidebarProps {
   /** #311: Command Palette "Create New File / Folder" request, forwarded to
    *  the File Explorer so it opens the shared create dialog. */
   fileExplorerCreateEntryRequest: FileExplorerCreateEntryRequest | null;
+  fileExplorerRenameEntryRequest?: FileExplorerRenameEntryRequest | null;
   translate: Translate;
   onActivateProjectDocument: (relativePath: string) => void;
   onFileExplorerCreateEntryRequestHandled: () => void;
+  onFileExplorerRenameEntryRequestHandled?: () => void;
+  isFileExplorerProjectDocumentDirty?: (relativePath: string) => boolean;
+  onFileExplorerProjectDocumentRenamed?: (
+    oldRelativePath: string,
+    newEntry: FileExplorerEntry
+  ) => void;
+  onFileExplorerRenameUnavailable?: (message: string) => void;
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
   onCreateGlossaryEntry: (
     input: CreateGlossaryEntryInput
@@ -34,9 +43,14 @@ export function WorkspaceSidebar({
   highlightedGlossaryEntryId,
   glossaryRefreshToken,
   fileExplorerCreateEntryRequest,
+  fileExplorerRenameEntryRequest = null,
   translate,
   onActivateProjectDocument,
   onFileExplorerCreateEntryRequestHandled,
+  onFileExplorerRenameEntryRequestHandled,
+  isFileExplorerProjectDocumentDirty,
+  onFileExplorerProjectDocumentRenamed,
+  onFileExplorerRenameUnavailable,
   onActivateGlossaryEntry,
   onCreateGlossaryEntry
 }: WorkspaceSidebarProps): JSX.Element {
@@ -55,6 +69,13 @@ export function WorkspaceSidebar({
           onCreateEntryRequestHandled={
             onFileExplorerCreateEntryRequestHandled
           }
+          renameEntryRequest={fileExplorerRenameEntryRequest}
+          onRenameEntryRequestHandled={
+            onFileExplorerRenameEntryRequestHandled
+          }
+          isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
+          onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
+          onRenameUnavailable={onFileExplorerRenameUnavailable}
           onActivateDocument={onActivateProjectDocument}
         />
       );

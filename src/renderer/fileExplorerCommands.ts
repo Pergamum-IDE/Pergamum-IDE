@@ -8,8 +8,8 @@ import type { Translate } from "../shared/i18n";
 import type { FileExplorerCreateKind } from "./fileExplorerCreateMessages";
 
 /**
- * #311: Command Palette entries for the File Explorer "New File" / "New
- * Folder" toolbar actions. They do not implement any creation logic of their
+ * #311/#313: Command Palette entries for File Explorer create / rename
+ * actions. They do not implement any filesystem logic of their
  * own — they reveal the File Explorer (never collapsing it) and open the same
  * reusable {@link NameInputDialog} the toolbar opens, so the #307 create
  * target resolution, read-only / no-project guards, operation-error handling,
@@ -18,13 +18,15 @@ import type { FileExplorerCreateKind } from "./fileExplorerCreateMessages";
  */
 export const fileExplorerCommandIds = {
   createMarkdownFile: defineCommandId("workspace.files.createMarkdownFile"),
-  createFolder: defineCommandId("workspace.files.createFolder")
+  createFolder: defineCommandId("workspace.files.createFolder"),
+  rename: defineCommandId("workspace.files.rename")
 } as const;
 
 /**
- * Create is available only for a writable open project — the same gate as the
- * File Explorer toolbar (#307). The main process stays the source of truth;
- * this only hides an action that could never succeed.
+ * Create / rename is available only for a writable open project — the same
+ * gate as the File Explorer toolbar (#307). The main process stays the
+ * source of truth for filesystem safety; this only hides actions that could
+ * never succeed.
  */
 export const fileExplorerCreateCommandWhen: CommandEnablementExpression = {
   allOf: [{ key: "project.isOpen" }, { key: "project.access.readWrite" }]
@@ -37,6 +39,11 @@ export interface FileExplorerCommandController {
    * current File Explorer selection, or the project root when there is none.
    */
   requestFileExplorerCreate(kind: FileExplorerCreateKind): void;
+  /**
+   * Reveal the File Explorer if hidden and ask it to rename its current
+   * selection. The File Explorer owns selection and dirty-editor preflight.
+   */
+  requestFileExplorerRename(): void;
 }
 
 export interface FileExplorerCommandTitles {
@@ -44,6 +51,8 @@ export interface FileExplorerCommandTitles {
   createMarkdownFileDescription: string;
   createFolder: string;
   createFolderDescription: string;
+  rename: string;
+  renameDescription: string;
 }
 
 type FileExplorerCommand = Command<readonly [], void>;
@@ -61,7 +70,9 @@ export function createFileExplorerCommandTitles(
     createFolder: translate("command.workspace.files.createFolder"),
     createFolderDescription: translate(
       "command.workspace.files.createFolder.description"
-    )
+    ),
+    rename: translate("command.workspace.files.rename"),
+    renameDescription: translate("command.workspace.files.rename.description")
   };
 }
 
@@ -86,6 +97,15 @@ export function createFileExplorerCommands(
       when: fileExplorerCreateCommandWhen,
       execute: () => {
         controller.requestFileExplorerCreate("folder");
+      }
+    },
+    {
+      id: fileExplorerCommandIds.rename,
+      title: titles.rename,
+      description: titles.renameDescription,
+      when: fileExplorerCreateCommandWhen,
+      execute: () => {
+        controller.requestFileExplorerRename();
       }
     }
   ];

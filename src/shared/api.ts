@@ -29,6 +29,7 @@ import type {
   QuitApplicationResult
 } from "./lifecycle";
 import type { FileExplorerCreateFailureReason } from "./fileExplorerCreate";
+import type { FileExplorerRenameFailureReason } from "./fileExplorerRename";
 import type { Language } from "./i18n";
 import type { AppPlatform } from "./platform";
 import type { RecoveryStoreStatus } from "./recovery";
@@ -57,6 +58,7 @@ export type {
   FileExplorerCreateFailureReason,
   FileExplorerNameValidationError
 } from "./fileExplorerCreate";
+export type { FileExplorerRenameFailureReason } from "./fileExplorerRename";
 export type { RecoveryStoreOwnerInfo, RecoveryStoreStatus } from "./recovery";
 export type {
   RecoveryDocumentPayload,
@@ -150,6 +152,8 @@ export const PROJECT_CHANNELS = {
   createFileExplorerMarkdownFile: "projects:createFileExplorerMarkdownFile",
   /** #307: create a new (non-recursive) folder under a File Explorer folder. */
   createFileExplorerFolder: "projects:createFileExplorerFolder",
+  /** #313: rename one File Explorer file or empty folder under the project. */
+  renameFileExplorerEntry: "projects:renameFileExplorerEntry",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -378,6 +382,23 @@ export type CreateFileExplorerEntryResult =
   | {
       readonly ok: false;
       readonly reason: FileExplorerCreateFailureReason;
+    };
+
+export interface RenameFileExplorerEntryRequest {
+  sourceRelativePath: string;
+  newName: string;
+}
+
+export type RenameFileExplorerEntryResult =
+  | {
+      readonly ok: true;
+      readonly oldRelativePath: string;
+      readonly newEntry: FileExplorerEntry;
+      readonly parentDirectoryRelativePath: string | null;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: FileExplorerRenameFailureReason;
     };
 
 export type FileExplorerUnavailableReason =
@@ -625,6 +646,10 @@ export interface PergamumApi {
       parentDirectoryRelativePath: string | null,
       name: string
     ) => Promise<CreateFileExplorerEntryResult>;
+    renameFileExplorerEntry: (
+      sourceRelativePath: string,
+      newName: string
+    ) => Promise<RenameFileExplorerEntryResult>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

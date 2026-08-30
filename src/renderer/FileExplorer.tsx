@@ -17,9 +17,14 @@ import type {
   CreateFileExplorerEntryResult,
   FileExplorerEntry,
   ListFileExplorerChildrenResult,
-  PergamumProject
+  PergamumProject,
+  RenameFileExplorerEntryResult
 } from "../shared/api";
 import { isFileExplorerCreateValidationReason } from "../shared/fileExplorerCreate";
+import {
+  isFileExplorerRenameValidationReason,
+  type FileExplorerRenameKind
+} from "../shared/fileExplorerRename";
 import type { Translate } from "../shared/i18n";
 import {
   navigatorClipboardAdapter,
@@ -35,6 +40,11 @@ import {
   fileExplorerCreateTechnicalDetails,
   type FileExplorerCreateKind
 } from "./fileExplorerCreateMessages";
+import {
+  createFileExplorerRenameNameValidator,
+  fileExplorerRenameFailureMessageKey,
+  fileExplorerRenameTechnicalDetails
+} from "./fileExplorerRenameMessages";
 
 /**
  * #311: an external request (from the Command Palette) to open the same
@@ -43,6 +53,10 @@ import {
  */
 export interface FileExplorerCreateEntryRequest {
   kind: FileExplorerCreateKind;
+  token: number;
+}
+
+export interface FileExplorerRenameEntryRequest {
   token: number;
 }
 
@@ -56,6 +70,15 @@ interface FileExplorerProps {
   /** #311: Command Palette "Create New …" request; consumed once per token. */
   createEntryRequest?: FileExplorerCreateEntryRequest | null;
   onCreateEntryRequestHandled?: () => void;
+  /** #313: Command Palette "Rename" request; consumed once per token. */
+  renameEntryRequest?: FileExplorerRenameEntryRequest | null;
+  onRenameEntryRequestHandled?: () => void;
+  isProjectDocumentDirty?: (relativePath: string) => boolean;
+  onProjectDocumentRenamed?: (
+    oldRelativePath: string,
+    newEntry: FileExplorerEntry
+  ) => void;
+  onRenameUnavailable?: (message: string) => void;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -221,6 +244,10 @@ function isOpenableFileExplorerEntry(entry: FileExplorerEntry): boolean {
   );
 }
 
+function renameKindForEntry(entry: FileExplorerEntry): FileExplorerRenameKind {
+  return entry.kind === "folder" ? "folder" : "file";
+}
+
 function uniqueReloadTargets(
   targets: readonly (string | null)[]
 ): (string | null)[] {
@@ -349,6 +376,11 @@ export function FileExplorer({
   clipboardAdapter = navigatorClipboardAdapter,
   createEntryRequest = null,
   onCreateEntryRequestHandled,
+  renameEntryRequest = null,
+  onRenameEntryRequestHandled,
+  isProjectDocumentDirty = () => false,
+  onProjectDocumentRenamed,
+  onRenameUnavailable,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
   const [entriesByDirectoryPath, setEntriesByDirectoryPath] = useState<
@@ -356,6 +388,8 @@ export function FileExplorer({
   >({});
   const [createDialogKind, setCreateDialogKind] =
     useState<FileExplorerCreateKind | null>(null);
+  const [renameDialogTarget, setRenameDialogTarget] =
+    useState<FileExplorerEntry | null>(null);
   const [expandedDirectoryPaths, setExpandedDirectoryPaths] = useState<
     Set<string>
   >(() => new Set());
@@ -379,6 +413,12 @@ export function FileExplorer({
   const selectedRelativePath =
     selection?.kind === "entry" ? selection.relativePath : null;
   const isRootSelected = selection?.kind === "root";
+  const selectedEntry = selectedRelativePath
+    ? fileExplorerEntryByRelativePath(
+        entriesByDirectoryPath,
+        selectedRelativePath
+      )
+    : null;
 
   const loadDirectoryForGeneration = useCallback(
     async (
@@ -669,6 +709,7 @@ export function FileExplorer({
   // #307: create is available only for a writable open project. In
   // read-only mode the renderer never calls the create IPC.
   const canCreate = hasProject && !readOnly;
+  const canRename = hasProject && !readOnly;
 
   // #311: the folder a create would target, as a project-relative path
   // (`null` = project root). Same rule as the create IPC uses; shown in the
@@ -694,6 +735,58 @@ export function FileExplorer({
     [canCreate]
   );
 
+  const reportRenameUnavailable = useCallback(
+    (reason: Parameters<typeof fileExplorerRenameFailureMessageKey>[0]) => {
+      onRenameUnavailable?.(
+        translate(fileExplorerRenameFailureMessageKey(reason))
+      );
+    },
+    [onRenameUnavailable, translate]
+  );
+
+  const openRenameDialog = useCallback(() => {
+    if (!hasProject) {
+      reportRenameUnavailable("noProject");
+      return;
+    }
+
+    if (!canRename) {
+      reportRenameUnavailable("readOnlyProject");
+      return;
+    }
+
+    if (isRootSelected) {
+      reportRenameUnavailable("cannotRenameProjectRoot");
+      return;
+    }
+
+    if (!selectedEntry) {
+      reportRenameUnavailable("noSelection");
+      return;
+    }
+
+    if (selectedEntry.kind === "file") {
+      if (!isOpenableFileExplorerEntry(selectedEntry)) {
+        reportRenameUnavailable("unsupportedExtension");
+        return;
+      }
+
+      if (isProjectDocumentDirty(selectedEntry.relativePath)) {
+        reportRenameUnavailable("openDocumentDirty");
+        return;
+      }
+    }
+
+    setRenameDialogTarget(selectedEntry);
+  }, [
+    canRename,
+    hasProject,
+    isProjectDocumentDirty,
+    isRootSelected,
+    reportRenameUnavailable,
+    selectedEntry
+  ]);
+
   // #311: a Command Palette "Create New File / Folder" opens the very same
   // dialog the toolbar opens. The create target still resolves from the
   // current File Explorer selection (or the project root when there is
@@ -714,6 +807,23 @@ export function FileExplorer({
     openCreateDialog(createEntryRequest.kind);
     onCreateEntryRequestHandled?.();
   }, [createEntryRequest, onCreateEntryRequestHandled, openCreateDialog]);
+
+  // #313: Command Palette "Rename" request. This uses the File Explorer's
+  // own selection and does the dirty open-document preflight before IPC.
+  const handledRenameEntryRequestTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!renameEntryRequest) {
+      return;
+    }
+    if (
+      handledRenameEntryRequestTokenRef.current === renameEntryRequest.token
+    ) {
+      return;
+    }
+    handledRenameEntryRequestTokenRef.current = renameEntryRequest.token;
+    openRenameDialog();
+    onRenameEntryRequestHandled?.();
+  }, [renameEntryRequest, onRenameEntryRequestHandled, openRenameDialog]);
 
   const submitCreate = useCallback(
     async (
@@ -825,6 +935,135 @@ export function FileExplorer({
     ]
   );
 
+  const submitRename = useCallback(
+    async (
+      targetEntry: FileExplorerEntry,
+      rawValue: string
+    ): Promise<NameInputDialogSubmitResult> => {
+      if (!canRename) {
+        return {
+          ok: false,
+          error: {
+            message: translate("explorer.rename.error.readOnlyProject")
+          }
+        };
+      }
+
+      const kind = renameKindForEntry(targetEntry);
+
+      if (
+        targetEntry.kind === "file" &&
+        isProjectDocumentDirty(targetEntry.relativePath)
+      ) {
+        return {
+          ok: false,
+          error: {
+            message: translate("explorer.rename.error.openDocumentDirty")
+          }
+        };
+      }
+
+      let result: RenameFileExplorerEntryResult;
+
+      try {
+        result = await window.pergamum.projects.renameFileExplorerEntry(
+          targetEntry.relativePath,
+          rawValue
+        );
+      } catch {
+        return {
+          ok: false,
+          error: {
+            message: translate("explorer.rename.error.unknown"),
+            technicalDetails: fileExplorerRenameTechnicalDetails({
+              kind,
+              reason: "unknown",
+              sourceRelativePath: targetEntry.relativePath,
+              requestedName: rawValue
+            })
+          }
+        };
+      }
+
+      if (!result.ok) {
+        const message = translate(
+          fileExplorerRenameFailureMessageKey(result.reason)
+        );
+
+        if (isFileExplorerRenameValidationReason(result.reason)) {
+          return { ok: false, error: { message } };
+        }
+
+        return {
+          ok: false,
+          error: {
+            message,
+            technicalDetails: fileExplorerRenameTechnicalDetails({
+              kind,
+              reason: result.reason,
+              sourceRelativePath: targetEntry.relativePath,
+              requestedName: rawValue
+            })
+          }
+        };
+      }
+
+      const wasExpanded =
+        targetEntry.kind === "folder" &&
+        expandedDirectoryPaths.has(targetEntry.relativePath);
+      const generation = loadGenerationRef.current;
+
+      await loadDirectoryForGeneration(
+        result.parentDirectoryRelativePath,
+        generation
+      );
+
+      if (targetEntry.kind === "folder") {
+        setEntriesByDirectoryPath((current) => {
+          const oldKey = directoryKey(targetEntry.relativePath);
+          const newKey = directoryKey(result.newEntry.relativePath);
+
+          if (!Object.prototype.hasOwnProperty.call(current, oldKey)) {
+            return current;
+          }
+
+          const next = { ...current, [newKey]: current[oldKey] };
+          delete next[oldKey];
+
+          return next;
+        });
+
+        if (wasExpanded) {
+          setExpandedDirectoryPaths((current) => {
+            const next = withoutSetEntry(current, targetEntry.relativePath);
+            next.add(result.newEntry.relativePath);
+            return next;
+          });
+        }
+      }
+
+      setSelection({
+        kind: "entry",
+        relativePath: result.newEntry.relativePath
+      });
+      setRenameDialogTarget(null);
+
+      if (result.newEntry.kind === "file") {
+        onProjectDocumentRenamed?.(result.oldRelativePath, result.newEntry);
+      }
+
+      return { ok: true };
+    },
+    [
+      canRename,
+      expandedDirectoryPaths,
+      isProjectDocumentDirty,
+      loadDirectoryForGeneration,
+      onProjectDocumentRenamed,
+      translate
+    ]
+  );
+
   return (
     <>
       <FileExplorerView
@@ -893,6 +1132,52 @@ export function FileExplorer({
           )}
           onSubmit={(rawValue) => submitCreate(createDialogKind, rawValue)}
           onClose={() => setCreateDialogKind(null)}
+        />
+      ) : null}
+      {renameDialogTarget !== null ? (
+        <NameInputDialog
+          key={`rename:${renameDialogTarget.relativePath}`}
+          title={translate(
+            renameDialogTarget.kind === "file"
+              ? "explorer.rename.file.title"
+              : "explorer.rename.folder.title"
+          )}
+          description={translate(
+            renameDialogTarget.kind === "file"
+              ? "explorer.rename.file.description"
+              : "explorer.rename.folder.description"
+          )}
+          inputLabel={translate(
+            renameDialogTarget.kind === "file"
+              ? "explorer.rename.file.inputLabel"
+              : "explorer.rename.folder.inputLabel"
+          )}
+          initialValue={renameDialogTarget.name}
+          primaryLabel={translate(
+            renameDialogTarget.kind === "file"
+              ? "explorer.rename.file.primary"
+              : "explorer.rename.folder.primary"
+          )}
+          contextLabel={translate("explorer.rename.context.label")}
+          contextValue={renameDialogTarget.relativePath}
+          icon={{
+            url:
+              renameDialogTarget.kind === "file"
+                ? documentTextIconUrl
+                : folderIconUrl
+          }}
+          translate={translate}
+          clipboardAdapter={clipboardAdapter}
+          opener={null}
+          validateName={createFileExplorerRenameNameValidator(
+            {
+              kind: renameKindForEntry(renameDialogTarget),
+              originalName: renameDialogTarget.name
+            },
+            translate
+          )}
+          onSubmit={(rawValue) => submitRename(renameDialogTarget, rawValue)}
+          onClose={() => setRenameDialogTarget(null)}
         />
       ) : null}
     </>

@@ -55,6 +55,10 @@ describe("glossary preload API", () => {
     await api.projects.confirmReadOnlyProjectOpen("pending-token");
     await api.projects.cancelReadOnlyProjectOpen("pending-token");
     await api.projects.listFileExplorerChildren("Drafts");
+    await api.projects.renameFileExplorerEntry(
+      "Drafts/chapter-01.md",
+      "chapter-02"
+    );
 
     expect(api.projects as Record<string, unknown>).not.toHaveProperty(
       "openProjectFile"
@@ -85,6 +89,13 @@ describe("glossary preload API", () => {
         PROJECT_CHANNELS.listFileExplorerChildren,
         {
           directoryRelativePath: "Drafts"
+        }
+      ],
+      [
+        PROJECT_CHANNELS.renameFileExplorerEntry,
+        {
+          sourceRelativePath: "Drafts/chapter-01.md",
+          newName: "chapter-02"
         }
       ]
     ]);

@@ -29,14 +29,21 @@ const titles = {
     "Create a Markdown file at the current File Explorer selection.",
   createFolder: "Create New Folder",
   createFolderDescription:
-    "Create a folder at the current File Explorer selection."
+    "Create a folder at the current File Explorer selection.",
+  rename: "Rename",
+  renameDescription: "Rename the selected File Explorer file or empty folder."
 };
 
 function registryWith(
-  requestFileExplorerCreate: (kind: FileExplorerCreateKind) => void
+  requestFileExplorerCreate: (kind: FileExplorerCreateKind) => void,
+  requestFileExplorerRename: () => void = () => undefined
 ): CommandRegistry {
   const registry = new CommandRegistry();
-  registerFileExplorerCommands(registry, { requestFileExplorerCreate }, titles);
+  registerFileExplorerCommands(
+    registry,
+    { requestFileExplorerCreate, requestFileExplorerRename },
+    titles
+  );
   return registry;
 }
 
@@ -60,7 +67,8 @@ describe("File Explorer create commands (#311)", () => {
 
     expect(registry.list().map((command) => String(command.id))).toEqual([
       "workspace.files.createMarkdownFile",
-      "workspace.files.createFolder"
+      "workspace.files.createFolder",
+      "workspace.files.rename"
     ]);
   });
 
@@ -81,6 +89,16 @@ describe("File Explorer create commands (#311)", () => {
     expect(kinds).toEqual(["file", "folder"]);
   });
 
+  it("routes rename to the File Explorer rename request", async () => {
+    const rename = vi.fn();
+    const registry = registryWith(() => undefined, rename);
+    registry.setCommandContextProvider(() => writableProjectContext);
+
+    await registry.execute(fileExplorerCommandIds.rename, executionOptions);
+
+    expect(rename).toHaveBeenCalledTimes(1);
+  });
+
   it("is unavailable when no project is open", () => {
     const registry = registryWith(() => undefined);
 
@@ -93,6 +111,12 @@ describe("File Explorer create commands (#311)", () => {
     expect(
       registry.isEnabledForContext(
         fileExplorerCommandIds.createFolder,
+        noProjectContext
+      )
+    ).toBe(false);
+    expect(
+      registry.isEnabledForContext(
+        fileExplorerCommandIds.rename,
         noProjectContext
       )
     ).toBe(false);
@@ -113,6 +137,12 @@ describe("File Explorer create commands (#311)", () => {
         readOnlyProjectContext
       )
     ).toBe(false);
+    expect(
+      registry.isEnabledForContext(
+        fileExplorerCommandIds.rename,
+        readOnlyProjectContext
+      )
+    ).toBe(false);
   });
 
   it("is available for a writable open project", () => {
@@ -127,6 +157,12 @@ describe("File Explorer create commands (#311)", () => {
     expect(
       registry.isEnabledForContext(
         fileExplorerCommandIds.createFolder,
+        writableProjectContext
+      )
+    ).toBe(true);
+    expect(
+      registry.isEnabledForContext(
+        fileExplorerCommandIds.rename,
         writableProjectContext
       )
     ).toBe(true);
@@ -156,7 +192,9 @@ describe("File Explorer create commands (#311)", () => {
         "t:command.workspace.files.createMarkdownFile.description",
       createFolder: "t:command.workspace.files.createFolder",
       createFolderDescription:
-        "t:command.workspace.files.createFolder.description"
+        "t:command.workspace.files.createFolder.description",
+      rename: "t:command.workspace.files.rename",
+      renameDescription: "t:command.workspace.files.rename.description"
     });
   });
 
@@ -178,6 +216,8 @@ describe("File Explorer create commands (#311)", () => {
     expect(enTranslations["command.workspace.files.createFolder"]).toBe(
       "Create New Folder"
     );
+    expect(jaTranslations["command.workspace.files.rename"]).toBe("名前を変更");
+    expect(enTranslations["command.workspace.files.rename"]).toBe("Rename");
   });
 
   it("keeps the command module free of React and DOM APIs", () => {
@@ -247,7 +287,7 @@ describe("Toggle File Explorer command wording (#311)", () => {
 describe("App wiring for File Explorer create commands (#311)", () => {
   const appSource = readFileSync("src/renderer/App.tsx", "utf8");
 
-  it("registers the File Explorer create commands", () => {
+  it("registers the File Explorer create and rename commands", () => {
     expect(appSource).toContain("registerFileExplorerCommands(");
     expect(appSource).toContain("createFileExplorerCommandTitles(translate)");
   });
@@ -257,9 +297,10 @@ describe("App wiring for File Explorer create commands (#311)", () => {
     expect(start).toBeGreaterThan(-1);
     const handler = appSource.slice(start, start + 1200);
 
-    expect(handler).toContain('setSidebarMode("files");');
-    // Non-toggling reveal: only ever uncollapses.
-    expect(handler).toContain("collapsed: false");
+    expect(handler).toContain("revealFileExplorer();");
+    // Non-toggling reveal stays centralized and never uses the toggle helper.
+    expect(appSource).toContain('setSidebarMode("files");');
+    expect(appSource).toContain("collapsed: false");
     expect(handler).not.toContain("resolveSidebarToggle");
     expect(handler).toContain("fileExplorerCreateRequestSeqRef.current += 1;");
     expect(handler).toContain("setFileExplorerCreateEntryRequest({");
@@ -283,6 +324,19 @@ describe("App wiring for File Explorer create commands (#311)", () => {
     );
     expect(appSource).toContain(
       "onFileExplorerCreateEntryRequestHandled={() => {\n                        setFileExplorerCreateEntryRequest(null);\n                      }}"
+    );
+  });
+
+  it("reveals the File Explorer before handing over a rename request", () => {
+    const start = appSource.indexOf("requestFileExplorerRename: () => {");
+    expect(start).toBeGreaterThan(-1);
+    const handler = appSource.slice(start, start + 500);
+
+    expect(handler).toContain("revealFileExplorer();");
+    expect(handler).toContain("fileExplorerRenameRequestSeqRef.current += 1;");
+    expect(handler).toContain("setFileExplorerRenameEntryRequest({");
+    expect(handler).toContain(
+      "token: fileExplorerRenameRequestSeqRef.current"
     );
   });
 });

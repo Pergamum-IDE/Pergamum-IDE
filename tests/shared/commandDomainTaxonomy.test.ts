@@ -112,7 +112,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
   registerFileExplorerCommands(
     registry,
     {
-      requestFileExplorerCreate: () => undefined
+      requestFileExplorerCreate: () => undefined,
+      requestFileExplorerRename: () => undefined
     },
     {
       createMarkdownFile: "Create New Markdown File",
@@ -120,7 +121,10 @@ function buildCoreCommandRegistry(): CommandRegistry {
         "Create a Markdown file at the current File Explorer selection.",
       createFolder: "Create New Folder",
       createFolderDescription:
-        "Create a folder at the current File Explorer selection."
+        "Create a folder at the current File Explorer selection.",
+      rename: "Rename",
+      renameDescription:
+        "Rename the selected File Explorer file or empty folder."
     }
   );
   registerUtilityWindowCommands(
