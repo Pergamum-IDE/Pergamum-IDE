@@ -423,6 +423,43 @@ function projectContextForProject(
   return project ? { rootPath: project.rootPath } : null;
 }
 
+function isSupportedProjectMarkdownRelativePath(relativePath: string): boolean {
+  const lowerRelativePath = relativePath.toLowerCase();
+
+  return (
+    lowerRelativePath.endsWith(".md") ||
+    lowerRelativePath.endsWith(".markdown")
+  );
+}
+
+function projectDocumentForRelativePath(relativePath: string): ProjectDocument {
+  return {
+    relativePath,
+    name: displayName(relativePath)
+  };
+}
+
+function withRegisteredProjectDocument(
+  project: PergamumProject,
+  document: ProjectDocument
+): PergamumProject {
+  if (
+    project.documents.some(
+      (projectDocument) =>
+        projectDocument.relativePath === document.relativePath
+    )
+  ) {
+    return project;
+  }
+
+  return {
+    ...project,
+    documents: [...project.documents, document].sort((left, right) =>
+      left.relativePath.localeCompare(right.relativePath)
+    )
+  };
+}
+
 function projectDocumentPathForReadOnlyRootUi(
   project: PergamumProject,
   document: CurrentDocument
@@ -5504,14 +5541,30 @@ export function App(): JSX.Element {
       return;
     }
 
-    const document = project?.documents.find(
-      (projectDocument) => projectDocument.relativePath === relativePath
-    );
+    const activeProject = project;
+    const activeContext = activeProjectContext;
 
-    if (!document) {
+    if (!activeProject || !activeContext) {
       setStatus({ key: "status.projectDocumentNotFound" });
       return;
     }
+
+    const existingDocument = activeProject.documents.find(
+      (projectDocument) => projectDocument.relativePath === relativePath
+    );
+
+    if (
+      !existingDocument &&
+      !isSupportedProjectMarkdownRelativePath(relativePath)
+    ) {
+      setStatus({ key: "status.projectDocumentNotFound" });
+      return;
+    }
+
+    const document =
+      existingDocument ?? projectDocumentForRelativePath(relativePath);
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
 
     // Workspace/File Explorer pane open path (#152 follow-up). Unlike
     // openFile(), there is no OS dialog step, so document.open.started can
@@ -5533,13 +5586,54 @@ export function App(): JSX.Element {
     try {
       const documentId = createProjectDocumentEditorId(
         document.relativePath,
-        activeProjectContext
+        activeContext
       );
 
       const didOpen = await completeInstrumentedDocumentOpen(
         documentOpenId,
         startedAt,
-        () => openEditorFromExplicitActivation(documentId)
+        async () => {
+          if (existingDocument) {
+            return await openEditorFromExplicitActivation(documentId);
+          }
+
+          const projectFile =
+            await window.pergamum.projects.readProjectDocument(
+              document.relativePath
+            );
+
+          if (
+            !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+              projectGeneration
+            )
+          ) {
+            return false;
+          }
+
+          setProject((currentProject) => {
+            if (
+              !currentProject ||
+              currentProject.rootPath !== activeProject.rootPath ||
+              currentProject.activeProjectFilePath !==
+                activeProject.activeProjectFilePath
+            ) {
+              return currentProject;
+            }
+
+            return withRegisteredProjectDocument(currentProject, document);
+          });
+
+          return await openEditorFromExplicitActivation(documentId, {
+            history: "record",
+            resolvedEditor: createMarkdownCurrentEditor(
+              createProjectDocument(
+                document,
+                projectFile.content,
+                projectFile.metadata
+              )
+            )
+          });
+        }
       );
 
       setStatus(

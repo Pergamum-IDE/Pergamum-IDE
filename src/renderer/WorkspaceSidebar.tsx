@@ -36,7 +36,7 @@ export function WorkspaceSidebar({
       return (
         <FileExplorer
           key={project?.rootPath ?? "no-project"}
-          documents={project?.documents ?? []}
+          project={project}
           highlightedRelativePath={
             project ? highlightedProjectDocumentRelativePath : null
           }

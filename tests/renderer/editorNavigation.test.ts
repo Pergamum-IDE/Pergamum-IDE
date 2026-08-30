@@ -113,9 +113,7 @@ describe("EditorNavigation", () => {
     // open wrapper rather than awaiting them directly, but both still call
     // through to the same underlying functions.
     expect(source).toMatch(/\(\) =>\s*openDocument\(openedDocument\)/);
-    expect(source).toContain(
-      "() => openEditorFromExplicitActivation(documentId)"
-    );
+    expect(source).toContain("openEditorFromExplicitActivation(documentId");
     expect(source).toMatch(
       /function openEditorFromExplicitActivation\([\s\S]*?return openEditor\(editorId, options\);\s*\}/
     );

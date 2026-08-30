@@ -140,6 +140,7 @@ export const PROJECT_CHANNELS = {
   openRecentProject: "projects:openRecentProject",
   confirmReadOnlyProjectOpen: "projects:confirmReadOnlyProjectOpen",
   cancelReadOnlyProjectOpen: "projects:cancelReadOnlyProjectOpen",
+  listFileExplorerChildren: "projects:listFileExplorerChildren",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -339,6 +340,37 @@ export interface ProjectDocument {
   relativePath: string;
   name: string;
 }
+
+export type FileExplorerEntryKind = "folder" | "file";
+
+export interface FileExplorerEntry {
+  kind: FileExplorerEntryKind;
+  name: string;
+  relativePath: string;
+}
+
+export interface ListFileExplorerChildrenRequest {
+  directoryRelativePath: string | null;
+}
+
+export type FileExplorerUnavailableReason =
+  | "invalidRequest"
+  | "noProject"
+  | "outsideProjectRoot"
+  | "notDirectory"
+  | "unreadable";
+
+export type ListFileExplorerChildrenResult =
+  | {
+      kind: "ok";
+      directoryRelativePath: string | null;
+      entries: FileExplorerEntry[];
+    }
+  | {
+      kind: "unavailable";
+      directoryRelativePath: string | null;
+      reason: FileExplorerUnavailableReason;
+    };
 
 export interface ReadProjectDocumentRequest {
   relativePath: string;
@@ -551,6 +583,9 @@ export interface PergamumApi {
       token: string
     ) => Promise<PergamumProject | null>;
     cancelReadOnlyProjectOpen: (token: string) => Promise<void>;
+    listFileExplorerChildren: (
+      directoryRelativePath: string | null
+    ) => Promise<ListFileExplorerChildrenResult>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

@@ -188,12 +188,14 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
   });
 
   describe("Workspace/File Explorer open path (activateProjectDocument) — #152 follow-up", () => {
-    it("does not generate a documentOpenId or log anything for a relativePath that isn't a real project document", () => {
+    it("does not generate a documentOpenId or log anything for a non-Markdown relativePath", () => {
       const body = functionBody(
         appSource,
         "async function activateProjectDocument("
       );
-      const notFoundGuardIndex = body.indexOf("if (!document) {");
+      const notFoundGuardIndex = body.indexOf(
+        "!isSupportedProjectMarkdownRelativePath(relativePath)"
+      );
       const notFoundGuardEnd = body.indexOf("return;", notFoundGuardIndex);
       const idGenerationIndex = body.indexOf(
         "const documentOpenId = nextDocumentOpenId();"
@@ -230,9 +232,8 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       expect(body).toContain(
         "const didOpen = await completeInstrumentedDocumentOpen("
       );
-      expect(body).toContain(
-        "() => openEditorFromExplicitActivation(documentId)"
-      );
+      expect(body).toContain("openEditorFromExplicitActivation(documentId");
+      expect(body).toContain("resolvedEditor: createMarkdownCurrentEditor(");
     });
 
     it("does not fabricate a document.open.fileRead.completed event for this path (no fs.readFile boundary is threaded through here)", () => {

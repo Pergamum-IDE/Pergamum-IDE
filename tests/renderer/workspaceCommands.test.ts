@@ -13,8 +13,8 @@ const executionOptions = { source: "activityBar" } as const;
 
 describe("workspace commands", () => {
   const titles = {
-    focusFiles: "Focus Files",
-    focusFilesDescription: "Not implemented.",
+    focusFiles: "Focus File Explorer",
+    focusFilesDescription: "Show the File Explorer.",
     focusSearch: "Focus Search",
     focusSearchDescription: "Not implemented.",
     focusGlossary: "Focus Glossary",

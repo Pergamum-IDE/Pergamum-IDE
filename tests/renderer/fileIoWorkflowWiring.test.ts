@@ -87,7 +87,10 @@ describe("file I/O workflow wiring (#202)", () => {
       "const didOpen = await completeInstrumentedDocumentOpen("
     );
     expect(projectDocumentOpenBlock).toContain(
-      "() => openEditorFromExplicitActivation(documentId)"
+      "openEditorFromExplicitActivation(documentId"
+    );
+    expect(projectDocumentOpenBlock).toContain(
+      "resolvedEditor: createMarkdownCurrentEditor("
     );
     expect(catchBlock).not.toContain("setOpenDocumentsState");
     expect(catchBlock).not.toContain("openOrActivateEditor");

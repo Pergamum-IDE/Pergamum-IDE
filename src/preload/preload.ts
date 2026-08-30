@@ -91,6 +91,10 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.cancelReadOnlyProjectOpen, {
         token
       }),
+    listFileExplorerChildren: (directoryRelativePath) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.listFileExplorerChildren, {
+        directoryRelativePath
+      }),
     readProjectDocument: (relativePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
         relativePath
