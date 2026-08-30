@@ -15,6 +15,7 @@ import {
 } from "../../src/renderer/projectDocumentResolution";
 import {
   activateOpenDocument,
+  activeProjectDocumentRelativePath,
   closeOpenEditor,
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithDocument,
@@ -1020,5 +1021,52 @@ describe("isOpenDocumentDirty (#184)", () => {
     );
 
     expect(isOpenDocumentDirty(state, unrelatedEditorId)).toBe(false);
+  });
+});
+
+describe("activeProjectDocumentRelativePath (#318)", () => {
+  it("returns the project-relative path of the active project-file editor", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(secondProjectDocument, "content"),
+      projectContext
+    );
+
+    expect(activeProjectDocumentRelativePath(state)).toBe("chapter-02.md");
+  });
+
+  it("is null in the zero-tab state (no active editor)", () => {
+    expect(
+      activeProjectDocumentRelativePath(createInitialOpenDocumentsState())
+    ).toBeNull();
+  });
+
+  it("is null for an untitled document", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createUntitledDocument(),
+      projectContext
+    );
+
+    expect(activeProjectDocumentRelativePath(state)).toBeNull();
+  });
+
+  it("is null for an external / standalone Markdown file editor", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createFileDocument({
+        path: "C:\\Elsewhere\\notes.md",
+        content: "content"
+      }),
+      projectContext
+    );
+
+    expect(activeProjectDocumentRelativePath(state)).toBeNull();
+  });
+
+  it("is null for a glossary-entry editor", () => {
+    const state = createOpenDocumentsStateWithEditor(
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    expect(activeProjectDocumentRelativePath(state)).toBeNull();
   });
 });

@@ -13,6 +13,7 @@ const baseInput = {
   editorKindMarkdown: true,
   editorKindGlossary: false,
   editorDocumentProjectOwned: true,
+  editorDocumentProjectFile: true,
   activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
   occurrenceTrackingActive: false,
   recoveryOwner: false,
@@ -30,6 +31,7 @@ describe("buildCommandContextSnapshot", () => {
       "editor.kind.markdown": true,
       "editor.kind.glossary": false,
       "editor.document.projectOwned": true,
+      "editor.document.projectFile": true,
       "activeEditor.saveBlockedByReadOnlyProjectRootForUi": false,
       "glossary.occurrences.tracking.active": false,
       "recovery.owner": false,
@@ -44,6 +46,21 @@ describe("buildCommandContextSnapshot", () => {
         recoveryOwner: true,
         recoveryHasRecoverableCandidates: true
       })["recovery.hasRecoverableCandidates"]
+    ).toBe(true);
+  });
+
+  it("maps editorDocumentProjectFile into editor.document.projectFile (#318)", () => {
+    expect(
+      buildCommandContextSnapshot({
+        ...baseInput,
+        editorDocumentProjectFile: false
+      })["editor.document.projectFile"]
+    ).toBe(false);
+    expect(
+      buildCommandContextSnapshot({
+        ...baseInput,
+        editorDocumentProjectFile: true
+      })["editor.document.projectFile"]
     ).toBe(true);
   });
 

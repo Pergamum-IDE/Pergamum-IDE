@@ -56,8 +56,24 @@ export interface FileExplorerCreateEntryRequest {
   token: number;
 }
 
+/**
+ * #318: an explicit rename target supplied by a global command (Command
+ * Palette / menu / shortcut) — the active editor's backing project file, as
+ * a project-relative path. The File Explorer renames exactly this file and
+ * never consults its own selection.
+ */
+export interface FileExplorerRenameTarget {
+  readonly relativePath: string;
+}
+
 export interface FileExplorerRenameEntryRequest {
   token: number;
+  /**
+   * #318: when set, rename this file (a global command's active-editor
+   * target). When absent / null the rename targets the File Explorer's own
+   * selection (a future File-Explorer-internal trigger).
+   */
+  target?: FileExplorerRenameTarget | null;
 }
 
 interface FileExplorerProps {
@@ -246,6 +262,24 @@ function isOpenableFileExplorerEntry(entry: FileExplorerEntry): boolean {
 
 function renameKindForEntry(entry: FileExplorerEntry): FileExplorerRenameKind {
   return entry.kind === "folder" ? "folder" : "file";
+}
+
+/**
+ * #318: a minimal `FileExplorerEntry` for a global command's explicit rename
+ * target (the active editor's project file). The file need not be loaded into
+ * the tree — the rename dialog only needs kind / name / relativePath, and the
+ * main process stays the source of truth for path safety.
+ */
+function fileExplorerEntryForRenameTarget(
+  relativePath: string
+): FileExplorerEntry {
+  const normalized = relativePath.replace(/\\/g, "/");
+
+  return {
+    kind: "file",
+    name: normalized.slice(normalized.lastIndexOf("/") + 1),
+    relativePath: normalized
+  };
 }
 
 function uniqueReloadTargets(
@@ -744,48 +778,64 @@ export function FileExplorer({
     [onRenameUnavailable, translate]
   );
 
-  const openRenameDialog = useCallback(() => {
-    if (!hasProject) {
-      reportRenameUnavailable("noProject");
-      return;
-    }
-
-    if (!canRename) {
-      reportRenameUnavailable("readOnlyProject");
-      return;
-    }
-
-    if (isRootSelected) {
-      reportRenameUnavailable("cannotRenameProjectRoot");
-      return;
-    }
-
-    if (!selectedEntry) {
-      reportRenameUnavailable("noSelection");
-      return;
-    }
-
-    if (selectedEntry.kind === "file") {
-      if (!isOpenableFileExplorerEntry(selectedEntry)) {
-        reportRenameUnavailable("unsupportedExtension");
+  const openRenameDialog = useCallback(
+    (explicitTarget?: FileExplorerRenameTarget | null) => {
+      if (!hasProject) {
+        reportRenameUnavailable("noProject");
         return;
       }
 
-      if (isProjectDocumentDirty(selectedEntry.relativePath)) {
-        reportRenameUnavailable("openDocumentDirty");
+      if (!canRename) {
+        reportRenameUnavailable("readOnlyProject");
         return;
       }
-    }
 
-    setRenameDialogTarget(selectedEntry);
-  }, [
-    canRename,
-    hasProject,
-    isProjectDocumentDirty,
-    isRootSelected,
-    reportRenameUnavailable,
-    selectedEntry
-  ]);
+      // #318: a global command supplies the target explicitly (the active
+      // editor's project file); a File-Explorer-internal trigger uses the
+      // selection. Either way the same extension / dirty / root preflight
+      // runs below before the dialog opens.
+      if (explicitTarget) {
+        if (explicitTarget.relativePath.trim() === "") {
+          reportRenameUnavailable("cannotRenameProjectRoot");
+          return;
+        }
+      } else if (isRootSelected) {
+        reportRenameUnavailable("cannotRenameProjectRoot");
+        return;
+      }
+
+      const targetEntry = explicitTarget
+        ? fileExplorerEntryForRenameTarget(explicitTarget.relativePath)
+        : selectedEntry;
+
+      if (!targetEntry) {
+        reportRenameUnavailable("noSelection");
+        return;
+      }
+
+      if (targetEntry.kind === "file") {
+        if (!isOpenableFileExplorerEntry(targetEntry)) {
+          reportRenameUnavailable("unsupportedExtension");
+          return;
+        }
+
+        if (isProjectDocumentDirty(targetEntry.relativePath)) {
+          reportRenameUnavailable("openDocumentDirty");
+          return;
+        }
+      }
+
+      setRenameDialogTarget(targetEntry);
+    },
+    [
+      canRename,
+      hasProject,
+      isProjectDocumentDirty,
+      isRootSelected,
+      reportRenameUnavailable,
+      selectedEntry
+    ]
+  );
 
   // #311: a Command Palette "Create New File / Folder" opens the very same
   // dialog the toolbar opens. The create target still resolves from the
@@ -808,8 +858,11 @@ export function FileExplorer({
     onCreateEntryRequestHandled?.();
   }, [createEntryRequest, onCreateEntryRequestHandled, openCreateDialog]);
 
-  // #313: Command Palette "Rename" request. This uses the File Explorer's
-  // own selection and does the dirty open-document preflight before IPC.
+  // #313 / #318: a "Rename" request. A global command (Command Palette /
+  // menu / shortcut) carries an explicit `target` (the active editor's
+  // project file); a File-Explorer-internal trigger omits it and the
+  // selection is used. Either way the extension / dirty-open-document / root
+  // preflight runs in `openRenameDialog` before IPC.
   const handledRenameEntryRequestTokenRef = useRef<number | null>(null);
   useEffect(() => {
     if (!renameEntryRequest) {
@@ -821,7 +874,7 @@ export function FileExplorer({
       return;
     }
     handledRenameEntryRequestTokenRef.current = renameEntryRequest.token;
-    openRenameDialog();
+    openRenameDialog(renameEntryRequest.target ?? null);
     onRenameEntryRequestHandled?.();
   }, [renameEntryRequest, onRenameEntryRequestHandled, openRenameDialog]);
 

@@ -284,6 +284,7 @@ import {
 import {
   activeCurrentEditor,
   activeOpenDocument,
+  activeProjectDocumentRelativePath,
   activateOpenDocument,
   closeOpenEditor,
   createInitialOpenDocumentsState,
@@ -1532,6 +1533,17 @@ export function App(): JSX.Element {
     (currentEditor?.kind === "glossaryEntry" ||
       (currentEditor?.kind === "markdown" &&
         activeMarkdownDocument?.kind === "project"));
+  // #318: the active editor's backing project-file path / name, when the
+  // active editor is a Markdown editor over a current-project document.
+  // Drives the Rename command label so the Command Palette shows which file
+  // it will act on. Independent of dirtiness — a dirty target still shows
+  // its name, the `when` gate makes the command unavailable.
+  const renameActiveEditorTargetRelativePath = isSettingsTabActive
+    ? null
+    : activeProjectDocumentRelativePath(openDocumentsState);
+  const renameActiveEditorTargetName = renameActiveEditorTargetRelativePath
+    ? displayName(renameActiveEditorTargetRelativePath)
+    : null;
   const isReadOnlyProjectOwnedEditor =
     isReadOnlyProject && isProjectOwnedCurrentEditor;
   const isSavingGlossaryEntry =
@@ -1642,6 +1654,12 @@ export function App(): JSX.Element {
         editorKindGlossary:
           !isSettingsTabActive && currentEditor?.kind === "glossaryEntry",
         editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
+        // #318: same source of truth as the Rename target resolution — an
+        // active Markdown editor over a current-project document. Untitled,
+        // external / standalone, project-root-outside, and other-project
+        // files all resolve to null here.
+        editorDocumentProjectFile:
+          renameActiveEditorTargetRelativePath !== null,
         activeEditorSaveBlockedByReadOnlyProjectRootForUi,
         occurrenceTrackingActive:
           glossaryOccurrenceTrackingState.kind === "active",
@@ -1656,6 +1674,7 @@ export function App(): JSX.Element {
       currentEditor?.kind,
       activeMarkdownDocument,
       isProjectOwnedCurrentEditor,
+      renameActiveEditorTargetRelativePath,
       activeEditorSaveBlockedByReadOnlyProjectRootForUi,
       isDirty,
       glossaryOccurrenceTrackingState.kind,
@@ -1807,15 +1826,32 @@ export function App(): JSX.Element {
             token: fileExplorerCreateRequestSeqRef.current
           });
         },
-        requestFileExplorerRename: () => {
+        requestRenameActiveEditorFile: () => {
+          // #318: a global Rename targets the *active editor's* backing
+          // project file — never the File Explorer's own selection. The
+          // command `when` gate already requires such an editor; this
+          // resolves the concrete path and backstops a stale gate. Nothing
+          // happens (no dialog, no reveal) when there is no such target.
+          const relativePath = activeProjectDocumentRelativePath(
+            openDocumentsStateRef.current
+          );
+
+          if (relativePath === null) {
+            return;
+          }
+
           revealFileExplorer();
           fileExplorerRenameRequestSeqRef.current += 1;
           setFileExplorerRenameEntryRequest({
-            token: fileExplorerRenameRequestSeqRef.current
+            token: fileExplorerRenameRequestSeqRef.current,
+            target: { relativePath }
           });
         }
       },
-      createFileExplorerCommandTitles(translate)
+      createFileExplorerCommandTitles(
+        translate,
+        renameActiveEditorTargetName
+      )
     );
     registerUtilityWindowCommands(
       registry,
@@ -1970,6 +2006,7 @@ export function App(): JSX.Element {
     activeProjectContext,
     dialogController,
     layout.sidebar.collapsed,
+    renameActiveEditorTargetName,
     sidebarMode,
     translate
   ]);

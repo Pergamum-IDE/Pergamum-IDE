@@ -9,6 +9,8 @@ export interface CommandContextSnapshotInput {
   readonly editorKindMarkdown: boolean;
   readonly editorKindGlossary: boolean;
   readonly editorDocumentProjectOwned: boolean;
+  /** #318: active editor is a Markdown editor backed by a project file. */
+  readonly editorDocumentProjectFile: boolean;
   readonly activeEditorSaveBlockedByReadOnlyProjectRootForUi: boolean;
   readonly occurrenceTrackingActive: boolean;
   readonly recoveryOwner: boolean;
@@ -46,6 +48,7 @@ export function buildCommandContextSnapshot(
     "editor.kind.markdown": input.editorKindMarkdown,
     "editor.kind.glossary": input.editorKindGlossary,
     "editor.document.projectOwned": input.editorDocumentProjectOwned,
+    "editor.document.projectFile": input.editorDocumentProjectFile,
     "activeEditor.saveBlockedByReadOnlyProjectRootForUi":
       input.activeEditorSaveBlockedByReadOnlyProjectRootForUi,
     "glossary.occurrences.tracking.active": input.occurrenceTrackingActive,
