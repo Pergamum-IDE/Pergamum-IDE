@@ -107,6 +107,20 @@ describe("clampMarkdownEditorPreviewRatio", () => {
 });
 
 describe("resolveSidebarToggle", () => {
+  it("toggles the File Explorer pane when clicking the File Explorer Activity Bar item", () => {
+    const hidden = resolveSidebarToggle("files", "files", false);
+    const shownAgain = resolveSidebarToggle(hidden.mode, "files", hidden.collapsed);
+
+    expect(hidden).toEqual({
+      collapsed: true,
+      mode: "files"
+    });
+    expect(shownAgain).toEqual({
+      collapsed: false,
+      mode: "files"
+    });
+  });
+
   it("collapses when clicking the currently active, expanded mode", () => {
     expect(resolveSidebarToggle("files", "files", false)).toEqual({
       collapsed: true,

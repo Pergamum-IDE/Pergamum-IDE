@@ -102,7 +102,7 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openApplicationSettings: () => undefined
     },
     {
-      focusFiles: "Focus Files",
+      focusFiles: "Focus File Explorer",
       focusSearch: "Focus Search",
       focusGlossary: "Focus Glossary",
       openApplicationSettings: "Open Application Settings"

@@ -17,6 +17,10 @@ import {
   PROJECT_CHANNELS,
   type CloseCurrentProjectRequest,
   type CloseCurrentProjectResult,
+  type FileExplorerEntry,
+  type FileExplorerUnavailableReason,
+  type ListFileExplorerChildrenRequest,
+  type ListFileExplorerChildrenResult,
   type OpenProjectByFilePathRequest,
   type OpenProjectByFilePathResult,
   type OpenRecentProjectRequest,
@@ -991,6 +995,343 @@ function parseCloseCurrentProjectRequest(
   };
 }
 
+function parseListFileExplorerChildrenRequest(
+  value: unknown
+): ListFileExplorerChildrenRequest {
+  if (
+    !isRequestObject(value) ||
+    !("directoryRelativePath" in value) ||
+    !(
+      value.directoryRelativePath === null ||
+      typeof value.directoryRelativePath === "string"
+    )
+  ) {
+    throw new Error("Invalid File Explorer children request.");
+  }
+
+  return {
+    directoryRelativePath: value.directoryRelativePath
+  };
+}
+
+function fileExplorerUnavailableResult(
+  directoryRelativePath: string | null,
+  reason: FileExplorerUnavailableReason
+): ListFileExplorerChildrenResult {
+  return {
+    kind: "unavailable",
+    directoryRelativePath,
+    reason
+  };
+}
+
+function normalizeFileExplorerDirectoryRelativePath(
+  directoryRelativePath: string | null
+): string | null {
+  if (directoryRelativePath === null || directoryRelativePath.length === 0) {
+    return null;
+  }
+
+  if (
+    directoryRelativePath.includes("\0") ||
+    path.isAbsolute(directoryRelativePath) ||
+    path.win32.isAbsolute(directoryRelativePath) ||
+    path.posix.isAbsolute(directoryRelativePath)
+  ) {
+    throw new Error("File Explorer path must be project-relative.");
+  }
+
+  const normalized = directoryRelativePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+
+  if (
+    segments.some(
+      (segment) =>
+        segment.length === 0 || segment === "." || segment === ".."
+    )
+  ) {
+    throw new Error("File Explorer path must stay inside the project root.");
+  }
+
+  return segments.join("/");
+}
+
+function resolveFileExplorerDirectoryPath(directoryRelativePath: string | null):
+  | {
+      kind: "ok";
+      directoryRelativePath: string | null;
+      directoryPath: string;
+      rootPath: string;
+      projectState: CurrentProjectState;
+    }
+  | {
+      kind: "unavailable";
+      reason: FileExplorerUnavailableReason;
+    } {
+  if (!currentProjectState) {
+    return {
+      kind: "unavailable",
+      reason: "noProject"
+    };
+  }
+
+  let normalizedDirectoryRelativePath: string | null = null;
+
+  try {
+    normalizedDirectoryRelativePath =
+      normalizeFileExplorerDirectoryRelativePath(directoryRelativePath);
+  } catch {
+    return {
+      kind: "unavailable",
+      reason: "outsideProjectRoot"
+    };
+  }
+
+  const directoryPath =
+    normalizedDirectoryRelativePath === null
+      ? currentProjectState.rootPath
+      : path.resolve(
+          currentProjectState.rootPath,
+          normalizedDirectoryRelativePath
+        );
+  const relativeFromRoot = path.relative(
+    currentProjectState.rootPath,
+    directoryPath
+  );
+
+  if (
+    relativeFromRoot.startsWith("..") ||
+    path.isAbsolute(relativeFromRoot)
+  ) {
+    return {
+      kind: "unavailable",
+      reason: "outsideProjectRoot"
+    };
+  }
+
+  return {
+    kind: "ok",
+    directoryRelativePath: normalizedDirectoryRelativePath,
+    directoryPath,
+    rootPath: currentProjectState.rootPath,
+    projectState: currentProjectState
+  };
+}
+
+function sameFileSystemPath(left: string, right: string): boolean {
+  const resolvedLeft = path.resolve(left);
+  const resolvedRight = path.resolve(right);
+
+  if (process.platform === "win32" || process.platform === "darwin") {
+    return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase();
+  }
+
+  return resolvedLeft === resolvedRight;
+}
+
+function isHiddenFileExplorerEntry(
+  entryName: string,
+  entryPath: string,
+  activeProjectFilePath: string
+): boolean {
+  const normalizedName = entryName.normalize("NFC");
+  const lowerName = normalizedName.toLowerCase();
+
+  if (sameFileSystemPath(entryPath, activeProjectFilePath)) {
+    return true;
+  }
+
+  if (isProtectedPergamumDataFilePath(normalizedName)) {
+    return true;
+  }
+
+  return (
+    lowerName === ".pergamum" ||
+    lowerName === ".pergamum.lock" ||
+    lowerName.startsWith(".pergamum.lock.stale-") ||
+    lowerName === projectConfigFileName.toLowerCase() ||
+    lowerName === ".pergamum_recovery" ||
+    lowerName === ".git" ||
+    lowerName === ".ds_store" ||
+    lowerName === "thumbs.db" ||
+    lowerName === "desktop.ini"
+  );
+}
+
+function compareFileExplorerEntries(
+  left: FileExplorerEntry,
+  right: FileExplorerEntry
+): number {
+  if (left.kind !== right.kind) {
+    return left.kind === "folder" ? -1 : 1;
+  }
+
+  return left.name.localeCompare(right.name);
+}
+
+async function fileExplorerDirectoryTraversalFailureReason(
+  rootPath: string,
+  directoryRelativePath: string | null
+): Promise<FileExplorerUnavailableReason | null> {
+  if (directoryRelativePath === null) {
+    return null;
+  }
+
+  let currentPath = rootPath;
+
+  for (const segment of directoryRelativePath.split("/")) {
+    currentPath = path.join(currentPath, segment);
+
+    try {
+      const stats = await fs.lstat(currentPath);
+
+      if (stats.isSymbolicLink() || !stats.isDirectory()) {
+        return "notDirectory";
+      }
+    } catch {
+      return "unreadable";
+    }
+  }
+
+  return null;
+}
+
+function isProjectMarkdownDocumentPath(relativePath: string): boolean {
+  const extension = path.extname(relativePath).toLowerCase();
+
+  return extension === ".md" || extension === ".markdown";
+}
+
+function normalizedProjectMarkdownDocumentRelativePath(
+  rootPath: string,
+  absolutePath: string
+): string | null {
+  const relativePath = path.relative(rootPath, path.resolve(absolutePath));
+
+  if (
+    relativePath.length === 0 ||
+    relativePath.startsWith("..") ||
+    path.isAbsolute(relativePath)
+  ) {
+    return null;
+  }
+
+  if (!isProjectMarkdownDocumentPath(relativePath)) {
+    return null;
+  }
+
+  return normalizeRelativePath(relativePath);
+}
+
+function registerProjectDocumentPath(
+  projectState: CurrentProjectState,
+  absolutePath: string
+): string | null {
+  const normalized = normalizedProjectMarkdownDocumentRelativePath(
+    projectState.rootPath,
+    absolutePath
+  );
+
+  if (!normalized) {
+    return null;
+  }
+
+  projectState.documentRelativePaths.add(normalized);
+
+  return normalized;
+}
+
+async function listFileExplorerChildren(
+  request: ListFileExplorerChildrenRequest
+): Promise<ListFileExplorerChildrenResult> {
+  const resolved = resolveFileExplorerDirectoryPath(
+    request.directoryRelativePath
+  );
+
+  if (resolved.kind === "unavailable") {
+    return fileExplorerUnavailableResult(null, resolved.reason);
+  }
+
+  try {
+    const traversalFailureReason =
+      await fileExplorerDirectoryTraversalFailureReason(
+        resolved.rootPath,
+        resolved.directoryRelativePath
+      );
+
+    if (traversalFailureReason) {
+      return fileExplorerUnavailableResult(
+        resolved.directoryRelativePath,
+        traversalFailureReason
+      );
+    }
+
+    const directoryStats = await fs.lstat(resolved.directoryPath);
+
+    if (
+      directoryStats.isSymbolicLink() ||
+      !directoryStats.isDirectory()
+    ) {
+      return fileExplorerUnavailableResult(
+        resolved.directoryRelativePath,
+        "notDirectory"
+      );
+    }
+
+    const entries = await fs.readdir(resolved.directoryPath, {
+      withFileTypes: true
+    });
+    const visibleEntries: FileExplorerEntry[] = [];
+
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+
+      if (!entry.isDirectory() && !entry.isFile()) {
+        continue;
+      }
+
+      const entryPath = path.join(resolved.directoryPath, entry.name);
+
+      if (
+        isHiddenFileExplorerEntry(
+          entry.name,
+          entryPath,
+          resolved.projectState.activeProjectFilePath
+        )
+      ) {
+        continue;
+      }
+
+      const relativePath = normalizeRelativePath(
+        path.relative(resolved.rootPath, entryPath)
+      );
+
+      if (entry.isFile() && isProjectMarkdownDocumentPath(relativePath)) {
+        resolved.projectState.documentRelativePaths.add(relativePath);
+      }
+
+      visibleEntries.push({
+        kind: entry.isDirectory() ? "folder" : "file",
+        name: entry.name,
+        relativePath
+      });
+    }
+
+    return {
+      kind: "ok",
+      directoryRelativePath: resolved.directoryRelativePath,
+      entries: visibleEntries.sort(compareFileExplorerEntries)
+    };
+  } catch {
+    return fileExplorerUnavailableResult(
+      resolved.directoryRelativePath,
+      "unreadable"
+    );
+  }
+}
+
 function resolveProjectDocumentPath(relativePath: string): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
@@ -1024,9 +1365,9 @@ function resolveProjectDocumentPath(relativePath: string): string {
  * reopening the project.
  *
  * Returns the project-root-relative path — forward-slash separated, the same
- * form `discoverMarkdownFiles` produces — when `absolutePath` is a `.md`
+ * form `discoverMarkdownFiles` produces — when `absolutePath` is a Markdown
  * file inside the open project root; otherwise `null` (no project open, path
- * outside the root, or not a `.md` file). Idempotent.
+ * outside the root, or not a supported Markdown file). Idempotent.
  */
 export function registerCurrentProjectDocumentPath(
   absolutePath: string
@@ -1035,27 +1376,7 @@ export function registerCurrentProjectDocumentPath(
     return null;
   }
 
-  const relativePath = path.relative(
-    currentProjectState.rootPath,
-    path.resolve(absolutePath)
-  );
-
-  if (
-    relativePath.length === 0 ||
-    relativePath.startsWith("..") ||
-    path.isAbsolute(relativePath)
-  ) {
-    return null;
-  }
-
-  if (path.extname(relativePath).toLowerCase() !== ".md") {
-    return null;
-  }
-
-  const normalized = normalizeRelativePath(relativePath);
-  currentProjectState.documentRelativePaths.add(normalized);
-
-  return normalized;
+  return registerProjectDocumentPath(currentProjectState, absolutePath);
 }
 
 async function discoverMarkdownFiles(
@@ -1076,7 +1397,7 @@ async function discoverMarkdownFiles(
         continue;
       }
 
-      if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== ".md") {
+      if (!entry.isFile() || !isProjectMarkdownDocumentPath(entry.name)) {
         continue;
       }
 
@@ -2159,6 +2480,24 @@ export function registerProjectIpc(
     PROJECT_CHANNELS.cancelReadOnlyProjectOpen,
     async (_event, rawRequest: unknown): Promise<void> => {
       await cancelReadOnlyProjectOpen(rawRequest);
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.listFileExplorerChildren,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<ListFileExplorerChildrenResult> => {
+      let request: ListFileExplorerChildrenRequest;
+
+      try {
+        request = parseListFileExplorerChildrenRequest(rawRequest);
+      } catch {
+        return fileExplorerUnavailableResult(null, "invalidRequest");
+      }
+
+      return listFileExplorerChildren(request);
     }
   );
 

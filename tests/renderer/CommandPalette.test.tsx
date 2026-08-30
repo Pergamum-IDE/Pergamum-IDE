@@ -277,8 +277,8 @@ describe("CommandPalette", () => {
       ],
       [
         "command.workspace.files.focus.description",
-        "（未実装です）",
-        "Not implemented."
+        "ファイルエクスプローラーを表示します。",
+        "Show the File Explorer."
       ],
       [
         "command.workspace.search.focus.description",

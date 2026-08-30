@@ -1,4 +1,4 @@
-import { promises as fs, readFileSync } from "node:fs";
+import { promises as fs, readFileSync, type Dirent } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   defaultProjectAccessMode,
   PROJECT_CHANNELS,
+  type ListFileExplorerChildrenResult,
   type PendingReadOnlyProjectOpen,
   type ProjectOpenResult
 } from "../../src/shared/api";
@@ -906,6 +907,7 @@ describe("project file IPC foundation", () => {
         PROJECT_CHANNELS.openStartupProject,
         PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
         PROJECT_CHANNELS.cancelReadOnlyProjectOpen,
+        PROJECT_CHANNELS.listFileExplorerChildren,
         PROJECT_CHANNELS.closeCurrentProject
       ])
     );
@@ -1344,6 +1346,18 @@ describe("project file IPC foundation", () => {
     expect(registerCurrentProjectDocumentPath(recoveredAbsolute)).toBe(
       "chapter.recovered.md"
     );
+
+    const markdownAbsolute = path.join(projectRootPath, "appendix.markdown");
+    await fs.writeFile(markdownAbsolute, "# Appendix\nbody\n", "utf8");
+    expect(registerCurrentProjectDocumentPath(markdownAbsolute)).toBe(
+      "appendix.markdown"
+    );
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "appendix.markdown" })
+    ).resolves.toMatchObject({
+      relativePath: "appendix.markdown",
+      content: "# Appendix\nbody\n"
+    });
   });
 
   it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {
@@ -2961,6 +2975,386 @@ describe("project file IPC foundation", () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
+  it("lists only visible File Explorer root children without reading nested folders", async () => {
+    const projectFilePath = path.join(projectRootPath, "Explorer.pergamum");
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+    await fs.mkdir(path.join(projectRootPath, "Drafts", "Deep"));
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), "# Chapter\n");
+    await fs.writeFile(path.join(projectRootPath, "notes.txt"), "notes\n");
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "nested.md"),
+      "# Nested\n"
+    );
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "Deep", "deep.md"),
+      "# Deep\n"
+    );
+    await fs.writeFile(path.join(projectRootPath, projectConfigFileName), "{}\n");
+    await fs.mkdir(path.join(projectRootPath, ".pergamum_recovery"));
+    await fs.writeFile(
+      path.join(projectRootPath, ".pergamum_recovery", "candidate.txt"),
+      "recovery\n"
+    );
+    await fs.mkdir(path.join(projectRootPath, ".git"));
+    await fs.writeFile(path.join(projectRootPath, ".DS_Store"), "");
+    await fs.writeFile(path.join(projectRootPath, "Thumbs.db"), "");
+    await fs.writeFile(path.join(projectRootPath, "desktop.ini"), "");
+    await fs.mkdir(
+      path.join(projectRootPath, ".pergamum.lock.stale-2026-08-30T00-00-00Z")
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    const rootResult = expectFileExplorerOk(
+      await listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: null }
+      )
+    );
+
+    expect(rootResult.entries).toEqual([
+      {
+        kind: "folder",
+        name: "Drafts",
+        relativePath: "Drafts"
+      },
+      {
+        kind: "file",
+        name: "chapter.md",
+        relativePath: "chapter.md"
+      },
+      {
+        kind: "file",
+        name: "notes.txt",
+        relativePath: "notes.txt"
+      }
+    ]);
+    expect(JSON.stringify(rootResult)).not.toContain("nested.md");
+    expect(JSON.stringify(rootResult)).not.toContain("Explorer.pergamum");
+    expect(JSON.stringify(rootResult)).not.toContain(projectConfigFileName);
+    expect(JSON.stringify(rootResult)).not.toContain(".pergamum.lock");
+    expect(JSON.stringify(rootResult)).not.toContain(".pergamum_recovery");
+    expect(JSON.stringify(rootResult)).not.toContain(".git");
+    expect(JSON.stringify(rootResult)).not.toContain(".DS_Store");
+    expect(JSON.stringify(rootResult)).not.toContain("Thumbs.db");
+    expect(JSON.stringify(rootResult)).not.toContain("desktop.ini");
+  });
+
+  it("registers Markdown files discovered by File Explorer listing as project documents", async () => {
+    const projectFilePath = path.join(projectRootPath, "Explorer Late.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Late"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocument
+    );
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    await fs.writeFile(path.join(projectRootPath, "late.md"), "# Late\n");
+    await fs.writeFile(
+      path.join(projectRootPath, "late.markdown"),
+      "# Late Markdown\n"
+    );
+    await fs.writeFile(path.join(projectRootPath, "notes.txt"), "notes\n");
+
+    await expect(
+      readProjectDocumentHandler({ sender: {} }, { relativePath: "late.md" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+
+    const rootResult = expectFileExplorerOk(
+      await listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: null }
+      )
+    );
+
+    expect(rootResult.entries).toEqual([
+      {
+        kind: "file",
+        name: "late.markdown",
+        relativePath: "late.markdown"
+      },
+      {
+        kind: "file",
+        name: "late.md",
+        relativePath: "late.md"
+      },
+      {
+        kind: "file",
+        name: "notes.txt",
+        relativePath: "notes.txt"
+      }
+    ]);
+    await expect(
+      readProjectDocumentHandler({ sender: {} }, { relativePath: "late.md" })
+    ).resolves.toMatchObject({
+      relativePath: "late.md",
+      content: "# Late\n"
+    });
+    await expect(
+      readProjectDocumentHandler(
+        { sender: {} },
+        { relativePath: "late.markdown" }
+      )
+    ).resolves.toMatchObject({
+      relativePath: "late.markdown",
+      content: "# Late Markdown\n"
+    });
+    await expect(
+      readProjectDocumentHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+  });
+
+  it("lists only the requested folder direct children for File Explorer expansion", async () => {
+    const projectFilePath = path.join(projectRootPath, "Explorer Nested.pergamum");
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+    await fs.mkdir(path.join(projectRootPath, "Drafts", "Deep"));
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "nested.md"),
+      "# Nested\n"
+    );
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "Deep", "deep.md"),
+      "# Deep\n"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Nested"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    const draftsResult = expectFileExplorerOk(
+      await listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: "Drafts" }
+      )
+    );
+
+    expect(draftsResult.directoryRelativePath).toBe("Drafts");
+    expect(draftsResult.entries).toEqual([
+      {
+        kind: "folder",
+        name: "Deep",
+        relativePath: "Drafts/Deep"
+      },
+      {
+        kind: "file",
+        name: "nested.md",
+        relativePath: "Drafts/nested.md"
+      }
+    ]);
+    expect(JSON.stringify(draftsResult)).not.toContain("deep.md");
+  });
+
+  it("refuses outside-root and non-directory File Explorer listing requests", async () => {
+    const projectFilePath = path.join(projectRootPath, "Explorer Safety.pergamum");
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), "# Chapter\n");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Safety"
+    });
+    await created.close();
+
+    const listBeforeOpenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    await expect(
+      listBeforeOpenHandler({ sender: {} }, { directoryRelativePath: null })
+    ).resolves.toEqual({
+      kind: "unavailable",
+      directoryRelativePath: null,
+      reason: "noProject"
+    });
+
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    await expect(
+      listBeforeOpenHandler({ sender: {} }, { directoryRelativePath: ".." })
+    ).resolves.toEqual({
+      kind: "unavailable",
+      directoryRelativePath: null,
+      reason: "outsideProjectRoot"
+    });
+    await expect(
+      listBeforeOpenHandler({ sender: {} }, { directoryRelativePath: "chapter.md" })
+    ).resolves.toEqual({
+      kind: "unavailable",
+      directoryRelativePath: "chapter.md",
+      reason: "notDirectory"
+    });
+    await expect(listBeforeOpenHandler({ sender: {} }, {})).resolves.toEqual({
+      kind: "unavailable",
+      directoryRelativePath: null,
+      reason: "invalidRequest"
+    });
+  });
+
+  it("returns an unavailable File Explorer result when a folder cannot be read", async () => {
+    const logger = createLoggerMock();
+    const projectFilePath = path.join(projectRootPath, "Explorer Unreadable.pergamum");
+    const rawPath = path.join(projectRootPath, "secret-folder");
+    const rawError = Object.assign(
+      new Error(`EACCES: denied '${rawPath}'`),
+      {
+        code: "EACCES",
+        path: rawPath
+      }
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Unreadable"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      logger
+    );
+    await openProjectHandler({ sender: {} });
+    const readdirSpy = vi.spyOn(fs, "readdir").mockRejectedValueOnce(rawError);
+
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren,
+      logger
+    );
+
+    await expect(
+      listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: null }
+      )
+    ).resolves.toEqual({
+      kind: "unavailable",
+      directoryRelativePath: null,
+      reason: "unreadable"
+    });
+    expectNoUnsafeSurface(logger, [rawPath, projectRootPath]);
+    readdirSpy.mockRestore();
+  });
+
+  it("does not follow symlink-like File Explorer entries", async () => {
+    const projectFilePath = path.join(projectRootPath, "Explorer Symlink.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Symlink"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+    const readdirSpy = vi.spyOn(fs, "readdir").mockResolvedValueOnce([
+      fakeDirent("Visible", "directory"),
+      fakeDirent("visible.md", "file"),
+      fakeDirent("Linked", "symlink")
+    ] as Dirent[]);
+
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    const rootResult = expectFileExplorerOk(
+      await listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: null }
+      )
+    );
+
+    expect(rootResult.entries).toEqual([
+      {
+        kind: "folder",
+        name: "Visible",
+        relativePath: "Visible"
+      },
+      {
+        kind: "file",
+        name: "visible.md",
+        relativePath: "visible.md"
+      }
+    ]);
+    expect(JSON.stringify(rootResult)).not.toContain("Linked");
+    readdirSpy.mockRestore();
+  });
+
+  it("refuses direct File Explorer requests below a symlink-like path before scanning it", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Explorer Symlink Request.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Symlink Request"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+    const lstatSpy = vi
+      .spyOn(fs, "lstat")
+      .mockResolvedValueOnce(fakeStats("symlink"));
+    const readdirSpy = vi.spyOn(fs, "readdir");
+
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    const result = await listFileExplorerChildrenHandler(
+      { sender: {} },
+      { directoryRelativePath: "Linked/child" }
+    );
+
+    expect(result).toEqual({
+      kind: "unavailable",
+      directoryRelativePath: "Linked/child",
+      reason: "notDirectory"
+    });
+    expect(readdirSpy).not.toHaveBeenCalled();
+    lstatSpy.mockRestore();
+    readdirSpy.mockRestore();
+  });
+
   // -------------------------------------------------------------------------
   // #274: openProjectByFilePath — cold-start Session restore project reopen
   // -------------------------------------------------------------------------
@@ -3061,6 +3455,42 @@ function createWriteOwnershipManager(
     acquire: vi.fn().mockResolvedValue(ownership),
     release: vi.fn().mockResolvedValue(undefined)
   };
+}
+
+function expectFileExplorerOk(
+  value: unknown
+): Extract<ListFileExplorerChildrenResult, { kind: "ok" }> {
+  expect(value).toMatchObject({
+    kind: "ok",
+    entries: expect.any(Array)
+  });
+
+  return value as Extract<ListFileExplorerChildrenResult, { kind: "ok" }>;
+}
+
+function fakeDirent(
+  name: string,
+  kind: "directory" | "file" | "symlink"
+): Dirent {
+  return {
+    name,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isDirectory: () => kind === "directory",
+    isFIFO: () => false,
+    isFile: () => kind === "file",
+    isSocket: () => false,
+    isSymbolicLink: () => kind === "symlink"
+  } as Dirent;
+}
+
+function fakeStats(
+  kind: "directory" | "file" | "symlink"
+): Awaited<ReturnType<typeof fs.lstat>> {
+  return {
+    isDirectory: () => kind === "directory",
+    isSymbolicLink: () => kind === "symlink"
+  } as Awaited<ReturnType<typeof fs.lstat>>;
 }
 
 function realProjectWriteLockFileSystem(
