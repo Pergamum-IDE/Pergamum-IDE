@@ -147,6 +147,48 @@ function parentDirectoryRelativePath(relativePath: string): string | null {
   return slashIndex === -1 ? null : relativePath.slice(0, slashIndex);
 }
 
+/**
+ * #309: the chain of ancestor folders for a project-relative document path,
+ * from the outermost folder inwards, e.g.
+ *   `Drafts/Chapter1/scene-03.md` → `["Drafts", "Drafts/Chapter1"]`.
+ * The project root (`null`) is implicit and never included; a root-level
+ * document (`chapter-01.md`) yields `[]`.
+ */
+export function ancestorDirectoryRelativePaths(relativePath: string): string[] {
+  const segments = relativePath.split("/");
+  segments.pop();
+
+  const ancestors: string[] = [];
+  let prefix = "";
+
+  for (const segment of segments) {
+    prefix = prefix ? `${prefix}/${segment}` : segment;
+    ancestors.push(prefix);
+  }
+
+  return ancestors;
+}
+
+/**
+ * #309: whether the active project document is already reachable in the
+ * rendered tree — its parent folder's children are loaded AND every ancestor
+ * folder is expanded. Used to decide when the reveal walk is done, so an
+ * already-visible active document never triggers extra loads or tree changes.
+ */
+function isFileExplorerEntryRevealed(
+  entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>,
+  expandedDirectoryPaths: ReadonlySet<string>,
+  relativePath: string
+): boolean {
+  if (!isFileExplorerEntryVisible(entriesByDirectoryPath, relativePath)) {
+    return false;
+  }
+
+  return ancestorDirectoryRelativePaths(relativePath).every((directoryPath) =>
+    expandedDirectoryPaths.has(directoryPath)
+  );
+}
+
 function isProjectMarkdownRelativePath(relativePath: string): boolean {
   const lowerRelativePath = relativePath.toLowerCase();
 
@@ -408,6 +450,82 @@ export function FileExplorer({
         : null;
     });
   }, [entriesByDirectoryPath]);
+
+  // #309: reveal the active project document. When the active editor is a
+  // project document, `highlightedRelativePath` is its project-relative path
+  // (it is `null` for every non-project editor — standalone Markdown,
+  // Untitled, glossary — so those clear the highlight and reveal nothing).
+  // This walks the ancestor folder chain, lazily loading each folder and
+  // then expanding it, until the document is reachable in the tree. It never
+  // touches the File Explorer selection (that state drives #307 create
+  // targets), never collapses folders, and reloads only the document's own
+  // ancestors. Each load is generation-guarded by `loadDirectoryForGeneration`,
+  // so a late result after a project switch or close is discarded (#305).
+  useEffect(() => {
+    if (!hasProject || !highlightedRelativePath) {
+      return;
+    }
+
+    if (
+      isFileExplorerEntryRevealed(
+        entriesByDirectoryPath,
+        expandedDirectoryPaths,
+        highlightedRelativePath
+      )
+    ) {
+      return;
+    }
+
+    const ancestorDirectoryPaths = ancestorDirectoryRelativePaths(
+      highlightedRelativePath
+    );
+
+    for (const directoryPath of [null, ...ancestorDirectoryPaths]) {
+      const key = directoryKey(directoryPath);
+
+      if (unavailableDirectoryPaths.has(key)) {
+        // The chain is broken — the document cannot be revealed. Stop rather
+        // than retry-loop the same unreadable folder.
+        return;
+      }
+
+      if (!hasDirectoryEntries(entriesByDirectoryPath, directoryPath)) {
+        if (!loadingDirectoryPaths.has(key)) {
+          void loadDirectoryForGeneration(
+            directoryPath,
+            loadGenerationRef.current
+          );
+        }
+        // Wait for the load to land; this effect re-runs and continues the
+        // walk from the next unloaded ancestor.
+        return;
+      }
+    }
+
+    // Every ancestor is loaded — expand them so the document renders. Only
+    // adds paths; never removes, so the user's other tree state is untouched.
+    setExpandedDirectoryPaths((current) => {
+      let changed = false;
+      const next = new Set(current);
+
+      for (const directoryPath of ancestorDirectoryPaths) {
+        if (!next.has(directoryPath)) {
+          next.add(directoryPath);
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [
+    entriesByDirectoryPath,
+    expandedDirectoryPaths,
+    hasProject,
+    highlightedRelativePath,
+    loadDirectoryForGeneration,
+    loadingDirectoryPaths,
+    unavailableDirectoryPaths
+  ]);
 
   const selectRoot = useCallback(() => {
     setSelection({ kind: "root" });
