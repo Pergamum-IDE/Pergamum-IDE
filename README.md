@@ -6,7 +6,7 @@ Pergamum（ペルガモン）は、**小説を書く人のためのオープン�
 
 MIT ライセンスで公開しているフリーソフトウェアです。
 
-ただし、単なる Markdown エディタを作ろうとしているわけではありません。
+Pergamum は、単なる Markdown エディタではありません。
 
 小説を書いていると、本文とは別に大量の情報が発生します。
 
@@ -16,9 +16,30 @@ MIT ライセンスで公開しているフリーソフトウェアです。
 
 Pergamum は、**本文を書く場所と、作品世界について作者が知っていることを管理する場所を分け、その両方をひとつの執筆環境として扱う**ことを目指しています。
 
-なお、Pergamum は現在まだ開発初期です。ここで述べている構想のすべてが実装済みというわけではありません。
+本文は、人間が読める Markdown ファイルとして保存します。
+
+作品世界の構造化情報は、SQLite database として管理します。
+
+そして、作者が書いた本文を勝手に書き換えないこと、保存や復旧の安全性を軽く扱わないことを大事にしています。
+
+> Pergamum は、あなたが捨てると決めるまで、未保存の原稿を勝手に捨てません。
+
+なお、Pergamum は現在も開発中です。  
+ここで述べている構想のすべてが実装済みというわけではありません。
 
 ちなみに Pergamum とは、現在のトルコ西部にあった古代ギリシャ都市の名前です。アレクサンドリア図書館に匹敵する大図書館を擁し、羊皮紙（parchment）の語源にもなりました。
+
+---
+
+## 現在の状態
+
+現在の Pergamum は、v0.70.0 時点で Phase 6「閉じても戻れるようにする」までを完了した段階です。
+
+本文編集、Project file、Command Palette、Settings、Debug Log、Session restore、Document Recovery など、毎日 dogfood しながら使うための基盤が整いつつあります。
+
+一方で、まだ一般利用向けの安定版ではありません。
+
+特に Glossary / project database の schema は今後も変更される可能性があります。重要な原稿や構造化データを扱う場合は、作業ディレクトリ全体を Git や通常のバックアップで管理してください。
 
 ---
 
@@ -45,7 +66,9 @@ Pergamum では、現在その役割を次のように分けています。
 Markdown
   原稿本文の正本
 
-pergamum.db
+.pergamum
+  Project file
+  Project identity / metadata を持つ入口
   人物・用語・地名・組織・概念など
   構造化された作品情報の正本
 
@@ -54,6 +77,9 @@ pergamum.json
 
 Assets
   画像などのバイナリデータ
+
+Recovery Store
+  未保存本文の作業コピーを保持する application data
 ```
 
 本文をデータベースの都合に合わせることもしないし、構造化情報を Markdown の中へ押し込むこともしません。
@@ -98,10 +124,143 @@ Pergamum の UI は、本文を書く場を守ります。
   Diagnostics
   Output
   Debug Log
+  Settings
   Utility Window / 支援ウィンドウ
 ```
 
 探す・辿る・診断する・出力する・ログを確認する作業は、本文領域ではなく、周辺 UI に逃がします。
+
+---
+
+## 現在できること
+
+Pergamum は現在も開発中ですが、Markdown 原稿を安全に扱うための基盤と、Glossary を結びつけるための基盤が動き始めています。
+
+現在は、主に以下のことができます。
+
+| 分類 | できること |
+| -- | -- |
+| Project | `.pergamum` project file を作成・開く |
+| Project | Project root / project metadata を管理する |
+| Project | Project write lock により同時書き込みを防ぐ |
+| Project | 他プロセスが開いている project を read-only で開く |
+| Project | stale project write lock を安全に回収する |
+| Project | Project を閉じる |
+| Editor | Markdown 本文を編集する |
+| Editor | 複数の文書をタブで開く |
+| Editor | 開いたタブを閉じる |
+| Editor | 外部 Markdown ファイルを開く |
+| Editor | 改行コードを保ったまま保存する |
+| Editor | Atomic Markdown save pipeline で保存する |
+| Editor | 文字数カウントを表示する |
+| Editor | 段落字下げの一括挿入・削除を行う |
+| Preview | Markdown Preview を表示する |
+| Preview | Glossary match を Preview 上に装飾する |
+| Glossary | Glossary entry を作成・編集・削除する |
+| Glossary | Glossary form を管理する |
+| Glossary | Glossary match の Hover Card を表示する |
+| Glossary | Glossary entry から本文中の使用箇所へ移動する |
+| Glossary | Glossary navigator で entry を探す |
+| Glossary | Glossary occurrences tab で使用箇所を確認する |
+| Command | Command Palette から操作を検索・実行する |
+| Command | Application menu / shortcut / context menu から操作する |
+| Settings | Settings Page で設定を確認・変更する |
+| Session | 前回の project / tabs / window state を復元する |
+| Recovery | 未保存本文の Recovery payload を保持する |
+| Recovery | 前回起動時の未保存本文を復元候補として表示する |
+| Recovery | Recovery candidate を `.recovered.md` として復元する |
+| Recovery | Recovery candidate を明示的に破棄する |
+| Recovery | 同じ Recovery candidate set の repeated auto-show を抑制する |
+| Notification | 軽い情報通知を NotificationToast で表示する |
+| Workbench | Navigator / Editor / Preview のペインを扱う |
+| Workbench | Sidebar を折りたたむ |
+| Utility Window | 支援ウィンドウを開く |
+| Debug | Debug mode JSONL log を出力する |
+| Debug | Debug Log tab でログを確認する |
+| Persistence | SQLite に構造化プロジェクトデータを保存する |
+| Distribution | Windows installer / `.pergamum` file association の基盤を持つ |
+
+---
+
+## Project file と Project root
+
+Pergamum では、`.pergamum` ファイルを project file として扱います。
+
+`.pergamum` ファイルがあるフォルダを Project root とし、その下に Markdown 本文、project database、project config などを配置します。
+
+```text
+MyNovel/
+  MyNovel.pergamum
+  pergamum.json
+  chapter-01.md
+  chapter-02.md
+  assets/
+```
+
+Project file は、単なるフォルダを開くよりも明示的な入口です。
+
+Project identity を持ち、Session restore や Recent Projects、file association と結びつきます。
+
+---
+
+## Session と Recovery
+
+Pergamum では、Session と Recovery を分けて扱います。
+
+```text
+Session:
+  前回開いていた project / tabs / window state など、
+  作業環境を復元するための情報
+
+Recovery:
+  未保存の Markdown 本文そのものを守るための作業コピー
+```
+
+Session は「前回の作業環境に戻る」ための仕組みです。
+
+Recovery は「未保存の本文を失わない」ための仕組みです。
+
+この二つは似ていますが、役割が違います。
+
+### Session
+
+Session restore は、前回開いていた project、tabs、window state などを復元します。
+
+ただし、Session の読み込みに異常に時間がかかる場合は、起動を無期限に止めません。安全に time out し、その回は Session restore なしで起動します。
+
+Session data を読み込めなかっただけで、既存の Session data を削除したり修復したりはしません。
+
+### Recovery
+
+Recovery は、未保存の Markdown 本文を application data 側の Recovery Store に保存します。
+
+保存済みファイルそのものを勝手に上書きしたり、現在開いている dirty editor に直接流し込んだりはしません。
+
+Recovery candidate を復元する場合は、元ファイルを上書きせず、新しい sidecar file として開きます。
+
+```text
+chapter-03.md
+chapter-03.recovered.md
+chapter-03.recovered-2.md
+```
+
+Recovery row は、以下の場合にのみ削除されます。
+
+```text
+削除される場合:
+  元文書の Save 成功
+  Restore 成功後、renderer が .recovered.md を開いたことを finalize した場合
+  ユーザーが確認 dialog を経て明示的に破棄した場合
+
+削除されない場合:
+  Recovery dialog を閉じる
+  「後で決める」を押す
+  起動時 auto-show を見た
+  reminder toast を見た / 閉じた
+  app quit / restart
+```
+
+Pergamum は、Recovery candidate を勝手に捨てません。
 
 ---
 
@@ -175,30 +334,7 @@ Boundary policy:
 
 ---
 
-## 現在できること
-
-Pergamum は現在も開発初期ですが、Markdown 原稿と Glossary を結びつけるための基盤は動き始めています。
-
-現在は、主に以下のことができます。
-
-| 分類 | できること |
-| -- | -- |
-| Project | Markdown プロジェクトを開く |
-| Editor | Markdown 本文を編集する |
-| Preview | Markdown Preview を表示する |
-| Glossary | Glossary entry を作成・編集・削除する |
-| Glossary | Glossary form を管理する |
-| Glossary | Glossary match を Preview 上に装飾する |
-| Glossary | Glossary match の Hover Card を表示する |
-| Glossary | Glossary entry から本文中の使用箇所へ移動する |
-| Glossary | Glossary navigator で entry を探す |
-| Glossary | Glossary occurrences tab で使用箇所を確認する |
-| Workbench | Navigator / Editor / Preview のペインを扱う |
-| Workbench | Sidebar を折りたたむ |
-| Utility Window | 支援ウィンドウを開く |
-| Debug | Debug mode JSONL log を出力する |
-| Debug | Debug Log tab でログを確認する |
-| Persistence | SQLite に構造化プロジェクトデータを保存する |
+## Glossary model
 
 Glossary については、以下のような経路で Renderer から Project Database へアクセスします。
 
@@ -263,7 +399,7 @@ none
 
 ## 現在の制限
 
-Pergamum は現在も開発初期です。
+Pergamum は現在も開発中です。
 
 日常的に dogfood しながら開発していますが、まだ一般利用向けの安定版ではありません。
 
@@ -275,17 +411,19 @@ Pergamum は現在も開発初期です。
 | File format | `*.txt` やその他のテキストファイルは未対応です |
 | Encoding | UTF-8 のみ対応しています |
 | Encoding | Shift_JIS / EUC-JP / UTF-16 など、UTF-8 以外の文字コードは未対応です |
-| Editor tabs | 複数の文書をタブで開くことはできます |
-| Editor tabs | ただし、開いたタブを UI から閉じる操作はまだ未実装です |
-| Glossary database | Glossary / project database の schema は開発中です |
-| Glossary database | 今後の変更で破壊的変更が入る可能性があります |
+| Project database | Glossary / project database の schema は開発中です |
+| Project database | 今後の変更で破壊的変更が入る可能性があります |
 | Compatibility | 現時点では、永続的な DB 互換性を保証しません |
+| Recovery | Recovery は未保存本文の救済用であり、履歴管理や Git の代替ではありません |
+| Search | 作品全体を歩くための高度な検索・一覧機能は今後の開発対象です |
+| Output | 投稿・印刷・電子書籍向けの本格的な出力機能は未実装です |
+| Distribution | 配布基盤は整備中ですが、安定版リリースではありません |
 
-特に `pergamum.db` は、現在の Pergamum における構造化データの正本です。
+特に `.pergamum` は、現在の Pergamum における構造化データの正本です。
 
 その一方で、Glossary model や project data model はまだ安定版ではありません。
 
-そのため、開発初期の段階では、古い `pergamum.db` が将来のバージョンでそのまま使えなくなる可能性があります。
+そのため、開発初期の段階では、古い `.pergamum` が将来のバージョンでそのまま使えなくなる可能性があります。
 
 重要な原稿や Glossary を扱う場合は、作業ディレクトリ全体を Git や通常のバックアップで管理してください。
 
@@ -295,57 +433,13 @@ Pergamum は現在も開発初期です。
 
 ---
 
-## 現在開発中のこと
-
-現在は Phase 4「迷わず触れるようにする」の後半です。
-
-Phase 3 では、本文を書く場と周辺作業の場を分離し、Glossary / Navigation / Utility Window / Debug logging / Runtime baseline の基礎を整えました。
-
-Phase 4 では、後続機能を無理なく積み上げるために、操作入口を整理しています。
-
-```text
-Command:
-  操作の意味
-
-Menu:
-  見つけられる入口
-
-Shortcut:
-  速く呼ぶ入口
-
-Context menu:
-  対象に応じた入口
-
-Command Palette / Command UI:
-  操作を探して実行する入口
-```
-
-直近の主な開発テーマは以下です。
-
-| 分類 | 開発テーマ |
-| -- | -- |
-| Command infrastructure | アプリ内の操作を Command Registry に寄せる |
-| Command Palette | 操作を検索して実行できる入口を整える |
-| Application menu | 日常操作をメニューから辿れるようにする |
-| Shortcut | 基本操作をキーボードから呼べるようにする |
-| Context menu | 選択中の対象に応じた操作入口を整える |
-| Debug logging | dogfood や不具合解析のため、実ユーザー経路の観測を強化する |
-
-Phase 4 の目的は、単にメニューやショートカットを増やすことではありません。
-
-Pergamum の操作を command として整理し、menu / shortcut / context menu / Command Palette から同じ意味の操作を呼べるようにすることです。
-
-これにより、今後の Glossary 操作、Editor 補助表示、検索、設定、出力などを、ばらばらの UI 実装ではなく、一貫した操作体系の上に載せられるようにします。
-
----
-
 ## データを失わないために
 
 小説は、作者が何十時間、何百時間とかけて作るデータです。
 
 そのため Pergamum では、構造化情報についても「壊れたら作り直せばいい」とは考えていません。
 
-`pergamum.db` を構造化データの正本としつつ、将来的には Git で差分を確認でき、人間にも読める決定論的な snapshot を生成する予定です。
+`.pergamum`  project file 内の SQLite database を構造化データの正本としつつ、将来的には Git で差分を確認でき、人間にも読める決定論的な snapshot を生成する予定です。
 
 snapshot は第二の正本にはしません。
 
@@ -354,7 +448,7 @@ snapshot は第二の正本にはしません。
 その代わり、以下のような一方向の関係にします。
 
 ```text
-pergamum.db
+.pergamum
   ↓
 deterministic snapshot
   ↓
@@ -379,14 +473,21 @@ AI は開発プロセスを支援するために利用しており、作者の�
 
 ## インストール
 
-Pergamum は現在開発中であり、一般利用向けの配布物はまだありません。
+Pergamum は現在開発中です。
 
 現時点では、ソースコードから開発環境を構築して試すことができます。
 
 開発には Node.js 24 LTS を使用します。
 
+依存関係のインストール:
+
 ```bash
-npm install
+npm ci
+```
+
+開発サーバー起動:
+
+```bash
 npm run dev
 ```
 
@@ -396,7 +497,10 @@ npm run dev
 npm run typecheck
 npm test
 npm run build
+git diff --check
 ```
+
+Windows installer / `.pergamum` file association の基盤はありますが、利用可能な配布物・リリース手順は release ごとの案内を確認してください。
 
 ---
 
@@ -410,7 +514,8 @@ Pergamum では、大きな設計判断を ADR（Architecture Decision Record）
 > なぜ Glossary の表記を別テーブルにしたのか  
 > なぜ SQLite が正本なのか  
 > なぜ snapshot を正本にしないのか  
-> なぜ Command / Navigation / Editor identity を分けるのか
+> なぜ Command / Navigation / Editor identity を分けるのか  
+> なぜ Recovery を project folder ではなく application data 側に置くのか
 
 といった理由は時間とともに失われます。
 
@@ -423,6 +528,8 @@ Pergamum では、大きな設計判断を ADR（Architecture Decision Record）
 - [ADR-0003: UI Interaction Architecture](./docs/adr/0003-ui-interaction-architecture.md)
 - [ADR-0004: Manuscript Non-Destructive Policy](./docs/adr/0004-manuscript-non-destructive-policy.md)
 - [ADR-0005: Command Domain Taxonomy](./docs/adr/0005-command-domain-taxonomy.md)
+- [ADR-0008: Project File / Root / Recovery Layout](./docs/adr/0008-project-file-root-recovery-layout.md)
+- [ADR-0009: Recovery Store Architecture](./docs/adr/0009-recovery-store-architecture.md)
 
 実装より先に設計を決めることもあります。
 
@@ -440,7 +547,7 @@ Pergamum の開発ロードマップは以下に整理しています。
 
 ロードマップは、方向性・優先順位・保留事項を見失わないための地図として扱います。
 
-現在は Phase 4「迷わず触れるようにする」の後半です。
+現在は Phase 6「閉じても戻れるようにする」までを完了し、次の段階に進む準備をしています。
 
 大きな流れは以下です。
 
