@@ -138,13 +138,32 @@ export function parseProjectLockOwnerInfo(
     return null;
   }
 
+  const metadata = parseProjectLockOwnerMetadata(value);
+
+  return metadata ? projectLockOwnerInfoFromMetadata(metadata) : null;
+}
+
+export function parseProjectLockOwnerMetadata(
+  value: unknown
+): ProjectLockOwnerMetadata | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (value.schemaVersion !== projectLockOwnerMetadataSchemaVersion) {
+    return null;
+  }
+
+  const projectId = nonEmptyString(value.projectId);
+  const sessionId = nonEmptyString(value.sessionId);
+  const appVersion = nonEmptyString(value.appVersion);
   const createdAt = validIsoDateString(value.createdAt);
   const updatedAt = validIsoDateString(value.updatedAt);
 
   if (
-    !nonEmptyString(value.projectId) ||
-    !nonEmptyString(value.sessionId) ||
-    !nonEmptyString(value.appVersion) ||
+    !projectId ||
+    !sessionId ||
+    !appVersion ||
     typeof value.pid !== "number" ||
     !Number.isInteger(value.pid) ||
     value.pid <= 0 ||
@@ -155,16 +174,52 @@ export function parseProjectLockOwnerInfo(
   }
 
   const hostname = sanitizeProjectLockOwnerHostname(value.hostname);
-  const openedAt = formatProjectLockOpenedAt(createdAt);
 
-  if (!hostname || !openedAt) {
+  if (!hostname) {
     return null;
   }
 
   return {
+    schemaVersion: projectLockOwnerMetadataSchemaVersion,
+    projectId,
+    sessionId,
+    pid: value.pid,
     hostname,
+    appVersion,
+    createdAt,
+    updatedAt
+  };
+}
+
+export function projectLockOwnerInfoFromMetadata(
+  metadata: ProjectLockOwnerMetadata
+): ProjectLockOwnerInfo | null {
+  const openedAt = formatProjectLockOpenedAt(metadata.createdAt);
+
+  if (!openedAt) {
+    return null;
+  }
+
+  return {
+    hostname: metadata.hostname,
     openedAt
   };
+}
+
+export async function readProjectLockOwnerMetadata(
+  fileSystem: ProjectLockOwnerMetadataReader,
+  lockDirectoryPath: string
+): Promise<ProjectLockOwnerMetadata | null> {
+  try {
+    const raw = await fileSystem.readFile(
+      projectLockOwnerMetadataPath(lockDirectoryPath),
+      "utf8"
+    );
+
+    return parseProjectLockOwnerMetadata(JSON.parse(raw));
+  } catch {
+    return null;
+  }
 }
 
 export async function readProjectLockOwnerInfo(

@@ -79,11 +79,18 @@ import {
 } from "./projectWindowTitle";
 import {
   createProjectLockOwnerMetadata,
+  projectLockOwnerInfoFromMetadata,
   projectLockOwnerHandleContent,
   projectLockOwnerHandlePath,
   projectLockOwnerMetadataPath,
-  readProjectLockOwnerInfo
+  readProjectLockOwnerInfo,
+  readProjectLockOwnerMetadata,
+  type ProjectLockOwnerMetadata
 } from "./projectLockOwnerMetadata";
+import {
+  probeProcessLiveness,
+  type ProcessLiveness
+} from "./processLiveness";
 
 interface CurrentProjectState {
   rootPath: string;
@@ -121,16 +128,19 @@ interface PendingReadOnlyProjectOpenState {
 export type ProjectWriteOwnership =
   | {
       kind: "owned";
+      staleTakeover?: ProjectWriteLockStaleTakeoverInfo;
     }
   | {
       kind: "unavailable";
       reason: "lockUnavailable" | "lockSetupFailed";
       lockOwner?: ProjectLockOwnerInfo | null;
+      staleTakeover?: ProjectWriteLockStaleTakeoverInfo;
     };
 
 export interface ProjectWriteLockAcquireContext {
   readonly projectId: string;
   readonly sessionId: string;
+  readonly instanceRunId?: string;
 }
 
 export interface ProjectWriteOwnershipManager {
@@ -160,6 +170,8 @@ export interface ProjectWriteLockFileSystem {
   unlink(path: string): Promise<void>;
   rmdir(path: string): Promise<void>;
   readFile(path: string, encoding: BufferEncoding): Promise<string>;
+  rename(fromPath: string, toPath: string): Promise<void>;
+  stat(path: string): Promise<{ isDirectory(): boolean }>;
 }
 
 export interface ProjectWriteLockRuntimeMetadataProvider {
@@ -167,6 +179,24 @@ export interface ProjectWriteLockRuntimeMetadataProvider {
   hostname(): string;
   appVersion(): string;
   pid(): number;
+}
+
+export type ProjectWriteLockStaleTakeoverPhase =
+  | "refused"
+  | "reacquired"
+  | "archiveFailed"
+  | "reacquireFailed";
+
+export interface ProjectWriteLockStaleTakeoverInfo {
+  readonly phase: ProjectWriteLockStaleTakeoverPhase;
+  readonly ownerPid: number;
+  readonly ownerAppVersion: string;
+  readonly ownerCreatedAt: string;
+  readonly archivedLockDirName?: string;
+}
+
+export interface ProjectWriteLockStaleReclamationPolicy {
+  readonly probeProcessLiveness: (pid: number) => ProcessLiveness;
 }
 
 export type ProjectWindowTitleTargetProvider =
@@ -257,6 +287,68 @@ async function bestEffortCleanupProjectWriteLockArtifacts(
   }
 }
 
+function projectWriteLockStaleArchiveDirName(
+  lockDirectoryPath: string,
+  now: Date,
+  instanceRunId: string
+): string {
+  const base = path.basename(lockDirectoryPath);
+  const timestamp = now.toISOString().replace(/[:.]/g, "-");
+  const fragment =
+    instanceRunId.replace(/[^0-9a-fA-F]/g, "").slice(0, 8) || "run";
+
+  return `${base}.stale-${timestamp}-${fragment}`;
+}
+
+function projectWriteLockStaleTakeoverInfo(
+  phase: ProjectWriteLockStaleTakeoverPhase,
+  staleOwner: ProjectLockOwnerMetadata,
+  archivedLockDirName?: string
+): ProjectWriteLockStaleTakeoverInfo {
+  return {
+    phase,
+    ownerPid: staleOwner.pid,
+    ownerAppVersion: staleOwner.appVersion,
+    ownerCreatedAt: staleOwner.createdAt,
+    ...(archivedLockDirName ? { archivedLockDirName } : {})
+  };
+}
+
+function projectLockOwnerMetadataMatches(
+  actual: ProjectLockOwnerMetadata,
+  expected: ProjectLockOwnerMetadata
+): boolean {
+  return (
+    actual.schemaVersion === expected.schemaVersion &&
+    actual.projectId === expected.projectId &&
+    actual.sessionId === expected.sessionId &&
+    actual.pid === expected.pid &&
+    actual.hostname === expected.hostname &&
+    actual.appVersion === expected.appVersion &&
+    actual.createdAt === expected.createdAt &&
+    actual.updatedAt === expected.updatedAt
+  );
+}
+
+function projectWriteLockContextRunId(
+  context: ProjectWriteLockAcquireContext | undefined
+): string {
+  return context?.instanceRunId ?? context?.sessionId ?? "unknown-session";
+}
+
+function projectWriteLockUnavailable(
+  reason: "lockUnavailable" | "lockSetupFailed",
+  lockOwner: ProjectLockOwnerInfo | null,
+  staleTakeover?: ProjectWriteLockStaleTakeoverInfo
+): ProjectWriteOwnership {
+  return {
+    kind: "unavailable",
+    reason,
+    lockOwner,
+    ...(staleTakeover ? { staleTakeover } : {})
+  };
+}
+
 export class ProjectWriteLockOwnershipManager
   implements ProjectWriteOwnershipManager
 {
@@ -269,7 +361,9 @@ export class ProjectWriteLockOwnershipManager
     private readonly fileSystem: ProjectWriteLockFileSystem =
       fs as unknown as ProjectWriteLockFileSystem,
     private readonly metadataProvider: ProjectWriteLockRuntimeMetadataProvider =
-      defaultProjectWriteLockRuntimeMetadataProvider
+      defaultProjectWriteLockRuntimeMetadataProvider,
+    private readonly staleReclamationPolicy: ProjectWriteLockStaleReclamationPolicy =
+      { probeProcessLiveness }
   ) {}
 
   async acquire(
@@ -286,35 +380,51 @@ export class ProjectWriteLockOwnershipManager
       await this.fileSystem.mkdir(lockDirectoryPath);
     } catch (error) {
       if (nodeErrorCode(error) === "EEXIST") {
-        return {
-          kind: "unavailable",
-          reason: "lockUnavailable",
-          lockOwner: await readProjectLockOwnerInfo(
-            this.fileSystem,
-            lockDirectoryPath
-          )
-        };
+        return this.reclaimStaleProjectWriteLock(
+          lockDirectoryPath,
+          context
+        );
       }
 
-      return {
-        kind: "unavailable",
-        reason: "lockSetupFailed",
-        lockOwner: null
-      };
+      return projectWriteLockUnavailable("lockSetupFailed", null);
     }
 
+    return this.writeFreshProjectWriteLockOwner(lockDirectoryPath, context);
+  }
+
+  private projectLockOwnerMetadata(
+    context: ProjectWriteLockAcquireContext | undefined,
+    now: Date
+  ): ProjectLockOwnerMetadata {
+    return createProjectLockOwnerMetadata({
+      projectId: context?.projectId ?? "unknown-project",
+      sessionId: context?.sessionId ?? "unknown-session",
+      pid: this.metadataProvider.pid(),
+      hostname: this.metadataProvider.hostname(),
+      appVersion: this.metadataProvider.appVersion(),
+      now
+    });
+  }
+
+  private async writeFreshProjectWriteLockOwner(
+    lockDirectoryPath: string,
+    context: ProjectWriteLockAcquireContext | undefined,
+    staleSuccess?: ProjectWriteLockStaleTakeoverInfo,
+    staleFailure?: ProjectWriteLockStaleTakeoverInfo
+  ): Promise<ProjectWriteOwnership> {
     let ownerHandle: ProjectWriteLockFileHandle | null = null;
+    const failure = (): ProjectWriteOwnership =>
+      projectWriteLockUnavailable(
+        "lockSetupFailed",
+        null,
+        staleFailure
+      );
 
     try {
-      const now = this.metadataProvider.now();
-      const metadata = createProjectLockOwnerMetadata({
-        projectId: context?.projectId ?? "unknown-project",
-        sessionId: context?.sessionId ?? "unknown-session",
-        pid: this.metadataProvider.pid(),
-        hostname: this.metadataProvider.hostname(),
-        appVersion: this.metadataProvider.appVersion(),
-        now
-      });
+      const metadata = this.projectLockOwnerMetadata(
+        context,
+        this.metadataProvider.now()
+      );
 
       await this.fileSystem.writeFile(
         projectLockOwnerMetadataPath(lockDirectoryPath),
@@ -326,9 +436,29 @@ export class ProjectWriteLockOwnershipManager
         "wx"
       );
       await ownerHandle.writeFile(projectLockOwnerHandleContent, "utf8");
+
+      const confirmed = await readProjectLockOwnerMetadata(
+        this.fileSystem,
+        lockDirectoryPath
+      );
+
+      if (
+        !confirmed ||
+        !projectLockOwnerMetadataMatches(confirmed, metadata)
+      ) {
+        // self-check mismatch は fresh lock の状態が曖昧になったことを意味する。
+        // ここで lock directory を削除せず、read-only fallback に任せる。
+        // 後続 run で dead owner と確定できた場合だけ stale recovery する。
+        await bestEffortCloseProjectWriteLockHandle(ownerHandle);
+        return failure();
+      }
+
       this.ownedLocks.set(lockDirectoryPath, { ownerHandle });
 
-      return { kind: "owned" };
+      return {
+        kind: "owned",
+        ...(staleSuccess ? { staleTakeover: staleSuccess } : {})
+      };
     } catch {
       await bestEffortCloseProjectWriteLockHandle(ownerHandle);
       await bestEffortCleanupProjectWriteLockArtifacts(
@@ -336,12 +466,145 @@ export class ProjectWriteLockOwnershipManager
         lockDirectoryPath
       );
 
-      return {
-        kind: "unavailable",
-        reason: "lockSetupFailed",
-        lockOwner: null
-      };
+      return failure();
     }
+  }
+
+  private async reclaimStaleProjectWriteLock(
+    lockDirectoryPath: string,
+    context: ProjectWriteLockAcquireContext | undefined
+  ): Promise<ProjectWriteOwnership> {
+    let lockStat: { isDirectory(): boolean };
+
+    try {
+      lockStat = await this.fileSystem.stat(lockDirectoryPath);
+    } catch (error) {
+      if (nodeErrorCode(error) === "ENOENT") {
+        try {
+          await this.fileSystem.mkdir(lockDirectoryPath);
+        } catch (mkdirError) {
+          return projectWriteLockUnavailable(
+            nodeErrorCode(mkdirError) === "EEXIST"
+              ? "lockUnavailable"
+              : "lockSetupFailed",
+            nodeErrorCode(mkdirError) === "EEXIST"
+              ? await readProjectLockOwnerInfo(
+                  this.fileSystem,
+                  lockDirectoryPath
+                )
+              : null
+          );
+        }
+
+        return this.writeFreshProjectWriteLockOwner(
+          lockDirectoryPath,
+          context
+        );
+      }
+
+      return projectWriteLockUnavailable("lockUnavailable", null);
+    }
+
+    if (!lockStat.isDirectory()) {
+      return projectWriteLockUnavailable("lockUnavailable", null);
+    }
+
+    const firstOwner = await readProjectLockOwnerMetadata(
+      this.fileSystem,
+      lockDirectoryPath
+    );
+
+    if (!firstOwner) {
+      return projectWriteLockUnavailable("lockUnavailable", null);
+    }
+
+    const firstOwnerInfo = projectLockOwnerInfoFromMetadata(firstOwner);
+    const firstLiveness = this.staleReclamationPolicy.probeProcessLiveness(
+      firstOwner.pid
+    );
+
+    if (firstLiveness !== "dead") {
+      return projectWriteLockUnavailable(
+        "lockUnavailable",
+        firstOwnerInfo,
+        projectWriteLockStaleTakeoverInfo("refused", firstOwner)
+      );
+    }
+
+    const secondOwner = await readProjectLockOwnerMetadata(
+      this.fileSystem,
+      lockDirectoryPath
+    );
+
+    if (
+      !secondOwner ||
+      !projectLockOwnerMetadataMatches(secondOwner, firstOwner) ||
+      this.staleReclamationPolicy.probeProcessLiveness(secondOwner.pid) !==
+        "dead"
+    ) {
+      return projectWriteLockUnavailable(
+        "lockUnavailable",
+        secondOwner ? projectLockOwnerInfoFromMetadata(secondOwner) : null
+      );
+    }
+
+    const archivedLockDirName = projectWriteLockStaleArchiveDirName(
+      lockDirectoryPath,
+      this.metadataProvider.now(),
+      projectWriteLockContextRunId(context)
+    );
+    const archivedLockDirPath = path.join(
+      path.dirname(lockDirectoryPath),
+      archivedLockDirName
+    );
+
+    try {
+      await this.fileSystem.rename(lockDirectoryPath, archivedLockDirPath);
+    } catch {
+      return projectWriteLockUnavailable(
+        "lockUnavailable",
+        firstOwnerInfo,
+        projectWriteLockStaleTakeoverInfo("archiveFailed", firstOwner)
+      );
+    }
+
+    try {
+      await this.fileSystem.mkdir(lockDirectoryPath);
+    } catch (error) {
+      const reason =
+        nodeErrorCode(error) === "EEXIST"
+          ? "lockUnavailable"
+          : "lockSetupFailed";
+      const lockOwner =
+        reason === "lockUnavailable"
+          ? await readProjectLockOwnerInfo(this.fileSystem, lockDirectoryPath)
+          : null;
+
+      return projectWriteLockUnavailable(
+        reason,
+        lockOwner,
+        projectWriteLockStaleTakeoverInfo(
+          "reacquireFailed",
+          firstOwner,
+          archivedLockDirName
+        )
+      );
+    }
+
+    return this.writeFreshProjectWriteLockOwner(
+      lockDirectoryPath,
+      context,
+      projectWriteLockStaleTakeoverInfo(
+        "reacquired",
+        firstOwner,
+        archivedLockDirName
+      ),
+      projectWriteLockStaleTakeoverInfo(
+        "reacquireFailed",
+        firstOwner,
+        archivedLockDirName
+      )
+    );
   }
 
   async release(
@@ -1118,6 +1381,112 @@ function logProjectOpenSucceeded(
   });
 }
 
+function projectWriteLockStaleTakeoverLogDetails(
+  info: ProjectWriteLockStaleTakeoverInfo,
+  instanceRunId: string | undefined,
+  startedAt: number,
+  result: "succeeded" | "failed" | "ignored"
+): Record<string, unknown> {
+  return {
+    result,
+    ...(instanceRunId ? { instanceRunId } : {}),
+    ownerPid: info.ownerPid,
+    ownerAppVersion: info.ownerAppVersion,
+    ownerCreatedAt: info.ownerCreatedAt,
+    durationMs: Math.max(0, durationSince(startedAt))
+  };
+}
+
+function logProjectWriteLockStaleTakeover(
+  logger: DebugLogger,
+  ownership: ProjectWriteOwnership,
+  instanceRunId: string | undefined,
+  startedAt: number
+): void {
+  const staleTakeover = ownership.staleTakeover;
+
+  if (!staleTakeover) {
+    return;
+  }
+
+  if (staleTakeover.phase === "refused") {
+    logger.log({
+      level: "debug",
+      event: "project.writeLock.reclamation.refused",
+      details: {
+        ...projectWriteLockStaleTakeoverLogDetails(
+          staleTakeover,
+          instanceRunId,
+          startedAt,
+          "ignored"
+        ),
+        reason: "locked"
+      }
+    });
+    return;
+  }
+
+  logger.log({
+    level: "debug",
+    event: "project.writeLock.stale.detected",
+    details: projectWriteLockStaleTakeoverLogDetails(
+      staleTakeover,
+      instanceRunId,
+      startedAt,
+      "ignored"
+    )
+  });
+
+  if (staleTakeover.phase === "reacquired") {
+    logger.log({
+      level: "info",
+      event: "project.writeLock.stale.archived",
+      details: projectWriteLockStaleTakeoverLogDetails(
+        staleTakeover,
+        instanceRunId,
+        startedAt,
+        "succeeded"
+      )
+    });
+    logger.log({
+      level: "info",
+      event: "project.writeLock.reacquire.succeeded",
+      details: projectWriteLockStaleTakeoverLogDetails(
+        staleTakeover,
+        instanceRunId,
+        startedAt,
+        "succeeded"
+      )
+    });
+    return;
+  }
+
+  if (staleTakeover.phase === "archiveFailed") {
+    logger.log({
+      level: "error",
+      event: "project.writeLock.stale.archive.failed",
+      details: projectWriteLockStaleTakeoverLogDetails(
+        staleTakeover,
+        instanceRunId,
+        startedAt,
+        "failed"
+      )
+    });
+    return;
+  }
+
+  logger.log({
+    level: "error",
+    event: "project.writeLock.reacquire.failed",
+    details: projectWriteLockStaleTakeoverLogDetails(
+      staleTakeover,
+      instanceRunId,
+      startedAt,
+      "failed"
+    )
+  });
+}
+
 async function finalizeProjectFileOpen(
   openedProject: ProjectFileOpenResult
 ): Promise<PergamumProject> {
@@ -1256,7 +1625,8 @@ export async function cancelReadOnlyProjectOpen(
 async function createProjectFromProjectFile(
   projectFilePath: string,
   logger: DebugLogger,
-  writeOwnershipManager: ProjectWriteOwnershipManager
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  instanceRunId?: string
 ): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const initialProjectName =
@@ -1275,10 +1645,18 @@ async function createProjectFromProjectFile(
   };
 
   await writeProjectConfig(projectRootPath, config);
+  const lockStartedAt = Date.now();
   const ownership = await writeOwnershipManager.acquire(projectFilePath, {
     projectId: metadata.projectId,
-    sessionId: logger.sessionId ?? "unknown-session"
+    sessionId: logger.sessionId ?? "unknown-session",
+    ...(instanceRunId ? { instanceRunId } : {})
   });
+  logProjectWriteLockStaleTakeover(
+    logger,
+    ownership,
+    instanceRunId,
+    lockStartedAt
+  );
   const accessMode = projectAccessModeFromWriteOwnership(ownership);
   let shouldReleaseOwnership = true;
 
@@ -1315,17 +1693,26 @@ async function createProjectFromProjectFile(
 async function openProjectFromProjectFile(
   projectFilePath: string,
   logger: DebugLogger,
-  writeOwnershipManager: ProjectWriteOwnershipManager
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  instanceRunId?: string
 ): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const database = await openProjectDatabase(projectFilePath, logger);
   const metadata = await readProjectMetadataAndClose(database);
 
   const config = await readProjectConfig(projectRootPath);
+  const lockStartedAt = Date.now();
   const ownership = await writeOwnershipManager.acquire(projectFilePath, {
     projectId: metadata.projectId,
-    sessionId: logger.sessionId ?? "unknown-session"
+    sessionId: logger.sessionId ?? "unknown-session",
+    ...(instanceRunId ? { instanceRunId } : {})
   });
+  logProjectWriteLockStaleTakeover(
+    logger,
+    ownership,
+    instanceRunId,
+    lockStartedAt
+  );
   const accessMode = projectAccessModeFromWriteOwnership(ownership);
   let shouldReleaseOwnership = true;
 
@@ -1363,7 +1750,8 @@ export async function createProject(
   event: IpcMainInvokeEvent,
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
-    defaultProjectWriteOwnershipManager
+    defaultProjectWriteOwnershipManager,
+  instanceRunId?: string
 ): Promise<ProjectOpenResult> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
@@ -1409,7 +1797,8 @@ export async function createProject(
     const openedProject = await createProjectFromProjectFile(
       projectFilePath,
       logger,
-      writeOwnershipManager
+      writeOwnershipManager,
+      instanceRunId
     );
     return projectOpenResultForOpenedProject(
       openedProject,
@@ -1440,7 +1829,8 @@ export async function openProject(
   event: IpcMainInvokeEvent,
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
-    defaultProjectWriteOwnershipManager
+    defaultProjectWriteOwnershipManager,
+  instanceRunId?: string
 ): Promise<ProjectOpenResult> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
@@ -1473,7 +1863,8 @@ export async function openProject(
     const openedProject = await openProjectFromProjectFile(
       projectFilePath,
       logger,
-      writeOwnershipManager
+      writeOwnershipManager,
+      instanceRunId
     );
     return projectOpenResultForOpenedProject(
       openedProject,
@@ -1504,7 +1895,8 @@ export async function openStartupProject(
   rawProjectFilePath: string,
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
-    defaultProjectWriteOwnershipManager
+    defaultProjectWriteOwnershipManager,
+  instanceRunId?: string
 ): Promise<ProjectOpenResult> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
@@ -1521,7 +1913,8 @@ export async function openStartupProject(
     const openedProject = await openProjectFromProjectFile(
       projectFilePath,
       logger,
-      writeOwnershipManager
+      writeOwnershipManager,
+      instanceRunId
     );
     return projectOpenResultForOpenedProject(
       openedProject,
@@ -1563,7 +1956,8 @@ export async function openProjectByFilePath(
   expectedProjectId: string,
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
-    defaultProjectWriteOwnershipManager
+    defaultProjectWriteOwnershipManager,
+  instanceRunId?: string
 ): Promise<OpenProjectByFilePathResult> {
   const startedAt = Date.now();
   let projectRef: string | undefined;
@@ -1584,7 +1978,8 @@ export async function openProjectByFilePath(
     const openedProject = await openProjectFromProjectFile(
       projectFilePath,
       logger,
-      writeOwnershipManager
+      writeOwnershipManager,
+      instanceRunId
     );
 
     if (openedProject.metadata.projectId !== expectedProjectId) {
@@ -1636,17 +2031,18 @@ export function registerProjectIpc(
   writeOwnershipManager: ProjectWriteOwnershipManager =
     defaultProjectWriteOwnershipManager,
   windowTitleTargetProvider?: ProjectWindowTitleTargetProvider,
-  startupProjectFilePath?: string | null
+  startupProjectFilePath?: string | null,
+  instanceRunId?: string
 ): void {
   setProjectWindowTitleTargetProvider(windowTitleTargetProvider ?? null);
   let pendingStartupProjectFilePath = startupProjectFilePath ?? null;
 
   ipcMain.handle(PROJECT_CHANNELS.createProject, (event) =>
-    createProject(event, logger, writeOwnershipManager)
+    createProject(event, logger, writeOwnershipManager, instanceRunId)
   );
 
   ipcMain.handle(PROJECT_CHANNELS.openProject, (event) =>
-    openProject(event, logger, writeOwnershipManager)
+    openProject(event, logger, writeOwnershipManager, instanceRunId)
   );
 
   ipcMain.handle(
@@ -1673,7 +2069,8 @@ export function registerProjectIpc(
           result: await openStartupProject(
             projectFilePath,
             logger,
-            writeOwnershipManager
+            writeOwnershipManager,
+            instanceRunId
           )
         };
       } catch (error) {
@@ -1694,7 +2091,8 @@ export function registerProjectIpc(
         request.projectFilePath,
         request.expectedProjectId,
         logger,
-        writeOwnershipManager
+        writeOwnershipManager,
+        instanceRunId
       );
     }
   );
@@ -1722,7 +2120,8 @@ export function registerProjectIpc(
         const openedProject = await openProjectFromProjectFile(
           projectFilePath,
           logger,
-          writeOwnershipManager
+          writeOwnershipManager,
+          instanceRunId
         );
 
         return projectOpenResultForOpenedProject(

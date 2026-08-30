@@ -280,7 +280,8 @@ app.whenReady().then(async () => {
     debugLogger,
     defaultProjectWriteOwnershipManager,
     undefined,
-    startupProjectFilePath
+    startupProjectFilePath,
+    instanceRunId
   );
   registerSettingsIpc();
   registerAppInfoIpc();
