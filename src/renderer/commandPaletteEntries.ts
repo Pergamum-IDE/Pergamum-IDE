@@ -321,6 +321,42 @@ export function firstEnabledCommandPaletteIndex(
   return index === -1 ? null : index;
 }
 
+/**
+ * #316: the normalized active-selection index for a (freshly filtered)
+ * command-mode list.
+ *
+ *   - no entries              → `null` (no active command; ENTER does nothing),
+ *   - `currentIndex` is still in range AND still enabled → keep it,
+ *   - otherwise               → the first enabled entry, or index `0` when
+ *     every remaining entry is disabled (so a lone candidate is still
+ *     highlighted and ENTER can visibly block it).
+ *
+ * Keeping a still-valid, still-enabled `currentIndex` lets an active command
+ * survive an unrelated re-filter; anything stale / out of range / now
+ * disabled is replaced. This never moves a selection the caller placed onto
+ * a disabled row *within the same list* — call sites only pass `currentIndex`
+ * when the list actually changed.
+ */
+export function resolveCommandPaletteSelection(
+  entries: readonly Pick<CommandPaletteEntry, "enabled">[],
+  currentIndex: number | null = null
+): number | null {
+  if (entries.length === 0) {
+    return null;
+  }
+
+  if (
+    currentIndex !== null &&
+    currentIndex >= 0 &&
+    currentIndex < entries.length &&
+    entries[currentIndex]?.enabled === true
+  ) {
+    return currentIndex;
+  }
+
+  return firstEnabledCommandPaletteIndex(entries) ?? 0;
+}
+
 export function moveCommandPaletteSelection(
   entriesLength: number,
   currentIndex: number | null,
@@ -334,6 +370,51 @@ export function moveCommandPaletteSelection(
   const next = base + delta;
 
   return Math.min(Math.max(next, 0), entriesLength - 1);
+}
+
+/**
+ * #316 follow-up: how far PageUp / PageDown move the Command Palette active
+ * selection. A fixed step — the Palette does not measure the list viewport
+ * or row height — so the jump is predictable regardless of layout.
+ */
+export const COMMAND_PALETTE_PAGE_STEP = 8;
+
+export type CommandPalettePagedTarget =
+  | "home"
+  | "end"
+  | "pageUp"
+  | "pageDown";
+
+/**
+ * #316 follow-up: resolves the active-selection index for the "big move"
+ * keys (Home / End / PageUp / PageDown). Clamps at both ends; returns `null`
+ * only for an empty list. Like {@link moveCommandPaletteSelection} it does
+ * not skip disabled rows — landing on a disabled command and having ENTER
+ * block it is the existing, intentional behavior.
+ */
+export function resolveCommandPalettePagedSelection(
+  entriesLength: number,
+  currentIndex: number | null,
+  target: CommandPalettePagedTarget,
+  pageStep: number = COMMAND_PALETTE_PAGE_STEP
+): number | null {
+  if (entriesLength === 0) {
+    return null;
+  }
+
+  const lastIndex = entriesLength - 1;
+  const base = currentIndex ?? 0;
+
+  switch (target) {
+    case "home":
+      return 0;
+    case "end":
+      return lastIndex;
+    case "pageUp":
+      return Math.max(base - pageStep, 0);
+    case "pageDown":
+      return Math.min(base + pageStep, lastIndex);
+  }
 }
 
 /**

@@ -76,6 +76,59 @@ describe("command palette wiring", () => {
     expect(propsBlock).toContain("commandContext={commandContext}");
   });
 
+  it("wires the input as an ARIA combobox pointing at the active option (#316)", () => {
+    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+    const inputStart = source.indexOf('className="commandPaletteInput"');
+    const inputBlock = source.slice(inputStart, source.indexOf("/>", inputStart));
+
+    expect(inputBlock).toContain('role="combobox"');
+    expect(inputBlock).toContain("aria-controls={hasListbox ? listboxId : undefined}");
+    expect(inputBlock).toContain("aria-activedescendant={activeOptionId}");
+    // The listbox the combobox controls must actually carry that id.
+    expect(source).toContain("id={listboxId}");
+    // Every command option row must be addressable by aria-activedescendant.
+    expect(source).toContain("id={optionId(index)}");
+  });
+
+  it("keeps the Palette an input-owned combobox — no DOM focus on the rows (#316 follow-up)", () => {
+    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+
+    // The listbox/option rows are virtual-focus targets only.
+    expect(source).not.toContain("tabIndex={0}");
+    expect(source).not.toMatch(/<ul[^>]*tabIndex/s);
+    // Row mouse down must not pull DOM focus off the input.
+    const optionStart = source.indexOf("id={optionId(index)}");
+    const optionBlock = source.slice(optionStart, source.indexOf("</li>", optionStart));
+    expect(optionBlock).toContain("onMouseDown={(event) => {");
+    expect(optionBlock).toContain("event.preventDefault();");
+    expect(optionBlock).toContain("onClick={() => executeEntryAt(index)}");
+  });
+
+  it("adds Home/End/PageUp/PageDown as command-mode-only, IME-guarded active-selection moves (#316 follow-up)", () => {
+    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+    const start = source.indexOf('case "Home":');
+    const block = source.slice(start, source.indexOf('case "Enter": {', start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(block).toContain('case "End":');
+    expect(block).toContain('case "PageUp":');
+    expect(block).toContain('case "PageDown":');
+    expect(block).toContain("if (isImeCompositionKeyDown(event)) {");
+    expect(block).toContain('if (mode !== "command") {');
+    expect(block).toContain("resolveCommandPalettePagedSelection(");
+  });
+
+  it("does not add the paged keys to the footer hint row (#316 follow-up)", () => {
+    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+    const hintsStart = source.indexOf('className="commandPaletteFooterHints"');
+    const hintsBlock = source.slice(hintsStart, source.indexOf("</div>", hintsStart));
+
+    expect(hintsStart).toBeGreaterThan(-1);
+    for (const token of ["PageUp", "PageDown", "pageStep", "Home", "End"]) {
+      expect(hintsBlock).not.toContain(token);
+    }
+  });
+
   it("wires a debug-only command.blocked emission for UI-level disabled blocks, distinct from command.ignored", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const componentIndex = source.indexOf("<CommandPalette");

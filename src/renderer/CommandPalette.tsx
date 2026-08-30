@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -25,11 +26,12 @@ import {
   type CommandPaletteMatchRange,
   commandPaletteResultCountKey,
   filterCommandPaletteEntries,
-  firstEnabledCommandPaletteIndex,
   listCommandPaletteEntries,
   mergeCommandPaletteMatchRanges,
   moveCommandPaletteSelection,
-  resolveCommandPaletteEnterSelection
+  resolveCommandPalettePagedSelection,
+  resolveCommandPaletteSelection,
+  type CommandPalettePagedTarget
 } from "./commandPaletteEntries";
 import {
   commandPaletteNotImplementedStatusIndicator,
@@ -507,15 +509,21 @@ export function CommandPalette({
       return null;
     }
 
-    return firstEnabledCommandPaletteIndex(
+    // #316: seed the active selection with the *actual* initial query, not
+    // "" — an initial non-empty query must not point the selection into the
+    // unfiltered list (stale / out-of-range on the very first ENTER).
+    return resolveCommandPaletteSelection(
       filterCommandPaletteEntries(
         listCommandPaletteEntries(commandRegistry, snapshot),
-        ""
+        initialParsed.query
       )
     );
   });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const selectedItemRef = useRef<HTMLLIElement | null>(null);
+  const paletteId = useId();
+  const listboxId = `${paletteId}-listbox`;
+  const optionId = (index: number): string => `${paletteId}-option-${index}`;
 
   useEffect(() => {
     const input = inputRef.current;
@@ -554,6 +562,25 @@ export function CommandPalette({
     scrollCommandPaletteSelectionIntoView(selectedItemRef.current);
   }, [selectionLength, mode, query, selectedIndex]);
 
+  // #316: keep the command-mode active selection valid whenever the list
+  // itself changes (a new query, or a `commandRegistry` re-memo). A
+  // still-valid, still-enabled selection is kept; a stale / out-of-range /
+  // now-disabled one is replaced. Runs as a *layout* effect so the
+  // normalization (and its re-render) is committed before the browser can
+  // deliver the next keydown — so a fast ENTER can never act on a stale
+  // `selectedIndex`. It is NOT keyed on `selectedIndex`, so ArrowUp/ArrowDown
+  // onto a disabled row inside an unchanged list is left alone.
+  useCommandPaletteLayoutEffect(() => {
+    if (mode !== "command") {
+      return;
+    }
+
+    setSelectedIndex((current) =>
+      resolveCommandPaletteSelection(entries, current)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, query, commandRegistry, snapshot]);
+
   function updateInput(value: string): void {
     setInputValue(value);
 
@@ -565,7 +592,12 @@ export function CommandPalette({
         resolved.query
       );
 
-      setSelectedIndex(firstEnabledCommandPaletteIndex(nextEntries));
+      // A new query means a new list — keep the active command if it is
+      // still present and enabled, otherwise fall back to the first enabled
+      // row (or row 0 when every match is disabled).
+      setSelectedIndex((current) =>
+        resolveCommandPaletteSelection(nextEntries, current)
+      );
       return;
     }
 
@@ -585,6 +617,20 @@ export function CommandPalette({
 
     setSelectedIndex(null);
   }
+
+  // #316: the single current-render active command in command mode. Every
+  // consumer — ENTER, the footer, `aria-activedescendant`, the selected row
+  // — is derived from this, so visual selection and execution target can
+  // never diverge.
+  const activeEntry =
+    mode === "command"
+      ? selectedCommandPaletteEntry(entries, selectedIndex)
+      : null;
+  const activeCommandId = activeEntry?.id ?? null;
+  const activeOptionId =
+    mode === "command" && activeEntry !== null && selectedIndex !== null
+      ? optionId(selectedIndex)
+      : undefined;
 
   function executeEntryAt(index: number): void {
     const entry = entries[index];
@@ -627,10 +673,28 @@ export function CommandPalette({
     }
   }
 
+  /**
+   * #316: whether this keydown is part of an IME composition. The Palette
+   * reuses the app-wide `isComposing()` guard AND the standard per-event
+   * signals (`KeyboardEvent.isComposing`, the legacy `keyCode === 229`
+   * sentinel) so the decision does not depend on the ordering of
+   * `compositionend` relative to this keydown. No new composition-tracking
+   * state is introduced.
+   */
+  function isImeCompositionKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement>
+  ): boolean {
+    return (
+      isComposing() ||
+      event.nativeEvent.isComposing ||
+      event.nativeEvent.keyCode === 229
+    );
+  }
+
   function handleKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
     switch (event.key) {
       case "Escape": {
-        if (isComposing()) {
+        if (isImeCompositionKeyDown(event)) {
           return;
         }
         event.preventDefault();
@@ -638,6 +702,9 @@ export function CommandPalette({
         return;
       }
       case "ArrowDown": {
+        if (isImeCompositionKeyDown(event)) {
+          return;
+        }
         event.preventDefault();
         setSelectedIndex((current) =>
           moveCommandPaletteSelection(selectionLength, current, 1)
@@ -645,14 +712,48 @@ export function CommandPalette({
         return;
       }
       case "ArrowUp": {
+        if (isImeCompositionKeyDown(event)) {
+          return;
+        }
         event.preventDefault();
         setSelectedIndex((current) =>
           moveCommandPaletteSelection(selectionLength, current, -1)
         );
         return;
       }
+      case "Home":
+      case "End":
+      case "PageUp":
+      case "PageDown": {
+        if (isImeCompositionKeyDown(event)) {
+          return;
+        }
+        // #316 follow-up: the "big move" keys are command-mode only — line
+        // jump navigation stays on ArrowUp/ArrowDown as before.
+        if (mode !== "command") {
+          return;
+        }
+        event.preventDefault();
+        const pagedTarget: CommandPalettePagedTarget =
+          event.key === "Home"
+            ? "home"
+            : event.key === "End"
+              ? "end"
+              : event.key === "PageUp"
+                ? "pageUp"
+                : "pageDown";
+        setSelectedIndex((current) =>
+          resolveCommandPalettePagedSelection(
+            selectionLength,
+            current,
+            pagedTarget
+          )
+        );
+        return;
+      }
       case "Enter": {
-        if (isComposing()) {
+        if (isImeCompositionKeyDown(event)) {
+          // The ENTER that commits an IME candidate never runs a command.
           return;
         }
         event.preventDefault();
@@ -662,10 +763,7 @@ export function CommandPalette({
           return;
         }
 
-        const entry = resolveCommandPaletteEnterSelection(
-          entries,
-          selectedIndex
-        );
+        const entry = activeEntry;
 
         if (!entry) {
           return;
@@ -685,10 +783,6 @@ export function CommandPalette({
   }
 
   const reservedKey = reservedPlaceholderKey(mode);
-  const selectedEntry =
-    mode === "command"
-      ? selectedCommandPaletteEntry(entries, selectedIndex)
-      : null;
   const footer = lineJumpState
     ? resolveLineJumpFooterModel(lineJumpState)
     : resolveCommandPaletteFooterModel({
@@ -709,7 +803,7 @@ export function CommandPalette({
     enabled: footer.statusText !== undefined && descriptionSettings.enable,
     resetKey:
       footer.statusText !== undefined
-        ? `${String(selectedEntry?.id ?? "")}:${footer.statusText}`
+        ? `${String(activeEntry?.id ?? "")}:${footer.statusText}`
         : "",
     settings: descriptionSettings
   });
@@ -723,6 +817,12 @@ export function CommandPalette({
         "--command-palette-description-marquee-distance": `${descriptionMarquee.state.distancePx}px`
       } as CSSProperties)
     : undefined;
+  // #316: a `role="listbox"` popup is on screen (command mode always renders
+  // one — empty state included — plus the two line-jump list states). Used to
+  // drive the input's combobox ARIA.
+  const hasListbox = lineJumpState
+    ? lineJumpState.kind === "executable" || lineJumpState.kind === "disabled"
+    : !reservedKey;
 
   return (
     <div className="commandPaletteBackdrop" onClick={onClose}>
@@ -741,7 +841,11 @@ export function CommandPalette({
             value={inputValue}
             onChange={(event) => updateInput(event.target.value)}
             onKeyDown={handleKeyDown}
+            role="combobox"
             aria-label={translate("commandPalette.searchLabel")}
+            aria-expanded={hasListbox ? "true" : "false"}
+            aria-controls={hasListbox ? listboxId : undefined}
+            aria-activedescendant={activeOptionId}
             placeholder={translate("commandPalette.inputPlaceholder")}
             autoComplete="off"
             spellCheck={false}
@@ -757,7 +861,11 @@ export function CommandPalette({
         </div>
         {lineJumpState ? (
           lineJumpState.kind === "executable" ? (
-            <ul className="commandPaletteList" role="listbox">
+            <ul
+              id={listboxId}
+              className="commandPaletteList"
+              role="listbox"
+            >
               {lineJumpState.candidates.map((candidate, index) => (
                 <li
                   key={candidate.line}
@@ -786,7 +894,11 @@ export function CommandPalette({
               ))}
             </ul>
           ) : lineJumpState.kind === "disabled" ? (
-            <ul className="commandPaletteList" role="listbox">
+            <ul
+              id={listboxId}
+              className="commandPaletteList"
+              role="listbox"
+            >
               <li
                 role="option"
                 aria-selected="true"
@@ -820,15 +932,21 @@ export function CommandPalette({
             {translate(reservedKey)}
           </CommandPaletteReservedPlaceholder>
         ) : (
-          <ul className="commandPaletteList" role="listbox">
+          <ul
+            id={listboxId}
+            className="commandPaletteList"
+            role="listbox"
+            aria-label={translate("commandPalette.searchLabel")}
+          >
             {entries.length === 0 ? (
-              <li className="commandPaletteEmpty">
+              <li role="presentation" className="commandPaletteEmpty">
                 {translate("commandPalette.noResults")}
               </li>
             ) : (
               entries.map((entry, index) => (
                 <li
                   key={entry.id}
+                  id={optionId(index)}
                   role="option"
                   aria-selected={index === selectedIndex}
                   aria-disabled={!entry.enabled}
@@ -838,6 +956,18 @@ export function CommandPalette({
                     index === selectedIndex,
                     entry.enabled
                   )}
+                  onMouseDown={(event) => {
+                    // #316 follow-up: keep DOM focus on the input — the
+                    // Palette is an input-owned combobox/listbox, the row is
+                    // a virtual-focus target (aria-activedescendant), never a
+                    // DOM focus target. The click still runs the command.
+                    event.preventDefault();
+                  }}
+                  onMouseMove={() => {
+                    if (selectedIndex !== index) {
+                      setSelectedIndex(index);
+                    }
+                  }}
                   onClick={() => executeEntryAt(index)}
                 >
                   <CommandPaletteItemContent
@@ -877,7 +1007,7 @@ export function CommandPalette({
                 className={footerStatusClassName}
                 key={
                   footer.statusText !== undefined
-                    ? `${String(selectedEntry?.id ?? "")}:${footer.statusText}`
+                    ? `${String(activeEntry?.id ?? "")}:${footer.statusText}`
                     : footerStatusText
                 }
                 ref={descriptionMarquee.textRef}

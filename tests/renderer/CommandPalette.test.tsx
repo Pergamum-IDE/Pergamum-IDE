@@ -728,7 +728,7 @@ describe("CommandPalette", () => {
     expect(source).toContain("scrollWidth: text.scrollWidth");
     expect(source).toContain("clientWidth: container.clientWidth");
     expect(source).toContain("resetKey:");
-    expect(source).toContain("selectedEntry?.id");
+    expect(source).toContain("activeEntry?.id");
     expect(source).toContain(
       "--command-palette-description-marquee-delay"
     );
@@ -1210,7 +1210,8 @@ describe("CommandPalette snapshot and UI-level block wiring", () => {
     const endIndex = source.indexOf("default:");
     const body = source.slice(startIndex, endIndex);
 
-    expect(body).toContain("resolveCommandPaletteEnterSelection(");
+    // #316: ENTER acts on the single derived `activeEntry`, never a re-resolve.
+    expect(body).toContain("const entry = activeEntry;");
     expect(body).toContain("if (!entry.enabled) {");
     expect(body.indexOf("onBlockedCommand(entry.id)")).toBeLessThan(
       body.indexOf("onExecuteCommand(entry.id)")
@@ -1417,8 +1418,10 @@ describe("CommandPalette line jump mode (#140 / #148)", () => {
     const body = source.slice(startIndex, endIndex);
 
     expect(body).toContain('if (mode === "line") {');
+    expect(body).toContain("executeLineJumpResult();");
+    // Line mode returns before the command-mode `activeEntry` is consulted.
     expect(body.indexOf('if (mode === "line")')).toBeLessThan(
-      body.indexOf("resolveCommandPaletteEnterSelection(")
+      body.indexOf("const entry = activeEntry;")
     );
   });
 
