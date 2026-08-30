@@ -3466,7 +3466,11 @@ describe("project file IPC foundation", () => {
     return registeredHandler(PROJECT_CHANNELS.createFileExplorerFolder);
   }
 
-  it("registers the File Explorer create IPC channels", () => {
+  function renameHandler(): (...args: unknown[]) => unknown {
+    return registeredHandler(PROJECT_CHANNELS.renameFileExplorerEntry);
+  }
+
+  it("registers the File Explorer create and rename IPC channels", () => {
     registerProjectIpc(createLoggerMock());
 
     expect(
@@ -3474,7 +3478,8 @@ describe("project file IPC foundation", () => {
     ).toEqual(
       expect.arrayContaining([
         PROJECT_CHANNELS.createFileExplorerMarkdownFile,
-        PROJECT_CHANNELS.createFileExplorerFolder
+        PROJECT_CHANNELS.createFileExplorerFolder,
+        PROJECT_CHANNELS.renameFileExplorerEntry
       ])
     );
   });
@@ -3684,6 +3689,239 @@ describe("project file IPC foundation", () => {
     await expect(
       createFileHandler()({ sender: {} }, { name: 42 })
     ).resolves.toEqual({ ok: false, reason: "invalidName" });
+  });
+
+  it("renames a later-discovered Markdown file and keeps it on the project document IPC path", async () => {
+    await openExplorerProject("Rename MD");
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "old.md"),
+      "# RENAMED_MANUSCRIPT_MARKER\n",
+      "utf8"
+    );
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "Drafts/old.md", newName: "new" }
+    )) as {
+      ok: boolean;
+      oldRelativePath?: string;
+      newEntry?: { kind: string; name: string; relativePath: string };
+      parentDirectoryRelativePath?: string | null;
+    };
+
+    expect(result).toEqual({
+      ok: true,
+      oldRelativePath: "Drafts/old.md",
+      newEntry: {
+        kind: "file",
+        name: "new.md",
+        relativePath: "Drafts/new.md"
+      },
+      parentDirectoryRelativePath: "Drafts"
+    });
+    await expect(
+      fs.access(path.join(projectRootPath, "Drafts", "old.md"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.readFile(path.join(projectRootPath, "Drafts", "new.md"), "utf8")
+    ).resolves.toBe("# RENAMED_MANUSCRIPT_MARKER\n");
+
+    const document = (await registeredHandler(
+      PROJECT_CHANNELS.readProjectDocument
+    )({ sender: {} }, { relativePath: "Drafts/new.md" })) as {
+      content: string;
+    };
+    expect(document.content).toBe("# RENAMED_MANUSCRIPT_MARKER\n");
+  });
+
+  it("renames an empty folder without creating, deleting, or moving its children", async () => {
+    await openExplorerProject("Rename Empty Folder");
+    await fs.mkdir(path.join(projectRootPath, "Empty"));
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "Empty", newName: "Renamed" }
+    )) as { ok: boolean; newEntry?: { kind: string; relativePath: string } };
+
+    expect(result).toMatchObject({
+      ok: true,
+      newEntry: { kind: "folder", relativePath: "Renamed" }
+    });
+    expect(
+      (await fs.lstat(path.join(projectRootPath, "Renamed"))).isDirectory()
+    ).toBe(true);
+    await expect(
+      fs.access(path.join(projectRootPath, "Empty"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects non-empty folder rename in v1", async () => {
+    await openExplorerProject("Rename Nonempty Folder");
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+    await fs.writeFile(path.join(projectRootPath, "Drafts", "scene.md"), "");
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "Drafts", newName: "Renamed" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "folderNotEmpty" });
+    await expect(
+      fs.access(path.join(projectRootPath, "Drafts", "scene.md"))
+    ).resolves.toBeUndefined();
+  });
+
+  it("prioritizes an existing folder target over the non-empty folder limitation", async () => {
+    await openExplorerProject("Rename Folder Exists Priority");
+    await fs.mkdir(path.join(projectRootPath, "Source"));
+    await fs.writeFile(path.join(projectRootPath, "Source", "scene.md"), "");
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "Source", newName: "Drafts" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "alreadyExists" });
+    await expect(
+      fs.access(path.join(projectRootPath, "Source", "scene.md"))
+    ).resolves.toBeUndefined();
+    await expect(
+      fs.access(path.join(projectRootPath, "Drafts"))
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects non-Markdown file rename without touching the file", async () => {
+    await openExplorerProject("Rename Non MD");
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      "NON_MARKDOWN_MARKER",
+      "utf8"
+    );
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "notes.txt", newName: "notes-2" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "unsupportedExtension" });
+    await expect(
+      fs.readFile(path.join(projectRootPath, "notes.txt"), "utf8")
+    ).resolves.toBe("NON_MARKDOWN_MARKER");
+  });
+
+  it("rejects overwrite, reserved targets, outside paths, and same-path rename", async () => {
+    await openExplorerProject("Rename Rejects");
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), "source");
+    await fs.writeFile(path.join(projectRootPath, "existing.md"), "target");
+    await fs.mkdir(path.join(projectRootPath, "folder-target.md"));
+
+    await expect(
+      renameHandler()(
+        { sender: {} },
+        { sourceRelativePath: "chapter.md", newName: "existing.md" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "alreadyExists" });
+    await expect(
+      renameHandler()(
+        { sender: {} },
+        { sourceRelativePath: "chapter.md", newName: "folder-target.md" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "alreadyExists" });
+    await expect(
+      renameHandler()(
+        { sender: {} },
+        { sourceRelativePath: "chapter.md", newName: ".git" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "reservedName" });
+    await expect(
+      renameHandler()(
+        { sender: {} },
+        { sourceRelativePath: "../chapter.md", newName: "safe.md" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "outsideProjectRoot" });
+    await expect(
+      renameHandler()(
+        { sender: {} },
+        { sourceRelativePath: "chapter.md", newName: "chapter" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "samePath" });
+
+    await expect(
+      fs.readFile(path.join(projectRootPath, "chapter.md"), "utf8")
+    ).resolves.toBe("source");
+    await expect(
+      fs.readFile(path.join(projectRootPath, "existing.md"), "utf8")
+    ).resolves.toBe("target");
+  });
+
+  it("rejects reserved sources before filesystem rename", async () => {
+    await openExplorerProject("Rename Reserved Source");
+    const renameSpy = vi.spyOn(fs, "rename");
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: ".pergamum.lock/meta.md", newName: "safe.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "reservedName" });
+    expect(renameSpy).not.toHaveBeenCalled();
+    renameSpy.mockRestore();
+  });
+
+  it("refuses to rename a symlink-like source", async () => {
+    await openExplorerProject("Rename Symlink");
+    const renameSpy = vi.spyOn(fs, "rename");
+    const lstatSpy = vi
+      .spyOn(fs, "lstat")
+      .mockResolvedValue(fakeStats("symlink"));
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "Linked.md", newName: "Renamed.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "notFile" });
+    expect(renameSpy).not.toHaveBeenCalled();
+    lstatSpy.mockRestore();
+    renameSpy.mockRestore();
+  });
+
+  it("refuses to rename when the current project is read-only", async () => {
+    await openReadOnlyExplorerProject("Rename Readonly");
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), "source");
+    const renameSpy = vi.spyOn(fs, "rename");
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "chapter.md", newName: "renamed.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "readOnlyProject" });
+    expect(renameSpy).not.toHaveBeenCalled();
+    renameSpy.mockRestore();
+  });
+
+  it("maps raw rename filesystem errors to stable reasons without leaking raw paths", async () => {
+    await openExplorerProject("Rename Errors");
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), "source");
+    const renameSpy = vi
+      .spyOn(fs, "rename")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("EPERM SECRET_RAW_PATH /etc/passwd"), {
+          code: "EPERM"
+        })
+      );
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      { sourceRelativePath: "chapter.md", newName: "renamed.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "permissionDenied" });
+    expect(JSON.stringify(result)).not.toContain("SECRET_RAW_PATH");
+    renameSpy.mockRestore();
   });
 
   // -------------------------------------------------------------------------

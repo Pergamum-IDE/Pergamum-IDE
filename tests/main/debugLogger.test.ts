@@ -619,6 +619,26 @@ describe("debug logger", () => {
     });
   });
 
+  it("keeps the File Explorer rename success status key in the debug catalog", () => {
+    const logger = createTestLogger(
+      enabledOptions([new Date(2026, 7, 30, 17, 20, 0, 1)])
+    );
+
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: {
+        commandId: "workspace.files.rename",
+        statusKey: "status.fileExplorerRenameSucceeded"
+      }
+    });
+
+    expect(logger.getSnapshot().events[0].details).toMatchObject({
+      commandId: "workspace.files.rename",
+      statusKey: "status.fileExplorerRenameSucceeded"
+    });
+  });
+
   it("uses DB operation event levels from the main-process catalog", () => {
     const logger = createTestLogger(
       enabledOptions([

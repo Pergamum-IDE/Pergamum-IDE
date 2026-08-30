@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   FileExplorerEntry,
   ListFileExplorerChildrenResult,
-  PergamumProject
+  PergamumProject,
+  RenameFileExplorerEntryResult
 } from "../../src/shared/api";
 import type { Translate } from "../../src/shared/i18n";
 import type { CreateFileExplorerEntryResult } from "../../src/shared/api";
@@ -1814,5 +1815,327 @@ describe("FileExplorer Command Palette create request (#311)", () => {
     expect(dialogInput()).toBeNull();
     // The request is still consumed so it will not linger.
     expect(onCreateEntryRequestHandled).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FileExplorer Command Palette rename request (#313)", () => {
+  interface RenameRequestHarness {
+    listFileExplorerChildren: ReturnType<typeof vi.fn>;
+    renameFileExplorerEntry: ReturnType<typeof vi.fn>;
+    onRenameEntryRequestHandled: ReturnType<typeof vi.fn>;
+    onProjectDocumentRenamed: ReturnType<typeof vi.fn>;
+    onRenameUnavailable: ReturnType<typeof vi.fn>;
+    writeText: ReturnType<typeof vi.fn>;
+    setRootEntries(entries: FileExplorerEntry[]): void;
+    rerender(request: { token: number } | null): void;
+  }
+
+  function renderWithRenameRequest(options: {
+    initialRequest?: { token: number } | null;
+    entries?: FileExplorerEntry[];
+    renameFileExplorerEntry?: ReturnType<typeof vi.fn>;
+    isProjectDocumentDirty?: (relativePath: string) => boolean;
+  } = {}): RenameRequestHarness {
+    let currentRequest = options.initialRequest ?? null;
+    let currentRootEntries = options.entries ?? rootEntries;
+    const listFileExplorerChildren = vi.fn(
+      async (relativePath: string | null) => {
+        if (relativePath === "Drafts") {
+          return ok("Drafts", draftEntries);
+        }
+        return ok(null, currentRootEntries);
+      }
+    );
+    const renameFileExplorerEntry =
+      options.renameFileExplorerEntry ??
+      vi.fn(async (): Promise<RenameFileExplorerEntryResult> => ({
+        ok: true,
+        oldRelativePath: "chapter-01.md",
+        newEntry: {
+          kind: "file",
+          name: "chapter-02.md",
+          relativePath: "chapter-02.md"
+        },
+        parentDirectoryRelativePath: null
+      }));
+    const onRenameEntryRequestHandled = vi.fn();
+    const onProjectDocumentRenamed = vi.fn();
+    const onRenameUnavailable = vi.fn();
+    const writeText = vi.fn(async () => undefined);
+
+    Object.defineProperty(window, "pergamum", {
+      configurable: true,
+      value: {
+        projects: {
+          listFileExplorerChildren,
+          createFileExplorerMarkdownFile: vi.fn(),
+          createFileExplorerFolder: vi.fn(),
+          renameFileExplorerEntry
+        }
+      }
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const paint = (): void => {
+      act(() => {
+        root!.render(
+          React.createElement(FileExplorer, {
+            project,
+            highlightedRelativePath: null,
+            translate,
+            readOnly: false,
+            clipboardAdapter: { writeText },
+            renameEntryRequest: currentRequest,
+            onRenameEntryRequestHandled,
+            isProjectDocumentDirty:
+              options.isProjectDocumentDirty ?? (() => false),
+            onProjectDocumentRenamed,
+            onRenameUnavailable,
+            onActivateDocument: vi.fn()
+          })
+        );
+      });
+    };
+
+    paint();
+
+    return {
+      listFileExplorerChildren,
+      renameFileExplorerEntry,
+      onRenameEntryRequestHandled,
+      onProjectDocumentRenamed,
+      onRenameUnavailable,
+      writeText,
+      setRootEntries: (entries) => {
+        currentRootEntries = entries;
+      },
+      rerender: (request) => {
+        currentRequest = request;
+        paint();
+      }
+    };
+  }
+
+  function renameDialogInput(): HTMLInputElement | null {
+    return container!.querySelector<HTMLInputElement>(".nameInputDialogInput");
+  }
+
+  function renameDialogPrimary(): HTMLButtonElement {
+    return container!.querySelector<HTMLButtonElement>(
+      ".nameInputDialogPrimary"
+    )!;
+  }
+
+  function typeRenameName(value: string): void {
+    act(() => {
+      const field = renameDialogInput()!;
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeSetter?.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("opens a rename dialog for the selected Markdown file and marks the request handled", async () => {
+    const harness = renderWithRenameRequest();
+    await flushPromises();
+
+    act(() => entryButton("chapter-01.md").click());
+    harness.rerender({ token: 1 });
+    await flushPromises();
+
+    expect(renameDialogInput()).not.toBeNull();
+    expect(renameDialogInput()!.value).toBe("chapter-01.md");
+    expect(container!.textContent).toContain("explorer.rename.file.title");
+    expect(
+      container!.querySelector(".nameInputDialogContextLabel")?.textContent
+    ).toBe("explorer.rename.context.label");
+    expect(
+      container!.querySelector(".nameInputDialogContextValue")?.textContent
+    ).toBe("chapter-01.md");
+    expect(harness.onRenameEntryRequestHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the previous project-relative path as rename context without putting it in the input", async () => {
+    const harness = renderWithRenameRequest();
+    await flushPromises();
+
+    act(() => entryButton("Drafts").click());
+    await flushPromises();
+    act(() => entryButton("Drafts/draft.md").click());
+    harness.rerender({ token: 1 });
+    await flushPromises();
+
+    expect(renameDialogInput()!.value).toBe("draft.md");
+    expect(
+      container!.querySelector(".nameInputDialogContextValue")?.textContent
+    ).toBe("Drafts/draft.md");
+  });
+
+  it("rejects no selection, project root, and dirty open project documents before IPC", async () => {
+    const dirty = vi.fn(() => true);
+    const harness = renderWithRenameRequest({
+      isProjectDocumentDirty: dirty
+    });
+    await flushPromises();
+
+    harness.rerender({ token: 1 });
+    await flushPromises();
+    expect(harness.onRenameUnavailable).toHaveBeenCalledWith(
+      "explorer.rename.error.noSelection"
+    );
+
+    act(() => rootButton().click());
+    harness.rerender({ token: 2 });
+    await flushPromises();
+    expect(harness.onRenameUnavailable).toHaveBeenCalledWith(
+      "explorer.rename.error.cannotRenameProjectRoot"
+    );
+
+    act(() => entryButton("chapter-01.md").click());
+    harness.rerender({ token: 3 });
+    await flushPromises();
+
+    expect(dirty).toHaveBeenCalledWith("chapter-01.md");
+    expect(renameDialogInput()).toBeNull();
+    expect(harness.renameFileExplorerEntry).not.toHaveBeenCalled();
+    expect(harness.onRenameUnavailable).toHaveBeenCalledWith(
+      "explorer.rename.error.openDocumentDirty"
+    );
+  });
+
+  it("rejects same-path and unsupported-extension input without IPC", async () => {
+    const harness = renderWithRenameRequest();
+    await flushPromises();
+
+    act(() => entryButton("chapter-01.md").click());
+    harness.rerender({ token: 1 });
+    await flushPromises();
+
+    await act(async () => {
+      renameDialogPrimary().click();
+    });
+    expect(
+      container!.querySelector(".nameInputDialogError")?.textContent
+    ).toBe("explorer.rename.error.samePath");
+
+    typeRenameName("chapter-01.txt");
+    await act(async () => {
+      renameDialogPrimary().click();
+    });
+    expect(
+      container!.querySelector(".nameInputDialogError")?.textContent
+    ).toBe("explorer.rename.error.unsupportedExtension");
+    expect(harness.renameFileExplorerEntry).not.toHaveBeenCalled();
+  });
+
+  it("renames through IPC, reloads the parent folder, and updates project document identity", async () => {
+    const harness = renderWithRenameRequest();
+    await flushPromises();
+    harness.listFileExplorerChildren.mockClear();
+
+    act(() => entryButton("chapter-01.md").click());
+    harness.rerender({ token: 1 });
+    await flushPromises();
+    harness.setRootEntries([
+      { kind: "folder", name: "Drafts", relativePath: "Drafts" },
+      { kind: "file", name: "chapter-02.md", relativePath: "chapter-02.md" }
+    ]);
+
+    typeRenameName("chapter-02");
+    await act(async () => {
+      renameDialogPrimary().click();
+    });
+    await flushPromises();
+
+    expect(harness.renameFileExplorerEntry).toHaveBeenCalledWith(
+      "chapter-01.md",
+      "chapter-02"
+    );
+    expect(harness.listFileExplorerChildren).toHaveBeenCalledWith(null);
+    expect(harness.onProjectDocumentRenamed).toHaveBeenCalledWith(
+      "chapter-01.md",
+      {
+        kind: "file",
+        name: "chapter-02.md",
+        relativePath: "chapter-02.md"
+      }
+    );
+    expect(renameDialogInput()).toBeNull();
+  });
+
+  it("keeps an expanded empty folder expanded after folder rename", async () => {
+    const renameFileExplorerEntry = vi.fn(
+      async (): Promise<RenameFileExplorerEntryResult> => ({
+        ok: true,
+        oldRelativePath: "Drafts",
+        newEntry: { kind: "folder", name: "Renamed", relativePath: "Renamed" },
+        parentDirectoryRelativePath: null
+      })
+    );
+    const harness = renderWithRenameRequest({ renameFileExplorerEntry });
+    await flushPromises();
+
+    act(() => entryButton("Drafts").click());
+    await flushPromises();
+    expect(entryButton("Drafts").getAttribute("aria-expanded")).toBe("true");
+
+    harness.rerender({ token: 1 });
+    await flushPromises();
+    harness.setRootEntries([
+      { kind: "folder", name: "Renamed", relativePath: "Renamed" },
+      { kind: "file", name: "chapter-01.md", relativePath: "chapter-01.md" }
+    ]);
+
+    typeRenameName("Renamed");
+    await act(async () => {
+      renameDialogPrimary().click();
+    });
+    await flushPromises();
+
+    expect(entryButton("Renamed").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("surfaces operation errors with sanitized technical-copy details", async () => {
+    const renameFileExplorerEntry = vi.fn(
+      async (): Promise<RenameFileExplorerEntryResult> => ({
+        ok: false,
+        reason: "permissionDenied"
+      })
+    );
+    const harness = renderWithRenameRequest({ renameFileExplorerEntry });
+    await flushPromises();
+
+    act(() => entryButton("chapter-01.md").click());
+    harness.rerender({ token: 1 });
+    await flushPromises();
+
+    typeRenameName("chapter-02");
+    await act(async () => {
+      renameDialogPrimary().click();
+    });
+
+    expect(
+      container!.querySelector(".nameInputDialogError")?.textContent
+    ).toBe("explorer.rename.error.permissionDenied");
+    const copy = container!.querySelector<HTMLButtonElement>(
+      ".nameInputDialogCopyButton"
+    );
+    expect(copy).not.toBeNull();
+
+    await act(async () => {
+      copy!.click();
+    });
+    const copied = String(
+      (harness.writeText.mock.calls[0] as unknown[] | undefined)?.[0] ?? ""
+    );
+    expect(copied).toContain("reason: permissionDenied");
+    expect(copied).toContain("source: chapter-01.md");
+    expect(copied).not.toContain(project.rootPath);
   });
 });

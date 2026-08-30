@@ -13,6 +13,7 @@ import type {
   PergamumProject,
   ProjectOpenResult,
   ProjectDocument,
+  FileExplorerEntry,
   SaveMarkdownRejectedReason,
   SaveApplicationSettingsRequest,
   DirtyWorkingCopy,
@@ -360,7 +361,10 @@ import {
   createFileExplorerCommandTitles,
   registerFileExplorerCommands
 } from "./fileExplorerCommands";
-import type { FileExplorerCreateEntryRequest } from "./FileExplorer";
+import type {
+  FileExplorerCreateEntryRequest,
+  FileExplorerRenameEntryRequest
+} from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import {
   documentWorkspaceTabId,
@@ -465,6 +469,36 @@ function withRegisteredProjectDocument(
     documents: [...project.documents, document].sort((left, right) =>
       left.relativePath.localeCompare(right.relativePath)
     )
+  };
+}
+
+function isSameProjectInstance(
+  left: PergamumProject,
+  right: PergamumProject
+): boolean {
+  return (
+    left.rootPath === right.rootPath &&
+    left.activeProjectFilePath === right.activeProjectFilePath
+  );
+}
+
+function withRenamedProjectDocument(
+  project: PergamumProject,
+  oldRelativePath: string,
+  document: ProjectDocument
+): PergamumProject {
+  const nextDocuments = project.documents
+    .filter(
+      (projectDocument) =>
+        projectDocument.relativePath !== oldRelativePath &&
+        projectDocument.relativePath !== document.relativePath
+    )
+    .concat(document)
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+  return {
+    ...project,
+    documents: nextDocuments
   };
 }
 
@@ -659,6 +693,9 @@ export function App(): JSX.Element {
   const fileExplorerCreateRequestSeqRef = useRef(0);
   const [fileExplorerCreateEntryRequest, setFileExplorerCreateEntryRequest] =
     useState<FileExplorerCreateEntryRequest | null>(null);
+  const fileExplorerRenameRequestSeqRef = useRef(0);
+  const [fileExplorerRenameEntryRequest, setFileExplorerRenameEntryRequest] =
+    useState<FileExplorerRenameEntryRequest | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<GlossaryOccurrenceRange | null>(null);
   /**
@@ -1645,6 +1682,23 @@ export function App(): JSX.Element {
       : null;
   const commandRegistry = useMemo(() => {
     const registry = new CommandRegistry();
+    const revealFileExplorer = () => {
+      setSidebarMode("files");
+      setLayout((current) =>
+        current.sidebar.collapsed
+          ? {
+              ...current,
+              sidebar: {
+                collapsed: false,
+                width: clampSidebarWidth(
+                  current.sidebar.width,
+                  mainAreaRef.current?.clientWidth
+                )
+              }
+            }
+          : current
+      );
+    };
 
     registerApplicationCommands(
       registry,
@@ -1746,25 +1800,18 @@ export function App(): JSX.Element {
         requestFileExplorerCreate: (kind) => {
           // #311: reveal the File Explorer without ever collapsing it (this
           // is not the Activity Bar toggle), then hand it a create request.
-          setSidebarMode("files");
-          setLayout((current) =>
-            current.sidebar.collapsed
-              ? {
-                  ...current,
-                  sidebar: {
-                    collapsed: false,
-                    width: clampSidebarWidth(
-                      current.sidebar.width,
-                      mainAreaRef.current?.clientWidth
-                    )
-                  }
-                }
-              : current
-          );
+          revealFileExplorer();
           fileExplorerCreateRequestSeqRef.current += 1;
           setFileExplorerCreateEntryRequest({
             kind,
             token: fileExplorerCreateRequestSeqRef.current
+          });
+        },
+        requestFileExplorerRename: () => {
+          revealFileExplorer();
+          fileExplorerRenameRequestSeqRef.current += 1;
+          setFileExplorerRenameEntryRequest({
+            token: fileExplorerRenameRequestSeqRef.current
           });
         }
       },
@@ -5589,6 +5636,88 @@ export function App(): JSX.Element {
         )
       : null;
 
+  function isFileExplorerProjectDocumentDirty(
+    relativePath: string
+  ): boolean {
+    if (!activeProjectContext) {
+      return false;
+    }
+
+    const editorId = createProjectDocumentEditorId(
+      relativePath,
+      activeProjectContext
+    );
+    const openDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      editorId
+    );
+
+    return openDocument ? isCurrentEditorDirty(openDocument.editor) : false;
+  }
+
+  function handleFileExplorerProjectDocumentRenamed(
+    oldRelativePath: string,
+    newEntry: FileExplorerEntry
+  ): void {
+    if (newEntry.kind !== "file" || !project || !activeProjectContext) {
+      return;
+    }
+
+    const projectSnapshot = project;
+    const renamedDocument = projectDocumentForRelativePath(
+      newEntry.relativePath
+    );
+    const oldEditorId = createProjectDocumentEditorId(
+      oldRelativePath,
+      activeProjectContext
+    );
+    const openDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      oldEditorId
+    );
+    const currentDocument = openDocument
+      ? markdownDocumentForEditor(openDocument.editor)
+      : null;
+
+    setProject((currentProject) =>
+      currentProject && isSameProjectInstance(currentProject, projectSnapshot)
+        ? withRenamedProjectDocument(
+            currentProject,
+            oldRelativePath,
+            renamedDocument
+          )
+        : currentProject
+    );
+
+    if (currentDocument?.kind === "project") {
+      const replacement = replaceOpenDocument(
+        openDocumentsStateRef.current,
+        oldEditorId,
+        {
+          ...currentDocument,
+          relativePath: renamedDocument.relativePath,
+          name: renamedDocument.name
+        },
+        activeProjectContext
+      );
+
+      if (!replacement.didCollide) {
+        openDocumentsStateRef.current = replacement.state;
+        setOpenDocumentsState(replacement.state);
+      }
+    }
+
+    editorNavigationRef.current?.invalidateEditor(oldEditorId);
+    setStatus({
+      key: "status.fileExplorerRenameSucceeded",
+      values: { relativePath: newEntry.relativePath }
+    });
+  }
+
+  function handleFileExplorerRenameUnavailable(message: string): void {
+    setStatus({ key: "status.commandFailed", values: { message } });
+  }
+
   async function activateProjectDocument(relativePath: string): Promise<void> {
     if (isLifecycleCommitBarrierActiveNow()) {
       return;
@@ -5867,6 +5996,9 @@ export function App(): JSX.Element {
                       fileExplorerCreateEntryRequest={
                         fileExplorerCreateEntryRequest
                       }
+                      fileExplorerRenameEntryRequest={
+                        fileExplorerRenameEntryRequest
+                      }
                       translate={translate}
                       onActivateProjectDocument={(relativePath) => {
                         void activateProjectDocument(relativePath);
@@ -5874,6 +6006,18 @@ export function App(): JSX.Element {
                       onFileExplorerCreateEntryRequestHandled={() => {
                         setFileExplorerCreateEntryRequest(null);
                       }}
+                      onFileExplorerRenameEntryRequestHandled={() => {
+                        setFileExplorerRenameEntryRequest(null);
+                      }}
+                      isFileExplorerProjectDocumentDirty={
+                        isFileExplorerProjectDocumentDirty
+                      }
+                      onFileExplorerProjectDocumentRenamed={
+                        handleFileExplorerProjectDocumentRenamed
+                      }
+                      onFileExplorerRenameUnavailable={
+                        handleFileExplorerRenameUnavailable
+                      }
                       onActivateGlossaryEntry={(entryId) => {
                         executeUiCommand(
                           glossaryCommandIds.openEntry,

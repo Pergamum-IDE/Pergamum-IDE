@@ -291,6 +291,11 @@ describe("CommandPalette", () => {
         "Create a folder at the current File Explorer selection."
       ],
       [
+        "command.workspace.files.rename.description",
+        "ファイルエクスプローラーで選択しているファイルまたは空フォルダの名前を変更します。",
+        "Rename the selected File Explorer file or empty folder."
+      ],
+      [
         "command.workspace.search.focus.description",
         "（未実装です）",
         "Not implemented."

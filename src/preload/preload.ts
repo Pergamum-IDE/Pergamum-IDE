@@ -105,6 +105,11 @@ const pergamumApi: PergamumApi = {
         parentDirectoryRelativePath,
         name
       }),
+    renameFileExplorerEntry: (sourceRelativePath, newName) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.renameFileExplorerEntry, {
+        sourceRelativePath,
+        newName
+      }),
     readProjectDocument: (relativePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
         relativePath
