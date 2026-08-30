@@ -1,9 +1,10 @@
 /**
  * #293: a minimal, conservative OS-process liveness probe.
  *
- * Used ONLY by the Recovery Store lock's stale-`Recovery.lock` reclamation
- * path (`recoveryStoreLock.ts`). It never terminates anything — it sends
- * signal `0`, which is a pure existence/permission check.
+ * Used only by stale-lock reclamation paths (`recoveryStoreLock.ts` and the
+ * project write-lock manager in `projectIpc.ts`). It never terminates
+ * anything — it sends signal `0`, which is a pure existence/permission
+ * check.
  *
  * The decision it feeds is deliberately biased so that only a *provably*
  * dead owner can lose its lock:

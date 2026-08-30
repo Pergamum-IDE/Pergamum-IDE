@@ -23,6 +23,12 @@ export const debugLogEventNames = [
   "log.file.write.failed",
   "project.open.succeeded",
   "project.open.failed",
+  "project.writeLock.reclamation.refused",
+  "project.writeLock.stale.detected",
+  "project.writeLock.stale.archived",
+  "project.writeLock.stale.archive.failed",
+  "project.writeLock.reacquire.succeeded",
+  "project.writeLock.reacquire.failed",
   "application_menu.command.sent",
   "application_menu.command.received",
   "command.invoked",
@@ -485,10 +491,10 @@ export interface DebugLogDetails {
   synchronous?: DebugLogRecoverySynchronousLevel;
 
   /**
-   * #293: the owner recorded in a stale `Recovery.lock/owner.json` left by
-   * a killed process. Diagnostics only — `ownerPid` is that dead process's
-   * OS pid, `ownerAppVersion` its app version string, `ownerCreatedAt` its
-   * ISO lock-acquire timestamp. No path, no manuscript text, no store name.
+   * #293/#302: the owner recorded in a stale lock metadata file left by a
+   * killed process. Diagnostics only — `ownerPid` is that dead process's OS
+   * pid, `ownerAppVersion` its app version string, `ownerCreatedAt` its ISO
+   * lock-acquire timestamp. No path, no manuscript text, no store name.
    */
   ownerPid?: number;
   ownerAppVersion?: string;

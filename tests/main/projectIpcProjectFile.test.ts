@@ -73,9 +73,12 @@ import {
 } from "../../src/main/projectIpc";
 import {
   createProjectLockOwnerMetadata,
+  parseProjectLockOwnerMetadata,
   projectLockOwnerHandleContent,
   projectLockOwnerHandlePath,
-  projectLockOwnerMetadataPath
+  projectLockOwnerMetadataFileName,
+  projectLockOwnerMetadataPath,
+  type ProjectLockOwnerMetadata
 } from "../../src/main/projectLockOwnerMetadata";
 
 const projectConflictWarningMessage =
@@ -154,20 +157,521 @@ describe("project file IPC foundation", () => {
     await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
   });
 
+  it("dead stale project write lock is archived and reacquired with meta.json and owner.handle intact", async () => {
+    const projectFilePath = path.join(projectRootPath, "Dead Lock.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const staleOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+      sessionId: "stale-session",
+      pid: 62368,
+      hostname: "stale-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    await seedProjectWriteLock(projectFilePath, staleOwner);
+
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem(),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    const ownership = await manager.acquire(projectFilePath, {
+      projectId: "0198d95f-97d8-7000-8000-000000000302",
+      sessionId: "fresh-session",
+      instanceRunId: "0198d95f-97d8-7000-8000-000000000302"
+    });
+
+    expect(ownership).toMatchObject({
+      kind: "owned",
+      staleTakeover: {
+        phase: "reacquired",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: staleOwner.createdAt,
+        archivedLockDirName: expect.stringMatching(
+          /^\.pergamum\.lock\.stale-2026-08-29T10-00-00-000Z-[0-9a-f]{8}$/
+        )
+      }
+    });
+
+    const liveOwner = parseProjectLockOwnerMetadata(
+      JSON.parse(
+        await fs.readFile(
+          projectLockOwnerMetadataPath(lockDirectoryPath),
+          "utf8"
+        )
+      )
+    );
+    expect(liveOwner).toMatchObject({
+      projectId: "0198d95f-97d8-7000-8000-000000000302",
+      sessionId: "fresh-session",
+      pid: 4242,
+      hostname: "fresh-host",
+      appVersion: "9.8.7-test"
+    });
+    await expect(
+      fs.readFile(projectLockOwnerHandlePath(lockDirectoryPath), "utf8")
+    ).resolves.toBe(projectLockOwnerHandleContent);
+
+    const archives = await listProjectWriteLockArchives(projectFilePath);
+    expect(archives).toEqual([
+      ownership.staleTakeover?.archivedLockDirName
+    ]);
+    const archivedLockDirectoryPath = path.join(projectRootPath, archives[0]);
+    const archivedOwner = parseProjectLockOwnerMetadata(
+      JSON.parse(
+        await fs.readFile(
+          projectLockOwnerMetadataPath(archivedLockDirectoryPath),
+          "utf8"
+        )
+      )
+    );
+    expect(archivedOwner).toEqual(staleOwner);
+    await expect(
+      fs.readFile(
+        projectLockOwnerHandlePath(archivedLockDirectoryPath),
+        "utf8"
+      )
+    ).resolves.toBe(projectLockOwnerHandleContent);
+
+    await manager.release(projectFilePath, ownership);
+    await expect(fs.access(lockDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    await expect(fs.access(archivedLockDirectoryPath)).resolves.toBeUndefined();
+  });
+
+  it.each(["alive", "unknown"] as const)(
+    "owner liveness %s refuses stale project write lock recovery without archiving",
+    async (liveness) => {
+      const projectFilePath = path.join(projectRootPath, `Owner ${liveness}.pergamum`);
+      const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+      const staleOwner = createProjectLockOwnerMetadata({
+        projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+        sessionId: "stale-session",
+        pid: 62368,
+        hostname: "stale-host",
+        appVersion: "0.60.0",
+        now: new Date(2026, 7, 29, 8, 6, 16)
+      });
+      await seedProjectWriteLock(projectFilePath, staleOwner);
+
+      const manager = new ProjectWriteLockOwnershipManager(
+        realProjectWriteLockFileSystem(),
+        {
+          now: () => new Date("2026-08-29T10:00:00.000Z"),
+          hostname: () => "fresh-host",
+          appVersion: () => "9.8.7-test",
+          pid: () => 4242
+        },
+        { probeProcessLiveness: () => liveness }
+      );
+
+      await expect(
+        manager.acquire(projectFilePath, {
+          projectId: "0198d95f-97d8-7000-8000-000000000302",
+          sessionId: "fresh-session",
+          instanceRunId: "0198d95f-97d8-7000-8000-000000000302"
+        })
+      ).resolves.toEqual({
+        kind: "unavailable",
+        reason: "lockUnavailable",
+        lockOwner: {
+          hostname: "stale-host",
+          openedAt: "2026-08-29 08:06:16"
+        },
+        staleTakeover: {
+          phase: "refused",
+          ownerPid: 62368,
+          ownerAppVersion: "0.60.0",
+          ownerCreatedAt: staleOwner.createdAt
+        }
+      });
+      expect(await listProjectWriteLockArchives(projectFilePath)).toEqual([]);
+      const raw = await fs.readFile(
+        projectLockOwnerMetadataPath(lockDirectoryPath),
+        "utf8"
+      );
+      expect(parseProjectLockOwnerMetadata(JSON.parse(raw))).toEqual(staleOwner);
+    }
+  );
+
+  it("malformed project lock metadata is unavailable and never archived", async () => {
+    const projectFilePath = path.join(projectRootPath, "Malformed Lock.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    await fs.mkdir(lockDirectoryPath);
+    await fs.writeFile(
+      projectLockOwnerMetadataPath(lockDirectoryPath),
+      "{not-json",
+      "utf8"
+    );
+
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem(),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    await expect(manager.acquire(projectFilePath)).resolves.toEqual({
+      kind: "unavailable",
+      reason: "lockUnavailable",
+      lockOwner: null
+    });
+    expect(await listProjectWriteLockArchives(projectFilePath)).toEqual([]);
+    await expect(
+      fs.readFile(projectLockOwnerMetadataPath(lockDirectoryPath), "utf8")
+    ).resolves.toBe("{not-json");
+  });
+
+  it("unreadable project lock metadata is unavailable and never renamed", async () => {
+    const projectFilePath = path.join(projectRootPath, "Unreadable Lock.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    await fs.mkdir(lockDirectoryPath);
+    const rename = vi.fn(async () => undefined);
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem({
+        readFile: vi.fn(async () => {
+          const error = Object.assign(new Error("denied"), { code: "EACCES" });
+          throw error;
+        }),
+        rename
+      }),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    await expect(manager.acquire(projectFilePath)).resolves.toEqual({
+      kind: "unavailable",
+      reason: "lockUnavailable",
+      lockOwner: null
+    });
+    expect(rename).not.toHaveBeenCalled();
+    await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
+  });
+
+  it("project write lock path as a file is unavailable and never renamed", async () => {
+    const projectFilePath = path.join(projectRootPath, "Lock File.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    await fs.writeFile(lockDirectoryPath, "not a lock directory", "utf8");
+    const rename = vi.fn(async () => undefined);
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem({ rename }),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    await expect(manager.acquire(projectFilePath)).resolves.toEqual({
+      kind: "unavailable",
+      reason: "lockUnavailable",
+      lockOwner: null
+    });
+    expect(rename).not.toHaveBeenCalled();
+    await expect(fs.readFile(lockDirectoryPath, "utf8")).resolves.toBe(
+      "not a lock directory"
+    );
+  });
+
+  it("project lock metadata TOCTOU mismatch refuses recovery without archiving", async () => {
+    const projectFilePath = path.join(projectRootPath, "TOCTOU Lock.pergamum");
+    const firstOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+      sessionId: "first-session",
+      pid: 62368,
+      hostname: "first-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    const secondOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000bb",
+      sessionId: "second-session",
+      pid: 62369,
+      hostname: "second-host",
+      appVersion: "0.61.0",
+      now: new Date(2026, 7, 29, 8, 7, 16)
+    });
+    await seedProjectWriteLock(projectFilePath, firstOwner);
+    let reads = 0;
+    const rename = vi.fn(async () => undefined);
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem({
+        readFile: vi.fn(async () => {
+          reads += 1;
+          return `${JSON.stringify(reads === 1 ? firstOwner : secondOwner, null, 2)}\n`;
+        }),
+        rename
+      }),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    await expect(manager.acquire(projectFilePath)).resolves.toEqual({
+      kind: "unavailable",
+      reason: "lockUnavailable",
+      lockOwner: {
+        hostname: "second-host",
+        openedAt: "2026-08-29 08:07:16"
+      }
+    });
+    expect(rename).not.toHaveBeenCalled();
+    expect(await listProjectWriteLockArchives(projectFilePath)).toEqual([]);
+  });
+
+  it("archive rename failure falls back to read-only and leaves the stale lock untouched", async () => {
+    const projectFilePath = path.join(projectRootPath, "Archive Failure.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const staleOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+      sessionId: "stale-session",
+      pid: 62368,
+      hostname: "stale-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    await seedProjectWriteLock(projectFilePath, staleOwner);
+
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem({
+        rename: vi.fn(async () => {
+          throw new Error("rename failed");
+        })
+      }),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    const ownership = await manager.acquire(projectFilePath);
+
+    expect(ownership).toEqual({
+      kind: "unavailable",
+      reason: "lockUnavailable",
+      lockOwner: {
+        hostname: "stale-host",
+        openedAt: "2026-08-29 08:06:16"
+      },
+      staleTakeover: {
+        phase: "archiveFailed",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: staleOwner.createdAt
+      }
+    });
+    expect(await listProjectWriteLockArchives(projectFilePath)).toEqual([]);
+    const raw = await fs.readFile(
+      projectLockOwnerMetadataPath(lockDirectoryPath),
+      "utf8"
+    );
+    expect(parseProjectLockOwnerMetadata(JSON.parse(raw))).toEqual(staleOwner);
+  });
+
+  it("fresh mkdir failure after archive falls back without retrying", async () => {
+    const projectFilePath = path.join(projectRootPath, "Fresh Mkdir Failure.pergamum");
+    const staleOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+      sessionId: "stale-session",
+      pid: 62368,
+      hostname: "stale-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    await seedProjectWriteLock(projectFilePath, staleOwner);
+
+    let mkdirCalls = 0;
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem({
+        mkdir: (dirPath) => {
+          mkdirCalls += 1;
+          return mkdirCalls >= 2
+            ? Promise.reject(new Error("fresh mkdir failed"))
+            : fs.mkdir(dirPath).then(() => undefined);
+        }
+      }),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    const ownership = await manager.acquire(projectFilePath);
+
+    expect(ownership).toMatchObject({
+      kind: "unavailable",
+      reason: "lockSetupFailed",
+      staleTakeover: {
+        phase: "reacquireFailed",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: staleOwner.createdAt
+      }
+    });
+    expect(mkdirCalls).toBe(2);
+    expect(await listProjectWriteLockArchives(projectFilePath)).toHaveLength(1);
+  });
+
+  it("fresh owner metadata write failure after archive falls back without deleting the archive", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Fresh Metadata Failure.pergamum"
+    );
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const staleOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+      sessionId: "stale-session",
+      pid: 62368,
+      hostname: "stale-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    await seedProjectWriteLock(projectFilePath, staleOwner);
+
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem({
+        writeFile: vi.fn(async () => {
+          throw new Error("fresh metadata write failed");
+        })
+      }),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    const ownership = await manager.acquire(projectFilePath);
+
+    expect(ownership).toMatchObject({
+      kind: "unavailable",
+      reason: "lockSetupFailed",
+      staleTakeover: {
+        phase: "reacquireFailed",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: staleOwner.createdAt
+      }
+    });
+    expect(await listProjectWriteLockArchives(projectFilePath)).toHaveLength(1);
+    await expect(fs.access(lockDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
+  it("fresh owner metadata self-check failure falls back and never claims ownership", async () => {
+    const projectFilePath = path.join(projectRootPath, "Self Check Failure.pergamum");
+    const staleOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+      sessionId: "stale-session",
+      pid: 62368,
+      hostname: "stale-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    const impostorOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000bb",
+      sessionId: "impostor-session",
+      pid: 7000,
+      hostname: "impostor-host",
+      appVersion: "0.61.0",
+      now: new Date(2026, 7, 29, 8, 7, 16)
+    });
+    await seedProjectWriteLock(projectFilePath, staleOwner);
+
+    let freshMetadataWrites = 0;
+    const manager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem({
+        writeFile: async (targetPath, data, options) => {
+          freshMetadataWrites += 1;
+          await fs.writeFile(targetPath, data, options);
+        },
+        readFile: async (targetPath, encoding) => {
+          if (
+            freshMetadataWrites > 0 &&
+            targetPath.endsWith(projectLockOwnerMetadataFileName)
+          ) {
+            return `${JSON.stringify(impostorOwner, null, 2)}\n`;
+          }
+
+          return fs.readFile(targetPath, encoding);
+        }
+      }),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+
+    const ownership = await manager.acquire(projectFilePath);
+
+    expect(ownership).toMatchObject({
+      kind: "unavailable",
+      reason: "lockSetupFailed",
+      staleTakeover: {
+        phase: "reacquireFailed",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: staleOwner.createdAt
+      }
+    });
+    await manager.release(projectFilePath, ownership);
+    await expect(fs.access(projectWriteLockDirectoryPath(projectFilePath))).resolves.toBeUndefined();
+  });
+
   it("retains the owner.handle file handle until lock release", async () => {
     const projectFilePath = path.join(projectRootPath, "Retained.pergamum");
     const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    let writtenMetadata = "";
     const ownerHandle = {
       writeFile: vi.fn(async () => undefined),
       close: vi.fn(async () => undefined)
     } satisfies ProjectWriteLockFileHandle;
     const fileSystem = {
       mkdir: vi.fn(async () => undefined),
-      writeFile: vi.fn(async () => undefined),
+      writeFile: vi.fn(async (_targetPath, data) => {
+        writtenMetadata = data;
+      }),
       open: vi.fn(async () => ownerHandle),
       unlink: vi.fn(async () => undefined),
       rmdir: vi.fn(async () => undefined),
-      readFile: vi.fn(async () => "")
+      readFile: vi.fn(async () => writtenMetadata),
+      rename: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isDirectory: () => true }))
     } satisfies ProjectWriteLockFileSystem;
     const manager = new ProjectWriteLockOwnershipManager(fileSystem, {
       now: () => new Date(2026, 7, 25, 8, 21, 0),
@@ -223,7 +727,9 @@ describe("project file IPC foundation", () => {
       }),
       unlink: vi.fn(async () => undefined),
       rmdir: vi.fn(async () => undefined),
-      readFile: vi.fn(async () => "")
+      readFile: vi.fn(async () => ""),
+      rename: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isDirectory: () => true }))
     } satisfies ProjectWriteLockFileSystem;
     const manager = new ProjectWriteLockOwnershipManager(fileSystem, {
       now: () => new Date(2026, 7, 25, 8, 21, 0),
@@ -263,7 +769,9 @@ describe("project file IPC foundation", () => {
       }),
       unlink: vi.fn(async () => undefined),
       rmdir: vi.fn(async () => undefined),
-      readFile: vi.fn(async () => "")
+      readFile: vi.fn(async () => ""),
+      rename: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isDirectory: () => true }))
     } satisfies ProjectWriteLockFileSystem;
     const manager = new ProjectWriteLockOwnershipManager(fileSystem, {
       now: () => new Date(2026, 7, 25, 8, 21, 0),
@@ -297,13 +805,16 @@ describe("project file IPC foundation", () => {
 
   it("keeps lock release cleanup best-effort after closing owner.handle", async () => {
     const projectFilePath = path.join(projectRootPath, "Cleanup Failure.pergamum");
+    let writtenMetadata = "";
     const ownerHandle = {
       writeFile: vi.fn(async () => undefined),
       close: vi.fn(async () => undefined)
     } satisfies ProjectWriteLockFileHandle;
     const fileSystem = {
       mkdir: vi.fn(async () => undefined),
-      writeFile: vi.fn(async () => undefined),
+      writeFile: vi.fn(async (_targetPath, data) => {
+        writtenMetadata = data;
+      }),
       open: vi.fn(async () => ownerHandle),
       unlink: vi.fn(async () => {
         throw new Error("unlink failed");
@@ -311,7 +822,9 @@ describe("project file IPC foundation", () => {
       rmdir: vi.fn(async () => {
         throw new Error("rmdir failed");
       }),
-      readFile: vi.fn(async () => "")
+      readFile: vi.fn(async () => writtenMetadata),
+      rename: vi.fn(async () => undefined),
+      stat: vi.fn(async () => ({ isDirectory: () => true }))
     } satisfies ProjectWriteLockFileSystem;
     const manager = new ProjectWriteLockOwnershipManager(fileSystem, {
       now: () => new Date(2026, 7, 25, 8, 21, 0),
@@ -1318,6 +1831,74 @@ describe("project file IPC foundation", () => {
     await expect(fs.access(lockDirectoryPath)).resolves.toBeUndefined();
   });
 
+  it("openProject recovers a provably dead stale write lock without read-only confirmation", async () => {
+    const logger = createLoggerMock();
+    const projectFilePath = path.join(projectRootPath, "Recovered Lock.pergamum");
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Recovered Lock"
+    });
+    const metadata = await readProjectMetadata(created);
+    await created.close();
+    const staleOwner = createProjectLockOwnerMetadata({
+      projectId: metadata.projectId,
+      sessionId: "stale-session",
+      pid: 62368,
+      hostname: "stale-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    await seedProjectWriteLock(projectFilePath, staleOwner);
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const ownershipManager = new ProjectWriteLockOwnershipManager(
+      realProjectWriteLockFileSystem(),
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
+      logger,
+      ownershipManager,
+      undefined,
+      undefined,
+      "0198d95f-97d8-7000-8000-000000000302"
+    );
+    const project = await openProjectHandler({ sender: {} });
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      accessMode: defaultProjectAccessMode,
+      name: "Recovered Lock"
+    });
+    expect(currentProjectAccessMode()).toEqual(defaultProjectAccessMode);
+    const liveOwner = parseProjectLockOwnerMetadata(
+      JSON.parse(
+        await fs.readFile(
+          projectLockOwnerMetadataPath(lockDirectoryPath),
+          "utf8"
+        )
+      )
+    );
+    expect(liveOwner).toMatchObject({
+      projectId: metadata.projectId,
+      sessionId: "session",
+      pid: 4242,
+      hostname: "fresh-host"
+    });
+    expect(await listProjectWriteLockArchives(projectFilePath)).toHaveLength(1);
+  });
+
   it("openProject includes lock owner metadata in the pending read-only result when readable", async () => {
     const logger = createLoggerMock();
     const projectFilePath = path.join(projectRootPath, "Locked Owner.pergamum");
@@ -1335,7 +1916,7 @@ describe("project file IPC foundation", () => {
         createProjectLockOwnerMetadata({
           projectId: metadata.projectId,
           sessionId: "session-owner",
-          pid: 238,
+          pid: process.pid,
           hostname: "SECRET_HOST",
           appVersion: "9.8.7-test",
           now: new Date(2026, 7, 25, 8, 21, 0)
@@ -2482,6 +3063,62 @@ function createWriteOwnershipManager(
   };
 }
 
+function realProjectWriteLockFileSystem(
+  overrides: Partial<ProjectWriteLockFileSystem> = {}
+): ProjectWriteLockFileSystem {
+  return {
+    mkdir: (dirPath) => fs.mkdir(dirPath).then(() => undefined),
+    writeFile: (targetPath, data, options) =>
+      fs.writeFile(targetPath, data, options),
+    open: async (targetPath, flags) => {
+      const handle = await fs.open(targetPath, flags);
+
+      return {
+        writeFile: (data, encoding) => handle.writeFile(data, encoding),
+        close: () => handle.close()
+      };
+    },
+    unlink: (targetPath) => fs.unlink(targetPath),
+    rmdir: (dirPath) => fs.rmdir(dirPath),
+    readFile: (targetPath, encoding) => fs.readFile(targetPath, encoding),
+    rename: (fromPath, toPath) =>
+      fs.rename(fromPath, toPath).then(() => undefined),
+    stat: async (targetPath) => {
+      const stats = await fs.stat(targetPath);
+      return { isDirectory: () => stats.isDirectory() };
+    },
+    ...overrides
+  };
+}
+
+async function seedProjectWriteLock(
+  projectFilePath: string,
+  owner: ProjectLockOwnerMetadata
+): Promise<void> {
+  const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+
+  await fs.mkdir(lockDirectoryPath);
+  await fs.writeFile(
+    projectLockOwnerMetadataPath(lockDirectoryPath),
+    `${JSON.stringify(owner, null, 2)}\n`,
+    "utf8"
+  );
+  await fs.writeFile(
+    projectLockOwnerHandlePath(lockDirectoryPath),
+    projectLockOwnerHandleContent,
+    "utf8"
+  );
+}
+
+async function listProjectWriteLockArchives(
+  projectFilePath: string
+): Promise<string[]> {
+  const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+  const entries = await fs.readdir(path.dirname(lockDirectoryPath));
+
+  return entries.filter((name) => name.startsWith(".pergamum.lock.stale-"));
+}
+
 function createTitleWindowMock(): { setTitle: ReturnType<typeof vi.fn> } {
   return {
     setTitle: vi.fn()
@@ -2531,13 +3168,15 @@ function registeredHandler(
   logger: DebugLogger = createLoggerMock(),
   writeOwnershipManager?: ProjectWriteOwnershipManager,
   windowTitleTargetProvider?: ProjectWindowTitleTargetProvider,
-  startupProjectFilePath?: string | null
+  startupProjectFilePath?: string | null,
+  instanceRunId?: string
 ): (...args: unknown[]) => unknown {
   registerProjectIpc(
     logger,
     writeOwnershipManager,
     windowTitleTargetProvider,
-    startupProjectFilePath
+    startupProjectFilePath,
+    instanceRunId
   );
 
   const registration = electronMock.handle.mock.calls.find(

@@ -412,6 +412,29 @@ describe("debug log catalog", () => {
     expect(hasOwnerPath).toBe(false);
   });
 
+  it("includes the #302 stale project write-lock recovery events, none implying a path leak", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "project.writeLock.reclamation.refused",
+        "project.writeLock.stale.detected",
+        "project.writeLock.stale.archived",
+        "project.writeLock.stale.archive.failed",
+        "project.writeLock.reacquire.succeeded",
+        "project.writeLock.reacquire.failed"
+      ])
+    );
+    expect(debugLogEventNames).not.toContain("project.writeLock.path");
+
+    type HasOwnerPath = "ownerPath" extends keyof DebugLogDetails ? true : false;
+    type HasProjectPath = "projectPath" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasOwnerPath: HasOwnerPath = false;
+    const hasProjectPath: HasProjectPath = false;
+    expect(hasOwnerPath).toBe(false);
+    expect(hasProjectPath).toBe(false);
+  });
+
   it("includes the Recovery document payload persistence events (Phase 6-4-3)", () => {
     expect(debugLogEventNames).toEqual(
       expect.arrayContaining([

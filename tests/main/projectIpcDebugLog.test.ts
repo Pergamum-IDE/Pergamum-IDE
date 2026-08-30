@@ -41,11 +41,20 @@ vi.mock("electron", () => ({
 import {
   currentActiveProjectFilePath,
   currentProjectRootPath,
+  ProjectWriteLockOwnershipManager,
+  projectWriteLockDirectoryPath,
   releaseCurrentProjectWriteOwnership,
   registerProjectIpc,
   requireCurrentActiveProjectFilePath,
-  requireCurrentProjectRootPath
+  requireCurrentProjectRootPath,
+  type ProjectWriteLockFileSystem
 } from "../../src/main/projectIpc";
+import {
+  createProjectLockOwnerMetadata,
+  projectLockOwnerHandleContent,
+  projectLockOwnerHandlePath,
+  projectLockOwnerMetadataPath
+} from "../../src/main/projectLockOwnerMetadata";
 
 describe("project IPC debug logging", () => {
   let projectRootPath: string;
@@ -155,6 +164,94 @@ describe("project IPC debug logging", () => {
     expect(requireCurrentProjectRootPath()).toBe(projectRootPath);
     expect(currentActiveProjectFilePath()).toBe(projectFilePath);
     expect(requireCurrentActiveProjectFilePath()).toBe(projectFilePath);
+  });
+
+  it("logs stale project write lock recovery without exposing raw paths or contents", async () => {
+    const logger = createLoggerMock();
+    const lockDirectoryPath = projectWriteLockDirectoryPath(projectFilePath);
+    const staleOwner = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-0000000000aa",
+      sessionId: "stale-session",
+      pid: 62368,
+      hostname: "stale-host",
+      appVersion: "0.60.0",
+      now: new Date(2026, 7, 29, 8, 6, 16)
+    });
+    await fs.mkdir(lockDirectoryPath);
+    await fs.writeFile(
+      projectLockOwnerMetadataPath(lockDirectoryPath),
+      `${JSON.stringify(staleOwner, null, 2)}\n`,
+      "utf8"
+    );
+    await fs.writeFile(
+      projectLockOwnerHandlePath(lockDirectoryPath),
+      projectLockOwnerHandleContent,
+      "utf8"
+    );
+    const ownershipManager = new ProjectWriteLockOwnershipManager(
+      fs as unknown as ProjectWriteLockFileSystem,
+      {
+        now: () => new Date("2026-08-29T10:00:00.000Z"),
+        hostname: () => "fresh-host",
+        appVersion: () => "9.8.7-test",
+        pid: () => 4242
+      },
+      { probeProcessLiveness: () => "dead" }
+    );
+    registerProjectIpc(
+      logger,
+      ownershipManager,
+      undefined,
+      undefined,
+      "0198d95f-97d8-7000-8000-000000000302"
+    );
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProject = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProject({ sender: {} });
+
+    const events = logger.log.mock.calls.map(([input]) => input.event);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        "project.writeLock.stale.detected",
+        "project.writeLock.stale.archived",
+        "project.writeLock.reacquire.succeeded",
+        "project.open.succeeded"
+      ])
+    );
+    expect(events.indexOf("project.writeLock.stale.detected")).toBeLessThan(
+      events.indexOf("project.writeLock.stale.archived")
+    );
+    expect(events.indexOf("project.writeLock.stale.archived")).toBeLessThan(
+      events.indexOf("project.writeLock.reacquire.succeeded")
+    );
+
+    const staleEvents = logger.log.mock.calls
+      .map(([input]) => input)
+      .filter((input) => String(input.event).startsWith("project.writeLock."));
+
+    expect(staleEvents).toHaveLength(3);
+    expect(staleEvents[0]).toMatchObject({
+      level: "debug",
+      event: "project.writeLock.stale.detected",
+      details: {
+        result: "ignored",
+        instanceRunId: "0198d95f-97d8-7000-8000-000000000302",
+        ownerPid: 62368,
+        ownerAppVersion: "0.60.0",
+        ownerCreatedAt: staleOwner.createdAt
+      }
+    });
+
+    const serializedLogs = JSON.stringify(staleEvents);
+    expect(serializedLogs).not.toContain(projectRootPath);
+    expect(serializedLogs).not.toContain(projectFilePath);
+    expect(serializedLogs).not.toContain("Debug Project");
+    expect(serializedLogs).not.toContain("known.md");
+    expect(serializedLogs).not.toContain(projectLockOwnerHandleContent);
   });
 
   it("does not write raw project details to console when recent project recording fails", async () => {

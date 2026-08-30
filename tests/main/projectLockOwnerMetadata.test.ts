@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createProjectLockOwnerMetadata,
   formatProjectLockOpenedAt,
+  parseProjectLockOwnerMetadata,
   parseProjectLockOwnerInfo,
   sanitizeProjectLockOwnerHostname
 } from "../../src/main/projectLockOwnerMetadata";
@@ -38,6 +39,26 @@ describe("project lock owner metadata (#238)", () => {
     expect(
       parseProjectLockOwnerInfo({ ...metadata, createdAt: "not-a-date" })
     ).toBeNull();
+    expect(
+      parseProjectLockOwnerMetadata({ ...metadata, pid: "not-a-number" })
+    ).toBeNull();
+  });
+
+  it("parses full owner metadata for stale lock recovery without changing the UI-safe surface", () => {
+    const metadata = createProjectLockOwnerMetadata({
+      projectId: "0198d95f-97d8-7000-8000-000000000238",
+      sessionId: "session-test",
+      pid: 238,
+      hostname: "writer-host",
+      appVersion: "9.8.7-test",
+      now: new Date(2026, 7, 25, 8, 21, 0)
+    });
+
+    expect(parseProjectLockOwnerMetadata(metadata)).toEqual(metadata);
+    expect(parseProjectLockOwnerInfo(metadata)).toEqual({
+      hostname: "writer-host",
+      openedAt: "2026-08-25 08:21:00"
+    });
   });
 
   it("returns only UI-safe owner info from valid metadata", () => {
