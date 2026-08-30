@@ -5,7 +5,10 @@ import {
   useRef,
   useState
 } from "react";
-import type { CSSProperties } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent
+} from "react";
 import pergamumProjectIconUrl from "../../assets/icons/file-associations/pergamum/pergamum-scroll-file-icon.svg?url";
 import filePlusIconUrl from "../../assets/icons/feather/explorer/file-plus.svg?url";
 import folderPlusIconUrl from "../../assets/icons/feather/explorer/folder-plus.svg?url";
@@ -45,6 +48,16 @@ import {
   fileExplorerRenameFailureMessageKey,
   fileExplorerRenameTechnicalDetails
 } from "./fileExplorerRenameMessages";
+import {
+  clearFileExplorerSelection,
+  collapseFileExplorerSelection,
+  createEmptyFileExplorerSelection,
+  extendFileExplorerSelectionTo,
+  isFileExplorerDescendantPath,
+  replaceFileExplorerSelection,
+  toggleFileExplorerSelection,
+  type FileExplorerSelectionState
+} from "./fileExplorerSelectionState";
 
 /**
  * #311: an external request (from the Command Palette) to open the same
@@ -106,19 +119,45 @@ interface FileExplorerViewProps {
   loadingDirectoryPaths: ReadonlySet<string>;
   unavailableDirectoryPaths: ReadonlySet<string>;
   isRootSelected: boolean;
+  /** The primary / keyboard-focused entry (drives roving tabindex and the
+   *  #307 create target). One of `selectedPaths`, or `null`. */
   selectedRelativePath: string | null;
+  /** #323: every currently-selected entry path (#322 selection set). */
+  selectedPaths?: ReadonlySet<string>;
+  /** #323: visible entry paths, top to bottom — the roving-tabindex order. */
+  visibleOrder?: readonly string[];
   highlightedRelativePath: string | null;
   canCreate: boolean;
   translate: Translate;
   /** #311: attached to the active project document entry once it is
    *  rendered, so the container can scroll it into view. */
   activeDocumentEntryRef?: (element: HTMLButtonElement | null) => void;
+  /** #323: register a rendered row's DOM node with the container's roving
+   *  focus map. */
+  registerRowElement?: (
+    relativePath: string,
+    element: HTMLButtonElement | null
+  ) => void;
+  registerRootElement?: (element: HTMLButtonElement | null) => void;
   onReload: () => void;
   onNewFile: () => void;
   onNewFolder: () => void;
   onToggleDirectory: (relativePath: string) => void;
   onSelectRoot: () => void;
+  /** Plain click / Space / plain Arrow — replace the selection with this
+   *  single entry and move the anchor to it (#322 `replace`). */
   onSelectEntry: (relativePath: string) => void;
+  /** Ctrl / Cmd + click — add/remove this entry (#322 `toggle`). */
+  onToggleEntrySelection?: (relativePath: string) => void;
+  /** Shift + click — visible-range select from the anchor (#322 `extendTo`).
+   *  The container supplies `visibleOrder`. */
+  onExtendEntrySelection?: (relativePath: string) => void;
+  /** #323: keyboard nav / Space handling for one entry row. */
+  onEntryKeyDown?: (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    entry: FileExplorerEntry
+  ) => void;
+  onRootKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -130,6 +169,41 @@ type FileExplorerSelection =
       kind: "entry";
       relativePath: string;
     };
+
+/**
+ * #323: the visible entry paths in top-to-bottom order — a folder's children
+ * are included only when it is expanded. This is the single order source the
+ * #322 range functions get (a collapsed folder's children are never in a
+ * range). The project root is not included (it is not a selectable entry).
+ */
+export function flattenVisibleFileExplorerEntryPaths(input: {
+  readonly rootEntries: readonly FileExplorerEntry[];
+  readonly entriesByDirectoryPath: Readonly<
+    Record<string, FileExplorerEntry[]>
+  >;
+  readonly expandedDirectoryPaths: ReadonlySet<string>;
+}): string[] {
+  const order: string[] = [];
+
+  const walk = (entries: readonly FileExplorerEntry[]): void => {
+    for (const entry of entries) {
+      order.push(entry.relativePath);
+
+      if (
+        entry.kind === "folder" &&
+        input.expandedDirectoryPaths.has(entry.relativePath)
+      ) {
+        walk(
+          input.entriesByDirectoryPath[directoryKey(entry.relativePath)] ?? []
+        );
+      }
+    }
+  };
+
+  walk(input.rootEntries);
+
+  return order;
+}
 
 export interface FileExplorerReloadTargetState {
   entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>;
@@ -434,6 +508,12 @@ export function FileExplorer({
     Set<string>
   >(() => new Set());
   const [selection, setSelection] = useState<FileExplorerSelection | null>(null);
+  // #323: the multi-selection set + range anchor (#322 pure state machine).
+  // `selection` above stays the single "primary / focused" entry — it drives
+  // the #307 create target, #313 rename preflight, and the roving tabindex —
+  // and is kept in sync as one member of this set.
+  const [multiSelection, setMultiSelection] =
+    useState<FileExplorerSelectionState>(createEmptyFileExplorerSelection);
   const loadGenerationRef = useRef(0);
   // #311: the DOM node of the active project document entry (once #309 has
   // revealed it) and the last path we scrolled to, so the scroll fires once
@@ -453,6 +533,147 @@ export function FileExplorer({
         selectedRelativePath
       )
     : null;
+
+  // #323: the visible entry order — the only order source handed to the #322
+  // range functions.
+  const rootEntriesForView = entriesByDirectoryPath[rootDirectoryKey] ?? [];
+  const visibleOrder = useMemo(
+    () =>
+      flattenVisibleFileExplorerEntryPaths({
+        rootEntries: rootEntriesForView,
+        entriesByDirectoryPath,
+        expandedDirectoryPaths
+      }),
+    [rootEntriesForView, entriesByDirectoryPath, expandedDirectoryPaths]
+  );
+
+  // #323: make `path` the sole selection AND the primary/focused entry.
+  const selectSingleEntry = useCallback((relativePath: string) => {
+    setSelection({ kind: "entry", relativePath });
+    setMultiSelection((current) =>
+      replaceFileExplorerSelection(current, relativePath)
+    );
+  }, []);
+
+  const selectRoot = useCallback(() => {
+    setSelection({ kind: "root" });
+    // #323: the project root is not a multi-selectable entry — selecting it
+    // clears the entry selection.
+    setMultiSelection((current) => clearFileExplorerSelection(current));
+  }, []);
+
+  // #323: Ctrl / Cmd + click — the primary/focused entry follows the target;
+  // the #322 anchor moves to it.
+  const toggleEntrySelection = useCallback((relativePath: string) => {
+    setSelection({ kind: "entry", relativePath });
+    setMultiSelection((current) =>
+      toggleFileExplorerSelection(current, relativePath)
+    );
+  }, []);
+
+  // #323: Shift + click / Shift + Arrow — the #322 range function owns the
+  // rule; the view only hands over the visible order. The primary/focused
+  // entry follows the moving edge; the #322 anchor is left where it was.
+  const extendEntrySelection = useCallback(
+    (relativePath: string) => {
+      setSelection({ kind: "entry", relativePath });
+      setMultiSelection((current) =>
+        extendFileExplorerSelectionTo(current, relativePath, visibleOrder)
+      );
+    },
+    [visibleOrder]
+  );
+
+  // #323: roving-tabindex focus map, owned here so `FileExplorerView` stays a
+  // pure render function.
+  const rowElementsRef = useRef(new Map<string, HTMLButtonElement>());
+  const rootButtonElementRef = useRef<HTMLButtonElement | null>(null);
+
+  const registerRowElement = useCallback(
+    (relativePath: string, element: HTMLButtonElement | null) => {
+      if (element) {
+        rowElementsRef.current.set(relativePath, element);
+      } else {
+        rowElementsRef.current.delete(relativePath);
+      }
+    },
+    []
+  );
+
+  const registerRootElement = useCallback(
+    (element: HTMLButtonElement | null) => {
+      rootButtonElementRef.current = element;
+    },
+    []
+  );
+
+  const handleTreeEntryKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>, entry: FileExplorerEntry) => {
+      const path = entry.relativePath;
+
+      if (event.key === " ") {
+        // Space is the keyboard anchor gesture — select only, never open.
+        event.preventDefault();
+        selectSingleEntry(path);
+        return;
+      }
+
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+        // Enter and every other key fall through to the native button click
+        // (existing open / expand behavior).
+        return;
+      }
+
+      event.preventDefault();
+      const index = visibleOrder.indexOf(path);
+
+      if (index === -1) {
+        return;
+      }
+
+      const nextPath =
+        visibleOrder[index + (event.key === "ArrowDown" ? 1 : -1)];
+
+      if (nextPath === undefined) {
+        if (event.key === "ArrowUp") {
+          // Above the first entry → step onto the project root.
+          rootButtonElementRef.current?.focus();
+          selectRoot();
+        }
+        return;
+      }
+
+      rowElementsRef.current.get(nextPath)?.focus();
+      if (event.shiftKey) {
+        extendEntrySelection(nextPath);
+      } else {
+        selectSingleEntry(nextPath);
+      }
+    },
+    [extendEntrySelection, selectSingleEntry, selectRoot, visibleOrder]
+  );
+
+  const handleRootKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === " ") {
+        event.preventDefault();
+        selectRoot();
+        return;
+      }
+
+      if (event.key === "ArrowDown" && visibleOrder.length > 0) {
+        event.preventDefault();
+        const firstPath = visibleOrder[0];
+        rowElementsRef.current.get(firstPath)?.focus();
+        if (event.shiftKey) {
+          extendEntrySelection(firstPath);
+        } else {
+          selectSingleEntry(firstPath);
+        }
+      }
+    },
+    [extendEntrySelection, selectSingleEntry, selectRoot, visibleOrder]
+  );
 
   const loadDirectoryForGeneration = useCallback(
     async (
@@ -512,6 +733,8 @@ export function FileExplorer({
     setLoadingDirectoryPaths(new Set());
     setUnavailableDirectoryPaths(new Set());
     setSelection(null);
+    // #323: a project close / switch clears the multi-selection too.
+    setMultiSelection(createEmptyFileExplorerSelection());
 
     if (hasProject) {
       void loadDirectoryForGeneration(null, generation);
@@ -564,6 +787,29 @@ export function FileExplorer({
       )
         ? currentSelection
         : null;
+    });
+
+    // #323: drop selected entries whose path no longer exists after a tree
+    // reload / entry disappearance. (Folder collapse is handled separately by
+    // `collapseFileExplorerSelection` — a collapsed folder's children still
+    // exist in the data.) The anchor is kept as-is.
+    setMultiSelection((current) => {
+      if (current.selected.size === 0) {
+        return current;
+      }
+
+      let changed = false;
+      const kept = new Set<string>();
+
+      for (const path of current.selected) {
+        if (isFileExplorerEntryVisible(entriesByDirectoryPath, path)) {
+          kept.add(path);
+        } else {
+          changed = true;
+        }
+      }
+
+      return changed ? { selected: kept, anchor: current.anchor } : current;
     });
   }, [entriesByDirectoryPath]);
 
@@ -682,19 +928,23 @@ export function FileExplorer({
     highlightedRelativePath
   ]);
 
-  const selectRoot = useCallback(() => {
-    setSelection({ kind: "root" });
-  }, []);
-
-  const selectEntry = useCallback((relativePath: string) => {
-    setSelection({ kind: "entry", relativePath });
-  }, []);
-
   const toggleDirectory = useCallback(
     (relativePath: string) => {
       if (expandedDirectoryPaths.has(relativePath)) {
         setExpandedDirectoryPaths((current) =>
           withoutSetEntry(current, relativePath)
+        );
+        // #323 (R-4): collapsing a folder drops its descendants from the
+        // selection; the folder itself stays. If the primary/focused entry
+        // was inside, move focus up to the folder so a tab stop stays visible.
+        setMultiSelection((current) =>
+          collapseFileExplorerSelection(current, relativePath)
+        );
+        setSelection((current) =>
+          current?.kind === "entry" &&
+          isFileExplorerDescendantPath(current.relativePath, relativePath)
+            ? { kind: "entry", relativePath }
+            : current
         );
         return;
       }
@@ -962,7 +1212,7 @@ export function FileExplorer({
         );
       }
 
-      setSelection({ kind: "entry", relativePath: newRelativePath });
+      selectSingleEntry(newRelativePath);
       setCreateDialogKind(null);
 
       if (kind === "file") {
@@ -983,6 +1233,7 @@ export function FileExplorer({
       isRootSelected,
       loadDirectoryForGeneration,
       onActivateDocument,
+      selectSingleEntry,
       selectedRelativePath,
       translate
     ]
@@ -1095,10 +1346,7 @@ export function FileExplorer({
         }
       }
 
-      setSelection({
-        kind: "entry",
-        relativePath: result.newEntry.relativePath
-      });
+      selectSingleEntry(result.newEntry.relativePath);
       setRenameDialogTarget(null);
 
       if (result.newEntry.kind === "file") {
@@ -1128,16 +1376,24 @@ export function FileExplorer({
         unavailableDirectoryPaths={unavailableDirectoryPaths}
         isRootSelected={isRootSelected}
         selectedRelativePath={selectedRelativePath}
+        selectedPaths={multiSelection.selected}
+        visibleOrder={visibleOrder}
         highlightedRelativePath={project ? highlightedRelativePath : null}
         canCreate={canCreate}
         translate={translate}
         activeDocumentEntryRef={setActiveDocumentEntryElement}
+        registerRowElement={registerRowElement}
+        registerRootElement={registerRootElement}
         onReload={reloadCurrentExplorerContext}
         onNewFile={() => openCreateDialog("file")}
         onNewFolder={() => openCreateDialog("folder")}
         onToggleDirectory={toggleDirectory}
         onSelectRoot={selectRoot}
-        onSelectEntry={selectEntry}
+        onSelectEntry={selectSingleEntry}
+        onToggleEntrySelection={toggleEntrySelection}
+        onExtendEntrySelection={extendEntrySelection}
+        onEntryKeyDown={handleTreeEntryKeyDown}
+        onRootKeyDown={handleRootKeyDown}
         onActivateDocument={onActivateDocument}
       />
       {createDialogKind !== null ? (
@@ -1237,6 +1493,9 @@ export function FileExplorer({
   );
 }
 
+const EMPTY_SELECTED_PATHS: ReadonlySet<string> = new Set();
+const EMPTY_VISIBLE_ORDER: readonly string[] = [];
+
 export function FileExplorerView({
   projectName,
   rootEntries,
@@ -1246,25 +1505,41 @@ export function FileExplorerView({
   unavailableDirectoryPaths,
   isRootSelected,
   selectedRelativePath,
+  selectedPaths = EMPTY_SELECTED_PATHS,
+  visibleOrder = EMPTY_VISIBLE_ORDER,
   highlightedRelativePath,
   canCreate,
   translate,
   activeDocumentEntryRef,
+  registerRowElement,
+  registerRootElement,
   onReload,
   onNewFile,
   onNewFolder,
   onToggleDirectory,
   onSelectRoot,
   onSelectEntry,
+  onToggleEntrySelection,
+  onExtendEntrySelection,
+  onEntryKeyDown,
+  onRootKeyDown,
   onActivateDocument
 }: FileExplorerViewProps): JSX.Element {
+  // #323: roving tabindex — exactly one row in the tree is tabbable. The
+  // primary/focused entry when it is on screen, otherwise the project root.
+  const primaryInView =
+    selectedRelativePath !== null &&
+    visibleOrder.includes(selectedRelativePath);
+  const rootIsTabStop = isRootSelected || !primaryInView;
+
   const renderEntry = (entry: FileExplorerEntry, depth: number): JSX.Element => {
     const isExpanded =
       entry.kind === "folder" &&
       expandedDirectoryPaths.has(entry.relativePath);
     const isHighlighted =
       entry.kind === "file" && entry.relativePath === highlightedRelativePath;
-    const isSelected = entry.relativePath === selectedRelativePath;
+    const isSelected = selectedPaths.has(entry.relativePath);
+    const isPrimary = entry.relativePath === selectedRelativePath;
     const isOpenable = isOpenableFileExplorerEntry(entry);
     const icon = iconForEntry(entry, expandedDirectoryPaths);
     const childKey = directoryKey(entry.relativePath);
@@ -1274,11 +1549,20 @@ export function FileExplorerView({
       <div key={entry.relativePath}>
         <button
           type="button"
-          ref={isHighlighted ? activeDocumentEntryRef : undefined}
+          ref={(element) => {
+            registerRowElement?.(entry.relativePath, element);
+
+            if (isHighlighted) {
+              activeDocumentEntryRef?.(element);
+            }
+          }}
           role="treeitem"
+          tabIndex={isPrimary ? 0 : -1}
           aria-expanded={entry.kind === "folder" ? isExpanded : undefined}
+          aria-selected={isSelected}
           aria-current={isHighlighted ? "page" : undefined}
           data-selected={isSelected ? "true" : undefined}
+          data-file-explorer-primary={isPrimary ? "true" : undefined}
           data-file-explorer-entry-kind={entry.kind}
           data-file-explorer-entry-path={entry.relativePath}
           data-file-explorer-openable={isOpenable ? "true" : undefined}
@@ -1298,7 +1582,24 @@ export function FileExplorerView({
               "--file-explorer-indent": `${8 + depth * 16}px`
             } as CSSProperties
           }
-          onClick={() => {
+          onKeyDown={(event) => onEntryKeyDown?.(event, entry)}
+          onClick={(event) => {
+            const extendRange = event?.shiftKey ?? false;
+            const toggle =
+              !extendRange &&
+              ((event?.metaKey ?? false) || (event?.ctrlKey ?? false));
+
+            if (extendRange) {
+              onExtendEntrySelection?.(entry.relativePath);
+              // Selection-only gesture — never opens / expands.
+              return;
+            }
+
+            if (toggle) {
+              onToggleEntrySelection?.(entry.relativePath);
+              return;
+            }
+
             onSelectEntry(entry.relativePath);
 
             if (entry.kind === "folder") {
@@ -1421,21 +1722,26 @@ export function FileExplorerView({
         <div
           className="fileExplorerList"
           role="tree"
+          aria-multiselectable="true"
           aria-label={translate("explorer.fileTree")}
         >
           <button
             type="button"
+            ref={(element) => registerRootElement?.(element)}
             className={
               ["fileExplorerRoot", isRootSelected ? "isSelected" : null]
                 .filter(Boolean)
                 .join(" ")
             }
             role="treeitem"
+            tabIndex={rootIsTabStop ? 0 : -1}
             aria-expanded="true"
+            aria-selected={isRootSelected}
             data-selected={isRootSelected ? "true" : undefined}
             data-file-explorer-entry-kind="root"
             data-file-explorer-entry-path=""
             title={projectName}
+            onKeyDown={(event) => onRootKeyDown?.(event)}
             onClick={onSelectRoot}
           >
             <img

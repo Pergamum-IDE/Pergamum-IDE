@@ -13,6 +13,7 @@ import type { Translate } from "../../src/shared/i18n";
 import type { CreateFileExplorerEntryResult } from "../../src/shared/api";
 import {
   FileExplorer,
+  flattenVisibleFileExplorerEntryPaths,
   resolveFileExplorerCreateParentDirectory,
   resolveFileExplorerReloadTargets,
   scrollFileExplorerActiveDocumentIntoView,
@@ -2298,5 +2299,407 @@ describe("FileExplorer Command Palette rename request (#313)", () => {
         "explorer.rename.error.readOnlyProject"
       );
     });
+  });
+});
+
+describe("FileExplorer multi-selection (#323)", () => {
+  const treeRoot: FileExplorerEntry[] = [
+    { kind: "folder", name: "Drafts", relativePath: "Drafts" },
+    { kind: "file", name: "a.md", relativePath: "a.md" },
+    { kind: "file", name: "b.md", relativePath: "b.md" },
+    { kind: "file", name: "c.md", relativePath: "c.md" }
+  ];
+  const treeDrafts: FileExplorerEntry[] = [
+    { kind: "file", name: "x.md", relativePath: "Drafts/x.md" },
+    { kind: "file", name: "y.md", relativePath: "Drafts/y.md" }
+  ];
+
+  function list(directoryRelativePath: string | null) {
+    return Promise.resolve(
+      directoryRelativePath === "Drafts"
+        ? ok("Drafts", treeDrafts)
+        : ok(null, treeRoot)
+    );
+  }
+
+  async function mountTree(onActivateDocument = vi.fn()): Promise<void> {
+    mountFileExplorer(vi.fn().mockImplementation(list), project, onActivateDocument);
+    await flushPromises();
+  }
+
+  async function expandDrafts(): Promise<void> {
+    await act(async () => {
+      entryButton("Drafts").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushPromises();
+    // Sanity: the folder's children are now in the tree.
+    entryButton("Drafts/x.md");
+  }
+
+  function clickEntry(
+    relativePath: string,
+    modifiers: {
+      ctrlKey?: boolean;
+      metaKey?: boolean;
+      shiftKey?: boolean;
+    } = {}
+  ): void {
+    act(() => {
+      entryButton(relativePath).dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          ...modifiers
+        })
+      );
+    });
+  }
+
+  function keyDownEntry(
+    relativePath: string,
+    key: string,
+    modifiers: { shiftKey?: boolean } = {}
+  ): void {
+    act(() => {
+      entryButton(relativePath).dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key,
+          ...modifiers
+        })
+      );
+    });
+  }
+
+  function selectedPaths(): string[] {
+    return Array.from(
+      container!.querySelectorAll('[role="treeitem"][aria-selected="true"]')
+    )
+      .map((element) => element.getAttribute("data-file-explorer-entry-path"))
+      .filter((path): path is string => path !== null && path.length > 0)
+      .sort();
+  }
+
+  it("plain click selects only that item", async () => {
+    await mountTree();
+
+    clickEntry("b.md");
+
+    expect(selectedPaths()).toEqual(["b.md"]);
+  });
+
+  it("plain click updates the anchor (a later Shift+click ranges from it)", async () => {
+    await mountTree();
+
+    clickEntry("a.md");
+    clickEntry("c.md", { shiftKey: true });
+
+    expect(selectedPaths()).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("Ctrl / Cmd + click adds an item, and clicking it again removes it", async () => {
+    await mountTree();
+
+    clickEntry("a.md");
+    clickEntry("c.md", { ctrlKey: true });
+    expect(selectedPaths()).toEqual(["a.md", "c.md"]);
+
+    clickEntry("c.md", { metaKey: true });
+    expect(selectedPaths()).toEqual(["a.md"]);
+  });
+
+  it("Ctrl / Cmd + click moves the anchor to the toggled item", async () => {
+    await mountTree();
+
+    clickEntry("a.md");
+    clickEntry("c.md", { ctrlKey: true }); // anchor is now c.md
+    clickEntry("b.md", { shiftKey: true }); // range c.md..b.md
+
+    expect(selectedPaths()).toEqual(["b.md", "c.md"]);
+  });
+
+  it("Ctrl / Cmd + click does not open the file", async () => {
+    const onActivateDocument = vi.fn();
+    await mountTree(onActivateDocument);
+
+    clickEntry("a.md", { ctrlKey: true });
+
+    expect(onActivateDocument).not.toHaveBeenCalled();
+    expect(selectedPaths()).toEqual(["a.md"]);
+  });
+
+  it("Shift + click selects the visible range and replaces the previous selection", async () => {
+    await mountTree();
+
+    clickEntry("a.md", { ctrlKey: true });
+    clickEntry("c.md", { ctrlKey: true }); // {a, c}, anchor c
+    clickEntry("a.md"); // plain click → {a}, anchor a
+    clickEntry("c.md", { shiftKey: true }); // range a..c, REPLACES
+
+    expect(selectedPaths()).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("Shift + click does not include a collapsed folder's children", async () => {
+    await mountTree();
+
+    // Drafts is collapsed → Drafts/x.md, Drafts/y.md are not visible.
+    clickEntry("Drafts");
+    clickEntry("c.md", { shiftKey: true });
+
+    expect(selectedPaths()).toEqual(["Drafts", "a.md", "b.md", "c.md"]);
+  });
+
+  it("Ctrl / Cmd + Shift + click behaves as Shift + click (range, not additive)", async () => {
+    await mountTree();
+
+    clickEntry("a.md");
+    clickEntry("c.md", { ctrlKey: true, shiftKey: true });
+
+    expect(selectedPaths()).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("Space on a focused item selects it and sets the anchor", async () => {
+    await mountTree();
+
+    keyDownEntry("b.md", " ");
+    expect(selectedPaths()).toEqual(["b.md"]);
+
+    // Anchor is b.md → Shift+ArrowDown extends b..c.
+    keyDownEntry("b.md", "ArrowDown", { shiftKey: true });
+    expect(selectedPaths()).toEqual(["b.md", "c.md"]);
+  });
+
+  it("Space does not open the focused file", async () => {
+    const onActivateDocument = vi.fn();
+    await mountTree(onActivateDocument);
+
+    keyDownEntry("a.md", " ");
+
+    expect(onActivateDocument).not.toHaveBeenCalled();
+  });
+
+  it("Space then Shift + ArrowDown selects a downward visible range", async () => {
+    await mountTree();
+
+    keyDownEntry("a.md", " ");
+    keyDownEntry("a.md", "ArrowDown", { shiftKey: true });
+    keyDownEntry("b.md", "ArrowDown", { shiftKey: true });
+
+    expect(selectedPaths()).toEqual(["a.md", "b.md", "c.md"]);
+    expect(document.activeElement).toBe(entryButton("c.md"));
+  });
+
+  it("Space then Shift + ArrowUp selects an upward visible range", async () => {
+    await mountTree();
+
+    keyDownEntry("c.md", " ");
+    keyDownEntry("c.md", "ArrowUp", { shiftKey: true });
+    keyDownEntry("b.md", "ArrowUp", { shiftKey: true });
+
+    expect(selectedPaths()).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("Shift + Arrow works without a prior Space — the pre-move row is the anchor", async () => {
+    await mountTree();
+
+    // Plain arrow navigation establishes the anchor as it goes.
+    keyDownEntry("a.md", "ArrowDown"); // focus + select b.md, anchor b.md
+    keyDownEntry("b.md", "ArrowDown", { shiftKey: true }); // range b..c
+
+    expect(selectedPaths()).toEqual(["b.md", "c.md"]);
+  });
+
+  it("Shift + Arrow range uses visibleOrder, spanning an expanded folder's children", async () => {
+    await mountTree();
+    await expandDrafts();
+
+    // visibleOrder: Drafts, Drafts/x.md, Drafts/y.md, a.md, b.md, c.md
+    keyDownEntry("Drafts/y.md", " ");
+    keyDownEntry("Drafts/y.md", "ArrowDown", { shiftKey: true }); // + a.md
+    keyDownEntry("a.md", "ArrowDown", { shiftKey: true }); // + b.md
+
+    expect(selectedPaths()).toEqual(["Drafts/y.md", "a.md", "b.md"]);
+  });
+
+  it("plain ArrowDown / ArrowUp moves focus and replaces the selection", async () => {
+    await mountTree();
+
+    clickEntry("a.md");
+    keyDownEntry("a.md", "ArrowDown");
+    expect(selectedPaths()).toEqual(["b.md"]);
+    expect(document.activeElement).toBe(entryButton("b.md"));
+
+    keyDownEntry("b.md", "ArrowUp");
+    expect(selectedPaths()).toEqual(["a.md"]);
+  });
+
+  it("Enter keeps opening the focused file (no selection-only override)", async () => {
+    const onActivateDocument = vi.fn();
+    await mountTree(onActivateDocument);
+
+    // Enter on a native <button> fires its click; the handler must not
+    // preventDefault it.
+    act(() => {
+      const button = entryButton("a.md");
+      button.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "Enter"
+        })
+      );
+      button.click();
+    });
+
+    expect(onActivateDocument).toHaveBeenCalledWith("a.md");
+    expect(selectedPaths()).toEqual(["a.md"]);
+  });
+
+  it("collapsing a folder leaves no hidden descendant selected, and keeps the folder", async () => {
+    await mountTree();
+    await expandDrafts();
+
+    clickEntry("Drafts/x.md");
+    clickEntry("Drafts/y.md", { ctrlKey: true });
+    expect(selectedPaths()).toEqual(["Drafts/x.md", "Drafts/y.md"]);
+
+    // Click Drafts to collapse it. `collapseFileExplorerSelection` runs and
+    // no `Drafts/...` path can remain selected once its children are hidden.
+    await act(async () => {
+      entryButton("Drafts").click();
+      await Promise.resolve();
+    });
+    await flushPromises();
+
+    expect(
+      selectedPaths().some((path) => path.startsWith("Drafts/"))
+    ).toBe(false);
+    expect(selectedPaths()).toEqual(["Drafts"]);
+    expect(entryButton("Drafts").getAttribute("aria-selected")).toBe("true");
+    expect(entryButton("Drafts").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("exposes aria-selected and multi-select tree semantics", async () => {
+    await mountTree();
+
+    clickEntry("a.md", { ctrlKey: true });
+    clickEntry("c.md", { ctrlKey: true });
+
+    expect(entryButton("a.md").getAttribute("aria-selected")).toBe("true");
+    expect(entryButton("b.md").getAttribute("aria-selected")).toBe("false");
+    expect(entryButton("c.md").getAttribute("aria-selected")).toBe("true");
+    expect(
+      container!
+        .querySelector('[role="tree"]')
+        ?.getAttribute("aria-multiselectable")
+    ).toBe("true");
+  });
+
+  it("keyboard-only: Space then Shift+Arrow builds a range with no pointer input", async () => {
+    await mountTree();
+
+    act(() => {
+      entryButton("a.md").focus();
+    });
+    keyDownEntry("a.md", " ");
+    keyDownEntry("a.md", "ArrowDown", { shiftKey: true });
+    keyDownEntry("b.md", "ArrowDown", { shiftKey: true });
+
+    expect(selectedPaths()).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("switching the project clears the selection", async () => {
+    await mountTree();
+    clickEntry("a.md", { ctrlKey: true });
+    clickEntry("b.md", { ctrlKey: true });
+    expect(selectedPaths()).toEqual(["a.md", "b.md"]);
+
+    const otherProject: PergamumProject = {
+      ...project,
+      rootPath: "C:\\Other",
+      activeProjectFilePath: "C:\\Other\\Other.pergamum",
+      name: "Other"
+    };
+    act(() => {
+      root!.render(
+        React.createElement(FileExplorer, {
+          project: otherProject,
+          highlightedRelativePath: null,
+          translate,
+          onActivateDocument: vi.fn()
+        })
+      );
+    });
+    await flushPromises();
+
+    expect(selectedPaths()).toEqual([]);
+  });
+});
+
+describe("flattenVisibleFileExplorerEntryPaths (#323)", () => {
+  const rootLevel: FileExplorerEntry[] = [
+    { kind: "folder", name: "Drafts", relativePath: "Drafts" },
+    { kind: "file", name: "a.md", relativePath: "a.md" }
+  ];
+  const draftsChildren: FileExplorerEntry[] = [
+    { kind: "folder", name: "Old", relativePath: "Drafts/Old" },
+    { kind: "file", name: "x.md", relativePath: "Drafts/x.md" }
+  ];
+  const oldChildren: FileExplorerEntry[] = [
+    { kind: "file", name: "z.md", relativePath: "Drafts/Old/z.md" }
+  ];
+  const entriesByDirectoryPath = {
+    "": rootLevel,
+    Drafts: draftsChildren,
+    "Drafts/Old": oldChildren
+  };
+
+  it("lists only top-level entries when nothing is expanded", () => {
+    expect(
+      flattenVisibleFileExplorerEntryPaths({
+        rootEntries: rootLevel,
+        entriesByDirectoryPath,
+        expandedDirectoryPaths: new Set()
+      })
+    ).toEqual(["Drafts", "a.md"]);
+  });
+
+  it("inlines an expanded folder's children in order, before its siblings", () => {
+    expect(
+      flattenVisibleFileExplorerEntryPaths({
+        rootEntries: rootLevel,
+        entriesByDirectoryPath,
+        expandedDirectoryPaths: new Set(["Drafts"])
+      })
+    ).toEqual(["Drafts", "Drafts/Old", "Drafts/x.md", "a.md"]);
+  });
+
+  it("recurses only into folders that are themselves expanded", () => {
+    expect(
+      flattenVisibleFileExplorerEntryPaths({
+        rootEntries: rootLevel,
+        entriesByDirectoryPath,
+        expandedDirectoryPaths: new Set(["Drafts", "Drafts/Old"])
+      })
+    ).toEqual([
+      "Drafts",
+      "Drafts/Old",
+      "Drafts/Old/z.md",
+      "Drafts/x.md",
+      "a.md"
+    ]);
+  });
+
+  it("treats an expanded folder with no loaded children as empty", () => {
+    expect(
+      flattenVisibleFileExplorerEntryPaths({
+        rootEntries: rootLevel,
+        entriesByDirectoryPath: { "": rootLevel },
+        expandedDirectoryPaths: new Set(["Drafts"])
+      })
+    ).toEqual(["Drafts", "a.md"]);
   });
 });
