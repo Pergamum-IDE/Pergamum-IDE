@@ -40,6 +40,7 @@ export function WorkspaceSidebar({
           highlightedRelativePath={
             project ? highlightedProjectDocumentRelativePath : null
           }
+          readOnly={project?.accessMode.kind === "readOnly"}
           translate={translate}
           onActivateDocument={onActivateProjectDocument}
         />

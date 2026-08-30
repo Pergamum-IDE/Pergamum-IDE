@@ -95,6 +95,16 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.listFileExplorerChildren, {
         directoryRelativePath
       }),
+    createFileExplorerMarkdownFile: (parentDirectoryRelativePath, name) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.createFileExplorerMarkdownFile, {
+        parentDirectoryRelativePath,
+        name
+      }),
+    createFileExplorerFolder: (parentDirectoryRelativePath, name) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.createFileExplorerFolder, {
+        parentDirectoryRelativePath,
+        name
+      }),
     readProjectDocument: (relativePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
         relativePath

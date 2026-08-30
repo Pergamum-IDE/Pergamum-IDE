@@ -28,6 +28,7 @@ import type {
   QuitApplicationRequest,
   QuitApplicationResult
 } from "./lifecycle";
+import type { FileExplorerCreateFailureReason } from "./fileExplorerCreate";
 import type { Language } from "./i18n";
 import type { AppPlatform } from "./platform";
 import type { RecoveryStoreStatus } from "./recovery";
@@ -52,6 +53,10 @@ import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
 
 export type { AppPlatform } from "./platform";
+export type {
+  FileExplorerCreateFailureReason,
+  FileExplorerNameValidationError
+} from "./fileExplorerCreate";
 export type { RecoveryStoreOwnerInfo, RecoveryStoreStatus } from "./recovery";
 export type {
   RecoveryDocumentPayload,
@@ -141,6 +146,10 @@ export const PROJECT_CHANNELS = {
   confirmReadOnlyProjectOpen: "projects:confirmReadOnlyProjectOpen",
   cancelReadOnlyProjectOpen: "projects:cancelReadOnlyProjectOpen",
   listFileExplorerChildren: "projects:listFileExplorerChildren",
+  /** #307: create a new empty Markdown file under a File Explorer folder. */
+  createFileExplorerMarkdownFile: "projects:createFileExplorerMarkdownFile",
+  /** #307: create a new (non-recursive) folder under a File Explorer folder. */
+  createFileExplorerFolder: "projects:createFileExplorerFolder",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -352,6 +361,24 @@ export interface FileExplorerEntry {
 export interface ListFileExplorerChildrenRequest {
   directoryRelativePath: string | null;
 }
+
+/**
+ * #307: request to create a new File Explorer entry. `name` is the raw
+ * user-entered name; the main process validates it and (for Markdown files)
+ * applies the extension rule. `parentDirectoryRelativePath` is `null` for
+ * the project root.
+ */
+export interface CreateFileExplorerEntryRequest {
+  parentDirectoryRelativePath: string | null;
+  name: string;
+}
+
+export type CreateFileExplorerEntryResult =
+  | { readonly ok: true; readonly entry: FileExplorerEntry }
+  | {
+      readonly ok: false;
+      readonly reason: FileExplorerCreateFailureReason;
+    };
 
 export type FileExplorerUnavailableReason =
   | "invalidRequest"
@@ -586,6 +613,14 @@ export interface PergamumApi {
     listFileExplorerChildren: (
       directoryRelativePath: string | null
     ) => Promise<ListFileExplorerChildrenResult>;
+    createFileExplorerMarkdownFile: (
+      parentDirectoryRelativePath: string | null,
+      name: string
+    ) => Promise<CreateFileExplorerEntryResult>;
+    createFileExplorerFolder: (
+      parentDirectoryRelativePath: string | null,
+      name: string
+    ) => Promise<CreateFileExplorerEntryResult>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;
