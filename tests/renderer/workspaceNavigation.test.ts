@@ -16,7 +16,10 @@ import {
 import { t, type Translate } from "../../src/shared/i18n";
 import { ActivityBar } from "../../src/renderer/ActivityBar";
 import { createProjectDocument } from "../../src/renderer/currentDocument";
-import { FileExplorerView } from "../../src/renderer/FileExplorer";
+import {
+  FileExplorerView,
+  flattenVisibleFileExplorerEntryPaths
+} from "../../src/renderer/FileExplorer";
 import {
   GlossarySidebar,
   GlossarySidebarView,
@@ -104,7 +107,7 @@ type FileExplorerViewProps = Parameters<typeof FileExplorerView>[0];
 function fileExplorerViewProps(
   overrides: Partial<FileExplorerViewProps> = {}
 ): FileExplorerViewProps {
-  return {
+  const props: FileExplorerViewProps = {
     projectName: project.name,
     rootEntries: rootFileExplorerEntries,
     entriesByDirectoryPath: {
@@ -125,6 +128,24 @@ function fileExplorerViewProps(
     onActivateDocument: () => undefined,
     ...overrides
   };
+
+  // #323: the container keeps `selectedRelativePath` (the primary/focused
+  // entry) as a member of `selectedPaths`. Mirror that here unless a test
+  // sets the multi-selection explicitly.
+  if (props.selectedPaths === undefined) {
+    props.selectedPaths = props.selectedRelativePath
+      ? new Set([props.selectedRelativePath])
+      : new Set();
+  }
+  if (props.visibleOrder === undefined) {
+    props.visibleOrder = flattenVisibleFileExplorerEntryPaths({
+      rootEntries: props.rootEntries,
+      entriesByDirectoryPath: props.entriesByDirectoryPath,
+      expandedDirectoryPaths: props.expandedDirectoryPaths
+    });
+  }
+
+  return props;
 }
 
 const timestamp = "2026-01-01T00:00:00.000Z";

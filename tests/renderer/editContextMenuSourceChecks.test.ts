@@ -47,13 +47,21 @@ function allSourceText(): string {
  * `role="tab"` element (a `<div>`, not a native `<button>`, since a nested
  * close `<button>` cannot live inside a `<button>`), scoped to that one
  * tab — not a document-level/global shortcut listener.
+ *
+ * FileExplorer.tsx (#323) is the same category of exception: its
+ * `onKeyDown` handlers implement roving-tabindex Arrow navigation and
+ * Space multi-selection for the File Explorer's own `role="treeitem"`
+ * rows, scoped to the tree while it is focused — a local ARIA tree widget,
+ * not a document-level/global shortcut listener, and it never touches the
+ * Markdown editor's native-edit-command delegation.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
   "ChoiceDialog.tsx",
   "ConfirmDialog.tsx",
   "InfoDialog.tsx",
-  "DocumentTabBar.tsx"
+  "DocumentTabBar.tsx",
+  "FileExplorer.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {
