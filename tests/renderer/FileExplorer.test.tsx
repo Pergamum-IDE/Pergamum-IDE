@@ -853,3 +853,430 @@ describe("FileExplorer create toolbar (#307)", () => {
     expect(container!.querySelector(".nameInputDialogInput")).toBeNull();
   });
 });
+
+describe("FileExplorer active project document reveal (#309)", () => {
+  const revealRootEntries: FileExplorerEntry[] = [
+    { kind: "folder", name: "Drafts", relativePath: "Drafts" },
+    { kind: "file", name: "chapter-01.md", relativePath: "chapter-01.md" }
+  ];
+  const draftsChildren: FileExplorerEntry[] = [
+    { kind: "folder", name: "Chapter1", relativePath: "Drafts/Chapter1" },
+    { kind: "file", name: "outline.md", relativePath: "Drafts/outline.md" }
+  ];
+  const chapter1Children: FileExplorerEntry[] = [
+    {
+      kind: "file",
+      name: "scene-03.md",
+      relativePath: "Drafts/Chapter1/scene-03.md"
+    }
+  ];
+
+  function revealList(
+    directoryRelativePath: string | null
+  ): Promise<ListFileExplorerChildrenResult> {
+    switch (directoryRelativePath) {
+      case null:
+        return Promise.resolve(ok(null, revealRootEntries));
+      case "Drafts":
+        return Promise.resolve(ok("Drafts", draftsChildren));
+      case "Drafts/Chapter1":
+        return Promise.resolve(ok("Drafts/Chapter1", chapter1Children));
+      default:
+        return Promise.resolve(ok(directoryRelativePath, []));
+    }
+  }
+
+  async function settleReveal(): Promise<void> {
+    for (let i = 0; i < 6; i += 1) {
+      await flushPromises();
+    }
+  }
+
+  interface RevealHarness {
+    listFileExplorerChildren: ReturnType<typeof vi.fn>;
+    createFileExplorerMarkdownFile: ReturnType<typeof vi.fn>;
+    rerender: (next: {
+      project?: PergamumProject | null;
+      highlightedRelativePath?: string | null;
+    }) => void;
+  }
+
+  function renderReveal(options?: {
+    listFileExplorerChildren?: (
+      directoryRelativePath: string | null
+    ) => Promise<ListFileExplorerChildrenResult>;
+    project?: PergamumProject | null;
+    highlightedRelativePath?: string | null;
+    createFileExplorerMarkdownFile?: ReturnType<typeof vi.fn>;
+  }): RevealHarness {
+    const listFileExplorerChildren = vi.fn(
+      options?.listFileExplorerChildren ?? revealList
+    );
+    const createFileExplorerMarkdownFile =
+      options?.createFileExplorerMarkdownFile ??
+      vi.fn(
+        async (): Promise<CreateFileExplorerEntryResult> => ({
+          ok: true,
+          entry: { kind: "file", name: "new.md", relativePath: "new.md" }
+        })
+      );
+
+    Object.defineProperty(window, "pergamum", {
+      configurable: true,
+      value: {
+        projects: {
+          listFileExplorerChildren,
+          createFileExplorerMarkdownFile,
+          createFileExplorerFolder: vi.fn(
+            async (): Promise<CreateFileExplorerEntryResult> => ({
+              ok: true,
+              entry: { kind: "folder", name: "New", relativePath: "New" }
+            })
+          )
+        }
+      }
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let currentProject: PergamumProject | null =
+      options?.project === undefined ? project : options.project;
+    let currentHighlight: string | null =
+      options?.highlightedRelativePath ?? null;
+
+    const paint = (): void => {
+      act(() => {
+        root!.render(
+          React.createElement(FileExplorer, {
+            project: currentProject,
+            highlightedRelativePath: currentHighlight,
+            translate,
+            onActivateDocument: vi.fn()
+          })
+        );
+      });
+    };
+
+    paint();
+
+    return {
+      listFileExplorerChildren,
+      createFileExplorerMarkdownFile,
+      rerender: (next) => {
+        if ("project" in next) {
+          currentProject = next.project ?? null;
+        }
+        if ("highlightedRelativePath" in next) {
+          currentHighlight = next.highlightedRelativePath ?? null;
+        }
+        paint();
+      }
+    };
+  }
+
+  function typeDialogName(value: string): void {
+    const field = container!.querySelector<HTMLInputElement>(
+      ".nameInputDialogInput"
+    )!;
+    act(() => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeSetter?.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("highlights a root-level active project document", async () => {
+    renderReveal({ highlightedRelativePath: "chapter-01.md" });
+    await settleReveal();
+
+    const highlighted = entryButton("chapter-01.md");
+    expect(highlighted.getAttribute("aria-current")).toBe("page");
+    expect(highlighted.className).toContain("isActive");
+  });
+
+  it("expands and lazily loads the ancestor folders of a nested active project document", async () => {
+    const { listFileExplorerChildren } = renderReveal({
+      highlightedRelativePath: "Drafts/Chapter1/scene-03.md"
+    });
+    await settleReveal();
+
+    expect(listFileExplorerChildren).toHaveBeenCalledWith(null);
+    expect(listFileExplorerChildren).toHaveBeenCalledWith("Drafts");
+    expect(listFileExplorerChildren).toHaveBeenCalledWith("Drafts/Chapter1");
+    expect(entryButton("Drafts").getAttribute("aria-expanded")).toBe("true");
+    expect(entryButton("Drafts/Chapter1").getAttribute("aria-expanded")).toBe(
+      "true"
+    );
+  });
+
+  it("makes a nested active project document visible after the lazy reveal", async () => {
+    renderReveal({
+      highlightedRelativePath: "Drafts/Chapter1/scene-03.md"
+    });
+    await settleReveal();
+
+    const revealed = entryButton("Drafts/Chapter1/scene-03.md");
+    expect(revealed.getAttribute("aria-current")).toBe("page");
+    expect(revealed.className).toContain("isActive");
+  });
+
+  it("updates the active highlight when the active project document changes", async () => {
+    const { rerender } = renderReveal({
+      highlightedRelativePath: "chapter-01.md"
+    });
+    await settleReveal();
+    expect(entryButton("chapter-01.md").getAttribute("aria-current")).toBe(
+      "page"
+    );
+
+    rerender({ highlightedRelativePath: "Drafts/outline.md" });
+    await settleReveal();
+
+    expect(
+      entryButton("chapter-01.md").getAttribute("aria-current")
+    ).toBeNull();
+    const nextHighlight = entryButton("Drafts/outline.md");
+    expect(nextHighlight.getAttribute("aria-current")).toBe("page");
+    expect(nextHighlight.className).toContain("isActive");
+  });
+
+  it("does not overwrite the File Explorer selection when revealing the active document", async () => {
+    const { rerender } = renderReveal({ highlightedRelativePath: null });
+    await settleReveal();
+
+    act(() => entryButton("Drafts").click());
+    await settleReveal();
+    expect(entryButton("Drafts").dataset.selected).toBe("true");
+
+    rerender({ highlightedRelativePath: "chapter-01.md" });
+    await settleReveal();
+
+    expect(entryButton("chapter-01.md").getAttribute("aria-current")).toBe(
+      "page"
+    );
+    expect(entryButton("Drafts").dataset.selected).toBe("true");
+    expect(entryButton("chapter-01.md").dataset.selected).toBeUndefined();
+  });
+
+  it("keeps expanded folders when the active project document is already visible", async () => {
+    const { listFileExplorerChildren, rerender } = renderReveal({
+      highlightedRelativePath: null
+    });
+    await settleReveal();
+
+    act(() => entryButton("Drafts").click());
+    await settleReveal();
+    expect(container!.textContent).toContain("outline.md");
+
+    const callsBefore = listFileExplorerChildren.mock.calls.length;
+    rerender({ highlightedRelativePath: "chapter-01.md" });
+    await settleReveal();
+
+    expect(entryButton("Drafts").getAttribute("aria-expanded")).toBe("true");
+    expect(container!.textContent).toContain("outline.md");
+    expect(listFileExplorerChildren.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("clears the active highlight when the active tab is a standalone Markdown file", async () => {
+    const { rerender } = renderReveal({
+      highlightedRelativePath: "chapter-01.md"
+    });
+    await settleReveal();
+    expect(entryButton("chapter-01.md").getAttribute("aria-current")).toBe(
+      "page"
+    );
+
+    // A standalone Markdown editor is not a project document, so the wiring
+    // feeds the File Explorer a null highlighted path.
+    rerender({ highlightedRelativePath: null });
+    await settleReveal();
+
+    expect(
+      entryButton("chapter-01.md").getAttribute("aria-current")
+    ).toBeNull();
+    expect(
+      container!.querySelector(".fileExplorerItem.isActive")
+    ).toBeNull();
+  });
+
+  it("clears the active highlight when the active tab is an untitled document", async () => {
+    const { rerender } = renderReveal({
+      highlightedRelativePath: "chapter-01.md"
+    });
+    await settleReveal();
+
+    // An untitled editor has no project-relative path.
+    rerender({ highlightedRelativePath: null });
+    await settleReveal();
+
+    expect(
+      entryButton("chapter-01.md").getAttribute("aria-current")
+    ).toBeNull();
+    expect(
+      container!.querySelector(".fileExplorerItem.isActive")
+    ).toBeNull();
+  });
+
+  it("clears the active highlight when the active tab is a glossary entry", async () => {
+    const { rerender } = renderReveal({
+      highlightedRelativePath: "chapter-01.md"
+    });
+    await settleReveal();
+
+    // A glossary entry editor is not a project document.
+    rerender({ highlightedRelativePath: null });
+    await settleReveal();
+
+    expect(
+      entryButton("chapter-01.md").getAttribute("aria-current")
+    ).toBeNull();
+    expect(
+      container!.querySelector(".fileExplorerItem.isActive")
+    ).toBeNull();
+  });
+
+  it("leaves the File Explorer selection unchanged when the active editor is non-project", async () => {
+    const { rerender } = renderReveal({
+      highlightedRelativePath: "chapter-01.md"
+    });
+    await settleReveal();
+
+    act(() => entryButton("Drafts").click());
+    await settleReveal();
+    expect(entryButton("Drafts").dataset.selected).toBe("true");
+
+    rerender({ highlightedRelativePath: null });
+    await settleReveal();
+
+    expect(entryButton("Drafts").dataset.selected).toBe("true");
+  });
+
+  it("ignores a late reveal folder load after a project switch", async () => {
+    const draftsLoad = deferred<ListFileExplorerChildrenResult>();
+    let draftsCalls = 0;
+    const listFileExplorerChildren = vi.fn((directoryRelativePath: string | null) => {
+      if (directoryRelativePath === "Drafts") {
+        draftsCalls += 1;
+        if (draftsCalls === 1) {
+          return draftsLoad.promise;
+        }
+      }
+      return revealList(directoryRelativePath);
+    });
+    const switchedProject: PergamumProject = {
+      ...project,
+      rootPath: "C:\\Other",
+      activeProjectFilePath: "C:\\Other\\Other.pergamum",
+      name: "Other"
+    };
+
+    const { rerender } = renderReveal({
+      listFileExplorerChildren,
+      highlightedRelativePath: "Drafts/Chapter1/scene-03.md"
+    });
+    await settleReveal();
+
+    rerender({
+      project: switchedProject,
+      highlightedRelativePath: null
+    });
+    await settleReveal();
+
+    draftsLoad.resolve(
+      ok("Drafts", [
+        {
+          kind: "file",
+          name: "stale-scene.md",
+          relativePath: "Drafts/stale-scene.md"
+        }
+      ])
+    );
+    await settleReveal();
+
+    expect(container!.textContent).toContain("Other");
+    expect(container!.textContent).not.toContain("stale-scene.md");
+  });
+
+  it("ignores a late reveal folder load after the project is closed", async () => {
+    const draftsLoad = deferred<ListFileExplorerChildrenResult>();
+    let draftsCalls = 0;
+    const listFileExplorerChildren = vi.fn((directoryRelativePath: string | null) => {
+      if (directoryRelativePath === "Drafts") {
+        draftsCalls += 1;
+        if (draftsCalls === 1) {
+          return draftsLoad.promise;
+        }
+      }
+      return revealList(directoryRelativePath);
+    });
+
+    const { rerender } = renderReveal({
+      listFileExplorerChildren,
+      highlightedRelativePath: "Drafts/Chapter1/scene-03.md"
+    });
+    await settleReveal();
+
+    rerender({ project: null, highlightedRelativePath: null });
+    await settleReveal();
+
+    draftsLoad.resolve(
+      ok("Drafts", [
+        {
+          kind: "file",
+          name: "stale-scene.md",
+          relativePath: "Drafts/stale-scene.md"
+        }
+      ])
+    );
+    await settleReveal();
+
+    expect(container!.textContent).toContain("explorer.noProject");
+    expect(container!.textContent).not.toContain("stale-scene.md");
+  });
+
+  it("keeps the #307 create target on the selected folder while another document is highlighted as active", async () => {
+    const createFileExplorerMarkdownFile = vi.fn(
+      async (): Promise<CreateFileExplorerEntryResult> => ({
+        ok: true,
+        entry: {
+          kind: "file",
+          name: "chapter-02.md",
+          relativePath: "Drafts/chapter-02.md"
+        }
+      })
+    );
+    const { rerender } = renderReveal({
+      highlightedRelativePath: null,
+      createFileExplorerMarkdownFile
+    });
+    await settleReveal();
+
+    act(() => entryButton("Drafts").click());
+    await settleReveal();
+
+    rerender({ highlightedRelativePath: "chapter-01.md" });
+    await settleReveal();
+    expect(entryButton("chapter-01.md").getAttribute("aria-current")).toBe(
+      "page"
+    );
+
+    act(() => toolbarButton("explorer.newFile").click());
+    typeDialogName("chapter-02");
+    await act(async () => {
+      container!
+        .querySelector<HTMLButtonElement>(".nameInputDialogPrimary")!
+        .click();
+    });
+    await settleReveal();
+
+    expect(createFileExplorerMarkdownFile).toHaveBeenCalledWith(
+      "Drafts",
+      "chapter-02"
+    );
+  });
+});
