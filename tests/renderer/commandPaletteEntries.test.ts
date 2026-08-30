@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CommandRegistry, defineCommandId } from "../../src/shared/commandRegistry";
 import { t, type Translate } from "../../src/shared/i18n";
 import {
+  COMMAND_PALETTE_PAGE_STEP,
   commandPaletteResultCountKey,
   filterCommandPaletteEntries,
   firstEnabledCommandPaletteIndex,
@@ -9,7 +10,9 @@ import {
   listCommandPaletteEntries,
   mergeCommandPaletteMatchRanges,
   moveCommandPaletteSelection,
+  resolveCommandPalettePagedSelection,
   resolveCommandPaletteEnterSelection,
+  resolveCommandPaletteSelection,
   type CommandPaletteEntry
 } from "../../src/renderer/commandPaletteEntries";
 
@@ -395,6 +398,85 @@ describe("resolveCommandPaletteEnterSelection", () => {
 
   it("is not confused by an out-of-range index", () => {
     expect(resolveCommandPaletteEnterSelection(entries, 99)).toBeNull();
+  });
+});
+
+describe("resolveCommandPaletteSelection (#316)", () => {
+  const enabled = (): Pick<CommandPaletteEntry, "enabled"> => ({ enabled: true });
+  const disabled = (): Pick<CommandPaletteEntry, "enabled"> => ({
+    enabled: false
+  });
+
+  it("returns null for an empty list (active none — ENTER does nothing)", () => {
+    expect(resolveCommandPaletteSelection([])).toBeNull();
+    expect(resolveCommandPaletteSelection([], 0)).toBeNull();
+    expect(resolveCommandPaletteSelection([], 3)).toBeNull();
+  });
+
+  it("keeps a still-valid, still-enabled current index", () => {
+    const entries = [enabled(), enabled(), enabled()];
+
+    expect(resolveCommandPaletteSelection(entries, 2)).toBe(2);
+  });
+
+  it("seeds the first enabled row when there is no current index", () => {
+    expect(
+      resolveCommandPaletteSelection([disabled(), enabled(), enabled()])
+    ).toBe(1);
+  });
+
+  it("replaces an out-of-range current index with the first enabled row", () => {
+    const entries = [disabled(), enabled()];
+
+    expect(resolveCommandPaletteSelection(entries, 5)).toBe(1);
+    expect(resolveCommandPaletteSelection(entries, -1)).toBe(1);
+  });
+
+  it("replaces a current index that now points at a disabled row", () => {
+    const entries = [enabled(), disabled(), enabled()];
+
+    expect(resolveCommandPaletteSelection(entries, 1)).toBe(0);
+  });
+
+  it("falls back to index 0 when every remaining entry is disabled", () => {
+    expect(resolveCommandPaletteSelection([disabled(), disabled()])).toBe(0);
+    expect(resolveCommandPaletteSelection([disabled(), disabled()], 1)).toBe(0);
+  });
+});
+
+describe("resolveCommandPalettePagedSelection (#316 follow-up)", () => {
+  it("uses a fixed page step of 8", () => {
+    expect(COMMAND_PALETTE_PAGE_STEP).toBe(8);
+  });
+
+  it("returns null only for an empty list", () => {
+    expect(resolveCommandPalettePagedSelection(0, null, "home")).toBeNull();
+    expect(resolveCommandPalettePagedSelection(0, 0, "pageDown")).toBeNull();
+  });
+
+  it("Home goes to the first index, End to the last", () => {
+    expect(resolveCommandPalettePagedSelection(20, 12, "home")).toBe(0);
+    expect(resolveCommandPalettePagedSelection(20, 12, "end")).toBe(19);
+  });
+
+  it("PageDown jumps down by the page step and clamps at the last index", () => {
+    expect(resolveCommandPalettePagedSelection(20, 2, "pageDown")).toBe(10);
+    expect(resolveCommandPalettePagedSelection(20, 15, "pageDown")).toBe(19);
+  });
+
+  it("PageUp jumps up by the page step and clamps at the first index", () => {
+    expect(resolveCommandPalettePagedSelection(20, 15, "pageUp")).toBe(7);
+    expect(resolveCommandPalettePagedSelection(20, 3, "pageUp")).toBe(0);
+  });
+
+  it("treats a null current index as position 0", () => {
+    expect(resolveCommandPalettePagedSelection(20, null, "pageDown")).toBe(8);
+    expect(resolveCommandPalettePagedSelection(20, null, "pageUp")).toBe(0);
+    expect(resolveCommandPalettePagedSelection(20, null, "end")).toBe(19);
+  });
+
+  it("honors a caller-supplied page step", () => {
+    expect(resolveCommandPalettePagedSelection(20, 0, "pageDown", 3)).toBe(3);
   });
 });
 
