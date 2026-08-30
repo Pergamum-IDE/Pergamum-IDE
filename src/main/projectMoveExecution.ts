@@ -15,25 +15,44 @@
  *
  * The ONLY filesystem mutation here is `fs.rename`, inside the post-
  * validation loop. No rollback rename, no `unlink` / `rm` / `mkdir` /
- * `copyFile`. No Recovery re-key (that is #326, which consumes
- * `successfulPathPairs`). No IPC, no renderer / UI state.
+ * `copyFile`. No IPC, no renderer / UI state.
+ *
+ * #326: after a successful (or partially successful) execution, the moved
+ * `successfulPathPairs` are handed to an injected Recovery re-key hook
+ * (`deps.rekeyRecoveryPaths`, wired elsewhere to #320's
+ * `rekeyRecoveryDocumentPaths`). It is BEST EFFORT: it runs only when at
+ * least one file moved, its failure is swallowed, and it never changes
+ * `MoveEntriesResult.ok` — which stays a function of validation + rename
+ * results alone. This module still imports nothing from the Recovery Store.
  */
 
 import { promises as nodeFs } from "node:fs";
 import type {
+  MoveEntriesRecoveryRekey,
   MoveEntriesResult,
   MoveEntryExecutionFailureReason,
   MoveEntryExecutionResult,
   MoveEntryPathPair
 } from "../shared/projectMove";
+import type { RecoveryPathRekeyResult } from "../shared/recoveryDocument";
 import {
   validateMoveEntries,
   type ValidateMoveEntriesInput
 } from "./projectMoveValidation";
 
-/** Injectable so execution-time failures are deterministic in tests. */
+/** Injectable so execution / re-key are deterministic in tests. */
 export interface MoveEntriesDeps {
   readonly rename?: (oldPath: string, newPath: string) => Promise<void>;
+  /**
+   * #326: best-effort Recovery path re-key for the files that actually
+   * moved. Wired elsewhere to #320's `rekeyRecoveryDocumentPaths` (kept as a
+   * hook so this module never imports the Recovery Store). Called ONLY when
+   * `successfulPathPairs` is non-empty; a throw here is caught and does not
+   * reject `moveEntries` or change its `ok`.
+   */
+  readonly rekeyRecoveryPaths?: (
+    pairs: readonly MoveEntryPathPair[]
+  ) => RecoveryPathRekeyResult | Promise<RecoveryPathRekeyResult>;
 }
 
 const defaultRename: NonNullable<MoveEntriesDeps["rename"]> = (
@@ -116,19 +135,41 @@ export async function moveEntries(
     });
   }
 
-  if (anyFailed) {
-    return {
-      ok: false,
-      validation: { ok: true },
-      results,
-      successfulPathPairs
-    };
-  }
+  // #326: best-effort Recovery re-key for the files that actually moved.
+  // Never runs on an empty pair list; a throw is swallowed; the result is
+  // diagnostic metadata only and does not affect `ok`.
+  const recoveryRekey = await rekeyMovedPathsBestEffort(
+    successfulPathPairs,
+    deps.rekeyRecoveryPaths
+  );
 
   return {
-    ok: true,
+    ok: !anyFailed,
     validation: { ok: true },
     results,
-    successfulPathPairs
+    successfulPathPairs,
+    ...(recoveryRekey ? { recoveryRekey } : {})
   };
+}
+
+async function rekeyMovedPathsBestEffort(
+  successfulPathPairs: readonly MoveEntryPathPair[],
+  rekeyRecoveryPaths: MoveEntriesDeps["rekeyRecoveryPaths"]
+): Promise<MoveEntriesRecoveryRekey | undefined> {
+  if (!rekeyRecoveryPaths) {
+    return undefined;
+  }
+
+  if (successfulPathPairs.length === 0) {
+    return { skipped: "no-successful-path-pairs" };
+  }
+
+  try {
+    return await rekeyRecoveryPaths(successfulPathPairs);
+  } catch {
+    // Recovery is best effort — a re-key failure never rejects the Move
+    // (which already completed) or changes its result. The hook itself
+    // owns any safe #320 logging.
+    return { failed: "threw" };
+  }
 }
