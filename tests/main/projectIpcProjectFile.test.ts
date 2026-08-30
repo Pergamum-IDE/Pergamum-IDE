@@ -70,6 +70,7 @@ import {
   type ProjectWriteOwnership,
   type ProjectWriteOwnershipManager,
   type ProjectWindowTitleTargetProvider,
+  type RecoveryPathRekeyHook,
   registerProjectIpc
 } from "../../src/main/projectIpc";
 import {
@@ -3735,6 +3736,86 @@ describe("project file IPC foundation", () => {
     expect(document.content).toBe("# RENAMED_MANUSCRIPT_MARKER\n");
   });
 
+  function renameHandlerWithRekey(
+    rekey: RecoveryPathRekeyHook
+  ): (...args: unknown[]) => unknown {
+    // Registered LAST (after openExplorerProject's own registration) so this
+    // rekey hook is the one bound when the rename handler runs.
+    return registeredHandler(
+      PROJECT_CHANNELS.renameFileExplorerEntry,
+      createLoggerMock(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      rekey
+    );
+  }
+
+  it("hands the successful file rename's old/new absolute paths to the Recovery re-key hook (#320)", async () => {
+    await openExplorerProject("Rekey Rename");
+    await fs.writeFile(
+      path.join(projectRootPath, "work.md"),
+      "# body\n",
+      "utf8"
+    );
+    const rekey = vi.fn();
+
+    const result = (await renameHandlerWithRekey(rekey)(
+      { sender: {} },
+      { sourceRelativePath: "work.md", newName: "final" }
+    )) as { ok: boolean };
+
+    expect(result.ok).toBe(true);
+    expect(rekey).toHaveBeenCalledTimes(1);
+    expect(rekey).toHaveBeenCalledWith([
+      {
+        oldAbsolutePath: path.join(projectRootPath, "work.md"),
+        newAbsolutePath: path.join(projectRootPath, "final.md")
+      }
+    ]);
+  });
+
+  it("does not call the Recovery re-key hook for an empty-folder rename (#320)", async () => {
+    await openExplorerProject("Rekey Folder Rename");
+    await fs.mkdir(path.join(projectRootPath, "Empty"));
+    const rekey = vi.fn();
+
+    const result = (await renameHandlerWithRekey(rekey)(
+      { sender: {} },
+      { sourceRelativePath: "Empty", newName: "Renamed" }
+    )) as { ok: boolean };
+
+    expect(result.ok).toBe(true);
+    expect(rekey).not.toHaveBeenCalled();
+  });
+
+  it("still returns rename success when the Recovery re-key hook throws (#320)", async () => {
+    await openExplorerProject("Rekey Throws");
+    await fs.writeFile(
+      path.join(projectRootPath, "work.md"),
+      "# body\n",
+      "utf8"
+    );
+    const rekey = vi.fn(() => {
+      throw new Error("recovery store exploded");
+    });
+
+    const result = (await renameHandlerWithRekey(rekey)(
+      { sender: {} },
+      { sourceRelativePath: "work.md", newName: "final" }
+    )) as { ok: boolean; newEntry?: { relativePath: string } };
+
+    expect(result).toMatchObject({
+      ok: true,
+      newEntry: { relativePath: "final.md" }
+    });
+    expect(rekey).toHaveBeenCalledTimes(1);
+    await expect(
+      fs.readFile(path.join(projectRootPath, "final.md"), "utf8")
+    ).resolves.toBe("# body\n");
+  });
+
   it("renames an empty folder without creating, deleting, or moving its children", async () => {
     await openExplorerProject("Rename Empty Folder");
     await fs.mkdir(path.join(projectRootPath, "Empty"));
@@ -4168,14 +4249,16 @@ function registeredHandler(
   writeOwnershipManager?: ProjectWriteOwnershipManager,
   windowTitleTargetProvider?: ProjectWindowTitleTargetProvider,
   startupProjectFilePath?: string | null,
-  instanceRunId?: string
+  instanceRunId?: string,
+  rekeyRecoveryPaths?: RecoveryPathRekeyHook
 ): (...args: unknown[]) => unknown {
   registerProjectIpc(
     logger,
     writeOwnershipManager,
     windowTitleTargetProvider,
     startupProjectFilePath,
-    instanceRunId
+    instanceRunId,
+    rekeyRecoveryPaths
   );
 
   const registration = electronMock.handle.mock.calls.find(

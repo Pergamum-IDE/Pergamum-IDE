@@ -21,11 +21,43 @@
  * never blocks editing.
  */
 
-import type {
-  RecoveryDocumentPayload,
-  RecoveryDocumentWriteResult
+import {
+  recoveryFileSourceUri,
+  type RecoveryDocumentPayload,
+  type RecoveryDocumentWriteResult
 } from "../../shared/recoveryDocument";
 import type { RecoveryDirtyDocument } from "./recoveryDocumentPayload";
+
+/** #320: one open working copy whose backing file was renamed / moved. */
+export interface RecoveryKeyRelocation {
+  readonly oldKey: string;
+  readonly newKey: string;
+}
+
+/**
+ * Rewrite a pending payload's identity fields to a new `file:` document key
+ * (the file was renamed / moved). Untitled keys never relocate, so a
+ * non-`file:` `newKey` leaves the payload untouched. `payload_text` and the
+ * base fingerprint are unchanged — only where it lands moves.
+ */
+function relocatePayloadIdentity(
+  payload: RecoveryDocumentPayload,
+  newKey: string
+): RecoveryDocumentPayload {
+  if (!newKey.startsWith("file:")) {
+    return { ...payload, documentKey: newKey };
+  }
+
+  const newPath = newKey.slice("file:".length);
+
+  return {
+    ...payload,
+    documentKey: newKey,
+    sourceUri: recoveryFileSourceUri(newPath),
+    filePath: newPath,
+    displayName: newPath.slice(newPath.lastIndexOf("/") + 1)
+  };
+}
 
 export const RECOVERY_IDLE_FLUSH_MS = 3_000;
 export const RECOVERY_MAX_FLUSH_MS = 60_000;
@@ -269,6 +301,57 @@ export class RecoveryPayloadCoordinator {
         }
       }
     });
+  }
+
+  /**
+   * #320: a File Explorer rename / move changed one or more open documents'
+   * backing paths. Follow the current-run Recovery bookkeeping from each old
+   * `document_key` to the new one so a queued flush lands under the new
+   * identity and no current-run payload is left owned by the stale key. The
+   * matching main-side `documents` row is re-keyed separately (owner-side,
+   * covers closed / previous-run rows too); this keeps the two in step for
+   * the open document.
+   *
+   * A no-op while disabled / stopped. Does not delete any `Recovery.db`
+   * row — rename is not a discard.
+   */
+  onPathsRelocated(relocations: readonly RecoveryKeyRelocation[]): void {
+    if (!this.isEnabled()) {
+      return;
+    }
+
+    let movedIntoPending = false;
+
+    for (const { oldKey, newKey } of relocations) {
+      if (oldKey === newKey) {
+        continue;
+      }
+
+      const pending = this.pendingByKey.get(oldKey);
+
+      if (pending) {
+        this.pendingByKey.delete(oldKey);
+        // Only overwrite the new slot if nothing fresher is already queued
+        // there (a rebuilt payload from a later `updateDirtyDocuments`).
+        if (!this.pendingByKey.has(newKey)) {
+          this.pendingByKey.set(
+            newKey,
+            relocatePayloadIdentity(pending, newKey)
+          );
+          movedIntoPending = true;
+        }
+      }
+
+      // Drop the stale dedupe entry; the next flush re-confirms the row
+      // under the new key. (`updateDirtyDocuments` deliberately keeps
+      // `lastFlushedByKey` when a key merely leaves the set — a relocation
+      // is different: that key is gone for good.)
+      this.lastFlushedByKey.delete(oldKey);
+    }
+
+    if (movedIntoPending) {
+      this.scheduleFlush();
+    }
   }
 
   /** Best-effort flush of any pending dirty payloads (approved quit / final

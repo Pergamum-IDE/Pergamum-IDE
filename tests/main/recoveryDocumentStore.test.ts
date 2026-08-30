@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openRecoveryStoreDatabase } from "../../src/main/recoveryStoreDatabase";
 import {
   deleteRecoveryDocument,
+  rekeyRecoveryDocumentPath,
   upsertRecoveryDocument,
   type UpsertRecoveryDocumentContext
 } from "../../src/main/recoveryDocumentStore";
@@ -229,5 +230,113 @@ describe("deleteRecoveryDocument", () => {
 
     expect(row(db, "file:C:/Novel/chapter.md")).toBeUndefined();
     expect(row(db, "file:C:/Novel/other.md")).toBeDefined();
+  });
+});
+
+describe("rekeyRecoveryDocumentPath (#320)", () => {
+  const rekeyInput = {
+    oldDocumentKey: "file:C:/Novel/chapter.md",
+    newDocumentKey: "file:C:/Novel/Drafts/final.md",
+    newSourceUri: "file://C:/Novel/Drafts/final.md",
+    newFilePath: "C:/Novel/Drafts/final.md",
+    newDisplayName: "final.md"
+  };
+
+  it("moves a row's identity columns and keeps payload / provenance intact", () => {
+    const db = handle!;
+    upsertRecoveryDocument(db.database, filePayload(), context());
+
+    expect(rekeyRecoveryDocumentPath(db.database, rekeyInput)).toBe("rekeyed");
+
+    expect(row(db, "file:C:/Novel/chapter.md")).toBeUndefined();
+    expect(row(db, "file:C:/Novel/Drafts/final.md")).toMatchObject({
+      id: "row-1",
+      document_key: "file:C:/Novel/Drafts/final.md",
+      source_uri: "file://C:/Novel/Drafts/final.md",
+      file_path: "C:/Novel/Drafts/final.md",
+      display_name: "final.md",
+      // untouched
+      payload_text: "# Chapter\nSECRET_MANUSCRIPT_BODY_v1",
+      base_size: 10,
+      base_sha256: SHA_A,
+      origin_instance_run_id: "0198d95f-97d8-7000-8000-00000000run",
+      created_at: "2026-08-29T08:21:00.000Z",
+      updated_at: "2026-08-29T08:21:00.000Z"
+    });
+  });
+
+  it("re-keys a previous-run candidate row the same way", () => {
+    const db = handle!;
+    upsertRecoveryDocument(
+      db.database,
+      filePayload(),
+      context({ instanceRunId: "0198d95f-0000-7000-8000-0000previousru" })
+    );
+
+    expect(rekeyRecoveryDocumentPath(db.database, rekeyInput)).toBe("rekeyed");
+    expect(
+      row(db, "file:C:/Novel/Drafts/final.md")?.origin_instance_run_id
+    ).toBe("0198d95f-0000-7000-8000-0000previousru");
+  });
+
+  it("returns 'no-row' when nothing references the old key (and writes nothing)", () => {
+    const db = handle!;
+    upsertRecoveryDocument(
+      db.database,
+      filePayload({
+        documentKey: "file:C:/Novel/unrelated.md",
+        sourceUri: "file://C:/Novel/unrelated.md",
+        filePath: "C:/Novel/unrelated.md"
+      }),
+      context()
+    );
+
+    expect(rekeyRecoveryDocumentPath(db.database, rekeyInput)).toBe("no-row");
+    expect(row(db, "file:C:/Novel/Drafts/final.md")).toBeUndefined();
+    expect(row(db, "file:C:/Novel/unrelated.md")).toBeDefined();
+  });
+
+  it("reports a collision and leaves BOTH rows untouched when the new key exists", () => {
+    const db = handle!;
+    upsertRecoveryDocument(
+      db.database,
+      filePayload({ payloadText: "OLD_KEY_BODY" }),
+      context()
+    );
+    upsertRecoveryDocument(
+      db.database,
+      filePayload({
+        documentKey: "file:C:/Novel/Drafts/final.md",
+        sourceUri: "file://C:/Novel/Drafts/final.md",
+        filePath: "C:/Novel/Drafts/final.md",
+        displayName: "final.md",
+        payloadText: "NEW_KEY_BODY"
+      }),
+      context()
+    );
+
+    expect(rekeyRecoveryDocumentPath(db.database, rekeyInput)).toBe(
+      "collision"
+    );
+
+    expect(row(db, "file:C:/Novel/chapter.md")).toMatchObject({
+      payload_text: "OLD_KEY_BODY"
+    });
+    expect(row(db, "file:C:/Novel/Drafts/final.md")).toMatchObject({
+      payload_text: "NEW_KEY_BODY"
+    });
+  });
+
+  it("is a no-op when the old and new keys are identical", () => {
+    const db = handle!;
+    upsertRecoveryDocument(db.database, filePayload(), context());
+
+    expect(
+      rekeyRecoveryDocumentPath(db.database, {
+        ...rekeyInput,
+        oldDocumentKey: "file:C:/Novel/chapter.md",
+        newDocumentKey: "file:C:/Novel/chapter.md"
+      })
+    ).toBe("no-row");
   });
 });

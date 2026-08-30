@@ -167,7 +167,8 @@ import { RecoveryPayloadCoordinator } from "./recovery/recoveryPayloadCoordinato
 import {
   buildRecoveryDirtyDocuments,
   buildRecoveryDocumentPayload,
-  recoveryDocumentKeyForDocument
+  recoveryDocumentKeyForDocument,
+  recoveryDocumentKeyForProjectRelativePath
 } from "./recovery/recoveryDocumentPayload";
 import { RecoveryCandidateDialog } from "./recovery/RecoveryCandidateDialog";
 import {
@@ -5745,6 +5746,26 @@ export function App(): JSX.Element {
     }
 
     editorNavigationRef.current?.invalidateEditor(oldEditorId);
+
+    // #320: follow the current-run Recovery bookkeeping from the old path's
+    // key to the new one, matching the owner-side `documents` row re-key that
+    // the rename IPC already did. Best-effort — a null key (no project
+    // context / unnormalisable path) or a disabled coordinator is a no-op.
+    const oldRecoveryKey = recoveryDocumentKeyForProjectRelativePath(
+      oldRelativePath,
+      { project: projectSnapshot, activeProjectContext }
+    );
+    const newRecoveryKey = recoveryDocumentKeyForProjectRelativePath(
+      newEntry.relativePath,
+      { project: projectSnapshot, activeProjectContext }
+    );
+
+    if (oldRecoveryKey && newRecoveryKey && oldRecoveryKey !== newRecoveryKey) {
+      recoveryPayloadCoordinator.onPathsRelocated([
+        { oldKey: oldRecoveryKey, newKey: newRecoveryKey }
+      ]);
+    }
+
     setStatus({
       key: "status.fileExplorerRenameSucceeded",
       values: { relativePath: newEntry.relativePath }

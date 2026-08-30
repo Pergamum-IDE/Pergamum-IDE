@@ -1890,6 +1890,18 @@ async function resolveFileExplorerRenameTarget(
   };
 }
 
+/**
+ * #320: notify the Recovery Store that files moved on disk, so a pending
+ * Recovery candidate for the old path is re-keyed instead of stranded. Best
+ * effort — it never throws and its result does not affect the rename / move
+ * result. Takes a list so a future batch / subtree Move reuses it.
+ */
+export type RecoveryPathRekeyHook = (
+  pairs: readonly { oldAbsolutePath: string; newAbsolutePath: string }[]
+) => void;
+
+let recoveryPathRekeyHook: RecoveryPathRekeyHook | null = null;
+
 async function renameFileExplorerEntry(
   rawRequest: unknown
 ): Promise<RenameFileExplorerEntryResult> {
@@ -1921,6 +1933,20 @@ async function renameFileExplorerEntry(
   if (target.entryKind === "file") {
     target.projectState.documentRelativePaths.delete(target.oldRelativePath);
     target.projectState.documentRelativePaths.add(target.newRelativePath);
+
+    // #320: fs.rename succeeded — re-key any Recovery row for the old path.
+    // A folder rename in v1 is empty-folder-only, so no descendant file
+    // paths change; only a file rename needs this.
+    try {
+      recoveryPathRekeyHook?.([
+        {
+          oldAbsolutePath: target.sourcePath,
+          newAbsolutePath: target.targetPath
+        }
+      ]);
+    } catch {
+      // Best effort: a Recovery re-key failure never breaks the rename.
+    }
   }
 
   return {
@@ -2956,9 +2982,11 @@ export function registerProjectIpc(
     defaultProjectWriteOwnershipManager,
   windowTitleTargetProvider?: ProjectWindowTitleTargetProvider,
   startupProjectFilePath?: string | null,
-  instanceRunId?: string
+  instanceRunId?: string,
+  rekeyRecoveryPaths?: RecoveryPathRekeyHook
 ): void {
   setProjectWindowTitleTargetProvider(windowTitleTargetProvider ?? null);
+  recoveryPathRekeyHook = rekeyRecoveryPaths ?? null;
   let pendingStartupProjectFilePath = startupProjectFilePath ?? null;
 
   ipcMain.handle(PROJECT_CHANNELS.createProject, (event) =>

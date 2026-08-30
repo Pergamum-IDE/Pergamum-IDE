@@ -244,6 +244,92 @@ describe("RecoveryPayloadCoordinator — tab close / disappearance", () => {
   });
 });
 
+describe("RecoveryPayloadCoordinator — onPathsRelocated (#320)", () => {
+  it("moves a queued (unflushed) payload from the old key to the new one, rewriting its identity", async () => {
+    const h = makeHarness();
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/Novel/old.md", "v1")]);
+
+    // Rename happens before the idle flush fires.
+    h.coordinator.onPathsRelocated([
+      { oldKey: "file:C:/Novel/old.md", newKey: "file:C:/Novel/Drafts/new.md" }
+    ]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+
+    expect(h.upsert).toHaveBeenCalledTimes(1);
+    const p = h.upsert.mock.calls[0][0];
+    expect(p.documentKey).toBe("file:C:/Novel/Drafts/new.md");
+    expect(p.sourceUri).toBe("file://C:/Novel/Drafts/new.md");
+    expect(p.filePath).toBe("C:/Novel/Drafts/new.md");
+    expect(p.displayName).toBe("new.md");
+    expect(p.payloadText).toBe("v1");
+    // The old key is never written or deleted.
+    expect(h.del).not.toHaveBeenCalled();
+  });
+
+  it("does not resurrect anything when there is nothing queued, and never deletes a row", async () => {
+    const h = makeHarness();
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/Novel/old.md", "v1")]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+    expect(h.upsert).toHaveBeenCalledTimes(1);
+    h.upsert.mockClear();
+
+    h.coordinator.onPathsRelocated([
+      { oldKey: "file:C:/Novel/old.md", newKey: "file:C:/Novel/new.md" }
+    ]);
+    await h.clock.advance(RECOVERY_MAX_FLUSH_MS);
+
+    expect(h.upsert).not.toHaveBeenCalled();
+    expect(h.del).not.toHaveBeenCalled();
+  });
+
+  it("keeps a fresher payload already queued under the new key", async () => {
+    const h = makeHarness();
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/Novel/old.md", "v1")]);
+    // Host re-fed after the rename: the rebuilt payload is already under the
+    // new key when the relocation call arrives.
+    h.coordinator.updateDirtyDocuments([
+      dirty("file:C:/Novel/new.md", "v2-rebuilt"),
+      dirty("file:C:/Novel/old.md", "v1")
+    ]);
+
+    h.coordinator.onPathsRelocated([
+      { oldKey: "file:C:/Novel/old.md", newKey: "file:C:/Novel/new.md" }
+    ]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+
+    const byKey = new Map(
+      h.upsert.mock.calls.map((c) => [c[0].documentKey, c[0].payloadText])
+    );
+    expect(byKey.get("file:C:/Novel/new.md")).toBe("v2-rebuilt");
+    expect(byKey.has("file:C:/Novel/old.md")).toBe(false);
+  });
+
+  it("is a no-op while disabled", async () => {
+    const h = makeHarness({ enabled: false });
+
+    h.coordinator.onPathsRelocated([
+      { oldKey: "file:C:/Novel/old.md", newKey: "file:C:/Novel/new.md" }
+    ]);
+    await h.clock.advance(RECOVERY_MAX_FLUSH_MS);
+
+    expect(h.upsert).not.toHaveBeenCalled();
+    expect(h.del).not.toHaveBeenCalled();
+  });
+
+  it("ignores a relocation whose old and new keys are identical", async () => {
+    const h = makeHarness();
+    h.coordinator.updateDirtyDocuments([dirty("file:C:/Novel/a.md", "v1")]);
+
+    h.coordinator.onPathsRelocated([
+      { oldKey: "file:C:/Novel/a.md", newKey: "file:C:/Novel/a.md" }
+    ]);
+    await h.clock.advance(RECOVERY_IDLE_FLUSH_MS);
+
+    expect(h.upsert).toHaveBeenCalledTimes(1);
+    expect(h.upsert.mock.calls[0][0].documentKey).toBe("file:C:/Novel/a.md");
+  });
+});
+
 describe("RecoveryPayloadCoordinator — Save-success identity matrix", () => {
   it("normal Save, no in-flight edits: deletes the current key", async () => {
     const h = makeHarness();

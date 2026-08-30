@@ -451,6 +451,18 @@ describe("debug log catalog", () => {
     expect(debugLogEventNames).not.toContain("recovery.document.body");
   });
 
+  it("includes the Recovery document path re-key events (#320)", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "recovery.document.rekeyed",
+        "recovery.document.rekey.collision",
+        "recovery.document.rekey.failed"
+      ])
+    );
+    // The event names describe the operation, not the moved path.
+    expect(debugLogEventNames).not.toContain("recovery.document.rekey.path");
+  });
+
   it("includes the Recovery candidate dialog events (Phase 6-4-4)", () => {
     expect(debugLogEventNames).toEqual(
       expect.arrayContaining([
