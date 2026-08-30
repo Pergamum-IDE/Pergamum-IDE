@@ -103,6 +103,48 @@ describe("NameInputDialog", () => {
     expect(icon.getAttribute("alt")).toBe("caller icon");
   });
 
+  it("renders caller-provided context (label + value) verbatim above the input", () => {
+    render(
+      baseProps({
+        contextLabel: "Create in:",
+        contextValue: "Drafts/Chapter1"
+      })
+    );
+
+    const context = container.querySelector(".nameInputDialogContext")!;
+    expect(context).not.toBeNull();
+    expect(
+      context.querySelector(".nameInputDialogContextLabel")?.textContent
+    ).toBe("Create in:");
+    expect(
+      context.querySelector(".nameInputDialogContextValue")?.textContent
+    ).toBe("Drafts/Chapter1");
+  });
+
+  it("omits the context block entirely when no contextValue is provided", () => {
+    render(baseProps({ contextLabel: "Create in:" }));
+    expect(container.querySelector(".nameInputDialogContext")).toBeNull();
+  });
+
+  it("renders the context value without a label when only contextValue is given", () => {
+    render(baseProps({ contextValue: "Project root" }));
+    const context = container.querySelector(".nameInputDialogContext")!;
+    expect(context).not.toBeNull();
+    expect(context.querySelector(".nameInputDialogContextLabel")).toBeNull();
+    expect(
+      context.querySelector(".nameInputDialogContextValue")?.textContent
+    ).toBe("Project root");
+  });
+
+  it("stays generic — it does not resolve or transform the context value", () => {
+    // Whatever the caller passes is shown as-is; the dialog applies no path
+    // rules of its own.
+    render(baseProps({ contextValue: "  weird//value  " }));
+    expect(
+      container.querySelector(".nameInputDialogContextValue")?.textContent
+    ).toBe("  weird//value  ");
+  });
+
   it("treats an icon with no alt as decorative", () => {
     render(baseProps({ icon: { url: "/x.svg" } }));
     const icon = container.querySelector<HTMLImageElement>(".nameInputDialogIcon")!;

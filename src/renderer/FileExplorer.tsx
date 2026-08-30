@@ -36,6 +36,16 @@ import {
   type FileExplorerCreateKind
 } from "./fileExplorerCreateMessages";
 
+/**
+ * #311: an external request (from the Command Palette) to open the same
+ * "New File" / "New Folder" dialog the toolbar opens. `token` changes on
+ * every request so a repeated command re-opens the dialog.
+ */
+export interface FileExplorerCreateEntryRequest {
+  kind: FileExplorerCreateKind;
+  token: number;
+}
+
 interface FileExplorerProps {
   project: PergamumProject | null;
   highlightedRelativePath: string | null;
@@ -43,6 +53,9 @@ interface FileExplorerProps {
   /** #307: disable the create toolbar and never attempt a create IPC. */
   readOnly?: boolean;
   clipboardAdapter?: ClipboardAdapter;
+  /** #311: Command Palette "Create New …" request; consumed once per token. */
+  createEntryRequest?: FileExplorerCreateEntryRequest | null;
+  onCreateEntryRequestHandled?: () => void;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -58,6 +71,9 @@ interface FileExplorerViewProps {
   highlightedRelativePath: string | null;
   canCreate: boolean;
   translate: Translate;
+  /** #311: attached to the active project document entry once it is
+   *  rendered, so the container can scroll it into view. */
+  activeDocumentEntryRef?: (element: HTMLButtonElement | null) => void;
   onReload: () => void;
   onNewFile: () => void;
   onNewFolder: () => void;
@@ -293,6 +309,25 @@ export function resolveFileExplorerCreateParentDirectory({
   return null;
 }
 
+/** #311: the smallest scroll-target contract needed to nudge the active
+ *  project document entry into view — an element (or a test double) exposing
+ *  `scrollIntoView`. */
+export interface FileExplorerScrollTarget {
+  scrollIntoView(options?: ScrollIntoViewOptions): void;
+}
+
+/**
+ * #311: bring the active project document entry into view after #309 has
+ * revealed it. Deliberately conservative — `block: "nearest"` does nothing
+ * when the entry is already visible, and it never focuses or selects the
+ * entry. Non-project editors pass `null` here and nothing scrolls.
+ */
+export function scrollFileExplorerActiveDocumentIntoView(
+  target: FileExplorerScrollTarget | null
+): void {
+  target?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
 function iconForEntry(
   entry: FileExplorerEntry,
   expandedDirectoryPaths: ReadonlySet<string>
@@ -312,6 +347,8 @@ export function FileExplorer({
   translate,
   readOnly = false,
   clipboardAdapter = navigatorClipboardAdapter,
+  createEntryRequest = null,
+  onCreateEntryRequestHandled,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
   const [entriesByDirectoryPath, setEntriesByDirectoryPath] = useState<
@@ -330,6 +367,11 @@ export function FileExplorer({
   >(() => new Set());
   const [selection, setSelection] = useState<FileExplorerSelection | null>(null);
   const loadGenerationRef = useRef(0);
+  // #311: the DOM node of the active project document entry (once #309 has
+  // revealed it) and the last path we scrolled to, so the scroll fires once
+  // per active document and never on every re-render.
+  const activeDocumentEntryElementRef = useRef<HTMLButtonElement | null>(null);
+  const lastScrolledHighlightRef = useRef<string | null>(null);
   const projectKey = project
     ? `${project.rootPath}\0${project.activeProjectFilePath}`
     : "no-project";
@@ -527,6 +569,45 @@ export function FileExplorer({
     unavailableDirectoryPaths
   ]);
 
+  const setActiveDocumentEntryElement = useCallback(
+    (element: HTMLButtonElement | null) => {
+      activeDocumentEntryElementRef.current = element;
+    },
+    []
+  );
+
+  // #311: once the active project document entry is in the rendered tree,
+  // nudge it into view. Conservative by design — `block: "nearest"` is a
+  // no-op when the entry is already visible — and it never focuses, selects,
+  // or collapses anything. Non-project editors feed a null highlighted path,
+  // so nothing scrolls for them. Runs at most once per active document via
+  // `lastScrolledHighlightRef`; re-runs on tree changes so a document that
+  // needed lazy ancestor expansion still scrolls once its entry mounts.
+  useEffect(() => {
+    if (!hasProject || !highlightedRelativePath) {
+      lastScrolledHighlightRef.current = null;
+      return;
+    }
+
+    if (lastScrolledHighlightRef.current === highlightedRelativePath) {
+      return;
+    }
+
+    const element = activeDocumentEntryElementRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    lastScrolledHighlightRef.current = highlightedRelativePath;
+    scrollFileExplorerActiveDocumentIntoView(element);
+  }, [
+    entriesByDirectoryPath,
+    expandedDirectoryPaths,
+    hasProject,
+    highlightedRelativePath
+  ]);
+
   const selectRoot = useCallback(() => {
     setSelection({ kind: "root" });
   }, []);
@@ -589,6 +670,20 @@ export function FileExplorer({
   // read-only mode the renderer never calls the create IPC.
   const canCreate = hasProject && !readOnly;
 
+  // #311: the folder a create would target, as a project-relative path
+  // (`null` = project root). Same rule as the create IPC uses; shown in the
+  // name dialog so the user can see where the item lands. Never absolute —
+  // the main process resolves the real path.
+  const createParentDirectory = useMemo(
+    () =>
+      resolveFileExplorerCreateParentDirectory({
+        entriesByDirectoryPath,
+        isRootSelected,
+        selectedRelativePath
+      }),
+    [entriesByDirectoryPath, isRootSelected, selectedRelativePath]
+  );
+
   const openCreateDialog = useCallback(
     (kind: FileExplorerCreateKind) => {
       if (!canCreate) {
@@ -598,6 +693,27 @@ export function FileExplorer({
     },
     [canCreate]
   );
+
+  // #311: a Command Palette "Create New File / Folder" opens the very same
+  // dialog the toolbar opens. The create target still resolves from the
+  // current File Explorer selection (or the project root when there is
+  // none), so no Palette-specific creation path exists. Consumed once per
+  // `token`; the read-only / no-project guard in `openCreateDialog` still
+  // applies as a backstop to the command's `when` gate.
+  const handledCreateEntryRequestTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!createEntryRequest) {
+      return;
+    }
+    if (
+      handledCreateEntryRequestTokenRef.current === createEntryRequest.token
+    ) {
+      return;
+    }
+    handledCreateEntryRequestTokenRef.current = createEntryRequest.token;
+    openCreateDialog(createEntryRequest.kind);
+    onCreateEntryRequestHandled?.();
+  }, [createEntryRequest, onCreateEntryRequestHandled, openCreateDialog]);
 
   const submitCreate = useCallback(
     async (
@@ -723,6 +839,7 @@ export function FileExplorer({
         highlightedRelativePath={project ? highlightedRelativePath : null}
         canCreate={canCreate}
         translate={translate}
+        activeDocumentEntryRef={setActiveDocumentEntryElement}
         onReload={reloadCurrentExplorerContext}
         onNewFile={() => openCreateDialog("file")}
         onNewFolder={() => openCreateDialog("folder")}
@@ -759,6 +876,11 @@ export function FileExplorer({
               ? "explorer.newFile.primary"
               : "explorer.newFolder.primary"
           )}
+          contextLabel={translate("explorer.create.target.label")}
+          contextValue={
+            createParentDirectory ??
+            translate("explorer.create.target.projectRoot")
+          }
           icon={{
             url: createDialogKind === "file" ? filePlusIconUrl : folderPlusIconUrl
           }}
@@ -789,6 +911,7 @@ export function FileExplorerView({
   highlightedRelativePath,
   canCreate,
   translate,
+  activeDocumentEntryRef,
   onReload,
   onNewFile,
   onNewFolder,
@@ -813,6 +936,7 @@ export function FileExplorerView({
       <div key={entry.relativePath}>
         <button
           type="button"
+          ref={isHighlighted ? activeDocumentEntryRef : undefined}
           role="treeitem"
           aria-expanded={entry.kind === "folder" ? isExpanded : undefined}
           aria-current={isHighlighted ? "page" : undefined}

@@ -13,8 +13,8 @@ const executionOptions = { source: "activityBar" } as const;
 
 describe("workspace commands", () => {
   const titles = {
-    focusFiles: "Focus File Explorer",
-    focusFilesDescription: "Show the File Explorer.",
+    toggleFiles: "Focus File Explorer",
+    toggleFilesDescription: "Show the File Explorer.",
     focusSearch: "Focus Search",
     focusSearchDescription: "Not implemented.",
     focusGlossary: "Focus Glossary",
@@ -36,7 +36,7 @@ describe("workspace commands", () => {
     );
 
     expect(registry.list().map((command) => command.id)).toEqual([
-      workspaceCommandIds.focusFiles,
+      workspaceCommandIds.toggleFiles,
       workspaceCommandIds.focusSearch,
       workspaceCommandIds.focusGlossary,
       workspaceCommandIds.openApplicationSettings
@@ -58,7 +58,7 @@ describe("workspace commands", () => {
       titles
     );
 
-    await registry.execute(workspaceCommandIds.focusFiles, executionOptions);
+    await registry.execute(workspaceCommandIds.toggleFiles, executionOptions);
     await registry.execute(workspaceCommandIds.focusSearch, executionOptions);
     await registry.execute(workspaceCommandIds.focusGlossary, executionOptions);
 
@@ -88,7 +88,7 @@ describe("workspace commands", () => {
 
   it("maps Sidebar modes to stable Workspace Command IDs", () => {
     expect(workspaceFocusCommandIdForMode("files")).toBe(
-      workspaceCommandIds.focusFiles
+      workspaceCommandIds.toggleFiles
     );
     expect(workspaceFocusCommandIdForMode("search")).toBe(
       workspaceCommandIds.focusSearch
@@ -102,9 +102,9 @@ describe("workspace commands", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createWorkspaceCommandTitles(translate)).toEqual({
-      focusFiles: "translated:command.workspace.files.focus",
-      focusFilesDescription:
-        "translated:command.workspace.files.focus.description",
+      toggleFiles: "translated:command.workspace.files.toggle",
+      toggleFilesDescription:
+        "translated:command.workspace.files.toggle.description",
       focusSearch: "translated:command.workspace.search.focus",
       focusSearchDescription:
         "translated:command.workspace.search.focus.description",

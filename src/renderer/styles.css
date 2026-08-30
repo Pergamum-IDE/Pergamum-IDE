@@ -2838,6 +2838,36 @@ label.settingsItemHeader {
   line-height: 1.4;
 }
 
+.nameInputDialogContext {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--app-dialog-inset-background, rgba(37, 99, 168, 0.08));
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.nameInputDialogContextLabel {
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  font-weight: 600;
+}
+
+.nameInputDialogContextValue {
+  font-family: var(
+    --app-monospace-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace
+  );
+  word-break: break-all;
+}
+
 .nameInputDialogLabel {
   display: flex;
   flex-direction: column;

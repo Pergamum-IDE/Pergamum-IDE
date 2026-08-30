@@ -106,7 +106,7 @@ describe("debug logger", () => {
       seq: 99,
       timestamp: "1999-01-01T00:00:00.000+00:00",
       details: {
-        commandId: "workspace.files.focus",
+        commandId: "workspace.files.toggle",
         bogusField: "renderer",
         message: "free form",
         fileName: "secret.md",
@@ -127,7 +127,7 @@ describe("debug logger", () => {
       level: "debug",
       event: "command.invoked",
       details: {
-        commandId: "workspace.files.focus",
+        commandId: "workspace.files.toggle",
         droppedKeyCount: 4,
         error: {
           name: "Error",
@@ -167,7 +167,7 @@ describe("debug logger", () => {
     logger.log({
       level: "debug",
       event: "command.invoked",
-      details: { commandId: "workspace.files.focus" }
+      details: { commandId: "workspace.files.toggle" }
     });
     logger.log({
       level: "debug",
@@ -270,7 +270,7 @@ describe("debug logger", () => {
     logger.log({
       level: "debug",
       event: "command.invoked",
-      details: { commandId: "workspace.files.focus" }
+      details: { commandId: "workspace.files.toggle" }
     });
     logger.log({
       level: "debug",
@@ -319,7 +319,7 @@ describe("debug logger", () => {
     logger.log({
       level: "warn",
       event: "command.invoked",
-      details: { commandId: "workspace.files.focus" }
+      details: { commandId: "workspace.files.toggle" }
     });
 
     const files = await jsonlFiles(logsDir);
@@ -404,7 +404,7 @@ describe("debug logger", () => {
     logger.logRendererRequest({
       level: "info",
       event: "catalog.outside",
-      details: { commandId: "workspace.files.focus" }
+      details: { commandId: "workspace.files.toggle" }
     });
     logger.logRendererRequest({
       level: "debug",
@@ -466,7 +466,7 @@ describe("debug logger", () => {
       logger.log({
         level: "debug",
         event: "command.invoked",
-        details: { commandId: "workspace.files.focus" }
+        details: { commandId: "workspace.files.toggle" }
       });
       logger.log({
         level: "debug",
@@ -508,7 +508,7 @@ describe("debug logger", () => {
     logger.log({
       level: "debug",
       event: "command.invoked",
-      details: { commandId: "workspace.files.focus" }
+      details: { commandId: "workspace.files.toggle" }
     });
     logger.log({
       level: "debug",

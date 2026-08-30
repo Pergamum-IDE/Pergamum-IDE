@@ -69,7 +69,7 @@ describe("DebugLogPanelView", () => {
               level: "debug",
               event: "command.invoked",
               details: {
-                commandId: "workspace.files.focus"
+                commandId: "workspace.files.toggle"
               }
             }
           ],
@@ -86,7 +86,7 @@ describe("DebugLogPanelView", () => {
     expect(markup).toContain("22:00:21.959");
     expect(markup).toContain("2026-08-15 00:00:00.012");
     expect(markup).toContain("command.invoked");
-    expect(markup).toContain("workspace.files.focus");
+    expect(markup).toContain("workspace.files.toggle");
     expect(markup).not.toContain(sessionId);
     expect(markup).not.toContain(".jsonl");
   });

@@ -13,7 +13,8 @@ import type { CreateFileExplorerEntryResult } from "../../src/shared/api";
 import {
   FileExplorer,
   resolveFileExplorerCreateParentDirectory,
-  resolveFileExplorerReloadTargets
+  resolveFileExplorerReloadTargets,
+  scrollFileExplorerActiveDocumentIntoView
 } from "../../src/renderer/FileExplorer";
 
 const translate: Translate = (key) => key;
@@ -1278,5 +1279,540 @@ describe("FileExplorer active project document reveal (#309)", () => {
       "Drafts",
       "chapter-02"
     );
+  });
+});
+
+describe("scrollFileExplorerActiveDocumentIntoView (#311)", () => {
+  it("uses a conservative, non-focusing scroll and tolerates a null target", () => {
+    const scrollIntoView = vi.fn();
+    scrollFileExplorerActiveDocumentIntoView({ scrollIntoView });
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: "nearest",
+      inline: "nearest"
+    });
+
+    expect(() =>
+      scrollFileExplorerActiveDocumentIntoView(null)
+    ).not.toThrow();
+  });
+});
+
+describe("FileExplorer context polish (#311)", () => {
+  const rootEntries311: FileExplorerEntry[] = [
+    { kind: "folder", name: "Drafts", relativePath: "Drafts" },
+    { kind: "file", name: "chapter-01.md", relativePath: "chapter-01.md" }
+  ];
+  const draftsChildren311: FileExplorerEntry[] = [
+    { kind: "folder", name: "Chapter1", relativePath: "Drafts/Chapter1" },
+    { kind: "file", name: "outline.md", relativePath: "Drafts/outline.md" }
+  ];
+  const chapter1Children311: FileExplorerEntry[] = [
+    {
+      kind: "file",
+      name: "scene-03.md",
+      relativePath: "Drafts/Chapter1/scene-03.md"
+    }
+  ];
+
+  function list311(
+    directoryRelativePath: string | null
+  ): Promise<ListFileExplorerChildrenResult> {
+    switch (directoryRelativePath) {
+      case null:
+        return Promise.resolve(ok(null, rootEntries311));
+      case "Drafts":
+        return Promise.resolve(ok("Drafts", draftsChildren311));
+      case "Drafts/Chapter1":
+        return Promise.resolve(ok("Drafts/Chapter1", chapter1Children311));
+      default:
+        return Promise.resolve(ok(directoryRelativePath, []));
+    }
+  }
+
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 6; i += 1) {
+      await flushPromises();
+    }
+  }
+
+  let hadScrollIntoView = false;
+  let originalScrollIntoView:
+    | typeof HTMLElement.prototype.scrollIntoView
+    | undefined;
+  let scrollSpy: ReturnType<typeof vi.fn>;
+  let scrolledTargets: { element: Element; options: unknown }[] = [];
+
+  function installScrollSpy(): void {
+    hadScrollIntoView = "scrollIntoView" in HTMLElement.prototype;
+    originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    scrolledTargets = [];
+    scrollSpy = vi.fn(function (this: Element, options?: unknown) {
+      scrolledTargets.push({ element: this, options });
+    });
+    HTMLElement.prototype.scrollIntoView =
+      scrollSpy as unknown as typeof HTMLElement.prototype.scrollIntoView;
+  }
+
+  afterEach(() => {
+    if (!scrollSpy) {
+      return;
+    }
+    if (hadScrollIntoView && originalScrollIntoView) {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    } else {
+      delete (HTMLElement.prototype as { scrollIntoView?: unknown })
+        .scrollIntoView;
+    }
+    originalScrollIntoView = undefined;
+    scrollSpy = undefined as unknown as ReturnType<typeof vi.fn>;
+  });
+
+  function render311(options?: {
+    highlightedRelativePath?: string | null;
+    listFileExplorerChildren?: (
+      directoryRelativePath: string | null
+    ) => Promise<ListFileExplorerChildrenResult>;
+  }): {
+    createFileExplorerFolder: ReturnType<typeof vi.fn>;
+    createFileExplorerMarkdownFile: ReturnType<typeof vi.fn>;
+    rerender: (highlightedRelativePath: string | null) => void;
+  } {
+    const createFileExplorerMarkdownFile = vi.fn(
+      async (): Promise<CreateFileExplorerEntryResult> => ({
+        ok: true,
+        entry: { kind: "file", name: "new.md", relativePath: "new.md" }
+      })
+    );
+    const createFileExplorerFolder = vi.fn(
+      async (): Promise<CreateFileExplorerEntryResult> => ({
+        ok: true,
+        entry: { kind: "folder", name: "New", relativePath: "New" }
+      })
+    );
+
+    Object.defineProperty(window, "pergamum", {
+      configurable: true,
+      value: {
+        projects: {
+          listFileExplorerChildren: vi.fn(
+            options?.listFileExplorerChildren ?? list311
+          ),
+          createFileExplorerMarkdownFile,
+          createFileExplorerFolder
+        }
+      }
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let currentHighlight: string | null =
+      options?.highlightedRelativePath ?? null;
+
+    const paint = (): void => {
+      act(() => {
+        root!.render(
+          React.createElement(FileExplorer, {
+            project,
+            highlightedRelativePath: currentHighlight,
+            translate,
+            onActivateDocument: vi.fn()
+          })
+        );
+      });
+    };
+
+    paint();
+
+    return {
+      createFileExplorerFolder,
+      createFileExplorerMarkdownFile,
+      rerender: (highlightedRelativePath) => {
+        currentHighlight = highlightedRelativePath;
+        paint();
+      }
+    };
+  }
+
+  function contextValueText(): string | null {
+    return (
+      container!.querySelector(".nameInputDialogContextValue")?.textContent ??
+      null
+    );
+  }
+
+  // ---- 1. Create target display ----
+
+  it("New File dialog shows Project root when nothing is selected", async () => {
+    installScrollSpy();
+    render311();
+    await settle();
+
+    act(() => toolbarButton("explorer.newFile").click());
+
+    expect(
+      container!.querySelector(".nameInputDialogContextLabel")?.textContent
+    ).toBe("explorer.create.target.label");
+    expect(contextValueText()).toBe("explorer.create.target.projectRoot");
+  });
+
+  it("New File dialog shows the selected folder path", async () => {
+    installScrollSpy();
+    render311();
+    await settle();
+
+    act(() => entryButton("Drafts").click());
+    act(() => toolbarButton("explorer.newFile").click());
+
+    expect(contextValueText()).toBe("Drafts");
+  });
+
+  it("New File dialog shows the selected file's parent folder path", async () => {
+    installScrollSpy();
+    render311();
+    await settle();
+
+    act(() => entryButton("Drafts").click());
+    await settle();
+    act(() => entryButton("Drafts/outline.md").click());
+    act(() => toolbarButton("explorer.newFile").click());
+
+    expect(contextValueText()).toBe("Drafts");
+  });
+
+  it("New Folder dialog uses the same create-target display rules", async () => {
+    installScrollSpy();
+    render311();
+    await settle();
+
+    act(() => entryButton("Drafts").click());
+    act(() => toolbarButton("explorer.newFolder").click());
+
+    expect(contextValueText()).toBe("Drafts");
+  });
+
+  it("shows a project-relative target only — never an absolute path", async () => {
+    installScrollSpy();
+    render311();
+    await settle();
+
+    act(() => entryButton("Drafts").click());
+    await settle();
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settle();
+    act(() => toolbarButton("explorer.newFile").click());
+
+    const value = contextValueText() ?? "";
+    expect(value).toBe("Drafts/Chapter1");
+    expect(value).not.toContain(project.rootPath);
+    expect(value).not.toContain("\\");
+    expect(value).not.toMatch(/^[A-Za-z]:/);
+  });
+
+  it("renders the create target only as caller-provided dialog context", async () => {
+    installScrollSpy();
+    render311();
+    await settle();
+
+    act(() => toolbarButton("explorer.newFile").click());
+
+    const context = container!.querySelector(".nameInputDialogContext");
+    expect(context).not.toBeNull();
+    // The dialog shows exactly the label + value the caller passed.
+    expect(context!.textContent).toBe(
+      "explorer.create.target.labelexplorer.create.target.projectRoot"
+    );
+  });
+
+  // ---- 2. Scroll active document into view ----
+
+  it("scrolls the active project document entry into view after reveal", async () => {
+    installScrollSpy();
+    render311({ highlightedRelativePath: "chapter-01.md" });
+    await settle();
+
+    expect(scrollSpy).toHaveBeenCalled();
+    const scrolledOn = scrolledTargets.at(-1)?.element as HTMLElement;
+    expect(scrolledOn.dataset.fileExplorerEntryPath).toBe("chapter-01.md");
+  });
+
+  it("scrolls a nested active project document into view after lazy ancestor expansion", async () => {
+    installScrollSpy();
+    render311({ highlightedRelativePath: "Drafts/Chapter1/scene-03.md" });
+    await settle();
+
+    expect(entryButton("Drafts/Chapter1/scene-03.md")).toBeInstanceOf(
+      HTMLButtonElement
+    );
+    expect(scrollSpy).toHaveBeenCalled();
+    const scrolledOn = scrolledTargets.at(-1)?.element as HTMLElement;
+    expect(scrolledOn.dataset.fileExplorerEntryPath).toBe(
+      "Drafts/Chapter1/scene-03.md"
+    );
+  });
+
+  it("uses conservative scroll options for an already-visible active document", async () => {
+    installScrollSpy();
+    render311({ highlightedRelativePath: "chapter-01.md" });
+    await settle();
+
+    expect(scrolledTargets.at(-1)?.options).toEqual({
+      block: "nearest",
+      inline: "nearest"
+    });
+  });
+
+  it("does not scroll for a non-project active editor", async () => {
+    installScrollSpy();
+    render311({ highlightedRelativePath: null });
+    await settle();
+
+    expect(scrollSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not change the File Explorer selection when scrolling the active document", async () => {
+    installScrollSpy();
+    const { rerender } = render311({ highlightedRelativePath: null });
+    await settle();
+
+    act(() => entryButton("Drafts").click());
+    await settle();
+    expect(entryButton("Drafts").dataset.selected).toBe("true");
+
+    rerender("chapter-01.md");
+    await settle();
+
+    expect(scrollSpy).toHaveBeenCalled();
+    expect(entryButton("Drafts").dataset.selected).toBe("true");
+    expect(entryButton("chapter-01.md").dataset.selected).toBeUndefined();
+  });
+});
+
+describe("FileExplorer Command Palette create request (#311)", () => {
+  interface CreateRequestHarness {
+    createMarkdownFile: ReturnType<typeof vi.fn>;
+    createFolder: ReturnType<typeof vi.fn>;
+    onActivateDocument: ReturnType<typeof vi.fn>;
+    onCreateEntryRequestHandled: ReturnType<typeof vi.fn>;
+    rerender: (
+      request: { kind: "file" | "folder"; token: number } | null
+    ) => void;
+  }
+
+  function renderWithCreateRequest(
+    initialRequest: { kind: "file" | "folder"; token: number } | null,
+    createMarkdownFile = vi.fn(
+      async (): Promise<CreateFileExplorerEntryResult> => ({
+        ok: true,
+        entry: { kind: "file", name: "new.md", relativePath: "new.md" }
+      })
+    ),
+    createFolder = vi.fn(
+      async (): Promise<CreateFileExplorerEntryResult> => ({
+        ok: true,
+        entry: { kind: "folder", name: "New", relativePath: "New" }
+      })
+    )
+  ): CreateRequestHarness {
+    const listFileExplorerChildren = vi.fn(
+      async (relativePath: string | null) => {
+        if (relativePath === "Drafts") {
+          return ok("Drafts", draftEntries);
+        }
+        return ok(null, rootEntries);
+      }
+    );
+    const onActivateDocument = vi.fn();
+    const onCreateEntryRequestHandled = vi.fn();
+
+    Object.defineProperty(window, "pergamum", {
+      configurable: true,
+      value: {
+        projects: {
+          listFileExplorerChildren,
+          createFileExplorerMarkdownFile: createMarkdownFile,
+          createFileExplorerFolder: createFolder
+        }
+      }
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let currentRequest = initialRequest;
+
+    const paint = (): void => {
+      act(() => {
+        root!.render(
+          React.createElement(FileExplorer, {
+            project,
+            highlightedRelativePath: null,
+            translate,
+            readOnly: false,
+            clipboardAdapter: { writeText: vi.fn(async () => undefined) },
+            createEntryRequest: currentRequest,
+            onCreateEntryRequestHandled,
+            onActivateDocument
+          })
+        );
+      });
+    };
+
+    paint();
+
+    return {
+      createMarkdownFile,
+      createFolder,
+      onActivateDocument,
+      onCreateEntryRequestHandled,
+      rerender: (request) => {
+        currentRequest = request;
+        paint();
+      }
+    };
+  }
+
+  function dialogInput(): HTMLInputElement | null {
+    return container!.querySelector<HTMLInputElement>(".nameInputDialogInput");
+  }
+
+  function typeName(value: string): void {
+    act(() => {
+      const field = dialogInput()!;
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeSetter?.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("opens the shared New File dialog on a create-file request and marks it handled", async () => {
+    const harness = renderWithCreateRequest({ kind: "file", token: 1 });
+    await flushPromises();
+
+    expect(dialogInput()).not.toBeNull();
+    expect(container!.textContent).toContain("explorer.newFile.title");
+    // #311 create target: no selection → project root.
+    expect(
+      container!.querySelector(".nameInputDialogContextValue")?.textContent
+    ).toBe("explorer.create.target.projectRoot");
+    expect(harness.onCreateEntryRequestHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the shared New Folder dialog on a create-folder request", async () => {
+    renderWithCreateRequest({ kind: "folder", token: 1 });
+    await flushPromises();
+
+    expect(dialogInput()).not.toBeNull();
+    expect(container!.textContent).toContain("explorer.newFolder.title");
+  });
+
+  it("keeps the #307 create target rules — uses the current File Explorer selection", async () => {
+    const harness = renderWithCreateRequest(null);
+    await flushPromises();
+
+    act(() => entryButton("Drafts").click());
+    await flushPromises();
+
+    harness.rerender({ kind: "file", token: 1 });
+    await flushPromises();
+
+    expect(
+      container!.querySelector(".nameInputDialogContextValue")?.textContent
+    ).toBe("Drafts");
+  });
+
+  it("submits through the same #307 create IPC and opens the new document", async () => {
+    const createMarkdownFile = vi.fn(
+      async (): Promise<CreateFileExplorerEntryResult> => ({
+        ok: true,
+        entry: {
+          kind: "file",
+          name: "chapter-09.md",
+          relativePath: "chapter-09.md"
+        }
+      })
+    );
+    const harness = renderWithCreateRequest(
+      { kind: "file", token: 1 },
+      createMarkdownFile
+    );
+    await flushPromises();
+
+    typeName("chapter-09");
+    await act(async () => {
+      container!
+        .querySelector<HTMLButtonElement>(".nameInputDialogPrimary")!
+        .click();
+    });
+    await flushPromises();
+
+    expect(createMarkdownFile).toHaveBeenCalledWith(null, "chapter-09");
+    expect(harness.onActivateDocument).toHaveBeenCalledWith("chapter-09.md");
+    expect(dialogInput()).toBeNull();
+  });
+
+  it("re-opens the dialog only when the request token changes", async () => {
+    const harness = renderWithCreateRequest({ kind: "file", token: 1 });
+    await flushPromises();
+    expect(dialogInput()).not.toBeNull();
+
+    // Cancel the dialog.
+    act(() => {
+      const cancel = Array.from(
+        container!.querySelectorAll<HTMLButtonElement>(".appDialogButton")
+      ).find((button) => button.textContent === "common.cancel");
+      cancel?.click();
+    });
+    expect(dialogInput()).toBeNull();
+
+    // Same token → not re-opened.
+    harness.rerender({ kind: "file", token: 1 });
+    await flushPromises();
+    expect(dialogInput()).toBeNull();
+
+    // New token → re-opened.
+    harness.rerender({ kind: "folder", token: 2 });
+    await flushPromises();
+    expect(dialogInput()).not.toBeNull();
+    expect(container!.textContent).toContain("explorer.newFolder.title");
+  });
+
+  it("ignores a create request in a read-only project", async () => {
+    const listFileExplorerChildren = vi.fn(async () => ok(null, rootEntries));
+    Object.defineProperty(window, "pergamum", {
+      configurable: true,
+      value: { projects: { listFileExplorerChildren } }
+    });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const onCreateEntryRequestHandled = vi.fn();
+
+    act(() => {
+      root!.render(
+        React.createElement(FileExplorer, {
+          project: {
+            ...project,
+            accessMode: { kind: "readOnly", reason: "writeLockUnavailable" }
+          },
+          highlightedRelativePath: null,
+          translate,
+          readOnly: true,
+          createEntryRequest: { kind: "file", token: 1 },
+          onCreateEntryRequestHandled,
+          onActivateDocument: vi.fn()
+        })
+      );
+    });
+    await flushPromises();
+
+    expect(dialogInput()).toBeNull();
+    // The request is still consumed so it will not linger.
+    expect(onCreateEntryRequestHandled).toHaveBeenCalledTimes(1);
   });
 });

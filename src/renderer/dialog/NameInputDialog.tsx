@@ -62,6 +62,15 @@ export interface NameInputDialogProps {
   placeholder?: string;
   initialValue?: string;
   primaryLabel: string;
+  /**
+   * #311: optional read-only context shown above the input — e.g. where a
+   * File Explorer item will be created. The dialog renders these verbatim
+   * and never resolves paths or project rules itself; the caller supplies
+   * already-localized, display-safe strings. Both are shown only when
+   * `contextValue` is present; `contextLabel` is optional.
+   */
+  contextLabel?: string;
+  contextValue?: string;
   icon: NameInputDialogIcon;
   translate: Translate;
   clipboardAdapter: ClipboardAdapter;
@@ -84,6 +93,8 @@ export function NameInputDialog({
   placeholder,
   initialValue,
   primaryLabel,
+  contextLabel,
+  contextValue,
   icon,
   translate,
   clipboardAdapter,
@@ -227,6 +238,16 @@ export function NameInputDialog({
         <p id={descriptionId} className="nameInputDialogDescription">
           {description}
         </p>
+        {contextValue ? (
+          <p className="nameInputDialogContext">
+            {contextLabel ? (
+              <span className="nameInputDialogContextLabel">
+                {contextLabel}
+              </span>
+            ) : null}
+            <span className="nameInputDialogContextValue">{contextValue}</span>
+          </p>
+        ) : null}
         <label className="nameInputDialogLabel" htmlFor={`${inputId}-field`}>
           <span className="nameInputDialogLabelText">{inputLabel}</span>
           <span className="nameInputDialogInputRow">

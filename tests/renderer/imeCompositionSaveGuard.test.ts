@@ -157,14 +157,14 @@ describe("IME composition save guard", () => {
     const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
-    expect(guard.handleCommand("workspace.files.focus", execute)).toBe(false);
+    expect(guard.handleCommand("workspace.files.toggle", execute)).toBe(false);
 
     expect(execute).not.toHaveBeenCalled();
     expect(guard.hasPendingSave()).toBe(false);
     expect(log).toHaveBeenCalledWith({
       event: "ime.command.ignored",
       details: {
-        commandId: "workspace.files.focus",
+        commandId: "workspace.files.toggle",
         operation: "command",
         result: "ignored",
         reason: "invalid_command",

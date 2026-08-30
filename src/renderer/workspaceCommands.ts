@@ -8,14 +8,14 @@ import type { SidebarMode } from "./sidebarMode";
 import { selectSidebarMode } from "./sidebarMode";
 
 export const workspaceCommandIds = {
-  focusFiles: defineCommandId("workspace.files.focus"),
+  toggleFiles: defineCommandId("workspace.files.toggle"),
   focusSearch: defineCommandId("workspace.search.focus"),
   focusGlossary: defineCommandId("workspace.glossary.focus"),
   openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
 } as const;
 
 export type WorkspaceFocusCommandId =
-  | typeof workspaceCommandIds.focusFiles
+  | typeof workspaceCommandIds.toggleFiles
   | typeof workspaceCommandIds.focusSearch
   | typeof workspaceCommandIds.focusGlossary;
 
@@ -25,8 +25,8 @@ export interface WorkspaceCommandController {
 }
 
 export interface WorkspaceCommandTitles {
-  focusFiles: string;
-  focusFilesDescription: string;
+  toggleFiles: string;
+  toggleFilesDescription: string;
   focusSearch: string;
   focusSearchDescription: string;
   focusGlossary: string;
@@ -41,8 +41,8 @@ export function createWorkspaceCommandTitles(
   translate: Translate
 ): WorkspaceCommandTitles {
   return {
-    focusFiles: translate("command.workspace.files.focus"),
-    focusFilesDescription: translate("command.workspace.files.focus.description"),
+    toggleFiles: translate("command.workspace.files.toggle"),
+    toggleFilesDescription: translate("command.workspace.files.toggle.description"),
     focusSearch: translate("command.workspace.search.focus"),
     focusSearchDescription: translate(
       "command.workspace.search.focus.description"
@@ -65,7 +65,7 @@ export function workspaceFocusCommandIdForMode(
 ): WorkspaceFocusCommandId {
   switch (selectSidebarMode(mode)) {
     case "files":
-      return workspaceCommandIds.focusFiles;
+      return workspaceCommandIds.toggleFiles;
     case "search":
       return workspaceCommandIds.focusSearch;
     case "glossary":
@@ -79,9 +79,9 @@ export function createWorkspaceCommands(
 ): readonly WorkspaceCommand[] {
   return [
     {
-      id: workspaceCommandIds.focusFiles,
-      title: titles.focusFiles,
-      description: titles.focusFilesDescription,
+      id: workspaceCommandIds.toggleFiles,
+      title: titles.toggleFiles,
+      description: titles.toggleFilesDescription,
       execute: () => {
         controller.focusSidebarMode("files");
       }

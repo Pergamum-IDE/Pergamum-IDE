@@ -5,6 +5,7 @@ import {
   fileExplorerCreateFailureReasonFromValidationError,
   isFileExplorerCreateValidationReason,
   isReservedFileExplorerName,
+  pathHasReservedFileExplorerSegment,
   validateFileExplorerName,
   type FileExplorerNameValidationError
 } from "../../src/shared/fileExplorerCreate";
@@ -50,6 +51,34 @@ describe("isReservedFileExplorerName", () => {
     );
     expect(isReservedFileExplorerName("chapter.md")).toBe(false);
     expect(isReservedFileExplorerName("")).toBe(false);
+  });
+});
+
+describe("pathHasReservedFileExplorerSegment (#311)", () => {
+  it("flags a reserved segment anywhere in a project-relative path", () => {
+    for (const reserved of [
+      ".git",
+      ".pergamum_recovery",
+      ".pergamum.lock",
+      "pergamum.json",
+      ".pergamum.lock.stale-20260830",
+      "foo/.git",
+      "foo/bar/.pergamum_recovery",
+      "foo\\.pergamum.lock.stale-20260830",
+      "Thumbs.db"
+    ]) {
+      expect(pathHasReservedFileExplorerSegment(reserved)).toBe(true);
+    }
+  });
+
+  it("passes ordinary project-relative folder paths and the root", () => {
+    expect(pathHasReservedFileExplorerSegment(null)).toBe(false);
+    expect(pathHasReservedFileExplorerSegment("")).toBe(false);
+    expect(pathHasReservedFileExplorerSegment("Drafts")).toBe(false);
+    expect(pathHasReservedFileExplorerSegment("Drafts/Chapter1")).toBe(false);
+    expect(
+      pathHasReservedFileExplorerSegment("Drafts/pergamum-notes")
+    ).toBe(false);
   });
 });
 
