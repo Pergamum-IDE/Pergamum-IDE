@@ -17,6 +17,8 @@ import {
   PROJECT_CHANNELS,
   type CloseCurrentProjectRequest,
   type CloseCurrentProjectResult,
+  type CreateFileExplorerEntryRequest,
+  type CreateFileExplorerEntryResult,
   type FileExplorerEntry,
   type FileExplorerUnavailableReason,
   type ListFileExplorerChildrenRequest,
@@ -39,6 +41,13 @@ import {
   type SaveProjectDocumentResult,
   type StartupProjectOpenResult
 } from "../shared/api";
+import {
+  applyMarkdownFileExtension,
+  fileExplorerCreateFailureReasonFromErrorCode,
+  fileExplorerCreateFailureReasonFromValidationError,
+  validateFileExplorerName,
+  type FileExplorerCreateFailureReason
+} from "../shared/fileExplorerCreate";
 import type { AppPlatform } from "../shared/platform";
 import {
   isPathEqualOrInsideDirectory,
@@ -1332,6 +1341,240 @@ async function listFileExplorerChildren(
   }
 }
 
+// -------------------------------------------------------------------------
+// #307: File Explorer "New File" / "New Folder" — create only, never
+// destructive (#305). The main process is the source of truth: it enforces
+// current-project-root only, no outside-root or symlink traversal, no
+// reserved-path mutation, no overwrite, and read-only rejection. The
+// renderer's reusable name dialog does none of this.
+// -------------------------------------------------------------------------
+
+function parseCreateFileExplorerEntryRequest(
+  value: unknown
+): CreateFileExplorerEntryRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.name !== "string" ||
+    (value.parentDirectoryRelativePath !== null &&
+      value.parentDirectoryRelativePath !== undefined &&
+      typeof value.parentDirectoryRelativePath !== "string")
+  ) {
+    throw new Error("Invalid File Explorer create request.");
+  }
+
+  return {
+    parentDirectoryRelativePath:
+      typeof value.parentDirectoryRelativePath === "string"
+        ? value.parentDirectoryRelativePath
+        : null,
+    name: value.name
+  };
+}
+
+type FileExplorerCreateTarget =
+  | {
+      kind: "ok";
+      name: string;
+      parentDirectoryPath: string;
+      targetPath: string;
+      relativePath: string;
+      rootPath: string;
+    }
+  | { kind: "error"; reason: FileExplorerCreateFailureReason };
+
+async function resolveFileExplorerCreateTarget(
+  parentDirectoryRelativePath: string | null,
+  validatedName: string
+): Promise<FileExplorerCreateTarget> {
+  if (!currentProjectState) {
+    return { kind: "error", reason: "noProject" };
+  }
+
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { kind: "error", reason: "readOnlyProject" };
+  }
+
+  if (isProtectedPergamumDataFilePath(validatedName)) {
+    return { kind: "error", reason: "reservedName" };
+  }
+
+  const resolved = resolveFileExplorerDirectoryPath(
+    parentDirectoryRelativePath
+  );
+
+  if (resolved.kind === "unavailable") {
+    return {
+      kind: "error",
+      reason:
+        resolved.reason === "noProject"
+          ? "noProject"
+          : resolved.reason === "notDirectory"
+            ? "notDirectory"
+            : "outsideProjectRoot"
+    };
+  }
+
+  const traversalFailureReason =
+    await fileExplorerDirectoryTraversalFailureReason(
+      resolved.rootPath,
+      resolved.directoryRelativePath
+    );
+
+  if (traversalFailureReason) {
+    return {
+      kind: "error",
+      reason:
+        traversalFailureReason === "notDirectory"
+          ? "notDirectory"
+          : "targetDirectoryMissing"
+    };
+  }
+
+  try {
+    const parentStats = await fs.lstat(resolved.directoryPath);
+
+    if (parentStats.isSymbolicLink() || !parentStats.isDirectory()) {
+      return { kind: "error", reason: "notDirectory" };
+    }
+  } catch {
+    return { kind: "error", reason: "targetDirectoryMissing" };
+  }
+
+  const targetPath = path.join(resolved.directoryPath, validatedName);
+  const relativeFromRoot = path.relative(resolved.rootPath, targetPath);
+
+  if (
+    relativeFromRoot.length === 0 ||
+    relativeFromRoot.startsWith("..") ||
+    path.isAbsolute(relativeFromRoot)
+  ) {
+    return { kind: "error", reason: "outsideProjectRoot" };
+  }
+
+  return {
+    kind: "ok",
+    name: validatedName,
+    parentDirectoryPath: resolved.directoryPath,
+    targetPath,
+    relativePath: normalizeRelativePath(relativeFromRoot),
+    rootPath: resolved.rootPath
+  };
+}
+
+async function createFileExplorerEntry(
+  rawRequest: unknown,
+  entryKind: FileExplorerEntry["kind"],
+  logger: DebugLogger
+): Promise<CreateFileExplorerEntryResult> {
+  let request: CreateFileExplorerEntryRequest;
+
+  try {
+    request = parseCreateFileExplorerEntryRequest(rawRequest);
+  } catch {
+    return { ok: false, reason: "invalidName" };
+  }
+
+  const validation = validateFileExplorerName(request.name);
+
+  if (!validation.ok) {
+    return {
+      ok: false,
+      reason: fileExplorerCreateFailureReasonFromValidationError(
+        validation.error
+      )
+    };
+  }
+
+  let finalName = validation.name;
+
+  if (entryKind === "file") {
+    const withExtension = applyMarkdownFileExtension(validation.name);
+
+    if (!withExtension.ok) {
+      return { ok: false, reason: "unsupportedExtension" };
+    }
+
+    finalName = withExtension.fileName;
+
+    // The appended / kept extension must not turn the name into a
+    // reserved one (e.g. a bare "pergamum" typed as "pergamum.json").
+    const revalidated = validateFileExplorerName(finalName);
+
+    if (!revalidated.ok) {
+      return {
+        ok: false,
+        reason: fileExplorerCreateFailureReasonFromValidationError(
+          revalidated.error
+        )
+      };
+    }
+  }
+
+  const target = await resolveFileExplorerCreateTarget(
+    request.parentDirectoryRelativePath,
+    finalName
+  );
+
+  if (target.kind === "error") {
+    return { ok: false, reason: target.reason };
+  }
+
+  try {
+    if (entryKind === "file") {
+      // Overwrite-protected create — `wx` throws EEXIST rather than
+      // truncating an existing file.
+      await fs.writeFile(target.targetPath, "", { flag: "wx" });
+    } else {
+      // Non-recursive: the parent must already exist, and mkdir throws
+      // EEXIST for an existing file or folder.
+      await fs.mkdir(target.targetPath);
+    }
+  } catch (error) {
+    const reason = fileExplorerCreateFailureReasonFromErrorCode(
+      nodeErrorCode(error)
+    );
+
+    logger.log({
+      level: "error",
+      event: "fileExplorer.create.failed",
+      details: {
+        projectRef: logger.projectRefForKey(target.rootPath),
+        entryKind,
+        pathDepth: debugLogPathDepth(target.relativePath),
+        result: "failed",
+        reason
+      }
+    });
+
+    return { ok: false, reason };
+  }
+
+  if (entryKind === "file") {
+    currentProjectState?.documentRelativePaths.add(target.relativePath);
+  }
+
+  logger.log({
+    level: "info",
+    event: "fileExplorer.create.completed",
+    details: {
+      projectRef: logger.projectRefForKey(target.rootPath),
+      entryKind,
+      extension: debugLogExtensionForPath(target.relativePath),
+      pathDepth: debugLogPathDepth(target.relativePath),
+      result: "succeeded"
+    }
+  });
+
+  return {
+    ok: true,
+    entry: {
+      kind: entryKind,
+      name: target.name,
+      relativePath: target.relativePath
+    }
+  };
+}
+
 function resolveProjectDocumentPath(relativePath: string): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
@@ -2499,6 +2742,24 @@ export function registerProjectIpc(
 
       return listFileExplorerChildren(request);
     }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.createFileExplorerMarkdownFile,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<CreateFileExplorerEntryResult> =>
+      createFileExplorerEntry(rawRequest, "file", logger)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.createFileExplorerFolder,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<CreateFileExplorerEntryResult> =>
+      createFileExplorerEntry(rawRequest, "folder", logger)
   );
 
   ipcMain.handle(

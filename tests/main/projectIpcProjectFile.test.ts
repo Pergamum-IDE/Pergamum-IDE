@@ -3356,6 +3356,277 @@ describe("project file IPC foundation", () => {
   });
 
   // -------------------------------------------------------------------------
+  // #307: File Explorer "New File" / "New Folder"
+  // -------------------------------------------------------------------------
+
+  async function openExplorerProject(name: string): Promise<void> {
+    const projectFilePath = path.join(projectRootPath, `${name}.pergamum`);
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: name
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    await registeredHandler(PROJECT_CHANNELS.openProject)({ sender: {} });
+  }
+
+  async function openReadOnlyExplorerProject(name: string): Promise<void> {
+    const projectFilePath = path.join(projectRootPath, `${name}.pergamum`);
+    const ownershipManager = createWriteOwnershipManager({
+      kind: "unavailable",
+      reason: "lockUnavailable"
+    });
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: projectFilePath
+    });
+    const pending = expectPendingReadOnlyProjectOpen(
+      await registeredHandler(
+        PROJECT_CHANNELS.createProject,
+        createLoggerMock(),
+        ownershipManager
+      )({ sender: {} })
+    );
+    await registeredHandler(PROJECT_CHANNELS.confirmReadOnlyProjectOpen)(
+      { sender: {} },
+      { token: pending.token }
+    );
+  }
+
+  function createFileHandler(): (...args: unknown[]) => unknown {
+    return registeredHandler(
+      PROJECT_CHANNELS.createFileExplorerMarkdownFile
+    );
+  }
+
+  function createFolderHandler(): (...args: unknown[]) => unknown {
+    return registeredHandler(PROJECT_CHANNELS.createFileExplorerFolder);
+  }
+
+  it("registers the File Explorer create IPC channels", () => {
+    registerProjectIpc(createLoggerMock());
+
+    expect(
+      electronMock.handle.mock.calls.map(([channel]) => channel)
+    ).toEqual(
+      expect.arrayContaining([
+        PROJECT_CHANNELS.createFileExplorerMarkdownFile,
+        PROJECT_CHANNELS.createFileExplorerFolder
+      ])
+    );
+  });
+
+  it("creates an empty Markdown file and makes it a readable project document", async () => {
+    await openExplorerProject("Create MD");
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+
+    const result = (await createFileHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: "Drafts", name: "chapter-01" }
+    )) as { ok: boolean; entry?: { relativePath: string; name: string } };
+
+    expect(result).toEqual({
+      ok: true,
+      entry: {
+        kind: "file",
+        name: "chapter-01.md",
+        relativePath: "Drafts/chapter-01.md"
+      }
+    });
+    await expect(
+      fs.readFile(path.join(projectRootPath, "Drafts", "chapter-01.md"), "utf8")
+    ).resolves.toBe("");
+
+    const document = (await registeredHandler(
+      PROJECT_CHANNELS.readProjectDocument
+    )({ sender: {} }, { relativePath: "Drafts/chapter-01.md" })) as {
+      content: string;
+    };
+    expect(document.content).toBe("");
+  });
+
+  it("keeps a supported extension and appends .md otherwise", async () => {
+    await openExplorerProject("Create Ext");
+
+    const kept = (await createFileHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: null, name: "notes.markdown" }
+    )) as { ok: boolean; entry?: { name: string } };
+    expect(kept.entry?.name).toBe("notes.markdown");
+
+    const rejected = (await createFileHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: null, name: "notes.txt" }
+    )) as { ok: boolean; reason?: string };
+    expect(rejected).toEqual({ ok: false, reason: "unsupportedExtension" });
+    await expect(
+      fs.access(path.join(projectRootPath, "notes.txt"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("creates a folder without recursion and never overwrites", async () => {
+    await openExplorerProject("Create Folder");
+
+    const first = (await createFolderHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: null, name: "Chapters" }
+    )) as { ok: boolean; entry?: { kind: string; relativePath: string } };
+    expect(first).toEqual({
+      ok: true,
+      entry: { kind: "folder", name: "Chapters", relativePath: "Chapters" }
+    });
+    expect(
+      (await fs.lstat(path.join(projectRootPath, "Chapters"))).isDirectory()
+    ).toBe(true);
+
+    // Re-create → EEXIST → alreadyExists (never truncates).
+    const second = (await createFolderHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: null, name: "Chapters" }
+    )) as { ok: boolean; reason?: string };
+    expect(second).toEqual({ ok: false, reason: "alreadyExists" });
+
+    // Non-recursive: a missing parent is targetDirectoryMissing, not mkdir -p.
+    const nested = (await createFolderHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: "Missing", name: "Deep" }
+    )) as { ok: boolean; reason?: string };
+    expect(nested.ok).toBe(false);
+    expect(["targetDirectoryMissing", "outsideProjectRoot"]).toContain(
+      nested.reason
+    );
+    await expect(
+      fs.access(path.join(projectRootPath, "Missing"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects overwriting an existing file", async () => {
+    await openExplorerProject("Create Overwrite");
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "EXISTING_MANUSCRIPT_MARKER"
+    );
+
+    const result = (await createFileHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: null, name: "chapter.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "alreadyExists" });
+    await expect(
+      fs.readFile(path.join(projectRootPath, "chapter.md"), "utf8")
+    ).resolves.toBe("EXISTING_MANUSCRIPT_MARKER");
+  });
+
+  it("rejects reserved names without touching the filesystem", async () => {
+    await openExplorerProject("Create Reserved");
+    const writeSpy = vi.spyOn(fs, "writeFile");
+    const mkdirSpy = vi.spyOn(fs, "mkdir");
+
+    for (const name of [".pergamum", "pergamum.json", ".git", "Thumbs.db"]) {
+      const fileResult = (await createFileHandler()(
+        { sender: {} },
+        { parentDirectoryRelativePath: null, name }
+      )) as { ok: boolean; reason?: string };
+      expect(fileResult.ok).toBe(false);
+      expect(["reservedName", "invalidName"]).toContain(fileResult.reason);
+
+      const folderResult = (await createFolderHandler()(
+        { sender: {} },
+        { parentDirectoryRelativePath: null, name }
+      )) as { ok: boolean; reason?: string };
+      expect(folderResult.ok).toBe(false);
+    }
+
+    expect(writeSpy).not.toHaveBeenCalled();
+    expect(mkdirSpy).not.toHaveBeenCalled();
+    writeSpy.mockRestore();
+    mkdirSpy.mockRestore();
+  });
+
+  it("rejects a create outside the project root", async () => {
+    await openExplorerProject("Create Outside");
+
+    const result = (await createFileHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: "../escape", name: "leak.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("outsideProjectRoot");
+  });
+
+  it("refuses to create under a symlink-like parent", async () => {
+    await openExplorerProject("Create Symlink");
+    const lstatSpy = vi
+      .spyOn(fs, "lstat")
+      .mockResolvedValue(fakeStats("symlink"));
+
+    const result = (await createFileHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: "Linked", name: "leak.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "notDirectory" });
+    lstatSpy.mockRestore();
+  });
+
+  it("refuses to create when the current project is read-only", async () => {
+    await openReadOnlyExplorerProject("Create Readonly");
+    const writeSpy = vi.spyOn(fs, "writeFile");
+
+    const result = (await createFileHandler()(
+      { sender: {} },
+      { parentDirectoryRelativePath: null, name: "chapter.md" }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "readOnlyProject" });
+    expect(writeSpy).not.toHaveBeenCalled();
+    writeSpy.mockRestore();
+  });
+
+  it("maps raw filesystem errors to stable reasons and never leaks the message", async () => {
+    await openExplorerProject("Create Errors");
+    const cases: Array<[string, string]> = [
+      ["EACCES", "permissionDenied"],
+      ["ENOSPC", "noSpace"],
+      ["EROFS", "readOnlyFilesystem"],
+      ["ENAMETOOLONG", "nameTooLong"],
+      ["EWEIRD", "unknown"]
+    ];
+
+    for (const [code, reason] of cases) {
+      const writeSpy = vi
+        .spyOn(fs, "writeFile")
+        .mockRejectedValueOnce(
+          Object.assign(new Error(`${code}: SECRET_RAW_PATH /etc/passwd`), {
+            code
+          })
+        );
+
+      const result = (await createFileHandler()(
+        { sender: {} },
+        { parentDirectoryRelativePath: null, name: `err-${code}.md` }
+      )) as { ok: boolean; reason?: string };
+
+      expect(result).toEqual({ ok: false, reason });
+      expect(JSON.stringify(result)).not.toContain("SECRET_RAW_PATH");
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("returns invalidName for a malformed create request", async () => {
+    await openExplorerProject("Create Malformed");
+
+    await expect(
+      createFileHandler()({ sender: {} }, { name: 42 })
+    ).resolves.toEqual({ ok: false, reason: "invalidName" });
+  });
+
+  // -------------------------------------------------------------------------
   // #274: openProjectByFilePath — cold-start Session restore project reopen
   // -------------------------------------------------------------------------
 

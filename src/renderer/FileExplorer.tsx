@@ -14,16 +14,35 @@ import folderOpenIconUrl from "../../assets/icons/ionicons/explorer/folder-open-
 import folderIconUrl from "../../assets/icons/ionicons/explorer/folder-outline.svg?url";
 import refreshIconUrl from "../../assets/icons/ionicons/explorer/refresh-outline.svg?url";
 import type {
+  CreateFileExplorerEntryResult,
   FileExplorerEntry,
   ListFileExplorerChildrenResult,
   PergamumProject
 } from "../shared/api";
+import { isFileExplorerCreateValidationReason } from "../shared/fileExplorerCreate";
 import type { Translate } from "../shared/i18n";
+import {
+  navigatorClipboardAdapter,
+  type ClipboardAdapter
+} from "./dialog/clipboardAdapter";
+import {
+  NameInputDialog,
+  type NameInputDialogSubmitResult
+} from "./dialog/NameInputDialog";
+import {
+  createFileExplorerNameValidator,
+  fileExplorerCreateFailureMessageKey,
+  fileExplorerCreateTechnicalDetails,
+  type FileExplorerCreateKind
+} from "./fileExplorerCreateMessages";
 
 interface FileExplorerProps {
   project: PergamumProject | null;
   highlightedRelativePath: string | null;
   translate: Translate;
+  /** #307: disable the create toolbar and never attempt a create IPC. */
+  readOnly?: boolean;
+  clipboardAdapter?: ClipboardAdapter;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -37,8 +56,11 @@ interface FileExplorerViewProps {
   isRootSelected: boolean;
   selectedRelativePath: string | null;
   highlightedRelativePath: string | null;
+  canCreate: boolean;
   translate: Translate;
   onReload: () => void;
+  onNewFile: () => void;
+  onNewFolder: () => void;
   onToggleDirectory: (relativePath: string) => void;
   onSelectRoot: () => void;
   onSelectEntry: (relativePath: string) => void;
@@ -192,6 +214,43 @@ export function resolveFileExplorerReloadTargets({
   ]);
 }
 
+/**
+ * #307: which folder a "New File" / "New Folder" action creates into,
+ * as a project-relative path (`null` = project root):
+ *   - a selected folder  → that folder,
+ *   - a selected file    → its parent folder,
+ *   - the root selected, or nothing selected → the project root.
+ * Never resolves an absolute path — the main process does that.
+ */
+export function resolveFileExplorerCreateParentDirectory({
+  entriesByDirectoryPath,
+  isRootSelected,
+  selectedRelativePath
+}: {
+  entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>;
+  isRootSelected: boolean;
+  selectedRelativePath: string | null;
+}): string | null {
+  if (isRootSelected || !selectedRelativePath) {
+    return null;
+  }
+
+  const selectedEntry = fileExplorerEntryByRelativePath(
+    entriesByDirectoryPath,
+    selectedRelativePath
+  );
+
+  if (selectedEntry?.kind === "folder") {
+    return selectedEntry.relativePath;
+  }
+
+  if (selectedEntry?.kind === "file") {
+    return parentDirectoryRelativePath(selectedEntry.relativePath);
+  }
+
+  return null;
+}
+
 function iconForEntry(
   entry: FileExplorerEntry,
   expandedDirectoryPaths: ReadonlySet<string>
@@ -209,11 +268,15 @@ export function FileExplorer({
   project,
   highlightedRelativePath,
   translate,
+  readOnly = false,
+  clipboardAdapter = navigatorClipboardAdapter,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
   const [entriesByDirectoryPath, setEntriesByDirectoryPath] = useState<
     Record<string, FileExplorerEntry[]>
   >({});
+  const [createDialogKind, setCreateDialogKind] =
+    useState<FileExplorerCreateKind | null>(null);
   const [expandedDirectoryPaths, setExpandedDirectoryPaths] = useState<
     Set<string>
   >(() => new Set());
@@ -404,24 +467,195 @@ export function FileExplorer({
     unavailableDirectoryPaths
   ]);
 
+  // #307: create is available only for a writable open project. In
+  // read-only mode the renderer never calls the create IPC.
+  const canCreate = hasProject && !readOnly;
+
+  const openCreateDialog = useCallback(
+    (kind: FileExplorerCreateKind) => {
+      if (!canCreate) {
+        return;
+      }
+      setCreateDialogKind(kind);
+    },
+    [canCreate]
+  );
+
+  const submitCreate = useCallback(
+    async (
+      kind: FileExplorerCreateKind,
+      rawValue: string
+    ): Promise<NameInputDialogSubmitResult> => {
+      if (!canCreate) {
+        return {
+          ok: false,
+          error: {
+            message: translate("explorer.create.error.readOnlyProject")
+          }
+        };
+      }
+
+      const parentRelativePath = resolveFileExplorerCreateParentDirectory({
+        entriesByDirectoryPath,
+        isRootSelected,
+        selectedRelativePath
+      });
+
+      let result: CreateFileExplorerEntryResult;
+
+      try {
+        result =
+          kind === "file"
+            ? await window.pergamum.projects.createFileExplorerMarkdownFile(
+                parentRelativePath,
+                rawValue
+              )
+            : await window.pergamum.projects.createFileExplorerFolder(
+                parentRelativePath,
+                rawValue
+              );
+      } catch {
+        return {
+          ok: false,
+          error: {
+            message: translate("explorer.create.error.unknown"),
+            technicalDetails: fileExplorerCreateTechnicalDetails({
+              kind,
+              reason: "unknown",
+              parentRelativePath,
+              requestedName: rawValue
+            })
+          }
+        };
+      }
+
+      if (!result.ok) {
+        const message = translate(
+          fileExplorerCreateFailureMessageKey(result.reason)
+        );
+
+        if (isFileExplorerCreateValidationReason(result.reason)) {
+          return { ok: false, error: { message } };
+        }
+
+        return {
+          ok: false,
+          error: {
+            message,
+            technicalDetails: fileExplorerCreateTechnicalDetails({
+              kind,
+              reason: result.reason,
+              parentRelativePath,
+              requestedName: rawValue
+            })
+          }
+        };
+      }
+
+      const newRelativePath = result.entry.relativePath;
+      const generation = loadGenerationRef.current;
+
+      // Reload the parent folder so the new entry appears, keeping the
+      // rest of the user's expanded tree untouched (#305).
+      await loadDirectoryForGeneration(parentRelativePath, generation);
+
+      if (parentRelativePath !== null) {
+        setExpandedDirectoryPaths((current) =>
+          withSetEntry(current, parentRelativePath)
+        );
+      }
+
+      setSelection({ kind: "entry", relativePath: newRelativePath });
+      setCreateDialogKind(null);
+
+      if (kind === "file") {
+        // Open it as a project document — never as a standalone Markdown.
+        onActivateDocument(newRelativePath);
+      } else {
+        setExpandedDirectoryPaths((current) =>
+          withSetEntry(current, newRelativePath)
+        );
+        void loadDirectoryForGeneration(newRelativePath, generation);
+      }
+
+      return { ok: true };
+    },
+    [
+      canCreate,
+      entriesByDirectoryPath,
+      isRootSelected,
+      loadDirectoryForGeneration,
+      onActivateDocument,
+      selectedRelativePath,
+      translate
+    ]
+  );
+
   return (
-    <FileExplorerView
-      projectName={project?.name ?? null}
-      rootEntries={entriesByDirectoryPath[rootDirectoryKey] ?? []}
-      entriesByDirectoryPath={entriesByDirectoryPath}
-      expandedDirectoryPaths={expandedDirectoryPaths}
-      loadingDirectoryPaths={loadingForView}
-      unavailableDirectoryPaths={unavailableDirectoryPaths}
-      isRootSelected={isRootSelected}
-      selectedRelativePath={selectedRelativePath}
-      highlightedRelativePath={project ? highlightedRelativePath : null}
-      translate={translate}
-      onReload={reloadCurrentExplorerContext}
-      onToggleDirectory={toggleDirectory}
-      onSelectRoot={selectRoot}
-      onSelectEntry={selectEntry}
-      onActivateDocument={onActivateDocument}
-    />
+    <>
+      <FileExplorerView
+        projectName={project?.name ?? null}
+        rootEntries={entriesByDirectoryPath[rootDirectoryKey] ?? []}
+        entriesByDirectoryPath={entriesByDirectoryPath}
+        expandedDirectoryPaths={expandedDirectoryPaths}
+        loadingDirectoryPaths={loadingForView}
+        unavailableDirectoryPaths={unavailableDirectoryPaths}
+        isRootSelected={isRootSelected}
+        selectedRelativePath={selectedRelativePath}
+        highlightedRelativePath={project ? highlightedRelativePath : null}
+        canCreate={canCreate}
+        translate={translate}
+        onReload={reloadCurrentExplorerContext}
+        onNewFile={() => openCreateDialog("file")}
+        onNewFolder={() => openCreateDialog("folder")}
+        onToggleDirectory={toggleDirectory}
+        onSelectRoot={selectRoot}
+        onSelectEntry={selectEntry}
+        onActivateDocument={onActivateDocument}
+      />
+      {createDialogKind !== null ? (
+        <NameInputDialog
+          key={createDialogKind}
+          title={translate(
+            createDialogKind === "file"
+              ? "explorer.newFile.title"
+              : "explorer.newFolder.title"
+          )}
+          description={translate(
+            createDialogKind === "file"
+              ? "explorer.newFile.description"
+              : "explorer.newFolder.description"
+          )}
+          inputLabel={translate(
+            createDialogKind === "file"
+              ? "explorer.newFile.inputLabel"
+              : "explorer.newFolder.inputLabel"
+          )}
+          placeholder={translate(
+            createDialogKind === "file"
+              ? "explorer.newFile.placeholder"
+              : "explorer.newFolder.placeholder"
+          )}
+          primaryLabel={translate(
+            createDialogKind === "file"
+              ? "explorer.newFile.primary"
+              : "explorer.newFolder.primary"
+          )}
+          icon={{
+            url: createDialogKind === "file" ? filePlusIconUrl : folderPlusIconUrl
+          }}
+          translate={translate}
+          clipboardAdapter={clipboardAdapter}
+          opener={null}
+          validateName={createFileExplorerNameValidator(
+            createDialogKind,
+            translate
+          )}
+          onSubmit={(rawValue) => submitCreate(createDialogKind, rawValue)}
+          onClose={() => setCreateDialogKind(null)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -435,8 +669,11 @@ export function FileExplorerView({
   isRootSelected,
   selectedRelativePath,
   highlightedRelativePath,
+  canCreate,
   translate,
   onReload,
+  onNewFile,
+  onNewFolder,
   onToggleDirectory,
   onSelectRoot,
   onSelectEntry,
@@ -571,7 +808,8 @@ export function FileExplorerView({
             className="fileExplorerToolbarButton"
             title={translate("explorer.newFile")}
             aria-label={translate("explorer.newFile")}
-            disabled
+            disabled={!canCreate}
+            onClick={onNewFile}
           >
             <img
               src={filePlusIconUrl}
@@ -585,7 +823,8 @@ export function FileExplorerView({
             className="fileExplorerToolbarButton"
             title={translate("explorer.newFolder")}
             aria-label={translate("explorer.newFolder")}
-            disabled
+            disabled={!canCreate}
+            onClick={onNewFolder}
           >
             <img
               src={folderPlusIconUrl}
