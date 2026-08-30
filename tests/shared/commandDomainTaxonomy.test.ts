@@ -113,7 +113,7 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     {
       requestFileExplorerCreate: () => undefined,
-      requestFileExplorerRename: () => undefined
+      requestRenameActiveEditorFile: () => undefined
     },
     {
       createMarkdownFile: "Create New Markdown File",

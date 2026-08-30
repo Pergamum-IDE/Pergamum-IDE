@@ -32,6 +32,30 @@ export const fileExplorerCreateCommandWhen: CommandEnablementExpression = {
   allOf: [{ key: "project.isOpen" }, { key: "project.access.readWrite" }]
 };
 
+/**
+ * #318: the global `workspace.files.rename` command (Command Palette / menu /
+ * shortcut) renames the *active editor's backing project file*, so on top of
+ * the writable-open-project gate it also requires that such an editor is
+ * active. It is therefore disabled with no editor tab, for an untitled
+ * document, and for an external / project-outside Markdown file. A future
+ * File-Explorer-internal rename (context menu / F2) is a separate trigger
+ * that keeps using the File Explorer selection and is not gated by this.
+ *
+ * The `not editor.isDirty` clause keeps the #318 micro-scope out of dirty
+ * file rename policy: renaming a file with unsaved changes touches editor
+ * tab / Session / Recovery / backing path consistency, so the command is
+ * simply unavailable until the active file is saved (the File Explorer
+ * dirty preflight still backstops this).
+ */
+export const fileExplorerRenameCommandWhen: CommandEnablementExpression = {
+  allOf: [
+    { key: "project.isOpen" },
+    { key: "project.access.readWrite" },
+    { key: "editor.document.projectFile" },
+    { not: { key: "editor.isDirty" } }
+  ]
+};
+
 export interface FileExplorerCommandController {
   /**
    * Reveal the File Explorer if hidden (never collapse it) and open the
@@ -40,10 +64,13 @@ export interface FileExplorerCommandController {
    */
   requestFileExplorerCreate(kind: FileExplorerCreateKind): void;
   /**
-   * Reveal the File Explorer if hidden and ask it to rename its current
-   * selection. The File Explorer owns selection and dirty-editor preflight.
+   * #318: reveal the File Explorer if hidden and open the Rename dialog for
+   * the *active editor's backing project file* — not the File Explorer's own
+   * selection. The caller resolves the target path from the active editor;
+   * the File Explorer still runs the extension / dirty-open-document / root /
+   * read-only preflight before IPC.
    */
-  requestFileExplorerRename(): void;
+  requestRenameActiveEditorFile(): void;
 }
 
 export interface FileExplorerCommandTitles {
@@ -58,7 +85,14 @@ export interface FileExplorerCommandTitles {
 type FileExplorerCommand = Command<readonly [], void>;
 
 export function createFileExplorerCommandTitles(
-  translate: Translate
+  translate: Translate,
+  /**
+   * #318: the display name of the active editor's backing project file, when
+   * there is one. Shown in the Rename command label so the Command Palette
+   * makes the target file obvious before execution. `null` (no such editor)
+   * falls back to the plain label.
+   */
+  activeRenameTargetName: string | null = null
 ): FileExplorerCommandTitles {
   return {
     createMarkdownFile: translate(
@@ -71,7 +105,12 @@ export function createFileExplorerCommandTitles(
     createFolderDescription: translate(
       "command.workspace.files.createFolder.description"
     ),
-    rename: translate("command.workspace.files.rename"),
+    rename:
+      activeRenameTargetName !== null
+        ? translate("command.workspace.files.rename.withTarget", {
+            name: activeRenameTargetName
+          })
+        : translate("command.workspace.files.rename"),
     renameDescription: translate("command.workspace.files.rename.description")
   };
 }
@@ -103,9 +142,9 @@ export function createFileExplorerCommands(
       id: fileExplorerCommandIds.rename,
       title: titles.rename,
       description: titles.renameDescription,
-      when: fileExplorerCreateCommandWhen,
+      when: fileExplorerRenameCommandWhen,
       execute: () => {
-        controller.requestFileExplorerRename();
+        controller.requestRenameActiveEditorFile();
       }
     }
   ];

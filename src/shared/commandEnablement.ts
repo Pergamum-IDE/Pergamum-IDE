@@ -16,6 +16,11 @@ export type CommandContextKey =
   | "editor.kind.markdown"
   | "editor.kind.glossary"
   | "editor.document.projectOwned"
+  // #318: the active editor is a Markdown editor backed by a project file
+  // (kind "project"). Narrower than `editor.document.projectOwned`, which
+  // also covers glossary-entry editors. Gates the global (Command Palette /
+  // menu / shortcut) Rename, whose target is the active editor's file.
+  | "editor.document.projectFile"
   | "activeEditor.saveBlockedByReadOnlyProjectRootForUi"
   | "glossary.occurrences.tracking.active"
   | "recovery.owner"
@@ -30,6 +35,7 @@ export const commandContextKeys: readonly CommandContextKey[] = [
   "editor.kind.markdown",
   "editor.kind.glossary",
   "editor.document.projectOwned",
+  "editor.document.projectFile",
   "activeEditor.saveBlockedByReadOnlyProjectRootForUi",
   "glossary.occurrences.tracking.active",
   "recovery.owner",

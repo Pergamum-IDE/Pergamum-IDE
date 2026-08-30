@@ -1,4 +1,7 @@
-import type { CurrentDocument } from "./currentDocument";
+import {
+  currentProjectRelativePath,
+  type CurrentDocument
+} from "./currentDocument";
 import {
   createUntitledEditorId,
   editorIdEquals,
@@ -193,6 +196,23 @@ export function activeCurrentEditor(
   state: OpenDocumentsState
 ): CurrentEditor | null {
   return activeOpenDocument(state)?.editor ?? null;
+}
+
+/**
+ * #318: the project-relative path of the active editor's backing project
+ * file, or `null` when there is no active editor, it is not a Markdown
+ * editor, or its document is untitled / an external (non-project) file.
+ *
+ * This is the target a *global* Rename (Command Palette / menu / shortcut)
+ * acts on — never the File Explorer's own selection.
+ */
+export function activeProjectDocumentRelativePath(
+  state: OpenDocumentsState
+): string | null {
+  const editor = activeCurrentEditor(state);
+  const document = editor ? markdownDocumentForEditor(editor) : null;
+
+  return document ? currentProjectRelativePath(document) : null;
 }
 
 export function hasDirtyOpenDocuments(state: OpenDocumentsState): boolean {

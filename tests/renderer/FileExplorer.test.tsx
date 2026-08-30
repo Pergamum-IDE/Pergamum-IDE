@@ -15,7 +15,8 @@ import {
   FileExplorer,
   resolveFileExplorerCreateParentDirectory,
   resolveFileExplorerReloadTargets,
-  scrollFileExplorerActiveDocumentIntoView
+  scrollFileExplorerActiveDocumentIntoView,
+  type FileExplorerRenameEntryRequest
 } from "../../src/renderer/FileExplorer";
 
 const translate: Translate = (key) => key;
@@ -1827,11 +1828,11 @@ describe("FileExplorer Command Palette rename request (#313)", () => {
     onRenameUnavailable: ReturnType<typeof vi.fn>;
     writeText: ReturnType<typeof vi.fn>;
     setRootEntries(entries: FileExplorerEntry[]): void;
-    rerender(request: { token: number } | null): void;
+    rerender(request: FileExplorerRenameEntryRequest | null): void;
   }
 
   function renderWithRenameRequest(options: {
-    initialRequest?: { token: number } | null;
+    initialRequest?: FileExplorerRenameEntryRequest | null;
     entries?: FileExplorerEntry[];
     renameFileExplorerEntry?: ReturnType<typeof vi.fn>;
     isProjectDocumentDirty?: (relativePath: string) => boolean;
@@ -2137,5 +2138,165 @@ describe("FileExplorer Command Palette rename request (#313)", () => {
     expect(copied).toContain("reason: permissionDenied");
     expect(copied).toContain("source: chapter-01.md");
     expect(copied).not.toContain(project.rootPath);
+  });
+
+  describe("global (active-editor) rename target (#318)", () => {
+    it("renames the explicit target and ignores the File Explorer selection", async () => {
+      const harness = renderWithRenameRequest();
+      await flushPromises();
+
+      // Selection is chapter-01.md, but the global command targets a
+      // different file — the active editor's — that need not even be loaded
+      // into the tree.
+      act(() => entryButton("chapter-01.md").click());
+      harness.rerender({
+        token: 1,
+        target: { relativePath: "Drafts/draft.md" }
+      });
+      await flushPromises();
+
+      expect(renameDialogInput()!.value).toBe("draft.md");
+      expect(
+        container!.querySelector(".nameInputDialogContextValue")?.textContent
+      ).toBe("Drafts/draft.md");
+      expect(harness.onRenameEntryRequestHandled).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the selection when no explicit target is given", async () => {
+      const harness = renderWithRenameRequest();
+      await flushPromises();
+
+      act(() => entryButton("chapter-01.md").click());
+      harness.rerender({ token: 1 });
+      await flushPromises();
+
+      expect(renameDialogInput()!.value).toBe("chapter-01.md");
+    });
+
+    it("submits IPC with the explicit target's project-relative path", async () => {
+      const renameFileExplorerEntry = vi.fn(
+        async (): Promise<RenameFileExplorerEntryResult> => ({
+          ok: true,
+          oldRelativePath: "Drafts/draft.md",
+          newEntry: {
+            kind: "file",
+            name: "draft-2.md",
+            relativePath: "Drafts/draft-2.md"
+          },
+          parentDirectoryRelativePath: "Drafts"
+        })
+      );
+      const harness = renderWithRenameRequest({ renameFileExplorerEntry });
+      await flushPromises();
+
+      harness.rerender({
+        token: 1,
+        target: { relativePath: "Drafts/draft.md" }
+      });
+      await flushPromises();
+
+      typeRenameName("draft-2");
+      await act(async () => {
+        renameDialogPrimary().click();
+      });
+      await flushPromises();
+
+      expect(renameFileExplorerEntry).toHaveBeenCalledWith(
+        "Drafts/draft.md",
+        "draft-2"
+      );
+    });
+
+    it("blocks a dirty explicit target before IPC", async () => {
+      const harness = renderWithRenameRequest({
+        isProjectDocumentDirty: (relativePath) =>
+          relativePath === "Drafts/draft.md"
+      });
+      await flushPromises();
+
+      harness.rerender({
+        token: 1,
+        target: { relativePath: "Drafts/draft.md" }
+      });
+      await flushPromises();
+
+      expect(renameDialogInput()).toBeNull();
+      expect(harness.renameFileExplorerEntry).not.toHaveBeenCalled();
+      expect(harness.onRenameUnavailable).toHaveBeenCalledWith(
+        "explorer.rename.error.openDocumentDirty"
+      );
+    });
+
+    it("blocks an unsupported-extension explicit target before IPC", async () => {
+      const harness = renderWithRenameRequest();
+      await flushPromises();
+
+      harness.rerender({
+        token: 1,
+        target: { relativePath: "notes.txt" }
+      });
+      await flushPromises();
+
+      expect(renameDialogInput()).toBeNull();
+      expect(harness.onRenameUnavailable).toHaveBeenCalledWith(
+        "explorer.rename.error.unsupportedExtension"
+      );
+    });
+
+    it("rejects an empty explicit target path as the project root", async () => {
+      const harness = renderWithRenameRequest();
+      await flushPromises();
+
+      harness.rerender({ token: 1, target: { relativePath: "" } });
+      await flushPromises();
+
+      expect(renameDialogInput()).toBeNull();
+      expect(harness.onRenameUnavailable).toHaveBeenCalledWith(
+        "explorer.rename.error.cannotRenameProjectRoot"
+      );
+    });
+
+    it("still blocks in a read-only project", async () => {
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+      const onRenameUnavailable = vi.fn();
+      const renameFileExplorerEntry = vi.fn();
+
+      Object.defineProperty(window, "pergamum", {
+        configurable: true,
+        value: {
+          projects: {
+            listFileExplorerChildren: vi.fn(async () => ok(null, rootEntries)),
+            renameFileExplorerEntry
+          }
+        }
+      });
+
+      act(() => {
+        root!.render(
+          React.createElement(FileExplorer, {
+            project,
+            highlightedRelativePath: null,
+            translate,
+            readOnly: true,
+            renameEntryRequest: {
+              token: 1,
+              target: { relativePath: "chapter-01.md" }
+            },
+            onRenameEntryRequestHandled: vi.fn(),
+            isProjectDocumentDirty: () => false,
+            onRenameUnavailable,
+            onActivateDocument: vi.fn()
+          })
+        );
+      });
+      await flushPromises();
+
+      expect(renameFileExplorerEntry).not.toHaveBeenCalled();
+      expect(onRenameUnavailable).toHaveBeenCalledWith(
+        "explorer.rename.error.readOnlyProject"
+      );
+    });
   });
 });

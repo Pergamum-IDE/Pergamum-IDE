@@ -292,8 +292,8 @@ describe("CommandPalette", () => {
       ],
       [
         "command.workspace.files.rename.description",
-        "ファイルエクスプローラーで選択しているファイルまたは空フォルダの名前を変更します。",
-        "Rename the selected File Explorer file or empty folder."
+        "アクティブなエディターで開いている、保存済みのプロジェクト Markdown ファイルの名前を変更します。",
+        "Rename the saved project Markdown file open in the active editor."
       ],
       [
         "command.workspace.search.focus.description",

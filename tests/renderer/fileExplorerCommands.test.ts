@@ -36,12 +36,12 @@ const titles = {
 
 function registryWith(
   requestFileExplorerCreate: (kind: FileExplorerCreateKind) => void,
-  requestFileExplorerRename: () => void = () => undefined
+  requestRenameActiveEditorFile: () => void = () => undefined
 ): CommandRegistry {
   const registry = new CommandRegistry();
   registerFileExplorerCommands(
     registry,
-    { requestFileExplorerCreate, requestFileExplorerRename },
+    { requestFileExplorerCreate, requestRenameActiveEditorFile },
     titles
   );
   return registry;
@@ -58,7 +58,15 @@ const readOnlyProjectContext: CommandContext = {
 };
 const writableProjectContext: CommandContext = {
   "project.isOpen": true,
-  "project.access.readWrite": true
+  "project.access.readWrite": true,
+  // #318: the global Rename also requires an active editor backed by a
+  // project file. Create commands ignore this key.
+  "editor.document.projectFile": true
+};
+const writableProjectNoActiveFileContext: CommandContext = {
+  "project.isOpen": true,
+  "project.access.readWrite": true,
+  "editor.document.projectFile": false
 };
 
 describe("File Explorer create commands (#311)", () => {
@@ -89,7 +97,7 @@ describe("File Explorer create commands (#311)", () => {
     expect(kinds).toEqual(["file", "folder"]);
   });
 
-  it("routes rename to the File Explorer rename request", async () => {
+  it("routes rename to the active-editor rename request (#318)", async () => {
     const rename = vi.fn();
     const registry = registryWith(() => undefined, rename);
     registry.setCommandContextProvider(() => writableProjectContext);
@@ -97,6 +105,83 @@ describe("File Explorer create commands (#311)", () => {
     await registry.execute(fileExplorerCommandIds.rename, executionOptions);
 
     expect(rename).toHaveBeenCalledTimes(1);
+  });
+
+  it("is unavailable without an active project-file editor (#318)", () => {
+    const registry = registryWith(() => undefined);
+
+    expect(
+      registry.isEnabledForContext(
+        fileExplorerCommandIds.rename,
+        writableProjectNoActiveFileContext
+      )
+    ).toBe(false);
+    // Create commands never depend on the active editor.
+    expect(
+      registry.isEnabledForContext(
+        fileExplorerCommandIds.createMarkdownFile,
+        writableProjectNoActiveFileContext
+      )
+    ).toBe(true);
+  });
+
+  it("does not run the rename request when the command is disabled (#318)", async () => {
+    const rename = vi.fn();
+    const registry = registryWith(() => undefined, rename);
+    registry.setCommandContextProvider(
+      () => writableProjectNoActiveFileContext
+    );
+
+    await expect(
+      registry.execute(fileExplorerCommandIds.rename, executionOptions)
+    ).rejects.toThrow();
+
+    expect(rename).not.toHaveBeenCalled();
+  });
+
+  it("is unavailable when the active project file is dirty (#318)", async () => {
+    const rename = vi.fn();
+    const registry = registryWith(() => undefined, rename);
+    const dirtyContext: CommandContext = {
+      ...writableProjectContext,
+      "editor.isDirty": true
+    };
+
+    expect(
+      registry.isEnabledForContext(fileExplorerCommandIds.rename, dirtyContext)
+    ).toBe(false);
+
+    registry.setCommandContextProvider(() => dirtyContext);
+    await expect(
+      registry.execute(fileExplorerCommandIds.rename, executionOptions)
+    ).rejects.toThrow();
+    expect(rename).not.toHaveBeenCalled();
+  });
+
+  it("is available only for a writable open project with a clean active project file (#318)", () => {
+    const registry = registryWith(() => undefined);
+
+    // editor tab 0 / untitled / external / project-outside / another
+    // project's file all resolve to editor.document.projectFile = false in
+    // App (see activeProjectDocumentRelativePath in openDocuments.test.ts),
+    // which this single gate case represents.
+    expect(
+      registry.isEnabledForContext(
+        fileExplorerCommandIds.rename,
+        writableProjectContext
+      )
+    ).toBe(true);
+    for (const context of [
+      writableProjectNoActiveFileContext,
+      { ...writableProjectContext, "editor.isDirty": true },
+      { ...writableProjectContext, "project.isOpen": false },
+      readOnlyProjectContext,
+      noProjectContext
+    ] satisfies CommandContext[]) {
+      expect(
+        registry.isEnabledForContext(fileExplorerCommandIds.rename, context)
+      ).toBe(false);
+    }
   });
 
   it("is unavailable when no project is open", () => {
@@ -198,6 +283,46 @@ describe("File Explorer create commands (#311)", () => {
     });
   });
 
+  it("labels Rename with the active editor target file name when given one (#318)", () => {
+    const translate = vi.fn(
+      (key: string, values?: Record<string, unknown>) =>
+        values ? `t:${key}:${JSON.stringify(values)}` : `t:${key}`
+    );
+
+    expect(
+      createFileExplorerCommandTitles(translate, "chapter-01.md").rename
+    ).toBe(
+      't:command.workspace.files.rename.withTarget:{"name":"chapter-01.md"}'
+    );
+    // No target → the plain label.
+    expect(createFileExplorerCommandTitles(translate, null).rename).toBe(
+      "t:command.workspace.files.rename"
+    );
+  });
+
+  it("shows the target file name in the Command Palette Rename entry (#318)", () => {
+    const registry = new CommandRegistry();
+    registerFileExplorerCommands(
+      registry,
+      {
+        requestFileExplorerCreate: () => undefined,
+        requestRenameActiveEditorFile: () => undefined
+      },
+      createFileExplorerCommandTitles(
+        (key, values) => t("en", key, values),
+        "chapter-01.md"
+      )
+    );
+
+    const renameEntry = listCommandPaletteEntries(registry).find(
+      (entry) => String(entry.id) === "workspace.files.rename"
+    );
+
+    expect(renameEntry?.title).toBe(
+      "Rename Active Editor File: chapter-01.md"
+    );
+  });
+
   it("defines Japanese and English labels/descriptions", () => {
     expect(jaTranslations["command.workspace.files.createMarkdownFile"]).toBe(
       "新規 Markdown ファイルを作成"
@@ -216,8 +341,18 @@ describe("File Explorer create commands (#311)", () => {
     expect(enTranslations["command.workspace.files.createFolder"]).toBe(
       "Create New Folder"
     );
-    expect(jaTranslations["command.workspace.files.rename"]).toBe("名前を変更");
-    expect(enTranslations["command.workspace.files.rename"]).toBe("Rename");
+    expect(jaTranslations["command.workspace.files.rename"]).toBe(
+      "アクティブなファイル名を変更"
+    );
+    expect(enTranslations["command.workspace.files.rename"]).toBe(
+      "Rename Active Editor File"
+    );
+    expect(jaTranslations["command.workspace.files.rename.withTarget"]).toBe(
+      "アクティブなファイル名を変更: {name}"
+    );
+    expect(enTranslations["command.workspace.files.rename.withTarget"]).toBe(
+      "Rename Active Editor File: {name}"
+    );
   });
 
   it("keeps the command module free of React and DOM APIs", () => {
@@ -228,7 +363,11 @@ describe("File Explorer create commands (#311)", () => {
 
     expect(source).not.toContain('from "react"');
     expect(source).not.toContain("window.");
-    expect(source).not.toContain("document.");
+    // Real DOM access only — the `editor.document.projectFile` enablement key
+    // (#318) is a plain string, not a `document` global reference.
+    expect(source).not.toMatch(
+      /\bdocument\.(getElementById|querySelector|createElement|body|addEventListener|documentElement)/
+    );
   });
 });
 
@@ -289,7 +428,28 @@ describe("App wiring for File Explorer create commands (#311)", () => {
 
   it("registers the File Explorer create and rename commands", () => {
     expect(appSource).toContain("registerFileExplorerCommands(");
-    expect(appSource).toContain("createFileExplorerCommandTitles(translate)");
+    expect(appSource).toContain("createFileExplorerCommandTitles(");
+  });
+
+  it("passes the active editor target file name into the Rename command label (#318)", () => {
+    expect(appSource).toContain(
+      "createFileExplorerCommandTitles(\n        translate,\n        renameActiveEditorTargetName\n      )"
+    );
+    // The label name is derived from the active project document, not the
+    // File Explorer selection, and is independent of dirtiness.
+    expect(appSource).toContain(
+      "const renameActiveEditorTargetRelativePath = isSettingsTabActive"
+    );
+    expect(appSource).toContain(
+      "activeProjectDocumentRelativePath(openDocumentsState)"
+    );
+    expect(appSource).toContain(
+      "renameActiveEditorTargetName,\n    sidebarMode,"
+    );
+    // The `when` gate key and the label name share one source of truth.
+    expect(appSource).toContain(
+      "editorDocumentProjectFile:\n          renameActiveEditorTargetRelativePath !== null"
+    );
   });
 
   it("reveals the File Explorer without collapsing it, then hands over a create request", () => {
@@ -327,10 +487,22 @@ describe("App wiring for File Explorer create commands (#311)", () => {
     );
   });
 
-  it("reveals the File Explorer before handing over a rename request", () => {
-    const start = appSource.indexOf("requestFileExplorerRename: () => {");
+  it("targets the active editor's project file for a global rename (#318)", () => {
+    const start = appSource.indexOf(
+      "requestRenameActiveEditorFile: () => {"
+    );
     expect(start).toBeGreaterThan(-1);
-    const handler = appSource.slice(start, start + 500);
+    const handler = appSource.slice(start, start + 900);
+
+    // Resolve the target from the active editor — never the File Explorer
+    // selection — and do nothing when there is no such target.
+    expect(handler).toContain(
+      "activeProjectDocumentRelativePath(\n            openDocumentsStateRef.current\n          )"
+    );
+    expect(handler).toContain("if (relativePath === null) {");
+    expect(handler.indexOf("if (relativePath === null) {")).toBeLessThan(
+      handler.indexOf("revealFileExplorer();")
+    );
 
     expect(handler).toContain("revealFileExplorer();");
     expect(handler).toContain("fileExplorerRenameRequestSeqRef.current += 1;");
@@ -338,5 +510,6 @@ describe("App wiring for File Explorer create commands (#311)", () => {
     expect(handler).toContain(
       "token: fileExplorerRenameRequestSeqRef.current"
     );
+    expect(handler).toContain("target: { relativePath }");
   });
 });
