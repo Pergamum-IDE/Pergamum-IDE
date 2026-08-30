@@ -191,6 +191,52 @@ export function parseRecoveryDocumentPayload(
   };
 }
 
+/**
+ * #320: one file that moved on disk (Rename now; batch / subtree Move later).
+ * Absolute paths — the re-key layer normalises them into `document_key` /
+ * `source_uri` / `file_path` the same way capture does.
+ */
+export interface RecoveryDocumentPathPair {
+  readonly oldAbsolutePath: string;
+  readonly newAbsolutePath: string;
+}
+
+/** Per-pair result of a best-effort re-key. */
+export type RecoveryPathRekeyStatus =
+  /** A row was moved from the old `document_key` to the new one. */
+  | "rekeyed"
+  /** No Recovery row referenced the old path (the common, expected case). */
+  | "no-row"
+  /**
+   * A row already exists under the new `document_key`. Per #320 both rows
+   * are left intact — Recovery identity is never silently conflated.
+   */
+  | "collision"
+  /** Either path could not be normalised, or the DB write threw. */
+  | "error";
+
+export interface RecoveryPathRekeyOutcome {
+  readonly oldAbsolutePath: string;
+  readonly newAbsolutePath: string;
+  readonly status: RecoveryPathRekeyStatus;
+}
+
+/**
+ * Aggregate result of {@link RecoveryDocumentPathPair}[] re-key. A
+ * non-owner / unavailable store yields `{ ok: false, skipped }` and the
+ * filesystem operation still succeeds.
+ */
+export type RecoveryPathRekeyResult =
+  | {
+      readonly ok: true;
+      readonly rekeyed: number;
+      readonly noRow: number;
+      readonly collisions: number;
+      readonly errors: number;
+      readonly outcomes: readonly RecoveryPathRekeyOutcome[];
+    }
+  | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
+
 /** A renderer → main delete request: Save-success cleanup only. */
 export interface RecoveryDocumentDeleteRequest {
   readonly documentKey: string;

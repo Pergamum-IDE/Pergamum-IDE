@@ -128,3 +128,67 @@ export function deleteRecoveryDocument(
 
   return result.changes > 0 ? "deleted" : "noop";
 }
+
+export interface RekeyRecoveryDocumentPathInput {
+  readonly oldDocumentKey: string;
+  readonly newDocumentKey: string;
+  readonly newSourceUri: string;
+  readonly newFilePath: string;
+  readonly newDisplayName: string;
+}
+
+/**
+ * #320: point the Recovery row that matched `oldDocumentKey` at
+ * `newDocumentKey` after the source file was renamed / moved. Updates only
+ * the identity columns (`document_key` / `source_uri` / `file_path` /
+ * `display_name`); `payload_text`, the base fingerprint, `origin_instance_run_id`,
+ * `created_at`, and `updated_at` are left untouched, so a re-keyed row keeps
+ * its provenance and its place in the candidate list. Covers both the
+ * current run's own backups and previous-run candidates (no
+ * `origin_instance_run_id` filter).
+ *
+ *   - `"collision"` — a row already exists under `newDocumentKey`
+ *     (`document_key` is UNIQUE). Nothing is written; the caller MUST leave
+ *     both rows intact and log it (#320 collision policy).
+ *   - `"no-row"`    — no row referenced `oldDocumentKey` (nothing to do).
+ *   - `"rekeyed"`   — one row was moved.
+ *
+ * The SELECT + UPDATE run on one synchronous better-sqlite3 connection, so
+ * the collision check and the write are not interleaved with another write.
+ */
+export function rekeyRecoveryDocumentPath(
+  database: BetterSqliteDatabase,
+  input: RekeyRecoveryDocumentPathInput
+): "rekeyed" | "no-row" | "collision" {
+  if (input.oldDocumentKey === input.newDocumentKey) {
+    return "no-row";
+  }
+
+  const collides =
+    database
+      .prepare("SELECT 1 FROM documents WHERE document_key = ?")
+      .get(input.newDocumentKey) !== undefined;
+
+  if (collides) {
+    return "collision";
+  }
+
+  const result = database
+    .prepare(
+      `UPDATE documents
+          SET document_key = @newDocumentKey,
+              source_uri   = @newSourceUri,
+              file_path    = @newFilePath,
+              display_name = @newDisplayName
+        WHERE document_key = @oldDocumentKey`
+    )
+    .run({
+      oldDocumentKey: input.oldDocumentKey,
+      newDocumentKey: input.newDocumentKey,
+      newSourceUri: input.newSourceUri,
+      newFilePath: input.newFilePath,
+      newDisplayName: input.newDisplayName
+    });
+
+  return result.changes > 0 ? "rekeyed" : "no-row";
+}

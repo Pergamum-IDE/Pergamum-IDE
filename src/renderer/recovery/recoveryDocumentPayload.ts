@@ -112,6 +112,28 @@ export function recoveryDocumentKeyForEditor(
   return recoveryDocumentKeyForDocument(document, context);
 }
 
+/**
+ * #320: the Recovery `document_key` for a project document addressed by its
+ * project-root-relative path (rather than an open `CurrentDocument`). Used
+ * by the rename-success flow to tell the coordinator "`oldRelativePath`
+ * became `newRelativePath`". `null` when there is no active project context
+ * or the path cannot be normalised.
+ */
+export function recoveryDocumentKeyForProjectRelativePath(
+  relativePath: string,
+  context: RecoveryDocumentBuildContext
+): string | null {
+  if (!context.activeProjectContext) {
+    return null;
+  }
+
+  const normalized = normalizeAbsolutePath(
+    joinProjectPath(context.activeProjectContext.rootPath, relativePath)
+  );
+
+  return normalized === null ? null : recoveryFileDocumentKey(normalized);
+}
+
 export function recoveryDocumentKeyForDocument(
   document: CurrentDocument,
   context: RecoveryDocumentBuildContext

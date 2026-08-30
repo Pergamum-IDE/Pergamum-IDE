@@ -65,6 +65,7 @@ import {
 import { registerRecoveryStoreIpc } from "./recoveryStoreIpc";
 import { registerRecoveryDocumentIpc } from "./recoveryDocumentIpc";
 import { registerRecoveryCandidateIpc } from "./recoveryCandidateIpc";
+import { rekeyRecoveryDocumentPaths } from "./recoveryDocumentPathRekey";
 
 let mainWindow: BrowserWindow | null = null;
 let windowLifecycleController: WindowLifecycleController | null = null;
@@ -281,7 +282,22 @@ app.whenReady().then(async () => {
     defaultProjectWriteOwnershipManager,
     undefined,
     startupProjectFilePath,
-    instanceRunId
+    instanceRunId,
+    // #320: after a File Explorer rename `fs.rename`s a file, best-effort
+    // re-key its Recovery row so a pending candidate is not stranded on the
+    // old path. Owner-only; a non-owner / unavailable store is a silent
+    // no-op and the rename still succeeds. The getters resolve lazily, so
+    // wiring this before `initializeRecoveryStore` runs is fine.
+    (pairs) =>
+      rekeyRecoveryDocumentPaths(
+        {
+          getStatus: recoveryStoreStatus,
+          getOwnerDatabase: recoveryStoreOwnerDatabase,
+          instanceRunId,
+          logger: debugLogger
+        },
+        pairs
+      )
   );
   registerSettingsIpc();
   registerAppInfoIpc();

@@ -316,4 +316,29 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     );
     expect(restoreFn).toMatch(/if \(!selected\) \{\s*continue;/);
   });
+
+  it("follows the current-run Recovery key when a project document is renamed (#320)", () => {
+    const renameFn = appSource.slice(
+      appSource.indexOf(
+        "function handleFileExplorerProjectDocumentRenamed"
+      ),
+      appSource.indexOf("function handleFileExplorerRenameUnavailable")
+    );
+
+    // Old / new keys come from the same normaliser capture uses, keyed on
+    // the project-root-relative paths — not the File Explorer selection.
+    expect(renameFn).toContain(
+      "recoveryDocumentKeyForProjectRelativePath(\n      oldRelativePath,"
+    );
+    expect(renameFn).toContain(
+      "recoveryDocumentKeyForProjectRelativePath(\n      newEntry.relativePath,"
+    );
+    expect(renameFn).toContain(
+      "recoveryPayloadCoordinator.onPathsRelocated([\n        { oldKey: oldRecoveryKey, newKey: newRecoveryKey }\n      ])"
+    );
+    // Only when both resolve and actually differ.
+    expect(renameFn).toContain(
+      "if (oldRecoveryKey && newRecoveryKey && oldRecoveryKey !== newRecoveryKey)"
+    );
+  });
 });
