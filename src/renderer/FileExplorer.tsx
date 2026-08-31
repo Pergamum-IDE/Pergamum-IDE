@@ -26,6 +26,10 @@ import type {
   PergamumProject,
   RenameFileExplorerEntryResult
 } from "../shared/api";
+import {
+  collectMovedProjectDocumentRelocations,
+  type ProjectDocumentPathRelocation
+} from "../shared/projectMove";
 import { isFileExplorerCreateValidationReason } from "../shared/fileExplorerCreate";
 import {
   isFileExplorerRenameValidationReason,
@@ -125,14 +129,19 @@ interface FileExplorerProps {
     oldRelativePath: string,
     newEntry: FileExplorerEntry
   ) => void;
+  /** #338: after a successful Move, the old → new project-relative paths for
+   *  every file that actually moved. The host follows open editor identity
+   *  (tab label, save target, active/highlighted path, session snapshot) and
+   *  its Recovery bookkeeping along these. A non-open old path is a no-op. */
+  onProjectDocumentsMoved?: (
+    relocations: readonly ProjectDocumentPathRelocation[]
+  ) => void;
   onRenameUnavailable?: (message: string) => void;
-  /** #327: project-relative paths of documents open with unsaved changes.
-   *  Passed to the Move backend as `dirtyProjectDocumentRelativePaths`. */
+  /** #327/#338: project-relative paths of documents open with UNSAVED changes.
+   *  Passed to the Move backend as `dirtyProjectDocumentRelativePaths`, and the
+   *  only editor state that still blocks a Move — a clean open document moves
+   *  and its editor identity follows (#338). */
   dirtyProjectDocumentRelativePaths?: readonly string[];
-  /** #327: project-relative paths of documents currently open in an editor.
-   *  Move is disabled in the UI for these — clean-open editor identity
-   *  update after a Move is a deferred follow-up. */
-  openProjectDocumentRelativePaths?: readonly string[];
   /** #327: a short, already-localized status line for a Move attempt. */
   onMoveResultMessage?: (message: string) => void;
   onActivateDocument: (relativePath: string) => void;
@@ -574,9 +583,9 @@ export function FileExplorer({
   onRenameEntryRequestHandled,
   isProjectDocumentDirty = () => false,
   onProjectDocumentRenamed,
+  onProjectDocumentsMoved,
   onRenameUnavailable,
   dirtyProjectDocumentRelativePaths = EMPTY_STRING_LIST,
-  openProjectDocumentRelativePaths = EMPTY_STRING_LIST,
   onMoveResultMessage,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
@@ -1489,18 +1498,20 @@ export function FileExplorer({
       ),
     [multiSelection.selected, entriesByDirectoryPath]
   );
-  const selectionHasOpenDocument = useMemo(() => {
-    const openSet = new Set(openProjectDocumentRelativePaths);
-    return [...multiSelection.selected].some((path) => openSet.has(path));
-  }, [multiSelection.selected, openProjectDocumentRelativePaths]);
+  // #338: only a DIRTY open project document blocks a Move now — a clean open
+  // document moves and its editor identity follows (`onProjectDocumentsMoved`).
+  const selectionHasDirtyOpenDocument = useMemo(() => {
+    const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
+    return [...multiSelection.selected].some((path) => dirtySet.has(path));
+  }, [multiSelection.selected, dirtyProjectDocumentRelativePaths]);
   // UI enablement is a convenience — the backend validation is authoritative.
-  // #328: Cut has the exact same gating as Move (files only, no open docs).
+  // #328: Cut has the exact same gating as Move (files only, no dirty docs).
   const canMoveSelection =
     hasProject &&
     !readOnly &&
     !moveInFlight &&
     moveSources.canMove &&
-    !selectionHasOpenDocument;
+    !selectionHasDirtyOpenDocument;
   const canCutSelection = canMoveSelection;
   // #327 blocker: a single, most-explanatory reason `Move…` is disabled, shown
   // via the menu item's `title`. `null` ⟺ `canMoveSelection`.
@@ -1511,31 +1522,32 @@ export function FileExplorer({
       readOnly,
       hasFolder: moveSources.hasFolder,
       fileCount: moveSources.relativePaths.length,
-      hasOpenDocument: selectionHasOpenDocument
+      hasDirtyOpenDocument: selectionHasDirtyOpenDocument
     });
-  // #328: whether any pending Cut source is now open in an editor — Paste stays
-  // blocked for open project documents (clean-open identity update is deferred).
-  const cutSourceHasOpenDocument = useMemo(() => {
+  // #328/#338: whether any pending Cut source is a DIRTY open document — Paste
+  // stays blocked for those (a clean open document Pastes and its editor
+  // identity follows).
+  const cutSourceHasDirtyOpenDocument = useMemo(() => {
     if (cutState === null) {
       return false;
     }
-    const openSet = new Set(openProjectDocumentRelativePaths);
-    return cutState.sourceRelativePaths.some((path) => openSet.has(path));
-  }, [cutState, openProjectDocumentRelativePaths]);
+    const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
+    return cutState.sourceRelativePaths.some((path) => dirtySet.has(path));
+  }, [cutState, dirtyProjectDocumentRelativePaths]);
   const canPasteCut =
     hasProject &&
     !readOnly &&
     !moveInFlight &&
     cutState !== null &&
     cutState.sourceRelativePaths.length > 0 &&
-    !cutSourceHasOpenDocument;
+    !cutSourceHasDirtyOpenDocument;
   const pasteDisabledReason: FileExplorerPasteDisabledReason | null =
     resolveFileExplorerPasteDisabledReason({
       moveInFlight,
       hasProject,
       readOnly,
       cutSourceCount: cutState?.sourceRelativePaths.length ?? 0,
-      cutHasOpenDocument: cutSourceHasOpenDocument
+      cutHasDirtyOpenDocument: cutSourceHasDirtyOpenDocument
     });
   // #328: the pending Cut paths, as a set for the muted-row marker.
   const cutRelativePaths = useMemo(
@@ -1624,6 +1636,14 @@ export function FileExplorer({
       const movedFailedCount = result.results.filter(
         (entry) => entry.status === "failed"
       ).length;
+
+      // #338: follow open editor identity for every file that ACTUALLY moved
+      // (moved entries only — never a validation failure / unavailable / a
+      // failed entry). The host no-ops for any old path that is not open.
+      const relocations = collectMovedProjectDocumentRelocations(result);
+      if (relocations.length > 0) {
+        onProjectDocumentsMoved?.(relocations);
+      }
       const generation = loadGenerationRef.current + 1;
       loadGenerationRef.current = generation;
 
@@ -1680,7 +1700,12 @@ export function FileExplorer({
 
       return "applied";
     },
-    [loadDirectoryForGeneration, onMoveResultMessage, translate]
+    [
+      loadDirectoryForGeneration,
+      onMoveResultMessage,
+      onProjectDocumentsMoved,
+      translate
+    ]
   );
 
   const performMove = useCallback(
@@ -1690,16 +1715,16 @@ export function FileExplorer({
         entriesByDirectoryPath
       );
 
-      // #327: re-assert every gate at execution time — the selection or its
-      // open-document state can change while the destination picker is open.
-      // (Clean-open editor identity update is deferred, so open project
-      // documents stay blocked here, not just in the disabled UI.)
+      // #327/#338: re-assert every gate at execution time — the selection or
+      // its dirty state can change while the destination picker is open. Only
+      // a DIRTY open document is rejected here; a clean open document moves and
+      // its editor identity follows (`onProjectDocumentsMoved`).
       if (
         !hasProject ||
         readOnly ||
         moveInFlight ||
         !sources.canMove ||
-        selectionHasOpenDocument
+        selectionHasDirtyOpenDocument
       ) {
         onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
         return;
@@ -1736,7 +1761,7 @@ export function FileExplorer({
       multiSelection.selected,
       onMoveResultMessage,
       readOnly,
-      selectionHasOpenDocument,
+      selectionHasDirtyOpenDocument,
       translate
     ]
   );
@@ -1755,7 +1780,7 @@ export function FileExplorer({
       readOnly ||
       moveInFlight ||
       !sources.canMove ||
-      selectionHasOpenDocument
+      selectionHasDirtyOpenDocument
     ) {
       return;
     }
@@ -1770,7 +1795,7 @@ export function FileExplorer({
     moveInFlight,
     multiSelection.selected,
     readOnly,
-    selectionHasOpenDocument
+    selectionHasDirtyOpenDocument
   ]);
 
   // #328: move the pending Cut sources into the folder resolved from the
@@ -1781,15 +1806,15 @@ export function FileExplorer({
       return;
     }
 
-    const openSet = new Set(openProjectDocumentRelativePaths);
-    const cutHasOpenDocument = cutState.sourceRelativePaths.some((path) =>
-      openSet.has(path)
+    const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
+    const cutHasDirtyOpenDocument = cutState.sourceRelativePaths.some((path) =>
+      dirtySet.has(path)
     );
 
     // Re-assert every gate at execution time (same rule as `performMove`).
-    // Open project documents stay blocked — clean-open editor identity update
-    // after a Move is still out of scope.
-    if (!hasProject || readOnly || moveInFlight || cutHasOpenDocument) {
+    // #338: only a DIRTY open document is rejected — a clean open document
+    // Pastes and its editor identity follows (`onProjectDocumentsMoved`).
+    if (!hasProject || readOnly || moveInFlight || cutHasDirtyOpenDocument) {
       onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
       return;
     }
@@ -1833,7 +1858,6 @@ export function FileExplorer({
     hasProject,
     moveInFlight,
     onMoveResultMessage,
-    openProjectDocumentRelativePaths,
     readOnly,
     selection,
     translate
@@ -1907,19 +1931,20 @@ export function FileExplorer({
       sourceRelativePaths: readonly string[],
       destinationFolderRelativePath: string
     ) => {
-      const openSet = new Set(openProjectDocumentRelativePaths);
-      const sourcesHaveOpenDocument = sourceRelativePaths.some((path) =>
-        openSet.has(path)
+      const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
+      const sourcesHaveDirtyOpenDocument = sourceRelativePaths.some((path) =>
+        dirtySet.has(path)
       );
 
       // Re-check every safety gate at drop time — the same rule the Move and
-      // Paste routes apply. The backend stays authoritative regardless.
+      // Paste routes apply. #338: only a DIRTY open document is rejected. The
+      // backend stays authoritative regardless.
       if (
         !hasProject ||
         readOnly ||
         moveInFlight ||
         sourceRelativePaths.length === 0 ||
-        sourcesHaveOpenDocument
+        sourcesHaveDirtyOpenDocument
       ) {
         onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
         return;
@@ -1953,7 +1978,6 @@ export function FileExplorer({
       hasProject,
       moveInFlight,
       onMoveResultMessage,
-      openProjectDocumentRelativePaths,
       readOnly,
       translate
     ]
@@ -1988,9 +2012,9 @@ export function FileExplorer({
         multiSelection.selected,
         entriesByDirectoryPath
       );
-      const openSet = new Set(openProjectDocumentRelativePaths);
-      const sourcesHaveOpenDocument = sources.sourceRelativePaths.some((path) =>
-        openSet.has(path)
+      const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
+      const sourcesHaveDirtyOpenDocument = sources.sourceRelativePaths.some(
+        (path) => dirtySet.has(path)
       );
 
       if (
@@ -1998,10 +2022,11 @@ export function FileExplorer({
         readOnly ||
         moveInFlight ||
         !sources.canDrag ||
-        sourcesHaveOpenDocument
+        sourcesHaveDirtyOpenDocument
       ) {
-        // Cancel the drag before it starts — folders, mixed selections, open
-        // documents, and read-only projects never begin a movable drag.
+        // Cancel the drag before it starts — folders, mixed selections,
+        // DIRTY open documents (#338), and read-only projects never begin a
+        // movable drag.
         event.preventDefault();
         return;
       }
@@ -2017,11 +2042,11 @@ export function FileExplorer({
       });
     },
     [
+      dirtyProjectDocumentRelativePaths,
       entriesByDirectoryPath,
       hasProject,
       moveInFlight,
       multiSelection.selected,
-      openProjectDocumentRelativePaths,
       readOnly
     ]
   );
@@ -2409,7 +2434,8 @@ const MOVE_DISABLED_REASON_MESSAGE_KEY: Record<
   "read-only-project": "explorer.move.disabled.readOnlyProject",
   "empty-selection": "explorer.move.disabled.emptySelection",
   "contains-folder": "explorer.move.disabled.containsFolder",
-  "contains-open-document": "explorer.move.disabled.containsOpenDocument"
+  "contains-dirty-open-document":
+    "explorer.move.disabled.containsDirtyOpenDocument"
 };
 
 const CUT_DISABLED_REASON_MESSAGE_KEY: Record<
@@ -2421,7 +2447,8 @@ const CUT_DISABLED_REASON_MESSAGE_KEY: Record<
   "read-only-project": "explorer.cut.disabled.readOnlyProject",
   "empty-selection": "explorer.cut.disabled.emptySelection",
   "contains-folder": "explorer.cut.disabled.containsFolder",
-  "contains-open-document": "explorer.cut.disabled.containsOpenDocument"
+  "contains-dirty-open-document":
+    "explorer.cut.disabled.containsDirtyOpenDocument"
 };
 
 const PASTE_DISABLED_REASON_MESSAGE_KEY: Record<
@@ -2432,7 +2459,8 @@ const PASTE_DISABLED_REASON_MESSAGE_KEY: Record<
   "no-project": "explorer.paste.disabled.noProject",
   "read-only-project": "explorer.paste.disabled.readOnlyProject",
   "no-cut-sources": "explorer.paste.disabled.noCutSources",
-  "contains-open-document": "explorer.paste.disabled.containsOpenDocument"
+  "contains-dirty-open-document":
+    "explorer.paste.disabled.containsDirtyOpenDocument"
 };
 
 export function FileExplorerView({

@@ -20,6 +20,7 @@ import {
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithDocument,
   documentTabs,
+  findOpenDocument,
   isOpenDocumentDirty,
   openOrActivateEditor,
   openOrActivateDocument,
@@ -390,6 +391,45 @@ describe("OpenDocumentsState", () => {
       )
     ).toBe(true);
     expect(documentTabs(result.state)[0].title).toBe("chapter-renamed.md");
+  });
+
+  it("relocates a clean open project document to a new folder after a File Explorer Move (#338)", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "existing"),
+      projectContext
+    );
+    const result = replaceOpenDocument(
+      state,
+      createProjectDocumentEditorId("chapter-01.md", projectContext),
+      createProjectDocument(
+        {
+          relativePath: "Archive/chapter-01.md",
+          name: "chapter-01.md"
+        },
+        "existing"
+      ),
+      projectContext
+    );
+
+    expect(result.didCollide).toBe(false);
+    // The editor identity — which is also the save target — follows the new
+    // project-relative path; the old identity no longer resolves.
+    expect(
+      editorIdEquals(
+        result.state.activeDocumentId,
+        createProjectDocumentEditorId(
+          "Archive/chapter-01.md",
+          projectContext
+        )
+      )
+    ).toBe(true);
+    expect(
+      findOpenDocument(
+        result.state,
+        createProjectDocumentEditorId("chapter-01.md", projectContext)
+      )
+    ).toBeNull();
+    expect(documentTabs(result.state)[0].title).toBe("chapter-01.md");
   });
 
   it("opens a project document into the empty zero-tab initial state (#262)", () => {

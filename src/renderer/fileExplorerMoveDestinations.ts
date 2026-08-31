@@ -110,10 +110,11 @@ export function resolveFileExplorerMoveSources(
 }
 
 /**
- * #327 blocker / #328: why a Move (context menu / toolbar) or a Cut is
+ * #327 blocker / #328 / #338: why a Move (context menu / toolbar) or a Cut is
  * disabled. Exactly one is chosen (most-explanatory first); `null` means the
  * action is allowed. Move and Cut share this taxonomy — their gating is
- * identical.
+ * identical. `contains-dirty-open-document`: a selected file is open with
+ * UNSAVED changes — a *clean* open document moves fine (#338).
  */
 export type FileExplorerMoveDisabledReason =
   | "move-in-progress"
@@ -121,7 +122,7 @@ export type FileExplorerMoveDisabledReason =
   | "read-only-project"
   | "empty-selection"
   | "contains-folder"
-  | "contains-open-document";
+  | "contains-dirty-open-document";
 
 export function resolveFileExplorerMoveDisabledReason(input: {
   readonly moveInFlight: boolean;
@@ -129,7 +130,7 @@ export function resolveFileExplorerMoveDisabledReason(input: {
   readonly readOnly: boolean;
   readonly hasFolder: boolean;
   readonly fileCount: number;
-  readonly hasOpenDocument: boolean;
+  readonly hasDirtyOpenDocument: boolean;
 }): FileExplorerMoveDisabledReason | null {
   if (input.moveInFlight) {
     return "move-in-progress";
@@ -146,14 +147,14 @@ export function resolveFileExplorerMoveDisabledReason(input: {
   if (input.fileCount === 0) {
     return "empty-selection";
   }
-  if (input.hasOpenDocument) {
-    return "contains-open-document";
+  if (input.hasDirtyOpenDocument) {
+    return "contains-dirty-open-document";
   }
   return null;
 }
 
 /**
- * #328: why a Paste is disabled. `no-cut-sources` replaces the selection
+ * #328/#338: why a Paste is disabled. `no-cut-sources` replaces the selection
  * reasons — a Paste depends on the pending Cut, not the current selection.
  */
 export type FileExplorerPasteDisabledReason =
@@ -161,14 +162,14 @@ export type FileExplorerPasteDisabledReason =
   | "no-project"
   | "read-only-project"
   | "no-cut-sources"
-  | "contains-open-document";
+  | "contains-dirty-open-document";
 
 export function resolveFileExplorerPasteDisabledReason(input: {
   readonly moveInFlight: boolean;
   readonly hasProject: boolean;
   readonly readOnly: boolean;
   readonly cutSourceCount: number;
-  readonly cutHasOpenDocument: boolean;
+  readonly cutHasDirtyOpenDocument: boolean;
 }): FileExplorerPasteDisabledReason | null {
   if (input.moveInFlight) {
     return "move-in-progress";
@@ -182,8 +183,8 @@ export function resolveFileExplorerPasteDisabledReason(input: {
   if (input.cutSourceCount === 0) {
     return "no-cut-sources";
   }
-  if (input.cutHasOpenDocument) {
-    return "contains-open-document";
+  if (input.cutHasDirtyOpenDocument) {
+    return "contains-dirty-open-document";
   }
   return null;
 }

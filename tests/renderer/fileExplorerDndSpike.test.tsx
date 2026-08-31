@@ -90,6 +90,7 @@ function movedResult(entries: Array<{ src: string; dest: string }>) {
 interface Harness {
   moveFileExplorerEntries: ReturnType<typeof vi.fn>;
   onMoveResultMessage: ReturnType<typeof vi.fn>;
+  onProjectDocumentsMoved: ReturnType<typeof vi.fn>;
   listCalls: Array<string | null>;
   setDraftsChildren: (entries: FileExplorerEntry[]) => void;
 }
@@ -97,7 +98,7 @@ interface Harness {
 async function mount(
   options: {
     moveImpl?: (request: unknown) => unknown;
-    openProjectDocumentRelativePaths?: string[];
+    dirtyProjectDocumentRelativePaths?: string[];
     readOnly?: boolean;
   } = {}
 ): Promise<Harness> {
@@ -120,6 +121,7 @@ async function mount(
       : movedResult([{ src: "a.md", dest: "Drafts/a.md" }])
   );
   const onMoveResultMessage = vi.fn();
+  const onProjectDocumentsMoved = vi.fn();
 
   Object.defineProperty(window, "pergamum", {
     configurable: true,
@@ -140,10 +142,10 @@ async function mount(
         translate,
         readOnly: options.readOnly ?? false,
         onActivateDocument: vi.fn(),
-        dirtyProjectDocumentRelativePaths: [],
-        openProjectDocumentRelativePaths:
-          options.openProjectDocumentRelativePaths ?? [],
-        onMoveResultMessage
+        dirtyProjectDocumentRelativePaths:
+          options.dirtyProjectDocumentRelativePaths ?? [],
+        onMoveResultMessage,
+        onProjectDocumentsMoved
       })
     );
   });
@@ -152,6 +154,7 @@ async function mount(
   return {
     moveFileExplorerEntries,
     onMoveResultMessage,
+    onProjectDocumentsMoved,
     listCalls,
     setDraftsChildren: (entries) => {
       draftsChildren = entries;
@@ -305,14 +308,24 @@ describe("FileExplorer D&D spike — drag source (#329)", () => {
     expect(draggingMarkers()).toEqual([]);
   });
 
-  it("does not start a drag when a selected file is an open project document", async () => {
-    await mount({ openProjectDocumentRelativePaths: ["a.md"] });
+  it("does not start a drag when a selected file is a DIRTY open document (#338)", async () => {
+    await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
     clickEntry("a.md");
 
     const event = dragStart("a.md");
 
     expect(event.defaultPrevented).toBe(true);
     expect(draggingMarkers()).toEqual([]);
+  });
+
+  it("starts a drag for a CLEAN open document (#338)", async () => {
+    await mount({ dirtyProjectDocumentRelativePaths: [] });
+    clickEntry("a.md");
+
+    const event = dragStart("a.md");
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(draggingMarkers()).toEqual(["a.md"]);
   });
 
   it("does not start a drag in a read-only project", async () => {
@@ -504,5 +517,18 @@ describe("FileExplorer D&D spike — execution & lifecycle (#329)", () => {
 
     expect(draggingMarkers()).toEqual([]);
     expect(harness.moveFileExplorerEntries).not.toHaveBeenCalled();
+  });
+
+  it("reports the old -> new relocation on a successful drop (#338)", async () => {
+    const harness = await mount();
+    clickEntry("a.md");
+    const started = dragStart("a.md");
+
+    drop(entryButton("Drafts"), started.dataTransfer);
+    await flushPromises();
+
+    expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
+      { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" }
+    ]);
   });
 });

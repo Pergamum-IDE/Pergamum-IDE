@@ -1,4 +1,5 @@
 import type { FileExplorerEntry, PergamumProject } from "../shared/api";
+import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import type { CreateGlossaryEntryInput, GlossaryEntryId } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
@@ -29,11 +30,16 @@ interface WorkspaceSidebarProps {
     oldRelativePath: string,
     newEntry: FileExplorerEntry
   ) => void;
+  /** #338: after a successful File Explorer Move, the old → new relocations
+   *  for every moved file. The host follows open editor identity along these. */
+  onFileExplorerProjectDocumentsMoved?: (
+    relocations: readonly ProjectDocumentPathRelocation[]
+  ) => void;
   onFileExplorerRenameUnavailable?: (message: string) => void;
-  /** #327: project-relative paths of open dirty / open documents, and a
-   *  status-line sink for the context-menu Move route. */
+  /** #327/#338: project-relative paths of open documents with UNSAVED changes
+   *  (the only editor state that blocks a Move), and a status-line sink for
+   *  the Move routes. */
   fileExplorerDirtyProjectDocumentRelativePaths?: readonly string[];
-  fileExplorerOpenProjectDocumentRelativePaths?: readonly string[];
   onFileExplorerMoveResultMessage?: (message: string) => void;
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
   onCreateGlossaryEntry: (
@@ -55,9 +61,9 @@ export function WorkspaceSidebar({
   onFileExplorerRenameEntryRequestHandled,
   isFileExplorerProjectDocumentDirty,
   onFileExplorerProjectDocumentRenamed,
+  onFileExplorerProjectDocumentsMoved,
   onFileExplorerRenameUnavailable,
   fileExplorerDirtyProjectDocumentRelativePaths,
-  fileExplorerOpenProjectDocumentRelativePaths,
   onFileExplorerMoveResultMessage,
   onActivateGlossaryEntry,
   onCreateGlossaryEntry
@@ -83,12 +89,10 @@ export function WorkspaceSidebar({
           }
           isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
           onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
+          onProjectDocumentsMoved={onFileExplorerProjectDocumentsMoved}
           onRenameUnavailable={onFileExplorerRenameUnavailable}
           dirtyProjectDocumentRelativePaths={
             fileExplorerDirtyProjectDocumentRelativePaths
-          }
-          openProjectDocumentRelativePaths={
-            fileExplorerOpenProjectDocumentRelativePaths
           }
           onMoveResultMessage={onFileExplorerMoveResultMessage}
           onActivateDocument={onActivateProjectDocument}

@@ -90,14 +90,14 @@ describe("resolveFileExplorerMoveSources (#327)", () => {
   });
 });
 
-describe("resolveFileExplorerMoveDisabledReason (#327/#328)", () => {
+describe("resolveFileExplorerMoveDisabledReason (#327/#328/#338)", () => {
   const eligible = {
     moveInFlight: false,
     hasProject: true,
     readOnly: false,
     hasFolder: false,
     fileCount: 2,
-    hasOpenDocument: false
+    hasDirtyOpenDocument: false
   };
 
   it("returns null when a files-only selection is fully eligible", () => {
@@ -127,19 +127,28 @@ describe("resolveFileExplorerMoveDisabledReason (#327/#328)", () => {
     expect(
       resolveFileExplorerMoveDisabledReason({
         ...eligible,
-        hasOpenDocument: true
+        hasDirtyOpenDocument: true
       })
-    ).toBe("contains-open-document");
+    ).toBe("contains-dirty-open-document");
+  });
+
+  it("stays eligible for a CLEAN open document (#338)", () => {
+    expect(
+      resolveFileExplorerMoveDisabledReason({
+        ...eligible,
+        hasDirtyOpenDocument: false
+      })
+    ).toBeNull();
   });
 });
 
-describe("resolveFileExplorerPasteDisabledReason (#328)", () => {
+describe("resolveFileExplorerPasteDisabledReason (#328/#338)", () => {
   const ready = {
     moveInFlight: false,
     hasProject: true,
     readOnly: false,
     cutSourceCount: 1,
-    cutHasOpenDocument: false
+    cutHasDirtyOpenDocument: false
   };
 
   it("returns null when a pending Cut can be pasted", () => {
@@ -152,13 +161,13 @@ describe("resolveFileExplorerPasteDisabledReason (#328)", () => {
     ).toBe("no-cut-sources");
   });
 
-  it("reports an open document among the cut sources", () => {
+  it("reports a DIRTY open document among the cut sources (#338)", () => {
     expect(
       resolveFileExplorerPasteDisabledReason({
         ...ready,
-        cutHasOpenDocument: true
+        cutHasDirtyOpenDocument: true
       })
-    ).toBe("contains-open-document");
+    ).toBe("contains-dirty-open-document");
   });
 
   it("still gates on project / read-only / in-flight first", () => {
