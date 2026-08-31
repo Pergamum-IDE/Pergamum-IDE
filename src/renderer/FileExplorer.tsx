@@ -42,7 +42,12 @@ import {
 import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
 import {
   collectFileExplorerMoveDestinationFolders,
-  resolveFileExplorerMoveSources
+  resolveFileExplorerMoveDisabledReason,
+  resolveFileExplorerMoveSources,
+  resolveFileExplorerPasteDestination,
+  resolveFileExplorerPasteDisabledReason,
+  type FileExplorerMoveDisabledReason,
+  type FileExplorerPasteDisabledReason
 } from "./fileExplorerMoveDestinations";
 import {
   createFileExplorerNameValidator,
@@ -150,6 +155,9 @@ interface FileExplorerViewProps {
   /** #327: localized reason the move is unavailable — shown as the toolbar
    *  button's `title` when disabled. */
   moveDisabledReasonLabel?: string;
+  /** #328: project-relative paths of the pending Cut sources — the rows are
+   *  rendered muted (`data-file-explorer-cut="true"`) while still visible. */
+  cutRelativePaths?: ReadonlySet<string>;
   translate: Translate;
   /** #311: attached to the active project document entry once it is
    *  rendered, so the container can scroll it into view. */
@@ -191,6 +199,13 @@ interface FileExplorerViewProps {
   onEntryContextMenu?: (
     event: ReactMouseEvent<HTMLElement>,
     entry: FileExplorerEntry | null
+  ) => void;
+  /**
+   * #328: Ctrl/Cmd+X / Ctrl/Cmd+V while focus is inside the tree. Scoped to
+   * the tree subtree — it never sees an editor / input keystroke.
+   */
+  onTreeShortcutKeyDown?: (
+    event: ReactKeyboardEvent<HTMLDivElement>
   ) => void;
   onActivateDocument: (relativePath: string) => void;
 }
@@ -559,6 +574,9 @@ export function FileExplorer({
   } | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveInFlight, setMoveInFlight] = useState(false);
+  // #328: the pending internal Cut — a snapshot of the File Explorer selection
+  // taken at Cut time, moved by the next Paste. Never touches the OS clipboard.
+  const [cutState, setCutState] = useState<FileExplorerCutState | null>(null);
   const loadGenerationRef = useRef(0);
   // #311: the DOM node of the active project document entry (once #309 has
   // revealed it) and the last path we scrolled to, so the scroll fires once
@@ -780,6 +798,8 @@ export function FileExplorer({
     setSelection(null);
     // #323: a project close / switch clears the multi-selection too.
     setMultiSelection(createEmptyFileExplorerSelection());
+    // #328: a pending Cut is scoped to the current project — drop it.
+    setCutState(null);
 
     if (hasProject) {
       void loadDirectoryForGeneration(null, generation);
@@ -1411,7 +1431,7 @@ export function FileExplorer({
   );
 
   // ---------------------------------------------------------------------------
-  // #327: context-menu Move route.
+  // #327: context-menu / toolbar Move route. #328: internal Cut / Paste.
   // ---------------------------------------------------------------------------
   const moveSources = useMemo(
     () =>
@@ -1426,27 +1446,54 @@ export function FileExplorer({
     return [...multiSelection.selected].some((path) => openSet.has(path));
   }, [multiSelection.selected, openProjectDocumentRelativePaths]);
   // UI enablement is a convenience — the backend validation is authoritative.
+  // #328: Cut has the exact same gating as Move (files only, no open docs).
   const canMoveSelection =
     hasProject &&
     !readOnly &&
     !moveInFlight &&
     moveSources.canMove &&
     !selectionHasOpenDocument;
+  const canCutSelection = canMoveSelection;
   // #327 blocker: a single, most-explanatory reason `Move…` is disabled, shown
   // via the menu item's `title`. `null` ⟺ `canMoveSelection`.
-  const moveDisabledReason: MoveDisabledReason | null = moveInFlight
-    ? "move-in-progress"
-    : !hasProject
-      ? "no-project"
-      : readOnly
-        ? "read-only-project"
-        : moveSources.hasFolder
-          ? "contains-folder"
-          : moveSources.relativePaths.length === 0
-            ? "empty-selection"
-            : selectionHasOpenDocument
-              ? "contains-open-document"
-              : null;
+  const moveDisabledReason: FileExplorerMoveDisabledReason | null =
+    resolveFileExplorerMoveDisabledReason({
+      moveInFlight,
+      hasProject,
+      readOnly,
+      hasFolder: moveSources.hasFolder,
+      fileCount: moveSources.relativePaths.length,
+      hasOpenDocument: selectionHasOpenDocument
+    });
+  // #328: whether any pending Cut source is now open in an editor — Paste stays
+  // blocked for open project documents (clean-open identity update is deferred).
+  const cutSourceHasOpenDocument = useMemo(() => {
+    if (cutState === null) {
+      return false;
+    }
+    const openSet = new Set(openProjectDocumentRelativePaths);
+    return cutState.sourceRelativePaths.some((path) => openSet.has(path));
+  }, [cutState, openProjectDocumentRelativePaths]);
+  const canPasteCut =
+    hasProject &&
+    !readOnly &&
+    !moveInFlight &&
+    cutState !== null &&
+    cutState.sourceRelativePaths.length > 0 &&
+    !cutSourceHasOpenDocument;
+  const pasteDisabledReason: FileExplorerPasteDisabledReason | null =
+    resolveFileExplorerPasteDisabledReason({
+      moveInFlight,
+      hasProject,
+      readOnly,
+      cutSourceCount: cutState?.sourceRelativePaths.length ?? 0,
+      cutHasOpenDocument: cutSourceHasOpenDocument
+    });
+  // #328: the pending Cut paths, as a set for the muted-row marker.
+  const cutRelativePaths = useMemo(
+    () => new Set(cutState?.sourceRelativePaths ?? []),
+    [cutState]
+  );
   const moveDestinationFolders = useMemo(
     () => collectFileExplorerMoveDestinationFolders(entriesByDirectoryPath),
     [entriesByDirectoryPath]
@@ -1481,52 +1528,20 @@ export function FileExplorer({
     []
   );
 
-  const performMove = useCallback(
-    async (destinationFolderRelativePath: string) => {
-      const sources = resolveFileExplorerMoveSources(
-        multiSelection.selected,
-        entriesByDirectoryPath
-      );
-
-      // #327: re-assert every gate at execution time — the selection or its
-      // open-document state can change while the destination picker is open.
-      // (Clean-open editor identity update is deferred, so open project
-      // documents stay blocked here, not just in the disabled UI.)
-      if (
-        !hasProject ||
-        readOnly ||
-        moveInFlight ||
-        !sources.canMove ||
-        selectionHasOpenDocument
-      ) {
-        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
-        return;
-      }
-
-      setMoveInFlight(true);
-      let response: Awaited<
+  // #327/#328: turn a completed Move IPC response into tree refreshes, a
+  // selection update, and a status line. Shared by the Move route and the
+  // #328 Paste route. Returns whether the filesystem may have changed
+  // (`"applied"` ⟺ validation passed) so a caller can clear its own state.
+  const applyMoveResponse = useCallback(
+    (
+      response: Awaited<
         ReturnType<typeof window.pergamum.projects.moveFileExplorerEntries>
-      >;
-
-      try {
-        response = await window.pergamum.projects.moveFileExplorerEntries({
-          sourceRelativePaths: sources.relativePaths,
-          destinationFolderRelativePath,
-          dirtyProjectDocumentRelativePaths: [
-            ...dirtyProjectDocumentRelativePaths
-          ]
-        });
-      } catch {
-        setMoveInFlight(false);
-        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
-        return;
-      }
-
-      setMoveInFlight(false);
-
+      >,
+      destinationFolderRelativePath: string
+    ): "applied" | "not-applied" => {
       if (response.kind === "unavailable") {
         onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
-        return;
+        return "not-applied";
       }
 
       const { result } = response;
@@ -1545,7 +1560,7 @@ export function FileExplorer({
             reason: firstReason
           })
         );
-        return;
+        return "not-applied";
       }
 
       // Validation passed → the filesystem may have changed. Refresh the tree
@@ -1609,18 +1624,219 @@ export function FileExplorer({
           })
         );
       }
+
+      return "applied";
+    },
+    [loadDirectoryForGeneration, onMoveResultMessage, translate]
+  );
+
+  const performMove = useCallback(
+    async (destinationFolderRelativePath: string) => {
+      const sources = resolveFileExplorerMoveSources(
+        multiSelection.selected,
+        entriesByDirectoryPath
+      );
+
+      // #327: re-assert every gate at execution time — the selection or its
+      // open-document state can change while the destination picker is open.
+      // (Clean-open editor identity update is deferred, so open project
+      // documents stay blocked here, not just in the disabled UI.)
+      if (
+        !hasProject ||
+        readOnly ||
+        moveInFlight ||
+        !sources.canMove ||
+        selectionHasOpenDocument
+      ) {
+        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      setMoveInFlight(true);
+      let response: Awaited<
+        ReturnType<typeof window.pergamum.projects.moveFileExplorerEntries>
+      >;
+
+      try {
+        response = await window.pergamum.projects.moveFileExplorerEntries({
+          sourceRelativePaths: sources.relativePaths,
+          destinationFolderRelativePath,
+          dirtyProjectDocumentRelativePaths: [
+            ...dirtyProjectDocumentRelativePaths
+          ]
+        });
+      } catch {
+        setMoveInFlight(false);
+        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      setMoveInFlight(false);
+      applyMoveResponse(response, destinationFolderRelativePath);
     },
     [
+      applyMoveResponse,
       dirtyProjectDocumentRelativePaths,
       entriesByDirectoryPath,
       hasProject,
-      loadDirectoryForGeneration,
       moveInFlight,
       multiSelection.selected,
       onMoveResultMessage,
       readOnly,
       selectionHasOpenDocument,
       translate
+    ]
+  );
+
+  // #328: snapshot the current selection as the pending Cut. No filesystem
+  // work — the next Paste calls the existing Move IPC. A disabled Cut is a
+  // silent no-op (the menu item's `title` explains why).
+  const performCut = useCallback(() => {
+    const sources = resolveFileExplorerMoveSources(
+      multiSelection.selected,
+      entriesByDirectoryPath
+    );
+
+    if (
+      !hasProject ||
+      readOnly ||
+      moveInFlight ||
+      !sources.canMove ||
+      selectionHasOpenDocument
+    ) {
+      return;
+    }
+
+    setCutState({
+      sourceRelativePaths: sources.relativePaths,
+      createdAt: Date.now()
+    });
+  }, [
+    entriesByDirectoryPath,
+    hasProject,
+    moveInFlight,
+    multiSelection.selected,
+    readOnly,
+    selectionHasOpenDocument
+  ]);
+
+  // #328: move the pending Cut sources into the folder resolved from the
+  // primary selection. Reuses the Move IPC and `applyMoveResponse`.
+  const performPaste = useCallback(async () => {
+    if (cutState === null || cutState.sourceRelativePaths.length === 0) {
+      onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+      return;
+    }
+
+    const openSet = new Set(openProjectDocumentRelativePaths);
+    const cutHasOpenDocument = cutState.sourceRelativePaths.some((path) =>
+      openSet.has(path)
+    );
+
+    // Re-assert every gate at execution time (same rule as `performMove`).
+    // Open project documents stay blocked — clean-open editor identity update
+    // after a Move is still out of scope.
+    if (!hasProject || readOnly || moveInFlight || cutHasOpenDocument) {
+      onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+      return;
+    }
+
+    const destinationFolderRelativePath = resolveFileExplorerPasteDestination(
+      selection,
+      entriesByDirectoryPath
+    );
+
+    setMoveInFlight(true);
+    let response: Awaited<
+      ReturnType<typeof window.pergamum.projects.moveFileExplorerEntries>
+    >;
+
+    try {
+      response = await window.pergamum.projects.moveFileExplorerEntries({
+        sourceRelativePaths: [...cutState.sourceRelativePaths],
+        destinationFolderRelativePath,
+        dirtyProjectDocumentRelativePaths: [...dirtyProjectDocumentRelativePaths]
+      });
+    } catch {
+      setMoveInFlight(false);
+      onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+      return;
+    }
+
+    setMoveInFlight(false);
+    const outcome = applyMoveResponse(response, destinationFolderRelativePath);
+
+    // #328 v1 rule: a fully- OR partially-applied Paste clears the pending
+    // Cut. Pending state is kept only when nothing moved — a validation
+    // failure or an unavailable gate — so the user can retry.
+    if (outcome === "applied") {
+      setCutState(null);
+    }
+  }, [
+    applyMoveResponse,
+    cutState,
+    dirtyProjectDocumentRelativePaths,
+    entriesByDirectoryPath,
+    hasProject,
+    moveInFlight,
+    onMoveResultMessage,
+    openProjectDocumentRelativePaths,
+    readOnly,
+    selection,
+    translate
+  ]);
+
+  // #328: Ctrl/Cmd+X / Ctrl/Cmd+V, only while focus is inside the tree. The
+  // handler is scoped to the tree subtree, so an editor / input / preview
+  // keystroke never reaches it; it also bails during IME composition and
+  // while a File Explorer modal dialog owns the keyboard.
+  const handleTreeShortcutKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+        return;
+      }
+
+      const usesPrimaryModifier =
+        (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
+      if (!usesPrimaryModifier) {
+        return;
+      }
+
+      // Defensive: never shadow a real text-editing surface (the tree has
+      // none, but a future inline rename input might live here).
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest("input, textarea, [contenteditable='true']") != null
+      ) {
+        return;
+      }
+
+      // A File Explorer modal dialog owns the keyboard while it is open.
+      if (
+        moveDialogOpen ||
+        createDialogKind !== null ||
+        renameDialogTarget !== null
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "x") {
+        event.preventDefault();
+        performCut();
+        return;
+      }
+      if (key === "v") {
+        event.preventDefault();
+        void performPaste();
+      }
+    },
+    [
+      createDialogKind,
+      moveDialogOpen,
+      performCut,
+      performPaste,
+      renameDialogTarget
     ]
   );
 
@@ -1645,6 +1861,7 @@ export function FileExplorer({
             ? translate(MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason])
             : undefined
         }
+        cutRelativePaths={cutRelativePaths}
         translate={translate}
         activeDocumentEntryRef={setActiveDocumentEntryElement}
         registerRowElement={registerRowElement}
@@ -1661,6 +1878,7 @@ export function FileExplorer({
         onEntryKeyDown={handleTreeEntryKeyDown}
         onRootKeyDown={handleRootKeyDown}
         onEntryContextMenu={handleEntryContextMenu}
+        onTreeShortcutKeyDown={handleTreeShortcutKeyDown}
         onActivateDocument={onActivateDocument}
       />
       {contextMenu !== null ? (
@@ -1675,7 +1893,7 @@ export function FileExplorer({
           <div
             className="fileExplorerContextMenu"
             role="menu"
-            aria-label={translate("explorer.contextMenu.move")}
+            aria-label={translate("explorer.contextMenu.label")}
             style={
               {
                 "--file-explorer-context-menu-x": `${contextMenu.x}px`,
@@ -1709,6 +1927,58 @@ export function FileExplorer({
               }}
             >
               {translate("explorer.contextMenu.move")}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="cut"
+              data-file-explorer-cut-disabled-reason={
+                moveDisabledReason ?? undefined
+              }
+              disabled={!canCutSelection}
+              aria-disabled={!canCutSelection}
+              title={
+                moveDisabledReason
+                  ? translate(
+                      CUT_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
+                    )
+                  : undefined
+              }
+              onClick={() => {
+                closeContextMenu();
+                if (canCutSelection) {
+                  performCut();
+                }
+              }}
+            >
+              {translate("explorer.contextMenu.cut")}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="paste"
+              data-file-explorer-paste-disabled-reason={
+                pasteDisabledReason ?? undefined
+              }
+              disabled={!canPasteCut}
+              aria-disabled={!canPasteCut}
+              title={
+                pasteDisabledReason
+                  ? translate(
+                      PASTE_DISABLED_REASON_MESSAGE_KEY[pasteDisabledReason]
+                    )
+                  : undefined
+              }
+              onClick={() => {
+                closeContextMenu();
+                if (canPasteCut) {
+                  void performPaste();
+                }
+              }}
+            >
+              {translate("explorer.contextMenu.paste")}
             </button>
           </div>
         </div>
@@ -1828,19 +2098,22 @@ const EMPTY_VISIBLE_ORDER: readonly string[] = [];
 const EMPTY_STRING_LIST: readonly string[] = [];
 
 /**
- * #327 blocker: why the context-menu `Move…` is disabled. Exactly one is
- * chosen (most-explanatory first); `null` means the move is allowed.
+ * #328: the pending internal Cut — a snapshot of the File Explorer selection,
+ * moved by the next Paste. Never on the OS clipboard; scoped to the current
+ * project (cleared on remount / project switch).
  */
-type MoveDisabledReason =
-  | "move-in-progress"
-  | "no-project"
-  | "read-only-project"
-  | "empty-selection"
-  | "contains-folder"
-  | "contains-open-document";
+interface FileExplorerCutState {
+  readonly sourceRelativePaths: readonly string[];
+  readonly createdAt: number;
+}
 
+/**
+ * #327 blocker: the localized reason a disabled `Move…` / `Cut` / `Paste`
+ * shows in its `title`. `FileExplorerMoveDisabledReason` is shared by Move and
+ * Cut (identical gating); Paste has its own taxonomy.
+ */
 const MOVE_DISABLED_REASON_MESSAGE_KEY: Record<
-  MoveDisabledReason,
+  FileExplorerMoveDisabledReason,
   TranslationKey
 > = {
   "move-in-progress": "explorer.move.disabled.moveInProgress",
@@ -1849,6 +2122,29 @@ const MOVE_DISABLED_REASON_MESSAGE_KEY: Record<
   "empty-selection": "explorer.move.disabled.emptySelection",
   "contains-folder": "explorer.move.disabled.containsFolder",
   "contains-open-document": "explorer.move.disabled.containsOpenDocument"
+};
+
+const CUT_DISABLED_REASON_MESSAGE_KEY: Record<
+  FileExplorerMoveDisabledReason,
+  TranslationKey
+> = {
+  "move-in-progress": "explorer.cut.disabled.moveInProgress",
+  "no-project": "explorer.cut.disabled.noProject",
+  "read-only-project": "explorer.cut.disabled.readOnlyProject",
+  "empty-selection": "explorer.cut.disabled.emptySelection",
+  "contains-folder": "explorer.cut.disabled.containsFolder",
+  "contains-open-document": "explorer.cut.disabled.containsOpenDocument"
+};
+
+const PASTE_DISABLED_REASON_MESSAGE_KEY: Record<
+  FileExplorerPasteDisabledReason,
+  TranslationKey
+> = {
+  "move-in-progress": "explorer.paste.disabled.moveInProgress",
+  "no-project": "explorer.paste.disabled.noProject",
+  "read-only-project": "explorer.paste.disabled.readOnlyProject",
+  "no-cut-sources": "explorer.paste.disabled.noCutSources",
+  "contains-open-document": "explorer.paste.disabled.containsOpenDocument"
 };
 
 export function FileExplorerView({
@@ -1866,6 +2162,7 @@ export function FileExplorerView({
   canCreate,
   canMove = false,
   moveDisabledReasonLabel,
+  cutRelativePaths = EMPTY_SELECTED_PATHS,
   translate,
   activeDocumentEntryRef,
   registerRowElement,
@@ -1882,6 +2179,7 @@ export function FileExplorerView({
   onEntryKeyDown,
   onRootKeyDown,
   onEntryContextMenu,
+  onTreeShortcutKeyDown,
   onActivateDocument
 }: FileExplorerViewProps): JSX.Element {
   // #323: roving tabindex — exactly one row in the tree is tabbable. The
@@ -1899,6 +2197,7 @@ export function FileExplorerView({
       entry.kind === "file" && entry.relativePath === highlightedRelativePath;
     const isSelected = selectedPaths.has(entry.relativePath);
     const isPrimary = entry.relativePath === selectedRelativePath;
+    const isCut = cutRelativePaths.has(entry.relativePath);
     const isOpenable = isOpenableFileExplorerEntry(entry);
     const icon = iconForEntry(entry, expandedDirectoryPaths);
     const childKey = directoryKey(entry.relativePath);
@@ -1925,12 +2224,14 @@ export function FileExplorerView({
           data-file-explorer-entry-kind={entry.kind}
           data-file-explorer-entry-path={entry.relativePath}
           data-file-explorer-openable={isOpenable ? "true" : undefined}
+          data-file-explorer-cut={isCut ? "true" : undefined}
           className={
             [
               "fileExplorerItem",
               entry.kind === "folder" ? "isFolder" : "isFile",
               isHighlighted ? "isActive" : null,
-              isSelected ? "isSelected" : null
+              isSelected ? "isSelected" : null,
+              isCut ? "isCut" : null
             ]
               .filter(Boolean)
               .join(" ")
@@ -2112,6 +2413,7 @@ export function FileExplorerView({
           aria-multiselectable="true"
           aria-label={translate("explorer.fileTree")}
           onContextMenu={(event) => onEntryContextMenu?.(event, null)}
+          onKeyDown={(event) => onTreeShortcutKeyDown?.(event)}
         >
           <button
             type="button"
