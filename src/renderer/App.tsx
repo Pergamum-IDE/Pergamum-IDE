@@ -21,6 +21,7 @@ import type {
   LifecycleWindowCloseRequest,
   SaveWorkingCopyOutcome
 } from "../shared/api";
+import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import {
   applicationMenuCommandIds,
   type ApplicationMenuCommandId,
@@ -303,6 +304,10 @@ import {
   updateOpenEditor,
   type OpenDocumentsState
 } from "./openDocuments";
+import {
+  isSameProjectInstance,
+  planProjectDocumentMoveRelocation
+} from "./projectDocumentMoveRelocation";
 import { currentDocumentForOpenedFile } from "./projectDocumentResolution";
 import {
   loadFirstProjectDocumentIfCurrent,
@@ -475,16 +480,6 @@ function withRegisteredProjectDocument(
   };
 }
 
-function isSameProjectInstance(
-  left: PergamumProject,
-  right: PergamumProject
-): boolean {
-  return (
-    left.rootPath === right.rootPath &&
-    left.activeProjectFilePath === right.activeProjectFilePath
-  );
-}
-
 function withRenamedProjectDocument(
   project: PergamumProject,
   oldRelativePath: string,
@@ -497,6 +492,52 @@ function withRenamedProjectDocument(
         projectDocument.relativePath !== document.relativePath
     )
     .concat(document)
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+  return {
+    ...project,
+    documents: nextDocuments
+  };
+}
+
+/**
+ * #338: re-key the renderer `project.documents` cache for the files a Move
+ * relocated. Only a source that was ALREADY a registered project document is
+ * relocated — a moved non-project file (e.g. an unsupported extension) is
+ * neither dropped nor added, matching the main-side registry rule (#327).
+ */
+function withMovedProjectDocuments(
+  project: PergamumProject,
+  relocations: readonly ProjectDocumentPathRelocation[]
+): PergamumProject {
+  const registeredPaths = new Set(
+    project.documents.map((projectDocument) => projectDocument.relativePath)
+  );
+  const applicable = relocations.filter((relocation) =>
+    registeredPaths.has(relocation.oldRelativePath)
+  );
+
+  if (applicable.length === 0) {
+    return project;
+  }
+
+  const oldPaths = new Set(
+    applicable.map((relocation) => relocation.oldRelativePath)
+  );
+  const movedDocuments = applicable.map((relocation) =>
+    projectDocumentForRelativePath(relocation.newRelativePath)
+  );
+  const movedPaths = new Set(
+    movedDocuments.map((projectDocument) => projectDocument.relativePath)
+  );
+
+  const nextDocuments = project.documents
+    .filter(
+      (projectDocument) =>
+        !oldPaths.has(projectDocument.relativePath) &&
+        !movedPaths.has(projectDocument.relativePath)
+    )
+    .concat(movedDocuments)
     .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 
   return {
@@ -538,6 +579,12 @@ function debugSaveTargetKind(editor: CurrentEditor): DebugLogSaveTargetKind {
 
 export function App(): JSX.Element {
   const [project, setProject] = useState<PergamumProject | null>(null);
+  // #338 blocker: the latest `project`, readable from async continuations that
+  // ran a state snapshot earlier (e.g. a Move IPC callback). A project switch /
+  // close between the IPC call and its late result must not apply a stale
+  // relocation to the current project.
+  const projectRef = useRef(project);
+  projectRef.current = project;
   const [openDocumentsState, setOpenDocumentsState] =
     useState<OpenDocumentsState>(createInitialOpenDocumentsState);
   const openDocumentsStateRef = useRef(openDocumentsState);
@@ -1546,32 +1593,29 @@ export function App(): JSX.Element {
   const renameActiveEditorTargetName = renameActiveEditorTargetRelativePath
     ? displayName(renameActiveEditorTargetRelativePath)
     : null;
-  // #327: project-relative paths of open project documents, split by dirty
-  // state, for the File Explorer context-menu Move route. `dirty` is passed
-  // to the Move backend (authoritative validation); `open` disables Move in
-  // the File Explorer UI (clean-open editor identity update after a Move is a
-  // deferred follow-up).
-  const fileExplorerOpenProjectDocumentPaths = useMemo(() => {
-    const open: string[] = [];
+  // #327/#338: project-relative paths of open project documents with UNSAVED
+  // changes. Passed to the Move backend (authoritative validation) and used to
+  // disable Move in the File Explorer UI. A *clean* open document moves fine
+  // now — its editor identity follows via `handleFileExplorerProjectDocumentsMoved`.
+  const fileExplorerDirtyProjectDocumentPaths = useMemo(() => {
     const dirty: string[] = [];
 
     for (const openDocument of openDocumentsState.documents) {
+      if (!isCurrentEditorDirty(openDocument.editor)) {
+        continue;
+      }
+
       const markdownDocument = markdownDocumentForEditor(openDocument.editor);
       const relativePath = markdownDocument
         ? currentProjectRelativePath(markdownDocument)
         : null;
 
-      if (relativePath === null) {
-        continue;
-      }
-
-      open.push(relativePath);
-      if (isCurrentEditorDirty(openDocument.editor)) {
+      if (relativePath !== null) {
         dirty.push(relativePath);
       }
     }
 
-    return { open, dirty };
+    return dirty;
   }, [openDocumentsState]);
   const isReadOnlyProjectOwnedEditor =
     isReadOnlyProject && isProjectOwnedCurrentEditor;
@@ -5800,6 +5844,84 @@ export function App(): JSX.Element {
     });
   }
 
+  /**
+   * #338: a File Explorer Move relocated one or more project documents. For
+   * every relocation whose OLD path is an open project document, follow the
+   * editor identity to the NEW path (tab label / title, save target, active /
+   * highlighted path, session snapshot) and re-key the renderer Recovery
+   * bookkeeping — the same steps `handleFileExplorerProjectDocumentRenamed`
+   * does for a single rename. A non-open old path is a no-op.
+   *
+   * Only ever called with `results` entries that `status === "moved"`
+   * (validation failure / unavailable / IPC failure / failed entries never
+   * reach here).
+   *
+   * #338 blocker: the Move IPC is async, so a project switch / close can land
+   * between the request and this late callback. Before touching ANY live state
+   * — the project document registry, the open editor identity, the renderer
+   * Recovery bookkeeping — re-check that the current project is still the same
+   * instance (`rootPath` AND `activeProjectFilePath`, since one root can hold
+   * several `.pergamum` project files) that started the Move. A stale
+   * relocation is dropped, never applied to the new project.
+   */
+  function handleFileExplorerProjectDocumentsMoved(
+    relocations: readonly ProjectDocumentPathRelocation[]
+  ): void {
+    if (!project || !activeProjectContext || relocations.length === 0) {
+      return;
+    }
+
+    const projectSnapshot = project;
+    const contextSnapshot = activeProjectContext;
+
+    // #338 blocker: `planProjectDocumentMoveRelocation` re-checks the LATEST
+    // project (`projectRef.current`, not the render-time closure) against the
+    // Move-start snapshot and returns `null` when a switch / close landed
+    // while the Move IPC was in flight. Nothing below runs for a stale
+    // result: no registry re-key, no open editor identity update, no
+    // navigation invalidation, no Recovery coordinator relocation.
+    const plan = planProjectDocumentMoveRelocation({
+      projectSnapshot,
+      currentProject: projectRef.current,
+      relocations,
+      openDocumentsState: openDocumentsStateRef.current,
+      context: contextSnapshot,
+      recoveryKeyForRelativePath: (relativePath) =>
+        recoveryDocumentKeyForProjectRelativePath(relativePath, {
+          project: projectSnapshot,
+          activeProjectContext: contextSnapshot
+        })
+    });
+
+    if (plan === null) {
+      return;
+    }
+
+    setProject((latestProject) =>
+      latestProject && isSameProjectInstance(latestProject, projectSnapshot)
+        ? withMovedProjectDocuments(latestProject, relocations)
+        : latestProject
+    );
+
+    if (plan.openDocumentsChanged) {
+      openDocumentsStateRef.current = plan.openDocumentsState;
+      setOpenDocumentsState(plan.openDocumentsState);
+    }
+
+    for (const editorId of plan.invalidatedEditorIds) {
+      editorNavigationRef.current?.invalidateEditor(editorId);
+    }
+
+    // #320: follow the current-run Recovery bookkeeping from each old
+    // document key to the new one (matches the owner-side `documents` re-key
+    // #326 already did). Best-effort — a disabled coordinator is a no-op. A
+    // clean open document has nothing pending, so this is usually just a
+    // dedupe-bookkeeping cleanup.
+    if (plan.recoveryKeyRelocations.length > 0) {
+      recoveryPayloadCoordinator.onPathsRelocated(plan.recoveryKeyRelocations);
+    }
+  }
+
   function handleFileExplorerRenameUnavailable(message: string): void {
     setStatus({ key: "status.commandFailed", values: { message } });
   }
@@ -6101,14 +6223,14 @@ export function App(): JSX.Element {
                       onFileExplorerProjectDocumentRenamed={
                         handleFileExplorerProjectDocumentRenamed
                       }
+                      onFileExplorerProjectDocumentsMoved={
+                        handleFileExplorerProjectDocumentsMoved
+                      }
                       onFileExplorerRenameUnavailable={
                         handleFileExplorerRenameUnavailable
                       }
                       fileExplorerDirtyProjectDocumentRelativePaths={
-                        fileExplorerOpenProjectDocumentPaths.dirty
-                      }
-                      fileExplorerOpenProjectDocumentRelativePaths={
-                        fileExplorerOpenProjectDocumentPaths.open
+                        fileExplorerDirtyProjectDocumentPaths
                       }
                       onFileExplorerMoveResultMessage={(message) => {
                         setStatus({

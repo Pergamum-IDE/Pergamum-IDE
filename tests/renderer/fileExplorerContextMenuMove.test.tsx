@@ -85,15 +85,16 @@ function movedResult(
 interface Harness {
   moveFileExplorerEntries: ReturnType<typeof vi.fn>;
   onMoveResultMessage: ReturnType<typeof vi.fn>;
+  onProjectDocumentsMoved: ReturnType<typeof vi.fn>;
   listCalls: Array<string | null>;
-  setOpenProjectDocuments: (relativePaths: string[]) => void;
+  /** #338: only DIRTY open documents block Move — set the dirty list. */
+  setDirtyProjectDocuments: (relativePaths: string[]) => void;
 }
 
 async function mount(
   options: {
     moveImpl?: (request: unknown) => unknown;
     dirtyProjectDocumentRelativePaths?: string[];
-    openProjectDocumentRelativePaths?: string[];
   } = {}
 ): Promise<Harness> {
   const listCalls: Array<string | null> = [];
@@ -109,6 +110,7 @@ async function mount(
       : movedResult([{ src: "a.md", dest: "Drafts/a.md" }])
   );
   const onMoveResultMessage = vi.fn();
+  const onProjectDocumentsMoved = vi.fn();
 
   Object.defineProperty(window, "pergamum", {
     configurable: true,
@@ -121,8 +123,8 @@ async function mount(
   document.body.appendChild(container);
   root = createRoot(container);
 
-  let openProjectDocumentRelativePaths =
-    options.openProjectDocumentRelativePaths ?? [];
+  let dirtyProjectDocumentRelativePaths =
+    options.dirtyProjectDocumentRelativePaths ?? [];
 
   const renderExplorer = (): void => {
     act(() => {
@@ -132,10 +134,9 @@ async function mount(
           highlightedRelativePath: null,
           translate,
           onActivateDocument: vi.fn(),
-          dirtyProjectDocumentRelativePaths:
-            options.dirtyProjectDocumentRelativePaths ?? [],
-          openProjectDocumentRelativePaths,
-          onMoveResultMessage
+          dirtyProjectDocumentRelativePaths,
+          onMoveResultMessage,
+          onProjectDocumentsMoved
         })
       );
     });
@@ -147,9 +148,10 @@ async function mount(
   return {
     moveFileExplorerEntries,
     onMoveResultMessage,
+    onProjectDocumentsMoved,
     listCalls,
-    setOpenProjectDocuments: (relativePaths) => {
-      openProjectDocumentRelativePaths = relativePaths;
+    setDirtyProjectDocuments: (relativePaths) => {
+      dirtyProjectDocumentRelativePaths = relativePaths;
       renderExplorer();
     }
   };
@@ -286,12 +288,21 @@ describe("FileExplorer context-menu Move — enablement (#327)", () => {
     expect(moveMenuItem()?.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("disables Move… when a selected file is an open document", async () => {
-    await mount({ openProjectDocumentRelativePaths: ["a.md"] });
+  it("disables Move… when a selected file is a DIRTY open document (#338)", async () => {
+    await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
     clickEntry("a.md");
     contextMenuEntry("a.md");
 
     expect(moveMenuItem()?.disabled).toBe(true);
+  });
+
+  it("keeps Move… enabled for a CLEAN open document (#338)", async () => {
+    // a.md is open in an editor but has no unsaved changes.
+    await mount({ dirtyProjectDocumentRelativePaths: [] });
+    clickEntry("a.md");
+    contextMenuEntry("a.md");
+
+    expect(moveMenuItem()?.disabled).toBe(false);
   });
 });
 
@@ -548,17 +559,19 @@ describe("FileExplorer context-menu Move — disabled reason is visible (#327 bl
     );
   });
 
-  it("shows Move… disabled with an open-document reason", async () => {
-    await mount({ openProjectDocumentRelativePaths: ["a.md"] });
+  it("shows Move… disabled with a dirty-open-document reason (#338)", async () => {
+    await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
     clickEntry("a.md");
     contextMenuEntry("a.md");
 
     const item = moveMenuItem();
     expect(item!.disabled).toBe(true);
     expect(item!.getAttribute("data-file-explorer-move-disabled-reason")).toBe(
-      "contains-open-document"
+      "contains-dirty-open-document"
     );
-    expect(item!.getAttribute("title")).toContain("Close the document");
+    expect(item!.getAttribute("title")).toBe(
+      "Save the document before moving it."
+    );
   });
 
   it("enables Move… with no disabled reason for an eligible file selection", async () => {
@@ -634,8 +647,8 @@ describe("FileExplorer toolbar Move — primary route (#327)", () => {
     });
   });
 
-  it("uses the same enablement as the context menu (folder / open document)", async () => {
-    await mount({ openProjectDocumentRelativePaths: ["a.md"] });
+  it("uses the same enablement as the context menu (folder / dirty open document)", async () => {
+    await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
 
     clickEntry("a.md");
     clickEntry("Drafts", { ctrlKey: true });
@@ -644,23 +657,23 @@ describe("FileExplorer toolbar Move — primary route (#327)", () => {
       "Folders cannot be moved yet. Select files only."
     );
 
-    // Just the open document now.
+    // Just the dirty open document now.
     clickEntry("a.md");
     expect(toolbarMoveButton().disabled).toBe(true);
-    expect(toolbarMoveButton().getAttribute("title")).toContain(
-      "Close the document"
+    expect(toolbarMoveButton().getAttribute("title")).toBe(
+      "Save the document before moving it."
     );
   });
 });
 
-describe("FileExplorer Move — execution-time re-checks (#327 review blocker)", () => {
-  it("does not call the Move backend if a selected file became an open document while the picker was open", async () => {
+describe("FileExplorer Move — execution-time re-checks (#327 review blocker / #338)", () => {
+  it("does not call the Move backend if a selected file became DIRTY while the picker was open", async () => {
     const harness = await mount();
     clickEntry("a.md");
-    act(() => toolbarMoveButton().click()); // picker opens while a.md is eligible
+    act(() => toolbarMoveButton().click()); // picker opens while a.md is clean
 
-    // a.md is opened in the editor before the user confirms.
-    harness.setOpenProjectDocuments(["a.md"]);
+    // a.md gains unsaved changes before the user confirms.
+    harness.setDirtyProjectDocuments(["a.md"]);
 
     act(() => destinationOption("Drafts").click());
     act(() => {
@@ -676,12 +689,12 @@ describe("FileExplorer Move — execution-time re-checks (#327 review blocker)",
     );
   });
 
-  it("still moves when the open-document gate is clear at confirm time", async () => {
-    const harness = await mount({ openProjectDocumentRelativePaths: ["a.md"] });
+  it("still moves when the dirty gate is clear at confirm time", async () => {
+    const harness = await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
     clickEntry("a.md");
     // Disabled now, but simulate the picker being reached and the document
-    // then closed before confirming.
-    harness.setOpenProjectDocuments([]);
+    // then saved before confirming.
+    harness.setDirtyProjectDocuments([]);
     act(() => toolbarMoveButton().click());
     act(() => destinationOption("Drafts").click());
     act(() => {
@@ -696,5 +709,88 @@ describe("FileExplorer Move — execution-time re-checks (#327 review blocker)",
       destinationFolderRelativePath: "Drafts",
       dirtyProjectDocumentRelativePaths: []
     });
+  });
+});
+
+describe("FileExplorer Move — open editor identity relocation (#338)", () => {
+  it("reports old -> new relocations for the moved files on success", async () => {
+    const harness = await mount({
+      moveImpl: () =>
+        movedResult([
+          { src: "a.md", dest: "Drafts/a.md" },
+          { src: "b.md", dest: "Drafts/b.md" }
+        ])
+    });
+    clickEntry("a.md");
+    clickEntry("b.md", { ctrlKey: true });
+    await moveSelectionTo("Drafts");
+
+    expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
+      { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" },
+      { oldRelativePath: "b.md", newRelativePath: "Drafts/b.md" }
+    ]);
+  });
+
+  it("does not report relocations on a validation failure", async () => {
+    const harness = await mount({
+      moveImpl: () => ({
+        kind: "completed",
+        result: {
+          ok: false,
+          validation: {
+            ok: false,
+            errors: [{ reason: "same-parent", sourceRelativePath: "a.md" }]
+          },
+          results: [],
+          successfulPathPairs: []
+        }
+      })
+    });
+    clickEntry("a.md");
+    await moveSelectionTo("Drafts");
+
+    expect(harness.onProjectDocumentsMoved).not.toHaveBeenCalled();
+  });
+
+  it("reports only the moved entries on a partial failure", async () => {
+    const harness = await mount({
+      moveImpl: () => ({
+        kind: "completed",
+        result: {
+          ok: false,
+          validation: { ok: true },
+          results: [
+            {
+              status: "moved",
+              sourceRelativePath: "a.md",
+              destinationRelativePath: "Drafts/a.md",
+              sourceAbsolutePath: "C:/Novel/a.md",
+              destinationAbsolutePath: "C:/Novel/Drafts/a.md"
+            },
+            {
+              status: "failed",
+              reason: "permission-denied",
+              sourceRelativePath: "b.md",
+              destinationRelativePath: "Drafts/b.md",
+              sourceAbsolutePath: "C:/Novel/b.md",
+              destinationAbsolutePath: "C:/Novel/Drafts/b.md"
+            }
+          ],
+          successfulPathPairs: [
+            {
+              oldAbsolutePath: "C:/Novel/a.md",
+              newAbsolutePath: "C:/Novel/Drafts/a.md"
+            }
+          ]
+        }
+      })
+    });
+    clickEntry("a.md");
+    clickEntry("b.md", { ctrlKey: true });
+    await moveSelectionTo("Drafts");
+
+    expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
+      { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" }
+    ]);
   });
 });

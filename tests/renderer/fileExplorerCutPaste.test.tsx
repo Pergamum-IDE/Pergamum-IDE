@@ -96,8 +96,10 @@ function movedResult(
 interface Harness {
   moveFileExplorerEntries: ReturnType<typeof vi.fn>;
   onMoveResultMessage: ReturnType<typeof vi.fn>;
+  onProjectDocumentsMoved: ReturnType<typeof vi.fn>;
   listCalls: Array<string | null>;
-  setOpenProjectDocuments: (relativePaths: string[]) => void;
+  /** #338: only DIRTY open documents block Cut/Paste — set the dirty list. */
+  setDirtyProjectDocuments: (relativePaths: string[]) => void;
   setDraftsChildren: (entries: FileExplorerEntry[]) => void;
   setProject: (next: PergamumProject) => void;
 }
@@ -106,7 +108,6 @@ async function mount(
   options: {
     moveImpl?: (request: unknown) => unknown;
     dirtyProjectDocumentRelativePaths?: string[];
-    openProjectDocumentRelativePaths?: string[];
     readOnly?: boolean;
   } = {}
 ): Promise<Harness> {
@@ -127,6 +128,7 @@ async function mount(
       : movedResult([{ src: "a.md", dest: "Drafts/a.md" }])
   );
   const onMoveResultMessage = vi.fn();
+  const onProjectDocumentsMoved = vi.fn();
 
   Object.defineProperty(window, "pergamum", {
     configurable: true,
@@ -139,8 +141,8 @@ async function mount(
   document.body.appendChild(container);
   root = createRoot(container);
 
-  let openProjectDocumentRelativePaths =
-    options.openProjectDocumentRelativePaths ?? [];
+  let dirtyProjectDocumentRelativePaths =
+    options.dirtyProjectDocumentRelativePaths ?? [];
   let currentProject = project;
 
   const renderExplorer = (): void => {
@@ -152,10 +154,9 @@ async function mount(
           translate,
           readOnly: options.readOnly ?? false,
           onActivateDocument: vi.fn(),
-          dirtyProjectDocumentRelativePaths:
-            options.dirtyProjectDocumentRelativePaths ?? [],
-          openProjectDocumentRelativePaths,
-          onMoveResultMessage
+          dirtyProjectDocumentRelativePaths,
+          onMoveResultMessage,
+          onProjectDocumentsMoved
         })
       );
     });
@@ -167,9 +168,10 @@ async function mount(
   return {
     moveFileExplorerEntries,
     onMoveResultMessage,
+    onProjectDocumentsMoved,
     listCalls,
-    setOpenProjectDocuments: (relativePaths) => {
-      openProjectDocumentRelativePaths = relativePaths;
+    setDirtyProjectDocuments: (relativePaths) => {
+      dirtyProjectDocumentRelativePaths = relativePaths;
       renderExplorer();
     },
     setDraftsChildren: (entries) => {
@@ -345,17 +347,27 @@ describe("FileExplorer Cut/Paste — Cut state (#328)", () => {
     ).toBe("contains-folder");
   });
 
-  it("disables Cut when a selected file is an open project document", async () => {
-    await mount({ openProjectDocumentRelativePaths: ["a.md"] });
+  it("disables Cut when a selected file is a DIRTY open document (#338)", async () => {
+    await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
     clickEntry("a.md");
     contextMenuEntry("a.md");
 
     const item = cutMenuItem();
     expect(item.disabled).toBe(true);
-    expect(item.getAttribute("title")).toContain("Close the document");
+    expect(item.getAttribute("title")).toBe(
+      "Save the document before moving it."
+    );
     expect(
       item.getAttribute("data-file-explorer-cut-disabled-reason")
-    ).toBe("contains-open-document");
+    ).toBe("contains-dirty-open-document");
+  });
+
+  it("allows Cut of a CLEAN open document (#338)", async () => {
+    await mount({ dirtyProjectDocumentRelativePaths: [] });
+    clickEntry("a.md");
+    contextMenuEntry("a.md");
+
+    expect(cutMenuItem().disabled).toBe(false);
   });
 
   it("disables Cut in a read-only project", async () => {
@@ -606,6 +618,57 @@ describe("FileExplorer Cut/Paste — Paste execution (#328)", () => {
     await cutViaContextMenu("a.md");
     contextMenuEntry("Drafts");
     expect(pasteMenuItem().disabled).toBe(false);
+  });
+
+  it("reports the old -> new relocation on a successful Paste (#338)", async () => {
+    const harness = await mount();
+    await cutViaContextMenu("a.md");
+    contextMenuEntry("Drafts");
+    act(() => pasteMenuItem().click());
+    await flushPromises();
+
+    expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
+      { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" }
+    ]);
+  });
+
+  it("does not report a relocation when Paste validation fails (#338)", async () => {
+    const harness = await mount({
+      moveImpl: () => ({
+        kind: "completed",
+        result: {
+          ok: false,
+          validation: {
+            ok: false,
+            errors: [{ reason: "same-parent", sourceRelativePath: "a.md" }]
+          },
+          results: [],
+          successfulPathPairs: []
+        }
+      })
+    });
+    await cutViaContextMenu("a.md");
+    contextMenuEntry("Drafts");
+    act(() => pasteMenuItem().click());
+    await flushPromises();
+
+    expect(harness.onProjectDocumentsMoved).not.toHaveBeenCalled();
+  });
+
+  it("still blocks Cut/Paste while a cut source is DIRTY (#338)", async () => {
+    const harness = await mount();
+    await cutViaContextMenu("a.md");
+    // a.md gains unsaved changes after being cut.
+    harness.setDirtyProjectDocuments(["a.md"]);
+    contextMenuEntry("Drafts");
+    expect(pasteMenuItem().disabled).toBe(true);
+    expect(pasteMenuItem().getAttribute("title")).toBe(
+      "Save the document before moving it."
+    );
+
+    act(() => pasteMenuItem().click());
+    await flushPromises();
+    expect(harness.moveFileExplorerEntries).not.toHaveBeenCalled();
   });
 });
 

@@ -247,3 +247,43 @@ export type MoveEntriesResult =
       readonly successfulPathPairs: readonly MoveEntryPathPair[];
       readonly recoveryRekey?: MoveEntriesRecoveryRekey;
     };
+
+/**
+ * #338: one moved project document's old → new project-relative path. After a
+ * successful Move the renderer follows open editor identity (tab label, save
+ * target, active/highlighted path, session snapshot) and its Recovery
+ * bookkeeping along these.
+ */
+export interface ProjectDocumentPathRelocation {
+  readonly oldRelativePath: string;
+  readonly newRelativePath: string;
+}
+
+/**
+ * #338: the old → new relocations for every file a Move ACTUALLY moved.
+ *
+ * Built from `results` entries with `status === "moved"` only, so:
+ *   - a validation failure (empty `results`) yields `[]`
+ *   - an unavailable / IPC failure never reaches this (no `MoveEntriesResult`)
+ *   - a partial failure yields the moved entries only — `status === "failed"`
+ *     entries contribute nothing
+ *
+ * The caller still filters to paths that are actually open before touching
+ * editor state; a non-open old path is a no-op there.
+ */
+export function collectMovedProjectDocumentRelocations(
+  result: MoveEntriesResult
+): ProjectDocumentPathRelocation[] {
+  const relocations: ProjectDocumentPathRelocation[] = [];
+
+  for (const entry of result.results) {
+    if (entry.status === "moved") {
+      relocations.push({
+        oldRelativePath: entry.sourceRelativePath,
+        newRelativePath: entry.destinationRelativePath
+      });
+    }
+  }
+
+  return relocations;
+}
