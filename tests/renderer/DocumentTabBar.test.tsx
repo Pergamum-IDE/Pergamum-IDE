@@ -834,7 +834,7 @@ describe("DocumentTabBar tab shape / padding polish (#342)", () => {
   it("rounds only the top corners of the tab", () => {
     const rule = documentTabCssBlock();
 
-    expect(rule).toContain("border-radius: 6px 6px 0 0");
+    expect(rule).toContain("border-radius: 10px 10px 0 0");
     expect(rule).not.toContain("border-radius: 0");
   });
 
