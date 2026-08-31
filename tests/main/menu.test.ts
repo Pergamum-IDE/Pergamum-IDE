@@ -100,6 +100,7 @@ describe("application menu", () => {
       applicationCommandIds.closeProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
+      editorCommandIds.saveAll,
       editorCommandIds.saveAs,
       applicationCommandIds.toggleRecentProjects,
       editorCommandIds.close,
@@ -116,6 +117,7 @@ describe("application menu", () => {
       applicationCommandIds.closeProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
+      editorCommandIds.saveAll,
       editorCommandIds.saveAs,
       applicationCommandIds.toggleRecentProjects,
       editorCommandIds.close
@@ -294,6 +296,9 @@ describe("application menu", () => {
     expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
       "CommandOrControl+S"
     );
+    expect(fileItemByLabel(fileItems, "Save All").accelerator).toBe(
+      "CommandOrControl+Alt+S"
+    );
     expect(fileItemByLabel(fileItems, "Save As...").accelerator).toBe(
       "CommandOrControl+Shift+S"
     );
@@ -319,6 +324,9 @@ describe("application menu", () => {
       );
       expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
         "CommandOrControl+S"
+      );
+      expect(fileItemByLabel(fileItems, "Save All").accelerator).toBe(
+        "CommandOrControl+Alt+S"
       );
       expect(fileItemByLabel(fileItems, "Save As...").accelerator).toBe(
         "CommandOrControl+Shift+S"

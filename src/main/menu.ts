@@ -202,6 +202,13 @@ function fileMenu(
       "CommandOrControl+S"
     ),
     commandMenuItem(
+      editorCommandIds.saveAll,
+      language,
+      "menu.saveAll",
+      options,
+      "CommandOrControl+Alt+S"
+    ),
+    commandMenuItem(
       editorCommandIds.saveAs,
       language,
       "menu.saveAs",

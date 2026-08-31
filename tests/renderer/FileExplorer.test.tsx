@@ -2703,3 +2703,111 @@ describe("flattenVisibleFileExplorerEntryPaths (#323)", () => {
     ).toEqual(["Drafts", "a.md"]);
   });
 });
+
+describe("FileExplorer dirty indicator (#342)", () => {
+  function mountWithDirty(options: {
+    isProjectDocumentDirty: (relativePath: string) => boolean;
+    highlightedRelativePath?: string | null;
+  }): void {
+    const listFileExplorerChildren = vi.fn(async () => ok(null, rootEntries));
+
+    Object.defineProperty(window, "pergamum", {
+      configurable: true,
+      value: { projects: { listFileExplorerChildren } }
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root!.render(
+        React.createElement(FileExplorer, {
+          project,
+          highlightedRelativePath: options.highlightedRelativePath ?? null,
+          translate,
+          onActivateDocument: vi.fn(),
+          isProjectDocumentDirty: options.isProjectDocumentDirty
+        })
+      );
+    });
+  }
+
+  function dirtyIndicator(relativePath: string): Element | null {
+    return container!.querySelector(
+      `[data-file-explorer-entry-path="${relativePath}"] [data-file-explorer-dirty-indicator="true"]`
+    );
+  }
+
+  it("shows a dirty indicator next to a dirty project document's file name", async () => {
+    mountWithDirty({
+      isProjectDocumentDirty: (relativePath) => relativePath === "chapter-01.md"
+    });
+    await flushPromises();
+
+    const row = entryButton("chapter-01.md");
+    expect(row.getAttribute("data-file-explorer-dirty")).toBe("true");
+
+    const indicator = dirtyIndicator("chapter-01.md");
+    expect(indicator).not.toBeNull();
+    // Renders after the file-name label.
+    const label = row.querySelector(".fileExplorerItemLabel");
+    expect(
+      label!.compareDocumentPosition(indicator!) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("gives the dirty indicator accessible text", async () => {
+    mountWithDirty({
+      isProjectDocumentDirty: () => true
+    });
+    await flushPromises();
+
+    const indicator = dirtyIndicator("chapter-01.md");
+    expect(indicator!.getAttribute("alt")).toBe("explorer.unsavedChanges");
+    expect(indicator!.getAttribute("title")).toBe("explorer.unsavedChanges");
+  });
+
+  it("does not show a dirty indicator on a clean project document file row", async () => {
+    mountWithDirty({ isProjectDocumentDirty: () => false });
+    await flushPromises();
+
+    expect(
+      entryButton("chapter-01.md").getAttribute("data-file-explorer-dirty")
+    ).toBeNull();
+    expect(dirtyIndicator("chapter-01.md")).toBeNull();
+  });
+
+  it("still shows the dirty indicator on the active / highlighted document row", async () => {
+    mountWithDirty({
+      isProjectDocumentDirty: (relativePath) => relativePath === "chapter-01.md",
+      highlightedRelativePath: "chapter-01.md"
+    });
+    await flushPromises();
+
+    const row = entryButton("chapter-01.md");
+    expect(row.className).toContain("isActive");
+    expect(dirtyIndicator("chapter-01.md")).not.toBeNull();
+  });
+
+  it("never shows a dirty indicator on a folder row", async () => {
+    mountWithDirty({ isProjectDocumentDirty: () => true });
+    await flushPromises();
+
+    expect(
+      entryButton("Drafts").getAttribute("data-file-explorer-dirty")
+    ).toBeNull();
+    expect(dirtyIndicator("Drafts")).toBeNull();
+  });
+
+  it("never shows a dirty indicator on the project root row", async () => {
+    mountWithDirty({ isProjectDocumentDirty: () => true });
+    await flushPromises();
+
+    expect(
+      rootButton().querySelector('[data-file-explorer-dirty-indicator="true"]')
+    ).toBeNull();
+    expect(rootButton().getAttribute("data-file-explorer-dirty")).toBeNull();
+  });
+});

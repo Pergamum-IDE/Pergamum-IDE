@@ -116,6 +116,38 @@ describe("IME composition save guard", () => {
   });
 
 
+  it("#342: defers Save All while composing and re-fires it (not Save) after composition end", () => {
+    vi.useFakeTimers();
+    const guard = createImeCompositionSaveGuard();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
+
+    guard.handleCompositionStart();
+    expect(guard.handleCommand(editorCommandIds.saveAll, execute)).toBe(true);
+    expect(execute).not.toHaveBeenCalled();
+    expect(guard.hasPendingSave()).toBe(true);
+
+    guard.handleCompositionEnd(execute);
+    vi.runOnlyPendingTimers();
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(editorCommandIds.saveAll);
+  });
+
+  it("#342: the most recent deferred save command wins when Save then Save All arrive in one composition", () => {
+    vi.useFakeTimers();
+    const guard = createImeCompositionSaveGuard();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
+
+    guard.handleCompositionStart();
+    guard.handleCommand(editorCommandIds.saveDocument, execute);
+    guard.handleCommand(editorCommandIds.saveAll, execute);
+    guard.handleCompositionEnd(execute);
+    vi.runOnlyPendingTimers();
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(editorCommandIds.saveAll);
+  });
+
   it("does not defer non-save File commands while composing", () => {
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });

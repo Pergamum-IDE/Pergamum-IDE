@@ -11,7 +11,6 @@ import {
   handleDocumentTabCloseButtonClick,
   handleDocumentTabMiddleClick
 } from "./documentTabHandlers";
-import { DocumentTabDirtyIndicator } from "./DocumentTabDirtyIndicator";
 import {
   documentWorkspaceTabId,
   specialWorkspaceTabId,
@@ -136,11 +135,7 @@ export function DocumentTabBar({
     const isHovered =
       hoveredDocumentId !== null &&
       editorIdEquals(tab.id, hoveredDocumentId);
-    const trailingSlotKind = documentTabTrailingSlotKind(
-      isActive,
-      tab.isDirty,
-      isHovered
-    );
+    const trailingSlotKind = documentTabTrailingSlotKind(isActive, isHovered);
     const externalWarning = tab.isExternalMarkdownFile
       ? translate("tabs.externalMarkdownFile")
       : null;
@@ -209,8 +204,6 @@ export function DocumentTabBar({
               }
               dangerouslySetInnerHTML={{ __html: closeXIcon }}
             />
-          ) : trailingSlotKind === "dirty" ? (
-            <DocumentTabDirtyIndicator tooltip={unsavedLabel} />
           ) : null}
         </span>
       </div>

@@ -5,6 +5,21 @@ import {
 } from "../shared/commandIds";
 import type { DebugLogEventName } from "../shared/debugLog";
 
+/**
+ * Save commands that are DEFERRED (not dropped) when they reach Pergamum
+ * during IME composition: they re-fire once in the task after
+ * `compositionend`. Save As is deliberately excluded — it opens a native
+ * dialog rather than committing text, so IME timing is not a concern there.
+ */
+const deferrableSaveCommandIds: readonly string[] = [
+  editorCommandIds.saveDocument,
+  editorCommandIds.saveAll
+];
+
+function isDeferrableSaveCommandId(commandId: string): boolean {
+  return deferrableSaveCommandIds.includes(commandId);
+}
+
 export type ApplicationMenuAllowedCommandExecutor = (
   commandId: ApplicationMenuCommandId
 ) => void;
@@ -64,17 +79,25 @@ export function createImeCompositionSaveGuard({
   log = () => undefined
 }: ImeCompositionSaveGuardOptions = {}): ImeCompositionSaveGuard {
   let composing = false;
-  let pendingSave = false;
+  // The deferred save command awaiting `compositionend`, or `null` when none
+  // is pending. `saveDocument` and `saveAll` share this single slot — the
+  // most recent one wins, matching the "one pending save per composition"
+  // rule the boolean flag enforced before.
+  let pendingSaveCommandId: ApplicationMenuCommandId | null = null;
   let cancelScheduledSave: CancelScheduledTask | null = null;
 
   function hasScheduledSave(): boolean {
     return cancelScheduledSave !== null;
   }
 
+  function hasPendingSave(): boolean {
+    return pendingSaveCommandId !== null;
+  }
+
   function pendingStateDetails(): Record<string, unknown> {
     return {
       isComposing: composing,
-      hasPendingSave: pendingSave,
+      hasPendingSave: hasPendingSave(),
       hasScheduledSave: hasScheduledSave()
     };
   }
@@ -108,7 +131,7 @@ export function createImeCompositionSaveGuard({
   function clearPendingSave(
     reason: ImePendingSaveClearReason = "manual_clear"
   ): void {
-    const hadPendingSave = pendingSave;
+    const hadPendingSave = hasPendingSave();
     const hadScheduledSave = hasScheduledSave();
 
     if (hadPendingSave || hadScheduledSave) {
@@ -121,7 +144,7 @@ export function createImeCompositionSaveGuard({
       });
     }
 
-    pendingSave = false;
+    pendingSaveCommandId = null;
     clearScheduledSave();
   }
 
@@ -133,29 +156,30 @@ export function createImeCompositionSaveGuard({
     handleCompositionEnd: (execute) => {
       composing = false;
 
-      if (!pendingSave) {
+      if (pendingSaveCommandId === null) {
         return;
       }
 
-      pendingSave = false;
+      const commandToExecute = pendingSaveCommandId;
+      pendingSaveCommandId = null;
       clearScheduledSave();
       cancelScheduledSave = schedule(() => {
         cancelScheduledSave = null;
         log({
           event: "ime.save.pending.executed",
           details: {
-            commandId: editorCommandIds.saveDocument,
+            commandId: commandToExecute,
             operation: "command",
             result: "succeeded",
             ...pendingStateDetails()
           }
         });
-        execute(editorCommandIds.saveDocument);
+        execute(commandToExecute);
       });
       log({
         event: "ime.save.pending.scheduled",
         details: {
-          commandId: editorCommandIds.saveDocument,
+          commandId: commandToExecute,
           operation: "command",
           result: "succeeded",
           ...pendingStateDetails()
@@ -177,9 +201,11 @@ export function createImeCompositionSaveGuard({
         return false;
       }
 
-      if (commandId === editorCommandIds.saveDocument && composing) {
-        if (!pendingSave) {
-          pendingSave = true;
+      if (isDeferrableSaveCommandId(commandId) && composing) {
+        const hadPendingSave = hasPendingSave();
+        pendingSaveCommandId = commandId;
+
+        if (!hadPendingSave) {
           log({
             event: "ime.save.pending.created",
             details: {
@@ -189,10 +215,8 @@ export function createImeCompositionSaveGuard({
               ...pendingStateDetails()
             }
           });
-          return true;
         }
 
-        pendingSave = true;
         return true;
       }
 
@@ -209,7 +233,7 @@ export function createImeCompositionSaveGuard({
       return true;
     },
     clearPendingSave,
-    hasPendingSave: () => pendingSave,
+    hasPendingSave,
     hasScheduledSave,
     isComposing: () => composing
   };

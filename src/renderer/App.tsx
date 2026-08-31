@@ -844,6 +844,10 @@ export function App(): JSX.Element {
   const canSaveCurrentDocumentAsCommandRef = useRef<() => boolean>(
     () => false
   );
+  const saveAllDocumentsCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
+  const canSaveAllDocumentsCommandRef = useRef<() => boolean>(() => false);
   const goToLineCommandRef = useRef<(line: number) => void>(() => undefined);
   const showLineEndingDistributionCommandRef = useRef<() => void>(
     () => undefined
@@ -1811,9 +1815,11 @@ export function App(): JSX.Element {
         saveCurrentDocument: () => saveCurrentDocumentCommandRef.current(),
         saveCurrentDocumentAs: () =>
           saveCurrentDocumentAsCommandRef.current(),
+        saveAllDocuments: () => saveAllDocumentsCommandRef.current(),
         canSaveCurrentDocument: () => canSaveCurrentDocumentCommandRef.current(),
         canSaveCurrentDocumentAs: () =>
           canSaveCurrentDocumentAsCommandRef.current(),
+        canSaveAllDocuments: () => canSaveAllDocumentsCommandRef.current(),
         closeEditor: (editorId) => closeEditorCommandRef.current(editorId),
         canCloseEditor: (editorId) =>
           canCloseEditorCommandRef.current(editorId),
@@ -5713,6 +5719,28 @@ export function App(): JSX.Element {
   };
   canSaveCurrentDocumentCommandRef.current = () => canSave;
   canSaveCurrentDocumentAsCommandRef.current = () => canSaveAs;
+  // #342: Save All — save every open document that currently has unsaved
+  // changes, reusing the existing per-document `saveFile` spec (line endings,
+  // Recovery retirement, atomic write, in-flight guarding). The dirty set is
+  // snapshotted up front so a Save-As identity change mid-loop cannot skip or
+  // repeat a document.
+  canSaveAllDocumentsCommandRef.current = () =>
+    openDocumentsStateRef.current.documents.some((openDocument) =>
+      isCurrentEditorDirty(openDocument.editor)
+    );
+  saveAllDocumentsCommandRef.current = async () => {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
+    const dirtyEditorIds = openDocumentsStateRef.current.documents
+      .filter((openDocument) => isCurrentEditorDirty(openDocument.editor))
+      .map((openDocument) => openDocument.id);
+
+    for (const editorId of dirtyEditorIds) {
+      await saveFile({ editorId });
+    }
+  };
   goToLineCommandRef.current = (line) => {
     if (currentEditor?.kind !== "markdown") {
       return;
