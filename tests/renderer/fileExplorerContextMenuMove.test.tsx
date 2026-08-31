@@ -58,7 +58,15 @@ async function flushPromises(): Promise<void> {
 }
 
 function movedResult(
-  entries: Array<{ src: string; dest: string }>,
+  entries: Array<{
+    src: string;
+    dest: string;
+    isDirectory?: boolean;
+    movedProjectDocuments?: Array<{
+      oldRelativePath: string;
+      newRelativePath: string;
+    }>;
+  }>,
   extra: Record<string, unknown> = {}
 ) {
   return {
@@ -71,12 +79,23 @@ function movedResult(
         sourceRelativePath: entry.src,
         destinationRelativePath: entry.dest,
         sourceAbsolutePath: `C:/Novel/${entry.src}`,
-        destinationAbsolutePath: `C:/Novel/${entry.dest}`
+        destinationAbsolutePath: `C:/Novel/${entry.dest}`,
+        isDirectory: entry.isDirectory ?? false,
+        movedProjectDocuments: entry.movedProjectDocuments ?? []
       })),
-      successfulPathPairs: entries.map((entry) => ({
-        oldAbsolutePath: `C:/Novel/${entry.src}`,
-        newAbsolutePath: `C:/Novel/${entry.dest}`
-      })),
+      successfulPathPairs: entries.flatMap((entry) =>
+        entry.isDirectory
+          ? (entry.movedProjectDocuments ?? []).map((doc) => ({
+              oldAbsolutePath: `C:/Novel/${doc.oldRelativePath}`,
+              newAbsolutePath: `C:/Novel/${doc.newRelativePath}`
+            }))
+          : [
+              {
+                oldAbsolutePath: `C:/Novel/${entry.src}`,
+                newAbsolutePath: `C:/Novel/${entry.dest}`
+              }
+            ]
+      ),
       ...extra
     }
   };
@@ -246,6 +265,36 @@ async function moveSelectionTo(destinationPath: string): Promise<void> {
   await flushPromises();
 }
 
+function moveFailureDialog(): HTMLElement | null {
+  return container!.querySelector<HTMLElement>(
+    '[data-file-operation-failure="true"]'
+  );
+}
+
+function moveFailureDetails(): HTMLTextAreaElement | null {
+  return container!.querySelector<HTMLTextAreaElement>(
+    '[data-file-operation-failure-details="true"]'
+  );
+}
+
+function rejectedMoveImpl(
+  errors: ReadonlyArray<{
+    reason: string;
+    sourceRelativePath?: string;
+    destinationFolderRelativePath?: string;
+  }>
+) {
+  return () => ({
+    kind: "completed",
+    result: {
+      ok: false,
+      validation: { ok: false, errors },
+      results: [],
+      successfulPathPairs: []
+    }
+  });
+}
+
 describe("FileExplorer context-menu Move — source selection (#327)", () => {
   it("keeps the existing multi-selection when right-clicking a selected file", async () => {
     await mount();
@@ -278,14 +327,14 @@ describe("FileExplorer context-menu Move — enablement (#327)", () => {
     expect(moveMenuItem()?.getAttribute("aria-disabled")).toBe("false");
   });
 
-  it("disables Move… when the selection contains a folder", async () => {
+  it("#340: enables Move… when the selection contains a folder", async () => {
     await mount();
     clickEntry("a.md");
     clickEntry("Drafts", { ctrlKey: true });
     contextMenuEntry("Drafts");
 
-    expect(moveMenuItem()?.disabled).toBe(true);
-    expect(moveMenuItem()?.getAttribute("aria-disabled")).toBe("true");
+    expect(moveMenuItem()?.disabled).toBe(false);
+    expect(moveMenuItem()?.getAttribute("aria-disabled")).toBe("false");
   });
 
   it("disables Move… when a selected file is a DIRTY open document (#338)", async () => {
@@ -395,6 +444,205 @@ describe("FileExplorer context-menu Move — result handling (#327)", () => {
     expect(selectedPaths()).toEqual(["a.md"]);
   });
 
+  it("#340 blocker: shows the failure-list modal (not just the status bar) on a destination conflict", async () => {
+    const harness = await mount({
+      moveImpl: rejectedMoveImpl([
+        {
+          reason: "destination-conflict",
+          sourceRelativePath: "a.md",
+          destinationFolderRelativePath: "Archive"
+        }
+      ])
+    });
+    clickEntry("a.md");
+    await moveSelectionTo("Archive");
+
+    const dialog = moveFailureDialog();
+    expect(dialog).not.toBeNull();
+    // Localized title + intro.
+    expect(container!.textContent).toContain("Could not move items");
+    expect(container!.textContent).toContain(
+      "The following items could not be moved."
+    );
+    // Details: item kind, item name, and the destination-conflict reason.
+    const details = moveFailureDetails();
+    expect(details).not.toBeNull();
+    expect(details!.value).toContain("File: a.md");
+    expect(details!.value).toContain(
+      "Reason: The destination already contains an item with the same name."
+    );
+    // Secondary feedback (status line) still fires.
+    expect(harness.onMoveResultMessage).toHaveBeenCalledWith(
+      expect.stringContaining("destination-conflict")
+    );
+    // Nothing was applied: selection stays on the source.
+    expect(selectedPaths()).toEqual(["a.md"]);
+  });
+
+  it("#340 blocker: the failure list reports the item kind as Folder for a folder conflict", async () => {
+    await mount({
+      moveImpl: rejectedMoveImpl([
+        {
+          reason: "destination-conflict",
+          sourceRelativePath: "Drafts",
+          destinationFolderRelativePath: "Archive"
+        }
+      ])
+    });
+    clickEntry("Drafts", { ctrlKey: true });
+    await moveSelectionTo("Archive");
+
+    const details = moveFailureDetails();
+    expect(details).not.toBeNull();
+    expect(details!.value).toContain("Folder: Drafts");
+    expect(details!.value).toContain(
+      "Reason: The destination already contains an item with the same name."
+    );
+    // No merge / overwrite happened: no successful pair, selection unchanged.
+    expect(selectedPaths()).toEqual(["Drafts"]);
+  });
+
+  it("#340 blocker: the failure details are a readonly (not disabled) textarea", async () => {
+    await mount({
+      moveImpl: rejectedMoveImpl([
+        { reason: "destination-conflict", sourceRelativePath: "a.md" }
+      ])
+    });
+    clickEntry("a.md");
+    await moveSelectionTo("Archive");
+
+    const details = moveFailureDetails();
+    expect(details).not.toBeNull();
+    expect(details!.tagName).toBe("TEXTAREA");
+    expect(details!.readOnly).toBe(true);
+    expect(details!.disabled).toBe(false);
+  });
+
+  it("#340 blocker: lists every rejected entry in the textarea", async () => {
+    await mount({
+      moveImpl: rejectedMoveImpl([
+        { reason: "destination-conflict", sourceRelativePath: "a.md" },
+        { reason: "destination-conflict", sourceRelativePath: "b.md" }
+      ])
+    });
+    clickEntry("a.md");
+    clickEntry("b.md", { ctrlKey: true });
+    await moveSelectionTo("Archive");
+
+    const details = moveFailureDetails();
+    expect(details!.value).toContain("File: a.md");
+    expect(details!.value).toContain("File: b.md");
+  });
+
+  it("#340 blocker: destination-inside-source uses the same failure-list modal", async () => {
+    await mount({
+      moveImpl: rejectedMoveImpl([
+        { reason: "destination-inside-source", sourceRelativePath: "Drafts" }
+      ])
+    });
+    clickEntry("Drafts", { ctrlKey: true });
+    await moveSelectionTo("Archive");
+
+    const details = moveFailureDetails();
+    expect(details).not.toBeNull();
+    expect(details!.value).toContain("Folder: Drafts");
+    expect(details!.value).toContain(
+      "Reason: The destination is inside the folder being moved."
+    );
+  });
+
+  it("#340 blocker: an ancestor/descendant mixed selection uses the same modal (no item name)", async () => {
+    await mount({
+      moveImpl: rejectedMoveImpl([{ reason: "contains-ancestor-and-descendant" }])
+    });
+    clickEntry("Drafts", { ctrlKey: true });
+    await moveSelectionTo("Archive");
+
+    const details = moveFailureDetails();
+    expect(details).not.toBeNull();
+    expect(details!.value).toContain(
+      "Reason: The selection includes a folder and an item inside it."
+    );
+  });
+
+  it("#340 blocker: an intra-batch destination collision lists every rejected entry", async () => {
+    await mount({
+      moveImpl: rejectedMoveImpl([
+        {
+          reason: "batch-destination-conflict",
+          sourceRelativePath: "a.md",
+          destinationFolderRelativePath: "Archive"
+        },
+        {
+          reason: "batch-destination-conflict",
+          sourceRelativePath: "b.md",
+          destinationFolderRelativePath: "Archive"
+        }
+      ])
+    });
+    clickEntry("a.md");
+    clickEntry("b.md", { ctrlKey: true });
+    await moveSelectionTo("Archive");
+
+    const details = moveFailureDetails();
+    expect(details).not.toBeNull();
+    expect(details!.value).toContain("File: a.md");
+    expect(details!.value).toContain("File: b.md");
+    expect(details!.value).toContain(
+      "Reason: Two of the selected items would have the same name in the destination."
+    );
+    // Nothing moved.
+    expect(selectedPaths()).toEqual(["a.md", "b.md"]);
+  });
+
+  it("#340 blocker: an execution failure is shown in the same failure-list modal", async () => {
+    await mount({
+      moveImpl: () => ({
+        kind: "completed",
+        result: {
+          ok: false,
+          validation: { ok: true },
+          results: [
+            {
+              status: "failed",
+              reason: "permission-denied",
+              sourceRelativePath: "a.md",
+              destinationRelativePath: "Archive/a.md",
+              sourceAbsolutePath: "C:/Novel/a.md",
+              destinationAbsolutePath: "C:/Novel/Archive/a.md"
+            }
+          ],
+          successfulPathPairs: []
+        }
+      })
+    });
+    clickEntry("a.md");
+    await moveSelectionTo("Archive");
+
+    const details = moveFailureDetails();
+    expect(details).not.toBeNull();
+    expect(details!.value).toContain("File: a.md");
+    expect(details!.value).toContain("Reason: Permission was denied.");
+  });
+
+  it("#340 blocker: the failure modal is dismissed with OK", async () => {
+    await mount({
+      moveImpl: rejectedMoveImpl([
+        { reason: "destination-conflict", sourceRelativePath: "a.md" }
+      ])
+    });
+    clickEntry("a.md");
+    await moveSelectionTo("Archive");
+
+    expect(moveFailureDialog()).not.toBeNull();
+    act(() => {
+      container!
+        .querySelector<HTMLButtonElement>(".fileOperationFailureDialogPrimary")!
+        .click();
+    });
+    expect(moveFailureDialog()).toBeNull();
+  });
+
   it("refreshes the destination folder and moves the selection off old paths on success", async () => {
     const harness = await mount({
       moveImpl: () => movedResult([{ src: "a.md", dest: "Drafts/a.md" }])
@@ -407,6 +655,48 @@ describe("FileExplorer context-menu Move — result handling (#327)", () => {
     expect(selectedPaths()).not.toContain("a.md");
     expect(harness.onMoveResultMessage).toHaveBeenCalledWith(
       expect.stringMatching(/Moved 1/)
+    );
+  });
+
+  it("#340: moves a folder selection and feeds its subtree relocations to the host", async () => {
+    const harness = await mount({
+      moveImpl: () =>
+        movedResult([
+          {
+            src: "Drafts",
+            dest: "Archive/Drafts",
+            isDirectory: true,
+            movedProjectDocuments: [
+              {
+                oldRelativePath: "Drafts/draft-01.md",
+                newRelativePath: "Archive/Drafts/draft-01.md"
+              }
+            ]
+          }
+        ])
+    });
+    harness.listCalls.length = 0;
+    clickEntry("Drafts", { ctrlKey: true });
+    await moveSelectionTo("Archive");
+
+    expect(harness.moveFileExplorerEntries).toHaveBeenCalledWith({
+      sourceRelativePaths: ["Drafts"],
+      destinationFolderRelativePath: "Archive",
+      dirtyProjectDocumentRelativePaths: []
+    });
+    // The subtree's registered documents are relocated for the open editor.
+    expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
+      {
+        oldRelativePath: "Drafts/draft-01.md",
+        newRelativePath: "Archive/Drafts/draft-01.md"
+      }
+    ]);
+    // Old location + new location both refreshed; selection leaves the old path.
+    expect(harness.listCalls).toContain("Archive");
+    expect(harness.listCalls).toContain("Archive/Drafts");
+    expect(selectedPaths()).not.toContain("Drafts");
+    expect(harness.onMoveResultMessage).toHaveBeenCalledWith(
+      expect.stringMatching(/Moved 1 item/)
     );
   });
 
@@ -536,27 +826,24 @@ describe("FileExplorer context-menu Move — disabled reason is visible (#327 bl
     expect(item).not.toBeNull();
     expect(item!.disabled).toBe(true);
     expect(item!.getAttribute("title")).toBe(
-      "Select one or more files to move."
+      "Select one or more items to move."
     );
     expect(item!.getAttribute("data-file-explorer-move-disabled-reason")).toBe(
       "empty-selection"
     );
   });
 
-  it("shows Move… disabled with a folder reason when the selection contains a folder", async () => {
+  it("#340: keeps Move… enabled when the selection contains a folder", async () => {
     await mount();
     clickEntry("a.md");
     clickEntry("Drafts", { ctrlKey: true });
     contextMenuEntry("Drafts");
 
     const item = moveMenuItem();
-    expect(item!.disabled).toBe(true);
-    expect(item!.getAttribute("data-file-explorer-move-disabled-reason")).toBe(
-      "contains-folder"
-    );
-    expect(item!.getAttribute("title")).toBe(
-      "Folders cannot be moved yet. Select files only."
-    );
+    expect(item!.disabled).toBe(false);
+    expect(
+      item!.getAttribute("data-file-explorer-move-disabled-reason")
+    ).toBeNull();
   });
 
   it("shows Move… disabled with a dirty-open-document reason (#338)", async () => {
@@ -609,7 +896,7 @@ describe("FileExplorer toolbar Move — primary route (#327)", () => {
     const button = toolbarMoveButton();
     expect(button.disabled).toBe(true);
     expect(button.getAttribute("title")).toBe(
-      "Select one or more files to move."
+      "Select one or more items to move."
     );
   });
 
@@ -647,17 +934,16 @@ describe("FileExplorer toolbar Move — primary route (#327)", () => {
     });
   });
 
-  it("uses the same enablement as the context menu (folder / dirty open document)", async () => {
+  it("uses the same enablement as the context menu (#340 folder ok / dirty open document blocks)", async () => {
     await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
 
-    clickEntry("a.md");
+    // #340: a folder mixed into an otherwise-clean selection is movable.
+    clickEntry("b.md");
     clickEntry("Drafts", { ctrlKey: true });
-    expect(toolbarMoveButton().disabled).toBe(true);
-    expect(toolbarMoveButton().getAttribute("title")).toBe(
-      "Folders cannot be moved yet. Select files only."
-    );
+    expect(toolbarMoveButton().disabled).toBe(false);
+    expect(toolbarMoveButton().getAttribute("title")).toBe("Move…");
 
-    // Just the dirty open document now.
+    // A dirty open document still blocks the Move.
     clickEntry("a.md");
     expect(toolbarMoveButton().disabled).toBe(true);
     expect(toolbarMoveButton().getAttribute("title")).toBe(

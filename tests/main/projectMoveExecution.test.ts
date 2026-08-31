@@ -75,6 +75,45 @@ describe("moveEntries (#325) — validation gate", () => {
       (await fs.readdir(path.join(projectRoot, "Dest"))).sort()
     ).toEqual(destBefore);
   });
+
+  it("#340: rejects an intra-batch destination collision without any fs.rename", async () => {
+    await fs.mkdir(path.join(projectRoot, "A"));
+    await fs.mkdir(path.join(projectRoot, "B"));
+    await fs.writeFile(path.join(projectRoot, "A", "foo.md"), "a\n", "utf8");
+    await fs.writeFile(path.join(projectRoot, "B", "foo.md"), "b\n", "utf8");
+    const rootBefore = (await fs.readdir(projectRoot)).sort();
+    const aBefore = (await fs.readdir(path.join(projectRoot, "A"))).sort();
+    const bBefore = (await fs.readdir(path.join(projectRoot, "B"))).sort();
+    const destBefore = (await fs.readdir(path.join(projectRoot, "Dest"))).sort();
+    const rename = vi.fn<
+      Parameters<NonNullable<MoveEntriesDeps["rename"]>>,
+      Promise<void>
+    >(() => Promise.resolve());
+
+    const result = await moveEntries(
+      input({
+        sourceRelativePaths: ["A/foo.md", "B/foo.md"],
+        destinationFolderRelativePath: "Dest"
+      }),
+      { rename }
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.validation.ok).toBe(false);
+    expect(result.results).toEqual([]);
+    expect(result.successfulPathPairs).toEqual([]);
+    expect(rename).not.toHaveBeenCalled();
+    expect((await fs.readdir(projectRoot)).sort()).toEqual(rootBefore);
+    expect((await fs.readdir(path.join(projectRoot, "A"))).sort()).toEqual(
+      aBefore
+    );
+    expect((await fs.readdir(path.join(projectRoot, "B"))).sort()).toEqual(
+      bBefore
+    );
+    expect((await fs.readdir(path.join(projectRoot, "Dest"))).sort()).toEqual(
+      destBefore
+    );
+  });
 });
 
 describe("moveEntries (#325) — successful execution", () => {
@@ -89,7 +128,9 @@ describe("moveEntries (#325) — successful execution", () => {
         sourceRelativePath: "a.md",
         destinationRelativePath: "Dest/a.md",
         sourceAbsolutePath: path.join(projectRoot, "a.md"),
-        destinationAbsolutePath: path.join(projectRoot, "Dest", "a.md")
+        destinationAbsolutePath: path.join(projectRoot, "Dest", "a.md"),
+        isDirectory: false,
+        movedProjectDocuments: []
       }
     ]);
     expect(await exists("a.md")).toBe(false);
@@ -237,6 +278,197 @@ describe("moveEntries (#325) — partial failure, no rollback", () => {
 
     expect(result.ok).toBe(false);
     expect(result.validation).toEqual({ ok: true });
+  });
+});
+
+describe("moveEntries (#340) — folder subtree Move", () => {
+  beforeEach(async () => {
+    // Folder/         (has doc.md + nested/deep.markdown + cover.png)
+    await fs.mkdir(path.join(projectRoot, "Folder", "nested"), {
+      recursive: true
+    });
+    await fs.writeFile(
+      path.join(projectRoot, "Folder", "doc.md"),
+      "# doc\n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(projectRoot, "Folder", "nested", "deep.markdown"),
+      "# deep\n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(projectRoot, "Folder", "cover.png"),
+      "x\n",
+      "utf8"
+    );
+  });
+
+  it("moves the whole subtree with one fs.rename and reports isDirectory", async () => {
+    const calls: Array<[string, string]> = [];
+    const rename: MoveEntriesDeps["rename"] = async (oldPath, newPath) => {
+      calls.push([path.basename(oldPath), path.basename(newPath)]);
+      await fs.rename(oldPath, newPath);
+    };
+
+    const result = await moveEntries(
+      input({
+        sourceRelativePaths: ["Folder"],
+        destinationFolderRelativePath: "Dest",
+        knownProjectDocumentRelativePaths: [
+          "Folder/doc.md",
+          "Folder/nested/deep.markdown"
+        ]
+      }),
+      { rename }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual([["Folder", "Folder"]]); // one rename only
+    expect(result.results[0]).toMatchObject({
+      status: "moved",
+      isDirectory: true,
+      sourceRelativePath: "Folder",
+      destinationRelativePath: "Dest/Folder"
+    });
+    expect(await exists("Folder")).toBe(false);
+    expect(await exists("Dest/Folder/doc.md")).toBe(true);
+    expect(await exists("Dest/Folder/nested/deep.markdown")).toBe(true);
+    expect(await exists("Dest/Folder/cover.png")).toBe(true);
+  });
+
+  it("collects old->new relative paths for every moved project-document descendant", async () => {
+    const result = await moveEntries(
+      input({
+        sourceRelativePaths: ["Folder"],
+        destinationFolderRelativePath: "Dest",
+        knownProjectDocumentRelativePaths: [
+          "Folder/doc.md",
+          "Folder/nested/deep.markdown"
+        ]
+      })
+    );
+
+    expect(result.results[0]).toMatchObject({ status: "moved" });
+    if (result.results[0].status !== "moved") return;
+    expect(result.results[0].movedProjectDocuments).toEqual([
+      {
+        oldRelativePath: "Folder/doc.md",
+        newRelativePath: "Dest/Folder/doc.md"
+      },
+      {
+        oldRelativePath: "Folder/nested/deep.markdown",
+        newRelativePath: "Dest/Folder/nested/deep.markdown"
+      }
+    ]);
+  });
+
+  it("hands the Recovery re-key hook the descendant FILE pairs, not the folder", async () => {
+    const result = await moveEntries(
+      input({
+        sourceRelativePaths: ["Folder"],
+        destinationFolderRelativePath: "Dest",
+        knownProjectDocumentRelativePaths: [
+          "Folder/doc.md",
+          "Folder/nested/deep.markdown"
+        ]
+      })
+    );
+
+    expect(result.successfulPathPairs).toEqual([
+      {
+        oldAbsolutePath: path.join(projectRoot, "Folder", "doc.md"),
+        newAbsolutePath: path.join(projectRoot, "Dest", "Folder", "doc.md")
+      },
+      {
+        oldAbsolutePath: path.join(
+          projectRoot,
+          "Folder",
+          "nested",
+          "deep.markdown"
+        ),
+        newAbsolutePath: path.join(
+          projectRoot,
+          "Dest",
+          "Folder",
+          "nested",
+          "deep.markdown"
+        )
+      }
+    ]);
+  });
+
+  it("moves a folder with no known project documents (filesystem-only subtree)", async () => {
+    await fs.mkdir(path.join(projectRoot, "Assets"));
+    await fs.writeFile(
+      path.join(projectRoot, "Assets", "logo.png"),
+      "x\n",
+      "utf8"
+    );
+
+    const result = await moveEntries(
+      input({
+        sourceRelativePaths: ["Assets"],
+        destinationFolderRelativePath: "Dest",
+        knownProjectDocumentRelativePaths: []
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.results[0].status !== "moved") return;
+    expect(result.results[0].movedProjectDocuments).toEqual([]);
+    expect(result.successfulPathPairs).toEqual([]);
+    expect(await exists("Dest/Assets/logo.png")).toBe(true);
+  });
+
+  it("moves a folder to the project root (\"\" destination)", async () => {
+    await fs.mkdir(path.join(projectRoot, "Dest", "Inner"));
+    await fs.writeFile(
+      path.join(projectRoot, "Dest", "Inner", "note.md"),
+      "# n\n",
+      "utf8"
+    );
+
+    const result = await moveEntries(
+      input({
+        sourceRelativePaths: ["Dest/Inner"],
+        destinationFolderRelativePath: "",
+        knownProjectDocumentRelativePaths: ["Dest/Inner/note.md"]
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.results[0].status !== "moved") return;
+    expect(result.results[0].destinationRelativePath).toBe("Inner");
+    expect(result.results[0].movedProjectDocuments).toEqual([
+      { oldRelativePath: "Dest/Inner/note.md", newRelativePath: "Inner/note.md" }
+    ]);
+    expect(await exists("Inner/note.md")).toBe(true);
+  });
+
+  it("a failed folder rename yields no relocation pairs and ok:false", async () => {
+    const rename: MoveEntriesDeps["rename"] = () => {
+      const error = new Error("boom") as NodeJS.ErrnoException;
+      error.code = "EPERM";
+      return Promise.reject(error);
+    };
+
+    const result = await moveEntries(
+      input({
+        sourceRelativePaths: ["Folder"],
+        destinationFolderRelativePath: "Dest",
+        knownProjectDocumentRelativePaths: ["Folder/doc.md"]
+      }),
+      { rename }
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.results[0]).toMatchObject({
+      status: "failed",
+      reason: "permission-denied"
+    });
+    expect(result.successfulPathPairs).toEqual([]);
+    expect(await exists("Folder/doc.md")).toBe(true);
   });
 });
 

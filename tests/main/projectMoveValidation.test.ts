@@ -116,7 +116,99 @@ describe("validateMoveEntries (#324) — source rules", () => {
     ).toEqual(["source-not-found"]);
   });
 
-  it("rejects a folder source (files only in Move v1)", async () => {
+  it("accepts a folder source (#340: folder Move)", async () => {
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["Drafts"],
+        destinationFolderRelativePath: "Archive"
+      })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({
+      sourceRelativePath: "Drafts",
+      destinationRelativePath: "Archive/Drafts",
+      isDirectory: true
+    });
+  });
+
+  it("#340: collects moved project-document descendants of a folder source", async () => {
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["Drafts"],
+        destinationFolderRelativePath: "Archive",
+        knownProjectDocumentRelativePaths: [
+          "Drafts/draft-01.md",
+          "chapter-01.md"
+        ]
+      })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.entries[0].movedProjectDocuments).toEqual([
+      {
+        oldRelativePath: "Drafts/draft-01.md",
+        newRelativePath: "Archive/Drafts/draft-01.md"
+      }
+    ]);
+  });
+
+  it("#340: rejects the project root as a folder source", async () => {
+    expect(
+      reasons(
+        await validateMoveEntries(
+          input({
+            sourceRelativePaths: [""],
+            destinationFolderRelativePath: "Archive"
+          })
+        )
+      )
+    ).toEqual(["source-is-project-root"]);
+  });
+
+  it("#340: rejects a destination inside the folder source", async () => {
+    await fs.mkdir(path.join(projectRoot, "Drafts", "Nested"));
+    expect(
+      reasons(
+        await validateMoveEntries(
+          input({
+            sourceRelativePaths: ["Drafts"],
+            destinationFolderRelativePath: "Drafts/Nested"
+          })
+        )
+      )
+    ).toEqual(["destination-inside-source"]);
+  });
+
+  it("#340: rejects a destination equal to the folder source", async () => {
+    expect(
+      reasons(
+        await validateMoveEntries(
+          input({
+            sourceRelativePaths: ["Drafts"],
+            destinationFolderRelativePath: "Drafts"
+          })
+        )
+      )
+    ).toEqual(["destination-inside-source"]);
+  });
+
+  it("#340: rejects an ancestor + descendant mixed selection", async () => {
+    expect(
+      reasons(
+        await validateMoveEntries(
+          input({
+            sourceRelativePaths: ["Drafts", "Drafts/draft-01.md"],
+            destinationFolderRelativePath: "Archive"
+          })
+        )
+      )
+    ).toEqual(["contains-ancestor-and-descendant"]);
+  });
+
+  it("#340: rejects a folder Move whose destination already has that name", async () => {
+    await fs.mkdir(path.join(projectRoot, "Archive", "Drafts"));
     expect(
       reasons(
         await validateMoveEntries(
@@ -126,7 +218,40 @@ describe("validateMoveEntries (#324) — source rules", () => {
           })
         )
       )
-    ).toEqual(["source-not-file"]);
+    ).toEqual(["destination-conflict"]);
+  });
+
+  it("#340: rejects a folder Move when a document in the subtree is dirty and open", async () => {
+    expect(
+      reasons(
+        await validateMoveEntries(
+          input({
+            sourceRelativePaths: ["Drafts"],
+            destinationFolderRelativePath: "Archive",
+            dirtyProjectDocumentRelativePaths: ["Drafts/draft-01.md"]
+          })
+        )
+      )
+    ).toEqual(["source-dirty-open-document"]);
+  });
+
+  it("#340: accepts a folder Move whose subtree has only non-Markdown files", async () => {
+    await fs.mkdir(path.join(projectRoot, "Assets"));
+    await fs.writeFile(
+      path.join(projectRoot, "Assets", "cover.png"),
+      "x\n",
+      "utf8"
+    );
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["Assets"],
+        destinationFolderRelativePath: "Archive",
+        knownProjectDocumentRelativePaths: []
+      })
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.entries[0].movedProjectDocuments).toEqual([]);
   });
 
   it("rejects a dirty open document source", async () => {
@@ -284,7 +409,9 @@ describe("validateMoveEntries (#324) — success and all-or-nothing", () => {
           projectRoot,
           "Drafts",
           "chapter-01.md"
-        )
+        ),
+        isDirectory: false,
+        movedProjectDocuments: []
       }
     ]);
   });
@@ -363,11 +490,112 @@ describe("validateMoveEntries (#324) — success and all-or-nothing", () => {
   });
 });
 
+describe("validateMoveEntries (#340) — intra-batch destination collisions", () => {
+  it("rejects two files in the batch that resolve to the same destination", async () => {
+    await fs.mkdir(path.join(projectRoot, "A"));
+    await fs.mkdir(path.join(projectRoot, "B"));
+    await fs.writeFile(path.join(projectRoot, "A", "foo.md"), "a\n", "utf8");
+    await fs.writeFile(path.join(projectRoot, "B", "foo.md"), "b\n", "utf8");
+
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["A/foo.md", "B/foo.md"],
+        destinationFolderRelativePath: "Archive"
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    expect(reasons(result)).toEqual([
+      "batch-destination-conflict",
+      "batch-destination-conflict"
+    ]);
+    // Every colliding source is named so the failure list can show them.
+    expect(
+      result.ok
+        ? []
+        : result.errors.map((error) => error.sourceRelativePath).sort()
+    ).toEqual(["A/foo.md", "B/foo.md"]);
+  });
+
+  it("rejects two folders in the batch that resolve to the same destination", async () => {
+    await fs.mkdir(path.join(projectRoot, "A", "Notes"), { recursive: true });
+    await fs.mkdir(path.join(projectRoot, "B", "Notes"), { recursive: true });
+
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["A/Notes", "B/Notes"],
+        destinationFolderRelativePath: "Archive"
+      })
+    );
+
+    expect(reasons(result)).toEqual([
+      "batch-destination-conflict",
+      "batch-destination-conflict"
+    ]);
+  });
+
+  it("rejects a file and a folder with the same basename resolving to the same destination", async () => {
+    await fs.mkdir(path.join(projectRoot, "A"));
+    await fs.mkdir(path.join(projectRoot, "B", "foo"), { recursive: true });
+    await fs.writeFile(path.join(projectRoot, "A", "foo"), "a\n", "utf8");
+
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["A/foo", "B/foo"],
+        destinationFolderRelativePath: "Archive"
+      })
+    );
+
+    expect(reasons(result)).toEqual([
+      "batch-destination-conflict",
+      "batch-destination-conflict"
+    ]);
+  });
+
+  it("folds case / NFC when comparing batch destinations", async () => {
+    await fs.mkdir(path.join(projectRoot, "A"));
+    await fs.mkdir(path.join(projectRoot, "B"));
+    await fs.writeFile(path.join(projectRoot, "A", "Foo.md"), "a\n", "utf8");
+    await fs.writeFile(path.join(projectRoot, "B", "foo.md"), "b\n", "utf8");
+
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["A/Foo.md", "B/foo.md"],
+        destinationFolderRelativePath: "Archive"
+      })
+    );
+
+    expect(reasons(result)).toEqual([
+      "batch-destination-conflict",
+      "batch-destination-conflict"
+    ]);
+  });
+
+  it("does not flag distinct destinations in the same batch", async () => {
+    await fs.mkdir(path.join(projectRoot, "A"));
+    await fs.mkdir(path.join(projectRoot, "B"));
+    await fs.writeFile(path.join(projectRoot, "A", "foo.md"), "a\n", "utf8");
+    await fs.writeFile(path.join(projectRoot, "B", "bar.md"), "b\n", "utf8");
+
+    const result = await validateMoveEntries(
+      input({
+        sourceRelativePaths: ["A/foo.md", "B/bar.md"],
+        destinationFolderRelativePath: "Archive"
+      })
+    );
+
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe("Move validation pure helpers (#324)", () => {
   it("exposes the full reason taxonomy", () => {
     expect([...MOVE_ENTRIES_VALIDATION_ERROR_REASONS].sort()).toEqual(
       [
+        "batch-destination-conflict",
+        "contains-ancestor-and-descendant",
         "destination-conflict",
+        "destination-inside-source",
         "destination-not-folder",
         "destination-not-found",
         "destination-outside-project",
@@ -378,6 +606,7 @@ describe("Move validation pure helpers (#324)", () => {
         "path-traversal",
         "same-parent",
         "source-dirty-open-document",
+        "source-is-project-root",
         "source-not-file",
         "source-not-found",
         "source-outside-project"

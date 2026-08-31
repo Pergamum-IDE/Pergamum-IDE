@@ -69,7 +69,15 @@ async function flushPromises(): Promise<void> {
 }
 
 function movedResult(
-  entries: Array<{ src: string; dest: string }>,
+  entries: Array<{
+    src: string;
+    dest: string;
+    isDirectory?: boolean;
+    movedProjectDocuments?: Array<{
+      oldRelativePath: string;
+      newRelativePath: string;
+    }>;
+  }>,
   extra: Record<string, unknown> = {}
 ) {
   return {
@@ -82,12 +90,23 @@ function movedResult(
         sourceRelativePath: entry.src,
         destinationRelativePath: entry.dest,
         sourceAbsolutePath: `C:/Novel/${entry.src}`,
-        destinationAbsolutePath: `C:/Novel/${entry.dest}`
+        destinationAbsolutePath: `C:/Novel/${entry.dest}`,
+        isDirectory: entry.isDirectory ?? false,
+        movedProjectDocuments: entry.movedProjectDocuments ?? []
       })),
-      successfulPathPairs: entries.map((entry) => ({
-        oldAbsolutePath: `C:/Novel/${entry.src}`,
-        newAbsolutePath: `C:/Novel/${entry.dest}`
-      })),
+      successfulPathPairs: entries.flatMap((entry) =>
+        entry.isDirectory
+          ? (entry.movedProjectDocuments ?? []).map((doc) => ({
+              oldAbsolutePath: `C:/Novel/${doc.oldRelativePath}`,
+              newAbsolutePath: `C:/Novel/${doc.newRelativePath}`
+            }))
+          : [
+              {
+                oldAbsolutePath: `C:/Novel/${entry.src}`,
+                newAbsolutePath: `C:/Novel/${entry.dest}`
+              }
+            ]
+      ),
       ...extra
     }
   };
@@ -328,23 +347,23 @@ describe("FileExplorer Cut/Paste — Cut state (#328)", () => {
 
     const item = cutMenuItem();
     expect(item.disabled).toBe(true);
-    expect(item.getAttribute("title")).toBe("Select one or more files to cut.");
+    expect(item.getAttribute("title")).toBe("Select one or more items to cut.");
     expect(
       item.getAttribute("data-file-explorer-cut-disabled-reason")
     ).toBe("empty-selection");
   });
 
-  it("disables Cut when the selection contains a folder", async () => {
+  it("#340: keeps Cut enabled when the selection contains a folder", async () => {
     await mount();
     clickEntry("a.md");
     clickEntry("Drafts", { ctrlKey: true });
     contextMenuEntry("Drafts");
 
     const item = cutMenuItem();
-    expect(item.disabled).toBe(true);
+    expect(item.disabled).toBe(false);
     expect(
       item.getAttribute("data-file-explorer-cut-disabled-reason")
-    ).toBe("contains-folder");
+    ).toBeNull();
   });
 
   it("disables Cut when a selected file is a DIRTY open document (#338)", async () => {
@@ -378,7 +397,7 @@ describe("FileExplorer Cut/Paste — Cut state (#328)", () => {
     const item = cutMenuItem();
     expect(item.disabled).toBe(true);
     expect(item.getAttribute("title")).toBe(
-      "Files cannot be cut in a read-only project."
+      "Items cannot be cut in a read-only project."
     );
   });
 
@@ -606,7 +625,7 @@ describe("FileExplorer Cut/Paste — Paste execution (#328)", () => {
     rightClickListArea();
     expect(pasteMenuItem().disabled).toBe(true);
     expect(pasteMenuItem().getAttribute("title")).toBe(
-      "Cut one or more files first."
+      "Cut one or more items first."
     );
 
     // Close the menu, cut, reopen.

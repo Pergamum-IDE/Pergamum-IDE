@@ -3840,6 +3840,70 @@ describe("project file IPC foundation", () => {
     ).rejects.toMatchObject({ name: "PergamumFileIoError" });
   });
 
+  it("#340: re-keys the project documents inside a moved folder subtree", async () => {
+    await fs.mkdir(path.join(projectRootPath, "Chapters", "nested"), {
+      recursive: true
+    });
+    await fs.writeFile(
+      path.join(projectRootPath, "Chapters", "one.md"),
+      "# ONE\n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(projectRootPath, "Chapters", "nested", "two.md"),
+      "# TWO\n",
+      "utf8"
+    );
+    await fs.mkdir(path.join(projectRootPath, "Sub"));
+    await openExplorerProject("Move Folder Registry");
+
+    const moveHandler = registeredHandler(
+      PROJECT_CHANNELS.moveFileExplorerEntries
+    );
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+
+    // Nested Markdown files discovered on open are registered project documents.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "Chapters/one.md" })
+    ).resolves.toMatchObject({ content: "# ONE\n" });
+
+    const moveResult = (await moveHandler(
+      { sender: {} },
+      {
+        sourceRelativePaths: ["Chapters"],
+        destinationFolderRelativePath: "Sub",
+        dirtyProjectDocumentRelativePaths: []
+      }
+    )) as { kind: string; result: { ok: boolean } };
+
+    expect(moveResult.kind).toBe("completed");
+    expect(moveResult.result.ok).toBe(true);
+
+    // The subtree moved on disk...
+    await expect(
+      fs.readFile(
+        path.join(projectRootPath, "Sub", "Chapters", "nested", "two.md"),
+        "utf8"
+      )
+    ).resolves.toBe("# TWO\n");
+
+    // ...and the registry follows every descendant document to its new path.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "Sub/Chapters/one.md" })
+    ).resolves.toMatchObject({ content: "# ONE\n" });
+    await expect(
+      readHandler(
+        { sender: {} },
+        { relativePath: "Sub/Chapters/nested/two.md" }
+      )
+    ).resolves.toMatchObject({ content: "# TWO\n" });
+
+    // The old relative paths are no longer registered documents.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "Chapters/one.md" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+  });
+
   function renameHandlerWithRekey(
     rekey: RecoveryPathRekeyHook
   ): (...args: unknown[]) => unknown {

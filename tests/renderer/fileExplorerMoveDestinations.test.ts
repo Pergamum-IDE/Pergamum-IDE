@@ -47,7 +47,7 @@ describe("collectFileExplorerMoveDestinationFolders (#327)", () => {
   });
 });
 
-describe("resolveFileExplorerMoveSources (#327)", () => {
+describe("resolveFileExplorerMoveSources (#327/#340)", () => {
   const entriesByDirectoryPath = {
     "": [folder("Drafts"), file("a.md"), file("b.md")],
     Drafts: [file("Drafts/x.md")]
@@ -59,34 +59,23 @@ describe("resolveFileExplorerMoveSources (#327)", () => {
       entriesByDirectoryPath
     );
     expect(result.relativePaths).toEqual(["a.md", "b.md"]);
-    expect(result.hasFolder).toBe(false);
     expect(result.canMove).toBe(true);
   });
 
-  it("blocks the move when a folder is selected", () => {
+  it("#340: allows the move when a folder is selected", () => {
     const result = resolveFileExplorerMoveSources(
       new Set(["a.md", "Drafts"]),
       entriesByDirectoryPath
     );
-    expect(result.relativePaths).toEqual(["a.md"]);
-    expect(result.hasFolder).toBe(true);
-    expect(result.canMove).toBe(false);
+    expect([...result.relativePaths].sort()).toEqual(["Drafts", "a.md"].sort());
+    expect(result.relativePaths).toHaveLength(2);
+    expect(result.canMove).toBe(true);
   });
 
   it("blocks the move for an empty selection", () => {
     expect(
       resolveFileExplorerMoveSources(new Set(), entriesByDirectoryPath).canMove
     ).toBe(false);
-  });
-
-  it("treats an unknown selected path conservatively as not movable", () => {
-    const result = resolveFileExplorerMoveSources(
-      new Set(["mystery.md"]),
-      entriesByDirectoryPath
-    );
-    expect(result.relativePaths).toEqual([]);
-    expect(result.hasFolder).toBe(true);
-    expect(result.canMove).toBe(false);
   });
 });
 
@@ -95,13 +84,18 @@ describe("resolveFileExplorerMoveDisabledReason (#327/#328/#338)", () => {
     moveInFlight: false,
     hasProject: true,
     readOnly: false,
-    hasFolder: false,
-    fileCount: 2,
+    entryCount: 2,
     hasDirtyOpenDocument: false
   };
 
-  it("returns null when a files-only selection is fully eligible", () => {
+  it("returns null when a selection is fully eligible", () => {
     expect(resolveFileExplorerMoveDisabledReason(eligible)).toBeNull();
+  });
+
+  it("#340: stays eligible for a folder selection", () => {
+    expect(
+      resolveFileExplorerMoveDisabledReason({ ...eligible, entryCount: 1 })
+    ).toBeNull();
   });
 
   it("prefers the most-explanatory reason in priority order", () => {
@@ -119,10 +113,7 @@ describe("resolveFileExplorerMoveDisabledReason (#327/#328/#338)", () => {
       resolveFileExplorerMoveDisabledReason({ ...eligible, readOnly: true })
     ).toBe("read-only-project");
     expect(
-      resolveFileExplorerMoveDisabledReason({ ...eligible, hasFolder: true })
-    ).toBe("contains-folder");
-    expect(
-      resolveFileExplorerMoveDisabledReason({ ...eligible, fileCount: 0 })
+      resolveFileExplorerMoveDisabledReason({ ...eligible, entryCount: 0 })
     ).toBe("empty-selection");
     expect(
       resolveFileExplorerMoveDisabledReason({
@@ -260,23 +251,26 @@ describe("resolveFileExplorerDragSources (#329 spike)", () => {
     expect(result.canDrag).toBe(true);
   });
 
-  it("never starts a movable drag from a folder row", () => {
+  it("#340: starts a movable drag from a folder row", () => {
     const result = resolveFileExplorerDragSources(
       { relativePath: "Drafts", kind: "folder", isSelected: true },
       new Set(["Drafts"]),
       entriesByDirectoryPath
     );
-    expect(result.canDrag).toBe(false);
-    expect(result.sourceRelativePaths).toEqual([]);
+    expect(result.canDrag).toBe(true);
+    expect(result.sourceRelativePaths).toEqual(["Drafts"]);
   });
 
-  it("is not draggable when the selection mixes in a folder", () => {
+  it("#340: is draggable when the selection mixes files and folders", () => {
     const result = resolveFileExplorerDragSources(
       { relativePath: "a.md", kind: "file", isSelected: true },
       new Set(["a.md", "Drafts"]),
       entriesByDirectoryPath
     );
-    expect(result.canDrag).toBe(false);
+    expect(result.canDrag).toBe(true);
+    expect([...result.sourceRelativePaths].sort()).toEqual(
+      ["Drafts", "a.md"].sort()
+    );
   });
 });
 
@@ -355,6 +349,33 @@ describe("isValidFileExplorerDropTarget (#329 spike)", () => {
       isValidFileExplorerDropTarget({
         dragSourceRelativePaths: ["Drafts/a.md", "b.md"],
         destinationFolderRelativePath: "Drafts"
+      })
+    ).toBe(true);
+  });
+
+  it("#340: rejects dropping a folder onto itself", () => {
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["Drafts"],
+        destinationFolderRelativePath: "Drafts"
+      })
+    ).toBe(false);
+  });
+
+  it("#340: rejects dropping a folder into its own subtree", () => {
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["Drafts"],
+        destinationFolderRelativePath: "Drafts/Old"
+      })
+    ).toBe(false);
+  });
+
+  it("#340: accepts dropping a folder into an unrelated folder", () => {
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["Drafts"],
+        destinationFolderRelativePath: "Archive"
       })
     ).toBe(true);
   });

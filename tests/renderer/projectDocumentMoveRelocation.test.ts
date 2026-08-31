@@ -117,6 +117,47 @@ describe("planProjectDocumentMoveRelocation — same project instance (#338)", (
     ]);
   });
 
+  it("#340: relocates a deep open document carried by a folder-subtree Move", () => {
+    const plan = planProjectDocumentMoveRelocation({
+      projectSnapshot: projectA,
+      currentProject: { ...projectA },
+      // A folder Move of `Chapters/` → `Archive/Chapters` reports every
+      // subtree document's old→new relative path, nesting included.
+      relocations: [
+        {
+          oldRelativePath: "Chapters/act-1/scene-1.md",
+          newRelativePath: "Archive/Chapters/act-1/scene-1.md"
+        }
+      ],
+      openDocumentsState: openStateWith("Chapters/act-1/scene-1.md"),
+      context,
+      recoveryKeyForRelativePath
+    });
+
+    expect(plan).not.toBeNull();
+    expect(plan!.openDocumentsChanged).toBe(true);
+
+    const newId = createProjectDocumentEditorId(
+      "Archive/Chapters/act-1/scene-1.md",
+      context
+    );
+    const oldId = createProjectDocumentEditorId(
+      "Chapters/act-1/scene-1.md",
+      context
+    );
+    expect(findOpenDocument(plan!.openDocumentsState, newId)).not.toBeNull();
+    expect(findOpenDocument(plan!.openDocumentsState, oldId)).toBeNull();
+    expect(
+      plan!.invalidatedEditorIds.some((id) => editorIdEquals(id, oldId))
+    ).toBe(true);
+    expect(plan!.recoveryKeyRelocations).toEqual([
+      {
+        oldKey: "key:Chapters/act-1/scene-1.md",
+        newKey: "key:Archive/Chapters/act-1/scene-1.md"
+      }
+    ]);
+  });
+
   it("relocates only the moved-and-open entries in a mixed batch", () => {
     const plan = planProjectDocumentMoveRelocation({
       projectSnapshot: projectA,

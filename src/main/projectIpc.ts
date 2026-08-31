@@ -2027,20 +2027,36 @@ async function moveFileExplorerEntries(
       sourceRelativePaths: request.sourceRelativePaths,
       destinationFolderRelativePath: request.destinationFolderRelativePath,
       dirtyProjectDocumentRelativePaths:
-        request.dirtyProjectDocumentRelativePaths
+        request.dirtyProjectDocumentRelativePaths,
+      // #340: lets folder-source validation compute the subtree's document
+      // relocations.
+      knownProjectDocumentRelativePaths: [
+        ...projectState.documentRelativePaths
+      ]
     },
     rekeyHook ? { rekeyRecoveryPaths: (pairs) => rekeyHook(pairs) } : {}
   );
 
-  // Keep the in-memory project document set in step with the files that
-  // actually moved (same bookkeeping the rename handler does). Only a source
-  // that was already a registered project document gets its destination
-  // registered — a non-registered file (e.g. an unsupported extension) is
-  // just removed from any stale entry, never added.
+  // Keep the in-memory project document set in step with what actually moved
+  // (same bookkeeping the rename handler does).
   for (const entry of result.results) {
     if (entry.status !== "moved") {
       continue;
     }
+
+    if (entry.isDirectory) {
+      // #340: relocate every registered project document inside the moved
+      // subtree. Non-registered files (assets / unsupported extensions) ride
+      // the subtree on disk but are never added to the registry here.
+      for (const relocated of entry.movedProjectDocuments) {
+        projectState.documentRelativePaths.delete(relocated.oldRelativePath);
+        projectState.documentRelativePaths.add(relocated.newRelativePath);
+      }
+      continue;
+    }
+
+    // A file source: only a source that was ALREADY a registered project
+    // document gets its destination registered.
     const wasProjectDocument = projectState.documentRelativePaths.delete(
       entry.sourceRelativePath
     );

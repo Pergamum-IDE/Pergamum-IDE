@@ -1,5 +1,5 @@
 /**
- * #327/#328: pure helpers for the File Explorer Move / Cut-Paste routes.
+ * #327/#328/#340: pure helpers for the File Explorer Move / Cut-Paste routes.
  *
  *   - `collectFileExplorerMoveDestinationFolders` builds the destination
  *     folder picker's list from the tree data the File Explorer has already
@@ -7,8 +7,7 @@
  *     filesystem; folders inside never-expanded directories are simply not
  *     listed yet — the backend still validates the chosen destination.
  *   - `resolveFileExplorerMoveSources` turns a multi-selection into Move
- *     sources and reports whether the selection is movable in v1 (files
- *     only, non-empty).
+ *     sources (#340: files AND folders, non-empty).
  *   - `resolveFileExplorerMoveDisabledReason` / `resolveFileExplorerPaste…`
  *     pick the single most-explanatory reason a Move / Cut / Paste is
  *     unavailable (shown as the menu item's `title`).
@@ -60,76 +59,58 @@ export function collectFileExplorerMoveDestinationFolders(
 }
 
 export interface FileExplorerMoveSources {
-  /** Project-root-relative paths of the selected FILES, in `localeCompare`
-   *  path order. */
+  /** Project-root-relative paths of the selected entries — files AND folders
+   *  (#340) — in `localeCompare` path order. */
   readonly relativePaths: readonly string[];
-  /** `true` when the selection has at least one folder — Move v1 is files
-   *  only, so the UI disables `Move…` then. */
-  readonly hasFolder: boolean;
-  /** `true` when there is at least one movable file source. */
+  /** `true` when there is at least one entry to move. */
   readonly canMove: boolean;
 }
 
 /**
- * Resolve a multi-selection (a set of entry paths) into Move sources. Entry
- * kinds come from the loaded tree data; a selected path with no known entry
- * is treated conservatively as a folder (unknown → not movable).
+ * Resolve a multi-selection (a set of entry paths) into Move sources. #340:
+ * both file and folder rows are movable; the backend stays authoritative for
+ * folder-specific rules (destination-inside-source, ancestor/descendant
+ * mixed selection, subtree dirty documents, …). Selection state only ever
+ * holds paths that were rendered entries, so every selected path is a real
+ * file or folder.
  */
 export function resolveFileExplorerMoveSources(
   selectedPaths: ReadonlySet<string>,
-  entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>
+  // Unused now that folders are movable too — kept so every call site
+  // (Move / Cut / D&D) stays uniform and a future kind check is cheap to add.
+  _entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>
 ): FileExplorerMoveSources {
-  const kindByPath = new Map<string, FileExplorerEntry["kind"]>();
-
-  for (const entries of Object.values(entriesByDirectoryPath)) {
-    for (const entry of entries) {
-      kindByPath.set(entry.relativePath, entry.kind);
-    }
-  }
-
-  const orderedSelectedPaths = [...selectedPaths].sort((left, right) =>
+  const relativePaths = [...selectedPaths].sort((left, right) =>
     left.localeCompare(right)
   );
-  const relativePaths: string[] = [];
-  let hasFolder = false;
-
-  for (const selectedPath of orderedSelectedPaths) {
-    if (kindByPath.get(selectedPath) === "file") {
-      relativePaths.push(selectedPath);
-    } else {
-      // folder, or an unknown path we cannot prove is a file
-      hasFolder = true;
-    }
-  }
 
   return {
     relativePaths,
-    hasFolder,
-    canMove: relativePaths.length > 0 && !hasFolder
+    canMove: relativePaths.length > 0
   };
 }
 
 /**
- * #327 blocker / #328 / #338: why a Move (context menu / toolbar) or a Cut is
- * disabled. Exactly one is chosen (most-explanatory first); `null` means the
- * action is allowed. Move and Cut share this taxonomy — their gating is
- * identical. `contains-dirty-open-document`: a selected file is open with
- * UNSAVED changes — a *clean* open document moves fine (#338).
+ * #327 blocker / #328 / #338 / #340: why a Move (context menu / toolbar) or a
+ * Cut is disabled. Exactly one is chosen (most-explanatory first); `null`
+ * means the action is allowed. Move and Cut share this taxonomy — their
+ * gating is identical. #340 removed `contains-folder`: folders are movable
+ * now. `contains-dirty-open-document`: a selected file, or a document inside a
+ * selected folder's subtree, is open with UNSAVED changes — a *clean* open
+ * document moves fine (#338).
  */
 export type FileExplorerMoveDisabledReason =
   | "move-in-progress"
   | "no-project"
   | "read-only-project"
   | "empty-selection"
-  | "contains-folder"
   | "contains-dirty-open-document";
 
 export function resolveFileExplorerMoveDisabledReason(input: {
   readonly moveInFlight: boolean;
   readonly hasProject: boolean;
   readonly readOnly: boolean;
-  readonly hasFolder: boolean;
-  readonly fileCount: number;
+  readonly entryCount: number;
   readonly hasDirtyOpenDocument: boolean;
 }): FileExplorerMoveDisabledReason | null {
   if (input.moveInFlight) {
@@ -141,10 +122,7 @@ export function resolveFileExplorerMoveDisabledReason(input: {
   if (input.readOnly) {
     return "read-only-project";
   }
-  if (input.hasFolder) {
-    return "contains-folder";
-  }
-  if (input.fileCount === 0) {
+  if (input.entryCount === 0) {
     return "empty-selection";
   }
   if (input.hasDirtyOpenDocument) {
@@ -260,22 +238,22 @@ export interface FileExplorerDragSources {
 }
 
 /**
- * #329: resolve the Move sources for a drag.
+ * #329/#340: resolve the Move sources for a drag.
  *
- *   - dragging a folder / unknown row → never movable
- *   - dragging a selected file        → the whole current multi-selection
- *   - dragging a non-selected file    → just that file (the caller also
+ *   - dragging a file OR folder row (#340) → movable
+ *   - dragging the project root row / an unknown row → never movable
+ *   - dragging a selected row        → the whole current multi-selection
+ *   - dragging a non-selected row    → just that row (the caller also
  *     replaces the selection with it, matching right-click semantics)
  *
- * Reuses `resolveFileExplorerMoveSources`, so a selection that mixes in a
- * folder or an unknown path is not draggable — same rule as Move / Cut.
+ * The backend stays authoritative for folder-specific rejections.
  */
 export function resolveFileExplorerDragSources(
   origin: FileExplorerDragOrigin,
   selectedPaths: ReadonlySet<string>,
   entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>
 ): FileExplorerDragSources {
-  if (origin.kind !== "file") {
+  if (origin.kind !== "file" && origin.kind !== "folder") {
     return { sourceRelativePaths: [], canDrag: false };
   }
 
@@ -301,9 +279,10 @@ export type FileExplorerDropTarget =
   | { readonly kind: "none" };
 
 /**
- * #329: the destination folder a drop resolves to, or `null` when the target
- * cannot accept a Move drop (a file row, the empty area). Folder Move is out
- * of scope, so only folder rows and the project root are destinations.
+ * #329/#340: the destination folder a drop resolves to, or `null` when the
+ * target cannot accept a Move drop (a file row, the empty area). Only folder
+ * rows and the project root are destinations — dropping onto a file is never
+ * valid.
  */
 export function resolveFileExplorerDropDestination(
   target: FileExplorerDropTarget
@@ -336,12 +315,17 @@ export function isValidFileExplorerDropTarget(input: {
     return false;
   }
 
-  // Dropping a source onto itself, or a drop that would land every source
-  // back in its own parent, is a no-op — reject it before the IPC round-trip.
-  if (dragSourceRelativePaths.includes(destinationFolderRelativePath)) {
+  // #340: dropping a folder onto itself or into its own subtree is invalid.
+  const dropsIntoOwnSubtree = dragSourceRelativePaths.some(
+    (source) =>
+      destinationFolderRelativePath === source ||
+      destinationFolderRelativePath.startsWith(`${source}/`)
+  );
+  if (dropsIntoOwnSubtree) {
     return false;
   }
 
+  // A drop that would land every source back in its own parent is a no-op.
   const everySourceAlreadyThere = dragSourceRelativePaths.every((path) => {
     const slashIndex = path.lastIndexOf("/");
     const parent = slashIndex === -1 ? "" : path.slice(0, slashIndex);

@@ -46,6 +46,12 @@ import {
   type NameInputDialogSubmitResult
 } from "./dialog/NameInputDialog";
 import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
+import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
+import {
+  fileOperationFailureReasonTextKey,
+  type FileOperationFailureItemKind,
+  type FileOperationFailureStatus
+} from "./fileOperationFailure";
 import {
   collectFileExplorerMoveDestinationFolders,
   FILE_EXPLORER_MOVE_DND_MIME,
@@ -396,6 +402,41 @@ function parentDirectoryRelativePath(relativePath: string): string | null {
 }
 
 /**
+ * #340: `true` when `candidate` is `selectionPath` itself or lives inside it
+ * (so a dirty document `Drafts/x.md` counts as "in" a selected `Drafts`
+ * folder). Both are project-relative, forward-slash paths.
+ */
+function isPathWithinSelection(
+  candidate: string,
+  selectionPath: string
+): boolean {
+  return (
+    candidate === selectionPath ||
+    candidate.startsWith(`${selectionPath}/`)
+  );
+}
+
+/**
+ * #340: whether any dirty open project document is one of `selectionPaths` or
+ * lives inside a selected folder's subtree.
+ */
+function selectionCoversDirtyOpenDocument(
+  selectionPaths: Iterable<string>,
+  dirtyRelativePaths: readonly string[]
+): boolean {
+  for (const selectionPath of selectionPaths) {
+    if (
+      dirtyRelativePaths.some((dirty) =>
+        isPathWithinSelection(dirty, selectionPath)
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * #309: the chain of ancestor folders for a project-relative document path,
  * from the outermost folder inwards, e.g.
  *   `Drafts/Chapter1/scene-03.md` → `["Drafts", "Drafts/Chapter1"]`.
@@ -646,6 +687,17 @@ export function FileExplorer({
   } | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveInFlight, setMoveInFlight] = useState(false);
+  // #340 blocker: a Move that some or all items could not complete (validation
+  // rejected it, or execution failed partway) is surfaced as a list modal, not
+  // just the status line. Raw reason + source path per failed item; the
+  // file/folder kind and localized text are resolved at render time.
+  const [moveFailure, setMoveFailure] = useState<{
+    readonly status: FileOperationFailureStatus;
+    readonly entries: readonly {
+      readonly reason: string;
+      readonly sourceRelativePath: string | null;
+    }[];
+  } | null>(null);
   // #328: the pending internal Cut — a snapshot of the File Explorer selection
   // taken at Cut time, moved by the next Paste. Never touches the OS clipboard.
   const [cutState, setCutState] = useState<FileExplorerCutState | null>(null);
@@ -1554,14 +1606,21 @@ export function FileExplorer({
       ),
     [multiSelection.selected, entriesByDirectoryPath]
   );
-  // #338: only a DIRTY open project document blocks a Move now — a clean open
-  // document moves and its editor identity follows (`onProjectDocumentsMoved`).
-  const selectionHasDirtyOpenDocument = useMemo(() => {
-    const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
-    return [...multiSelection.selected].some((path) => dirtySet.has(path));
-  }, [multiSelection.selected, dirtyProjectDocumentRelativePaths]);
+  // #338/#340: only a DIRTY open project document blocks a Move now — a clean
+  // open document moves and its editor identity follows
+  // (`onProjectDocumentsMoved`). For a selected FOLDER, a dirty document
+  // anywhere in its subtree counts.
+  const selectionHasDirtyOpenDocument = useMemo(
+    () =>
+      selectionCoversDirtyOpenDocument(
+        multiSelection.selected,
+        dirtyProjectDocumentRelativePaths
+      ),
+    [multiSelection.selected, dirtyProjectDocumentRelativePaths]
+  );
   // UI enablement is a convenience — the backend validation is authoritative.
-  // #328: Cut has the exact same gating as Move (files only, no dirty docs).
+  // #328/#340: Cut has the exact same gating as Move (files or folders, no
+  // dirty docs in scope).
   const canMoveSelection =
     hasProject &&
     !readOnly &&
@@ -1576,19 +1635,19 @@ export function FileExplorer({
       moveInFlight,
       hasProject,
       readOnly,
-      hasFolder: moveSources.hasFolder,
-      fileCount: moveSources.relativePaths.length,
+      entryCount: moveSources.relativePaths.length,
       hasDirtyOpenDocument: selectionHasDirtyOpenDocument
     });
-  // #328/#338: whether any pending Cut source is a DIRTY open document — Paste
-  // stays blocked for those (a clean open document Pastes and its editor
-  // identity follows).
+  // #328/#338/#340: whether any pending Cut source is (or contains, for a
+  // folder) a DIRTY open document — Paste stays blocked for those.
   const cutSourceHasDirtyOpenDocument = useMemo(() => {
     if (cutState === null) {
       return false;
     }
-    const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
-    return cutState.sourceRelativePaths.some((path) => dirtySet.has(path));
+    return selectionCoversDirtyOpenDocument(
+      cutState.sourceRelativePaths,
+      dirtyProjectDocumentRelativePaths
+    );
   }, [cutState, dirtyProjectDocumentRelativePaths]);
   const canPasteCut =
     hasProject &&
@@ -1672,10 +1731,19 @@ export function FileExplorer({
           : destinationFolderRelativePath;
 
       if (!result.ok && result.validation.ok === false) {
-        // Validation failure: nothing changed on disk — do not refresh as a
-        // success, just report minimally.
+        // Validation rejected (dry run): nothing changed on disk — nothing was
+        // moved, merged, or overwritten. Surface every rejected item in the
+        // failure-list modal (#340 blocker), and keep the status line as
+        // secondary feedback.
         const firstReason =
           result.validation.errors[0]?.reason ?? "invalid-path";
+        setMoveFailure({
+          status: "rejected",
+          entries: result.validation.errors.map((error) => ({
+            reason: error.reason,
+            sourceRelativePath: error.sourceRelativePath ?? null
+          }))
+        });
         onMoveResultMessage?.(
           translate("explorer.move.status.validationFailed", {
             reason: firstReason
@@ -1693,15 +1761,69 @@ export function FileExplorer({
         (entry) => entry.status === "failed"
       ).length;
 
-      // #338: follow open editor identity for every file that ACTUALLY moved
-      // (moved entries only — never a validation failure / unavailable / a
-      // failed entry). The host no-ops for any old path that is not open.
+      // #338/#340: follow open editor identity for every project document
+      // that ACTUALLY moved — a moved file's own path, and, for a moved
+      // folder, every registered document in its subtree. The host no-ops
+      // for any old path that is not open.
       const relocations = collectMovedProjectDocumentRelocations(result);
       if (relocations.length > 0) {
         onProjectDocumentsMoved?.(relocations);
       }
       const generation = loadGenerationRef.current + 1;
       loadGenerationRef.current = generation;
+
+      // #340: a moved folder relocates a whole subtree — its old directory
+      // keys (cache) and any expanded state under the old path are now stale.
+      const movedFolderPairs = result.results
+        .filter(
+          (entry): entry is Extract<typeof entry, { status: "moved" }> =>
+            entry.status === "moved" && entry.isDirectory
+        )
+        .map((entry) => ({
+          from: entry.sourceRelativePath,
+          to: entry.destinationRelativePath
+        }));
+
+      if (movedFolderPairs.length > 0) {
+        const isUnderMovedFolder = (
+          directoryKeyPath: string
+        ): { from: string; to: string } | undefined =>
+          movedFolderPairs.find(
+            (pair) =>
+              directoryKeyPath === pair.from ||
+              directoryKeyPath.startsWith(`${pair.from}/`)
+          );
+
+        setEntriesByDirectoryPath((current) => {
+          let changed = false;
+          const next: Record<string, FileExplorerEntry[]> = {};
+          for (const [key, entries] of Object.entries(current)) {
+            if (key !== "" && isUnderMovedFolder(key)) {
+              // Drop the stale key — the new location loads lazily on expand
+              // / reveal.
+              changed = true;
+              continue;
+            }
+            next[key] = entries;
+          }
+          return changed ? next : current;
+        });
+
+        setExpandedDirectoryPaths((current) => {
+          let changed = false;
+          const next = new Set<string>();
+          for (const dir of current) {
+            const pair = isUnderMovedFolder(dir);
+            if (pair) {
+              changed = true;
+              next.add(pair.to + dir.slice(pair.from.length));
+            } else {
+              next.add(dir);
+            }
+          }
+          return changed ? next : current;
+        });
+      }
 
       const reloadDirectories = new Set<string | null>([
         destinationFolderRelativePath === ""
@@ -1712,6 +1834,11 @@ export function FileExplorer({
         reloadDirectories.add(
           parentDirectoryRelativePath(entry.sourceRelativePath)
         );
+      }
+      // #340: reload each moved folder's NEW location so its re-keyed
+      // expansion has fresh children.
+      for (const pair of movedFolderPairs) {
+        reloadDirectories.add(pair.to);
       }
       for (const directory of reloadDirectories) {
         void loadDirectoryForGeneration(directory, generation);
@@ -1752,6 +1879,23 @@ export function FileExplorer({
             failed: movedFailedCount
           })
         );
+      }
+
+      // Execution failure (wet run): the same failure-list modal carries the
+      // items that did not land, whether the whole batch failed or only part.
+      if (movedFailedCount > 0) {
+        setMoveFailure({
+          status: movedTargets.length > 0 ? "partiallyFailed" : "failed",
+          entries: result.results
+            .filter(
+              (entry): entry is Extract<typeof entry, { status: "failed" }> =>
+                entry.status === "failed"
+            )
+            .map((entry) => ({
+              reason: entry.reason,
+              sourceRelativePath: entry.sourceRelativePath
+            }))
+        });
       }
 
       return "applied";
@@ -1862,14 +2006,15 @@ export function FileExplorer({
       return;
     }
 
-    const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
-    const cutHasDirtyOpenDocument = cutState.sourceRelativePaths.some((path) =>
-      dirtySet.has(path)
+    const cutHasDirtyOpenDocument = selectionCoversDirtyOpenDocument(
+      cutState.sourceRelativePaths,
+      dirtyProjectDocumentRelativePaths
     );
 
     // Re-assert every gate at execution time (same rule as `performMove`).
-    // #338: only a DIRTY open document is rejected — a clean open document
-    // Pastes and its editor identity follows (`onProjectDocumentsMoved`).
+    // #338/#340: only a DIRTY open document (in a cut file, or inside a cut
+    // folder's subtree) is rejected — a clean open document Pastes and its
+    // editor identity follows (`onProjectDocumentsMoved`).
     if (!hasProject || readOnly || moveInFlight || cutHasDirtyOpenDocument) {
       onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
       return;
@@ -1947,6 +2092,7 @@ export function FileExplorer({
       // A File Explorer modal dialog owns the keyboard while it is open.
       if (
         moveDialogOpen ||
+        moveFailure !== null ||
         createDialogKind !== null ||
         renameDialogTarget !== null
       ) {
@@ -1967,6 +2113,7 @@ export function FileExplorer({
     [
       createDialogKind,
       moveDialogOpen,
+      moveFailure,
       performCut,
       performPaste,
       renameDialogTarget
@@ -1987,13 +2134,14 @@ export function FileExplorer({
       sourceRelativePaths: readonly string[],
       destinationFolderRelativePath: string
     ) => {
-      const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
-      const sourcesHaveDirtyOpenDocument = sourceRelativePaths.some((path) =>
-        dirtySet.has(path)
+      const sourcesHaveDirtyOpenDocument = selectionCoversDirtyOpenDocument(
+        sourceRelativePaths,
+        dirtyProjectDocumentRelativePaths
       );
 
       // Re-check every safety gate at drop time — the same rule the Move and
-      // Paste routes apply. #338: only a DIRTY open document is rejected. The
+      // Paste routes apply. #338/#340: only a DIRTY open document (in a
+      // dragged file, or inside a dragged folder's subtree) is rejected. The
       // backend stays authoritative regardless.
       if (
         !hasProject ||
@@ -2041,9 +2189,9 @@ export function FileExplorer({
 
   const handleEntryDragStart = useCallback(
     (event: ReactDragEvent<HTMLElement>, entry: FileExplorerEntry) => {
-      if (entry.kind !== "file") {
-        // Folder Move is out of scope — a folder row never starts a drag and
-        // never disturbs the selection.
+      // #340: file AND folder rows are drag sources. Only the project root
+      // row (handled separately) and an exotic node are not.
+      if (entry.kind !== "file" && entry.kind !== "folder") {
         event.preventDefault();
         return;
       }
@@ -2068,9 +2216,9 @@ export function FileExplorer({
         multiSelection.selected,
         entriesByDirectoryPath
       );
-      const dirtySet = new Set(dirtyProjectDocumentRelativePaths);
-      const sourcesHaveDirtyOpenDocument = sources.sourceRelativePaths.some(
-        (path) => dirtySet.has(path)
+      const sourcesHaveDirtyOpenDocument = selectionCoversDirtyOpenDocument(
+        sources.sourceRelativePaths,
+        dirtyProjectDocumentRelativePaths
       );
 
       if (
@@ -2080,9 +2228,9 @@ export function FileExplorer({
         !sources.canDrag ||
         sourcesHaveDirtyOpenDocument
       ) {
-        // Cancel the drag before it starts — folders, mixed selections,
-        // DIRTY open documents (#338), and read-only projects never begin a
-        // movable drag.
+        // Cancel the drag before it starts — the project root, an unknown
+        // row, a DIRTY open document (#338/#340: including one inside a
+        // dragged folder), and a read-only project never begin a movable drag.
         event.preventDefault();
         return;
       }
@@ -2356,6 +2504,32 @@ export function FileExplorer({
           }}
         />
       ) : null}
+      {moveFailure !== null ? (
+        <FileOperationFailureDialog
+          title={translate("fileOperation.move.failed.title")}
+          intro={translate("fileOperation.move.failed.intro")}
+          items={moveFailure.entries.map((entry) => {
+            const kind: FileOperationFailureItemKind =
+              entry.sourceRelativePath === null
+                ? "item"
+                : (fileExplorerEntryByRelativePath(
+                      entriesByDirectoryPath,
+                      entry.sourceRelativePath
+                    )?.kind ?? "item");
+
+            return {
+              kind,
+              displayName: entry.sourceRelativePath,
+              reasonText: translate(
+                fileOperationFailureReasonTextKey(entry.reason)
+              )
+            };
+          })}
+          translate={translate}
+          opener={null}
+          onClose={() => setMoveFailure(null)}
+        />
+      ) : null}
       {createDialogKind !== null ? (
         <NameInputDialog
           key={createDialogKind}
@@ -2490,7 +2664,6 @@ const MOVE_DISABLED_REASON_MESSAGE_KEY: Record<
   "no-project": "explorer.move.disabled.noProject",
   "read-only-project": "explorer.move.disabled.readOnlyProject",
   "empty-selection": "explorer.move.disabled.emptySelection",
-  "contains-folder": "explorer.move.disabled.containsFolder",
   "contains-dirty-open-document":
     "explorer.move.disabled.containsDirtyOpenDocument"
 };
@@ -2503,7 +2676,6 @@ const CUT_DISABLED_REASON_MESSAGE_KEY: Record<
   "no-project": "explorer.cut.disabled.noProject",
   "read-only-project": "explorer.cut.disabled.readOnlyProject",
   "empty-selection": "explorer.cut.disabled.emptySelection",
-  "contains-folder": "explorer.cut.disabled.containsFolder",
   "contains-dirty-open-document":
     "explorer.cut.disabled.containsDirtyOpenDocument"
 };
@@ -2621,7 +2793,9 @@ export function FileExplorerView({
           data-file-explorer-dragging={isDragging ? "true" : undefined}
           data-file-explorer-dirty={isDirtyFile ? "true" : undefined}
           data-file-explorer-drop-target={dropState}
-          draggable={entry.kind === "file" ? true : undefined}
+          draggable={
+            entry.kind === "file" || entry.kind === "folder" ? true : undefined
+          }
           className={
             [
               "fileExplorerItem",
