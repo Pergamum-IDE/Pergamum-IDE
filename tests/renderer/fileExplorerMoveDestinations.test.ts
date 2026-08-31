@@ -3,7 +3,10 @@ import type { FileExplorerEntry } from "../../src/shared/api";
 import {
   FILE_EXPLORER_MOVE_ROOT_DESTINATION,
   collectFileExplorerMoveDestinationFolders,
-  resolveFileExplorerMoveSources
+  resolveFileExplorerMoveDisabledReason,
+  resolveFileExplorerMoveSources,
+  resolveFileExplorerPasteDestination,
+  resolveFileExplorerPasteDisabledReason
 } from "../../src/renderer/fileExplorerMoveDestinations";
 
 const file = (relativePath: string): FileExplorerEntry => ({
@@ -81,5 +84,141 @@ describe("resolveFileExplorerMoveSources (#327)", () => {
     expect(result.relativePaths).toEqual([]);
     expect(result.hasFolder).toBe(true);
     expect(result.canMove).toBe(false);
+  });
+});
+
+describe("resolveFileExplorerMoveDisabledReason (#327/#328)", () => {
+  const eligible = {
+    moveInFlight: false,
+    hasProject: true,
+    readOnly: false,
+    hasFolder: false,
+    fileCount: 2,
+    hasOpenDocument: false
+  };
+
+  it("returns null when a files-only selection is fully eligible", () => {
+    expect(resolveFileExplorerMoveDisabledReason(eligible)).toBeNull();
+  });
+
+  it("prefers the most-explanatory reason in priority order", () => {
+    expect(
+      resolveFileExplorerMoveDisabledReason({
+        ...eligible,
+        moveInFlight: true,
+        hasProject: false
+      })
+    ).toBe("move-in-progress");
+    expect(
+      resolveFileExplorerMoveDisabledReason({ ...eligible, hasProject: false })
+    ).toBe("no-project");
+    expect(
+      resolveFileExplorerMoveDisabledReason({ ...eligible, readOnly: true })
+    ).toBe("read-only-project");
+    expect(
+      resolveFileExplorerMoveDisabledReason({ ...eligible, hasFolder: true })
+    ).toBe("contains-folder");
+    expect(
+      resolveFileExplorerMoveDisabledReason({ ...eligible, fileCount: 0 })
+    ).toBe("empty-selection");
+    expect(
+      resolveFileExplorerMoveDisabledReason({
+        ...eligible,
+        hasOpenDocument: true
+      })
+    ).toBe("contains-open-document");
+  });
+});
+
+describe("resolveFileExplorerPasteDisabledReason (#328)", () => {
+  const ready = {
+    moveInFlight: false,
+    hasProject: true,
+    readOnly: false,
+    cutSourceCount: 1,
+    cutHasOpenDocument: false
+  };
+
+  it("returns null when a pending Cut can be pasted", () => {
+    expect(resolveFileExplorerPasteDisabledReason(ready)).toBeNull();
+  });
+
+  it("reports no-cut-sources when nothing has been cut", () => {
+    expect(
+      resolveFileExplorerPasteDisabledReason({ ...ready, cutSourceCount: 0 })
+    ).toBe("no-cut-sources");
+  });
+
+  it("reports an open document among the cut sources", () => {
+    expect(
+      resolveFileExplorerPasteDisabledReason({
+        ...ready,
+        cutHasOpenDocument: true
+      })
+    ).toBe("contains-open-document");
+  });
+
+  it("still gates on project / read-only / in-flight first", () => {
+    expect(
+      resolveFileExplorerPasteDisabledReason({ ...ready, moveInFlight: true })
+    ).toBe("move-in-progress");
+    expect(
+      resolveFileExplorerPasteDisabledReason({ ...ready, hasProject: false })
+    ).toBe("no-project");
+    expect(
+      resolveFileExplorerPasteDisabledReason({ ...ready, readOnly: true })
+    ).toBe("read-only-project");
+  });
+});
+
+describe("resolveFileExplorerPasteDestination (#328)", () => {
+  const entriesByDirectoryPath = {
+    "": [folder("Drafts"), file("a.md")],
+    Drafts: [folder("Drafts/Old"), file("Drafts/x.md")]
+  };
+
+  it("uses the project root for a root selection", () => {
+    expect(
+      resolveFileExplorerPasteDestination({ kind: "root" }, entriesByDirectoryPath)
+    ).toBe(FILE_EXPLORER_MOVE_ROOT_DESTINATION);
+  });
+
+  it("uses the project root when nothing is selected", () => {
+    expect(
+      resolveFileExplorerPasteDestination(null, entriesByDirectoryPath)
+    ).toBe(FILE_EXPLORER_MOVE_ROOT_DESTINATION);
+  });
+
+  it("uses a selected folder's own path", () => {
+    expect(
+      resolveFileExplorerPasteDestination(
+        { kind: "entry", relativePath: "Drafts/Old" },
+        entriesByDirectoryPath
+      )
+    ).toBe("Drafts/Old");
+  });
+
+  it("uses the parent folder of a selected file", () => {
+    expect(
+      resolveFileExplorerPasteDestination(
+        { kind: "entry", relativePath: "Drafts/x.md" },
+        entriesByDirectoryPath
+      )
+    ).toBe("Drafts");
+    expect(
+      resolveFileExplorerPasteDestination(
+        { kind: "entry", relativePath: "a.md" },
+        entriesByDirectoryPath
+      )
+    ).toBe(FILE_EXPLORER_MOVE_ROOT_DESTINATION);
+  });
+
+  it("falls back to the parent path for an unknown selected entry", () => {
+    expect(
+      resolveFileExplorerPasteDestination(
+        { kind: "entry", relativePath: "Drafts/ghost.md" },
+        entriesByDirectoryPath
+      )
+    ).toBe("Drafts");
   });
 });

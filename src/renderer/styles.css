@@ -1538,7 +1538,12 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
-/* #327: File Explorer item context menu (Move…). */
+/* #328: pending Cut sources are shown muted while still visible. */
+.fileExplorerItem.isCut {
+  opacity: 0.5;
+}
+
+/* #327/#328: File Explorer item context menu (Move… / Cut / Paste). */
 .fileExplorerContextMenuBackdrop {
   position: fixed;
   inset: 0;
