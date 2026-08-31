@@ -270,6 +270,74 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     expect(restoreFn).toContain("recoveryIds: openedIds");
   });
 
+  it("asks the File Explorer to re-list the directory of every restored in-project file (#344)", () => {
+    const restoreFn = appSource.slice(
+      appSource.indexOf("async function handleRecoveryRestoreSelected"),
+      appSource.indexOf("async function getRecoveryReportTextForDialog")
+    );
+
+    // Built from the same `restore.results` — only `written` rows that have a
+    // project-relative path (i.e. landed inside the open project root).
+    expect(restoreFn).toContain("restoredDirectoryRelativePaths");
+    expect(restoreFn).toMatch(
+      /written\.status !== "written" \|\| !written\.projectRelativePath/
+    );
+    // Parent directory of each restored file; `null` for a project-root file.
+    expect(restoreFn).toContain("written.projectRelativePath.lastIndexOf(\"/\")");
+    // And it fires the token-guarded request the File Explorer consumes once.
+    expect(restoreFn).toContain(
+      "fileExplorerRefreshDirectoriesRequestSeqRef.current += 1"
+    );
+    expect(restoreFn).toContain("setFileExplorerRefreshDirectoriesRequest({");
+
+    const refreshIdx = restoreFn.indexOf(
+      "setFileExplorerRefreshDirectoriesRequest({"
+    );
+    const restoreIdx = restoreFn.indexOf(
+      "window.pergamum.recovery.restoreCandidates({"
+    );
+    // The request is derived after the restore IPC has returned its results.
+    expect(refreshIdx).toBeGreaterThan(restoreIdx);
+  });
+
+  it("wires the File Explorer refresh request end to end (App -> WorkspaceSidebar -> FileExplorer) (#344)", () => {
+    const workspaceSidebarSource = readFileSync(
+      "src/renderer/WorkspaceSidebar.tsx",
+      "utf8"
+    );
+    const fileExplorerSource = readFileSync(
+      "src/renderer/FileExplorer.tsx",
+      "utf8"
+    );
+
+    expect(appSource).toContain(
+      "fileExplorerRefreshDirectoriesRequest={"
+    );
+    expect(appSource).toContain(
+      "onFileExplorerRefreshDirectoriesRequestHandled={() => {"
+    );
+    expect(appSource).toContain(
+      "setFileExplorerRefreshDirectoriesRequest(null)"
+    );
+
+    expect(workspaceSidebarSource).toContain(
+      "refreshDirectoriesRequest={fileExplorerRefreshDirectoriesRequest}"
+    );
+    expect(workspaceSidebarSource).toContain(
+      "onRefreshDirectoriesRequestHandled={"
+    );
+
+    expect(fileExplorerSource).toContain(
+      "handledRefreshDirectoriesTokenRef"
+    );
+    expect(fileExplorerSource).toContain(
+      "for (const directoryRelativePath of refreshDirectoriesRequest.directoryRelativePaths)"
+    );
+    expect(fileExplorerSource).toContain(
+      "void loadDirectoryForGeneration(directoryRelativePath, generation)"
+    );
+  });
+
   it("opens an in-project recovered file as a project-owned document, standalone otherwise", () => {
     const restoreFn = appSource.slice(
       appSource.indexOf("async function handleRecoveryRestoreSelected"),

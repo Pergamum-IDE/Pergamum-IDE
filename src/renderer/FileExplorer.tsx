@@ -112,6 +112,20 @@ export interface FileExplorerRenameEntryRequest {
   target?: FileExplorerRenameTarget | null;
 }
 
+/**
+ * #344: an external request to re-list one or more project directories NOW,
+ * because a file appeared in the project by a path OUTSIDE the File
+ * Explorer's own create / rename / move flows — currently a Recovery restore
+ * that writes a `.recovered.md` into the open project. The File Explorer's
+ * cached listing for that directory is stale until it is re-fetched.
+ * Consumed once per token.
+ */
+export interface FileExplorerRefreshDirectoriesRequest {
+  /** Project-relative directory paths to re-list (`null` = project root). */
+  readonly directoryRelativePaths: readonly (string | null)[];
+  readonly token: number;
+}
+
 interface FileExplorerProps {
   project: PergamumProject | null;
   highlightedRelativePath: string | null;
@@ -125,6 +139,11 @@ interface FileExplorerProps {
   /** #313: Command Palette "Rename" request; consumed once per token. */
   renameEntryRequest?: FileExplorerRenameEntryRequest | null;
   onRenameEntryRequestHandled?: () => void;
+  /** #344: re-list these project directories now — a file was added by a
+   *  path outside the File Explorer's own flows (a Recovery restore).
+   *  Consumed once per token. */
+  refreshDirectoriesRequest?: FileExplorerRefreshDirectoriesRequest | null;
+  onRefreshDirectoriesRequestHandled?: () => void;
   isProjectDocumentDirty?: (relativePath: string) => boolean;
   onProjectDocumentRenamed?: (
     oldRelativePath: string,
@@ -586,6 +605,8 @@ export function FileExplorer({
   onCreateEntryRequestHandled,
   renameEntryRequest = null,
   onRenameEntryRequestHandled,
+  refreshDirectoriesRequest = null,
+  onRefreshDirectoriesRequestHandled,
   isProjectDocumentDirty = () => false,
   onProjectDocumentRenamed,
   onProjectDocumentsMoved,
@@ -1254,6 +1275,36 @@ export function FileExplorer({
     openRenameDialog(renameEntryRequest.target ?? null);
     onRenameEntryRequestHandled?.();
   }, [renameEntryRequest, onRenameEntryRequestHandled, openRenameDialog]);
+
+  // #344: a file appeared in the project outside the File Explorer's own
+  // create / rename / move flows (a Recovery restore writes `.recovered.md`
+  // straight to disk). Re-list the affected directories so the stale cached
+  // listing is replaced and the tree — plus the #309 active-document reveal —
+  // shows the new file. Consumed once per token.
+  const handledRefreshDirectoriesTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!refreshDirectoriesRequest || !hasProject) {
+      return;
+    }
+    if (
+      handledRefreshDirectoriesTokenRef.current ===
+      refreshDirectoriesRequest.token
+    ) {
+      return;
+    }
+    handledRefreshDirectoriesTokenRef.current = refreshDirectoriesRequest.token;
+
+    const generation = loadGenerationRef.current;
+    for (const directoryRelativePath of refreshDirectoriesRequest.directoryRelativePaths) {
+      void loadDirectoryForGeneration(directoryRelativePath, generation);
+    }
+    onRefreshDirectoriesRequestHandled?.();
+  }, [
+    hasProject,
+    loadDirectoryForGeneration,
+    onRefreshDirectoriesRequestHandled,
+    refreshDirectoriesRequest
+  ]);
 
   const submitCreate = useCallback(
     async (

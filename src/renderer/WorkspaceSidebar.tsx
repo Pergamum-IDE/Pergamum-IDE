@@ -5,6 +5,7 @@ import type { Translate } from "../shared/i18n";
 import {
   FileExplorer,
   type FileExplorerCreateEntryRequest,
+  type FileExplorerRefreshDirectoriesRequest,
   type FileExplorerRenameEntryRequest
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
@@ -21,10 +22,14 @@ interface WorkspaceSidebarProps {
    *  the File Explorer so it opens the shared create dialog. */
   fileExplorerCreateEntryRequest: FileExplorerCreateEntryRequest | null;
   fileExplorerRenameEntryRequest?: FileExplorerRenameEntryRequest | null;
+  /** #344: re-list project directories after a Recovery restore added files
+   *  outside the File Explorer's own flows. Consumed once per token. */
+  fileExplorerRefreshDirectoriesRequest?: FileExplorerRefreshDirectoriesRequest | null;
   translate: Translate;
   onActivateProjectDocument: (relativePath: string) => void;
   onFileExplorerCreateEntryRequestHandled: () => void;
   onFileExplorerRenameEntryRequestHandled?: () => void;
+  onFileExplorerRefreshDirectoriesRequestHandled?: () => void;
   isFileExplorerProjectDocumentDirty?: (relativePath: string) => boolean;
   onFileExplorerProjectDocumentRenamed?: (
     oldRelativePath: string,
@@ -55,10 +60,12 @@ export function WorkspaceSidebar({
   glossaryRefreshToken,
   fileExplorerCreateEntryRequest,
   fileExplorerRenameEntryRequest = null,
+  fileExplorerRefreshDirectoriesRequest = null,
   translate,
   onActivateProjectDocument,
   onFileExplorerCreateEntryRequestHandled,
   onFileExplorerRenameEntryRequestHandled,
+  onFileExplorerRefreshDirectoriesRequestHandled,
   isFileExplorerProjectDocumentDirty,
   onFileExplorerProjectDocumentRenamed,
   onFileExplorerProjectDocumentsMoved,
@@ -86,6 +93,10 @@ export function WorkspaceSidebar({
           renameEntryRequest={fileExplorerRenameEntryRequest}
           onRenameEntryRequestHandled={
             onFileExplorerRenameEntryRequestHandled
+          }
+          refreshDirectoriesRequest={fileExplorerRefreshDirectoriesRequest}
+          onRefreshDirectoriesRequestHandled={
+            onFileExplorerRefreshDirectoriesRequestHandled
           }
           isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
           onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}

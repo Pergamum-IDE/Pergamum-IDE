@@ -17,6 +17,7 @@ import {
   resolveFileExplorerCreateParentDirectory,
   resolveFileExplorerReloadTargets,
   scrollFileExplorerActiveDocumentIntoView,
+  type FileExplorerRefreshDirectoriesRequest,
   type FileExplorerRenameEntryRequest
 } from "../../src/renderer/FileExplorer";
 
@@ -2809,5 +2810,143 @@ describe("FileExplorer dirty indicator (#342)", () => {
       rootButton().querySelector('[data-file-explorer-dirty-indicator="true"]')
     ).toBeNull();
     expect(rootButton().getAttribute("data-file-explorer-dirty")).toBeNull();
+  });
+});
+
+describe("FileExplorer external-refresh request (#344)", () => {
+  const baselineRoot: FileExplorerEntry[] = [
+    { kind: "folder", name: "Drafts", relativePath: "Drafts" },
+    { kind: "file", name: "chapter-01.md", relativePath: "chapter-01.md" },
+    { kind: "file", name: "notes.markdown", relativePath: "notes.markdown" }
+  ];
+  const recoveredRoot: FileExplorerEntry[] = [
+    ...baselineRoot,
+    {
+      kind: "file",
+      name: "chapter-01.recovered.md",
+      relativePath: "chapter-01.recovered.md"
+    }
+  ];
+  const draftsChildren: FileExplorerEntry[] = [
+    { kind: "file", name: "outline.md", relativePath: "Drafts/outline.md" }
+  ];
+
+  interface RefreshHarness {
+    listFileExplorerChildren: ReturnType<typeof vi.fn>;
+    rerender: (
+      request: FileExplorerRefreshDirectoriesRequest | null
+    ) => void;
+    onHandled: ReturnType<typeof vi.fn>;
+    setRootEntries: (entries: FileExplorerEntry[]) => void;
+  }
+
+  function renderWithRefreshRequest(): RefreshHarness {
+    let currentRootEntries = baselineRoot;
+    const listFileExplorerChildren = vi.fn(
+      async (
+        directoryRelativePath: string | null
+      ): Promise<ListFileExplorerChildrenResult> => {
+        if (directoryRelativePath === "Drafts") {
+          return ok("Drafts", draftsChildren);
+        }
+        return ok(null, currentRootEntries);
+      }
+    );
+    const onHandled = vi.fn();
+
+    Object.defineProperty(window, "pergamum", {
+      configurable: true,
+      value: { projects: { listFileExplorerChildren } }
+    });
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let currentRequest: FileExplorerRefreshDirectoriesRequest | null = null;
+    let currentHighlight: string | null = null;
+
+    const paint = (): void => {
+      act(() => {
+        root!.render(
+          React.createElement(FileExplorer, {
+            project,
+            highlightedRelativePath: currentHighlight,
+            translate,
+            onActivateDocument: vi.fn(),
+            refreshDirectoriesRequest: currentRequest,
+            onRefreshDirectoriesRequestHandled: onHandled
+          })
+        );
+      });
+    };
+
+    paint();
+
+    return {
+      listFileExplorerChildren,
+      onHandled,
+      setRootEntries: (entries) => {
+        currentRootEntries = entries;
+      },
+      rerender: (request) => {
+        currentRequest = request;
+        if (request) {
+          // The recovered file becomes the active document, mirroring App.
+          currentHighlight = "chapter-01.recovered.md";
+        }
+        paint();
+      }
+    };
+  }
+
+  it("re-lists the project root and surfaces a file added outside the tree", async () => {
+    const harness = renderWithRefreshRequest();
+    await flushPromises();
+
+    // Stale listing: the recovered file is not there yet.
+    expect(
+      container!.querySelector(
+        '[data-file-explorer-entry-path="chapter-01.recovered.md"]'
+      )
+    ).toBeNull();
+
+    harness.setRootEntries(recoveredRoot);
+    harness.listFileExplorerChildren.mockClear();
+    harness.rerender({ directoryRelativePaths: [null], token: 1 });
+    await flushPromises();
+
+    expect(harness.listFileExplorerChildren).toHaveBeenCalledWith(null);
+    expect(entryButton("chapter-01.recovered.md")).toBeTruthy();
+    // Regression: the ordinary .md / .markdown siblings are still listed.
+    expect(entryButton("chapter-01.md")).toBeTruthy();
+    expect(entryButton("notes.markdown")).toBeTruthy();
+    expect(harness.onHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it("consumes each token once (a repeated token does not re-fetch)", async () => {
+    const harness = renderWithRefreshRequest();
+    await flushPromises();
+
+    harness.rerender({ directoryRelativePaths: [null], token: 7 });
+    await flushPromises();
+    harness.listFileExplorerChildren.mockClear();
+
+    // Same token object identity change, same token value → no re-fetch.
+    harness.rerender({ directoryRelativePaths: [null], token: 7 });
+    await flushPromises();
+
+    expect(harness.listFileExplorerChildren).not.toHaveBeenCalled();
+  });
+
+  it("does nothing without a request (baseline reload behavior is unchanged)", async () => {
+    const harness = renderWithRefreshRequest();
+    await flushPromises();
+    harness.listFileExplorerChildren.mockClear();
+
+    harness.rerender(null);
+    await flushPromises();
+
+    expect(harness.listFileExplorerChildren).not.toHaveBeenCalled();
   });
 });

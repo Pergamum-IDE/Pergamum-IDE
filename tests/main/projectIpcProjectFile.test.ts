@@ -3128,6 +3128,60 @@ describe("project file IPC foundation", () => {
     ).rejects.toMatchObject({ name: "PergamumFileIoError" });
   });
 
+  it("#344: lists a `.recovered.md` written into the project root after open", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Explorer Recovered.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Explorer Recovered"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    await registeredHandler(PROJECT_CHANNELS.openProject)({ sender: {} });
+
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    const readProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocument
+    );
+
+    // A Recovery restore drops this straight onto disk, next to its origin.
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter-01.recovered.md"),
+      "# Chapter 1\nrecovered body\n",
+      "utf8"
+    );
+
+    const rootResult = expectFileExplorerOk(
+      await listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: null }
+      )
+    );
+
+    expect(rootResult.entries).toContainEqual({
+      kind: "file",
+      name: "chapter-01.recovered.md",
+      relativePath: "chapter-01.recovered.md"
+    });
+    // ...and the listing registers it as a readable Markdown project document.
+    await expect(
+      readProjectDocumentHandler(
+        { sender: {} },
+        { relativePath: "chapter-01.recovered.md" }
+      )
+    ).resolves.toMatchObject({
+      relativePath: "chapter-01.recovered.md",
+      content: "# Chapter 1\nrecovered body\n"
+    });
+  });
+
   it("lists only the requested folder direct children for File Explorer expansion", async () => {
     const projectFilePath = path.join(projectRootPath, "Explorer Nested.pergamum");
     await fs.mkdir(path.join(projectRootPath, "Drafts"));
