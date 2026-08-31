@@ -24,29 +24,32 @@ function mockEvent() {
   };
 }
 
-describe("documentTabTrailingSlotKind (#184)", () => {
-  it("shows close on an active clean tab", () => {
-    expect(documentTabTrailingSlotKind(true, false, false)).toBe("close");
+describe("documentTabTrailingSlotKind (#184 / #342)", () => {
+  it("shows close on an active tab", () => {
+    expect(documentTabTrailingSlotKind(true, false)).toBe("close");
   });
 
-  it("shows close on an active dirty tab (close takes precedence over dirty)", () => {
-    expect(documentTabTrailingSlotKind(true, true, false)).toBe("close");
+  it("shows close on a hovered tab", () => {
+    expect(documentTabTrailingSlotKind(false, true)).toBe("close");
   });
 
-  it("shows empty on an inactive clean unhovered tab", () => {
-    expect(documentTabTrailingSlotKind(false, false, false)).toBe("empty");
+  it("shows close on an active AND hovered tab", () => {
+    expect(documentTabTrailingSlotKind(true, true)).toBe("close");
   });
 
-  it("shows dirty on an inactive dirty unhovered tab", () => {
-    expect(documentTabTrailingSlotKind(false, true, false)).toBe("dirty");
+  it("shows an empty placeholder on an inactive, unhovered tab", () => {
+    expect(documentTabTrailingSlotKind(false, false)).toBe("empty");
   });
 
-  it("shows close on a hovered clean tab", () => {
-    expect(documentTabTrailingSlotKind(false, false, true)).toBe("close");
-  });
+  it("#342: never returns a dirty slot — the inactive-tab pen icon was removed", () => {
+    const kinds = [
+      documentTabTrailingSlotKind(true, true),
+      documentTabTrailingSlotKind(true, false),
+      documentTabTrailingSlotKind(false, true),
+      documentTabTrailingSlotKind(false, false)
+    ];
 
-  it("shows close, not dirty, on a hovered dirty tab", () => {
-    expect(documentTabTrailingSlotKind(false, true, true)).toBe("close");
+    expect(kinds).not.toContain("dirty");
   });
 });
 

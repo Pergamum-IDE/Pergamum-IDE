@@ -466,7 +466,7 @@ describe("DocumentTabBar", () => {
     expect(tabOpenTag).not.toContain("outside the project");
   });
 
-  it("the external warning icon remains on the left side, independent of the right trailing slot's dirty indicator (#184)", () => {
+  it("the external warning icon remains on the left side, before the title and trailing slot (#184)", () => {
     const markup = renderTabBar(
       [
         {
@@ -492,7 +492,8 @@ describe("DocumentTabBar", () => {
     expect(externalIconIndex).toBeGreaterThan(-1);
     expect(externalIconIndex).toBeLessThan(titleIndex);
     expect(titleIndex).toBeLessThan(trailingIndex);
-    expect(tab).toContain("documentTabDirtyIndicator");
+    // #342: the tab bar no longer renders a per-tab dirty pen icon.
+    expect(tab).not.toContain("documentTabDirtyIndicator");
   });
 });
 
@@ -571,14 +572,17 @@ describe("DocumentTabBar trailing slot (#184)", () => {
     expect(activeTab).not.toContain("documentTabDirtyIndicator");
   });
 
-  it("shows the dirty indicator, not a close button, on an inactive dirty tab", () => {
+  it("#342: shows an empty trailing slot — no close button, no dirty pen — on an inactive dirty tab", () => {
     const markup = renderTabBar(tabs(), {
       activeDocumentId: projectDocumentId
     });
     const inactiveDirtyTab = tabMarkup(markup, 1);
 
-    expect(inactiveDirtyTab).toContain("documentTabDirtyIndicator");
+    expect(inactiveDirtyTab).not.toContain("documentTabDirtyIndicator");
     expect(inactiveDirtyTab).not.toContain("documentTabCloseButton");
+    expect(inactiveDirtyTab).toContain(
+      '<span class="documentTabTrailing"></span>'
+    );
   });
 
   it("shows neither a close button nor a dirty indicator on an inactive clean tab", () => {
@@ -667,63 +671,187 @@ describe("DocumentTabBar close button (#184)", () => {
   });
 });
 
-describe("DocumentTabBar dirty indicator (#184)", () => {
-  it("gives the dirty indicator a tooltip and accessible label indicating unsaved changes", () => {
-    const markup = renderTabBar(
-      [
-        {
-          id: projectDocumentId,
-          title: "chapter-01.md",
-          isDirty: false,
-          isExternalMarkdownFile: false
-        },
-        {
-          id: secondProjectDocumentId,
-          title: "chapter-02.md",
-          isDirty: true,
-          isExternalMarkdownFile: false
-        }
-      ],
-      { activeDocumentId: projectDocumentId }
-    );
-    const inactiveDirtyTab = tabMarkup(markup, 1);
+describe("DocumentTabBar dirty tab — no per-tab dirty icon (#342)", () => {
+  function dirtyTabs(): DocumentTab[] {
+    return [
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      },
+      {
+        id: secondProjectDocumentId,
+        title: "chapter-02.md",
+        isDirty: true,
+        isExternalMarkdownFile: false
+      }
+    ];
+  }
 
-    expect(inactiveDirtyTab).toContain('aria-label="Unsaved"');
-    expect(inactiveDirtyTab).toContain('title="Unsaved"');
+  it("renders no dirty-pen span for a dirty inactive tab", () => {
+    const markup = renderTabBar(dirtyTabs(), {
+      activeDocumentId: projectDocumentId
+    });
+
+    expect(markup).not.toContain("documentTabDirtyIndicator");
   });
 
-  it("is non-interactive — not a button, no click handler markup, no tabindex", () => {
-    const markup = renderTabBar(
-      [
-        {
-          id: projectDocumentId,
-          title: "chapter-01.md",
-          isDirty: false,
-          isExternalMarkdownFile: false
-        },
-        {
-          id: secondProjectDocumentId,
-          title: "chapter-02.md",
-          isDirty: true,
-          isExternalMarkdownFile: false
-        }
-      ],
-      { activeDocumentId: projectDocumentId }
-    );
-    const inactiveDirtyTab = tabMarkup(markup, 1);
-    const indicatorIndex = inactiveDirtyTab.indexOf("documentTabDirtyIndicator");
-    const beforeIndicator = inactiveDirtyTab.slice(0, indicatorIndex);
-    const tagStart = beforeIndicator.lastIndexOf("<");
-    const indicatorOpenTag = inactiveDirtyTab.slice(
-      tagStart,
-      inactiveDirtyTab.indexOf(">", tagStart)
-    );
+  it("no longer references the edit-2 Feather icon anywhere in the tab bar", () => {
+    const markup = renderTabBar(dirtyTabs(), {
+      activeDocumentId: projectDocumentId
+    });
 
-    expect(inactiveDirtyTab.slice(tagStart, tagStart + 5)).toBe("<span");
-    expect(indicatorOpenTag).not.toContain("tabindex");
+    expect(markup).not.toContain("feather-edit-2");
   });
 
-  it("uses the edit-2 Feather icon", () => {
+  it("keeps the unsaved state discoverable on the tab's own title", () => {
+    const markup = renderTabBar(dirtyTabs(), {
+      activeDocumentId: projectDocumentId
+    });
+    const inactiveDirtyTab = tabMarkup(markup, 1);
+    const tabOpenTag = inactiveDirtyTab.slice(
+      0,
+      inactiveDirtyTab.indexOf(">")
+    );
+
+    expect(tabOpenTag).toContain('title="chapter-02.md — Unsaved"');
+  });
+});
+
+describe("DocumentTabBar active tab label (#342)", () => {
+  function tabs(): DocumentTab[] {
+    return [
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      },
+      {
+        id: secondProjectDocumentId,
+        title: "chapter-02.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      }
+    ];
+  }
+
+  it("marks exactly the active tab with the isActive class", () => {
+    const markup = renderTabBar(tabs(), {
+      activeDocumentId: projectDocumentId
+    });
+
+    expect(markup).toContain('class="documentTab isActive"');
+    expect(
+      markup.match(/class="documentTab isActive"/g) ?? []
+    ).toHaveLength(1);
+    // The other tab carries the plain class, no active marker.
+    expect(markup).toContain('class="documentTab" role="tab"');
+  });
+
+  it("has a stylesheet rule that bolds the active tab's label", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    const ruleStart = css.indexOf(
+      ".documentTab.isActive .documentTabTitle {"
+    );
+
+    expect(ruleStart).toBeGreaterThan(-1);
+    expect(css.slice(ruleStart, css.indexOf("}", ruleStart))).toContain(
+      "font-weight: 700"
+    );
+  });
+});
+
+function documentTabCssBlock(): string {
+  const css = readFileSync("src/renderer/styles.css", "utf8");
+  const start = css.indexOf("\n.documentTab {");
+  return css.slice(start, css.indexOf("}", start));
+}
+
+function documentTabTitleCssBlock(): string {
+  const css = readFileSync("src/renderer/styles.css", "utf8");
+  const start = css.indexOf("\n.documentTabTitle {");
+  return css.slice(start, css.indexOf("}", start));
+}
+
+describe("DocumentTabBar variable-width tabs (#342)", () => {
+  it("no longer pins document tabs to a fixed equal width", () => {
+    const rule = documentTabCssBlock();
+
+    // No bare `width:` declaration (min-width / max-width are fine).
+    expect(rule).not.toMatch(/[\s;{]width:\s*\d+px/);
+    expect(rule).toContain("min-width: 88px");
+    expect(rule).toContain("max-width: 240px");
+  });
+
+  it("keeps the tab label ellipsis-capable", () => {
+    const rule = documentTabTitleCssBlock();
+
+    expect(rule).toContain("text-overflow: ellipsis");
+    expect(rule).toContain("overflow: hidden");
+    expect(rule).toContain("white-space: nowrap");
+  });
+
+  it("renders a close button for a very long file name without dropping it", () => {
+    const longName = `${"very-long-chapter-name-".repeat(4)}final.md`;
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: longName,
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { activeDocumentId: projectDocumentId }
+    );
+
+    expect(markup).toContain(longName);
+    expect(markup).toContain("documentTabCloseButton");
+  });
+
+  it("renders a short file name tab intact", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "a.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { activeDocumentId: projectDocumentId }
+    );
+    const tab = tabMarkup(markup);
+
+    expect(tab).toContain('<span class="documentTabTitle">a.md</span>');
+    expect(tab).toContain("documentTabCloseButton");
+  });
+});
+
+describe("DocumentTabBar tab shape / padding polish (#342)", () => {
+  it("rounds only the top corners of the tab", () => {
+    const rule = documentTabCssBlock();
+
+    expect(rule).toContain("border-radius: 10px 10px 0 0");
+    expect(rule).not.toContain("border-radius: 0");
+  });
+
+  it("halves the horizontal padding to ~5px and keeps vertical padding", () => {
+    const rule = documentTabCssBlock();
+
+    expect(rule).toContain("padding: 0 5px");
+    expect(rule).not.toContain("padding: 0 10px");
+  });
+
+  it("keeps the close button and variable-width contract intact", () => {
+    const rule = documentTabCssBlock();
+
+    expect(rule).toContain("min-width: 88px");
+    expect(rule).toContain("max-width: 240px");
+    expect(rule).not.toMatch(/[\s;{]width:\s*\d+px/);
+
     const markup = renderTabBar(
       [
         {
@@ -731,18 +859,13 @@ describe("DocumentTabBar dirty indicator (#184)", () => {
           title: "chapter-01.md",
           isDirty: false,
           isExternalMarkdownFile: false
-        },
-        {
-          id: secondProjectDocumentId,
-          title: "chapter-02.md",
-          isDirty: true,
-          isExternalMarkdownFile: false
         }
       ],
       { activeDocumentId: projectDocumentId }
     );
 
-    expect(markup).toContain("feather-edit-2");
+    expect(markup).toContain("documentTabCloseButton");
+    expect(documentTabTitleCssBlock()).toContain("text-overflow: ellipsis");
   });
 });
 

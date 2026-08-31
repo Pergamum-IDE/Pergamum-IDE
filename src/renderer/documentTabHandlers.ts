@@ -1,22 +1,21 @@
 import type { EditorId } from "../shared/editorId";
 
 /**
- * Right-side trailing slot content for a document tab (#184). Close button
- * takes precedence over the dirty indicator whenever the tab is active or
- * hovered, so the two never render at the same time on the same tab.
+ * Right-side trailing slot content for a document tab (#184). The close
+ * button shows only while the tab is active or hovered; otherwise the slot is
+ * an empty placeholder that keeps the tab's width stable.
+ *
+ * #342: the inactive-tab dirty pen icon was removed from the tab bar — unsaved
+ * state now surfaces on the File Explorer file row instead. The tab's own
+ * `title` still carries the unsaved suffix for hover discovery.
  */
-export type DocumentTabTrailingSlotKind = "close" | "dirty" | "empty";
+export type DocumentTabTrailingSlotKind = "close" | "empty";
 
 export function documentTabTrailingSlotKind(
   isActive: boolean,
-  isDirty: boolean,
   isHovered: boolean
 ): DocumentTabTrailingSlotKind {
-  if (isActive || isHovered) {
-    return "close";
-  }
-
-  return isDirty ? "dirty" : "empty";
+  return isActive || isHovered ? "close" : "empty";
 }
 
 /**

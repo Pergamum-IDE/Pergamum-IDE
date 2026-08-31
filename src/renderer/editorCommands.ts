@@ -34,8 +34,10 @@ export interface EditorCommandController {
   openMarkdownDocument(): void | Promise<void>;
   saveCurrentDocument(): void | Promise<void>;
   saveCurrentDocumentAs(): void | Promise<void>;
+  saveAllDocuments(): void | Promise<void>;
   canSaveCurrentDocument(): boolean;
   canSaveCurrentDocumentAs(): boolean;
+  canSaveAllDocuments(): boolean;
   closeEditor(editorId?: EditorId): void | Promise<void>;
   canCloseEditor(editorId?: EditorId): boolean;
   delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
@@ -47,6 +49,8 @@ export interface EditorCommandTitles {
   openMarkdownDocumentDescription: string;
   saveDocument: string;
   saveDocumentDescription: string;
+  saveAll: string;
+  saveAllDescription: string;
   saveAs: string;
   saveAsDescription: string;
   closeEditor: string;
@@ -75,6 +79,8 @@ export function createEditorCommandTitles(
     saveDocumentDescription: translate(
       "command.editor.document.save.description"
     ),
+    saveAll: translate("command.editor.saveAll"),
+    saveAllDescription: translate("command.editor.saveAll.description"),
     saveAs: translate("command.editor.saveAs"),
     saveAsDescription: translate("command.editor.saveAs.description"),
     closeEditor: translate("command.editor.document.close"),
@@ -137,6 +143,19 @@ export function createEditorCommands(
       },
       isEnabled: () => controller.canSaveCurrentDocument(),
       when: saveDocumentCommandWhen
+    },
+    {
+      id: editorCommandIds.saveAll,
+      title: titles.saveAll,
+      description: titles.saveAllDescription,
+      execute: () => {
+        if (!controller.canSaveAllDocuments()) {
+          return;
+        }
+
+        return controller.saveAllDocuments();
+      },
+      isEnabled: () => controller.canSaveAllDocuments()
     },
     {
       id: editorCommandIds.saveAs,

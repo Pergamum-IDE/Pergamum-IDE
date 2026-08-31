@@ -18,6 +18,7 @@ import moveIconUrl from "../../assets/icons/feather/explorer/move.svg?url";
 import documentTextIconUrl from "../../assets/icons/ionicons/explorer/document-text-outline.svg?url";
 import folderOpenIconUrl from "../../assets/icons/ionicons/explorer/folder-open-outline.svg?url";
 import folderIconUrl from "../../assets/icons/ionicons/explorer/folder-outline.svg?url";
+import pencilOutlineIconUrl from "../../assets/icons/ionicons/explorer/pencil-outline.svg?url";
 import refreshIconUrl from "../../assets/icons/ionicons/explorer/refresh-outline.svg?url";
 import type {
   CreateFileExplorerEntryResult,
@@ -176,6 +177,10 @@ interface FileExplorerViewProps {
   /** #329 spike: project-relative paths currently being dragged — the source
    *  rows carry `data-file-explorer-dragging="true"`. */
   draggingRelativePaths?: ReadonlySet<string>;
+  /** #342: the shared dirty check — a `file` row for a project document with
+   *  unsaved changes shows a pencil indicator next to its name
+   *  (`data-file-explorer-dirty="true"`). Same route the #338 Move gate uses. */
+  isProjectDocumentDirty?: (relativePath: string) => boolean;
   /** #329 spike: the row the pointer is over during a drag (`""` = the
    *  project root row), plus whether a drop there is valid. Drives
    *  `data-file-explorer-drop-target="valid" | "invalid"`. */
@@ -2158,6 +2163,7 @@ export function FileExplorer({
         }
         cutRelativePaths={cutRelativePaths}
         draggingRelativePaths={draggingRelativePaths}
+        isProjectDocumentDirty={isProjectDocumentDirty}
         dropTargetPath={dropTarget?.path ?? null}
         dropTargetValid={dropTarget?.valid ?? false}
         translate={translate}
@@ -2480,6 +2486,7 @@ export function FileExplorerView({
   moveDisabledReasonLabel,
   cutRelativePaths = EMPTY_SELECTED_PATHS,
   draggingRelativePaths = EMPTY_SELECTED_PATHS,
+  isProjectDocumentDirty = () => false,
   dropTargetPath = null,
   dropTargetValid = false,
   translate,
@@ -2529,6 +2536,9 @@ export function FileExplorerView({
     const isPrimary = entry.relativePath === selectedRelativePath;
     const isCut = cutRelativePaths.has(entry.relativePath);
     const isDragging = draggingRelativePaths.has(entry.relativePath);
+    // #342: only file rows can be dirty project documents.
+    const isDirtyFile =
+      entry.kind === "file" && isProjectDocumentDirty(entry.relativePath);
     const dropState = dropTargetState(entry.relativePath);
     const isOpenable = isOpenableFileExplorerEntry(entry);
     const icon = iconForEntry(entry, expandedDirectoryPaths);
@@ -2558,6 +2568,7 @@ export function FileExplorerView({
           data-file-explorer-openable={isOpenable ? "true" : undefined}
           data-file-explorer-cut={isCut ? "true" : undefined}
           data-file-explorer-dragging={isDragging ? "true" : undefined}
+          data-file-explorer-dirty={isDirtyFile ? "true" : undefined}
           data-file-explorer-drop-target={dropState}
           draggable={entry.kind === "file" ? true : undefined}
           className={
@@ -2568,6 +2579,7 @@ export function FileExplorerView({
               isSelected ? "isSelected" : null,
               isCut ? "isCut" : null,
               isDragging ? "isDragging" : null,
+              isDirtyFile ? "isDirty" : null,
               dropState === "valid" ? "isDropTarget" : null
             ]
               .filter(Boolean)
@@ -2628,6 +2640,15 @@ export function FileExplorerView({
             data-file-explorer-icon={icon.name}
           />
           <span className="fileExplorerItemLabel">{entry.name}</span>
+          {isDirtyFile ? (
+            <img
+              className="fileExplorerDirtyIndicator"
+              src={pencilOutlineIconUrl}
+              alt={translate("explorer.unsavedChanges")}
+              title={translate("explorer.unsavedChanges")}
+              data-file-explorer-dirty-indicator="true"
+            />
+          ) : null}
         </button>
         {entry.kind === "folder" && isExpanded ? (
           <div role="group">

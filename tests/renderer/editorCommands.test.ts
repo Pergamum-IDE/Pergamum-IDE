@@ -13,6 +13,7 @@ import {
   saveAsCommandWhen,
   saveDocumentCommandWhen
 } from "../../src/renderer/editorCommands";
+import { listCommandPaletteEntries } from "../../src/renderer/commandPaletteEntries";
 import {
   createProjectDocumentEditorId,
   type EditorId
@@ -25,6 +26,8 @@ const titles = {
   saveDocument: "Save Current Document",
   saveDocumentDescription:
     "Save the current document and overwrite the existing file.",
+  saveAll: "Save All",
+  saveAllDescription: "Save all open documents.",
   saveAs: "Save current document as",
   saveAsDescription:
     "Save the current document with a different name and location.",
@@ -52,8 +55,10 @@ function registerEditorCommandSet(
     openMarkdownDocument: () => void | Promise<void>;
     saveCurrentDocument: () => void | Promise<void>;
     saveCurrentDocumentAs: () => void | Promise<void>;
+    saveAllDocuments: () => void | Promise<void>;
     canSaveCurrentDocument: () => boolean;
     canSaveCurrentDocumentAs: () => boolean;
+    canSaveAllDocuments: () => boolean;
     closeEditor: (editorId?: EditorId) => void | Promise<void>;
     canCloseEditor: (editorId?: EditorId) => boolean;
     delegateNativeEditCommand: (
@@ -70,8 +75,10 @@ function registerEditorCommandSet(
       openMarkdownDocument: () => undefined,
       saveCurrentDocument: () => undefined,
       saveCurrentDocumentAs: () => undefined,
+      saveAllDocuments: () => undefined,
       canSaveCurrentDocument: () => true,
       canSaveCurrentDocumentAs: () => true,
+      canSaveAllDocuments: () => true,
       closeEditor: () => undefined,
       canCloseEditor: () => true,
       delegateNativeEditCommand: () => undefined,
@@ -100,6 +107,7 @@ describe("editor commands", () => {
     expect(registry.list().map((command) => command.id)).toEqual([
       "editor.document.markdown.open",
       "editor.document.save",
+      "editor.saveAll",
       "editor.saveAs",
       "editor.close",
       "editor.selection.cut",
@@ -142,6 +150,56 @@ describe("editor commands", () => {
     expect(openMarkdownDocument).toHaveBeenCalledTimes(1);
     expect(saveCurrentDocument).toHaveBeenCalledTimes(1);
     expect(saveCurrentDocumentAs).toHaveBeenCalledTimes(1);
+  });
+
+  it("#342: routes editor.saveAll to the controller's saveAllDocuments", async () => {
+    const registry = new CommandRegistry();
+    const saveAllDocuments = vi.fn();
+
+    registerEditorCommandSet(registry, { saveAllDocuments });
+
+    await registry.execute(editorCommandIds.saveAll, executionOptions);
+
+    expect(saveAllDocuments).toHaveBeenCalledTimes(1);
+  });
+
+  it("#342: reports editor.saveAll enablement from canSaveAllDocuments", () => {
+    const registry = new CommandRegistry();
+    const canSaveAllDocuments = vi.fn(() => false);
+
+    registerEditorCommandSet(registry, { canSaveAllDocuments });
+
+    expect(registry.isEnabled(editorCommandIds.saveAll)).toBe(false);
+    expect(canSaveAllDocuments).toHaveBeenCalled();
+  });
+
+  it("#342: does not run Save All when nothing is dirty", async () => {
+    const registry = new CommandRegistry();
+    const saveAllDocuments = vi.fn();
+
+    registerEditorCommandSet(registry, {
+      saveAllDocuments,
+      canSaveAllDocuments: () => false
+    });
+
+    await expect(
+      registry.execute(editorCommandIds.saveAll, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
+    expect(saveAllDocuments).not.toHaveBeenCalled();
+  });
+
+  it("#342: exposes editor.saveAll in the Command Palette with its label and description", () => {
+    const registry = new CommandRegistry();
+
+    registerEditorCommandSet(registry);
+
+    const entry = listCommandPaletteEntries(registry).find(
+      (candidate) => candidate.id === editorCommandIds.saveAll
+    );
+
+    expect(entry).toBeDefined();
+    expect(entry?.title).toBe("Save All");
+    expect(entry?.description).toBe("Save all open documents.");
   });
 
   it("routes Edit commands to native edit delegation through the controller", async () => {
@@ -371,6 +429,8 @@ describe("editor commands", () => {
       saveDocument: "translated:command.editor.document.save",
       saveDocumentDescription:
         "translated:command.editor.document.save.description",
+      saveAll: "translated:command.editor.saveAll",
+      saveAllDescription: "translated:command.editor.saveAll.description",
       saveAs: "translated:command.editor.saveAs",
       saveAsDescription: "translated:command.editor.saveAs.description",
       closeEditor: "translated:command.editor.document.close",

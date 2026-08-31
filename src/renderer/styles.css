@@ -750,22 +750,34 @@ label.settingsItemHeader {
   color: #17212b;
 }
 
+/*
+ * #342: variable-width tabs. The tab is sized to its content (file name +
+ * trailing slot + padding), not forced to an equal share, and never grows or
+ * shrinks — the tab strip (`.documentTabBarTabs`) scrolls when the total is
+ * too wide. `min-width` keeps a very short name legible; `max-width` clamps a
+ * very long one and `.documentTabTitle` ellipsizes inside it. The close
+ * button lives in the fixed-size trailing slot, so it is never squeezed out.
+ *
+ * #342 polish: the top corners are rounded (bottom stays square, flush with
+ * the editor) and the horizontal padding is halved (10px -> 5px). Vertical
+ * padding is unchanged.
+ */
 .documentTab {
   display: flex;
-  width: 176px;
+  min-width: 88px;
+  max-width: 240px;
   height: 36px;
-  min-width: 0;
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   overflow: hidden;
   border: 0;
   border-right: 1px solid #d3dae2;
-  border-radius: 0;
+  border-radius: 10px 10px 0 0;
   background: transparent;
   color: #52616f;
   font-size: 13px;
-  padding: 0 10px;
+  padding: 0 5px;
   text-align: left;
   cursor: pointer;
 }
@@ -778,6 +790,12 @@ label.settingsItemHeader {
 .documentTab.isActive:hover {
   background: #ffffff;
   color: #17212b;
+}
+
+/* #342: the active tab's label is bold (visual weight only — `aria-selected`
+ * and the `isActive` class remain the semantic markers). */
+.documentTab.isActive .documentTabTitle {
+  font-weight: 700;
 }
 
 .documentTabExternalIcon {
@@ -831,22 +849,6 @@ label.settingsItemHeader {
 }
 
 .documentTabCloseButton svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
-.documentTabDirtyIndicator {
-  display: flex;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  color: #946200;
-}
-
-.documentTabDirtyIndicator svg {
   width: 14px;
   height: 14px;
   display: block;
@@ -1536,6 +1538,20 @@ label.settingsItemHeader {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * #342: unsaved-changes pencil for an open dirty project document. Sits
+ * directly after the (possibly ellipsized) file name — `chapter-01.md ✎` —
+ * at content size so it never pushes the label. Inherits the row's text
+ * colour so it stays legible on the active / selected row.
+ */
+.fileExplorerDirtyIndicator {
+  inline-size: 12px;
+  block-size: 12px;
+  flex: 0 0 auto;
+  pointer-events: none;
+  opacity: 0.75;
 }
 
 /* #328: pending Cut sources are shown muted while still visible. */
