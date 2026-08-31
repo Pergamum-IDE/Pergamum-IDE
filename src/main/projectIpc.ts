@@ -37,12 +37,16 @@ import {
   type ProjectOpenResult,
   type ReadProjectDocumentRequest,
   type RecordRecentProjectInput,
+  type MoveFileExplorerEntriesRequest,
+  type MoveFileExplorerEntriesResult,
   type RenameFileExplorerEntryRequest,
   type RenameFileExplorerEntryResult,
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult,
   type StartupProjectOpenResult
 } from "../shared/api";
+import { moveEntries } from "./projectMoveExecution";
+import type { RecoveryPathRekeyResult } from "../shared/projectMove";
 import {
   applyMarkdownFileExtension,
   fileExplorerCreateFailureReasonFromErrorCode,
@@ -1898,7 +1902,7 @@ async function resolveFileExplorerRenameTarget(
  */
 export type RecoveryPathRekeyHook = (
   pairs: readonly { oldAbsolutePath: string; newAbsolutePath: string }[]
-) => void;
+) => RecoveryPathRekeyResult;
 
 let recoveryPathRekeyHook: RecoveryPathRekeyHook | null = null;
 
@@ -1959,6 +1963,93 @@ async function renameFileExplorerEntry(
     },
     parentDirectoryRelativePath: target.parentDirectoryRelativePath
   };
+}
+
+// -------------------------------------------------------------------------
+// #327: File Explorer context-menu Move — the first user-facing route into
+// the #324/#325/#326 Move backend. `projectRootPath` is taken from the open
+// project, never the renderer. `validateMoveEntries` (inside `moveEntries`)
+// stays the authoritative gate; the `noProject` / `readOnlyProject`
+// pre-checks here only avoid pointless work. The #320 Recovery re-key hook
+// wired for rename is reused for the moved path pairs (best effort — its
+// result never changes the Move outcome).
+// -------------------------------------------------------------------------
+
+function parseMoveFileExplorerEntriesRequest(
+  value: unknown
+): MoveFileExplorerEntriesRequest {
+  if (
+    !isRequestObject(value) ||
+    !Array.isArray(value.sourceRelativePaths) ||
+    !value.sourceRelativePaths.every((entry) => typeof entry === "string") ||
+    typeof value.destinationFolderRelativePath !== "string" ||
+    !Array.isArray(value.dirtyProjectDocumentRelativePaths) ||
+    !value.dirtyProjectDocumentRelativePaths.every(
+      (entry) => typeof entry === "string"
+    )
+  ) {
+    throw new Error("Invalid File Explorer move request.");
+  }
+
+  return {
+    sourceRelativePaths: value.sourceRelativePaths as string[],
+    destinationFolderRelativePath: value.destinationFolderRelativePath,
+    dirtyProjectDocumentRelativePaths:
+      value.dirtyProjectDocumentRelativePaths as string[]
+  };
+}
+
+async function moveFileExplorerEntries(
+  rawRequest: unknown
+): Promise<MoveFileExplorerEntriesResult> {
+  let request: MoveFileExplorerEntriesRequest;
+
+  try {
+    request = parseMoveFileExplorerEntriesRequest(rawRequest);
+  } catch {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  if (!currentProjectState) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { kind: "unavailable", reason: "readOnlyProject" };
+  }
+
+  const projectState = currentProjectState;
+  const rekeyHook = recoveryPathRekeyHook;
+
+  const result = await moveEntries(
+    {
+      projectRootPath: projectState.rootPath,
+      sourceRelativePaths: request.sourceRelativePaths,
+      destinationFolderRelativePath: request.destinationFolderRelativePath,
+      dirtyProjectDocumentRelativePaths:
+        request.dirtyProjectDocumentRelativePaths
+    },
+    rekeyHook ? { rekeyRecoveryPaths: (pairs) => rekeyHook(pairs) } : {}
+  );
+
+  // Keep the in-memory project document set in step with the files that
+  // actually moved (same bookkeeping the rename handler does). Only a source
+  // that was already a registered project document gets its destination
+  // registered — a non-registered file (e.g. an unsupported extension) is
+  // just removed from any stale entry, never added.
+  for (const entry of result.results) {
+    if (entry.status !== "moved") {
+      continue;
+    }
+    const wasProjectDocument = projectState.documentRelativePaths.delete(
+      entry.sourceRelativePath
+    );
+    if (wasProjectDocument) {
+      projectState.documentRelativePaths.add(entry.destinationRelativePath);
+    }
+  }
+
+  return { kind: "completed", result };
 }
 
 function resolveProjectDocumentPath(relativePath: string): string {
@@ -3157,6 +3248,15 @@ export function registerProjectIpc(
       rawRequest: unknown
     ): Promise<RenameFileExplorerEntryResult> =>
       renameFileExplorerEntry(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.moveFileExplorerEntries,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<MoveFileExplorerEntriesResult> =>
+      moveFileExplorerEntries(rawRequest)
   );
 
   ipcMain.handle(

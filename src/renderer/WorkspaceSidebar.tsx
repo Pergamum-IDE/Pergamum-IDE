@@ -30,6 +30,11 @@ interface WorkspaceSidebarProps {
     newEntry: FileExplorerEntry
   ) => void;
   onFileExplorerRenameUnavailable?: (message: string) => void;
+  /** #327: project-relative paths of open dirty / open documents, and a
+   *  status-line sink for the context-menu Move route. */
+  fileExplorerDirtyProjectDocumentRelativePaths?: readonly string[];
+  fileExplorerOpenProjectDocumentRelativePaths?: readonly string[];
+  onFileExplorerMoveResultMessage?: (message: string) => void;
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
   onCreateGlossaryEntry: (
     input: CreateGlossaryEntryInput
@@ -51,6 +56,9 @@ export function WorkspaceSidebar({
   isFileExplorerProjectDocumentDirty,
   onFileExplorerProjectDocumentRenamed,
   onFileExplorerRenameUnavailable,
+  fileExplorerDirtyProjectDocumentRelativePaths,
+  fileExplorerOpenProjectDocumentRelativePaths,
+  onFileExplorerMoveResultMessage,
   onActivateGlossaryEntry,
   onCreateGlossaryEntry
 }: WorkspaceSidebarProps): JSX.Element {
@@ -76,6 +84,13 @@ export function WorkspaceSidebar({
           isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
           onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
           onRenameUnavailable={onFileExplorerRenameUnavailable}
+          dirtyProjectDocumentRelativePaths={
+            fileExplorerDirtyProjectDocumentRelativePaths
+          }
+          openProjectDocumentRelativePaths={
+            fileExplorerOpenProjectDocumentRelativePaths
+          }
+          onMoveResultMessage={onFileExplorerMoveResultMessage}
           onActivateDocument={onActivateProjectDocument}
         />
       );
