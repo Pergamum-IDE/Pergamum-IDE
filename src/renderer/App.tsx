@@ -371,6 +371,7 @@ import {
 } from "./fileExplorerCommands";
 import type {
   FileExplorerCreateEntryRequest,
+  FileExplorerRefreshDirectoriesRequest,
   FileExplorerRenameEntryRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
@@ -746,6 +747,14 @@ export function App(): JSX.Element {
   const fileExplorerRenameRequestSeqRef = useRef(0);
   const [fileExplorerRenameEntryRequest, setFileExplorerRenameEntryRequest] =
     useState<FileExplorerRenameEntryRequest | null>(null);
+  // #344: after a Recovery restore writes `.recovered.md` files straight to
+  // disk, ask the File Explorer to re-list the directories they landed in so
+  // its cached listing is not left stale.
+  const fileExplorerRefreshDirectoriesRequestSeqRef = useRef(0);
+  const [
+    fileExplorerRefreshDirectoriesRequest,
+    setFileExplorerRefreshDirectoriesRequest
+  ] = useState<FileExplorerRefreshDirectoriesRequest | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<GlossaryOccurrenceRange | null>(null);
   /**
@@ -2953,6 +2962,32 @@ export function App(): JSX.Element {
         // The recovered files are already on disk — a finalize failure just
         // leaves the rows, which is safe.
       }
+    }
+
+    // #344: the restore wrote each `.recovered.md` straight to disk, bypassing
+    // the File Explorer's own create flow, so its cached listing for those
+    // directories is now stale. Ask it to re-list every directory a restored
+    // project file landed in (`null` = project root) so the tree — and the
+    // #309 active-document reveal — shows the new file without needing a
+    // manual reload.
+    const restoredDirectoryRelativePaths = new Set<string | null>();
+    for (const written of restore.results) {
+      if (written.status !== "written" || !written.projectRelativePath) {
+        continue;
+      }
+      const slashIndex = written.projectRelativePath.lastIndexOf("/");
+      restoredDirectoryRelativePaths.add(
+        slashIndex === -1
+          ? null
+          : written.projectRelativePath.slice(0, slashIndex)
+      );
+    }
+    if (restoredDirectoryRelativePaths.size > 0) {
+      fileExplorerRefreshDirectoriesRequestSeqRef.current += 1;
+      setFileExplorerRefreshDirectoriesRequest({
+        directoryRelativePaths: [...restoredDirectoryRelativePaths],
+        token: fileExplorerRefreshDirectoriesRequestSeqRef.current
+      });
     }
 
     await refreshRecoveryCandidateDialog();
@@ -6235,6 +6270,9 @@ export function App(): JSX.Element {
                       fileExplorerRenameEntryRequest={
                         fileExplorerRenameEntryRequest
                       }
+                      fileExplorerRefreshDirectoriesRequest={
+                        fileExplorerRefreshDirectoriesRequest
+                      }
                       translate={translate}
                       onActivateProjectDocument={(relativePath) => {
                         void activateProjectDocument(relativePath);
@@ -6244,6 +6282,9 @@ export function App(): JSX.Element {
                       }}
                       onFileExplorerRenameEntryRequestHandled={() => {
                         setFileExplorerRenameEntryRequest(null);
+                      }}
+                      onFileExplorerRefreshDirectoriesRequestHandled={() => {
+                        setFileExplorerRefreshDirectoriesRequest(null);
                       }}
                       isFileExplorerProjectDocumentDirty={
                         isFileExplorerProjectDocumentDirty
