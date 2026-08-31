@@ -3736,6 +3736,56 @@ describe("project file IPC foundation", () => {
     expect(document.content).toBe("# RENAMED_MANUSCRIPT_MARKER\n");
   });
 
+  it("#327: only registers the destination for a source that was already a project document", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter-01.md"),
+      "# C1\n",
+      "utf8"
+    );
+    await fs.writeFile(path.join(projectRootPath, "data.txt"), "raw\n", "utf8");
+    await fs.mkdir(path.join(projectRootPath, "Sub"));
+    await openExplorerProject("Move Registry");
+
+    const moveHandler = registeredHandler(
+      PROJECT_CHANNELS.moveFileExplorerEntries
+    );
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+
+    // A root Markdown file discovered on open is a registered project document.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "chapter-01.md" })
+    ).resolves.toMatchObject({ content: "# C1\n" });
+
+    const moveResult = (await moveHandler(
+      { sender: {} },
+      {
+        sourceRelativePaths: ["chapter-01.md", "data.txt"],
+        destinationFolderRelativePath: "Sub",
+        dirtyProjectDocumentRelativePaths: []
+      }
+    )) as {
+      kind: string;
+      result: { ok: boolean };
+    };
+
+    expect(moveResult.kind).toBe("completed");
+    expect(moveResult.result.ok).toBe(true);
+    await expect(
+      fs.readFile(path.join(projectRootPath, "Sub", "data.txt"), "utf8")
+    ).resolves.toBe("raw\n");
+
+    // Registered source → destination is now a project document.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "Sub/chapter-01.md" })
+    ).resolves.toMatchObject({ content: "# C1\n" });
+
+    // Non-registered source (`data.txt` was never a project document) → the
+    // destination is NOT added to the project document registry.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "Sub/data.txt" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+  });
+
   function renameHandlerWithRekey(
     rekey: RecoveryPathRekeyHook
   ): (...args: unknown[]) => unknown {

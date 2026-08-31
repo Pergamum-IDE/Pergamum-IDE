@@ -15,6 +15,7 @@ import type {
   RendererDebugLogRequest,
   SanitizedDebugLogEvent
 } from "./debugLog";
+import type { MoveEntriesResult } from "./projectMove";
 import type {
   EditContextMenuCommandSelection,
   EditContextMenuPopupRequest,
@@ -154,6 +155,8 @@ export const PROJECT_CHANNELS = {
   createFileExplorerFolder: "projects:createFileExplorerFolder",
   /** #313: rename one File Explorer file or empty folder under the project. */
   renameFileExplorerEntry: "projects:renameFileExplorerEntry",
+  /** #327: move one or more File Explorer files into an existing folder. */
+  moveFileExplorerEntries: "projects:moveFileExplorerEntries",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -399,6 +402,31 @@ export type RenameFileExplorerEntryResult =
   | {
       readonly ok: false;
       readonly reason: FileExplorerRenameFailureReason;
+    };
+
+/**
+ * #327: renderer → main request to move File Explorer files. `projectRootPath`
+ * is filled main-side from the open project (never trusted from the
+ * renderer); the renderer supplies only the selection, destination folder
+ * (`""` = project root), and the current dirty project-document paths.
+ */
+export interface MoveFileExplorerEntriesRequest {
+  readonly sourceRelativePaths: readonly string[];
+  readonly destinationFolderRelativePath: string;
+  readonly dirtyProjectDocumentRelativePaths: readonly string[];
+}
+
+/**
+ * #327: `kind: "completed"` carries the #325/#326 `MoveEntriesResult`
+ * verbatim (validation + `fs.rename` outcome + best-effort Recovery re-key
+ * diagnostics). `kind: "unavailable"` is a main-side gate before any
+ * validation / filesystem work.
+ */
+export type MoveFileExplorerEntriesResult =
+  | { readonly kind: "completed"; readonly result: MoveEntriesResult }
+  | {
+      readonly kind: "unavailable";
+      readonly reason: "noProject" | "readOnlyProject";
     };
 
 export type FileExplorerUnavailableReason =
@@ -650,6 +678,9 @@ export interface PergamumApi {
       sourceRelativePath: string,
       newName: string
     ) => Promise<RenameFileExplorerEntryResult>;
+    moveFileExplorerEntries: (
+      request: MoveFileExplorerEntriesRequest
+    ) => Promise<MoveFileExplorerEntriesResult>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

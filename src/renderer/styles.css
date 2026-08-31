@@ -1538,6 +1538,85 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
+/* #327: File Explorer item context menu (Move…). */
+.fileExplorerContextMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.fileExplorerContextMenu {
+  position: fixed;
+  top: var(--file-explorer-context-menu-y, 0);
+  left: var(--file-explorer-context-menu-x, 0);
+  min-width: 160px;
+  padding: 4px;
+  border: 1px solid var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
+  border-radius: 6px;
+  background: var(--app-surface, #fff);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.fileExplorerContextMenuItem {
+  display: block;
+  inline-size: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.fileExplorerContextMenuItem:hover:not(:disabled),
+.fileExplorerContextMenuItem:focus-visible {
+  background: var(--workspace-sidebar-hover);
+}
+
+.fileExplorerContextMenuItem:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.moveDestinationDialogDescription {
+  margin: 0 0 12px;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.moveDestinationDialogList {
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
+  border-radius: 6px;
+}
+
+.moveDestinationDialogOption {
+  display: block;
+  inline-size: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.moveDestinationDialogOption:hover,
+.moveDestinationDialogOption:focus-visible {
+  background: var(--workspace-sidebar-hover);
+}
+
+.moveDestinationDialogOption.isSelected {
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
+}
+
 .fileExplorerInlineStatus {
   min-height: 26px;
   overflow: hidden;

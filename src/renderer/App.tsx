@@ -95,6 +95,7 @@ import {
   createFileDocument,
   createProjectDocument,
   currentDocumentContent,
+  currentProjectRelativePath,
   displayName,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
@@ -1545,6 +1546,33 @@ export function App(): JSX.Element {
   const renameActiveEditorTargetName = renameActiveEditorTargetRelativePath
     ? displayName(renameActiveEditorTargetRelativePath)
     : null;
+  // #327: project-relative paths of open project documents, split by dirty
+  // state, for the File Explorer context-menu Move route. `dirty` is passed
+  // to the Move backend (authoritative validation); `open` disables Move in
+  // the File Explorer UI (clean-open editor identity update after a Move is a
+  // deferred follow-up).
+  const fileExplorerOpenProjectDocumentPaths = useMemo(() => {
+    const open: string[] = [];
+    const dirty: string[] = [];
+
+    for (const openDocument of openDocumentsState.documents) {
+      const markdownDocument = markdownDocumentForEditor(openDocument.editor);
+      const relativePath = markdownDocument
+        ? currentProjectRelativePath(markdownDocument)
+        : null;
+
+      if (relativePath === null) {
+        continue;
+      }
+
+      open.push(relativePath);
+      if (isCurrentEditorDirty(openDocument.editor)) {
+        dirty.push(relativePath);
+      }
+    }
+
+    return { open, dirty };
+  }, [openDocumentsState]);
   const isReadOnlyProjectOwnedEditor =
     isReadOnlyProject && isProjectOwnedCurrentEditor;
   const isSavingGlossaryEntry =
@@ -6076,6 +6104,18 @@ export function App(): JSX.Element {
                       onFileExplorerRenameUnavailable={
                         handleFileExplorerRenameUnavailable
                       }
+                      fileExplorerDirtyProjectDocumentRelativePaths={
+                        fileExplorerOpenProjectDocumentPaths.dirty
+                      }
+                      fileExplorerOpenProjectDocumentRelativePaths={
+                        fileExplorerOpenProjectDocumentPaths.open
+                      }
+                      onFileExplorerMoveResultMessage={(message) => {
+                        setStatus({
+                          key: "status.fileExplorerMoveResult",
+                          values: { message }
+                        });
+                      }}
                       onActivateGlossaryEntry={(entryId) => {
                         executeUiCommand(
                           glossaryCommandIds.openEntry,

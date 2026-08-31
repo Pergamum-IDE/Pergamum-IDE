@@ -19,6 +19,13 @@
 import type { RecoveryPathRekeyResult } from "./recoveryDocument";
 
 /**
+ * Re-exported so main modules on the project-DB / IPC path (which a
+ * separation guard keeps free of any `recoveryDocument` reference) can name
+ * the Recovery re-key result type without importing that module directly.
+ */
+export type { RecoveryPathRekeyResult } from "./recoveryDocument";
+
+/**
  * Stable internal reason values. No user-facing prose — a follow-up UI issue
  * maps these to i18n keys.
  */

@@ -7,11 +7,13 @@ import {
 } from "react";
 import type {
   CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent
 } from "react";
 import pergamumProjectIconUrl from "../../assets/icons/file-associations/pergamum/pergamum-scroll-file-icon.svg?url";
 import filePlusIconUrl from "../../assets/icons/feather/explorer/file-plus.svg?url";
 import folderPlusIconUrl from "../../assets/icons/feather/explorer/folder-plus.svg?url";
+import moveIconUrl from "../../assets/icons/feather/explorer/move.svg?url";
 import documentTextIconUrl from "../../assets/icons/ionicons/explorer/document-text-outline.svg?url";
 import folderOpenIconUrl from "../../assets/icons/ionicons/explorer/folder-open-outline.svg?url";
 import folderIconUrl from "../../assets/icons/ionicons/explorer/folder-outline.svg?url";
@@ -28,7 +30,7 @@ import {
   isFileExplorerRenameValidationReason,
   type FileExplorerRenameKind
 } from "../shared/fileExplorerRename";
-import type { Translate } from "../shared/i18n";
+import type { Translate, TranslationKey } from "../shared/i18n";
 import {
   navigatorClipboardAdapter,
   type ClipboardAdapter
@@ -37,6 +39,11 @@ import {
   NameInputDialog,
   type NameInputDialogSubmitResult
 } from "./dialog/NameInputDialog";
+import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
+import {
+  collectFileExplorerMoveDestinationFolders,
+  resolveFileExplorerMoveSources
+} from "./fileExplorerMoveDestinations";
 import {
   createFileExplorerNameValidator,
   fileExplorerCreateFailureMessageKey,
@@ -108,6 +115,15 @@ interface FileExplorerProps {
     newEntry: FileExplorerEntry
   ) => void;
   onRenameUnavailable?: (message: string) => void;
+  /** #327: project-relative paths of documents open with unsaved changes.
+   *  Passed to the Move backend as `dirtyProjectDocumentRelativePaths`. */
+  dirtyProjectDocumentRelativePaths?: readonly string[];
+  /** #327: project-relative paths of documents currently open in an editor.
+   *  Move is disabled in the UI for these — clean-open editor identity
+   *  update after a Move is a deferred follow-up. */
+  openProjectDocumentRelativePaths?: readonly string[];
+  /** #327: a short, already-localized status line for a Move attempt. */
+  onMoveResultMessage?: (message: string) => void;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -128,6 +144,12 @@ interface FileExplorerViewProps {
   visibleOrder?: readonly string[];
   highlightedRelativePath: string | null;
   canCreate: boolean;
+  /** #327: whether the current multi-selection can be moved (same rule as the
+   *  context-menu `Move…`). */
+  canMove?: boolean;
+  /** #327: localized reason the move is unavailable — shown as the toolbar
+   *  button's `title` when disabled. */
+  moveDisabledReasonLabel?: string;
   translate: Translate;
   /** #311: attached to the active project document entry once it is
    *  rendered, so the container can scroll it into view. */
@@ -142,6 +164,9 @@ interface FileExplorerViewProps {
   onReload: () => void;
   onNewFile: () => void;
   onNewFolder: () => void;
+  /** #327: the primary Move route — opens the destination picker for the
+   *  current selection. */
+  onMove?: () => void;
   onToggleDirectory: (relativePath: string) => void;
   onSelectRoot: () => void;
   /** Plain click / Space / plain Arrow — replace the selection with this
@@ -158,6 +183,15 @@ interface FileExplorerViewProps {
     entry: FileExplorerEntry
   ) => void;
   onRootKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void;
+  /**
+   * #327: right-click inside the File Explorer tree. `entry` is the row that
+   * was clicked, or `null` for the project root row / the empty list area
+   * (both open the Move menu without changing the selection).
+   */
+  onEntryContextMenu?: (
+    event: ReactMouseEvent<HTMLElement>,
+    entry: FileExplorerEntry | null
+  ) => void;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -489,6 +523,9 @@ export function FileExplorer({
   isProjectDocumentDirty = () => false,
   onProjectDocumentRenamed,
   onRenameUnavailable,
+  dirtyProjectDocumentRelativePaths = EMPTY_STRING_LIST,
+  openProjectDocumentRelativePaths = EMPTY_STRING_LIST,
+  onMoveResultMessage,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
   const [entriesByDirectoryPath, setEntriesByDirectoryPath] = useState<
@@ -514,6 +551,14 @@ export function FileExplorer({
   // and is kept in sync as one member of this set.
   const [multiSelection, setMultiSelection] =
     useState<FileExplorerSelectionState>(createEmptyFileExplorerSelection);
+  // #327: File Explorer item context menu (a single `Move…` command) and the
+  // destination-folder picker it opens.
+  const [contextMenu, setContextMenu] = useState<{
+    readonly x: number;
+    readonly y: number;
+  } | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [moveInFlight, setMoveInFlight] = useState(false);
   const loadGenerationRef = useRef(0);
   // #311: the DOM node of the active project document entry (once #309 has
   // revealed it) and the last path we scrolled to, so the scroll fires once
@@ -1365,6 +1410,220 @@ export function FileExplorer({
     ]
   );
 
+  // ---------------------------------------------------------------------------
+  // #327: context-menu Move route.
+  // ---------------------------------------------------------------------------
+  const moveSources = useMemo(
+    () =>
+      resolveFileExplorerMoveSources(
+        multiSelection.selected,
+        entriesByDirectoryPath
+      ),
+    [multiSelection.selected, entriesByDirectoryPath]
+  );
+  const selectionHasOpenDocument = useMemo(() => {
+    const openSet = new Set(openProjectDocumentRelativePaths);
+    return [...multiSelection.selected].some((path) => openSet.has(path));
+  }, [multiSelection.selected, openProjectDocumentRelativePaths]);
+  // UI enablement is a convenience — the backend validation is authoritative.
+  const canMoveSelection =
+    hasProject &&
+    !readOnly &&
+    !moveInFlight &&
+    moveSources.canMove &&
+    !selectionHasOpenDocument;
+  // #327 blocker: a single, most-explanatory reason `Move…` is disabled, shown
+  // via the menu item's `title`. `null` ⟺ `canMoveSelection`.
+  const moveDisabledReason: MoveDisabledReason | null = moveInFlight
+    ? "move-in-progress"
+    : !hasProject
+      ? "no-project"
+      : readOnly
+        ? "read-only-project"
+        : moveSources.hasFolder
+          ? "contains-folder"
+          : moveSources.relativePaths.length === 0
+            ? "empty-selection"
+            : selectionHasOpenDocument
+              ? "contains-open-document"
+              : null;
+  const moveDestinationFolders = useMemo(
+    () => collectFileExplorerMoveDestinationFolders(entriesByDirectoryPath),
+    [entriesByDirectoryPath]
+  );
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const handleEntryContextMenu = useCallback(
+    (
+      event: ReactMouseEvent<HTMLElement>,
+      entry: FileExplorerEntry | null
+    ) => {
+      // Always suppress the OS menu inside the File Explorer tree.
+      event.preventDefault();
+
+      if (entry !== null) {
+        // Right-click on a selected entry keeps the multi-selection;
+        // right-click on a non-selected entry replaces it with that entry.
+        setMultiSelection((current) =>
+          current.selected.has(entry.relativePath)
+            ? current
+            : replaceFileExplorerSelection(current, entry.relativePath)
+        );
+        setSelection({ kind: "entry", relativePath: entry.relativePath });
+      }
+      // For the project root row / empty list area (`entry === null`) the
+      // selection is left untouched — the menu still opens so `Move…` (and
+      // its disabled reason) stays discoverable.
+
+      setContextMenu({ x: event.clientX, y: event.clientY });
+    },
+    []
+  );
+
+  const performMove = useCallback(
+    async (destinationFolderRelativePath: string) => {
+      const sources = resolveFileExplorerMoveSources(
+        multiSelection.selected,
+        entriesByDirectoryPath
+      );
+
+      // #327: re-assert every gate at execution time — the selection or its
+      // open-document state can change while the destination picker is open.
+      // (Clean-open editor identity update is deferred, so open project
+      // documents stay blocked here, not just in the disabled UI.)
+      if (
+        !hasProject ||
+        readOnly ||
+        moveInFlight ||
+        !sources.canMove ||
+        selectionHasOpenDocument
+      ) {
+        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      setMoveInFlight(true);
+      let response: Awaited<
+        ReturnType<typeof window.pergamum.projects.moveFileExplorerEntries>
+      >;
+
+      try {
+        response = await window.pergamum.projects.moveFileExplorerEntries({
+          sourceRelativePaths: sources.relativePaths,
+          destinationFolderRelativePath,
+          dirtyProjectDocumentRelativePaths: [
+            ...dirtyProjectDocumentRelativePaths
+          ]
+        });
+      } catch {
+        setMoveInFlight(false);
+        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      setMoveInFlight(false);
+
+      if (response.kind === "unavailable") {
+        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      const { result } = response;
+      const destinationLabel =
+        destinationFolderRelativePath === ""
+          ? translate("explorer.move.destination.projectRoot")
+          : destinationFolderRelativePath;
+
+      if (!result.ok && result.validation.ok === false) {
+        // Validation failure: nothing changed on disk — do not refresh as a
+        // success, just report minimally.
+        const firstReason =
+          result.validation.errors[0]?.reason ?? "invalid-path";
+        onMoveResultMessage?.(
+          translate("explorer.move.status.validationFailed", {
+            reason: firstReason
+          })
+        );
+        return;
+      }
+
+      // Validation passed → the filesystem may have changed. Refresh the tree
+      // and both the (previous) source parents and the destination folder.
+      const movedTargets = result.results
+        .filter((entry) => entry.status === "moved")
+        .map((entry) => entry.destinationRelativePath);
+      const movedFailedCount = result.results.filter(
+        (entry) => entry.status === "failed"
+      ).length;
+      const generation = loadGenerationRef.current + 1;
+      loadGenerationRef.current = generation;
+
+      const reloadDirectories = new Set<string | null>([
+        destinationFolderRelativePath === ""
+          ? null
+          : destinationFolderRelativePath
+      ]);
+      for (const entry of result.results) {
+        reloadDirectories.add(
+          parentDirectoryRelativePath(entry.sourceRelativePath)
+        );
+      }
+      for (const directory of reloadDirectories) {
+        void loadDirectoryForGeneration(directory, generation);
+      }
+
+      // Never leave the selection pointing at old source paths.
+      if (movedTargets.length > 0) {
+        setMultiSelection({
+          selected: new Set(movedTargets),
+          anchor: movedTargets[movedTargets.length - 1] ?? null
+        });
+        setSelection({
+          kind: "entry",
+          relativePath: movedTargets[movedTargets.length - 1]
+        });
+      } else {
+        setMultiSelection(createEmptyFileExplorerSelection());
+        setSelection(null);
+      }
+
+      if (result.ok) {
+        onMoveResultMessage?.(
+          translate("explorer.move.status.succeeded", {
+            count: movedTargets.length,
+            destination: destinationLabel
+          })
+        );
+      } else if (movedTargets.length === 0) {
+        onMoveResultMessage?.(
+          translate("explorer.move.status.allFailed", {
+            failed: movedFailedCount
+          })
+        );
+      } else {
+        onMoveResultMessage?.(
+          translate("explorer.move.status.partiallyFailed", {
+            moved: movedTargets.length,
+            failed: movedFailedCount
+          })
+        );
+      }
+    },
+    [
+      dirtyProjectDocumentRelativePaths,
+      entriesByDirectoryPath,
+      hasProject,
+      loadDirectoryForGeneration,
+      moveInFlight,
+      multiSelection.selected,
+      onMoveResultMessage,
+      readOnly,
+      selectionHasOpenDocument,
+      translate
+    ]
+  );
+
   return (
     <>
       <FileExplorerView
@@ -1380,6 +1639,12 @@ export function FileExplorer({
         visibleOrder={visibleOrder}
         highlightedRelativePath={project ? highlightedRelativePath : null}
         canCreate={canCreate}
+        canMove={canMoveSelection}
+        moveDisabledReasonLabel={
+          moveDisabledReason
+            ? translate(MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason])
+            : undefined
+        }
         translate={translate}
         activeDocumentEntryRef={setActiveDocumentEntryElement}
         registerRowElement={registerRowElement}
@@ -1387,6 +1652,7 @@ export function FileExplorer({
         onReload={reloadCurrentExplorerContext}
         onNewFile={() => openCreateDialog("file")}
         onNewFolder={() => openCreateDialog("folder")}
+        onMove={() => setMoveDialogOpen(true)}
         onToggleDirectory={toggleDirectory}
         onSelectRoot={selectRoot}
         onSelectEntry={selectSingleEntry}
@@ -1394,8 +1660,72 @@ export function FileExplorer({
         onExtendEntrySelection={extendEntrySelection}
         onEntryKeyDown={handleTreeEntryKeyDown}
         onRootKeyDown={handleRootKeyDown}
+        onEntryContextMenu={handleEntryContextMenu}
         onActivateDocument={onActivateDocument}
       />
+      {contextMenu !== null ? (
+        <div
+          className="fileExplorerContextMenuBackdrop"
+          onClick={closeContextMenu}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            closeContextMenu();
+          }}
+        >
+          <div
+            className="fileExplorerContextMenu"
+            role="menu"
+            aria-label={translate("explorer.contextMenu.move")}
+            style={
+              {
+                "--file-explorer-context-menu-x": `${contextMenu.x}px`,
+                "--file-explorer-context-menu-y": `${contextMenu.y}px`
+              } as CSSProperties
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="move"
+              data-file-explorer-move-disabled-reason={
+                moveDisabledReason ?? undefined
+              }
+              disabled={!canMoveSelection}
+              aria-disabled={!canMoveSelection}
+              title={
+                moveDisabledReason
+                  ? translate(
+                      MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
+                    )
+                  : undefined
+              }
+              onClick={() => {
+                closeContextMenu();
+                if (canMoveSelection) {
+                  setMoveDialogOpen(true);
+                }
+              }}
+            >
+              {translate("explorer.contextMenu.move")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {moveDialogOpen ? (
+        <MoveDestinationDialog
+          folderRelativePaths={moveDestinationFolders}
+          sourceCount={moveSources.relativePaths.length}
+          translate={translate}
+          opener={null}
+          onCancel={() => setMoveDialogOpen(false)}
+          onConfirm={(destinationFolderRelativePath) => {
+            setMoveDialogOpen(false);
+            void performMove(destinationFolderRelativePath);
+          }}
+        />
+      ) : null}
       {createDialogKind !== null ? (
         <NameInputDialog
           key={createDialogKind}
@@ -1495,6 +1825,31 @@ export function FileExplorer({
 
 const EMPTY_SELECTED_PATHS: ReadonlySet<string> = new Set();
 const EMPTY_VISIBLE_ORDER: readonly string[] = [];
+const EMPTY_STRING_LIST: readonly string[] = [];
+
+/**
+ * #327 blocker: why the context-menu `Move…` is disabled. Exactly one is
+ * chosen (most-explanatory first); `null` means the move is allowed.
+ */
+type MoveDisabledReason =
+  | "move-in-progress"
+  | "no-project"
+  | "read-only-project"
+  | "empty-selection"
+  | "contains-folder"
+  | "contains-open-document";
+
+const MOVE_DISABLED_REASON_MESSAGE_KEY: Record<
+  MoveDisabledReason,
+  TranslationKey
+> = {
+  "move-in-progress": "explorer.move.disabled.moveInProgress",
+  "no-project": "explorer.move.disabled.noProject",
+  "read-only-project": "explorer.move.disabled.readOnlyProject",
+  "empty-selection": "explorer.move.disabled.emptySelection",
+  "contains-folder": "explorer.move.disabled.containsFolder",
+  "contains-open-document": "explorer.move.disabled.containsOpenDocument"
+};
 
 export function FileExplorerView({
   projectName,
@@ -1509,6 +1864,8 @@ export function FileExplorerView({
   visibleOrder = EMPTY_VISIBLE_ORDER,
   highlightedRelativePath,
   canCreate,
+  canMove = false,
+  moveDisabledReasonLabel,
   translate,
   activeDocumentEntryRef,
   registerRowElement,
@@ -1516,6 +1873,7 @@ export function FileExplorerView({
   onReload,
   onNewFile,
   onNewFolder,
+  onMove,
   onToggleDirectory,
   onSelectRoot,
   onSelectEntry,
@@ -1523,6 +1881,7 @@ export function FileExplorerView({
   onExtendEntrySelection,
   onEntryKeyDown,
   onRootKeyDown,
+  onEntryContextMenu,
   onActivateDocument
 }: FileExplorerViewProps): JSX.Element {
   // #323: roving tabindex — exactly one row in the tree is tabbable. The
@@ -1583,6 +1942,12 @@ export function FileExplorerView({
             } as CSSProperties
           }
           onKeyDown={(event) => onEntryKeyDown?.(event, entry)}
+          onContextMenu={(event) => {
+            // Stop the list-container handler below from also firing for a
+            // row right-click.
+            event.stopPropagation();
+            onEntryContextMenu?.(event, entry);
+          }}
           onClick={(event) => {
             const extendRange = event?.shiftKey ?? false;
             const toggle =
@@ -1714,6 +2079,28 @@ export function FileExplorerView({
               className="fileExplorerToolbarIcon"
             />
           </button>
+          <button
+            type="button"
+            className="fileExplorerToolbarButton"
+            data-file-explorer-toolbar-command="move"
+            title={
+              canMove
+                ? translate("explorer.contextMenu.move")
+                : (moveDisabledReasonLabel ??
+                  translate("explorer.contextMenu.move"))
+            }
+            aria-label={translate("explorer.contextMenu.move")}
+            disabled={!canMove}
+            aria-disabled={!canMove}
+            onClick={() => onMove?.()}
+          >
+            <img
+              src={moveIconUrl}
+              alt=""
+              aria-hidden="true"
+              className="fileExplorerToolbarIcon"
+            />
+          </button>
         </div>
       </div>
       {!projectName ? (
@@ -1724,10 +2111,15 @@ export function FileExplorerView({
           role="tree"
           aria-multiselectable="true"
           aria-label={translate("explorer.fileTree")}
+          onContextMenu={(event) => onEntryContextMenu?.(event, null)}
         >
           <button
             type="button"
             ref={(element) => registerRootElement?.(element)}
+            onContextMenu={(event) => {
+              event.stopPropagation();
+              onEntryContextMenu?.(event, null);
+            }}
             className={
               ["fileExplorerRoot", isRootSelected ? "isSelected" : null]
                 .filter(Boolean)
