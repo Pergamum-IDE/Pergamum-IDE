@@ -7,6 +7,7 @@ import {
 } from "react";
 import type {
   CSSProperties,
+  DragEvent as ReactDragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent
 } from "react";
@@ -42,10 +43,15 @@ import {
 import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
 import {
   collectFileExplorerMoveDestinationFolders,
+  FILE_EXPLORER_MOVE_DND_MIME,
+  isValidFileExplorerDropTarget,
+  resolveFileExplorerDragSources,
+  resolveFileExplorerDropDestination,
   resolveFileExplorerMoveDisabledReason,
   resolveFileExplorerMoveSources,
   resolveFileExplorerPasteDestination,
   resolveFileExplorerPasteDisabledReason,
+  type FileExplorerDropTarget,
   type FileExplorerMoveDisabledReason,
   type FileExplorerPasteDisabledReason
 } from "./fileExplorerMoveDestinations";
@@ -158,6 +164,14 @@ interface FileExplorerViewProps {
   /** #328: project-relative paths of the pending Cut sources — the rows are
    *  rendered muted (`data-file-explorer-cut="true"`) while still visible. */
   cutRelativePaths?: ReadonlySet<string>;
+  /** #329 spike: project-relative paths currently being dragged — the source
+   *  rows carry `data-file-explorer-dragging="true"`. */
+  draggingRelativePaths?: ReadonlySet<string>;
+  /** #329 spike: the row the pointer is over during a drag (`""` = the
+   *  project root row), plus whether a drop there is valid. Drives
+   *  `data-file-explorer-drop-target="valid" | "invalid"`. */
+  dropTargetPath?: string | null;
+  dropTargetValid?: boolean;
   translate: Translate;
   /** #311: attached to the active project document entry once it is
    *  rendered, so the container can scroll it into view. */
@@ -206,6 +220,29 @@ interface FileExplorerViewProps {
    */
   onTreeShortcutKeyDown?: (
     event: ReactKeyboardEvent<HTMLDivElement>
+  ) => void;
+  /**
+   * #329 spike: native HTML5 drag & drop. `onEntryDragStart` fires for every
+   * row (it cancels the drag itself for a folder / ineligible selection);
+   * `onRowDragOver` / `onRowDragLeave` / `onRowDrop` fire for entry rows and
+   * the project root row (`entry === null`).
+   */
+  onEntryDragStart?: (
+    event: ReactDragEvent<HTMLElement>,
+    entry: FileExplorerEntry
+  ) => void;
+  onEntryDragEnd?: (event: ReactDragEvent<HTMLElement>) => void;
+  onRowDragOver?: (
+    event: ReactDragEvent<HTMLElement>,
+    entry: FileExplorerEntry | null
+  ) => void;
+  onRowDragLeave?: (
+    event: ReactDragEvent<HTMLElement>,
+    entry: FileExplorerEntry | null
+  ) => void;
+  onRowDrop?: (
+    event: ReactDragEvent<HTMLElement>,
+    entry: FileExplorerEntry | null
   ) => void;
   onActivateDocument: (relativePath: string) => void;
 }
@@ -577,6 +614,14 @@ export function FileExplorer({
   // #328: the pending internal Cut — a snapshot of the File Explorer selection
   // taken at Cut time, moved by the next Paste. Never touches the OS clipboard.
   const [cutState, setCutState] = useState<FileExplorerCutState | null>(null);
+  // #329 spike: the in-progress native drag (renderer state is authoritative;
+  // the DataTransfer payload is only the gesture carrier) and the row the
+  // pointer is currently over.
+  const [dragState, setDragState] = useState<FileExplorerDragState | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    readonly path: string;
+    readonly valid: boolean;
+  } | null>(null);
   const loadGenerationRef = useRef(0);
   // #311: the DOM node of the active project document entry (once #309 has
   // revealed it) and the last path we scrolled to, so the scroll fires once
@@ -800,6 +845,9 @@ export function FileExplorer({
     setMultiSelection(createEmptyFileExplorerSelection());
     // #328: a pending Cut is scoped to the current project — drop it.
     setCutState(null);
+    // #329 spike: abandon any in-progress drag on a project switch / remount.
+    setDragState(null);
+    setDropTarget(null);
 
     if (hasProject) {
       void loadDirectoryForGeneration(null, generation);
@@ -1494,6 +1542,11 @@ export function FileExplorer({
     () => new Set(cutState?.sourceRelativePaths ?? []),
     [cutState]
   );
+  // #329 spike: the dragging paths, as a set for the dragged-row marker.
+  const draggingRelativePaths = useMemo(
+    () => new Set(dragState?.sourceRelativePaths ?? []),
+    [dragState]
+  );
   const moveDestinationFolders = useMemo(
     () => collectFileExplorerMoveDestinationFolders(entriesByDirectoryPath),
     [entriesByDirectoryPath]
@@ -1840,6 +1893,223 @@ export function FileExplorer({
     ]
   );
 
+  // -------------------------------------------------------------------------
+  // #329 spike: native HTML5 Drag & Drop route.
+  //
+  // Deliberately thin: `dragstart` builds the sources (reusing the Move / Cut
+  // resolver + a re-check), stamps a private MIME as the gesture carrier, and
+  // records renderer-authoritative drag state. `dragover` / `drop` consult
+  // that state (never the DataTransfer payload) and reuse `applyMoveResponse`.
+  // See `fileExplorerMoveDestinations.ts` for the pure helpers this leans on.
+  // -------------------------------------------------------------------------
+  const performDndMove = useCallback(
+    async (
+      sourceRelativePaths: readonly string[],
+      destinationFolderRelativePath: string
+    ) => {
+      const openSet = new Set(openProjectDocumentRelativePaths);
+      const sourcesHaveOpenDocument = sourceRelativePaths.some((path) =>
+        openSet.has(path)
+      );
+
+      // Re-check every safety gate at drop time — the same rule the Move and
+      // Paste routes apply. The backend stays authoritative regardless.
+      if (
+        !hasProject ||
+        readOnly ||
+        moveInFlight ||
+        sourceRelativePaths.length === 0 ||
+        sourcesHaveOpenDocument
+      ) {
+        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      setMoveInFlight(true);
+      let response: Awaited<
+        ReturnType<typeof window.pergamum.projects.moveFileExplorerEntries>
+      >;
+
+      try {
+        response = await window.pergamum.projects.moveFileExplorerEntries({
+          sourceRelativePaths: [...sourceRelativePaths],
+          destinationFolderRelativePath,
+          dirtyProjectDocumentRelativePaths: [
+            ...dirtyProjectDocumentRelativePaths
+          ]
+        });
+      } catch {
+        setMoveInFlight(false);
+        onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      setMoveInFlight(false);
+      applyMoveResponse(response, destinationFolderRelativePath);
+    },
+    [
+      applyMoveResponse,
+      dirtyProjectDocumentRelativePaths,
+      hasProject,
+      moveInFlight,
+      onMoveResultMessage,
+      openProjectDocumentRelativePaths,
+      readOnly,
+      translate
+    ]
+  );
+
+  const handleEntryDragStart = useCallback(
+    (event: ReactDragEvent<HTMLElement>, entry: FileExplorerEntry) => {
+      if (entry.kind !== "file") {
+        // Folder Move is out of scope — a folder row never starts a drag and
+        // never disturbs the selection.
+        event.preventDefault();
+        return;
+      }
+
+      const isSelected = multiSelection.selected.has(entry.relativePath);
+
+      // Match right-click semantics: a drag from a non-selected row makes that
+      // row the whole selection first.
+      if (!isSelected) {
+        setSelection({ kind: "entry", relativePath: entry.relativePath });
+        setMultiSelection((current) =>
+          replaceFileExplorerSelection(current, entry.relativePath)
+        );
+      }
+
+      const sources = resolveFileExplorerDragSources(
+        {
+          relativePath: entry.relativePath,
+          kind: entry.kind,
+          isSelected
+        },
+        multiSelection.selected,
+        entriesByDirectoryPath
+      );
+      const openSet = new Set(openProjectDocumentRelativePaths);
+      const sourcesHaveOpenDocument = sources.sourceRelativePaths.some((path) =>
+        openSet.has(path)
+      );
+
+      if (
+        !hasProject ||
+        readOnly ||
+        moveInFlight ||
+        !sources.canDrag ||
+        sourcesHaveOpenDocument
+      ) {
+        // Cancel the drag before it starts — folders, mixed selections, open
+        // documents, and read-only projects never begin a movable drag.
+        event.preventDefault();
+        return;
+      }
+
+      event.dataTransfer.setData(
+        FILE_EXPLORER_MOVE_DND_MIME,
+        JSON.stringify(sources.sourceRelativePaths)
+      );
+      event.dataTransfer.effectAllowed = "move";
+      setDragState({
+        sourceRelativePaths: sources.sourceRelativePaths,
+        startedAt: Date.now()
+      });
+    },
+    [
+      entriesByDirectoryPath,
+      hasProject,
+      moveInFlight,
+      multiSelection.selected,
+      openProjectDocumentRelativePaths,
+      readOnly
+    ]
+  );
+
+  const handleEntryDragEnd = useCallback(() => {
+    setDragState(null);
+    setDropTarget(null);
+  }, []);
+
+  const dropTargetForEntry = useCallback(
+    (entry: FileExplorerEntry | null): FileExplorerDropTarget =>
+      entry === null
+        ? { kind: "root" }
+        : {
+            kind: "entry",
+            relativePath: entry.relativePath,
+            entryKind: entry.kind
+          },
+    []
+  );
+
+  const handleRowDragOver = useCallback(
+    (event: ReactDragEvent<HTMLElement>, entry: FileExplorerEntry | null) => {
+      if (dragState === null) {
+        return; // not our drag — leave the browser's default (no drop)
+      }
+
+      const destination = resolveFileExplorerDropDestination(
+        dropTargetForEntry(entry)
+      );
+      const valid =
+        destination !== null &&
+        isValidFileExplorerDropTarget({
+          dragSourceRelativePaths: dragState.sourceRelativePaths,
+          destinationFolderRelativePath: destination
+        });
+
+      if (valid && destination !== null) {
+        // preventDefault here is what makes the element a drop target.
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropTarget({ path: destination, valid: true });
+      } else {
+        setDropTarget({
+          path: entry === null ? "" : entry.relativePath,
+          valid: false
+        });
+      }
+    },
+    [dragState, dropTargetForEntry]
+  );
+
+  const handleRowDragLeave = useCallback(() => {
+    // A continuous `dragover` re-establishes the marker immediately, so a
+    // blunt clear is enough for the spike.
+    setDropTarget(null);
+  }, []);
+
+  const handleRowDrop = useCallback(
+    (event: ReactDragEvent<HTMLElement>, entry: FileExplorerEntry | null) => {
+      event.preventDefault();
+
+      const activeDrag = dragState;
+      setDragState(null);
+      setDropTarget(null);
+
+      if (activeDrag === null) {
+        return; // unknown / external drag — ignore silently
+      }
+
+      const destination = resolveFileExplorerDropDestination(
+        dropTargetForEntry(entry)
+      );
+      if (
+        destination === null ||
+        !isValidFileExplorerDropTarget({
+          dragSourceRelativePaths: activeDrag.sourceRelativePaths,
+          destinationFolderRelativePath: destination
+        })
+      ) {
+        return; // invalid target — no-op, no status noise
+      }
+
+      void performDndMove(activeDrag.sourceRelativePaths, destination);
+    },
+    [dragState, dropTargetForEntry, performDndMove]
+  );
+
   return (
     <>
       <FileExplorerView
@@ -1862,6 +2132,9 @@ export function FileExplorer({
             : undefined
         }
         cutRelativePaths={cutRelativePaths}
+        draggingRelativePaths={draggingRelativePaths}
+        dropTargetPath={dropTarget?.path ?? null}
+        dropTargetValid={dropTarget?.valid ?? false}
         translate={translate}
         activeDocumentEntryRef={setActiveDocumentEntryElement}
         registerRowElement={registerRowElement}
@@ -1879,6 +2152,11 @@ export function FileExplorer({
         onRootKeyDown={handleRootKeyDown}
         onEntryContextMenu={handleEntryContextMenu}
         onTreeShortcutKeyDown={handleTreeShortcutKeyDown}
+        onEntryDragStart={handleEntryDragStart}
+        onEntryDragEnd={handleEntryDragEnd}
+        onRowDragOver={handleRowDragOver}
+        onRowDragLeave={handleRowDragLeave}
+        onRowDrop={handleRowDrop}
         onActivateDocument={onActivateDocument}
       />
       {contextMenu !== null ? (
@@ -2108,6 +2386,16 @@ interface FileExplorerCutState {
 }
 
 /**
+ * #329 spike: the in-progress native drag. Renderer-authoritative — the drop
+ * handler trusts this, not the DataTransfer payload. Cleared on
+ * `dragend` / `drop` / project switch.
+ */
+interface FileExplorerDragState {
+  readonly sourceRelativePaths: readonly string[];
+  readonly startedAt: number;
+}
+
+/**
  * #327 blocker: the localized reason a disabled `Move…` / `Cut` / `Paste`
  * shows in its `title`. `FileExplorerMoveDisabledReason` is shared by Move and
  * Cut (identical gating); Paste has its own taxonomy.
@@ -2163,6 +2451,9 @@ export function FileExplorerView({
   canMove = false,
   moveDisabledReasonLabel,
   cutRelativePaths = EMPTY_SELECTED_PATHS,
+  draggingRelativePaths = EMPTY_SELECTED_PATHS,
+  dropTargetPath = null,
+  dropTargetValid = false,
   translate,
   activeDocumentEntryRef,
   registerRowElement,
@@ -2180,8 +2471,19 @@ export function FileExplorerView({
   onRootKeyDown,
   onEntryContextMenu,
   onTreeShortcutKeyDown,
+  onEntryDragStart,
+  onEntryDragEnd,
+  onRowDragOver,
+  onRowDragLeave,
+  onRowDrop,
   onActivateDocument
 }: FileExplorerViewProps): JSX.Element {
+  const dropTargetState = (path: string): "valid" | "invalid" | undefined =>
+    dropTargetPath === path
+      ? dropTargetValid
+        ? "valid"
+        : "invalid"
+      : undefined;
   // #323: roving tabindex — exactly one row in the tree is tabbable. The
   // primary/focused entry when it is on screen, otherwise the project root.
   const primaryInView =
@@ -2198,6 +2500,8 @@ export function FileExplorerView({
     const isSelected = selectedPaths.has(entry.relativePath);
     const isPrimary = entry.relativePath === selectedRelativePath;
     const isCut = cutRelativePaths.has(entry.relativePath);
+    const isDragging = draggingRelativePaths.has(entry.relativePath);
+    const dropState = dropTargetState(entry.relativePath);
     const isOpenable = isOpenableFileExplorerEntry(entry);
     const icon = iconForEntry(entry, expandedDirectoryPaths);
     const childKey = directoryKey(entry.relativePath);
@@ -2225,13 +2529,18 @@ export function FileExplorerView({
           data-file-explorer-entry-path={entry.relativePath}
           data-file-explorer-openable={isOpenable ? "true" : undefined}
           data-file-explorer-cut={isCut ? "true" : undefined}
+          data-file-explorer-dragging={isDragging ? "true" : undefined}
+          data-file-explorer-drop-target={dropState}
+          draggable={entry.kind === "file" ? true : undefined}
           className={
             [
               "fileExplorerItem",
               entry.kind === "folder" ? "isFolder" : "isFile",
               isHighlighted ? "isActive" : null,
               isSelected ? "isSelected" : null,
-              isCut ? "isCut" : null
+              isCut ? "isCut" : null,
+              isDragging ? "isDragging" : null,
+              dropState === "valid" ? "isDropTarget" : null
             ]
               .filter(Boolean)
               .join(" ")
@@ -2249,6 +2558,11 @@ export function FileExplorerView({
             event.stopPropagation();
             onEntryContextMenu?.(event, entry);
           }}
+          onDragStart={(event) => onEntryDragStart?.(event, entry)}
+          onDragEnd={(event) => onEntryDragEnd?.(event)}
+          onDragOver={(event) => onRowDragOver?.(event, entry)}
+          onDragLeave={(event) => onRowDragLeave?.(event, entry)}
+          onDrop={(event) => onRowDrop?.(event, entry)}
           onClick={(event) => {
             const extendRange = event?.shiftKey ?? false;
             const toggle =
@@ -2423,7 +2737,11 @@ export function FileExplorerView({
               onEntryContextMenu?.(event, null);
             }}
             className={
-              ["fileExplorerRoot", isRootSelected ? "isSelected" : null]
+              [
+                "fileExplorerRoot",
+                isRootSelected ? "isSelected" : null,
+                dropTargetState("") === "valid" ? "isDropTarget" : null
+              ]
                 .filter(Boolean)
                 .join(" ")
             }
@@ -2434,9 +2752,13 @@ export function FileExplorerView({
             data-selected={isRootSelected ? "true" : undefined}
             data-file-explorer-entry-kind="root"
             data-file-explorer-entry-path=""
+            data-file-explorer-drop-target={dropTargetState("")}
             title={projectName}
             onKeyDown={(event) => onRootKeyDown?.(event)}
             onClick={onSelectRoot}
+            onDragOver={(event) => onRowDragOver?.(event, null)}
+            onDragLeave={(event) => onRowDragLeave?.(event, null)}
+            onDrop={(event) => onRowDrop?.(event, null)}
           >
             <img
               className="fileExplorerIcon fileExplorerProjectIcon"

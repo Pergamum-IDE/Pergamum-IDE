@@ -1543,6 +1543,22 @@ label.settingsItemHeader {
   opacity: 0.5;
 }
 
+/* #329 spike: minimal native-D&D feedback. Deliberately unpolished. */
+.fileExplorerItem.isDragging {
+  opacity: 0.4;
+}
+
+.fileExplorerItem.isDropTarget,
+.fileExplorerRoot.isDropTarget {
+  outline: 2px solid var(--workspace-sidebar-active-background, #3b82f6);
+  outline-offset: -2px;
+  background: var(--workspace-sidebar-hover);
+}
+
+.fileExplorerItem[data-file-explorer-drop-target="invalid"] {
+  cursor: no-drop;
+}
+
 /* #327/#328: File Explorer item context menu (Move… / Cut / Paste). */
 .fileExplorerContextMenuBackdrop {
   position: fixed;
