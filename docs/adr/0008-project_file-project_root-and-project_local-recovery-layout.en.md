@@ -8,47 +8,68 @@ Proposed
 
 2026-08-22
 
+## Amendments
+
+### 2026-08-27 — working-copy Recovery storage is partially superseded by ADR-0009
+
+The decision in this ADR to use `.pergamum_recovery/` (the project-local recovery directory) as **the storage location for working-copy Recovery (unsaved Markdown text, unsaved `GlossaryEntryDraft` content, and their reconciliation metadata)** has been **superseded by ADR-0009 Working Copy Persistence and Recovery Model**.
+
+- The storage location for working-copy Recovery is now authoritatively defined by ADR-0009. It uses a dedicated Recovery store under the application `userData` area and does not use `.pergamum_recovery/` as a working-copy Recovery store. The reasoning is defined by ADR-0009: persisted state and Recovery must not be placed in the same failure domain.
+- All other decisions in this ADR remain in force: the `.pergamum` project file, project root, project name / project metadata schema, project boundary, acceptance of multiple `.pergamum` files within one project root, the premise of the one-folder-one-instance policy, and the OS file association policy are unchanged.
+- The future use of `.pergamum_recovery/` (for example, deleting it or dedicating it to derived data), and the future handling of the `project.recoveryDirectoryName` setting (its validity and purpose), are not decided by this amendment or by ADR-0009. This amendment only fixes the boundary that `.pergamum_recovery/` is **not used for working-copy Recovery**.
+- The body below, especially the “Project-local recovery directory” section, is kept as history. The description of where working-copy Recovery is stored is replaced by ADR-0009 as stated above.
+
+### 2026-09-01 — startup file-open routing (cold start) is fixed by ADR-0010
+
+This ADR explicitly deferred “Startup file open / `.pergamum` argv handling” and “the Open Folder flow when multiple `.pergamum` files are found” to follow-up issues in §Non-goals / §Follow-up issues.
+
+Of that deferred area, the **cold-start portion (startup arguments / Open With / EXE drop)** is now fixed by **ADR-0010 Startup File-Open Routing (Cold Start)**, implemented in #347.
+
+- The decisions in this ADR are **not rewritten**. ADR-0010 **uses as premises** this ADR’s project root, project boundary, acceptance of multiple `.pergamum` files within one project root, and lock unit = project root.
+- Multiple `.pergamum` files are **not an invalid project layout** (see this ADR’s §“Multiple `.pergamum` files in one project root” and §Alternatives considered “Forbid multiple `.pergamum` files in one project root”). Because startup routing cannot choose one unambiguously, ADR-0010 **rejects this case as ambiguous** and, mirroring §“Open Folder behavior”, never silently chooses one; it tells the user to open the specific `.pergamum` file directly.
+- Runtime `second-instance`, macOS `open-file`, existing-window focus, instance registry, and OS file association registration remain undecided (see ADR-0010 §Future Work and this ADR’s §Follow-up issues).
+
 ## Context
 
-Pergamum は小説執筆向けIDEとして、本文を Markdown ファイルに保持しつつ、Glossary、セッション、復旧情報、プロジェクト構造などの管理情報を SQLite database に保持する。
+Pergamum is an IDE for novel writing. It stores manuscript text in Markdown files, while storing management information such as Glossary data, session state, recovery information, and project structure in a SQLite database.
 
-ADR-0001 では、本文・構造情報・設定情報の責務分担として、概ね以下の方針を採用している。
-
-```text
-本文       = Markdown files
-構造情報   = SQLite database
-設定       = pergamum.json
-```
-
-Phase 4-6 の #202 File I/O workflow foundation により、Markdown 文書の読み込み・保存・Save As・dirty close save flow が実際に動作するようになった。
-
-これにより、次の設計論点が明確になった。
+ADR-0001 adopted the following broad responsibility split between manuscript text, structured data, and settings.
 
 ```text
-保存できる
-↓
-新規作成は？
-↓
-新規作成の文書種別は？
-↓
-.md と .txt はどう分ける？
-↓
-プロジェクトファイルとは何か？
-↓
-OS関連付けは？
-↓
-同じプロジェクトを複数インスタンスで開いてよいのか？
+Manuscript text = Markdown files
+Structured data = SQLite database
+Settings        = pergamum.json
 ```
 
-従来の `pergamum.db` という名前は、ユーザーから見ると内部実装ファイル、または削除可能な一時DBに見えやすい。
+Phase 4-6, #202 File I/O workflow foundation, made Markdown document loading, saving, Save As, and dirty close save flow actually work.
 
-しかし Pergamum のプロジェクトDBは、単なる内部キャッシュではない。Glossary、プロジェクト文書管理、セッション復元、復旧情報との関連など、作品管理の中核を担う。
+That made the following design questions concrete.
 
-そのため、Pergamum はプロジェクトDBを明示的な project file として扱う必要がある。
+```text
+We can save.
+↓
+How do we create new documents?
+↓
+What document kinds can be created?
+↓
+How do we distinguish .md and .txt?
+↓
+What is a project file?
+↓
+What should OS file association target?
+↓
+Can the same project be opened by multiple instances at the same time?
+```
 
-また、ユーザーは用心深く `.pergamum` ファイルをコピー・退避・バックアップする可能性が高い。
+The previous name `pergamum.db` is likely to look, from the user’s point of view, like an internal implementation file or a disposable temporary database.
 
-例:
+However, Pergamum’s project database is not merely an internal cache. It is central to work management: Glossary, project document management, session restoration, and relations to recovery information.
+
+Therefore, Pergamum needs to treat the project database as an explicit project file.
+
+Users are also likely to cautiously copy, move aside, or back up `.pergamum` files.
+
+Example:
 
 ```text
 /project-root/
@@ -59,43 +80,43 @@ OS関連付けは？
   manuscripts/
 ```
 
-このようなケースを異常扱いしてはならない。
+This kind of layout must not be treated as abnormal.
 
-一方で、同じ project root を複数の Pergamum プロセスで同時に開くと、本文、DB、Glossary、session restore、recovery store、dirty state が競合する可能性がある。
+On the other hand, if the same project root is opened by multiple Pergamum processes at the same time, manuscript text, the database, Glossary, session restore, recovery store, and dirty state may conflict.
 
-そのため、`.pergamum` project file、project root、project name、project metadata、project-local recovery directory の定義を明確にする。
+For that reason, this ADR defines the `.pergamum` project file, project root, project name, project metadata, and project-local recovery directory.
 
 ---
 
 ## Decision
 
-Pergamum は、プロジェクトDBファイルとして `.pergamum` 拡張子を使用する。
+Pergamum uses the `.pergamum` extension for project database files.
 
 ```text
-<任意のファイル名>.pergamum
+<any file name>.pergamum
 ```
 
-`.pergamum` ファイルは SQLite3 database file であり、Pergamum project file として扱う。
+A `.pergamum` file is a SQLite3 database file and is treated as a Pergamum project file.
 
-例:
+Example:
 
 ```text
 俺TUEEEEEE物語.pergamum
 ```
 
-`.pergamum` は次の意味を持つ。
+`.pergamum` has the following meaning.
 
 ```text
 .pergamum
   = SQLite3 database file
   = Pergamum project file
-  = OS関連付け対象
-  = プロジェクトを開く入口
+  = OS file association target
+  = Entry point for opening a project
 ```
 
-ただし、`.pergamum` ファイル名を project name の source of truth にはしない。
+However, the `.pergamum` file name is not the source of truth for the project name.
 
-Project name の source of truth は `.pergamum` database 内の `metadata.project_name` とする。
+The source of truth for the project name is `metadata.project_name` inside the `.pergamum` database.
 
 ---
 
@@ -103,146 +124,144 @@ Project name の source of truth は `.pergamum` database 内の `metadata.proje
 
 ### Active project file
 
-実際に開かれた `.pergamum` ファイルを active project file とする。
+The `.pergamum` file that was actually opened is the active project file.
 
-例:
+Example:
 
 ```text
 /work/novels/俺TUEEEEEE物語.pergamum
 ```
 
-この場合:
+In this case:
 
 ```text
 active project file = /work/novels/俺TUEEEEEE物語.pergamum
 ```
 
-同一フォルダ内に他の `.pergamum` ファイルが存在していても、それらを active project file とはみなさない。
+Even if other `.pergamum` files exist in the same folder, they are not considered active project files.
 
 ---
 
 ### Project root
 
-開いた `.pergamum` ファイルの親ディレクトリを project root とする。
+The parent directory of the opened `.pergamum` file is the project root.
 
-例:
+Example:
 
 ```text
 /work/novels/俺TUEEEEEE物語.pergamum
 ```
 
-この場合:
+In this case:
 
 ```text
 project root = /work/novels
 ```
 
-Project root のフォルダ名は project name として扱わない。
+The project root folder name is not treated as the project name.
 
-たとえば以下の場合:
+For example:
 
 ```text
 /work/pergamum-dogfood/俺TUEEEEEE物語.pergamum
 ```
 
-project root は `/work/pergamum-dogfood` だが、project name は `pergamum-dogfood` ではない。
+The project root is `/work/pergamum-dogfood`, but the project name is not `pergamum-dogfood`.
 
 ---
 
 ### Project name
 
-Project name は `.pergamum` database 内の metadata として保持する。
+The project name is stored as metadata inside the `.pergamum` database.
 
 ```text
 metadata.project_name
 ```
 
-`.pergamum` ファイル名は、プロジェクト作成時の初期値、または metadata が利用できない場合の表示 fallback として使ってよい。
+The `.pergamum` file name may be used as the initial value when creating a project, or as a display fallback when metadata is unavailable.
 
-ただし、作成後の project name の source of truth は `metadata.project_name` とする。
+However, after creation, the source of truth for the project name is `metadata.project_name`.
 
-つまり、以下を原則とする。
+In short:
 
 ```text
-path は所在。
-filename は入口。
-metadata が名前。
+The path is the location.
+The filename is the entry point.
+The metadata is the name.
 ```
 
 ---
 
 ## Project boundary
 
-Pergamum project の境界は project root とする。
+The boundary of a Pergamum project is the project root.
 
-Project root は、開いた `.pergamum` ファイルの親ディレクトリである。
+The project root is the parent directory of the opened `.pergamum` file.
 
-Pergamum は、project root 配下を project-local file space として扱う。
+Pergamum treats the area under the project root as the project-local file space.
 
-Project root の外側にあるファイルやディレクトリは、ユーザーの作品管理上どれほど関連があっても、Pergamum project の一部とはみなさない。
+Files and directories outside the project root are not considered part of the Pergamum project, no matter how related they may be to the user’s work management.
 
-Project root 外のファイルを明示的に開いた場合、そのファイルは external file document として扱う。
+If a file outside the project root is explicitly opened, it is treated as an external file document.
 
-External file document は、自動的に project document へ昇格しない。
+An external file document is not automatically promoted to a project document.
 
-Project root 配下のディレクトリ構造はユーザーが自由に決めてよい。
+Users may choose any directory structure under the project root.
 
-Pergamum は、単巻、巻別、部別、章別などの作品構造を特定の階層に強制しない。
+Pergamum does not force a specific hierarchy for works, volumes, parts, chapters, or similar structures.
 
-Project-local file space の判定では、必要に応じて real path を解決し、project root 外へ出るパスを project-local とみなさない。
+When determining project-local file space, Pergamum resolves real paths as needed and does not treat paths that escape outside the project root as project-local.
 
 ---
 
 ## File name and project name
 
-プロジェクト作成時には、ユーザーが指定した `.pergamum` ファイル名から拡張子を除いた名前を、初期 project name として使ってよい。
+When creating a project, Pergamum may use the `.pergamum` file name specified by the user, minus the extension, as the initial project name.
 
-例:
+Example:
 
 ```text
 俺TUEEEEEE物語.pergamum
 ```
 
-作成時の初期値:
+Initial value at creation time:
 
 ```text
 metadata.project_name = 俺TUEEEEEE物語
 ```
 
-ただし、作成後に `.pergamum` ファイルがリネームまたはコピーされても、project name を暗黙に変更してはならない。
+However, after creation, renaming or copying the `.pergamum` file must not implicitly change the project name.
 
-例:
+Examples:
 
 ```text
 俺TUEEEEEE物語 - copy.pergamum
 俺TUEEEEEE物語_20260822_backup.pergamum
 ```
 
-これらを開いた場合でも、database 内 metadata が以下であれば:
+Even if these files are opened, if the metadata inside the database is:
 
 ```text
 metadata.project_name = 俺TUEEEEEE物語
 ```
 
-Pergamum 内で表示される project name は:
+then the project name displayed inside Pergamum remains:
 
 ```text
 俺TUEEEEEE物語
 ```
 
-のままとする。
-
-`.pergamum` ファイルのリネームは、OS上のファイル名変更であり、Pergamum project name の変更ではない。
+Renaming a `.pergamum` file is an OS-level file name change, not a Pergamum project name change.
 
 ---
 
 ## Multiple `.pergamum` files in one project root
 
-同一 project root に複数の `.pergamum` ファイルが存在することは許容する。
+Multiple `.pergamum` files may exist in the same project root.
 
-これはユーザーがバックアップ、コピー、退避、検証用DBを作成するために自然に発生する。
+This naturally happens when users create backups, copies, moved-aside files, or verification databases.
 
-例:
+Example:
 
 ```text
 /project-root/
@@ -253,49 +272,47 @@ Pergamum 内で表示される project name は:
   manuscripts/
 ```
 
-Pergamum は、同一フォルダ内のすべての `.pergamum` ファイルを active project file とみなしてはならない。
+Pergamum must not treat every `.pergamum` file in the same folder as an active project file.
 
-実際に開かれた `.pergamum` ファイルだけを active project file とする。
+Only the `.pergamum` file that was actually opened is the active project file.
 
 ---
 
 ## Open Folder behavior
 
-フォルダを開く導線で、対象フォルダ内に複数の `.pergamum` ファイルが見つかった場合、Pergamum は黙って1つを選んではならない。
+When opening a folder, if multiple `.pergamum` files are found inside the target folder, Pergamum must not silently choose one.
 
-この場合は、開く project file をユーザーに選ばせるか、`.pergamum` ファイルを直接選ぶよう案内する。
+In this case, Pergamum should either ask the user to choose which project file to open, or instruct the user to select a `.pergamum` file directly.
 
-例:
-
-```text
-このフォルダには複数の .pergamum ファイルがあります。
-開く project file を選択してください。
-```
-
-または、初期実装ではより単純に:
+Example:
 
 ```text
-このフォルダには複数の .pergamum ファイルがあります。
-.pergamum ファイルを直接選んで開いてください。
+This folder contains multiple .pergamum files.
+Choose the project file to open.
 ```
 
-としてよい。
+Or, for an initial implementation, it may use the simpler message:
 
-この ADR は Open Folder flow の具体的なUI実装までは定義しない。
+```text
+This folder contains multiple .pergamum files.
+Choose a .pergamum file directly.
+```
 
-ただし、複数 `.pergamum` の存在を禁止してはならない。
+This ADR does not define the concrete UI implementation of the Open Folder flow.
+
+However, Pergamum must not forbid the presence of multiple `.pergamum` files.
 
 ---
 
 ## Project metadata schema
 
-`.pergamum` database は、1行固定の `metadata` table を持つ。
+The `.pergamum` database has a fixed-single-row `metadata` table.
 
-`metadata` table は、project identity と schema information を保持する。
+The `metadata` table stores project identity and schema information.
 
 ### Required fields
 
-最低限、以下を必須とする。
+At minimum, the following fields are required.
 
 ```text
 metadata.project_id
@@ -303,7 +320,7 @@ metadata.project_name
 metadata.schema_version
 ```
 
-加えて、作成日時・更新日時も metadata として保持する。
+Creation and update timestamps are also stored as metadata.
 
 ```text
 metadata.created_at
@@ -329,7 +346,7 @@ CREATE TABLE metadata (
 );
 ```
 
-`metadata` table は1行固定とし、通常は `id = 1` の行だけを使用する。
+The `metadata` table is fixed to a single row, and normally only the row with `id = 1` is used.
 
 ```sql
 SELECT project_name FROM metadata WHERE id = 1;
@@ -339,118 +356,121 @@ SELECT project_name FROM metadata WHERE id = 1;
 
 #### `project_id`
 
-Project identity を表す不変ID。
+An immutable ID representing project identity.
 
-推奨形式は UUIDv7 string とする。
+The recommended format is a UUIDv7 string.
 
 ```text
-metadata.project_id = 018f... など
+metadata.project_id = 018f... etc.
 ```
 
-`project_id` は project name や filename とは独立する。
+`project_id` is independent of the project name and filename.
 
-同名の別プロジェクトを区別し、コピーされた `.pergamum` と新規作成された `.pergamum` を区別するために使う。
+It is used to distinguish separate projects with the same name, and to distinguish copied `.pergamum` files from newly created `.pergamum` files.
 
 #### `project_name`
 
-ユーザーに表示する project name。
+The project name displayed to the user.
 
-Project name の source of truth は `metadata.project_name` とする。
+The source of truth for the project name is `metadata.project_name`.
 
-`.pergamum` ファイル名や project root フォルダ名は、通常運用において project name の source of truth ではない。
+The `.pergamum` file name and project root folder name are not, in normal operation, the source of truth for the project name.
 
 #### `schema_version`
 
-Pergamum project database schema version。
+The Pergamum project database schema version.
 
-`.pergamum` database の論理スキーマバージョンを表す。
+It represents the logical schema version of the `.pergamum` database.
 
-Migration 判定、互換性確認、将来の破壊的変更判定に使用する。
+It is used for migration decisions, compatibility checks, and future breaking-change detection.
 
 #### `created_at`
 
-Project database 作成日時。
+The project database creation time.
 
-ISO 8601 UTC string を推奨する。
+An ISO 8601 UTC string is recommended.
 
 #### `updated_at`
 
-Project metadata の更新日時。
+The project metadata update time.
 
-この値の更新タイミングは実装方針に依存するため、必要に応じて別issueで詳細を定義する。
+The timing for updating this value depends on the implementation policy, and may be defined in detail in a separate issue if needed.
 
 #### `created_with_app_version`
 
-Project database 作成時の Pergamum app version。
+The Pergamum app version that created the project database.
 
-必須ではないが、サポート・migration・dogfood調査に有用なため保持してよい。
+This is not required, but may be stored because it is useful for support, migration, and dogfood investigations.
 
 #### `last_opened_with_app_version`
 
-最後にこの project database を開いた Pergamum app version。
+The Pergamum app version that last opened this project database.
 
-必須ではないが、migration・互換性確認・障害調査に有用なため保持してよい。
+This is not required, but may be stored because it is useful for migration, compatibility checks, and incident investigations.
 
 ---
 
 ## `metadata.schema_version` and `PRAGMA user_version`
 
-Pergamum は SQLite の `PRAGMA user_version` を migration guard として使用してよい。
+Pergamum may use SQLite’s `PRAGMA user_version` as a migration guard.
 
-その場合、原則として以下を満たす。
+In that case, the following should hold in principle.
 
 ```text
 metadata.schema_version == PRAGMA user_version
 ```
 
-役割分担は以下とする。
+The responsibility split is as follows.
 
 ```text
 metadata.schema_version
-  Pergamum project database の論理スキーマバージョン
-  アプリケーション上の metadata として読む
+  The logical schema version of the Pergamum project database
+  Read as application-level metadata
 
 PRAGMA user_version
-  SQLite database migration が最初に参照する整数バージョン
+  An integer version first consulted by SQLite database migration
 ```
 
-Migration 中に一時的な不一致が発生する可能性はあるが、正常に開かれた project database として扱う時点では両者は一致していなければならない。
+Temporary inconsistency may occur during migration, but once a project database is treated as successfully opened, the two values must match.
 
-不一致が検出された場合は、DB破損、migration中断、古い実装由来の不整合として安全側に倒す。
+If an inconsistency is detected, Pergamum must fail safe as a possible database corruption, interrupted migration, or inconsistency from an old implementation.
 
-この場合、本文やパスを含む raw error を debug log / console / dialog に出してはならない。
+In this case, raw errors that include manuscript text or paths must not be written to debug logs, console output, or dialogs.
 
 ---
 
 ## Project name fallback
 
-通常、UI 表示上の project name は `metadata.project_name` を正とする。
+Normally, the UI display name for a project is `metadata.project_name`.
 
-Fallback は以下の順序とする。
+Fallback order is as follows.
 
 ```text
 1. metadata.project_name
-2. metadata.project_name が未設定または利用できない場合、.pergamum ファイル名から拡張子を除いた名前
-3. それも不可能な場合、Untitled Project
+2. If metadata.project_name is unset or unavailable, the .pergamum file name without extension
+3. If that is also impossible, Untitled Project
 ```
 
-ただし、fallback は表示やエラー回復のための補助であり、`.pergamum` ファイル名を project name の source of truth に戻すものではない。
+However, fallback is only a helper for display and error recovery. It does not make the `.pergamum` file name the source of truth for the project name again.
 
-また、metadata が読めない壊れたDBを fallback だけで正常な project database として扱ってはならない。
+Also, a broken database whose metadata cannot be read must not be treated as a valid project database merely because a fallback display name can be produced.
 
 ---
 
 ## Project-local recovery directory
 
-Pergamum は、project root 配下に project-local recovery directory を持つ。
+> **Note (2026-08-27, partially superseded by ADR-0009):**
+> The part of this section that treats `.pergamum_recovery/` as the storage location for working-copy Recovery (unsaved text, dirty document recovery data, crash recovery data, and save failure recovery support data) has been superseded by ADR-0009. The storage location for working-copy Recovery is a dedicated Recovery store under the application `userData` area, and `.pergamum_recovery/` is not used as a working-copy Recovery store. This section is kept as history.
 
-既定名は以下とする。
+Pergamum has a project-local recovery directory under the project root.
+
+The default name is:
 
 ```text
 .pergamum_recovery
 ```
 
-配置例:
+Example layout:
 
 ```text
 /project-root/
@@ -460,47 +480,47 @@ Pergamum は、project root 配下に project-local recovery directory を持つ
   manuscripts/
 ```
 
-`.pergamum_recovery/` には、未保存本文、dirty document recovery data、crash recovery data、save failure recovery support data など、ユーザー本文に準じる情報が含まれる可能性がある。
+`.pergamum_recovery/` may contain information equivalent to user manuscript content, such as unsaved text, dirty document recovery data, crash recovery data, and save failure recovery support data.
 
-そのため、`.pergamum_recovery/` を単なる一時キャッシュとして扱ってはならない。
+Therefore, `.pergamum_recovery/` must not be treated as a mere temporary cache.
 
-Recovery data の cleanup は保守的に行う。
+Recovery data cleanup is performed conservatively.
 
-Recovery data の内容、本文、raw path、filename を debug log / console / dialog に出してはならない。
+Recovery data contents, manuscript text, raw paths, and filenames must not be written to debug logs, console output, or dialogs.
 
 ---
 
 ## Recovery directory name setting
 
-`.pergamum_recovery` は標準名とする。
+`.pergamum_recovery` is the standard name.
 
-ただし、この値を各実装箇所で magic string としてハードコードしてはならない。
+However, this value must not be hard-coded as a magic string at each implementation site.
 
-既定値は Settings Catalog に定義し、利用側は project settings の解決結果を通じて取得する。
+The default value is defined in the Settings Catalog, and consumers obtain it through resolved project settings.
 
-設定キー案:
+Proposed setting key:
 
 ```text
 project.recoveryDirectoryName
 ```
 
-既定値:
+Default value:
 
 ```text
 .pergamum_recovery
 ```
 
-この設定は達人向け設定とする。
+This setting is an expert setting.
 
-通常ユーザーが変更することは想定しないが、特殊な運用、既存ディレクトリとの衝突、同期環境、検証用途などに備えて変更可能にしておく。
+It is not expected to be changed by ordinary users, but it remains configurable for special operation, conflicts with existing directories, synchronized environments, verification use, and similar cases.
 
 ---
 
 ## Recovery directory name validation
 
-`project.recoveryDirectoryName` は、任意パスではなく、project root 直下のディレクトリ名だけを受け付ける。
+`project.recoveryDirectoryName` accepts only a directory name directly under the project root, not an arbitrary path.
 
-許可する値の例:
+Allowed examples:
 
 ```text
 .pergamum_recovery
@@ -509,7 +529,7 @@ pergamum-recovery
 recovery
 ```
 
-禁止する値の例:
+Forbidden examples:
 
 ```text
 ../recovery
@@ -519,76 +539,76 @@ C:\temp\recovery
 /tmp/recovery
 .
 ..
-空文字
+empty string
 ```
 
-禁止するもの:
+Forbidden forms:
 
 ```text
-絶対パス
-相対パス
+absolute paths
+relative paths
 ../
 ./
-スラッシュ /
-バックスラッシュ \
-空文字
+slash /
+backslash \
+empty string
 .
 ..
-制御文字
+control characters
 bidi / zero-width characters
 ```
 
-つまり、設定できるのは「場所」ではなく、project root 直下の「名前」だけである。
+In other words, this setting controls only the “name” directly under the project root, not the “location.”
 
 ---
 
 ## Recovery directory name changes
 
-`project.recoveryDirectoryName` を変更した場合、Pergamum は以後、新しい recovery directory name を使う。
+If `project.recoveryDirectoryName` is changed, Pergamum uses the new recovery directory name from then on.
 
-ただし、既存の recovery directory を暗黙に移動・削除・上書きしてはならない。
+However, existing recovery directories must not be implicitly moved, deleted, or overwritten.
 
 ```text
-設定変更後、新しい recovery directory name を使う。
-既存の recovery directory は自動移動しない。
+After the setting is changed, use the new recovery directory name.
+Do not automatically move existing recovery directories.
 ```
 
-UI 実装時には、以下のような警告を出すことが望ましい。
+When implementing the UI, it is desirable to show a warning such as:
 
 ```text
-リカバリ領域名を変更すると、既存の復旧データが自動的には参照されなくなる場合があります。
-通常は変更しないでください。
+Changing the recovery area name may make existing recovery data no longer referenced automatically.
+Normally, do not change this setting.
 ```
 
 ---
 
 ## Responsibility split
 
-Pergamum project root 内の主なファイル責務は次のとおりとする。
+The main file responsibilities inside a Pergamum project root are as follows.
 
 ```text
-<任意のファイル名>.pergamum
+<any file name>.pergamum
   Project database
   Pergamum project file
   SQLite3 database file
-  OS関連付け対象
-  active project file 候補
+  OS file association target
+  Candidate active project file
 
 pergamum.json
   Project Settings
 
 .pergamum_recovery/
   Project-local recovery directory
-  未保存本文や復旧用メタデータを含む可能性がある
-  キャッシュ扱いしない
+  May contain unsaved text and recovery metadata
+  Not treated as a cache
 
 *.md / *.markdown
   Markdown document
-  本文の正本
+  Source of truth for manuscript text
 
 *.txt
   Future plain text document
-  Markdown の別名にはしない
+  Not an alias for Markdown
 
 *.glossary
   Future glossary export/import candidate
@@ -598,52 +618,52 @@ pergamum.json
 
 ## Markdown / plain text / extension policy
 
-`.md` / `.markdown` は Markdown document として扱う。
+`.md` and `.markdown` are treated as Markdown documents.
 
-`.txt` は将来の plain text document の候補とし、Markdown document の別名にはしない。
+`.txt` is a candidate for a future plain text document and is not an alias for a Markdown document.
 
-`.pergamum` は SQLite3 database file であり、Markdown document でも plain text document でもない。
+`.pergamum` is a SQLite3 database file and is neither a Markdown document nor a plain text document.
 
 ```text
-.md と .markdown は Markdown。
-.txt は Markdown の別名ではない。
-.pergamum は SQLite。
+.md and .markdown are Markdown.
+.txt is not an alias for Markdown.
+.pergamum is SQLite.
 ```
 
 ---
 
 ## OS file association
 
-`.pergamum` は将来的に OS file association の対象とする。
+`.pergamum` is a future OS file association target.
 
-ただし、この ADR は OS file association の具体的な実装方法を定義しない。
+However, this ADR does not define the concrete implementation method for OS file association.
 
-OS file association は、Windows、macOS、Linux で処理系依存が大きい。
+OS file association differs significantly across Windows, macOS, and Linux.
 
-そのため、以下は別issueで扱う。
+Therefore, the following are handled in separate issues.
 
 ```text
 Installer registers .pergamum file association
 Startup file open / .pergamum argv handling
 ```
 
-設計方針としては、インストーラーは `.pergamum` を Pergamum Project file として登録する。
+As a design policy, the installer registers `.pergamum` as a Pergamum Project file.
 
-ただし、既定アプリの強制奪取はしない。
+However, Pergamum must not forcibly take over the default application.
 
-ユーザーのOS設定とユーザー選択を尊重する。
+It respects the user’s OS settings and user choices.
 
 ---
 
 ## One-folder-one-instance policy
 
-同一 project root を複数 Pergamum インスタンスで同時に開くことは防ぐべきである。
+Opening the same project root with multiple Pergamum instances at the same time should be prevented.
 
-ただし、この ADR は one-folder-one-instance enforcement の具体的な実装方法を定義しない。
+However, this ADR does not define the concrete implementation method for one-folder-one-instance enforcement.
 
-この ADR で定義するのは、ロックや多重起動判定の単位が active project file path ではなく project root である、という前提である。
+This ADR only defines the premise that the unit of locking and multi-open detection is not the active project file path, but the project root.
 
-理由は、同じ project root 内では以下が共有されるためである。
+The reason is that the following are shared within the same project root.
 
 ```text
 pergamum.json
@@ -654,40 +674,40 @@ recovery store
 dirty document state
 ```
 
-したがって、以下の2つは別の `.pergamum` ファイルであっても、同じ project root を共有する。
+Therefore, the following two files share the same project root even though they are different `.pergamum` files.
 
 ```text
 /project-root/俺TUEEEEEE物語.pergamum
 /project-root/俺TUEEEEEE物語 - copy.pergamum
 ```
 
-これらを別プロセスで同時に開くことは、後続issueで防止する。
+Opening these in separate processes at the same time is prevented in a follow-up issue.
 
 ---
 
 ## Non-goals
 
-この ADR では以下を定義しない。
+This ADR does not define the following.
 
 ```text
-OS file association の具体的実装
-インストーラー設定
+Concrete implementation of OS file association
+Installer settings
 startup argv handling
 open-file event handling
-one-folder-one-instance の実装方式
-既存 pergamum.db から .pergamum への migration 手順
-Open Folder flow の具体的UI
-複数プロジェクト同時オープン
-複数ウィンドウ対応
+Implementation method for one-folder-one-instance
+Migration procedure from existing pergamum.db to .pergamum
+Concrete UI for the Open Folder flow
+Opening multiple projects at the same time
+Multiple-window support
 New Markdown File command
 Plain text document mode
-.txt の実装
+.txt implementation
 .glossary export/import
-recovery store 本体のスキーマ
-recovery data cleanup policy の詳細
+Schema of the recovery store itself
+Details of the recovery data cleanup policy
 ```
 
-これらは follow-up issue または別ADRで扱う。
+These are handled in follow-up issues or separate ADRs.
 
 ---
 
@@ -695,26 +715,26 @@ recovery data cleanup policy の詳細
 
 ### Positive
 
-- `.pergamum` が Pergamum project file として明確になる
-- `pergamum.db` よりもユーザーにプロジェクト本体として認識されやすい
-- OS file association の対象が明確になる
-- Project root の定義が明確になる
-- Project name を filename から分離できる
-- `.pergamum` のコピーやリネームで project name が暗黙に変わらない
-- 複数 `.pergamum` ファイルの存在を自然なユーザー行動として許容できる
-- Project metadata と schema version の置き場所が明確になる
-- Recovery directory を cache ではなく user content に準じる領域として扱える
-- Recovery directory name を将来的に変更可能にできる
-- One-folder-one-instance policy の前提が明確になる
+- `.pergamum` becomes clearly defined as the Pergamum project file.
+- It is easier for users to recognize it as the project body than `pergamum.db`.
+- The target of OS file association becomes clear.
+- The definition of project root becomes clear.
+- The project name can be separated from the filename.
+- Copying or renaming a `.pergamum` file does not implicitly change the project name.
+- The presence of multiple `.pergamum` files can be accepted as natural user behavior.
+- The location of project metadata and schema version becomes clear.
+- The recovery directory can be treated as an area equivalent to user content rather than as a cache.
+- The recovery directory name can be made configurable in the future.
+- The premise of the one-folder-one-instance policy becomes clear.
 
 ### Negative / Trade-offs
 
-- `pergamum.db` から `.pergamum` への移行方針が必要になる
-- Project metadata table の初期化と migration が必要になる
-- `metadata.schema_version` と `PRAGMA user_version` の整合性を管理する必要がある
-- Recovery directory name を settings 経由にするため、単純なハードコードより実装が少し重くなる
-- `.pergamum` ファイル名と project name が異なるケースをUI上で自然に扱う必要がある
-- Open Folder flow で複数 `.pergamum` が見つかるケースを設計する必要がある
+- A migration policy from `pergamum.db` to `.pergamum` is required.
+- Initialization and migration of the project metadata table are required.
+- Consistency between `metadata.schema_version` and `PRAGMA user_version` must be managed.
+- Resolving the recovery directory name through settings is slightly heavier than simple hard-coding.
+- The UI must naturally handle cases where the `.pergamum` filename differs from the project name.
+- The Open Folder flow must handle cases where multiple `.pergamum` files are found.
 
 ---
 
@@ -722,82 +742,82 @@ recovery data cleanup policy の詳細
 
 ### Keep using `pergamum.db`
 
-却下。
+Rejected.
 
-`pergamum.db` は内部実装ファイルに見えやすい。
+`pergamum.db` looks too much like an internal implementation file.
 
-ユーザーから見ると、削除可能な生成物やキャッシュのように見える危険がある。
+From the user’s point of view, it risks looking like a deletable generated artifact or cache.
 
-Pergamum project file として OS file association する対象としても弱い。
+It is also weak as an OS file association target for a Pergamum project file.
 
 ---
 
 ### Use folder name as project name
 
-却下。
+Rejected.
 
-Project root のフォルダ名は、Git repository、同期フォルダ、作業用ディレクトリ、バックアップディレクトリなどの都合で変わる。
+The project root folder name may change for reasons such as Git repositories, synchronized folders, working directories, or backup directories.
 
-例:
+Example:
 
 ```text
 /work/pergamum-dogfood/俺TUEEEEEE物語.pergamum
 ```
 
-この場合、`pergamum-dogfood` を project name とするのは不自然である。
+In this case, using `pergamum-dogfood` as the project name is unnatural.
 
 ---
 
 ### Use `.pergamum` filename as project name source of truth
 
-却下。
+Rejected.
 
-ユーザーは `.pergamum` ファイルをコピー・リネームする可能性が高い。
+Users are likely to copy and rename `.pergamum` files.
 
-例:
+Examples:
 
 ```text
 俺TUEEEEEE物語 - copy.pergamum
 俺TUEEEEEE物語_20260822_backup.pergamum
 ```
 
-ファイル名を source of truth にすると、コピーやバックアップによって project name が暗黙に変わってしまう。
+If the filename were the source of truth, copying or backing up the file would implicitly change the project name.
 
-Project name は DB metadata に保持する。
+The project name is stored in DB metadata.
 
 ---
 
 ### Forbid multiple `.pergamum` files in one project root
 
-却下。
+Rejected.
 
-ユーザーが用心深く `.pergamum` ファイルをコピー・バックアップするのは自然な行動である。
+It is natural for cautious users to copy and back up `.pergamum` files.
 
-設計がそれを敵視してはならない。
+The design must not treat this as hostile.
 
-Pergamum が制御すべきなのは、複数 `.pergamum` ファイルの存在そのものではなく、どの `.pergamum` が active project file なのか、および同じ project root を複数プロセスで同時に開かないことである。
+What Pergamum should control is not the mere existence of multiple `.pergamum` files, but which `.pergamum` file is the active project file, and preventing the same project root from being opened by multiple processes at the same time.
 
 ---
 
 ### Hard-code `.pergamum_recovery`
 
-却下。
+Rejected.
 
-`.pergamum_recovery` は標準名として採用するが、実装箇所に magic string として散らしてはならない。
+`.pergamum_recovery` is adopted as the standard name, but it must not be scattered across implementation sites as a magic string.
 
-Recovery directory name は Settings Catalog default として定義し、project settings の解決結果として利用する。
+The recovery directory name is defined as a Settings Catalog default and used as the resolved project setting value.
 
 ---
 
 ### Store all project metadata as key-value
 
-現時点では採用しない。
+Not adopted at this time.
 
-Project metadata の中核である `project_id`、`project_name`、`schema_version` は、型と必須性が重要である。
+The core project metadata fields `project_id`, `project_name`, and `schema_version` have important type and requiredness semantics.
 
-そのため、汎用 key-value table よりも、1行固定の `metadata` table として明示的な column を持つ方が望ましい。
+Therefore, it is preferable to use an explicit fixed-single-row `metadata` table with columns, rather than a generic key-value table.
 
-将来的な拡張情報については、必要に応じて別 table や限定的な key-value table を検討する。
+For future extension information, a separate table or limited key-value table may be considered as needed.
 
 ---
 
@@ -805,54 +825,54 @@ Project metadata の中核である `project_id`、`project_name`、`schema_vers
 
 ### Project creation
 
-新規 project database 作成時は、ユーザーが選んだ `.pergamum` ファイルパスを active project file とする。
+When creating a new project database, the `.pergamum` file path chosen by the user is the active project file.
 
 ```text
 /project-root/俺TUEEEEEE物語.pergamum
 ```
 
-このとき:
+At that time:
 
 ```text
 activeProjectFile = /project-root/俺TUEEEEEE物語.pergamum
 projectRoot = /project-root
 ```
 
-初期 project name が明示されていない場合、`.pergamum` ファイル名から拡張子を除いた名前を `metadata.project_name` の初期値にしてよい。
+If an initial project name is not explicitly specified, the `.pergamum` filename without extension may be used as the initial value of `metadata.project_name`.
 
 ```text
 metadata.project_name = 俺TUEEEEEE物語
 ```
 
-ただし、作成後は `metadata.project_name` が正となる。
+However, after creation, `metadata.project_name` is authoritative.
 
 ---
 
 ### Project open
 
-`.pergamum` ファイルを開く場合、Pergamum は以下を行う。
+When opening a `.pergamum` file, Pergamum performs the following.
 
 ```text
-1. path を受け取る
-2. .pergamum file として扱う
-3. SQLite database として開く
-4. PRAGMA user_version を読む
-5. metadata table を読む
-6. metadata.schema_version と PRAGMA user_version の整合性を確認する
-7. metadata.project_id / metadata.project_name を読む
-8. active project file を設定する
-9. parent directory を project root とする
+1. Receive the path
+2. Treat it as a .pergamum file
+3. Open it as a SQLite database
+4. Read PRAGMA user_version
+5. Read the metadata table
+6. Check consistency between metadata.schema_version and PRAGMA user_version
+7. Read metadata.project_id / metadata.project_name
+8. Set the active project file
+9. Treat the parent directory as the project root
 ```
 
-失敗した場合、raw path、filename、本文、raw fs error を debug log / console / dialog に出してはならない。
+If this fails, raw paths, filenames, manuscript text, and raw filesystem errors must not be written to debug logs, console output, or dialogs.
 
 ---
 
 ### Recovery path resolution
 
-Recovery directory path は、各実装箇所で直接組み立てない。
+Recovery directory paths are not assembled directly at each implementation site.
 
-以下のような resolver を通す。
+They go through a resolver like the following.
 
 ```text
 projectRoot
@@ -861,26 +881,26 @@ project.recoveryDirectoryName
 recoveryDirectoryPath
 ```
 
-例:
+Example:
 
 ```text
 projectRoot = /project-root
 project.recoveryDirectoryName = .pergamum_recovery
 ```
 
-結果:
+Result:
 
 ```text
 recoveryDirectoryPath = /project-root/.pergamum_recovery
 ```
 
-`.pergamum_recovery` という literal を直接利用してよいのは、Settings Catalog default、テスト期待値、ドキュメント、migration notes に限定する。
+Direct use of the literal `.pergamum_recovery` is allowed only in the Settings Catalog default, test expectations, documentation, and migration notes.
 
 ---
 
 ## Follow-up issues
 
-この ADR を受けて、以下を別issueとして扱う。
+The following are handled as separate issues after this ADR.
 
 ```text
 Implement .pergamum project file layout
@@ -903,12 +923,12 @@ Recovery store foundation
 
 ## Summary
 
-Pergamum project は、`.pergamum` SQLite database file を project file として持つ。
+A Pergamum project has a `.pergamum` SQLite database file as its project file.
 
-実際に開いた `.pergamum` が active project file であり、その親ディレクトリが project root である。
+The `.pergamum` file actually opened is the active project file, and its parent directory is the project root.
 
-Project name は `.pergamum` ファイル名ではなく、database 内の `metadata.project_name` を正とする。
+The project name is not the `.pergamum` filename; the authoritative value is `metadata.project_name` inside the database.
 
-`.pergamum` database は、1行固定の `metadata` table を持ち、少なくとも `project_id`、`project_name`、`schema_version` を保持する。
+The `.pergamum` database has a fixed-single-row `metadata` table and stores at least `project_id`, `project_name`, and `schema_version`.
 
-Project-local recovery directory の標準名は `.pergamum_recovery` とするが、実装上は Settings Catalog / project settings 経由で解決し、magic string として各所にハードコードしない。
+The standard name of the project-local recovery directory is `.pergamum_recovery`, but implementation must resolve it through the Settings Catalog / project settings and must not hard-code it as a magic string at each use site.

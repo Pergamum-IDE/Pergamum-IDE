@@ -19,6 +19,16 @@ Proposed（partially superseded — 下記「Amendments」を参照）
 - `.pergamum_recovery/` の将来用途（削除する、derived data 専用にする 等）、および `project.recoveryDirectoryName` 設定の今後の扱い（有効性・用途）は本 amendment / ADR-0009 では決定しない。**working-copy Recovery には使用しない**、という境界のみを確定する。
 - 以下の本文（特に「Project-local recovery directory」節）は履歴として残す。working-copy Recovery の保存先に関する記述は、上記のとおり ADR-0009 に置き換わっている。
 
+### 2026-09-01 — startup file-open routing（cold start）を ADR-0010 で確定
+
+本 ADR は「Startup file open / `.pergamum` argv handling」および「Open Folder flow で複数 `.pergamum` が見つかるケース」を **§Non-goals / §Follow-up issues で明示的に別 Issue へ先送り**していた。
+
+このうち **cold start（起動引数 / Open With / EXE drop）の部分**は、**ADR-0010 Startup File-Open Routing (Cold Start)** で確定した（#347 で実装済み）。
+
+- 本 ADR の判断は**書き換えない**。ADR-0010 は本 ADR の project root / project boundary / 同一 project root 内の複数 `.pergamum` file の許容 / lock 単位 = project root を**前提として使用する**。
+- 複数 `.pergamum` file は **invalid な project layout ではない**（本 ADR §「Multiple `.pergamum` files in one project root」／§Alternatives considered「Forbid multiple …」）。ADR-0010 は起動時ルーティングが 1 つを一意に選べないため**曖昧として拒否**し、§「Open Folder behavior」と同じく「黙って 1 つを選ばず、該当 `.pergamum` を直接開くよう促す」方針を取る。
+- runtime `second-instance` / macOS `open-file` / 既存ウィンドウ focus / instance registry / OS file association 登録は引き続き未確定（ADR-0010 §Future Work、本 ADR §Follow-up issues のまま）。
+
 ## Context
 
 Pergamum は小説執筆向けIDEとして、本文を Markdown ファイルに保持しつつ、Glossary、セッション、復旧情報、プロジェクト構造などの管理情報を SQLite database に保持する。
