@@ -31,21 +31,30 @@ import {
   moveEntryNamesConflict,
   type MoveEntriesValidationError,
   type MoveEntriesValidationResult,
+  type ProjectDocumentPathRelocation,
   type ValidatedMoveEntry
 } from "../shared/projectMove";
 
 export interface ValidateMoveEntriesInput {
   /** Absolute path of the current project root. */
   readonly projectRootPath: string;
-  /** Project-root-relative file paths selected for the move. */
+  /** Project-root-relative file / folder paths selected for the move. */
   readonly sourceRelativePaths: readonly string[];
   /** Project-root-relative destination FOLDER path; `""` = project root. */
   readonly destinationFolderRelativePath: string;
   /**
    * Project-root-relative paths of documents currently open with unsaved
-   * changes. Renderer-supplied — this module owns no live editor state.
+   * changes. Renderer-supplied — this module owns no live editor state. For a
+   * folder source, any dirty document INSIDE the subtree blocks the Move.
    */
   readonly dirtyProjectDocumentRelativePaths: readonly string[];
+  /**
+   * #340: project-root-relative paths of every registered project Markdown
+   * document. Used to compute a folder source's `movedProjectDocuments`
+   * (the subtree's known documents that must be relocated). Main-side data;
+   * absent for file-only callers / older tests.
+   */
+  readonly knownProjectDocumentRelativePaths?: readonly string[];
 }
 
 function nodeErrorCode(error: unknown): string | undefined {
@@ -285,6 +294,14 @@ async function resolveDestination(
   };
 }
 
+/**
+ * #340: `true` when `candidate` is `ancestor` itself or a path inside it.
+ * Both are folded, forward-slash project-relative paths.
+ */
+function isPathWithin(candidate: string, ancestor: string): boolean {
+  return candidate === ancestor || candidate.startsWith(`${ancestor}/`);
+}
+
 export async function validateMoveEntries(
   input: ValidateMoveEntriesInput
 ): Promise<MoveEntriesValidationResult> {
@@ -304,17 +321,47 @@ export async function validateMoveEntries(
     resolvedDestination.destination;
   const foldedDestination = foldPath(folderRelativePath);
 
-  const dirtyPaths = new Set(
-    (input.dirtyProjectDocumentRelativePaths ?? [])
-      .filter((value): value is string => typeof value === "string")
-      .map((value) => foldPath(value.replace(/\\/g, "/")))
+  const dirtyFoldedPaths = (input.dirtyProjectDocumentRelativePaths ?? [])
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => foldPath(value.replace(/\\/g, "/")));
+  const knownProjectDocuments = (
+    input.knownProjectDocumentRelativePaths ?? []
+  ).filter((value): value is string => typeof value === "string");
+
+  // #340: a mixed ancestor/descendant selection (e.g. `A/` + `A/B.md`) is
+  // rejected wholesale rather than auto-normalised — moving `A/` already
+  // carries `A/B.md`, and a doubled relocation / re-key is unsafe in v1.
+  const foldedNormalizedSources = sources
+    .map((raw) => normalizeMoveSourceRelativePath(raw))
+    .filter((r): r is { ok: true; relativePath: string } => r.ok)
+    .map((r) => foldPath(r.relativePath));
+  const hasAncestorDescendantPair = foldedNormalizedSources.some((a, index) =>
+    foldedNormalizedSources.some(
+      (b, otherIndex) =>
+        index !== otherIndex && a !== b && isPathWithin(b, a)
+    )
   );
 
   const errors: MoveEntriesValidationError[] = [];
   const entries: ValidatedMoveEntry[] = [];
   const seenSources = new Set<string>();
 
+  if (hasAncestorDescendantPair) {
+    errors.push({ reason: "contains-ancestor-and-descendant" });
+  }
+
   for (const rawSource of sources) {
+    // A raw source string that resolves to the project root itself (empty /
+    // only slashes) can never be a Move source.
+    if (
+      typeof rawSource === "string" &&
+      rawSource.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, "")
+        .length === 0
+    ) {
+      errors.push({ reason: "source-is-project-root" });
+      continue;
+    }
+
     const normalized = normalizeMoveSourceRelativePath(rawSource);
 
     if (!normalized.ok) {
@@ -353,15 +400,44 @@ export async function validateMoveEntries(
       continue;
     }
 
-    if (sourceStats.isSymbolicLink() || !sourceStats.isFile()) {
+    // #340: a folder source is now valid (moved as a subtree); only a
+    // symlink or an exotic node (socket / device / fifo) is rejected.
+    const sourceIsDirectory = sourceStats.isDirectory();
+
+    if (
+      sourceStats.isSymbolicLink() ||
+      (!sourceStats.isFile() && !sourceIsDirectory)
+    ) {
       errors.push({ reason: "source-not-file", sourceRelativePath });
       continue;
     }
 
-    if (dirtyPaths.has(foldedSource)) {
+    // #340: for a folder source, a dirty open document ANYWHERE in the
+    // subtree blocks the Move (the renderer's identity update only follows
+    // clean documents).
+    const hasDirtyInScope = sourceIsDirectory
+      ? dirtyFoldedPaths.some((dirty) =>
+          isPathWithin(dirty, foldedSource)
+        )
+      : dirtyFoldedPaths.includes(foldedSource);
+
+    if (hasDirtyInScope) {
       errors.push({
         reason: "source-dirty-open-document",
         sourceRelativePath
+      });
+      continue;
+    }
+
+    // #340: a folder can never be moved into itself or its own subtree.
+    if (
+      sourceIsDirectory &&
+      isPathWithin(foldedDestination, foldedSource)
+    ) {
+      errors.push({
+        reason: "destination-inside-source",
+        sourceRelativePath,
+        destinationFolderRelativePath: folderRelativePath
       });
       continue;
     }
@@ -383,6 +459,8 @@ export async function validateMoveEntries(
     const baseName =
       sourceRelativePath.split("/").pop() ?? sourceRelativePath;
 
+    // #340: a name collision is a conflict for a folder too — folders are
+    // never merged.
     if (
       entryNames.some((existingName) =>
         moveEntryNamesConflict(existingName, baseName)
@@ -409,13 +487,54 @@ export async function validateMoveEntries(
       continue;
     }
 
+    // #340: for a folder, relocate every registered project Markdown document
+    // inside the subtree. New path = the folder's new location + the tail
+    // after the old folder path.
+    const subtreePrefix = `${sourceRelativePath}/`;
+    const movedProjectDocuments: ProjectDocumentPathRelocation[] =
+      sourceIsDirectory
+        ? knownProjectDocuments
+            .filter((doc) => doc.startsWith(subtreePrefix))
+            .map((oldRelativePath) => ({
+              oldRelativePath,
+              newRelativePath:
+                destinationRelativePath +
+                oldRelativePath.slice(sourceRelativePath.length)
+            }))
+        : [];
+
     entries.push({
       sourceRelativePath,
       destinationFolderRelativePath: folderRelativePath,
       destinationRelativePath,
       sourceAbsolutePath,
-      destinationAbsolutePath
+      destinationAbsolutePath,
+      isDirectory: sourceIsDirectory,
+      movedProjectDocuments
     });
+  }
+
+  // #340 blocker: two sources in THIS batch that would land on the same
+  // destination path (after NFC + case folding) collide with each other —
+  // e.g. `A/foo.md` and `B/foo.md` both → `Archive/foo.md`. This is invisible
+  // to the per-source filesystem conflict check (`entryNames`), so detect it
+  // here and reject every colliding entry before any `fs.rename` runs.
+  const foldedDestinationCounts = new Map<string, number>();
+  for (const entry of entries) {
+    const key = foldPath(entry.destinationRelativePath);
+    foldedDestinationCounts.set(key, (foldedDestinationCounts.get(key) ?? 0) + 1);
+  }
+  for (const entry of entries) {
+    if (
+      (foldedDestinationCounts.get(foldPath(entry.destinationRelativePath)) ??
+        0) > 1
+    ) {
+      errors.push({
+        reason: "batch-destination-conflict",
+        sourceRelativePath: entry.sourceRelativePath,
+        destinationFolderRelativePath: entry.destinationFolderRelativePath
+      });
+    }
   }
 
   if (errors.length > 0) {

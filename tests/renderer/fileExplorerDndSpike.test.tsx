@@ -66,7 +66,17 @@ async function flushPromises(): Promise<void> {
   });
 }
 
-function movedResult(entries: Array<{ src: string; dest: string }>) {
+function movedResult(
+  entries: Array<{
+    src: string;
+    dest: string;
+    isDirectory?: boolean;
+    movedProjectDocuments?: Array<{
+      oldRelativePath: string;
+      newRelativePath: string;
+    }>;
+  }>
+) {
   return {
     kind: "completed",
     result: {
@@ -77,12 +87,23 @@ function movedResult(entries: Array<{ src: string; dest: string }>) {
         sourceRelativePath: entry.src,
         destinationRelativePath: entry.dest,
         sourceAbsolutePath: `C:/Novel/${entry.src}`,
-        destinationAbsolutePath: `C:/Novel/${entry.dest}`
+        destinationAbsolutePath: `C:/Novel/${entry.dest}`,
+        isDirectory: entry.isDirectory ?? false,
+        movedProjectDocuments: entry.movedProjectDocuments ?? []
       })),
-      successfulPathPairs: entries.map((entry) => ({
-        oldAbsolutePath: `C:/Novel/${entry.src}`,
-        newAbsolutePath: `C:/Novel/${entry.dest}`
-      }))
+      successfulPathPairs: entries.flatMap((entry) =>
+        entry.isDirectory
+          ? (entry.movedProjectDocuments ?? []).map((doc) => ({
+              oldAbsolutePath: `C:/Novel/${doc.oldRelativePath}`,
+              newAbsolutePath: `C:/Novel/${doc.newRelativePath}`
+            }))
+          : [
+              {
+                oldAbsolutePath: `C:/Novel/${entry.src}`,
+                newAbsolutePath: `C:/Novel/${entry.dest}`
+              }
+            ]
+      )
     }
   };
 }
@@ -298,14 +319,16 @@ describe("FileExplorer D&D spike — drag source (#329)", () => {
     expect(selectedPaths()).toEqual(["c.md"]);
   });
 
-  it("does not start a movable drag from a folder row", async () => {
+  it("#340: starts a movable drag from a folder row", async () => {
     await mount();
 
     const event = dragStart("Drafts");
 
-    expect(event.defaultPrevented).toBe(true);
-    expect(event.dataTransfer.getData(FILE_EXPLORER_MOVE_DND_MIME)).toBe("");
-    expect(draggingMarkers()).toEqual([]);
+    expect(event.defaultPrevented).toBe(false);
+    expect(event.dataTransfer.getData(FILE_EXPLORER_MOVE_DND_MIME)).toBe(
+      JSON.stringify(["Drafts"])
+    );
+    expect(draggingMarkers()).toEqual(["Drafts"]);
   });
 
   it("does not start a drag when a selected file is a DIRTY open document (#338)", async () => {

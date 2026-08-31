@@ -1654,6 +1654,27 @@ label.settingsItemHeader {
   color: var(--workspace-sidebar-active-foreground);
 }
 
+.fileOperationFailureDialogIntro {
+  margin: 0 0 10px;
+}
+
+.fileOperationFailureDialogDetails {
+  display: block;
+  inline-size: 100%;
+  box-sizing: border-box;
+  max-height: 240px;
+  padding: 8px 10px;
+  overflow-y: auto;
+  border: 1px solid var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
+  border-radius: 6px;
+  /* Muted, read-only surface — but full-contrast text (readOnly, not
+     disabled) so the list stays legible and copyable. */
+  background: var(--workspace-sidebar-hover, rgba(127, 127, 127, 0.08));
+  color: inherit;
+  font: inherit;
+  resize: none;
+}
+
 .fileExplorerInlineStatus {
   min-height: 26px;
   overflow: hidden;

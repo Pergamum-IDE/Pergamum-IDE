@@ -27,6 +27,7 @@
  */
 
 import { promises as nodeFs } from "node:fs";
+import nodePath from "node:path";
 import type {
   MoveEntriesRecoveryRekey,
   MoveEntriesResult,
@@ -116,6 +117,8 @@ export async function moveEntries(
     };
 
     try {
+      // A folder source is one `fs.rename` of the whole subtree — no
+      // recursion, no per-file work here.
       await rename(entry.sourceAbsolutePath, entry.destinationAbsolutePath);
     } catch (error) {
       anyFailed = true;
@@ -128,11 +131,35 @@ export async function moveEntries(
       continue;
     }
 
-    results.push({ status: "moved", ...location });
-    successfulPathPairs.push({
-      oldAbsolutePath: entry.sourceAbsolutePath,
-      newAbsolutePath: entry.destinationAbsolutePath
+    results.push({
+      status: "moved",
+      isDirectory: entry.isDirectory,
+      movedProjectDocuments: entry.movedProjectDocuments,
+      ...location
     });
+
+    if (entry.isDirectory) {
+      // #340: hand the #326 Recovery re-key hook the moved subtree's known
+      // project-document FILE pairs (not the folder itself — no Recovery row
+      // is keyed to a directory).
+      for (const relocated of entry.movedProjectDocuments) {
+        successfulPathPairs.push({
+          oldAbsolutePath: nodePath.resolve(
+            input.projectRootPath,
+            relocated.oldRelativePath
+          ),
+          newAbsolutePath: nodePath.resolve(
+            input.projectRootPath,
+            relocated.newRelativePath
+          )
+        });
+      }
+    } else {
+      successfulPathPairs.push({
+        oldAbsolutePath: entry.sourceAbsolutePath,
+        newAbsolutePath: entry.destinationAbsolutePath
+      });
+    }
   }
 
   // #326: best-effort Recovery re-key for the files that actually moved.
