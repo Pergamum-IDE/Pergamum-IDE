@@ -44,7 +44,7 @@ describe("cold-start Markdown focus wiring (#280)", () => {
 
   it("waits for deferred Markdown launch routing to settle before requesting focus", () => {
     const routingEffect = sourceBlock(
-      "const filePath = pendingMarkdownLaunchTargetForRestore;"
+      "const { filePath, scope } = pendingMarkdownLaunchTargetForRestore;"
     );
     const routingSettled = sourceBlock(
       "const coldStartMarkdownLaunchRoutingSettled"
@@ -55,7 +55,7 @@ describe("cold-start Markdown focus wiring (#280)", () => {
       "setColdStartMarkdownLaunchRoutingInFlight(true)"
     );
     expect(routingEffect).toContain(
-      "routeMarkdownLaunchTargetNow(filePath).finally(() => {"
+      "routeMarkdownLaunchTargetNow(filePath, scope).finally(() => {"
     );
     expect(routingEffect).toContain(
       "setColdStartMarkdownLaunchRoutingInFlight(false)"

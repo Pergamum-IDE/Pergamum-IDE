@@ -47,7 +47,10 @@ import {
   type ActiveProjectContext,
   type EditorId
 } from "../shared/editorId";
-import { decideMarkdownScope } from "../shared/sessionRestore";
+import {
+  decideMarkdownScope,
+  type StartupMarkdownRejectionReason
+} from "../shared/sessionRestore";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
@@ -182,7 +185,8 @@ import type { RecoveryCandidate } from "../shared/recoveryCandidate";
 import {
   runColdStartRestore,
   type ColdStartRestoreDeps,
-  type RestoreUnavailableReason
+  type RestoreUnavailableReason,
+  type StartupMarkdownRejectedRoute
 } from "./session/coldStartRestore";
 import { runExplicitProjectCloseCommit } from "./explicitProjectCloseCommit";
 import {
@@ -1063,11 +1067,17 @@ export function App(): JSX.Element {
   if (!deferredRestoreErrorDialogsRef.current) {
     deferredRestoreErrorDialogsRef.current = new DeferredErrorDialogQueue([
       "restoreUnavailable",
-      "projectRestoreFailed"
+      "projectRestoreFailed",
+      // #347: a rejected startup Markdown target (ambiguous project root,
+      // discovery failure, unsupported / URL-like / directory / missing).
+      "startupMarkdownRejected"
     ]);
   }
 
   const deferredRestoreErrorDialogs = deferredRestoreErrorDialogsRef.current;
+  // #347: the reason for a pending `startupMarkdownRejected` deferred dialog.
+  const pendingStartupMarkdownRejectedReasonRef =
+    useRef<StartupMarkdownRejectionReason | null>(null);
   const [
     deferredRestoreErrorDialogVersion,
     setDeferredRestoreErrorDialogVersion
@@ -1082,10 +1092,16 @@ export function App(): JSX.Element {
   );
   // #274: a Markdown launch target awaiting routing into the restored
   // working environment (handled by a follow-up effect, with fresh state).
+  // #347: `scope` distinguishes an External File Document open (`"external"`)
+  // from a project-owned Markdown that must open ONLY as a Project Document
+  // (`"enclosingProject"`) and must never fall back to standalone writable.
   const [
     pendingMarkdownLaunchTargetForRestore,
     setPendingMarkdownLaunchTargetForRestore
-  ] = useState<string | null>(null);
+  ] = useState<{
+    readonly filePath: string;
+    readonly scope: "external" | "enclosingProject";
+  } | null>(null);
   /**
    * Holds the current live command context. Read lazily by the
    * CommandRegistry's injected context provider so `when` re-evaluation at
@@ -5444,6 +5460,29 @@ export function App(): JSX.Element {
     }).then(() => undefined);
   }
 
+  // #347: the user-visible explanation for a rejected startup Markdown
+  // target. Info dialog, OK only; presented from the deferred-error idle
+  // boundary so it never races the read-only-project confirmation modal.
+  function showStartupMarkdownRejectedDialog(): Promise<void> {
+    const reason: StartupMarkdownRejectionReason =
+      pendingStartupMarkdownRejectedReasonRef.current ?? "discoveryFailed";
+
+    return confirmDialog({
+      title: translate("dialog.startupMarkdownRejected.title"),
+      message: {
+        kind: "plainText",
+        text: translate(
+          `dialog.startupMarkdownRejected.reason.${reason}` as TranslationKey
+        )
+      },
+      icon: { kind: "info", tooltip: translate("dialog.icon.info") },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    }).then(() => undefined);
+  }
+
   // #274: re-drive the deferred restore-Error queue. Presents at most one
   // owed-and-unshown Error, only once the cold-start sequence is ready AND
   // the dialog controller is idle; a rejected presentation
@@ -5452,10 +5491,17 @@ export function App(): JSX.Element {
   function pumpDeferredRestoreErrorDialogs(): void {
     const presentation = deferredRestoreErrorDialogs.pump({
       isDialogPending: () => dialogController.getPendingRequest() !== null,
-      present: (id) =>
-        id === "restoreUnavailable"
-          ? showSessionRestoreUnavailableDialog()
-          : showProjectRestoreFailedDialog()
+      present: (id) => {
+        if (id === "restoreUnavailable") {
+          return showSessionRestoreUnavailableDialog();
+        }
+
+        if (id === "startupMarkdownRejected") {
+          return showStartupMarkdownRejectedDialog();
+        }
+
+        return showProjectRestoreFailedDialog();
+      }
     });
 
     if (presentation) {
@@ -5509,17 +5555,55 @@ export function App(): JSX.Element {
     }
   }
 
-  // #274: route a Markdown launch target into the (now committed) restored
-  // working environment. Runs from a follow-up effect so `project` /
+  // #274/#347: route a Markdown launch target into the (now committed)
+  // restored working environment. Runs from a follow-up effect so `project` /
   // `activeProjectContext` / the EditorNavigation adapter are all fresh.
-  async function routeMarkdownLaunchTargetNow(filePath: string): Promise<void> {
-    const scope = decideMarkdownScope({
+  //
+  //   - `"enclosingProject"` (#347): main-process discovery already proved
+  //     this Markdown belongs to a Pergamum project, and the launch target
+  //     opened that project through the normal lifecycle. Open it ONLY as a
+  //     Project Document. If the project is not open (user cancelled the
+  //     read-only confirmation, or the open failed) open nothing. NEVER fall
+  //     back to a standalone writable document (LOCK-STARTUP-1/2/3).
+  //   - `"external"` (#274): no enclosing project. Attach to the restored
+  //     Project scope when the path is inside it, otherwise standalone.
+  async function routeMarkdownLaunchTargetNow(
+    filePath: string,
+    scope: "external" | "enclosingProject"
+  ): Promise<void> {
+    if (scope === "enclosingProject") {
+      if (!project || !activeProjectContext) {
+        // The enclosing project did not open (cancelled / fatal failure).
+        // The lifecycle already surfaced why; do not open standalone.
+        return;
+      }
+
+      const editorId = createEditorIdForPath(filePath, activeProjectContext);
+
+      if (editorId.kind !== "projectDocument") {
+        setStatus({ key: "status.projectDocumentNotFound" });
+        return;
+      }
+
+      if (findOpenDocument(openDocumentsState, editorId)) {
+        openEditorFromUi(editorId);
+      } else {
+        // `activateProjectDocument` reads the file fresh and safely reports
+        // `status.projectDocumentNotFound` if it is gone — it never opens a
+        // standalone document.
+        await activateProjectDocument(editorId.relativePath);
+      }
+
+      return;
+    }
+
+    const restoredScope = decideMarkdownScope({
       markdownPath: filePath,
       projectRootPath: project?.rootPath ?? null,
       platform: window.pergamum.platform
     });
 
-    if (scope === "insideProject" && project && activeProjectContext) {
+    if (restoredScope === "insideProject" && project && activeProjectContext) {
       const editorId = createEditorIdForPath(filePath, activeProjectContext);
 
       if (
@@ -5575,8 +5659,19 @@ export function App(): JSX.Element {
       });
       setColdStartMarkdownFocusArmed(sessionWasRestored);
     },
-    routeMarkdownLaunchTarget: (filePath) => {
-      setPendingMarkdownLaunchTargetForRestore(filePath);
+    routeMarkdownLaunchTarget: (filePath, scope) => {
+      setPendingMarkdownLaunchTargetForRestore({ filePath, scope });
+    },
+    // #347: a project-owned / ambiguous / unsafe startup Markdown target that
+    // must not open as a standalone writable document. Armed as owed only;
+    // presented from the same idle boundary as the other restore Errors so
+    // it never collides with the read-only-project confirmation modal.
+    notifyStartupMarkdownRejected: (route: StartupMarkdownRejectedRoute) => {
+      pendingStartupMarkdownRejectedReasonRef.current = route.reason;
+
+      if (deferredRestoreErrorDialogs.arm("startupMarkdownRejected")) {
+        setDeferredRestoreErrorDialogVersion((version) => version + 1);
+      }
     },
     // #274: arm the Error as owed only. Presentation is deferred to an idle
     // boundary so it never collides with a launch-routing modal (e.g. a
@@ -5638,10 +5733,10 @@ export function App(): JSX.Element {
       return;
     }
 
-    const filePath = pendingMarkdownLaunchTargetForRestore;
+    const { filePath, scope } = pendingMarkdownLaunchTargetForRestore;
     setPendingMarkdownLaunchTargetForRestore(null);
     setColdStartMarkdownLaunchRoutingInFlight(true);
-    void routeMarkdownLaunchTargetNow(filePath).finally(() => {
+    void routeMarkdownLaunchTargetNow(filePath, scope).finally(() => {
       setColdStartMarkdownLaunchRoutingInFlight(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

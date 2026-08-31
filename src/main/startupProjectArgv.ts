@@ -13,7 +13,53 @@ function isOptionArgument(value: string): boolean {
   return value.startsWith("-");
 }
 
+/**
+ * #347 / LOCK-STARTUP-5: a startup file-open target MUST be a local
+ * filesystem path, never a URL. `path.resolve("https://x/y.pergamum")`
+ * happily produces a `*.pergamum`-suffixed local path, so without this guard
+ * a URL-like argument would be accepted as a project / Markdown target.
+ *
+ * A single-letter drive prefix (`C:\`, `C:/`, bare `C:`), a UNC path
+ * (`\\server\...`), and a POSIX-absolute path (`/abs/...`) are local paths,
+ * not schemes.
+ */
+export function isUrlLikeStartupInput(rawInput: string): boolean {
+  const trimmed = rawInput.trim();
+
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  // Windows drive path: `C:\...`, `C:/...`, or bare `C:`.
+  if (/^[a-zA-Z]:([\\/]|$)/.test(trimmed)) {
+    return false;
+  }
+
+  // Extended-length / UNC / POSIX-absolute prefixes are local paths.
+  if (trimmed.startsWith("\\") || trimmed.startsWith("/")) {
+    return false;
+  }
+
+  // `scheme://authority/...`
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
+    return true;
+  }
+
+  // Bare scheme with a payload (`mailto:`, `about:`, custom protocols).
+  // Requires at least two characters before the colon so a Windows drive
+  // letter is never caught here.
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]+:/.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
 function isPergamumProjectFilePath(value: string): boolean {
+  if (isUrlLikeStartupInput(value)) {
+    return false;
+  }
+
   return (
     path.extname(path.resolve(value)).toLowerCase() === projectFileExtension
   );

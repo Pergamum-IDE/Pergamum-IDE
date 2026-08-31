@@ -22,8 +22,9 @@ describe("cold-start restore Error dialog wiring (#274)", () => {
     expect(app).toContain(
       'import { DeferredErrorDialogQueue } from "./dialog/deferredErrorDialogQueue"'
     );
+    // #347 added a third deferred cause id ("startupMarkdownRejected").
     expect(app).toMatch(
-      /new DeferredErrorDialogQueue\(\[\s*"restoreUnavailable",\s*"projectRestoreFailed"\s*\]\)/
+      /new DeferredErrorDialogQueue\(\[[\s\S]*?"restoreUnavailable",[\s\S]*?"projectRestoreFailed",[\s\S]*?"startupMarkdownRejected"[\s\S]*?\]\)/
     );
     // The old "attempted once" booleans are gone.
     expect(app).not.toContain("sessionRestoreUnavailableDialogShownRef");

@@ -33,9 +33,57 @@ import { sessionEditorIdentitiesEqual } from "./session";
 // Launch target
 // ---------------------------------------------------------------------------
 
+/**
+ * #347: why a startup Markdown target was refused. Every reason here means
+ * "do NOT open this as a standalone writable document". A locked enclosing
+ * project is deliberately NOT in this list — that case is promoted to a
+ * `kind: "pergamum"` target and handled by the existing project-open
+ * read-only lifecycle.
+ */
+export type StartupMarkdownRejectionReason =
+  | "urlLikeInput"
+  | "notFound"
+  | "notAFile"
+  | "isDirectory"
+  | "unsupportedExtension"
+  | "ambiguousProject"
+  | "discoveryFailed";
+
+/**
+ * #347: the main-process routing decision for a `kind: "markdown"` cold-start
+ * launch target. `enclosingProject` is NOT represented here — that case is
+ * promoted to a `kind: "pergamum"` target with `openProjectMarkdownAfter`
+ * set, so it reuses the whole existing project-open cold-start path
+ * (including the read-only confirmation dialog for a locked project).
+ */
+export type StartupMarkdownRoute =
+  | { readonly kind: "externalFile" }
+  | {
+      readonly kind: "rejected";
+      readonly reason: StartupMarkdownRejectionReason;
+    };
+
 export type ColdStartLaunchTarget =
-  | { readonly kind: "pergamum"; readonly filePath: string }
-  | { readonly kind: "markdown"; readonly filePath: string };
+  | {
+      readonly kind: "pergamum";
+      readonly filePath: string;
+      /**
+       * #347: when this project was reached because a startup Markdown file
+       * lives inside it, the absolute path of that Markdown. After the
+       * project is open/restored the renderer opens it as a Project
+       * Document — never standalone.
+       */
+      readonly openProjectMarkdownAfter?: string;
+    }
+  | {
+      readonly kind: "markdown";
+      readonly filePath: string;
+      /**
+       * #347: absent is treated as `{ kind: "externalFile" }` for
+       * backward compatibility with pre-#347 payloads.
+       */
+      readonly markdownRoute?: StartupMarkdownRoute;
+    };
 
 // ---------------------------------------------------------------------------
 // Session selection

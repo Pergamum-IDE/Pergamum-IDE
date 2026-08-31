@@ -49,8 +49,15 @@ import {
   selectRestoreSession,
   shouldSurfaceRestoreUnavailable,
   type ColdStartLaunchTarget,
-  type RestoredEditorLike
+  type RestoredEditorLike,
+  type StartupMarkdownRoute
 } from "../../shared/sessionRestore";
+
+/** #347: the `rejected` shape of a startup Markdown route. */
+export type StartupMarkdownRejectedRoute = Extract<
+  StartupMarkdownRoute,
+  { kind: "rejected" }
+>;
 import {
   createFileEditorIdForPath,
   createGlossaryEntryEditorId,
@@ -125,11 +132,35 @@ export interface ColdStartRestoreDeps {
   /**
    * Route a Markdown launch target into the (already-applied) working
    * environment. The host defers this to a follow-up effect so it runs with
-   * fresh state (restored Project / editors committed): it decides
-   * project-scope vs standalone (`decideMarkdownScope`), de-dupes against an
-   * already-open editor, and opens.
+   * fresh state (restored Project / editors committed).
+   *
+   *   - `"external"`         — Case A: no enclosing project. The host
+   *                            decides restored-project-scope vs standalone
+   *                            (`decideMarkdownScope`), de-dupes, and opens.
+   *   - `"enclosingProject"` — #347: the Markdown belongs to a project that
+   *                            was just opened via the launch target. The
+   *                            host opens it ONLY as a Project Document, and
+   *                            ONLY if that project is actually open (writable
+   *                            or read-only). If the project did not open
+   *                            (user cancelled / fatal failure) it opens
+   *                            nothing. It MUST NEVER fall back to a
+   *                            standalone writable document (LOCK-STARTUP-1).
    */
-  readonly routeMarkdownLaunchTarget: (filePath: string) => void;
+  readonly routeMarkdownLaunchTarget: (
+    filePath: string,
+    scope: "external" | "enclosingProject"
+  ) => void;
+
+  /**
+   * #347: a startup Markdown target that must NOT be opened as a standalone
+   * writable document — the nearest project root is ambiguous (multiple
+   * `.pergamum`), discovery failed for a safety-relevant reason, or the
+   * input was unsupported / URL-like / a directory / missing. The host shows
+   * a user-visible explanation and opens nothing.
+   */
+  readonly notifyStartupMarkdownRejected: (
+    route: StartupMarkdownRejectedRoute
+  ) => void;
 
   readonly notifyRestoreUnavailable: (reason: RestoreUnavailableReason) => void;
   readonly notifyProjectRestoreFailed: () => void;
@@ -470,22 +501,33 @@ export async function runColdStartRestore(
     // Launch target integration AFTER restore. The host routes the Markdown
     // target in a follow-up effect (fresh state).
     if (launchTarget?.kind === "markdown") {
-      deps.routeMarkdownLaunchTarget(launchTarget.filePath);
-    } else if (
-      launchTarget?.kind === "pergamum" &&
-      selection.matchedLaunchTarget &&
-      outcome.projectContextRestoreFailed
-    ) {
-      // BLOCKER 3: the Session was selected only because its SAVED LOCATOR
-      // matched the launched `.pergamum`. That match is provisional — the
-      // `.pergamum` at that path is now a different project (identity
-      // mismatch) or is missing / unreadable. The Session's Project Context
-      // is not restored (a dialog already told the user), but the
-      // `.pergamum` the user explicitly launched must NOT be lost: open it
-      // the ordinary way, through the normal Project-open lifecycle. Any
-      // independent editors the Session did restore stay as-is until that
-      // ordinary open takes over the working environment.
-      await deps.openLaunchTargetProjectNormally();
+      routeColdStartMarkdownTarget(launchTarget, deps);
+    } else if (launchTarget?.kind === "pergamum") {
+      if (selection.matchedLaunchTarget && outcome.projectContextRestoreFailed) {
+        // BLOCKER 3: the Session was selected only because its SAVED LOCATOR
+        // matched the launched `.pergamum`. That match is provisional — the
+        // `.pergamum` at that path is now a different project (identity
+        // mismatch) or is missing / unreadable. The Session's Project
+        // Context is not restored (a dialog already told the user), but the
+        // `.pergamum` the user explicitly launched must NOT be lost: open it
+        // the ordinary way, through the normal Project-open lifecycle. Any
+        // independent editors the Session did restore stay as-is until that
+        // ordinary open takes over the working environment.
+        await deps.openLaunchTargetProjectNormally();
+      }
+
+      // #347: the launch target is a `.pergamum` only because a startup
+      // Markdown file lives inside it. Now that the project has been through
+      // its open lifecycle (Session restore or the ordinary open above, or a
+      // read-only confirmation / cancel), attach that Markdown as a Project
+      // Document — never standalone (LOCK-STARTUP-1/2). The host opens
+      // nothing if the project did not actually open.
+      if (launchTarget.openProjectMarkdownAfter) {
+        deps.routeMarkdownLaunchTarget(
+          launchTarget.openProjectMarkdownAfter,
+          "enclosingProject"
+        );
+      }
     }
     // A `.pergamum` that matched and restored cleanly needs nothing
     // further — its project is already restored, no duplicate is created.
@@ -504,10 +546,42 @@ async function openLaunchTargetOnly(
 
   if (launchTarget.kind === "pergamum") {
     await deps.openLaunchTargetProjectNormally();
+
+    // #347: a Markdown that lives inside this project is attached as a
+    // Project Document once the project's open lifecycle has run. Never
+    // standalone; opens nothing if the project did not open.
+    if (launchTarget.openProjectMarkdownAfter) {
+      deps.routeMarkdownLaunchTarget(
+        launchTarget.openProjectMarkdownAfter,
+        "enclosingProject"
+      );
+    }
+
     return;
   }
 
-  // Markdown with nothing restored → route it (the host will open it
-  // standalone, since there is no restored Project scope).
-  deps.routeMarkdownLaunchTarget(launchTarget.filePath);
+  routeColdStartMarkdownTarget(launchTarget, deps);
+}
+
+/**
+ * #347: route a `kind: "markdown"` cold-start launch target.
+ *
+ *   - `externalFile` (or a pre-#347 payload with no `markdownRoute`) — no
+ *     enclosing project; the host opens it as an External File Document.
+ *   - `rejected` — ambiguous project root / discovery failure / unsupported
+ *     / URL-like / directory / missing: the host shows an explanation and
+ *     opens nothing. It is NEVER opened as standalone writable.
+ */
+function routeColdStartMarkdownTarget(
+  launchTarget: Extract<ColdStartLaunchTarget, { kind: "markdown" }>,
+  deps: ColdStartRestoreDeps
+): void {
+  const route = launchTarget.markdownRoute ?? { kind: "externalFile" };
+
+  if (route.kind === "rejected") {
+    deps.notifyStartupMarkdownRejected(route);
+    return;
+  }
+
+  deps.routeMarkdownLaunchTarget(launchTarget.filePath, "external");
 }

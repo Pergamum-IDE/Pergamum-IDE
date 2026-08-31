@@ -57,6 +57,31 @@ describe("extractStartupProjectFilePathFromArgv", () => {
     }
   );
 
+  it.each([
+    "https://example.com/Book.pergamum",
+    "http://host/Book.pergamum",
+    "file:///C:/Users/me/Book.pergamum",
+    "ftp://host/Book.pergamum"
+  ])(
+    "does not treat a URL-like .pergamum argument as a startup project (%s) (#347 / LOCK-STARTUP-5)",
+    (url) => {
+      expect(
+        extractStartupProjectFilePathFromArgv(["Pergamum.exe", url], {
+          isPackaged: true
+        })
+      ).toBeNull();
+    }
+  );
+
+  it("still accepts a Windows drive-letter .pergamum path (not URL-like)", () => {
+    expect(
+      extractStartupProjectFilePathFromArgv(
+        ["Pergamum.exe", "C:\\Novel\\Book.pergamum"],
+        { isPackaged: true }
+      )
+    ).toBe(path.resolve("C:\\Novel\\Book.pergamum"));
+  });
+
   it("does not extract a startup project when multiple positional file arguments are present", () => {
     expect(
       extractStartupProjectFilePathFromArgv(
