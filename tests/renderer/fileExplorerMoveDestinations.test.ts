@@ -3,6 +3,9 @@ import type { FileExplorerEntry } from "../../src/shared/api";
 import {
   FILE_EXPLORER_MOVE_ROOT_DESTINATION,
   collectFileExplorerMoveDestinationFolders,
+  isValidFileExplorerDropTarget,
+  resolveFileExplorerDragSources,
+  resolveFileExplorerDropDestination,
   resolveFileExplorerMoveDisabledReason,
   resolveFileExplorerMoveSources,
   resolveFileExplorerPasteDestination,
@@ -220,5 +223,130 @@ describe("resolveFileExplorerPasteDestination (#328)", () => {
         entriesByDirectoryPath
       )
     ).toBe("Drafts");
+  });
+});
+
+describe("resolveFileExplorerDragSources (#329 spike)", () => {
+  const entriesByDirectoryPath = {
+    "": [folder("Drafts"), file("a.md"), file("b.md"), file("c.md")]
+  };
+
+  it("uses the whole multi-selection when dragging a selected file", () => {
+    const result = resolveFileExplorerDragSources(
+      { relativePath: "a.md", kind: "file", isSelected: true },
+      new Set(["b.md", "a.md"]),
+      entriesByDirectoryPath
+    );
+    expect(result.sourceRelativePaths).toEqual(["a.md", "b.md"]);
+    expect(result.canDrag).toBe(true);
+  });
+
+  it("uses only the dragged file when it is not part of the selection", () => {
+    const result = resolveFileExplorerDragSources(
+      { relativePath: "c.md", kind: "file", isSelected: false },
+      new Set(["a.md", "b.md"]),
+      entriesByDirectoryPath
+    );
+    expect(result.sourceRelativePaths).toEqual(["c.md"]);
+    expect(result.canDrag).toBe(true);
+  });
+
+  it("never starts a movable drag from a folder row", () => {
+    const result = resolveFileExplorerDragSources(
+      { relativePath: "Drafts", kind: "folder", isSelected: true },
+      new Set(["Drafts"]),
+      entriesByDirectoryPath
+    );
+    expect(result.canDrag).toBe(false);
+    expect(result.sourceRelativePaths).toEqual([]);
+  });
+
+  it("is not draggable when the selection mixes in a folder", () => {
+    const result = resolveFileExplorerDragSources(
+      { relativePath: "a.md", kind: "file", isSelected: true },
+      new Set(["a.md", "Drafts"]),
+      entriesByDirectoryPath
+    );
+    expect(result.canDrag).toBe(false);
+  });
+});
+
+describe("resolveFileExplorerDropDestination (#329 spike)", () => {
+  it("maps the project root row to the empty destination", () => {
+    expect(resolveFileExplorerDropDestination({ kind: "root" })).toBe(
+      FILE_EXPLORER_MOVE_ROOT_DESTINATION
+    );
+  });
+
+  it("maps a folder row to its own path", () => {
+    expect(
+      resolveFileExplorerDropDestination({
+        kind: "entry",
+        relativePath: "Drafts/Old",
+        entryKind: "folder"
+      })
+    ).toBe("Drafts/Old");
+  });
+
+  it("rejects a file row and the empty area", () => {
+    expect(
+      resolveFileExplorerDropDestination({
+        kind: "entry",
+        relativePath: "a.md",
+        entryKind: "file"
+      })
+    ).toBeNull();
+    expect(resolveFileExplorerDropDestination({ kind: "none" })).toBeNull();
+  });
+});
+
+describe("isValidFileExplorerDropTarget (#329 spike)", () => {
+  it("accepts a real move into a different folder", () => {
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["a.md", "b.md"],
+        destinationFolderRelativePath: "Drafts"
+      })
+    ).toBe(true);
+  });
+
+  it("rejects a null destination and an empty source list", () => {
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["a.md"],
+        destinationFolderRelativePath: null
+      })
+    ).toBe(false);
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: [],
+        destinationFolderRelativePath: "Drafts"
+      })
+    ).toBe(false);
+  });
+
+  it("rejects a drop where every source is already in the destination", () => {
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["Drafts/a.md", "Drafts/b.md"],
+        destinationFolderRelativePath: "Drafts"
+      })
+    ).toBe(false);
+    // Root-level files dropped back on the project root.
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["a.md"],
+        destinationFolderRelativePath: ""
+      })
+    ).toBe(false);
+  });
+
+  it("still accepts a mixed batch where at least one source moves", () => {
+    expect(
+      isValidFileExplorerDropTarget({
+        dragSourceRelativePaths: ["Drafts/a.md", "b.md"],
+        destinationFolderRelativePath: "Drafts"
+      })
+    ).toBe(true);
   });
 });
