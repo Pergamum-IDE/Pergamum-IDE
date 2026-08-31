@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   runColdStartRestore,
   type ColdStartRestoreDeps,
-  type RestoredEnvironment
+  type RestoredEnvironment,
+  type StartupMarkdownRejectedRoute
 } from "../../src/renderer/session/coldStartRestore";
 import type {
   ColdStartRestorePayload,
@@ -73,12 +74,18 @@ function pm(relativePath: string, order: number): SessionEditor {
   return { kind: "projectMarkdown", order, relativePath, viewState: null };
 }
 
+interface RoutedMarkdown {
+  readonly filePath: string;
+  readonly scope: "external" | "enclosingProject";
+}
+
 interface Harness {
   deps: ColdStartRestoreDeps;
   applied: RestoredEnvironment[];
   adopted: string[];
   finished: boolean[];
-  routedMarkdown: string[];
+  routedMarkdown: RoutedMarkdown[];
+  rejectedRoutes: StartupMarkdownRejectedRoute[];
   skipped: string[];
   restoreUnavailable: string[];
   projectRestoreFailed: number;
@@ -92,7 +99,8 @@ function harness(
   const applied: RestoredEnvironment[] = [];
   const adopted: string[] = [];
   const finished: boolean[] = [];
-  const routedMarkdown: string[] = [];
+  const routedMarkdown: RoutedMarkdown[] = [];
+  const rejectedRoutes: StartupMarkdownRejectedRoute[] = [];
   const skipped: string[] = [];
   const restoreUnavailable: string[] = [];
   let projectRestoreFailed = 0;
@@ -119,7 +127,9 @@ function harness(
     },
     adoptSessionId: (id) => adopted.push(id),
     finishColdStart: (restored) => finished.push(restored),
-    routeMarkdownLaunchTarget: (filePath) => routedMarkdown.push(filePath),
+    routeMarkdownLaunchTarget: (filePath, scope) =>
+      routedMarkdown.push({ filePath, scope }),
+    notifyStartupMarkdownRejected: (route) => rejectedRoutes.push(route),
     notifyRestoreUnavailable: (reason) => restoreUnavailable.push(reason),
     notifyProjectRestoreFailed: () => {
       projectRestoreFailed += 1;
@@ -134,6 +144,7 @@ function harness(
     adopted,
     finished,
     routedMarkdown,
+    rejectedRoutes,
     skipped,
     restoreUnavailable,
     get projectRestoreFailed() {
@@ -502,13 +513,16 @@ describe("runColdStartRestore (#274)", () => {
     expect(h.restoreUnavailable).toEqual([]);
   });
 
-  it("empty restore set + Markdown launch target: routes the Markdown", async () => {
+  it("empty restore set + Markdown launch target: routes the Markdown (external scope)", async () => {
     const h = harness({
       read: { kind: "empty" },
       launchTarget: { kind: "markdown", filePath: "/w/x/a.md" }
     });
     await runColdStartRestore(h.deps);
-    expect(h.routedMarkdown).toEqual(["/w/x/a.md"]);
+    expect(h.routedMarkdown).toEqual([
+      { filePath: "/w/x/a.md", scope: "external" }
+    ]);
+    expect(h.rejectedRoutes).toEqual([]);
   });
 
   it("empty restore set + `.pergamum` launch target: opens the project normally", async () => {
@@ -527,7 +541,9 @@ describe("runColdStartRestore (#274)", () => {
     });
     await runColdStartRestore(h.deps);
     expect(h.restoreUnavailable).toEqual(["malformed"]);
-    expect(h.routedMarkdown).toEqual(["/w/x/a.md"]);
+    expect(h.routedMarkdown).toEqual([
+      { filePath: "/w/x/a.md", scope: "external" }
+    ]);
     expect(h.applied).toEqual([]);
     expect(h.finished).toEqual([false]);
   });
@@ -674,6 +690,67 @@ describe("runColdStartRestore (#274)", () => {
     );
     await runColdStartRestore(h.deps);
     expect(seen).toEqual(["apply", "route"]);
+  });
+
+  // #347: lock-aware startup Markdown open routing.
+  it("#347: a `rejected` Markdown route notifies the host and opens nothing", async () => {
+    const h = harness({
+      read: { kind: "empty" },
+      launchTarget: {
+        kind: "markdown",
+        filePath: "/w/proj/ch1.md",
+        markdownRoute: { kind: "rejected", reason: "ambiguousProject" }
+      }
+    });
+    await runColdStartRestore(h.deps);
+
+    expect(h.rejectedRoutes).toEqual([
+      { kind: "rejected", reason: "ambiguousProject" }
+    ]);
+    expect(h.routedMarkdown).toEqual([]);
+    expect(h.applied).toEqual([]);
+  });
+
+  it("#347: an enclosing-project Markdown opens the project then routes project-scoped", async () => {
+    const seen: string[] = [];
+    const h = harness(
+      {
+        read: { kind: "empty" },
+        launchTarget: {
+          kind: "pergamum",
+          filePath: "/w/proj/Book.pergamum",
+          openProjectMarkdownAfter: "/w/proj/manuscripts/ch1.md"
+        }
+      },
+      {
+        openLaunchTargetProjectNormally: () => {
+          seen.push("openProject");
+          return Promise.resolve(PROJECT);
+        },
+        routeMarkdownLaunchTarget: (filePath, scope) =>
+          seen.push(`route:${scope}:${filePath}`)
+      }
+    );
+
+    await runColdStartRestore(h.deps);
+
+    expect(seen).toEqual([
+      "openProject",
+      "route:enclosingProject:/w/proj/manuscripts/ch1.md"
+    ]);
+    expect(h.rejectedRoutes).toEqual([]);
+  });
+
+  it("#347: a Markdown launch target with no markdownRoute is treated as external (back-compat)", async () => {
+    const h = harness({
+      read: { kind: "empty" },
+      launchTarget: { kind: "markdown", filePath: "/w/x/a.md" }
+    });
+    await runColdStartRestore(h.deps);
+
+    expect(h.routedMarkdown).toEqual([
+      { filePath: "/w/x/a.md", scope: "external" }
+    ]);
   });
 
   it("a thrown payload fetch is best-effort: notifies + releases persistence", async () => {

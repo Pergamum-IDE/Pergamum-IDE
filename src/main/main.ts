@@ -51,7 +51,7 @@ import {
 } from "./windowStateRestore";
 import { installAppShutdownCleanup } from "./shutdownCleanup";
 import { extractStartupProjectFilePathFromArgv } from "./startupProjectArgv";
-import { extractColdStartLaunchTarget } from "./startupLaunchTarget";
+import { resolveColdStartLaunchTarget } from "./startupLaunchTarget";
 import {
   createWindowLifecycleController,
   type WindowLifecycleController
@@ -230,10 +230,25 @@ app.whenReady().then(async () => {
   // #274: cold-start launch target (`.pergamum` or Markdown). Extracted
   // here so the restore payload can carry it; runtime `second-instance` /
   // `open-file` forwarding stays out of scope.
-  const coldStartLaunchTarget = extractColdStartLaunchTarget(
+  //
+  // #347: for a Markdown target this also runs the classifier — enclosing
+  // Pergamum project discovery, the `.md` / `.markdown` allowlist, and
+  // URL-like / directory / missing rejection. A Markdown that lives inside a
+  // project is promoted to a `kind: "pergamum"` target carrying
+  // `openProjectMarkdownAfter`, so the existing project-open lifecycle
+  // (read-only confirmation for a locked project) owns the outcome and it can
+  // never be opened as standalone writable.
+  const coldStartLaunchTarget = await resolveColdStartLaunchTarget(
     process.argv,
     startupProjectArgvOptions
   );
+  // #347: when the launched Markdown belongs to an enclosing project, open
+  // that project through the ordinary startup-project lifecycle.
+  const enclosingMarkdownProjectFilePath =
+    coldStartLaunchTarget?.kind === "pergamum" &&
+    coldStartLaunchTarget.openProjectMarkdownAfter
+      ? coldStartLaunchTarget.filePath
+      : null;
   const debugLogger = createDebugLogger({
     enabled: pergamumDebugMode,
     runtime: createDebugLogRuntimeDetails(app, pergamumDebugMode),
@@ -281,7 +296,10 @@ app.whenReady().then(async () => {
     debugLogger,
     defaultProjectWriteOwnershipManager,
     undefined,
-    startupProjectFilePath,
+    // #347: a Markdown launch target inside a project opens that project
+    // here, so the renderer then attaches the Markdown as a Project
+    // Document rather than opening it standalone.
+    startupProjectFilePath ?? enclosingMarkdownProjectFilePath,
     instanceRunId,
     // #320: after a File Explorer rename `fs.rename`s a file, best-effort
     // re-key its Recovery row so a pending candidate is not stranded on the

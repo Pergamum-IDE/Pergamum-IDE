@@ -318,6 +318,52 @@ describe("file I/O workflow translations (#202)", () => {
 
 });
 
+describe("startup Markdown rejection dialog translations (#347)", () => {
+  const reasons = [
+    "urlLikeInput",
+    "notFound",
+    "notAFile",
+    "isDirectory",
+    "unsupportedExtension",
+    "ambiguousProject",
+    "discoveryFailed"
+  ] as const;
+
+  it("defines a title and one message per rejection reason for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      expect(
+        t(language, "dialog.startupMarkdownRejected.title").length
+      ).toBeGreaterThan(0);
+
+      for (const reason of reasons) {
+        const key =
+          `dialog.startupMarkdownRejected.reason.${reason}` as const;
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("tells the user to open the .pergamum directly when the project root is ambiguous (ADR-0008)", () => {
+    expect(
+      t("ja", "dialog.startupMarkdownRejected.reason.ambiguousProject")
+    ).toContain(".pergamum");
+    expect(
+      t("en", "dialog.startupMarkdownRejected.reason.ambiguousProject")
+    ).toMatch(/\.pergamum/);
+  });
+
+  it("names the supported extensions in the unsupported-extension message", () => {
+    for (const language of ["ja", "en"] as const) {
+      const message = t(
+        language,
+        "dialog.startupMarkdownRejected.reason.unsupportedExtension"
+      );
+      expect(message).toContain(".md");
+      expect(message).toContain(".markdown");
+    }
+  });
+});
+
 describe("application settings translations (#181)", () => {
   it("defines an explicit Application Settings tab title for ja and en", () => {
     expect(t("ja", "settings.application.title")).toBe(
