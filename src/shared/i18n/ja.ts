@@ -139,6 +139,11 @@ export const jaTranslations = {
   "dialog.projectOpenFailed.message":
     "プロジェクトファイル（.pergamum）が見つからないか、読み込めないか、別のプロジェクトに置き換わっている可能性があります。\n文書やプロジェクトの内容が削除されたわけではありません。",
   "dialog.projectOpenFailed.title": "プロジェクトを開けませんでした",
+  "dialog.createProjectConflict.message":
+    "このフォルダには、既にPergamumのプロジェクト設定または復旧領域があります。\n\n新しいプロジェクトを作成すると、既存の設定や復旧情報が上書きされる可能性があります。\n文書ファイル自体は削除されません。",
+  "dialog.createProjectConflict.overwriteAndCreate": "上書きして作成",
+  "dialog.createProjectConflict.title":
+    "既存のPergamum情報を上書きしますか？",
   "dialog.projectRestoreFailed.message":
     "前回開いていたプロジェクトを復元できませんでした。\n\nプロジェクトファイル（.pergamum）が見つからないか、読み込めないか、別のプロジェクトに置き換わっている可能性があります。\n文書やプロジェクトの内容が削除されたわけではありません。",
   "dialog.projectRestoreFailed.title": "プロジェクトを復元できませんでした",

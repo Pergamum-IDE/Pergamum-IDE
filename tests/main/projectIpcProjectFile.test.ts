@@ -7,6 +7,7 @@ import {
   defaultProjectAccessMode,
   PROJECT_CHANNELS,
   type ListFileExplorerChildrenResult,
+  type PendingCreateProjectInExistingRoot,
   type PendingReadOnlyProjectOpen,
   type ProjectOpenResult
 } from "../../src/shared/api";
@@ -82,12 +83,6 @@ import {
   projectLockOwnerMetadataPath,
   type ProjectLockOwnerMetadata
 } from "../../src/main/projectLockOwnerMetadata";
-
-const projectConflictWarningMessage =
-  "既に Pergamum のプロジェクト設定または復旧領域があります。\n\n" +
-  "既存の設定を上書きし、本文やGlossaryに関する復旧領域があるフォルダに新しいプロジェクトを作成します。\n\n" +
-  "これは破壊的な変更を伴います。\n" +
-  "本当によろしいですか？";
 
 describe("project file IPC foundation", () => {
   let projectRootPath: string;
@@ -906,6 +901,8 @@ describe("project file IPC foundation", () => {
         PROJECT_CHANNELS.createProject,
         PROJECT_CHANNELS.openProject,
         PROJECT_CHANNELS.openStartupProject,
+        PROJECT_CHANNELS.confirmCreateProjectInExistingRoot,
+        PROJECT_CHANNELS.cancelCreateProjectInExistingRoot,
         PROJECT_CHANNELS.confirmReadOnlyProjectOpen,
         PROJECT_CHANNELS.cancelReadOnlyProjectOpen,
         PROJECT_CHANNELS.listFileExplorerChildren,
@@ -1448,7 +1445,7 @@ describe("project file IPC foundation", () => {
       }
     ]
   ] as const)(
-    "createProject shows a warning confirmation when an existing %s is found",
+    "createProject returns an AppDialog pending request when an existing %s is found",
     async (_label, seedConflict) => {
       const projectFilePath = path.join(projectRootPath, "Warned.pergamum");
       await seedConflict(projectRootPath);
@@ -1456,34 +1453,16 @@ describe("project file IPC foundation", () => {
         canceled: false,
         filePath: projectFilePath
       });
-      electronMock.showMessageBox.mockResolvedValue({
-        response: 1,
-        checkboxChecked: false
-      });
 
       const createProjectHandler = registeredHandler(
         PROJECT_CHANNELS.createProject
       );
+      const pending = expectPendingCreateProjectInExistingRoot(
+        await createProjectHandler({ sender: {} })
+      );
 
-      await expect(createProjectHandler({ sender: {} })).resolves.toBeNull();
-
-      expect(electronMock.showMessageBox).toHaveBeenCalledTimes(1);
-      const options = electronMock.showMessageBox.mock.calls[0].at(-1);
-
-      expect(options).toMatchObject({
-        type: "warning",
-        message: projectConflictWarningMessage,
-        buttons: ["意味を理解して同意", "キャンセル"],
-        defaultId: 1,
-        cancelId: 1,
-        noLink: true
-      });
-      expectDialogHasNoUnsafeSurface([
-        projectRootPath,
-        projectFilePath,
-        "Warned.pergamum",
-        "Warned"
-      ]);
+      expect(pending.token).toMatch(/^pending-create-project-in-existing-root:/);
+      expect(electronMock.showMessageBox).not.toHaveBeenCalled();
       await expect(fs.access(projectFilePath)).rejects.toMatchObject({
         code: "ENOENT"
       });
@@ -1500,16 +1479,23 @@ describe("project file IPC foundation", () => {
       canceled: false,
       filePath: projectFilePath
     });
-    electronMock.showMessageBox.mockResolvedValue({
-      response: 1,
-      checkboxChecked: false
-    });
 
     const createProjectHandler = registeredHandler(
       PROJECT_CHANNELS.createProject
     );
+    const pending = expectPendingCreateProjectInExistingRoot(
+      await createProjectHandler({ sender: {} })
+    );
+    const cancelCreateProjectInExistingRootHandler = registeredHandler(
+      PROJECT_CHANNELS.cancelCreateProjectInExistingRoot
+    );
 
-    await expect(createProjectHandler({ sender: {} })).resolves.toBeNull();
+    await expect(
+      cancelCreateProjectInExistingRootHandler(
+        { sender: {} },
+        { token: pending.token }
+      )
+    ).resolves.toBeUndefined();
     await expect(fs.access(projectFilePath)).rejects.toMatchObject({
       code: "ENOENT"
     });
@@ -1531,15 +1517,20 @@ describe("project file IPC foundation", () => {
       canceled: false,
       filePath: projectFilePath
     });
-    electronMock.showMessageBox.mockResolvedValue({
-      response: 0,
-      checkboxChecked: false
-    });
 
     const createProjectHandler = registeredHandler(
       PROJECT_CHANNELS.createProject
     );
-    const project = await createProjectHandler({ sender: {} });
+    const pending = expectPendingCreateProjectInExistingRoot(
+      await createProjectHandler({ sender: {} })
+    );
+    const confirmCreateProjectInExistingRootHandler = registeredHandler(
+      PROJECT_CHANNELS.confirmCreateProjectInExistingRoot
+    );
+    const project = await confirmCreateProjectInExistingRootHandler(
+      { sender: {} },
+      { token: pending.token }
+    );
 
     expect(project).toMatchObject({
       rootPath: projectRootPath,
@@ -1547,6 +1538,7 @@ describe("project file IPC foundation", () => {
       accessMode: defaultProjectAccessMode,
       name: "Confirmed"
     });
+    expect(electronMock.showMessageBox).not.toHaveBeenCalled();
     await expect(fs.access(projectFilePath)).resolves.toBeUndefined();
     await expect(
       fs.readFile(path.join(projectRootPath, projectConfigFileName), "utf8")
@@ -4527,6 +4519,17 @@ function expectPendingReadOnlyProjectOpen(
   expect(value).toHaveProperty("lockOwner");
 
   return value as PendingReadOnlyProjectOpen;
+}
+
+function expectPendingCreateProjectInExistingRoot(
+  value: unknown
+): PendingCreateProjectInExistingRoot {
+  expect(value).toEqual({
+    kind: "pendingCreateProjectInExistingRoot",
+    token: expect.stringMatching(/^pending-create-project-in-existing-root:/)
+  });
+
+  return value as PendingCreateProjectInExistingRoot;
 }
 
 function expectStartupProjectOpenResult(value: unknown): ProjectOpenResult {

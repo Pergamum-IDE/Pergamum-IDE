@@ -52,6 +52,8 @@ describe("glossary preload API", () => {
     await api.projects.openProject();
     await api.projects.openStartupProject();
     await api.projects.openRecentProject("C:\\Novel\\Novel.pergamum");
+    await api.projects.confirmCreateProjectInExistingRoot("pending-create-token");
+    await api.projects.cancelCreateProjectInExistingRoot("pending-create-token");
     await api.projects.confirmReadOnlyProjectOpen("pending-token");
     await api.projects.cancelReadOnlyProjectOpen("pending-token");
     await api.projects.listFileExplorerChildren("Drafts");
@@ -71,6 +73,18 @@ describe("glossary preload API", () => {
         PROJECT_CHANNELS.openRecentProject,
         {
           projectFilePath: "C:\\Novel\\Novel.pergamum"
+        }
+      ],
+      [
+        PROJECT_CHANNELS.confirmCreateProjectInExistingRoot,
+        {
+          token: "pending-create-token"
+        }
+      ],
+      [
+        PROJECT_CHANNELS.cancelCreateProjectInExistingRoot,
+        {
+          token: "pending-create-token"
         }
       ],
       [

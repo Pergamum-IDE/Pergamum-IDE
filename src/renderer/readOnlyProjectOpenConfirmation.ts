@@ -2,7 +2,7 @@ import {
   isPendingReadOnlyProjectOpen,
   type PendingReadOnlyProjectOpen,
   type PergamumProject,
-  type ProjectOpenResult
+  type ProjectOpenFinalizationResult
 } from "../shared/api";
 import type { Translate } from "../shared/i18n";
 import {
@@ -75,7 +75,7 @@ export function buildReadOnlyProjectOpenChoiceDialogOptions(
 }
 
 export interface ReadOnlyProjectOpenConfirmationDeps {
-  result: ProjectOpenResult;
+  result: ProjectOpenFinalizationResult;
   translate: Translate;
   choiceDialog: (
     options: AppChoiceDialogOptions

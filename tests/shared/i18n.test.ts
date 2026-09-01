@@ -760,3 +760,26 @@ describe("Recovery explicit discard translations (#300)", () => {
     );
   });
 });
+
+describe("Project create conflict translations", () => {
+  it("defines AppDialog copy for ja and en", () => {
+    expect(t("ja", "dialog.createProjectConflict.title")).toBe(
+      "既存のPergamum情報を上書きしますか？"
+    );
+    expect(t("ja", "dialog.createProjectConflict.message")).toContain(
+      "文書ファイル自体は削除されません。"
+    );
+    expect(t("ja", "dialog.createProjectConflict.overwriteAndCreate")).toBe(
+      "上書きして作成"
+    );
+    expect(t("en", "dialog.createProjectConflict.title")).toBe(
+      "Overwrite existing Pergamum data?"
+    );
+    expect(t("en", "dialog.createProjectConflict.message")).toContain(
+      "Your document files will not be deleted."
+    );
+    expect(t("en", "dialog.createProjectConflict.overwriteAndCreate")).toBe(
+      "Overwrite and create"
+    );
+  });
+});

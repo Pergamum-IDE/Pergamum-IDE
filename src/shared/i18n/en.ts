@@ -141,6 +141,10 @@ export const enTranslations = {
   "dialog.projectOpenFailed.message":
     "The project file (.pergamum) may be missing, unreadable, or replaced by another project.\nYour documents and project contents have not been deleted.",
   "dialog.projectOpenFailed.title": "Could not open project",
+  "dialog.createProjectConflict.message":
+    "This folder already contains Pergamum project settings or recovery-related data.\n\nCreating a new project here may overwrite existing settings or recovery information.\nYour document files will not be deleted.",
+  "dialog.createProjectConflict.overwriteAndCreate": "Overwrite and create",
+  "dialog.createProjectConflict.title": "Overwrite existing Pergamum data?",
   "dialog.projectRestoreFailed.message":
     "The project that was open last time could not be restored.\n\nIts project file (.pergamum) may be missing, unreadable, or replaced by a different project.\nNo documents or project contents have been deleted.",
   "dialog.projectRestoreFailed.title": "Could not restore project",

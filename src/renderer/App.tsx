@@ -329,6 +329,7 @@ import {
   planProjectDocumentMoveRelocation
 } from "./projectDocumentMoveRelocation";
 import { currentDocumentForOpenedFile } from "./projectDocumentResolution";
+import { confirmCreateProjectConflictIfNeeded } from "./createProjectConflictConfirmation";
 import {
   loadFirstProjectDocumentIfCurrent,
   openFirstProjectDocumentAfterContextSwitch,
@@ -2311,8 +2312,19 @@ export function App(): JSX.Element {
   async function resolveProjectOpenResult(
     result: ProjectOpenResult
   ): Promise<PergamumProject | null> {
+    const createProjectConflictResult =
+      await confirmCreateProjectConflictIfNeeded({
+        result,
+        translate,
+        choiceDialog,
+        confirmCreateProjectInExistingRoot:
+          window.pergamum.projects.confirmCreateProjectInExistingRoot,
+        cancelCreateProjectInExistingRoot:
+          window.pergamum.projects.cancelCreateProjectInExistingRoot
+      });
+
     return confirmReadOnlyProjectOpenIfNeeded({
-      result,
+      result: createProjectConflictResult,
       translate,
       choiceDialog,
       confirmReadOnlyProjectOpen:
