@@ -1512,12 +1512,26 @@ export function FileExplorer({
         return;
       }
 
+      // #362: a File-Explorer-internal trigger (context menu / F2) is
+      // single-selection only. An explicit target (Command Palette / tab
+      // menu) is not selection-driven, so it skips this gate.
+      if (!explicitTarget && multiSelection.selected.size > 1) {
+        reportRenameUnavailable("noSelection");
+        return;
+      }
+
       const targetEntry = explicitTarget
         ? fileExplorerEntryForRenameTarget(explicitTarget.relativePath)
         : selectedEntry;
 
       if (!targetEntry) {
         reportRenameUnavailable("noSelection");
+        return;
+      }
+
+      // #362: protected / reserved Pergamum entries are never rename targets.
+      if (isProtectedFileExplorerRelativePath(targetEntry.relativePath)) {
+        reportRenameUnavailable("reservedName");
         return;
       }
 
@@ -1533,13 +1547,28 @@ export function FileExplorer({
         }
       }
 
+      // #362: a folder rename is blocked when any dirty open project document
+      // is inside its subtree.
+      if (
+        targetEntry.kind === "folder" &&
+        selectionCoversDirtyOpenDocument(
+          [targetEntry.relativePath],
+          dirtyProjectDocumentRelativePaths
+        )
+      ) {
+        reportRenameUnavailable("openDocumentDirty");
+        return;
+      }
+
       setRenameDialogTarget(targetEntry);
     },
     [
       canRename,
+      dirtyProjectDocumentRelativePaths,
       hasProject,
       isProjectDocumentDirty,
       isRootSelected,
+      multiSelection.selected,
       reportRenameUnavailable,
       selectedEntry
     ]
@@ -1740,10 +1769,18 @@ export function FileExplorer({
 
       const kind = renameKindForEntry(targetEntry);
 
-      if (
-        targetEntry.kind === "file" &&
-        isProjectDocumentDirty(targetEntry.relativePath)
-      ) {
+      // #362: re-assert the dirty gate at submit time — a file, or (folder
+      // rename) any document inside the subtree, that is open with unsaved
+      // changes blocks the rename. The main process re-checks authoritatively.
+      const dirtyInScope =
+        targetEntry.kind === "folder"
+          ? selectionCoversDirtyOpenDocument(
+              [targetEntry.relativePath],
+              dirtyProjectDocumentRelativePaths
+            )
+          : isProjectDocumentDirty(targetEntry.relativePath);
+
+      if (dirtyInScope) {
         return {
           ok: false,
           error: {
@@ -1757,7 +1794,8 @@ export function FileExplorer({
       try {
         result = await window.pergamum.projects.renameFileExplorerEntry(
           targetEntry.relativePath,
-          rawValue
+          rawValue,
+          [...dirtyProjectDocumentRelativePaths]
         );
       } catch {
         return {
@@ -1797,9 +1835,6 @@ export function FileExplorer({
         };
       }
 
-      const wasExpanded =
-        targetEntry.kind === "folder" &&
-        expandedDirectoryPaths.has(targetEntry.relativePath);
       const generation = loadGenerationRef.current;
 
       await loadDirectoryForGeneration(
@@ -1808,44 +1843,72 @@ export function FileExplorer({
       );
 
       if (targetEntry.kind === "folder") {
+        // #362: a folder rename relocates the whole subtree in one
+        // `fs.rename`. Re-key every cached directory listing and every
+        // expanded-folder entry from the old subtree prefix to the new one,
+        // rewriting the child entries' own `relativePath`s. No reload of the
+        // renamed folder is needed — its listing moves with it.
+        const fromPath = targetEntry.relativePath;
+        const toPath = result.newEntry.relativePath;
+        const isUnderRenamedFolder = (candidate: string): boolean =>
+          candidate === fromPath || candidate.startsWith(`${fromPath}/`);
+        const rekeyPath = (candidate: string): string =>
+          toPath + candidate.slice(fromPath.length);
+
         setEntriesByDirectoryPath((current) => {
-          const oldKey = directoryKey(targetEntry.relativePath);
-          const newKey = directoryKey(result.newEntry.relativePath);
-
-          if (!Object.prototype.hasOwnProperty.call(current, oldKey)) {
-            return current;
+          let changed = false;
+          const next: Record<string, FileExplorerEntry[]> = {};
+          for (const [key, entries] of Object.entries(current)) {
+            if (key !== "" && isUnderRenamedFolder(key)) {
+              changed = true;
+              next[rekeyPath(key)] = entries.map((entry) =>
+                isUnderRenamedFolder(entry.relativePath)
+                  ? { ...entry, relativePath: rekeyPath(entry.relativePath) }
+                  : entry
+              );
+            } else {
+              next[key] = entries;
+            }
           }
-
-          const next = { ...current, [newKey]: current[oldKey] };
-          delete next[oldKey];
-
-          return next;
+          return changed ? next : current;
         });
 
-        if (wasExpanded) {
-          setExpandedDirectoryPaths((current) => {
-            const next = withoutSetEntry(current, targetEntry.relativePath);
-            next.add(result.newEntry.relativePath);
-            return next;
-          });
-        }
+        setExpandedDirectoryPaths((current) => {
+          let changed = false;
+          const next = new Set<string>();
+          for (const dir of current) {
+            if (isUnderRenamedFolder(dir)) {
+              changed = true;
+              next.add(rekeyPath(dir));
+            } else {
+              next.add(dir);
+            }
+          }
+          return changed ? next : current;
+        });
       }
 
       selectSingleEntry(result.newEntry.relativePath);
       setRenameDialogTarget(null);
 
+      // #362: relocate open editor identity. A file rename uses the singular
+      // pathway; a folder rename reuses the #338/#340 plural Move relocation
+      // pathway for every registered document inside the subtree.
       if (result.newEntry.kind === "file") {
         onProjectDocumentRenamed?.(result.oldRelativePath, result.newEntry);
+      } else if ((result.movedProjectDocuments ?? []).length > 0) {
+        onProjectDocumentsMoved?.(result.movedProjectDocuments ?? []);
       }
 
       return { ok: true };
     },
     [
       canRename,
-      expandedDirectoryPaths,
+      dirtyProjectDocumentRelativePaths,
       isProjectDocumentDirty,
       loadDirectoryForGeneration,
       onProjectDocumentRenamed,
+      onProjectDocumentsMoved,
       translate
     ]
   );
@@ -1994,6 +2057,34 @@ export function FileExplorer({
               ? "explorer.delete.disabled.protectedSelected"
               : null;
   const canDeleteSelection = deleteDisabledReasonKey === null;
+
+  // #362: the context-menu "Rename…" item is a single-selection file/folder
+  // action. `openRenameDialog` re-checks each gate before opening the dialog;
+  // this only controls the item's enabled state.
+  const renameSelectionTarget =
+    !isRootSelected &&
+    multiSelection.selected.size <= 1 &&
+    selectedEntry &&
+    (selectedEntry.kind === "file" || selectedEntry.kind === "folder")
+      ? selectedEntry
+      : null;
+  const canRenameSelection =
+    hasProject &&
+    !readOnly &&
+    renameSelectionTarget !== null &&
+    !isProtectedFileExplorerRelativePath(renameSelectionTarget.relativePath) &&
+    !(
+      renameSelectionTarget.kind === "file" &&
+      (!isOpenableFileExplorerEntry(renameSelectionTarget) ||
+        isProjectDocumentDirty(renameSelectionTarget.relativePath))
+    ) &&
+    !(
+      renameSelectionTarget.kind === "folder" &&
+      selectionCoversDirtyOpenDocument(
+        [renameSelectionTarget.relativePath],
+        dirtyProjectDocumentRelativePaths
+      )
+    );
 
   const beginDelete = useCallback(async () => {
     if (
@@ -2657,6 +2748,22 @@ export function FileExplorer({
         return;
       }
 
+      // #362: F2 opens the SAME rename dialog as the context menu.
+      // `openRenameDialog` re-checks single-selection / root / read-only /
+      // protected / dirty and no-ops otherwise. (The IME / input / modal
+      // guards above already apply.)
+      if (
+        event.key === "F2" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        openRenameDialog();
+        return;
+      }
+
       const usesPrimaryModifier =
         (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
       if (!usesPrimaryModifier) {
@@ -2688,6 +2795,7 @@ export function FileExplorer({
       dndConfirm,
       moveDialogOpen,
       moveFailure,
+      openRenameDialog,
       performCopy,
       performCut,
       renameDialogTarget
@@ -3423,6 +3531,22 @@ export function FileExplorer({
               }}
             >
               {translate("explorer.contextMenu.paste")}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="rename"
+              disabled={!canRenameSelection}
+              aria-disabled={!canRenameSelection}
+              onClick={() => {
+                closeContextMenu();
+                if (canRenameSelection) {
+                  openRenameDialog();
+                }
+              }}
+            >
+              {translate("explorer.contextMenu.rename")}
             </button>
             <button
               type="button"
