@@ -1365,6 +1365,35 @@ describe("FileExplorer active project document reveal (#309)", () => {
     );
   });
 
+  it("#354 regression: switching active document does not continuously force-expand a collapsed ancestor", async () => {
+    const { rerender } = renderReveal({ highlightedRelativePath: DEEP });
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(true);
+
+    // switch to a different deep doc → one-time reveal is allowed
+    rerender({ highlightedRelativePath: "Drafts/outline.md" });
+    await settleReveal();
+    rerender({ highlightedRelativePath: DEEP });
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(true);
+
+    // user collapses the ancestor for the (now current) doc
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(false);
+
+    // several re-renders / no-op tab operations with the SAME highlight must
+    // not snap the ancestor back open
+    for (let i = 0; i < 3; i += 1) {
+      rerender({ highlightedRelativePath: DEEP });
+      await settleReveal();
+    }
+    expect(entryButton("Drafts/Chapter1").getAttribute("aria-expanded")).toBe(
+      "false"
+    );
+    expect(isRendered(DEEP)).toBe(false);
+  });
+
   it("re-arms the passive reveal after a project switch", async () => {
     const switched: PergamumProject = {
       ...project,

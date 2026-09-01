@@ -372,6 +372,79 @@ export function resolveCloseTargetEditorId(
   return hasOpenDocument(state, editorId) ? editorId : null;
 }
 
+/**
+ * #354: horizontal tab reordering. Moves the document identified by
+ * `movedEditorId` to `targetIndex` in the `documents` array (the array order
+ * IS the tab order). `targetIndex` is clamped to `[0, documents.length - 1]`.
+ * Only the array order changes — `activeDocumentId`, every editor's identity /
+ * dirty / view state, and `nextUntitledId` are untouched. A no-op move (or an
+ * unknown id) returns the same state reference.
+ */
+export function reorderOpenDocuments(
+  state: OpenDocumentsState,
+  movedEditorId: EditorId,
+  targetIndex: number
+): OpenDocumentsState {
+  const fromIndex = state.documents.findIndex((document) =>
+    editorIdEquals(document.id, movedEditorId)
+  );
+
+  if (fromIndex === -1) {
+    return state;
+  }
+
+  const clampedTarget = Math.max(
+    0,
+    Math.min(targetIndex, state.documents.length - 1)
+  );
+
+  if (clampedTarget === fromIndex) {
+    return state;
+  }
+
+  const nextDocuments = [...state.documents];
+  const [moved] = nextDocuments.splice(fromIndex, 1);
+  nextDocuments.splice(clampedTarget, 0, moved);
+
+  return {
+    ...state,
+    documents: nextDocuments
+  };
+}
+
+/**
+ * #354: the editor ids a "Close Other Tabs" / "Close Tabs to the Left" /
+ * "Close Tabs to the Right" command targets, relative to `anchorEditorId`, in
+ * `documents` array order. Special tabs are not in `documents` so they are
+ * never included. An unknown anchor yields `[]`.
+ */
+export function editorIdsForBatchTabClose(
+  state: OpenDocumentsState,
+  anchorEditorId: EditorId,
+  scope: "others" | "left" | "right"
+): EditorId[] {
+  const anchorIndex = state.documents.findIndex((document) =>
+    editorIdEquals(document.id, anchorEditorId)
+  );
+
+  if (anchorIndex === -1) {
+    return [];
+  }
+
+  return state.documents
+    .filter((_document, index) => {
+      switch (scope) {
+        case "others":
+          return index !== anchorIndex;
+        case "left":
+          return index < anchorIndex;
+        case "right":
+          return index > anchorIndex;
+      }
+    })
+    .map((document) => document.id);
+}
+
 export function isOpenDocumentDirty(
   state: OpenDocumentsState,
   editorId: EditorId

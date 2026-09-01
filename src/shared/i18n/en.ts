@@ -149,6 +149,8 @@ export const enTranslations = {
   "dialog.icon.error": "Error",
   "dialog.icon.info": "Information",
   "dialog.icon.warning": "Warning",
+  "dialog.clipboardCopyFailed.title": "Could not copy",
+  "dialog.clipboardCopyFailed.message": "Could not copy to the clipboard.",
   "dialog.about.appIconAlt": "Pergamum app icon",
   "dialog.about.copyTechnicalInfo": "Copy technical information",
   "dialog.about.copyTechnicalInfoCopied": "Copied",
@@ -545,6 +547,9 @@ export const enTranslations = {
   "menu.zoomOut": "Zoom Out",
   "notification.dismiss": "Dismiss notification",
   "notification.externalMarkdownOpened": "Opened a file from outside the project",
+  "notification.tabAbsolutePathCopied": "Copied absolute path",
+  "notification.tabRelativePathCopied": "Copied relative path",
+  "notification.tabFileNameCopied": "Copied file name",
   "notification.recoveryCandidatesReminder":
     "{count} unresolved Recovery candidate(s) remain.",
   "notification.sessionRestore.editorSkipped":
@@ -692,6 +697,24 @@ export const enTranslations = {
   "status.withDetail": "{status}; {detail}",
   "tabs.closeTab": "Close tab",
   "tabs.contextMenu.label": "Tab actions",
+  "tabs.contextMenu.close": "Close Tab",
+  "tabs.contextMenu.closeOthers": "Close Other Tabs",
+  "tabs.contextMenu.closeToLeft": "Close Tabs to the Left",
+  "tabs.contextMenu.closeToRight": "Close Tabs to the Right",
+  "tabs.contextMenu.renameFile": "Rename Tab File…",
+  "tabs.contextMenu.saveAs": "Save Tab As…",
+  "tabs.contextMenu.copyAbsolutePath": "Copy Absolute Path",
+  "tabs.contextMenu.copyRelativePath": "Copy Relative Path",
+  "tabs.contextMenu.copyFileName": "Copy File Name",
+  "tabs.contextMenu.disabled.notProjectDocument":
+    "Only available for project document tabs",
+  "tabs.contextMenu.disabled.dirtyDocument": "Save changes first",
+  "tabs.contextMenu.disabled.readOnlyProject":
+    "Not available in a read-only project",
+  "tabs.contextMenu.disabled.noOtherTabs": "No other tabs are open",
+  "tabs.contextMenu.disabled.noTabsToLeft": "No tabs to the left",
+  "tabs.contextMenu.disabled.noTabsToRight": "No tabs to the right",
+  "tabs.contextMenu.disabled.unsupportedForTab": "Not available for this tab",
   "tabs.contextMenu.selectInFileExplorer": "Select in File Explorer",
   "tabs.contextMenu.selectInFileExplorer.unavailable":
     "Only available for project document tabs",

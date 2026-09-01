@@ -1,6 +1,9 @@
 import {
+  Fragment,
+  useRef,
   useState,
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent
 } from "react";
@@ -8,9 +11,15 @@ import type { ProjectAccessMode } from "../shared/api";
 import type { Translate } from "../shared/i18n";
 import {
   editorIdEquals,
+  serializeEditorId,
   type EditorId
 } from "../shared/editorId";
 import type { DocumentTab } from "./openDocuments";
+import {
+  resolveTabReorderTargetIndex,
+  type TabContextMenuAction,
+  type TabContextMenuDescriptor
+} from "./documentTabContextMenu";
 import {
   documentTabTrailingSlotKind,
   handleDocumentTabCloseButtonClick,
@@ -31,6 +40,12 @@ import alertTriangleIcon from "../../assets/icons/feather/global/alert-triangle.
 import closeXIcon from "../../assets/icons/feather/global/close-x.svg?raw";
 import shieldIcon from "../../assets/icons/feather/global/shield.svg?raw";
 
+/**
+ * #354: the editor tab context menu opens on a right-click of a DOCUMENT tab
+ * (never a special tab). Every command is dispatched via `onTabAction`
+ * against the right-clicked tab. The menu contents / enablement come from the
+ * host through `describeTabContextMenu` (pure, in `documentTabContextMenu.ts`).
+ */
 interface DocumentTabBarProps {
   tabs: DocumentTab[];
   /**
@@ -49,21 +64,48 @@ interface DocumentTabBarProps {
   onSelectSpecialTab?: (tabId: SpecialTabId) => void;
   onCloseSpecialTab?: (tabId: SpecialTabId) => void;
   /**
-   * #355 v1 — integrate into #354 tab context menu later. When provided, a
-   * right-click on a document tab opens a one-item menu whose sole action is
-   * "Select in File Explorer" for that tab. The menu is not rendered at all
-   * when this is omitted.
+   * #354: run a tab context-menu command against the right-clicked tab. When
+   * omitted (together with `describeTabContextMenu`) no context menu opens.
    */
-  onSelectInFileExplorer?: (tab: DocumentTab) => void;
-  /** #355 v1: whether the "Select in File Explorer" item is enabled for a
-   *  given tab. Defaults to "project document tabs only". */
-  canSelectInFileExplorer?: (tab: DocumentTab) => boolean;
+  onTabAction?: (action: TabContextMenuAction, tab: DocumentTab) => void;
+  /** #354: the menu contents / enablement for the right-clicked tab. */
+  describeTabContextMenu?: (tab: DocumentTab) => TabContextMenuDescriptor;
+  /**
+   * #354: a horizontal drag-and-drop reorder finished — move the document tab
+   * `movedEditorId` to `targetIndex` in the document-tab list. When omitted,
+   * tabs are not draggable.
+   */
+  onReorderDocuments?: (movedEditorId: EditorId, targetIndex: number) => void;
   isUtilityWindowOpen: boolean;
   onToggleUtilityWindow: () => void;
 }
 
-function defaultCanSelectInFileExplorer(tab: DocumentTab): boolean {
-  return tab.id.kind === "projectDocument";
+/** #354: dedicated MIME marker so a tab reorder drag is never confused with a
+ *  File Explorer Move drag (which uses its own marker). */
+export const TAB_REORDER_DND_MIME = "application/x-pergamum-tab-reorder";
+
+const CONTEXT_COMMAND_ATTR: Record<TabContextMenuAction, string> = {
+  close: "close",
+  closeOthers: "close-others",
+  closeToLeft: "close-left",
+  closeToRight: "close-right",
+  selectInFileExplorer: "select-in-file-explorer",
+  renameFile: "rename-file",
+  saveAs: "save-as",
+  copyAbsolutePath: "copy-absolute-path",
+  copyRelativePath: "copy-relative-path",
+  copyFileName: "copy-file-name"
+};
+
+function dataTransferHasTabReorderPayload(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types ?? []).includes(TAB_REORDER_DND_MIME);
+}
+
+interface TabDragState {
+  readonly movedEditorId: EditorId;
+  readonly movedIndex: number;
+  /** insertion index the drop indicator is drawn at, or `null`. */
+  readonly overIndex: number | null;
 }
 
 export function DocumentTabBar({
@@ -79,30 +121,61 @@ export function DocumentTabBar({
   onCloseDocument,
   onSelectSpecialTab = () => undefined,
   onCloseSpecialTab = () => undefined,
-  onSelectInFileExplorer,
-  canSelectInFileExplorer = defaultCanSelectInFileExplorer,
+  onTabAction,
+  describeTabContextMenu,
+  onReorderDocuments,
   isUtilityWindowOpen,
   onToggleUtilityWindow
 }: DocumentTabBarProps): JSX.Element {
-  // #355 v1: the document tab a right-click opened the minimal context menu on.
+  const contextMenuEnabled = Boolean(onTabAction && describeTabContextMenu);
+  const reorderEnabled = Boolean(onReorderDocuments);
+
   const [tabContextMenu, setTabContextMenu] = useState<{
     tab: DocumentTab;
     x: number;
     y: number;
   } | null>(null);
+  const menuOpenerRef = useRef<HTMLElement | null>(null);
+  const tabsNavRef = useRef<HTMLElement | null>(null);
+  const [tabDrag, setTabDrag] = useState<TabDragState | null>(null);
 
-  const closeTabContextMenu = (): void => setTabContextMenu(null);
+  const [hoveredDocumentId, setHoveredDocumentId] = useState<EditorId | null>(
+    null
+  );
+
+  function closeTabContextMenu(): void {
+    setTabContextMenu(null);
+    const opener = menuOpenerRef.current;
+    menuOpenerRef.current = null;
+    if (
+      opener &&
+      typeof document !== "undefined" &&
+      document.contains(opener) &&
+      typeof opener.focus === "function"
+    ) {
+      opener.focus();
+    }
+  }
 
   function handleDocumentTabContextMenu(
     event: ReactMouseEvent<HTMLDivElement>,
     tab: DocumentTab
   ): void {
-    if (!onSelectInFileExplorer) {
+    if (!contextMenuEnabled) {
       return;
     }
     event.preventDefault();
+    menuOpenerRef.current = event.currentTarget;
     setTabContextMenu({ tab, x: event.clientX, y: event.clientY });
   }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      closeTabContextMenu();
+    }
+  }
+
   function isWorkspaceTabActive(tabId: WorkspaceTabId): boolean {
     return (
       activeWorkspaceTabId !== undefined &&
@@ -114,9 +187,6 @@ export function DocumentTabBar({
   const closeTabLabel = translate("tabs.closeTab");
   const unsavedLabel = translate("tabs.unsaved");
   const readOnlyTooltip = translate("projectAccess.readOnly.tooltip");
-  const [hoveredDocumentId, setHoveredDocumentId] = useState<EditorId | null>(
-    null
-  );
 
   function handleTabKeyDown(
     event: ReactKeyboardEvent<HTMLDivElement>,
@@ -169,16 +239,119 @@ export function DocumentTabBar({
     onCloseSpecialTab(tabId);
   }
 
-  function renderDocumentTab(tab: DocumentTab): JSX.Element {
+  // --- #354 horizontal drag-and-drop reorder -----------------------------
+
+  function documentTabRects(): { left: number; right: number }[] {
+    const nav = tabsNavRef.current;
+    if (!nav) {
+      return [];
+    }
+    return Array.from(
+      nav.querySelectorAll<HTMLElement>('[data-document-tab="true"]')
+    ).map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right };
+    });
+  }
+
+  function handleTabDragStart(
+    event: ReactDragEvent<HTMLDivElement>,
+    tab: DocumentTab,
+    index: number
+  ): void {
+    if (!reorderEnabled) {
+      return;
+    }
+    // The close button is not a drag handle.
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest(".documentTabCloseButton")
+    ) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.setData(
+      TAB_REORDER_DND_MIME,
+      serializeEditorId(tab.id)
+    );
+    event.dataTransfer.effectAllowed = "move";
+    setTabDrag({ movedEditorId: tab.id, movedIndex: index, overIndex: index });
+  }
+
+  function handleTabDragOver(event: ReactDragEvent<HTMLDivElement>): void {
+    if (!tabDrag || !dataTransferHasTabReorderPayload(event.dataTransfer)) {
+      // Not a tab reorder (e.g. a File Explorer Move drag) — ignore it, so the
+      // two drag systems never interfere.
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+
+    const overIndex = resolveTabReorderTargetIndex(
+      event.clientX,
+      documentTabRects(),
+      tabDrag.movedIndex
+    );
+    if (overIndex !== tabDrag.overIndex) {
+      setTabDrag({ ...tabDrag, overIndex });
+    }
+  }
+
+  function handleTabDrop(event: ReactDragEvent<HTMLDivElement>): void {
+    if (!tabDrag || !dataTransferHasTabReorderPayload(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    // A drop on a tab must not also bubble to the <nav> handler below.
+    event.stopPropagation();
+
+    const targetIndex = resolveTabReorderTargetIndex(
+      event.clientX,
+      documentTabRects(),
+      tabDrag.movedIndex
+    );
+    const movedEditorId = tabDrag.movedEditorId;
+    const movedIndex = tabDrag.movedIndex;
+    setTabDrag(null);
+
+    if (targetIndex !== movedIndex) {
+      onReorderDocuments?.(movedEditorId, targetIndex);
+    }
+  }
+
+  function handleTabDragEnd(): void {
+    // Fires on every drag end, including a drop outside a valid target —
+    // clears the transient state without reordering (drop-outside = cancel).
+    setTabDrag(null);
+  }
+
+  function dropIndicatorFor(index: number): "before" | "after" | undefined {
+    if (tabDrag?.overIndex == null) {
+      return undefined;
+    }
+    if (tabDrag.overIndex === index) {
+      return "before";
+    }
+    if (
+      index === tabs.length - 1 &&
+      tabDrag.overIndex >= tabs.length
+    ) {
+      return "after";
+    }
+    return undefined;
+  }
+
+  function renderDocumentTab(tab: DocumentTab, index: number): JSX.Element {
     const tabId = documentWorkspaceTabId(tab.id);
     const isActive = isWorkspaceTabActive(tabId);
     const isHovered =
-      hoveredDocumentId !== null &&
-      editorIdEquals(tab.id, hoveredDocumentId);
+      hoveredDocumentId !== null && editorIdEquals(tab.id, hoveredDocumentId);
     const trailingSlotKind = documentTabTrailingSlotKind(isActive, isHovered);
     const externalWarning = tab.isExternalMarkdownFile
       ? translate("tabs.externalMarkdownFile")
       : null;
+    const isDragging =
+      tabDrag !== null && editorIdEquals(tabDrag.movedEditorId, tab.id);
     // Nested-element tooltip behavior varies by browser, so the
     // external warning is exposed both on the icon itself and on the
     // tab's own title/accessible name — not only on the icon. The
@@ -206,6 +379,11 @@ export function DocumentTabBar({
         tabIndex={0}
         aria-selected={isActive}
         title={tabTitle}
+        data-document-tab="true"
+        data-tab-index={index}
+        data-tab-dragging={isDragging ? "true" : undefined}
+        data-tab-drop-indicator={dropIndicatorFor(index)}
+        draggable={reorderEnabled || undefined}
         onClick={() => onSelectDocument(tab.id)}
         onContextMenu={(event) => handleDocumentTabContextMenu(event, tab)}
         onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
@@ -218,6 +396,10 @@ export function DocumentTabBar({
             current && editorIdEquals(current, tab.id) ? null : current
           )
         }
+        onDragStart={(event) => handleTabDragStart(event, tab, index)}
+        onDragOver={handleTabDragOver}
+        onDrop={handleTabDrop}
+        onDragEnd={handleTabDragEnd}
       >
         {externalWarning ? (
           <span
@@ -236,6 +418,7 @@ export function DocumentTabBar({
               className="documentTabCloseButton"
               aria-label={closeTabLabel}
               title={closeTabLabel}
+              draggable={false}
               onClick={(event) =>
                 handleDocumentTabCloseButtonClick(
                   event,
@@ -264,6 +447,7 @@ export function DocumentTabBar({
         aria-selected={isActive}
         title={tab.title}
         onClick={() => onSelectSpecialTab(tab.id)}
+        onContextMenu={(event) => event.preventDefault()}
         onKeyDown={(event) => handleSpecialTabKeyDown(event, tab.id)}
         onMouseDown={(event) => {
           handleSpecialTabMiddleClick(event, tab.id);
@@ -286,11 +470,25 @@ export function DocumentTabBar({
     );
   }
 
+  let documentTabIndex = -1;
   function renderWorkspaceTab(tab: WorkspaceTab): JSX.Element {
-    return tab.kind === "document"
-      ? renderDocumentTab(tab)
-      : renderSpecialTab(tab);
+    if (tab.kind === "document") {
+      documentTabIndex += 1;
+      // Pass the plain `DocumentTab` from `tabs` (same order), not the
+      // `{ ...tab, kind: "document" }` workspace shape, so `onTabAction` /
+      // `describeTabContextMenu` receive exactly the caller's object.
+      return renderDocumentTab(
+        tabs[documentTabIndex] ?? tab,
+        documentTabIndex
+      );
+    }
+    return renderSpecialTab(tab);
   }
+
+  const menuDescriptor: TabContextMenuDescriptor | null =
+    tabContextMenu !== null && describeTabContextMenu
+      ? describeTabContextMenu(tabContextMenu.tab)
+      : null;
 
   return (
     <div className="documentTabBar">
@@ -304,9 +502,12 @@ export function DocumentTabBar({
         />
       ) : null}
       <nav
+        ref={tabsNavRef}
         className="documentTabBarTabs"
         aria-label={translate("tabs.openDocuments")}
         role="tablist"
+        onDragOver={reorderEnabled ? handleTabDragOver : undefined}
+        onDrop={reorderEnabled ? handleTabDrop : undefined}
       >
         {workspaceTabs(tabs, specialTabs).map(renderWorkspaceTab)}
       </nav>
@@ -326,7 +527,7 @@ export function DocumentTabBar({
         {utilityWindowLabel}
       </button>
 
-      {tabContextMenu !== null && onSelectInFileExplorer ? (
+      {tabContextMenu !== null && menuDescriptor !== null ? (
         <div
           className="documentTabContextMenuBackdrop"
           onClick={closeTabContextMenu}
@@ -346,36 +547,45 @@ export function DocumentTabBar({
               } as CSSProperties
             }
             onClick={(event) => event.stopPropagation()}
+            onKeyDown={handleMenuKeyDown}
           >
-            {(() => {
+            {menuDescriptor.items.map((item, itemIndex) => {
               const menuTab = tabContextMenu.tab;
-              const enabled = canSelectInFileExplorer(menuTab);
               return (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="documentTabContextMenuItem"
-                  data-document-tab-context-command="select-in-file-explorer"
-                  disabled={!enabled}
-                  aria-disabled={!enabled}
-                  title={
-                    enabled
-                      ? undefined
-                      : translate(
-                          "tabs.contextMenu.selectInFileExplorer.unavailable"
-                        )
-                  }
-                  onClick={() => {
-                    closeTabContextMenu();
-                    if (enabled) {
-                      onSelectInFileExplorer(menuTab);
+                <Fragment key={item.id}>
+                  {item.separatorBefore ? (
+                    <div
+                      role="separator"
+                      className="documentTabContextMenuSeparator"
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="documentTabContextMenuItem"
+                    data-document-tab-context-command={
+                      CONTEXT_COMMAND_ATTR[item.id]
                     }
-                  }}
-                >
-                  {translate("tabs.contextMenu.selectInFileExplorer")}
-                </button>
+                    disabled={!item.enabled}
+                    aria-disabled={!item.enabled}
+                    autoFocus={itemIndex === 0}
+                    title={
+                      item.enabled || !item.disabledReasonKey
+                        ? undefined
+                        : translate(item.disabledReasonKey)
+                    }
+                    onClick={() => {
+                      closeTabContextMenu();
+                      if (item.enabled) {
+                        onTabAction?.(item.id, menuTab);
+                      }
+                    }}
+                  >
+                    {translate(item.labelKey)}
+                  </button>
+                </Fragment>
               );
-            })()}
+            })}
           </div>
         </div>
       ) : null}

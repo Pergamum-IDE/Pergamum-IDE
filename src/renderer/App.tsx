@@ -125,7 +125,10 @@ import {
 import { DocumentTabBar } from "./DocumentTabBar";
 import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
-import { navigatorClipboardAdapter } from "./dialog/clipboardAdapter";
+import {
+  navigatorClipboardAdapter,
+  performClipboardCopy
+} from "./dialog/clipboardAdapter";
 import {
   DialogController,
   type DialogControllerPendingRequest
@@ -297,10 +300,12 @@ import {
   createInitialOpenDocumentsState,
   documentTabs,
   editorIdForCurrentDocument,
+  editorIdsForBatchTabClose,
   findOpenDocument,
   hasOpenDocument,
   openOrActivateEditor,
   removeProjectScopedOpenEditors,
+  reorderOpenDocuments,
   replaceOpenDocument,
   resolveCloseTargetEditorId,
   updateActiveOpenDocument,
@@ -309,6 +314,12 @@ import {
   type DocumentTab,
   type OpenDocumentsState
 } from "./openDocuments";
+import {
+  describeTabContextMenu,
+  resolveTabCopyText,
+  type TabContextMenuAction,
+  type TabContextMenuDescriptor
+} from "./documentTabContextMenu";
 import {
   isSameProjectInstance,
   planProjectDocumentMoveRelocation
@@ -2244,39 +2255,9 @@ export function App(): JSX.Element {
       ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
       : undefined;
 
-  // #355: "Select in File Explorer" from a document tab context menu. Only a
-  // project-document tab has a project-relative path to reveal; external,
-  // untitled, and glossary tabs are disabled at the menu. It does not change
-  // the active tab — it only shows the File Explorer and asks it to expand /
-  // select / scroll to the file.
-  const canSelectTabInFileExplorer = (tab: DocumentTab): boolean =>
-    tab.id.kind === "projectDocument";
-
-  const handleSelectTabInFileExplorer = (tab: DocumentTab): void => {
-    if (tab.id.kind !== "projectDocument") {
-      return;
-    }
-    setSidebarMode("files");
-    setLayout((current) =>
-      current.sidebar.collapsed
-        ? {
-            ...current,
-            sidebar: {
-              collapsed: false,
-              width: clampSidebarWidth(
-                current.sidebar.width,
-                mainAreaRef.current?.clientWidth
-              )
-            }
-          }
-        : current
-    );
-    fileExplorerRevealRequestSeqRef.current += 1;
-    setFileExplorerRevealRequest({
-      relativePath: tab.id.relativePath,
-      token: fileExplorerRevealRequestSeqRef.current
-    });
-  };
+  // #355 → #354: "Select in File Explorer" (and every other tab context-menu
+  // command) now dispatches through `handleTabAction` below, defined after
+  // the editor-navigation / save wiring it depends on.
   if (!editorNavigationRef.current) {
     editorNavigationRef.current = new EditorNavigation({
       resolveEditor,
@@ -3216,7 +3197,9 @@ export function App(): JSX.Element {
     }
 
     await runEditorCloseFlow(editorId, {
-      state: openDocumentsState,
+      // #354: read the freshest state so a batch close (below) that lands
+      // here per-tab never sees a stale dirty flag after a prior save/close.
+      state: openDocumentsStateRef.current,
       translate,
       choiceDialog,
       saveDirtyEditorBeforeClose: (targetId) =>
@@ -3226,6 +3209,245 @@ export function App(): JSX.Element {
         setOpenDocumentsState((state) => closeOpenEditor(state, targetId));
       }
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // #354: editor tab context menu — Close batch / Rename / Save As / Copy /
+  // Select in File Explorer / horizontal reorder. Every command acts on the
+  // RIGHT-CLICKED tab (`tab`), never necessarily the active one.
+  // -------------------------------------------------------------------------
+
+  function revealFileExplorerSidebar(): void {
+    setSidebarMode("files");
+    setLayout((current) =>
+      current.sidebar.collapsed
+        ? {
+            ...current,
+            sidebar: {
+              collapsed: false,
+              width: clampSidebarWidth(
+                current.sidebar.width,
+                mainAreaRef.current?.clientWidth
+              )
+            }
+          }
+        : current
+    );
+  }
+
+  async function closeOneTabWithConfirmation(
+    editorId: EditorId
+  ): Promise<"closed" | "cancelled" | "noTarget"> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return "cancelled";
+    }
+
+    return runEditorCloseFlow(editorId, {
+      state: openDocumentsStateRef.current,
+      translate,
+      choiceDialog,
+      saveDirtyEditorBeforeClose: (targetId) => saveFile({ editorId: targetId }),
+      onClose: (targetId) => {
+        editorNavigation.invalidateEditor(targetId);
+        setOpenDocumentsState((state) => closeOpenEditor(state, targetId));
+      }
+    });
+  }
+
+  async function closeTabsBatch(
+    anchorEditorId: EditorId,
+    scope: "others" | "left" | "right"
+  ): Promise<void> {
+    // Snapshot the target ids up front — they are stable identities, so a
+    // reorder or a fallback-activation mid-batch cannot skip or repeat one.
+    const targetIds = editorIdsForBatchTabClose(
+      openDocumentsStateRef.current,
+      anchorEditorId,
+      scope
+    );
+
+    for (const targetId of targetIds) {
+      const outcome = await closeOneTabWithConfirmation(targetId);
+
+      // The user cancelled a dirty confirmation → stop the batch. Tabs
+      // already closed stay closed (no rollback — #354 dirty close policy).
+      if (outcome === "cancelled") {
+        return;
+      }
+    }
+  }
+
+  async function handleTabContextMenuCopy(
+    tab: DocumentTab,
+    kind: "absolute" | "relative" | "fileName"
+  ): Promise<void> {
+    const copyText = resolveTabCopyText(tab, {
+      projectRootPath: project?.rootPath ?? null
+    });
+    const text =
+      kind === "absolute"
+        ? copyText.absolute
+        : kind === "relative"
+          ? copyText.relative
+          : copyText.fileName;
+
+    if (text === null) {
+      // The menu disables unsupported combinations; this is a backstop.
+      return;
+    }
+
+    const result = await performClipboardCopy(navigatorClipboardAdapter, text);
+
+    if (result.ok) {
+      // #354 clipboard feedback policy: success is a light happy-path notice →
+      // NotificationToast (not a status-line-only signal).
+      notificationController.notify({
+        lane: "internal",
+        priority: notificationToastPriority.success,
+        message: translate(
+          kind === "absolute"
+            ? "notification.tabAbsolutePathCopied"
+            : kind === "relative"
+              ? "notification.tabRelativePathCopied"
+              : "notification.tabFileNameCopied"
+        ),
+        icon: { kind: "preset", name: "success" }
+      });
+      return;
+    }
+
+    // Failure is "the operation you asked for did not complete" → Dialog,
+    // never a success toast, never status-line-only.
+    void confirmDialog({
+      title: translate("dialog.clipboardCopyFailed.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.clipboardCopyFailed.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      cancelLabel: null
+    }).catch(() => undefined);
+  }
+
+  /**
+   * #354: the ON-DISK-cased project-relative path for an open project
+   * document tab. A `projectDocument` EditorId case-normalizes its
+   * `relativePath` (lowercased on a case-insensitive root), which would NOT
+   * match the File Explorer tree's real-cased entries — so the reveal /
+   * rename request must use the CurrentDocument's own relativePath. The tab
+   * is not activated; this only reads the already-open editor.
+   */
+  function openProjectDocumentRelativePath(editorId: EditorId): string | null {
+    if (editorId.kind !== "projectDocument") {
+      return null;
+    }
+    const openDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      editorId
+    );
+    return (
+      (openDocument &&
+        currentEditorProjectRelativePath(openDocument.editor)) ??
+      editorId.relativePath
+    );
+  }
+
+  function handleTabAction(
+    action: TabContextMenuAction,
+    tab: DocumentTab
+  ): void {
+    switch (action) {
+      case "close":
+        executeUiCommand(
+          editorCommandIds.close,
+          { source: "documentTabBar" },
+          { editorId: tab.id }
+        );
+        return;
+      case "closeOthers":
+        void closeTabsBatch(tab.id, "others");
+        return;
+      case "closeToLeft":
+        void closeTabsBatch(tab.id, "left");
+        return;
+      case "closeToRight":
+        void closeTabsBatch(tab.id, "right");
+        return;
+      case "selectInFileExplorer": {
+        // Acts on the RIGHT-CLICKED tab, never the active editor. Does not
+        // activate the tab.
+        const relativePath = openProjectDocumentRelativePath(tab.id);
+        if (relativePath === null) {
+          return;
+        }
+        revealFileExplorerSidebar();
+        fileExplorerRevealRequestSeqRef.current += 1;
+        setFileExplorerRevealRequest({
+          relativePath,
+          token: fileExplorerRevealRequestSeqRef.current
+        });
+        return;
+      }
+      case "renameFile": {
+        if (
+          tab.id.kind !== "projectDocument" ||
+          project?.accessMode.kind === "readOnly" ||
+          tab.isDirty
+        ) {
+          return;
+        }
+        const relativePath = openProjectDocumentRelativePath(tab.id);
+        if (relativePath === null) {
+          return;
+        }
+        // The rename dialog lives inside the File Explorer, so it must be
+        // shown — but this is unrelated to the active tab.
+        revealFileExplorerSidebar();
+        fileExplorerRenameRequestSeqRef.current += 1;
+        setFileExplorerRenameEntryRequest({
+          token: fileExplorerRenameRequestSeqRef.current,
+          target: { relativePath }
+        });
+        return;
+      }
+      case "saveAs":
+        if (tab.id.kind === "glossaryEntry") {
+          return;
+        }
+        void saveFile({ editorId: tab.id, forceSaveAs: true });
+        return;
+      case "copyAbsolutePath":
+        void handleTabContextMenuCopy(tab, "absolute");
+        return;
+      case "copyRelativePath":
+        void handleTabContextMenuCopy(tab, "relative");
+        return;
+      case "copyFileName":
+        void handleTabContextMenuCopy(tab, "fileName");
+        return;
+    }
+  }
+
+  function describeTabContextMenuForTab(
+    tab: DocumentTab
+  ): TabContextMenuDescriptor {
+    return describeTabContextMenu(tab, {
+      allTabs: tabs,
+      projectAccess: project?.accessMode ?? null
+    });
+  }
+
+  function handleReorderDocuments(
+    movedEditorId: EditorId,
+    targetIndex: number
+  ): void {
+    setOpenDocumentsState((state) =>
+      reorderOpenDocuments(state, movedEditorId, targetIndex)
+    );
   }
 
   function handleActivityBarModeClick(mode: SidebarMode): void {
@@ -6588,8 +6810,9 @@ export function App(): JSX.Element {
                   }
                   onSelectSpecialTab={activateSpecialTab}
                   onCloseSpecialTab={closeSpecialTab}
-                  onSelectInFileExplorer={handleSelectTabInFileExplorer}
-                  canSelectInFileExplorer={canSelectTabInFileExplorer}
+                  onTabAction={handleTabAction}
+                  describeTabContextMenu={describeTabContextMenuForTab}
+                  onReorderDocuments={handleReorderDocuments}
                   isUtilityWindowOpen={layout.utilityWindow.open}
                   onToggleUtilityWindow={() =>
                     executeUiCommand(utilityWindowCommandIds.toggle, {

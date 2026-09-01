@@ -20,10 +20,12 @@ import {
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithDocument,
   documentTabs,
+  editorIdsForBatchTabClose,
   findOpenDocument,
   isOpenDocumentDirty,
   openOrActivateEditor,
   openOrActivateDocument,
+  reorderOpenDocuments,
   replaceOpenDocument,
   createOpenDocumentsStateWithEditor,
   removeProjectScopedOpenEditors,
@@ -1108,5 +1110,140 @@ describe("activeProjectDocumentRelativePath (#318)", () => {
     );
 
     expect(activeProjectDocumentRelativePath(state)).toBeNull();
+  });
+});
+
+describe("reorderOpenDocuments / editorIdsForBatchTabClose (#354)", () => {
+  function fourTabState(): OpenDocumentsState {
+    let state = createOpenDocumentsStateWithDocument(
+      createProjectDocument({ relativePath: "a.md", name: "a.md" }, "a"),
+      projectContext
+    );
+    for (const relativePath of ["b.md", "c.md", "d.md"]) {
+      state = openOrActivateDocument(
+        state,
+        createProjectDocument({ relativePath, name: relativePath }, relativePath),
+        projectContext
+      );
+    }
+    // active = last opened ("d.md")
+    return state;
+  }
+
+  const idFor = (relativePath: string): EditorId =>
+    createProjectDocumentEditorId(relativePath, projectContext);
+  const order = (state: OpenDocumentsState): string[] =>
+    state.documents.map((d) =>
+      d.editor.kind === "markdown" && d.editor.document.kind === "project"
+        ? d.editor.document.relativePath
+        : "?"
+    );
+
+  it("moves a tab right", () => {
+    const state = fourTabState();
+    const next = reorderOpenDocuments(state, idFor("a.md"), 2);
+    expect(order(next)).toEqual(["b.md", "c.md", "a.md", "d.md"]);
+  });
+
+  it("moves a tab left", () => {
+    const state = fourTabState();
+    const next = reorderOpenDocuments(state, idFor("d.md"), 0);
+    expect(order(next)).toEqual(["d.md", "a.md", "b.md", "c.md"]);
+  });
+
+  it("is a no-op (same reference) when the target index equals the source", () => {
+    const state = fourTabState();
+    expect(reorderOpenDocuments(state, idFor("b.md"), 1)).toBe(state);
+  });
+
+  it("is a no-op for an unknown editor id", () => {
+    const state = fourTabState();
+    expect(reorderOpenDocuments(state, idFor("zzz.md"), 0)).toBe(state);
+  });
+
+  it("clamps an out-of-range target index", () => {
+    const state = fourTabState();
+    expect(order(reorderOpenDocuments(state, idFor("a.md"), 99))).toEqual([
+      "b.md",
+      "c.md",
+      "d.md",
+      "a.md"
+    ]);
+    expect(order(reorderOpenDocuments(state, idFor("d.md"), -5))).toEqual([
+      "d.md",
+      "a.md",
+      "b.md",
+      "c.md"
+    ]);
+  });
+
+  it("preserves activeDocumentId, identity, dirty and view state", () => {
+    let state = fourTabState();
+    state = updateActiveOpenDocument(state, (document) =>
+      updateCurrentDocumentContent(document, "dirty edit")
+    );
+    const activeBefore = state.activeDocumentId;
+    const dirtyBefore = documentTabs(state).map((t) => t.isDirty);
+
+    const next = reorderOpenDocuments(state, idFor("a.md"), 3);
+
+    expect(editorIdEquals(next.activeDocumentId, activeBefore)).toBe(true);
+    expect(next.nextUntitledId).toBe(state.nextUntitledId);
+    // same OpenDocument objects, just reordered
+    expect(new Set(next.documents)).toEqual(new Set(state.documents));
+    const dirtyAfterByPath = new Map(
+      next.documents.map((d) => [
+        d.editor.kind === "markdown" && d.editor.document.kind === "project"
+          ? d.editor.document.relativePath
+          : "?",
+        isOpenDocumentDirty(next, d.id)
+      ])
+    );
+    expect(dirtyAfterByPath.get("d.md")).toBe(dirtyBefore[3]);
+  });
+
+  it("editorIdsForBatchTabClose — others / left / right, by anchor position", () => {
+    const state = fourTabState(); // [a, b, c, d]
+
+    expect(
+      editorIdsForBatchTabClose(state, idFor("b.md"), "others").map((id) =>
+        id.kind === "projectDocument" ? id.relativePath : "?"
+      )
+    ).toEqual(["a.md", "c.md", "d.md"]);
+
+    expect(
+      editorIdsForBatchTabClose(state, idFor("c.md"), "left").map((id) =>
+        id.kind === "projectDocument" ? id.relativePath : "?"
+      )
+    ).toEqual(["a.md", "b.md"]);
+
+    expect(
+      editorIdsForBatchTabClose(state, idFor("b.md"), "right").map((id) =>
+        id.kind === "projectDocument" ? id.relativePath : "?"
+      )
+    ).toEqual(["c.md", "d.md"]);
+
+    // anchor first
+    expect(editorIdsForBatchTabClose(state, idFor("a.md"), "left")).toEqual([]);
+    // anchor last
+    expect(editorIdsForBatchTabClose(state, idFor("d.md"), "right")).toEqual([]);
+  });
+
+  it("editorIdsForBatchTabClose — single tab has nothing to batch-close", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "only"),
+      projectContext
+    );
+    const only = state.documents[0].id;
+    expect(editorIdsForBatchTabClose(state, only, "others")).toEqual([]);
+    expect(editorIdsForBatchTabClose(state, only, "left")).toEqual([]);
+    expect(editorIdsForBatchTabClose(state, only, "right")).toEqual([]);
+  });
+
+  it("editorIdsForBatchTabClose — unknown anchor yields []", () => {
+    const state = fourTabState();
+    expect(editorIdsForBatchTabClose(state, idFor("zzz.md"), "others")).toEqual(
+      []
+    );
   });
 });

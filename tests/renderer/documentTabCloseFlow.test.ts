@@ -424,7 +424,7 @@ describe("runEditorCloseFlow (#184/#192)", () => {
         saveDirtyEditorBeforeClose,
         onClose
       })
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("cancelled");
     expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -468,6 +468,64 @@ describe("runEditorCloseFlow (#184/#192)", () => {
     expect(choiceDialog).not.toHaveBeenCalled();
     expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("returns an outcome so a batch close can stop on cancel (#354)", async () => {
+    const cancel = vi.fn().mockResolvedValue({
+      kind: "chosen",
+      id: dirtyCloseChoiceIds.cancel
+    });
+    const noop = vi.fn();
+
+    // clean editor -> "closed"
+    expect(
+      await runEditorCloseFlow(undefined, {
+        state: cleanState(),
+        translate: translateEn,
+        choiceDialog: vi.fn(),
+        saveDirtyEditorBeforeClose: vi.fn(),
+        onClose: noop
+      })
+    ).toBe("closed");
+
+    // dirty editor, user cancels -> "cancelled"
+    expect(
+      await runEditorCloseFlow(undefined, {
+        state: dirtyState(),
+        translate: translateEn,
+        choiceDialog: cancel,
+        saveDirtyEditorBeforeClose: vi.fn(),
+        onClose: noop
+      })
+    ).toBe("cancelled");
+
+    // dirty editor, save fails -> "cancelled"
+    expect(
+      await runEditorCloseFlow(undefined, {
+        state: dirtyState(),
+        translate: translateEn,
+        choiceDialog: vi.fn().mockResolvedValue({
+          kind: "chosen",
+          id: dirtyCloseChoiceIds.saveAndClose
+        }),
+        saveDirtyEditorBeforeClose: vi.fn().mockResolvedValue("failed"),
+        onClose: noop
+      })
+    ).toBe("cancelled");
+
+    // nothing to close -> "noTarget"
+    expect(
+      await runEditorCloseFlow(
+        createProjectDocumentEditorId("not-open.md", { rootPath: "C:\\Novel" }),
+        {
+          state: cleanState(),
+          translate: translateEn,
+          choiceDialog: vi.fn(),
+          saveDirtyEditorBeforeClose: vi.fn(),
+          onClose: noop
+        }
+      )
+    ).toBe("noTarget");
   });
 
   it("uses the glossary tab title in the shared unsaved-changes prompt", async () => {
