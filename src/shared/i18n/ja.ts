@@ -305,6 +305,87 @@ export const jaTranslations = {
   "explorer.move.status.allFailed": "{failed} 個すべての項目の移動に失敗しました",
   "explorer.move.status.validationFailed": "移動できません: {reason}",
   "explorer.move.status.unavailable": "現在、移動はできません",
+  "explorer.contextMenu.delete": "削除...",
+  "explorer.delete.disabled.noProject": "プロジェクトが開かれていません。",
+  "explorer.delete.disabled.readOnlyProject":
+    "読み取り専用プロジェクトでは削除できません。",
+  "explorer.delete.disabled.emptySelection": "削除する項目を選択してください。",
+  "explorer.delete.disabled.protectedSelected":
+    "この項目は削除できません。",
+  "explorer.delete.disabled.containsDirtyOpenDocument":
+    "削除する前に文書を保存してください。",
+  "explorer.delete.disabled.deleteInProgress": "削除処理中です。",
+  "explorer.delete.reject.emptySelection": "削除する項目が選択されていません。",
+  "explorer.delete.reject.projectRoot":
+    "プロジェクトのルートは削除できません。",
+  "explorer.delete.reject.outsideProject":
+    "プロジェクトの外にある項目は削除できません。",
+  "explorer.delete.reject.invalidPath": "このパスは削除できません。",
+  "explorer.delete.reject.protected":
+    "Pergamum が管理する項目のため削除できません。",
+  "explorer.delete.reject.symlink":
+    "シンボリックリンクは削除できません。",
+  "explorer.delete.reject.symlinkedPath":
+    "シンボリックリンクを経由するパスは削除できません。",
+  "explorer.delete.reject.notFound": "項目が見つかりません。",
+  "explorer.delete.reject.unsupportedNode":
+    "通常のファイルまたはフォルダではありません。",
+  "explorer.delete.reject.folderContainsProtected":
+    "削除できない項目（{offendingPath}）を含むため、このフォルダはまるごと削除できません。",
+  "explorer.delete.reject.enumerationFailed":
+    "フォルダの内容を読み取れませんでした。",
+  "explorer.delete.failure.permissionDenied": "アクセスが拒否されました。",
+  "explorer.delete.failure.notEmpty":
+    "フォルダが空でないため削除できませんでした。",
+  "explorer.delete.failure.busy": "他のプロセスが使用中のため削除できませんでした。",
+  "explorer.delete.failure.protected":
+    "Pergamum が管理する項目のため削除できませんでした。",
+  "explorer.delete.failure.outsideProject":
+    "プロジェクトの外にあるため削除できませんでした。",
+  "explorer.delete.failure.symlink":
+    "シンボリックリンクのため削除できませんでした。",
+  "explorer.delete.failure.targetChanged":
+    "対象がディスク上で変化したため削除しませんでした。",
+  "explorer.delete.failure.deleteFailed": "削除できませんでした。",
+  "explorer.delete.rejectDialog.title": "削除できない項目があります",
+  "explorer.delete.rejectDialog.intro":
+    "次の項目は削除できないため、削除を中止しました。",
+  "explorer.delete.dialog.title": "削除の確認",
+  "explorer.delete.dialog.intro": "以下の {count} 個の項目を削除しようとしています。",
+  "explorer.delete.dialog.warning":
+    "削除した項目はゴミ箱には移動されず、直接削除されます。\nこの操作は元に戻せません。",
+  "explorer.delete.dialog.folderNote":
+    "選択されたフォルダに含まれるファイルとサブフォルダも削除対象に含まれます。",
+  "explorer.delete.dialog.question": "本当に削除してよろしいですか？",
+  "explorer.delete.dialog.cancel": "キャンセル",
+  "explorer.delete.dialog.confirm": "削除",
+  "explorer.delete.dialog.abort": "中止",
+  "explorer.delete.dialog.close": "閉じる",
+  "explorer.delete.dialog.tableLabel": "削除対象の一覧",
+  "explorer.delete.column.status": "状態",
+  "explorer.delete.column.path": "パス名",
+  "explorer.delete.column.name": "ファイル名",
+  "explorer.delete.column.modified": "最終更新日時",
+  "explorer.delete.column.previewHead": "書き出し10文字",
+  "explorer.delete.column.previewTail": "終わり10文字",
+  "explorer.delete.column.bytes": "全バイト数",
+  "explorer.delete.state.pending": "未実行",
+  "explorer.delete.state.deleting": "削除中",
+  "explorer.delete.state.deleted": "削除しました",
+  "explorer.delete.state.alreadyAbsent": "削除済みでした",
+  "explorer.delete.state.failed": "削除できませんでした: {reason}",
+  "explorer.delete.state.aborted": "中止しました",
+  "explorer.delete.preview.folder": "フォルダ",
+  "explorer.delete.preview.unavailable": "プレビュー不可",
+  "explorer.delete.preview.empty": "（空）",
+  "explorer.delete.value.folderBytes": "—",
+  "explorer.delete.pathProjectRoot": "（プロジェクト直下）",
+  "explorer.delete.status.completed": "{deleted} 個の項目を削除しました",
+  "explorer.delete.status.someFailed":
+    "{deleted} 個を削除しました。{failed} 個は削除できませんでした",
+  "explorer.delete.status.aborted":
+    "削除を中止しました（{deleted} 個削除済み）",
+  "explorer.delete.status.nothingDeleted": "削除できませんでした",
   "fileOperation.move.failed.title": "移動できませんでした",
   "fileOperation.move.failed.intro": "以下の項目は移動できませんでした。",
   "fileOperation.itemKind.file": "ファイル",

@@ -3753,6 +3753,152 @@ label.settingsItemHeader {
   pointer-events: none;
 }
 
+/* #351: File Explorer delete confirmation dialog — a destructive-operation
+   confirmation, styled to read as a danger action (matches the unsaved-
+   changes dialog) and wide enough that the target table is readable. */
+.fileExplorerDeleteDialog.appInfoDialog {
+  /* Nearly the full parent window — the table has 7 columns including two
+     preview columns and a path column. */
+  inline-size: min(1180px, calc(100vw - 40px));
+  max-inline-size: none;
+}
+
+/* A solid red header with a white "!" icon and white title — unambiguously
+   a dangerous action, stronger than the default light `appDialog-destructive`
+   header tint. */
+.fileExplorerDeleteDialog .appDialogHeader {
+  background: #a32929;
+  color: #ffffff;
+}
+
+.fileExplorerDeleteDialog .appDialogTitle {
+  color: #ffffff;
+}
+
+.fileExplorerDeleteDialogHeaderIcon {
+  color: #ffffff;
+}
+
+.fileExplorerDeleteDialogHeaderIcon svg {
+  stroke: currentColor;
+}
+
+.fileExplorerDeleteDialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fileExplorerDeleteDialogWarning {
+  white-space: pre-line;
+  font-weight: 600;
+}
+
+.fileExplorerDeleteDialogFolderNote,
+.fileExplorerDeleteDialogRunStatus {
+  color: #52616f;
+  font-size: 0.88rem;
+}
+
+.fileExplorerDeleteDialogTableWrap {
+  max-height: min(52vh, 460px);
+  overflow: auto;
+  border: 1px solid #e4e9ee;
+  border-radius: 6px;
+}
+
+.fileExplorerDeleteDialogTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.fileExplorerDeleteDialogTable th,
+.fileExplorerDeleteDialogTable td {
+  padding-block: 7px;
+  padding-inline: 12px;
+  text-align: start;
+  border-block-end: 1px solid #eef1f4;
+  vertical-align: top;
+}
+
+.fileExplorerDeleteDialogTable thead th {
+  position: sticky;
+  inset-block-start: 0;
+  background: #f5f7f9;
+  color: #52616f;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Column sizing: status / name / modified / bytes stay on one line; the two
+   preview columns and the path column absorb the remaining width. */
+.fileExplorerDeleteDialogTable th:nth-child(1),
+.fileExplorerDeleteDialogTable td:nth-child(1),
+.fileExplorerDeleteDialogTable th:nth-child(3),
+.fileExplorerDeleteDialogTable td:nth-child(3),
+.fileExplorerDeleteDialogTable th:nth-child(4),
+.fileExplorerDeleteDialogTable td:nth-child(4) {
+  white-space: nowrap;
+}
+
+.fileExplorerDeleteDialogTable td:nth-child(5),
+.fileExplorerDeleteDialogTable td:nth-child(6) {
+  color: #52616f;
+  word-break: break-word;
+}
+
+.fileExplorerDeleteDialogPathCell {
+  word-break: break-word;
+  min-inline-size: 12ch;
+}
+
+.fileExplorerDeleteDialogBytesCell {
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fileExplorerDeleteDialogTable tr[data-delete-status="deleted"] td {
+  color: #4b7a3f;
+}
+
+.fileExplorerDeleteDialogTable tr[data-delete-status="failed"] td {
+  color: #b0403a;
+}
+
+.fileExplorerDeleteDialogTable tr[data-delete-status="aborted"] td {
+  color: #8a6d1f;
+}
+
+.fileExplorerDeleteConfirmButton,
+.fileExplorerDeleteAbortButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The 5s-wait state is shown by the icon swap alone (no helper text):
+   hourglass while disabled, trash-bin once armed. Painted in the button's
+   own white foreground so it stays legible on the red destructive fill. */
+.fileExplorerDeleteConfirmButtonIcon {
+  inline-size: 16px;
+  block-size: 16px;
+  flex-shrink: 0;
+  pointer-events: none;
+  background-color: #ffffff;
+  mask: var(--file-explorer-delete-button-icon) center / contain no-repeat;
+  -webkit-mask: var(--file-explorer-delete-button-icon) center / contain
+    no-repeat;
+}
+
+@media (max-width: 720px) {
+  .fileExplorerDeleteDialog.appInfoDialog {
+    inline-size: calc(100vw - 24px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .recoveryCandidateDialogRow {
     transition: none;

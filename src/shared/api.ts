@@ -30,6 +30,11 @@ import type {
   QuitApplicationResult
 } from "./lifecycle";
 import type { FileExplorerCreateFailureReason } from "./fileExplorerCreate";
+import type {
+  FileExplorerDeleteCollectResult,
+  FileExplorerDeleteEntryResult,
+  FileExplorerDeleteItemKind
+} from "./fileExplorerDelete";
 import type { FileExplorerRenameFailureReason } from "./fileExplorerRename";
 import type { Language } from "./i18n";
 import type { AppPlatform } from "./platform";
@@ -59,6 +64,15 @@ export type {
   FileExplorerCreateFailureReason,
   FileExplorerNameValidationError
 } from "./fileExplorerCreate";
+export type {
+  FileExplorerDeleteCollectResult,
+  FileExplorerDeleteEntryResult,
+  FileExplorerDeleteExecutionFailureReason,
+  FileExplorerDeleteItemKind,
+  FileExplorerDeleteRejection,
+  FileExplorerDeleteRejectionReason,
+  FileExplorerDeleteTarget
+} from "./fileExplorerDelete";
 export type { FileExplorerRenameFailureReason } from "./fileExplorerRename";
 export type { RecoveryStoreOwnerInfo, RecoveryStoreStatus } from "./recovery";
 export type {
@@ -157,6 +171,13 @@ export const PROJECT_CHANNELS = {
   renameFileExplorerEntry: "projects:renameFileExplorerEntry",
   /** #327: move one or more File Explorer files into an existing folder. */
   moveFileExplorerEntries: "projects:moveFileExplorerEntries",
+  /** #351: dry-run — validate a selection for deletion and enumerate every
+   *  file/folder that would actually be removed (with preview metadata). */
+  collectFileExplorerDeleteTargets:
+    "projects:collectFileExplorerDeleteTargets",
+  /** #351: delete ONE already-validated project-local entry. The renderer
+   *  drives the ordered loop; abort is "stop calling". */
+  deleteFileExplorerEntry: "projects:deleteFileExplorerEntry",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -429,6 +450,40 @@ export type MoveFileExplorerEntriesResult =
       readonly reason: "noProject" | "readOnlyProject";
     };
 
+/**
+ * #351: renderer → main dry-run request. `projectRootPath` is filled
+ * main-side from the open project (never trusted from the renderer).
+ */
+export interface CollectFileExplorerDeleteTargetsRequest {
+  readonly selectedRelativePaths: readonly string[];
+}
+
+export type CollectFileExplorerDeleteTargetsResult =
+  | {
+      readonly kind: "completed";
+      readonly result: FileExplorerDeleteCollectResult;
+    }
+  | {
+      readonly kind: "unavailable";
+      readonly reason: "noProject" | "readOnlyProject";
+    };
+
+/** #351: renderer → main request to delete ONE already-validated entry. */
+export interface DeleteFileExplorerEntryRequest {
+  readonly relativePath: string;
+  readonly kind: FileExplorerDeleteItemKind;
+}
+
+export type DeleteFileExplorerEntryResponse =
+  | {
+      readonly kind: "completed";
+      readonly result: FileExplorerDeleteEntryResult;
+    }
+  | {
+      readonly kind: "unavailable";
+      readonly reason: "noProject" | "readOnlyProject";
+    };
+
 export type FileExplorerUnavailableReason =
   | "invalidRequest"
   | "noProject"
@@ -681,6 +736,12 @@ export interface PergamumApi {
     moveFileExplorerEntries: (
       request: MoveFileExplorerEntriesRequest
     ) => Promise<MoveFileExplorerEntriesResult>;
+    collectFileExplorerDeleteTargets: (
+      request: CollectFileExplorerDeleteTargetsRequest
+    ) => Promise<CollectFileExplorerDeleteTargetsResult>;
+    deleteFileExplorerEntry: (
+      request: DeleteFileExplorerEntryRequest
+    ) => Promise<DeleteFileExplorerEntryResponse>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

@@ -308,6 +308,86 @@ export const enTranslations = {
   "explorer.move.status.allFailed": "Move failed for all {failed} item(s)",
   "explorer.move.status.validationFailed": "Move is unavailable: {reason}",
   "explorer.move.status.unavailable": "Move is unavailable right now",
+  "explorer.contextMenu.delete": "Delete...",
+  "explorer.delete.disabled.noProject": "No project is open.",
+  "explorer.delete.disabled.readOnlyProject":
+    "Deletion is not available in a read-only project.",
+  "explorer.delete.disabled.emptySelection": "Select an item to delete.",
+  "explorer.delete.disabled.protectedSelected": "This item cannot be deleted.",
+  "explorer.delete.disabled.containsDirtyOpenDocument":
+    "Save the document before deleting.",
+  "explorer.delete.disabled.deleteInProgress": "A deletion is in progress.",
+  "explorer.delete.reject.emptySelection": "No item is selected for deletion.",
+  "explorer.delete.reject.projectRoot": "The project root cannot be deleted.",
+  "explorer.delete.reject.outsideProject":
+    "An item outside the project cannot be deleted.",
+  "explorer.delete.reject.invalidPath": "This path cannot be deleted.",
+  "explorer.delete.reject.protected":
+    "This item is managed by Pergamum and cannot be deleted.",
+  "explorer.delete.reject.symlink": "A symbolic link cannot be deleted.",
+  "explorer.delete.reject.symlinkedPath":
+    "A path that goes through a symbolic link cannot be deleted.",
+  "explorer.delete.reject.notFound": "The item could not be found.",
+  "explorer.delete.reject.unsupportedNode":
+    "This is not a regular file or folder.",
+  "explorer.delete.reject.folderContainsProtected":
+    "This folder cannot be deleted as a whole because it contains an item that cannot be deleted ({offendingPath}).",
+  "explorer.delete.reject.enumerationFailed":
+    "The folder's contents could not be read.",
+  "explorer.delete.failure.permissionDenied": "Access was denied.",
+  "explorer.delete.failure.notEmpty":
+    "The folder was not empty and could not be deleted.",
+  "explorer.delete.failure.busy":
+    "The item is in use by another process and could not be deleted.",
+  "explorer.delete.failure.protected":
+    "This item is managed by Pergamum and could not be deleted.",
+  "explorer.delete.failure.outsideProject":
+    "The item is outside the project and could not be deleted.",
+  "explorer.delete.failure.symlink":
+    "The item is a symbolic link and could not be deleted.",
+  "explorer.delete.failure.targetChanged":
+    "The item changed on disk and was not deleted.",
+  "explorer.delete.failure.deleteFailed": "The item could not be deleted.",
+  "explorer.delete.rejectDialog.title": "Some items cannot be deleted",
+  "explorer.delete.rejectDialog.intro":
+    "The following items cannot be deleted, so the deletion was cancelled.",
+  "explorer.delete.dialog.title": "Confirm deletion",
+  "explorer.delete.dialog.intro":
+    "You are about to delete the following {count} item(s).",
+  "explorer.delete.dialog.warning":
+    "Deleted items are not moved to the trash; they are deleted directly.\nThis operation cannot be undone.",
+  "explorer.delete.dialog.folderNote":
+    "Files and subfolders contained in the selected folder(s) are also included as deletion targets.",
+  "explorer.delete.dialog.question": "Are you sure you want to delete?",
+  "explorer.delete.dialog.cancel": "Cancel",
+  "explorer.delete.dialog.confirm": "Delete",
+  "explorer.delete.dialog.abort": "Abort",
+  "explorer.delete.dialog.close": "Close",
+  "explorer.delete.dialog.tableLabel": "List of items to delete",
+  "explorer.delete.column.status": "Status",
+  "explorer.delete.column.path": "Path",
+  "explorer.delete.column.name": "Name",
+  "explorer.delete.column.modified": "Last modified",
+  "explorer.delete.column.previewHead": "First 10 characters",
+  "explorer.delete.column.previewTail": "Last 10 characters",
+  "explorer.delete.column.bytes": "Total bytes",
+  "explorer.delete.state.pending": "Not started",
+  "explorer.delete.state.deleting": "Deleting",
+  "explorer.delete.state.deleted": "Deleted",
+  "explorer.delete.state.alreadyAbsent": "Already deleted",
+  "explorer.delete.state.failed": "Could not delete: {reason}",
+  "explorer.delete.state.aborted": "Aborted",
+  "explorer.delete.preview.folder": "Folder",
+  "explorer.delete.preview.unavailable": "Preview unavailable",
+  "explorer.delete.preview.empty": "(empty)",
+  "explorer.delete.value.folderBytes": "—",
+  "explorer.delete.pathProjectRoot": "(project root)",
+  "explorer.delete.status.completed": "Deleted {deleted} item(s)",
+  "explorer.delete.status.someFailed":
+    "Deleted {deleted} item(s). {failed} item(s) could not be deleted",
+  "explorer.delete.status.aborted":
+    "Deletion aborted ({deleted} item(s) deleted)",
+  "explorer.delete.status.nothingDeleted": "Nothing was deleted",
   "fileOperation.move.failed.title": "Could not move items",
   "fileOperation.move.failed.intro": "The following items could not be moved.",
   "fileOperation.itemKind.file": "File",
