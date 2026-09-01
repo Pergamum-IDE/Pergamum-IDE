@@ -6807,6 +6807,7 @@ export function App(): JSX.Element {
                       onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
                       markdownOutline={activeMarkdownOutline}
                       activeEditorIsMarkdown={activeEditorIsMarkdown}
+                      activeOutlineDocumentKey={activeDocumentKey}
                       onOutlineHeadingClick={handleOutlineHeadingClick}
                     />
                   </div>

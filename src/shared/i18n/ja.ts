@@ -560,6 +560,8 @@ export const jaTranslations = {
   "outline.empty.notMarkdown": "このタブにはアウトラインがありません",
   "outline.heading.jumpLabel": "{text} へ移動",
   "outline.heading.empty": "（無題の見出し）",
+  "outline.item.expand": "アウトライン項目を展開",
+  "outline.item.collapse": "アウトライン項目を折りたたみ",
   "project.label": "プロジェクト: {name}",
   "projectAccess.readOnly.label": "読み取り専用",
   "projectAccess.readOnly.tooltip": "読み取り専用で開いています",

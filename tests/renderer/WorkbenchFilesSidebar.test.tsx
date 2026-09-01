@@ -23,9 +23,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function render(
-  overrides: Partial<Parameters<typeof WorkbenchFilesSidebar>[0]> = {}
-) {
+type Overrides = Partial<Parameters<typeof WorkbenchFilesSidebar>[0]>;
+
+function draw(overrides: Overrides = {}): void {
   act(() => {
     root.render(
       <WorkbenchFilesSidebar
@@ -36,10 +36,29 @@ function render(
           extractMarkdownOutline("# A\n## B\n## C\n## D")
         }
         activeEditorIsMarkdown={overrides.activeEditorIsMarkdown ?? true}
+        activeOutlineDocumentKey={
+          overrides.activeOutlineDocumentKey ?? "doc-1"
+        }
         onOutlineHeadingClick={overrides.onOutlineHeadingClick ?? vi.fn()}
       />
     );
   });
+}
+
+function render(overrides: Overrides = {}) {
+  draw(overrides);
+  return { rerender: draw };
+}
+
+function outlineChevron(): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>(
+    ".markdownOutlineTreeChevron"
+  );
+}
+function outlineHeadingTexts(): string[] {
+  return [
+    ...container.querySelectorAll<HTMLButtonElement>(".markdownOutlineHeading")
+  ].map((b) => b.textContent ?? "");
 }
 
 function toggle(): HTMLButtonElement {
@@ -148,5 +167,51 @@ describe("WorkbenchFilesSidebar — Outline resize / collapse (#352)", () => {
     expect(container.textContent).toContain(
       t("en", "outline.empty.notMarkdown")
     );
+  });
+
+  it("keeps a collapsed tree item collapsed across an Outline pane collapse / re-expand", () => {
+    render();
+    expand();
+    expect(outlineHeadingTexts()).toEqual(["A", "B", "C", "D"]);
+
+    act(() => outlineChevron()!.click()); // collapse heading "A"
+    expect(outlineHeadingTexts()).toEqual(["A"]);
+
+    act(() => toggle().click()); // collapse the whole Outline pane (body unmounts)
+    expect(body()).toBeNull();
+    act(() => toggle().click()); // re-expand the Outline pane
+
+    // the per-item collapsed state survived the body unmount
+    expect(outlineHeadingTexts()).toEqual(["A"]);
+    expect(outlineChevron()!.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("clears the tree item collapsed state when the active document key changes", () => {
+    const { rerender } = render();
+    expand();
+    act(() => outlineChevron()!.click()); // collapse heading "A"
+    expect(outlineHeadingTexts()).toEqual(["A"]);
+
+    // same outline shape, different document → collapsed state resets
+    rerender({
+      activeOutlineDocumentKey: "doc-2",
+      markdownOutline: extractMarkdownOutline("# A\n## B\n## C\n## D")
+    });
+    expect(outlineHeadingTexts()).toEqual(["A", "B", "C", "D"]);
+    expect(outlineChevron()!.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("keeps the tree item collapsed state while the document key is unchanged (typing re-parse)", () => {
+    const { rerender } = render();
+    expand();
+    act(() => outlineChevron()!.click());
+    expect(outlineHeadingTexts()).toEqual(["A"]);
+
+    // a debounce re-parse hands a NEW outline object, same document key
+    rerender({
+      activeOutlineDocumentKey: "doc-1",
+      markdownOutline: extractMarkdownOutline("# A\n## B\n## C\n## D")
+    });
+    expect(outlineHeadingTexts()).toEqual(["A"]);
   });
 });

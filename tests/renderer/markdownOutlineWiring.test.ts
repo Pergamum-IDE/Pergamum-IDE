@@ -60,6 +60,7 @@ describe("Markdown Outline wiring (#352)", () => {
     );
     expect(block).toContain("markdownOutline={activeMarkdownOutline}");
     expect(block).toContain("activeEditorIsMarkdown={activeEditorIsMarkdown}");
+    expect(block).toContain("activeOutlineDocumentKey={activeDocumentKey}");
     expect(block).toContain("onOutlineHeadingClick={handleOutlineHeadingClick}");
   });
 
@@ -81,6 +82,10 @@ describe("Markdown Outline wiring (#352)", () => {
     expect(filesSidebar).toContain("workbenchFilesSidebarResizeHandle");
     expect(filesSidebar).toContain("<CollapsibleSidebarSection");
     expect(filesSidebar).toContain("<MarkdownOutlinePane");
+    // #352: the tree item collapsed set is lifted here (survives the pane
+    // body unmounting) and cleared on document change, not on every keystroke.
+    expect(filesSidebar).toContain("collapsedOutlineItemIds");
+    expect(filesSidebar).toContain("}, [activeOutlineDocumentKey]);");
     // handle only rendered while expanded
     expect(filesSidebar).toContain("outlineCollapsed ? null : (");
     // File Explorer is rendered before the Outline section

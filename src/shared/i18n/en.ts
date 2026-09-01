@@ -561,6 +561,8 @@ export const enTranslations = {
   "outline.empty.notMarkdown": "Outline is not available for this tab",
   "outline.heading.jumpLabel": "Go to {text}",
   "outline.heading.empty": "(Untitled heading)",
+  "outline.item.expand": "Expand outline item",
+  "outline.item.collapse": "Collapse outline item",
   "project.label": "Project: {name}",
   "projectAccess.readOnly.label": "Read-only",
   "projectAccess.readOnly.tooltip": "Opened in read-only mode",

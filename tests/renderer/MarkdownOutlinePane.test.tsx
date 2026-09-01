@@ -26,29 +26,77 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function render(
-  props: {
-    outline?: ReturnType<typeof extractMarkdownOutline> | null;
-    activeEditorIsMarkdown?: boolean;
-  } = {}
-) {
+interface PaneProps {
+  outline?: ReturnType<typeof extractMarkdownOutline> | null;
+  activeEditorIsMarkdown?: boolean;
+}
+
+/**
+ * The pane is CONTROLLED — this harness supplies the collapsed-set state the
+ * way `WorkbenchFilesSidebar` does, so a chevron click actually toggles.
+ */
+function Harness(props: {
+  outline: ReturnType<typeof extractMarkdownOutline> | null;
+  activeEditorIsMarkdown: boolean;
+  onHeadingClick: (item: MarkdownOutlineItem) => void;
+  onToggleSpy?: (itemId: string) => void;
+}): JSX.Element {
+  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  return (
+    <MarkdownOutlinePane
+      outline={props.outline}
+      activeEditorIsMarkdown={props.activeEditorIsMarkdown}
+      collapsedItemIds={collapsed}
+      onToggleItemCollapsed={(itemId) => {
+        props.onToggleSpy?.(itemId);
+        setCollapsed((current) => {
+          const next = new Set(current);
+          if (next.has(itemId)) {
+            next.delete(itemId);
+          } else {
+            next.add(itemId);
+          }
+          return next;
+        });
+      }}
+      translate={translate}
+      onHeadingClick={props.onHeadingClick}
+    />
+  );
+}
+
+function render(props: PaneProps = {}) {
   const onHeadingClick = vi.fn<(item: MarkdownOutlineItem) => void>();
-  act(() => {
-    root.render(
-      <MarkdownOutlinePane
-        outline={props.outline ?? null}
-        activeEditorIsMarkdown={props.activeEditorIsMarkdown ?? true}
-        translate={translate}
-        onHeadingClick={onHeadingClick}
-      />
-    );
-  });
-  return { onHeadingClick };
+  const onToggleSpy = vi.fn<(itemId: string) => void>();
+  const draw = (next: PaneProps): void => {
+    act(() => {
+      root.render(
+        <Harness
+          outline={next.outline ?? null}
+          activeEditorIsMarkdown={next.activeEditorIsMarkdown ?? true}
+          onHeadingClick={onHeadingClick}
+          onToggleSpy={onToggleSpy}
+        />
+      );
+    });
+  };
+  draw(props);
+  return { onHeadingClick, onToggleSpy, rerender: draw };
 }
 
 function headingButtons(): HTMLButtonElement[] {
   return [
     ...container.querySelectorAll<HTMLButtonElement>(".markdownOutlineHeading")
+  ];
+}
+
+function chevronButtons(): HTMLButtonElement[] {
+  return [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      ".markdownOutlineTreeChevron"
+    )
   ];
 }
 
@@ -116,5 +164,93 @@ describe("MarkdownOutlinePane (#352)", () => {
       t("en", "outline.heading.empty")
     );
     expect(button.textContent).toBe(t("en", "outline.heading.empty"));
+  });
+
+  it("shows a collapse chevron only for headings that have children", () => {
+    render({ outline: extractMarkdownOutline("# A\n## A.1\n# B") });
+    // A has a child, B does not.
+    const items = [
+      ...container.querySelectorAll<HTMLLIElement>(".markdownOutlineTreeItem")
+    ];
+    const rowA = items[0].querySelector(".markdownOutlineTreeRow")!;
+    const rowB = items[2].querySelector(".markdownOutlineTreeRow")!;
+    expect(rowA.querySelector(".markdownOutlineTreeChevron")).not.toBeNull();
+    expect(rowB.querySelector(".markdownOutlineTreeChevron")).toBeNull();
+    // childless rows still get an alignment placeholder
+    expect(
+      rowB.querySelector(".markdownOutlineTreeChevronPlaceholder")
+    ).not.toBeNull();
+  });
+
+  it("keeps the jump button and the collapse button as separate elements", () => {
+    render({ outline: extractMarkdownOutline("# A\n## A.1") });
+    const chevron = chevronButtons()[0];
+    const heading = headingButtons()[0];
+    expect(chevron).not.toBe(heading);
+    expect(chevron.classList.contains("markdownOutlineHeading")).toBe(false);
+    expect(heading.classList.contains("markdownOutlineTreeChevron")).toBe(false);
+  });
+
+  it("hides children on chevron click and shows them again on a second click", () => {
+    render({ outline: extractMarkdownOutline("# A\n## A.1\n### A.1.a") });
+    expect(headingButtons().map((b) => b.textContent)).toEqual([
+      "A",
+      "A.1",
+      "A.1.a"
+    ]);
+
+    act(() => chevronButtons()[0].click()); // collapse A
+    expect(headingButtons().map((b) => b.textContent)).toEqual(["A"]);
+    expect(chevronButtons()[0].getAttribute("aria-expanded")).toBe("false");
+    expect(chevronButtons()[0].getAttribute("aria-label")).toBe(
+      t("en", "outline.item.expand")
+    );
+
+    act(() => chevronButtons()[0].click()); // expand A
+    expect(headingButtons().map((b) => b.textContent)).toEqual([
+      "A",
+      "A.1",
+      "A.1.a"
+    ]);
+    expect(chevronButtons()[0].getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("reports the toggled item id to the host and never jumps on a chevron click", () => {
+    const outline = extractMarkdownOutline("# A\n## A.1");
+    const { onHeadingClick, onToggleSpy } = render({ outline });
+    act(() => chevronButtons()[0].click());
+    expect(onToggleSpy).toHaveBeenCalledTimes(1);
+    expect(onToggleSpy).toHaveBeenCalledWith(outline.tree[0].id);
+    expect(onHeadingClick).not.toHaveBeenCalled();
+  });
+
+  it("jumps (and does not toggle) when the heading text is clicked", () => {
+    const { onHeadingClick, onToggleSpy } = render({
+      outline: extractMarkdownOutline("# A\n## A.1")
+    });
+    act(() => headingButtons()[0].click());
+    expect(onHeadingClick).toHaveBeenCalledTimes(1);
+    expect(onToggleSpy).not.toHaveBeenCalled();
+    // children still visible — a heading click never collapses
+    expect(headingButtons().map((b) => b.textContent)).toEqual(["A", "A.1"]);
+  });
+
+  it("reflects the controlled collapsedItemIds prop", () => {
+    const outline = extractMarkdownOutline("# A\n## A.1");
+    act(() => {
+      root.render(
+        <MarkdownOutlinePane
+          outline={outline}
+          activeEditorIsMarkdown
+          collapsedItemIds={new Set([outline.tree[0].id])}
+          onToggleItemCollapsed={vi.fn()}
+          translate={translate}
+          onHeadingClick={vi.fn()}
+        />
+      );
+    });
+    // A is collapsed via the prop → its child is not rendered
+    expect(headingButtons().map((b) => b.textContent)).toEqual(["A"]);
+    expect(chevronButtons()[0].getAttribute("aria-expanded")).toBe("false");
   });
 });

@@ -220,6 +220,7 @@ button:active {
 }
 
 .activityBarItem:hover {
+  width: 44px;
   background: #dfe8f1;
   color: #25313d;
 }
@@ -231,6 +232,7 @@ button:active {
 
 .activityBarItem.isActive,
 .activityBarItem.isActive:hover {
+  width: 44px;
   background: #ffffff;
   color: #0f2438;
 }
@@ -1333,17 +1335,22 @@ label.settingsItemHeader {
   border-top: 1px solid var(--workspace-sidebar-border);
 }
 
+/* Match the File Explorer / sidebar section header treatment so the Outline
+   header reads as the same heading tier when the two stack. */
 .collapsibleSidebarSectionHeader {
   display: flex;
   align-items: center;
   gap: 4px;
   width: 100%;
-  padding: 6px 10px;
+  min-height: 34px;
+  padding: 5px 8px 5px 12px;
   border: none;
   background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
+  color: var(--workspace-sidebar-header-foreground);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
   text-align: start;
   cursor: pointer;
 }
@@ -1354,7 +1361,7 @@ label.settingsItemHeader {
 }
 
 .collapsibleSidebarSectionChevron {
-  font-size: 0.75em;
+  font-size: 1.5em;
   opacity: 0.8;
 }
 
@@ -1380,26 +1387,62 @@ label.settingsItemHeader {
   list-style: none;
   margin: 0;
   padding: 0;
+  /* Same text size as a File Explorer file row. */
+  font-size: 13px;
+}
+
+/* One outline row: [chevron | heading]. The level indent lives here so the
+   chevron and the heading text move together. */
+.markdownOutlineTreeRow {
+  display: flex;
+  align-items: center;
+  padding-inline-start: calc(6px + var(--markdown-outline-depth, 0) * 12px);
+}
+
+.markdownOutlineTreeChevron,
+.markdownOutlineTreeChevronPlaceholder {
+  flex: 0 0 auto;
+  inline-size: 16px;
+  block-size: 20px;
+}
+
+.markdownOutlineTreeChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 1.5em;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.markdownOutlineTreeChevron:hover,
+.markdownOutlineTreeChevron:focus-visible {
+  opacity: 1;
+  background: var(--workspace-sidebar-hover);
 }
 
 .markdownOutlineHeading {
+  flex: 1 1 auto;
+  min-width: 0;
   display: block;
-  width: 100%;
-  padding: 3px 10px 3px
-    calc(10px + var(--markdown-outline-depth, 0) * 12px);
+  padding: 2px 10px 2px 2px;
   border: none;
+  border-radius: 4px;
   background: transparent;
   color: inherit;
-  font: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 18px;
   text-align: start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-}
-
-.markdownOutlineHeading[data-outline-level="1"] {
-  font-weight: 600;
 }
 
 .markdownOutlineHeading:hover,

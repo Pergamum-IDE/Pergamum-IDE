@@ -71,6 +71,9 @@ interface WorkspaceSidebarProps {
   /** #352: whether the active editor is a Markdown document (drives the
    *  Outline pane's empty vs. unavailable state). */
   activeEditorIsMarkdown?: boolean;
+  /** #352: serialized identity of the active document. Drives clearing the
+   *  Outline tree item collapsed state on document change. */
+  activeOutlineDocumentKey?: string | null;
   /** #352: jump the editor to a clicked outline heading. */
   onOutlineHeadingClick?: (item: MarkdownOutlineItem) => void;
 }
@@ -102,6 +105,7 @@ export function WorkspaceSidebar({
   onCreateGlossaryEntry,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
+  activeOutlineDocumentKey = null,
   onOutlineHeadingClick = () => undefined
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
@@ -112,6 +116,7 @@ export function WorkspaceSidebar({
           translate={translate}
           markdownOutline={markdownOutline}
           activeEditorIsMarkdown={activeEditorIsMarkdown}
+          activeOutlineDocumentKey={activeOutlineDocumentKey}
           onOutlineHeadingClick={onOutlineHeadingClick}
           fileExplorer={
             <FileExplorer
