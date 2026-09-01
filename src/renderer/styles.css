@@ -1617,6 +1617,50 @@ label.settingsItemHeader {
   cursor: default;
 }
 
+/* #355 v1 — minimal one-item document-tab context menu ("Select in File
+   Explorer"). The full tab context menu is #354; these styles mirror the
+   File Explorer menu so #354 can restyle from a clean, dedicated class. */
+.documentTabContextMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.documentTabContextMenu {
+  position: fixed;
+  top: var(--document-tab-context-menu-y, 0);
+  left: var(--document-tab-context-menu-x, 0);
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
+  border-radius: 6px;
+  background: var(--app-surface, #fff);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.documentTabContextMenuItem {
+  display: block;
+  inline-size: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.documentTabContextMenuItem:hover:not(:disabled),
+.documentTabContextMenuItem:focus-visible {
+  background: var(--workspace-sidebar-hover);
+}
+
+.documentTabContextMenuItem:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .moveDestinationDialogDescription {
   margin: 0 0 12px;
   color: var(--workspace-sidebar-muted-foreground);

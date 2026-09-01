@@ -1,4 +1,9 @@
-import { useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 import type { ProjectAccessMode } from "../shared/api";
 import type { Translate } from "../shared/i18n";
 import {
@@ -43,8 +48,22 @@ interface DocumentTabBarProps {
   onCloseDocument: (documentId: EditorId) => void;
   onSelectSpecialTab?: (tabId: SpecialTabId) => void;
   onCloseSpecialTab?: (tabId: SpecialTabId) => void;
+  /**
+   * #355 v1 — integrate into #354 tab context menu later. When provided, a
+   * right-click on a document tab opens a one-item menu whose sole action is
+   * "Select in File Explorer" for that tab. The menu is not rendered at all
+   * when this is omitted.
+   */
+  onSelectInFileExplorer?: (tab: DocumentTab) => void;
+  /** #355 v1: whether the "Select in File Explorer" item is enabled for a
+   *  given tab. Defaults to "project document tabs only". */
+  canSelectInFileExplorer?: (tab: DocumentTab) => boolean;
   isUtilityWindowOpen: boolean;
   onToggleUtilityWindow: () => void;
+}
+
+function defaultCanSelectInFileExplorer(tab: DocumentTab): boolean {
+  return tab.id.kind === "projectDocument";
 }
 
 export function DocumentTabBar({
@@ -60,9 +79,30 @@ export function DocumentTabBar({
   onCloseDocument,
   onSelectSpecialTab = () => undefined,
   onCloseSpecialTab = () => undefined,
+  onSelectInFileExplorer,
+  canSelectInFileExplorer = defaultCanSelectInFileExplorer,
   isUtilityWindowOpen,
   onToggleUtilityWindow
 }: DocumentTabBarProps): JSX.Element {
+  // #355 v1: the document tab a right-click opened the minimal context menu on.
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    tab: DocumentTab;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const closeTabContextMenu = (): void => setTabContextMenu(null);
+
+  function handleDocumentTabContextMenu(
+    event: ReactMouseEvent<HTMLDivElement>,
+    tab: DocumentTab
+  ): void {
+    if (!onSelectInFileExplorer) {
+      return;
+    }
+    event.preventDefault();
+    setTabContextMenu({ tab, x: event.clientX, y: event.clientY });
+  }
   function isWorkspaceTabActive(tabId: WorkspaceTabId): boolean {
     return (
       activeWorkspaceTabId !== undefined &&
@@ -167,6 +207,7 @@ export function DocumentTabBar({
         aria-selected={isActive}
         title={tabTitle}
         onClick={() => onSelectDocument(tab.id)}
+        onContextMenu={(event) => handleDocumentTabContextMenu(event, tab)}
         onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
         onMouseDown={(event) => {
           handleDocumentTabMiddleClick(event, tab.id, onCloseDocument);
@@ -284,6 +325,60 @@ export function DocumentTabBar({
       >
         {utilityWindowLabel}
       </button>
+
+      {tabContextMenu !== null && onSelectInFileExplorer ? (
+        <div
+          className="documentTabContextMenuBackdrop"
+          onClick={closeTabContextMenu}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            closeTabContextMenu();
+          }}
+        >
+          <div
+            className="documentTabContextMenu"
+            role="menu"
+            aria-label={translate("tabs.contextMenu.label")}
+            style={
+              {
+                "--document-tab-context-menu-x": `${tabContextMenu.x}px`,
+                "--document-tab-context-menu-y": `${tabContextMenu.y}px`
+              } as CSSProperties
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            {(() => {
+              const menuTab = tabContextMenu.tab;
+              const enabled = canSelectInFileExplorer(menuTab);
+              return (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="documentTabContextMenuItem"
+                  data-document-tab-context-command="select-in-file-explorer"
+                  disabled={!enabled}
+                  aria-disabled={!enabled}
+                  title={
+                    enabled
+                      ? undefined
+                      : translate(
+                          "tabs.contextMenu.selectInFileExplorer.unavailable"
+                        )
+                  }
+                  onClick={() => {
+                    closeTabContextMenu();
+                    if (enabled) {
+                      onSelectInFileExplorer(menuTab);
+                    }
+                  }}
+                >
+                  {translate("tabs.contextMenu.selectInFileExplorer")}
+                </button>
+              );
+            })()}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

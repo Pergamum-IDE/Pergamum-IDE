@@ -140,6 +140,17 @@ export interface FileExplorerRefreshDirectoriesRequest {
   readonly token: number;
 }
 
+/**
+ * #355: an explicit request to reveal one project document in the File
+ * Explorer — expand its parent folder chain, select its row, and scroll it
+ * into view. Issued by the "Select in File Explorer" tab context-menu item.
+ * `token` changes per request so a repeat re-runs the reveal.
+ */
+export interface FileExplorerRevealRequest {
+  readonly relativePath: string;
+  readonly token: number;
+}
+
 interface FileExplorerProps {
   project: PergamumProject | null;
   highlightedRelativePath: string | null;
@@ -158,6 +169,12 @@ interface FileExplorerProps {
    *  Consumed once per token. */
   refreshDirectoriesRequest?: FileExplorerRefreshDirectoriesRequest | null;
   onRefreshDirectoriesRequestHandled?: () => void;
+  /** #355: an explicit "Select in File Explorer" request from a document tab.
+   *  Unlike the passive #309 active-document follow, this ALWAYS expands the
+   *  parent folder chain (even folders the user collapsed), selects the row,
+   *  and scrolls it into view. Consumed once per token. */
+  revealRequest?: FileExplorerRevealRequest | null;
+  onRevealRequestHandled?: () => void;
   isProjectDocumentDirty?: (relativePath: string) => boolean;
   onProjectDocumentRenamed?: (
     oldRelativePath: string,
@@ -686,6 +703,8 @@ export function FileExplorer({
   onRenameEntryRequestHandled,
   refreshDirectoriesRequest = null,
   onRefreshDirectoriesRequestHandled,
+  revealRequest = null,
+  onRevealRequestHandled,
   isProjectDocumentDirty = () => false,
   onProjectDocumentRenamed,
   onProjectDocumentsMoved,
@@ -700,6 +719,14 @@ export function FileExplorer({
   >({});
   const [createDialogKind, setCreateDialogKind] =
     useState<FileExplorerCreateKind | null>(null);
+  // #355: when a create is triggered from a context menu, the target folder is
+  // an explicit override rather than the current selection:
+  //   `undefined` → no override (toolbar / Command Palette → selection-based),
+  //   `null`      → project root (empty-area / project-root context menu),
+  //   string      → that folder (folder-row context menu).
+  const [createDialogParentOverride, setCreateDialogParentOverride] = useState<
+    string | null | undefined
+  >(undefined);
   const [renameDialogTarget, setRenameDialogTarget] =
     useState<FileExplorerEntry | null>(null);
   const [expandedDirectoryPaths, setExpandedDirectoryPaths] = useState<
@@ -718,11 +745,18 @@ export function FileExplorer({
   // and is kept in sync as one member of this set.
   const [multiSelection, setMultiSelection] =
     useState<FileExplorerSelectionState>(createEmptyFileExplorerSelection);
-  // #327: File Explorer item context menu (a single `Move…` command) and the
-  // destination-folder picker it opens.
+  // #327: File Explorer item context menu (Move / Cut / Paste / Delete) and
+  // the destination-folder picker it opens.
+  // #355: it also carries the create target — a right-click on the project
+  // root row or the empty list area targets the project root; a right-click
+  // on a folder row targets that folder; a file row shows no create items.
   const [contextMenu, setContextMenu] = useState<{
     readonly x: number;
     readonly y: number;
+    readonly createTarget:
+      | { readonly kind: "root" }
+      | { readonly kind: "folder"; readonly relativePath: string }
+      | null;
   } | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveInFlight, setMoveInFlight] = useState(false);
@@ -754,6 +788,16 @@ export function FileExplorer({
   // per active document and never on every re-render.
   const activeDocumentEntryElementRef = useRef<HTMLButtonElement | null>(null);
   const lastScrolledHighlightRef = useRef<string | null>(null);
+  // #355: the active-document path for which the passive #309 reveal has
+  // already run to a terminal state. While it equals `highlightedRelativePath`
+  // the auto-reveal is inert, so a folder the user collapses stays collapsed.
+  // Reset on project switch; the explicit #355 reveal request ignores it.
+  const lastRevealedHighlightRef = useRef<string | null>(null);
+  // #355: a path an explicit reveal request wants scrolled into view once its
+  // row mounts (set after the parent chain is expanded).
+  const pendingRevealScrollRef = useRef<string | null>(null);
+  const handledRevealRequestTokenRef = useRef<number | null>(null);
+  const forceRevealRetriedKeysRef = useRef<Set<string>>(new Set());
   const projectKey = project
     ? `${project.rootPath}\0${project.activeProjectFilePath}`
     : "no-project";
@@ -974,6 +1018,10 @@ export function FileExplorer({
     // #329 spike: abandon any in-progress drag on a project switch / remount.
     setDragState(null);
     setDropTarget(null);
+    // #355: a new project re-arms the passive active-document reveal.
+    lastRevealedHighlightRef.current = null;
+    pendingRevealScrollRef.current = null;
+    forceRevealRetriedKeysRef.current = new Set();
 
     if (hasProject) {
       void loadDirectoryForGeneration(null, generation);
@@ -1052,81 +1100,187 @@ export function FileExplorer({
     });
   }, [entriesByDirectoryPath]);
 
-  // #309: reveal the active project document. When the active editor is a
-  // project document, `highlightedRelativePath` is its project-relative path
-  // (it is `null` for every non-project editor — standalone Markdown,
-  // Untitled, glossary — so those clear the highlight and reveal nothing).
-  // This walks the ancestor folder chain, lazily loading each folder and
-  // then expanding it, until the document is reachable in the tree. It never
-  // touches the File Explorer selection (that state drives #307 create
-  // targets), never collapses folders, and reloads only the document's own
-  // ancestors. Each load is generation-guarded by `loadDirectoryForGeneration`,
-  // so a late result after a project switch or close is discarded (#305).
+  // #309/#355: one pass of the "reveal a project document" walk — lazily
+  // load each ancestor folder, then expand the whole chain so the document's
+  // row renders. Multi-pass: returns `"pending"` while a load is in flight
+  // (the caller re-runs when the tree changes), `"done"` when the row is
+  // reachable (or was just expanded into place), `"unavailable"` when the
+  // chain is broken. Never touches the File Explorer selection and never
+  // collapses a folder.
+  //
+  // `mode: "auto"` — the passive #309 active-document follow. Gives up on the
+  //   first unreadable ancestor.
+  // `mode: "force"` — the explicit #355 "Select in File Explorer" request.
+  //   Retries each unreadable ancestor once (the user asked for it) before
+  //   giving up, tracked in `forceRevealRetriedKeysRef`.
+  const revealPathInTree = useCallback(
+    (
+      relativePath: string,
+      mode: "auto" | "force"
+    ): "done" | "pending" | "unavailable" => {
+      if (
+        isFileExplorerEntryRevealed(
+          entriesByDirectoryPath,
+          expandedDirectoryPaths,
+          relativePath
+        )
+      ) {
+        return "done";
+      }
+
+      const ancestorDirectoryPaths =
+        ancestorDirectoryRelativePaths(relativePath);
+
+      for (const directoryPath of [null, ...ancestorDirectoryPaths]) {
+        const key = directoryKey(directoryPath);
+        const missing = !hasDirectoryEntries(
+          entriesByDirectoryPath,
+          directoryPath
+        );
+        const unavailable = unavailableDirectoryPaths.has(key);
+
+        if (unavailable && mode === "auto") {
+          return "unavailable";
+        }
+
+        if (unavailable && mode === "force") {
+          if (forceRevealRetriedKeysRef.current.has(key)) {
+            return "unavailable";
+          }
+          forceRevealRetriedKeysRef.current.add(key);
+          if (!loadingDirectoryPaths.has(key)) {
+            void loadDirectoryForGeneration(
+              directoryPath,
+              loadGenerationRef.current
+            );
+          }
+          return "pending";
+        }
+
+        if (missing) {
+          if (!loadingDirectoryPaths.has(key)) {
+            void loadDirectoryForGeneration(
+              directoryPath,
+              loadGenerationRef.current
+            );
+          }
+          // Wait for the load to land; the caller re-runs and continues.
+          return "pending";
+        }
+      }
+
+      // Every ancestor is loaded — expand the chain. Adds paths only; never
+      // removes, so the user's other tree state is untouched.
+      setExpandedDirectoryPaths((current) => {
+        let changed = false;
+        const next = new Set(current);
+        for (const directoryPath of ancestorDirectoryPaths) {
+          if (!next.has(directoryPath)) {
+            next.add(directoryPath);
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+      return "done";
+    },
+    [
+      entriesByDirectoryPath,
+      expandedDirectoryPaths,
+      loadDirectoryForGeneration,
+      loadingDirectoryPaths,
+      unavailableDirectoryPaths
+    ]
+  );
+
+  // #309/#355: passively follow the active project document, but ONLY ONCE
+  // per document. After the walk reaches a terminal state for a given
+  // `highlightedRelativePath`, this effect is inert for that path — so a
+  // folder the user then collapses stays collapsed (it does NOT snap back
+  // open on the next re-render). A different active document, or a project
+  // switch (which nulls the ref), re-arms it. The explicit #355 reveal
+  // request below ignores this gate.
   useEffect(() => {
     if (!hasProject || !highlightedRelativePath) {
       return;
     }
-
-    if (
-      isFileExplorerEntryRevealed(
-        entriesByDirectoryPath,
-        expandedDirectoryPaths,
-        highlightedRelativePath
-      )
-    ) {
+    if (lastRevealedHighlightRef.current === highlightedRelativePath) {
       return;
     }
 
-    const ancestorDirectoryPaths = ancestorDirectoryRelativePaths(
-      highlightedRelativePath
-    );
+    const result = revealPathInTree(highlightedRelativePath, "auto");
 
-    for (const directoryPath of [null, ...ancestorDirectoryPaths]) {
-      const key = directoryKey(directoryPath);
+    if (result === "pending") {
+      // Still loading an ancestor — wait; this effect re-runs on tree change.
+      return;
+    }
 
-      if (unavailableDirectoryPaths.has(key)) {
-        // The chain is broken — the document cannot be revealed. Stop rather
-        // than retry-loop the same unreadable folder.
-        return;
-      }
+    // "done" or "unavailable": do not auto-reveal this path again.
+    lastRevealedHighlightRef.current = highlightedRelativePath;
+  }, [hasProject, highlightedRelativePath, revealPathInTree]);
 
-      if (!hasDirectoryEntries(entriesByDirectoryPath, directoryPath)) {
-        if (!loadingDirectoryPaths.has(key)) {
-          void loadDirectoryForGeneration(
-            directoryPath,
-            loadGenerationRef.current
-          );
-        }
-        // Wait for the load to land; this effect re-runs and continues the
-        // walk from the next unloaded ancestor.
-        return;
+  // #355: an explicit "Select in File Explorer" request. Unlike the passive
+  // follow above it ALWAYS expands the parent chain (even folders the user
+  // collapsed), selects the row, and scrolls it into view. Consumed once per
+  // token.
+  useEffect(() => {
+    const request = revealRequest;
+    if (!request || !hasProject) {
+      return;
+    }
+    if (handledRevealRequestTokenRef.current === request.token) {
+      return;
+    }
+
+    const result = revealPathInTree(request.relativePath, "force");
+
+    if (result === "pending") {
+      // Loading an ancestor — wait; this effect re-runs on tree change.
+      return;
+    }
+
+    handledRevealRequestTokenRef.current = request.token;
+    forceRevealRetriedKeysRef.current = new Set();
+
+    if (result === "done") {
+      selectSingleEntry(request.relativePath);
+      const element = rowElementsRef.current.get(request.relativePath);
+      if (element) {
+        // The row was already visible — scroll / focus it right away.
+        scrollFileExplorerActiveDocumentIntoView(element);
+        element.focus();
+      } else {
+        // The chain was just expanded; the row mounts on the next render —
+        // the follow-up effect below scrolls it then.
+        pendingRevealScrollRef.current = request.relativePath;
       }
     }
 
-    // Every ancestor is loaded — expand them so the document renders. Only
-    // adds paths; never removes, so the user's other tree state is untouched.
-    setExpandedDirectoryPaths((current) => {
-      let changed = false;
-      const next = new Set(current);
-
-      for (const directoryPath of ancestorDirectoryPaths) {
-        if (!next.has(directoryPath)) {
-          next.add(directoryPath);
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
-    });
+    onRevealRequestHandled?.();
   }, [
-    entriesByDirectoryPath,
-    expandedDirectoryPaths,
     hasProject,
-    highlightedRelativePath,
-    loadDirectoryForGeneration,
-    loadingDirectoryPaths,
-    unavailableDirectoryPaths
+    onRevealRequestHandled,
+    revealPathInTree,
+    revealRequest,
+    selectSingleEntry
   ]);
+
+  // #355: once an explicitly-revealed row that needed lazy expansion has
+  // mounted, scroll it into view and move focus to it (roving-tabindex
+  // primary, set by `selectSingleEntry` above).
+  useEffect(() => {
+    const targetPath = pendingRevealScrollRef.current;
+    if (targetPath === null) {
+      return;
+    }
+    const element = rowElementsRef.current.get(targetPath);
+    if (!element) {
+      return;
+    }
+    pendingRevealScrollRef.current = null;
+    scrollFileExplorerActiveDocumentIntoView(element);
+    element.focus();
+  }, [entriesByDirectoryPath, expandedDirectoryPaths]);
 
   const setActiveDocumentEntryElement = useCallback(
     (element: HTMLButtonElement | null) => {
@@ -1248,15 +1402,30 @@ export function FileExplorer({
     [entriesByDirectoryPath, isRootSelected, selectedRelativePath]
   );
 
+  // #355: the folder a create will actually land in — the explicit
+  // context-menu override when set (`null` = project root, string = a
+  // folder), otherwise the selection-derived target. Shown in the dialog and
+  // used by `submitCreate`, so the two can never disagree.
+  const effectiveCreateParentDirectory =
+    createDialogParentOverride !== undefined
+      ? createDialogParentOverride
+      : createParentDirectory;
+
   const openCreateDialog = useCallback(
-    (kind: FileExplorerCreateKind) => {
+    (kind: FileExplorerCreateKind, parentOverride?: string | null) => {
       if (!canCreate) {
         return;
       }
+      setCreateDialogParentOverride(parentOverride);
       setCreateDialogKind(kind);
     },
     [canCreate]
   );
+
+  const closeCreateDialog = useCallback(() => {
+    setCreateDialogKind(null);
+    setCreateDialogParentOverride(undefined);
+  }, []);
 
   const reportRenameUnavailable = useCallback(
     (reason: Parameters<typeof fileExplorerRenameFailureMessageKey>[0]) => {
@@ -1411,11 +1580,9 @@ export function FileExplorer({
         };
       }
 
-      const parentRelativePath = resolveFileExplorerCreateParentDirectory({
-        entriesByDirectoryPath,
-        isRootSelected,
-        selectedRelativePath
-      });
+      // #355: honor the context-menu target override when present; otherwise
+      // fall back to the selection-derived folder. Same value the dialog shows.
+      const parentRelativePath = effectiveCreateParentDirectory;
 
       let result: CreateFileExplorerEntryResult;
 
@@ -1482,7 +1649,7 @@ export function FileExplorer({
       }
 
       selectSingleEntry(newRelativePath);
-      setCreateDialogKind(null);
+      closeCreateDialog();
 
       if (kind === "file") {
         // Open it as a project document — never as a standalone Markdown.
@@ -1498,12 +1665,11 @@ export function FileExplorer({
     },
     [
       canCreate,
-      entriesByDirectoryPath,
-      isRootSelected,
+      closeCreateDialog,
+      effectiveCreateParentDirectory,
       loadDirectoryForGeneration,
       onActivateDocument,
       selectSingleEntry,
-      selectedRelativePath,
       translate
     ]
   );
@@ -1939,7 +2105,18 @@ export function FileExplorer({
       // selection is left untouched — the menu still opens so `Move…` (and
       // its disabled reason) stays discoverable.
 
-      setContextMenu({ x: event.clientX, y: event.clientY });
+      // #355: the create target — project root for the root row / empty area,
+      // the clicked folder for a folder row, and no create items for a file
+      // row. Independent of the selection so a folder-row create always lands
+      // in that folder even though the right-click also selected it.
+      const createTarget =
+        entry === null
+          ? ({ kind: "root" } as const)
+          : entry.kind === "folder"
+            ? ({ kind: "folder", relativePath: entry.relativePath } as const)
+            : null;
+
+      setContextMenu({ x: event.clientX, y: event.clientY, createTarget });
     },
     []
   );
@@ -2657,6 +2834,46 @@ export function FileExplorer({
             }
             onClick={(event) => event.stopPropagation()}
           >
+            {contextMenu.createTarget !== null
+              ? (["file", "folder"] as const).map((createKind) => {
+                  const target = contextMenu.createTarget;
+                  return (
+                    <button
+                      key={`create-${createKind}`}
+                      type="button"
+                      role="menuitem"
+                      className="fileExplorerContextMenuItem"
+                      data-file-explorer-context-command={
+                        createKind === "file" ? "new-file" : "new-folder"
+                      }
+                      disabled={!canCreate}
+                      aria-disabled={!canCreate}
+                      title={
+                        canCreate
+                          ? undefined
+                          : translate("explorer.create.error.readOnlyProject")
+                      }
+                      onClick={() => {
+                        closeContextMenu();
+                        if (canCreate && target !== null) {
+                          openCreateDialog(
+                            createKind,
+                            target.kind === "root"
+                              ? null
+                              : target.relativePath
+                          );
+                        }
+                      }}
+                    >
+                      {translate(
+                        createKind === "file"
+                          ? "explorer.contextMenu.newFile"
+                          : "explorer.contextMenu.newFolder"
+                      )}
+                    </button>
+                  );
+                })
+              : null}
             <button
               type="button"
               role="menuitem"
@@ -2875,8 +3092,10 @@ export function FileExplorer({
           )}
           contextLabel={translate("explorer.create.target.label")}
           contextValue={
-            createParentDirectory ??
-            translate("explorer.create.target.projectRoot")
+            effectiveCreateParentDirectory === null ||
+            effectiveCreateParentDirectory === ""
+              ? translate("explorer.create.target.projectRoot")
+              : effectiveCreateParentDirectory
           }
           icon={{
             url: createDialogKind === "file" ? filePlusIconUrl : folderPlusIconUrl
@@ -2889,7 +3108,7 @@ export function FileExplorer({
             translate
           )}
           onSubmit={(rawValue) => submitCreate(createDialogKind, rawValue)}
-          onClose={() => setCreateDialogKind(null)}
+          onClose={closeCreateDialog}
         />
       ) : null}
       {renameDialogTarget !== null ? (
