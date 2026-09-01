@@ -49,6 +49,15 @@ import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
 import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
 import { FileExplorerDeleteDialog } from "./FileExplorerDeleteDialog";
 import {
+  FileExplorerDragDropDialog,
+  type FileExplorerDragDropSourceRow
+} from "./FileExplorerDragDropDialog";
+import { FileExplorerCopyCollisionDialog } from "./FileExplorerCopyCollisionDialog";
+import type {
+  CopyEntriesExecutionResult,
+  FileExplorerCopyPlan
+} from "../shared/projectCopy";
+import {
   fileExplorerDeleteRejectionReasonKey,
   type FileExplorerDeleteRejection,
   type FileExplorerDeleteTarget
@@ -782,6 +791,29 @@ export function FileExplorer({
     readonly path: string;
     readonly valid: boolean;
   } | null>(null);
+  // #356: after a valid drop, the Move / Copy / Cancel confirmation. Holds the
+  // top-level dragged rows (metadata hydrated by a lightweight lstat IPC) and
+  // the resolved destination folder.
+  const [dndConfirm, setDndConfirm] = useState<{
+    readonly sources: readonly FileExplorerDragDropSourceRow[];
+    readonly destinationFolderRelativePath: string;
+    readonly includesFolder: boolean;
+  } | null>(null);
+  // #356: a copy is running (plan or execute IPC in flight).
+  const [copyInFlight, setCopyInFlight] = useState(false);
+  // #356: a copy plan with at least one auto-renamed row — the dedicated
+  // rename-copy confirmation dialog.
+  const [copyCollisionPlan, setCopyCollisionPlan] =
+    useState<FileExplorerCopyPlan | null>(null);
+  // #356: a copy that was blocked (plan) or partly failed (execute), surfaced
+  // as the shared file-operation failure list modal.
+  const [copyFailure, setCopyFailure] = useState<{
+    readonly status: FileOperationFailureStatus;
+    readonly entries: readonly {
+      readonly reason: string;
+      readonly sourceRelativePath: string | null;
+    }[];
+  } | null>(null);
   const loadGenerationRef = useRef(0);
   // #311: the DOM node of the active project document entry (once #309 has
   // revealed it) and the last path we scrolled to, so the scroll fires once
@@ -1018,6 +1050,11 @@ export function FileExplorer({
     // #329 spike: abandon any in-progress drag on a project switch / remount.
     setDragState(null);
     setDropTarget(null);
+    // #356: drop any in-progress D&D confirmation / copy dialogs.
+    setDndConfirm(null);
+    setCopyCollisionPlan(null);
+    setCopyFailure(null);
+    setCopyInFlight(false);
     // #355: a new project re-arms the passive active-document reveal.
     lastRevealedHighlightRef.current = null;
     pendingRevealScrollRef.current = null;
@@ -1916,6 +1953,8 @@ export function FileExplorer({
       deleteFlow !== null ||
       moveDialogOpen ||
       moveFailure !== null ||
+      dndConfirm !== null ||
+      copyCollisionPlan !== null ||
       createDialogKind !== null ||
       renameDialogTarget !== null
     ) {
@@ -1987,10 +2026,12 @@ export function FileExplorer({
       folderCount: response.result.folderCount
     });
   }, [
+    copyCollisionPlan,
     createDialogKind,
     dirtyProjectDocumentRelativePaths,
     entriesByDirectoryPath,
     deleteFlow,
+    dndConfirm,
     hasProject,
     moveDialogOpen,
     moveFailure,
@@ -2500,6 +2541,9 @@ export function FileExplorer({
       if (
         moveDialogOpen ||
         moveFailure !== null ||
+        dndConfirm !== null ||
+        copyCollisionPlan !== null ||
+        copyFailure !== null ||
         createDialogKind !== null ||
         renameDialogTarget !== null ||
         deleteFlow !== null
@@ -2534,8 +2578,11 @@ export function FileExplorer({
     },
     [
       beginDelete,
+      copyCollisionPlan,
+      copyFailure,
       createDialogKind,
       deleteFlow,
+      dndConfirm,
       moveDialogOpen,
       moveFailure,
       performCut,
@@ -2607,6 +2654,249 @@ export function FileExplorer({
       moveInFlight,
       onMoveResultMessage,
       readOnly,
+      translate
+    ]
+  );
+
+  // #356: fill the D&D confirmation table's size / modified columns with a
+  // lightweight top-level lstat (never reads content, never recurses).
+  const hydrateDndSourceStats = useCallback(
+    async (sourceRelativePaths: readonly string[]) => {
+      let response: Awaited<
+        ReturnType<typeof window.pergamum.projects.statFileExplorerEntries>
+      >;
+      try {
+        response = await window.pergamum.projects.statFileExplorerEntries({
+          relativePaths: [...sourceRelativePaths]
+        });
+      } catch {
+        return;
+      }
+      if (response.kind !== "ok") {
+        return;
+      }
+      const statByPath = new Map(
+        response.entries.map((entry) => [entry.relativePath, entry])
+      );
+      setDndConfirm((current) => {
+        if (current === null) {
+          return current;
+        }
+        return {
+          ...current,
+          sources: current.sources.map((row) => {
+            const stat = statByPath.get(row.relativePath);
+            return stat
+              ? {
+                  ...row,
+                  kind: stat.kind === "folder" ? "folder" : row.kind,
+                  sizeBytes: stat.sizeBytes,
+                  modifiedAt: stat.modifiedAt
+                }
+              : row;
+          })
+        };
+      });
+    },
+    []
+  );
+
+  // #356: refresh the tree after a copy — the DESTINATION directory only
+  // (sources are untouched). Never treats a copy as a relocation.
+  const applyCopyResponse = useCallback(
+    (
+      result: CopyEntriesExecutionResult,
+      destinationFolderRelativePath: string
+    ) => {
+      const copied = result.results.filter(
+        (entry): entry is Extract<typeof entry, { status: "copied" }> =>
+          entry.status === "copied"
+      );
+      const failed = result.results.filter(
+        (entry): entry is Extract<typeof entry, { status: "failed" }> =>
+          entry.status === "failed"
+      );
+
+      const generation = loadGenerationRef.current + 1;
+      loadGenerationRef.current = generation;
+      void loadDirectoryForGeneration(
+        destinationFolderRelativePath === ""
+          ? null
+          : destinationFolderRelativePath,
+        generation
+      );
+
+      if (copied.length > 0) {
+        const newPaths = copied.map((entry) => entry.destinationRelativePath);
+        setMultiSelection({
+          selected: new Set(newPaths),
+          anchor: newPaths[newPaths.length - 1] ?? null
+        });
+        setSelection({
+          kind: "entry",
+          relativePath: newPaths[newPaths.length - 1]
+        });
+      }
+
+      const destinationLabel =
+        destinationFolderRelativePath === ""
+          ? translate("explorer.copy.collision.destinationProjectRoot")
+          : destinationFolderRelativePath;
+
+      if (result.ok) {
+        onMoveResultMessage?.(
+          translate("explorer.copy.status.succeeded", {
+            count: copied.length,
+            destination: destinationLabel
+          })
+        );
+      } else if (copied.length === 0) {
+        onMoveResultMessage?.(
+          translate("explorer.copy.status.allFailed", { failed: failed.length })
+        );
+      } else {
+        onMoveResultMessage?.(
+          translate("explorer.copy.status.partiallyFailed", {
+            copied: copied.length,
+            failed: failed.length
+          })
+        );
+      }
+
+      if (failed.length > 0) {
+        setCopyFailure({
+          status: copied.length > 0 ? "partiallyFailed" : "failed",
+          entries: failed.map((entry) => ({
+            reason: entry.reason,
+            sourceRelativePath: entry.sourceRelativePath
+          }))
+        });
+      }
+    },
+    [loadDirectoryForGeneration, onMoveResultMessage, translate]
+  );
+
+  // #356: execute a stored copy plan by id, then refresh the tree.
+  const runCopyPlan = useCallback(
+    async (
+      plan: FileExplorerCopyPlan
+    ): Promise<CopyEntriesExecutionResult | null> => {
+      setCopyInFlight(true);
+      let response: Awaited<
+        ReturnType<typeof window.pergamum.projects.executeFileExplorerCopyPlan>
+      >;
+      try {
+        response = await window.pergamum.projects.executeFileExplorerCopyPlan({
+          planId: plan.planId,
+          dirtyProjectDocumentRelativePaths: [
+            ...dirtyProjectDocumentRelativePaths
+          ]
+        });
+      } catch {
+        setCopyInFlight(false);
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return null;
+      }
+      setCopyInFlight(false);
+
+      if (response.kind !== "completed") {
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return null;
+      }
+
+      applyCopyResponse(response.result, plan.destinationFolderRelativePath);
+      return response.result;
+    },
+    [
+      applyCopyResponse,
+      dirtyProjectDocumentRelativePaths,
+      onMoveResultMessage,
+      translate
+    ]
+  );
+
+  // #356: the "Copy" choice from the D&D confirmation dialog. Runs the plan;
+  // executes directly when nothing auto-renamed, otherwise opens the
+  // rename-copy confirmation dialog.
+  const performDndCopy = useCallback(
+    async (
+      sourceRelativePaths: readonly string[],
+      destinationFolderRelativePath: string
+    ) => {
+      const sourcesHaveDirtyOpenDocument = selectionCoversDirtyOpenDocument(
+        sourceRelativePaths,
+        dirtyProjectDocumentRelativePaths
+      );
+      if (
+        !hasProject ||
+        readOnly ||
+        moveInFlight ||
+        copyInFlight ||
+        sourceRelativePaths.length === 0 ||
+        sourcesHaveDirtyOpenDocument
+      ) {
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return;
+      }
+
+      setCopyInFlight(true);
+      let planResponse: Awaited<
+        ReturnType<typeof window.pergamum.projects.planFileExplorerCopyEntries>
+      >;
+      try {
+        planResponse =
+          await window.pergamum.projects.planFileExplorerCopyEntries({
+            sourceRelativePaths: [...sourceRelativePaths],
+            destinationFolderRelativePath,
+            dirtyProjectDocumentRelativePaths: [
+              ...dirtyProjectDocumentRelativePaths
+            ]
+          });
+      } catch {
+        setCopyInFlight(false);
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return;
+      }
+      setCopyInFlight(false);
+
+      if (planResponse.kind !== "planned") {
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return;
+      }
+
+      const plan = planResponse.plan;
+
+      if (plan.hasBlockingIssues) {
+        setCopyFailure({
+          status: "rejected",
+          entries:
+            plan.blockingReason !== undefined
+              ? [{ reason: plan.blockingReason, sourceRelativePath: null }]
+              : plan.rows
+                  .filter((row) => row.status === "blocked")
+                  .map((row) => ({
+                    reason: row.reason ?? "copy-failed",
+                    sourceRelativePath: row.sourceRelativePath
+                  }))
+        });
+        return;
+      }
+
+      if (!plan.hasCollisions) {
+        await runCopyPlan(plan);
+        return;
+      }
+
+      setCopyCollisionPlan(plan);
+    },
+    [
+      copyInFlight,
+      dirtyProjectDocumentRelativePaths,
+      hasProject,
+      moveInFlight,
+      onMoveResultMessage,
+      readOnly,
+      runCopyPlan,
       translate
     ]
   );
@@ -2758,9 +3048,43 @@ export function FileExplorer({
         return; // invalid target — no-op, no status noise
       }
 
-      void performDndMove(activeDrag.sourceRelativePaths, destination);
+      // #356: the drop no longer executes Move immediately — open the
+      // Move / Copy / Cancel confirmation first. Rows come from the tree
+      // (name / kind), the size / modified columns are hydrated by a
+      // lightweight lstat IPC.
+      const sourceRows: FileExplorerDragDropSourceRow[] =
+        activeDrag.sourceRelativePaths.map((relativePath) => {
+          const treeEntry = fileExplorerEntryByRelativePath(
+            entriesByDirectoryPath,
+            relativePath
+          );
+          return {
+            relativePath,
+            name:
+              treeEntry?.name ??
+              relativePath.split("/").pop() ??
+              relativePath,
+            parentRelativePath:
+              parentDirectoryRelativePath(relativePath) ?? "",
+            kind: treeEntry?.kind === "folder" ? "folder" : "file",
+            sizeBytes: null,
+            modifiedAt: null
+          };
+        });
+
+      setDndConfirm({
+        sources: sourceRows,
+        destinationFolderRelativePath: destination,
+        includesFolder: sourceRows.some((row) => row.kind === "folder")
+      });
+      void hydrateDndSourceStats(activeDrag.sourceRelativePaths);
     },
-    [dragState, dropTargetForEntry, performDndMove]
+    [
+      dragState,
+      dropTargetForEntry,
+      entriesByDirectoryPath,
+      hydrateDndSourceStats
+    ]
   );
 
   return (
@@ -3060,6 +3384,78 @@ export function FileExplorer({
           translate={translate}
           opener={null}
           onClose={() => setMoveFailure(null)}
+        />
+      ) : null}
+      {dndConfirm !== null ? (
+        <FileExplorerDragDropDialog
+          sources={dndConfirm.sources}
+          destinationFolderRelativePath={
+            dndConfirm.destinationFolderRelativePath
+          }
+          includesFolder={dndConfirm.includesFolder}
+          busy={moveInFlight || copyInFlight}
+          translate={translate}
+          opener={null}
+          onMove={() => {
+            const { sources, destinationFolderRelativePath } = dndConfirm;
+            setDndConfirm(null);
+            void performDndMove(
+              sources.map((row) => row.relativePath),
+              destinationFolderRelativePath
+            );
+          }}
+          onCopy={() => {
+            const { sources, destinationFolderRelativePath } = dndConfirm;
+            setDndConfirm(null);
+            void performDndCopy(
+              sources.map((row) => row.relativePath),
+              destinationFolderRelativePath
+            );
+          }}
+          onCancel={() => setDndConfirm(null)}
+        />
+      ) : null}
+      {copyCollisionPlan !== null ? (
+        <FileExplorerCopyCollisionDialog
+          plan={copyCollisionPlan}
+          translate={translate}
+          opener={null}
+          executePlan={() => runCopyPlan(copyCollisionPlan)}
+          onDismiss={() => setCopyCollisionPlan(null)}
+        />
+      ) : null}
+      {copyFailure !== null ? (
+        <FileOperationFailureDialog
+          title={translate(
+            copyFailure.status === "rejected"
+              ? "fileOperation.copy.blocked.title"
+              : "fileOperation.copy.failed.title"
+          )}
+          intro={translate(
+            copyFailure.status === "rejected"
+              ? "fileOperation.copy.blocked.intro"
+              : "fileOperation.copy.failed.intro"
+          )}
+          items={copyFailure.entries.map((entry) => {
+            const kind: FileOperationFailureItemKind =
+              entry.sourceRelativePath === null
+                ? "item"
+                : (fileExplorerEntryByRelativePath(
+                      entriesByDirectoryPath,
+                      entry.sourceRelativePath
+                    )?.kind ?? "item");
+
+            return {
+              kind,
+              displayName: entry.sourceRelativePath,
+              reasonText: translate(
+                fileOperationFailureReasonTextKey(entry.reason)
+              )
+            };
+          })}
+          translate={translate}
+          opener={null}
+          onClose={() => setCopyFailure(null)}
         />
       ) : null}
       {createDialogKind !== null ? (

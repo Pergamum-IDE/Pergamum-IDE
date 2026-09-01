@@ -4104,6 +4104,106 @@ label.settingsItemHeader {
   color: #8a6d1f;
 }
 
+/* #356: D&D Move / Copy / Cancel confirmation + the rename-copy confirmation.
+   Reuse the delete dialog's table visual language. */
+.fileExplorerDragDropDialogBody,
+.fileExplorerCopyCollisionDialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fileExplorerCopyCollisionDialogMessage {
+  white-space: pre-line;
+}
+
+.fileExplorerDragDropDialogDestination,
+.fileExplorerCopyCollisionDialogDestination {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+}
+
+.fileExplorerDragDropDialogDestinationLabel,
+.fileExplorerCopyCollisionDialogDestinationLabel {
+  font-weight: 600;
+  color: #52616f;
+}
+
+.fileExplorerDragDropDialogDestinationPath,
+.fileExplorerCopyCollisionDialogDestinationPath {
+  word-break: break-word;
+}
+
+.fileExplorerDragDropDialogFolderNote,
+.fileExplorerCopyCollisionDialogRunStatus {
+  color: #52616f;
+  font-size: 0.88rem;
+}
+
+.fileExplorerDragDropDialogTableWrap,
+.fileExplorerCopyCollisionDialogTableWrap {
+  max-height: min(52vh, 460px);
+  overflow: auto;
+  border: 1px solid #e4e9ee;
+  border-radius: 6px;
+}
+
+.fileExplorerDragDropDialogTable,
+.fileExplorerCopyCollisionDialogTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.fileExplorerDragDropDialogTable th,
+.fileExplorerDragDropDialogTable td,
+.fileExplorerCopyCollisionDialogTable th,
+.fileExplorerCopyCollisionDialogTable td {
+  padding-block: 7px;
+  padding-inline: 12px;
+  text-align: start;
+  border-block-end: 1px solid #eef1f4;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.fileExplorerDragDropDialogTable thead th,
+.fileExplorerCopyCollisionDialogTable thead th {
+  position: sticky;
+  inset-block-start: 0;
+  background: #f5f7f9;
+  color: #52616f;
+  font-weight: 700;
+}
+
+.fileExplorerDragDropDialogPathCell,
+.fileExplorerCopyCollisionDialogSourceCell,
+.fileExplorerCopyCollisionDialogDestinationNameCell {
+  white-space: normal;
+  word-break: break-word;
+  min-inline-size: 12ch;
+}
+
+.fileExplorerDragDropDialogSizeCell {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.fileExplorerCopyCollisionDialogDirectionCell {
+  text-align: center;
+  color: #52616f;
+}
+
+.fileExplorerCopyCollisionDialogTable tr[data-copy-row-status="blocked"] td {
+  color: #b0403a;
+}
+
+.fileExplorerDragDropDialogActions .appDialogButton-choice,
+.fileExplorerCopyCollisionDialogActions .appDialogButton-confirm {
+  min-inline-size: 6.5rem;
+}
+
 .fileExplorerDeleteConfirmButton,
 .fileExplorerDeleteAbortButton {
   position: relative;

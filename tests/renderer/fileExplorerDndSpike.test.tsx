@@ -287,6 +287,40 @@ function selectedPaths(): string[] {
     .sort();
 }
 
+// #356: the drop now opens a Move / Copy / Cancel confirmation dialog. These
+// helpers drive it.
+function dndDialog(): HTMLElement | null {
+  return container!.querySelector<HTMLElement>(".fileExplorerDragDropDialog");
+}
+function dndButton(selector: string): HTMLButtonElement {
+  const button = container!.querySelector<HTMLButtonElement>(selector);
+  if (!button) {
+    throw new Error(`D&D confirmation button ${selector} not rendered`);
+  }
+  return button;
+}
+function confirmMove(): void {
+  act(() => {
+    dndButton(".fileExplorerDragDropMoveButton").dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+  });
+}
+function confirmCopy(): void {
+  act(() => {
+    dndButton(".fileExplorerDragDropCopyButton").dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+  });
+}
+function cancelDnd(): void {
+  act(() => {
+    dndButton(".fileExplorerDragDropCancelButton").dispatchEvent(
+      new MouseEvent("click", { bubbles: true })
+    );
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Drag source
 // ---------------------------------------------------------------------------
@@ -390,6 +424,8 @@ describe("FileExplorer D&D spike — drop destination (#329)", () => {
 
     drop(entryButton("Drafts"), started.dataTransfer);
     await flushPromises();
+    confirmMove();
+    await flushPromises();
 
     expect(harness.moveFileExplorerEntries).toHaveBeenCalledWith({
       sourceRelativePaths: ["a.md"],
@@ -407,6 +443,8 @@ describe("FileExplorer D&D spike — drop destination (#329)", () => {
 
     dragOver(rootRow(), started.dataTransfer);
     drop(rootRow(), started.dataTransfer);
+    await flushPromises();
+    confirmMove();
     await flushPromises();
 
     expect(harness.moveFileExplorerEntries).toHaveBeenCalledWith({
@@ -465,6 +503,11 @@ describe("FileExplorer D&D spike — execution & lifecycle (#329)", () => {
 
     drop(entryButton("Drafts"), started.dataTransfer);
     await flushPromises();
+    // #356: the drop opens the confirmation dialog; Move runs the existing path.
+    expect(dndDialog()).not.toBeNull();
+    expect(harness.moveFileExplorerEntries).not.toHaveBeenCalled();
+    confirmMove();
+    await flushPromises();
 
     expect(harness.listCalls).toContain("Drafts");
     expect(selectedPaths()).toContain("Drafts/a.md");
@@ -494,6 +537,8 @@ describe("FileExplorer D&D spike — execution & lifecycle (#329)", () => {
 
     drop(entryButton("Drafts"), started.dataTransfer);
     await flushPromises();
+    confirmMove();
+    await flushPromises();
 
     expect(harness.listCalls).toEqual([]);
     expect(harness.onMoveResultMessage).toHaveBeenCalledWith(
@@ -510,6 +555,8 @@ describe("FileExplorer D&D spike — execution & lifecycle (#329)", () => {
 
     drop(entryButton("Drafts"), started.dataTransfer);
     await flushPromises();
+    confirmMove();
+    await flushPromises();
 
     expect(harness.onMoveResultMessage).toHaveBeenCalledWith(
       expect.stringContaining("unavailable")
@@ -524,9 +571,12 @@ describe("FileExplorer D&D spike — execution & lifecycle (#329)", () => {
 
     drop(entryButton("Drafts"), started.dataTransfer);
     await flushPromises();
-
+    // The drag state is cleared on drop, before the confirmation dialog.
     expect(draggingMarkers()).toEqual([]);
     expect(dropTargetState("Drafts")).toBeNull();
+    confirmMove();
+    await flushPromises();
+
     expect(harness.moveFileExplorerEntries).toHaveBeenCalledTimes(1);
   });
 
@@ -548,6 +598,8 @@ describe("FileExplorer D&D spike — execution & lifecycle (#329)", () => {
     const started = dragStart("a.md");
 
     drop(entryButton("Drafts"), started.dataTransfer);
+    await flushPromises();
+    confirmMove();
     await flushPromises();
 
     expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
