@@ -3773,7 +3773,10 @@ describe("project file IPC foundation", () => {
         name: "new.md",
         relativePath: "Drafts/new.md"
       },
-      parentDirectoryRelativePath: "Drafts"
+      parentDirectoryRelativePath: "Drafts",
+      movedProjectDocuments: [
+        { oldRelativePath: "Drafts/old.md", newRelativePath: "Drafts/new.md" }
+      ]
     });
     await expect(
       fs.access(path.join(projectRootPath, "Drafts", "old.md"))
@@ -4005,23 +4008,157 @@ describe("project file IPC foundation", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("rejects non-empty folder rename in v1", async () => {
+  it("renames a non-empty folder as a subtree and relocates registered documents (#362)", async () => {
     await openExplorerProject("Rename Nonempty Folder");
-    await fs.mkdir(path.join(projectRootPath, "Drafts"));
-    await fs.writeFile(path.join(projectRootPath, "Drafts", "scene.md"), "");
+    await fs.mkdir(path.join(projectRootPath, "Drafts", "sub"), {
+      recursive: true
+    });
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "a.md"),
+      "# a\n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "sub", "b.md"),
+      "# b\n",
+      "utf8"
+    );
+    // listing a directory registers the Markdown files it contains on the
+    // project-document IPC path.
+    await registeredHandler(PROJECT_CHANNELS.listFileExplorerChildren)(
+      { sender: {} },
+      { directoryRelativePath: "Drafts" }
+    );
+    await registeredHandler(PROJECT_CHANNELS.listFileExplorerChildren)(
+      { sender: {} },
+      { directoryRelativePath: "Drafts/sub" }
+    );
 
     const result = (await renameHandler()(
       { sender: {} },
       { sourceRelativePath: "Drafts", newName: "Renamed" }
-    )) as { ok: boolean; reason?: string };
+    )) as {
+      ok: boolean;
+      newEntry?: { kind: string; relativePath: string };
+      movedProjectDocuments?: Array<{
+        oldRelativePath: string;
+        newRelativePath: string;
+      }>;
+    };
 
-    expect(result).toEqual({ ok: false, reason: "folderNotEmpty" });
+    expect(result.ok).toBe(true);
+    expect(result.newEntry).toMatchObject({
+      kind: "folder",
+      relativePath: "Renamed"
+    });
+    expect(
+      [...(result.movedProjectDocuments ?? [])].sort((x, y) =>
+        x.oldRelativePath.localeCompare(y.oldRelativePath)
+      )
+    ).toEqual([
+      { oldRelativePath: "Drafts/a.md", newRelativePath: "Renamed/a.md" },
+      { oldRelativePath: "Drafts/sub/b.md", newRelativePath: "Renamed/sub/b.md" }
+    ]);
+
     await expect(
-      fs.access(path.join(projectRootPath, "Drafts", "scene.md"))
-    ).resolves.toBeUndefined();
+      fs.access(path.join(projectRootPath, "Drafts"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      fs.readFile(
+        path.join(projectRootPath, "Renamed", "sub", "b.md"),
+        "utf8"
+      )
+    ).resolves.toBe("# b\n");
+    // the relocated documents are still on the project-document IPC path
+    const relocated = (await registeredHandler(
+      PROJECT_CHANNELS.readProjectDocument
+    )({ sender: {} }, { relativePath: "Renamed/sub/b.md" })) as {
+      content: string;
+    };
+    expect(relocated.content).toBe("# b\n");
   });
 
-  it("prioritizes an existing folder target over the non-empty folder limitation", async () => {
+  it("blocks a file rename when the target file is open and dirty (#362)", async () => {
+    await openExplorerProject("Rename Dirty File");
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "# c\n",
+      "utf8"
+    );
+    const renameSpy = vi.spyOn(fs, "rename");
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      {
+        sourceRelativePath: "chapter.md",
+        newName: "chapter-2",
+        dirtyProjectDocumentRelativePaths: ["chapter.md"]
+      }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "openDocumentDirty" });
+    expect(renameSpy).not.toHaveBeenCalled();
+    renameSpy.mockRestore();
+  });
+
+  it("blocks a folder rename when a dirty open document is inside the subtree (#362)", async () => {
+    await openExplorerProject("Rename Dirty Folder");
+    await fs.mkdir(path.join(projectRootPath, "Drafts", "sub"), {
+      recursive: true
+    });
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "sub", "b.md"),
+      "# b\n",
+      "utf8"
+    );
+    const renameSpy = vi.spyOn(fs, "rename");
+
+    const result = (await renameHandler()(
+      { sender: {} },
+      {
+        sourceRelativePath: "Drafts",
+        newName: "Renamed",
+        dirtyProjectDocumentRelativePaths: ["Drafts/sub/b.md"]
+      }
+    )) as { ok: boolean; reason?: string };
+
+    expect(result).toEqual({ ok: false, reason: "openDocumentDirty" });
+    expect(renameSpy).not.toHaveBeenCalled();
+    await expect(
+      fs.access(path.join(projectRootPath, "Drafts", "sub", "b.md"))
+    ).resolves.toBeUndefined();
+    renameSpy.mockRestore();
+  });
+
+  it("hands a non-empty folder rename's relocated file pairs to the Recovery re-key hook (#362)", async () => {
+    await openExplorerProject("Rekey Folder Subtree");
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts", "a.md"),
+      "# a\n",
+      "utf8"
+    );
+    await registeredHandler(PROJECT_CHANNELS.listFileExplorerChildren)(
+      { sender: {} },
+      { directoryRelativePath: "Drafts" }
+    );
+    const rekey = vi.fn();
+
+    const result = (await renameHandlerWithRekey(rekey)(
+      { sender: {} },
+      { sourceRelativePath: "Drafts", newName: "Renamed" }
+    )) as { ok: boolean };
+
+    expect(result.ok).toBe(true);
+    expect(rekey).toHaveBeenCalledWith([
+      {
+        oldAbsolutePath: path.join(projectRootPath, "Drafts", "a.md"),
+        newAbsolutePath: path.join(projectRootPath, "Renamed", "a.md")
+      }
+    ]);
+  });
+
+  it("prioritizes an existing folder target over any folder-subtree handling", async () => {
     await openExplorerProject("Rename Folder Exists Priority");
     await fs.mkdir(path.join(projectRootPath, "Source"));
     await fs.writeFile(path.join(projectRootPath, "Source", "scene.md"), "");

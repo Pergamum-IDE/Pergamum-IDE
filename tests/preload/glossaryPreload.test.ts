@@ -95,7 +95,8 @@ describe("glossary preload API", () => {
         PROJECT_CHANNELS.renameFileExplorerEntry,
         {
           sourceRelativePath: "Drafts/chapter-01.md",
-          newName: "chapter-02"
+          newName: "chapter-02",
+          dirtyProjectDocumentRelativePaths: []
         }
       ]
     ]);

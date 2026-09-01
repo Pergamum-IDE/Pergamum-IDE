@@ -15,7 +15,10 @@ import type {
   RendererDebugLogRequest,
   SanitizedDebugLogEvent
 } from "./debugLog";
-import type { MoveEntriesResult } from "./projectMove";
+import type {
+  MoveEntriesResult,
+  ProjectDocumentPathRelocation
+} from "./projectMove";
 import type {
   CopyEntriesExecutionResult,
   FileExplorerCopyPlan
@@ -423,6 +426,12 @@ export type CreateFileExplorerEntryResult =
 export interface RenameFileExplorerEntryRequest {
   sourceRelativePath: string;
   newName: string;
+  /**
+   * #362: project-root-relative paths of documents open with unsaved changes.
+   * A file rename is blocked when the target file is one; a folder rename is
+   * blocked when any is inside the folder subtree. Renderer-supplied.
+   */
+  readonly dirtyProjectDocumentRelativePaths?: readonly string[];
 }
 
 export type RenameFileExplorerEntryResult =
@@ -431,6 +440,14 @@ export type RenameFileExplorerEntryResult =
       readonly oldRelativePath: string;
       readonly newEntry: FileExplorerEntry;
       readonly parentDirectoryRelativePath: string | null;
+      /**
+       * #362: old → new project-relative path of every registered project
+       * Markdown document the rename relocated. For a file rename this is the
+       * single renamed file; for a folder rename it is every registered
+       * document inside the moved subtree. Absent / `[]` when nothing
+       * registered moved.
+       */
+      readonly movedProjectDocuments?: readonly ProjectDocumentPathRelocation[];
     }
   | {
       readonly ok: false;
@@ -808,7 +825,8 @@ export interface PergamumApi {
     ) => Promise<CreateFileExplorerEntryResult>;
     renameFileExplorerEntry: (
       sourceRelativePath: string,
-      newName: string
+      newName: string,
+      dirtyProjectDocumentRelativePaths?: readonly string[]
     ) => Promise<RenameFileExplorerEntryResult>;
     moveFileExplorerEntries: (
       request: MoveFileExplorerEntriesRequest

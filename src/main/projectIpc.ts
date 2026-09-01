@@ -70,7 +70,10 @@ import {
 } from "./projectCopyExecution";
 import { normalizeMoveSourceRelativePath } from "./projectMoveValidation";
 import type { FileExplorerCopyPlan } from "../shared/projectCopy";
-import type { RecoveryPathRekeyResult } from "../shared/projectMove";
+import type {
+  ProjectDocumentPathRelocation,
+  RecoveryPathRekeyResult
+} from "../shared/projectMove";
 import {
   applyMarkdownFileExtension,
   fileExplorerCreateFailureReasonFromErrorCode,
@@ -1070,9 +1073,15 @@ function parseRenameFileExplorerEntryRequest(
     throw new Error("Invalid File Explorer rename request.");
   }
 
+  const dirty = value.dirtyProjectDocumentRelativePaths;
+
   return {
     sourceRelativePath: value.sourceRelativePath,
-    newName: value.newName
+    newName: value.newName,
+    dirtyProjectDocumentRelativePaths:
+      Array.isArray(dirty) && dirty.every((entry) => typeof entry === "string")
+        ? (dirty as string[])
+        : []
   };
 }
 
@@ -1704,6 +1713,13 @@ type FileExplorerRenameTarget =
       parentDirectoryRelativePath: string | null;
       sourcePath: string;
       targetPath: string;
+      /**
+       * #362: old → new project-relative path of every registered project
+       * Markdown document this rename relocates. For a file rename it is the
+       * single renamed file; for a folder rename it is every registered
+       * document inside the moved subtree.
+       */
+      movedProjectDocuments: readonly ProjectDocumentPathRelocation[];
     }
   | { kind: "error"; reason: FileExplorerRenameFailureReason };
 
@@ -1832,6 +1848,29 @@ async function resolveFileExplorerRenameTarget(
     return { kind: "error", reason: "unsupportedExtension" };
   }
 
+  // #362: dirty-open-document policy. A file rename is blocked when the target
+  // file is open with unsaved changes; a folder rename is blocked when any
+  // dirty open document is inside the subtree. Renderer-supplied list.
+  const foldedSource = sourceRelativePath
+    .replace(/\\/g, "/")
+    .normalize("NFC")
+    .toLowerCase();
+  const dirtyFolded = (request.dirtyProjectDocumentRelativePaths ?? [])
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.replace(/\\/g, "/").normalize("NFC").toLowerCase());
+  const hasDirtyInScope =
+    entryKind === "folder"
+      ? dirtyFolded.some(
+          (dirty) =>
+            dirty === foldedSource ||
+            dirty.startsWith(`${foldedSource}/`)
+        )
+      : dirtyFolded.includes(foldedSource);
+
+  if (hasDirtyInScope) {
+    return { kind: "error", reason: "openDocumentDirty" };
+  }
+
   const nameValidation = validateFileExplorerRenameName({
     kind: entryKind,
     originalName: fileExplorerEntryNameFromRelativePath(sourceRelativePath),
@@ -1886,11 +1925,12 @@ async function resolveFileExplorerRenameTarget(
     }
   }
 
+  // #362: a folder rename is a subtree relocation (single `fs.rename`), no
+  // longer empty-folder-only. `readdir` here is just a pre-flight existence /
+  // permission probe.
   if (entryKind === "folder") {
-    let childNames: string[];
-
     try {
-      childNames = await fs.readdir(sourcePath);
+      await fs.readdir(sourcePath);
     } catch (error) {
       return {
         kind: "error",
@@ -1899,11 +1939,28 @@ async function resolveFileExplorerRenameTarget(
         )
       };
     }
-
-    if (childNames.length > 0) {
-      return { kind: "error", reason: "folderNotEmpty" };
-    }
   }
+
+  // #362: old → new project-relative path of every registered project
+  // Markdown document this rename relocates. A file rename relocates itself; a
+  // folder rename relocates every registered document under its subtree
+  // (same computation as a #340 folder Move).
+  const movedProjectDocuments: ProjectDocumentPathRelocation[] =
+    entryKind === "file"
+      ? [
+          {
+            oldRelativePath: sourceRelativePath,
+            newRelativePath: targetRelativePath
+          }
+        ]
+      : [...parent.projectState.documentRelativePaths]
+          .filter((doc) => doc.startsWith(`${sourceRelativePath}/`))
+          .map((oldRelativePath) => ({
+            oldRelativePath,
+            newRelativePath:
+              targetRelativePath +
+              oldRelativePath.slice(sourceRelativePath.length)
+          }));
 
   return {
     kind: "ok",
@@ -1914,7 +1971,8 @@ async function resolveFileExplorerRenameTarget(
     newName: nameValidation.name,
     parentDirectoryRelativePath: parent.directoryRelativePath,
     sourcePath,
-    targetPath
+    targetPath,
+    movedProjectDocuments
   };
 }
 
@@ -1958,20 +2016,40 @@ async function renameFileExplorerEntry(
     };
   }
 
-  if (target.entryKind === "file") {
-    target.projectState.documentRelativePaths.delete(target.oldRelativePath);
-    target.projectState.documentRelativePaths.add(target.newRelativePath);
+  // #362: keep the in-memory project-document registry in step. A file rename
+  // relocates its own path; a folder rename relocates every registered
+  // document inside the moved subtree.
+  for (const relocation of target.movedProjectDocuments) {
+    target.projectState.documentRelativePaths.delete(
+      relocation.oldRelativePath
+    );
+    target.projectState.documentRelativePaths.add(relocation.newRelativePath);
+  }
 
-    // #320: fs.rename succeeded — re-key any Recovery row for the old path.
-    // A folder rename in v1 is empty-folder-only, so no descendant file
-    // paths change; only a file rename needs this.
+  // #320: fs.rename succeeded — best-effort re-key of any Recovery row for a
+  // relocated FILE path (a directory never has a Recovery row of its own).
+  const recoveryPairs =
+    target.entryKind === "file"
+      ? [
+          {
+            oldAbsolutePath: target.sourcePath,
+            newAbsolutePath: target.targetPath
+          }
+        ]
+      : target.movedProjectDocuments.map((relocation) => ({
+          oldAbsolutePath: path.resolve(
+            target.projectState.rootPath,
+            relocation.oldRelativePath
+          ),
+          newAbsolutePath: path.resolve(
+            target.projectState.rootPath,
+            relocation.newRelativePath
+          )
+        }));
+
+  if (recoveryPairs.length > 0) {
     try {
-      recoveryPathRekeyHook?.([
-        {
-          oldAbsolutePath: target.sourcePath,
-          newAbsolutePath: target.targetPath
-        }
-      ]);
+      recoveryPathRekeyHook?.(recoveryPairs);
     } catch {
       // Best effort: a Recovery re-key failure never breaks the rename.
     }
@@ -1985,7 +2063,8 @@ async function renameFileExplorerEntry(
       name: target.newName,
       relativePath: target.newRelativePath
     },
-    parentDirectoryRelativePath: target.parentDirectoryRelativePath
+    parentDirectoryRelativePath: target.parentDirectoryRelativePath,
+    movedProjectDocuments: target.movedProjectDocuments
   };
 }
 

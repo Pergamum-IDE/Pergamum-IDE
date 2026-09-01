@@ -2265,7 +2265,8 @@ describe("FileExplorer Command Palette rename request (#313)", () => {
 
     expect(harness.renameFileExplorerEntry).toHaveBeenCalledWith(
       "chapter-01.md",
-      "chapter-02"
+      "chapter-02",
+      []
     );
     expect(harness.listFileExplorerChildren).toHaveBeenCalledWith(null);
     expect(harness.onProjectDocumentRenamed).toHaveBeenCalledWith(
@@ -2412,7 +2413,8 @@ describe("FileExplorer Command Palette rename request (#313)", () => {
 
       expect(renameFileExplorerEntry).toHaveBeenCalledWith(
         "Drafts/draft.md",
-        "draft-2"
+        "draft-2",
+        []
       );
     });
 
