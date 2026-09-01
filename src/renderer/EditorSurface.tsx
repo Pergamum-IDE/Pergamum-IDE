@@ -397,6 +397,9 @@ interface EditorSurfaceProps {
   onChangeGlossaryEntryCanonicalMatchBoundaryEnd: (
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ) => void;
+  onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch: (
+    value: boolean
+  ) => void;
   onAddGlossaryEntryForm: (relation: GlossaryFormRelation) => void;
   onChangeGlossaryEntryFormSurface: (
     formId: string,
@@ -413,6 +416,10 @@ interface EditorSurfaceProps {
   onChangeGlossaryEntryFormMatchBoundaryEnd: (
     formId: string,
     matchBoundaryEnd: GlossaryFormMatchBoundary
+  ) => void;
+  onChangeGlossaryEntryFormAllowSingleCharacterMatch: (
+    formId: string,
+    value: boolean
   ) => void;
   onDeleteGlossaryEntryForm: (formId: string) => void;
   onDeleteGlossaryEntry: () => void;
@@ -508,11 +515,13 @@ export function EditorSurface({
   onChangeGlossaryEntryCanonicalSurface,
   onChangeGlossaryEntryCanonicalMatchBoundaryStart,
   onChangeGlossaryEntryCanonicalMatchBoundaryEnd,
+  onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch,
   onAddGlossaryEntryForm,
   onChangeGlossaryEntryFormSurface,
   onChangeGlossaryEntryFormWarningPolicy,
   onChangeGlossaryEntryFormMatchBoundaryStart,
   onChangeGlossaryEntryFormMatchBoundaryEnd,
+  onChangeGlossaryEntryFormAllowSingleCharacterMatch,
   onDeleteGlossaryEntryForm,
   onDeleteGlossaryEntry,
   onNavigateToPreviousGlossaryOccurrence,
@@ -586,6 +595,9 @@ export function EditorSurface({
           onChangeCanonicalMatchBoundaryEnd={
             onChangeGlossaryEntryCanonicalMatchBoundaryEnd
           }
+          onChangeCanonicalAllowSingleCharacterMatch={
+            onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch
+          }
           onAddForm={onAddGlossaryEntryForm}
           onChangeFormSurface={onChangeGlossaryEntryFormSurface}
           onChangeFormWarningPolicy={
@@ -596,6 +608,9 @@ export function EditorSurface({
           }
           onChangeFormMatchBoundaryEnd={
             onChangeGlossaryEntryFormMatchBoundaryEnd
+          }
+          onChangeFormAllowSingleCharacterMatch={
+            onChangeGlossaryEntryFormAllowSingleCharacterMatch
           }
           onDeleteForm={onDeleteGlossaryEntryForm}
           onDeleteEntry={onDeleteGlossaryEntry}

@@ -167,6 +167,10 @@ export const PROJECT_CHANNELS = {
    *  a saved-identity check. Used only by cold-start Session restore. */
   openProjectByFilePath: "projects:openProjectByFilePath",
   openRecentProject: "projects:openRecentProject",
+  confirmCreateProjectInExistingRoot:
+    "projects:confirmCreateProjectInExistingRoot",
+  cancelCreateProjectInExistingRoot:
+    "projects:cancelCreateProjectInExistingRoot",
   confirmReadOnlyProjectOpen: "projects:confirmReadOnlyProjectOpen",
   cancelReadOnlyProjectOpen: "projects:cancelReadOnlyProjectOpen",
   listFileExplorerChildren: "projects:listFileExplorerChildren",
@@ -654,10 +658,19 @@ export interface PendingReadOnlyProjectOpen {
   lockOwner: ProjectLockOwnerInfo | null;
 }
 
-export type ProjectOpenResult =
+export interface PendingCreateProjectInExistingRoot {
+  kind: "pendingCreateProjectInExistingRoot";
+  token: string;
+}
+
+export type ProjectOpenFinalizationResult =
   | PergamumProject
   | PendingReadOnlyProjectOpen
   | null;
+
+export type ProjectOpenResult =
+  | ProjectOpenFinalizationResult
+  | PendingCreateProjectInExistingRoot;
 
 export type StartupProjectOpenResult =
   | { kind: "noStartupProjectOpen" }
@@ -717,6 +730,10 @@ export interface PendingReadOnlyProjectOpenRequest {
   token: string;
 }
 
+export interface PendingCreateProjectInExistingRootRequest {
+  token: string;
+}
+
 export function isPendingReadOnlyProjectOpen(
   value: ProjectOpenResult
 ): value is PendingReadOnlyProjectOpen {
@@ -725,6 +742,17 @@ export function isPendingReadOnlyProjectOpen(
     value !== null &&
     "kind" in value &&
     value.kind === "pendingReadOnlyProjectOpen"
+  );
+}
+
+export function isPendingCreateProjectInExistingRoot(
+  value: ProjectOpenResult
+): value is PendingCreateProjectInExistingRoot {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    value.kind === "pendingCreateProjectInExistingRoot"
   );
 }
 
@@ -808,6 +836,10 @@ export interface PergamumApi {
       expectedProjectId: string
     ) => Promise<OpenProjectByFilePathResult>;
     openRecentProject: (projectFilePath: string) => Promise<ProjectOpenResult>;
+    confirmCreateProjectInExistingRoot: (
+      token: string
+    ) => Promise<ProjectOpenFinalizationResult>;
+    cancelCreateProjectInExistingRoot: (token: string) => Promise<void>;
     confirmReadOnlyProjectOpen: (
       token: string
     ) => Promise<PergamumProject | null>;

@@ -26,23 +26,27 @@ const matchBoundaryDescriptionTranslationKeys: Record<
 interface GlossaryFormAdvancedMatchingSettingsViewProps {
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
+  allowSingleCharacterMatch: boolean;
   translate: Translate;
   isExpanded: boolean;
   readOnly?: boolean;
   onToggleExpanded: () => void;
   onChangeMatchBoundaryStart: (value: GlossaryFormMatchBoundary) => void;
   onChangeMatchBoundaryEnd: (value: GlossaryFormMatchBoundary) => void;
+  onChangeAllowSingleCharacterMatch: (value: boolean) => void;
 }
 
 export function GlossaryFormAdvancedMatchingSettingsView({
   matchBoundaryStart,
   matchBoundaryEnd,
+  allowSingleCharacterMatch,
   translate,
   isExpanded,
   readOnly = false,
   onToggleExpanded,
   onChangeMatchBoundaryStart,
-  onChangeMatchBoundaryEnd
+  onChangeMatchBoundaryEnd,
+  onChangeAllowSingleCharacterMatch
 }: GlossaryFormAdvancedMatchingSettingsViewProps): JSX.Element {
   return (
     <div className="glossaryEditorAdvancedMatchingSettings">
@@ -115,6 +119,25 @@ export function GlossaryFormAdvancedMatchingSettingsView({
               )}
             </p>
           </label>
+
+          <label className="glossaryEditorAllowSingleCharacterMatchField">
+            <input
+              type="checkbox"
+              checked={allowSingleCharacterMatch}
+              disabled={readOnly}
+              onChange={(event) =>
+                !readOnly
+                  ? onChangeAllowSingleCharacterMatch(event.target.checked)
+                  : undefined
+              }
+            />
+            <span>
+              {translate("glossaryEditor.allowSingleCharacterMatch.label")}
+            </span>
+            <p className="glossaryEditorMatchBoundaryDescription">
+              {translate("glossaryEditor.allowSingleCharacterMatch.helper")}
+            </p>
+          </label>
         </div>
       ) : null}
     </div>
@@ -124,10 +147,12 @@ export function GlossaryFormAdvancedMatchingSettingsView({
 interface GlossaryFormAdvancedMatchingSettingsProps {
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
+  allowSingleCharacterMatch: boolean;
   translate: Translate;
   readOnly?: boolean;
   onChangeMatchBoundaryStart: (value: GlossaryFormMatchBoundary) => void;
   onChangeMatchBoundaryEnd: (value: GlossaryFormMatchBoundary) => void;
+  onChangeAllowSingleCharacterMatch: (value: boolean) => void;
 }
 
 export function GlossaryFormAdvancedMatchingSettings(

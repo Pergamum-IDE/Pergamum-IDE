@@ -83,6 +83,14 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.openRecentProject, {
         projectFilePath
       }),
+    confirmCreateProjectInExistingRoot: (token) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.confirmCreateProjectInExistingRoot, {
+        token
+      }),
+    cancelCreateProjectInExistingRoot: (token) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.cancelCreateProjectInExistingRoot, {
+        token
+      }),
     confirmReadOnlyProjectOpen: (token) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.confirmReadOnlyProjectOpen, {
         token

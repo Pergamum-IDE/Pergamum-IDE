@@ -154,6 +154,7 @@ describe("glossary store", () => {
       warningPolicy: null,
       matchBoundaryStart: "auto",
       matchBoundaryEnd: "auto",
+      allowSingleCharacterMatch: false,
       isCanonical: true
     });
     expect(Date.parse(entry.createdAt)).not.toBeNaN();
@@ -266,6 +267,62 @@ describe("glossary store", () => {
 
     await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
       updatedEntry
+    );
+  });
+
+  it("persists allowSingleCharacterMatch on create, update, and read (#365)", async () => {
+    // create: canonical form defaults to false when not provided
+    const created = await createGlossaryEntry(database!, {
+      kind: "term",
+      canonicalSurface: "蝕",
+      description: ""
+    });
+    expect(canonicalFormOf(created).allowSingleCharacterMatch).toBe(false);
+
+    // create with the opt-in on the canonical form
+    const createdOptIn = await createGlossaryEntry(database!, {
+      kind: "term",
+      canonicalSurface: "牙",
+      description: "",
+      allowSingleCharacterMatch: true
+    });
+    expect(canonicalFormOf(createdOptIn).allowSingleCharacterMatch).toBe(true);
+
+    // update: flip the canonical form on and add a non-canonical form with it on
+    const updated = await updateGlossaryEntry(database!, {
+      id: created.id,
+      kind: "term",
+      description: "",
+      canonicalSurface: "蝕",
+      allowSingleCharacterMatch: true,
+      forms: [
+        {
+          surface: "喰",
+          relation: "alias",
+          warningPolicy: "default",
+          matchBoundaryStart: "auto",
+          matchBoundaryEnd: "auto",
+          allowSingleCharacterMatch: true
+        },
+        {
+          surface: "蝕変",
+          relation: "variant",
+          warningPolicy: "default",
+          matchBoundaryStart: "auto",
+          matchBoundaryEnd: "auto"
+        }
+      ]
+    });
+    expect(canonicalFormOf(updated).allowSingleCharacterMatch).toBe(true);
+    const aliasForm = updated.forms.find((form) => form.surface === "喰");
+    const variantForm = updated.forms.find((form) => form.surface === "蝕変");
+    expect(aliasForm?.allowSingleCharacterMatch).toBe(true);
+    // missing on input ⇒ false
+    expect(variantForm?.allowSingleCharacterMatch).toBe(false);
+
+    // read back after reopen equals the in-memory result
+    await expect(getGlossaryEntryById(database!, created.id)).resolves.toEqual(
+      updated
     );
   });
 

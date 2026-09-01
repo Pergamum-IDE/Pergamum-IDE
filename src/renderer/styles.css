@@ -2562,6 +2562,28 @@ label.settingsItemHeader {
   font-size: 12px;
 }
 
+/* #365: one-character opt-in checkbox, styled to sit with the boundary
+   fields above it (checkbox + label on one line, helper text under). */
+.glossaryEditorAllowSingleCharacterMatchField {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 8px;
+  align-items: center;
+  color: #25313d;
+  font-size: 13px;
+}
+
+.glossaryEditorAllowSingleCharacterMatchField > span {
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.glossaryEditorAllowSingleCharacterMatchField
+  > .glossaryEditorMatchBoundaryDescription {
+  grid-column: 1 / -1;
+}
+
 .glossaryEditorFormGroup {
   margin-top: 14px;
 }

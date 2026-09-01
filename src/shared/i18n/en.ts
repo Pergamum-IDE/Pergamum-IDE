@@ -138,6 +138,13 @@ export const enTranslations = {
   "dialog.unsavedChanges.title": "Unsaved Changes",
   "dialog.projectCloseFailed.message": "Pergamum could not close the project.\nYour working state is still kept. Try again later.",
   "dialog.projectCloseFailed.title": "Could not close project",
+  "dialog.projectOpenFailed.message":
+    "The project file (.pergamum) may be missing, unreadable, or replaced by another project.\nYour documents and project contents have not been deleted.",
+  "dialog.projectOpenFailed.title": "Could not open project",
+  "dialog.createProjectConflict.message":
+    "This folder already contains Pergamum project settings or recovery-related data.\n\nCreating a new project here may overwrite existing settings or recovery information.\nYour document files will not be deleted.",
+  "dialog.createProjectConflict.overwriteAndCreate": "Overwrite and create",
+  "dialog.createProjectConflict.title": "Overwrite existing Pergamum data?",
   "dialog.projectRestoreFailed.message":
     "The project that was open last time could not be restored.\n\nIts project file (.pergamum) may be missing, unreadable, or replaced by a different project.\nNo documents or project contents have been deleted.",
   "dialog.projectRestoreFailed.title": "Could not restore project",
@@ -552,6 +559,8 @@ export const enTranslations = {
   "glossaryEditor.addVariant": "+ Variant",
   "glossaryEditor.advancedMatchingSettings": "Advanced matching settings",
   "glossaryEditor.aliases": "Aliases",
+  "glossaryEditor.allowSingleCharacterMatch.label": "Detect even when one character long",
+  "glossaryEditor.allowSingleCharacterMatch.helper": "One-character forms are normally skipped to avoid false positives. Enable this only for forms that should be matched as glossary terms.",
   "glossaryEditor.canonicalForm": "Canonical",
   "glossaryEditor.canonicalSurface": "Canonical surface",
   "glossaryEditor.deleteEntry": "Delete",
@@ -769,7 +778,7 @@ export const enTranslations = {
   "status.projectCloseFailed": "Could not close project: {message}",
   "status.projectOpenFailed": "Project open failed: {message}",
   "status.quitFailed": "Could not quit Pergamum: {message}",
-  "status.recentProjectOpenFailed": "Recent project open failed: {message}",
+  "status.recentProjectOpenFailed": "Recent project open failed",
   "status.recoveryBackupSaved": "Saved recovery backup.",
   "status.recoveryDiscarded": "Discarded {count} Recovery item(s)",
   "status.recoveryRestoreFailed": "Some items could not be restored",

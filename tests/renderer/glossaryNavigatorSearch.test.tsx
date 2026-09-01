@@ -50,6 +50,7 @@ function canonicalForm(entryId: string, id: string, surface: string): GlossaryFo
     isCanonical: true,
     matchBoundaryStart: "auto",
     matchBoundaryEnd: "auto",
+    allowSingleCharacterMatch: false,
     createdAt: timestamp,
     updatedAt: timestamp
   };

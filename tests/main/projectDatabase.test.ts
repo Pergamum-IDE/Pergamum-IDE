@@ -591,6 +591,7 @@ describe("project database", () => {
         ["warning_policy", "TEXT"],
         ["match_boundary_start", "TEXT"],
         ["match_boundary_end", "TEXT"],
+        ["allow_single_character_match", "INTEGER"],
         ["is_canonical", "INTEGER"],
         ["created_at", "TEXT"],
         ["updated_at", "TEXT"]

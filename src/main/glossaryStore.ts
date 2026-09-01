@@ -57,6 +57,7 @@ interface GlossaryFormRow extends Record<string, unknown> {
   warning_policy: unknown;
   match_boundary_start: unknown;
   match_boundary_end: unknown;
+  allow_single_character_match: unknown;
   is_canonical: unknown;
   created_at: unknown;
   updated_at: unknown;
@@ -75,6 +76,7 @@ interface GlossarySurfaceMatchRow extends Record<string, unknown> {
   form_warning_policy: unknown;
   form_match_boundary_start: unknown;
   form_match_boundary_end: unknown;
+  form_allow_single_character_match: unknown;
   form_is_canonical: unknown;
   form_created_at: unknown;
   form_updated_at: unknown;
@@ -158,6 +160,10 @@ export function glossaryFormFromDatabaseRow(
       row.match_boundary_end,
       "match_boundary_end"
     ),
+    allowSingleCharacterMatch: booleanColumn(
+      row.allow_single_character_match,
+      "allow_single_character_match"
+    ),
     isCanonical: booleanColumn(row.is_canonical, "is_canonical"),
     createdAt: stringColumn(row.created_at, "created_at"),
     updatedAt: stringColumn(row.updated_at, "updated_at")
@@ -195,6 +201,7 @@ async function listFormsForEntry(
         warning_policy,
         match_boundary_start,
         match_boundary_end,
+        allow_single_character_match,
         is_canonical,
         created_at,
         updated_at
@@ -231,6 +238,7 @@ async function listFormsForEntries(
         warning_policy,
         match_boundary_start,
         match_boundary_end,
+        allow_single_character_match,
         is_canonical,
         created_at,
         updated_at
@@ -272,6 +280,7 @@ function formRowFromSurfaceMatchRow(
     warning_policy: row.form_warning_policy,
     match_boundary_start: row.form_match_boundary_start,
     match_boundary_end: row.form_match_boundary_end,
+    allow_single_character_match: row.form_allow_single_character_match,
     is_canonical: row.form_is_canonical,
     created_at: row.form_created_at,
     updated_at: row.form_updated_at
@@ -297,6 +306,7 @@ async function listSurfaceMatchRows(
         forms.warning_policy AS form_warning_policy,
         forms.match_boundary_start AS form_match_boundary_start,
         forms.match_boundary_end AS form_match_boundary_end,
+        forms.allow_single_character_match AS form_allow_single_character_match,
         forms.is_canonical AS form_is_canonical,
         forms.created_at AS form_created_at,
         forms.updated_at AS form_updated_at
@@ -362,11 +372,12 @@ export async function createGlossaryEntry(
               warning_policy,
               match_boundary_start,
               match_boundary_end,
+              allow_single_character_match,
               is_canonical,
               created_at,
               updated_at
             )
-            VALUES (?, ?, ?, NULL, NULL, ?, ?, 1, ?, ?)
+            VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, 1, ?, ?)
           `,
           [
             canonicalFormId,
@@ -376,6 +387,7 @@ export async function createGlossaryEntry(
               DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
             validatedInput.matchBoundaryEnd ??
               DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+            validatedInput.allowSingleCharacterMatch ? 1 : 0,
             timestamp,
             timestamp
           ]
@@ -551,6 +563,8 @@ export async function updateGlossaryEntry(
               surface = ?,
               match_boundary_start = COALESCE(?, match_boundary_start),
               match_boundary_end = COALESCE(?, match_boundary_end),
+              allow_single_character_match =
+                COALESCE(?, allow_single_character_match),
               updated_at = ?
             WHERE entry_id = ?
               AND is_canonical = 1
@@ -559,6 +573,11 @@ export async function updateGlossaryEntry(
             entry.canonicalSurface,
             entry.matchBoundaryStart ?? null,
             entry.matchBoundaryEnd ?? null,
+            entry.allowSingleCharacterMatch === undefined
+              ? null
+              : entry.allowSingleCharacterMatch
+                ? 1
+                : 0,
             timestamp,
             entry.id
           ]
@@ -581,11 +600,12 @@ export async function updateGlossaryEntry(
                 warning_policy,
                 match_boundary_start,
                 match_boundary_end,
+                allow_single_character_match,
                 is_canonical,
                 created_at,
                 updated_at
               )
-              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             `,
             [
               form.id ?? createUuidv7(),
@@ -595,6 +615,7 @@ export async function updateGlossaryEntry(
               form.warningPolicy,
               form.matchBoundaryStart,
               form.matchBoundaryEnd,
+              form.allowSingleCharacterMatch ? 1 : 0,
               timestamp,
               timestamp
             ]

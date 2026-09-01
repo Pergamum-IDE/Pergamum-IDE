@@ -250,10 +250,12 @@ import {
   isGlossaryEntryDraftDirty,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
+  updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch,
   updateGlossaryEntryDraftCanonicalMatchBoundaryEnd,
   updateGlossaryEntryDraftCanonicalMatchBoundaryStart,
   updateGlossaryEntryDraftCanonicalSurface,
   updateGlossaryEntryDraftDescription,
+  updateGlossaryEntryDraftFormAllowSingleCharacterMatch,
   updateGlossaryEntryDraftFormMatchBoundaryEnd,
   updateGlossaryEntryDraftFormMatchBoundaryStart,
   updateGlossaryEntryDraftFormSurface,
@@ -327,6 +329,7 @@ import {
   planProjectDocumentMoveRelocation
 } from "./projectDocumentMoveRelocation";
 import { currentDocumentForOpenedFile } from "./projectDocumentResolution";
+import { confirmCreateProjectConflictIfNeeded } from "./createProjectConflictConfirmation";
 import {
   loadFirstProjectDocumentIfCurrent,
   openFirstProjectDocumentAfterContextSwitch,
@@ -2309,8 +2312,19 @@ export function App(): JSX.Element {
   async function resolveProjectOpenResult(
     result: ProjectOpenResult
   ): Promise<PergamumProject | null> {
+    const createProjectConflictResult =
+      await confirmCreateProjectConflictIfNeeded({
+        result,
+        translate,
+        choiceDialog,
+        confirmCreateProjectInExistingRoot:
+          window.pergamum.projects.confirmCreateProjectInExistingRoot,
+        cancelCreateProjectInExistingRoot:
+          window.pergamum.projects.cancelCreateProjectInExistingRoot
+      });
+
     return confirmReadOnlyProjectOpenIfNeeded({
-      result,
+      result: createProjectConflictResult,
       translate,
       choiceDialog,
       confirmReadOnlyProjectOpen:
@@ -2437,6 +2451,29 @@ export function App(): JSX.Element {
     );
   }
 
+  function setActiveGlossaryEntryCanonicalAllowSingleCharacterMatch(
+    value: boolean
+  ): void {
+    if (!canMutateActiveWorkingCopy()) {
+      return;
+    }
+
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft:
+                updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch(
+                  editor.draft,
+                  value
+                )
+            }
+          : editor
+      )
+    );
+  }
+
   function addActiveGlossaryEntryForm(
     relation: GlossaryFormRelation
   ): void {
@@ -2545,6 +2582,30 @@ export function App(): JSX.Element {
                 editor.draft,
                 formId,
                 matchBoundaryEnd
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryFormAllowSingleCharacterMatch(
+    formId: string,
+    value: boolean
+  ): void {
+    if (!canMutateActiveWorkingCopy()) {
+      return;
+    }
+
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
+                editor.draft,
+                formId,
+                value
               )
             }
           : editor
@@ -5735,10 +5796,20 @@ export function App(): JSX.Element {
       setIsRecentProjectsOpen(false);
       setStatus(projectOpenStatus(openedStatus, settingsReloadError, translate));
     } catch (error) {
-      setStatus({
-        key: "status.recentProjectOpenFailed",
-        values: { message: errorMessage(error, translate) }
+      // #366: never surface the raw IPC/remote-method error text in the UI —
+      // log the sanitized detail and show the same safe dialog style as a
+      // session-restore project-open failure instead.
+      logRendererDebugEvent({
+        level: "error",
+        event: "project.open.failed",
+        details: {
+          operation: "openRecent",
+          result: "failed",
+          error: rendererDebugErrorInfo(error)
+        }
       });
+      setStatus({ key: "status.recentProjectOpenFailed" });
+      await showProjectOpenFailedDialog();
     }
   }
 
@@ -5767,6 +5838,26 @@ export function App(): JSX.Element {
       message: {
         kind: "plainText",
         text: translate("dialog.projectRestoreFailed.message")
+      },
+      icon: { kind: "error", tooltip: translate("dialog.icon.error") },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    }).then(() => undefined);
+  }
+
+  // #366: same safe-dialog style as `showProjectRestoreFailedDialog`
+  // (session restore project-open failure), for an explicit user-initiated
+  // project open (Recent Projects) that failed. Shown directly from the
+  // triggering catch block rather than through the deferred restore-Error
+  // queue, since this is not a startup-sequenced dialog.
+  function showProjectOpenFailedDialog(): Promise<void> {
+    return confirmDialog({
+      title: translate("dialog.projectOpenFailed.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.projectOpenFailed.message")
       },
       icon: { kind: "error", tooltip: translate("dialog.icon.error") },
       clipboardText: null,
@@ -6932,6 +7023,9 @@ export function App(): JSX.Element {
                         onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
                           setActiveGlossaryEntryCanonicalMatchBoundaryEnd
                         }
+                        onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch={
+                          setActiveGlossaryEntryCanonicalAllowSingleCharacterMatch
+                        }
                         onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
                         onChangeGlossaryEntryFormSurface={
                           setActiveGlossaryEntryFormSurface
@@ -6944,6 +7038,9 @@ export function App(): JSX.Element {
                         }
                         onChangeGlossaryEntryFormMatchBoundaryEnd={
                           setActiveGlossaryEntryFormMatchBoundaryEnd
+                        }
+                        onChangeGlossaryEntryFormAllowSingleCharacterMatch={
+                          setActiveGlossaryEntryFormAllowSingleCharacterMatch
                         }
                         onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
                         onDeleteGlossaryEntry={() => {

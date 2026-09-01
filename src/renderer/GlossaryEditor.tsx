@@ -39,6 +39,7 @@ interface GlossaryEditorProps {
   onChangeCanonicalMatchBoundaryEnd: (
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ) => void;
+  onChangeCanonicalAllowSingleCharacterMatch: (value: boolean) => void;
   onAddForm: (relation: GlossaryFormRelation) => void;
   onChangeFormSurface: (formId: string, surface: string) => void;
   onChangeFormWarningPolicy: (
@@ -52,6 +53,10 @@ interface GlossaryEditorProps {
   onChangeFormMatchBoundaryEnd: (
     formId: string,
     matchBoundaryEnd: GlossaryFormMatchBoundary
+  ) => void;
+  onChangeFormAllowSingleCharacterMatch: (
+    formId: string,
+    value: boolean
   ) => void;
   onDeleteForm: (formId: string) => void;
   onDeleteEntry: () => void;
@@ -68,11 +73,13 @@ export function GlossaryEditor({
   onChangeCanonicalSurface,
   onChangeCanonicalMatchBoundaryStart,
   onChangeCanonicalMatchBoundaryEnd,
+  onChangeCanonicalAllowSingleCharacterMatch,
   onAddForm,
   onChangeFormSurface,
   onChangeFormWarningPolicy,
   onChangeFormMatchBoundaryStart,
   onChangeFormMatchBoundaryEnd,
+  onChangeFormAllowSingleCharacterMatch,
   onDeleteForm,
   onDeleteEntry,
   onNavigateToPreviousOccurrence,
@@ -139,6 +146,7 @@ export function GlossaryEditor({
         <GlossaryFormAdvancedMatchingSettings
           matchBoundaryStart={form.matchBoundaryStart}
           matchBoundaryEnd={form.matchBoundaryEnd}
+          allowSingleCharacterMatch={form.allowSingleCharacterMatch}
           translate={translate}
           readOnly={readOnly}
           onChangeMatchBoundaryStart={(matchBoundaryStart) =>
@@ -149,6 +157,11 @@ export function GlossaryEditor({
           onChangeMatchBoundaryEnd={(matchBoundaryEnd) =>
             !readOnly
               ? onChangeFormMatchBoundaryEnd(form.id, matchBoundaryEnd)
+              : undefined
+          }
+          onChangeAllowSingleCharacterMatch={(value) =>
+            !readOnly
+              ? onChangeFormAllowSingleCharacterMatch(form.id, value)
               : undefined
           }
         />
@@ -239,6 +252,7 @@ export function GlossaryEditor({
             key={draft.entry.id}
             matchBoundaryStart={draft.canonicalMatchBoundaryStart}
             matchBoundaryEnd={draft.canonicalMatchBoundaryEnd}
+            allowSingleCharacterMatch={draft.canonicalAllowSingleCharacterMatch}
             translate={translate}
             readOnly={readOnly}
             onChangeMatchBoundaryStart={(matchBoundaryStart) => {
@@ -249,6 +263,11 @@ export function GlossaryEditor({
             onChangeMatchBoundaryEnd={(matchBoundaryEnd) => {
               if (!readOnly) {
                 onChangeCanonicalMatchBoundaryEnd(matchBoundaryEnd);
+              }
+            }}
+            onChangeAllowSingleCharacterMatch={(value) => {
+              if (!readOnly) {
+                onChangeCanonicalAllowSingleCharacterMatch(value);
               }
             }}
           />

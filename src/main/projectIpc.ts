@@ -26,6 +26,8 @@ import {
   type OpenProjectByFilePathRequest,
   type OpenProjectByFilePathResult,
   type OpenRecentProjectRequest,
+  type PendingCreateProjectInExistingRoot,
+  type PendingCreateProjectInExistingRootRequest,
   type PendingReadOnlyProjectOpen,
   type PendingReadOnlyProjectOpenRequest,
   type PergamumProject,
@@ -34,6 +36,7 @@ import {
   type ProjectAccessMode,
   type ProjectDocument,
   type ProjectDocumentContent,
+  type ProjectOpenFinalizationResult,
   type ProjectOpenResult,
   type ReadProjectDocumentRequest,
   type RecordRecentProjectInput,
@@ -177,6 +180,16 @@ interface PendingReadOnlyProjectOpenState {
   startedAt: number;
 }
 
+interface PendingCreateProjectInExistingRootState {
+  token: string;
+  projectFilePath: string;
+  logger: DebugLogger;
+  writeOwnershipManager: ProjectWriteOwnershipManager;
+  projectRef: string;
+  startedAt: number;
+  instanceRunId?: string;
+}
+
 export type ProjectWriteOwnership =
   | {
       kind: "owned";
@@ -258,20 +271,14 @@ let currentProjectState: CurrentProjectState | null = null;
 let pendingReadOnlyProjectOpenState: PendingReadOnlyProjectOpenState | null =
   null;
 let pendingReadOnlyProjectOpenSequence = 0;
+let pendingCreateProjectInExistingRootState:
+  | PendingCreateProjectInExistingRootState
+  | null = null;
+let pendingCreateProjectInExistingRootSequence = 0;
 let projectWindowTitleTargetProvider: ProjectWindowTitleTargetProvider | null =
   null;
 
 const defaultProjectRecoveryDirectoryName = ".pergamum_recovery";
-const createProjectConflictWarningMessage =
-  "既に Pergamum のプロジェクト設定または復旧領域があります。\n\n" +
-  "既存の設定を上書きし、本文やGlossaryに関する復旧領域があるフォルダに新しいプロジェクトを作成します。\n\n" +
-  "これは破壊的な変更を伴います。\n" +
-  "本当によろしいですか？";
-
-const createProjectConflictDialogButtonIndex = {
-  confirm: 0,
-  cancel: 1
-} as const;
 function nodePlatformToAppPlatform(platform: NodeJS.Platform): AppPlatform {
   switch (platform) {
     case "win32":
@@ -902,21 +909,6 @@ async function showExistingProjectFileDialog(
   });
 }
 
-async function confirmCreateProjectInExistingRoot(
-  event: IpcMainInvokeEvent
-): Promise<boolean> {
-  const result = await showProjectMessageBox(event, {
-    type: "warning",
-    message: createProjectConflictWarningMessage,
-    buttons: ["意味を理解して同意", "キャンセル"],
-    defaultId: createProjectConflictDialogButtonIndex.cancel,
-    cancelId: createProjectConflictDialogButtonIndex.cancel,
-    noLink: true
-  });
-
-  return result?.response === createProjectConflictDialogButtonIndex.confirm;
-}
-
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
@@ -1018,6 +1010,22 @@ function parsePendingReadOnlyProjectOpenRequest(
     value.token.length === 0
   ) {
     throw new Error("Invalid read-only project open request.");
+  }
+
+  return {
+    token: value.token
+  };
+}
+
+function parsePendingCreateProjectInExistingRootRequest(
+  value: unknown
+): PendingCreateProjectInExistingRootRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.token !== "string" ||
+    value.token.length === 0
+  ) {
+    throw new Error("Invalid pending project create request.");
   }
 
   return {
@@ -2627,6 +2635,28 @@ async function releaseProjectWriteOwnershipBestEffort(
   );
 }
 
+function logCreateProjectFailedAndThrow(
+  error: unknown,
+  logger: DebugLogger,
+  startedAt: number,
+  projectRef?: string
+): never {
+  const safeError = sanitizedFileIoError(error);
+  logger.log({
+    level: "error",
+    event: "project.open.failed",
+    details: {
+      ...(projectRef ? { projectRef } : {}),
+      operation: "create",
+      result: "failed",
+      durationMs: durationSince(startedAt),
+      error: safeError
+    }
+  });
+
+  throw safeError;
+}
+
 function shouldReleasePreviousProjectWriteOwnership(
   previousState: CurrentProjectState,
   nextProjectFilePath: string,
@@ -2682,6 +2712,7 @@ export async function updateCurrentProjectWindowTitle(): Promise<void> {
 
 export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
   await discardPendingReadOnlyProjectOpen();
+  discardPendingCreateProjectInExistingRoot();
 
   const stateToRelease = currentProjectState;
 
@@ -2700,6 +2731,7 @@ export async function closeCurrentProject(): Promise<CloseCurrentProjectResult> 
 
   if (!stateToClose) {
     await discardPendingReadOnlyProjectOpen();
+    discardPendingCreateProjectInExistingRoot();
     return { status: "noProject" };
   }
 
@@ -2711,6 +2743,7 @@ export async function closeCurrentProject(): Promise<CloseCurrentProjectResult> 
     }
 
     await discardPendingReadOnlyProjectOpen();
+    discardPendingCreateProjectInExistingRoot();
     if (currentProjectState === stateToClose) {
       currentProjectState = null;
     }
@@ -2988,6 +3021,41 @@ async function finalizeProjectFileOpen(
   return openedProject.project;
 }
 
+function nextPendingCreateProjectInExistingRootToken(): string {
+  pendingCreateProjectInExistingRootSequence += 1;
+  return `pending-create-project-in-existing-root:${pendingCreateProjectInExistingRootSequence}`;
+}
+
+function discardPendingCreateProjectInExistingRoot(): void {
+  pendingCreateProjectInExistingRootState = null;
+}
+
+function createPendingCreateProjectInExistingRoot(
+  projectFilePath: string,
+  logger: DebugLogger,
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  projectRef: string,
+  startedAt: number,
+  instanceRunId?: string
+): PendingCreateProjectInExistingRoot {
+  const token = nextPendingCreateProjectInExistingRootToken();
+
+  pendingCreateProjectInExistingRootState = {
+    token,
+    projectFilePath,
+    logger,
+    writeOwnershipManager,
+    projectRef,
+    startedAt,
+    ...(instanceRunId ? { instanceRunId } : {})
+  };
+
+  return {
+    kind: "pendingCreateProjectInExistingRoot",
+    token
+  };
+}
+
 function readOnlyProjectOpenNeedsConfirmation(
   project: PergamumProject
 ): boolean {
@@ -3057,7 +3125,7 @@ async function projectOpenResultForOpenedProject(
   projectRef: string,
   operation: ProjectOpenOperation,
   startedAt: number
-): Promise<ProjectOpenResult> {
+): Promise<ProjectOpenFinalizationResult> {
   if (readOnlyProjectOpenNeedsConfirmation(openedProject.project)) {
     return createPendingReadOnlyProjectOpen(
       openedProject,
@@ -3072,6 +3140,30 @@ async function projectOpenResultForOpenedProject(
   logProjectOpenSucceeded(logger, projectRef, operation, startedAt);
 
   return project;
+}
+
+async function createProjectOpenResultFromProjectFile(
+  projectFilePath: string,
+  logger: DebugLogger,
+  writeOwnershipManager: ProjectWriteOwnershipManager,
+  projectRef: string,
+  startedAt: number,
+  instanceRunId?: string
+): Promise<ProjectOpenFinalizationResult> {
+  const openedProject = await createProjectFromProjectFile(
+    projectFilePath,
+    logger,
+    writeOwnershipManager,
+    instanceRunId
+  );
+
+  return projectOpenResultForOpenedProject(
+    openedProject,
+    logger,
+    projectRef,
+    "create",
+    startedAt
+  );
 }
 
 export async function confirmReadOnlyProjectOpen(
@@ -3107,6 +3199,48 @@ export async function cancelReadOnlyProjectOpen(
   }
 
   await discardPendingReadOnlyProjectOpen();
+}
+
+export async function confirmCreateProjectInExistingRoot(
+  rawRequest: unknown
+): Promise<ProjectOpenFinalizationResult> {
+  const request = parsePendingCreateProjectInExistingRootRequest(rawRequest);
+  const pending = pendingCreateProjectInExistingRootState;
+
+  if (!pending || pending.token !== request.token) {
+    return null;
+  }
+
+  pendingCreateProjectInExistingRootState = null;
+
+  try {
+    return await createProjectOpenResultFromProjectFile(
+      pending.projectFilePath,
+      pending.logger,
+      pending.writeOwnershipManager,
+      pending.projectRef,
+      pending.startedAt,
+      pending.instanceRunId
+    );
+  } catch (error) {
+    logCreateProjectFailedAndThrow(
+      error,
+      pending.logger,
+      pending.startedAt,
+      pending.projectRef
+    );
+  }
+}
+
+export function cancelCreateProjectInExistingRoot(rawRequest: unknown): void {
+  const request = parsePendingCreateProjectInExistingRootRequest(rawRequest);
+  const pending = pendingCreateProjectInExistingRootState;
+
+  if (!pending || pending.token !== request.token) {
+    return;
+  }
+
+  discardPendingCreateProjectInExistingRoot();
 }
 
 async function createProjectFromProjectFile(
@@ -3274,41 +3408,26 @@ export async function createProject(
 
     const projectRootPath = resolveProjectRoot(projectFilePath);
     if (await hasCreateProjectConflict(projectRootPath)) {
-      const confirmed = await confirmCreateProjectInExistingRoot(event);
-
-      if (!confirmed) {
-        return null;
-      }
+      return createPendingCreateProjectInExistingRoot(
+        projectFilePath,
+        logger,
+        writeOwnershipManager,
+        projectRef,
+        startedAt,
+        instanceRunId
+      );
     }
 
-    const openedProject = await createProjectFromProjectFile(
+    return await createProjectOpenResultFromProjectFile(
       projectFilePath,
       logger,
       writeOwnershipManager,
+      projectRef,
+      startedAt,
       instanceRunId
     );
-    return projectOpenResultForOpenedProject(
-      openedProject,
-      logger,
-      projectRef,
-      "create",
-      startedAt
-    );
   } catch (error) {
-    const safeError = sanitizedFileIoError(error);
-    logger.log({
-      level: "error",
-      event: "project.open.failed",
-      details: {
-        ...(projectRef ? { projectRef } : {}),
-        operation: "create",
-        result: "failed",
-        durationMs: durationSince(startedAt),
-        error: safeError
-      }
-    });
-
-    throw safeError;
+    logCreateProjectFailedAndThrow(error, logger, startedAt, projectRef);
   }
 }
 
@@ -3635,6 +3754,19 @@ export function registerProjectIpc(
 
         throw safeError;
       }
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.confirmCreateProjectInExistingRoot,
+    (_event, rawRequest: unknown): Promise<ProjectOpenFinalizationResult> =>
+      confirmCreateProjectInExistingRoot(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.cancelCreateProjectInExistingRoot,
+    async (_event, rawRequest: unknown): Promise<void> => {
+      cancelCreateProjectInExistingRoot(rawRequest);
     }
   );
 

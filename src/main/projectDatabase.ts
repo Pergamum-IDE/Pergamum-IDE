@@ -435,6 +435,9 @@ export async function createSchemaVersionOne(
       match_boundary_end TEXT NOT NULL DEFAULT 'auto' CHECK (
         match_boundary_end IN ('auto', 'strict', 'none')
       ),
+      allow_single_character_match INTEGER NOT NULL DEFAULT 0 CHECK (
+        allow_single_character_match IN (0, 1)
+      ),
       is_canonical INTEGER NOT NULL CHECK (is_canonical IN (0, 1)),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -566,6 +569,7 @@ export async function validateSchemaVersionOne(
     ["warning_policy", "TEXT", 0],
     ["match_boundary_start", "TEXT", 0],
     ["match_boundary_end", "TEXT", 0],
+    ["allow_single_character_match", "INTEGER", 0],
     ["is_canonical", "INTEGER", 0],
     ["created_at", "TEXT", 0],
     ["updated_at", "TEXT", 0]
