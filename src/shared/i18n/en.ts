@@ -283,6 +283,7 @@ export const enTranslations = {
   "explorer.create.target.label": "Create in:",
   "explorer.create.target.projectRoot": "Project root",
   "explorer.contextMenu.move": "Move…",
+  "explorer.contextMenu.copy": "Copy",
   "explorer.contextMenu.cut": "Cut",
   "explorer.contextMenu.paste": "Paste",
   "explorer.contextMenu.label": "File actions",
@@ -338,6 +339,9 @@ export const enTranslations = {
     "Copied {copied} item(s); {failed} failed",
   "explorer.copy.status.allFailed": "Copy failed for all {failed} item(s)",
   "explorer.copy.status.unavailable": "The items could not be copied.",
+  "explorer.copy.status.buffered": "Copied {count} item(s)",
+  "explorer.copy.disabled.protectedSelected":
+    "Protected items cannot be copied.",
   "explorer.cut.disabled.moveInProgress": "A move is already in progress.",
   "explorer.cut.disabled.noProject": "No project is open.",
   "explorer.cut.disabled.readOnlyProject": "Items cannot be cut in a read-only project.",

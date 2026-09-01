@@ -3996,6 +3996,15 @@ label.settingsItemHeader {
   max-inline-size: none;
 }
 
+/* #356: the Copy collision (rename-copy) confirmation carries a 9-column
+   table (source + direction + destination + existing-item metadata), so it
+   needs the same near-full-window width as the delete dialog. The D&D
+   Move/Copy confirmation keeps the default dialog width. */
+.fileExplorerCopyCollisionDialog.appInfoDialog {
+  inline-size: min(1180px, calc(100vw - 40px));
+  max-inline-size: none;
+}
+
 /* A solid red header with a white "!" icon and white title — unambiguously
    a dangerous action, stronger than the default light `appDialog-destructive`
    header tint. */
@@ -4227,7 +4236,8 @@ label.settingsItemHeader {
 }
 
 @media (max-width: 720px) {
-  .fileExplorerDeleteDialog.appInfoDialog {
+  .fileExplorerDeleteDialog.appInfoDialog,
+  .fileExplorerCopyCollisionDialog.appInfoDialog {
     inline-size: calc(100vw - 24px);
   }
 }

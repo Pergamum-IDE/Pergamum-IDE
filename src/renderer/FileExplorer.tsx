@@ -783,6 +783,17 @@ export function FileExplorer({
   // #328: the pending internal Cut — a snapshot of the File Explorer selection
   // taken at Cut time, moved by the next Paste. Never touches the OS clipboard.
   const [cutState, setCutState] = useState<FileExplorerCutState | null>(null);
+  // #356: an internal COPY buffer — mutually exclusive with the Cut buffer.
+  // Records only the top-level selected source paths; Paste runs the #356
+  // Copy plan/execute. The buffer SURVIVES a successful Paste (repeated Paste
+  // is allowed), and is cleared on project switch or when a Cut replaces it.
+  // Never on the OS clipboard.
+  const [copyState, setCopyState] = useState<FileExplorerCopyState | null>(
+    null
+  );
+  // #356: Ctrl+V / context-menu Paste routes to whichever internal buffer is
+  // active. Reassigned every render so it closes over fresh state.
+  const explorerPasteRouterRef = useRef<() => void>(() => undefined);
   // #329 spike: the in-progress native drag (renderer state is authoritative;
   // the DataTransfer payload is only the gesture carrier) and the row the
   // pointer is currently over.
@@ -1047,6 +1058,8 @@ export function FileExplorer({
     setMultiSelection(createEmptyFileExplorerSelection());
     // #328: a pending Cut is scoped to the current project — drop it.
     setCutState(null);
+    // #356: a Copy buffer is likewise project-scoped.
+    setCopyState(null);
     // #329 spike: abandon any in-progress drag on a project switch / remount.
     setDragState(null);
     setDropTarget(null);
@@ -1898,14 +1911,50 @@ export function FileExplorer({
     cutState !== null &&
     cutState.sourceRelativePaths.length > 0 &&
     !cutSourceHasDirtyOpenDocument;
-  const pasteDisabledReason: FileExplorerPasteDisabledReason | null =
-    resolveFileExplorerPasteDisabledReason({
-      moveInFlight,
-      hasProject,
-      readOnly,
-      cutSourceCount: cutState?.sourceRelativePaths.length ?? 0,
-      cutHasDirtyOpenDocument: cutSourceHasDirtyOpenDocument
-    });
+  // #356: a source string that resolves to the project root, or a protected /
+  // reserved entry, can never be a Copy source (the backend is authoritative;
+  // this just disables the menu item early).
+  const copySelectionHasProtectedOrRoot = moveSources.relativePaths.some(
+    (relativePath) =>
+      relativePath.length === 0 ||
+      isProtectedFileExplorerRelativePath(relativePath)
+  );
+  const canCopySelection =
+    canMoveSelection && !copySelectionHasProtectedOrRoot;
+  const copySourceHasDirtyOpenDocument = useMemo(() => {
+    if (copyState === null) {
+      return false;
+    }
+    return selectionCoversDirtyOpenDocument(
+      copyState.sourceRelativePaths,
+      dirtyProjectDocumentRelativePaths
+    );
+  }, [copyState, dirtyProjectDocumentRelativePaths]);
+  const canPasteCopy =
+    hasProject &&
+    !readOnly &&
+    !moveInFlight &&
+    !copyInFlight &&
+    copyState !== null &&
+    copyState.sourceRelativePaths.length > 0 &&
+    !copySourceHasDirtyOpenDocument;
+  // #356: Paste is enabled for EITHER internal buffer.
+  const canPaste = canPasteCut || canPasteCopy;
+  const pasteDisabledReason: FileExplorerPasteDisabledReason | null = canPaste
+    ? null
+    : resolveFileExplorerPasteDisabledReason({
+        moveInFlight: moveInFlight || copyInFlight,
+        hasProject,
+        readOnly,
+        cutSourceCount:
+          copyState?.sourceRelativePaths.length ??
+          cutState?.sourceRelativePaths.length ??
+          0,
+        cutHasDirtyOpenDocument:
+          copyState !== null
+            ? copySourceHasDirtyOpenDocument
+            : cutSourceHasDirtyOpenDocument
+      });
   // #328: the pending Cut paths, as a set for the muted-row marker.
   const cutRelativePaths = useMemo(
     () => new Set(cutState?.sourceRelativePaths ?? []),
@@ -2439,6 +2488,8 @@ export function FileExplorer({
       return;
     }
 
+    // #356: Cut and Copy buffers are mutually exclusive.
+    setCopyState(null);
     setCutState({
       sourceRelativePaths: sources.relativePaths,
       createdAt: Date.now()
@@ -2450,6 +2501,53 @@ export function FileExplorer({
     multiSelection.selected,
     readOnly,
     selectionHasDirtyOpenDocument
+  ]);
+
+  // #356: snapshot the current selection as the internal Copy buffer. No
+  // filesystem work — the next Paste runs `planFileExplorerCopyEntries` /
+  // `executeFileExplorerCopyPlan`. Mutually exclusive with the Cut buffer.
+  const performCopy = useCallback(() => {
+    const sources = resolveFileExplorerMoveSources(
+      multiSelection.selected,
+      entriesByDirectoryPath
+    );
+
+    if (
+      !hasProject ||
+      readOnly ||
+      moveInFlight ||
+      copyInFlight ||
+      !sources.canMove ||
+      selectionHasDirtyOpenDocument ||
+      sources.relativePaths.some(
+        (relativePath) =>
+          relativePath.length === 0 ||
+          isProtectedFileExplorerRelativePath(relativePath)
+      )
+    ) {
+      return;
+    }
+
+    setCutState(null);
+    setCopyState({
+      sourceRelativePaths: sources.relativePaths,
+      createdAt: Date.now()
+    });
+    onMoveResultMessage?.(
+      translate("explorer.copy.status.buffered", {
+        count: sources.relativePaths.length
+      })
+    );
+  }, [
+    copyInFlight,
+    entriesByDirectoryPath,
+    hasProject,
+    moveInFlight,
+    multiSelection.selected,
+    onMoveResultMessage,
+    readOnly,
+    selectionHasDirtyOpenDocument,
+    translate
   ]);
 
   // #328: move the pending Cut sources into the folder resolved from the
@@ -2566,6 +2664,11 @@ export function FileExplorer({
       }
 
       const key = event.key.toLowerCase();
+      if (key === "c") {
+        event.preventDefault();
+        performCopy();
+        return;
+      }
       if (key === "x") {
         event.preventDefault();
         performCut();
@@ -2573,7 +2676,7 @@ export function FileExplorer({
       }
       if (key === "v") {
         event.preventDefault();
-        void performPaste();
+        explorerPasteRouterRef.current();
       }
     },
     [
@@ -2585,8 +2688,8 @@ export function FileExplorer({
       dndConfirm,
       moveDialogOpen,
       moveFailure,
+      performCopy,
       performCut,
-      performPaste,
       renameDialogTarget
     ]
   );
@@ -2900,6 +3003,21 @@ export function FileExplorer({
       translate
     ]
   );
+
+  // #356: Paste routes to the active internal buffer. A Copy buffer runs the
+  // Copy plan/execute path into the resolved Paste destination (same-folder
+  // duplicate IS allowed here, unlike D&D); otherwise the existing Cut/Move
+  // Paste. Reassigned every render so it always sees fresh state.
+  explorerPasteRouterRef.current = () => {
+    if (copyState !== null && copyState.sourceRelativePaths.length > 0) {
+      void performDndCopy(
+        copyState.sourceRelativePaths,
+        resolveFileExplorerPasteDestination(selection, entriesByDirectoryPath)
+      );
+      return;
+    }
+    void performPaste();
+  };
 
   const handleEntryDragStart = useCallback(
     (event: ReactDragEvent<HTMLElement>, entry: FileExplorerEntry) => {
@@ -3228,6 +3346,36 @@ export function FileExplorer({
               type="button"
               role="menuitem"
               className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="copy"
+              data-file-explorer-copy-disabled-reason={
+                canCopySelection
+                  ? undefined
+                  : (moveDisabledReason ?? "protected-or-root")
+              }
+              disabled={!canCopySelection}
+              aria-disabled={!canCopySelection}
+              title={
+                canCopySelection
+                  ? undefined
+                  : translate(
+                      moveDisabledReason
+                        ? MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
+                        : "explorer.copy.disabled.protectedSelected"
+                    )
+              }
+              onClick={() => {
+                closeContextMenu();
+                if (canCopySelection) {
+                  performCopy();
+                }
+              }}
+            >
+              {translate("explorer.contextMenu.copy")}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
               data-file-explorer-context-command="cut"
               data-file-explorer-cut-disabled-reason={
                 moveDisabledReason ?? undefined
@@ -3258,8 +3406,8 @@ export function FileExplorer({
               data-file-explorer-paste-disabled-reason={
                 pasteDisabledReason ?? undefined
               }
-              disabled={!canPasteCut}
-              aria-disabled={!canPasteCut}
+              disabled={!canPaste}
+              aria-disabled={!canPaste}
               title={
                 pasteDisabledReason
                   ? translate(
@@ -3269,8 +3417,8 @@ export function FileExplorer({
               }
               onClick={() => {
                 closeContextMenu();
-                if (canPasteCut) {
-                  void performPaste();
+                if (canPaste) {
+                  explorerPasteRouterRef.current();
                 }
               }}
             >
@@ -3567,6 +3715,16 @@ const EMPTY_STRING_LIST: readonly string[] = [];
  * project (cleared on remount / project switch).
  */
 interface FileExplorerCutState {
+  readonly sourceRelativePaths: readonly string[];
+  readonly createdAt: number;
+}
+
+/**
+ * #356: the internal COPY buffer — the same snapshot shape as the Cut buffer,
+ * but a Paste duplicates (via the #356 Copy plan/execute) instead of moving.
+ * Mutually exclusive with {@link FileExplorerCutState}.
+ */
+interface FileExplorerCopyState {
   readonly sourceRelativePaths: readonly string[];
   readonly createdAt: number;
 }

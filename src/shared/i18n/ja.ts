@@ -281,6 +281,7 @@ export const jaTranslations = {
   "explorer.create.target.label": "作成先:",
   "explorer.create.target.projectRoot": "プロジェクト直下",
   "explorer.contextMenu.move": "移動...",
+  "explorer.contextMenu.copy": "コピー",
   "explorer.contextMenu.cut": "切り取り",
   "explorer.contextMenu.paste": "貼り付け",
   "explorer.contextMenu.label": "ファイル操作",
@@ -335,6 +336,9 @@ export const jaTranslations = {
   "explorer.copy.status.partiallyFailed": "{copied} 件コピー、{failed} 件失敗",
   "explorer.copy.status.allFailed": "{failed} 件すべてコピーに失敗しました",
   "explorer.copy.status.unavailable": "コピーできませんでした",
+  "explorer.copy.status.buffered": "{count} 個の項目をコピーしました",
+  "explorer.copy.disabled.protectedSelected":
+    "保護された項目はコピーできません。",
   "explorer.cut.disabled.moveInProgress": "移動処理中です。",
   "explorer.cut.disabled.noProject": "プロジェクトが開かれていません。",
   "explorer.cut.disabled.readOnlyProject": "読み取り専用プロジェクトでは切り取りできません。",
