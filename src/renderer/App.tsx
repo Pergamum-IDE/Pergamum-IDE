@@ -266,7 +266,6 @@ import {
   glossaryCommandIds,
   registerGlossaryCommands
 } from "./glossaryCommands";
-import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
 import {
   inactiveGlossaryOccurrenceTrackingState,
   navigateGlossaryOccurrenceTracking,
@@ -320,6 +319,9 @@ import {
   type TabContextMenuAction,
   type TabContextMenuDescriptor
 } from "./documentTabContextMenu";
+import { useMarkdownOutlineIndex } from "./useMarkdownOutlineIndex";
+import type { MarkdownOutlineItem } from "../shared/markdownOutline";
+import type { PendingMarkdownSelection } from "./pendingMarkdownSelection";
 import {
   isSameProjectInstance,
   planProjectDocumentMoveRelocation
@@ -803,7 +805,7 @@ export function App(): JSX.Element {
   const [fileExplorerRevealRequest, setFileExplorerRevealRequest] =
     useState<FileExplorerRevealRequest | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
-    useState<GlossaryOccurrenceRange | null>(null);
+    useState<PendingMarkdownSelection | null>(null);
   /**
    * In-flight document-open timing correlation (#152). Set at the start of
    * `openFile()`, read by MarkdownEditorSurface's one-shot preview-render
@@ -1239,6 +1241,10 @@ export function App(): JSX.Element {
   const activeMarkdownDocument = currentEditor
     ? markdownDocumentForEditor(currentEditor)
     : null;
+  // #352: heading outline index over every open Markdown document (working
+  // text, dirty edits included). The sidebar only shows the active one.
+  const { activeOutline: activeMarkdownOutline } =
+    useMarkdownOutlineIndex(openDocumentsState);
   const activeDocumentKey = activeDocument
     ? serializeEditorId(activeDocument.id)
     : null;
@@ -1263,6 +1269,28 @@ export function App(): JSX.Element {
   const isSettingsTabActive =
     isSettingsTabOpen &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
+  // #352: the Outline pane shows headings only for an active Markdown editor.
+  const activeEditorIsMarkdown =
+    !isSettingsTabActive && currentEditor?.kind === "markdown";
+
+  // #352: jump the active Markdown editor to a clicked outline heading. Reuses
+  // the existing pending-selection plumbing (same as Go to Line / glossary
+  // occurrence navigation) — an offset jump, never a line-number jump — but
+  // with a CENTER scroll strategy so the heading lands mid-viewport rather
+  // than scraping the bottom edge.
+  //
+  // Future: record editor navigation history before heading jump.
+  function handleOutlineHeadingClick(item: MarkdownOutlineItem): void {
+    if (!activeEditorIsMarkdown) {
+      return;
+    }
+    setPendingMarkdownSelection({
+      start: item.from,
+      end: item.from,
+      scrollY: "center"
+    });
+  }
+
   const activeEditorFocusSurface = isSettingsTabActive
     ? "special"
     : currentEditor?.kind === "markdown"
@@ -6777,6 +6805,10 @@ export function App(): JSX.Element {
                         );
                       }}
                       onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
+                      markdownOutline={activeMarkdownOutline}
+                      activeEditorIsMarkdown={activeEditorIsMarkdown}
+                      activeOutlineDocumentKey={activeDocumentKey}
+                      onOutlineHeadingClick={handleOutlineHeadingClick}
                     />
                   </div>
                   <div

@@ -320,8 +320,8 @@ describe("Recovery candidate dialog wiring (#287)", () => {
       "setFileExplorerRefreshDirectoriesRequest(null)"
     );
 
-    expect(workspaceSidebarSource).toContain(
-      "refreshDirectoriesRequest={fileExplorerRefreshDirectoriesRequest}"
+    expect(workspaceSidebarSource.replace(/\s+/g, " ")).toContain(
+      "refreshDirectoriesRequest={ fileExplorerRefreshDirectoriesRequest }"
     );
     expect(workspaceSidebarSource).toContain(
       "onRefreshDirectoriesRequestHandled={"

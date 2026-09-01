@@ -11,6 +11,11 @@ import {
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
+import { WorkbenchFilesSidebar } from "./WorkbenchFilesSidebar";
+import type {
+  MarkdownOutlineItem,
+  MarkdownOutlineParseResult
+} from "../shared/markdownOutline";
 import type { SidebarMode } from "./sidebarMode";
 
 interface WorkspaceSidebarProps {
@@ -60,6 +65,17 @@ interface WorkspaceSidebarProps {
   onCreateGlossaryEntry: (
     input: CreateGlossaryEntryInput
   ) => Promise<boolean>;
+  /** #352: the ACTIVE Markdown document's heading outline (working text), or
+   *  `null` when there is no active Markdown document. */
+  markdownOutline?: MarkdownOutlineParseResult | null;
+  /** #352: whether the active editor is a Markdown document (drives the
+   *  Outline pane's empty vs. unavailable state). */
+  activeEditorIsMarkdown?: boolean;
+  /** #352: serialized identity of the active document. Drives clearing the
+   *  Outline tree item collapsed state on document change. */
+  activeOutlineDocumentKey?: string | null;
+  /** #352: jump the editor to a clicked outline heading. */
+  onOutlineHeadingClick?: (item: MarkdownOutlineItem) => void;
 }
 
 export function WorkspaceSidebar({
@@ -86,43 +102,58 @@ export function WorkspaceSidebar({
   fileExplorerDirtyProjectDocumentRelativePaths,
   onFileExplorerMoveResultMessage,
   onActivateGlossaryEntry,
-  onCreateGlossaryEntry
+  onCreateGlossaryEntry,
+  markdownOutline = null,
+  activeEditorIsMarkdown = false,
+  activeOutlineDocumentKey = null,
+  onOutlineHeadingClick = () => undefined
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
       return (
-        <FileExplorer
+        <WorkbenchFilesSidebar
           key={project?.rootPath ?? "no-project"}
-          project={project}
-          highlightedRelativePath={
-            project ? highlightedProjectDocumentRelativePath : null
-          }
-          readOnly={project?.accessMode.kind === "readOnly"}
           translate={translate}
-          createEntryRequest={fileExplorerCreateEntryRequest}
-          onCreateEntryRequestHandled={
-            onFileExplorerCreateEntryRequestHandled
+          markdownOutline={markdownOutline}
+          activeEditorIsMarkdown={activeEditorIsMarkdown}
+          activeOutlineDocumentKey={activeOutlineDocumentKey}
+          onOutlineHeadingClick={onOutlineHeadingClick}
+          fileExplorer={
+            <FileExplorer
+              project={project}
+              highlightedRelativePath={
+                project ? highlightedProjectDocumentRelativePath : null
+              }
+              readOnly={project?.accessMode.kind === "readOnly"}
+              translate={translate}
+              createEntryRequest={fileExplorerCreateEntryRequest}
+              onCreateEntryRequestHandled={
+                onFileExplorerCreateEntryRequestHandled
+              }
+              renameEntryRequest={fileExplorerRenameEntryRequest}
+              onRenameEntryRequestHandled={
+                onFileExplorerRenameEntryRequestHandled
+              }
+              refreshDirectoriesRequest={
+                fileExplorerRefreshDirectoriesRequest
+              }
+              onRefreshDirectoriesRequestHandled={
+                onFileExplorerRefreshDirectoriesRequestHandled
+              }
+              revealRequest={fileExplorerRevealRequest}
+              onRevealRequestHandled={onFileExplorerRevealRequestHandled}
+              isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
+              onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
+              onProjectDocumentsMoved={onFileExplorerProjectDocumentsMoved}
+              onEntriesDeleted={onFileExplorerEntriesDeleted}
+              onRenameUnavailable={onFileExplorerRenameUnavailable}
+              dirtyProjectDocumentRelativePaths={
+                fileExplorerDirtyProjectDocumentRelativePaths
+              }
+              onMoveResultMessage={onFileExplorerMoveResultMessage}
+              onActivateDocument={onActivateProjectDocument}
+            />
           }
-          renameEntryRequest={fileExplorerRenameEntryRequest}
-          onRenameEntryRequestHandled={
-            onFileExplorerRenameEntryRequestHandled
-          }
-          refreshDirectoriesRequest={fileExplorerRefreshDirectoriesRequest}
-          onRefreshDirectoriesRequestHandled={
-            onFileExplorerRefreshDirectoriesRequestHandled
-          }
-          revealRequest={fileExplorerRevealRequest}
-          onRevealRequestHandled={onFileExplorerRevealRequestHandled}
-          isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
-          onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
-          onProjectDocumentsMoved={onFileExplorerProjectDocumentsMoved}
-          onEntriesDeleted={onFileExplorerEntriesDeleted}
-          onRenameUnavailable={onFileExplorerRenameUnavailable}
-          dirtyProjectDocumentRelativePaths={
-            fileExplorerDirtyProjectDocumentRelativePaths
-          }
-          onMoveResultMessage={onFileExplorerMoveResultMessage}
-          onActivateDocument={onActivateProjectDocument}
         />
       );
     case "search":

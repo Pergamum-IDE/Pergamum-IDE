@@ -141,9 +141,13 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
       expect(sidebarBlock).toContain("{!layout.sidebar.collapsed ? (");
       expect(sidebarBlock).toContain("<WorkspaceSidebar");
       // Sidebar visibility must not depend on tabs / active editor / Welcome.
+      // (Passing an active-document-derived VALUE as a prop is fine — e.g.
+      // #352's `activeOutlineDocumentKey={activeDocumentKey}`; a rendering
+      // CONDITION on it is not.)
       expect(sidebarBlock).not.toContain("shouldShowWelcome");
       expect(sidebarBlock).not.toContain("shouldShowFullScreenWelcome");
-      expect(sidebarBlock).not.toContain("activeDocument");
+      expect(sidebarBlock).not.toContain("activeDocument ?");
+      expect(sidebarBlock).not.toContain("activeDocument &&");
     });
 
     it("passes a null active-document highlight (clears the highlight) instead of hiding File Explorer", () => {
