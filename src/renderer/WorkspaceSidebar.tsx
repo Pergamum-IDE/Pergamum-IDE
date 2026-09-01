@@ -6,7 +6,8 @@ import {
   FileExplorer,
   type FileExplorerCreateEntryRequest,
   type FileExplorerRefreshDirectoriesRequest,
-  type FileExplorerRenameEntryRequest
+  type FileExplorerRenameEntryRequest,
+  type FileExplorerRevealRequest
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
@@ -25,11 +26,15 @@ interface WorkspaceSidebarProps {
   /** #344: re-list project directories after a Recovery restore added files
    *  outside the File Explorer's own flows. Consumed once per token. */
   fileExplorerRefreshDirectoriesRequest?: FileExplorerRefreshDirectoriesRequest | null;
+  /** #355: an explicit "Select in File Explorer" request from a document tab.
+   *  Consumed once per token. */
+  fileExplorerRevealRequest?: FileExplorerRevealRequest | null;
   translate: Translate;
   onActivateProjectDocument: (relativePath: string) => void;
   onFileExplorerCreateEntryRequestHandled: () => void;
   onFileExplorerRenameEntryRequestHandled?: () => void;
   onFileExplorerRefreshDirectoriesRequestHandled?: () => void;
+  onFileExplorerRevealRequestHandled?: () => void;
   isFileExplorerProjectDocumentDirty?: (relativePath: string) => boolean;
   onFileExplorerProjectDocumentRenamed?: (
     oldRelativePath: string,
@@ -66,11 +71,13 @@ export function WorkspaceSidebar({
   fileExplorerCreateEntryRequest,
   fileExplorerRenameEntryRequest = null,
   fileExplorerRefreshDirectoriesRequest = null,
+  fileExplorerRevealRequest = null,
   translate,
   onActivateProjectDocument,
   onFileExplorerCreateEntryRequestHandled,
   onFileExplorerRenameEntryRequestHandled,
   onFileExplorerRefreshDirectoriesRequestHandled,
+  onFileExplorerRevealRequestHandled,
   isFileExplorerProjectDocumentDirty,
   onFileExplorerProjectDocumentRenamed,
   onFileExplorerProjectDocumentsMoved,
@@ -104,6 +111,8 @@ export function WorkspaceSidebar({
           onRefreshDirectoriesRequestHandled={
             onFileExplorerRefreshDirectoriesRequestHandled
           }
+          revealRequest={fileExplorerRevealRequest}
+          onRevealRequestHandled={onFileExplorerRevealRequestHandled}
           isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
           onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
           onProjectDocumentsMoved={onFileExplorerProjectDocumentsMoved}

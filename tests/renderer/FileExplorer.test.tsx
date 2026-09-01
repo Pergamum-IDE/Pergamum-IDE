@@ -18,7 +18,8 @@ import {
   resolveFileExplorerReloadTargets,
   scrollFileExplorerActiveDocumentIntoView,
   type FileExplorerRefreshDirectoriesRequest,
-  type FileExplorerRenameEntryRequest
+  type FileExplorerRenameEntryRequest,
+  type FileExplorerRevealRequest
 } from "../../src/renderer/FileExplorer";
 
 const translate: Translate = (key) => key;
@@ -900,9 +901,11 @@ describe("FileExplorer active project document reveal (#309)", () => {
   interface RevealHarness {
     listFileExplorerChildren: ReturnType<typeof vi.fn>;
     createFileExplorerMarkdownFile: ReturnType<typeof vi.fn>;
+    onRevealRequestHandled: ReturnType<typeof vi.fn>;
     rerender: (next: {
       project?: PergamumProject | null;
       highlightedRelativePath?: string | null;
+      revealRequest?: FileExplorerRevealRequest | null;
     }) => void;
   }
 
@@ -912,6 +915,7 @@ describe("FileExplorer active project document reveal (#309)", () => {
     ) => Promise<ListFileExplorerChildrenResult>;
     project?: PergamumProject | null;
     highlightedRelativePath?: string | null;
+    revealRequest?: FileExplorerRevealRequest | null;
     createFileExplorerMarkdownFile?: ReturnType<typeof vi.fn>;
   }): RevealHarness {
     const listFileExplorerChildren = vi.fn(
@@ -950,6 +954,9 @@ describe("FileExplorer active project document reveal (#309)", () => {
       options?.project === undefined ? project : options.project;
     let currentHighlight: string | null =
       options?.highlightedRelativePath ?? null;
+    let currentRevealRequest: FileExplorerRevealRequest | null =
+      options?.revealRequest ?? null;
+    const onRevealRequestHandled = vi.fn();
 
     const paint = (): void => {
       act(() => {
@@ -957,6 +964,8 @@ describe("FileExplorer active project document reveal (#309)", () => {
           React.createElement(FileExplorer, {
             project: currentProject,
             highlightedRelativePath: currentHighlight,
+            revealRequest: currentRevealRequest,
+            onRevealRequestHandled,
             translate,
             onActivateDocument: vi.fn()
           })
@@ -969,12 +978,16 @@ describe("FileExplorer active project document reveal (#309)", () => {
     return {
       listFileExplorerChildren,
       createFileExplorerMarkdownFile,
+      onRevealRequestHandled,
       rerender: (next) => {
         if ("project" in next) {
           currentProject = next.project ?? null;
         }
         if ("highlightedRelativePath" in next) {
           currentHighlight = next.highlightedRelativePath ?? null;
+        }
+        if ("revealRequest" in next) {
+          currentRevealRequest = next.revealRequest ?? null;
         }
         paint();
       }
@@ -1283,6 +1296,171 @@ describe("FileExplorer active project document reveal (#309)", () => {
       "Drafts",
       "chapter-02"
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // #355: passive follow is one-shot per active document; explicit reveal is
+  // unconditional.
+  // ---------------------------------------------------------------------------
+
+  const DEEP = "Drafts/Chapter1/scene-03.md";
+
+  function isRendered(relativePath: string): boolean {
+    return (
+      container!.querySelector(
+        `[data-file-explorer-entry-path="${relativePath}"]`
+      ) !== null
+    );
+  }
+
+  it("auto-reveals a deep active document once, then lets the user collapse an ancestor and keeps it collapsed", async () => {
+    renderReveal({ highlightedRelativePath: DEEP });
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(true);
+
+    // User collapses the inner folder.
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settleReveal();
+
+    expect(entryButton("Drafts/Chapter1").getAttribute("aria-expanded")).toBe(
+      "false"
+    );
+    expect(isRendered(DEEP)).toBe(false);
+  });
+
+  it("does not re-open a user-collapsed ancestor on a re-render with the same active document", async () => {
+    const { rerender } = renderReveal({ highlightedRelativePath: DEEP });
+    await settleReveal();
+
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(false);
+
+    rerender({ highlightedRelativePath: DEEP });
+    await settleReveal();
+
+    expect(entryButton("Drafts/Chapter1").getAttribute("aria-expanded")).toBe(
+      "false"
+    );
+    expect(isRendered(DEEP)).toBe(false);
+  });
+
+  it("reveals a different active document once, without touching an unrelated collapsed folder", async () => {
+    const { rerender } = renderReveal({ highlightedRelativePath: DEEP });
+    await settleReveal();
+
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(false);
+
+    rerender({ highlightedRelativePath: "Drafts/outline.md" });
+    await settleReveal();
+
+    expect(
+      entryButton("Drafts/outline.md").getAttribute("aria-current")
+    ).toBe("page");
+    // the inner folder the user collapsed for the previous doc stays collapsed
+    expect(entryButton("Drafts/Chapter1").getAttribute("aria-expanded")).toBe(
+      "false"
+    );
+  });
+
+  it("re-arms the passive reveal after a project switch", async () => {
+    const switched: PergamumProject = {
+      ...project,
+      rootPath: "C:\\Other",
+      activeProjectFilePath: "C:\\Other\\Other.pergamum",
+      name: "Other"
+    };
+    const { rerender } = renderReveal({ highlightedRelativePath: DEEP });
+    await settleReveal();
+
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(false);
+
+    rerender({ project: switched, highlightedRelativePath: DEEP });
+    await settleReveal();
+
+    // fresh project → the one-shot ref was cleared → the doc reveals again
+    expect(isRendered(DEEP)).toBe(true);
+  });
+
+  it("an explicit reveal request expands a user-collapsed ancestor chain and selects the row", async () => {
+    const { rerender, onRevealRequestHandled } = renderReveal({
+      highlightedRelativePath: DEEP
+    });
+    await settleReveal();
+
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(false);
+
+    rerender({ revealRequest: { relativePath: DEEP, token: 1 } });
+    await settleReveal();
+
+    expect(entryButton("Drafts/Chapter1").getAttribute("aria-expanded")).toBe(
+      "true"
+    );
+    expect(isRendered(DEEP)).toBe(true);
+    expect(entryButton(DEEP).dataset.selected).toBe("true");
+    expect(entryButton(DEEP).dataset.fileExplorerPrimary).toBe("true");
+    expect(onRevealRequestHandled).toHaveBeenCalled();
+  });
+
+  it("consumes an explicit reveal request once per token", async () => {
+    const { rerender } = renderReveal({ highlightedRelativePath: DEEP });
+    await settleReveal();
+
+    rerender({ revealRequest: { relativePath: DEEP, token: 7 } });
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(true);
+
+    // user collapses again; the SAME token must not re-reveal
+    act(() => entryButton("Drafts/Chapter1").click());
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(false);
+
+    rerender({ revealRequest: { relativePath: DEEP, token: 7 } });
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(false);
+
+    // a new token re-reveals
+    rerender({ revealRequest: { relativePath: DEEP, token: 8 } });
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(true);
+  });
+
+  it("an explicit reveal request scrolls the target row into view (after lazy expansion)", async () => {
+    const scrollIntoView = vi
+      .spyOn(window.HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => undefined);
+
+    const { rerender } = renderReveal({ highlightedRelativePath: null });
+    await settleReveal();
+
+    rerender({ revealRequest: { relativePath: DEEP, token: 1 } });
+    await settleReveal();
+
+    expect(isRendered(DEEP)).toBe(true);
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("an explicit reveal request scrolls an already-visible row into view", async () => {
+    const scrollIntoView = vi
+      .spyOn(window.HTMLElement.prototype, "scrollIntoView")
+      .mockImplementation(() => undefined);
+
+    const { rerender } = renderReveal({ highlightedRelativePath: DEEP });
+    await settleReveal();
+    expect(isRendered(DEEP)).toBe(true);
+    scrollIntoView.mockClear();
+
+    rerender({ revealRequest: { relativePath: DEEP, token: 1 } });
+    await settleReveal();
+
+    expect(entryButton(DEEP).dataset.selected).toBe("true");
+    expect(scrollIntoView).toHaveBeenCalled();
   });
 });
 

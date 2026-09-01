@@ -306,6 +306,7 @@ import {
   updateActiveOpenDocument,
   updateActiveOpenEditor,
   updateOpenEditor,
+  type DocumentTab,
   type OpenDocumentsState
 } from "./openDocuments";
 import {
@@ -376,7 +377,8 @@ import {
 import type {
   FileExplorerCreateEntryRequest,
   FileExplorerRefreshDirectoriesRequest,
-  FileExplorerRenameEntryRequest
+  FileExplorerRenameEntryRequest,
+  FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import {
@@ -784,6 +786,11 @@ export function App(): JSX.Element {
     fileExplorerRefreshDirectoriesRequest,
     setFileExplorerRefreshDirectoriesRequest
   ] = useState<FileExplorerRefreshDirectoriesRequest | null>(null);
+  // #355: "Select in File Explorer" from a document tab. Cleared to null once
+  // the File Explorer consumes it so a sidebar remount cannot replay it.
+  const fileExplorerRevealRequestSeqRef = useRef(0);
+  const [fileExplorerRevealRequest, setFileExplorerRevealRequest] =
+    useState<FileExplorerRevealRequest | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<GlossaryOccurrenceRange | null>(null);
   /**
@@ -2236,6 +2243,40 @@ export function App(): JSX.Element {
     : openDocumentsState.activeDocumentId
       ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
       : undefined;
+
+  // #355: "Select in File Explorer" from a document tab context menu. Only a
+  // project-document tab has a project-relative path to reveal; external,
+  // untitled, and glossary tabs are disabled at the menu. It does not change
+  // the active tab — it only shows the File Explorer and asks it to expand /
+  // select / scroll to the file.
+  const canSelectTabInFileExplorer = (tab: DocumentTab): boolean =>
+    tab.id.kind === "projectDocument";
+
+  const handleSelectTabInFileExplorer = (tab: DocumentTab): void => {
+    if (tab.id.kind !== "projectDocument") {
+      return;
+    }
+    setSidebarMode("files");
+    setLayout((current) =>
+      current.sidebar.collapsed
+        ? {
+            ...current,
+            sidebar: {
+              collapsed: false,
+              width: clampSidebarWidth(
+                current.sidebar.width,
+                mainAreaRef.current?.clientWidth
+              )
+            }
+          }
+        : current
+    );
+    fileExplorerRevealRequestSeqRef.current += 1;
+    setFileExplorerRevealRequest({
+      relativePath: tab.id.relativePath,
+      token: fileExplorerRevealRequestSeqRef.current
+    });
+  };
   if (!editorNavigationRef.current) {
     editorNavigationRef.current = new EditorNavigation({
       resolveEditor,
@@ -6465,6 +6506,7 @@ export function App(): JSX.Element {
                       fileExplorerRefreshDirectoriesRequest={
                         fileExplorerRefreshDirectoriesRequest
                       }
+                      fileExplorerRevealRequest={fileExplorerRevealRequest}
                       translate={translate}
                       onActivateProjectDocument={(relativePath) => {
                         void activateProjectDocument(relativePath);
@@ -6477,6 +6519,9 @@ export function App(): JSX.Element {
                       }}
                       onFileExplorerRefreshDirectoriesRequestHandled={() => {
                         setFileExplorerRefreshDirectoriesRequest(null);
+                      }}
+                      onFileExplorerRevealRequestHandled={() => {
+                        setFileExplorerRevealRequest(null);
                       }}
                       isFileExplorerProjectDocumentDirty={
                         isFileExplorerProjectDocumentDirty
@@ -6543,6 +6588,8 @@ export function App(): JSX.Element {
                   }
                   onSelectSpecialTab={activateSpecialTab}
                   onCloseSpecialTab={closeSpecialTab}
+                  onSelectInFileExplorer={handleSelectTabInFileExplorer}
+                  canSelectInFileExplorer={canSelectTabInFileExplorer}
                   isUtilityWindowOpen={layout.utilityWindow.open}
                   onToggleUtilityWindow={() =>
                     executeUiCommand(utilityWindowCommandIds.toggle, {
