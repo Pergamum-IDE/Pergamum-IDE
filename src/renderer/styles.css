@@ -1617,9 +1617,8 @@ label.settingsItemHeader {
   cursor: default;
 }
 
-/* #355 v1 — minimal one-item document-tab context menu ("Select in File
-   Explorer"). The full tab context menu is #354; these styles mirror the
-   File Explorer menu so #354 can restyle from a clean, dedicated class. */
+/* #354 — the editor tab context menu (Close batch / Select in File Explorer /
+   Rename / Save As / Copy path). Mirrors the File Explorer context menu. */
 .documentTabContextMenuBackdrop {
   position: fixed;
   inset: 0;
@@ -1659,6 +1658,26 @@ label.settingsItemHeader {
 .documentTabContextMenuItem:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.documentTabContextMenuSeparator {
+  block-size: 1px;
+  margin-block: 4px;
+  margin-inline: 6px;
+  background: var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
+}
+
+/* #354 — horizontal tab reorder drag affordances. */
+.documentTab[data-tab-dragging="true"] {
+  opacity: 0.5;
+}
+
+.documentTab[data-tab-drop-indicator="before"] {
+  box-shadow: inset 2px 0 0 0 var(--focus-ring, #3b82f6);
+}
+
+.documentTab[data-tab-drop-indicator="after"] {
+  box-shadow: inset -2px 0 0 0 var(--focus-ring, #3b82f6);
 }
 
 .moveDestinationDialogDescription {

@@ -91,6 +91,16 @@ export interface EditorCloseFlowDeps {
 }
 
 /**
+ * #354: the outcome of one close attempt, so a batch close
+ * (Close Other / Left / Right Tabs) can stop the moment the user cancels.
+ *   - `"closed"`     — the target was (or will be) closed.
+ *   - `"cancelled"`  — a dirty confirmation was cancelled / dismissed, or its
+ *                      save did not complete; nothing was closed.
+ *   - `"noTarget"`   — there was no editor to close.
+ */
+export type EditorCloseFlowOutcome = "closed" | "cancelled" | "noTarget";
+
+/**
  * Resolves the close target (#184: explicit `editorId`, or the active
  * editor when omitted) and, for a dirty target, awaits the dirty-close choice
  * dialog before calling `onClose`. A concurrent close request that lands
@@ -98,22 +108,25 @@ export interface EditorCloseFlowDeps {
  * `AppDialogError("dialogAlreadyOpen")` (#182 D-14) — absorbed here as a
  * silent no-op: no additional close, no rethrow, the existing dialog stays
  * open.
+ *
+ * #354: returns an {@link EditorCloseFlowOutcome}. Existing callers may
+ * ignore it.
  */
 export async function runEditorCloseFlow(
   editorId: EditorId | undefined,
   deps: EditorCloseFlowDeps
-): Promise<void> {
+): Promise<EditorCloseFlowOutcome> {
   const targetId = resolveCloseTargetEditorId(deps.state, editorId);
 
   if (!targetId) {
-    return;
+    return "noTarget";
   }
 
   if (isOpenDocumentDirty(deps.state, targetId)) {
     const targetOpenDocument = findOpenDocument(deps.state, targetId);
 
     if (!targetOpenDocument) {
-      return;
+      return "noTarget";
     }
 
     let result: AppChoiceDialogResult;
@@ -127,30 +140,31 @@ export async function runEditorCloseFlow(
       );
     } catch (error) {
       if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
-        return;
+        return "cancelled";
       }
 
       throw error;
     }
 
     if (result.kind === "dismissed") {
-      return;
+      return "cancelled";
     }
 
     switch (result.id) {
       case dirtyCloseChoiceIds.saveAndClose:
         if ((await deps.saveDirtyEditorBeforeClose(targetId)) !== "saved") {
-          return;
+          return "cancelled";
         }
         break;
       case dirtyCloseChoiceIds.discardAndClose:
         break;
       case dirtyCloseChoiceIds.cancel:
-        return;
+        return "cancelled";
       default:
-        return;
+        return "cancelled";
     }
   }
 
   deps.onClose(targetId);
+  return "closed";
 }

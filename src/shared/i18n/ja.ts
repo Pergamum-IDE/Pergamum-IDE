@@ -147,6 +147,9 @@ export const jaTranslations = {
   "dialog.icon.error": "エラー",
   "dialog.icon.info": "情報",
   "dialog.icon.warning": "警告",
+  "dialog.clipboardCopyFailed.title": "コピーできませんでした",
+  "dialog.clipboardCopyFailed.message":
+    "クリップボードへのコピーに失敗しました。",
   "dialog.about.appIconAlt": "Pergamum アプリアイコン",
   "dialog.about.copyTechnicalInfo": "技術情報をコピー",
   "dialog.about.copyTechnicalInfoCopied": "コピーしました",
@@ -543,6 +546,9 @@ export const jaTranslations = {
   "menu.zoomOut": "縮小",
   "notification.dismiss": "通知を閉じる",
   "notification.externalMarkdownOpened": "プロジェクト外のファイルを開きました",
+  "notification.tabAbsolutePathCopied": "絶対パスをコピーしました",
+  "notification.tabRelativePathCopied": "相対パスをコピーしました",
+  "notification.tabFileNameCopied": "ファイル名をコピーしました",
   "notification.recoveryCandidatesReminder":
     "{count} 件の未解決の復旧候補が残っています",
   "notification.sessionRestore.editorSkipped":
@@ -690,6 +696,24 @@ export const jaTranslations = {
   "status.withDetail": "{status}（{detail}）",
   "tabs.closeTab": "タブを閉じる",
   "tabs.contextMenu.label": "タブ操作",
+  "tabs.contextMenu.close": "タブを閉じる",
+  "tabs.contextMenu.closeOthers": "このタブ以外を閉じる",
+  "tabs.contextMenu.closeToLeft": "左側のタブを閉じる",
+  "tabs.contextMenu.closeToRight": "右側のタブを閉じる",
+  "tabs.contextMenu.renameFile": "タブのファイル名を変更する...",
+  "tabs.contextMenu.saveAs": "タブを別名で保存する...",
+  "tabs.contextMenu.copyAbsolutePath": "タブの絶対パス名をコピーする",
+  "tabs.contextMenu.copyRelativePath": "タブの相対パス名をコピーする",
+  "tabs.contextMenu.copyFileName": "タブのファイル名をコピーする",
+  "tabs.contextMenu.disabled.notProjectDocument":
+    "プロジェクト文書のタブでのみ使用できます",
+  "tabs.contextMenu.disabled.dirtyDocument": "変更を保存してから実行してください",
+  "tabs.contextMenu.disabled.readOnlyProject":
+    "読み取り専用プロジェクトでは使用できません",
+  "tabs.contextMenu.disabled.noOtherTabs": "他に開いているタブがありません",
+  "tabs.contextMenu.disabled.noTabsToLeft": "左側にタブがありません",
+  "tabs.contextMenu.disabled.noTabsToRight": "右側にタブがありません",
+  "tabs.contextMenu.disabled.unsupportedForTab": "このタブでは使用できません",
   "tabs.contextMenu.selectInFileExplorer": "ファイルエクスプローラで選択状態にする",
   "tabs.contextMenu.selectInFileExplorer.unavailable":
     "プロジェクト文書のタブでのみ使用できます",
