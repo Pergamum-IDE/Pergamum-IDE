@@ -63,7 +63,22 @@ const REASON_TEXT_KEY: Readonly<Record<string, TranslationKey>> = {
   "permission-denied": "fileOperation.failure.reason.permissionDenied",
   "rename-failed": "fileOperation.failure.reason.executionFailed",
   "source-missing-during-execution":
-    "fileOperation.failure.reason.executionFailed"
+    "fileOperation.failure.reason.sourceUnavailable",
+  // #356: copy plan / execution reasons.
+  "empty-sources": "fileOperation.failure.reason.unknown",
+  "duplicate-source": "fileOperation.failure.reason.duplicateSource",
+  "source-outside-project": "fileOperation.failure.reason.pathOutsideProject",
+  "path-traversal": "fileOperation.failure.reason.invalidPath",
+  "invalid-path": "fileOperation.failure.reason.invalidPath",
+  "source-not-found": "fileOperation.failure.reason.sourceUnavailable",
+  "source-not-file-or-folder":
+    "fileOperation.failure.reason.sourceNotCopyable",
+  "source-contains-symlink": "fileOperation.failure.reason.subtreeUnsafe",
+  "source-contains-protected": "fileOperation.failure.reason.subtreeUnsafe",
+  "ancestor-symlink": "fileOperation.failure.reason.ancestorSymlink",
+  "enumeration-failed": "fileOperation.failure.reason.enumerationFailed",
+  "copy-failed": "fileOperation.failure.reason.copyFailed",
+  "copy-plan-stale": "fileOperation.failure.reason.copyPlanStale"
 };
 
 export function fileOperationFailureReasonTextKey(

@@ -49,6 +49,15 @@ import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
 import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
 import { FileExplorerDeleteDialog } from "./FileExplorerDeleteDialog";
 import {
+  FileExplorerDragDropDialog,
+  type FileExplorerDragDropSourceRow
+} from "./FileExplorerDragDropDialog";
+import { FileExplorerCopyCollisionDialog } from "./FileExplorerCopyCollisionDialog";
+import type {
+  CopyEntriesExecutionResult,
+  FileExplorerCopyPlan
+} from "../shared/projectCopy";
+import {
   fileExplorerDeleteRejectionReasonKey,
   type FileExplorerDeleteRejection,
   type FileExplorerDeleteTarget
@@ -774,6 +783,17 @@ export function FileExplorer({
   // #328: the pending internal Cut — a snapshot of the File Explorer selection
   // taken at Cut time, moved by the next Paste. Never touches the OS clipboard.
   const [cutState, setCutState] = useState<FileExplorerCutState | null>(null);
+  // #356: an internal COPY buffer — mutually exclusive with the Cut buffer.
+  // Records only the top-level selected source paths; Paste runs the #356
+  // Copy plan/execute. The buffer SURVIVES a successful Paste (repeated Paste
+  // is allowed), and is cleared on project switch or when a Cut replaces it.
+  // Never on the OS clipboard.
+  const [copyState, setCopyState] = useState<FileExplorerCopyState | null>(
+    null
+  );
+  // #356: Ctrl+V / context-menu Paste routes to whichever internal buffer is
+  // active. Reassigned every render so it closes over fresh state.
+  const explorerPasteRouterRef = useRef<() => void>(() => undefined);
   // #329 spike: the in-progress native drag (renderer state is authoritative;
   // the DataTransfer payload is only the gesture carrier) and the row the
   // pointer is currently over.
@@ -781,6 +801,29 @@ export function FileExplorer({
   const [dropTarget, setDropTarget] = useState<{
     readonly path: string;
     readonly valid: boolean;
+  } | null>(null);
+  // #356: after a valid drop, the Move / Copy / Cancel confirmation. Holds the
+  // top-level dragged rows (metadata hydrated by a lightweight lstat IPC) and
+  // the resolved destination folder.
+  const [dndConfirm, setDndConfirm] = useState<{
+    readonly sources: readonly FileExplorerDragDropSourceRow[];
+    readonly destinationFolderRelativePath: string;
+    readonly includesFolder: boolean;
+  } | null>(null);
+  // #356: a copy is running (plan or execute IPC in flight).
+  const [copyInFlight, setCopyInFlight] = useState(false);
+  // #356: a copy plan with at least one auto-renamed row — the dedicated
+  // rename-copy confirmation dialog.
+  const [copyCollisionPlan, setCopyCollisionPlan] =
+    useState<FileExplorerCopyPlan | null>(null);
+  // #356: a copy that was blocked (plan) or partly failed (execute), surfaced
+  // as the shared file-operation failure list modal.
+  const [copyFailure, setCopyFailure] = useState<{
+    readonly status: FileOperationFailureStatus;
+    readonly entries: readonly {
+      readonly reason: string;
+      readonly sourceRelativePath: string | null;
+    }[];
   } | null>(null);
   const loadGenerationRef = useRef(0);
   // #311: the DOM node of the active project document entry (once #309 has
@@ -1015,9 +1058,16 @@ export function FileExplorer({
     setMultiSelection(createEmptyFileExplorerSelection());
     // #328: a pending Cut is scoped to the current project — drop it.
     setCutState(null);
+    // #356: a Copy buffer is likewise project-scoped.
+    setCopyState(null);
     // #329 spike: abandon any in-progress drag on a project switch / remount.
     setDragState(null);
     setDropTarget(null);
+    // #356: drop any in-progress D&D confirmation / copy dialogs.
+    setDndConfirm(null);
+    setCopyCollisionPlan(null);
+    setCopyFailure(null);
+    setCopyInFlight(false);
     // #355: a new project re-arms the passive active-document reveal.
     lastRevealedHighlightRef.current = null;
     pendingRevealScrollRef.current = null;
@@ -1861,14 +1911,50 @@ export function FileExplorer({
     cutState !== null &&
     cutState.sourceRelativePaths.length > 0 &&
     !cutSourceHasDirtyOpenDocument;
-  const pasteDisabledReason: FileExplorerPasteDisabledReason | null =
-    resolveFileExplorerPasteDisabledReason({
-      moveInFlight,
-      hasProject,
-      readOnly,
-      cutSourceCount: cutState?.sourceRelativePaths.length ?? 0,
-      cutHasDirtyOpenDocument: cutSourceHasDirtyOpenDocument
-    });
+  // #356: a source string that resolves to the project root, or a protected /
+  // reserved entry, can never be a Copy source (the backend is authoritative;
+  // this just disables the menu item early).
+  const copySelectionHasProtectedOrRoot = moveSources.relativePaths.some(
+    (relativePath) =>
+      relativePath.length === 0 ||
+      isProtectedFileExplorerRelativePath(relativePath)
+  );
+  const canCopySelection =
+    canMoveSelection && !copySelectionHasProtectedOrRoot;
+  const copySourceHasDirtyOpenDocument = useMemo(() => {
+    if (copyState === null) {
+      return false;
+    }
+    return selectionCoversDirtyOpenDocument(
+      copyState.sourceRelativePaths,
+      dirtyProjectDocumentRelativePaths
+    );
+  }, [copyState, dirtyProjectDocumentRelativePaths]);
+  const canPasteCopy =
+    hasProject &&
+    !readOnly &&
+    !moveInFlight &&
+    !copyInFlight &&
+    copyState !== null &&
+    copyState.sourceRelativePaths.length > 0 &&
+    !copySourceHasDirtyOpenDocument;
+  // #356: Paste is enabled for EITHER internal buffer.
+  const canPaste = canPasteCut || canPasteCopy;
+  const pasteDisabledReason: FileExplorerPasteDisabledReason | null = canPaste
+    ? null
+    : resolveFileExplorerPasteDisabledReason({
+        moveInFlight: moveInFlight || copyInFlight,
+        hasProject,
+        readOnly,
+        cutSourceCount:
+          copyState?.sourceRelativePaths.length ??
+          cutState?.sourceRelativePaths.length ??
+          0,
+        cutHasDirtyOpenDocument:
+          copyState !== null
+            ? copySourceHasDirtyOpenDocument
+            : cutSourceHasDirtyOpenDocument
+      });
   // #328: the pending Cut paths, as a set for the muted-row marker.
   const cutRelativePaths = useMemo(
     () => new Set(cutState?.sourceRelativePaths ?? []),
@@ -1916,6 +2002,8 @@ export function FileExplorer({
       deleteFlow !== null ||
       moveDialogOpen ||
       moveFailure !== null ||
+      dndConfirm !== null ||
+      copyCollisionPlan !== null ||
       createDialogKind !== null ||
       renameDialogTarget !== null
     ) {
@@ -1987,10 +2075,12 @@ export function FileExplorer({
       folderCount: response.result.folderCount
     });
   }, [
+    copyCollisionPlan,
     createDialogKind,
     dirtyProjectDocumentRelativePaths,
     entriesByDirectoryPath,
     deleteFlow,
+    dndConfirm,
     hasProject,
     moveDialogOpen,
     moveFailure,
@@ -2398,6 +2488,8 @@ export function FileExplorer({
       return;
     }
 
+    // #356: Cut and Copy buffers are mutually exclusive.
+    setCopyState(null);
     setCutState({
       sourceRelativePaths: sources.relativePaths,
       createdAt: Date.now()
@@ -2409,6 +2501,53 @@ export function FileExplorer({
     multiSelection.selected,
     readOnly,
     selectionHasDirtyOpenDocument
+  ]);
+
+  // #356: snapshot the current selection as the internal Copy buffer. No
+  // filesystem work — the next Paste runs `planFileExplorerCopyEntries` /
+  // `executeFileExplorerCopyPlan`. Mutually exclusive with the Cut buffer.
+  const performCopy = useCallback(() => {
+    const sources = resolveFileExplorerMoveSources(
+      multiSelection.selected,
+      entriesByDirectoryPath
+    );
+
+    if (
+      !hasProject ||
+      readOnly ||
+      moveInFlight ||
+      copyInFlight ||
+      !sources.canMove ||
+      selectionHasDirtyOpenDocument ||
+      sources.relativePaths.some(
+        (relativePath) =>
+          relativePath.length === 0 ||
+          isProtectedFileExplorerRelativePath(relativePath)
+      )
+    ) {
+      return;
+    }
+
+    setCutState(null);
+    setCopyState({
+      sourceRelativePaths: sources.relativePaths,
+      createdAt: Date.now()
+    });
+    onMoveResultMessage?.(
+      translate("explorer.copy.status.buffered", {
+        count: sources.relativePaths.length
+      })
+    );
+  }, [
+    copyInFlight,
+    entriesByDirectoryPath,
+    hasProject,
+    moveInFlight,
+    multiSelection.selected,
+    onMoveResultMessage,
+    readOnly,
+    selectionHasDirtyOpenDocument,
+    translate
   ]);
 
   // #328: move the pending Cut sources into the folder resolved from the
@@ -2500,6 +2639,9 @@ export function FileExplorer({
       if (
         moveDialogOpen ||
         moveFailure !== null ||
+        dndConfirm !== null ||
+        copyCollisionPlan !== null ||
+        copyFailure !== null ||
         createDialogKind !== null ||
         renameDialogTarget !== null ||
         deleteFlow !== null
@@ -2522,6 +2664,11 @@ export function FileExplorer({
       }
 
       const key = event.key.toLowerCase();
+      if (key === "c") {
+        event.preventDefault();
+        performCopy();
+        return;
+      }
       if (key === "x") {
         event.preventDefault();
         performCut();
@@ -2529,17 +2676,20 @@ export function FileExplorer({
       }
       if (key === "v") {
         event.preventDefault();
-        void performPaste();
+        explorerPasteRouterRef.current();
       }
     },
     [
       beginDelete,
+      copyCollisionPlan,
+      copyFailure,
       createDialogKind,
       deleteFlow,
+      dndConfirm,
       moveDialogOpen,
       moveFailure,
+      performCopy,
       performCut,
-      performPaste,
       renameDialogTarget
     ]
   );
@@ -2610,6 +2760,264 @@ export function FileExplorer({
       translate
     ]
   );
+
+  // #356: fill the D&D confirmation table's size / modified columns with a
+  // lightweight top-level lstat (never reads content, never recurses).
+  const hydrateDndSourceStats = useCallback(
+    async (sourceRelativePaths: readonly string[]) => {
+      let response: Awaited<
+        ReturnType<typeof window.pergamum.projects.statFileExplorerEntries>
+      >;
+      try {
+        response = await window.pergamum.projects.statFileExplorerEntries({
+          relativePaths: [...sourceRelativePaths]
+        });
+      } catch {
+        return;
+      }
+      if (response.kind !== "ok") {
+        return;
+      }
+      const statByPath = new Map(
+        response.entries.map((entry) => [entry.relativePath, entry])
+      );
+      setDndConfirm((current) => {
+        if (current === null) {
+          return current;
+        }
+        return {
+          ...current,
+          sources: current.sources.map((row) => {
+            const stat = statByPath.get(row.relativePath);
+            return stat
+              ? {
+                  ...row,
+                  kind: stat.kind === "folder" ? "folder" : row.kind,
+                  sizeBytes: stat.sizeBytes,
+                  modifiedAt: stat.modifiedAt
+                }
+              : row;
+          })
+        };
+      });
+    },
+    []
+  );
+
+  // #356: refresh the tree after a copy — the DESTINATION directory only
+  // (sources are untouched). Never treats a copy as a relocation.
+  const applyCopyResponse = useCallback(
+    (
+      result: CopyEntriesExecutionResult,
+      destinationFolderRelativePath: string
+    ) => {
+      const copied = result.results.filter(
+        (entry): entry is Extract<typeof entry, { status: "copied" }> =>
+          entry.status === "copied"
+      );
+      const failed = result.results.filter(
+        (entry): entry is Extract<typeof entry, { status: "failed" }> =>
+          entry.status === "failed"
+      );
+
+      const generation = loadGenerationRef.current + 1;
+      loadGenerationRef.current = generation;
+      void loadDirectoryForGeneration(
+        destinationFolderRelativePath === ""
+          ? null
+          : destinationFolderRelativePath,
+        generation
+      );
+
+      if (copied.length > 0) {
+        const newPaths = copied.map((entry) => entry.destinationRelativePath);
+        setMultiSelection({
+          selected: new Set(newPaths),
+          anchor: newPaths[newPaths.length - 1] ?? null
+        });
+        setSelection({
+          kind: "entry",
+          relativePath: newPaths[newPaths.length - 1]
+        });
+      }
+
+      const destinationLabel =
+        destinationFolderRelativePath === ""
+          ? translate("explorer.copy.collision.destinationProjectRoot")
+          : destinationFolderRelativePath;
+
+      if (result.ok) {
+        onMoveResultMessage?.(
+          translate("explorer.copy.status.succeeded", {
+            count: copied.length,
+            destination: destinationLabel
+          })
+        );
+      } else if (copied.length === 0) {
+        onMoveResultMessage?.(
+          translate("explorer.copy.status.allFailed", { failed: failed.length })
+        );
+      } else {
+        onMoveResultMessage?.(
+          translate("explorer.copy.status.partiallyFailed", {
+            copied: copied.length,
+            failed: failed.length
+          })
+        );
+      }
+
+      if (failed.length > 0) {
+        setCopyFailure({
+          status: copied.length > 0 ? "partiallyFailed" : "failed",
+          entries: failed.map((entry) => ({
+            reason: entry.reason,
+            sourceRelativePath: entry.sourceRelativePath
+          }))
+        });
+      }
+    },
+    [loadDirectoryForGeneration, onMoveResultMessage, translate]
+  );
+
+  // #356: execute a stored copy plan by id, then refresh the tree.
+  const runCopyPlan = useCallback(
+    async (
+      plan: FileExplorerCopyPlan
+    ): Promise<CopyEntriesExecutionResult | null> => {
+      setCopyInFlight(true);
+      let response: Awaited<
+        ReturnType<typeof window.pergamum.projects.executeFileExplorerCopyPlan>
+      >;
+      try {
+        response = await window.pergamum.projects.executeFileExplorerCopyPlan({
+          planId: plan.planId,
+          dirtyProjectDocumentRelativePaths: [
+            ...dirtyProjectDocumentRelativePaths
+          ]
+        });
+      } catch {
+        setCopyInFlight(false);
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return null;
+      }
+      setCopyInFlight(false);
+
+      if (response.kind !== "completed") {
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return null;
+      }
+
+      applyCopyResponse(response.result, plan.destinationFolderRelativePath);
+      return response.result;
+    },
+    [
+      applyCopyResponse,
+      dirtyProjectDocumentRelativePaths,
+      onMoveResultMessage,
+      translate
+    ]
+  );
+
+  // #356: the "Copy" choice from the D&D confirmation dialog. Runs the plan;
+  // executes directly when nothing auto-renamed, otherwise opens the
+  // rename-copy confirmation dialog.
+  const performDndCopy = useCallback(
+    async (
+      sourceRelativePaths: readonly string[],
+      destinationFolderRelativePath: string
+    ) => {
+      const sourcesHaveDirtyOpenDocument = selectionCoversDirtyOpenDocument(
+        sourceRelativePaths,
+        dirtyProjectDocumentRelativePaths
+      );
+      if (
+        !hasProject ||
+        readOnly ||
+        moveInFlight ||
+        copyInFlight ||
+        sourceRelativePaths.length === 0 ||
+        sourcesHaveDirtyOpenDocument
+      ) {
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return;
+      }
+
+      setCopyInFlight(true);
+      let planResponse: Awaited<
+        ReturnType<typeof window.pergamum.projects.planFileExplorerCopyEntries>
+      >;
+      try {
+        planResponse =
+          await window.pergamum.projects.planFileExplorerCopyEntries({
+            sourceRelativePaths: [...sourceRelativePaths],
+            destinationFolderRelativePath,
+            dirtyProjectDocumentRelativePaths: [
+              ...dirtyProjectDocumentRelativePaths
+            ]
+          });
+      } catch {
+        setCopyInFlight(false);
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return;
+      }
+      setCopyInFlight(false);
+
+      if (planResponse.kind !== "planned") {
+        onMoveResultMessage?.(translate("explorer.copy.status.unavailable"));
+        return;
+      }
+
+      const plan = planResponse.plan;
+
+      if (plan.hasBlockingIssues) {
+        setCopyFailure({
+          status: "rejected",
+          entries:
+            plan.blockingReason !== undefined
+              ? [{ reason: plan.blockingReason, sourceRelativePath: null }]
+              : plan.rows
+                  .filter((row) => row.status === "blocked")
+                  .map((row) => ({
+                    reason: row.reason ?? "copy-failed",
+                    sourceRelativePath: row.sourceRelativePath
+                  }))
+        });
+        return;
+      }
+
+      if (!plan.hasCollisions) {
+        await runCopyPlan(plan);
+        return;
+      }
+
+      setCopyCollisionPlan(plan);
+    },
+    [
+      copyInFlight,
+      dirtyProjectDocumentRelativePaths,
+      hasProject,
+      moveInFlight,
+      onMoveResultMessage,
+      readOnly,
+      runCopyPlan,
+      translate
+    ]
+  );
+
+  // #356: Paste routes to the active internal buffer. A Copy buffer runs the
+  // Copy plan/execute path into the resolved Paste destination (same-folder
+  // duplicate IS allowed here, unlike D&D); otherwise the existing Cut/Move
+  // Paste. Reassigned every render so it always sees fresh state.
+  explorerPasteRouterRef.current = () => {
+    if (copyState !== null && copyState.sourceRelativePaths.length > 0) {
+      void performDndCopy(
+        copyState.sourceRelativePaths,
+        resolveFileExplorerPasteDestination(selection, entriesByDirectoryPath)
+      );
+      return;
+    }
+    void performPaste();
+  };
 
   const handleEntryDragStart = useCallback(
     (event: ReactDragEvent<HTMLElement>, entry: FileExplorerEntry) => {
@@ -2758,9 +3166,43 @@ export function FileExplorer({
         return; // invalid target — no-op, no status noise
       }
 
-      void performDndMove(activeDrag.sourceRelativePaths, destination);
+      // #356: the drop no longer executes Move immediately — open the
+      // Move / Copy / Cancel confirmation first. Rows come from the tree
+      // (name / kind), the size / modified columns are hydrated by a
+      // lightweight lstat IPC.
+      const sourceRows: FileExplorerDragDropSourceRow[] =
+        activeDrag.sourceRelativePaths.map((relativePath) => {
+          const treeEntry = fileExplorerEntryByRelativePath(
+            entriesByDirectoryPath,
+            relativePath
+          );
+          return {
+            relativePath,
+            name:
+              treeEntry?.name ??
+              relativePath.split("/").pop() ??
+              relativePath,
+            parentRelativePath:
+              parentDirectoryRelativePath(relativePath) ?? "",
+            kind: treeEntry?.kind === "folder" ? "folder" : "file",
+            sizeBytes: null,
+            modifiedAt: null
+          };
+        });
+
+      setDndConfirm({
+        sources: sourceRows,
+        destinationFolderRelativePath: destination,
+        includesFolder: sourceRows.some((row) => row.kind === "folder")
+      });
+      void hydrateDndSourceStats(activeDrag.sourceRelativePaths);
     },
-    [dragState, dropTargetForEntry, performDndMove]
+    [
+      dragState,
+      dropTargetForEntry,
+      entriesByDirectoryPath,
+      hydrateDndSourceStats
+    ]
   );
 
   return (
@@ -2904,6 +3346,36 @@ export function FileExplorer({
               type="button"
               role="menuitem"
               className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="copy"
+              data-file-explorer-copy-disabled-reason={
+                canCopySelection
+                  ? undefined
+                  : (moveDisabledReason ?? "protected-or-root")
+              }
+              disabled={!canCopySelection}
+              aria-disabled={!canCopySelection}
+              title={
+                canCopySelection
+                  ? undefined
+                  : translate(
+                      moveDisabledReason
+                        ? MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
+                        : "explorer.copy.disabled.protectedSelected"
+                    )
+              }
+              onClick={() => {
+                closeContextMenu();
+                if (canCopySelection) {
+                  performCopy();
+                }
+              }}
+            >
+              {translate("explorer.contextMenu.copy")}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
               data-file-explorer-context-command="cut"
               data-file-explorer-cut-disabled-reason={
                 moveDisabledReason ?? undefined
@@ -2934,8 +3406,8 @@ export function FileExplorer({
               data-file-explorer-paste-disabled-reason={
                 pasteDisabledReason ?? undefined
               }
-              disabled={!canPasteCut}
-              aria-disabled={!canPasteCut}
+              disabled={!canPaste}
+              aria-disabled={!canPaste}
               title={
                 pasteDisabledReason
                   ? translate(
@@ -2945,8 +3417,8 @@ export function FileExplorer({
               }
               onClick={() => {
                 closeContextMenu();
-                if (canPasteCut) {
-                  void performPaste();
+                if (canPaste) {
+                  explorerPasteRouterRef.current();
                 }
               }}
             >
@@ -3062,6 +3534,78 @@ export function FileExplorer({
           onClose={() => setMoveFailure(null)}
         />
       ) : null}
+      {dndConfirm !== null ? (
+        <FileExplorerDragDropDialog
+          sources={dndConfirm.sources}
+          destinationFolderRelativePath={
+            dndConfirm.destinationFolderRelativePath
+          }
+          includesFolder={dndConfirm.includesFolder}
+          busy={moveInFlight || copyInFlight}
+          translate={translate}
+          opener={null}
+          onMove={() => {
+            const { sources, destinationFolderRelativePath } = dndConfirm;
+            setDndConfirm(null);
+            void performDndMove(
+              sources.map((row) => row.relativePath),
+              destinationFolderRelativePath
+            );
+          }}
+          onCopy={() => {
+            const { sources, destinationFolderRelativePath } = dndConfirm;
+            setDndConfirm(null);
+            void performDndCopy(
+              sources.map((row) => row.relativePath),
+              destinationFolderRelativePath
+            );
+          }}
+          onCancel={() => setDndConfirm(null)}
+        />
+      ) : null}
+      {copyCollisionPlan !== null ? (
+        <FileExplorerCopyCollisionDialog
+          plan={copyCollisionPlan}
+          translate={translate}
+          opener={null}
+          executePlan={() => runCopyPlan(copyCollisionPlan)}
+          onDismiss={() => setCopyCollisionPlan(null)}
+        />
+      ) : null}
+      {copyFailure !== null ? (
+        <FileOperationFailureDialog
+          title={translate(
+            copyFailure.status === "rejected"
+              ? "fileOperation.copy.blocked.title"
+              : "fileOperation.copy.failed.title"
+          )}
+          intro={translate(
+            copyFailure.status === "rejected"
+              ? "fileOperation.copy.blocked.intro"
+              : "fileOperation.copy.failed.intro"
+          )}
+          items={copyFailure.entries.map((entry) => {
+            const kind: FileOperationFailureItemKind =
+              entry.sourceRelativePath === null
+                ? "item"
+                : (fileExplorerEntryByRelativePath(
+                      entriesByDirectoryPath,
+                      entry.sourceRelativePath
+                    )?.kind ?? "item");
+
+            return {
+              kind,
+              displayName: entry.sourceRelativePath,
+              reasonText: translate(
+                fileOperationFailureReasonTextKey(entry.reason)
+              )
+            };
+          })}
+          translate={translate}
+          opener={null}
+          onClose={() => setCopyFailure(null)}
+        />
+      ) : null}
       {createDialogKind !== null ? (
         <NameInputDialog
           key={createDialogKind}
@@ -3171,6 +3715,16 @@ const EMPTY_STRING_LIST: readonly string[] = [];
  * project (cleared on remount / project switch).
  */
 interface FileExplorerCutState {
+  readonly sourceRelativePaths: readonly string[];
+  readonly createdAt: number;
+}
+
+/**
+ * #356: the internal COPY buffer — the same snapshot shape as the Cut buffer,
+ * but a Paste duplicates (via the #356 Copy plan/execute) instead of moving.
+ * Mutually exclusive with {@link FileExplorerCutState}.
+ */
+interface FileExplorerCopyState {
   readonly sourceRelativePaths: readonly string[];
   readonly createdAt: number;
 }

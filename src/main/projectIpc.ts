@@ -39,6 +39,12 @@ import {
   type RecordRecentProjectInput,
   type MoveFileExplorerEntriesRequest,
   type MoveFileExplorerEntriesResult,
+  type StatFileExplorerEntriesResult,
+  type FileExplorerEntryStat,
+  type PlanFileExplorerCopyEntriesRequest,
+  type PlanFileExplorerCopyEntriesResult,
+  type ExecuteFileExplorerCopyPlanRequest,
+  type ExecuteFileExplorerCopyPlanResult,
   type CollectFileExplorerDeleteTargetsResult,
   type DeleteFileExplorerEntryRequest,
   type DeleteFileExplorerEntryResponse,
@@ -54,6 +60,16 @@ import {
   defaultFileExplorerDeleteCollectDeps
 } from "./fileExplorerDeleteCollect";
 import { deleteOneFileExplorerEntry } from "./fileExplorerDeleteExecute";
+import {
+  defaultPlanCopyEntriesDeps,
+  planCopyEntries
+} from "./projectCopyValidation";
+import {
+  defaultExecuteCopyPlanDeps,
+  executeCopyPlan
+} from "./projectCopyExecution";
+import { normalizeMoveSourceRelativePath } from "./projectMoveValidation";
+import type { FileExplorerCopyPlan } from "../shared/projectCopy";
 import type { RecoveryPathRekeyResult } from "../shared/projectMove";
 import {
   applyMarkdownFileExtension,
@@ -2077,6 +2093,229 @@ async function moveFileExplorerEntries(
 }
 
 // -------------------------------------------------------------------------
+// #356: File Explorer project-local COPY (D&D "Copy" choice) + a lightweight
+// top-level lstat for the D&D confirmation table. Copy never overwrites: a
+// name collision is resolved by the deterministic ` copy` ladder. Three
+// channels:
+//   - `statFileExplorerEntries`   — top-level lstat (name/kind/size/mtime).
+//   - `planFileExplorerCopyEntries`   — dry run: validate + compute the plan.
+//   - `executeFileExplorerCopyPlan`   — copy exactly what a stored plan said.
+// The plan is stored by id and consumed once; it is discarded on project
+// close. Recovery rows are never copied / re-keyed (#356 non-goal).
+// -------------------------------------------------------------------------
+
+const MAX_STORED_COPY_PLANS = 16;
+const storedCopyPlans = new Map<
+  string,
+  { readonly plan: FileExplorerCopyPlan; readonly projectRootPath: string }
+>();
+
+function rememberCopyPlan(
+  plan: FileExplorerCopyPlan,
+  projectRootPath: string
+): void {
+  storedCopyPlans.set(plan.planId, { plan, projectRootPath });
+  while (storedCopyPlans.size > MAX_STORED_COPY_PLANS) {
+    const oldest = storedCopyPlans.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    storedCopyPlans.delete(oldest);
+  }
+}
+
+function forgetAllCopyPlans(): void {
+  storedCopyPlans.clear();
+}
+
+async function statFileExplorerEntriesHandler(
+  rawRequest: unknown
+): Promise<StatFileExplorerEntriesResult> {
+  const relativePaths =
+    isRequestObject(rawRequest) &&
+    Array.isArray(rawRequest.relativePaths) &&
+    rawRequest.relativePaths.every((value) => typeof value === "string")
+      ? (rawRequest.relativePaths as string[])
+      : null;
+
+  if (relativePaths === null || !currentProjectState) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  const projectRootPath = currentProjectState.rootPath;
+  const entries: FileExplorerEntryStat[] = [];
+
+  for (const rawPath of relativePaths) {
+    const normalized = normalizeMoveSourceRelativePath(rawPath);
+    const name =
+      typeof rawPath === "string"
+        ? (rawPath.replace(/\\/g, "/").split("/").pop() ?? rawPath)
+        : String(rawPath);
+
+    if (!normalized.ok) {
+      entries.push({
+        relativePath: typeof rawPath === "string" ? rawPath : String(rawPath),
+        name,
+        kind: "missing",
+        sizeBytes: null,
+        modifiedAt: null
+      });
+      continue;
+    }
+
+    const relativePath = normalized.relativePath;
+    const absolutePath = path.resolve(projectRootPath, relativePath);
+
+    try {
+      const stats = await fs.lstat(absolutePath);
+      const modifiedAt = Number.isNaN(stats.mtime.getTime())
+        ? null
+        : stats.mtime.toISOString();
+
+      if (stats.isSymbolicLink() || (!stats.isFile() && !stats.isDirectory())) {
+        entries.push({
+          relativePath,
+          name: relativePath.split("/").pop() ?? relativePath,
+          kind: "other",
+          sizeBytes: null,
+          modifiedAt
+        });
+        continue;
+      }
+
+      entries.push({
+        relativePath,
+        name: relativePath.split("/").pop() ?? relativePath,
+        kind: stats.isDirectory() ? "folder" : "file",
+        sizeBytes: stats.isDirectory() ? null : stats.size,
+        modifiedAt
+      });
+    } catch {
+      entries.push({
+        relativePath,
+        name: relativePath.split("/").pop() ?? relativePath,
+        kind: "missing",
+        sizeBytes: null,
+        modifiedAt: null
+      });
+    }
+  }
+
+  return { kind: "ok", entries };
+}
+
+function parsePlanFileExplorerCopyEntriesRequest(
+  value: unknown
+): PlanFileExplorerCopyEntriesRequest {
+  if (
+    !isRequestObject(value) ||
+    !Array.isArray(value.sourceRelativePaths) ||
+    !value.sourceRelativePaths.every((entry) => typeof entry === "string") ||
+    typeof value.destinationFolderRelativePath !== "string" ||
+    !Array.isArray(value.dirtyProjectDocumentRelativePaths) ||
+    !value.dirtyProjectDocumentRelativePaths.every(
+      (entry) => typeof entry === "string"
+    )
+  ) {
+    throw new Error("Invalid File Explorer copy plan request.");
+  }
+
+  return {
+    sourceRelativePaths: value.sourceRelativePaths as string[],
+    destinationFolderRelativePath: value.destinationFolderRelativePath,
+    dirtyProjectDocumentRelativePaths:
+      value.dirtyProjectDocumentRelativePaths as string[]
+  };
+}
+
+async function planFileExplorerCopyEntriesHandler(
+  rawRequest: unknown
+): Promise<PlanFileExplorerCopyEntriesResult> {
+  let request: PlanFileExplorerCopyEntriesRequest;
+  try {
+    request = parsePlanFileExplorerCopyEntriesRequest(rawRequest);
+  } catch {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  if (!currentProjectState) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { kind: "unavailable", reason: "readOnlyProject" };
+  }
+
+  const projectRootPath = currentProjectState.rootPath;
+  const plan = await planCopyEntries(
+    {
+      projectRootPath,
+      sourceRelativePaths: request.sourceRelativePaths,
+      destinationFolderRelativePath: request.destinationFolderRelativePath,
+      dirtyProjectDocumentRelativePaths:
+        request.dirtyProjectDocumentRelativePaths
+    },
+    defaultPlanCopyEntriesDeps
+  );
+
+  rememberCopyPlan(plan, projectRootPath);
+
+  return { kind: "planned", plan };
+}
+
+async function executeFileExplorerCopyPlanHandler(
+  rawRequest: unknown
+): Promise<ExecuteFileExplorerCopyPlanResult> {
+  const request =
+    isRequestObject(rawRequest) &&
+    typeof rawRequest.planId === "string" &&
+    (rawRequest.dirtyProjectDocumentRelativePaths === undefined ||
+      (Array.isArray(rawRequest.dirtyProjectDocumentRelativePaths) &&
+        rawRequest.dirtyProjectDocumentRelativePaths.every(
+          (entry) => typeof entry === "string"
+        )))
+      ? (rawRequest as unknown as ExecuteFileExplorerCopyPlanRequest)
+      : null;
+
+  if (request === null) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+  if (!currentProjectState) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { kind: "unavailable", reason: "readOnlyProject" };
+  }
+
+  const stored = storedCopyPlans.get(request.planId);
+  if (!stored) {
+    return { kind: "unavailable", reason: "planNotFound" };
+  }
+  // Consume once regardless of outcome.
+  storedCopyPlans.delete(request.planId);
+
+  if (stored.projectRootPath !== currentProjectState.rootPath) {
+    return { kind: "unavailable", reason: "planStale" };
+  }
+
+  const projectState = currentProjectState;
+  const result = await executeCopyPlan(
+    {
+      projectRootPath: projectState.rootPath,
+      plan: stored.plan,
+      dirtyProjectDocumentRelativePaths:
+        request.dirtyProjectDocumentRelativePaths
+    },
+    defaultExecuteCopyPlanDeps
+  );
+
+  for (const relativePath of result.registeredDocumentRelativePaths) {
+    projectState.documentRelativePaths.add(relativePath);
+  }
+
+  return { kind: "completed", result };
+}
+
+// -------------------------------------------------------------------------
 // #351: File Explorer project-local deletion (ADR-0011). Two channels:
 //   - `collectFileExplorerDeleteTargets` — dry run: validate + enumerate the
 //     subtree + gather preview metadata. Never mutates the filesystem.
@@ -2372,6 +2611,7 @@ export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
   }
 
   currentProjectState = null;
+  forgetAllCopyPlans();
   await requestCurrentProjectWindowTitleUpdate();
   await releaseProjectWriteOwnershipBestEffort(stateToRelease);
 }
@@ -2395,6 +2635,7 @@ export async function closeCurrentProject(): Promise<CloseCurrentProjectResult> 
     if (currentProjectState === stateToClose) {
       currentProjectState = null;
     }
+    forgetAllCopyPlans();
     await requestCurrentProjectWindowTitleUpdate();
 
     return { status: "closed" };
@@ -3383,6 +3624,33 @@ export function registerProjectIpc(
       rawRequest: unknown
     ): Promise<MoveFileExplorerEntriesResult> =>
       moveFileExplorerEntries(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.statFileExplorerEntries,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<StatFileExplorerEntriesResult> =>
+      statFileExplorerEntriesHandler(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.planFileExplorerCopyEntries,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<PlanFileExplorerCopyEntriesResult> =>
+      planFileExplorerCopyEntriesHandler(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.executeFileExplorerCopyPlan,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<ExecuteFileExplorerCopyPlanResult> =>
+      executeFileExplorerCopyPlanHandler(rawRequest)
   );
 
   ipcMain.handle(

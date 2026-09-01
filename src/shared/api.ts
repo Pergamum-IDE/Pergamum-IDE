@@ -17,6 +17,10 @@ import type {
 } from "./debugLog";
 import type { MoveEntriesResult } from "./projectMove";
 import type {
+  CopyEntriesExecutionResult,
+  FileExplorerCopyPlan
+} from "./projectCopy";
+import type {
   EditContextMenuCommandSelection,
   EditContextMenuPopupRequest,
   NativeEditDelegationRequest
@@ -171,6 +175,14 @@ export const PROJECT_CHANNELS = {
   renameFileExplorerEntry: "projects:renameFileExplorerEntry",
   /** #327: move one or more File Explorer files into an existing folder. */
   moveFileExplorerEntries: "projects:moveFileExplorerEntries",
+  /** #356: lightweight lstat of top-level File Explorer entries (name / kind /
+   *  size / mtime) for the D&D confirmation table. No content reads. */
+  statFileExplorerEntries: "projects:statFileExplorerEntries",
+  /** #356: dry-run — plan a project-local COPY of dragged entries into a
+   *  folder, computing the deterministic ` copy` destination names. */
+  planFileExplorerCopyEntries: "projects:planFileExplorerCopyEntries",
+  /** #356: execute a previously returned copy plan (by id). */
+  executeFileExplorerCopyPlan: "projects:executeFileExplorerCopyPlan",
   /** #351: dry-run — validate a selection for deletion and enumerate every
    *  file/folder that would actually be removed (with preview metadata). */
   collectFileExplorerDeleteTargets:
@@ -448,6 +460,71 @@ export type MoveFileExplorerEntriesResult =
   | {
       readonly kind: "unavailable";
       readonly reason: "noProject" | "readOnlyProject";
+    };
+
+/**
+ * #356: renderer → main lightweight lstat of the given top-level entries.
+ * Used only to fill the D&D confirmation table's size / modified columns —
+ * never reads file content, never recurses into folders.
+ */
+export interface StatFileExplorerEntriesRequest {
+  readonly relativePaths: readonly string[];
+}
+
+export interface FileExplorerEntryStat {
+  readonly relativePath: string;
+  readonly name: string;
+  readonly kind: "file" | "folder" | "other" | "missing";
+  /** Byte size for a file; `null` for a folder / missing / other. */
+  readonly sizeBytes: number | null;
+  /** ISO 8601 mtime; `null` when unavailable. */
+  readonly modifiedAt: string | null;
+}
+
+export type StatFileExplorerEntriesResult =
+  | { readonly kind: "ok"; readonly entries: readonly FileExplorerEntryStat[] }
+  | { readonly kind: "unavailable"; readonly reason: "noProject" };
+
+/**
+ * #356: renderer → main copy PLAN (dry run) request. `projectRootPath` is
+ * filled main-side from the open project. `""` = project root destination.
+ */
+export interface PlanFileExplorerCopyEntriesRequest {
+  readonly sourceRelativePaths: readonly string[];
+  readonly destinationFolderRelativePath: string;
+  readonly dirtyProjectDocumentRelativePaths: readonly string[];
+}
+
+export type PlanFileExplorerCopyEntriesResult =
+  | { readonly kind: "planned"; readonly plan: FileExplorerCopyPlan }
+  | {
+      readonly kind: "unavailable";
+      readonly reason: "noProject" | "readOnlyProject";
+    };
+
+/**
+ * #356: renderer → main request to execute a plan returned by
+ * {@link PlanFileExplorerCopyEntriesResult}. The plan is looked up by id and
+ * consumed once. `dirtyProjectDocumentRelativePaths` is an optional
+ * execute-time re-check (a source that became dirty since the plan fails).
+ */
+export interface ExecuteFileExplorerCopyPlanRequest {
+  readonly planId: string;
+  readonly dirtyProjectDocumentRelativePaths?: readonly string[];
+}
+
+export type ExecuteFileExplorerCopyPlanResult =
+  | {
+      readonly kind: "completed";
+      readonly result: CopyEntriesExecutionResult;
+    }
+  | {
+      readonly kind: "unavailable";
+      readonly reason:
+        | "noProject"
+        | "readOnlyProject"
+        | "planNotFound"
+        | "planStale";
     };
 
 /**
@@ -736,6 +813,15 @@ export interface PergamumApi {
     moveFileExplorerEntries: (
       request: MoveFileExplorerEntriesRequest
     ) => Promise<MoveFileExplorerEntriesResult>;
+    statFileExplorerEntries: (
+      request: StatFileExplorerEntriesRequest
+    ) => Promise<StatFileExplorerEntriesResult>;
+    planFileExplorerCopyEntries: (
+      request: PlanFileExplorerCopyEntriesRequest
+    ) => Promise<PlanFileExplorerCopyEntriesResult>;
+    executeFileExplorerCopyPlan: (
+      request: ExecuteFileExplorerCopyPlanRequest
+    ) => Promise<ExecuteFileExplorerCopyPlanResult>;
     collectFileExplorerDeleteTargets: (
       request: CollectFileExplorerDeleteTargetsRequest
     ) => Promise<CollectFileExplorerDeleteTargetsResult>;

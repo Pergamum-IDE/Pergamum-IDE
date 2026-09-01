@@ -112,6 +112,12 @@ const pergamumApi: PergamumApi = {
       }),
     moveFileExplorerEntries: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.moveFileExplorerEntries, request),
+    statFileExplorerEntries: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.statFileExplorerEntries, request),
+    planFileExplorerCopyEntries: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.planFileExplorerCopyEntries, request),
+    executeFileExplorerCopyPlan: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.executeFileExplorerCopyPlan, request),
     collectFileExplorerDeleteTargets: (request) =>
       ipcRenderer.invoke(
         PROJECT_CHANNELS.collectFileExplorerDeleteTargets,
