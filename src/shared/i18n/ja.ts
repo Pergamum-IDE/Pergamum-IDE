@@ -553,6 +553,13 @@ export const jaTranslations = {
     "{count} 件の未解決の復旧候補が残っています",
   "notification.sessionRestore.editorSkipped":
     "{name} を復元できなかったため、このタブは開いていません",
+  "outline.title": "アウトライン",
+  "outline.section.toggle": "アウトラインの開閉",
+  "outline.resizeHandle": "アウトラインの高さを変更",
+  "outline.empty.noHeadings": "見出しがありません",
+  "outline.empty.notMarkdown": "このタブにはアウトラインがありません",
+  "outline.heading.jumpLabel": "{text} へ移動",
+  "outline.heading.empty": "（無題の見出し）",
   "project.label": "プロジェクト: {name}",
   "projectAccess.readOnly.label": "読み取り専用",
   "projectAccess.readOnly.tooltip": "読み取り専用で開いています",

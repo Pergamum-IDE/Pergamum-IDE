@@ -1285,6 +1285,133 @@ label.settingsItemHeader {
   background: var(--workspace-sidebar-background);
 }
 
+/* #352 — Files sidebar becomes a vertical stack: File Explorer (flex) +
+   collapsible Outline section (auto height). */
+.workbenchFilesSidebar {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-inline-end: 1px solid var(--workspace-sidebar-border);
+  background: var(--workspace-sidebar-background);
+}
+
+.workbenchFilesSidebar > .fileExplorer {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-inline-end: none;
+}
+
+/* #352 — pointer-drag handle between the File Explorer and the Outline
+   section (row-resize). Only rendered while the Outline pane is expanded. */
+.workbenchFilesSidebarResizeHandle {
+  block-size: 6px;
+  min-block-size: 6px;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--workspace-sidebar-border);
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.workbenchFilesSidebarResizeHandle:hover,
+.workbenchFilesSidebarResizeHandle:active {
+  background: var(--workspace-sidebar-focus-ring);
+}
+
+.collapsibleSidebarSection {
+  flex: 0 0 auto;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* When the Outline pane is collapsed there is no resize handle, so the
+   section keeps its own top divider; when expanded, the handle draws it. */
+.collapsibleSidebarSection[data-collapsed="true"] {
+  border-top: 1px solid var(--workspace-sidebar-border);
+}
+
+.collapsibleSidebarSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.collapsibleSidebarSectionHeader:hover,
+.collapsibleSidebarSectionHeader:focus-visible {
+  background: var(--workspace-sidebar-hover);
+}
+
+.collapsibleSidebarSectionChevron {
+  font-size: 0.75em;
+  opacity: 0.8;
+}
+
+.collapsibleSidebarSectionBody {
+  /* Height is driven by the resize handle via an inline style; fall back to
+     a sane default if none is set. */
+  block-size: 200px;
+  min-height: 0;
+  overflow: auto;
+  padding-block-end: 4px;
+}
+
+/* #352 — Markdown Outline pane */
+.markdownOutlinePaneEmpty {
+  margin: 0;
+  padding: 6px 12px;
+  color: var(--workspace-sidebar-muted, rgba(127, 127, 127, 0.9));
+  font-size: 0.85rem;
+}
+
+.markdownOutlineTree,
+.markdownOutlineTreeGroup {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.markdownOutlineHeading {
+  display: block;
+  width: 100%;
+  padding: 3px 10px 3px
+    calc(10px + var(--markdown-outline-depth, 0) * 12px);
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.markdownOutlineHeading[data-outline-level="1"] {
+  font-weight: 600;
+}
+
+.markdownOutlineHeading:hover,
+.markdownOutlineHeading:focus-visible {
+  background: var(--workspace-sidebar-hover);
+}
+
+.markdownOutlineHeadingEmpty {
+  opacity: 0.6;
+  font-style: italic;
+}
+
 .workspaceSidebarPanel {
   display: flex;
   width: 100%;

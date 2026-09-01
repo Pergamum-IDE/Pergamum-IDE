@@ -28,7 +28,7 @@ import {
   lineEndingBreakSetToArray,
   type LineEndingBreakSet
 } from "./editorLineEndingField";
-import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
+import type { PendingMarkdownSelection } from "./pendingMarkdownSelection";
 import { GlossaryEditor } from "./GlossaryEditor";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
@@ -418,7 +418,7 @@ interface EditorSurfaceProps {
   onDeleteGlossaryEntry: () => void;
   onNavigateToPreviousGlossaryOccurrence: () => void;
   onNavigateToNextGlossaryOccurrence: () => void;
-  pendingMarkdownSelection: GlossaryOccurrenceRange | null;
+  pendingMarkdownSelection: PendingMarkdownSelection | null;
   onPendingMarkdownSelectionApplied: () => void;
   /** In-flight document-open correlation id (#152), or null when idle. */
   documentOpenId: string | null;
@@ -644,7 +644,7 @@ interface MarkdownEditorSurfaceProps {
   onRestoreViewStateApplied: (key: string) => void;
   focusRequest: MarkdownEditorFocusRequest | null;
   onFocusRequestApplied: (requestId: number) => void;
-  pendingSelection: GlossaryOccurrenceRange | null;
+  pendingSelection: PendingMarkdownSelection | null;
   onPendingSelectionApplied: () => void;
   ratio: number;
   onChangeRatio: (ratio: number) => void;

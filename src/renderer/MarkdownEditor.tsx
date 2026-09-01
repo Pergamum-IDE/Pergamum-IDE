@@ -47,6 +47,8 @@ import {
 interface MarkdownEditorPendingSelection {
   start: number;
   end: number;
+  /** #352: `"center"` for an Outline heading jump, otherwise `"nearest"`. */
+  scrollY?: "nearest" | "center";
 }
 
 interface MarkdownEditorProps {
@@ -687,7 +689,9 @@ export function MarkdownEditor({
 
     view.dispatch({
       selection: EditorSelection.single(from, to),
-      effects: EditorView.scrollIntoView(from)
+      effects: EditorView.scrollIntoView(from, {
+        y: pendingSelection.scrollY ?? "nearest"
+      })
     });
     view.focus();
     onPendingSelectionApplied?.();
