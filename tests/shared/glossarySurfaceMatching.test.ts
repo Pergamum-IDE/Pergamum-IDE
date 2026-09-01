@@ -29,7 +29,8 @@ function canonicalForm(
   id: string,
   surface: string,
   matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
+  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto",
+  allowSingleCharacterMatch = false
 ): GlossaryForm {
   return {
     id,
@@ -37,6 +38,7 @@ function canonicalForm(
     surface,
     matchBoundaryStart,
     matchBoundaryEnd,
+    allowSingleCharacterMatch,
     relation: null,
     warningPolicy: null,
     isCanonical: true,
@@ -52,7 +54,8 @@ function nonCanonicalForm(
   relation: GlossaryFormRelation,
   warningPolicy: GlossaryWarningPolicy,
   matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
+  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto",
+  allowSingleCharacterMatch = false
 ): GlossaryForm {
   return {
     id,
@@ -62,6 +65,7 @@ function nonCanonicalForm(
     warningPolicy,
     matchBoundaryStart,
     matchBoundaryEnd,
+    allowSingleCharacterMatch,
     isCanonical: false,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -859,5 +863,123 @@ describe("glossary surface matching", () => {
     });
     expect("😀A".length).toBe(3);
     expect(Array.from("😀A")).toHaveLength(2);
+  });
+
+  describe("explicit one-character form matching (#365)", () => {
+    const eclipseEntryId = "018f4b8c-7a2b-7c3d-8e4f-1000000000a1";
+    const eclipseFormId = "018f4b8c-7a2b-7c3d-8e4f-2000000000a1";
+
+    function eclipseIndex(allowSingleCharacterMatch: boolean) {
+      return buildGlossarySurfaceIndex([
+        glossaryEntry(eclipseEntryId, [
+          canonicalForm(
+            eclipseEntryId,
+            eclipseFormId,
+            "蝕",
+            "auto",
+            "auto",
+            allowSingleCharacterMatch
+          )
+        ])
+      ]);
+    }
+
+    function eclipseMatches(text: string): string[] {
+      return matchGlossarySurfacesInText(text, eclipseIndex(true)).map(
+        (match) => match.matchedText
+      );
+    }
+
+    it("skips a one-character form by default (allowSingleCharacterMatch false)", () => {
+      const index = eclipseIndex(false);
+      expect(index.entries).toEqual([]);
+      expect(matchGlossarySurfacesInText("蝕の時が来た。", index)).toEqual([]);
+    });
+
+    it("indexes and matches a one-character form when explicitly enabled", () => {
+      const index = eclipseIndex(true);
+      expect(index.entries.map((entry) => entry.surface)).toEqual(["蝕"]);
+      expect(index.entries[0].singleCharacterKanjiGuard).toBe(true);
+    });
+
+    it("leaves 2+ character forms unaffected by allowSingleCharacterMatch", () => {
+      const on = buildGlossarySurfaceIndex([
+        glossaryEntry("018f4b8c-7a2b-7c3d-8e4f-1000000000a2", [
+          canonicalForm(
+            "018f4b8c-7a2b-7c3d-8e4f-1000000000a2",
+            "018f4b8c-7a2b-7c3d-8e4f-2000000000a2",
+            "アル",
+            "auto",
+            "auto",
+            true
+          )
+        ])
+      ]);
+      expect(on.entries.map((e) => e.surface)).toEqual(["アル"]);
+      expect(on.entries[0].singleCharacterKanjiGuard).toBe(false);
+      expect(
+        matchGlossarySurfacesInText("アルと呼ばれた。", on).map(
+          (m) => m.matchedText
+        )
+      ).toEqual(["アル"]);
+    });
+
+    it("always skips empty / whitespace-only surfaces", () => {
+      const index = buildGlossarySurfaceIndex([
+        glossaryEntry("018f4b8c-7a2b-7c3d-8e4f-1000000000a3", [
+          canonicalForm(
+            "018f4b8c-7a2b-7c3d-8e4f-1000000000a3",
+            "018f4b8c-7a2b-7c3d-8e4f-2000000000a3",
+            "  ",
+            "none",
+            "none",
+            true
+          )
+        ])
+      ]);
+      expect(index.entries).toEqual([]);
+    });
+
+    it("keeps the existing minimumSurfaceLength option behaviour for non-opted-in forms", () => {
+      const index = buildGlossarySurfaceIndex(
+        [
+          glossaryEntry(eclipseEntryId, [
+            canonicalForm(eclipseEntryId, eclipseFormId, "蝕")
+          ])
+        ],
+        { minimumSurfaceLength: 1 }
+      );
+      expect(index.entries.map((e) => e.surface)).toEqual(["蝕"]);
+      // not opted in → no compound-word guard even at minimumSurfaceLength 1
+      expect(index.entries[0].singleCharacterKanjiGuard).toBe(false);
+      expect(
+        matchGlossarySurfacesInText("腐蝕した銅板。", index).map(
+          (m) => m.matchedText
+        )
+      ).toEqual(["蝕"]);
+    });
+
+    it("matches an opted-in 蝕 next to kana / punctuation / brackets / text edge", () => {
+      expect(eclipseMatches("蝕の時が来た。")).toEqual(["蝕"]);
+      expect(eclipseMatches("「蝕」と呼ばれる。")).toEqual(["蝕"]);
+      expect(eclipseMatches("蝕。")).toEqual(["蝕"]);
+    });
+
+    it("rejects an opted-in 蝕 inside a kanji compound (different adjacent kanji)", () => {
+      expect(eclipseMatches("腐蝕した銅板。")).toEqual([]);
+      expect(eclipseMatches("蝕牙")).toEqual([]);
+      expect(eclipseMatches("黒蝕病")).toEqual([]);
+      expect(eclipseMatches("大蝕")).toEqual([]);
+      expect(eclipseMatches("月蝕")).toEqual([]);
+    });
+
+    it("does NOT reject an opted-in 蝕 next to the same kanji or a Japanese iteration mark", () => {
+      expect(eclipseMatches("蝕々")).toEqual(["蝕"]);
+      expect(eclipseMatches("蝕ゝ")).toEqual(["蝕"]);
+      expect(eclipseMatches("蝕ゞ")).toEqual(["蝕"]);
+      expect(eclipseMatches("蝕ヽ")).toEqual(["蝕"]);
+      expect(eclipseMatches("蝕ヾ")).toEqual(["蝕"]);
+      expect(eclipseMatches("蝕蝕")).toEqual(["蝕", "蝕"]);
+    });
   });
 });

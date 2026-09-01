@@ -25,6 +25,14 @@ export interface GlossarySurfaceIndexEntry {
   warningPolicy: GlossaryWarningPolicy | null;
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
+  /**
+   * #365: `true` when this is an opted-in single-code-point form whose
+   * surface is a CJK ideograph. Such a match is additionally rejected when
+   * the character immediately before or after it is a DIFFERENT kanji
+   * (compound-word guard). Same kanji, a Japanese iteration mark, kana,
+   * punctuation, or the text edge do not reject.
+   */
+  singleCharacterKanjiGuard: boolean;
 }
 
 export interface GlossarySurfaceIndex {
@@ -73,6 +81,72 @@ function normalizedMinimumSurfaceLength(
 
 function surfaceCharacterLength(surface: string): number {
   return Array.from(surface).length;
+}
+
+/**
+ * #365: Japanese iteration / repetition marks. Handled by an EXPLICIT
+ * allowlist (not a Unicode category), so widening the ideograph ranges later
+ * never silently changes iteration-mark behaviour.
+ *   々  U+3005  ideographic iteration mark
+ *   ゝ  U+309D  hiragana iteration mark
+ *   ゞ  U+309E  hiragana voiced iteration mark
+ *   ヽ  U+30FD  katakana iteration mark
+ *   ヾ  U+30FE  katakana voiced iteration mark
+ */
+const JAPANESE_ITERATION_MARKS: ReadonlySet<string> = new Set([
+  "々",
+  "ゝ",
+  "ゞ",
+  "ヽ",
+  "ヾ"
+]);
+
+/**
+ * #365: narrow "is this a CJK ideograph (kanji)?" test used only for the
+ * single-character compound-word guard. Deliberately does NOT include
+ * U+3005 々 / U+3007 〇 / iteration marks / kana.
+ */
+function isCjkIdeographCodePoint(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x4e00 && codePoint <= 0x9fff) || // CJK Unified Ideographs
+    (codePoint >= 0x3400 && codePoint <= 0x4dbf) || // Extension A
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // Compatibility Ideographs
+    (codePoint >= 0x20000 && codePoint <= 0x2ebef) || // Extensions B–F
+    (codePoint >= 0x2f800 && codePoint <= 0x2fa1f) // Compat. Ideographs Suppl.
+  );
+}
+
+/** Code point ending immediately before `index`, or `undefined` at the start. */
+function codePointBefore(text: string, index: number): number | undefined {
+  if (index <= 0) {
+    return undefined;
+  }
+  const low = text.charCodeAt(index - 1);
+  if (low >= 0xdc00 && low <= 0xdfff && index - 2 >= 0) {
+    const high = text.charCodeAt(index - 2);
+    if (high >= 0xd800 && high <= 0xdbff) {
+      return (high - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000;
+    }
+  }
+  return low;
+}
+
+/**
+ * #365: does the neighbouring code point `neighbour` block a single-kanji
+ * match of `matchedCodePoint`? Only a DIFFERENT kanji blocks. The text edge
+ * (`undefined`), the same kanji, and a Japanese iteration mark never block.
+ */
+function singleKanjiNeighbourBlocks(
+  neighbour: number | undefined,
+  matchedCodePoint: number
+): boolean {
+  if (neighbour === undefined || neighbour === matchedCodePoint) {
+    return false;
+  }
+  if (JAPANESE_ITERATION_MARKS.has(String.fromCodePoint(neighbour))) {
+    return false;
+  }
+  return isCjkIdeographCodePoint(neighbour);
 }
 
 function relationForForm(form: GlossaryForm): GlossarySurfaceMatchRelation {
@@ -131,10 +205,15 @@ export function buildGlossarySurfaceIndex(
   for (const entry of entries) {
     for (const form of entry.forms) {
       const surface = form.surface.trim();
+      const surfaceLength = surfaceCharacterLength(surface);
+      // #365: a single-code-point surface is only indexed when the form
+      // explicitly opts in. 2+ code points are unaffected.
+      const singleCharacterOptIn =
+        surfaceLength === 1 && form.allowSingleCharacterMatch === true;
 
       if (
         surface.length === 0 ||
-        surfaceCharacterLength(surface) < minimumSurfaceLength
+        (surfaceLength < minimumSurfaceLength && !singleCharacterOptIn)
       ) {
         continue;
       }
@@ -146,7 +225,10 @@ export function buildGlossarySurfaceIndex(
         relation: relationForForm(form),
         warningPolicy: warningPolicyForForm(form),
         matchBoundaryStart: form.matchBoundaryStart,
-        matchBoundaryEnd: form.matchBoundaryEnd
+        matchBoundaryEnd: form.matchBoundaryEnd,
+        singleCharacterKanjiGuard:
+          singleCharacterOptIn &&
+          isCjkIdeographCodePoint(surface.codePointAt(0) ?? 0)
       });
     }
   }
@@ -192,6 +274,36 @@ function isBoundaryAcceptedRawMatch(
   });
 }
 
+/**
+ * #365: for an opted-in single-code-point KANJI form, reject the raw match
+ * when the character immediately before or after it is a different kanji
+ * (e.g. `蝕` inside `腐蝕` / `蝕牙`). The same kanji (`蝕蝕`), a Japanese
+ * iteration mark (`蝕々`), kana, punctuation, or the text edge never reject.
+ * Non-kanji single-character forms are unaffected (`matchBoundary*` still
+ * applies to them as before).
+ */
+function isSingleCharacterKanjiAdjacencyAccepted(
+  text: string,
+  rawMatch: RawGlossarySurfaceMatch
+): boolean {
+  if (!rawMatch.entry.singleCharacterKanjiGuard) {
+    return true;
+  }
+
+  const matchedCodePoint = rawMatch.entry.surface.codePointAt(0) ?? 0;
+
+  return (
+    !singleKanjiNeighbourBlocks(
+      codePointBefore(text, rawMatch.start),
+      matchedCodePoint
+    ) &&
+    !singleKanjiNeighbourBlocks(
+      text.codePointAt(rawMatch.end),
+      matchedCodePoint
+    )
+  );
+}
+
 function groupAcceptedRawMatches(
   rawMatches: readonly RawGlossarySurfaceMatch[]
 ): Map<string, RawGlossarySurfaceMatch[]> {
@@ -217,9 +329,11 @@ export function matchGlossarySurfacesInText(
 ): GlossarySurfaceTextMatch[] {
   const matches: GlossarySurfaceTextMatch[] = [];
   const matchesByRange = groupAcceptedRawMatches(
-    collectRawGlossarySurfaceMatches(text, index).filter((rawMatch) =>
-      isBoundaryAcceptedRawMatch(text, rawMatch)
-    )
+    collectRawGlossarySurfaceMatches(text, index)
+      .filter((rawMatch) => isBoundaryAcceptedRawMatch(text, rawMatch))
+      .filter((rawMatch) =>
+        isSingleCharacterKanjiAdjacencyAccepted(text, rawMatch)
+      )
   );
   let cursor = 0;
 

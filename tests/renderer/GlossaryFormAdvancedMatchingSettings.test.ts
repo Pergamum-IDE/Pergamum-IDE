@@ -183,6 +183,82 @@ describe("GlossaryFormAdvancedMatchingSettingsView", () => {
     expect(onChangeMatchBoundaryEnd).not.toHaveBeenCalled();
   });
 
+  it("renders the one-character opt-in checkbox reflecting its prop and reports changes (#365)", () => {
+    const onChangeAllowSingleCharacterMatch = vi.fn();
+    const element = GlossaryFormAdvancedMatchingSettingsView({
+      matchBoundaryStart: "auto",
+      matchBoundaryEnd: "auto",
+      allowSingleCharacterMatch: true,
+      translate,
+      isExpanded: true,
+      onToggleExpanded: () => undefined,
+      onChangeMatchBoundaryStart: () => undefined,
+      onChangeMatchBoundaryEnd: () => undefined,
+      onChangeAllowSingleCharacterMatch
+    });
+
+    const markup = renderToStaticMarkup(element);
+    expect(markup).toContain("glossaryEditor.allowSingleCharacterMatch.label");
+    expect(markup).toContain(
+      "glossaryEditor.allowSingleCharacterMatch.helper"
+    );
+
+    const checkboxes = collectElements(
+      element,
+      (child) =>
+        child.type === "input" && child.props.type === "checkbox"
+    );
+    expect(checkboxes).toHaveLength(1);
+    expect(checkboxes[0].props.checked).toBe(true);
+
+    (checkboxes[0].props.onChange as (event: unknown) => void)({
+      target: { checked: false }
+    });
+    expect(onChangeAllowSingleCharacterMatch).toHaveBeenCalledWith(false);
+  });
+
+  it("hides the one-character opt-in checkbox while collapsed and ignores it in read-only mode (#365)", () => {
+    const collapsed = renderToStaticMarkup(
+      GlossaryFormAdvancedMatchingSettingsView({
+        matchBoundaryStart: "auto",
+        matchBoundaryEnd: "auto",
+        allowSingleCharacterMatch: false,
+        translate,
+        isExpanded: false,
+        onToggleExpanded: () => undefined,
+        onChangeMatchBoundaryStart: () => undefined,
+        onChangeMatchBoundaryEnd: () => undefined,
+        onChangeAllowSingleCharacterMatch: () => undefined
+      })
+    );
+    expect(collapsed).not.toContain(
+      "glossaryEditor.allowSingleCharacterMatch.label"
+    );
+
+    const onChangeAllowSingleCharacterMatch = vi.fn();
+    const element = GlossaryFormAdvancedMatchingSettingsView({
+      matchBoundaryStart: "auto",
+      matchBoundaryEnd: "auto",
+      allowSingleCharacterMatch: false,
+      translate,
+      isExpanded: true,
+      readOnly: true,
+      onToggleExpanded: () => undefined,
+      onChangeMatchBoundaryStart: () => undefined,
+      onChangeMatchBoundaryEnd: () => undefined,
+      onChangeAllowSingleCharacterMatch
+    });
+    const checkbox = collectElements(
+      element,
+      (child) => child.type === "input" && child.props.type === "checkbox"
+    )[0];
+    expect(checkbox.props.disabled).toBe(true);
+    (checkbox.props.onChange as (event: unknown) => void)({
+      target: { checked: true }
+    });
+    expect(onChangeAllowSingleCharacterMatch).not.toHaveBeenCalled();
+  });
+
   it("reports the toggle interaction through onToggleExpanded", () => {
     const onToggleExpanded = vi.fn();
     const element = GlossaryFormAdvancedMatchingSettingsView({

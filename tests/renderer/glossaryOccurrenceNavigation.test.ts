@@ -25,7 +25,8 @@ function canonicalForm(
   id: string,
   surface: string,
   matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
+  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto",
+  allowSingleCharacterMatch = false
 ): GlossaryForm {
   return {
     id,
@@ -33,6 +34,7 @@ function canonicalForm(
     surface,
     matchBoundaryStart,
     matchBoundaryEnd,
+    allowSingleCharacterMatch,
     relation: null,
     warningPolicy: null,
     isCanonical: true,
@@ -182,6 +184,33 @@ describe("findGlossaryEntryOccurrences", () => {
     expect(findGlossaryEntryOccurrences("誰もいない部屋。", maidEntry)).toEqual(
       []
     );
+  });
+
+  it("finds an opted-in one-character kanji form, but not inside a compound (#365)", () => {
+    const eclipseEntryId = "018f4b8c-7a2b-7c3d-8e4f-1000000000c1";
+    const text = "蝕の時が来た。腐蝕した銅板。";
+
+    const defaultEntry = glossaryEntry(eclipseEntryId, [
+      canonicalForm(eclipseEntryId, "018f4b8c-7a2b-7c3d-8e4f-2000000000c1", "蝕")
+    ]);
+    expect(findGlossaryEntryOccurrences(text, defaultEntry)).toEqual([]);
+
+    const optedInEntry = glossaryEntry(eclipseEntryId, [
+      canonicalForm(
+        eclipseEntryId,
+        "018f4b8c-7a2b-7c3d-8e4f-2000000000c1",
+        "蝕",
+        "auto",
+        "auto",
+        true
+      )
+    ]);
+    const occurrences = findGlossaryEntryOccurrences(text, optedInEntry);
+    expect(
+      occurrences.map((range) => text.slice(range.start, range.end))
+    ).toEqual(["蝕"]);
+    // the sole match is the standalone 蝕 before の, not the one in 腐蝕
+    expect(occurrences[0].start).toBe(0);
   });
 });
 

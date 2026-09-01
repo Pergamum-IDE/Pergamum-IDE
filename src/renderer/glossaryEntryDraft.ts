@@ -18,6 +18,7 @@ export interface GlossaryFormDraft {
   warningPolicy: GlossaryWarningPolicy;
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
+  allowSingleCharacterMatch: boolean;
 }
 
 export interface GlossaryEntryDraft {
@@ -25,6 +26,7 @@ export interface GlossaryEntryDraft {
   canonicalSurface: string;
   canonicalMatchBoundaryStart: GlossaryFormMatchBoundary;
   canonicalMatchBoundaryEnd: GlossaryFormMatchBoundary;
+  canonicalAllowSingleCharacterMatch: boolean;
   kind: GlossaryEntryKind;
   description: string;
   forms: GlossaryFormDraft[];
@@ -37,6 +39,7 @@ export interface NormalizedGlossaryFormForComparison {
   warningPolicy: GlossaryWarningPolicy;
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
+  allowSingleCharacterMatch: boolean;
 }
 
 function fallbackRandomId(): string {
@@ -79,6 +82,10 @@ function canonicalMatchBoundaryEndOf(
     DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
 }
 
+function canonicalAllowSingleCharacterMatchOf(entry: GlossaryEntry): boolean {
+  return canonicalFormOf(entry)?.allowSingleCharacterMatch ?? false;
+}
+
 function isNonCanonicalGlossaryForm(
   form: GlossaryEntry["forms"][number]
 ): form is GlossaryNonCanonicalForm {
@@ -96,7 +103,8 @@ function glossaryFormDraftsFromEntry(
       relation: form.relation,
       warningPolicy: form.warningPolicy,
       matchBoundaryStart: form.matchBoundaryStart,
-      matchBoundaryEnd: form.matchBoundaryEnd
+      matchBoundaryEnd: form.matchBoundaryEnd,
+      allowSingleCharacterMatch: form.allowSingleCharacterMatch
     }));
 }
 
@@ -109,7 +117,9 @@ function compareNormalizedGlossaryForms(
     left.surface.localeCompare(right.surface) ||
     left.warningPolicy.localeCompare(right.warningPolicy) ||
     left.matchBoundaryStart.localeCompare(right.matchBoundaryStart) ||
-    left.matchBoundaryEnd.localeCompare(right.matchBoundaryEnd)
+    left.matchBoundaryEnd.localeCompare(right.matchBoundaryEnd) ||
+    Number(left.allowSingleCharacterMatch) -
+      Number(right.allowSingleCharacterMatch)
   );
 }
 
@@ -120,6 +130,7 @@ export function normalizeGlossaryFormsForComparison(
     warningPolicy: GlossaryWarningPolicy;
     matchBoundaryStart: GlossaryFormMatchBoundary;
     matchBoundaryEnd: GlossaryFormMatchBoundary;
+    allowSingleCharacterMatch: boolean;
   }[]
 ): NormalizedGlossaryFormForComparison[] {
   return forms
@@ -128,7 +139,8 @@ export function normalizeGlossaryFormsForComparison(
       relation: form.relation,
       warningPolicy: form.warningPolicy,
       matchBoundaryStart: form.matchBoundaryStart,
-      matchBoundaryEnd: form.matchBoundaryEnd
+      matchBoundaryEnd: form.matchBoundaryEnd,
+      allowSingleCharacterMatch: form.allowSingleCharacterMatch
     }))
     .sort(compareNormalizedGlossaryForms);
 }
@@ -149,7 +161,9 @@ function areNormalizedGlossaryFormsEqual(
       leftForm.relation === rightForm.relation &&
       leftForm.warningPolicy === rightForm.warningPolicy &&
       leftForm.matchBoundaryStart === rightForm.matchBoundaryStart &&
-      leftForm.matchBoundaryEnd === rightForm.matchBoundaryEnd
+      leftForm.matchBoundaryEnd === rightForm.matchBoundaryEnd &&
+      leftForm.allowSingleCharacterMatch ===
+        rightForm.allowSingleCharacterMatch
     );
   });
 }
@@ -201,6 +215,8 @@ export function createGlossaryEntryDraft(
     canonicalSurface: canonicalSurfaceOf(entry),
     canonicalMatchBoundaryStart: canonicalMatchBoundaryStartOf(entry),
     canonicalMatchBoundaryEnd: canonicalMatchBoundaryEndOf(entry),
+    canonicalAllowSingleCharacterMatch:
+      canonicalAllowSingleCharacterMatchOf(entry),
     kind: entry.kind,
     description: entry.description,
     forms: glossaryFormDraftsFromEntry(entry),
@@ -222,6 +238,8 @@ export function isGlossaryEntryDraftDirty(draft: GlossaryEntryDraft): boolean {
       canonicalMatchBoundaryStartOf(draft.entry) ||
     draft.canonicalMatchBoundaryEnd !==
       canonicalMatchBoundaryEndOf(draft.entry) ||
+    draft.canonicalAllowSingleCharacterMatch !==
+      canonicalAllowSingleCharacterMatchOf(draft.entry) ||
     !areNormalizedGlossaryFormsEqual(draftForms, savedForms)
   );
 }
@@ -280,6 +298,16 @@ export function updateGlossaryEntryDraftCanonicalMatchBoundaryEnd(
   });
 }
 
+export function updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch(
+  draft: GlossaryEntryDraft,
+  canonicalAllowSingleCharacterMatch: boolean
+): GlossaryEntryDraft {
+  return withRecomputedSaveState({
+    ...draft,
+    canonicalAllowSingleCharacterMatch
+  });
+}
+
 export function addGlossaryEntryDraftForm(
   draft: GlossaryEntryDraft,
   relation: GlossaryFormRelation
@@ -294,7 +322,8 @@ export function addGlossaryEntryDraftForm(
         relation,
         warningPolicy: "default",
         matchBoundaryStart: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-        matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
+        matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+        allowSingleCharacterMatch: false
       }
     ]
   });
@@ -352,6 +381,19 @@ export function updateGlossaryEntryDraftFormMatchBoundaryEnd(
   });
 }
 
+export function updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
+  draft: GlossaryEntryDraft,
+  formId: string,
+  allowSingleCharacterMatch: boolean
+): GlossaryEntryDraft {
+  return withRecomputedSaveState({
+    ...draft,
+    forms: draft.forms.map((form) =>
+      form.id === formId ? { ...form, allowSingleCharacterMatch } : form
+    )
+  });
+}
+
 export function deleteGlossaryEntryDraftForm(
   draft: GlossaryEntryDraft,
   formId: string
@@ -400,6 +442,7 @@ export function glossaryEntryDraftUpdateInput(
     canonicalSurface: draft.canonicalSurface.trim(),
     matchBoundaryStart: draft.canonicalMatchBoundaryStart,
     matchBoundaryEnd: draft.canonicalMatchBoundaryEnd,
+    allowSingleCharacterMatch: draft.canonicalAllowSingleCharacterMatch,
     forms: draft.forms
       .map((form) => ({
         ...form,
@@ -412,7 +455,8 @@ export function glossaryEntryDraftUpdateInput(
         relation: form.relation,
         warningPolicy: form.warningPolicy,
         matchBoundaryStart: form.matchBoundaryStart,
-        matchBoundaryEnd: form.matchBoundaryEnd
+        matchBoundaryEnd: form.matchBoundaryEnd,
+        allowSingleCharacterMatch: form.allowSingleCharacterMatch
       }))
   };
 }

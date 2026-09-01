@@ -136,6 +136,9 @@ export const jaTranslations = {
   "dialog.unsavedChanges.title": "未保存の変更があります",
   "dialog.projectCloseFailed.message": "プロジェクトを閉じられませんでした。\n編集中の内容は保持されています。時間をおいて再度お試しください。",
   "dialog.projectCloseFailed.title": "プロジェクトを閉じられませんでした",
+  "dialog.projectOpenFailed.message":
+    "プロジェクトファイル（.pergamum）が見つからないか、読み込めないか、別のプロジェクトに置き換わっている可能性があります。\n文書やプロジェクトの内容が削除されたわけではありません。",
+  "dialog.projectOpenFailed.title": "プロジェクトを開けませんでした",
   "dialog.projectRestoreFailed.message":
     "前回開いていたプロジェクトを復元できませんでした。\n\nプロジェクトファイル（.pergamum）が見つからないか、読み込めないか、別のプロジェクトに置き換わっている可能性があります。\n文書やプロジェクトの内容が削除されたわけではありません。",
   "dialog.projectRestoreFailed.title": "プロジェクトを復元できませんでした",
@@ -549,6 +552,8 @@ export const jaTranslations = {
   "glossaryEditor.addVariant": "+ 表記揺れ",
   "glossaryEditor.advancedMatchingSettings": "機械検索用詳細設定",
   "glossaryEditor.aliases": "別名",
+  "glossaryEditor.allowSingleCharacterMatch.label": "1文字でも検出する",
+  "glossaryEditor.allowSingleCharacterMatch.helper": "漢字1文字など、通常は誤検出を避けるため検出しない短い表記を、このFormだけ検出対象にします。",
   "glossaryEditor.canonicalForm": "代表表記",
   "glossaryEditor.canonicalSurface": "代表表記",
   "glossaryEditor.deleteEntry": "削除",
@@ -766,7 +771,7 @@ export const jaTranslations = {
   "status.projectCloseFailed": "プロジェクトを閉じられませんでした: {message}",
   "status.projectOpenFailed": "プロジェクトを開けませんでした: {message}",
   "status.quitFailed": "Pergamumを終了できませんでした: {message}",
-  "status.recentProjectOpenFailed": "最近のプロジェクトを開けませんでした: {message}",
+  "status.recentProjectOpenFailed": "最近のプロジェクトを開けませんでした",
   "status.recoveryBackupSaved": "復旧用バックアップを保存しました",
   "status.recoveryDiscarded": "{count} 件の復旧候補を破棄しました",
   "status.recoveryRestoreFailed": "一部の項目を復元できませんでした",

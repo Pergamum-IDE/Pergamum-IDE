@@ -71,7 +71,8 @@ describe("glossary validation", () => {
       canonicalSurface: "魔導炉",
       description: "",
       matchBoundaryStart: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-      matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
+      matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+      allowSingleCharacterMatch: false
     });
 
     expect(
@@ -101,7 +102,8 @@ describe("glossary validation", () => {
           relation: "alias",
           warningPolicy: "default",
           matchBoundaryStart: "strict",
-          matchBoundaryEnd: "none"
+          matchBoundaryEnd: "none",
+          allowSingleCharacterMatch: false
         }
       ]
     });
@@ -377,7 +379,8 @@ describe("glossary validation", () => {
       canonicalSurface: "魔導炉",
       description: "  説明文  ",
       matchBoundaryStart: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-      matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
+      matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+      allowSingleCharacterMatch: false
     });
 
     expect(
@@ -407,7 +410,8 @@ describe("glossary validation", () => {
           relation: "alias",
           warningPolicy: "default",
           matchBoundaryStart: "auto",
-          matchBoundaryEnd: "strict"
+          matchBoundaryEnd: "strict",
+          allowSingleCharacterMatch: false
         }
       ]
     });

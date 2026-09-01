@@ -41,6 +41,14 @@ interface BaseGlossaryForm {
   surface: string;
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
+  /**
+   * #365: opt-in for this form only. When `false` (the default), a trimmed
+   * surface that is a single Unicode code point is never indexed/matched
+   * (false-positive guard). When `true`, this form is matched even at
+   * one code point long. `matchBoundaryStart` / `matchBoundaryEnd` remain
+   * boundary-only and are not used to express this opt-in.
+   */
+  allowSingleCharacterMatch: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +84,8 @@ export interface CreateGlossaryEntryInput {
   description: string;
   matchBoundaryStart?: GlossaryFormMatchBoundary;
   matchBoundaryEnd?: GlossaryFormMatchBoundary;
+  /** #365: canonical form opt-in; absent ⇒ `false`. */
+  allowSingleCharacterMatch?: boolean;
 }
 
 export interface GlossaryFormInput {
@@ -85,6 +95,8 @@ export interface GlossaryFormInput {
   warningPolicy: GlossaryWarningPolicy;
   matchBoundaryStart: GlossaryFormMatchBoundary;
   matchBoundaryEnd: GlossaryFormMatchBoundary;
+  /** #365: absent ⇒ `false`. */
+  allowSingleCharacterMatch?: boolean;
 }
 
 export interface UpdateGlossaryEntryInput {
@@ -94,6 +106,8 @@ export interface UpdateGlossaryEntryInput {
   canonicalSurface: string;
   matchBoundaryStart?: GlossaryFormMatchBoundary;
   matchBoundaryEnd?: GlossaryFormMatchBoundary;
+  /** #365: canonical form opt-in; absent ⇒ leave unchanged. */
+  allowSingleCharacterMatch?: boolean;
   forms: GlossaryFormInput[];
 }
 
@@ -187,6 +201,22 @@ function validateBoolean(value: unknown, path: string): boolean {
   }
 
   return value;
+}
+
+/**
+ * #365: `allowSingleCharacterMatch` is optional on the wire and in older /
+ * partial payloads. Absent (`undefined`) folds to `false`; anything else must
+ * be a real boolean.
+ */
+function validateOptionalBooleanDefaultFalse(
+  value: unknown,
+  path: string
+): boolean {
+  if (value === undefined) {
+    return false;
+  }
+
+  return validateBoolean(value, path);
 }
 
 function validateTimestamp(value: unknown, path: string): string {
@@ -306,6 +336,10 @@ export function validateGlossaryForm(
       value.matchBoundaryEnd,
       `${path}.matchBoundaryEnd`
     ),
+    allowSingleCharacterMatch: validateOptionalBooleanDefaultFalse(
+      value.allowSingleCharacterMatch,
+      `${path}.allowSingleCharacterMatch`
+    ),
     createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
     updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
   };
@@ -373,6 +407,10 @@ function validateGlossaryFormInput(
     matchBoundaryEnd: validateGlossaryFormMatchBoundary(
       value.matchBoundaryEnd,
       `${path}.matchBoundaryEnd`
+    ),
+    allowSingleCharacterMatch: validateOptionalBooleanDefaultFalse(
+      value.allowSingleCharacterMatch,
+      `${path}.allowSingleCharacterMatch`
     )
   };
 
@@ -469,6 +507,10 @@ export function validateCreateGlossaryEntryInput(
     matchBoundaryEnd: validateGlossaryFormMatchBoundaryOrDefault(
       value.matchBoundaryEnd,
       "matchBoundaryEnd"
+    ),
+    allowSingleCharacterMatch: validateOptionalBooleanDefaultFalse(
+      value.allowSingleCharacterMatch,
+      "allowSingleCharacterMatch"
     )
   };
 }
@@ -502,6 +544,13 @@ export function validateUpdateGlossaryEntryInput(
     value.matchBoundaryEnd,
     "matchBoundaryEnd"
   );
+  const allowSingleCharacterMatch =
+    value.allowSingleCharacterMatch === undefined
+      ? undefined
+      : validateBoolean(
+          value.allowSingleCharacterMatch,
+          "allowSingleCharacterMatch"
+        );
 
   return {
     id: validateGlossaryEntryId(value.id, "id"),
@@ -510,6 +559,9 @@ export function validateUpdateGlossaryEntryInput(
     canonicalSurface,
     ...(matchBoundaryStart === undefined ? {} : { matchBoundaryStart }),
     ...(matchBoundaryEnd === undefined ? {} : { matchBoundaryEnd }),
+    ...(allowSingleCharacterMatch === undefined
+      ? {}
+      : { allowSingleCharacterMatch }),
     forms
   };
 }

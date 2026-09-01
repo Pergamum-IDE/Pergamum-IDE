@@ -13,10 +13,12 @@ import {
   isLocalGlossaryFormId,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
+  updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch,
   updateGlossaryEntryDraftCanonicalMatchBoundaryEnd,
   updateGlossaryEntryDraftCanonicalMatchBoundaryStart,
   updateGlossaryEntryDraftCanonicalSurface,
   updateGlossaryEntryDraftDescription,
+  updateGlossaryEntryDraftFormAllowSingleCharacterMatch,
   updateGlossaryEntryDraftFormMatchBoundaryEnd,
   updateGlossaryEntryDraftFormMatchBoundaryStart,
   updateGlossaryEntryDraftFormSurface,
@@ -39,6 +41,7 @@ const savedEntry: GlossaryEntry = {
       warningPolicy: null,
       matchBoundaryStart: "strict",
       matchBoundaryEnd: "none",
+      allowSingleCharacterMatch: false,
       isCanonical: true,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -51,6 +54,7 @@ const savedEntry: GlossaryEntry = {
       warningPolicy: "default",
       matchBoundaryStart: "strict",
       matchBoundaryEnd: "none",
+      allowSingleCharacterMatch: false,
       isCanonical: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -63,6 +67,7 @@ const savedEntry: GlossaryEntry = {
       warningPolicy: "warn",
       matchBoundaryStart: "none",
       matchBoundaryEnd: "strict",
+      allowSingleCharacterMatch: false,
       isCanonical: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -88,7 +93,8 @@ describe("GlossaryEntryDraft", () => {
         relation: "alias",
         warningPolicy: "default",
         matchBoundaryStart: "strict",
-        matchBoundaryEnd: "none"
+        matchBoundaryEnd: "none",
+        allowSingleCharacterMatch: false
       },
       {
         id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
@@ -96,7 +102,8 @@ describe("GlossaryEntryDraft", () => {
         relation: "variant",
         warningPolicy: "warn",
         matchBoundaryStart: "none",
-        matchBoundaryEnd: "strict"
+        matchBoundaryEnd: "strict",
+        allowSingleCharacterMatch: false
       }
     ]);
   });
@@ -440,7 +447,8 @@ describe("GlossaryEntryDraft", () => {
       relation: "alias",
       warningPolicy: "warn",
       matchBoundaryStart: "strict",
-      matchBoundaryEnd: "none"
+      matchBoundaryEnd: "none",
+        allowSingleCharacterMatch: false
     });
   });
 
@@ -472,7 +480,8 @@ describe("GlossaryEntryDraft", () => {
           relation: "alias",
           warningPolicy: "warn",
           matchBoundaryStart: "none",
-          matchBoundaryEnd: "strict"
+          matchBoundaryEnd: "strict",
+          allowSingleCharacterMatch: false
         }
       ]
     });
@@ -489,6 +498,7 @@ describe("GlossaryEntryDraft", () => {
           warningPolicy: "default",
           matchBoundaryStart: "none",
           matchBoundaryEnd: "strict",
+      allowSingleCharacterMatch: false,
           isCanonical: false,
           createdAt: "2026-01-02T00:00:00.000Z",
           updatedAt: "2026-01-02T00:00:00.000Z"
@@ -507,7 +517,8 @@ describe("GlossaryEntryDraft", () => {
       relation: "alias",
       warningPolicy: "warn",
       matchBoundaryStart: "none",
-      matchBoundaryEnd: "strict"
+      matchBoundaryEnd: "strict",
+        allowSingleCharacterMatch: false
     });
     expect(savedDraft.saveState).toBe("dirty");
   });
@@ -526,6 +537,73 @@ describe("GlossaryEntryDraft", () => {
     expect(isGlossaryEntryDraftDirty(failedDraft)).toBe(true);
   });
 
+  it("tracks allowSingleCharacterMatch on the canonical form and a non-canonical form (#365)", () => {
+    const base = createGlossaryEntryDraft(savedEntry);
+    expect(base.canonicalAllowSingleCharacterMatch).toBe(false);
+    expect(
+      base.forms.every((form) => form.allowSingleCharacterMatch === false)
+    ).toBe(true);
+
+    const canonicalOn =
+      updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch(base, true);
+    expect(canonicalOn.canonicalAllowSingleCharacterMatch).toBe(true);
+    expect(isGlossaryEntryDraftDirty(canonicalOn)).toBe(true);
+    expect(canonicalOn.saveState).toBe("dirty");
+    expect(
+      isGlossaryEntryDraftDirty(
+        updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch(
+          canonicalOn,
+          false
+        )
+      )
+    ).toBe(false);
+
+    const formOn = updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
+      base,
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      true
+    );
+    expect(
+      formOn.forms.find((form) => form.id === "018f4b8c-7a2b-7c3d-8e4f-323456789abc")?.allowSingleCharacterMatch
+    ).toBe(true);
+    expect(isGlossaryEntryDraftDirty(formOn)).toBe(true);
+
+    const input = glossaryEntryDraftUpdateInput(
+      updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
+        canonicalOn,
+        "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+        true
+      )
+    );
+    expect(input.allowSingleCharacterMatch).toBe(true);
+    expect(
+      input.forms.find((form) => form.id === "018f4b8c-7a2b-7c3d-8e4f-323456789abc")?.allowSingleCharacterMatch
+    ).toBe(true);
+
+    const savedEntryWithFlags: GlossaryEntry = {
+      ...savedEntry,
+      forms: savedEntry.forms.map((form) =>
+        form.isCanonical || form.id === "018f4b8c-7a2b-7c3d-8e4f-323456789abc"
+          ? { ...form, allowSingleCharacterMatch: true }
+          : form
+      )
+    };
+    const savedDraft = applyGlossaryEntryDraftSaveResult(
+      updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
+        canonicalOn,
+        "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+        true
+      ),
+      savedEntryWithFlags
+    );
+    expect(savedDraft.saveState).toBe("clean");
+    expect(savedDraft.canonicalAllowSingleCharacterMatch).toBe(true);
+    expect(
+      savedDraft.forms.find((form) => form.id === "018f4b8c-7a2b-7c3d-8e4f-323456789abc")
+        ?.allowSingleCharacterMatch
+    ).toBe(true);
+  });
+
   it("builds the UpdateGlossaryEntryInput from the draft's editable fields", () => {
     const draft = updateGlossaryEntryDraftDescription(
       updateGlossaryEntryDraftKind(
@@ -542,6 +620,7 @@ describe("GlossaryEntryDraft", () => {
       canonicalSurface: "王都",
       matchBoundaryStart: "strict",
       matchBoundaryEnd: "none",
+      allowSingleCharacterMatch: false,
       forms: [
         {
           id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
@@ -549,7 +628,8 @@ describe("GlossaryEntryDraft", () => {
           relation: "alias",
           warningPolicy: "default",
           matchBoundaryStart: "strict",
-          matchBoundaryEnd: "none"
+          matchBoundaryEnd: "none",
+          allowSingleCharacterMatch: false
         },
         {
           id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
@@ -557,7 +637,8 @@ describe("GlossaryEntryDraft", () => {
           relation: "variant",
           warningPolicy: "warn",
           matchBoundaryStart: "none",
-          matchBoundaryEnd: "strict"
+          matchBoundaryEnd: "strict",
+          allowSingleCharacterMatch: false
         }
       ]
     });
@@ -576,7 +657,8 @@ describe("GlossaryEntryDraft", () => {
         relation: "alias",
         warningPolicy: "default",
         matchBoundaryStart: "strict",
-        matchBoundaryEnd: "none"
+        matchBoundaryEnd: "none",
+        allowSingleCharacterMatch: false
       },
       {
         id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
@@ -584,7 +666,8 @@ describe("GlossaryEntryDraft", () => {
         relation: "variant",
         warningPolicy: "warn",
         matchBoundaryStart: "none",
-        matchBoundaryEnd: "strict"
+        matchBoundaryEnd: "strict",
+        allowSingleCharacterMatch: false
       }
     ]);
   });
@@ -599,7 +682,8 @@ describe("GlossaryEntryDraft", () => {
           relation: "alias" as const,
           warningPolicy: "default" as const,
           matchBoundaryStart: "strict" as const,
-          matchBoundaryEnd: "none" as const
+          matchBoundaryEnd: "none" as const,
+          allowSingleCharacterMatch: false
         },
         {
           id: "local:blank",
@@ -607,7 +691,8 @@ describe("GlossaryEntryDraft", () => {
           relation: "variant" as const,
           warningPolicy: "default" as const,
           matchBoundaryStart: "none" as const,
-          matchBoundaryEnd: "strict" as const
+          matchBoundaryEnd: "strict" as const,
+          allowSingleCharacterMatch: false
         }
       ]
     };
@@ -619,6 +704,7 @@ describe("GlossaryEntryDraft", () => {
       canonicalSurface: "王都",
       matchBoundaryStart: "strict",
       matchBoundaryEnd: "none",
+      allowSingleCharacterMatch: false,
       forms: [
         {
           id: undefined,
@@ -626,7 +712,8 @@ describe("GlossaryEntryDraft", () => {
           relation: "alias",
           warningPolicy: "default",
           matchBoundaryStart: "strict",
-          matchBoundaryEnd: "none"
+          matchBoundaryEnd: "none",
+          allowSingleCharacterMatch: false
         }
       ]
     });

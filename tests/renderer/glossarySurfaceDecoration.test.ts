@@ -181,6 +181,37 @@ describe("buildGlossarySurfaceDecorationSegments", () => {
     expect(segments).toEqual([{ kind: "plain", text: "蝕" }]);
   });
 
+  it("highlights an opted-in one-character kanji form but not inside a compound (#365)", () => {
+    const entryId = "018f4b8c-7a2b-7c3d-8e4f-1000000000b1";
+    const optedInEntry = glossaryEntry(entryId, "term", [
+      {
+        id: "018f4b8c-7a2b-7c3d-8e4f-2000000000b1",
+        entryId,
+        surface: "蝕",
+        relation: null,
+        warningPolicy: null,
+        isCanonical: true,
+        matchBoundaryStart: "auto",
+        matchBoundaryEnd: "auto",
+        allowSingleCharacterMatch: true,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }
+    ]);
+    const index = buildGlossarySurfaceIndex([optedInEntry]);
+
+    expect(
+      summarizeSegments(buildGlossarySurfaceDecorationSegments("蝕の時。", index))
+    ).toEqual([
+      { kind: "match", text: "蝕", relation: "canonical" },
+      { kind: "plain", text: "の時。" }
+    ]);
+    // no highlight for 蝕 inside the compound 腐蝕
+    expect(
+      buildGlossarySurfaceDecorationSegments("腐蝕した銅板。", index)
+    ).toEqual([{ kind: "plain", text: "腐蝕した銅板。" }]);
+  });
+
   it("segments overlaps according to the shared matching result", () => {
     const entryId = "018f4b8c-7a2b-7c3d-8e4f-100000000003";
     const segments = buildGlossarySurfaceDecorationSegments(
