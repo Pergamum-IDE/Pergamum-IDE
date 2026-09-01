@@ -47,6 +47,14 @@ import {
 } from "./dialog/NameInputDialog";
 import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
 import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
+import { FileExplorerDeleteDialog } from "./FileExplorerDeleteDialog";
+import {
+  fileExplorerDeleteRejectionReasonKey,
+  type FileExplorerDeleteRejection,
+  type FileExplorerDeleteTarget
+} from "../shared/fileExplorerDelete";
+import { isProtectedPergamumDataFilePath } from "../shared/saveTargetPolicy";
+import { pathHasReservedFileExplorerSegment } from "../shared/fileExplorerCreate";
 import {
   fileOperationFailureReasonTextKey,
   type FileOperationFailureItemKind,
@@ -168,10 +176,40 @@ interface FileExplorerProps {
    *  only editor state that still blocks a Move — a clean open document moves
    *  and its editor identity follows (#338). */
   dirtyProjectDocumentRelativePaths?: readonly string[];
-  /** #327: a short, already-localized status line for a Move attempt. */
+  /** #327: a short, already-localized status line for a Move attempt.
+   *  #351: reused for File Explorer deletion status / disabled reasons. */
   onMoveResultMessage?: (message: string) => void;
+  /** #351: after a delete run settles, the project-relative paths that were
+   *  actually removed. The host closes any open editors for them (Recovery
+   *  rows are left intact — ADR-0011 DEL-14) and refreshes. */
+  onEntriesDeleted?: (deletedRelativePaths: readonly string[]) => void;
   onActivateDocument: (relativePath: string) => void;
 }
+
+/** #351: `true` when a project-relative path is a Pergamum reserved /
+ *  protected entry — a cheap renderer-side check so the context-menu Delete
+ *  item can disable itself when the whole selection is protected. */
+function isProtectedFileExplorerRelativePath(relativePath: string): boolean {
+  return (
+    pathHasReservedFileExplorerSegment(relativePath) ||
+    relativePath
+      .split("/")
+      .some((segment) => isProtectedPergamumDataFilePath(segment))
+  );
+}
+
+type FileExplorerDeleteFlowState =
+  | { readonly kind: "collecting" }
+  | {
+      readonly kind: "rejected";
+      readonly rejections: readonly FileExplorerDeleteRejection[];
+    }
+  | {
+      readonly kind: "confirm";
+      readonly targets: readonly FileExplorerDeleteTarget[];
+      readonly fileCount: number;
+      readonly folderCount: number;
+    };
 
 interface FileExplorerViewProps {
   projectName: string | null;
@@ -654,6 +692,7 @@ export function FileExplorer({
   onRenameUnavailable,
   dirtyProjectDocumentRelativePaths = EMPTY_STRING_LIST,
   onMoveResultMessage,
+  onEntriesDeleted,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
   const [entriesByDirectoryPath, setEntriesByDirectoryPath] = useState<
@@ -1679,6 +1718,203 @@ export function FileExplorer({
     [entriesByDirectoryPath]
   );
 
+  // -----------------------------------------------------------------------
+  // #351: File Explorer project-local deletion (ADR-0011).
+  // -----------------------------------------------------------------------
+  const [deleteFlow, setDeleteFlow] =
+    useState<FileExplorerDeleteFlowState | null>(null);
+
+  const selectionIsEntirelyProtected =
+    moveSources.relativePaths.length > 0 &&
+    moveSources.relativePaths.every(isProtectedFileExplorerRelativePath);
+
+  const deleteDisabledReasonKey: TranslationKey | null = !hasProject
+    ? "explorer.delete.disabled.noProject"
+    : readOnly
+      ? "explorer.delete.disabled.readOnlyProject"
+      : deleteFlow !== null
+        ? "explorer.delete.disabled.deleteInProgress"
+        : moveSources.relativePaths.length === 0
+          ? "explorer.delete.disabled.emptySelection"
+          : selectionHasDirtyOpenDocument
+            ? "explorer.delete.disabled.containsDirtyOpenDocument"
+            : selectionIsEntirelyProtected
+              ? "explorer.delete.disabled.protectedSelected"
+              : null;
+  const canDeleteSelection = deleteDisabledReasonKey === null;
+
+  const beginDelete = useCallback(async () => {
+    if (
+      !hasProject ||
+      readOnly ||
+      deleteFlow !== null ||
+      moveDialogOpen ||
+      moveFailure !== null ||
+      createDialogKind !== null ||
+      renameDialogTarget !== null
+    ) {
+      return;
+    }
+
+    const selectedRelativePaths = resolveFileExplorerMoveSources(
+      multiSelection.selected,
+      entriesByDirectoryPath
+    ).relativePaths;
+
+    if (selectedRelativePaths.length === 0) {
+      return;
+    }
+
+    if (
+      selectionCoversDirtyOpenDocument(
+        selectedRelativePaths,
+        dirtyProjectDocumentRelativePaths
+      )
+    ) {
+      onMoveResultMessage?.(
+        translate("explorer.delete.disabled.containsDirtyOpenDocument")
+      );
+      return;
+    }
+
+    setDeleteFlow({ kind: "collecting" });
+
+    let response: Awaited<
+      ReturnType<
+        typeof window.pergamum.projects.collectFileExplorerDeleteTargets
+      >
+    >;
+    try {
+      response = await window.pergamum.projects.collectFileExplorerDeleteTargets(
+        { selectedRelativePaths: [...selectedRelativePaths] }
+      );
+    } catch {
+      setDeleteFlow(null);
+      onMoveResultMessage?.(translate("explorer.delete.status.nothingDeleted"));
+      return;
+    }
+
+    if (response.kind === "unavailable") {
+      setDeleteFlow(null);
+      onMoveResultMessage?.(
+        translate(
+          response.reason === "readOnlyProject"
+            ? "explorer.delete.disabled.readOnlyProject"
+            : "explorer.delete.disabled.noProject"
+        )
+      );
+      return;
+    }
+
+    if (!response.result.ok) {
+      setDeleteFlow({
+        kind: "rejected",
+        rejections: response.result.rejections
+      });
+      return;
+    }
+
+    setDeleteFlow({
+      kind: "confirm",
+      targets: response.result.targets,
+      fileCount: response.result.fileCount,
+      folderCount: response.result.folderCount
+    });
+  }, [
+    createDialogKind,
+    dirtyProjectDocumentRelativePaths,
+    entriesByDirectoryPath,
+    deleteFlow,
+    hasProject,
+    moveDialogOpen,
+    moveFailure,
+    multiSelection.selected,
+    onMoveResultMessage,
+    readOnly,
+    renameDialogTarget,
+    translate
+  ]);
+
+  const deleteEntry = useCallback(
+    async (relativePath: string, kind: "file" | "folder") => {
+      const response = await window.pergamum.projects.deleteFileExplorerEntry({
+        relativePath,
+        kind
+      });
+      return response.kind === "completed"
+        ? response.result
+        : ({ ok: false, reason: "delete-failed" } as const);
+    },
+    []
+  );
+
+  const handleDeleteRunSettled = useCallback(
+    (deletedRelativePaths: readonly string[]) => {
+      if (deletedRelativePaths.length === 0) {
+        onMoveResultMessage?.(
+          translate("explorer.delete.status.nothingDeleted")
+        );
+        return;
+      }
+
+      onEntriesDeleted?.(deletedRelativePaths);
+
+      // Drop the deleted paths (and anything under a deleted folder) from the
+      // multi-selection and from the per-directory listing cache; re-list the
+      // affected parent directories.
+      const deletedSet = new Set(deletedRelativePaths);
+      const isDeleted = (relativePath: string): boolean =>
+        deletedSet.has(relativePath) ||
+        deletedRelativePaths.some((deleted) =>
+          relativePath.startsWith(`${deleted}/`)
+        );
+
+      setMultiSelection((current) => {
+        const nextSelected = new Set<string>();
+        for (const relativePath of current.selected) {
+          if (!isDeleted(relativePath)) {
+            nextSelected.add(relativePath);
+          }
+        }
+        return { selected: nextSelected, anchor: current.anchor };
+      });
+
+      setEntriesByDirectoryPath((current) => {
+        const next: Record<string, FileExplorerEntry[]> = {};
+        for (const [key, entries] of Object.entries(current)) {
+          if (key !== "" && isDeleted(key)) {
+            continue;
+          }
+          next[key] = entries;
+        }
+        return next;
+      });
+
+      const parents = new Set<string>();
+      for (const deleted of deletedRelativePaths) {
+        const slashIndex = deleted.lastIndexOf("/");
+        parents.add(slashIndex === -1 ? "" : deleted.slice(0, slashIndex));
+      }
+      const generation = loadGenerationRef.current + 1;
+      loadGenerationRef.current = generation;
+      for (const parent of parents) {
+        void loadDirectoryForGeneration(parent === "" ? null : parent, generation);
+      }
+
+      onMoveResultMessage?.(
+        translate("explorer.delete.status.completed", {
+          deleted: deletedRelativePaths.length
+        })
+      );
+    },
+    [
+      loadDirectoryForGeneration,
+      onEntriesDeleted,
+      onMoveResultMessage,
+      translate
+    ]
+  );
+
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const handleEntryContextMenu = useCallback(
@@ -2074,12 +2310,6 @@ export function FileExplorer({
         return;
       }
 
-      const usesPrimaryModifier =
-        (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
-      if (!usesPrimaryModifier) {
-        return;
-      }
-
       // Defensive: never shadow a real text-editing surface (the tree has
       // none, but a future inline rename input might live here).
       const target = event.target as HTMLElement | null;
@@ -2094,8 +2324,23 @@ export function FileExplorer({
         moveDialogOpen ||
         moveFailure !== null ||
         createDialogKind !== null ||
-        renameDialogTarget !== null
+        renameDialogTarget !== null ||
+        deleteFlow !== null
       ) {
+        return;
+      }
+
+      // #351: DEL runs the SAME delete command as the context menu — it
+      // always goes through the confirmation dialog, never a silent delete.
+      if (event.key === "Delete" && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        void beginDelete();
+        return;
+      }
+
+      const usesPrimaryModifier =
+        (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
+      if (!usesPrimaryModifier) {
         return;
       }
 
@@ -2111,7 +2356,9 @@ export function FileExplorer({
       }
     },
     [
+      beginDelete,
       createDialogKind,
+      deleteFlow,
       moveDialogOpen,
       moveFailure,
       performCut,
@@ -2488,8 +2735,76 @@ export function FileExplorer({
             >
               {translate("explorer.contextMenu.paste")}
             </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="delete"
+              data-file-explorer-delete-disabled-reason={
+                deleteDisabledReasonKey ?? undefined
+              }
+              disabled={!canDeleteSelection}
+              aria-disabled={!canDeleteSelection}
+              title={
+                deleteDisabledReasonKey
+                  ? translate(deleteDisabledReasonKey)
+                  : undefined
+              }
+              onClick={() => {
+                closeContextMenu();
+                if (canDeleteSelection) {
+                  void beginDelete();
+                }
+              }}
+            >
+              {translate("explorer.contextMenu.delete")}
+            </button>
           </div>
         </div>
+      ) : null}
+      {deleteFlow?.kind === "confirm" ? (
+        <FileExplorerDeleteDialog
+          targets={deleteFlow.targets}
+          fileCount={deleteFlow.fileCount}
+          folderCount={deleteFlow.folderCount}
+          translate={translate}
+          opener={null}
+          deleteEntry={deleteEntry}
+          onRunSettled={handleDeleteRunSettled}
+          onDismiss={() => setDeleteFlow(null)}
+        />
+      ) : null}
+      {deleteFlow?.kind === "rejected" ? (
+        <FileOperationFailureDialog
+          title={translate("explorer.delete.rejectDialog.title")}
+          intro={translate("explorer.delete.rejectDialog.intro")}
+          items={deleteFlow.rejections.map((rejection) => {
+            const kind: FileOperationFailureItemKind =
+              rejection.selectedPath === ""
+                ? "item"
+                : (fileExplorerEntryByRelativePath(
+                      entriesByDirectoryPath,
+                      rejection.selectedPath
+                    )?.kind ?? "item");
+
+            return {
+              kind,
+              displayName:
+                rejection.selectedPath === ""
+                  ? null
+                  : rejection.selectedPath,
+              reasonText: translate(
+                fileExplorerDeleteRejectionReasonKey(rejection.reason),
+                rejection.offendingPath
+                  ? { offendingPath: rejection.offendingPath }
+                  : undefined
+              )
+            };
+          })}
+          translate={translate}
+          opener={null}
+          onClose={() => setDeleteFlow(null)}
+        />
       ) : null}
       {moveDialogOpen ? (
         <MoveDestinationDialog

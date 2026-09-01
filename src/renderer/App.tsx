@@ -551,6 +551,31 @@ function withMovedProjectDocuments(
   };
 }
 
+/**
+ * #351: drop every registered project document whose path was deleted —
+ * directly, or because it lives inside a deleted folder — from the renderer
+ * `project.documents` cache. Reference-equal to the input when nothing
+ * matched.
+ */
+function withoutProjectDocuments(
+  project: PergamumProject,
+  deletedRelativePaths: readonly string[]
+): PergamumProject {
+  const isDeleted = (relativePath: string): boolean =>
+    deletedRelativePaths.some(
+      (deleted) =>
+        relativePath === deleted || relativePath.startsWith(`${deleted}/`)
+    );
+
+  const nextDocuments = project.documents.filter(
+    (projectDocument) => !isDeleted(projectDocument.relativePath)
+  );
+
+  return nextDocuments.length === project.documents.length
+    ? project
+    : { ...project, documents: nextDocuments };
+}
+
 function projectDocumentPathForReadOnlyRootUi(
   project: PergamumProject,
   document: CurrentDocument
@@ -6084,6 +6109,78 @@ export function App(): JSX.Element {
     setStatus({ key: "status.commandFailed", values: { message } });
   }
 
+  /**
+   * #351: a File Explorer delete run settled. For every open project document
+   * whose path was deleted (directly, or inside a deleted folder), close its
+   * editor and invalidate navigation — there is no relocation target. Drop
+   * the deleted paths from the project-document registry. Recovery rows are
+   * left untouched (ADR-0011 DEL-14); the row simply lists as a candidate
+   * under the now-missing path and restore fails gracefully if the parent
+   * folder is gone. A project switch / close that landed while the delete
+   * IPC loop ran drops the whole update.
+   */
+  function handleFileExplorerEntriesDeleted(
+    deletedRelativePaths: readonly string[]
+  ): void {
+    if (
+      !project ||
+      !activeProjectContext ||
+      deletedRelativePaths.length === 0
+    ) {
+      return;
+    }
+
+    const projectSnapshot = project;
+    const contextSnapshot = activeProjectContext;
+    const latestProject = projectRef.current;
+
+    if (
+      !latestProject ||
+      !isSameProjectInstance(latestProject, projectSnapshot)
+    ) {
+      return;
+    }
+
+    const isDeleted = (relativePath: string): boolean =>
+      deletedRelativePaths.some(
+        (deleted) =>
+          relativePath === deleted || relativePath.startsWith(`${deleted}/`)
+      );
+
+    let nextOpenDocuments = openDocumentsStateRef.current;
+    let openDocumentsChanged = false;
+
+    for (const openDocument of openDocumentsStateRef.current.documents) {
+      const markdownDocument = markdownDocumentForEditor(openDocument.editor);
+
+      if (
+        markdownDocument?.kind !== "project" ||
+        !isDeleted(markdownDocument.relativePath)
+      ) {
+        continue;
+      }
+
+      const editorId = createProjectDocumentEditorId(
+        markdownDocument.relativePath,
+        contextSnapshot
+      );
+      nextOpenDocuments = closeOpenEditor(nextOpenDocuments, editorId);
+      editorNavigationRef.current?.invalidateEditor(editorId);
+      openDocumentsChanged = true;
+    }
+
+    if (openDocumentsChanged) {
+      openDocumentsStateRef.current = nextOpenDocuments;
+      setOpenDocumentsState(nextOpenDocuments);
+    }
+
+    setProject((currentProject) =>
+      currentProject && isSameProjectInstance(currentProject, projectSnapshot)
+        ? withoutProjectDocuments(currentProject, deletedRelativePaths)
+        : currentProject
+    );
+  }
+
   async function activateProjectDocument(relativePath: string): Promise<void> {
     if (isLifecycleCommitBarrierActiveNow()) {
       return;
@@ -6389,6 +6486,9 @@ export function App(): JSX.Element {
                       }
                       onFileExplorerProjectDocumentsMoved={
                         handleFileExplorerProjectDocumentsMoved
+                      }
+                      onFileExplorerEntriesDeleted={
+                        handleFileExplorerEntriesDeleted
                       }
                       onFileExplorerRenameUnavailable={
                         handleFileExplorerRenameUnavailable

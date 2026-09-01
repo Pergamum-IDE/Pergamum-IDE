@@ -39,6 +39,9 @@ import {
   type RecordRecentProjectInput,
   type MoveFileExplorerEntriesRequest,
   type MoveFileExplorerEntriesResult,
+  type CollectFileExplorerDeleteTargetsResult,
+  type DeleteFileExplorerEntryRequest,
+  type DeleteFileExplorerEntryResponse,
   type RenameFileExplorerEntryRequest,
   type RenameFileExplorerEntryResult,
   type SaveProjectDocumentRequest,
@@ -46,6 +49,11 @@ import {
   type StartupProjectOpenResult
 } from "../shared/api";
 import { moveEntries } from "./projectMoveExecution";
+import {
+  collectFileExplorerDeleteTargets,
+  defaultFileExplorerDeleteCollectDeps
+} from "./fileExplorerDeleteCollect";
+import { deleteOneFileExplorerEntry } from "./fileExplorerDeleteExecute";
 import type { RecoveryPathRekeyResult } from "../shared/projectMove";
 import {
   applyMarkdownFileExtension,
@@ -2068,6 +2076,108 @@ async function moveFileExplorerEntries(
   return { kind: "completed", result };
 }
 
+// -------------------------------------------------------------------------
+// #351: File Explorer project-local deletion (ADR-0011). Two channels:
+//   - `collectFileExplorerDeleteTargets` — dry run: validate + enumerate the
+//     subtree + gather preview metadata. Never mutates the filesystem.
+//   - `deleteFileExplorerEntry` — delete ONE already-validated entry. The
+//     renderer drives the ordered per-item loop (abort = stop calling).
+// `projectRootPath` is taken from the open project; the `noProject` /
+// `readOnlyProject` gate stays main-authoritative. Recovery rows are left
+// untouched on delete (ADR-0011 DEL-14).
+// -------------------------------------------------------------------------
+
+async function collectFileExplorerDeleteTargetsHandler(
+  rawRequest: unknown
+): Promise<CollectFileExplorerDeleteTargetsResult> {
+  const selectedRelativePaths =
+    typeof rawRequest === "object" &&
+    rawRequest !== null &&
+    Array.isArray(
+      (rawRequest as { selectedRelativePaths?: unknown }).selectedRelativePaths
+    )
+      ? (
+          rawRequest as { selectedRelativePaths: unknown[] }
+        ).selectedRelativePaths.filter(
+          (value): value is string => typeof value === "string"
+        )
+      : null;
+
+  if (selectedRelativePaths === null) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  if (!currentProjectState) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { kind: "unavailable", reason: "readOnlyProject" };
+  }
+
+  const result = await collectFileExplorerDeleteTargets(
+    {
+      projectRootPath: currentProjectState.rootPath,
+      selectedRelativePaths
+    },
+    defaultFileExplorerDeleteCollectDeps
+  );
+
+  return { kind: "completed", result };
+}
+
+async function deleteFileExplorerEntryHandler(
+  rawRequest: unknown
+): Promise<DeleteFileExplorerEntryResponse> {
+  const request =
+    typeof rawRequest === "object" &&
+    rawRequest !== null &&
+    typeof (rawRequest as { relativePath?: unknown }).relativePath === "string" &&
+    ((rawRequest as { kind?: unknown }).kind === "file" ||
+      (rawRequest as { kind?: unknown }).kind === "folder")
+      ? (rawRequest as DeleteFileExplorerEntryRequest)
+      : null;
+
+  if (request === null) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  if (!currentProjectState) {
+    return { kind: "unavailable", reason: "noProject" };
+  }
+
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { kind: "unavailable", reason: "readOnlyProject" };
+  }
+
+  const projectState = currentProjectState;
+
+  const result = await deleteOneFileExplorerEntry({
+    projectRootPath: projectState.rootPath,
+    relativePath: request.relativePath,
+    kind: request.kind
+  });
+
+  // Keep the in-memory project-document set in step with what was deleted —
+  // the same bookkeeping the Move / Rename handlers do. Recovery rows are
+  // NOT touched (ADR-0011 DEL-14).
+  if (result.ok) {
+    const normalized = request.relativePath.replace(/\\/g, "/");
+    const subtreePrefix = `${normalized}/`;
+
+    for (const documentPath of [...projectState.documentRelativePaths]) {
+      if (
+        documentPath === normalized ||
+        documentPath.startsWith(subtreePrefix)
+      ) {
+        projectState.documentRelativePaths.delete(documentPath);
+      }
+    }
+  }
+
+  return { kind: "completed", result };
+}
+
 function resolveProjectDocumentPath(relativePath: string): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
@@ -3273,6 +3383,24 @@ export function registerProjectIpc(
       rawRequest: unknown
     ): Promise<MoveFileExplorerEntriesResult> =>
       moveFileExplorerEntries(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.collectFileExplorerDeleteTargets,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<CollectFileExplorerDeleteTargetsResult> =>
+      collectFileExplorerDeleteTargetsHandler(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.deleteFileExplorerEntry,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<DeleteFileExplorerEntryResponse> =>
+      deleteFileExplorerEntryHandler(rawRequest)
   );
 
   ipcMain.handle(

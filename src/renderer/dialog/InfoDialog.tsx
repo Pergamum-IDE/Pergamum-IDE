@@ -14,6 +14,15 @@ export interface InfoDialogProps {
   children: ReactNode;
   footer: ReactNode;
   hideVisualTitle?: boolean;
+  /** Extra class(es) appended to the dialog root, e.g. `appDialog-destructive`
+   *  for a danger-styled variant, or a per-dialog width modifier. */
+  className?: string;
+  /** ARIA role for the dialog element. `alertdialog` for a destructive
+   *  confirmation, `dialog` (the default) otherwise. */
+  role?: "dialog" | "alertdialog";
+  /** Optional node rendered before the title inside the header — typically an
+   *  `appDialogIcon` span. Ignored when `hideVisualTitle` is set. */
+  headerIcon?: ReactNode;
   /**
    * Whether this dialog traps Tab focus within itself. Defaults to `true`.
    * Set `false` while a nested modal (e.g. a stacked destructive-confirm
@@ -47,6 +56,9 @@ export function InfoDialog({
   children,
   footer,
   hideVisualTitle = false,
+  className,
+  role = "dialog",
+  headerIcon,
   trapFocus = true,
   onClose
 }: InfoDialogProps): JSX.Element {
@@ -113,8 +125,12 @@ export function InfoDialog({
     <div className="appDialogBackdrop">
       <div
         ref={dialogRef}
-        className="appDialog appInfoDialog"
-        role="dialog"
+        className={
+          className
+            ? `appDialog appInfoDialog ${className}`
+            : "appDialog appInfoDialog"
+        }
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
@@ -127,6 +143,7 @@ export function InfoDialog({
           titleHeading
         ) : (
           <div className="appDialogHeader appInfoDialogHeader">
+            {headerIcon ?? null}
             {titleHeading}
           </div>
         )}

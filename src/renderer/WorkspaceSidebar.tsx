@@ -40,6 +40,11 @@ interface WorkspaceSidebarProps {
   onFileExplorerProjectDocumentsMoved?: (
     relocations: readonly ProjectDocumentPathRelocation[]
   ) => void;
+  /** #351: after a File Explorer delete run settles, the project-relative
+   *  paths that were actually removed. */
+  onFileExplorerEntriesDeleted?: (
+    deletedRelativePaths: readonly string[]
+  ) => void;
   onFileExplorerRenameUnavailable?: (message: string) => void;
   /** #327/#338: project-relative paths of open documents with UNSAVED changes
    *  (the only editor state that blocks a Move), and a status-line sink for
@@ -69,6 +74,7 @@ export function WorkspaceSidebar({
   isFileExplorerProjectDocumentDirty,
   onFileExplorerProjectDocumentRenamed,
   onFileExplorerProjectDocumentsMoved,
+  onFileExplorerEntriesDeleted,
   onFileExplorerRenameUnavailable,
   fileExplorerDirtyProjectDocumentRelativePaths,
   onFileExplorerMoveResultMessage,
@@ -101,6 +107,7 @@ export function WorkspaceSidebar({
           isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
           onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
           onProjectDocumentsMoved={onFileExplorerProjectDocumentsMoved}
+          onEntriesDeleted={onFileExplorerEntriesDeleted}
           onRenameUnavailable={onFileExplorerRenameUnavailable}
           dirtyProjectDocumentRelativePaths={
             fileExplorerDirtyProjectDocumentRelativePaths
