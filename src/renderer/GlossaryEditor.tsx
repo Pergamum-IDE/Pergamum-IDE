@@ -25,6 +25,11 @@ interface GlossaryEditorProps {
   onDeleteAtom: (atomId: string) => void;
   onMoveAtom: (atomId: string, direction: "up" | "down") => void;
   onToggleTag: (tagId: string) => void;
+  /**
+   * #375: open the dedicated Glossary Tag Manager tab — the "I need a tag
+   * that doesn't exist yet" escape hatch from the tag picker.
+   */
+  onOpenTagManager: () => void;
   onDeleteEntry: () => void;
   onNavigateToPreviousOccurrence: () => void;
   onNavigateToNextOccurrence: () => void;
@@ -42,6 +47,7 @@ export function GlossaryEditor({
   onDeleteAtom,
   onMoveAtom,
   onToggleTag,
+  onOpenTagManager,
   onDeleteEntry,
   onNavigateToPreviousOccurrence,
   onNavigateToNextOccurrence,
@@ -205,7 +211,16 @@ export function GlossaryEditor({
       </section>
 
       <section className="glossaryEditorSection glossaryEditorTags">
-        <h2>{translate("glossaryEditor.tags.heading")}</h2>
+        <div className="glossaryEditorTagsHeader">
+          <h2>{translate("glossaryEditor.tags.heading")}</h2>
+          <button
+            type="button"
+            className="glossaryEditorTagsManageLink"
+            onClick={onOpenTagManager}
+          >
+            {translate("glossaryEditor.tags.openManager")}
+          </button>
+        </div>
         {availableTags.length === 0 ? (
           <p className="glossaryEditorTagsEmpty">
             {translate("glossaryEditor.tags.noProjectTags")}

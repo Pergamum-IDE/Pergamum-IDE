@@ -438,7 +438,7 @@ describe("App wiring for File Explorer create commands (#311)", () => {
     // The label name is derived from the active project document, not the
     // File Explorer selection, and is independent of dirtiness.
     expect(appSource).toContain(
-      "const renameActiveEditorTargetRelativePath = isSettingsTabActive"
+      "const renameActiveEditorTargetRelativePath = isEditorAreaSpecialTabActive"
     );
     expect(appSource).toContain(
       "activeProjectDocumentRelativePath(openDocumentsState)"

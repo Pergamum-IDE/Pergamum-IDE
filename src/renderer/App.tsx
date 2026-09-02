@@ -354,6 +354,7 @@ import type {
   NotificationToastPlacement
 } from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
+import { GlossaryTagManager } from "./GlossaryTagManager";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import {
@@ -782,6 +783,15 @@ export function App(): JSX.Element {
     createInitialWorkbenchLayoutState
   );
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
+  // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
+  // project-owned) — closed on project close. `autoStartCreate` opens it
+  // with the "new tag" form already up (from the Entry editor link).
+  const [isGlossaryTagManagerTabOpen, setIsGlossaryTagManagerTabOpen] =
+    useState(false);
+  const [
+    glossaryTagManagerAutoStartCreate,
+    setGlossaryTagManagerAutoStartCreate
+  ] = useState(false);
   const [activeSpecialTabId, setActiveSpecialTabId] =
     useState<SpecialTabId | null>(null);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
@@ -1293,14 +1303,26 @@ export function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDocumentKey, pendingRestoreViewStateVersion]);
   const hasOpenDocumentTab = openDocumentsState.documents.length > 0;
+  // #375: the Glossary Tag Manager special tab is active only when it is
+  // explicitly the selected special tab (no "default to it" fallback).
+  const isGlossaryTagManagerTabActive =
+    isGlossaryTagManagerTabOpen &&
+    activeSpecialTabId === "glossaryTagManager";
   // When the Settings tab is the only open tab (zero document tabs), it is the
-  // active surface even though `activeSpecialTabId` may not have been set.
+  // active surface even though `activeSpecialTabId` may not have been set —
+  // but never while the Glossary Tag Manager tab is the selected special tab.
   const isSettingsTabActive =
     isSettingsTabOpen &&
+    !isGlossaryTagManagerTabActive &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
+  // A full-editor-area special tab (Settings or the Glossary Tag Manager) is
+  // showing instead of an editor. Command gates that mean "an editor is
+  // active" check this rather than isSettingsTabActive alone.
+  const isEditorAreaSpecialTabActive =
+    isSettingsTabActive || isGlossaryTagManagerTabActive;
   // #352: the Outline pane shows headings only for an active Markdown editor.
   const activeEditorIsMarkdown =
-    !isSettingsTabActive && currentEditor?.kind === "markdown";
+    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
 
   // #352: jump the active Markdown editor to a clicked outline heading. Reuses
   // the existing pending-selection plumbing (same as Go to Line / glossary
@@ -1320,7 +1342,7 @@ export function App(): JSX.Element {
     });
   }
 
-  const activeEditorFocusSurface = isSettingsTabActive
+  const activeEditorFocusSurface = isEditorAreaSpecialTabActive
     ? "special"
     : currentEditor?.kind === "markdown"
       ? "markdown"
@@ -1664,7 +1686,7 @@ export function App(): JSX.Element {
   const shouldComputeStatusBarCharacterCount =
     effectiveSettings.workbench.statusBar.visible &&
     effectiveSettings.workbench.statusBar.characterCount.visible &&
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown";
   const statusBarCharacterCountDocumentKey =
     shouldComputeStatusBarCharacterCount && activeDocument
@@ -1707,7 +1729,7 @@ export function App(): JSX.Element {
   const isReadOnlyProject = project?.accessMode.kind === "readOnly";
   const isReadWriteProject = project?.accessMode.kind === "readWrite";
   const isProjectOwnedCurrentEditor =
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     (currentEditor?.kind === "glossaryEntry" ||
       (currentEditor?.kind === "markdown" &&
         activeMarkdownDocument?.kind === "project"));
@@ -1716,7 +1738,7 @@ export function App(): JSX.Element {
   // Drives the Rename command label so the Command Palette shows which file
   // it will act on. Independent of dirtiness — a dirty target still shows
   // its name, the `when` gate makes the command unavailable.
-  const renameActiveEditorTargetRelativePath = isSettingsTabActive
+  const renameActiveEditorTargetRelativePath = isEditorAreaSpecialTabActive
     ? null
     : activeProjectDocumentRelativePath(openDocumentsState);
   const renameActiveEditorTargetName = renameActiveEditorTargetRelativePath
@@ -1756,11 +1778,11 @@ export function App(): JSX.Element {
     !isSavingGlossaryEntry &&
     glossaryEntryDraftValidity(currentEditor.draft).ok;
   const canSave =
-    !isSettingsTabActive && currentEditor?.kind === "markdown"
+    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
-      : !isSettingsTabActive && canSaveGlossaryEntry;
+      : !isEditorAreaSpecialTabActive && canSaveGlossaryEntry;
   const canSaveAs =
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
     Boolean(activeMarkdownDocument);
   const isLifecycleCommitBarrierActive =
@@ -1825,7 +1847,7 @@ export function App(): JSX.Element {
   }
 
   const activeEditorSaveBlockedByReadOnlyProjectRootForUi =
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
     activeMarkdownDocument &&
     project
@@ -1847,14 +1869,14 @@ export function App(): JSX.Element {
         projectAccessReadWrite: isReadWriteProject,
         projectAccessReadOnly: isReadOnlyProject,
         editorHasDocument:
-          !isSettingsTabActive && currentEditor?.kind === "markdown"
+          !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
             ? Boolean(activeMarkdownDocument)
-            : !isSettingsTabActive && currentEditor?.kind === "glossaryEntry",
-        editorIsDirty: !isSettingsTabActive && isDirty,
+            : !isEditorAreaSpecialTabActive && currentEditor?.kind === "glossaryEntry",
+        editorIsDirty: !isEditorAreaSpecialTabActive && isDirty,
         editorKindMarkdown:
-          !isSettingsTabActive && currentEditor?.kind === "markdown",
+          !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown",
         editorKindGlossary:
-          !isSettingsTabActive && currentEditor?.kind === "glossaryEntry",
+          !isEditorAreaSpecialTabActive && currentEditor?.kind === "glossaryEntry",
         editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
         // #318: same source of truth as the Rename target resolution — an
         // active Markdown editor over a current-project document. Untitled,
@@ -1872,7 +1894,7 @@ export function App(): JSX.Element {
       project,
       isReadWriteProject,
       isReadOnlyProject,
-      isSettingsTabActive,
+      isEditorAreaSpecialTabActive,
       currentEditor?.kind,
       activeMarkdownDocument,
       isProjectOwnedCurrentEditor,
@@ -2145,7 +2167,11 @@ export function App(): JSX.Element {
         navigateToPreviousGlossaryOccurrence: (entryId) =>
           navigateGlossaryOccurrenceRef.current(entryId, "previous"),
         navigateToNextGlossaryOccurrence: (entryId) =>
-          navigateGlossaryOccurrenceRef.current(entryId, "next")
+          navigateGlossaryOccurrenceRef.current(entryId, "next"),
+        openGlossaryTagManager: () => {
+          openGlossaryTagManagerTab();
+          return true;
+        }
       },
       createGlossaryCommandTitles(translate)
     );
@@ -2293,24 +2319,35 @@ export function App(): JSX.Element {
     () => documentTabs(openDocumentsState),
     [openDocumentsState]
   );
-  const specialTabs = useMemo<SpecialWorkspaceTab[]>(
-    () =>
-      isSettingsTabOpen
-        ? [
-            {
-              kind: "special",
-              id: "settings",
-              title: translate("settings.application.title")
-            }
-          ]
-        : [],
-    [isSettingsTabOpen, translate]
-  );
-  const activeWorkspaceTabId: WorkspaceTabId | undefined = isSettingsTabActive
-    ? specialWorkspaceTabId("settings")
-    : openDocumentsState.activeDocumentId
-      ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
-      : undefined;
+  const specialTabs = useMemo<SpecialWorkspaceTab[]>(() => {
+    const list: SpecialWorkspaceTab[] = [];
+
+    if (isSettingsTabOpen) {
+      list.push({
+        kind: "special",
+        id: "settings",
+        title: translate("settings.application.title")
+      });
+    }
+
+    if (isGlossaryTagManagerTabOpen) {
+      list.push({
+        kind: "special",
+        id: "glossaryTagManager",
+        title: translate("glossary.tagManager.title")
+      });
+    }
+
+    return list;
+  }, [isSettingsTabOpen, isGlossaryTagManagerTabOpen, translate]);
+  const activeWorkspaceTabId: WorkspaceTabId | undefined =
+    isGlossaryTagManagerTabActive
+      ? specialWorkspaceTabId("glossaryTagManager")
+      : isSettingsTabActive
+        ? specialWorkspaceTabId("settings")
+        : openDocumentsState.activeDocumentId
+          ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+          : undefined;
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
@@ -2474,10 +2511,11 @@ export function App(): JSX.Element {
     }
   }
 
-  // #375: Glossary tag CRUD from the sidebar tag manager. Each mutation
-  // bumps `glossaryRefreshToken`, which reloads the tag list (and every
-  // glossary consumer) below.
-  async function createGlossaryTagFromSidebar(
+  // #375: Glossary tag CRUD, driven by the Glossary Tag Manager special
+  // tab. Each mutation bumps `glossaryRefreshToken`, which reloads the tag
+  // list (and every glossary consumer — sidebar filter, entry-row chips,
+  // entry editor tag picker) below.
+  async function handleCreateGlossaryTag(
     input: CreateGlossaryTagInput
   ): Promise<GlossaryTag> {
     const tag = await window.pergamum.glossary.createTag(input);
@@ -2485,7 +2523,7 @@ export function App(): JSX.Element {
     return tag;
   }
 
-  async function updateGlossaryTagFromSidebar(
+  async function handleUpdateGlossaryTag(
     input: UpdateGlossaryTagInput
   ): Promise<GlossaryTag> {
     const tag = await window.pergamum.glossary.updateTag(input);
@@ -2493,7 +2531,7 @@ export function App(): JSX.Element {
     return tag;
   }
 
-  async function deleteGlossaryTagFromSidebar(
+  async function handleDeleteGlossaryTag(
     tagId: string,
     confirmMessage: string
   ): Promise<void> {
@@ -2580,19 +2618,42 @@ export function App(): JSX.Element {
     setActiveSpecialTabId("settings");
   }
 
+  // #375: open (or re-activate) the Glossary Tag Manager special tab. Opening
+  // it again just activates the existing one — never a duplicate tab.
+  function openGlossaryTagManagerTab(options?: {
+    autoStartCreate?: boolean;
+  }): void {
+    setGlossaryTagManagerAutoStartCreate(options?.autoStartCreate ?? false);
+    setIsGlossaryTagManagerTabOpen(true);
+    setActiveSpecialTabId("glossaryTagManager");
+  }
+
   function activateSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings" && isSettingsTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+
+    if (tabId === "glossaryTagManager" && isGlossaryTagManagerTabOpen) {
       setActiveSpecialTabId(tabId);
     }
   }
 
   function closeSpecialTab(tabId: SpecialTabId): void {
-    if (tabId !== "settings") {
+    if (tabId === "settings") {
+      setIsSettingsTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
       return;
     }
 
-    setIsSettingsTabOpen(false);
-    setActiveSpecialTabId((current) => (current === tabId ? null : current));
+    if (tabId === "glossaryTagManager") {
+      setIsGlossaryTagManagerTabOpen(false);
+      setGlossaryTagManagerAutoStartCreate(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+    }
   }
 
   async function openAboutDialog(): Promise<void> {
@@ -3128,7 +3189,7 @@ export function App(): JSX.Element {
     operation: "insert" | "remove"
   ): void {
     if (
-      isSettingsTabActive ||
+      isEditorAreaSpecialTabActive ||
       currentEditor?.kind !== "markdown" ||
       !activeMarkdownDocument ||
       isLifecycleCommitBarrierActiveNow() ||
@@ -3180,7 +3241,7 @@ export function App(): JSX.Element {
   }
 
   function canCloseEditorNow(editorId?: EditorId): boolean {
-    if (!editorId && isSettingsTabActive) {
+    if (!editorId && isEditorAreaSpecialTabActive) {
       return true;
     }
 
@@ -3191,6 +3252,11 @@ export function App(): JSX.Element {
     editorId?: EditorId
   ): Promise<void> {
     if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
+    if (!editorId && isGlossaryTagManagerTabActive) {
+      closeSpecialTab("glossaryTagManager");
       return;
     }
 
@@ -4909,7 +4975,10 @@ export function App(): JSX.Element {
       targetOpenDocument?.id ?? options.editorId ?? activeDocument?.id
     );
 
-    if (!targetOpenDocument || (!options.editorId && isSettingsTabActive)) {
+    if (
+      !targetOpenDocument ||
+      (!options.editorId && isEditorAreaSpecialTabActive)
+    ) {
       logRendererDebugEvent({
         level: "debug",
         event: "save.skipped",
@@ -5235,6 +5304,13 @@ export function App(): JSX.Element {
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
     sidebarGlossaryOccurrenceCursorRef.current = null;
+    // #375: the Glossary Tag Manager tab is project-scoped (tags are
+    // project-owned) — it never survives a project switch / close.
+    setIsGlossaryTagManagerTabOpen(false);
+    setGlossaryTagManagerAutoStartCreate(false);
+    setActiveSpecialTabId((current) =>
+      current === "glossaryTagManager" ? null : current
+    );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
     setOpenDocumentsState((state) =>
@@ -5310,6 +5386,13 @@ export function App(): JSX.Element {
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
     sidebarGlossaryOccurrenceCursorRef.current = null;
+    // #375: the Glossary Tag Manager tab is project-scoped (tags are
+    // project-owned) — it never survives a project switch / close.
+    setIsGlossaryTagManagerTabOpen(false);
+    setGlossaryTagManagerAutoStartCreate(false);
+    setActiveSpecialTabId((current) =>
+      current === "glossaryTagManager" ? null : current
+    );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
     const nextOpenDocumentsState = removeProjectScopedOpenEditors(
@@ -5850,6 +5933,13 @@ export function App(): JSX.Element {
     projectActivationLifetimeRef.current.markExplicitEditorActivation();
     lastActiveMarkdownEditorIdRef.current = null;
     sidebarGlossaryOccurrenceCursorRef.current = null;
+    // #375: the Glossary Tag Manager tab is project-scoped (tags are
+    // project-owned) — it never survives a project switch / close.
+    setIsGlossaryTagManagerTabOpen(false);
+    setGlossaryTagManagerAutoStartCreate(false);
+    setActiveSpecialTabId((current) =>
+      current === "glossaryTagManager" ? null : current
+    );
     coldStartMarkdownFocusRequestedRef.current = false;
     setMarkdownEditorFocusRequest(null);
     setCommandPaletteMarkdownFocusRestorePending(false);
@@ -6200,7 +6290,7 @@ export function App(): JSX.Element {
       return;
     }
 
-    if (isSettingsTabActive) {
+    if (isEditorAreaSpecialTabActive) {
       return;
     }
 
@@ -6222,7 +6312,7 @@ export function App(): JSX.Element {
   // lazily split (see createLineJumpEditorSnapshot), so it costs nothing on
   // renders where the Palette isn't open in line mode.
   const lineJumpEditorSnapshot =
-    !isSettingsTabActive && currentEditor?.kind === "markdown"
+    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
       ? createLineJumpEditorSnapshot(
           currentDocumentContent(currentEditor.document)
         )
@@ -6670,13 +6760,15 @@ export function App(): JSX.Element {
       <header className="toolbar">
         <div className="documentTitle">
           <span>
-            {isSettingsTabActive
-              ? translate("settings.application.title")
-              : currentEditor
-                ? currentEditorTitle(currentEditor)
-                : ""}
+            {isGlossaryTagManagerTabActive
+              ? translate("glossary.tagManager.title")
+              : isSettingsTabActive
+                ? translate("settings.application.title")
+                : currentEditor
+                  ? currentEditorTitle(currentEditor)
+                  : ""}
           </span>
-          {!isSettingsTabActive && isDirty ? (
+          {!isEditorAreaSpecialTabActive && isDirty ? (
             <span className="dirtyIndicator">
               {translate("document.unsaved")}
             </span>
@@ -6849,9 +6941,6 @@ export function App(): JSX.Element {
                       onNavigateGlossaryOccurrence={
                         navigateGlossaryOccurrenceFromSidebar
                       }
-                      onCreateGlossaryTag={createGlossaryTagFromSidebar}
-                      onUpdateGlossaryTag={updateGlossaryTagFromSidebar}
-                      onDeleteGlossaryTag={deleteGlossaryTagFromSidebar}
                       markdownOutline={activeMarkdownOutline}
                       activeEditorIsMarkdown={activeEditorIsMarkdown}
                       activeOutlineDocumentKey={activeDocumentKey}
@@ -6901,7 +6990,18 @@ export function App(): JSX.Element {
                 />
 
                 <section className="editorAreaBody" ref={editorAreaBodyRef}>
-                  {isSettingsTabActive ? (
+                  {isGlossaryTagManagerTabActive ? (
+                    <section className="glossaryTagManagerTab">
+                      <GlossaryTagManager
+                        tags={glossaryTags}
+                        translate={translate}
+                        autoStartCreate={glossaryTagManagerAutoStartCreate}
+                        onCreateTag={handleCreateGlossaryTag}
+                        onUpdateTag={handleUpdateGlossaryTag}
+                        onDeleteTag={handleDeleteGlossaryTag}
+                      />
+                    </section>
+                  ) : isSettingsTabActive ? (
                     <SettingsPanel
                       settings={settings}
                       isLoading={isSettingsLoading}
@@ -6980,6 +7080,9 @@ export function App(): JSX.Element {
                         onDeleteGlossaryEntryAtom={deleteActiveGlossaryEntryAtom}
                         onMoveGlossaryEntryAtom={moveActiveGlossaryEntryAtom}
                         onToggleGlossaryEntryTag={toggleActiveGlossaryEntryTag}
+                        onOpenGlossaryTagManager={() =>
+                          openGlossaryTagManagerTab({ autoStartCreate: true })
+                        }
                         onDeleteGlossaryEntry={() => {
                           void deleteActiveGlossaryEntry();
                         }}

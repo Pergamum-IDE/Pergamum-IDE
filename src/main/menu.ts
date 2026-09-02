@@ -13,6 +13,7 @@ import {
   assistCommandIds,
   commandPaletteCommandIds,
   editorCommandIds,
+  glossaryTabCommandIds,
   isApplicationMenuCommandId,
   type ApplicationMenuCommandId
 } from "../shared/commandIds";
@@ -338,6 +339,13 @@ function assistMenu(
         assistCommandIds.removeParagraphIndent,
         language,
         "menu.assist.paragraphIndent.remove",
+        options
+      ),
+      { type: "separator" },
+      commandMenuItem(
+        glossaryTabCommandIds.manageTags,
+        language,
+        "menu.assist.manageGlossaryTags",
         options
       )
     ]

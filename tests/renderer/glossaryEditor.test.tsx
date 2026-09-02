@@ -1,6 +1,9 @@
+// @vitest-environment happy-dom
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { createRoot } from "react-dom/client";
+import { act } from "react-dom/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GlossaryBoundaryPolicy,
   setGlossaryAtomBoundaryStartPolicy
@@ -80,6 +83,7 @@ function noopHandlers() {
     onDeleteAtom: vi.fn(),
     onMoveAtom: vi.fn(),
     onToggleTag: vi.fn(),
+    onOpenTagManager: vi.fn(),
     onDeleteEntry: vi.fn(),
     onNavigateToPreviousOccurrence: vi.fn(),
     onNavigateToNextOccurrence: vi.fn()
@@ -210,5 +214,50 @@ describe("GlossaryEditor (#375)", () => {
 
     expect(markup).toContain("<h1>見出し</h1>");
     expect(markup).not.toContain("# 見出し");
+  });
+
+  it("renders a 'manage tags' link near the tag picker", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
+
+    expect(markup).toContain("glossaryEditorTagsManageLink");
+    expect(markup).toContain("glossaryEditor.tags.openManager");
+  });
+});
+
+describe("GlossaryEditor (#375) — tag manager link", () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("calls onOpenTagManager when the manage-tags link is clicked", () => {
+    const onOpenTagManager = vi.fn();
+
+    act(() => {
+      root.render(
+        React.createElement(GlossaryEditor, {
+          draft: createGlossaryEntryDraft(entry()),
+          availableTags: [tagA, tagB],
+          translate,
+          ...noopHandlers(),
+          onOpenTagManager
+        })
+      );
+    });
+
+    container
+      .querySelector<HTMLButtonElement>(".glossaryEditorTagsManageLink")!
+      .click();
+
+    expect(onOpenTagManager).toHaveBeenCalledTimes(1);
   });
 });

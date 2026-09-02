@@ -2,10 +2,8 @@ import type { FileExplorerEntry, PergamumProject } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import type {
   CreateGlossaryEntryInput,
-  CreateGlossaryTagInput,
   GlossaryEntry,
-  GlossaryEntryId,
-  UpdateGlossaryTagInput
+  GlossaryEntryId
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
@@ -77,16 +75,6 @@ interface WorkspaceSidebarProps {
     entry: GlossaryEntry,
     direction: "previous" | "next"
   ) => void;
-  onCreateGlossaryTag: (
-    input: CreateGlossaryTagInput
-  ) => Promise<unknown>;
-  onUpdateGlossaryTag: (
-    input: UpdateGlossaryTagInput
-  ) => Promise<unknown>;
-  onDeleteGlossaryTag: (
-    tagId: string,
-    confirmMessage: string
-  ) => Promise<unknown>;
   /** #352: the ACTIVE Markdown document's heading outline (working text), or
    *  `null` when there is no active Markdown document. */
   markdownOutline?: MarkdownOutlineParseResult | null;
@@ -127,9 +115,6 @@ export function WorkspaceSidebar({
   onCreateGlossaryEntry,
   glossaryActiveDocumentContent,
   onNavigateGlossaryOccurrence,
-  onCreateGlossaryTag,
-  onUpdateGlossaryTag,
-  onDeleteGlossaryTag,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
   activeOutlineDocumentKey = null,
@@ -197,9 +182,6 @@ export function WorkspaceSidebar({
           onActivateEntry={onActivateGlossaryEntry}
           onCreateEntry={onCreateGlossaryEntry}
           onNavigateOccurrence={onNavigateGlossaryOccurrence}
-          onCreateTag={onCreateGlossaryTag}
-          onUpdateTag={onUpdateGlossaryTag}
-          onDeleteTag={onDeleteGlossaryTag}
         />
       );
   }

@@ -101,9 +101,6 @@ function baseProps(overrides: Record<string, unknown> = {}) {
     onActivateEntry: vi.fn(),
     onCreateEntry: vi.fn().mockResolvedValue(true),
     onNavigateOccurrence: vi.fn(),
-    onCreateTag: vi.fn().mockResolvedValue({}),
-    onUpdateTag: vi.fn().mockResolvedValue({}),
-    onDeleteTag: vi.fn().mockResolvedValue(undefined),
     ...overrides
   };
 }
@@ -289,11 +286,10 @@ describe("GlossarySidebar (#375)", () => {
     });
   });
 
-  it("mounts the tag manager on demand", async () => {
+  it("no longer hosts any tag CRUD UI (moved to the Glossary Tag Manager tab)", async () => {
     await render();
     expect(container.querySelector(".glossaryTagManager")).toBeNull();
-    act(() => button("glossary.manageTags").click());
-    expect(container.querySelector(".glossaryTagManager")).not.toBeNull();
+    expect(container.textContent).not.toContain("glossary.manageTags");
   });
 
   it("shows the no-project placeholder without a project", async () => {

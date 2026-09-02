@@ -397,6 +397,8 @@ interface EditorSurfaceProps {
     direction: "up" | "down"
   ) => void;
   onToggleGlossaryEntryTag: (tagId: string) => void;
+  /** #375: open the Glossary Tag Manager special tab. */
+  onOpenGlossaryTagManager: () => void;
   onDeleteGlossaryEntry: () => void;
   onNavigateToPreviousGlossaryOccurrence: () => void;
   onNavigateToNextGlossaryOccurrence: () => void;
@@ -493,6 +495,7 @@ export function EditorSurface({
   onDeleteGlossaryEntryAtom,
   onMoveGlossaryEntryAtom,
   onToggleGlossaryEntryTag,
+  onOpenGlossaryTagManager,
   onDeleteGlossaryEntry,
   onNavigateToPreviousGlossaryOccurrence,
   onNavigateToNextGlossaryOccurrence,
@@ -564,6 +567,7 @@ export function EditorSurface({
           onDeleteAtom={onDeleteGlossaryEntryAtom}
           onMoveAtom={onMoveGlossaryEntryAtom}
           onToggleTag={onToggleGlossaryEntryTag}
+          onOpenTagManager={onOpenGlossaryTagManager}
           onDeleteEntry={onDeleteGlossaryEntry}
           onNavigateToPreviousOccurrence={
             onNavigateToPreviousGlossaryOccurrence

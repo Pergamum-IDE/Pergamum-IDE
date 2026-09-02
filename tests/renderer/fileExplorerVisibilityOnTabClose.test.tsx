@@ -227,10 +227,7 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
             onActivateGlossaryEntry: vi.fn(),
             onCreateGlossaryEntry: vi.fn(async () => true),
             glossaryActiveDocumentContent: null,
-            onNavigateGlossaryOccurrence: vi.fn(),
-            onCreateGlossaryTag: vi.fn(async () => ({})),
-            onUpdateGlossaryTag: vi.fn(async () => ({})),
-            onDeleteGlossaryTag: vi.fn(async () => undefined)
+            onNavigateGlossaryOccurrence: vi.fn()
           })
         );
       });
@@ -273,10 +270,7 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
             onActivateGlossaryEntry: vi.fn(),
             onCreateGlossaryEntry: vi.fn(async () => true),
             glossaryActiveDocumentContent: null,
-            onNavigateGlossaryOccurrence: vi.fn(),
-            onCreateGlossaryTag: vi.fn(async () => ({})),
-            onUpdateGlossaryTag: vi.fn(async () => ({})),
-            onDeleteGlossaryTag: vi.fn(async () => undefined)
+            onNavigateGlossaryOccurrence: vi.fn()
           })
         );
       });

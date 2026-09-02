@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   CreateGlossaryEntryInput,
-  CreateGlossaryTagInput,
   GlossaryEntry,
   GlossaryEntryId,
-  GlossaryTagId,
-  UpdateGlossaryTagInput
+  GlossaryTagId
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { findGlossaryEntryOccurrences } from "./glossaryOccurrenceNavigation";
@@ -18,7 +16,6 @@ import {
   type GlossaryTagFilter
 } from "./glossaryNavigatorSearch";
 import { GlossaryTagChip } from "./GlossaryTagChip";
-import { GlossaryTagManager } from "./GlossaryTagManager";
 import {
   createErrorGlossarySidebarState,
   createLoadedGlossarySidebarState,
@@ -45,9 +42,6 @@ interface GlossarySidebarProps {
     entry: GlossaryEntry,
     direction: "previous" | "next"
   ) => void;
-  onCreateTag: (input: CreateGlossaryTagInput) => Promise<unknown>;
-  onUpdateTag: (input: UpdateGlossaryTagInput) => Promise<unknown>;
-  onDeleteTag: (tagId: string, confirmMessage: string) => Promise<unknown>;
 }
 
 interface GlossaryCreateFormState {
@@ -112,10 +106,7 @@ export function GlossarySidebar({
   activeDocumentContent,
   onActivateEntry,
   onCreateEntry,
-  onNavigateOccurrence,
-  onCreateTag,
-  onUpdateTag,
-  onDeleteTag
+  onNavigateOccurrence
 }: GlossarySidebarProps): JSX.Element {
   const [state, setState] = useState<GlossarySidebarState>(() =>
     projectRootPath
@@ -131,7 +122,6 @@ export function GlossarySidebar({
   >(new Set());
   const [createForm, setCreateForm] =
     useState<GlossaryCreateFormState>(INITIAL_CREATE_FORM);
-  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
   const projectRootPathRef = useRef<string | null>(projectRootPath);
   const loadRequestIdRef = useRef(0);
 
@@ -421,16 +411,6 @@ export function GlossarySidebar({
         )}
       </div>
 
-      {isTagManagerOpen && state.status === "loaded" ? (
-        <GlossaryTagManager
-          tags={state.tags}
-          translate={translate}
-          onCreateTag={onCreateTag}
-          onUpdateTag={onUpdateTag}
-          onDeleteTag={onDeleteTag}
-        />
-      ) : null}
-
       {createForm.isOpen ? (
         <form
           className="glossaryCreateForm"
@@ -509,14 +489,6 @@ export function GlossarySidebar({
       ) : null}
 
       <div className="workspaceSidebarActions glossarySidebarActions">
-        <button
-          type="button"
-          className="workspaceSidebarButton"
-          disabled={readOnly || state.status !== "loaded"}
-          onClick={() => setIsTagManagerOpen((open) => !open)}
-        >
-          {translate("glossary.manageTags")}
-        </button>
         <button
           type="button"
           className="workspaceSidebarButton"

@@ -7,7 +7,8 @@ import {
   applicationMenuCommandIds,
   assistCommandIds,
   commandPaletteCommandIds,
-  editorCommandIds
+  editorCommandIds,
+  glossaryTabCommandIds
 } from "../../src/shared/commandIds";
 
 const electronMock = vi.hoisted(() => ({
@@ -439,7 +440,7 @@ describe("application menu", () => {
       expect(template.map((item) => item.label)).toContain("支援");
     });
 
-    it("renders paragraph indent items in the Japanese Assist menu", () => {
+    it("renders paragraph indent + glossary tag items in the Japanese Assist menu", () => {
       const assistItems = submenuItems(
         findTopLevelMenu(
           buildApplicationMenu("ja", emptyMenuOptions(), "win32"),
@@ -447,10 +448,15 @@ describe("application menu", () => {
         )
       );
 
-      expect(assistItems.map((item) => item.label)).toEqual([
+      expect(
+        assistItems
+          .filter((item) => item.type !== "separator")
+          .map((item) => item.label)
+      ).toEqual([
         "改行コード分布...",
         "段落字下げ一括挿入",
-        "段落字下げ一括削除"
+        "段落字下げ一括削除",
+        "用語タグを管理..."
       ]);
     });
 
@@ -468,7 +474,8 @@ describe("application menu", () => {
       expect(send.mock.calls.map((call) => call[1])).toEqual([
         assistCommandIds.showLineEndingDistribution,
         assistCommandIds.insertParagraphIndent,
-        assistCommandIds.removeParagraphIndent
+        assistCommandIds.removeParagraphIndent,
+        glossaryTabCommandIds.manageTags
       ]);
     });
 
@@ -481,6 +488,33 @@ describe("application menu", () => {
       );
       expect(applicationMenuCommandIds).toContain(
         assistCommandIds.removeParagraphIndent
+      );
+      // #375: the glossary tag manage command is menu-sendable too.
+      expect(applicationMenuCommandIds).toContain(
+        glossaryTabCommandIds.manageTags
+      );
+    });
+
+    it("sends the glossary tag manage command from the 用語タグを管理... item", () => {
+      const { window, send } = menuWindowMock();
+      const assistItems = submenuItems(
+        findTopLevelMenu(
+          buildApplicationMenu(
+            "ja",
+            { getMainWindow: () => window },
+            "win32"
+          ),
+          "支援"
+        )
+      );
+      const manageItem = assistItems.find(
+        (item) => item.label === "用語タグを管理..."
+      );
+
+      expect(manageItem?.id).toBe(glossaryTabCommandIds.manageTags);
+      manageItem?.click?.({} as never, null as never, {} as never);
+      expect(send.mock.calls.at(-1)?.[1]).toBe(
+        glossaryTabCommandIds.manageTags
       );
     });
   });

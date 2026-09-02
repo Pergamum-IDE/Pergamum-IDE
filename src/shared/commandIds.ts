@@ -26,6 +26,14 @@ export const assistCommandIds = {
   removeParagraphIndent: defineCommandId("assist.paragraphIndent.remove")
 } as const;
 
+/**
+ * #375: glossary command ids the application menu also references (so they
+ * live in shared, not the renderer-only glossary command module).
+ */
+export const glossaryTabCommandIds = {
+  manageTags: defineCommandId("glossary.tag.manage")
+} as const;
+
 export const editorCommandIds = {
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),
@@ -74,7 +82,8 @@ export const applicationMenuCommandIds = [
   commandPaletteCommandIds.open,
   assistCommandIds.showLineEndingDistribution,
   assistCommandIds.insertParagraphIndent,
-  assistCommandIds.removeParagraphIndent
+  assistCommandIds.removeParagraphIndent,
+  glossaryTabCommandIds.manageTags
 ] as const;
 
 export type ApplicationMenuCommandId =

@@ -22,6 +22,12 @@ interface GlossaryTagManagerProps {
   onUpdateTag: (input: UpdateGlossaryTagInput) => Promise<unknown>;
   /** Hard delete; the confirmation dialog is shown by the main process. */
   onDeleteTag: (tagId: string, confirmMessage: string) => Promise<unknown>;
+  /**
+   * #375: start with the "new tag" form already open (used when the Tag
+   * Manager tab is opened from the Glossary Entry editor's "Manage tags"
+   * link, i.e. the user wants a tag that does not exist yet).
+   */
+  autoStartCreate?: boolean;
 }
 
 /**
@@ -34,9 +40,12 @@ export function GlossaryTagManager({
   translate,
   onCreateTag,
   onUpdateTag,
-  onDeleteTag
+  onDeleteTag,
+  autoStartCreate = false
 }: GlossaryTagManagerProps): JSX.Element {
-  const [draft, setDraft] = useState<GlossaryTagDraft | null>(null);
+  const [draft, setDraft] = useState<GlossaryTagDraft | null>(() =>
+    autoStartCreate ? createNewGlossaryTagDraft() : null
+  );
   const [busy, setBusy] = useState(false);
 
   async function submit(): Promise<void> {

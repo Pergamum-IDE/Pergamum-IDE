@@ -88,6 +88,17 @@ describe("GlossaryTagManager (#375)", () => {
     expect(container.textContent).toContain("glossaryTagEditor.listEmpty");
   });
 
+  it("opens with the new-tag form already up when autoStartCreate is set", () => {
+    render({ tags: [], autoStartCreate: true });
+    // The GlossaryTagEditor form is mounted from the first render.
+    expect(container.querySelector(".glossaryTagEditor")).not.toBeNull();
+  });
+
+  it("stays closed by default (autoStartCreate unset)", () => {
+    render({ tags: [] });
+    expect(container.querySelector(".glossaryTagEditor")).toBeNull();
+  });
+
   it("hard-deletes through onDeleteTag with a confirmation message", () => {
     const handlers = render();
     act(() => button("glossaryTagEditor.deleteTag").click());

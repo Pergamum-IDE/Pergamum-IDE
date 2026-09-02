@@ -5,7 +5,7 @@ import {
 } from "../shared/editorId";
 import type { DocumentTab } from "./openDocuments";
 
-export type SpecialTabId = "settings";
+export type SpecialTabId = "settings" | "glossaryTagManager";
 
 export interface SpecialWorkspaceTab {
   readonly kind: "special";

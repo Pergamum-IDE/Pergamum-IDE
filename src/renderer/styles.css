@@ -2643,6 +2643,27 @@ label.settingsItemHeader {
   cursor: default;
 }
 
+/* #375: header row of the Entry editor tag picker + its "manage tags" link. */
+.glossaryEditorTagsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.glossaryEditorTagsManageLink {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #326da8;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.glossaryEditorTagsManageLink:hover {
+  text-decoration: underline;
+}
+
 .glossaryEditorTagsEmpty {
   margin: 6px 0 0;
   color: #6b7785;
@@ -2675,6 +2696,17 @@ label.settingsItemHeader {
 }
 
 /* #375: Glossary tag manager + editor */
+/* The dedicated Glossary Tag Manager special tab wraps the manager in a
+ * scrollable, padded editor-area surface (mirrors .glossaryEditor). */
+.glossaryTagManagerTab {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+  padding: 28px 32px;
+}
+
 .glossaryTagManager {
   display: flex;
   flex-direction: column;
