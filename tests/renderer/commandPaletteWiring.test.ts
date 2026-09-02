@@ -65,6 +65,36 @@ describe("command palette wiring", () => {
     expect(handlerBlock).not.toContain("setFileExplorerRevealRequest");
   });
 
+  it("passes the ordered open-document heading snapshot and executes `#` heading jumps via tab activation (#141)", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const componentIndex = source.indexOf("<CommandPalette");
+    const closeIndex = source.indexOf("/>", componentIndex);
+    const propsBlock = source.slice(componentIndex, closeIndex);
+
+    expect(propsBlock).toContain(
+      "headingJumpCandidates={headingJumpCandidates}"
+    );
+
+    const handlerStart = propsBlock.indexOf(
+      "onExecuteHeadingJumpCandidate={(candidate) => {"
+    );
+    const handlerBlock = propsBlock.slice(handlerStart);
+    expect(handlerStart).toBeGreaterThan(-1);
+    expect(handlerBlock).toContain(
+      "void activateHeadingJumpTarget(candidate);"
+    );
+    expect(handlerBlock).toContain(
+      "closeCommandPaletteAndRestoreMarkdownFocus();"
+    );
+    expect(handlerBlock).not.toContain("revealFileExplorer");
+    expect(handlerBlock).not.toContain("setFileExplorerRevealRequest");
+
+    // The snapshot is built from the shared outline index, not a new parser.
+    expect(source).toContain(
+      "collectMarkdownHeadingSearchCandidates(\n        markdownOutlineIndex,\n        openDocumentsState\n      )"
+    );
+  });
+
   it("reuses the existing IME composition guard instead of a new tracking mechanism", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const componentIndex = source.indexOf("<CommandPalette");

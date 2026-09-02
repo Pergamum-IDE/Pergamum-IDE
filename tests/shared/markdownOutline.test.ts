@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractMarkdownOutline,
+  headingBodyPreviewLine,
   type MarkdownOutlineItem
 } from "../../src/shared/markdownOutline";
 
@@ -173,5 +174,41 @@ describe("extractMarkdownOutline (#352)", () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids[0].startsWith("0:")).toBe(true);
     expect(ids[1].startsWith("1:")).toBe(true);
+  });
+});
+
+describe("headingBodyPreviewLine (#141)", () => {
+  const doc = ["# 第一章", "", "本文が始まる。", "続きの行", "", "## 次節", "節本文"].join(
+    "\n"
+  );
+
+  it("returns the first non-empty line under the heading, trimmed", () => {
+    expect(headingBodyPreviewLine(doc, 0, 5)).toBe("本文が始まる。");
+  });
+
+  it("bounds the scan to the heading's own body (before the next heading)", () => {
+    // The `# 第一章` body ends at line 5 (`## 次節`); "節本文" must not leak in.
+    expect(headingBodyPreviewLine(doc, 0, 5)).not.toBe("節本文");
+    expect(headingBodyPreviewLine(doc, 5, null)).toBe("節本文");
+  });
+
+  it("skips blank lines and heading lines when picking the preview", () => {
+    const text = ["## A", "", "   ", "### B", "real body"].join("\n");
+    expect(headingBodyPreviewLine(text, 0, null)).toBe("real body");
+  });
+
+  it("returns null when the heading has no body line", () => {
+    expect(headingBodyPreviewLine(["# Only heading"].join("\n"), 0, null)).toBe(
+      null
+    );
+    expect(headingBodyPreviewLine(["# A", "", "# B"].join("\n"), 0, 2)).toBe(
+      null
+    );
+  });
+
+  it("trims surrounding whitespace from the returned line", () => {
+    expect(
+      headingBodyPreviewLine(["# A", "   spaced body   "].join("\n"), 0, null)
+    ).toBe("spaced body");
   });
 });

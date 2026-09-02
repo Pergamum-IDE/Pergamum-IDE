@@ -132,6 +132,55 @@ function buildTree(
   return roots;
 }
 
+/**
+ * #141: the Command Palette `#` heading-jump footer detail preview line for
+ * one heading.
+ *
+ * Scans the lines that belong to the heading's body — from the line after the
+ * heading up to (but not including) `nextHeadingLineNumber` (or end of
+ * document when `null`) — and returns the first line that is non-empty after
+ * `trim()` and is NOT itself an ATX heading. Returns `null` when the heading
+ * has no such body line.
+ *
+ * Deliberately minimal (see the Issue's Non-goals): no fenced-code / list /
+ * frontmatter awareness, no multi-line snippet — just "the first real line
+ * under this heading". `nextHeadingLineNumber` is supplied by the caller from
+ * the same `flat` outline this heading came from, so no re-parsing happens.
+ */
+export function headingBodyPreviewLine(
+  text: string,
+  headingLineNumber: number,
+  nextHeadingLineNumber: number | null
+): string | null {
+  const lines = text.split("\n");
+  const end =
+    nextHeadingLineNumber === null
+      ? lines.length
+      : Math.min(nextHeadingLineNumber, lines.length);
+
+  for (
+    let lineNumber = headingLineNumber + 1;
+    lineNumber < end;
+    lineNumber += 1
+  ) {
+    const line = lines[lineNumber];
+    const trimmed = line.trim();
+
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    // A heading line is never a body preview (`## …` under `# …`, etc.).
+    if (ATX_HEADING.test(line)) {
+      continue;
+    }
+
+    return trimmed;
+  }
+
+  return null;
+}
+
 export function extractMarkdownOutline(
   text: string
 ): MarkdownOutlineParseResult {

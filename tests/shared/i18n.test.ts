@@ -540,10 +540,42 @@ describe("Application Settings core control translations (#195)", () => {
       "Type a valid file name"
     );
 
-    // The still-reserved sibling modes are untouched.
-    expect(t("ja", "commandPalette.reserved.heading").length).toBeGreaterThan(0);
+    // The still-reserved glossary mode is untouched.
+    expect(t("ja", "commandPalette.reserved.glossary").length).toBeGreaterThan(
+      0
+    );
     expect(t("en", "commandPalette.reserved.glossary").length).toBeGreaterThan(
       0
+    );
+  });
+
+  it("#141: drops the unused reserved heading-mode key, keeps reserved glossary, and defines heading-jump empty copy", () => {
+    expect(Object.keys(jaTranslations)).not.toContain(
+      "commandPalette.reserved.heading"
+    );
+    expect(Object.keys(enTranslations)).not.toContain(
+      "commandPalette.reserved.heading"
+    );
+
+    // `@` glossary stays reserved.
+    expect(Object.keys(jaTranslations)).toContain(
+      "commandPalette.reserved.glossary"
+    );
+    expect(Object.keys(enTranslations)).toContain(
+      "commandPalette.reserved.glossary"
+    );
+
+    expect(t("ja", "commandPalette.headingJump.noResults")).toBe(
+      "一致する見出しがありません"
+    );
+    expect(t("en", "commandPalette.headingJump.noResults")).toBe(
+      "No matching headings"
+    );
+    expect(t("ja", "commandPalette.headingJump.noOpenHeadings")).toBe(
+      "開いているMarkdown文書に見出しがありません"
+    );
+    expect(t("en", "commandPalette.headingJump.noOpenHeadings")).toBe(
+      "No headings in open Markdown documents"
     );
   });
 

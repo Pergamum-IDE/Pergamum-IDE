@@ -13,6 +13,13 @@ import type { CommandContext } from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
 import { editorCommandIds } from "../shared/commandIds";
 import type { ProjectDocument } from "../shared/api";
+import type { MarkdownHeadingSearchCandidate } from "./markdownOutlineIndex";
+import {
+  filterCommandPaletteHeadingJumpCandidates,
+  resolveHeadingJumpFooterModel,
+  resolveHeadingJumpSelection,
+  type CommandPaletteHeadingJumpCandidate
+} from "./commandPaletteHeadingJump";
 import type {
   Translate,
   TranslationKey,
@@ -108,6 +115,18 @@ export interface CommandPaletteProps {
   onRequestProjectFileQuickOpenPreview?: (
     relativePath: string
   ) => Promise<string | null>;
+  /**
+   * #141: heading-jump (`#` prefix) candidates over every open Markdown
+   * document, already ordered active-document-first then tab-bar order, each
+   * heading in document order. Built by App.tsx from the shared
+   * `MarkdownOutlineIndex` — the Palette never re-parses Markdown or reads
+   * editor internals; it only prefix-filters, renders, and reports the chosen
+   * heading back through `onExecuteHeadingJumpCandidate`.
+   */
+  headingJumpCandidates?: readonly MarkdownHeadingSearchCandidate[];
+  onExecuteHeadingJumpCandidate?: (
+    candidate: CommandPaletteHeadingJumpCandidate
+  ) => void;
   footerDetailSettings?: CommandPaletteFooterDetailSettings;
 }
 
@@ -199,7 +218,9 @@ function reservedPlaceholderKey(mode: QuickAccessMode): TranslationKey | null {
       // this reserved-placeholder text.
       return null;
     case "heading":
-      return "commandPalette.reserved.heading";
+      // Heading jump mode is implemented (#141); it renders its own candidate
+      // list instead of this reserved-placeholder text.
+      return null;
     case "glossary":
       return "commandPalette.reserved.glossary";
     case "command":
@@ -244,6 +265,13 @@ function selectedProjectFileQuickOpenCandidate(
   return selectedIndex === null ? null : candidates[selectedIndex] ?? null;
 }
 
+function selectedHeadingJumpCandidate(
+  candidates: readonly CommandPaletteHeadingJumpCandidate[],
+  selectedIndex: number | null
+): CommandPaletteHeadingJumpCandidate | null {
+  return selectedIndex === null ? null : candidates[selectedIndex] ?? null;
+}
+
 function usePrefersReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
@@ -276,11 +304,11 @@ function useCommandPaletteFooterDetailMarquee(input: {
   readonly settings: CommandPaletteFooterDetailSettings;
 }): {
   readonly containerRef: RefObject<HTMLDivElement>;
-  readonly textRef: RefObject<HTMLSpanElement>;
+  readonly measureRef: RefObject<HTMLSpanElement>;
   readonly state: CommandPaletteFooterDetailMarqueeState;
 } {
   const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
   const reducedMotion = usePrefersReducedMotion();
   const [state, setState] = useState<CommandPaletteFooterDetailMarqueeState>(
     inactiveCommandPaletteFooterDetailMarqueeState
@@ -294,18 +322,25 @@ function useCommandPaletteFooterDetailMarquee(input: {
     }
 
     const container = containerRef.current;
-    const text = textRef.current;
+    const measure = measureRef.current;
 
-    if (!container || !text) {
+    if (!container || !measure) {
       return;
     }
 
-    const measure = () => {
+    const runMeasure = (): void => {
       setState(
         resolveCommandPaletteFooterDetailMarquee({
           enabled: input.enabled,
           reducedMotion,
-          scrollWidth: text.scrollWidth,
+          // #370 marquee fix: the VISIBLE text element clips itself
+          // (`overflow: hidden` + `max-width: 100%`), and a clipped element's
+          // `scrollWidth` is reported inconsistently across browsers
+          // (sometimes the clamped box width, so it never looks overflowing).
+          // Measure the FULL, unconstrained text from a dedicated off-screen
+          // twin span instead, and compare it against the clipping viewport's
+          // own width.
+          scrollWidth: measure.scrollWidth,
           clientWidth: container.clientWidth,
           delayMs: input.settings.marquee.delay,
           speedPxPerSecond: input.settings.marquee.speed
@@ -314,14 +349,28 @@ function useCommandPaletteFooterDetailMarquee(input: {
     };
 
     if (typeof window === "undefined" || !window.requestAnimationFrame) {
-      measure();
+      runMeasure();
       return;
     }
 
-    const animationFrame = window.requestAnimationFrame(measure);
+    // One rAF so the just-(re)mounted twin has been laid out; a
+    // ResizeObserver then re-measures if the footer width settles a frame
+    // later (font swap, Palette resize) so a late layout still starts the
+    // marquee instead of being stuck on the ellipsis fallback.
+    let animationFrame = window.requestAnimationFrame(runMeasure);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            window.cancelAnimationFrame(animationFrame);
+            animationFrame = window.requestAnimationFrame(runMeasure);
+          });
+
+    resizeObserver?.observe(container);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
     };
   }, [
     input.enabled,
@@ -331,7 +380,7 @@ function useCommandPaletteFooterDetailMarquee(input: {
     reducedMotion
   ]);
 
-  return { containerRef, textRef, state };
+  return { containerRef, measureRef, state };
 }
 
 /**
@@ -590,6 +639,8 @@ export function CommandPalette({
   recentProjectFileQuickOpenDocuments = [],
   onOpenProjectFileQuickOpenCandidate = () => undefined,
   onRequestProjectFileQuickOpenPreview,
+  headingJumpCandidates = [],
+  onExecuteHeadingJumpCandidate = () => undefined,
   footerDetailSettings = defaultFooterDetailSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
@@ -614,6 +665,15 @@ export function CommandPalette({
       );
 
       return initialState.kind === "executable" ? 0 : null;
+    }
+
+    if (initialParsed.mode === "heading") {
+      return resolveHeadingJumpSelection(
+        filterCommandPaletteHeadingJumpCandidates({
+          candidates: headingJumpCandidates,
+          query: initialParsed.query
+        })
+      );
     }
 
     if (initialParsed.mode !== "command") {
@@ -656,6 +716,13 @@ export function CommandPalette({
           query
         })
       : [];
+  const headingJumpFilteredCandidates =
+    mode === "heading"
+      ? filterCommandPaletteHeadingJumpCandidates({
+          candidates: headingJumpCandidates,
+          query
+        })
+      : [];
   const entries =
     mode === "command"
       ? filterCommandPaletteEntries(
@@ -677,8 +744,10 @@ export function CommandPalette({
       ? entries.length
       : mode === "file"
         ? fileQuickOpenCandidates.length
-        : (lineJumpCandidates?.length ??
-          (lineJumpState?.kind === "disabled" ? 1 : 0));
+        : mode === "heading"
+          ? headingJumpFilteredCandidates.length
+          : (lineJumpCandidates?.length ??
+            (lineJumpState?.kind === "disabled" ? 1 : 0));
 
   useEffect(() => {
     scrollCommandPaletteSelectionIntoView(selectedItemRef.current);
@@ -718,6 +787,17 @@ export function CommandPalette({
     projectFileQuickOpenDocuments,
     recentProjectFileQuickOpenDocuments
   ]);
+
+  useCommandPaletteLayoutEffect(() => {
+    if (mode !== "heading") {
+      return;
+    }
+
+    setSelectedIndex((current) =>
+      resolveHeadingJumpSelection(headingJumpFilteredCandidates, current)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, query, headingJumpCandidates]);
 
   function updateInput(value: string): void {
     setInputValue(value);
@@ -766,6 +846,18 @@ export function CommandPalette({
       return;
     }
 
+    if (resolved.mode === "heading") {
+      const nextCandidates = filterCommandPaletteHeadingJumpCandidates({
+        candidates: headingJumpCandidates,
+        query: resolved.query
+      });
+
+      setSelectedIndex((current) =>
+        resolveHeadingJumpSelection(nextCandidates, current)
+      );
+      return;
+    }
+
     setSelectedIndex(null);
   }
 
@@ -786,6 +878,13 @@ export function CommandPalette({
       : null;
   const activeProjectFileQuickOpenRelativePath =
     activeProjectFileQuickOpenCandidate?.document.relativePath ?? null;
+  const activeHeadingJumpCandidate =
+    mode === "heading"
+      ? selectedHeadingJumpCandidate(
+          headingJumpFilteredCandidates,
+          selectedIndex
+        )
+      : null;
 
   // #372: footer detail preview line for the selected file quick open
   // candidate. Only the selected candidate is ever read; a stale async result
@@ -858,7 +957,11 @@ export function CommandPalette({
           activeProjectFileQuickOpenCandidate !== null &&
           selectedIndex !== null
         ? optionId(selectedIndex)
-        : undefined;
+        : mode === "heading" &&
+            activeHeadingJumpCandidate !== null &&
+            selectedIndex !== null
+          ? optionId(selectedIndex)
+          : undefined;
 
   function executeEntryAt(index: number): void {
     const entry = entries[index];
@@ -893,6 +996,16 @@ export function CommandPalette({
     }
 
     onOpenProjectFileQuickOpenCandidate(candidate.document.relativePath);
+  }
+
+  function executeHeadingJumpCandidateAt(index: number): void {
+    const candidate = headingJumpFilteredCandidates[index];
+
+    if (!candidate) {
+      return;
+    }
+
+    onExecuteHeadingJumpCandidate(candidate);
   }
 
   /** Handles Enter for line mode: the disabled row, or the selected candidate. */
@@ -1006,6 +1119,11 @@ export function CommandPalette({
           return;
         }
 
+        if (mode === "heading") {
+          executeHeadingJumpCandidateAt(selectedIndex ?? 0);
+          return;
+        }
+
         const entry = activeEntry;
 
         if (!entry) {
@@ -1032,6 +1150,11 @@ export function CommandPalette({
       ? resolveProjectFileQuickOpenFooterModel({
           activeCandidate: activeProjectFileQuickOpenCandidate,
           previewText: projectFileQuickOpenPreview,
+          detailEnabled: footerDetailSettings.enable
+        })
+    : mode === "heading"
+      ? resolveHeadingJumpFooterModel({
+          activeCandidate: activeHeadingJumpCandidate,
           detailEnabled: footerDetailSettings.enable
         })
     : resolveCommandPaletteFooterModel({
@@ -1236,6 +1359,57 @@ export function CommandPalette({
                   </li>
                 ))
               )
+            ) : mode === "heading" ? (
+              headingJumpFilteredCandidates.length === 0 ? (
+                <li role="presentation" className="commandPaletteEmpty">
+                  {translate(
+                    headingJumpCandidates.length === 0
+                      ? "commandPalette.headingJump.noOpenHeadings"
+                      : "commandPalette.headingJump.noResults"
+                  )}
+                </li>
+              ) : (
+                headingJumpFilteredCandidates.map((candidate, index) => (
+                  <li
+                    key={candidate.id}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={index === selectedIndex}
+                    aria-disabled="false"
+                    aria-label={`${candidate.marker} ${candidate.text} ${candidate.documentPathLabel}`}
+                    ref={index === selectedIndex ? selectedItemRef : null}
+                    className={commandPaletteItemClassName(
+                      index === selectedIndex,
+                      true
+                    )}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                    }}
+                    onMouseMove={() => {
+                      if (selectedIndex !== index) {
+                        setSelectedIndex(index);
+                      }
+                    }}
+                    onClick={() => executeHeadingJumpCandidateAt(index)}
+                  >
+                    <CommandPaletteItemContent
+                      indicator={null}
+                      primary={
+                        <>
+                          <span className="commandPaletteHeadingJumpMarker">
+                            {candidate.marker}
+                          </span>{" "}
+                          <CommandPaletteHighlightedText
+                            text={candidate.text}
+                            ranges={candidate.matchRanges}
+                          />
+                        </>
+                      }
+                      secondary={candidate.documentPathLabel}
+                    />
+                  </li>
+                ))
+              )
             ) : entries.length === 0 ? (
               <li role="presentation" className="commandPaletteEmpty">
                 {translate(commandPaletteEmptyResultKey(mode))}
@@ -1301,14 +1475,22 @@ export function CommandPalette({
             ref={footerDetailMarquee.containerRef}
           >
             {footerStatusText ? (
-              <span
-                className={footerStatusClassName}
-                key={footerDetailResetKey || footerStatusText}
-                ref={footerDetailMarquee.textRef}
-                style={footerStatusStyle}
-              >
-                {footerStatusText}
-              </span>
+              <>
+                <span
+                  className={footerStatusClassName}
+                  key={footerDetailResetKey || footerStatusText}
+                  style={footerStatusStyle}
+                >
+                  {footerStatusText}
+                </span>
+                <span
+                  className="commandPaletteFooterStatusMeasure"
+                  aria-hidden="true"
+                  ref={footerDetailMarquee.measureRef}
+                >
+                  {footerStatusText}
+                </span>
+              </>
             ) : null}
           </div>
           <div className="commandPaletteFooterHints">

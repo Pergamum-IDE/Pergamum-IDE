@@ -9,9 +9,14 @@
  * never the Preview AST.
  */
 
-import { serializeEditorId, type EditorId } from "../shared/editorId";
+import {
+  editorIdEquals,
+  serializeEditorId,
+  type EditorId
+} from "../shared/editorId";
 import {
   extractMarkdownOutline,
+  headingBodyPreviewLine,
   type MarkdownHeadingLevel,
   type MarkdownOutlineParseResult
 } from "../shared/markdownOutline";
@@ -66,6 +71,79 @@ export interface MarkdownHeadingSearchCandidate {
   readonly documentTitle: string;
   readonly documentPath: string | null;
   readonly documentKind: MarkdownOutlineDocumentKind;
+  /**
+   * #141: first non-empty, non-heading line under this heading (bounded to the
+   * heading's own body), or `null`. Feeds the Command Palette `#` heading-jump
+   * footer detail preview only — never the 2-row candidate row.
+   */
+  readonly bodyPreview: string | null;
+}
+
+/**
+ * #141: every heading in every open Markdown document, as flat search
+ * candidates for the Command Palette `#` heading-jump mode.
+ *
+ * Order (matches the Issue): the ACTIVE document's headings first, then the
+ * other open Markdown documents in tab-bar order (`state.documents`); within
+ * each document, headings in document order. Nothing is re-parsed here — the
+ * `MarkdownOutlineIndex` already holds each document's `flat` outline; this
+ * only reshapes it and appends the bounded body preview.
+ */
+export function collectMarkdownHeadingSearchCandidates(
+  index: MarkdownOutlineIndex,
+  state: OpenDocumentsState
+): MarkdownHeadingSearchCandidate[] {
+  const activeId = state.activeDocumentId;
+  const orderedDocuments = [...state.documents].sort((left, right) => {
+    if (activeId === null) {
+      return 0;
+    }
+    const leftActive = editorIdEquals(left.id, activeId) ? 0 : 1;
+    const rightActive = editorIdEquals(right.id, activeId) ? 0 : 1;
+    return leftActive - rightActive;
+  });
+
+  const candidates: MarkdownHeadingSearchCandidate[] = [];
+
+  for (const openDocument of orderedDocuments) {
+    const outlineDocument = index.documents.get(
+      serializeEditorId(openDocument.id)
+    );
+
+    if (!outlineDocument) {
+      continue;
+    }
+
+    const flat = outlineDocument.outline.flat;
+
+    for (let position = 0; position < flat.length; position += 1) {
+      const heading = flat[position];
+      const nextHeadingLineNumber =
+        position + 1 < flat.length ? flat[position + 1].lineNumber : null;
+
+      candidates.push({
+        id: `${outlineDocument.editorKey}::${heading.id}`,
+        editorId: outlineDocument.editorId,
+        editorKey: outlineDocument.editorKey,
+        headingId: heading.id,
+        level: heading.level,
+        text: heading.text,
+        lineNumber: heading.lineNumber,
+        from: heading.from,
+        to: heading.to,
+        documentTitle: outlineDocument.title,
+        documentPath: outlineDocument.displayPath,
+        documentKind: outlineDocument.documentKind,
+        bodyPreview: headingBodyPreviewLine(
+          outlineDocument.contentSnapshot,
+          heading.lineNumber,
+          nextHeadingLineNumber
+        )
+      });
+    }
+  }
+
+  return candidates;
 }
 
 /**

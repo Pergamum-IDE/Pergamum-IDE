@@ -771,8 +771,11 @@ describe("CommandPalette", () => {
     expect(source).not.toContain("CommandPaletteDescriptionMarquee");
     expect(source).not.toContain("useCommandPaletteDescriptionMarquee");
     expect(source).not.toContain("commandPalette.description");
-    expect(source).toContain("scrollWidth: text.scrollWidth");
+    // #370 marquee fix: overflow is measured from a dedicated unconstrained
+    // twin span, not the visible ellipsized text element.
+    expect(source).toContain("scrollWidth: measure.scrollWidth");
     expect(source).toContain("clientWidth: container.clientWidth");
+    expect(source).toContain('className="commandPaletteFooterStatusMeasure"');
     expect(source).toContain("resetKey:");
     expect(source).toContain("detailResetKey: String(selectedEntry.id)");
     expect(source).toContain("footerDetailResetKey");
@@ -821,6 +824,9 @@ describe("CommandPalette", () => {
     expect(styles).toContain(".commandPaletteFooterStatusText-marquee");
     expect(styles).toContain("@keyframes commandPaletteFooterDetailMarquee");
     expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+    // #370 marquee fix: an off-screen, unconstrained measurement twin.
+    expect(styles).toContain(".commandPaletteFooterStatusMeasure {");
+    expect(styles).toContain(".commandPaletteFooterStatus {\n  position: relative;");
   });
 });
 
@@ -1094,9 +1100,8 @@ describe("CommandPalette highlighting and footer model", () => {
 });
 
 describe("CommandPalette reserved Quick Access modes (#145)", () => {
+  // `#` heading mode is implemented (#141); only `@` glossary stays reserved.
   const reservedCases = [
-    { initialInputValue: "#intro", mode: "heading", key: "commandPalette.reserved.heading" },
-    { initialInputValue: "＃intro", mode: "heading", key: "commandPalette.reserved.heading" },
     { initialInputValue: "@alice", mode: "glossary", key: "commandPalette.reserved.glossary" },
     { initialInputValue: "＠alice", mode: "glossary", key: "commandPalette.reserved.glossary" }
   ] as const;
@@ -1236,7 +1241,7 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
   });
 
   it("keeps the select/run/close footer key hints visible in reserved modes", () => {
-    const markup = renderPalette({ initialInputValue: "#intro" });
+    const markup = renderPalette({ initialInputValue: "@alice" });
 
     expect(markup).toContain("commandPalette.footer.selectHint");
     expect(markup).toContain("commandPalette.footer.runHint");
@@ -1246,7 +1251,7 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
   it("shows no footer status text (no result count, no search hint) in reserved modes", () => {
     const markup = renderPalette({
       translate: realTranslateEn,
-      initialInputValue: "#intro"
+      initialInputValue: "@alice"
     });
 
     expect(markup).toContain('<div class="commandPaletteFooterStatus"></div>');
@@ -1274,19 +1279,22 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
     expect(resolveCommandPaletteEnterSelection([], 5)).toBeNull();
   });
 
-  it("still recognizes '#' and '@' as file-mode-adjacent reserved prefixes, not as file queries", () => {
-    // Unknown leading characters (e.g. "%") fall back to file mode per
-    // #139, but '#' / '@' are reserved prefixes with their own messages,
-    // distinct from the plain no-prefix file message. ':' is no longer
-    // reserved (#140) — covered separately below.
+  it("recognizes '@' as a reserved prefix and '#' as heading-jump mode, not as file queries", () => {
+    // Unknown leading characters (e.g. "%") fall back to file mode per #139;
+    // '@' stays a reserved prefix with its own message; ':' is line jump
+    // (#140) and '#' is heading jump (#141), each distinct from the plain
+    // no-prefix file message.
     const fileMarkup = renderPalette({ initialInputValue: "%abc" });
+    const glossaryMarkup = renderPalette({ initialInputValue: "@abc" });
     const headingMarkup = renderPalette({ initialInputValue: "#abc" });
 
     expect(fileMarkup).toContain(
       "commandPalette.projectFileQuickOpen.noResults"
     );
-    expect(fileMarkup).not.toContain("commandPalette.reserved.heading");
-    expect(headingMarkup).toContain("commandPalette.reserved.heading");
+    expect(glossaryMarkup).toContain("commandPalette.reserved.glossary");
+    // Heading mode: no reserved placeholder, its own empty copy instead.
+    expect(headingMarkup).not.toContain("commandPaletteReservedPlaceholder");
+    expect(headingMarkup).toContain("commandPalette.headingJump.noOpenHeadings");
     expect(headingMarkup).not.toContain(
       "commandPalette.projectFileQuickOpen.noResults"
     );
@@ -1320,10 +1328,10 @@ describe("CommandPalette snapshot and UI-level block wiring", () => {
   });
 
   it("does not implement the remaining reserved-mode actions — only the reserved message and mode dispatch", () => {
-    // File mode is implemented by #143. Heading and glossary remain reserved
-    // and must not gain their own search/execution logic here.
+    // File mode (#143), line jump (#140) and heading jump (#141) are
+    // implemented. `@` glossary remains reserved and must not gain its own
+    // search/execution logic here.
     expect(source).not.toContain("symbolJump");
-    expect(source).not.toContain("headingSearch");
     expect(source).not.toContain("glossarySearch");
   });
 
@@ -1576,7 +1584,7 @@ describe("CommandPalette line jump mode (#140 / #148)", () => {
     );
   });
 
-  it("preserves existing command mode, and heading/glossary reserved modes", () => {
+  it("preserves existing command mode and file mode, and the glossary reserved mode", () => {
     const commandMarkup = renderPalette({ initialInputValue: ">save" });
     const fileMarkup = renderPalette({ initialInputValue: "abc" });
     const headingMarkup = renderPalette({ initialInputValue: "#intro" });
@@ -1586,7 +1594,9 @@ describe("CommandPalette line jump mode (#140 / #148)", () => {
     expect(fileMarkup).toContain(
       "commandPalette.projectFileQuickOpen.noResults"
     );
-    expect(headingMarkup).toContain("commandPalette.reserved.heading");
+    // #141: heading mode is a real candidate list now, not a reserved row.
+    expect(headingMarkup).not.toContain("commandPaletteReservedPlaceholder");
+    expect(headingMarkup).toContain("commandPalette.headingJump.noOpenHeadings");
     expect(glossaryMarkup).toContain("commandPalette.reserved.glossary");
   });
 });

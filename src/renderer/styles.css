@@ -2829,6 +2829,14 @@ label.settingsItemHeader {
   line-height: 1.35;
 }
 
+/* #141: the `#`/`##`/`###` heading-level marker in a `#` heading-jump
+   candidate's first row — shown for level context, never part of the search
+   or the match highlight. */
+.commandPaletteHeadingJumpMarker {
+  color: var(--workspace-sidebar-muted-foreground);
+  font-family: var(--editor-font-family, monospace);
+}
+
 .commandPaletteItemDisabled .commandPaletteItemPrimary {
   color: #5f6f7e;
 }
@@ -2872,6 +2880,7 @@ label.settingsItemHeader {
 }
 
 .commandPaletteFooterStatus {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -2882,13 +2891,25 @@ label.settingsItemHeader {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* #370 marquee fix: an off-screen, unconstrained twin of the footer detail
+   text. It carries no `max-width` / `overflow`, so its `scrollWidth` is the
+   true full text width used to decide whether the visible (clipped) text
+   overflows the footer viewport. Never painted and out of flow, so it
+   changes neither the footer nor the Palette layout. */
+.commandPaletteFooterStatusMeasure {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
   white-space: nowrap;
 }
 
 .commandPaletteFooterStatusText-marquee {
   max-width: none;
-  text-overflow: clip;
   animation-name: commandPaletteFooterDetailMarquee;
   animation-delay: var(--command-palette-footer-detail-marquee-delay);
   animation-duration: var(--command-palette-footer-detail-marquee-duration);
