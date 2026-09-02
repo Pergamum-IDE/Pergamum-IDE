@@ -9,6 +9,7 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProjectDocument } from "../../src/shared/api";
 import { CommandRegistry, defineCommandId } from "../../src/shared/commandRegistry";
 import type { CommandContext } from "../../src/shared/commandEnablement";
 import { t, type Translate } from "../../src/shared/i18n";
@@ -39,6 +40,13 @@ const alphaId = defineCommandId("test.palette.alpha");
 const betaId = defineCommandId("test.palette.beta");
 const gammaId = defineCommandId("test.palette.gamma");
 const deltaId = defineCommandId("test.palette.delta");
+
+function projectDocument(relativePath: string): ProjectDocument {
+  return {
+    relativePath,
+    name: relativePath.split(/[\\/]/).pop() ?? relativePath
+  };
+}
 
 function buildRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
@@ -561,5 +569,139 @@ describe("Command Palette active selection (#316)", () => {
         expect(hints.textContent ?? "").not.toContain(token);
       }
     });
+  });
+});
+
+describe("Command Palette project file quick open (#143)", () => {
+  it("shows no candidates for no-prefix input when no Project is open", () => {
+    const onOpenProjectFileQuickOpenCandidate = vi.fn();
+    render(
+      baseProps({
+        initialInputValue: "chapter",
+        onOpenProjectFileQuickOpenCandidate
+      })
+    );
+
+    expect(optionEls()).toHaveLength(0);
+    expect(selectedOptionEl()).toBeNull();
+
+    pressKey("Enter");
+    expect(onOpenProjectFileQuickOpenCandidate).not.toHaveBeenCalled();
+  });
+
+  it("executes the selected Project file candidate on ENTER", () => {
+    const onOpenProjectFileQuickOpenCandidate = vi.fn();
+    render(
+      baseProps({
+        initialInputValue: "chap",
+        projectFileQuickOpenDocuments: [
+          projectDocument("drafts/chapter-01.md"),
+          projectDocument("drafts/chapter-02.md")
+        ],
+        onOpenProjectFileQuickOpenCandidate
+      })
+    );
+
+    expect(optionEls()).toHaveLength(2);
+    expect(selectedOptionEl()!.textContent).toContain("chapter-01.md");
+
+    pressKey("ArrowDown");
+    expect(selectedOptionEl()!.textContent).toContain("chapter-02.md");
+
+    pressKey("Enter");
+    expect(onOpenProjectFileQuickOpenCandidate).toHaveBeenCalledTimes(1);
+    expect(onOpenProjectFileQuickOpenCandidate).toHaveBeenCalledWith(
+      "drafts/chapter-02.md"
+    );
+  });
+
+  it("executes the clicked Project file candidate while keeping input focus", () => {
+    const onOpenProjectFileQuickOpenCandidate = vi.fn();
+    render(
+      baseProps({
+        initialInputValue: "chap",
+        projectFileQuickOpenDocuments: [
+          projectDocument("drafts/chapter-01.md")
+        ],
+        onOpenProjectFileQuickOpenCandidate
+      })
+    );
+    inputEl().focus();
+
+    const row = optionEls()[0];
+    act(() => {
+      row.dispatchEvent(
+        new window.MouseEvent("mousedown", { bubbles: true, cancelable: true })
+      );
+      row.click();
+    });
+
+    expect(onOpenProjectFileQuickOpenCandidate).toHaveBeenCalledWith(
+      "drafts/chapter-01.md"
+    );
+    expect(document.activeElement).toBe(inputEl());
+  });
+
+  it("does not execute a Project file candidate during IME composition", () => {
+    const onOpenProjectFileQuickOpenCandidate = vi.fn();
+    render(
+      baseProps({
+        initialInputValue: "chap",
+        projectFileQuickOpenDocuments: [
+          projectDocument("drafts/chapter-01.md")
+        ],
+        onOpenProjectFileQuickOpenCandidate
+      })
+    );
+
+    pressKey("Enter", { isComposing: true });
+    pressKey("Enter", { keyCode: 229 });
+
+    expect(onOpenProjectFileQuickOpenCandidate).not.toHaveBeenCalled();
+  });
+
+  it("keeps existing command-prefix execution on the command path", () => {
+    const onExecuteCommand = vi.fn();
+    const onOpenProjectFileQuickOpenCandidate = vi.fn();
+    render(
+      baseProps({
+        initialInputValue: ">Beta",
+        projectFileQuickOpenDocuments: [
+          projectDocument("Beta Command.md")
+        ],
+        onExecuteCommand,
+        onOpenProjectFileQuickOpenCandidate
+      })
+    );
+
+    expect(optionEls()).toHaveLength(1);
+
+    pressKey("Enter");
+
+    expect(onExecuteCommand).toHaveBeenCalledWith(betaId);
+    expect(onOpenProjectFileQuickOpenCandidate).not.toHaveBeenCalled();
+  });
+
+  it("uses recent Project file candidates for an empty no-prefix input", () => {
+    const onOpenProjectFileQuickOpenCandidate = vi.fn();
+    render(
+      baseProps({
+        initialInputValue: "",
+        projectFileQuickOpenDocuments: [projectDocument("all.md")],
+        recentProjectFileQuickOpenDocuments: [
+          projectDocument("recent-01.md"),
+          projectDocument("recent-02.md")
+        ],
+        onOpenProjectFileQuickOpenCandidate
+      })
+    );
+
+    expect(optionEls()).toHaveLength(2);
+    expect(selectedOptionEl()!.textContent).toContain("recent-01.md");
+
+    pressKey("Enter");
+    expect(onOpenProjectFileQuickOpenCandidate).toHaveBeenCalledWith(
+      "recent-01.md"
+    );
   });
 });

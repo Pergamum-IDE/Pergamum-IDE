@@ -40,6 +40,31 @@ describe("command palette wiring", () => {
     );
   });
 
+  it("opens no-prefix project file candidates through Project document activation only (#143)", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const componentIndex = source.indexOf("<CommandPalette");
+    const closeIndex = source.indexOf("/>", componentIndex);
+    const propsBlock = source.slice(componentIndex, closeIndex);
+    const handlerStart = propsBlock.indexOf(
+      "onOpenProjectFileQuickOpenCandidate={(relativePath) => {"
+    );
+    const handlerBlock = propsBlock.slice(handlerStart);
+
+    expect(propsBlock).toContain(
+      "projectFileQuickOpenDocuments={projectFileQuickOpenDocuments}"
+    );
+    expect(propsBlock).toContain(
+      "recentProjectFileQuickOpenDocuments={"
+    );
+    expect(handlerStart).toBeGreaterThan(-1);
+    expect(handlerBlock).toContain("void activateProjectDocument(relativePath);");
+    expect(handlerBlock).toContain(
+      "closeCommandPaletteAndRestoreMarkdownFocus();"
+    );
+    expect(handlerBlock).not.toContain("revealFileExplorer");
+    expect(handlerBlock).not.toContain("setFileExplorerRevealRequest");
+  });
+
   it("reuses the existing IME composition guard instead of a new tracking mechanism", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const componentIndex = source.indexOf("<CommandPalette");
@@ -97,7 +122,7 @@ describe("command palette wiring", () => {
     expect(source).not.toContain("tabIndex={0}");
     expect(source).not.toMatch(/<ul[^>]*tabIndex/s);
     // Row mouse down must not pull DOM focus off the input.
-    const optionStart = source.indexOf("id={optionId(index)}");
+    const optionStart = source.indexOf("aria-disabled={!entry.enabled}");
     const optionBlock = source.slice(optionStart, source.indexOf("</li>", optionStart));
     expect(optionBlock).toContain("onMouseDown={(event) => {");
     expect(optionBlock).toContain("event.preventDefault();");
