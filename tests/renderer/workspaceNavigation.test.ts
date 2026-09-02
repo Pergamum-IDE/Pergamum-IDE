@@ -833,7 +833,7 @@ describe("workspace navigation", () => {
 
     expect(markup).toContain("glossary.sidebarTitle");
     expect(markup).toContain("glossary.loading");
-    expect(markup).toContain("glossary.add");
+    expect(markup).toContain("glossary.addEntry");
     expect(markup).not.toContain("chapter-01.md");
   });
 

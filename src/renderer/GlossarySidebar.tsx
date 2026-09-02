@@ -238,9 +238,9 @@ export function GlossarySidebar({
 
       {state.status === "loaded" ? (
         <div className="glossarySidebarControls">
-          <label className="glossarySidebarTagFilter">
-            <span>{translate("glossary.tagFilter")}</span>
+          <div className="glossarySidebarTagFilter">
             <select
+              aria-label={translate("glossary.tagFilter")}
               value={tagFilterToOptionValue(tagFilter)}
               onChange={(event) =>
                 setTagFilter(optionValueToTagFilter(event.target.value))
@@ -256,7 +256,7 @@ export function GlossarySidebar({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
           <input
             type="search"
             className="glossarySidebarSearch"
@@ -320,7 +320,7 @@ export function GlossarySidebar({
                   <div className="glossarySidebarEntryHeader">
                     <button
                       type="button"
-                      className="glossarySidebarOccurrenceButton"
+                      className="glossarySidebarIconButton glossarySidebarOccurrenceButton"
                       aria-label={translate("glossary.previousOccurrence")}
                       title={translate("glossary.previousOccurrence")}
                       disabled={occurrenceNavDisabled}
@@ -332,7 +332,7 @@ export function GlossarySidebar({
                     </button>
                     <button
                       type="button"
-                      className="glossarySidebarExpandButton"
+                      className="glossarySidebarIconButton glossarySidebarExpandButton"
                       aria-expanded={expanded}
                       aria-label={translate(
                         expanded
@@ -361,7 +361,7 @@ export function GlossarySidebar({
                     </span>
                     <button
                       type="button"
-                      className="glossarySidebarOccurrenceButton"
+                      className="glossarySidebarIconButton glossarySidebarOccurrenceButton glossarySidebarNextOccurrenceButton"
                       aria-label={translate("glossary.nextOccurrence")}
                       title={translate("glossary.nextOccurrence")}
                       disabled={occurrenceNavDisabled}
@@ -394,7 +394,7 @@ export function GlossarySidebar({
                         </span>
                         <button
                           type="button"
-                          className="glossarySidebarEditButton"
+                          className="glossarySidebarIconButton glossarySidebarEditButton"
                           aria-label={translate("glossary.editEntry")}
                           title={translate("glossary.editEntry")}
                           onClick={() => onActivateEntry(entry.id)}
@@ -501,7 +501,7 @@ export function GlossarySidebar({
             )
           }
         >
-          {translate("glossary.add")}
+          {translate("glossary.addEntry")}
         </button>
       </div>
     </aside>

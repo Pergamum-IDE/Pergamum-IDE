@@ -2680,6 +2680,144 @@ label.settingsItemHeader {
 }
 
 /*
+ * #375 minimal UI polish: the Glossary sidebar reads as a vocabulary LIST,
+ * not a wall of buttons. The representative atom is the loudest thing in a
+ * row; the ◀ / chevron / ▶ / edit controls are quiet ghost icons that only
+ * gain a background on hover / focus.
+ */
+.glossarySidebarControls {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--workspace-sidebar-divider);
+}
+
+.glossarySidebarTagFilter {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+}
+
+.glossarySidebarTagFilter select {
+  max-width: 8.5rem;
+  font-size: 12px;
+}
+
+.glossarySidebarSearch {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.glossarySidebarEntries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.glossarySidebarEntryRow {
+  border-bottom: 1px solid var(--workspace-sidebar-divider);
+}
+
+.glossarySidebarEntryRow.isActive {
+  background: var(--workspace-sidebar-active-background);
+}
+
+.glossarySidebarEntryHeader {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px 3px 2px;
+}
+
+.glossarySidebarEntryLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--workspace-sidebar-item-foreground);
+}
+
+/* Right-align the "next occurrence" control regardless of label width. */
+.glossarySidebarNextOccurrenceButton {
+  margin-left: auto;
+}
+
+/* Ghost icon buttons: no chrome at rest, a subtle surface on hover / focus. */
+.glossarySidebarIconButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.glossarySidebarIconButton:hover:not(:disabled) {
+  background: var(--workspace-sidebar-hover);
+  color: var(--workspace-sidebar-item-foreground);
+}
+
+.glossarySidebarIconButton:focus-visible {
+  outline: none;
+  border-color: var(--workspace-sidebar-focus-ring);
+  background: var(--workspace-sidebar-hover);
+}
+
+.glossarySidebarIconButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/*
+ * The ◀ / ▶ occurrence arrows are solid-fill glyphs that turn into a "dot"
+ * at the shared 11px icon size — give just these two a slightly larger
+ * glyph so they stay legible, while keeping the ghost-button lightness and
+ * staying a step below the representative-atom label (13px text).
+ */
+.glossarySidebarOccurrenceButton {
+  font-size: 13px;
+}
+
+.glossarySidebarEntryDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px 24px;
+}
+
+.glossarySidebarEntryTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.glossarySidebarEntryFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.glossarySidebarHitCount {
+  font-size: 11px;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossarySidebarEditButton {
+  margin-left: auto;
+}
+
+/*
  * #375: the "no tags" marker in a Glossary sidebar row. A UI-only state, not a
  * real tag — deliberately flat / neutral (no chip colours) so it never reads
  * as a GlossaryTag.

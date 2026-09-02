@@ -541,7 +541,7 @@ export const jaTranslations = {
   "explorer.reload": "再読み込み",
   "explorer.toolbar": "ファイルエクスプローラーツールバー",
   "explorer.unsavedChanges": "未保存の変更があります",
-  "glossary.add": "+ 追加",
+  "glossary.addEntry": "語彙を追加",
   "glossary.collapseEntry": "折りたたむ",
   "glossary.create.cancel": "キャンセル",
   "glossary.create.error": "用語エントリを作成できませんでした。",

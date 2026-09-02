@@ -543,7 +543,7 @@ export const enTranslations = {
   "explorer.reload": "Reload",
   "explorer.toolbar": "File Explorer toolbar",
   "explorer.unsavedChanges": "Unsaved changes",
-  "glossary.add": "+ Add",
+  "glossary.addEntry": "Add glossary entry",
   "glossary.collapseEntry": "Collapse",
   "glossary.create.cancel": "Cancel",
   "glossary.create.error": "Could not create the glossary entry.",

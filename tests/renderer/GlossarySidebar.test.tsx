@@ -221,6 +221,31 @@ describe("GlossarySidebar (#375)", () => {
     }
   });
 
+  it("keeps the tag filter operable with no visible label, only an aria-label", async () => {
+    await render();
+    const select = container.querySelector<HTMLSelectElement>(
+      ".glossarySidebarTagFilter select"
+    )!;
+
+    expect(select.getAttribute("aria-label")).toBe("glossary.tagFilter");
+    // No visible label element — the filter wrapper holds only the <select>.
+    const filterWrapper = container.querySelector(
+      ".glossarySidebarTagFilter"
+    )!;
+    expect(filterWrapper.querySelector("span")).toBeNull();
+    expect(
+      Array.from(filterWrapper.children).map((el) => el.tagName)
+    ).toEqual(["SELECT"]);
+    // The search input keeps its own accessible name + placeholder.
+    const search = container.querySelector<HTMLInputElement>(
+      ".glossarySidebarSearch"
+    )!;
+    expect(search.getAttribute("aria-label")).toBe("glossaryNavigator.search");
+    expect(search.getAttribute("placeholder")).toBe(
+      "glossaryNavigator.searchPlaceholder"
+    );
+  });
+
   it("filters entries by tag: all / a tag / the `no tags` pseudo-option", async () => {
     await render();
     const select = container.querySelector<HTMLSelectElement>(
@@ -253,7 +278,7 @@ describe("GlossarySidebar (#375)", () => {
   it("creates an entry from the bottom form with the representative atom value and selected tags", async () => {
     const props = await render();
 
-    act(() => button("glossary.add").click());
+    act(() => button("glossary.addEntry").click());
     const valueInput = container.querySelector<HTMLInputElement>(
       ".glossaryCreateForm input[type='text']"
     )!;
