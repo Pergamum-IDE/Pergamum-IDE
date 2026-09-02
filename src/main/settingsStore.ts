@@ -276,26 +276,26 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
   return workbench;
 }
 
-function readCommandPaletteDescriptionSettings(
+function readCommandPaletteFooterDetailSettings(
   value: unknown
-): ApplicationSettings["commandPalette"]["description"] {
-  const descriptionValue = isObject(value) ? value : undefined;
-  const marqueeValue = isObject(descriptionValue?.marquee)
-    ? descriptionValue.marquee
+): ApplicationSettings["commandPalette"]["footerDetail"] {
+  const footerDetailValue = isObject(value) ? value : undefined;
+  const marqueeValue = isObject(footerDetailValue?.marquee)
+    ? footerDetailValue.marquee
     : undefined;
 
   return {
     enable: resolveCatalogValue(
-      "commandPalette.description.enable",
-      descriptionValue?.enable
+      "commandPalette.footerDetail.enable",
+      footerDetailValue?.enable
     ).value,
     marquee: {
       delay: resolveCatalogValue(
-        "commandPalette.description.marquee.delay",
+        "commandPalette.footerDetail.marquee.delay",
         marqueeValue?.delay
       ).value,
       speed: resolveCatalogValue(
-        "commandPalette.description.marquee.speed",
+        "commandPalette.footerDetail.marquee.speed",
         marqueeValue?.speed
       ).value
     }
@@ -308,8 +308,8 @@ function readCommandPaletteSettings(
   const commandPaletteValue = isObject(value) ? value : undefined;
 
   return {
-    description: readCommandPaletteDescriptionSettings(
-      commandPaletteValue?.description
+    footerDetail: readCommandPaletteFooterDetailSettings(
+      commandPaletteValue?.footerDetail
     )
   };
 }
@@ -875,9 +875,9 @@ function parseWorkbenchSettingsForWrite(
   return workbench;
 }
 
-function parseCommandPaletteDescriptionSettingsForWrite(
+function parseCommandPaletteFooterDetailSettingsForWrite(
   value: unknown
-): ApplicationSettings["commandPalette"]["description"] {
+): ApplicationSettings["commandPalette"]["footerDetail"] {
   if (!isObject(value)) {
     throw new Error("Invalid application settings.");
   }
@@ -893,26 +893,26 @@ function parseCommandPaletteDescriptionSettingsForWrite(
     throw new Error("Invalid application settings.");
   }
 
-  const marqueeKeys = Object.keys(value.marquee);
+  const footerDetailMarqueeKeys = Object.keys(value.marquee);
 
   if (
-    marqueeKeys.length !== 2 ||
-    !marqueeKeys.includes("delay") ||
-    !marqueeKeys.includes("speed")
+    footerDetailMarqueeKeys.length !== 2 ||
+    !footerDetailMarqueeKeys.includes("delay") ||
+    !footerDetailMarqueeKeys.includes("speed")
   ) {
     throw new Error("Invalid application settings.");
   }
 
   const enableResolution = resolveCatalogValue(
-    "commandPalette.description.enable",
+    "commandPalette.footerDetail.enable",
     value.enable
   );
   const delayResolution = resolveCatalogValue(
-    "commandPalette.description.marquee.delay",
+    "commandPalette.footerDetail.marquee.delay",
     value.marquee.delay
   );
   const speedResolution = resolveCatalogValue(
-    "commandPalette.description.marquee.speed",
+    "commandPalette.footerDetail.marquee.speed",
     value.marquee.speed
   );
 
@@ -938,13 +938,13 @@ function parseCommandPaletteSettingsForWrite(
 
   const keys = Object.keys(value);
 
-  if (keys.length !== 1 || !keys.includes("description")) {
+  if (keys.length !== 1 || !keys.includes("footerDetail")) {
     throw new Error("Invalid application settings.");
   }
 
   return {
-    description: parseCommandPaletteDescriptionSettingsForWrite(
-      value.description
+    footerDetail: parseCommandPaletteFooterDetailSettingsForWrite(
+      value.footerDetail
     )
   };
 }

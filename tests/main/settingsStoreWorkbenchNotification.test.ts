@@ -105,7 +105,7 @@ function saveRequest(
       ...workbench
     },
     commandPalette: {
-      description: { enable: true, marquee: { delay: 2000, speed: 40 } }
+      footerDetail: { enable: true, marquee: { delay: 2000, speed: 40 } }
     },
     editor: {
       lineEnding: defaultLineEndingSettings,

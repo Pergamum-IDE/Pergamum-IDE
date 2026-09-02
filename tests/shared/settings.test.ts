@@ -173,30 +173,36 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     ).toBe(getCatalogDefaultValue("editor.fontFamily"));
   });
 
-  it("commandPalette.description defaults derive from the catalog and are concrete application settings", () => {
+  it("commandPalette.footerDetail defaults derive from the catalog and are concrete application settings", () => {
     const expected = {
-      enable: getCatalogDefaultValue("commandPalette.description.enable"),
+      enable: getCatalogDefaultValue("commandPalette.footerDetail.enable"),
       marquee: {
         delay: getCatalogDefaultValue(
-          "commandPalette.description.marquee.delay"
+          "commandPalette.footerDetail.marquee.delay"
         ),
         speed: getCatalogDefaultValue(
-          "commandPalette.description.marquee.speed"
+          "commandPalette.footerDetail.marquee.speed"
         )
       }
     };
 
-    expect(builtInDefaultSettings.commandPalette.description).toEqual(expected);
-    expect(defaultApplicationSettings.commandPalette.description).toEqual(
+    expect(builtInDefaultSettings.commandPalette.footerDetail).toEqual(expected);
+    expect(defaultApplicationSettings.commandPalette.footerDetail).toEqual(
       expected
     );
-    expect(createDefaultApplicationSettings().commandPalette.description).toEqual(
+    expect(createDefaultApplicationSettings().commandPalette.footerDetail).toEqual(
       expected
     );
     expect(
       resolveEffectiveSettings(defaultApplicationSettings, undefined)
-        .commandPalette.description
+        .commandPalette.footerDetail
     ).toEqual(expected);
+    expect(builtInDefaultSettings.commandPalette).not.toHaveProperty(
+      "description"
+    );
+    expect(defaultApplicationSettings.commandPalette).not.toHaveProperty(
+      "description"
+    );
   });
 
   it("resolveEffectiveSettings passes through a valid editor.fontFamily application override", () => {

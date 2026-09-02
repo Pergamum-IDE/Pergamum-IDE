@@ -468,12 +468,12 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.workbench.sound.newline.enabled.description",
         "settings.workbench.sound.keypress.enabled.label",
         "settings.workbench.sound.keypress.enabled.description",
-        "settings.commandPalette.description.enable.label",
-        "settings.commandPalette.description.enable.description",
-        "settings.commandPalette.description.marquee.delay.label",
-        "settings.commandPalette.description.marquee.delay.description",
-        "settings.commandPalette.description.marquee.speed.label",
-        "settings.commandPalette.description.marquee.speed.description",
+        "settings.commandPalette.footerDetail.enable.label",
+        "settings.commandPalette.footerDetail.enable.description",
+        "settings.commandPalette.footerDetail.marquee.delay.label",
+        "settings.commandPalette.footerDetail.marquee.delay.description",
+        "settings.commandPalette.footerDetail.marquee.speed.label",
+        "settings.commandPalette.footerDetail.marquee.speed.description",
         "settings.unit.ms",
         "settings.unit.pxPerSecond",
         "settings.editor.fontFamily.label",
@@ -504,6 +504,25 @@ describe("Application Settings core control translations (#195)", () => {
         expect(t(language, key).length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("uses footer detail wording for Command Palette footer settings in Japanese and English", () => {
+    expect(t("ja", "settings.commandPalette.footerDetail.enable.label")).toBe(
+      "フッター詳細を表示"
+    );
+    expect(
+      t("ja", "settings.commandPalette.footerDetail.enable.description")
+    ).toBe(
+      "コマンドパレットのフッターに、選択中候補の説明やプレビューを表示します。"
+    );
+    expect(t("en", "settings.commandPalette.footerDetail.enable.label")).toBe(
+      "Show footer details"
+    );
+    expect(
+      t("en", "settings.commandPalette.footerDetail.enable.description")
+    ).toBe(
+      "Show descriptions or previews for the selected Command Palette candidate in the footer."
+    );
   });
 
   it("defines the status-bar character count message for ja and en (#259)", () => {

@@ -108,7 +108,7 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
       sound: defaultSoundSettings
     },
     commandPalette: {
-      description: {
+      footerDetail: {
         enable: true,
         marquee: { delay: 2000, speed: 40 }
       }
@@ -136,7 +136,7 @@ function validSaveRequest(
       sound: defaultSoundSettings
     },
     commandPalette: {
-      description: {
+      footerDetail: {
         enable: true,
         marquee: { delay: 2000, speed: 40 }
       }
@@ -182,14 +182,14 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
       encoding: getCatalogDefaultValue("files.newFile.encoding")
     });
-    expect(settings.commandPalette.description).toEqual({
-      enable: getCatalogDefaultValue("commandPalette.description.enable"),
+    expect(settings.commandPalette.footerDetail).toEqual({
+      enable: getCatalogDefaultValue("commandPalette.footerDetail.enable"),
       marquee: {
         delay: getCatalogDefaultValue(
-          "commandPalette.description.marquee.delay"
+          "commandPalette.footerDetail.marquee.delay"
         ),
         speed: getCatalogDefaultValue(
-          "commandPalette.description.marquee.speed"
+          "commandPalette.footerDetail.marquee.speed"
         )
       }
     });
@@ -229,7 +229,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           }
         },
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: false,
             marquee: { delay: 3000, speed: 80 }
           }
@@ -260,7 +260,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       lineEnding: "crlf",
       encoding: "utf8"
     });
-    expect(settings.commandPalette.description).toEqual({
+    expect(settings.commandPalette.footerDetail).toEqual({
       enable: false,
       marquee: { delay: 3000, speed: 80 }
     });
@@ -296,7 +296,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           }
         },
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: "yes",
             marquee: { delay: -1, speed: 0 }
           }
@@ -317,7 +317,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       lineEnding: "lf",
       encoding: "utf8"
     });
-    expect(settings.commandPalette.description).toEqual({
+    expect(settings.commandPalette.footerDetail).toEqual({
       enable: true,
       marquee: { delay: 2000, speed: 40 }
     });
@@ -327,7 +327,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: true,
             marquee: { delay: 1.5, speed: 1000.1 }
           }
@@ -337,7 +337,27 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
 
     const settings = await loadSettings();
 
-    expect(settings.commandPalette.description).toEqual({
+    expect(settings.commandPalette.footerDetail).toEqual({
+      enable: true,
+      marquee: { delay: 2000, speed: 40 }
+    });
+  });
+
+  it("does not read obsolete commandPalette.description settings as footer detail", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        commandPalette: {
+          description: {
+            enable: false,
+            marquee: { delay: 3000, speed: 80 }
+          }
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.commandPalette.footerDetail).toEqual({
       enable: true,
       marquee: { delay: 2000, speed: 40 }
     });
@@ -378,7 +398,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       onDiskSettings({
         recentProjects: [recentProject],
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: false,
             marquee: { delay: 3000, speed: 80 }
           }
@@ -420,7 +440,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           }
         },
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: false,
             marquee: { delay: 3000, speed: 80 }
           }
@@ -446,7 +466,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     });
     expect(written.recentProjects).toEqual([recentProject]);
     expect(written.commandPalette).toEqual({
-      description: {
+      footerDetail: {
         enable: false,
         marquee: { delay: 3000, speed: 80 }
       }
@@ -623,7 +643,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: "yes" as unknown as boolean,
             marquee: { delay: 2000, speed: 40 }
           }
@@ -631,7 +651,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: true,
             marquee: { delay: -1, speed: 40 }
           }
@@ -639,7 +659,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: true,
             marquee: { delay: 10001, speed: 40 }
           }
@@ -647,7 +667,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: true,
             marquee: { delay: 1.5, speed: 40 }
           }
@@ -655,7 +675,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: true,
             marquee: { delay: 2000, speed: 0 }
           }
@@ -663,11 +683,19 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         commandPalette: {
-          description: {
+          footerDetail: {
             enable: true,
             marquee: { delay: 2000, speed: 1001 }
           }
         }
+      }),
+      validSaveRequest({
+        commandPalette: {
+          description: {
+            enable: true,
+            marquee: { delay: 2000, speed: 40 }
+          }
+        } as unknown as SaveApplicationSettingsRequest["commandPalette"]
       }),
       validSaveRequest({
         files: { newFile: { lineEnding: "cr" as "lf", encoding: "utf8" } }

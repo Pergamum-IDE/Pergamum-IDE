@@ -121,7 +121,7 @@ function saveRequest(
       ...workbench
     },
     commandPalette: {
-      description: {
+      footerDetail: {
         enable: true,
         marquee: { delay: 2000, speed: 40 }
       }
@@ -452,7 +452,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         sound: defaultSoundSettings
       },
       commandPalette: {
-        description: {
+        footerDetail: {
           enable: true,
           marquee: { delay: 2000, speed: 40 }
         }
@@ -484,7 +484,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         somethingUnknown: true
       },
       commandPalette: {
-        description: {
+        footerDetail: {
           enable: true,
           marquee: { delay: 2000, speed: 40 }
         }
