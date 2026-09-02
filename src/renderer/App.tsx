@@ -325,7 +325,9 @@ import {
   type TabContextMenuDescriptor
 } from "./documentTabContextMenu";
 import { useMarkdownOutlineIndex } from "./useMarkdownOutlineIndex";
+import { collectMarkdownHeadingSearchCandidates } from "./markdownOutlineIndex";
 import type { MarkdownOutlineItem } from "../shared/markdownOutline";
+import type { CommandPaletteHeadingJumpCandidate } from "./commandPaletteHeadingJump";
 import type { PendingMarkdownSelection } from "./pendingMarkdownSelection";
 import {
   isSameProjectInstance,
@@ -1248,9 +1250,21 @@ export function App(): JSX.Element {
     ? markdownDocumentForEditor(currentEditor)
     : null;
   // #352: heading outline index over every open Markdown document (working
-  // text, dirty edits included). The sidebar only shows the active one.
-  const { activeOutline: activeMarkdownOutline } =
+  // text, dirty edits included). The sidebar only shows the active one; #141
+  // reuses the full index for the Command Palette `#` heading-jump snapshot.
+  const { activeOutline: activeMarkdownOutline, index: markdownOutlineIndex } =
     useMarkdownOutlineIndex(openDocumentsState);
+  // #141: ordered (active document first, then tab-bar order) heading-jump
+  // candidates over every open Markdown document. No Markdown re-parsing here
+  // — the index already holds each document's `flat` outline.
+  const headingJumpCandidates = useMemo(
+    () =>
+      collectMarkdownHeadingSearchCandidates(
+        markdownOutlineIndex,
+        openDocumentsState
+      ),
+    [markdownOutlineIndex, openDocumentsState]
+  );
   const activeDocumentKey = activeDocument
     ? serializeEditorId(activeDocument.id)
     : null;
@@ -6690,6 +6704,34 @@ export function App(): JSX.Element {
     }
   }
 
+  // #141: Command Palette `#` heading jump. Activates the target open Markdown
+  // tab (already open — never a disk read, never a File Explorer reveal /
+  // selection sync) then jumps to the heading offset with the SAME behavior as
+  // an Outline pane heading click: an offset pending-selection with a CENTER
+  // scroll strategy. Mirrors the glossary-occurrence cross-document pattern
+  // (`openEditor` with `history: "skip"`, then `setPendingMarkdownSelection`).
+  async function activateHeadingJumpTarget(
+    candidate: CommandPaletteHeadingJumpCandidate
+  ): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
+    const didOpen = await editorNavigation.openEditor(candidate.editorId, {
+      history: "skip"
+    });
+
+    if (!didOpen) {
+      return;
+    }
+
+    setPendingMarkdownSelection({
+      start: candidate.from,
+      end: candidate.from,
+      scrollY: "center"
+    });
+  }
+
   async function changeSettings(
     nextSettings: SaveApplicationSettingsRequest
   ): Promise<void> {
@@ -7209,6 +7251,11 @@ export function App(): JSX.Element {
               relativePath
             )
           }
+          headingJumpCandidates={headingJumpCandidates}
+          onExecuteHeadingJumpCandidate={(candidate) => {
+            void activateHeadingJumpTarget(candidate);
+            closeCommandPaletteAndRestoreMarkdownFocus();
+          }}
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);
             closeCommandPaletteAndRestoreMarkdownFocus();

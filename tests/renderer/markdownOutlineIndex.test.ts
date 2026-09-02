@@ -20,6 +20,7 @@ import {
 } from "../../src/renderer/openDocuments";
 import {
   buildMarkdownOutlineDocument,
+  collectMarkdownHeadingSearchCandidates,
   emptyMarkdownOutlineIndex,
   recomputeMarkdownOutlineDocument,
   syncMarkdownOutlineIndex
@@ -228,6 +229,105 @@ describe("recomputeMarkdownOutlineDocument (#352)", () => {
     expect(index.documents.get(key)!.outline.flat.map((h) => h.text)).toEqual([
       "Alpha",
       "Deep"
+    ]);
+  });
+});
+
+describe("collectMarkdownHeadingSearchCandidates (#141)", () => {
+  function twoProjectDocState(): OpenDocumentsState {
+    let state = openOrActivateDocument(
+      createInitialOpenDocumentsState(),
+      createProjectDocument(
+        { relativePath: "a.md", name: "a.md" },
+        "# A1\n\nbody of a1\n## A2"
+      ),
+      projectContext
+    );
+    // Opening b.md makes it the ACTIVE tab; tab-bar order stays [a, b].
+    state = openOrActivateDocument(
+      state,
+      createProjectDocument(
+        { relativePath: "b.md", name: "b.md" },
+        "# B1\n\nbody of b1"
+      ),
+      projectContext
+    );
+    return state;
+  }
+
+  it("lists the active document's headings first, then the other tabs in tab-bar order, each in document order", () => {
+    const state = twoProjectDocState();
+    const index = syncMarkdownOutlineIndex(state, emptyMarkdownOutlineIndex);
+
+    const candidates = collectMarkdownHeadingSearchCandidates(index, state);
+
+    expect(candidates.map((candidate) => candidate.text)).toEqual([
+      "B1",
+      "A1",
+      "A2"
+    ]);
+  });
+
+  it("keeps tab-bar order when the active tab is already first", () => {
+    let state = twoProjectDocState();
+    // Re-activate a.md (documents[0]) without changing tab order.
+    state = { ...state, activeDocumentId: state.documents[0].id };
+    const index = syncMarkdownOutlineIndex(state, emptyMarkdownOutlineIndex);
+
+    expect(
+      collectMarkdownHeadingSearchCandidates(index, state).map((c) => c.text)
+    ).toEqual(["A1", "A2", "B1"]);
+  });
+
+  it("carries the fields the Command Palette needs, incl. a bounded body preview and a stable id", () => {
+    const state = twoProjectDocState();
+    state.activeDocumentId = state.documents[0].id;
+    const index = syncMarkdownOutlineIndex(state, emptyMarkdownOutlineIndex);
+
+    const [a1, a2, b1] = collectMarkdownHeadingSearchCandidates(index, state);
+
+    expect(a1).toMatchObject({
+      text: "A1",
+      level: 1,
+      lineNumber: 0,
+      documentKind: "project",
+      documentPath: "a.md",
+      bodyPreview: "body of a1"
+    });
+    // A1's preview stops at A2 — never leaks the `## A2` line.
+    expect(a1.bodyPreview).not.toContain("A2");
+    // A2 has no body line before end of document.
+    expect(a2.bodyPreview).toBeNull();
+    expect(b1.bodyPreview).toBe("body of b1");
+    // id = `${editorKey}::${headingId}` and is unique per heading.
+    expect(a1.id).toBe(`${a1.editorKey}::${a1.headingId}`);
+    expect(new Set([a1.id, a2.id, b1.id]).size).toBe(3);
+  });
+
+  it("returns [] when there are no open Markdown documents", () => {
+    expect(
+      collectMarkdownHeadingSearchCandidates(
+        emptyMarkdownOutlineIndex,
+        createInitialOpenDocumentsState()
+      )
+    ).toEqual([]);
+  });
+
+  it("ignores a non-Markdown (glossary) editor — it is never in the index", () => {
+    let state = twoProjectDocState();
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+    const index = syncMarkdownOutlineIndex(state, emptyMarkdownOutlineIndex);
+
+    const candidates = collectMarkdownHeadingSearchCandidates(index, state);
+
+    expect(candidates.map((candidate) => candidate.text).sort()).toEqual([
+      "A1",
+      "A2",
+      "B1"
     ]);
   });
 });

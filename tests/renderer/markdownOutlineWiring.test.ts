@@ -14,7 +14,7 @@ const sidebarSource = readFileSync(
 describe("Markdown Outline wiring (#352)", () => {
   it("App drives the outline index from openDocumentsState via useMarkdownOutlineIndex", () => {
     expect(appSource).toContain(
-      "const { activeOutline: activeMarkdownOutline } =\n" +
+      "const { activeOutline: activeMarkdownOutline, index: markdownOutlineIndex } =\n" +
         "    useMarkdownOutlineIndex(openDocumentsState);"
     );
     expect(appSource).toContain(
@@ -40,9 +40,10 @@ describe("Markdown Outline wiring (#352)", () => {
     );
   });
 
-  it("only the Outline jump passes scrollY: center — line jump / glossary occurrence stay nearest", () => {
-    // the only `scrollY:` in App is the Outline heading click
-    expect(appSource.match(/scrollY:/g) ?? []).toHaveLength(1);
+  it("only heading jumps pass scrollY: center — line jump / glossary occurrence stay nearest", () => {
+    // #352 Outline heading click + #141 Command Palette `#` heading jump are
+    // the only `scrollY:` uses in App; both jump to a heading.
+    expect(appSource.match(/scrollY:/g) ?? []).toHaveLength(2);
     const goToLine = appSource.slice(
       appSource.indexOf("goToLineCommandRef.current = (line) =>"),
       appSource.indexOf("lineJumpEditorSnapshot")
@@ -51,6 +52,24 @@ describe("Markdown Outline wiring (#352)", () => {
       "setPendingMarkdownSelection({ start: offset, end: offset })"
     );
     expect(goToLine).not.toContain("scrollY");
+  });
+
+  it("#141: the Command Palette `#` heading jump activates the tab then jumps to the heading offset, center-scrolled", () => {
+    const fn = appSource.slice(
+      appSource.indexOf("async function activateHeadingJumpTarget("),
+      appSource.indexOf("async function changeSettings(")
+    );
+    expect(fn).toContain(
+      "editorNavigation.openEditor(candidate.editorId, {"
+    );
+    expect(fn).toContain('history: "skip"');
+    expect(fn.replace(/\s+/g, " ")).toContain(
+      'setPendingMarkdownSelection({ start: candidate.from, end: candidate.from, scrollY: "center" })'
+    );
+    // No File Explorer reveal / selection sync, no line jump.
+    expect(fn).not.toContain("revealFileExplorer");
+    expect(fn).not.toContain("setFileExplorerRevealRequest");
+    expect(fn).not.toContain("goToLine");
   });
 
   it("App passes the outline props to WorkspaceSidebar", () => {
@@ -107,12 +126,17 @@ describe("Markdown Outline wiring (#352)", () => {
     );
   });
 
-  it("does not touch the Command Palette heading mode (still reserved)", () => {
+  it("#141: the Command Palette heading mode is now a real heading-jump list, not a reserved placeholder", () => {
     const paletteSource = readFileSync(
       "src/renderer/CommandPalette.tsx",
       "utf8"
     );
-    expect(paletteSource).toContain('return "commandPalette.reserved.heading";');
-    expect(paletteSource).not.toContain('mode === "heading"');
+    expect(paletteSource).not.toContain(
+      'return "commandPalette.reserved.heading";'
+    );
+    expect(paletteSource).toContain('mode === "heading"');
+    expect(paletteSource).toContain(
+      "filterCommandPaletteHeadingJumpCandidates("
+    );
   });
 });
