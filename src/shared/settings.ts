@@ -96,18 +96,18 @@ export interface WorkbenchSoundSettings {
   keypress: WorkbenchSoundToggleSettings;
 }
 
-export interface CommandPaletteDescriptionMarqueeSettings {
+export interface CommandPaletteFooterDetailMarqueeSettings {
   delay: number;
   speed: number;
 }
 
-export interface CommandPaletteDescriptionSettings {
+export interface CommandPaletteFooterDetailSettings {
   enable: boolean;
-  marquee: CommandPaletteDescriptionMarqueeSettings;
+  marquee: CommandPaletteFooterDetailMarqueeSettings;
 }
 
 export interface ApplicationCommandPaletteSettings {
-  description: CommandPaletteDescriptionSettings;
+  footerDetail: CommandPaletteFooterDetailSettings;
 }
 
 export type NewFileLineEnding = SettingValueOf<"files.newFile.lineEnding">;
@@ -239,7 +239,7 @@ export interface EffectiveWorkbenchSettings {
 }
 
 export interface EffectiveCommandPaletteSettings {
-  description: CommandPaletteDescriptionSettings;
+  footerDetail: CommandPaletteFooterDetailSettings;
 }
 
 export interface EffectiveEditorSettings {
@@ -331,14 +331,14 @@ export const builtInDefaultSettings: EffectiveSettings = {
     }
   },
   commandPalette: {
-    description: {
-      enable: getCatalogDefaultValue("commandPalette.description.enable"),
+    footerDetail: {
+      enable: getCatalogDefaultValue("commandPalette.footerDetail.enable"),
       marquee: {
         delay: getCatalogDefaultValue(
-          "commandPalette.description.marquee.delay"
+          "commandPalette.footerDetail.marquee.delay"
         ),
         speed: getCatalogDefaultValue(
-          "commandPalette.description.marquee.speed"
+          "commandPalette.footerDetail.marquee.speed"
         )
       }
     }
@@ -429,13 +429,13 @@ export const defaultApplicationSettings: ApplicationSettings = {
     }
   },
   commandPalette: {
-    description: {
-      enable: builtInDefaultSettings.commandPalette.description.enable,
+    footerDetail: {
+      enable: builtInDefaultSettings.commandPalette.footerDetail.enable,
       marquee: {
         delay:
-          builtInDefaultSettings.commandPalette.description.marquee.delay,
+          builtInDefaultSettings.commandPalette.footerDetail.marquee.delay,
         speed:
-          builtInDefaultSettings.commandPalette.description.marquee.speed
+          builtInDefaultSettings.commandPalette.footerDetail.marquee.speed
       }
     }
   },
@@ -510,13 +510,13 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       }
     },
     commandPalette: {
-      description: {
-        enable: defaultApplicationSettings.commandPalette.description.enable,
+      footerDetail: {
+        enable: defaultApplicationSettings.commandPalette.footerDetail.enable,
         marquee: {
           delay:
-            defaultApplicationSettings.commandPalette.description.marquee.delay,
+            defaultApplicationSettings.commandPalette.footerDetail.marquee.delay,
           speed:
-            defaultApplicationSettings.commandPalette.description.marquee.speed
+            defaultApplicationSettings.commandPalette.footerDetail.marquee.speed
         }
       }
     },
@@ -634,11 +634,11 @@ export function resolveEffectiveSettings(
       }
     },
     commandPalette: {
-      description: {
-        enable: applicationSettings.commandPalette.description.enable,
+      footerDetail: {
+        enable: applicationSettings.commandPalette.footerDetail.enable,
         marquee: {
-          delay: applicationSettings.commandPalette.description.marquee.delay,
-          speed: applicationSettings.commandPalette.description.marquee.speed
+          delay: applicationSettings.commandPalette.footerDetail.marquee.delay,
+          speed: applicationSettings.commandPalette.footerDetail.marquee.speed
         }
       }
     },

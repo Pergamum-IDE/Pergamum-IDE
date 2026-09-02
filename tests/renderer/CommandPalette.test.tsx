@@ -13,7 +13,7 @@ import {
   CommandPalette,
   CommandPaletteHighlightedText,
   commandPaletteItemClassName,
-  resolveCommandPaletteDescriptionMarquee,
+  resolveCommandPaletteFooterDetailMarquee,
   resolveCommandPaletteFooterModel,
   scrollCommandPaletteSelectionIntoView
 } from "../../src/renderer/CommandPalette";
@@ -24,14 +24,14 @@ import {
 } from "../../src/renderer/commandPaletteEntries";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import type { LineJumpEditorSnapshot } from "../../src/renderer/lineJumpQuery";
-import type { CommandPaletteDescriptionSettings } from "../../src/shared/settings";
+import type { CommandPaletteFooterDetailSettings } from "../../src/shared/settings";
 
 const translate: Translate = (key) => key;
 const realTranslateEn: Translate = (key, values) => t("en", key, values);
 const realTranslateJa: Translate = (key, values) => t("ja", key, values);
 const notComposing = () => false;
 const noop = () => undefined;
-const descriptionDisabledSettings: CommandPaletteDescriptionSettings = {
+const footerDetailDisabledSettings: CommandPaletteFooterDetailSettings = {
   enable: false,
   marquee: { delay: 2000, speed: 40 }
 };
@@ -131,7 +131,7 @@ function renderPalette(overrides: {
   projectFileQuickOpenDocuments?: readonly ProjectDocument[];
   recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
-  descriptionSettings?: CommandPaletteDescriptionSettings;
+  footerDetailSettings?: CommandPaletteFooterDetailSettings;
 } = {}): string {
   return renderToStaticMarkup(
     React.createElement(CommandPalette, {
@@ -149,7 +149,7 @@ function renderPalette(overrides: {
         overrides.recentProjectFileQuickOpenDocuments,
       onClose: noop,
       lineJumpEditorSnapshot: overrides.lineJumpEditorSnapshot,
-      descriptionSettings: overrides.descriptionSettings
+      footerDetailSettings: overrides.footerDetailSettings
     })
   );
 }
@@ -586,7 +586,7 @@ describe("CommandPalette", () => {
     expect(() => scrollCommandPaletteSelectionIntoView(null)).not.toThrow();
   });
 
-  it("renders fixed footer hints and the selected command description, without a result count, for the default empty query", () => {
+  it("renders fixed footer hints and the selected command footer detail, without a result count, for the default empty query", () => {
     const markup = renderPalette();
 
     expect(markup).toContain("commandPaletteFooter");
@@ -600,11 +600,11 @@ describe("CommandPalette", () => {
     expect(markup).not.toContain("commandPalette.footer.results");
   });
 
-  it("shows the real English/Japanese search hint text when command descriptions are disabled", () => {
+  it("shows the real English/Japanese search hint text when footer details are disabled", () => {
     expect(
       renderPalette({
         translate: realTranslateEn,
-        descriptionSettings: descriptionDisabledSettings
+        footerDetailSettings: footerDetailDisabledSettings
       })
     ).toContain(
       "Search commands"
@@ -612,7 +612,7 @@ describe("CommandPalette", () => {
     expect(
       renderPalette({
         translate: realTranslateJa,
-        descriptionSettings: descriptionDisabledSettings
+        footerDetailSettings: footerDetailDisabledSettings
       })
     ).toContain(
       "コマンドを検索します"
@@ -666,7 +666,7 @@ describe("CommandPalette", () => {
     const markup = renderPalette({
       translate: realTranslateEn,
       initialInputValue: ">fallback",
-      descriptionSettings: descriptionDisabledSettings
+      footerDetailSettings: footerDetailDisabledSettings
     });
 
     expect(markup).toContain("1 result");
@@ -677,7 +677,7 @@ describe("CommandPalette", () => {
     const markup = renderPalette({
       translate: realTranslateEn,
       initialInputValue: ">test.command",
-      descriptionSettings: descriptionDisabledSettings
+      footerDetailSettings: footerDetailDisabledSettings
     });
 
     expect(markup).toContain("3 results");
@@ -689,7 +689,7 @@ describe("CommandPalette", () => {
     const markup = renderPalette({
       translate: realTranslateJa,
       initialInputValue: ">fallback",
-      descriptionSettings: descriptionDisabledSettings
+      footerDetailSettings: footerDetailDisabledSettings
     });
 
     expect(markup).toContain("1件の結果");
@@ -712,9 +712,9 @@ describe("CommandPalette", () => {
     expect(jaTranslations["commandPalette.footer.closeHint"]).toBe("Esc");
   });
 
-  it("measures real overflow and enables command description marquee with configured delay and speed", () => {
+  it("measures real overflow and enables footer detail marquee with configured delay and speed", () => {
     expect(
-      resolveCommandPaletteDescriptionMarquee({
+      resolveCommandPaletteFooterDetailMarquee({
         enabled: true,
         reducedMotion: false,
         scrollWidth: 260,
@@ -732,9 +732,9 @@ describe("CommandPalette", () => {
     });
   });
 
-  it("does not enable command description marquee when the text fits", () => {
+  it("does not enable footer detail marquee when the text fits", () => {
     expect(
-      resolveCommandPaletteDescriptionMarquee({
+      resolveCommandPaletteFooterDetailMarquee({
         enabled: true,
         reducedMotion: false,
         scrollWidth: 100,
@@ -748,9 +748,9 @@ describe("CommandPalette", () => {
     });
   });
 
-  it("suppresses command description marquee when reduced motion is preferred", () => {
+  it("suppresses footer detail marquee when reduced motion is preferred", () => {
     expect(
-      resolveCommandPaletteDescriptionMarquee({
+      resolveCommandPaletteFooterDetailMarquee({
         enabled: true,
         reducedMotion: true,
         scrollWidth: 260,
@@ -764,19 +764,23 @@ describe("CommandPalette", () => {
     });
   });
 
-  it("uses measured scrollWidth/clientWidth, CSS animation, and selected command identity to reset description marquee", () => {
+  it("uses measured scrollWidth/clientWidth, CSS animation, and selected command detail identity to reset the marquee", () => {
     const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
 
     expect(source).not.toContain("<marquee");
+    expect(source).not.toContain("CommandPaletteDescriptionMarquee");
+    expect(source).not.toContain("useCommandPaletteDescriptionMarquee");
+    expect(source).not.toContain("commandPalette.description");
     expect(source).toContain("scrollWidth: text.scrollWidth");
     expect(source).toContain("clientWidth: container.clientWidth");
     expect(source).toContain("resetKey:");
-    expect(source).toContain("activeEntry?.id");
+    expect(source).toContain("detailResetKey: String(selectedEntry.id)");
+    expect(source).toContain("footerDetailResetKey");
     expect(source).toContain(
-      "--command-palette-description-marquee-delay"
+      "--command-palette-footer-detail-marquee-delay"
     );
     expect(source).toContain(
-      "--command-palette-description-marquee-duration"
+      "--command-palette-footer-detail-marquee-duration"
     );
   });
 
@@ -815,7 +819,7 @@ describe("CommandPalette", () => {
     expect(styles).toContain("border-radius: 0.125em;");
     expect(styles).toContain("padding: 0 0.08em;");
     expect(styles).toContain(".commandPaletteFooterStatusText-marquee");
-    expect(styles).toContain("@keyframes commandPaletteDescriptionMarquee");
+    expect(styles).toContain("@keyframes commandPaletteFooterDetailMarquee");
     expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
   });
 });
@@ -880,7 +884,7 @@ describe("CommandPalette highlighting and footer model", () => {
     );
   });
 
-  it("shows an enabled selected command description before result count or hints in the footer model", () => {
+  it("shows an enabled selected command description as footer detail before result count or hints in the footer model", () => {
     const results = filterCommandPaletteEntries(entries, "command");
 
     expect(
@@ -893,12 +897,13 @@ describe("CommandPalette highlighting and footer model", () => {
       })
     ).toEqual({
       statusKey: null,
-      statusText: "Write the current editor to disk",
+      detailText: "Write the current editor to disk",
+      detailResetKey: "test.command.save",
       canRunSelected: true
     });
   });
 
-  it("shows result count only for command queries when selected command description display is disabled", () => {
+  it("shows result count only for command queries when footer detail display is disabled", () => {
     const results = filterCommandPaletteEntries(entries, "command");
 
     expect(
@@ -908,7 +913,7 @@ describe("CommandPalette highlighting and footer model", () => {
         inputValue: ">command",
         entries: results,
         selectedIndex: 0,
-        descriptionEnabled: false
+        detailEnabled: false
       })
     ).toEqual({
       statusKey: "commandPalette.footer.results.other",
@@ -922,7 +927,7 @@ describe("CommandPalette highlighting and footer model", () => {
         inputValue: "",
         entries: results,
         selectedIndex: 0,
-        descriptionEnabled: false
+        detailEnabled: false
       }).statusKey
     ).toBeNull();
   });
@@ -938,7 +943,7 @@ describe("CommandPalette highlighting and footer model", () => {
         inputValue: ">save",
         entries: results,
         selectedIndex: 0,
-        descriptionEnabled: false
+        detailEnabled: false
       })
     ).toEqual({
       statusKey: "commandPalette.footer.results.one",
@@ -1031,7 +1036,7 @@ describe("CommandPalette highlighting and footer model", () => {
         inputValue: ">",
         entries: results,
         selectedIndex: 0,
-        descriptionEnabled: false
+        detailEnabled: false
       })
     ).toEqual({
       statusKey: "commandPalette.footer.searchHint",
@@ -1049,7 +1054,7 @@ describe("CommandPalette highlighting and footer model", () => {
         inputValue: "",
         entries: results,
         selectedIndex: 0,
-        descriptionEnabled: false
+        detailEnabled: false
       }).statusKey
     ).toBeNull();
   });

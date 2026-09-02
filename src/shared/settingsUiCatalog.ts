@@ -325,11 +325,11 @@ const workbenchLanguageOptions: readonly SettingSelectOption[] =
     labelKey: languageOptionLabelKeys[language]
   }));
 
-const commandPaletteMarqueeDelayRange = getCatalogEntry(
-  "commandPalette.description.marquee.delay"
+const commandPaletteFooterDetailMarqueeDelayRange = getCatalogEntry(
+  "commandPalette.footerDetail.marquee.delay"
 ).numericRange;
-const commandPaletteMarqueeSpeedRange = getCatalogEntry(
-  "commandPalette.description.marquee.speed"
+const commandPaletteFooterDetailMarqueeSpeedRange = getCatalogEntry(
+  "commandPalette.footerDetail.marquee.speed"
 ).numericRange;
 const previewUpdateDelayRange = getCatalogEntry(
   "preview.updateDelayMs"
@@ -703,44 +703,44 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("workbench.sound.keypress.enabled")
   },
   {
-    key: "commandPalette.description.enable",
+    key: "commandPalette.footerDetail.enable",
     category: "commands",
     order: 100,
-    labelKey: "settings.commandPalette.description.enable.label",
-    descriptionKey: "settings.commandPalette.description.enable.description",
+    labelKey: "settings.commandPalette.footerDetail.enable.label",
+    descriptionKey: "settings.commandPalette.footerDetail.enable.description",
     control: { kind: "switch" },
-    defaultValue: getCatalogDefaultValue("commandPalette.description.enable")
+    defaultValue: getCatalogDefaultValue("commandPalette.footerDetail.enable")
   },
   {
-    key: "commandPalette.description.marquee.delay",
+    key: "commandPalette.footerDetail.marquee.delay",
     category: "commands",
     order: 200,
-    labelKey: "settings.commandPalette.description.marquee.delay.label",
+    labelKey: "settings.commandPalette.footerDetail.marquee.delay.label",
     descriptionKey:
-      "settings.commandPalette.description.marquee.delay.description",
+      "settings.commandPalette.footerDetail.marquee.delay.description",
     control: {
       kind: "number",
-      min: commandPaletteMarqueeDelayRange.min,
-      max: commandPaletteMarqueeDelayRange.max
+      min: commandPaletteFooterDetailMarqueeDelayRange.min,
+      max: commandPaletteFooterDetailMarqueeDelayRange.max
     },
     defaultValue: getCatalogDefaultValue(
-      "commandPalette.description.marquee.delay"
+      "commandPalette.footerDetail.marquee.delay"
     )
   },
   {
-    key: "commandPalette.description.marquee.speed",
+    key: "commandPalette.footerDetail.marquee.speed",
     category: "commands",
     order: 300,
-    labelKey: "settings.commandPalette.description.marquee.speed.label",
+    labelKey: "settings.commandPalette.footerDetail.marquee.speed.label",
     descriptionKey:
-      "settings.commandPalette.description.marquee.speed.description",
+      "settings.commandPalette.footerDetail.marquee.speed.description",
     control: {
       kind: "number",
-      min: commandPaletteMarqueeSpeedRange.min,
-      max: commandPaletteMarqueeSpeedRange.max
+      min: commandPaletteFooterDetailMarqueeSpeedRange.min,
+      max: commandPaletteFooterDetailMarqueeSpeedRange.max
     },
     defaultValue: getCatalogDefaultValue(
-      "commandPalette.description.marquee.speed"
+      "commandPalette.footerDetail.marquee.speed"
     )
   }
 ] satisfies readonly SettingCatalogItem[]);

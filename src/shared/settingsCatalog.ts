@@ -543,33 +543,33 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
-  "commandPalette.description.enable": defineBooleanSetting({
-    key: "commandPalette.description.enable",
+  "commandPalette.footerDetail.enable": defineBooleanSetting({
+    key: "commandPalette.footerDetail.enable",
     scope: "applicationOnly",
     defaultValue: true,
-    labelKey: "settings.commandPalette.description.enable.label",
-    descriptionKey: "settings.commandPalette.description.enable.description",
+    labelKey: "settings.commandPalette.footerDetail.enable.label",
+    descriptionKey: "settings.commandPalette.footerDetail.enable.description",
     deprecatedAliases: [],
     migrationNotes: []
   }),
-  "commandPalette.description.marquee.delay": defineNumberSetting({
-    key: "commandPalette.description.marquee.delay",
+  "commandPalette.footerDetail.marquee.delay": defineNumberSetting({
+    key: "commandPalette.footerDetail.marquee.delay",
     scope: "applicationOnly",
     defaultValue: 2000,
-    labelKey: "settings.commandPalette.description.marquee.delay.label",
+    labelKey: "settings.commandPalette.footerDetail.marquee.delay.label",
     descriptionKey:
-      "settings.commandPalette.description.marquee.delay.description",
+      "settings.commandPalette.footerDetail.marquee.delay.description",
     numericRange: { min: 0, max: 10000, integer: true },
     deprecatedAliases: [],
     migrationNotes: []
   }),
-  "commandPalette.description.marquee.speed": defineNumberSetting({
-    key: "commandPalette.description.marquee.speed",
+  "commandPalette.footerDetail.marquee.speed": defineNumberSetting({
+    key: "commandPalette.footerDetail.marquee.speed",
     scope: "applicationOnly",
     defaultValue: 40,
-    labelKey: "settings.commandPalette.description.marquee.speed.label",
+    labelKey: "settings.commandPalette.footerDetail.marquee.speed.label",
     descriptionKey:
-      "settings.commandPalette.description.marquee.speed.description",
+      "settings.commandPalette.footerDetail.marquee.speed.description",
     numericRange: { min: 1, max: 1000 },
     deprecatedAliases: [],
     migrationNotes: []

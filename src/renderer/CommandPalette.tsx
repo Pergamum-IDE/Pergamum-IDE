@@ -20,7 +20,7 @@ import type {
 } from "../shared/i18n";
 import {
   builtInDefaultSettings,
-  type CommandPaletteDescriptionSettings
+  type CommandPaletteFooterDetailSettings
 } from "../shared/settings";
 import {
   type CommandPaletteFilteredEntry,
@@ -97,12 +97,12 @@ export interface CommandPaletteProps {
   projectFileQuickOpenDocuments?: readonly ProjectDocument[];
   recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
   onOpenProjectFileQuickOpenCandidate?: (relativePath: string) => void;
-  descriptionSettings?: CommandPaletteDescriptionSettings;
+  footerDetailSettings?: CommandPaletteFooterDetailSettings;
 }
 
 const defaultInputValue = ">";
-const defaultDescriptionSettings =
-  builtInDefaultSettings.commandPalette.description;
+const defaultFooterDetailSettings =
+  builtInDefaultSettings.commandPalette.footerDetail;
 const useCommandPaletteLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -110,10 +110,12 @@ export interface CommandPaletteFooterModel {
   readonly statusKey: TranslationKey | null;
   readonly statusValues?: TranslationValues;
   readonly statusText?: string;
+  readonly detailText?: string;
+  readonly detailResetKey?: string;
   readonly canRunSelected: boolean;
 }
 
-export interface CommandPaletteDescriptionMarqueeInput {
+export interface CommandPaletteFooterDetailMarqueeInput {
   readonly enabled: boolean;
   readonly reducedMotion: boolean;
   readonly scrollWidth: number;
@@ -122,7 +124,7 @@ export interface CommandPaletteDescriptionMarqueeInput {
   readonly speedPxPerSecond: number;
 }
 
-export interface CommandPaletteDescriptionMarqueeState {
+export interface CommandPaletteFooterDetailMarqueeState {
   readonly overflowing: boolean;
   readonly active: boolean;
   readonly distancePx: number;
@@ -131,7 +133,7 @@ export interface CommandPaletteDescriptionMarqueeState {
   readonly speedPxPerSecond: number;
 }
 
-const inactiveCommandPaletteDescriptionMarqueeState: CommandPaletteDescriptionMarqueeState =
+const inactiveCommandPaletteFooterDetailMarqueeState: CommandPaletteFooterDetailMarqueeState =
   {
     overflowing: false,
     active: false,
@@ -141,9 +143,9 @@ const inactiveCommandPaletteDescriptionMarqueeState: CommandPaletteDescriptionMa
     speedPxPerSecond: 0
   };
 
-export function resolveCommandPaletteDescriptionMarquee(
-  input: CommandPaletteDescriptionMarqueeInput
-): CommandPaletteDescriptionMarqueeState {
+export function resolveCommandPaletteFooterDetailMarquee(
+  input: CommandPaletteFooterDetailMarqueeInput
+): CommandPaletteFooterDetailMarqueeState {
   const distancePx = Math.max(0, input.scrollWidth - input.clientWidth);
   const overflowing = distancePx > 0;
 
@@ -257,24 +259,24 @@ function usePrefersReducedMotion(): boolean {
   return prefersReducedMotion;
 }
 
-function useCommandPaletteDescriptionMarquee(input: {
+function useCommandPaletteFooterDetailMarquee(input: {
   readonly enabled: boolean;
   readonly resetKey: string;
-  readonly settings: CommandPaletteDescriptionSettings;
+  readonly settings: CommandPaletteFooterDetailSettings;
 }): {
   readonly containerRef: RefObject<HTMLDivElement>;
   readonly textRef: RefObject<HTMLSpanElement>;
-  readonly state: CommandPaletteDescriptionMarqueeState;
+  readonly state: CommandPaletteFooterDetailMarqueeState;
 } {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const reducedMotion = usePrefersReducedMotion();
-  const [state, setState] = useState<CommandPaletteDescriptionMarqueeState>(
-    inactiveCommandPaletteDescriptionMarqueeState
+  const [state, setState] = useState<CommandPaletteFooterDetailMarqueeState>(
+    inactiveCommandPaletteFooterDetailMarqueeState
   );
 
   useCommandPaletteLayoutEffect(() => {
-    setState(inactiveCommandPaletteDescriptionMarqueeState);
+    setState(inactiveCommandPaletteFooterDetailMarqueeState);
 
     if (!input.enabled) {
       return;
@@ -289,7 +291,7 @@ function useCommandPaletteDescriptionMarquee(input: {
 
     const measure = () => {
       setState(
-        resolveCommandPaletteDescriptionMarquee({
+        resolveCommandPaletteFooterDetailMarquee({
           enabled: input.enabled,
           reducedMotion,
           scrollWidth: text.scrollWidth,
@@ -324,7 +326,7 @@ function useCommandPaletteDescriptionMarquee(input: {
 /**
  * Footer status priority (highest first):
  *  1. disabled selected command message
- *  2. enabled selected command description
+ *  2. enabled selected command detail
  *  3. non-empty query result count
  *  4. command mode empty-query hint — only once the user has actually typed
  *     the `>` prefix, not for a fully empty input (which shows the native
@@ -343,7 +345,7 @@ export function resolveCommandPaletteFooterModel(input: {
   readonly inputValue: string;
   readonly entries: readonly CommandPaletteFilteredEntry[];
   readonly selectedIndex: number | null;
-  readonly descriptionEnabled?: boolean;
+  readonly detailEnabled?: boolean;
 }): CommandPaletteFooterModel {
   const selectedEntry = selectedCommandPaletteEntry(
     input.entries,
@@ -369,13 +371,14 @@ export function resolveCommandPaletteFooterModel(input: {
   }
 
   if (
-    input.descriptionEnabled !== false &&
+    input.detailEnabled !== false &&
     selectedEntry?.enabled === true &&
     selectedEntry.description
   ) {
     return {
       statusKey: null,
-      statusText: selectedEntry.description,
+      detailText: selectedEntry.description,
+      detailResetKey: String(selectedEntry.id),
       canRunSelected
     };
   }
@@ -522,7 +525,7 @@ export function CommandPalette({
   projectFileQuickOpenDocuments = [],
   recentProjectFileQuickOpenDocuments = [],
   onOpenProjectFileQuickOpenCandidate = () => undefined,
-  descriptionSettings = defaultDescriptionSettings
+  footerDetailSettings = defaultFooterDetailSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
   const [inputValue, setInputValue] = useState(initialInputValue);
@@ -905,30 +908,32 @@ export function CommandPalette({
         inputValue,
         entries,
         selectedIndex,
-        descriptionEnabled: descriptionSettings.enable
+        detailEnabled: footerDetailSettings.enable
       });
   const runHintClassName = footer.canRunSelected
     ? "commandPaletteFooterHint"
     : "commandPaletteFooterHint commandPaletteFooterHintUnavailable";
   const footerStatusText =
+    footer.detailText ??
     footer.statusText ??
     (footer.statusKey ? translate(footer.statusKey, footer.statusValues) : null);
-  const descriptionMarquee = useCommandPaletteDescriptionMarquee({
-    enabled: footer.statusText !== undefined && descriptionSettings.enable,
-    resetKey:
-      footer.statusText !== undefined
-        ? `${String(activeEntry?.id ?? "")}:${footer.statusText}`
-        : "",
-    settings: descriptionSettings
+  const footerDetailResetKey =
+    footer.detailText !== undefined
+      ? `${footer.detailResetKey ?? ""}:${footer.detailText}`
+      : "";
+  const footerDetailMarquee = useCommandPaletteFooterDetailMarquee({
+    enabled: footer.detailText !== undefined && footerDetailSettings.enable,
+    resetKey: footerDetailResetKey,
+    settings: footerDetailSettings
   });
-  const footerStatusClassName = descriptionMarquee.state.active
+  const footerStatusClassName = footerDetailMarquee.state.active
     ? "commandPaletteFooterStatusText commandPaletteFooterStatusText-marquee"
     : "commandPaletteFooterStatusText";
-  const footerStatusStyle = descriptionMarquee.state.active
+  const footerStatusStyle = footerDetailMarquee.state.active
     ? ({
-        "--command-palette-description-marquee-delay": `${descriptionMarquee.state.delayMs}ms`,
-        "--command-palette-description-marquee-duration": `${descriptionMarquee.state.durationMs}ms`,
-        "--command-palette-description-marquee-distance": `${descriptionMarquee.state.distancePx}px`
+        "--command-palette-footer-detail-marquee-delay": `${footerDetailMarquee.state.delayMs}ms`,
+        "--command-palette-footer-detail-marquee-duration": `${footerDetailMarquee.state.durationMs}ms`,
+        "--command-palette-footer-detail-marquee-distance": `${footerDetailMarquee.state.distancePx}px`
       } as CSSProperties)
     : undefined;
   // #316: a `role="listbox"` popup is on screen (command mode always renders
@@ -1161,17 +1166,13 @@ export function CommandPalette({
         <div className="commandPaletteFooter">
           <div
             className="commandPaletteFooterStatus"
-            ref={descriptionMarquee.containerRef}
+            ref={footerDetailMarquee.containerRef}
           >
             {footerStatusText ? (
               <span
                 className={footerStatusClassName}
-                key={
-                  footer.statusText !== undefined
-                    ? `${String(activeEntry?.id ?? "")}:${footer.statusText}`
-                    : footerStatusText
-                }
-                ref={descriptionMarquee.textRef}
+                key={footerDetailResetKey || footerStatusText}
+                ref={footerDetailMarquee.textRef}
                 style={footerStatusStyle}
               >
                 {footerStatusText}

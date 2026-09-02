@@ -2889,21 +2889,21 @@ label.settingsItemHeader {
 .commandPaletteFooterStatusText-marquee {
   max-width: none;
   text-overflow: clip;
-  animation-name: commandPaletteDescriptionMarquee;
-  animation-delay: var(--command-palette-description-marquee-delay);
-  animation-duration: var(--command-palette-description-marquee-duration);
+  animation-name: commandPaletteFooterDetailMarquee;
+  animation-delay: var(--command-palette-footer-detail-marquee-delay);
+  animation-duration: var(--command-palette-footer-detail-marquee-duration);
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
 
-@keyframes commandPaletteDescriptionMarquee {
+@keyframes commandPaletteFooterDetailMarquee {
   from {
     transform: translateX(0);
   }
 
   to {
     transform: translateX(
-      calc(-1 * var(--command-palette-description-marquee-distance))
+      calc(-1 * var(--command-palette-footer-detail-marquee-distance))
     );
   }
 }

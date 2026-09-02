@@ -61,9 +61,9 @@ const unwiredKeys = new Set<SettingKey>([
   "preview.renderer"
 ]);
 
-const marqueeKeys = new Set<SettingKey>([
-  "commandPalette.description.marquee.delay",
-  "commandPalette.description.marquee.speed"
+const footerDetailMarqueeKeys = new Set<SettingKey>([
+  "commandPalette.footerDetail.marquee.delay",
+  "commandPalette.footerDetail.marquee.speed"
 ]);
 
 const soundChildKeys = new Set<SettingKey>([
@@ -83,8 +83,8 @@ const characterCountExcludeKeys = new Set<SettingKey>([
 // Presentational only (unit suffix for a number control) — not part of the
 // UI catalog schema, which has no `unit` field on SettingControl.
 const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
-  "commandPalette.description.marquee.delay": "settings.unit.ms",
-  "commandPalette.description.marquee.speed": "settings.unit.pxPerSecond",
+  "commandPalette.footerDetail.marquee.delay": "settings.unit.ms",
+  "commandPalette.footerDetail.marquee.speed": "settings.unit.pxPerSecond",
   "preview.updateDelayMs": "settings.unit.ms",
   "workbench.notification.durationMs": "settings.unit.ms"
 };
@@ -122,12 +122,12 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.workbench.sound.newline.enabled;
     case "workbench.sound.keypress.enabled":
       return settings.workbench.sound.keypress.enabled;
-    case "commandPalette.description.enable":
-      return settings.commandPalette.description.enable;
-    case "commandPalette.description.marquee.delay":
-      return settings.commandPalette.description.marquee.delay;
-    case "commandPalette.description.marquee.speed":
-      return settings.commandPalette.description.marquee.speed;
+    case "commandPalette.footerDetail.enable":
+      return settings.commandPalette.footerDetail.enable;
+    case "commandPalette.footerDetail.marquee.delay":
+      return settings.commandPalette.footerDetail.marquee.delay;
+    case "commandPalette.footerDetail.marquee.speed":
+      return settings.commandPalette.footerDetail.marquee.speed;
     case "editor.fontFamily":
       return (
         settings.editor.fontFamily ?? getCatalogDefaultValue("editor.fontFamily")
@@ -381,17 +381,17 @@ function buildNextSettings(
           }
         }
       });
-    case "commandPalette.description.enable":
+    case "commandPalette.footerDetail.enable":
       return saveRequest(settings, {
         commandPalette: {
           ...settings.commandPalette,
-          description: {
-            ...settings.commandPalette.description,
+          footerDetail: {
+            ...settings.commandPalette.footerDetail,
             enable: Boolean(rawValue)
           }
         }
       });
-    case "commandPalette.description.marquee.delay":
+    case "commandPalette.footerDetail.marquee.delay":
       if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
         return null;
       }
@@ -399,16 +399,16 @@ function buildNextSettings(
       return saveRequest(settings, {
         commandPalette: {
           ...settings.commandPalette,
-          description: {
-            ...settings.commandPalette.description,
+          footerDetail: {
+            ...settings.commandPalette.footerDetail,
             marquee: {
-              ...settings.commandPalette.description.marquee,
+              ...settings.commandPalette.footerDetail.marquee,
               delay: rawValue
             }
           }
         }
       });
-    case "commandPalette.description.marquee.speed":
+    case "commandPalette.footerDetail.marquee.speed":
       if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
         return null;
       }
@@ -416,10 +416,10 @@ function buildNextSettings(
       return saveRequest(settings, {
         commandPalette: {
           ...settings.commandPalette,
-          description: {
-            ...settings.commandPalette.description,
+          footerDetail: {
+            ...settings.commandPalette.footerDetail,
             marquee: {
-              ...settings.commandPalette.description.marquee,
+              ...settings.commandPalette.footerDetail.marquee,
               speed: rawValue
             }
           }
@@ -550,7 +550,10 @@ function isSettingDisabled(
     return true;
   }
 
-  if (marqueeKeys.has(item.key) && !settings.commandPalette.description.enable) {
+  if (
+    footerDetailMarqueeKeys.has(item.key) &&
+    !settings.commandPalette.footerDetail.enable
+  ) {
     return true;
   }
 

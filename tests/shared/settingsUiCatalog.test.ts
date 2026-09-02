@@ -175,9 +175,9 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "workbench.sound.dialog.enabled",
           "workbench.sound.newline.enabled",
           "workbench.sound.keypress.enabled",
-          "commandPalette.description.enable",
-          "commandPalette.description.marquee.delay",
-          "commandPalette.description.marquee.speed",
+          "commandPalette.footerDetail.enable",
+          "commandPalette.footerDetail.marquee.delay",
+          "commandPalette.footerDetail.marquee.speed",
           "editor.fontFamily",
           "editor.characterCount.exclude.whitespace",
           "editor.characterCount.exclude.lineBreaks",
@@ -270,10 +270,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
 
     it("commandPalette marquee delay/speed number controls carry min/max sourced from settingsCatalog.ts, not duplicated literals", () => {
       const delay = getSettingCatalogItem(
-        "commandPalette.description.marquee.delay"
+        "commandPalette.footerDetail.marquee.delay"
       );
       const speed = getSettingCatalogItem(
-        "commandPalette.description.marquee.speed"
+        "commandPalette.footerDetail.marquee.speed"
       );
 
       if (delay?.control.kind !== "number" || speed?.control.kind !== "number") {
@@ -281,10 +281,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }
 
       const delayRange = getCatalogEntry(
-        "commandPalette.description.marquee.delay"
+        "commandPalette.footerDetail.marquee.delay"
       ).numericRange;
       const speedRange = getCatalogEntry(
-        "commandPalette.description.marquee.speed"
+        "commandPalette.footerDetail.marquee.speed"
       ).numericRange;
 
       expect(delay.control).toMatchObject({
@@ -600,9 +600,9 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
         "workbench.sound.keypress.enabled",
-        "commandPalette.description.enable",
-        "commandPalette.description.marquee.delay",
-        "commandPalette.description.marquee.speed",
+        "commandPalette.footerDetail.enable",
+        "commandPalette.footerDetail.marquee.delay",
+        "commandPalette.footerDetail.marquee.speed",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderTab",

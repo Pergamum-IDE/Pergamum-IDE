@@ -7195,7 +7195,7 @@ export function App(): JSX.Element {
           translate={translate}
           isComposing={imeCompositionSaveGuard.isComposing}
           commandContext={commandContext}
-          descriptionSettings={effectiveSettings.commandPalette.description}
+          footerDetailSettings={effectiveSettings.commandPalette.footerDetail}
           projectFileQuickOpenDocuments={projectFileQuickOpenDocuments}
           recentProjectFileQuickOpenDocuments={
             recentProjectFileQuickOpenDocuments

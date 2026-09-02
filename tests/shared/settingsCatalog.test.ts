@@ -276,7 +276,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         getCatalogDefaultValue("editor.whitespace.renderIdeographicSpace")
       ).toEqualTypeOf<boolean>();
       expectTypeOf(
-        getCatalogDefaultValue("commandPalette.description.marquee.delay")
+        getCatalogDefaultValue("commandPalette.footerDetail.marquee.delay")
       ).toEqualTypeOf<number>();
     });
 
@@ -652,7 +652,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("uses number settings in production for Command Palette description marquee controls, the Preview update delay, and the Notification display time in ms (#266)", () => {
+    it("uses number settings in production for Command Palette footer detail marquee controls, the Preview update delay, and the Notification display time in ms (#266)", () => {
       const productionTypes = new Set(
         getCatalogEntries().map((entry) => entry.type)
       );
@@ -663,8 +663,8 @@ describe("Settings Catalog Foundation (#150)", () => {
           .filter((entry) => entry.type === "number")
           .map((entry) => entry.key)
       ).toEqual([
-        "commandPalette.description.marquee.delay",
-        "commandPalette.description.marquee.speed",
+        "commandPalette.footerDetail.marquee.delay",
+        "commandPalette.footerDetail.marquee.speed",
         "preview.updateDelayMs",
         "workbench.notification.durationMs"
       ]);
@@ -691,8 +691,8 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("validates Command Palette description marquee delay as a finite integer from 0 to 10000", () => {
-      const entry = getCatalogEntry("commandPalette.description.marquee.delay");
+    it("validates Command Palette footer detail marquee delay as a finite integer from 0 to 10000", () => {
+      const entry = getCatalogEntry("commandPalette.footerDetail.marquee.delay");
 
       expect(entry.type).toBe("number");
       if (entry.type !== "number") {
@@ -705,30 +705,30 @@ describe("Settings Catalog Foundation (#150)", () => {
         integer: true
       });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.delay", 0)
+        validateCatalogValue("commandPalette.footerDetail.marquee.delay", 0)
       ).toEqual({ ok: true });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.delay", 10000)
+        validateCatalogValue("commandPalette.footerDetail.marquee.delay", 10000)
       ).toEqual({ ok: true });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.delay", -1)
+        validateCatalogValue("commandPalette.footerDetail.marquee.delay", -1)
       ).toEqual({ ok: false, failure: "numericRange" });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.delay", 10001)
+        validateCatalogValue("commandPalette.footerDetail.marquee.delay", 10001)
       ).toEqual({ ok: false, failure: "numericRange" });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.delay", 1.5)
+        validateCatalogValue("commandPalette.footerDetail.marquee.delay", 1.5)
       ).toEqual({ ok: false, failure: "integer" });
       expect(
         validateCatalogValue(
-          "commandPalette.description.marquee.delay",
+          "commandPalette.footerDetail.marquee.delay",
           Number.POSITIVE_INFINITY
         )
       ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
-    it("validates Command Palette description marquee speed as a finite number from 1 to 1000", () => {
-      const entry = getCatalogEntry("commandPalette.description.marquee.speed");
+    it("validates Command Palette footer detail marquee speed as a finite number from 1 to 1000", () => {
+      const entry = getCatalogEntry("commandPalette.footerDetail.marquee.speed");
 
       expect(entry.type).toBe("number");
       if (entry.type !== "number") {
@@ -737,23 +737,23 @@ describe("Settings Catalog Foundation (#150)", () => {
 
       expect(entry.numericRange).toEqual({ min: 1, max: 1000 });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.speed", 1)
+        validateCatalogValue("commandPalette.footerDetail.marquee.speed", 1)
       ).toEqual({ ok: true });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.speed", 40.5)
+        validateCatalogValue("commandPalette.footerDetail.marquee.speed", 40.5)
       ).toEqual({ ok: true });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.speed", 1000)
+        validateCatalogValue("commandPalette.footerDetail.marquee.speed", 1000)
       ).toEqual({ ok: true });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.speed", 0)
+        validateCatalogValue("commandPalette.footerDetail.marquee.speed", 0)
       ).toEqual({ ok: false, failure: "numericRange" });
       expect(
-        validateCatalogValue("commandPalette.description.marquee.speed", 1000.1)
+        validateCatalogValue("commandPalette.footerDetail.marquee.speed", 1000.1)
       ).toEqual({ ok: false, failure: "numericRange" });
       expect(
         validateCatalogValue(
-          "commandPalette.description.marquee.speed",
+          "commandPalette.footerDetail.marquee.speed",
           Number.NaN
         )
       ).toEqual({ ok: false, failure: "typeMismatch" });
@@ -820,7 +820,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), command descriptions (#215), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), command palette footer details (#370), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
@@ -832,7 +832,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
         "workbench.sound.keypress.enabled",
-        "commandPalette.description.enable",
+        "commandPalette.footerDetail.enable",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderTab",
@@ -953,14 +953,14 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("workbench.sound.enabled").scope).toBe(
         "applicationOnly"
       );
-      expect(getCatalogEntry("commandPalette.description.enable").scope).toBe(
+      expect(getCatalogEntry("commandPalette.footerDetail.enable").scope).toBe(
         "applicationOnly"
       );
       expect(
-        getCatalogEntry("commandPalette.description.marquee.delay").scope
+        getCatalogEntry("commandPalette.footerDetail.marquee.delay").scope
       ).toBe("applicationOnly");
       expect(
-        getCatalogEntry("commandPalette.description.marquee.speed").scope
+        getCatalogEntry("commandPalette.footerDetail.marquee.speed").scope
       ).toBe("applicationOnly");
       expect(getCatalogEntry("preview.updateDelayMs").scope).toBe(
         "applicationOnly"
@@ -1003,7 +1003,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getSettingArea("workbench.fontFamily")).toBe("workbench");
       expect(getSettingArea("editor.fontFamily")).toBe("editor");
       expect(getSettingArea("preview.renderer")).toBe("preview");
-      expect(getSettingArea("commandPalette.description.enable")).toBe(
+      expect(getSettingArea("commandPalette.footerDetail.enable")).toBe(
         "commandPalette"
       );
       expect(getSettingArea("files.newFile.lineEnding")).toBe("files");
@@ -1061,14 +1061,16 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #215 command description settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, #259 character count settings, #266 workbench.notification.durationMs, and #298 notification.output.enabled (#232: workbench.advancedSettings.enabled removed)", () => {
-      expect(Object.keys(settingsCatalog).sort()).toEqual(
+    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #370 command palette footer detail settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, #259 character count settings, #266 workbench.notification.durationMs, and #298 notification.output.enabled (#232: workbench.advancedSettings.enabled removed)", () => {
+      const keys = Object.keys(settingsCatalog);
+
+      expect(keys.sort()).toEqual(
         [
           "notification.output.enabled",
           "workbench.notification.durationMs",
-          "commandPalette.description.enable",
-          "commandPalette.description.marquee.delay",
-          "commandPalette.description.marquee.speed",
+          "commandPalette.footerDetail.enable",
+          "commandPalette.footerDetail.marquee.delay",
+          "commandPalette.footerDetail.marquee.speed",
           "editor.characterCount.exclude.headings",
           "editor.characterCount.exclude.lineBreaks",
           "editor.characterCount.exclude.markdownComments",
@@ -1097,6 +1099,9 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.statusBar.visible"
         ].sort()
       );
+      expect(keys).not.toContain("commandPalette.description.enable");
+      expect(keys).not.toContain("commandPalette.description.marquee.delay");
+      expect(keys).not.toContain("commandPalette.description.marquee.speed");
     });
 
     it("no longer registers workbench.advancedSettings.enabled (#232)", () => {

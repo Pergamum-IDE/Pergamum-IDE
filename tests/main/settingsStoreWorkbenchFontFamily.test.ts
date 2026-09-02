@@ -250,7 +250,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
         fontFamily: 'Fira Code"; color: red'
       },
       commandPalette: {
-        description: {
+        footerDetail: {
           enable: true,
           marquee: { delay: 2000, speed: 40 }
         }

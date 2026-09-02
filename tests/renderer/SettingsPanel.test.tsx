@@ -190,6 +190,19 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     expect(markup).toContain("editor.fontFamily</code>");
   });
 
+  it("shows the footer detail Command Palette setting text instead of command-description wording", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("commandPalette.footerDetail.enable")
+    });
+
+    expect(markup).toContain("Show footer details");
+    expect(markup).toContain(
+      "Show descriptions or previews for the selected Command Palette candidate in the footer."
+    );
+    expect(markup).toContain("commandPalette.footerDetail.enable</code>");
+    expect(markup).not.toContain("Show command descriptions");
+  });
+
   it("does not hardcode any individual setting's label/description i18n key — those are read from the catalog item, not embedded per-field", () => {
     const source = settingsPanelSource();
     const perItemKeysThatMustNotBeHardcoded = [
@@ -203,7 +216,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
       "settings.editor.fontFamily.label",
       "settings.files.newFile.lineEnding.label",
       "settings.files.newFile.lineEnding.option.lf.label",
-      "settings.commandPalette.description.marquee.delay.label",
+      "settings.commandPalette.footerDetail.marquee.delay.label",
       "settings.preview.renderer.label"
     ];
 
@@ -1005,17 +1018,17 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     });
   });
 
-  it("saves immediately when a number setting changes (commandPalette.description.marquee.delay is directly editable, no advanced gate — #232)", () => {
+  it("saves immediately when a number setting changes (commandPalette.footerDetail.marquee.delay is directly editable, no advanced gate — #232)", () => {
     const settings: ApplicationSettings = defaultApplicationSettings;
     const onChangeSettings = vi.fn();
     const element = settingsPanelViewElement("en", {
       settings,
-      searchQuery: isolate("commandPalette.description.marquee.delay"),
+      searchQuery: isolate("commandPalette.footerDetail.marquee.delay"),
       onChangeSettings
     });
     const input = controlElement(
       element,
-      "commandPalette.description.marquee.delay"
+      "commandPalette.footerDetail.marquee.delay"
     );
     const onChange = input.props.onChange as (event: {
       target: { valueAsNumber: number };
@@ -1028,10 +1041,10 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       workbench: settings.workbench,
       commandPalette: {
         ...settings.commandPalette,
-        description: {
-          ...settings.commandPalette.description,
+        footerDetail: {
+          ...settings.commandPalette.footerDetail,
           marquee: {
-            ...settings.commandPalette.description.marquee,
+            ...settings.commandPalette.footerDetail.marquee,
             delay: 2500
           }
         }
@@ -1046,12 +1059,12 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     const onChangeSettings = vi.fn();
     const element = settingsPanelViewElement("en", {
       settings,
-      searchQuery: isolate("commandPalette.description.marquee.speed"),
+      searchQuery: isolate("commandPalette.footerDetail.marquee.speed"),
       onChangeSettings
     });
     const input = controlElement(
       element,
-      "commandPalette.description.marquee.speed"
+      "commandPalette.footerDetail.marquee.speed"
     );
     const onChange = input.props.onChange as (event: {
       target: { valueAsNumber: number };
@@ -1095,22 +1108,22 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
     ).toBe(false);
   });
 
-  it("commandPalette.description.enable is directly editable — no advanced gate", () => {
+  it("commandPalette.footerDetail.enable is directly editable — no advanced gate", () => {
     const element = settingsPanelViewElement("en", {
       selectedCategoryId: "commands"
     });
 
     expect(
-      controlElement(element, "commandPalette.description.enable").props
+      controlElement(element, "commandPalette.footerDetail.enable").props
         .disabled
     ).toBe(false);
   });
 
-  it("marquee number controls are disabled only when command descriptions are disabled, not by any advanced gate", () => {
+  it("marquee number controls are disabled only when footer details are disabled, not by any advanced gate", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       commandPalette: {
-        description: { enable: false, marquee: { delay: 3456, speed: 78.5 } }
+        footerDetail: { enable: false, marquee: { delay: 3456, speed: 78.5 } }
       }
     };
     const element = settingsPanelViewElement("en", {
@@ -1119,30 +1132,30 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
     });
 
     expect(
-      controlElement(element, "commandPalette.description.enable").props
+      controlElement(element, "commandPalette.footerDetail.enable").props
         .disabled
     ).toBe(false);
     expect(
-      controlElement(element, "commandPalette.description.marquee.delay")
+      controlElement(element, "commandPalette.footerDetail.marquee.delay")
         .props.disabled
     ).toBe(true);
     expect(
-      controlElement(element, "commandPalette.description.marquee.delay")
+      controlElement(element, "commandPalette.footerDetail.marquee.delay")
         .props.value
     ).toBe(3456);
   });
 
-  it("marquee number controls are enabled when command descriptions are enabled (the default)", () => {
+  it("marquee number controls are enabled when footer details are enabled (the default)", () => {
     const element = settingsPanelViewElement("en", {
       selectedCategoryId: "commands"
     });
 
     expect(
-      controlElement(element, "commandPalette.description.marquee.delay")
+      controlElement(element, "commandPalette.footerDetail.marquee.delay")
         .props.disabled
     ).toBe(false);
     expect(
-      controlElement(element, "commandPalette.description.marquee.speed")
+      controlElement(element, "commandPalette.footerDetail.marquee.speed")
         .props.disabled
     ).toBe(false);
   });
@@ -1567,8 +1580,8 @@ describe("Settings number control right-alignment (common style)", () => {
     // the number-control set the common style targets.
     expect([...numberKeys].sort()).toEqual(
       [
-        "commandPalette.description.marquee.delay",
-        "commandPalette.description.marquee.speed",
+        "commandPalette.footerDetail.marquee.delay",
+        "commandPalette.footerDetail.marquee.speed",
         "preview.updateDelayMs",
         "workbench.notification.durationMs"
       ].sort()
