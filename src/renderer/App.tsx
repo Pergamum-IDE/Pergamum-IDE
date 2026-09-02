@@ -7204,6 +7204,11 @@ export function App(): JSX.Element {
             void activateProjectDocument(relativePath);
             closeCommandPaletteAndRestoreMarkdownFocus();
           }}
+          onRequestProjectFileQuickOpenPreview={(relativePath) =>
+            window.pergamum.projects.readProjectDocumentPreviewLine(
+              relativePath
+            )
+          }
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);
             closeCommandPaletteAndRestoreMarkdownFocus();

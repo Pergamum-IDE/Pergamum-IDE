@@ -1144,9 +1144,11 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
       initialInputValue: "missing"
     });
 
-    expect(englishMarkup).toContain("No results found");
+    expect(englishMarkup).toContain("Type a valid file name");
+    expect(englishMarkup).not.toContain("No results found");
     expect(englishMarkup).not.toContain("No matching commands");
-    expect(japaneseMarkup).toContain("検索結果がありません");
+    expect(japaneseMarkup).toContain("有効なファイル名を入力してください");
+    expect(japaneseMarkup).not.toContain("検索結果がありません");
     expect(japaneseMarkup).not.toContain("一致するコマンドがありません");
   });
 
