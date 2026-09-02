@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import type { ProjectDocument } from "../../src/shared/api";
 import { CommandRegistry, defineCommandId } from "../../src/shared/commandRegistry";
 import type { CommandContext } from "../../src/shared/commandEnablement";
 import { editorCommandIds } from "../../src/shared/commandIds";
@@ -34,6 +35,13 @@ const descriptionDisabledSettings: CommandPaletteDescriptionSettings = {
   enable: false,
   marquee: { delay: 2000, speed: 40 }
 };
+
+function projectDocument(relativePath: string): ProjectDocument {
+  return {
+    relativePath,
+    name: relativePath.split(/[\\/]/).pop() ?? relativePath
+  };
+}
 
 function buildRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
@@ -119,6 +127,9 @@ function renderPalette(overrides: {
   initialInputValue?: string;
   onExecuteCommand?: (commandId: unknown, ...args: readonly unknown[]) => void;
   onBlockedCommand?: (commandId: unknown) => void;
+  onOpenProjectFileQuickOpenCandidate?: (relativePath: string) => void;
+  projectFileQuickOpenDocuments?: readonly ProjectDocument[];
+  recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
   descriptionSettings?: CommandPaletteDescriptionSettings;
 } = {}): string {
@@ -131,6 +142,11 @@ function renderPalette(overrides: {
       initialInputValue: overrides.initialInputValue,
       onExecuteCommand: overrides.onExecuteCommand ?? noop,
       onBlockedCommand: overrides.onBlockedCommand ?? noop,
+      onOpenProjectFileQuickOpenCandidate:
+        overrides.onOpenProjectFileQuickOpenCandidate ?? noop,
+      projectFileQuickOpenDocuments: overrides.projectFileQuickOpenDocuments,
+      recentProjectFileQuickOpenDocuments:
+        overrides.recentProjectFileQuickOpenDocuments,
       onClose: noop,
       lineJumpEditorSnapshot: overrides.lineJumpEditorSnapshot,
       descriptionSettings: overrides.descriptionSettings
@@ -603,14 +619,41 @@ describe("CommandPalette", () => {
     );
   });
 
-  it("does not show the command-mode search hint for a fully empty input, and renders the native placeholder instead", () => {
-    const markup = renderPalette({
+  it("does not show the command-mode search hint for a fully empty input, and renders the project file quick-open placeholder instead", () => {
+    const englishMarkup = renderPalette({
       translate: realTranslateEn,
       initialInputValue: ""
     });
+    const japaneseMarkup = renderPalette({
+      translate: realTranslateJa,
+      initialInputValue: ""
+    });
 
-    expect(markup).toContain('<div class="commandPaletteFooterStatus"></div>');
-    expect(markup).toContain('placeholder="Type &gt; for commands"');
+    expect(englishMarkup).toContain(
+      '<div class="commandPaletteFooterStatus"></div>'
+    );
+    expect(englishMarkup).toContain(
+      'placeholder="Type a folder or file name"'
+    );
+    expect(englishMarkup).not.toContain('placeholder="Search commands"');
+    expect(japaneseMarkup).toContain(
+      'placeholder="フォルダ名・ファイル名を入力してください"'
+    );
+    expect(japaneseMarkup).not.toContain('placeholder="コマンドを検索"');
+  });
+
+  it("renders the command-search placeholder in command mode", () => {
+    const englishMarkup = renderPalette({
+      translate: realTranslateEn,
+      initialInputValue: ">"
+    });
+    const japaneseMarkup = renderPalette({
+      translate: realTranslateJa,
+      initialInputValue: ">"
+    });
+
+    expect(englishMarkup).toContain('placeholder="Search commands"');
+    expect(japaneseMarkup).toContain('placeholder="コマンドを検索"');
   });
 
   it("renders '1 result', not '1 results', for a real English query with exactly one match (dogfood regression)", () => {
@@ -1047,9 +1090,6 @@ describe("CommandPalette highlighting and footer model", () => {
 
 describe("CommandPalette reserved Quick Access modes (#145)", () => {
   const reservedCases = [
-    { initialInputValue: "abc", mode: "file", key: "commandPalette.reserved.file" },
-    { initialInputValue: " abc", mode: "file", key: "commandPalette.reserved.file" },
-    { initialInputValue: "%abc", mode: "file", key: "commandPalette.reserved.file" },
     { initialInputValue: "#intro", mode: "heading", key: "commandPalette.reserved.heading" },
     { initialInputValue: "＃intro", mode: "heading", key: "commandPalette.reserved.heading" },
     { initialInputValue: "@alice", mode: "glossary", key: "commandPalette.reserved.glossary" },
@@ -1075,6 +1115,108 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
       expect(markup).not.toContain("commandPalette.footer.results");
     }
   );
+
+  it("renders no-prefix file mode as quick-open empty results when there is no Project", () => {
+    const markup = renderPalette({ initialInputValue: "abc" });
+
+    expect(markup).toContain("commandPaletteList");
+    expect(markup).toContain("commandPaletteEmpty");
+    expect(markup).toContain(
+      "commandPalette.projectFileQuickOpen.noResults"
+    );
+    expect(markup).not.toContain("commandPalette.noResults");
+    expect(markup).not.toContain("commandPaletteReservedPlaceholder");
+    expect(markup).not.toContain("commandPalette.reserved.file");
+  });
+
+  it("renders real project file quick-open copy for no-prefix empty results in English and Japanese", () => {
+    const englishMarkup = renderPalette({
+      translate: realTranslateEn,
+      initialInputValue: "missing"
+    });
+    const japaneseMarkup = renderPalette({
+      translate: realTranslateJa,
+      initialInputValue: "missing"
+    });
+
+    expect(englishMarkup).toContain("No results found");
+    expect(englishMarkup).not.toContain("No matching commands");
+    expect(japaneseMarkup).toContain("検索結果がありません");
+    expect(japaneseMarkup).not.toContain("一致するコマンドがありません");
+  });
+
+  it("keeps real command-search empty results in command mode", () => {
+    const englishMarkup = renderPalette({
+      registry: new CommandRegistry(),
+      translate: realTranslateEn,
+      initialInputValue: ">missing"
+    });
+    const japaneseMarkup = renderPalette({
+      registry: new CommandRegistry(),
+      translate: realTranslateJa,
+      initialInputValue: ">missing"
+    });
+
+    expect(englishMarkup).toContain("No matching commands");
+    expect(englishMarkup).not.toContain("No results found");
+    expect(japaneseMarkup).toContain("一致するコマンドがありません");
+    expect(japaneseMarkup).not.toContain("検索結果がありません");
+  });
+
+  it("renders project file quick-open candidates as filename plus relative path", () => {
+    const markup = renderPalette({
+      initialInputValue: "chap",
+      projectFileQuickOpenDocuments: [
+        projectDocument("manuscript/part1/chapter01.md")
+      ]
+    });
+
+    expect(markup).toContain("commandPaletteItemPrimary");
+    expect(markup).toContain("commandPaletteItemSecondary");
+    expect(markup).toContain("chapter01.md");
+    expect(markup).toContain("manuscript/part1/chapter01.md");
+  });
+
+  it("bolds the filename prefix match without injecting HTML", () => {
+    const markup = renderPalette({
+      initialInputValue: "<script>",
+      projectFileQuickOpenDocuments: [projectDocument("Drafts/<script>.md")]
+    });
+
+    expect(markup).toContain(
+      '<mark class="commandPaletteMatch">&lt;script&gt;</mark>.md'
+    );
+    expect(markup).not.toContain("<script>");
+  });
+
+  it("bolds the relative path segment prefix match on the secondary line", () => {
+    const markup = renderPalette({
+      initialInputValue: "part",
+      projectFileQuickOpenDocuments: [
+        projectDocument("manuscript/part1/chapter01.md")
+      ]
+    });
+
+    expect(markup).toContain(
+      'manuscript/<mark class="commandPaletteMatch">part</mark>1/chapter01.md'
+    );
+  });
+
+  it("renders recent Project files for an empty no-prefix query only", () => {
+    const markup = renderPalette({
+      initialInputValue: "",
+      projectFileQuickOpenDocuments: [
+        projectDocument("all-files-are-not-listed.md")
+      ],
+      recentProjectFileQuickOpenDocuments: [
+        projectDocument("recent/chapter05.md")
+      ]
+    });
+
+    expect(markup).toContain("chapter05.md");
+    expect(markup).toContain("recent/chapter05.md");
+    expect(markup).not.toContain("all-files-are-not-listed.md");
+  });
 
   it("dims the Enter hint in every reserved mode, same as a disabled selection", () => {
     for (const testCase of reservedCases) {
@@ -1133,10 +1275,14 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
     const fileMarkup = renderPalette({ initialInputValue: "%abc" });
     const headingMarkup = renderPalette({ initialInputValue: "#abc" });
 
-    expect(fileMarkup).toContain("commandPalette.reserved.file");
+    expect(fileMarkup).toContain(
+      "commandPalette.projectFileQuickOpen.noResults"
+    );
     expect(fileMarkup).not.toContain("commandPalette.reserved.heading");
     expect(headingMarkup).toContain("commandPalette.reserved.heading");
-    expect(headingMarkup).not.toContain("commandPalette.reserved.file");
+    expect(headingMarkup).not.toContain(
+      "commandPalette.projectFileQuickOpen.noResults"
+    );
   });
 
   it("no longer treats ':' as a reserved mode (#140): it shows a line-jump message instead", () => {
@@ -1167,13 +1313,11 @@ describe("CommandPalette snapshot and UI-level block wiring", () => {
   });
 
   it("does not implement the remaining reserved-mode actions — only the reserved message and mode dispatch", () => {
-    // File, heading, and glossary remain reserved (for the reserved-message
-    // switch and footer suppression) but must not gain their own execution
-    // logic here; that belongs to the future mode issues (#141-#143).
+    // File mode is implemented by #143. Heading and glossary remain reserved
+    // and must not gain their own search/execution logic here.
     expect(source).not.toContain("symbolJump");
     expect(source).not.toContain("headingSearch");
     expect(source).not.toContain("glossarySearch");
-    expect(source).not.toContain("fileQuickOpen");
   });
 
   it("captures commandContext once via a lazy useState initializer, not the live prop", () => {
@@ -1425,14 +1569,16 @@ describe("CommandPalette line jump mode (#140 / #148)", () => {
     );
   });
 
-  it("preserves existing command mode, and file/heading/glossary reserved modes", () => {
+  it("preserves existing command mode, and heading/glossary reserved modes", () => {
     const commandMarkup = renderPalette({ initialInputValue: ">save" });
     const fileMarkup = renderPalette({ initialInputValue: "abc" });
     const headingMarkup = renderPalette({ initialInputValue: "#intro" });
     const glossaryMarkup = renderPalette({ initialInputValue: "@alice" });
 
     expect(commandMarkup).toContain("commandPaletteList");
-    expect(fileMarkup).toContain("commandPalette.reserved.file");
+    expect(fileMarkup).toContain(
+      "commandPalette.projectFileQuickOpen.noResults"
+    );
     expect(headingMarkup).toContain("commandPalette.reserved.heading");
     expect(glossaryMarkup).toContain("commandPalette.reserved.glossary");
   });

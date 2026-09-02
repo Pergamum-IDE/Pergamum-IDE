@@ -12,6 +12,7 @@ import {
 import type { CommandContext } from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
 import { editorCommandIds } from "../shared/commandIds";
+import type { ProjectDocument } from "../shared/api";
 import type {
   Translate,
   TranslationKey,
@@ -45,6 +46,11 @@ import {
   type LineJumpPaletteState
 } from "./lineJumpPaletteState";
 import type { LineJumpEditorSnapshot } from "./lineJumpQuery";
+import {
+  projectFileQuickOpenCandidates,
+  resolveProjectFileQuickOpenSelection,
+  type ProjectFileQuickOpenCandidate
+} from "./projectFileQuickOpen";
 import {
   parseQuickAccessInput,
   type QuickAccessMode
@@ -88,6 +94,9 @@ export interface CommandPaletteProps {
    * `maxCandidates` preview lookups per keystroke stay cheap.
    */
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
+  projectFileQuickOpenDocuments?: readonly ProjectDocument[];
+  recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
+  onOpenProjectFileQuickOpenCandidate?: (relativePath: string) => void;
   descriptionSettings?: CommandPaletteDescriptionSettings;
 }
 
@@ -171,7 +180,7 @@ export interface CommandPaletteScrollTarget {
 function reservedPlaceholderKey(mode: QuickAccessMode): TranslationKey | null {
   switch (mode) {
     case "file":
-      return "commandPalette.reserved.file";
+      return null;
     case "line":
       // Line mode is implemented (#140); it renders its own body instead of
       // this reserved-placeholder text.
@@ -213,6 +222,13 @@ function selectedCommandPaletteEntry(
   selectedIndex: number | null
 ): CommandPaletteFilteredEntry | null {
   return selectedIndex === null ? null : entries[selectedIndex] ?? null;
+}
+
+function selectedProjectFileQuickOpenCandidate(
+  candidates: readonly ProjectFileQuickOpenCandidate[],
+  selectedIndex: number | null
+): ProjectFileQuickOpenCandidate | null {
+  return selectedIndex === null ? null : candidates[selectedIndex] ?? null;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -424,6 +440,20 @@ export function CommandPaletteHighlightedText({
   return <>{nodes}</>;
 }
 
+function commandPaletteInputPlaceholderKey(
+  mode: QuickAccessMode
+): TranslationKey {
+  return mode === "file"
+    ? "commandPalette.projectFileQuickOpen.inputPlaceholder"
+    : "commandPalette.inputPlaceholder";
+}
+
+function commandPaletteEmptyResultKey(mode: QuickAccessMode): TranslationKey {
+  return mode === "file"
+    ? "commandPalette.projectFileQuickOpen.noResults"
+    : "commandPalette.noResults";
+}
+
 function CommandPaletteStatusColumn({
   indicator
 }: {
@@ -489,12 +519,25 @@ export function CommandPalette({
   onClose,
   initialInputValue = defaultInputValue,
   lineJumpEditorSnapshot = null,
+  projectFileQuickOpenDocuments = [],
+  recentProjectFileQuickOpenDocuments = [],
+  onOpenProjectFileQuickOpenCandidate = () => undefined,
   descriptionSettings = defaultDescriptionSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
   const [inputValue, setInputValue] = useState(initialInputValue);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(() => {
     const initialParsed = parseQuickAccessInput(initialInputValue);
+
+    if (initialParsed.mode === "file") {
+      return resolveProjectFileQuickOpenSelection(
+        projectFileQuickOpenCandidates({
+          documents: projectFileQuickOpenDocuments,
+          recentDocuments: recentProjectFileQuickOpenDocuments,
+          query: initialParsed.query
+        })
+      );
+    }
 
     if (initialParsed.mode === "line") {
       const initialState = resolveLineJumpPaletteState(
@@ -537,6 +580,14 @@ export function CommandPalette({
   }, []);
 
   const { mode, query } = parseQuickAccessInput(inputValue);
+  const fileQuickOpenCandidates =
+    mode === "file"
+      ? projectFileQuickOpenCandidates({
+          documents: projectFileQuickOpenDocuments,
+          recentDocuments: recentProjectFileQuickOpenDocuments,
+          query
+        })
+      : [];
   const entries =
     mode === "command"
       ? filterCommandPaletteEntries(
@@ -556,7 +607,10 @@ export function CommandPalette({
   const selectionLength =
     mode === "command"
       ? entries.length
-      : (lineJumpCandidates?.length ?? (lineJumpState?.kind === "disabled" ? 1 : 0));
+      : mode === "file"
+        ? fileQuickOpenCandidates.length
+        : (lineJumpCandidates?.length ??
+          (lineJumpState?.kind === "disabled" ? 1 : 0));
 
   useEffect(() => {
     scrollCommandPaletteSelectionIntoView(selectedItemRef.current);
@@ -580,6 +634,22 @@ export function CommandPalette({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, query, commandRegistry, snapshot]);
+
+  useCommandPaletteLayoutEffect(() => {
+    if (mode !== "file") {
+      return;
+    }
+
+    setSelectedIndex((current) =>
+      resolveProjectFileQuickOpenSelection(fileQuickOpenCandidates, current)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mode,
+    query,
+    projectFileQuickOpenDocuments,
+    recentProjectFileQuickOpenDocuments
+  ]);
 
   function updateInput(value: string): void {
     setInputValue(value);
@@ -615,6 +685,19 @@ export function CommandPalette({
       return;
     }
 
+    if (resolved.mode === "file") {
+      const nextCandidates = projectFileQuickOpenCandidates({
+        documents: projectFileQuickOpenDocuments,
+        recentDocuments: recentProjectFileQuickOpenDocuments,
+        query: resolved.query
+      });
+
+      setSelectedIndex((current) =>
+        resolveProjectFileQuickOpenSelection(nextCandidates, current)
+      );
+      return;
+    }
+
     setSelectedIndex(null);
   }
 
@@ -626,11 +709,22 @@ export function CommandPalette({
     mode === "command"
       ? selectedCommandPaletteEntry(entries, selectedIndex)
       : null;
+  const activeProjectFileQuickOpenCandidate =
+    mode === "file"
+      ? selectedProjectFileQuickOpenCandidate(
+          fileQuickOpenCandidates,
+          selectedIndex
+        )
+      : null;
   const activeCommandId = activeEntry?.id ?? null;
   const activeOptionId =
     mode === "command" && activeEntry !== null && selectedIndex !== null
       ? optionId(selectedIndex)
-      : undefined;
+      : mode === "file" &&
+          activeProjectFileQuickOpenCandidate !== null &&
+          selectedIndex !== null
+        ? optionId(selectedIndex)
+        : undefined;
 
   function executeEntryAt(index: number): void {
     const entry = entries[index];
@@ -655,6 +749,16 @@ export function CommandPalette({
     }
 
     onExecuteCommand(editorCommandIds.goToLine, candidate.line);
+  }
+
+  function executeProjectFileQuickOpenCandidateAt(index: number): void {
+    const candidate = fileQuickOpenCandidates[index];
+
+    if (!candidate) {
+      return;
+    }
+
+    onOpenProjectFileQuickOpenCandidate(candidate.document.relativePath);
   }
 
   /** Handles Enter for line mode: the disabled row, or the selected candidate. */
@@ -763,6 +867,11 @@ export function CommandPalette({
           return;
         }
 
+        if (mode === "file") {
+          executeProjectFileQuickOpenCandidateAt(selectedIndex ?? 0);
+          return;
+        }
+
         const entry = activeEntry;
 
         if (!entry) {
@@ -785,6 +894,11 @@ export function CommandPalette({
   const reservedKey = reservedPlaceholderKey(mode);
   const footer = lineJumpState
     ? resolveLineJumpFooterModel(lineJumpState)
+    : mode === "file"
+      ? {
+          statusKey: null,
+          canRunSelected: activeProjectFileQuickOpenCandidate !== null
+        }
     : resolveCommandPaletteFooterModel({
         mode,
         query,
@@ -846,7 +960,7 @@ export function CommandPalette({
             aria-expanded={hasListbox ? "true" : "false"}
             aria-controls={hasListbox ? listboxId : undefined}
             aria-activedescendant={activeOptionId}
-            placeholder={translate("commandPalette.inputPlaceholder")}
+            placeholder={translate(commandPaletteInputPlaceholderKey(mode))}
             autoComplete="off"
             spellCheck={false}
           />
@@ -938,9 +1052,56 @@ export function CommandPalette({
             role="listbox"
             aria-label={translate("commandPalette.searchLabel")}
           >
-            {entries.length === 0 ? (
+            {mode === "file" ? (
+              fileQuickOpenCandidates.length === 0 ? (
+                <li role="presentation" className="commandPaletteEmpty">
+                  {translate(commandPaletteEmptyResultKey(mode))}
+                </li>
+              ) : (
+                fileQuickOpenCandidates.map((candidate, index) => (
+                  <li
+                    key={candidate.document.relativePath}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={index === selectedIndex}
+                    aria-disabled="false"
+                    aria-label={`${candidate.filename.text} ${candidate.relativePath.text}`}
+                    ref={index === selectedIndex ? selectedItemRef : null}
+                    className={commandPaletteItemClassName(
+                      index === selectedIndex,
+                      true
+                    )}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                    }}
+                    onMouseMove={() => {
+                      if (selectedIndex !== index) {
+                        setSelectedIndex(index);
+                      }
+                    }}
+                    onClick={() => executeProjectFileQuickOpenCandidateAt(index)}
+                  >
+                    <CommandPaletteItemContent
+                      indicator={null}
+                      primary={
+                        <CommandPaletteHighlightedText
+                          text={candidate.filename.text}
+                          ranges={candidate.filename.ranges}
+                        />
+                      }
+                      secondary={
+                        <CommandPaletteHighlightedText
+                          text={candidate.relativePath.text}
+                          ranges={candidate.relativePath.ranges}
+                        />
+                      }
+                    />
+                  </li>
+                ))
+              )
+            ) : entries.length === 0 ? (
               <li role="presentation" className="commandPaletteEmpty">
-                {translate("commandPalette.noResults")}
+                {translate(commandPaletteEmptyResultKey(mode))}
               </li>
             ) : (
               entries.map((entry, index) => (
