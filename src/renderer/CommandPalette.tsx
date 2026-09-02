@@ -97,6 +97,17 @@ export interface CommandPaletteProps {
   projectFileQuickOpenDocuments?: readonly ProjectDocument[];
   recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
   onOpenProjectFileQuickOpenCandidate?: (relativePath: string) => void;
+  /**
+   * #372: fetch the footer detail preview line (first non-empty Markdown line)
+   * for the selected file quick open candidate. Resolves to `null` when there
+   * is nothing to show. The Palette reads only the currently selected
+   * candidate, ignores stale results, and never reads the filesystem itself —
+   * App.tsx wires this to the Main Process
+   * `projects.readProjectDocumentPreviewLine` API.
+   */
+  onRequestProjectFileQuickOpenPreview?: (
+    relativePath: string
+  ) => Promise<string | null>;
   footerDetailSettings?: CommandPaletteFooterDetailSettings;
 }
 
@@ -404,6 +415,59 @@ export function resolveCommandPaletteFooterModel(input: {
   };
 }
 
+/**
+ * #372: whether the Palette should ask Main for a footer detail preview line
+ * for the currently selected file quick open candidate. Only prefix-less file
+ * quick open mode qualifies, only with footer detail enabled (#370), and only
+ * when a candidate is actually selected. Project-not-open collapses to "no
+ * candidate", so it is covered by `activeRelativePath === null`.
+ */
+export function shouldRequestProjectFileQuickOpenPreview(input: {
+  readonly mode: QuickAccessMode;
+  readonly activeRelativePath: string | null;
+  readonly detailEnabled: boolean;
+}): boolean {
+  return (
+    input.mode === "file" &&
+    input.detailEnabled &&
+    input.activeRelativePath !== null
+  );
+}
+
+/**
+ * #372: footer model for prefix-less file quick open mode. The preview line
+ * (when present, and footer detail is enabled) rides the #370 footer detail
+ * channel — `detailText` + `detailResetKey`. `detailResetKey` includes the
+ * selected file's project-relative path so the marquee resets on selection
+ * change. The candidate list itself is never touched.
+ */
+export function resolveProjectFileQuickOpenFooterModel(input: {
+  readonly activeCandidate: ProjectFileQuickOpenCandidate | null;
+  readonly previewText: string | null;
+  readonly detailEnabled: boolean;
+}): CommandPaletteFooterModel {
+  const canRunSelected = input.activeCandidate !== null;
+
+  if (
+    input.detailEnabled &&
+    input.activeCandidate !== null &&
+    input.previewText !== null &&
+    input.previewText.length > 0
+  ) {
+    return {
+      statusKey: null,
+      detailText: input.previewText,
+      detailResetKey: `projectFileQuickOpenPreview:${input.activeCandidate.document.relativePath}`,
+      canRunSelected
+    };
+  }
+
+  return {
+    statusKey: null,
+    canRunSelected
+  };
+}
+
 export function CommandPaletteHighlightedText({
   text,
   ranges
@@ -525,6 +589,7 @@ export function CommandPalette({
   projectFileQuickOpenDocuments = [],
   recentProjectFileQuickOpenDocuments = [],
   onOpenProjectFileQuickOpenCandidate = () => undefined,
+  onRequestProjectFileQuickOpenPreview,
   footerDetailSettings = defaultFooterDetailSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
@@ -719,6 +784,72 @@ export function CommandPalette({
           selectedIndex
         )
       : null;
+  const activeProjectFileQuickOpenRelativePath =
+    activeProjectFileQuickOpenCandidate?.document.relativePath ?? null;
+
+  // #372: footer detail preview line for the selected file quick open
+  // candidate. Only the selected candidate is ever read; a stale async result
+  // (input / selection moved on) is dropped via a monotonic request id, so
+  // the footer never shows a preview for a file that is no longer selected. A
+  // failed fetch simply leaves the preview empty and never closes the Palette.
+  const [projectFileQuickOpenPreview, setProjectFileQuickOpenPreview] =
+    useState<string | null>(null);
+  const projectFileQuickOpenPreviewRequestRef = useRef(0);
+  // Held in a ref so a caller passing a fresh function identity each render
+  // (App.tsx does) cannot retrigger the fetch effect — only the selected
+  // file, the mode, and the footer-detail toggle do.
+  const requestProjectFileQuickOpenPreviewRef = useRef(
+    onRequestProjectFileQuickOpenPreview
+  );
+  requestProjectFileQuickOpenPreviewRef.current =
+    onRequestProjectFileQuickOpenPreview;
+
+  useEffect(() => {
+    projectFileQuickOpenPreviewRequestRef.current += 1;
+    const requestId = projectFileQuickOpenPreviewRequestRef.current;
+    const isStale = (): boolean =>
+      projectFileQuickOpenPreviewRequestRef.current !== requestId;
+    const request = requestProjectFileQuickOpenPreviewRef.current;
+
+    // Nothing displayed while loading / when there is nothing to load.
+    setProjectFileQuickOpenPreview(null);
+
+    if (
+      !request ||
+      !shouldRequestProjectFileQuickOpenPreview({
+        mode,
+        activeRelativePath: activeProjectFileQuickOpenRelativePath,
+        detailEnabled: footerDetailSettings.enable
+      })
+    ) {
+      return;
+    }
+
+    void request(activeProjectFileQuickOpenRelativePath as string)
+      .then((preview) => {
+        if (isStale()) {
+          return;
+        }
+
+        setProjectFileQuickOpenPreview(
+          typeof preview === "string" && preview.length > 0 ? preview : null
+        );
+      })
+      .catch(() => {
+        if (isStale()) {
+          return;
+        }
+
+        setProjectFileQuickOpenPreview(null);
+      });
+    // `onRequestProjectFileQuickOpenPreview` is read through a ref on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mode,
+    activeProjectFileQuickOpenRelativePath,
+    footerDetailSettings.enable
+  ]);
+
   const activeCommandId = activeEntry?.id ?? null;
   const activeOptionId =
     mode === "command" && activeEntry !== null && selectedIndex !== null
@@ -898,10 +1029,11 @@ export function CommandPalette({
   const footer = lineJumpState
     ? resolveLineJumpFooterModel(lineJumpState)
     : mode === "file"
-      ? {
-          statusKey: null,
-          canRunSelected: activeProjectFileQuickOpenCandidate !== null
-        }
+      ? resolveProjectFileQuickOpenFooterModel({
+          activeCandidate: activeProjectFileQuickOpenCandidate,
+          previewText: projectFileQuickOpenPreview,
+          detailEnabled: footerDetailSettings.enable
+        })
     : resolveCommandPaletteFooterModel({
         mode,
         query,

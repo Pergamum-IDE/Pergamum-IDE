@@ -525,6 +525,28 @@ describe("Application Settings core control translations (#195)", () => {
     );
   });
 
+  it("#372: drops the unused reserved file-mode key and re-words file quick open no-results", () => {
+    expect(Object.keys(jaTranslations)).not.toContain(
+      "commandPalette.reserved.file"
+    );
+    expect(Object.keys(enTranslations)).not.toContain(
+      "commandPalette.reserved.file"
+    );
+
+    expect(t("ja", "commandPalette.projectFileQuickOpen.noResults")).toBe(
+      "有効なファイル名を入力してください"
+    );
+    expect(t("en", "commandPalette.projectFileQuickOpen.noResults")).toBe(
+      "Type a valid file name"
+    );
+
+    // The still-reserved sibling modes are untouched.
+    expect(t("ja", "commandPalette.reserved.heading").length).toBeGreaterThan(0);
+    expect(t("en", "commandPalette.reserved.glossary").length).toBeGreaterThan(
+      0
+    );
+  });
+
   it("defines the status-bar character count message for ja and en (#259)", () => {
     expect(t("ja", "status.characterCount", { count: 123 })).toBe("123文字");
     expect(t("en", "status.characterCount", { count: 123 })).toBe(

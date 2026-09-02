@@ -143,6 +143,10 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
         relativePath
       }),
+    readProjectDocumentPreviewLine: (relativePath) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocumentPreviewLine, {
+        relativePath
+      }),
     saveProjectDocument: (relativePath, content) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectDocument, {
         relativePath,

@@ -60,7 +60,8 @@ import {
 import { moveEntries } from "./projectMoveExecution";
 import {
   collectFileExplorerDeleteTargets,
-  defaultFileExplorerDeleteCollectDeps
+  defaultFileExplorerDeleteCollectDeps,
+  scanFileExplorerDeleteAncestorPath
 } from "./fileExplorerDeleteCollect";
 import { deleteOneFileExplorerEntry } from "./fileExplorerDeleteExecute";
 import {
@@ -91,6 +92,7 @@ import {
   type FileExplorerRenameFailureReason
 } from "../shared/fileExplorerRename";
 import type { AppPlatform } from "../shared/platform";
+import { firstNonEmptyMarkdownPreviewLine } from "../shared/markdownPreviewLine";
 import {
   isPathEqualOrInsideDirectory,
   projectWriteLockDirectoryPathForProjectRoot,
@@ -2530,6 +2532,117 @@ function resolveProjectDocumentPath(relativePath: string): string {
 }
 
 /**
+ * #372: true when any segment of a project-relative path is Recovery-related
+ * (the `.pergamum_recovery` store directory, or a `.recovered.md` restore
+ * artifact). Those are out of scope for the Command Palette file quick open
+ * footer detail preview even though they can otherwise be readable project
+ * documents.
+ */
+function isRecoveryRelatedProjectDocumentPath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/").toLowerCase();
+
+  return normalized
+    .split("/")
+    .some(
+      (segment) =>
+        segment === defaultProjectRecoveryDirectoryName ||
+        segment.endsWith(".recovered.md") ||
+        segment.endsWith(".recovered.markdown")
+    );
+}
+
+/**
+ * #372: read the Command Palette file quick open footer detail preview line
+ * for a project-local Markdown document — its first non-empty line, trimmed.
+ *
+ * Safety: the caller-supplied `relativePath` must resolve, through the same
+ * project-document-open helper used by `readProjectDocument`
+ * ({@link resolveProjectDocumentPath}), to a REGISTERED project-local document
+ * inside the active project root — which already rejects path traversal and a
+ * non-registered path. On top of that this only ever previews a `.md` /
+ * `.markdown` file (never a folder, the `.pergamum` project file, a
+ * protected / internal Pergamum data file, a reserved File Explorer segment,
+ * or a Recovery-related path), rejects a symlink / Windows junction / reparse
+ * point at the final target OR at ANY ancestor directory between the project
+ * root and the document's parent, and swallows every read failure — a raw I/O
+ * error must never reach the renderer. All of those cases resolve to `null`
+ * ("show no preview").
+ */
+async function readProjectDocumentPreviewLine(
+  rawRequest: unknown
+): Promise<string | null> {
+  let relativePath: string;
+
+  try {
+    relativePath = parseReadProjectDocumentRequest(rawRequest).relativePath;
+  } catch {
+    return null;
+  }
+
+  const normalized = relativePath.replace(/\\/g, "/");
+
+  if (
+    !isProjectMarkdownDocumentPath(normalized) ||
+    pathHasReservedFileExplorerSegment(normalized) ||
+    normalized
+      .split("/")
+      .some((segment) => isProtectedPergamumDataFilePath(segment)) ||
+    isRecoveryRelatedProjectDocumentPath(normalized)
+  ) {
+    return null;
+  }
+
+  let documentPath: string;
+
+  try {
+    documentPath = resolveProjectDocumentPath(relativePath);
+  } catch {
+    return null;
+  }
+
+  const rootPath = currentProjectRootPath();
+
+  if (rootPath === null) {
+    return null;
+  }
+
+  try {
+    // #372 blocker: a registered relative path is trusted only for its string
+    // shape. An ANCESTOR directory can be swapped for a symlink / Windows
+    // junction / reparse point while Pergamum runs — the path then stays
+    // lexically inside `path.resolve(root, ...)` yet reads a file OUTSIDE the
+    // project, and `lstat(documentPath).isSymbolicLink()` alone is `false`.
+    // Reuse the File Explorer delete / copy ancestor scan: `lstat` every
+    // segment from the project root down to the parent directory and bail on
+    // the first symlink / junction (Node reports a Windows directory junction
+    // as a symbolic link via `lstat`). A non-ENOENT `lstat` error on an
+    // ancestor also fails closed.
+    const ancestorScan = await scanFileExplorerDeleteAncestorPath(
+      rootPath,
+      normalized,
+      (target) => fs.lstat(target)
+    );
+
+    if (!ancestorScan.ok) {
+      return null;
+    }
+
+    const stats = await fs.lstat(documentPath);
+
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      return null;
+    }
+
+    const bytes = await fs.readFile(documentPath);
+    const decoded = decodeMarkdownBytes(bytes);
+
+    return firstNonEmptyMarkdownPreviewLine(decoded.content);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * #287 follow-up: make a Markdown file that was created inside the current
  * project's root AFTER the project was opened (for example a `.recovered.md`
  * file written next to its origin document) a first-class project document,
@@ -3880,6 +3993,12 @@ export function registerProjectIpc(
       rawRequest: unknown
     ): Promise<DeleteFileExplorerEntryResponse> =>
       deleteFileExplorerEntryHandler(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.readProjectDocumentPreviewLine,
+    async (_event, rawRequest: unknown): Promise<string | null> =>
+      readProjectDocumentPreviewLine(rawRequest)
   );
 
   ipcMain.handle(

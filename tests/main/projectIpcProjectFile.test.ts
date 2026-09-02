@@ -4370,6 +4370,295 @@ describe("project file IPC foundation", () => {
     expect(result.kind).toBe("failed");
     expect(typeof result.reason).toBe("string");
   });
+
+  // -------------------------------------------------------------------------
+  // #372: Command Palette file quick open footer detail preview line
+  // -------------------------------------------------------------------------
+
+  it("#372: returns the first non-empty Markdown line for a .md project document", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "\n\n   # 第一章  \n\n本文が始まる。\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Md");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "chapter.md" })
+    ).resolves.toBe("# 第一章");
+  });
+
+  it("#372: returns the first non-empty line for a .markdown project document", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.markdown"),
+      "\r\n\r\nSecond format body\r\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Markdown");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "notes.markdown" })
+    ).resolves.toBe("Second format body");
+  });
+
+  it("#372: returns null for a whitespace-only Markdown file", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "blank.md"),
+      "\n   \n\t\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Blank");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "blank.md" })
+    ).resolves.toBeNull();
+  });
+
+  it("#372: returns null for a .txt file, a folder, and an unregistered path", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      "plain text body\n",
+      "utf8"
+    );
+    await fs.mkdir(path.join(projectRootPath, "Drafts"));
+    await openExplorerProject("Preview Non Markdown");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toBeNull();
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "Drafts" })
+    ).resolves.toBeNull();
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "does-not-exist.md" })
+    ).resolves.toBeNull();
+  });
+
+  it("#372: rejects project-external path traversal and reserved / internal paths without throwing", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "# Body\n",
+      "utf8"
+    );
+    // A `.recovered.md` restore artifact IS discovered / registered as a
+    // readable project document (#344) but must not leak a footer preview.
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.recovered.md"),
+      "# Recovered body\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Safety");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+
+    // The recovery artifact is a real registered project document...
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "chapter.recovered.md" })
+    ).resolves.toMatchObject({ content: "# Recovered body\n" });
+
+    // ...yet every unsafe / out-of-scope path resolves to "no preview".
+    for (const relativePath of [
+      "../outside.md",
+      "..\\outside.md",
+      "pergamum.json",
+      ".pergamum",
+      ".git/config.md",
+      ".pergamum_recovery/x.md",
+      "chapter.recovered.md"
+    ]) {
+      await expect(
+        previewHandler({ sender: {} }, { relativePath })
+      ).resolves.toBeNull();
+    }
+  });
+
+  it("#372: swallows a read failure and resolves null instead of surfacing a raw I/O error", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "# Body\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Read Failure");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    const readFileSpy = vi
+      .spyOn(fs, "readFile")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("EIO: c:/secret/internal/path"), {
+          code: "EIO"
+        })
+      );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "chapter.md" })
+    ).resolves.toBeNull();
+
+    readFileSpy.mockRestore();
+  });
+
+  it("#372: returns null when an ancestor directory is replaced by a symlink or junction", async () => {
+    await fs.mkdir(path.join(projectRootPath, "Drafts2"));
+    await fs.writeFile(
+      path.join(projectRootPath, "Drafts2", "chapter.md"),
+      "# inside preview\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Ancestor Junction");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    // Baseline: the normal nested Markdown document previews fine.
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "Drafts2/chapter.md" })
+    ).resolves.toBe("# inside preview");
+
+    const outsideDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "pergamum-preview-ancestor-outside-")
+    );
+
+    try {
+      await fs.writeFile(
+        path.join(outsideDir, "chapter.md"),
+        "# OUTSIDE PREVIEW ESCAPE TEST\n",
+        "utf8"
+      );
+
+      // Swap the still-registered ancestor directory for a junction / symlink
+      // pointing outside the Project root, with the same relative target.
+      await fs.rm(path.join(projectRootPath, "Drafts2"), {
+        recursive: true,
+        force: true
+      });
+
+      try {
+        await fs.symlink(
+          outsideDir,
+          path.join(projectRootPath, "Drafts2"),
+          "junction"
+        );
+      } catch {
+        return; // Platform without symlink / junction privilege — skip.
+      }
+
+      // The junction really does resolve outside the Project root: a naive
+      // read of the lexically-in-root relative path would leak the outside
+      // file's body.
+      await expect(
+        fs.readFile(
+          path.join(projectRootPath, "Drafts2", "chapter.md"),
+          "utf8"
+        )
+      ).resolves.toBe("# OUTSIDE PREVIEW ESCAPE TEST\n");
+
+      // ...but the preview API refuses to read through the ancestor link.
+      const result = await previewHandler(
+        { sender: {} },
+        { relativePath: "Drafts2/chapter.md" }
+      );
+
+      expect(result).toBeNull();
+    } finally {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("#372: returns null when the preview target itself is a symlink", async () => {
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "# inside\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Target Symlink");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    const outsideDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "pergamum-preview-target-outside-")
+    );
+
+    try {
+      const outsideFile = path.join(outsideDir, "secret.md");
+      await fs.writeFile(
+        outsideFile,
+        "# OUTSIDE TARGET SYMLINK\n",
+        "utf8"
+      );
+
+      await fs.rm(path.join(projectRootPath, "chapter.md"));
+
+      try {
+        await fs.symlink(
+          outsideFile,
+          path.join(projectRootPath, "chapter.md")
+        );
+      } catch {
+        return; // Platform without symlink privilege — skip.
+      }
+
+      await expect(
+        previewHandler({ sender: {} }, { relativePath: "chapter.md" })
+      ).resolves.toBeNull();
+    } finally {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("#372: returns null when no project is open", async () => {
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "chapter.md" })
+    ).resolves.toBeNull();
+  });
+
+  it("#372: the renderer preview API is exposed and never reads the filesystem directly", () => {
+    const apiSource = readFileSync("src/shared/api.ts", "utf8");
+    const preloadSource = readFileSync("src/preload/preload.ts", "utf8");
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const paletteSource = readFileSync(
+      "src/renderer/CommandPalette.tsx",
+      "utf8"
+    );
+
+    expect(apiSource).toContain("readProjectDocumentPreviewLine");
+    expect(preloadSource).toContain(
+      "PROJECT_CHANNELS.readProjectDocumentPreviewLine"
+    );
+    expect(appSource).toContain(
+      "window.pergamum.projects.readProjectDocumentPreviewLine"
+    );
+    for (const forbidden of ["node:fs", 'from "fs"', "fs.readFile"]) {
+      expect(paletteSource).not.toContain(forbidden);
+    }
+  });
 });
 
 function createLoggerMock(): DebugLogger & {

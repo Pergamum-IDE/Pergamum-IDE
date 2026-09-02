@@ -198,6 +198,9 @@ export const PROJECT_CHANNELS = {
    *  drives the ordered loop; abort is "stop calling". */
   deleteFileExplorerEntry: "projects:deleteFileExplorerEntry",
   readProjectDocument: "projects:readProjectDocument",
+  /** #372: first non-empty Markdown line of a project-local document, for the
+   *  Command Palette file quick open footer detail preview. */
+  readProjectDocumentPreviewLine: "projects:readProjectDocumentPreviewLine",
   saveProjectDocument: "projects:saveProjectDocument",
   closeCurrentProject: "projects:closeCurrentProject"
 } as const;
@@ -609,6 +612,14 @@ export interface ReadProjectDocumentRequest {
   relativePath: string;
 }
 
+/**
+ * #372: request for the Command Palette file quick open footer detail preview
+ * line. `relativePath` is a project-root-relative Markdown document path.
+ */
+export interface ReadProjectDocumentPreviewLineRequest {
+  relativePath: string;
+}
+
 export interface ProjectDocumentContent {
   relativePath: string;
   content: string;
@@ -881,6 +892,16 @@ export interface PergamumApi {
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;
+    /**
+     * #372: the first non-empty Markdown line of a project-local document,
+     * trimmed, for the Command Palette file quick open footer detail preview.
+     * Resolves to `null` (never rejects with a raw I/O error) when there is no
+     * active project, the path does not safely resolve to a project-local
+     * `.md` / `.markdown` file, the file is blank, or the read fails.
+     */
+    readProjectDocumentPreviewLine: (
+      relativePath: string
+    ) => Promise<string | null>;
     saveProjectDocument: (
       relativePath: string,
       content: string
