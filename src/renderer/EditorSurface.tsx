@@ -12,12 +12,7 @@ import type {
   NewFileLineEnding,
   WorkbenchSoundSettings
 } from "../shared/settings";
-import type {
-  GlossaryEntryKind,
-  GlossaryFormMatchBoundary,
-  GlossaryFormRelation,
-  GlossaryWarningPolicy
-} from "../shared/glossary";
+import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
   currentDocumentContent,
@@ -388,40 +383,20 @@ interface EditorSurfaceProps {
   onRestoreActiveEditorViewStateApplied: (key: string) => void;
   markdownEditorFocusRequest: MarkdownEditorFocusRequest | null;
   onMarkdownEditorFocusRequestApplied: (requestId: number) => void;
-  onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
+  glossaryAvailableTags: readonly GlossaryTag[];
   onChangeGlossaryEntryDescription: (description: string) => void;
-  onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
-  onChangeGlossaryEntryCanonicalMatchBoundaryStart: (
-    matchBoundaryStart: GlossaryFormMatchBoundary
+  onAddGlossaryEntryAtom: () => void;
+  onChangeGlossaryEntryAtomValue: (atomId: string, value: string) => void;
+  onChangeGlossaryEntryAtomMatchFlags: (
+    atomId: string,
+    matchFlags: number
   ) => void;
-  onChangeGlossaryEntryCanonicalMatchBoundaryEnd: (
-    matchBoundaryEnd: GlossaryFormMatchBoundary
+  onDeleteGlossaryEntryAtom: (atomId: string) => void;
+  onMoveGlossaryEntryAtom: (
+    atomId: string,
+    direction: "up" | "down"
   ) => void;
-  onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch: (
-    value: boolean
-  ) => void;
-  onAddGlossaryEntryForm: (relation: GlossaryFormRelation) => void;
-  onChangeGlossaryEntryFormSurface: (
-    formId: string,
-    surface: string
-  ) => void;
-  onChangeGlossaryEntryFormWarningPolicy: (
-    formId: string,
-    warningPolicy: GlossaryWarningPolicy
-  ) => void;
-  onChangeGlossaryEntryFormMatchBoundaryStart: (
-    formId: string,
-    matchBoundaryStart: GlossaryFormMatchBoundary
-  ) => void;
-  onChangeGlossaryEntryFormMatchBoundaryEnd: (
-    formId: string,
-    matchBoundaryEnd: GlossaryFormMatchBoundary
-  ) => void;
-  onChangeGlossaryEntryFormAllowSingleCharacterMatch: (
-    formId: string,
-    value: boolean
-  ) => void;
-  onDeleteGlossaryEntryForm: (formId: string) => void;
+  onToggleGlossaryEntryTag: (tagId: string) => void;
   onDeleteGlossaryEntry: () => void;
   onNavigateToPreviousGlossaryOccurrence: () => void;
   onNavigateToNextGlossaryOccurrence: () => void;
@@ -510,19 +485,14 @@ export function EditorSurface({
   onRestoreActiveEditorViewStateApplied,
   markdownEditorFocusRequest,
   onMarkdownEditorFocusRequestApplied,
-  onChangeGlossaryEntryKind,
+  glossaryAvailableTags,
   onChangeGlossaryEntryDescription,
-  onChangeGlossaryEntryCanonicalSurface,
-  onChangeGlossaryEntryCanonicalMatchBoundaryStart,
-  onChangeGlossaryEntryCanonicalMatchBoundaryEnd,
-  onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch,
-  onAddGlossaryEntryForm,
-  onChangeGlossaryEntryFormSurface,
-  onChangeGlossaryEntryFormWarningPolicy,
-  onChangeGlossaryEntryFormMatchBoundaryStart,
-  onChangeGlossaryEntryFormMatchBoundaryEnd,
-  onChangeGlossaryEntryFormAllowSingleCharacterMatch,
-  onDeleteGlossaryEntryForm,
+  onAddGlossaryEntryAtom,
+  onChangeGlossaryEntryAtomValue,
+  onChangeGlossaryEntryAtomMatchFlags,
+  onDeleteGlossaryEntryAtom,
+  onMoveGlossaryEntryAtom,
+  onToggleGlossaryEntryTag,
   onDeleteGlossaryEntry,
   onNavigateToPreviousGlossaryOccurrence,
   onNavigateToNextGlossaryOccurrence,
@@ -585,34 +555,15 @@ export function EditorSurface({
       return (
         <GlossaryEditor
           draft={editor.draft}
+          availableTags={glossaryAvailableTags}
           translate={translate}
-          onChangeKind={onChangeGlossaryEntryKind}
           onChangeDescription={onChangeGlossaryEntryDescription}
-          onChangeCanonicalSurface={onChangeGlossaryEntryCanonicalSurface}
-          onChangeCanonicalMatchBoundaryStart={
-            onChangeGlossaryEntryCanonicalMatchBoundaryStart
-          }
-          onChangeCanonicalMatchBoundaryEnd={
-            onChangeGlossaryEntryCanonicalMatchBoundaryEnd
-          }
-          onChangeCanonicalAllowSingleCharacterMatch={
-            onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch
-          }
-          onAddForm={onAddGlossaryEntryForm}
-          onChangeFormSurface={onChangeGlossaryEntryFormSurface}
-          onChangeFormWarningPolicy={
-            onChangeGlossaryEntryFormWarningPolicy
-          }
-          onChangeFormMatchBoundaryStart={
-            onChangeGlossaryEntryFormMatchBoundaryStart
-          }
-          onChangeFormMatchBoundaryEnd={
-            onChangeGlossaryEntryFormMatchBoundaryEnd
-          }
-          onChangeFormAllowSingleCharacterMatch={
-            onChangeGlossaryEntryFormAllowSingleCharacterMatch
-          }
-          onDeleteForm={onDeleteGlossaryEntryForm}
+          onAddAtom={onAddGlossaryEntryAtom}
+          onChangeAtomValue={onChangeGlossaryEntryAtomValue}
+          onChangeAtomMatchFlags={onChangeGlossaryEntryAtomMatchFlags}
+          onDeleteAtom={onDeleteGlossaryEntryAtom}
+          onMoveAtom={onMoveGlossaryEntryAtom}
+          onToggleTag={onToggleGlossaryEntryTag}
           onDeleteEntry={onDeleteGlossaryEntry}
           onNavigateToPreviousOccurrence={
             onNavigateToPreviousGlossaryOccurrence
@@ -755,7 +706,7 @@ function MarkdownEditorSurface({
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
   const previewRenderDurationMs = previewRender.durationMs;
-  const { entries, surfaceIndex } = useGlossaryEntriesForMatching(
+  const { surfaceIndex } = useGlossaryEntriesForMatching(
     projectRootPath,
     glossaryRefreshToken
   );
@@ -929,7 +880,6 @@ function MarkdownEditorSurface({
         </div>
         <GlossaryPreviewDecorator
           previewHtml={previewHtml}
-          entries={entries}
           surfaceIndex={surfaceIndex}
           documentOpenId={documentOpenId}
           previewRenderStartedAt={previewRenderStartedAt}

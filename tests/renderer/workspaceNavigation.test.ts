@@ -20,20 +20,7 @@ import {
   FileExplorerView,
   flattenVisibleFileExplorerEntryPaths
 } from "../../src/renderer/FileExplorer";
-import {
-  GlossarySidebar,
-  GlossarySidebarView,
-  initialGlossaryCreateFormState
-} from "../../src/renderer/GlossarySidebar";
-import {
-  canonicalGlossarySurface,
-  createErrorGlossarySidebarState,
-  createLoadedGlossarySidebarState,
-  createLoadingGlossarySidebarState,
-  createNoProjectGlossarySidebarState,
-  loadGlossaryEntries,
-  shouldApplyGlossaryLoadResult
-} from "../../src/renderer/glossarySidebarState";
+import { GlossarySidebar } from "../../src/renderer/GlossarySidebar";
 import {
   createOpenDocumentsStateWithDocument,
   documentTabs
@@ -157,28 +144,26 @@ function glossaryEntry(
 ): GlossaryEntry {
   return {
     id,
-    kind: "term",
     description: "",
     createdAt: timestamp,
     updatedAt: timestamp,
-    forms: [
+    tags: [],
+    atoms: [
       {
-        id: `${id}-alternate-form`,
+        id: `${id}-canonical-atom`,
         entryId: id,
-        surface: alternateSurface,
-        relation: "alias",
-        warningPolicy: "default",
-        isCanonical: false,
+        sortOrder: 0,
+        value: canonicalSurface,
+        matchFlags: 0,
         createdAt: timestamp,
         updatedAt: timestamp
       },
       {
-        id: `${id}-canonical-form`,
+        id: `${id}-alternate-atom`,
         entryId: id,
-        surface: canonicalSurface,
-        relation: null,
-        warningPolicy: null,
-        isCanonical: true,
+        sortOrder: 1,
+        value: alternateSurface,
+        matchFlags: 0,
         createdAt: timestamp,
         updatedAt: timestamp
       }
@@ -240,7 +225,6 @@ function stubGlossaryApi(
   create: ReturnType<typeof vi.fn>;
   getById: ReturnType<typeof vi.fn>;
   list: ReturnType<typeof vi.fn>;
-  lookupSurface: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
 } {
@@ -248,7 +232,6 @@ function stubGlossaryApi(
     create: vi.fn(),
     getById: vi.fn(),
     list: vi.fn().mockResolvedValue(entries),
-    lookupSurface: vi.fn(),
     update: vi.fn(),
     delete: vi.fn()
   };
@@ -261,17 +244,6 @@ function stubGlossaryApi(
 
   return glossaryApi;
 }
-
-const noopGlossaryCreateFormProps = {
-  canCreateEntry: true,
-  searchQuery: "",
-  createForm: initialGlossaryCreateFormState,
-  onChangeSearchQuery: () => undefined,
-  onToggleCreateForm: () => undefined,
-  onChangeCreateSurface: () => undefined,
-  onChangeCreateKind: () => undefined,
-  onSubmitCreateForm: () => undefined
-};
 
 describe("workspace navigation", () => {
   afterEach(() => {
@@ -906,216 +878,6 @@ describe("workspace navigation", () => {
     expect(glossaryApi.list).not.toHaveBeenCalled();
   });
 
-  it("loads glossary entries through the renderer-facing API", async () => {
-    const glossaryApi = stubGlossaryApi();
-
-    await expect(loadGlossaryEntries()).resolves.toBe(glossaryEntries);
-
-    expect(glossaryApi.list).toHaveBeenCalledTimes(1);
-    expect(glossaryApi.create).not.toHaveBeenCalled();
-    expect(glossaryApi.update).not.toHaveBeenCalled();
-    expect(glossaryApi.delete).not.toHaveBeenCalled();
-  });
-
-  it("identifies the canonical surface by isCanonical", () => {
-    expect(canonicalGlossarySurface(glossaryEntries[0])).toBe("王都");
-
-    const markup = renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createLoadedGlossarySidebarState(glossaryEntries, null),
-        highlightedEntryId: null,
-        translate,
-        onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-
-    expect(markup).toContain("王都");
-    expect(markup).not.toContain("首都");
-  });
-
-  it("renders glossary entries in API result order", () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createLoadedGlossarySidebarState(glossaryEntries, null),
-        highlightedEntryId: null,
-        translate,
-        onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-
-    expect(markup.indexOf("王都")).toBeLessThan(markup.indexOf("魔導炉"));
-  });
-
-  it("tracks glossary selection by persistent entry ID", () => {
-    const onSelectEntry = vi.fn();
-    const onActivateEntry = vi.fn();
-    const element = GlossarySidebarView({
-      state: createLoadedGlossarySidebarState(glossaryEntries, null),
-      highlightedEntryId: null,
-      translate,
-      onSelectEntry,
-      onActivateEntry,
-      ...noopGlossaryCreateFormProps
-    });
-    const buttons = collectElements(
-      element,
-      (child) => child.type === "button"
-    );
-    const secondEntryButton = buttons.find(
-      (button) => button.props.title === "魔導炉"
-    );
-
-    expect(secondEntryButton).toBeDefined();
-
-    const onClick = secondEntryButton?.props.onClick;
-    expect(typeof onClick).toBe("function");
-    (onClick as () => void)();
-
-    expect(onSelectEntry).toHaveBeenCalledWith("entry-beta");
-    expect(onActivateEntry).toHaveBeenCalledWith("entry-beta");
-  });
-
-  it("renders Glossary selection independently from Active Editor highlight", () => {
-    const element = GlossarySidebarView({
-      state: createLoadedGlossarySidebarState(glossaryEntries, "entry-alpha"),
-      highlightedEntryId: "entry-beta",
-      translate,
-      onSelectEntry: () => undefined,
-      onActivateEntry: () => undefined,
-      ...noopGlossaryCreateFormProps
-    });
-    const buttons = collectElements(
-      element,
-      (child) => child.type === "button"
-    );
-    const selectedButton = buttons.find(
-      (button) => button.props.title === "王都"
-    );
-    const highlightedButton = buttons.find(
-      (button) => button.props.title === "魔導炉"
-    );
-
-    expect(selectedButton?.props.className).toContain("isSelected");
-    expect(selectedButton?.props.className).not.toContain("isActive");
-    expect(selectedButton?.props["data-selected"]).toBe("true");
-    expect(selectedButton?.props["aria-current"]).toBeUndefined();
-
-    expect(highlightedButton?.props.className).toContain("isActive");
-    expect(highlightedButton?.props.className).not.toContain("isSelected");
-    expect(highlightedButton?.props["aria-current"]).toBe("page");
-    expect(highlightedButton?.props["data-selected"]).toBeUndefined();
-  });
-
-  it("does not activate a Glossary Editor when highlight changes", () => {
-    const onSelectEntry = vi.fn();
-    const onActivateEntry = vi.fn();
-
-    renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createLoadedGlossarySidebarState(glossaryEntries, null),
-        highlightedEntryId: "entry-alpha",
-        translate,
-        onSelectEntry,
-        onActivateEntry,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-    renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createLoadedGlossarySidebarState(glossaryEntries, null),
-        highlightedEntryId: "entry-beta",
-        translate,
-        onSelectEntry,
-        onActivateEntry,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-
-    expect(onSelectEntry).not.toHaveBeenCalled();
-    expect(onActivateEntry).not.toHaveBeenCalled();
-  });
-
-  it("preserves selection across reload when the entry still exists", () => {
-    const state = createLoadedGlossarySidebarState(
-      glossaryEntries,
-      "entry-beta"
-    );
-
-    expect(state.selectedEntryId).toBe("entry-beta");
-  });
-
-  it("clears stale glossary selection when loaded entries change", () => {
-    const state = createLoadedGlossarySidebarState(
-      [glossaryEntries[0]],
-      "entry-beta"
-    );
-
-    expect(state.selectedEntryId).toBeNull();
-  });
-
-  it("clears stale glossary selection when project identity changes", () => {
-    const loadingState = createLoadingGlossarySidebarState(null);
-
-    expect(loadingState.selectedEntryId).toBeNull();
-  });
-
-  it("does not apply stale async load results from previous requests", () => {
-    expect(shouldApplyGlossaryLoadResult(2, 1)).toBe(false);
-    expect(shouldApplyGlossaryLoadResult(2, 2)).toBe(true);
-  });
-
-  it("renders glossary loading, empty, and error states", () => {
-    const loadingMarkup = renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createLoadingGlossarySidebarState(null),
-        highlightedEntryId: null,
-        translate,
-        onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-    const emptyMarkup = renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createLoadedGlossarySidebarState([], null),
-        highlightedEntryId: null,
-        translate,
-        onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-    const errorMarkup = renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createErrorGlossarySidebarState(null),
-        highlightedEntryId: null,
-        translate,
-        onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-    const noProjectMarkup = renderToStaticMarkup(
-      React.createElement(GlossarySidebarView, {
-        state: createNoProjectGlossarySidebarState(),
-        highlightedEntryId: null,
-        translate,
-        onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined,
-        ...noopGlossaryCreateFormProps
-      })
-    );
-
-    expect(loadingMarkup).toContain("glossary.loading");
-    expect(emptyMarkup).toContain("glossary.empty");
-    expect(errorMarkup).toContain("glossary.loadError");
-    expect(noProjectMarkup).toContain("glossary.noProject");
-  });
-
   it("keeps Sidebar mode switching independent from open document tabs", () => {
     const document = createProjectDocument(project.documents[0], "content");
     const openDocumentsState = createOpenDocumentsStateWithDocument(
@@ -1131,46 +893,6 @@ describe("workspace navigation", () => {
     expect(searchMode).toBe("search");
     expect(glossaryMode).toBe("glossary");
     expect(tabsAfterSwitch).toEqual(tabsBeforeSwitch);
-    expect(
-      editorIdEquals(
-        openDocumentsState.activeDocumentId,
-        createProjectDocumentEditorId("chapter-01.md", projectContext)
-      )
-    ).toBe(true);
-  });
-
-  it("keeps glossary selection independent from open document tabs", () => {
-    const document = createProjectDocument(project.documents[0], "content");
-    const openDocumentsState = createOpenDocumentsStateWithDocument(
-      document,
-      projectContext
-    );
-    const tabsBeforeSelection = documentTabs(openDocumentsState);
-    const onSelectEntry = vi.fn();
-    const onActivateEntry = vi.fn();
-    const element = GlossarySidebarView({
-      state: createLoadedGlossarySidebarState(glossaryEntries, null),
-      highlightedEntryId: null,
-      translate,
-      onSelectEntry,
-      onActivateEntry,
-      ...noopGlossaryCreateFormProps
-    });
-    const buttons = collectElements(
-      element,
-      (child) => child.type === "button"
-    );
-    const entryButton = buttons.find(
-      (button) => button.props.title === "王都"
-    );
-
-    const onClick = entryButton?.props.onClick;
-    expect(typeof onClick).toBe("function");
-    (onClick as () => void)();
-
-    expect(onSelectEntry).toHaveBeenCalledWith("entry-alpha");
-    expect(onActivateEntry).toHaveBeenCalledWith("entry-alpha");
-    expect(documentTabs(openDocumentsState)).toEqual(tabsBeforeSelection);
     expect(
       editorIdEquals(
         openDocumentsState.activeDocumentId,

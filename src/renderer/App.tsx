@@ -53,12 +53,11 @@ import {
 } from "../shared/sessionRestore";
 import type {
   CreateGlossaryEntryInput,
+  CreateGlossaryTagInput,
   GlossaryEntry,
   GlossaryEntryId,
-  GlossaryEntryKind,
-  GlossaryFormMatchBoundary,
-  GlossaryFormRelation,
-  GlossaryWarningPolicy
+  GlossaryTag,
+  UpdateGlossaryTagInput
 } from "../shared/glossary";
 import {
   t,
@@ -246,26 +245,22 @@ import {
   type OpenEditorOptions
 } from "./editorNavigation";
 import {
+  addGlossaryEntryDraftAtom,
   applyGlossaryEntryDraftSaveResult,
-  addGlossaryEntryDraftForm,
-  deleteGlossaryEntryDraftForm,
+  deleteGlossaryEntryDraftAtom,
   glossaryEntryDraftUpdateInput,
   isGlossaryEntryDraftDirty,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
-  updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch,
-  updateGlossaryEntryDraftCanonicalMatchBoundaryEnd,
-  updateGlossaryEntryDraftCanonicalMatchBoundaryStart,
-  updateGlossaryEntryDraftCanonicalSurface,
+  glossaryEntryDraftValidity,
+  moveGlossaryEntryDraftAtom,
+  toggleGlossaryEntryDraftTag,
+  updateGlossaryEntryDraftAtomMatchFlags,
+  updateGlossaryEntryDraftAtomValue,
   updateGlossaryEntryDraftDescription,
-  updateGlossaryEntryDraftFormAllowSingleCharacterMatch,
-  updateGlossaryEntryDraftFormMatchBoundaryEnd,
-  updateGlossaryEntryDraftFormMatchBoundaryStart,
-  updateGlossaryEntryDraftFormSurface,
-  updateGlossaryEntryDraftFormWarningPolicy,
-  updateGlossaryEntryDraftKind
+  type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
-import { canonicalGlossarySurface } from "./glossaryPresentation";
+import { representativeGlossarySurface } from "./glossaryPresentation";
 import {
   createGlossaryCommandTitles,
   glossaryCommandIds,
@@ -283,6 +278,10 @@ import {
   type ResolveGlossaryOccurrenceTrackingSessionContext,
   type ResolveGlossaryOccurrenceTrackingSessionResult
 } from "./glossaryOccurrenceTracking";
+import {
+  planGlossaryOccurrenceNavigation,
+  type GlossaryOccurrenceCursor
+} from "./glossaryOccurrenceNavigation";
 import {
   createGlossaryOccurrencesCommandTitles,
   glossaryOccurrencesCommandIds,
@@ -788,6 +787,10 @@ export function App(): JSX.Element {
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
+  // #375: project tag list, shared by the editor (attach/detach picker) and
+  // the sidebar (tag filter + tag manager). Reloaded whenever
+  // `glossaryRefreshToken` bumps.
+  const [glossaryTags, setGlossaryTags] = useState<GlossaryTag[]>([]);
   // #311: a Command Palette "Create New File / Folder" request handed to the
   // File Explorer. `token` is a session-monotonic counter (never reused) so a
   // repeat command re-opens the dialog; the state is cleared to null once the
@@ -837,6 +840,12 @@ export function App(): JSX.Element {
     new ProjectActivationLifetime()
   );
   const lastActiveMarkdownEditorIdRef = useRef<EditorId | null>(null);
+  // #375: cursor for the Glossary SIDEBAR's ◀ / ▶ occurrence jump. Distinct
+  // from the utility-window occurrence-tracking session (which the Glossary
+  // Entry editor drives); the sidebar path is a plain jump over the ACTIVE
+  // Markdown document.
+  const sidebarGlossaryOccurrenceCursorRef =
+    useRef<GlossaryOccurrenceCursor | null>(null);
   const navigateGlossaryOccurrenceRef = useRef<
     (
       entryId: GlossaryEntryId,
@@ -1745,7 +1754,7 @@ export function App(): JSX.Element {
   const canSaveGlossaryEntry =
     currentEditor?.kind === "glossaryEntry" &&
     !isSavingGlossaryEntry &&
-    currentEditor.draft.canonicalSurface.trim().length > 0;
+    glossaryEntryDraftValidity(currentEditor.draft).ok;
   const canSave =
     !isSettingsTabActive && currentEditor?.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
@@ -2377,7 +2386,9 @@ export function App(): JSX.Element {
     );
   }
 
-  function setActiveGlossaryEntryKind(kind: GlossaryEntryKind): void {
+  function updateActiveGlossaryDraft(
+    update: (draft: GlossaryEntryDraft) => GlossaryEntryDraft
+  ): void {
     if (!canMutateActiveWorkingCopy()) {
       return;
     }
@@ -2385,274 +2396,61 @@ export function App(): JSX.Element {
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
-          ? { ...editor, draft: updateGlossaryEntryDraftKind(editor.draft, kind) }
+          ? { ...editor, draft: update(editor.draft) }
           : editor
       )
     );
   }
 
   function setActiveGlossaryEntryDescription(description: string): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftDescription(
-                editor.draft,
-                description
-              )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      updateGlossaryEntryDraftDescription(draft, description)
     );
   }
 
-  function setActiveGlossaryEntryCanonicalSurface(surface: string): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftCanonicalSurface(
-                editor.draft,
-                surface
-              )
-            }
-          : editor
-      )
-    );
+  function addActiveGlossaryEntryAtom(): void {
+    updateActiveGlossaryDraft(addGlossaryEntryDraftAtom);
   }
 
-  function setActiveGlossaryEntryCanonicalMatchBoundaryStart(
-    matchBoundaryStart: GlossaryFormMatchBoundary
+  function setActiveGlossaryEntryAtomValue(
+    atomId: string,
+    value: string
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
-                editor.draft,
-                matchBoundaryStart
-              )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      updateGlossaryEntryDraftAtomValue(draft, atomId, value)
     );
   }
 
-  function setActiveGlossaryEntryCanonicalMatchBoundaryEnd(
-    matchBoundaryEnd: GlossaryFormMatchBoundary
+  function setActiveGlossaryEntryAtomMatchFlags(
+    atomId: string,
+    matchFlags: number
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftCanonicalMatchBoundaryEnd(
-                editor.draft,
-                matchBoundaryEnd
-              )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      updateGlossaryEntryDraftAtomMatchFlags(draft, atomId, matchFlags)
     );
   }
 
-  function setActiveGlossaryEntryCanonicalAllowSingleCharacterMatch(
-    value: boolean
+  function deleteActiveGlossaryEntryAtom(atomId: string): void {
+    updateActiveGlossaryDraft((draft) =>
+      deleteGlossaryEntryDraftAtom(draft, atomId)
+    );
+  }
+
+  function moveActiveGlossaryEntryAtom(
+    atomId: string,
+    direction: "up" | "down"
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft:
-                updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch(
-                  editor.draft,
-                  value
-                )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      moveGlossaryEntryDraftAtom(draft, atomId, direction)
     );
   }
 
-  function addActiveGlossaryEntryForm(
-    relation: GlossaryFormRelation
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: addGlossaryEntryDraftForm(editor.draft, relation)
-            }
-          : editor
-      )
+  function toggleActiveGlossaryEntryTag(tagId: string): void {
+    updateActiveGlossaryDraft((draft) =>
+      toggleGlossaryEntryDraftTag(draft, tagId)
     );
   }
 
-  function setActiveGlossaryEntryFormSurface(
-    formId: string,
-    surface: string
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormSurface(
-                editor.draft,
-                formId,
-                surface
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryFormWarningPolicy(
-    formId: string,
-    warningPolicy: GlossaryWarningPolicy
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormWarningPolicy(
-                editor.draft,
-                formId,
-                warningPolicy
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryFormMatchBoundaryStart(
-    formId: string,
-    matchBoundaryStart: GlossaryFormMatchBoundary
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormMatchBoundaryStart(
-                editor.draft,
-                formId,
-                matchBoundaryStart
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryFormMatchBoundaryEnd(
-    formId: string,
-    matchBoundaryEnd: GlossaryFormMatchBoundary
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormMatchBoundaryEnd(
-                editor.draft,
-                formId,
-                matchBoundaryEnd
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryFormAllowSingleCharacterMatch(
-    formId: string,
-    value: boolean
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
-                editor.draft,
-                formId,
-                value
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function deleteActiveGlossaryEntryForm(formId: string): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: deleteGlossaryEntryDraftForm(editor.draft, formId)
-            }
-          : editor
-      )
-    );
-  }
 
   async function createGlossaryEntryFromSidebar(
     input: CreateGlossaryEntryInput
@@ -2675,6 +2473,98 @@ export function App(): JSX.Element {
       return false;
     }
   }
+
+  // #375: Glossary tag CRUD from the sidebar tag manager. Each mutation
+  // bumps `glossaryRefreshToken`, which reloads the tag list (and every
+  // glossary consumer) below.
+  async function createGlossaryTagFromSidebar(
+    input: CreateGlossaryTagInput
+  ): Promise<GlossaryTag> {
+    const tag = await window.pergamum.glossary.createTag(input);
+    setGlossaryRefreshToken((token) => token + 1);
+    return tag;
+  }
+
+  async function updateGlossaryTagFromSidebar(
+    input: UpdateGlossaryTagInput
+  ): Promise<GlossaryTag> {
+    const tag = await window.pergamum.glossary.updateTag(input);
+    setGlossaryRefreshToken((token) => token + 1);
+    return tag;
+  }
+
+  async function deleteGlossaryTagFromSidebar(
+    tagId: string,
+    confirmMessage: string
+  ): Promise<void> {
+    await window.pergamum.glossary.deleteTag(tagId, confirmMessage);
+    setGlossaryRefreshToken((token) => token + 1);
+  }
+
+  // #375: Glossary sidebar ◀ / ▶ — jump to an occurrence of `entry` (any of
+  // its atoms) in the ACTIVE Markdown document. No-op when the active editor
+  // is not Markdown or the entry has no hits (the sidebar also disables the
+  // buttons in those cases). Advances a per-(entry, document) cursor and
+  // wraps, matching planGlossaryOccurrenceNavigation. Applying the selection
+  // returns focus to the editor (MarkdownEditor focuses on pendingSelection).
+  function navigateGlossaryOccurrenceFromSidebar(
+    entry: GlossaryEntry,
+    direction: "previous" | "next"
+  ): void {
+    if (activeDocument?.editor.kind !== "markdown") {
+      return;
+    }
+
+    const targetDocument = {
+      editorId: activeDocument.id,
+      content: currentDocumentContent(activeDocument.editor.document)
+    };
+    const outcome = planGlossaryOccurrenceNavigation({
+      entry,
+      targetDocument,
+      direction,
+      currentCursor: sidebarGlossaryOccurrenceCursorRef.current
+    });
+
+    if (outcome.kind === "noOccurrences") {
+      setStatus({ key: "status.glossaryOccurrenceNotFound" });
+      return;
+    }
+
+    if (outcome.kind !== "navigated") {
+      return;
+    }
+
+    sidebarGlossaryOccurrenceCursorRef.current = outcome.cursor;
+    setPendingMarkdownSelection(outcome.range);
+  }
+
+  useEffect(() => {
+    if (!project) {
+      setGlossaryTags([]);
+      return;
+    }
+
+    let isActive = true;
+
+    void window.pergamum.glossary
+      .listTags()
+      .then((tags) => {
+        if (isActive) {
+          setGlossaryTags(tags);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setGlossaryTags([]);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.rootPath ?? null, glossaryRefreshToken]);
 
   function activateDocument(documentId: EditorId): void {
     if (isLifecycleCommitBarrierActiveNow()) {
@@ -4625,7 +4515,7 @@ export function App(): JSX.Element {
       setGlossaryRefreshToken((token) => token + 1);
       setStatus({
         key: "status.savedPath",
-        values: { path: canonicalGlossarySurface(savedEntry) }
+        values: { path: representativeGlossarySurface(savedEntry) }
       });
       logRendererDebugEvent({
         level: "debug",
@@ -4804,7 +4694,7 @@ export function App(): JSX.Element {
       outcome = startGlossaryOccurrenceTracking({
         currentSession: glossaryOccurrenceTrackingState,
         entry,
-        entryLabel: canonicalGlossarySurface(entry),
+        entryLabel: representativeGlossarySurface(entry),
         targetDocument,
         direction
       });
@@ -5040,7 +4930,7 @@ export function App(): JSX.Element {
         ? true
         : targetEditor.kind === "glossaryEntry" &&
           targetEditor.draft.saveState !== "saving" &&
-          targetEditor.draft.canonicalSurface.trim().length > 0;
+          glossaryEntryDraftValidity(targetEditor.draft).ok;
 
     logRendererDebugEvent({
       level: "debug",
@@ -5344,6 +5234,7 @@ export function App(): JSX.Element {
 
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
+    sidebarGlossaryOccurrenceCursorRef.current = null;
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
     setOpenDocumentsState((state) =>
@@ -5418,6 +5309,7 @@ export function App(): JSX.Element {
     projectActivationLifetimeRef.current.startProjectContextSwitch();
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
+    sidebarGlossaryOccurrenceCursorRef.current = null;
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
     const nextOpenDocumentsState = removeProjectScopedOpenEditors(
@@ -5957,6 +5849,7 @@ export function App(): JSX.Element {
     projectActivationLifetimeRef.current.startProjectContextSwitch();
     projectActivationLifetimeRef.current.markExplicitEditorActivation();
     lastActiveMarkdownEditorIdRef.current = null;
+    sidebarGlossaryOccurrenceCursorRef.current = null;
     coldStartMarkdownFocusRequestedRef.current = false;
     setMarkdownEditorFocusRequest(null);
     setCommandPaletteMarkdownFocusRestorePending(false);
@@ -6948,6 +6841,17 @@ export function App(): JSX.Element {
                         );
                       }}
                       onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
+                      glossaryActiveDocumentContent={
+                        activeMarkdownDocument
+                          ? currentDocumentContent(activeMarkdownDocument)
+                          : null
+                      }
+                      onNavigateGlossaryOccurrence={
+                        navigateGlossaryOccurrenceFromSidebar
+                      }
+                      onCreateGlossaryTag={createGlossaryTagFromSidebar}
+                      onUpdateGlossaryTag={updateGlossaryTagFromSidebar}
+                      onDeleteGlossaryTag={deleteGlossaryTagFromSidebar}
                       markdownOutline={activeMarkdownOutline}
                       activeEditorIsMarkdown={activeEditorIsMarkdown}
                       activeOutlineDocumentKey={activeDocumentKey}
@@ -7062,39 +6966,20 @@ export function App(): JSX.Element {
                         onMarkdownEditorFocusRequestApplied={
                           handleMarkdownEditorFocusRequestApplied
                         }
-                        onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
+                        glossaryAvailableTags={glossaryTags}
                         onChangeGlossaryEntryDescription={
                           setActiveGlossaryEntryDescription
                         }
-                        onChangeGlossaryEntryCanonicalSurface={
-                          setActiveGlossaryEntryCanonicalSurface
+                        onAddGlossaryEntryAtom={addActiveGlossaryEntryAtom}
+                        onChangeGlossaryEntryAtomValue={
+                          setActiveGlossaryEntryAtomValue
                         }
-                        onChangeGlossaryEntryCanonicalMatchBoundaryStart={
-                          setActiveGlossaryEntryCanonicalMatchBoundaryStart
+                        onChangeGlossaryEntryAtomMatchFlags={
+                          setActiveGlossaryEntryAtomMatchFlags
                         }
-                        onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
-                          setActiveGlossaryEntryCanonicalMatchBoundaryEnd
-                        }
-                        onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch={
-                          setActiveGlossaryEntryCanonicalAllowSingleCharacterMatch
-                        }
-                        onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
-                        onChangeGlossaryEntryFormSurface={
-                          setActiveGlossaryEntryFormSurface
-                        }
-                        onChangeGlossaryEntryFormWarningPolicy={
-                          setActiveGlossaryEntryFormWarningPolicy
-                        }
-                        onChangeGlossaryEntryFormMatchBoundaryStart={
-                          setActiveGlossaryEntryFormMatchBoundaryStart
-                        }
-                        onChangeGlossaryEntryFormMatchBoundaryEnd={
-                          setActiveGlossaryEntryFormMatchBoundaryEnd
-                        }
-                        onChangeGlossaryEntryFormAllowSingleCharacterMatch={
-                          setActiveGlossaryEntryFormAllowSingleCharacterMatch
-                        }
-                        onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
+                        onDeleteGlossaryEntryAtom={deleteActiveGlossaryEntryAtom}
+                        onMoveGlossaryEntryAtom={moveActiveGlossaryEntryAtom}
+                        onToggleGlossaryEntryTag={toggleActiveGlossaryEntryTag}
                         onDeleteGlossaryEntry={() => {
                           void deleteActiveGlossaryEntry();
                         }}

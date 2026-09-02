@@ -16,9 +16,10 @@ import {
 import {
   createGlossaryEntryDraft,
   isGlossaryEntryDraftDirty,
+  representativeGlossaryAtomDraft,
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
-import { canonicalGlossarySurface } from "./glossaryPresentation";
+import { representativeGlossarySurface } from "./glossaryPresentation";
 
 export interface MarkdownCurrentEditor {
   kind: "markdown";
@@ -64,8 +65,8 @@ export function currentEditorTitle(editor: CurrentEditor): string {
       return currentDocumentTitle(editor.document);
     case "glossaryEntry":
       return (
-        editor.draft.canonicalSurface.trim() ||
-        canonicalGlossarySurface(editor.draft.entry)
+        representativeGlossaryAtomDraft(editor.draft)?.value.trim() ||
+        representativeGlossarySurface(editor.draft.entry)
       );
   }
 }

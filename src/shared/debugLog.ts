@@ -160,7 +160,8 @@ export type DebugLogDbOperation = (typeof debugLogDbOperations)[number];
 
 export const debugLogDbEntityKinds = [
   "glossaryEntry",
-  "glossaryForm",
+  "glossaryAtom",
+  "glossaryTag",
   "database",
   "unknown"
 ] as const;

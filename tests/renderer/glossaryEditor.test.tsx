@@ -1,138 +1,214 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import type { GlossaryEntry } from "../../src/shared/glossary";
+import { describe, expect, it, vi } from "vitest";
+import {
+  GlossaryBoundaryPolicy,
+  setGlossaryAtomBoundaryStartPolicy
+} from "../../src/shared/glossaryAtomFlags";
+import type {
+  GlossaryEntry,
+  GlossaryTag
+} from "../../src/shared/glossary";
 import type { Translate } from "../../src/shared/i18n";
+import { pergamumContextSurfaceAttribute } from "../../src/shared/editContextMenu";
 import { GlossaryEditor } from "../../src/renderer/GlossaryEditor";
-import { createGlossaryEntryDraft } from "../../src/renderer/glossaryEntryDraft";
+import {
+  createGlossaryEntryDraft,
+  updateGlossaryEntryDraftAtomValue,
+  type GlossaryEntryDraft
+} from "../../src/renderer/glossaryEntryDraft";
 
 const translate: Translate = (key) => key;
-const timestamp = "2026-01-01T00:00:00.000Z";
+const ts = "2026-09-02T00:00:00.000Z";
+const entryId = "018f4b8c-7a2b-7c3d-8e4f-100000000001";
 
-function glossaryEntry(description: string): GlossaryEntry {
+function tag(id: string, label: string): GlossaryTag {
   return {
-    id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-    kind: "place",
-    description,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    forms: [
-      {
-        id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
-        entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-        surface: "王都",
-        relation: null,
-        warningPolicy: null,
-        isCanonical: true,
-        matchBoundaryStart: "auto",
-        matchBoundaryEnd: "auto",
-        allowSingleCharacterMatch: false,
-        createdAt: timestamp,
-        updatedAt: timestamp
-      },
-      {
-        id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
-        entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-        surface: "首都",
-        relation: "alias",
-        warningPolicy: "default",
-        isCanonical: false,
-        matchBoundaryStart: "auto",
-        matchBoundaryEnd: "auto",
-        allowSingleCharacterMatch: false,
-        createdAt: timestamp,
-        updatedAt: timestamp
-      }
-    ]
+    id,
+    label,
+    description: null,
+    backgroundRgb: "#1f77b4",
+    foregroundRgb: "#ffffff",
+    sortOrder: 0,
+    createdAt: ts,
+    updatedAt: ts
   };
 }
 
-describe("GlossaryEditor", () => {
-  it("renders a Glossary entry as an editable Editor surface", () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(GlossaryEditor, {
-        draft: createGlossaryEntryDraft(glossaryEntry("王国の首都")),
-        translate,
-        onChangeKind: () => undefined,
-        onChangeDescription: () => undefined,
-        onChangeCanonicalSurface: () => undefined,
-        onChangeCanonicalMatchBoundaryStart: () => undefined,
-        onChangeCanonicalMatchBoundaryEnd: () => undefined,
-        onChangeCanonicalAllowSingleCharacterMatch: () => undefined,
-        onAddForm: () => undefined,
-        onChangeFormSurface: () => undefined,
-        onChangeFormWarningPolicy: () => undefined,
-        onChangeFormMatchBoundaryStart: () => undefined,
-        onChangeFormMatchBoundaryEnd: () => undefined,
-        onChangeFormAllowSingleCharacterMatch: () => undefined,
-        onDeleteForm: () => undefined,
-        onDeleteEntry: () => undefined,
-        onNavigateToPreviousOccurrence: () => undefined,
-        onNavigateToNextOccurrence: () => undefined
-      })
-    );
+const tagA = tag("018f4b8c-7a2b-7c3d-8e4f-300000000001", "武将");
+const tagB = tag("018f4b8c-7a2b-7c3d-8e4f-300000000002", "地名");
 
-    expect(markup).toContain("glossaryEditor.label");
-    expect(markup).toContain("王都");
-    expect(markup).toContain("place");
-    expect(markup).toContain("首都");
-    expect(markup).toContain("glossaryEditor.addAlias");
+function entry(): GlossaryEntry {
+  return {
+    id: entryId,
+    description: "王国の首都",
+    atoms: [
+      {
+        id: "a1",
+        entryId,
+        sortOrder: 0,
+        value: "王都アルセリア",
+        matchFlags: 0,
+        createdAt: ts,
+        updatedAt: ts
+      },
+      {
+        id: "a2",
+        entryId,
+        sortOrder: 1,
+        value: "アルセリア",
+        matchFlags: setGlossaryAtomBoundaryStartPolicy(
+          0,
+          GlossaryBoundaryPolicy.Auto
+        ),
+        createdAt: ts,
+        updatedAt: ts
+      }
+    ],
+    tags: [tagA],
+    createdAt: ts,
+    updatedAt: ts
+  };
+}
+
+function noopHandlers() {
+  return {
+    onChangeDescription: vi.fn(),
+    onAddAtom: vi.fn(),
+    onChangeAtomValue: vi.fn(),
+    onChangeAtomMatchFlags: vi.fn(),
+    onDeleteAtom: vi.fn(),
+    onMoveAtom: vi.fn(),
+    onToggleTag: vi.fn(),
+    onDeleteEntry: vi.fn(),
+    onNavigateToPreviousOccurrence: vi.fn(),
+    onNavigateToNextOccurrence: vi.fn()
+  };
+}
+
+function render(
+  draft: GlossaryEntryDraft,
+  overrides: {
+    availableTags?: readonly GlossaryTag[];
+    readOnly?: boolean;
+  } = {}
+): string {
+  return renderToStaticMarkup(
+    React.createElement(GlossaryEditor, {
+      draft,
+      availableTags: overrides.availableTags ?? [tagA, tagB],
+      translate,
+      readOnly: overrides.readOnly,
+      ...noopHandlers()
+    })
+  );
+}
+
+describe("GlossaryEditor (#375)", () => {
+  it("renders one row per atom with the representative badge on the first", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
+
+    expect(markup).toContain("王都アルセリア");
+    expect(markup).toContain("アルセリア");
+    expect(markup).toContain("glossaryEditor.atoms.representative");
+    // Exactly one representative badge.
+    expect(
+      markup.match(/glossaryEditorAtomRepresentativeBadge/g)
+    ).toHaveLength(1);
+    // No `kind` / alias / variant / warning-policy vocabulary remains.
+    expect(markup).not.toContain("glossaryEditor.kind");
+    expect(markup).not.toContain("glossaryEditor.aliases");
+    expect(markup).not.toContain("warningPolicy");
   });
 
-  it("renders description as Markdown source through the preview renderer", () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(GlossaryEditor, {
-        draft: createGlossaryEntryDraft(glossaryEntry("**王都** の説明")),
-        translate,
-        onChangeKind: () => undefined,
-        onChangeDescription: () => undefined,
-        onChangeCanonicalSurface: () => undefined,
-        onChangeCanonicalMatchBoundaryStart: () => undefined,
-        onChangeCanonicalMatchBoundaryEnd: () => undefined,
-        onChangeCanonicalAllowSingleCharacterMatch: () => undefined,
-        onAddForm: () => undefined,
-        onChangeFormSurface: () => undefined,
-        onChangeFormWarningPolicy: () => undefined,
-        onChangeFormMatchBoundaryStart: () => undefined,
-        onChangeFormMatchBoundaryEnd: () => undefined,
-        onChangeFormAllowSingleCharacterMatch: () => undefined,
-        onDeleteForm: () => undefined,
-        onDeleteEntry: () => undefined,
-        onNavigateToPreviousOccurrence: () => undefined,
-        onNavigateToNextOccurrence: () => undefined
-      })
-    );
+  it("renders the per-atom match-flags editor: single-character bit + start/end boundary policy selects", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
 
-    expect(markup).toContain("<strong>王都</strong>");
-    expect(markup).not.toContain("**王都**");
+    expect(markup).toContain("glossaryEditor.atoms.matchFlags.singleCharacter");
+    expect(markup).toContain(
+      "glossaryEditor.atoms.matchFlags.boundaryStartPolicy"
+    );
+    expect(markup).toContain(
+      "glossaryEditor.atoms.matchFlags.boundaryEndPolicy"
+    );
+    // Two atoms × two policy selects each.
+    expect(markup.match(/<select/g)).toHaveLength(4);
+    // a2's start policy is Auto → one option is rendered selected.
+    expect(markup).toContain("selected");
   });
 
-  it("does not create a separate description Editor boundary", () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(GlossaryEditor, {
-        draft: createGlossaryEntryDraft(glossaryEntry("説明")),
-        translate,
-        onChangeKind: () => undefined,
-        onChangeDescription: () => undefined,
-        onChangeCanonicalSurface: () => undefined,
-        onChangeCanonicalMatchBoundaryStart: () => undefined,
-        onChangeCanonicalMatchBoundaryEnd: () => undefined,
-        onChangeCanonicalAllowSingleCharacterMatch: () => undefined,
-        onAddForm: () => undefined,
-        onChangeFormSurface: () => undefined,
-        onChangeFormWarningPolicy: () => undefined,
-        onChangeFormMatchBoundaryStart: () => undefined,
-        onChangeFormMatchBoundaryEnd: () => undefined,
-        onChangeFormAllowSingleCharacterMatch: () => undefined,
-        onDeleteForm: () => undefined,
-        onDeleteEntry: () => undefined,
-        onNavigateToPreviousOccurrence: () => undefined,
-        onNavigateToNextOccurrence: () => undefined
-      })
-    );
+  it("marks the atom value inputs as an edit context menu surface", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
 
-    expect(markup).toContain("glossaryEditor.description");
-    expect(markup).not.toContain("documentTab");
-    expect(markup).not.toContain("EditorId");
+    expect(markup).toContain(
+      `${pergamumContextSurfaceAttribute}="glossaryAtomValue"`
+    );
+    expect(markup).not.toContain("glossaryCanonicalInput");
+    expect(markup).not.toContain("glossaryFormSurface");
+  });
+
+  it("renders the tag picker: attached tag pressed, unattached tag muted", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
+
+    expect(markup).toContain("glossaryEditor.tags.heading");
+    expect(markup).toContain("武将");
+    expect(markup).toContain("地名");
+    // The attached tag's toggle is aria-pressed="true".
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain('aria-pressed="false"');
+    expect(markup).toContain('data-muted="true"');
+  });
+
+  it("shows a 'no project tags' notice when there are none", () => {
+    const markup = render(createGlossaryEntryDraft(entry()), {
+      availableTags: []
+    });
+
+    expect(markup).toContain("glossaryEditor.tags.noProjectTags");
+    expect(markup).not.toContain("glossaryEditorTagList");
+  });
+
+  it("shows a validity message for a duplicate atom value", () => {
+    let draft = createGlossaryEntryDraft(entry());
+    draft = updateGlossaryEntryDraftAtomValue(draft, "a2", "王都アルセリア");
+
+    const markup = render(draft);
+
+    expect(markup).toContain("glossaryEditor.validity.duplicateAtomValue");
+    expect(markup).toContain('role="alert"');
+  });
+
+  it("renders previous/next occurrence buttons and a delete-entry icon button", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
+
+    expect(markup).toContain("glossaryEditor.previousOccurrenceLabel");
+    expect(markup).toContain("glossaryEditor.nextOccurrenceLabel");
+    expect(markup).toContain('aria-label="glossaryEditor.deleteEntry"');
+  });
+
+  it("disables every write control in read-only mode but keeps occurrence navigation live", () => {
+    const markup = render(createGlossaryEntryDraft(entry()), {
+      readOnly: true
+    });
+
+    expect(markup).toContain("glossaryEditorAddAtom");
+    expect(markup).toMatch(/glossaryEditorAddAtom[^>]*disabled/);
+    // Occurrence buttons are never disabled.
+    const occurrence = markup.slice(
+      markup.indexOf("glossaryEditorOccurrenceButton")
+    );
+    expect(occurrence.slice(0, 200)).not.toContain("disabled");
+  });
+
+  it("renders the draft description as Markdown preview, not raw source", () => {
+    const draft = createGlossaryEntryDraft({
+      ...entry(),
+      description: "# 見出し"
+    });
+
+    const markup = render(draft);
+
+    expect(markup).toContain("<h1>見出し</h1>");
+    expect(markup).not.toContain("# 見出し");
   });
 });

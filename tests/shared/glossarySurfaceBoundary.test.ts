@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { GlossaryFormMatchBoundary } from "../../src/shared/glossary";
 import { shouldAcceptGlossarySurfaceBoundary } from "../../src/shared/glossarySurfaceBoundary";
 
 function acceptBoundary(
   text: string,
   matchedText: string,
-  matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto",
+  checkStartBoundary = true,
+  checkEndBoundary = true,
   occurrence = 0
 ): boolean {
   let start = -1;
@@ -23,22 +22,18 @@ function acceptBoundary(
     text,
     start,
     end: start + matchedText.length,
-    matchBoundaryStart,
-    matchBoundaryEnd
+    checkStartBoundary,
+    checkEndBoundary
   });
 }
 
-describe("glossary surface boundary resolver", () => {
-  it("accepts text boundary edges", () => {
-    expect(acceptBoundary("PergamumIDE", "Pergamum", "auto", "none")).toBe(
-      true
-    );
-    expect(
-      acceptBoundary("SuperPergamum", "Pergamum", "none", "auto")
-    ).toBe(true);
+describe("glossary surface boundary resolver (#375)", () => {
+  it("accepts a checked edge that sits on the text edge", () => {
+    expect(acceptBoundary("PergamumIDE", "Pergamum", true, false)).toBe(true);
+    expect(acceptBoundary("SuperPergamum", "Pergamum", false, true)).toBe(true);
   });
 
-  it("applies Katakana continuation checks for auto policy", () => {
+  it("applies Katakana continuation checks when the edge is checked", () => {
     expect(acceptBoundary("オーダーメイド", "オーダ")).toBe(false);
     expect(acceptBoundary("オーダは沈黙した。", "オーダ")).toBe(true);
     expect(acceptBoundary("オーダーメイド", "オーダー")).toBe(false);
@@ -54,11 +49,11 @@ describe("glossary surface boundary resolver", () => {
 
   it("rejects a later Katakana occurrence with a Katakana start continuation", () => {
     expect(
-      acceptBoundary("ジャン・ヴァルジャン", "ジャン", "auto", "auto", 1)
+      acceptBoundary("ジャン・ヴァルジャン", "ジャン", true, true, 1)
     ).toBe(false);
   });
 
-  it("applies ASCII word continuation checks for auto policy", () => {
+  it("applies ASCII word continuation checks when the edge is checked", () => {
     expect(acceptBoundary("PergamumIDE", "Pergamum")).toBe(false);
     expect(acceptBoundary("Pergamum2", "Pergamum")).toBe(false);
     expect(acceptBoundary("Pergamum_IDE", "Pergamum")).toBe(false);
@@ -66,28 +61,15 @@ describe("glossary surface boundary resolver", () => {
     expect(acceptBoundary("Pergamum.IDE", "Pergamum")).toBe(true);
   });
 
-  it("lets none disable a target edge independently", () => {
-    expect(acceptBoundary("オーダーメイド", "オーダ", "auto", "none")).toBe(
-      true
-    );
-    expect(acceptBoundary("オーダーメイド", "メイド", "auto", "auto")).toBe(
-      false
-    );
-    expect(acceptBoundary("オーダーメイド", "メイド", "none", "auto")).toBe(
-      true
-    );
+  it("lets an unchecked edge pass independently of the other edge", () => {
+    expect(acceptBoundary("オーダーメイド", "オーダ", true, false)).toBe(true);
+    expect(acceptBoundary("オーダーメイド", "メイド", true, true)).toBe(false);
+    expect(acceptBoundary("オーダーメイド", "メイド", false, true)).toBe(true);
   });
 
-  it("uses the same implemented concrete checks for strict and auto", () => {
-    expect(acceptBoundary("オーダーメイド", "オーダ", "auto", "auto")).toBe(
-      acceptBoundary("オーダーメイド", "オーダ", "strict", "strict")
-    );
-    expect(acceptBoundary("PergamumIDE", "Pergamum", "auto", "auto")).toBe(
-      acceptBoundary("PergamumIDE", "Pergamum", "strict", "strict")
-    );
-    expect(acceptBoundary("お館さまがお呼びです。", "お館さま")).toBe(
-      acceptBoundary("お館さまがお呼びです。", "お館さま", "strict", "strict")
-    );
+  it("accepts unconditionally when neither edge is checked", () => {
+    expect(acceptBoundary("PergamumIDE", "Pergamum", false, false)).toBe(true);
+    expect(acceptBoundary("オーダーメイド", "オーダ", false, false)).toBe(true);
   });
 
   it("passes unresolved Hiragana, Kanji, Odoriji, and mixed-script edges", () => {

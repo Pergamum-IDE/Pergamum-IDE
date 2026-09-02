@@ -120,7 +120,7 @@ describe("glossary preload API", () => {
     );
   });
 
-  it("exposes glossary operations through the Pergamum API", () => {
+  it("exposes glossary entry + tag operations through the Pergamum API", () => {
     expect(electronMock.exposeInMainWorld).toHaveBeenCalledWith(
       "pergamum",
       expect.objectContaining({
@@ -128,15 +128,18 @@ describe("glossary preload API", () => {
           create: expect.any(Function),
           getById: expect.any(Function),
           list: expect.any(Function),
-          lookupSurface: expect.any(Function),
           update: expect.any(Function),
-          delete: expect.any(Function)
+          delete: expect.any(Function),
+          listTags: expect.any(Function),
+          createTag: expect.any(Function),
+          updateTag: expect.any(Function),
+          deleteTag: expect.any(Function)
         })
       })
     );
   });
 
-  it("invokes glossary IPC channels with request payloads", async () => {
+  it("invokes glossary IPC channels with request payloads (#375)", async () => {
     electronMock.invoke.mockClear();
     const api = electronMock.exposedApi;
 
@@ -144,77 +147,91 @@ describe("glossary preload API", () => {
       throw new Error("Pergamum API was not exposed.");
     }
 
+    const tagId = "018f4b8c-7a2b-7c3d-8e4f-1234567890ab";
+
     await api.glossary.create({
-      kind: "item",
-      canonicalSurface: "魔導炉",
-      description: "魔力を生成する設備"
+      description: "魔力を生成する設備",
+      atoms: [{ value: "魔導炉", matchFlags: 0 }],
+      tagIds: []
     });
     await api.glossary.getById(entryId);
     await api.glossary.list();
-    await api.glossary.lookupSurface("魔導炉");
     await api.glossary.update({
       id: entryId,
-      kind: "concept",
       description: "魔力を大量生成する技術",
-      canonicalSurface: "魔導炉",
-      forms: [
-        {
-          surface: "魔力炉",
-          relation: "alias",
-          warningPolicy: "default",
-          matchBoundaryStart: "auto",
-          matchBoundaryEnd: "auto"
-        }
-      ]
+      atoms: [
+        { value: "魔導炉", matchFlags: 0 },
+        { value: "魔力炉", matchFlags: 6 }
+      ],
+      tagIds: [tagId]
     });
     await api.glossary.delete(entryId, "この語彙を削除します。よろしいですか？");
+    await api.glossary.listTags();
+    await api.glossary.createTag({
+      label: "設備",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+    await api.glossary.updateTag({
+      id: tagId,
+      label: "施設",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+    await api.glossary.deleteTag(tagId, "このタグを削除します。よろしいですか？");
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [
         GLOSSARY_CHANNELS.create,
         {
-          kind: "item",
-          canonicalSurface: "魔導炉",
-          description: "魔力を生成する設備"
+          description: "魔力を生成する設備",
+          atoms: [{ value: "魔導炉", matchFlags: 0 }],
+          tagIds: []
         }
       ],
-      [
-        GLOSSARY_CHANNELS.getById,
-        {
-          id: entryId
-        }
-      ],
+      [GLOSSARY_CHANNELS.getById, { id: entryId }],
       [GLOSSARY_CHANNELS.list],
-      [
-        GLOSSARY_CHANNELS.lookupSurface,
-        {
-          surface: "魔導炉"
-        }
-      ],
       [
         GLOSSARY_CHANNELS.update,
         {
           id: entryId,
-          kind: "concept",
           description: "魔力を大量生成する技術",
-          canonicalSurface: "魔導炉",
-          forms: [
-            {
-              surface: "魔力炉",
-              relation: "alias",
-              warningPolicy: "default",
-              matchBoundaryStart: "auto",
-              matchBoundaryEnd: "auto"
-            }
-          ]
+          atoms: [
+            { value: "魔導炉", matchFlags: 0 },
+            { value: "魔力炉", matchFlags: 6 }
+          ],
+          tagIds: [tagId]
         }
       ],
       [
         GLOSSARY_CHANNELS.delete,
+        { id: entryId, confirmMessage: "この語彙を削除します。よろしいですか？" }
+      ],
+      [GLOSSARY_CHANNELS.listTags],
+      [
+        GLOSSARY_CHANNELS.createTag,
         {
-          id: entryId,
-          confirmMessage: "この語彙を削除します。よろしいですか？"
+          label: "設備",
+          description: null,
+          backgroundRgb: "#123456",
+          foregroundRgb: "#ffffff"
         }
+      ],
+      [
+        GLOSSARY_CHANNELS.updateTag,
+        {
+          id: tagId,
+          label: "施設",
+          description: null,
+          backgroundRgb: "#123456",
+          foregroundRgb: "#ffffff"
+        }
+      ],
+      [
+        GLOSSARY_CHANNELS.deleteTag,
+        { id: tagId, confirmMessage: "このタグを削除します。よろしいですか？" }
       ]
     ]);
   });

@@ -5,9 +5,11 @@ import type {
 } from "./settings";
 import type {
   CreateGlossaryEntryInput,
+  CreateGlossaryTagInput,
   GlossaryEntry,
-  GlossarySurfaceLookupResult,
-  UpdateGlossaryEntryInput
+  GlossaryTag,
+  UpdateGlossaryEntryInput,
+  UpdateGlossaryTagInput
 } from "./glossary";
 import type {
   DebugLogReason,
@@ -134,18 +136,17 @@ export type {
 } from "./settings";
 export type {
   CreateGlossaryEntryInput,
+  CreateGlossaryTagInput,
+  GlossaryAtom,
+  GlossaryAtomId,
+  GlossaryAtomInput,
   GlossaryEntry,
   GlossaryEntryId,
-  GlossaryEntryKind,
-  GlossaryForm,
-  GlossaryFormId,
-  GlossaryFormInput,
-  GlossaryFormMatchBoundary,
-  GlossaryFormRelation,
-  GlossarySurfaceLookupInput,
-  GlossarySurfaceLookupResult,
-  GlossaryWarningPolicy,
-  UpdateGlossaryEntryInput
+  GlossaryEntryTag,
+  GlossaryTag,
+  GlossaryTagId,
+  UpdateGlossaryEntryInput,
+  UpdateGlossaryTagInput
 } from "./glossary";
 
 export const FILE_CHANNELS = {
@@ -271,9 +272,13 @@ export const GLOSSARY_CHANNELS = {
   create: "glossary:create",
   getById: "glossary:getById",
   list: "glossary:list",
-  lookupSurface: "glossary:lookupSurface",
   update: "glossary:update",
-  delete: "glossary:delete"
+  delete: "glossary:delete",
+  /** #375: project-owned tag layer. */
+  listTags: "glossary:listTags",
+  createTag: "glossary:createTag",
+  updateTag: "glossary:updateTag",
+  deleteTag: "glossary:deleteTag"
 } as const;
 
 export const DEBUG_LOG_CHANNELS = {
@@ -784,8 +789,14 @@ export interface DeleteGlossaryEntryResult {
   deleted: boolean;
 }
 
-export interface GlossarySurfaceLookupRequest {
-  surface: string;
+/** #375: hard delete of a tag (cascades to `glossary_entry_tags` only). */
+export interface DeleteGlossaryTagRequest {
+  id: string;
+  confirmMessage: string;
+}
+
+export interface DeleteGlossaryTagResult {
+  deleted: boolean;
 }
 
 export interface PergamumRuntimeInfo {
@@ -985,12 +996,19 @@ export interface PergamumApi {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;
     getById: (id: string) => Promise<GlossaryEntry | null>;
     list: () => Promise<GlossaryEntry[]>;
-    lookupSurface: (surface: string) => Promise<GlossarySurfaceLookupResult>;
     update: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
     delete: (
       id: string,
       confirmMessage: string
     ) => Promise<DeleteGlossaryEntryResult>;
+    /** #375: project-owned tag layer. */
+    listTags: () => Promise<GlossaryTag[]>;
+    createTag: (input: CreateGlossaryTagInput) => Promise<GlossaryTag>;
+    updateTag: (input: UpdateGlossaryTagInput) => Promise<GlossaryTag>;
+    deleteTag: (
+      id: string,
+      confirmMessage: string
+    ) => Promise<DeleteGlossaryTagResult>;
   };
   debugLog: {
     logEvent: (request: RendererDebugLogRequest) => Promise<void>;

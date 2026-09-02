@@ -7,9 +7,8 @@ export const pergamumContextSurfaceAttribute =
 
 export const editableContextSurfaces = [
   "markdownEditor",
-  "glossaryCanonicalInput",
   "glossaryDescription",
-  "glossaryFormSurface"
+  "glossaryAtomValue"
 ] as const;
 
 export const contextMenuSurfaces = [

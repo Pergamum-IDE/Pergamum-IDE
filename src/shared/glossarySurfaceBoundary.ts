@@ -1,11 +1,20 @@
-import type { GlossaryFormMatchBoundary } from "./glossary";
+/**
+ * #375: boundary acceptance for a raw glossary atom match.
+ *
+ * Each edge is gated by a boolean the caller derives from that atom's 2-bit
+ * boundary policy (`getGlossaryAtomBoundaryStartPolicy` / `...End` +
+ * `glossaryBoundaryPolicyChecksBoundary`): when `true` the edge must sit on a
+ * character-class boundary, when `false` the edge is accepted
+ * unconditionally. `None` → `false`; `Auto` / `Strict` / `Reserved` → `true`
+ * (they all run the same concrete check for now).
+ */
 
 export interface GlossaryBoundaryContext {
   text: string;
   start: number;
   end: number;
-  matchBoundaryStart: GlossaryFormMatchBoundary;
-  matchBoundaryEnd: GlossaryFormMatchBoundary;
+  checkStartBoundary: boolean;
+  checkEndBoundary: boolean;
 }
 
 type GlossaryBoundaryCharacterClass = "asciiWord" | "katakana" | "other";
@@ -54,9 +63,9 @@ function shouldAcceptBoundaryEdge(
   text: string,
   matchedEdgeIndex: number,
   adjacentIndex: number,
-  policy: GlossaryFormMatchBoundary
+  check: boolean
 ): boolean {
-  if (policy === "none") {
+  if (!check) {
     return true;
   }
 
@@ -64,21 +73,10 @@ function shouldAcceptBoundaryEdge(
     return true;
   }
 
-  const matchedEdgeCodeUnit = text.charCodeAt(matchedEdgeIndex);
-  const adjacentCodeUnit = text.charCodeAt(adjacentIndex);
-
-  switch (policy) {
-    case "auto":
-      return shouldAcceptConcreteBoundary(
-        matchedEdgeCodeUnit,
-        adjacentCodeUnit
-      );
-    case "strict":
-      return shouldAcceptConcreteBoundary(
-        matchedEdgeCodeUnit,
-        adjacentCodeUnit
-      );
-  }
+  return shouldAcceptConcreteBoundary(
+    text.charCodeAt(matchedEdgeIndex),
+    text.charCodeAt(adjacentIndex)
+  );
 }
 
 export function shouldAcceptGlossarySurfaceBoundary(
@@ -89,13 +87,13 @@ export function shouldAcceptGlossarySurfaceBoundary(
       context.text,
       context.start,
       context.start - 1,
-      context.matchBoundaryStart
+      context.checkStartBoundary
     ) &&
     shouldAcceptBoundaryEdge(
       context.text,
       context.end - 1,
       context.end,
-      context.matchBoundaryEnd
+      context.checkEndBoundary
     )
   );
 }

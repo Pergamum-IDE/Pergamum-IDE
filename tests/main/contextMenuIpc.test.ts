@@ -337,7 +337,7 @@ describe("context menu IPC", () => {
         request: {
           interactionId: "contextMenu.3",
           commandId: editorCommandIds.copySelection,
-          requestedSurface: "glossaryCanonicalInput",
+          requestedSurface: "glossaryAtomValue",
           delegatedSurface: "unknownEditable"
         },
         webContents,
@@ -351,7 +351,7 @@ describe("context menu IPC", () => {
       details: {
         interactionId: "contextMenu.3",
         commandId: editorCommandIds.copySelection,
-        requestedSurface: "glossaryCanonicalInput",
+        requestedSurface: "glossaryAtomValue",
         delegatedSurface: "unknownEditable",
         result: "failed",
         reason: "web_contents_destroyed"

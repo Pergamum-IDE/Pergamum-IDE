@@ -17,8 +17,9 @@ import {
 
 const entryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
 const otherEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
-const formId = "018f4b8c-7a2b-7c3d-8e4f-123456789abe";
-const otherFormId = "018f4b8c-7a2b-7c3d-8e4f-123456789abf";
+const atomId = "018f4b8c-7a2b-7c3d-8e4f-123456789abe";
+const otherAtomId = "018f4b8c-7a2b-7c3d-8e4f-123456789abf";
+const tagId = "018f4b8c-7a2b-7c3d-8e4f-123456789ac0";
 const timestamp = "2026-08-11T12:00:00.000Z";
 
 describe("project database", () => {
@@ -159,7 +160,10 @@ describe("project database", () => {
           SELECT sql
           FROM sqlite_master
           WHERE type = 'table'
-            AND name IN ('metadata', 'glossary_entries', 'glossary_forms')
+            AND name IN (
+              'metadata', 'glossary_entries', 'glossary_atoms',
+              'glossary_tags', 'glossary_entry_tags'
+            )
         `
       );
       const schemaSql = schemaRows.map((row) => row.sql ?? "").join("\n");
@@ -492,7 +496,7 @@ describe("project database", () => {
         projectFilePath,
         projectName: "Missing Index Test"
       });
-      await created.exec("DROP INDEX glossary_forms_surface_idx");
+      await created.exec("DROP INDEX glossary_atoms_value_idx");
       await created.close();
 
       await expect(openProjectDatabase(projectFilePath)).rejects.toMatchObject({
@@ -501,12 +505,12 @@ describe("project database", () => {
 
       const verifyDb = new Database(projectFilePath);
       const indexes = verifyDb
-        .prepare("PRAGMA index_list(glossary_forms)")
+        .prepare("PRAGMA index_list(glossary_atoms)")
         .all() as { name: string }[];
       verifyDb.close();
 
       expect(indexes.map((row) => row.name)).not.toContain(
-        "glossary_forms_surface_idx"
+        "glossary_atoms_value_idx"
       );
     });
 
@@ -567,46 +571,64 @@ describe("project database", () => {
       const entryColumns = await database.all<{ name: string; type: string }>(
         "PRAGMA table_info(glossary_entries)"
       );
-      const formColumns = await database.all<{ name: string; type: string }>(
-        "PRAGMA table_info(glossary_forms)"
+      const atomColumns = await database.all<{ name: string; type: string }>(
+        "PRAGMA table_info(glossary_atoms)"
       );
-      const indexes = await database.all<{
+      const tagColumns = await database.all<{ name: string; type: string }>(
+        "PRAGMA table_info(glossary_tags)"
+      );
+      const entryTagColumns = await database.all<{
+        name: string;
+        type: string;
+      }>("PRAGMA table_info(glossary_entry_tags)");
+      const atomIndexes = await database.all<{
         name: string;
         unique: number;
         partial: number;
-      }>("PRAGMA index_list(glossary_forms)");
+      }>("PRAGMA index_list(glossary_atoms)");
 
       expect(entryColumns.map((column) => [column.name, column.type])).toEqual([
         ["id", "TEXT"],
-        ["kind", "TEXT"],
         ["description", "TEXT"],
         ["created_at", "TEXT"],
         ["updated_at", "TEXT"]
       ]);
-      expect(formColumns.map((column) => [column.name, column.type])).toEqual([
+      expect(atomColumns.map((column) => [column.name, column.type])).toEqual([
         ["id", "TEXT"],
         ["entry_id", "TEXT"],
-        ["surface", "TEXT"],
-        ["relation", "TEXT"],
-        ["warning_policy", "TEXT"],
-        ["match_boundary_start", "TEXT"],
-        ["match_boundary_end", "TEXT"],
-        ["allow_single_character_match", "INTEGER"],
-        ["is_canonical", "INTEGER"],
+        ["sort_order", "INTEGER"],
+        ["value", "TEXT"],
+        ["match_flags", "INTEGER"],
         ["created_at", "TEXT"],
         ["updated_at", "TEXT"]
       ]);
-      expect(indexes).toEqual(
+      expect(tagColumns.map((column) => [column.name, column.type])).toEqual([
+        ["id", "TEXT"],
+        ["label", "TEXT"],
+        ["description", "TEXT"],
+        ["background_rgb", "TEXT"],
+        ["foreground_rgb", "TEXT"],
+        ["sort_order", "INTEGER"],
+        ["created_at", "TEXT"],
+        ["updated_at", "TEXT"]
+      ]);
+      expect(
+        entryTagColumns.map((column) => [column.name, column.type])
+      ).toEqual([
+        ["entry_id", "TEXT"],
+        ["tag_id", "TEXT"]
+      ]);
+      expect(atomIndexes).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            name: "glossary_forms_surface_idx",
+            name: "glossary_atoms_value_idx",
             unique: 0,
             partial: 0
           }),
           expect.objectContaining({
-            name: "glossary_forms_one_canonical_per_entry_idx",
-            unique: 1,
-            partial: 1
+            name: "glossary_atoms_entry_id_idx",
+            unique: 0,
+            partial: 0
           })
         ])
       );
@@ -728,7 +750,7 @@ describe("project database", () => {
     });
   });
 
-  describe("glossary invariants and operations", () => {
+  describe("glossary invariants and operations (#375)", () => {
     it("does not encode UUIDv7 format validation as SQLite CHECK constraints", async () => {
       database = await openProjectDatabase(projectRootPath);
 
@@ -737,7 +759,10 @@ describe("project database", () => {
           SELECT sql
           FROM sqlite_master
           WHERE type = 'table'
-            AND name IN ('glossary_entries', 'glossary_forms')
+            AND name IN (
+              'glossary_entries', 'glossary_atoms',
+              'glossary_tags', 'glossary_entry_tags'
+            )
         `
       );
       const schemaSql = schemaRows.map((row) => row.sql ?? "").join("\n");
@@ -746,173 +771,125 @@ describe("project database", () => {
       expect(schemaSql).not.toContain("lower(");
     });
 
-    it("rejects direct glossary form rows that violate canonical invariants", async () => {
+    it("rejects a blank atom value and a negative match_flags / sort_order", async () => {
       database = await openProjectDatabase(projectRootPath);
       await insertEntry(database, entryId);
 
-      await expect(
-        database.run(
-          `
-            INSERT INTO glossary_forms (
-              id,
-              entry_id,
-              surface,
-              relation,
-              warning_policy,
-              is_canonical,
-              created_at,
-              updated_at
-            )
-            VALUES (?, ?, ?, ?, NULL, 1, ?, ?)
-          `,
-          [formId, entryId, "王都アルセリア", "alias", timestamp, timestamp]
-        )
-      ).rejects.toMatchObject({
-        code: "PROJECT_DATABASE_QUERY_ERROR"
-      });
-
-      await expect(
-        database.run(
-          `
-            INSERT INTO glossary_forms (
-              id,
-              entry_id,
-              surface,
-              relation,
-              warning_policy,
-              is_canonical,
-              created_at,
-              updated_at
-            )
-            VALUES (?, ?, ?, ?, NULL, 0, ?, ?)
-          `,
-          [formId, entryId, "アルセリア", "alias", timestamp, timestamp]
-        )
-      ).rejects.toMatchObject({
-        code: "PROJECT_DATABASE_QUERY_ERROR"
-      });
-    });
-
-    it("defaults and validates glossary form match boundary columns", async () => {
-      database = await openProjectDatabase(projectRootPath);
-      await insertEntry(database, entryId);
-      await insertCanonicalForm(database, formId, entryId, "王都アルセリア");
-
-      const defaultedForm = await database.get<{
-        match_boundary_start: string;
-        match_boundary_end: string;
-      }>(
-        `
-          SELECT match_boundary_start, match_boundary_end
-          FROM glossary_forms
-          WHERE id = ?
-        `,
-        [formId]
+      await expect(insertAtom(database, atomId, entryId, 0, "  ")).rejects.toMatchObject(
+        { code: "PROJECT_DATABASE_QUERY_ERROR" }
       );
-
-      expect(defaultedForm).toEqual({
-        match_boundary_start: "auto",
-        match_boundary_end: "auto"
-      });
-
       await expect(
-        database.run(
-          `
-            INSERT INTO glossary_forms (
-              id,
-              entry_id,
-              surface,
-              relation,
-              warning_policy,
-              match_boundary_start,
-              match_boundary_end,
-              is_canonical,
-              created_at,
-              updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-          `,
-          [
-            otherFormId,
-            entryId,
-            "アルセリア",
-            "alias",
-            "default",
-            "word",
-            "auto",
-            timestamp,
-            timestamp
-          ]
-        )
-      ).rejects.toMatchObject({
-        code: "PROJECT_DATABASE_QUERY_ERROR"
-      });
+        insertAtom(database, atomId, entryId, 0, "値", -1)
+      ).rejects.toMatchObject({ code: "PROJECT_DATABASE_QUERY_ERROR" });
+      await expect(
+        insertAtom(database, atomId, entryId, -1, "値")
+      ).rejects.toMatchObject({ code: "PROJECT_DATABASE_QUERY_ERROR" });
     });
 
-    it("enforces at most one canonical form per glossary entry", async () => {
+    it("enforces one atom per (entry_id, sort_order)", async () => {
       database = await openProjectDatabase(projectRootPath);
       await insertEntry(database, entryId);
-      await insertCanonicalForm(database, formId, entryId, "王都アルセリア");
+      await insertAtom(database, atomId, entryId, 0, "織田信長");
 
       await expect(
-        insertCanonicalForm(database, otherFormId, entryId, "アルセリア")
-      ).rejects.toMatchObject({
-        code: "PROJECT_DATABASE_QUERY_ERROR"
-      });
+        insertAtom(database, otherAtomId, entryId, 0, "第六天魔王")
+      ).rejects.toMatchObject({ code: "PROJECT_DATABASE_QUERY_ERROR" });
     });
 
-    it("cascades glossary form deletion when an entry is deleted", async () => {
+    it("cascades atom and entry_tag deletion when an entry is deleted", async () => {
       database = await openProjectDatabase(projectRootPath);
       await insertEntry(database, entryId);
-      await insertCanonicalForm(database, formId, entryId, "王都アルセリア");
+      await insertAtom(database, atomId, entryId, 0, "織田信長");
+      await insertTag(database, tagId, "武将");
+      await database.run(
+        "INSERT INTO glossary_entry_tags (entry_id, tag_id) VALUES (?, ?)",
+        [entryId, tagId]
+      );
 
       await database.run("DELETE FROM glossary_entries WHERE id = ?", [entryId]);
 
-      const row = await database.get<{ count: number }>(
-        "SELECT COUNT(*) AS count FROM glossary_forms WHERE entry_id = ?",
-        [entryId]
-      );
-
-      expect(row?.count).toBe(0);
+      expect(
+        (
+          await database.get<{ count: number }>(
+            "SELECT COUNT(*) AS count FROM glossary_atoms WHERE entry_id = ?",
+            [entryId]
+          )
+        )?.count
+      ).toBe(0);
+      expect(
+        (
+          await database.get<{ count: number }>(
+            "SELECT COUNT(*) AS count FROM glossary_entry_tags WHERE entry_id = ?",
+            [entryId]
+          )
+        )?.count
+      ).toBe(0);
+      // The tag itself survives.
+      expect(
+        (
+          await database.get<{ count: number }>(
+            "SELECT COUNT(*) AS count FROM glossary_tags WHERE id = ?",
+            [tagId]
+          )
+        )?.count
+      ).toBe(1);
     });
 
-    it("allows the same surface on different entries but rejects duplicate surfaces per entry", async () => {
+    it("hard-deleting a tag cascades to entry_tags only, never to entries or atoms", async () => {
+      database = await openProjectDatabase(projectRootPath);
+      await insertEntry(database, entryId);
+      await insertAtom(database, atomId, entryId, 0, "織田信長");
+      await insertTag(database, tagId, "武将");
+      await database.run(
+        "INSERT INTO glossary_entry_tags (entry_id, tag_id) VALUES (?, ?)",
+        [entryId, tagId]
+      );
+
+      await database.run("DELETE FROM glossary_tags WHERE id = ?", [tagId]);
+
+      expect(
+        (
+          await database.get<{ count: number }>(
+            "SELECT COUNT(*) AS count FROM glossary_entry_tags WHERE tag_id = ?",
+            [tagId]
+          )
+        )?.count
+      ).toBe(0);
+      expect(
+        (
+          await database.get<{ count: number }>(
+            "SELECT COUNT(*) AS count FROM glossary_atoms WHERE entry_id = ?",
+            [entryId]
+          )
+        )?.count
+      ).toBe(1);
+      expect(
+        (
+          await database.get<{ count: number }>(
+            "SELECT COUNT(*) AS count FROM glossary_entries WHERE id = ?",
+            [entryId]
+          )
+        )?.count
+      ).toBe(1);
+    });
+
+    it("rejects a blank tag label", async () => {
+      database = await openProjectDatabase(projectRootPath);
+
+      await expect(insertTag(database, tagId, "   ")).rejects.toMatchObject({
+        code: "PROJECT_DATABASE_QUERY_ERROR"
+      });
+    });
+
+    it("allows the same atom value on different entries", async () => {
       database = await openProjectDatabase(projectRootPath);
       await insertEntry(database, entryId);
       await insertEntry(database, otherEntryId);
-      await insertCanonicalForm(database, formId, entryId, "帝国");
-      await expect(
-        insertCanonicalForm(database, otherFormId, otherEntryId, "帝国")
-      ).resolves.toBeDefined();
+      await insertAtom(database, atomId, entryId, 0, "帝国");
 
       await expect(
-        database.run(
-          `
-            INSERT INTO glossary_forms (
-              id,
-              entry_id,
-              surface,
-              relation,
-              warning_policy,
-              is_canonical,
-              created_at,
-              updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-          `,
-          [
-            "018f4b8c-7a2b-7c3d-8e4f-123456789ac0",
-            entryId,
-            "帝国",
-            "alias",
-            "warn",
-            timestamp,
-            timestamp
-          ]
-        )
-      ).rejects.toMatchObject({
-        code: "PROJECT_DATABASE_QUERY_ERROR"
-      });
+        insertAtom(database, otherAtomId, otherEntryId, 0, "帝国")
+      ).resolves.toBeDefined();
     });
 
     it("rolls back a failed transaction", async () => {
@@ -921,22 +898,7 @@ describe("project database", () => {
       await expect(
         database.transaction(async () => {
           await insertEntry(database!, entryId);
-          await database?.run(
-            `
-              INSERT INTO glossary_forms (
-                id,
-                entry_id,
-                surface,
-                relation,
-                warning_policy,
-                is_canonical,
-                created_at,
-                updated_at
-              )
-              VALUES (?, ?, ?, NULL, NULL, 1, ?, ?)
-            `,
-            [formId, entryId, " ", timestamp, timestamp]
-          );
+          await insertAtom(database!, atomId, entryId, 0, " ");
         })
       ).rejects.toMatchObject({
         code: "PROJECT_DATABASE_TRANSACTION_ERROR"
@@ -958,40 +920,46 @@ async function insertEntry(
 ): Promise<void> {
   await database.run(
     `
-      INSERT INTO glossary_entries (
-        id,
-        kind,
-        description,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO glossary_entries (id, description, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
     `,
-    [id, "term", "説明", timestamp, timestamp]
+    [id, "説明", timestamp, timestamp]
   );
 }
 
-async function insertCanonicalForm(
+async function insertAtom(
   database: ProjectDatabase,
   id: string,
   entryId: string,
-  surface: string
+  sortOrder: number,
+  value: string,
+  matchFlags = 0
 ) {
   return database.run(
     `
-      INSERT INTO glossary_forms (
-        id,
-        entry_id,
-        surface,
-        relation,
-        warning_policy,
-        is_canonical,
-        created_at,
-        updated_at
+      INSERT INTO glossary_atoms (
+        id, entry_id, sort_order, value, match_flags, created_at, updated_at
       )
-      VALUES (?, ?, ?, NULL, NULL, 1, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-    [id, entryId, surface, timestamp, timestamp]
+    [id, entryId, sortOrder, value, matchFlags, timestamp, timestamp]
+  );
+}
+
+async function insertTag(
+  database: ProjectDatabase,
+  id: string,
+  label: string
+) {
+  return database.run(
+    `
+      INSERT INTO glossary_tags (
+        id, label, description, background_rgb, foreground_rgb,
+        sort_order, created_at, updated_at
+      )
+      VALUES (?, ?, NULL, '#123456', '#ffffff', 0, ?, ?)
+    `,
+    [id, label, timestamp, timestamp]
   );
 }
 

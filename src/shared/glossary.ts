@@ -1,146 +1,122 @@
-export const glossaryEntryKinds = [
-  "term",
-  "person",
-  "place",
-  "organization",
-  "item",
-  "concept"
-] as const;
+/**
+ * #375 PoC: Glossary domain model.
+ *
+ * Breaking rewrite. `kind` is gone (an entry carries `0..n` tags instead of a
+ * single classification). `GlossaryForm` (surface / relation / boundary
+ * columns) is replaced by `GlossaryAtom` — an ordered value with an integer
+ * `matchFlags` bitmask. Tags are a project-owned, many-to-many semantic layer
+ * with hard delete only (no archive / system / soft-delete).
+ *
+ * No migration runner: this is a pre-0.9x PoC and the project DB schema is
+ * recreated from {@link src/main/glossaryStore.ts}.
+ */
 
-export const glossaryFormRelations = ["variant", "alias"] as const;
-
-export const glossaryWarningPolicies = [
-  "default",
-  "ignore",
-  "warn"
-] as const;
-
-export const glossaryFormMatchBoundaries = [
-  "auto",
-  "strict",
-  "none"
-] as const;
-
-// auto is a dispatcher input for the future boundary resolver.
-// It is not a third boundary checking algorithm.
-export const DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY = "auto" as const;
-
-export type GlossaryEntryKind = (typeof glossaryEntryKinds)[number];
-export type GlossaryFormRelation = (typeof glossaryFormRelations)[number];
-export type GlossaryWarningPolicy =
-  (typeof glossaryWarningPolicies)[number];
-export type GlossaryFormMatchBoundary =
-  (typeof glossaryFormMatchBoundaries)[number];
+import {
+  GLOSSARY_ATOM_FLAGS_MASK,
+  normalizeGlossaryAtomMatchFlags
+} from "./glossaryAtomFlags";
 
 export type GlossaryEntryId = string;
-export type GlossaryFormId = string;
+export type GlossaryAtomId = string;
+export type GlossaryTagId = string;
 
-interface BaseGlossaryForm {
-  id: GlossaryFormId;
+/**
+ * One authored value for an entry. `sortOrder` is `0..n-1`; the `sortOrder = 0`
+ * atom is the entry's REPRESENTATIVE atom (the Glossary list's primary label).
+ */
+export interface GlossaryAtom {
+  id: GlossaryAtomId;
   entryId: GlossaryEntryId;
-  surface: string;
-  matchBoundaryStart: GlossaryFormMatchBoundary;
-  matchBoundaryEnd: GlossaryFormMatchBoundary;
-  /**
-   * #365: opt-in for this form only. When `false` (the default), a trimmed
-   * surface that is a single Unicode code point is never indexed/matched
-   * (false-positive guard). When `true`, this form is matched even at
-   * one code point long. `matchBoundaryStart` / `matchBoundaryEnd` remain
-   * boundary-only and are not used to express this opt-in.
-   */
-  allowSingleCharacterMatch: boolean;
+  sortOrder: number;
+  /** Non-empty, trimmed. */
+  value: string;
+  /** Integer bitmask — see `GlossaryAtomFlags`. */
+  matchFlags: number;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface GlossaryCanonicalForm extends BaseGlossaryForm {
-  relation: null;
-  warningPolicy: null;
-  isCanonical: true;
+/** A project-owned semantic classification. Renameable, hard-deletable. */
+export interface GlossaryTag {
+  id: GlossaryTagId;
+  /** Non-empty, trimmed. */
+  label: string;
+  description: string | null;
+  /** Normalized lowercase `#rrggbb`. */
+  backgroundRgb: string;
+  /** Normalized lowercase `#rrggbb`. */
+  foregroundRgb: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface GlossaryNonCanonicalForm extends BaseGlossaryForm {
-  relation: GlossaryFormRelation;
-  warningPolicy: GlossaryWarningPolicy;
-  isCanonical: false;
+/** `glossary_entry_tags` junction row. */
+export interface GlossaryEntryTag {
+  entryId: GlossaryEntryId;
+  tagId: GlossaryTagId;
 }
-
-export type GlossaryForm =
-  | GlossaryCanonicalForm
-  | GlossaryNonCanonicalForm;
 
 export interface GlossaryEntry {
   id: GlossaryEntryId;
-  kind: GlossaryEntryKind;
   description: string;
-  forms: GlossaryForm[];
+  /** `1..n`, ordered by `sortOrder` ascending (index 0 is representative). */
+  atoms: GlossaryAtom[];
+  /** `0..n`, ordered by the tag's own `sortOrder`. */
+  tags: GlossaryTag[];
   createdAt: string;
   updatedAt: string;
 }
 
-export interface CreateGlossaryEntryInput {
-  kind: GlossaryEntryKind;
-  canonicalSurface: string;
-  description: string;
-  matchBoundaryStart?: GlossaryFormMatchBoundary;
-  matchBoundaryEnd?: GlossaryFormMatchBoundary;
-  /** #365: canonical form opt-in; absent ⇒ `false`. */
-  allowSingleCharacterMatch?: boolean;
+// ---------------------------------------------------------------------------
+// Inputs
+// ---------------------------------------------------------------------------
+
+export interface GlossaryAtomInput {
+  /** Present to keep an existing atom's identity across an update. */
+  id?: GlossaryAtomId;
+  value: string;
+  matchFlags: number;
 }
 
-export interface GlossaryFormInput {
-  id?: GlossaryFormId;
-  surface: string;
-  relation: GlossaryFormRelation;
-  warningPolicy: GlossaryWarningPolicy;
-  matchBoundaryStart: GlossaryFormMatchBoundary;
-  matchBoundaryEnd: GlossaryFormMatchBoundary;
-  /** #365: absent ⇒ `false`. */
-  allowSingleCharacterMatch?: boolean;
+export interface CreateGlossaryEntryInput {
+  description: string;
+  /** `>= 1`; array order becomes `sortOrder`. */
+  atoms: GlossaryAtomInput[];
+  /** `0..n` existing tag ids. */
+  tagIds: GlossaryTagId[];
 }
 
 export interface UpdateGlossaryEntryInput {
   id: GlossaryEntryId;
-  kind: GlossaryEntryKind;
   description: string;
-  canonicalSurface: string;
-  matchBoundaryStart?: GlossaryFormMatchBoundary;
-  matchBoundaryEnd?: GlossaryFormMatchBoundary;
-  /** #365: canonical form opt-in; absent ⇒ leave unchanged. */
-  allowSingleCharacterMatch?: boolean;
-  forms: GlossaryFormInput[];
+  /** `>= 1`; array order becomes `sortOrder` (re-packed `0..n-1` on save). */
+  atoms: GlossaryAtomInput[];
+  tagIds: GlossaryTagId[];
 }
 
-export interface GlossarySurfaceLookupInput {
-  surface: string;
+export interface CreateGlossaryTagInput {
+  label: string;
+  description: string | null;
+  backgroundRgb: string;
+  foregroundRgb: string;
 }
 
-export interface GlossarySurfaceMatch {
-  entry: GlossaryEntry;
-  form: GlossaryForm;
+export interface UpdateGlossaryTagInput {
+  id: GlossaryTagId;
+  label: string;
+  description: string | null;
+  backgroundRgb: string;
+  foregroundRgb: string;
 }
 
-export interface NoGlossarySurfaceMatch {
-  status: "none";
-  surface: string;
+export interface DeleteGlossaryTagInput {
+  id: GlossaryTagId;
 }
 
-export interface UniqueGlossarySurfaceMatch {
-  status: "unique";
-  surface: string;
-  match: GlossarySurfaceMatch;
-}
-
-export interface AmbiguousGlossarySurfaceMatch {
-  status: "ambiguous";
-  surface: string;
-  matches: GlossarySurfaceMatch[];
-}
-
-export type GlossarySurfaceLookupResult =
-  | NoGlossarySurfaceMatch
-  | UniqueGlossarySurfaceMatch
-  | AmbiguousGlossarySurfaceMatch;
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
 
 export class GlossaryValidationError extends Error {
   readonly code = "GLOSSARY_VALIDATION_ERROR";
@@ -154,29 +130,14 @@ export class GlossaryValidationError extends Error {
 const uuidv7Pattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
+const rgbHexPattern = /^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/;
+
 function invalidGlossary(message: string): never {
   throw new GlossaryValidationError(message);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function validateEnum<T extends string>(
-  value: unknown,
-  allowedValues: readonly T[],
-  path: string
-): T {
-  if (
-    typeof value !== "string" ||
-    !allowedValues.includes(value as T)
-  ) {
-    invalidGlossary(
-      `${path} must be one of: ${allowedValues.join(", ")}.`
-    );
-  }
-
-  return value as T;
 }
 
 function validateNonEmptyString(value: unknown, path: string): string {
@@ -195,30 +156,6 @@ function validateString(value: unknown, path: string): string {
   return value;
 }
 
-function validateBoolean(value: unknown, path: string): boolean {
-  if (typeof value !== "boolean") {
-    invalidGlossary(`${path} must be a boolean.`);
-  }
-
-  return value;
-}
-
-/**
- * #365: `allowSingleCharacterMatch` is optional on the wire and in older /
- * partial payloads. Absent (`undefined`) folds to `false`; anything else must
- * be a real boolean.
- */
-function validateOptionalBooleanDefaultFalse(
-  value: unknown,
-  path: string
-): boolean {
-  if (value === undefined) {
-    return false;
-  }
-
-  return validateBoolean(value, path);
-}
-
 function validateTimestamp(value: unknown, path: string): string {
   const timestamp = validateNonEmptyString(value, path);
 
@@ -227,6 +164,24 @@ function validateTimestamp(value: unknown, path: string): string {
   }
 
   return timestamp;
+}
+
+function validateInteger(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    invalidGlossary(`${path} must be a safe integer.`);
+  }
+
+  return value;
+}
+
+function validateNonNegativeInteger(value: unknown, path: string): number {
+  const integer = validateInteger(value, path);
+
+  if (integer < 0) {
+    invalidGlossary(`${path} must be a non-negative integer.`);
+  }
+
+  return integer;
 }
 
 export function validateUuidv7(value: unknown, path = "id"): string {
@@ -244,202 +199,165 @@ export function validateGlossaryEntryId(
   return validateUuidv7(value, path);
 }
 
-export function validateGlossaryFormId(
+export function validateGlossaryAtomId(
   value: unknown,
   path = "id"
-): GlossaryFormId {
+): GlossaryAtomId {
   return validateUuidv7(value, path);
 }
 
-function validateOptionalGlossaryFormId(
+export function validateGlossaryTagId(
   value: unknown,
-  path: string
-): GlossaryFormId | undefined {
-  if (value === undefined) {
-    return undefined;
+  path = "id"
+): GlossaryTagId {
+  return validateUuidv7(value, path);
+}
+
+/**
+ * `matchFlags` on the wire / from the DB: a non-negative safe integer with
+ * every bit outside the known layout dropped (see
+ * {@link normalizeGlossaryAtomMatchFlags}). NaN / negative / fractional folds
+ * to `0`.
+ */
+export function validateGlossaryMatchFlags(
+  value: unknown,
+  path = "matchFlags"
+): number {
+  if (typeof value !== "number") {
+    invalidGlossary(`${path} must be a number.`);
   }
 
-  return validateGlossaryFormId(value, path);
+  return normalizeGlossaryAtomMatchFlags(value);
 }
 
-export function validateGlossaryEntryKind(
+/** Normalize a `#RGB` / `#RRGGBB` (with or without `#`) to lowercase `#rrggbb`. */
+export function normalizeGlossaryRgbHex(
   value: unknown,
-  path = "kind"
-): GlossaryEntryKind {
-  return validateEnum(value, glossaryEntryKinds, path);
-}
-
-export function validateGlossaryFormRelation(
-  value: unknown,
-  path = "relation"
-): GlossaryFormRelation {
-  return validateEnum(value, glossaryFormRelations, path);
-}
-
-export function validateGlossaryWarningPolicy(
-  value: unknown,
-  path = "warningPolicy"
-): GlossaryWarningPolicy {
-  return validateEnum(value, glossaryWarningPolicies, path);
-}
-
-export function validateGlossaryFormMatchBoundary(
-  value: unknown,
-  path = "matchBoundary"
-): GlossaryFormMatchBoundary {
-  return validateEnum(value, glossaryFormMatchBoundaries, path);
-}
-
-function validateGlossaryFormMatchBoundaryOrDefault(
-  value: unknown,
-  path: string
-): GlossaryFormMatchBoundary {
-  if (value === undefined) {
-    return DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
+  path = "color"
+): string {
+  if (typeof value !== "string" || !rgbHexPattern.test(value.trim())) {
+    invalidGlossary(`${path} must be a #RRGGBB or #RGB hex color.`);
   }
 
-  return validateGlossaryFormMatchBoundary(value, path);
+  const hex = value.trim().replace(/^#/, "").toLowerCase();
+  const expanded =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((character) => character + character)
+          .join("")
+      : hex;
+
+  return `#${expanded}`;
 }
 
-function validateOptionalGlossaryFormMatchBoundary(
+export function validateGlossaryAtom(
   value: unknown,
-  path: string
-): GlossaryFormMatchBoundary | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return validateGlossaryFormMatchBoundary(value, path);
-}
-
-export function validateGlossaryForm(
-  value: unknown,
-  path = "form"
-): GlossaryForm {
+  path = "atom"
+): GlossaryAtom {
   if (!isObject(value)) {
     invalidGlossary(`${path} must be an object.`);
   }
 
-  const isCanonical = validateBoolean(
-    value.isCanonical,
-    `${path}.isCanonical`
-  );
-  const base = {
-    id: validateGlossaryFormId(value.id, `${path}.id`),
+  return {
+    id: validateGlossaryAtomId(value.id, `${path}.id`),
     entryId: validateGlossaryEntryId(value.entryId, `${path}.entryId`),
-    surface: validateNonEmptyString(value.surface, `${path}.surface`),
-    matchBoundaryStart: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryStart,
-      `${path}.matchBoundaryStart`
+    sortOrder: validateNonNegativeInteger(
+      value.sortOrder,
+      `${path}.sortOrder`
     ),
-    matchBoundaryEnd: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryEnd,
-      `${path}.matchBoundaryEnd`
-    ),
-    allowSingleCharacterMatch: validateOptionalBooleanDefaultFalse(
-      value.allowSingleCharacterMatch,
-      `${path}.allowSingleCharacterMatch`
+    value: validateGlossaryAtomValue(value.value, `${path}.value`),
+    matchFlags: validateGlossaryMatchFlags(
+      value.matchFlags,
+      `${path}.matchFlags`
     ),
     createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
     updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
   };
+}
 
-  if (isCanonical) {
-    if (value.relation !== null) {
-      invalidGlossary(`${path}.relation must be null for canonical forms.`);
-    }
+function validateGlossaryAtomValue(value: unknown, path: string): string {
+  const trimmed = validateNonEmptyString(value, path).trim();
 
-    if (value.warningPolicy !== null) {
-      invalidGlossary(
-        `${path}.warningPolicy must be null for canonical forms.`
-      );
-    }
-
-    return {
-      ...base,
-      relation: null,
-      warningPolicy: null,
-      isCanonical: true
-    };
+  if (trimmed.length === 0) {
+    invalidGlossary(`${path} must not be blank.`);
   }
 
-  return {
-    ...base,
-    relation: validateGlossaryFormRelation(
-      value.relation,
-      `${path}.relation`
-    ),
-    warningPolicy: validateGlossaryWarningPolicy(
-      value.warningPolicy,
-      `${path}.warningPolicy`
-    ),
-    isCanonical: false
-  };
+  return trimmed;
 }
 
-function validateGlossarySurface(value: unknown, path: string): string {
-  return validateNonEmptyString(value, path).trim();
-}
-
-function validateGlossaryFormInput(
+function validateGlossaryTagDescription(
   value: unknown,
   path: string
-): GlossaryFormInput {
+): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const description = validateString(value, path);
+
+  return description.trim().length === 0 ? null : description;
+}
+
+export function validateGlossaryTag(
+  value: unknown,
+  path = "tag"
+): GlossaryTag {
   if (!isObject(value)) {
     invalidGlossary(`${path} must be an object.`);
   }
 
-  const id = validateOptionalGlossaryFormId(value.id, `${path}.id`);
-  const formInput = {
-    surface: validateGlossarySurface(value.surface, `${path}.surface`),
-    relation: validateGlossaryFormRelation(
-      value.relation,
-      `${path}.relation`
+  return {
+    id: validateGlossaryTagId(value.id, `${path}.id`),
+    label: validateNonEmptyString(value.label, `${path}.label`).trim(),
+    description: validateGlossaryTagDescription(
+      value.description,
+      `${path}.description`
     ),
-    warningPolicy: validateGlossaryWarningPolicy(
-      value.warningPolicy,
-      `${path}.warningPolicy`
+    backgroundRgb: normalizeGlossaryRgbHex(
+      value.backgroundRgb,
+      `${path}.backgroundRgb`
     ),
-    matchBoundaryStart: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryStart,
-      `${path}.matchBoundaryStart`
+    foregroundRgb: normalizeGlossaryRgbHex(
+      value.foregroundRgb,
+      `${path}.foregroundRgb`
     ),
-    matchBoundaryEnd: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryEnd,
-      `${path}.matchBoundaryEnd`
-    ),
-    allowSingleCharacterMatch: validateOptionalBooleanDefaultFalse(
-      value.allowSingleCharacterMatch,
-      `${path}.allowSingleCharacterMatch`
-    )
+    sortOrder: validateInteger(value.sortOrder, `${path}.sortOrder`),
+    createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
+    updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
   };
-
-  return id === undefined ? formInput : { ...formInput, id };
 }
 
-function assertNoDuplicateGlossarySurfaces(
-  canonicalSurface: string,
-  forms: GlossaryFormInput[]
+function assertRepresentativeAtomOrdering(
+  atoms: readonly GlossaryAtom[],
+  path: string
 ): void {
-  const seenSurfaces = new Set<string>();
-  const surfaces = [
-    { path: "canonicalSurface", surface: canonicalSurface },
-    ...forms.map((form, index) => ({
-      path: `forms[${index}].surface`,
-      surface: form.surface
-    }))
-  ];
+  if (atoms.length === 0) {
+    invalidGlossary(`${path} must contain at least one atom.`);
+  }
 
-  for (const { path, surface } of surfaces) {
-    const normalizedSurface = surface.trim();
-
-    if (seenSurfaces.has(normalizedSurface)) {
+  atoms.forEach((atom, index) => {
+    if (atom.sortOrder !== index) {
       invalidGlossary(
-        `${path} duplicates another surface in the same glossary entry.`
+        `${path}[${index}].sortOrder must be ${index} (atoms are packed 0..n-1).`
       );
     }
+  });
+}
 
-    seenSurfaces.add(normalizedSurface);
+function assertNoDuplicateAtomValues(
+  values: readonly { path: string; value: string }[]
+): void {
+  const seen = new Set<string>();
+
+  for (const { path, value } of values) {
+    const key = value.trim();
+
+    if (seen.has(key)) {
+      invalidGlossary(`${path} duplicates another atom value in the entry.`);
+    }
+
+    seen.add(key);
   }
 }
 
@@ -451,39 +369,113 @@ export function validateGlossaryEntry(
     invalidGlossary(`${path} must be an object.`);
   }
 
-  if (!Array.isArray(value.forms)) {
-    invalidGlossary(`${path}.forms must be an array.`);
+  if (!Array.isArray(value.atoms)) {
+    invalidGlossary(`${path}.atoms must be an array.`);
+  }
+
+  if (!Array.isArray(value.tags)) {
+    invalidGlossary(`${path}.tags must be an array.`);
   }
 
   const id = validateGlossaryEntryId(value.id, `${path}.id`);
-  const forms = value.forms.map((form, index) =>
-    validateGlossaryForm(form, `${path}.forms[${index}]`)
+  const atoms = value.atoms.map((atom, index) =>
+    validateGlossaryAtom(atom, `${path}.atoms[${index}]`)
   );
 
-  if (forms.length === 0) {
-    invalidGlossary(`${path}.forms must contain a canonical form.`);
-  }
+  assertRepresentativeAtomOrdering(atoms, `${path}.atoms`);
 
-  for (const form of forms) {
-    if (form.entryId !== id) {
-      invalidGlossary(`${path}.forms must belong to ${path}.id.`);
+  for (const atom of atoms) {
+    if (atom.entryId !== id) {
+      invalidGlossary(`${path}.atoms must belong to ${path}.id.`);
     }
   }
 
-  const canonicalForms = forms.filter((form) => form.isCanonical);
+  assertNoDuplicateAtomValues(
+    atoms.map((atom, index) => ({
+      path: `${path}.atoms[${index}].value`,
+      value: atom.value
+    }))
+  );
 
-  if (canonicalForms.length !== 1) {
-    invalidGlossary(`${path}.forms must contain exactly one canonical form.`);
-  }
+  const tags = value.tags.map((tag, index) =>
+    validateGlossaryTag(tag, `${path}.tags[${index}]`)
+  );
 
   return {
     id,
-    kind: validateGlossaryEntryKind(value.kind, `${path}.kind`),
     description: validateString(value.description, `${path}.description`),
-    forms,
+    atoms,
+    tags,
     createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
     updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
   };
+}
+
+function validateGlossaryAtomInput(
+  value: unknown,
+  path: string
+): GlossaryAtomInput {
+  if (!isObject(value)) {
+    invalidGlossary(`${path} must be an object.`);
+  }
+
+  const atomValue = validateGlossaryAtomValue(value.value, `${path}.value`);
+  const matchFlags = validateGlossaryMatchFlags(
+    value.matchFlags,
+    `${path}.matchFlags`
+  );
+
+  if (value.id === undefined) {
+    return { value: atomValue, matchFlags };
+  }
+
+  return {
+    id: validateGlossaryAtomId(value.id, `${path}.id`),
+    value: atomValue,
+    matchFlags
+  };
+}
+
+function validateGlossaryAtomInputs(
+  value: readonly unknown[],
+  path: string
+): GlossaryAtomInput[] {
+  const atoms = value.map((atom, index) =>
+    validateGlossaryAtomInput(atom, `${path}[${index}]`)
+  );
+
+  if (atoms.length === 0) {
+    invalidGlossary(`${path} must contain at least one atom.`);
+  }
+
+  assertNoDuplicateAtomValues(
+    atoms.map((atom, index) => ({
+      path: `${path}[${index}].value`,
+      value: atom.value
+    }))
+  );
+
+  return atoms;
+}
+
+function validateGlossaryTagIds(
+  value: readonly unknown[],
+  path: string
+): GlossaryTagId[] {
+  const tagIds = value.map((tagId, index) =>
+    validateGlossaryTagId(tagId, `${path}[${index}]`)
+  );
+  const seen = new Set<string>();
+
+  for (const tagId of tagIds) {
+    if (seen.has(tagId)) {
+      invalidGlossary(`${path} contains a duplicate tag id.`);
+    }
+
+    seen.add(tagId);
+  }
+
+  return tagIds;
 }
 
 export function validateCreateGlossaryEntryInput(
@@ -493,25 +485,18 @@ export function validateCreateGlossaryEntryInput(
     invalidGlossary("Glossary entry input must be an object.");
   }
 
+  if (!Array.isArray(value.atoms)) {
+    invalidGlossary("atoms must be an array.");
+  }
+
+  if (!Array.isArray(value.tagIds)) {
+    invalidGlossary("tagIds must be an array.");
+  }
+
   return {
-    kind: validateGlossaryEntryKind(value.kind, "kind"),
-    canonicalSurface: validateGlossarySurface(
-      value.canonicalSurface,
-      "canonicalSurface"
-    ),
     description: validateString(value.description, "description"),
-    matchBoundaryStart: validateGlossaryFormMatchBoundaryOrDefault(
-      value.matchBoundaryStart,
-      "matchBoundaryStart"
-    ),
-    matchBoundaryEnd: validateGlossaryFormMatchBoundaryOrDefault(
-      value.matchBoundaryEnd,
-      "matchBoundaryEnd"
-    ),
-    allowSingleCharacterMatch: validateOptionalBooleanDefaultFalse(
-      value.allowSingleCharacterMatch,
-      "allowSingleCharacterMatch"
-    )
+    atoms: validateGlossaryAtomInputs(value.atoms, "atoms"),
+    tagIds: validateGlossaryTagIds(value.tagIds, "tagIds")
   };
 }
 
@@ -522,58 +507,103 @@ export function validateUpdateGlossaryEntryInput(
     invalidGlossary("Glossary entry input must be an object.");
   }
 
-  if (!Array.isArray(value.forms)) {
-    invalidGlossary("forms must be an array.");
+  if (!Array.isArray(value.atoms)) {
+    invalidGlossary("atoms must be an array.");
   }
 
-  const canonicalSurface = validateGlossarySurface(
-    value.canonicalSurface,
-    "canonicalSurface"
-  );
-  const forms = value.forms.map((form, index) =>
-    validateGlossaryFormInput(form, `forms[${index}]`)
-  );
-
-  assertNoDuplicateGlossarySurfaces(canonicalSurface, forms);
-
-  const matchBoundaryStart = validateOptionalGlossaryFormMatchBoundary(
-    value.matchBoundaryStart,
-    "matchBoundaryStart"
-  );
-  const matchBoundaryEnd = validateOptionalGlossaryFormMatchBoundary(
-    value.matchBoundaryEnd,
-    "matchBoundaryEnd"
-  );
-  const allowSingleCharacterMatch =
-    value.allowSingleCharacterMatch === undefined
-      ? undefined
-      : validateBoolean(
-          value.allowSingleCharacterMatch,
-          "allowSingleCharacterMatch"
-        );
+  if (!Array.isArray(value.tagIds)) {
+    invalidGlossary("tagIds must be an array.");
+  }
 
   return {
     id: validateGlossaryEntryId(value.id, "id"),
-    kind: validateGlossaryEntryKind(value.kind, "kind"),
     description: validateString(value.description, "description"),
-    canonicalSurface,
-    ...(matchBoundaryStart === undefined ? {} : { matchBoundaryStart }),
-    ...(matchBoundaryEnd === undefined ? {} : { matchBoundaryEnd }),
-    ...(allowSingleCharacterMatch === undefined
-      ? {}
-      : { allowSingleCharacterMatch }),
-    forms
+    atoms: validateGlossaryAtomInputs(value.atoms, "atoms"),
+    tagIds: validateGlossaryTagIds(value.tagIds, "tagIds")
   };
 }
 
-export function validateGlossarySurfaceLookupInput(
+export function validateCreateGlossaryTagInput(
   value: unknown
-): GlossarySurfaceLookupInput {
+): CreateGlossaryTagInput {
   if (!isObject(value)) {
-    invalidGlossary("Glossary surface lookup input must be an object.");
+    invalidGlossary("Glossary tag input must be an object.");
   }
 
   return {
-    surface: validateGlossarySurface(value.surface, "surface")
+    label: validateNonEmptyString(value.label, "label").trim(),
+    description: validateGlossaryTagDescription(
+      value.description,
+      "description"
+    ),
+    backgroundRgb: normalizeGlossaryRgbHex(
+      value.backgroundRgb,
+      "backgroundRgb"
+    ),
+    foregroundRgb: normalizeGlossaryRgbHex(
+      value.foregroundRgb,
+      "foregroundRgb"
+    )
   };
 }
+
+export function validateUpdateGlossaryTagInput(
+  value: unknown
+): UpdateGlossaryTagInput {
+  if (!isObject(value)) {
+    invalidGlossary("Glossary tag input must be an object.");
+  }
+
+  return {
+    id: validateGlossaryTagId(value.id, "id"),
+    label: validateNonEmptyString(value.label, "label").trim(),
+    description: validateGlossaryTagDescription(
+      value.description,
+      "description"
+    ),
+    backgroundRgb: normalizeGlossaryRgbHex(
+      value.backgroundRgb,
+      "backgroundRgb"
+    ),
+    foregroundRgb: normalizeGlossaryRgbHex(
+      value.foregroundRgb,
+      "foregroundRgb"
+    )
+  };
+}
+
+export function validateDeleteGlossaryTagInput(
+  value: unknown
+): DeleteGlossaryTagInput {
+  if (!isObject(value)) {
+    invalidGlossary("Glossary tag delete input must be an object.");
+  }
+
+  return {
+    id: validateGlossaryTagId(value.id, "id")
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Derivations
+// ---------------------------------------------------------------------------
+
+/** The `sortOrder = 0` atom — the entry's primary label in the Glossary list. */
+export function representativeGlossaryAtom(
+  entry: Pick<GlossaryEntry, "atoms">
+): GlossaryAtom | null {
+  return (
+    entry.atoms.find((atom) => atom.sortOrder === 0) ?? entry.atoms[0] ?? null
+  );
+}
+
+/** The non-representative atoms, in `sortOrder` order. */
+export function nonRepresentativeGlossaryAtoms(
+  entry: Pick<GlossaryEntry, "atoms">
+): GlossaryAtom[] {
+  const representative = representativeGlossaryAtom(entry);
+
+  return entry.atoms.filter((atom) => atom !== representative);
+}
+
+export const GLOSSARY_ATOM_MATCH_FLAGS_MASK = GLOSSARY_ATOM_FLAGS_MASK;

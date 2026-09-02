@@ -25,20 +25,20 @@ describe("renderer lifecycle commit barrier wiring (#271)", () => {
     const markdownBlock = sourceBlock(
       source,
       "function setActiveDocumentContent",
-      "function setActiveGlossaryEntryKind"
+      "function updateActiveGlossaryDraft"
     );
-    const glossaryDescriptionBlock = sourceBlock(
+    const glossaryDraftBlock = sourceBlock(
       source,
-      "function setActiveGlossaryEntryDescription",
-      "function setActiveGlossaryEntryCanonicalSurface"
+      "function updateActiveGlossaryDraft",
+      "function setActiveGlossaryEntryDescription"
     );
 
     expect(markdownBlock.indexOf("if (!canMutateActiveWorkingCopy())")).toBeLessThan(
       markdownBlock.indexOf("updateActiveOpenDocument")
     );
     expect(
-      glossaryDescriptionBlock.indexOf("if (!canMutateActiveWorkingCopy())")
-    ).toBeLessThan(glossaryDescriptionBlock.indexOf("updateActiveOpenEditor"));
+      glossaryDraftBlock.indexOf("if (!canMutateActiveWorkingCopy())")
+    ).toBeLessThan(glossaryDraftBlock.indexOf("updateActiveOpenEditor"));
   });
 
   it("blocks registry-routed commands at the existing modal execution blocker", () => {

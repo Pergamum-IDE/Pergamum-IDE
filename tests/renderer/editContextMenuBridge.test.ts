@@ -305,7 +305,7 @@ describe("edit context menu renderer bridge", () => {
       {
         interactionId: "contextMenu.4",
         commandId: editorCommandIds.copySelection,
-        requestedSurface: "glossaryCanonicalInput"
+        requestedSurface: "glossaryAtomValue"
       },
       {
         commandRegistry: registry,
@@ -327,7 +327,7 @@ describe("edit context menu renderer bridge", () => {
       details: {
         interactionId: "contextMenu.4",
         commandId: editorCommandIds.copySelection,
-        requestedSurface: "glossaryCanonicalInput",
+        requestedSurface: "glossaryAtomValue",
         delegatedSurface: "unknownEditable",
         editorIdKind: "glossaryEntry",
         hasSelection: false,
@@ -439,12 +439,12 @@ describe("edit context menu renderer bridge", () => {
       {
         interactionId: "contextMenu.B",
         commandId: editorCommandIds.pasteSelection,
-        requestedSurface: "glossaryCanonicalInput"
+        requestedSurface: "glossaryAtomValue"
       },
       {
         commandRegistry: registry,
         editorIdKind: "glossaryEntry",
-        delegatedSurface: "glossaryCanonicalInput",
+        delegatedSurface: "glossaryAtomValue",
         hasSelection: false,
         log: vi.fn(),
         setNativeEditCommandContext: (context) => {
@@ -472,7 +472,7 @@ describe("edit context menu renderer bridge", () => {
       {
         interactionId: "contextMenu.B",
         commandId: editorCommandIds.pasteSelection,
-        delegatedSurface: "glossaryCanonicalInput"
+        delegatedSurface: "glossaryAtomValue"
       }
     ]);
   });

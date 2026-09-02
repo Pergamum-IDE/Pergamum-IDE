@@ -98,9 +98,9 @@ describe("glossary commands", () => {
     const registry = new CommandRegistry();
     const createGlossaryEntry = vi.fn(async () => true);
     const input = {
-      kind: "place" as const,
-      canonicalSurface: "王都",
-      description: ""
+      description: "",
+      atoms: [{ value: "王都", matchFlags: 0 }],
+      tagIds: []
     };
 
     registerAllGlossaryCommands(registry, { createGlossaryEntry });
@@ -115,9 +115,9 @@ describe("glossary commands", () => {
     const registry = new CommandRegistry();
     const createGlossaryEntry = vi.fn(async () => true);
     const input = {
-      kind: "place" as const,
-      canonicalSurface: "王都",
-      description: ""
+      description: "",
+      atoms: [{ value: "王都", matchFlags: 0 }],
+      tagIds: []
     };
 
     registerAllGlossaryCommands(registry, { createGlossaryEntry });

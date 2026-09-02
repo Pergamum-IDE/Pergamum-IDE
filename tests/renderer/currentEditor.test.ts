@@ -11,31 +11,28 @@ import {
   isCurrentEditorDirty,
   type GlossaryEntryCurrentEditor
 } from "../../src/renderer/currentEditor";
-import {
-  updateGlossaryEntryDraftDescription,
-  updateGlossaryEntryDraftKind
-} from "../../src/renderer/glossaryEntryDraft";
+import { updateGlossaryEntryDraftDescription } from "../../src/renderer/glossaryEntryDraft";
 
 const projectContext = { rootPath: "C:\\Novel" };
 
+const ts = "2026-01-01T00:00:00.000Z";
 const entry: GlossaryEntry = {
   id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  kind: "place",
   description: "王国の首都",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  forms: [
+  createdAt: ts,
+  updatedAt: ts,
+  atoms: [
     {
       id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
       entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      surface: "王都",
-      relation: null,
-      warningPolicy: null,
-      isCanonical: true,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
+      sortOrder: 0,
+      value: "王都",
+      matchFlags: 0,
+      createdAt: ts,
+      updatedAt: ts
     }
-  ]
+  ],
+  tags: []
 };
 
 describe("CurrentEditor for glossary entries", () => {
@@ -43,18 +40,6 @@ describe("CurrentEditor for glossary entries", () => {
     const editor = createGlossaryEntryCurrentEditor(entry);
 
     expect(isCurrentEditorDirty(editor)).toBe(false);
-  });
-
-  it("is dirty after the draft's kind changes from the saved snapshot", () => {
-    const editor: GlossaryEntryCurrentEditor = {
-      kind: "glossaryEntry",
-      draft: updateGlossaryEntryDraftKind(
-        createGlossaryEntryCurrentEditor(entry).draft,
-        "person"
-      )
-    };
-
-    expect(isCurrentEditorDirty(editor)).toBe(true);
   });
 
   it("is dirty after the draft's description changes from the saved snapshot", () => {
@@ -69,12 +54,12 @@ describe("CurrentEditor for glossary entries", () => {
     expect(isCurrentEditorDirty(editor)).toBe(true);
   });
 
-  it("keeps the canonical surface as the title even while kind/description are edited", () => {
+  it("keeps the representative atom value as the title while the description is edited", () => {
     const editor: GlossaryEntryCurrentEditor = {
       kind: "glossaryEntry",
-      draft: updateGlossaryEntryDraftKind(
+      draft: updateGlossaryEntryDraftDescription(
         createGlossaryEntryCurrentEditor(entry).draft,
-        "person"
+        "変更後の説明"
       )
     };
 

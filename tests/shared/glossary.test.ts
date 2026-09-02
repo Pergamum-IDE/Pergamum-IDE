@@ -1,427 +1,330 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+  GlossaryBoundaryPolicy,
+  setGlossaryAtomBoundaryEndPolicy,
+  setGlossaryAtomBoundaryStartPolicy
+} from "../../src/shared/glossaryAtomFlags";
+import {
   GlossaryValidationError,
+  nonRepresentativeGlossaryAtoms,
+  normalizeGlossaryRgbHex,
+  representativeGlossaryAtom,
   validateCreateGlossaryEntryInput,
+  validateCreateGlossaryTagInput,
+  validateDeleteGlossaryTagInput,
   validateGlossaryEntry,
-  validateGlossaryEntryId,
-  validateGlossaryEntryKind,
-  validateGlossaryForm,
-  validateGlossaryFormMatchBoundary,
-  validateGlossarySurfaceLookupInput,
-  validateUpdateGlossaryEntryInput
+  validateGlossaryMatchFlags,
+  validateGlossaryTag,
+  validateUpdateGlossaryEntryInput,
+  validateUpdateGlossaryTagInput,
+  type GlossaryAtom
 } from "../../src/shared/glossary";
 
-const entryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
-const canonicalFormId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
-const aliasFormId = "018f4b8c-7a2b-7c3d-8e4f-123456789abe";
+const BOUNDARY_START_AUTO = setGlossaryAtomBoundaryStartPolicy(
+  0,
+  GlossaryBoundaryPolicy.Auto
+);
+const BOUNDARY_BOTH_AUTO = setGlossaryAtomBoundaryEndPolicy(
+  BOUNDARY_START_AUTO,
+  GlossaryBoundaryPolicy.Auto
+);
 
-describe("glossary validation", () => {
-  it("accepts a valid glossary entry with canonical and non-canonical forms", () => {
-    expect(
-      validateGlossaryEntry({
-        id: entryId,
-        kind: "place",
-        description: "王国の首都",
-        forms: [
-          {
-            id: canonicalFormId,
-            entryId,
-            surface: "王都アルセリア",
-            relation: null,
-            warningPolicy: null,
-            matchBoundaryStart: "strict",
-            matchBoundaryEnd: "none",
-            isCanonical: true,
-            createdAt: "2026-08-11T12:00:00.000Z",
-            updatedAt: "2026-08-11T12:00:00.000Z"
-          },
-          {
-            id: aliasFormId,
-            entryId,
-            surface: "アルセリア",
-            relation: "alias",
-            warningPolicy: "warn",
-            matchBoundaryStart: "auto",
-            matchBoundaryEnd: "strict",
-            isCanonical: false,
-            createdAt: "2026-08-11T12:00:00.000Z",
-            updatedAt: "2026-08-11T12:00:00.000Z"
-          }
+const timestamp = "2026-09-02T00:00:00.000Z";
+const entryId = "018f4b8c-7a2b-7c3d-8e4f-100000000001";
+const atomId1 = "018f4b8c-7a2b-7c3d-8e4f-200000000001";
+const atomId2 = "018f4b8c-7a2b-7c3d-8e4f-200000000002";
+const tagId1 = "018f4b8c-7a2b-7c3d-8e4f-300000000001";
+const tagId2 = "018f4b8c-7a2b-7c3d-8e4f-300000000002";
+
+function atom(overrides: Partial<GlossaryAtom> = {}): GlossaryAtom {
+  return {
+    id: atomId1,
+    entryId,
+    sortOrder: 0,
+    value: "織田信長",
+    matchFlags: 0,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides
+  };
+}
+
+function tag(overrides: Record<string, unknown> = {}) {
+  return {
+    id: tagId1,
+    label: "武将",
+    description: null,
+    backgroundRgb: "#1f77b4",
+    foregroundRgb: "#ffffff",
+    sortOrder: 0,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides
+  };
+}
+
+function entry(overrides: Record<string, unknown> = {}) {
+  return {
+    id: entryId,
+    description: "戦国大名",
+    atoms: [atom()],
+    tags: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    ...overrides
+  };
+}
+
+describe("validateGlossaryMatchFlags (#375)", () => {
+  it("keeps a non-negative safe integer verbatim, folds anything else to 0", () => {
+    expect(validateGlossaryMatchFlags(0)).toBe(0);
+    expect(validateGlossaryMatchFlags(7)).toBe(7);
+    expect(validateGlossaryMatchFlags(-3)).toBe(0);
+    expect(validateGlossaryMatchFlags(2.5)).toBe(0);
+  });
+
+  it("rejects a non-number", () => {
+    expect(() => validateGlossaryMatchFlags("1011")).toThrow(
+      GlossaryValidationError
+    );
+  });
+});
+
+describe("normalizeGlossaryRgbHex (#375)", () => {
+  it("normalizes to lowercase #rrggbb, expanding a 3-digit form, accepting no leading #", () => {
+    expect(normalizeGlossaryRgbHex("#AABBCC")).toBe("#aabbcc");
+    expect(normalizeGlossaryRgbHex("AABBCC")).toBe("#aabbcc");
+    expect(normalizeGlossaryRgbHex("#abc")).toBe("#aabbcc");
+    expect(normalizeGlossaryRgbHex("  #0F0  ")).toBe("#00ff00");
+  });
+
+  it("rejects a malformed color", () => {
+    expect(() => normalizeGlossaryRgbHex("#12")).toThrow(
+      GlossaryValidationError
+    );
+    expect(() => normalizeGlossaryRgbHex("red")).toThrow(
+      GlossaryValidationError
+    );
+  });
+});
+
+describe("validateGlossaryTag (#375)", () => {
+  it("accepts a tag and normalizes its colors", () => {
+    const result = validateGlossaryTag(
+      tag({ backgroundRgb: "#A0B0C0", foregroundRgb: "#000" })
+    );
+    expect(result.backgroundRgb).toBe("#a0b0c0");
+    expect(result.foregroundRgb).toBe("#000000");
+    expect(result.label).toBe("武将");
+    expect(result.description).toBeNull();
+  });
+
+  it("folds a blank description to null and trims the label", () => {
+    expect(validateGlossaryTag(tag({ description: "   " })).description).toBeNull();
+    expect(validateGlossaryTag(tag({ label: "  武将  " })).label).toBe("武将");
+  });
+
+  it("rejects an empty label", () => {
+    expect(() => validateGlossaryTag(tag({ label: "" }))).toThrow(
+      GlossaryValidationError
+    );
+  });
+});
+
+describe("validateGlossaryEntry (#375)", () => {
+  it("accepts an entry with one atom and no tags", () => {
+    const result = validateGlossaryEntry(entry());
+    expect(result.atoms).toHaveLength(1);
+    expect(result.tags).toEqual([]);
+    expect("kind" in result).toBe(false);
+  });
+
+  it("accepts an entry with multiple packed atoms and tags", () => {
+    const result = validateGlossaryEntry(
+      entry({
+        atoms: [
+          atom({ id: atomId1, sortOrder: 0, value: "織田信長" }),
+          atom({
+            id: atomId2,
+            sortOrder: 1,
+            value: "第六天魔王",
+            matchFlags: BOUNDARY_START_AUTO
+          })
         ],
-        createdAt: "2026-08-11T12:00:00.000Z",
-        updatedAt: "2026-08-11T12:00:00.000Z"
+        tags: [tag({ id: tagId1, label: "武将" })]
       })
-    ).toMatchObject({
-      id: entryId,
-      kind: "place",
-      description: "王国の首都"
-    });
+    );
+    expect(result.atoms.map((a) => a.value)).toEqual([
+      "織田信長",
+      "第六天魔王"
+    ]);
+    expect(result.tags.map((t) => t.label)).toEqual(["武将"]);
   });
 
-  it("accepts create, update, and exact surface lookup input", () => {
-    expect(
-      validateCreateGlossaryEntryInput({
-        kind: "item",
-        canonicalSurface: "魔導炉",
-        description: ""
-      })
-    ).toEqual({
-      kind: "item",
-      canonicalSurface: "魔導炉",
-      description: "",
-      matchBoundaryStart: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-      matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-      allowSingleCharacterMatch: false
-    });
-
-    expect(
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "concept",
-        description: "魔力を生成する技術",
-        canonicalSurface: "魔導炉",
-        forms: [
-          {
-            surface: "旧式魔導炉",
-            relation: "alias",
-            warningPolicy: "default",
-            matchBoundaryStart: "strict",
-            matchBoundaryEnd: "none"
-          }
-        ]
-      })
-    ).toEqual({
-      id: entryId,
-      kind: "concept",
-      description: "魔力を生成する技術",
-      canonicalSurface: "魔導炉",
-      forms: [
-        {
-          surface: "旧式魔導炉",
-          relation: "alias",
-          warningPolicy: "default",
-          matchBoundaryStart: "strict",
-          matchBoundaryEnd: "none",
-          allowSingleCharacterMatch: false
-        }
-      ]
-    });
-
-    expect(
-      validateGlossarySurfaceLookupInput({
-        surface: "魔導炉"
-      })
-    ).toEqual({
-      surface: "魔導炉"
-    });
-  });
-
-  it("accepts an explicit canonical match boundary on update input", () => {
-    expect(
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "term",
-        description: "使用人",
-        canonicalSurface: "メイド",
-        matchBoundaryStart: "none",
-        matchBoundaryEnd: "auto",
-        forms: []
-      })
-    ).toEqual({
-      id: entryId,
-      kind: "term",
-      description: "使用人",
-      canonicalSurface: "メイド",
-      matchBoundaryStart: "none",
-      matchBoundaryEnd: "auto",
-      forms: []
-    });
-  });
-
-  it("rejects an invalid canonical match boundary on update input", () => {
-    expect(() =>
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "term",
-        description: "使用人",
-        canonicalSurface: "メイド",
-        matchBoundaryStart: "word",
-        forms: []
-      })
-    ).toThrow(GlossaryValidationError);
-  });
-
-  it("rejects non-v7 and non-lowercase IDs", () => {
-    expect(() => validateGlossaryEntryId(1)).toThrow(GlossaryValidationError);
-    expect(() =>
-      validateGlossaryEntryId("018f4b8c-7a2b-4c3d-8e4f-123456789abc")
-    ).toThrow(GlossaryValidationError);
-    expect(() =>
-      validateGlossaryEntryId("018F4B8C-7A2B-7C3D-8E4F-123456789ABC")
-    ).toThrow(GlossaryValidationError);
-  });
-
-  it("validates glossary form match boundaries", () => {
-    expect(validateGlossaryFormMatchBoundary("auto")).toBe("auto");
-    expect(validateGlossaryFormMatchBoundary("strict")).toBe("strict");
-    expect(validateGlossaryFormMatchBoundary("none")).toBe("none");
-    expect(() => validateGlossaryFormMatchBoundary("word")).toThrow(
-      GlossaryValidationError
+  it("rejects an entry with zero atoms", () => {
+    expect(() => validateGlossaryEntry(entry({ atoms: [] }))).toThrow(
+      /at least one atom/
     );
   });
 
-  it("rejects invalid entry kinds and required textual fields", () => {
-    expect(() => validateGlossaryEntryKind("chapter")).toThrow(
-      GlossaryValidationError
-    );
-
+  it("rejects atoms whose sortOrder is not packed 0..n-1", () => {
     expect(() =>
-      validateCreateGlossaryEntryInput({
-        kind: "term",
-        canonicalSurface: " ",
-        description: "空白のみの canonical surface"
-      })
-    ).toThrow(GlossaryValidationError);
-
-    expect(() =>
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "term",
-        description: "invalid",
-        canonicalSurface: " ",
-        forms: []
-      })
-    ).toThrow(GlossaryValidationError);
+      validateGlossaryEntry(
+        entry({
+          atoms: [
+            atom({ id: atomId1, sortOrder: 0 }),
+            atom({ id: atomId2, sortOrder: 2, value: "x" })
+          ]
+        })
+      )
+    ).toThrow(/sortOrder must be 1/);
   });
 
-  it("validates update input forms and rejects invalid warning policies", () => {
+  it("rejects duplicate atom values within an entry", () => {
     expect(() =>
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "term",
-        description: "invalid",
-        canonicalSurface: "魔導炉",
-        forms: [
-          {
-            surface: "旧式魔導炉",
-            relation: "alias",
-            warningPolicy: "block",
-            matchBoundaryStart: "auto",
-            matchBoundaryEnd: "auto"
-          }
-        ]
-      })
-    ).toThrow(GlossaryValidationError);
+      validateGlossaryEntry(
+        entry({
+          atoms: [
+            atom({ id: atomId1, sortOrder: 0, value: "同じ" }),
+            atom({ id: atomId2, sortOrder: 1, value: "同じ" })
+          ]
+        })
+      )
+    ).toThrow(/duplicates another atom value/);
   });
 
-  it("requires match boundaries for update input forms", () => {
+  it("rejects an atom that belongs to a different entry", () => {
     expect(() =>
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "term",
-        description: "invalid",
-        canonicalSurface: "魔導炉",
-        forms: [
-          {
-            surface: "旧式魔導炉",
-            relation: "alias",
-            warningPolicy: "default"
-          }
-        ]
-      })
-    ).toThrow(GlossaryValidationError);
+      validateGlossaryEntry(
+        entry({ atoms: [atom({ entryId: tagId2 })] })
+      )
+    ).toThrow(/must belong to/);
   });
+});
 
-  it("rejects duplicate surfaces only within the update input entry", () => {
-    expect(() =>
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "term",
-        description: "invalid",
-        canonicalSurface: "魔導炉",
-        forms: [
-          {
-            surface: " 魔導炉 ",
-            relation: "variant",
-            warningPolicy: "warn",
-            matchBoundaryStart: "auto",
-            matchBoundaryEnd: "auto"
-          }
-        ]
-      })
-    ).toThrow(GlossaryValidationError);
-
-    expect(
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "term",
-        description: "別エントリの重複はここでは検査しない",
-        canonicalSurface: "帝国",
-        forms: []
-      })
-    ).toMatchObject({
-      canonicalSurface: "帝国",
-      forms: []
-    });
-  });
-
-  it("rejects invalid canonical form relation and warning policy", () => {
-    expect(() =>
-      validateGlossaryForm({
-        id: canonicalFormId,
-        entryId,
-        surface: "王都アルセリア",
-        relation: "alias",
-        warningPolicy: null,
-        matchBoundaryStart: "auto",
-        matchBoundaryEnd: "auto",
-        isCanonical: true,
-        createdAt: "2026-08-11T12:00:00.000Z",
-        updatedAt: "2026-08-11T12:00:00.000Z"
-      })
-    ).toThrow(GlossaryValidationError);
-
-    expect(() =>
-      validateGlossaryForm({
-        id: canonicalFormId,
-        entryId,
-        surface: "王都アルセリア",
-        relation: null,
-        warningPolicy: "default",
-        matchBoundaryStart: "auto",
-        matchBoundaryEnd: "auto",
-        isCanonical: true,
-        createdAt: "2026-08-11T12:00:00.000Z",
-        updatedAt: "2026-08-11T12:00:00.000Z"
-      })
-    ).toThrow(GlossaryValidationError);
-  });
-
-  it("rejects invalid non-canonical form relation and warning policy", () => {
-    expect(() =>
-      validateGlossaryForm({
-        id: aliasFormId,
-        entryId,
-        surface: "アルセリア",
-        relation: null,
-        warningPolicy: "default",
-        matchBoundaryStart: "auto",
-        matchBoundaryEnd: "auto",
-        isCanonical: false,
-        createdAt: "2026-08-11T12:00:00.000Z",
-        updatedAt: "2026-08-11T12:00:00.000Z"
-      })
-    ).toThrow(GlossaryValidationError);
-
-    expect(() =>
-      validateGlossaryForm({
-        id: aliasFormId,
-        entryId,
-        surface: "アルセリア",
-        relation: "alias",
-        warningPolicy: null,
-        matchBoundaryStart: "auto",
-        matchBoundaryEnd: "auto",
-        isCanonical: false,
-        createdAt: "2026-08-11T12:00:00.000Z",
-        updatedAt: "2026-08-11T12:00:00.000Z"
-      })
-    ).toThrow(GlossaryValidationError);
-  });
-
-  it("rejects entries without exactly one canonical form", () => {
-    const form = {
-      id: canonicalFormId,
-      entryId,
-      surface: "王都アルセリア",
-      relation: null,
-      warningPolicy: null,
-      matchBoundaryStart: "auto",
-      matchBoundaryEnd: "auto",
-      isCanonical: true,
-      createdAt: "2026-08-11T12:00:00.000Z",
-      updatedAt: "2026-08-11T12:00:00.000Z"
-    };
-
-    expect(() =>
-      validateGlossaryEntry({
-        id: entryId,
-        kind: "place",
-        description: "王国の首都",
-        forms: [],
-        createdAt: "2026-08-11T12:00:00.000Z",
-        updatedAt: "2026-08-11T12:00:00.000Z"
-      })
-    ).toThrow(GlossaryValidationError);
-
-    expect(() =>
-      validateGlossaryEntry({
-        id: entryId,
-        kind: "place",
-        description: "王国の首都",
-        forms: [form, { ...form, id: aliasFormId }],
-        createdAt: "2026-08-11T12:00:00.000Z",
-        updatedAt: "2026-08-11T12:00:00.000Z"
-      })
-    ).toThrow(GlossaryValidationError);
-  });
-
-  it("trims glossary surface inputs while preserving description whitespace", () => {
-    expect(
-      validateCreateGlossaryEntryInput({
-        kind: "item",
-        canonicalSurface: "  魔導炉  ",
-        description: "  説明文  "
-      })
-    ).toEqual({
-      kind: "item",
-      canonicalSurface: "魔導炉",
-      description: "  説明文  ",
-      matchBoundaryStart: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-      matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-      allowSingleCharacterMatch: false
-    });
-
-    expect(
-      validateUpdateGlossaryEntryInput({
-        id: entryId,
-        kind: "concept",
-        description: "  説明文  ",
-        canonicalSurface: "  魔導炉  ",
-        forms: [
-          {
-            surface: "  旧式魔導炉  ",
-            relation: "alias",
-            warningPolicy: "default",
-            matchBoundaryStart: "auto",
-            matchBoundaryEnd: "strict"
-          }
-        ]
-      })
-    ).toEqual({
-      id: entryId,
-      kind: "concept",
-      description: "  説明文  ",
-      canonicalSurface: "魔導炉",
-      forms: [
-        {
-          surface: "旧式魔導炉",
-          relation: "alias",
-          warningPolicy: "default",
-          matchBoundaryStart: "auto",
-          matchBoundaryEnd: "strict",
-          allowSingleCharacterMatch: false
-        }
+describe("representative atom derivations (#375)", () => {
+  const built = validateGlossaryEntry(
+    entry({
+      atoms: [
+        atom({ id: atomId1, sortOrder: 0, value: "織田信長" }),
+        atom({ id: atomId2, sortOrder: 1, value: "第六天魔王" })
       ]
+    })
+  );
+
+  it("representativeGlossaryAtom returns the sortOrder 0 atom", () => {
+    expect(representativeGlossaryAtom(built)?.value).toBe("織田信長");
+  });
+
+  it("nonRepresentativeGlossaryAtoms returns the rest in order", () => {
+    expect(nonRepresentativeGlossaryAtoms(built).map((a) => a.value)).toEqual([
+      "第六天魔王"
+    ]);
+  });
+});
+
+describe("validateCreateGlossaryEntryInput (#375)", () => {
+  it("accepts a description, >=1 atoms (array order = sortOrder), and 0..n tag ids", () => {
+    const result = validateCreateGlossaryEntryInput({
+      description: "説明",
+      atoms: [
+        { value: "  桜田門  ", matchFlags: 0 },
+        {
+          value: "警視庁",
+          matchFlags: BOUNDARY_BOTH_AUTO
+        }
+      ],
+      tagIds: [tagId1, tagId2]
+    });
+    expect(result.atoms.map((a) => a.value)).toEqual(["桜田門", "警視庁"]);
+    // start policy Auto (bits 1-2) | end policy Auto (bits 3-4) = 0b1010.
+    expect(result.atoms[1].matchFlags).toBe(0b1010);
+    expect(result.tagIds).toEqual([tagId1, tagId2]);
+  });
+
+  it("allows an empty tag list", () => {
+    expect(
+      validateCreateGlossaryEntryInput({
+        description: "",
+        atoms: [{ value: "x", matchFlags: 0 }],
+        tagIds: []
+      }).tagIds
+    ).toEqual([]);
+  });
+
+  it("rejects zero atoms and blank atom values", () => {
+    expect(() =>
+      validateCreateGlossaryEntryInput({
+        description: "",
+        atoms: [],
+        tagIds: []
+      })
+    ).toThrow(/at least one atom/);
+    expect(() =>
+      validateCreateGlossaryEntryInput({
+        description: "",
+        atoms: [{ value: "   ", matchFlags: 0 }],
+        tagIds: []
+      })
+    ).toThrow(GlossaryValidationError);
+  });
+
+  it("rejects a duplicate tag id", () => {
+    expect(() =>
+      validateCreateGlossaryEntryInput({
+        description: "",
+        atoms: [{ value: "x", matchFlags: 0 }],
+        tagIds: [tagId1, tagId1]
+      })
+    ).toThrow(/duplicate tag id/);
+  });
+});
+
+describe("validateUpdateGlossaryEntryInput (#375)", () => {
+  it("keeps an atom id when supplied and drops it when absent", () => {
+    const result = validateUpdateGlossaryEntryInput({
+      id: entryId,
+      description: "d",
+      atoms: [
+        { id: atomId1, value: "keep", matchFlags: 0 },
+        { value: "new", matchFlags: 0 }
+      ],
+      tagIds: []
+    });
+    expect(result.atoms[0].id).toBe(atomId1);
+    expect(result.atoms[1].id).toBeUndefined();
+  });
+});
+
+describe("tag CRUD inputs (#375)", () => {
+  it("validates create / update / delete tag inputs", () => {
+    expect(
+      validateCreateGlossaryTagInput({
+        label: "地名",
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#FFFFFF"
+      })
+    ).toEqual({
+      label: "地名",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
     });
 
     expect(
-      validateGlossarySurfaceLookupInput({
-        surface: "  魔導炉  "
-      })
-    ).toEqual({
-      surface: "魔導炉"
+      validateUpdateGlossaryTagInput({
+        id: tagId1,
+        label: "地名",
+        description: "説明",
+        backgroundRgb: "#123456",
+        foregroundRgb: "#000000"
+      }).id
+    ).toBe(tagId1);
+
+    expect(validateDeleteGlossaryTagInput({ id: tagId1 })).toEqual({
+      id: tagId1
     });
   });
 });
+

@@ -1,64 +1,30 @@
 import deleteIcon from "../../assets/icons/feather/glossary/delete.svg?raw";
-import {
-  glossaryEntryKinds,
-  glossaryWarningPolicies,
-  type GlossaryEntryKind,
-  type GlossaryFormMatchBoundary,
-  type GlossaryFormRelation,
-  type GlossaryWarningPolicy
-} from "../shared/glossary";
-import type { Translate, TranslationKey } from "../shared/i18n";
+import type { GlossaryTag } from "../shared/glossary";
+import type { Translate } from "../shared/i18n";
 import { pergamumContextSurfaceAttribute } from "../shared/editContextMenu";
-import { GlossaryFormAdvancedMatchingSettings } from "./GlossaryFormAdvancedMatchingSettings";
-import type {
-  GlossaryEntryDraft,
-  GlossaryFormDraft
+import { GlossaryAtomMatchFlagsEditor } from "./GlossaryAtomMatchFlagsEditor";
+import {
+  glossaryEntryDraftValidity,
+  representativeGlossaryAtomDraft,
+  type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
-import { canonicalGlossarySurface } from "./glossaryPresentation";
+import { representativeGlossarySurface } from "./glossaryPresentation";
+import { GlossaryTagChip } from "./GlossaryTagChip";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 
-const warningPolicyTranslationKeys: Record<
-  GlossaryWarningPolicy,
-  TranslationKey
-> = {
-  default: "glossaryEditor.warningPolicy.default",
-  ignore: "glossaryEditor.warningPolicy.ignore",
-  warn: "glossaryEditor.warningPolicy.warn"
-};
-
 interface GlossaryEditorProps {
   draft: GlossaryEntryDraft;
+  /** Every tag defined in the project, for the attach/detach picker. */
+  availableTags: readonly GlossaryTag[];
   translate: Translate;
-  onChangeKind: (kind: GlossaryEntryKind) => void;
   onChangeDescription: (description: string) => void;
-  onChangeCanonicalSurface: (surface: string) => void;
-  onChangeCanonicalMatchBoundaryStart: (
-    matchBoundaryStart: GlossaryFormMatchBoundary
-  ) => void;
-  onChangeCanonicalMatchBoundaryEnd: (
-    matchBoundaryEnd: GlossaryFormMatchBoundary
-  ) => void;
-  onChangeCanonicalAllowSingleCharacterMatch: (value: boolean) => void;
-  onAddForm: (relation: GlossaryFormRelation) => void;
-  onChangeFormSurface: (formId: string, surface: string) => void;
-  onChangeFormWarningPolicy: (
-    formId: string,
-    warningPolicy: GlossaryWarningPolicy
-  ) => void;
-  onChangeFormMatchBoundaryStart: (
-    formId: string,
-    matchBoundaryStart: GlossaryFormMatchBoundary
-  ) => void;
-  onChangeFormMatchBoundaryEnd: (
-    formId: string,
-    matchBoundaryEnd: GlossaryFormMatchBoundary
-  ) => void;
-  onChangeFormAllowSingleCharacterMatch: (
-    formId: string,
-    value: boolean
-  ) => void;
-  onDeleteForm: (formId: string) => void;
+  onAddAtom: () => void;
+  onChangeAtomValue: (atomId: string, value: string) => void;
+  onChangeAtomMatchFlags: (atomId: string, matchFlags: number) => void;
+  onDeleteAtom: (atomId: string) => void;
+  onMoveAtom: (atomId: string, direction: "up" | "down") => void;
+  onToggleTag: (tagId: string) => void;
   onDeleteEntry: () => void;
   onNavigateToPreviousOccurrence: () => void;
   onNavigateToNextOccurrence: () => void;
@@ -67,107 +33,26 @@ interface GlossaryEditorProps {
 
 export function GlossaryEditor({
   draft,
+  availableTags,
   translate,
-  onChangeKind,
   onChangeDescription,
-  onChangeCanonicalSurface,
-  onChangeCanonicalMatchBoundaryStart,
-  onChangeCanonicalMatchBoundaryEnd,
-  onChangeCanonicalAllowSingleCharacterMatch,
-  onAddForm,
-  onChangeFormSurface,
-  onChangeFormWarningPolicy,
-  onChangeFormMatchBoundaryStart,
-  onChangeFormMatchBoundaryEnd,
-  onChangeFormAllowSingleCharacterMatch,
-  onDeleteForm,
+  onAddAtom,
+  onChangeAtomValue,
+  onChangeAtomMatchFlags,
+  onDeleteAtom,
+  onMoveAtom,
+  onToggleTag,
   onDeleteEntry,
   onNavigateToPreviousOccurrence,
   onNavigateToNextOccurrence,
   readOnly = false
 }: GlossaryEditorProps): JSX.Element {
-  const entry = draft.entry;
-  const title = draft.canonicalSurface.trim() || canonicalGlossarySurface(entry);
+  const title =
+    representativeGlossaryAtomDraft(draft)?.value.trim() ||
+    representativeGlossarySurface(draft.entry);
   const descriptionHtml = markdownPreviewRenderer.render(draft.description);
-  const aliases = draft.forms.filter((form) => form.relation === "alias");
-  const variants = draft.forms.filter((form) => form.relation === "variant");
-
-  function renderFormRows(forms: GlossaryFormDraft[]): JSX.Element[] {
-    return forms.map((form) => (
-      <div className="glossaryEditorFormRow" key={form.id}>
-        <div className="glossaryEditorFormRowMain">
-          <input
-            type="text"
-            value={form.surface}
-            readOnly={readOnly}
-            {...{
-              [pergamumContextSurfaceAttribute]: "glossaryFormSurface"
-            }}
-            onChange={(event) =>
-              !readOnly
-                ? onChangeFormSurface(form.id, event.target.value)
-                : undefined
-            }
-          />
-          <select
-            value={form.warningPolicy}
-            aria-label={translate("glossaryEditor.warningPolicy")}
-            disabled={readOnly}
-            onChange={(event) =>
-              !readOnly
-                ? onChangeFormWarningPolicy(
-                    form.id,
-                    event.target.value as GlossaryWarningPolicy
-                  )
-                : undefined
-            }
-          >
-            {glossaryWarningPolicies.map((warningPolicy) => (
-              <option key={warningPolicy} value={warningPolicy}>
-                {translate(warningPolicyTranslationKeys[warningPolicy])}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="glossaryEditorRemoveFormButton"
-            aria-label={translate("glossaryEditor.removeForm")}
-            title={translate("glossaryEditor.removeForm")}
-            disabled={readOnly}
-            onClick={() => {
-              if (!readOnly) {
-                onDeleteForm(form.id);
-              }
-            }}
-          >
-            <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteIcon }} />
-          </button>
-        </div>
-        <GlossaryFormAdvancedMatchingSettings
-          matchBoundaryStart={form.matchBoundaryStart}
-          matchBoundaryEnd={form.matchBoundaryEnd}
-          allowSingleCharacterMatch={form.allowSingleCharacterMatch}
-          translate={translate}
-          readOnly={readOnly}
-          onChangeMatchBoundaryStart={(matchBoundaryStart) =>
-            !readOnly
-              ? onChangeFormMatchBoundaryStart(form.id, matchBoundaryStart)
-              : undefined
-          }
-          onChangeMatchBoundaryEnd={(matchBoundaryEnd) =>
-            !readOnly
-              ? onChangeFormMatchBoundaryEnd(form.id, matchBoundaryEnd)
-              : undefined
-          }
-          onChangeAllowSingleCharacterMatch={(value) =>
-            !readOnly
-              ? onChangeFormAllowSingleCharacterMatch(form.id, value)
-              : undefined
-          }
-        />
-      </div>
-    ));
-  }
+  const validity = glossaryEntryDraftValidity(draft);
+  const attachedTagIds = new Set(draft.tagIds);
 
   return (
     <section
@@ -176,24 +61,6 @@ export function GlossaryEditor({
     >
       <header className="glossaryEditorHeader">
         <h1>{title}</h1>
-        <label className="glossaryEditorKindField">
-          <span>{translate("glossaryEditor.kind")}</span>
-          <select
-            value={draft.kind}
-            disabled={readOnly}
-            onChange={(event) =>
-              !readOnly
-                ? onChangeKind(event.target.value as GlossaryEntryKind)
-                : undefined
-            }
-          >
-            {glossaryEntryKinds.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind}
-              </option>
-            ))}
-          </select>
-        </label>
         <button
           type="button"
           className="glossaryEditorOccurrenceButton"
@@ -224,92 +91,156 @@ export function GlossaryEditor({
             }
           }}
         >
-          <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteIcon }} />
+          <span
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: deleteIcon }}
+          />
         </button>
       </header>
 
       <section className="glossaryEditorSection">
-        <h2>{translate("glossaryEditor.forms")}</h2>
-        <div className="glossaryEditorCanonicalField">
-          <label className="glossaryEditorCanonicalFieldMain">
-            <span>{translate("glossaryEditor.canonicalSurface")}</span>
-            <input
-              type="text"
-              required
-              value={draft.canonicalSurface}
-              readOnly={readOnly}
-              {...{
-                [pergamumContextSurfaceAttribute]: "glossaryCanonicalInput"
-              }}
-              onChange={(event) =>
-                !readOnly
-                  ? onChangeCanonicalSurface(event.target.value)
-                  : undefined
-              }
-            />
-          </label>
-          <GlossaryFormAdvancedMatchingSettings
-            key={draft.entry.id}
-            matchBoundaryStart={draft.canonicalMatchBoundaryStart}
-            matchBoundaryEnd={draft.canonicalMatchBoundaryEnd}
-            allowSingleCharacterMatch={draft.canonicalAllowSingleCharacterMatch}
-            translate={translate}
-            readOnly={readOnly}
-            onChangeMatchBoundaryStart={(matchBoundaryStart) => {
-              if (!readOnly) {
-                onChangeCanonicalMatchBoundaryStart(matchBoundaryStart);
-              }
-            }}
-            onChangeMatchBoundaryEnd={(matchBoundaryEnd) => {
-              if (!readOnly) {
-                onChangeCanonicalMatchBoundaryEnd(matchBoundaryEnd);
-              }
-            }}
-            onChangeAllowSingleCharacterMatch={(value) => {
-              if (!readOnly) {
-                onChangeCanonicalAllowSingleCharacterMatch(value);
-              }
-            }}
-          />
-        </div>
+        <h2>{translate("glossaryEditor.atoms.heading")}</h2>
+        <ol className="glossaryEditorAtoms">
+          {draft.atoms.map((atom, index) => (
+            <li className="glossaryEditorAtomRow" key={atom.id}>
+              <div className="glossaryEditorAtomRowMain">
+                {index === 0 ? (
+                  <span className="glossaryEditorAtomRepresentativeBadge">
+                    {translate("glossaryEditor.atoms.representative")}
+                  </span>
+                ) : null}
+                <input
+                  type="text"
+                  className="glossaryEditorAtomValue"
+                  value={atom.value}
+                  aria-label={translate("glossaryEditor.atoms.value")}
+                  readOnly={readOnly}
+                  {...{
+                    [pergamumContextSurfaceAttribute]: "glossaryAtomValue"
+                  }}
+                  onChange={(event) => {
+                    if (!readOnly) {
+                      onChangeAtomValue(atom.id, event.target.value);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="glossaryEditorAtomMoveButton"
+                  aria-label={translate("glossaryEditor.atoms.moveUp")}
+                  title={translate("glossaryEditor.atoms.moveUp")}
+                  disabled={readOnly || index === 0}
+                  onClick={() => {
+                    if (!readOnly) {
+                      onMoveAtom(atom.id, "up");
+                    }
+                  }}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="glossaryEditorAtomMoveButton"
+                  aria-label={translate("glossaryEditor.atoms.moveDown")}
+                  title={translate("glossaryEditor.atoms.moveDown")}
+                  disabled={readOnly || index === draft.atoms.length - 1}
+                  onClick={() => {
+                    if (!readOnly) {
+                      onMoveAtom(atom.id, "down");
+                    }
+                  }}
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="glossaryEditorAtomRemoveButton"
+                  aria-label={translate("glossaryEditor.atoms.remove")}
+                  title={translate("glossaryEditor.atoms.remove")}
+                  disabled={readOnly || draft.atoms.length === 1}
+                  onClick={() => {
+                    if (!readOnly) {
+                      onDeleteAtom(atom.id);
+                    }
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    dangerouslySetInnerHTML={{ __html: deleteIcon }}
+                  />
+                </button>
+              </div>
+              <GlossaryAtomMatchFlagsEditor
+                matchFlags={atom.matchFlags}
+                translate={translate}
+                readOnly={readOnly}
+                onChange={(matchFlags) =>
+                  onChangeAtomMatchFlags(atom.id, matchFlags)
+                }
+              />
+            </li>
+          ))}
+        </ol>
+        <button
+          type="button"
+          className="glossaryEditorAddAtom"
+          disabled={readOnly}
+          onClick={() => {
+            if (!readOnly) {
+              onAddAtom();
+            }
+          }}
+        >
+          {translate("glossaryEditor.atoms.add")}
+        </button>
+        {!validity.ok ? (
+          <p className="glossaryEditorValidityMessage" role="alert">
+            {translate(
+              validity.reason === "noAtoms"
+                ? "glossaryEditor.validity.noAtoms"
+                : "glossaryEditor.validity.duplicateAtomValue"
+            )}
+          </p>
+        ) : null}
+      </section>
 
-        <div className="glossaryEditorFormGroup">
-          <h3>{translate("glossaryEditor.aliases")}</h3>
-          <div className="glossaryEditorForms">
-            {renderFormRows(aliases)}
-          </div>
-          <button
-            type="button"
-            className="glossaryEditorAddForm"
-            disabled={readOnly}
-            onClick={() => {
-              if (!readOnly) {
-                onAddForm("alias");
-              }
-            }}
-          >
-            {translate("glossaryEditor.addAlias")}
-          </button>
-        </div>
+      <section className="glossaryEditorSection glossaryEditorTags">
+        <h2>{translate("glossaryEditor.tags.heading")}</h2>
+        {availableTags.length === 0 ? (
+          <p className="glossaryEditorTagsEmpty">
+            {translate("glossaryEditor.tags.noProjectTags")}
+          </p>
+        ) : (
+          <ul className="glossaryEditorTagList">
+            {availableTags.map((tag) => {
+              const attached = attachedTagIds.has(tag.id);
 
-        <div className="glossaryEditorFormGroup">
-          <h3>{translate("glossaryEditor.variants")}</h3>
-          <div className="glossaryEditorForms">
-            {renderFormRows(variants)}
-          </div>
-          <button
-            type="button"
-            className="glossaryEditorAddForm"
-            disabled={readOnly}
-            onClick={() => {
-              if (!readOnly) {
-                onAddForm("variant");
-              }
-            }}
-          >
-            {translate("glossaryEditor.addVariant")}
-          </button>
-        </div>
+              return (
+                <li key={tag.id}>
+                  <button
+                    type="button"
+                    className="glossaryEditorTagToggle"
+                    aria-pressed={attached}
+                    aria-label={translate("glossaryEditor.tags.toggle")}
+                    disabled={readOnly}
+                    onClick={() => {
+                      if (!readOnly) {
+                        onToggleTag(tag.id);
+                      }
+                    }}
+                  >
+                    <GlossaryTagChip tag={tag} muted={!attached} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {availableTags.length > 0 && draft.tagIds.length === 0 ? (
+          <p className="glossaryEditorTagsEmpty">
+            {translate("glossaryEditor.tags.empty")}
+          </p>
+        ) : null}
       </section>
 
       <section className="glossaryEditorSection glossaryEditorDescription">

@@ -2236,84 +2236,15 @@ label.settingsItemHeader {
   contain-intrinsic-size: auto 120px;
 }
 
+/*
+ * #375 PoC: body-text matches are still marked so readers can see which
+ * surfaces resolve to a glossary entry, but there is no hover card / tooltip
+ * — the sidebar and occurrence navigation are the only glossary affordances
+ * on the reading surface.
+ */
 .glossarySurfaceDecoration {
   border-bottom: 1px dotted #326da8;
   background: rgba(50, 109, 168, 0.08);
-  cursor: help;
-}
-
-.glossaryHoverCardLayer {
-  position: fixed;
-  z-index: 30;
-  width: min(320px, calc(100vw - 16px));
-  pointer-events: none;
-}
-
-.glossaryHoverCard {
-  border: 1px solid var(--workspace-sidebar-border);
-  border-radius: 6px;
-  background: #ffffff;
-  box-shadow: 0 10px 28px rgba(15, 36, 56, 0.18);
-  color: #25313d;
-  font-size: 12px;
-  line-height: 1.45;
-  max-height: min(360px, calc(100vh - 16px));
-  overflow: auto;
-  padding: 10px 12px;
-}
-
-.glossaryHoverCardTitle,
-.glossaryHoverCardCandidateTitle {
-  color: #17212b;
-  font-size: 14px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.glossaryHoverCardCount {
-  color: var(--workspace-sidebar-muted-foreground);
-  margin-top: 2px;
-}
-
-.glossaryHoverCardMeta {
-  display: grid;
-  gap: 3px;
-  margin-top: 6px;
-}
-
-.glossaryHoverCardMetaRow {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 8px;
-}
-
-.glossaryHoverCardMetaLabel {
-  color: var(--workspace-sidebar-muted-foreground);
-}
-
-.glossaryHoverCardMetaValue {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.glossaryHoverCardDescription {
-  margin: 8px 0 0;
-  color: #52616f;
-  overflow-wrap: anywhere;
-}
-
-.glossaryHoverCardCandidates {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-}
-
-.glossaryHoverCardCandidate + .glossaryHoverCardCandidate {
-  border-top: 1px solid var(--workspace-sidebar-divider);
-  padding-top: 8px;
 }
 
 .glossaryEditor {
@@ -2338,33 +2269,6 @@ label.settingsItemHeader {
   color: #17212b;
   font-size: 28px;
   line-height: 1.2;
-}
-
-.glossaryEditorKind {
-  flex: 0 0 auto;
-  border: 1px solid #cbd5df;
-  border-radius: 4px;
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  padding: 5px 7px;
-}
-
-.glossaryEditorKindField {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.glossaryEditorKindField select {
-  border: 1px solid #cbd5df;
-  border-radius: 4px;
-  padding: 5px 7px;
 }
 
 .glossaryEditorOccurrenceButton {
@@ -2610,6 +2514,271 @@ label.settingsItemHeader {
   margin: 0;
   color: #6b7785;
   font-size: 14px;
+}
+
+/* #375: atom / tag / match-flags editor */
+.glossaryEditorAtoms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.glossaryEditorAtomRow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+
+.glossaryEditorAtomRowMain {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.glossaryEditorAtomValue {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.glossaryEditorAtomRepresentativeBadge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #e3edf7;
+  padding: 2px 8px;
+  color: #25313d;
+  font-size: 12px;
+}
+
+.glossaryEditorAtomMoveButton,
+.glossaryEditorAtomRemoveButton {
+  flex: 0 0 auto;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  background: #fff;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.glossaryEditorAtomMoveButton:disabled,
+.glossaryEditorAtomRemoveButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.glossaryEditorAtomRemoveButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.glossaryEditorAtomMatchFlags {
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.glossaryEditorAtomMatchFlags legend {
+  padding: 0 4px;
+  color: #6b7785;
+  font-size: 12px;
+}
+
+.glossaryEditorAtomMatchFlagsField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.glossaryEditorAddAtom {
+  border: 1px dashed #b6c2ce;
+  border-radius: 4px;
+  background: #f7f9fb;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.glossaryEditorAddAtom:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.glossaryEditorValidityMessage {
+  margin: 6px 0 0;
+  color: #b4232a;
+  font-size: 13px;
+}
+
+.glossaryEditorTagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.glossaryEditorTagToggle {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.glossaryEditorTagToggle[aria-pressed="true"] {
+  border-color: #25313d;
+}
+
+.glossaryEditorTagToggle:disabled {
+  cursor: default;
+}
+
+.glossaryEditorTagsEmpty {
+  margin: 6px 0 0;
+  color: #6b7785;
+  font-size: 13px;
+}
+
+.glossaryTagChip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/*
+ * #375: the "no tags" marker in a Glossary sidebar row. A UI-only state, not a
+ * real tag — deliberately flat / neutral (no chip colours) so it never reads
+ * as a GlossaryTag.
+ */
+.glossarySidebarNoTagsChip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px dashed var(--workspace-sidebar-border, #c4ccd6);
+  border-radius: 4px;
+  color: var(--workspace-sidebar-muted-foreground, #6b7785);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/* #375: Glossary tag manager + editor */
+.glossaryTagManager {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.glossaryTagManagerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.glossaryTagManagerList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.glossaryTagManagerRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.glossaryTagManagerEmpty {
+  margin: 0;
+  color: #6b7785;
+  font-size: 13px;
+}
+
+.glossaryTagEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #d7dee6;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.glossaryTagEditorField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.glossaryTagEditorColorField {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.glossaryTagEditorColorInput {
+  width: 10ch;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-family: ui-monospace, monospace;
+}
+
+.glossaryTagEditorColorAction,
+.glossaryTagManagerNew,
+.glossaryTagManagerEdit,
+.glossaryTagManagerDelete,
+.glossaryTagEditorSave,
+.glossaryTagEditorCancel {
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  background: #fff;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.glossaryTagEditorColorAction:disabled,
+.glossaryTagEditorSave:disabled,
+.glossaryTagEditorCancel:disabled,
+.glossaryTagManagerNew:disabled,
+.glossaryTagManagerEdit:disabled,
+.glossaryTagManagerDelete:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.glossaryTagEditorPreview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b7785;
+}
+
+.glossaryTagEditorValidity {
+  margin: 0;
+  color: #b4232a;
+  font-size: 13px;
+}
+
+.glossaryTagEditorActions {
+  display: flex;
+  gap: 8px;
 }
 
 .statusBar {

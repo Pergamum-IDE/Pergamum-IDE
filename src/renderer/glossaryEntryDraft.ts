@@ -1,210 +1,61 @@
+/**
+ * #375 PoC: editable draft state for a Glossary entry — atoms + tags +
+ * description. No `kind`, no canonical/alias/variant forms.
+ *
+ *   - `atoms`: `1..n` ordered `GlossaryAtomDraft`. Index 0 is the
+ *     REPRESENTATIVE atom (`sortOrder = 0`); array order is `sortOrder`.
+ *   - `tagIds`: `0..n` attached tag ids.
+ */
+
 import type {
-  GlossaryFormMatchBoundary,
+  GlossaryAtomInput,
   GlossaryEntry,
-  GlossaryEntryKind,
-  GlossaryFormId,
-  GlossaryFormRelation,
-  GlossaryNonCanonicalForm,
-  GlossaryWarningPolicy,
+  GlossaryTagId,
   UpdateGlossaryEntryInput
 } from "../shared/glossary";
-import { DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY } from "../shared/glossary";
 import type { EditorSaveState } from "./editorState";
 
-export interface GlossaryFormDraft {
+export interface GlossaryAtomDraft {
+  /** `local:<uuid>` for a not-yet-persisted atom, else the real atom id. */
   id: string;
-  surface: string;
-  relation: GlossaryFormRelation;
-  warningPolicy: GlossaryWarningPolicy;
-  matchBoundaryStart: GlossaryFormMatchBoundary;
-  matchBoundaryEnd: GlossaryFormMatchBoundary;
-  allowSingleCharacterMatch: boolean;
+  value: string;
+  matchFlags: number;
 }
 
 export interface GlossaryEntryDraft {
   entry: GlossaryEntry;
-  canonicalSurface: string;
-  canonicalMatchBoundaryStart: GlossaryFormMatchBoundary;
-  canonicalMatchBoundaryEnd: GlossaryFormMatchBoundary;
-  canonicalAllowSingleCharacterMatch: boolean;
-  kind: GlossaryEntryKind;
   description: string;
-  forms: GlossaryFormDraft[];
+  atoms: GlossaryAtomDraft[];
+  tagIds: GlossaryTagId[];
   saveState: EditorSaveState;
 }
 
-export interface NormalizedGlossaryFormForComparison {
-  surface: string;
-  relation: GlossaryFormRelation;
-  warningPolicy: GlossaryWarningPolicy;
-  matchBoundaryStart: GlossaryFormMatchBoundary;
-  matchBoundaryEnd: GlossaryFormMatchBoundary;
-  allowSingleCharacterMatch: boolean;
-}
-
 function fallbackRandomId(): string {
-  return `${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2)}`;
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function createLocalGlossaryFormId(): string {
+export function createLocalGlossaryAtomId(): string {
   const randomUUID = globalThis.crypto?.randomUUID?.() ?? fallbackRandomId();
 
   return `local:${randomUUID}`;
 }
 
-export function isLocalGlossaryFormId(id: string): boolean {
+export function isLocalGlossaryAtomId(id: string): boolean {
   return id.startsWith("local:");
 }
 
-function canonicalFormOf(
-  entry: GlossaryEntry
-): GlossaryEntry["forms"][number] | undefined {
-  return entry.forms.find((form) => form.isCanonical === true);
-}
-
-function canonicalSurfaceOf(entry: GlossaryEntry): string {
-  return canonicalFormOf(entry)?.surface ?? "";
-}
-
-function canonicalMatchBoundaryStartOf(
-  entry: GlossaryEntry
-): GlossaryFormMatchBoundary {
-  return canonicalFormOf(entry)?.matchBoundaryStart ??
-    DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
-}
-
-function canonicalMatchBoundaryEndOf(
-  entry: GlossaryEntry
-): GlossaryFormMatchBoundary {
-  return canonicalFormOf(entry)?.matchBoundaryEnd ??
-    DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
-}
-
-function canonicalAllowSingleCharacterMatchOf(entry: GlossaryEntry): boolean {
-  return canonicalFormOf(entry)?.allowSingleCharacterMatch ?? false;
-}
-
-function isNonCanonicalGlossaryForm(
-  form: GlossaryEntry["forms"][number]
-): form is GlossaryNonCanonicalForm {
-  return form.isCanonical === false;
-}
-
-function glossaryFormDraftsFromEntry(
-  entry: GlossaryEntry
-): GlossaryFormDraft[] {
-  return entry.forms
-    .filter(isNonCanonicalGlossaryForm)
-    .map((form) => ({
-      id: form.id,
-      surface: form.surface,
-      relation: form.relation,
-      warningPolicy: form.warningPolicy,
-      matchBoundaryStart: form.matchBoundaryStart,
-      matchBoundaryEnd: form.matchBoundaryEnd,
-      allowSingleCharacterMatch: form.allowSingleCharacterMatch
+function atomDraftsFromEntry(entry: GlossaryEntry): GlossaryAtomDraft[] {
+  return [...entry.atoms]
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((atom) => ({
+      id: atom.id,
+      value: atom.value,
+      matchFlags: atom.matchFlags
     }));
 }
 
-function compareNormalizedGlossaryForms(
-  left: NormalizedGlossaryFormForComparison,
-  right: NormalizedGlossaryFormForComparison
-): number {
-  return (
-    left.relation.localeCompare(right.relation) ||
-    left.surface.localeCompare(right.surface) ||
-    left.warningPolicy.localeCompare(right.warningPolicy) ||
-    left.matchBoundaryStart.localeCompare(right.matchBoundaryStart) ||
-    left.matchBoundaryEnd.localeCompare(right.matchBoundaryEnd) ||
-    Number(left.allowSingleCharacterMatch) -
-      Number(right.allowSingleCharacterMatch)
-  );
-}
-
-export function normalizeGlossaryFormsForComparison(
-  forms: readonly {
-    surface: string;
-    relation: GlossaryFormRelation;
-    warningPolicy: GlossaryWarningPolicy;
-    matchBoundaryStart: GlossaryFormMatchBoundary;
-    matchBoundaryEnd: GlossaryFormMatchBoundary;
-    allowSingleCharacterMatch: boolean;
-  }[]
-): NormalizedGlossaryFormForComparison[] {
-  return forms
-    .map((form) => ({
-      surface: form.surface.trim(),
-      relation: form.relation,
-      warningPolicy: form.warningPolicy,
-      matchBoundaryStart: form.matchBoundaryStart,
-      matchBoundaryEnd: form.matchBoundaryEnd,
-      allowSingleCharacterMatch: form.allowSingleCharacterMatch
-    }))
-    .sort(compareNormalizedGlossaryForms);
-}
-
-function areNormalizedGlossaryFormsEqual(
-  left: NormalizedGlossaryFormForComparison[],
-  right: NormalizedGlossaryFormForComparison[]
-): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((leftForm, index) => {
-    const rightForm = right[index];
-
-    return (
-      leftForm.surface === rightForm.surface &&
-      leftForm.relation === rightForm.relation &&
-      leftForm.warningPolicy === rightForm.warningPolicy &&
-      leftForm.matchBoundaryStart === rightForm.matchBoundaryStart &&
-      leftForm.matchBoundaryEnd === rightForm.matchBoundaryEnd &&
-      leftForm.allowSingleCharacterMatch ===
-        rightForm.allowSingleCharacterMatch
-    );
-  });
-}
-
-function reconciliationKey(form: {
-  surface: string;
-  relation: GlossaryFormRelation;
-}): string {
-  return `${form.relation}\u0000${form.surface.trim()}`;
-}
-
-function reconcileLocalGlossaryFormIds(
-  forms: GlossaryFormDraft[],
-  savedEntry: GlossaryEntry
-): GlossaryFormDraft[] {
-  const savedFormsByKey = new Map<string, GlossaryFormDraft>();
-
-  for (const form of glossaryFormDraftsFromEntry(savedEntry)) {
-    savedFormsByKey.set(reconciliationKey(form), form);
-  }
-
-  const usedSavedFormIds = new Set<GlossaryFormId>();
-
-  return forms.map((form) => {
-    if (!isLocalGlossaryFormId(form.id)) {
-      return form;
-    }
-
-    const savedForm = savedFormsByKey.get(reconciliationKey(form));
-
-    if (!savedForm || usedSavedFormIds.has(savedForm.id)) {
-      return form;
-    }
-
-    usedSavedFormIds.add(savedForm.id);
-
-    return {
-      ...form,
-      id: savedForm.id
-    };
-  });
+function tagIdsFromEntry(entry: GlossaryEntry): GlossaryTagId[] {
+  return entry.tags.map((tag) => tag.id);
 }
 
 export function createGlossaryEntryDraft(
@@ -212,37 +63,97 @@ export function createGlossaryEntryDraft(
 ): GlossaryEntryDraft {
   return {
     entry,
-    canonicalSurface: canonicalSurfaceOf(entry),
-    canonicalMatchBoundaryStart: canonicalMatchBoundaryStartOf(entry),
-    canonicalMatchBoundaryEnd: canonicalMatchBoundaryEndOf(entry),
-    canonicalAllowSingleCharacterMatch:
-      canonicalAllowSingleCharacterMatchOf(entry),
-    kind: entry.kind,
     description: entry.description,
-    forms: glossaryFormDraftsFromEntry(entry),
+    atoms: atomDraftsFromEntry(entry),
+    tagIds: tagIdsFromEntry(entry),
     saveState: "clean"
   };
 }
 
-export function isGlossaryEntryDraftDirty(draft: GlossaryEntryDraft): boolean {
-  const savedForms = normalizeGlossaryFormsForComparison(
-    glossaryFormDraftsFromEntry(draft.entry)
-  );
-  const draftForms = normalizeGlossaryFormsForComparison(draft.forms);
+/** The representative atom draft — index 0, mirroring `sortOrder = 0`. */
+export function representativeGlossaryAtomDraft(
+  draft: GlossaryEntryDraft
+): GlossaryAtomDraft | null {
+  return draft.atoms[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Dirty detection
+// ---------------------------------------------------------------------------
+
+function normalizedAtomsForComparison(
+  atoms: readonly GlossaryAtomDraft[]
+): { value: string; matchFlags: number }[] {
+  return atoms.map((atom) => ({
+    value: atom.value.trim(),
+    matchFlags: atom.matchFlags
+  }));
+}
+
+function atomsEqual(
+  left: readonly GlossaryAtomDraft[],
+  right: readonly GlossaryAtomDraft[]
+): boolean {
+  const a = normalizedAtomsForComparison(left);
+  const b = normalizedAtomsForComparison(right);
 
   return (
-    draft.kind !== draft.entry.kind ||
-    draft.description !== draft.entry.description ||
-    draft.canonicalSurface.trim() !== canonicalSurfaceOf(draft.entry).trim() ||
-    draft.canonicalMatchBoundaryStart !==
-      canonicalMatchBoundaryStartOf(draft.entry) ||
-    draft.canonicalMatchBoundaryEnd !==
-      canonicalMatchBoundaryEndOf(draft.entry) ||
-    draft.canonicalAllowSingleCharacterMatch !==
-      canonicalAllowSingleCharacterMatchOf(draft.entry) ||
-    !areNormalizedGlossaryFormsEqual(draftForms, savedForms)
+    a.length === b.length &&
+    a.every(
+      (atom, index) =>
+        atom.value === b[index].value &&
+        atom.matchFlags === b[index].matchFlags
+    )
   );
 }
+
+function tagIdsEqual(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    [...left].sort().every((tagId, index) => tagId === [...right].sort()[index])
+  );
+}
+
+export function isGlossaryEntryDraftDirty(draft: GlossaryEntryDraft): boolean {
+  return (
+    draft.description !== draft.entry.description ||
+    !atomsEqual(draft.atoms, atomDraftsFromEntry(draft.entry)) ||
+    !tagIdsEqual(draft.tagIds, tagIdsFromEntry(draft.entry))
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Validity (the editor blocks save when this is not "ok")
+// ---------------------------------------------------------------------------
+
+export type GlossaryEntryDraftValidity =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "noAtoms" | "duplicateAtomValue" };
+
+export function glossaryEntryDraftValidity(
+  draft: GlossaryEntryDraft
+): GlossaryEntryDraftValidity {
+  const values = draft.atoms
+    .map((atom) => atom.value.trim())
+    .filter((value) => value.length > 0);
+
+  if (values.length === 0) {
+    return { ok: false, reason: "noAtoms" };
+  }
+
+  if (new Set(values).size !== values.length) {
+    return { ok: false, reason: "duplicateAtomValue" };
+  }
+
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Mutations (all return a new draft with a recomputed save state)
+// ---------------------------------------------------------------------------
 
 function withRecomputedSaveState(
   draft: GlossaryEntryDraft
@@ -257,13 +168,6 @@ function withRecomputedSaveState(
   };
 }
 
-export function updateGlossaryEntryDraftKind(
-  draft: GlossaryEntryDraft,
-  kind: GlossaryEntryKind
-): GlossaryEntryDraft {
-  return withRecomputedSaveState({ ...draft, kind });
-}
-
 export function updateGlossaryEntryDraftDescription(
   draft: GlossaryEntryDraft,
   description: string
@@ -271,138 +175,94 @@ export function updateGlossaryEntryDraftDescription(
   return withRecomputedSaveState({ ...draft, description });
 }
 
-export function updateGlossaryEntryDraftCanonicalSurface(
-  draft: GlossaryEntryDraft,
-  canonicalSurface: string
-): GlossaryEntryDraft {
-  return withRecomputedSaveState({ ...draft, canonicalSurface });
-}
-
-export function updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
-  draft: GlossaryEntryDraft,
-  canonicalMatchBoundaryStart: GlossaryFormMatchBoundary
+export function addGlossaryEntryDraftAtom(
+  draft: GlossaryEntryDraft
 ): GlossaryEntryDraft {
   return withRecomputedSaveState({
     ...draft,
-    canonicalMatchBoundaryStart
-  });
-}
-
-export function updateGlossaryEntryDraftCanonicalMatchBoundaryEnd(
-  draft: GlossaryEntryDraft,
-  canonicalMatchBoundaryEnd: GlossaryFormMatchBoundary
-): GlossaryEntryDraft {
-  return withRecomputedSaveState({
-    ...draft,
-    canonicalMatchBoundaryEnd
-  });
-}
-
-export function updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch(
-  draft: GlossaryEntryDraft,
-  canonicalAllowSingleCharacterMatch: boolean
-): GlossaryEntryDraft {
-  return withRecomputedSaveState({
-    ...draft,
-    canonicalAllowSingleCharacterMatch
-  });
-}
-
-export function addGlossaryEntryDraftForm(
-  draft: GlossaryEntryDraft,
-  relation: GlossaryFormRelation
-): GlossaryEntryDraft {
-  return withRecomputedSaveState({
-    ...draft,
-    forms: [
-      ...draft.forms,
-      {
-        id: createLocalGlossaryFormId(),
-        surface: "",
-        relation,
-        warningPolicy: "default",
-        matchBoundaryStart: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-        matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-        allowSingleCharacterMatch: false
-      }
+    atoms: [
+      ...draft.atoms,
+      { id: createLocalGlossaryAtomId(), value: "", matchFlags: 0 }
     ]
   });
 }
 
-export function updateGlossaryEntryDraftFormSurface(
+export function updateGlossaryEntryDraftAtomValue(
   draft: GlossaryEntryDraft,
-  formId: string,
-  surface: string
+  atomId: string,
+  value: string
 ): GlossaryEntryDraft {
   return withRecomputedSaveState({
     ...draft,
-    forms: draft.forms.map((form) =>
-      form.id === formId ? { ...form, surface } : form
+    atoms: draft.atoms.map((atom) =>
+      atom.id === atomId ? { ...atom, value } : atom
     )
   });
 }
 
-export function updateGlossaryEntryDraftFormWarningPolicy(
+export function updateGlossaryEntryDraftAtomMatchFlags(
   draft: GlossaryEntryDraft,
-  formId: string,
-  warningPolicy: GlossaryWarningPolicy
+  atomId: string,
+  matchFlags: number
 ): GlossaryEntryDraft {
   return withRecomputedSaveState({
     ...draft,
-    forms: draft.forms.map((form) =>
-      form.id === formId ? { ...form, warningPolicy } : form
+    atoms: draft.atoms.map((atom) =>
+      atom.id === atomId ? { ...atom, matchFlags } : atom
     )
   });
 }
 
-export function updateGlossaryEntryDraftFormMatchBoundaryStart(
+export function deleteGlossaryEntryDraftAtom(
   draft: GlossaryEntryDraft,
-  formId: string,
-  matchBoundaryStart: GlossaryFormMatchBoundary
+  atomId: string
 ): GlossaryEntryDraft {
   return withRecomputedSaveState({
     ...draft,
-    forms: draft.forms.map((form) =>
-      form.id === formId ? { ...form, matchBoundaryStart } : form
-    )
+    atoms: draft.atoms.filter((atom) => atom.id !== atomId)
   });
 }
 
-export function updateGlossaryEntryDraftFormMatchBoundaryEnd(
+/** Move an atom one slot toward index 0 (up) or the end (down). */
+export function moveGlossaryEntryDraftAtom(
   draft: GlossaryEntryDraft,
-  formId: string,
-  matchBoundaryEnd: GlossaryFormMatchBoundary
+  atomId: string,
+  direction: "up" | "down"
+): GlossaryEntryDraft {
+  const index = draft.atoms.findIndex((atom) => atom.id === atomId);
+
+  if (index === -1) {
+    return draft;
+  }
+
+  const target = direction === "up" ? index - 1 : index + 1;
+
+  if (target < 0 || target >= draft.atoms.length) {
+    return draft;
+  }
+
+  const atoms = [...draft.atoms];
+  [atoms[index], atoms[target]] = [atoms[target], atoms[index]];
+
+  return withRecomputedSaveState({ ...draft, atoms });
+}
+
+/** Attach the tag if absent, detach it if present. */
+export function toggleGlossaryEntryDraftTag(
+  draft: GlossaryEntryDraft,
+  tagId: GlossaryTagId
 ): GlossaryEntryDraft {
   return withRecomputedSaveState({
     ...draft,
-    forms: draft.forms.map((form) =>
-      form.id === formId ? { ...form, matchBoundaryEnd } : form
-    )
+    tagIds: draft.tagIds.includes(tagId)
+      ? draft.tagIds.filter((id) => id !== tagId)
+      : [...draft.tagIds, tagId]
   });
 }
 
-export function updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
-  draft: GlossaryEntryDraft,
-  formId: string,
-  allowSingleCharacterMatch: boolean
-): GlossaryEntryDraft {
-  return withRecomputedSaveState({
-    ...draft,
-    forms: draft.forms.map((form) =>
-      form.id === formId ? { ...form, allowSingleCharacterMatch } : form
-    )
-  });
-}
-
-export function deleteGlossaryEntryDraftForm(
-  draft: GlossaryEntryDraft,
-  formId: string
-): GlossaryEntryDraft {
-  return withRecomputedSaveState({
-    ...draft,
-    forms: draft.forms.filter((form) => form.id !== formId)
-  });
-}
+// ---------------------------------------------------------------------------
+// Save lifecycle
+// ---------------------------------------------------------------------------
 
 export function markGlossaryEntryDraftSaving(
   draft: GlossaryEntryDraft
@@ -416,14 +276,40 @@ export function markGlossaryEntryDraftSaveFailed(
   return { ...draft, saveState: "saveFailed" };
 }
 
+/**
+ * Re-key `local:` atom drafts to the ids the store assigned, matching by
+ * trimmed value in order. Tags are re-derived from the saved entry.
+ */
 export function applyGlossaryEntryDraftSaveResult(
   draft: GlossaryEntryDraft,
   savedEntry: GlossaryEntry
 ): GlossaryEntryDraft {
+  const savedByValue = new Map<string, string>();
+  const usedSavedIds = new Set<string>();
+
+  for (const atom of savedEntry.atoms) {
+    savedByValue.set(atom.value.trim(), atom.id);
+  }
+
   const nextDraft: GlossaryEntryDraft = {
     ...draft,
     entry: savedEntry,
-    forms: reconcileLocalGlossaryFormIds(draft.forms, savedEntry)
+    tagIds: tagIdsFromEntry(savedEntry),
+    atoms: draft.atoms.map((atom) => {
+      if (!isLocalGlossaryAtomId(atom.id)) {
+        return atom;
+      }
+
+      const savedId = savedByValue.get(atom.value.trim());
+
+      if (!savedId || usedSavedIds.has(savedId)) {
+        return atom;
+      }
+
+      usedSavedIds.add(savedId);
+
+      return { ...atom, id: savedId };
+    })
   };
 
   return {
@@ -432,31 +318,26 @@ export function applyGlossaryEntryDraftSaveResult(
   };
 }
 
+function atomInputsFromDraft(
+  draft: GlossaryEntryDraft
+): GlossaryAtomInput[] {
+  return draft.atoms
+    .map((atom) => ({ ...atom, value: atom.value.trim() }))
+    .filter((atom) => atom.value.length > 0)
+    .map((atom) => ({
+      ...(isLocalGlossaryAtomId(atom.id) ? {} : { id: atom.id }),
+      value: atom.value,
+      matchFlags: atom.matchFlags
+    }));
+}
+
 export function glossaryEntryDraftUpdateInput(
   draft: GlossaryEntryDraft
 ): UpdateGlossaryEntryInput {
   return {
     id: draft.entry.id,
-    kind: draft.kind,
     description: draft.description,
-    canonicalSurface: draft.canonicalSurface.trim(),
-    matchBoundaryStart: draft.canonicalMatchBoundaryStart,
-    matchBoundaryEnd: draft.canonicalMatchBoundaryEnd,
-    allowSingleCharacterMatch: draft.canonicalAllowSingleCharacterMatch,
-    forms: draft.forms
-      .map((form) => ({
-        ...form,
-        surface: form.surface.trim()
-      }))
-      .filter((form) => form.surface.length > 0)
-      .map((form) => ({
-        id: isLocalGlossaryFormId(form.id) ? undefined : form.id,
-        surface: form.surface,
-        relation: form.relation,
-        warningPolicy: form.warningPolicy,
-        matchBoundaryStart: form.matchBoundaryStart,
-        matchBoundaryEnd: form.matchBoundaryEnd,
-        allowSingleCharacterMatch: form.allowSingleCharacterMatch
-      }))
+    atoms: atomInputsFromDraft(draft),
+    tagIds: [...draft.tagIds]
   };
 }
