@@ -750,6 +750,11 @@ export const enTranslations = {
   "settings.application.section.sound": "Sound",
   "settings.application.title": "Application Settings",
   "settings.documentMap.title": "Document Map",
+  "settings.documentMap.viewportLensOpacity.label": "Viewport lens opacity",
+  "settings.documentMap.viewportLensOpacity.description":
+    "Adjusts the opacity of the lens that indicates the currently visible editor range on the Document Map.",
+  "settings.documentMap.viewportLensOpacity.invalid":
+    "Enter a value between 0.1 and 0.9.",
   "settings.documentMap.narrationColor.label": "Narration color",
   "settings.documentMap.glossaryFallbackColor.label": "Untagged glossary color",
   "settings.documentMap.adjustTagColorsForVisibility.label":

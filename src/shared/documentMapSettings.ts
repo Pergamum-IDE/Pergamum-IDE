@@ -39,6 +39,13 @@ export interface DocumentMapSettings {
    * verbatim. The `glossaryFallbackColor` (untagged hit) is never adjusted.
    */
   adjustTagColorsForVisibility: boolean;
+  /**
+   * #375: alpha (`0.1`..`0.9`) of the viewport-lens FILL — the translucent pane
+   * marking the currently visible editor range on the Document Map. Only the
+   * fill; the lens border / edge colours stay fixed, and the lens colour itself
+   * (achromatic white) is not configurable.
+   */
+  viewportLensOpacity: number;
 }
 
 // The narration colour is a dark grey, not pure black — the document map reads
@@ -53,6 +60,13 @@ export const DOCUMENT_MAP_DEFAULT_DIALOGUE_COLOR = "#909090";
 // colours often disappear in the map otherwise.
 export const DOCUMENT_MAP_DEFAULT_ADJUST_TAG_COLORS_FOR_VISIBILITY = true;
 
+// #375: viewport-lens FILL alpha. `0.1`..`0.9`; the UI slider steps by `0.1`
+// but any value in range is accepted (a slider on a non-step start value, a
+// hand-edited settings.json). `0` (invisible) and `1` (opaque) are rejected.
+export const DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MIN = 0.1;
+export const DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MAX = 0.9;
+export const DOCUMENT_MAP_DEFAULT_VIEWPORT_LENS_OPACITY = 0.28;
+
 export function defaultDocumentMapDialogueDelimiterPairs(): DocumentMapDialogueDelimiterPair[] {
   return [
     { open: "「", close: "」", color: DOCUMENT_MAP_DEFAULT_DIALOGUE_COLOR }
@@ -65,8 +79,23 @@ export function defaultDocumentMapSettings(): DocumentMapSettings {
     glossaryFallbackColor: DOCUMENT_MAP_DEFAULT_GLOSSARY_FALLBACK_COLOR,
     dialogueDelimiterPairs: defaultDocumentMapDialogueDelimiterPairs(),
     adjustTagColorsForVisibility:
-      DOCUMENT_MAP_DEFAULT_ADJUST_TAG_COLORS_FOR_VISIBILITY
+      DOCUMENT_MAP_DEFAULT_ADJUST_TAG_COLORS_FOR_VISIBILITY,
+    viewportLensOpacity: DOCUMENT_MAP_DEFAULT_VIEWPORT_LENS_OPACITY
   };
+}
+
+/**
+ * `true` when `value` is a finite number in the viewport-lens opacity range
+ * (`0.1`..`0.9`, inclusive). Shared by the strict parse and the Settings UI's
+ * live text-input validation.
+ */
+export function isValidViewportLensOpacity(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MIN &&
+    value <= DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MAX
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -187,11 +216,24 @@ export function parseDocumentMapSettingsForWrite(
     adjustTagColorsForVisibility = value.adjustTagColorsForVisibility;
   }
 
+  let viewportLensOpacity = defaults.viewportLensOpacity;
+  if (value.viewportLensOpacity !== undefined) {
+    if (!isValidViewportLensOpacity(value.viewportLensOpacity)) {
+      throw new DocumentMapSettingsError(
+        `documentMap.viewportLensOpacity must be a number between ` +
+          `${DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MIN} and ` +
+          `${DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MAX}.`
+      );
+    }
+    viewportLensOpacity = value.viewportLensOpacity;
+  }
+
   return {
     narrationColor,
     glossaryFallbackColor,
     dialogueDelimiterPairs,
-    adjustTagColorsForVisibility
+    adjustTagColorsForVisibility,
+    viewportLensOpacity
   };
 }
 
@@ -233,11 +275,28 @@ export function readDocumentMapSettings(value: unknown): DocumentMapSettings {
       ? value.adjustTagColorsForVisibility
       : defaults.adjustTagColorsForVisibility;
 
+  // Tolerant: a finite number outside range is clamped, anything else falls
+  // back to the default.
+  let viewportLensOpacity = defaults.viewportLensOpacity;
+  if (
+    typeof value.viewportLensOpacity === "number" &&
+    Number.isFinite(value.viewportLensOpacity)
+  ) {
+    viewportLensOpacity = Math.max(
+      DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MIN,
+      Math.min(
+        DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MAX,
+        value.viewportLensOpacity
+      )
+    );
+  }
+
   return {
     narrationColor,
     glossaryFallbackColor,
     dialogueDelimiterPairs,
-    adjustTagColorsForVisibility
+    adjustTagColorsForVisibility,
+    viewportLensOpacity
   };
 }
 

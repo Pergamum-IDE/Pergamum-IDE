@@ -3,8 +3,10 @@ import {
   DOCUMENT_MAP_DEFAULT_ADJUST_TAG_COLORS_FOR_VISIBILITY,
   DOCUMENT_MAP_DEFAULT_GLOSSARY_FALLBACK_COLOR,
   DOCUMENT_MAP_DEFAULT_NARRATION_COLOR,
+  DOCUMENT_MAP_DEFAULT_VIEWPORT_LENS_OPACITY,
   DocumentMapSettingsError,
   defaultDocumentMapSettings,
+  isValidViewportLensOpacity,
   normalizeDocumentMapColor,
   parseDocumentMapSettingsForWrite,
   readDocumentMapSettings,
@@ -12,18 +14,20 @@ import {
 } from "../../src/shared/documentMapSettings";
 
 describe("defaultDocumentMapSettings (#375)", () => {
-  it("has the dark-grey narration / red fallback colours, one grey 「」 pair, and tag-colour adjustment ON", () => {
+  it("has the dark-grey narration / red fallback colours, one grey 「」 pair, tag-colour adjustment ON, and 0.28 lens opacity", () => {
     expect(defaultDocumentMapSettings()).toEqual({
       narrationColor: "#3c3c3c",
       glossaryFallbackColor: "#ff0000",
       dialogueDelimiterPairs: [
         { open: "「", close: "」", color: "#909090" }
       ],
-      adjustTagColorsForVisibility: true
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
     });
     expect(DOCUMENT_MAP_DEFAULT_NARRATION_COLOR).toBe("#3c3c3c");
     expect(DOCUMENT_MAP_DEFAULT_GLOSSARY_FALLBACK_COLOR).toBe("#ff0000");
     expect(DOCUMENT_MAP_DEFAULT_ADJUST_TAG_COLORS_FOR_VISIBILITY).toBe(true);
+    expect(DOCUMENT_MAP_DEFAULT_VIEWPORT_LENS_OPACITY).toBe(0.28);
   });
 });
 
@@ -58,8 +62,9 @@ describe("parseDocumentMapSettingsForWrite (#375, strict)", () => {
         { open: "「", close: "」", color: "#0000ff" },
         { open: "『", close: "』", color: "#7c3aed" }
       ],
-      // omitted → the built-in default (ON)
-      adjustTagColorsForVisibility: true
+      // omitted → the built-in defaults (adjustment ON, 0.28 opacity)
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
     });
   });
 
@@ -125,6 +130,53 @@ describe("parseDocumentMapSettingsForWrite (#375, strict)", () => {
       parseDocumentMapSettingsForWrite({ ...valid, dialogueDelimiterPairs: {} })
     ).toThrow(DocumentMapSettingsError);
   });
+
+  it("#375: accepts a viewportLensOpacity in 0.1..0.9 and rejects anything else", () => {
+    for (const ok of [0.1, 0.28, 0.5, 0.9]) {
+      expect(
+        parseDocumentMapSettingsForWrite({ ...valid, viewportLensOpacity: ok })
+          .viewportLensOpacity
+      ).toBe(ok);
+    }
+    for (const bad of [
+      0,
+      1,
+      -0.5,
+      1.5,
+      "0.5",
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      null
+    ]) {
+      expect(() =>
+        parseDocumentMapSettingsForWrite({
+          ...valid,
+          viewportLensOpacity: bad
+        })
+      ).toThrow(DocumentMapSettingsError);
+    }
+  });
+
+  it("#375: an omitted viewportLensOpacity falls back to 0.28", () => {
+    expect(
+      parseDocumentMapSettingsForWrite(valid).viewportLensOpacity
+    ).toBe(0.28);
+  });
+});
+
+describe("isValidViewportLensOpacity (#375)", () => {
+  it("is true only for a finite number in 0.1..0.9 (inclusive)", () => {
+    expect(isValidViewportLensOpacity(0.1)).toBe(true);
+    expect(isValidViewportLensOpacity(0.9)).toBe(true);
+    expect(isValidViewportLensOpacity(0.28)).toBe(true);
+    expect(isValidViewportLensOpacity(0)).toBe(false);
+    expect(isValidViewportLensOpacity(1)).toBe(false);
+    expect(isValidViewportLensOpacity(-0.2)).toBe(false);
+    expect(isValidViewportLensOpacity(Number.NaN)).toBe(false);
+    expect(isValidViewportLensOpacity(Number.POSITIVE_INFINITY)).toBe(false);
+    expect(isValidViewportLensOpacity("0.5")).toBe(false);
+    expect(isValidViewportLensOpacity(undefined)).toBe(false);
+  });
 });
 
 describe("readDocumentMapSettings (#375, tolerant)", () => {
@@ -144,7 +196,8 @@ describe("readDocumentMapSettings (#375, tolerant)", () => {
       dialogueDelimiterPairs: [
         { open: "「", close: "」", color: "#909090" }
       ],
-      adjustTagColorsForVisibility: true
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
     });
   });
 
@@ -157,6 +210,25 @@ describe("readDocumentMapSettings (#375, tolerant)", () => {
       readDocumentMapSettings({ adjustTagColorsForVisibility: 0 })
         .adjustTagColorsForVisibility
     ).toBe(true);
+  });
+
+  it("#375: keeps an in-range viewportLensOpacity, clamps an out-of-range number, and falls back otherwise", () => {
+    expect(
+      readDocumentMapSettings({ viewportLensOpacity: 0.5 }).viewportLensOpacity
+    ).toBe(0.5);
+    // Finite but out of range → clamped into [0.1, 0.9].
+    expect(
+      readDocumentMapSettings({ viewportLensOpacity: 0 }).viewportLensOpacity
+    ).toBe(0.1);
+    expect(
+      readDocumentMapSettings({ viewportLensOpacity: 5 }).viewportLensOpacity
+    ).toBe(0.9);
+    // Non-number / non-finite → the default.
+    for (const bad of ["0.5", Number.NaN, null, {}]) {
+      expect(
+        readDocumentMapSettings({ viewportLensOpacity: bad }).viewportLensOpacity
+      ).toBe(0.28);
+    }
   });
 
   it("drops a single bad pair but keeps the rest", () => {

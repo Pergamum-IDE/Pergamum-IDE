@@ -5,7 +5,10 @@ import type {
 } from "../shared/api";
 import {
   DOCUMENT_MAP_DEFAULT_DIALOGUE_COLOR,
+  DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MAX,
+  DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MIN,
   defaultDocumentMapSettings,
+  isValidViewportLensOpacity,
   normalizeDocumentMapColor,
   reorderDocumentMapDialoguePairs,
   type DocumentMapDialogueDelimiterPair,
@@ -66,12 +69,18 @@ export function DocumentMapSettingsSection({
   const [draft, setDraft] = useState<DocumentMapSettings>(
     settings.documentMap
   );
+  // The viewport-lens opacity text input keeps its raw string separately, so a
+  // partial value ("0.", "") can stay on screen without corrupting the number.
+  const [opacityText, setOpacityText] = useState(
+    String(settings.documentMap.viewportLensOpacity)
+  );
   const settingsKey = useMemo(
     () => JSON.stringify(settings.documentMap),
     [settings.documentMap]
   );
   useEffect(() => {
     setDraft(settings.documentMap);
+    setOpacityText(String(settings.documentMap.viewportLensOpacity));
   }, [settingsKey]);
 
   const [drag, setDrag] = useState<number | null>(null);
@@ -79,7 +88,8 @@ export function DocumentMapSettingsSection({
 
   function commit(next: DocumentMapSettings): void {
     setDraft(next);
-    // Only persist when every colour is a valid #rrggbb.
+    // Only persist when every colour is a valid #rrggbb and the lens opacity
+    // is a valid number in range.
     const narration = normalizeDocumentMapColor(next.narrationColor);
     const fallback = normalizeDocumentMapColor(next.glossaryFallbackColor);
     const pairColors = next.dialogueDelimiterPairs.map((pair) =>
@@ -92,7 +102,12 @@ export function DocumentMapSettingsSection({
         pairColors[index] !== null
     );
 
-    if (narration && fallback && pairsValid) {
+    if (
+      narration &&
+      fallback &&
+      pairsValid &&
+      isValidViewportLensOpacity(next.viewportLensOpacity)
+    ) {
       onChangeSettings(
         saveRequestWithDocumentMap(settings, {
           narrationColor: narration,
@@ -104,11 +119,30 @@ export function DocumentMapSettingsSection({
               color: pairColors[index] as string
             })
           ),
-          adjustTagColorsForVisibility: next.adjustTagColorsForVisibility
+          adjustTagColorsForVisibility: next.adjustTagColorsForVisibility,
+          viewportLensOpacity: next.viewportLensOpacity
         })
       );
     }
   }
+
+  // Keep the draft opacity and the text input in step. The range slider always
+  // produces a valid in-range value; the text input is parsed and only pushed
+  // to the draft (and persisted) when it is a valid number in `0.1`..`0.9`.
+  function setOpacityFromNumber(value: number): void {
+    setOpacityText(String(value));
+    commit({ ...draft, viewportLensOpacity: value });
+  }
+
+  function setOpacityFromText(raw: string): void {
+    setOpacityText(raw);
+    const parsed = Number(raw);
+    if (raw.trim() !== "" && isValidViewportLensOpacity(parsed)) {
+      commit({ ...draft, viewportLensOpacity: parsed });
+    }
+  }
+
+  const opacityInvalid = !isValidViewportLensOpacity(Number(opacityText));
 
   function updatePair(
     index: number,
@@ -222,6 +256,55 @@ export function DocumentMapSettingsSection({
       className="documentMapSettingsSection"
       aria-label={translate("settings.documentMap.title")}
     >
+      {/* #375: viewport-lens opacity — top of the category. A range slider and
+          a text input edit the same value; the text input validates to
+          `0.1`..`0.9`. */}
+      <div className="documentMapSettingsOpacityField">
+        <label>
+          <span>{translate("settings.documentMap.viewportLensOpacity.label")}</span>
+          <span className="documentMapSettingsOpacityInputs">
+            <input
+              type="range"
+              className="documentMapSettingsOpacityRange"
+              min={DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MIN}
+              max={DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MAX}
+              step={0.1}
+              value={draft.viewportLensOpacity}
+              disabled={isLoading}
+              aria-label={translate(
+                "settings.documentMap.viewportLensOpacity.label"
+              )}
+              onChange={(event) =>
+                setOpacityFromNumber(event.target.valueAsNumber)
+              }
+            />
+            <input
+              type="text"
+              inputMode="decimal"
+              className="documentMapSettingsOpacityText"
+              value={opacityText}
+              disabled={isLoading}
+              aria-label={translate(
+                "settings.documentMap.viewportLensOpacity.label"
+              )}
+              aria-invalid={opacityInvalid || undefined}
+              onChange={(event) => setOpacityFromText(event.target.value)}
+            />
+          </span>
+        </label>
+        {opacityInvalid ? (
+          <p className="documentMapSettingsError" role="alert">
+            {translate("settings.documentMap.viewportLensOpacity.invalid")}
+          </p>
+        ) : (
+          <p className="documentMapSettingsHint">
+            {translate(
+              "settings.documentMap.viewportLensOpacity.description"
+            )}
+          </p>
+        )}
+      </div>
+
       {colorField(
         translate("settings.documentMap.narrationColor.label"),
         "narrationColor"

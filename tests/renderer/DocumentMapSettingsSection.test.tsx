@@ -90,6 +90,47 @@ describe("DocumentMapSettingsSection (#375)", () => {
     expect(container.querySelectorAll('input[type="color"]')).toHaveLength(3);
   });
 
+  it("renders the viewport-lens opacity control at the TOP, with a range + text input showing 0.28", () => {
+    render();
+    const section = q<HTMLElement>("section.documentMapSettingsSection");
+    const opacityField = q<HTMLElement>(".documentMapSettingsOpacityField");
+    // First child of the section → it is above the colour fields.
+    expect(section.firstElementChild).toBe(opacityField);
+
+    expect(container.textContent).toContain(
+      "settings.documentMap.viewportLensOpacity.label"
+    );
+    expect(
+      q<HTMLInputElement>(".documentMapSettingsOpacityRange").type
+    ).toBe("range");
+    expect(
+      q<HTMLInputElement>(".documentMapSettingsOpacityText").value
+    ).toBe("0.28");
+  });
+
+  it("saves a valid viewport-lens opacity from the text input and rejects an out-of-range one", () => {
+    const { onChangeSettings } = render();
+    setInput(q<HTMLInputElement>(".documentMapSettingsOpacityText"), "0.5");
+    expect(lastDocumentMap(onChangeSettings).viewportLensOpacity).toBe(0.5);
+
+    onChangeSettings.mockClear();
+    setInput(q<HTMLInputElement>(".documentMapSettingsOpacityText"), "0");
+    expect(container.textContent).toContain(
+      "settings.documentMap.viewportLensOpacity.invalid"
+    );
+    expect(onChangeSettings).not.toHaveBeenCalled();
+
+    onChangeSettings.mockClear();
+    setInput(q<HTMLInputElement>(".documentMapSettingsOpacityText"), "1");
+    expect(onChangeSettings).not.toHaveBeenCalled();
+  });
+
+  it("saves the opacity when the range slider moves", () => {
+    const { onChangeSettings } = render();
+    setInput(q<HTMLInputElement>(".documentMapSettingsOpacityRange"), "0.7");
+    expect(lastDocumentMap(onChangeSettings).viewportLensOpacity).toBe(0.7);
+  });
+
   it("renders one dialogue-pair row per pair with a ⣿ handle", () => {
     render();
     const rows = container.querySelectorAll(

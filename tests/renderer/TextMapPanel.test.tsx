@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryEntry, GlossaryTag } from "../../src/shared/glossary";
+import { defaultDocumentMapSettings } from "../../src/shared/documentMapSettings";
 import type { Translate } from "../../src/shared/i18n";
 import { TextMapPanel } from "../../src/renderer/TextMapPanel";
 
@@ -260,6 +261,62 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
   });
 });
 
+describe("TextMapPanel (#375) — click-to-scroll navigation", () => {
+  function clickHostAt(clientY: number): void {
+    const host = container.querySelector<HTMLElement>(
+      ".glossaryTextMapCanvasHost"
+    )!;
+    act(() => {
+      host.dispatchEvent(
+        new window.MouseEvent("click", { bubbles: true, clientY })
+      );
+    });
+  }
+
+  it("resolves a click on the map to a 0-based source line and reports it", () => {
+    const onNavigateToLine = vi.fn();
+    render({
+      // 6 source lines; cellSize 2 → row R spans clientY [2R, 2R+2).
+      activeDocumentContent: "l0\nl1\nl2\nl3\nl4\nl5",
+      glossaryEntries: [],
+      onNavigateToLine
+    });
+
+    clickHostAt(0); // row 0 → line 0
+    clickHostAt(7); // row 3 → line 3 (happy-dom rect top = 0)
+
+    expect(onNavigateToLine.mock.calls).toEqual([[0], [3]]);
+  });
+
+  it("marks the host navigable and clamps a click past the end to the last line", () => {
+    const onNavigateToLine = vi.fn();
+    render({
+      activeDocumentContent: "a\nb\nc",
+      glossaryEntries: [],
+      onNavigateToLine
+    });
+
+    expect(
+      container
+        .querySelector(".glossaryTextMapCanvasHost")
+        ?.getAttribute("data-navigable")
+    ).toBe("true");
+
+    clickHostAt(100_000);
+    expect(onNavigateToLine).toHaveBeenLastCalledWith(2);
+  });
+
+  it("is not clickable when onNavigateToLine is omitted", () => {
+    render({ activeDocumentContent: "a\nb", glossaryEntries: [] });
+    const host = container.querySelector(".glossaryTextMapCanvasHost")!;
+    expect(host.getAttribute("data-navigable")).toBeNull();
+    // No throw when clicked.
+    expect(() =>
+      act(() => host.dispatchEvent(new window.MouseEvent("click", { bubbles: true })))
+    ).not.toThrow();
+  });
+});
+
 describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
   it("wraps the tall canvas in a scroll body separate from the header", () => {
     render({
@@ -310,6 +367,51 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
     expect(overlay!.parentElement?.classList.contains(
       "glossaryTextMapCanvasHost"
     )).toBe(true);
+  });
+
+  it("carries the settings-driven viewport-lens fill opacity as an inline CSS custom property", () => {
+    render({
+      activeDocumentContent: "Foo\nbar\nbaz",
+      glossaryEntries: [],
+      editorVisibleRange: { from: 0, to: 7 },
+      documentMapSettings: {
+        ...defaultDocumentMapSettings(),
+        viewportLensOpacity: 0.6
+      }
+    });
+    const overlay = container.querySelector<HTMLElement>(".textMapViewport")!;
+    expect(
+      overlay.style.getPropertyValue("--text-map-viewport-fill")
+    ).toBe("rgba(255, 255, 255, 0.6)");
+  });
+
+  it("falls back to the default lens opacity (0.28) when documentMapSettings is omitted", () => {
+    render({
+      activeDocumentContent: "Foo\nbar",
+      glossaryEntries: [],
+      editorVisibleRange: { from: 0, to: 3 }
+    });
+    const overlay = container.querySelector<HTMLElement>(".textMapViewport")!;
+    expect(
+      overlay.style.getPropertyValue("--text-map-viewport-fill")
+    ).toBe("rgba(255, 255, 255, 0.28)");
+  });
+
+  it("clamps an out-of-range settings opacity back into the default before painting", () => {
+    render({
+      activeDocumentContent: "Foo\nbar",
+      glossaryEntries: [],
+      editorVisibleRange: { from: 0, to: 3 },
+      documentMapSettings: {
+        ...defaultDocumentMapSettings(),
+        viewportLensOpacity: 5 as number
+      }
+    });
+    const overlay = container.querySelector<HTMLElement>(".textMapViewport")!;
+    // 5 is not a valid lens opacity → the canvas uses the built-in default.
+    expect(
+      overlay.style.getPropertyValue("--text-map-viewport-fill")
+    ).toBe("rgba(255, 255, 255, 0.28)");
   });
 
   it("moves the overlay when the visible range changes (editor scroll)", () => {
@@ -369,7 +471,15 @@ describe("Text Map layout (#375) — CSS", () => {
     expect(block).toContain("min-height: 0");
   });
 
-  it("anchors the viewport overlay and keeps it non-interactive", () => {
+  // Everything from `.textMapViewport {` up to the end of the dark-scheme
+  // override block — covers the base rule, the ::before/::after edges and the
+  // @media (prefers-color-scheme: dark) fallbacks.
+  const lensCss = css.slice(
+    css.indexOf(".textMapViewport {"),
+    css.indexOf("@media (forced-colors: active)")
+  );
+
+  it("anchors the viewport lens, keeps it non-interactive, and gives it a translucent ACHROMATIC fill + border", () => {
     const block = css.slice(
       css.indexOf(".textMapViewport {"),
       css.indexOf("}", css.indexOf(".textMapViewport {"))
@@ -377,5 +487,58 @@ describe("Text Map layout (#375) — CSS", () => {
     expect(block).toContain("position: absolute");
     expect(block).toContain("pointer-events: none");
     expect(block).toContain("border: 1px solid");
+    // #375: translucent fill (not `transparent`), white glass.
+    expect(block).toMatch(/background:\s*var\(--text-map-viewport-fill/);
+    expect(block).not.toMatch(/background:\s*transparent/);
+    expect(block).toMatch(
+      /--text-map-viewport-fill,\s*rgba\(255,\s*255,\s*255,/
+    );
+    expect(block).toMatch(/--text-map-viewport-border,\s*rgba\(0,\s*0,\s*0,/);
+  });
+
+  it("uses NO blue / accent / selection colour anywhere in the lens (light or dark)", () => {
+    // The known accent-blue channel triples the design must not use.
+    for (const forbidden of [
+      /rgba?\(\s*0\s*,\s*120\s*,\s*215/,
+      /rgba?\(\s*59\s*,\s*130\s*,\s*246/,
+      /rgba?\(\s*37\s*,\s*99\s*,\s*235/
+    ]) {
+      expect(lensCss).not.toMatch(forbidden);
+    }
+    // Every rgba() in the lens block is achromatic: R === G === B.
+    const rgbas = lensCss.match(/rgba?\([^)]*\)/g) ?? [];
+    expect(rgbas.length).toBeGreaterThan(0);
+    for (const rgba of rgbas) {
+      const [r, g, b] = rgba
+        .replace(/rgba?\(|\)/g, "")
+        .split(",")
+        .slice(0, 3)
+        .map((n: string) => Number(n.trim()));
+      expect(r).toBe(g);
+      expect(g).toBe(b);
+    }
+  });
+
+  it("draws stronger top / bottom edges on the viewport lens", () => {
+    expect(css).toContain(".textMapViewport::before,");
+    expect(css).toContain(".textMapViewport::after");
+    const edgeBlock = css.slice(
+      css.indexOf(".textMapViewport::before,"),
+      css.indexOf(
+        "}",
+        css.indexOf(".textMapViewport::after")
+      )
+    );
+    expect(edgeBlock).toMatch(/background:\s*var\(--text-map-viewport-edge/);
+    expect(edgeBlock).toContain("pointer-events: none");
+  });
+
+  it("keeps a viewport-lens fallback for dark colour schemes and forced colours", () => {
+    expect(css).toMatch(
+      /@media \(prefers-color-scheme: dark\)[\s\S]*\.textMapViewport/
+    );
+    expect(css).toMatch(
+      /@media \(forced-colors: active\)[\s\S]*\.textMapViewport/
+    );
   });
 });

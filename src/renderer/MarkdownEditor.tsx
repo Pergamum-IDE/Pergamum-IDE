@@ -178,6 +178,13 @@ export interface MarkdownEditorViewStateController {
   /** Read-only snapshot of the current CodeMirror View State, or `null`
    *  when no editor view is mounted. */
   captureViewState(): EditorViewState | null;
+  /**
+   * #375 Document Map navigation: scroll the given 0-based SOURCE line into
+   * view, roughly centered, and focus the editor. This is NAVIGATION only —
+   * the caret / selection are NOT touched, no document change is dispatched.
+   * The line is clamped into the document; a no-op when no view is mounted.
+   */
+  scrollToLine(lineIndex: number): void;
 }
 
 export interface MarkdownEditorFocusRequest {
@@ -602,6 +609,28 @@ export function MarkdownEditor({
         const view = viewRef.current;
 
         return view ? captureEditorViewState(view) : null;
+      },
+      scrollToLine: (lineIndex) => {
+        const view = viewRef.current;
+
+        if (!view || !Number.isFinite(lineIndex)) {
+          return;
+        }
+
+        // CodeMirror lines are 1-based; the Document Map speaks 0-based
+        // source lines. Clamp into the document.
+        const totalLines = view.state.doc.lines;
+        const target = Math.max(
+          1,
+          Math.min(Math.floor(lineIndex) + 1, totalLines)
+        );
+        const line = view.state.doc.line(target);
+
+        // Effects only — no `selection`, so the caret does not move.
+        view.dispatch({
+          effects: EditorView.scrollIntoView(line.from, { y: "center" })
+        });
+        view.focus();
       }
     };
 

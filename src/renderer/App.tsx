@@ -2800,6 +2800,19 @@ export function App(): JSX.Element {
     setPendingMarkdownSelection(outcome.range);
   }
 
+  // #375: Document Map click-to-scroll. `lineIndex` is a 0-based SOURCE line
+  // the map resolved from the click. NAVIGATION only — the editor's
+  // scrollToLine centres the line and focuses the editor, and never touches
+  // the caret / selection / document. A no-op when the active editor is not a
+  // Markdown view (the controller ref is then unset).
+  function scrollActiveMarkdownEditorToLine(lineIndex: number): void {
+    if (activeDocument?.editor.kind !== "markdown") {
+      return;
+    }
+
+    markdownEditorViewStateControllerRef.current?.scrollToLine(lineIndex);
+  }
+
   useEffect(() => {
     if (!project) {
       setGlossaryTags([]);
@@ -7291,6 +7304,7 @@ export function App(): JSX.Element {
                       textMapEditorWidth={editorAreaWidth}
                       textMapEditorVisibleRange={markdownVisibleRange}
                       textMapDocumentMapSettings={effectiveSettings.documentMap}
+                      onTextMapNavigateToLine={scrollActiveMarkdownEditorToLine}
                       onNavigateGlossaryOccurrence={
                         navigateGlossaryOccurrenceFromSidebar
                       }

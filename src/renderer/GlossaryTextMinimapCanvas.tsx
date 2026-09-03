@@ -1,17 +1,25 @@
-import { useEffect, useMemo, useRef } from "react";
-import type { DocumentMapSettings } from "../shared/documentMapSettings";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type MouseEvent
+} from "react";
+import {
+  DOCUMENT_MAP_DEFAULT_VIEWPORT_LENS_OPACITY,
+  isValidViewportLensOpacity,
+  type DocumentMapSettings
+} from "../shared/documentMapSettings";
 import type { GlossaryEntry } from "../shared/glossary";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import {
   buildGlossaryTextMapPlan,
   buildTextMapViewportRect,
   drawGlossaryTextMap,
+  resolveTextMapClickToLineIndex,
   resolveTextMapWrapColumns,
   type GlossaryTextMapRenderMode
 } from "./glossaryTextMap";
-
-/** Fixed 1px-stroke colour for the editor-viewport rectangle. */
-const TEXT_MAP_VIEWPORT_STROKE_COLOR = "#666666";
 
 /**
  * Upper bound on the Canvas BACKING STORE side (px). Real prose stays well
@@ -47,6 +55,12 @@ interface GlossaryTextMinimapCanvasProps {
    * carrying a selected tag. See {@link buildGlossaryTextMapPlan}.
    */
   selectedTagIds?: readonly string[];
+  /**
+   * #375: a click on the map resolves to a 0-based SOURCE document line and
+   * calls this. Omitted → the map is not clickable. NAVIGATION only — the
+   * handler must not touch the caret / selection / document.
+   */
+  onNavigateToLine?: (lineIndex: number) => void;
   /** Phase 2 hook — accepted, unused in Phase 1. */
   renderMode?: GlossaryTextMapRenderMode;
 }
@@ -66,9 +80,11 @@ export function GlossaryTextMinimapCanvas({
   visibleRange = null,
   documentMapSettings,
   selectedTagIds,
+  onNavigateToLine,
   renderMode
 }: GlossaryTextMinimapCanvasProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
 
   const wrapColumns = useMemo(
     () =>
@@ -114,6 +130,40 @@ export function GlossaryTextMinimapCanvas({
   const contentWidth = plan.logicalPixelWidth;
   const contentHeight = plan.logicalPixelHeight;
 
+  // #375: viewport-lens FILL alpha from settings (`0.1`..`0.9`); an
+  // absent / out-of-range value falls back to the built-in default.
+  const lensFillOpacity = isValidViewportLensOpacity(
+    documentMapSettings?.viewportLensOpacity
+  )
+    ? documentMapSettings!.viewportLensOpacity
+    : DOCUMENT_MAP_DEFAULT_VIEWPORT_LENS_OPACITY;
+
+  // #375: click-to-navigate. The host is content-sized (1 CSS px = 1 logical
+  // map px), so `clientY - hostRect.top` is the logical map Y directly. Resolve
+  // it to a source line and hand it to the editor — no caret / selection / doc
+  // change. An unresolvable click (above the map, empty layout) is a no-op.
+  const handleClick = (event: MouseEvent<HTMLDivElement>): void => {
+    if (!onNavigateToLine) {
+      return;
+    }
+
+    const host = hostRef.current;
+    if (!host) {
+      return;
+    }
+
+    const mapY = event.clientY - host.getBoundingClientRect().top;
+    const lineIndex = resolveTextMapClickToLineIndex({
+      mapY,
+      cellSize: plan.cellSize,
+      lines: plan.lines
+    });
+
+    if (lineIndex !== null) {
+      onNavigateToLine(lineIndex);
+    }
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -149,7 +199,10 @@ export function GlossaryTextMinimapCanvas({
   return (
     <div
       className="glossaryTextMapCanvasHost"
+      ref={hostRef}
       style={{ width: `${contentWidth}px`, height: `${contentHeight}px` }}
+      data-navigable={onNavigateToLine ? true : undefined}
+      onClick={onNavigateToLine ? handleClick : undefined}
     >
       <canvas
         className="glossaryTextMapCanvas"
@@ -159,11 +212,16 @@ export function GlossaryTextMinimapCanvas({
       {viewportRect ? (
         <div
           className="textMapViewport"
-          style={{
-            top: `${viewportRect.y}px`,
-            height: `${viewportRect.height}px`,
-            borderColor: TEXT_MAP_VIEWPORT_STROKE_COLOR
-          }}
+          aria-hidden="true"
+          style={
+            {
+              top: `${viewportRect.y}px`,
+              height: `${viewportRect.height}px`,
+              // #375: the lens FILL alpha is settings-driven
+              // (`documentMap.viewportLensOpacity`). Border / edge stay CSS.
+              "--text-map-viewport-fill": `rgba(255, 255, 255, ${lensFillOpacity})`
+            } as CSSProperties
+          }
         />
       ) : null}
     </div>

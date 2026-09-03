@@ -198,12 +198,13 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       updateDelayMs: getCatalogDefaultValue("preview.updateDelayMs")
     });
     // #375 Task Q/R: Document Map defaults — dark-grey narration, red fallback,
-    // one grey 「」 pair, tag-colour visibility adjustment ON.
+    // one grey 「」 pair, tag-colour visibility adjustment ON, 0.28 lens opacity.
     expect(settings.documentMap).toEqual({
       narrationColor: "#3c3c3c",
       glossaryFallbackColor: "#ff0000",
       dialogueDelimiterPairs: [{ open: "「", close: "」", color: "#909090" }],
-      adjustTagColorsForVisibility: true
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
     });
   });
 
@@ -233,8 +234,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
         { open: "「", close: "」", color: "#0000ff" },
         { open: "『", close: "』", color: "#7c3aed" }
       ],
-      // omitted on disk → the built-in default (ON)
-      adjustTagColorsForVisibility: true
+      // omitted on disk → the built-in defaults
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
     });
   });
 
@@ -640,7 +642,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     expect(written.preview).toEqual({ renderer: "markdown", updateDelayMs: 0 });
   });
 
-  it("#375: writes documentMap (dialogue-pair colour / narration / toggle) from the save request instead of dropping it", async () => {
+  it("#375: writes documentMap (dialogue-pair colour / narration / toggle / lens opacity) from the save request instead of dropping it", async () => {
     fsMock.readFile.mockResolvedValue(onDiskSettings({}));
 
     const requestedDocumentMap = {
@@ -650,7 +652,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         { open: "「", close: "」", color: "#9e9e9e" },
         { open: "『", close: "』", color: "#123456" }
       ],
-      adjustTagColorsForVisibility: false
+      adjustTagColorsForVisibility: false,
+      viewportLensOpacity: 0.5
     };
 
     const saved = await saveApplicationSettings(

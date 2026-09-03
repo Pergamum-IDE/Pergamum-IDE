@@ -748,6 +748,11 @@ export const jaTranslations = {
   "settings.application.section.sound": "サウンド",
   "settings.application.title": "アプリケーション設定",
   "settings.documentMap.title": "文書マップ",
+  "settings.documentMap.viewportLensOpacity.label": "ビューポートレンズの濃さ",
+  "settings.documentMap.viewportLensOpacity.description":
+    "文書マップ上で、現在エディタに表示されている範囲を示すレンズの濃さを調整します。",
+  "settings.documentMap.viewportLensOpacity.invalid":
+    "0.1〜0.9 の範囲で入力してください。",
   "settings.documentMap.narrationColor.label": "地の文の色",
   "settings.documentMap.glossaryFallbackColor.label": "タグなし語彙の色",
   "settings.documentMap.adjustTagColorsForVisibility.label":

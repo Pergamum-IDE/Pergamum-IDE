@@ -88,6 +88,9 @@ interface WorkspaceSidebarProps {
   textMapEditorVisibleRange?: EditorVisibleTextRange | null;
   /** #375 Text Map: `documentMap` settings — draw colours + dialogue pairs. */
   textMapDocumentMapSettings?: DocumentMapSettings;
+  /** #375 Text Map: click-to-scroll — a resolved 0-based source line to scroll
+   *  the active Markdown editor to (navigation only). */
+  onTextMapNavigateToLine?: (lineIndex: number) => void;
   onNavigateGlossaryOccurrence: (
     entry: GlossaryEntry,
     direction: "previous" | "next"
@@ -136,6 +139,7 @@ export function WorkspaceSidebar({
   textMapEditorWidth = null,
   textMapEditorVisibleRange = null,
   textMapDocumentMapSettings,
+  onTextMapNavigateToLine,
   onNavigateGlossaryOccurrence,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
@@ -202,6 +206,7 @@ export function WorkspaceSidebar({
           editorWidth={textMapEditorWidth}
           editorVisibleRange={textMapEditorVisibleRange}
           documentMapSettings={textMapDocumentMapSettings}
+          onNavigateToLine={onTextMapNavigateToLine}
         />
       );
     case "glossary":

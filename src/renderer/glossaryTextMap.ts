@@ -511,21 +511,33 @@ export function visualRowForOffset(
 }
 
 /**
- * #375 Text Map viewport overlay: turn the editor's on-screen document range
- * into a logical-pixel rectangle over the map. Full width for now (`x = 0`,
+ * #375 Text Map viewport LENS: turn the editor's on-screen document range into
+ * a logical-pixel rectangle over the map (the renderer paints it as a
+ * translucent lens with a border). Full width for now (`x = 0`,
  * `width = logicalPixelWidth`); the y-band spans the visual rows of `from`..
- * `to`. Endpoints are clamped into `[0, text length]`. Returns `null` for no
- * range or an empty / inverted range (`to <= from`).
+ * `to`. Endpoints are clamped into `[0, text length]`, and the resulting
+ * rectangle is CLAMPED into the map's own bounds
+ * (`0 <= y`, `y + height <= max(cellSize, logicalPixelHeight)`), so a viewport
+ * larger than the whole document just covers the whole map. Returns `null` for
+ * no range or an empty / inverted range (`to <= from`).
  */
 export function buildTextMapViewportRect(
   plan: Pick<
     GlossaryTextMapPlan,
-    "lines" | "wrapColumns" | "cellSize" | "logicalPixelWidth"
+    | "lines"
+    | "wrapColumns"
+    | "cellSize"
+    | "logicalPixelWidth"
+    | "logicalPixelHeight"
   >,
   visibleRange: EditorVisibleTextRange | null,
   textLength: number
 ): TextMapViewportRect | null {
-  if (!visibleRange) {
+  if (
+    !visibleRange ||
+    !Number.isFinite(visibleRange.from) ||
+    !Number.isFinite(visibleRange.to)
+  ) {
     return null;
   }
 
@@ -543,13 +555,75 @@ export function buildTextMapViewportRect(
     plan.lines,
     plan.wrapColumns
   );
-  const y = Math.min(topRow, bottomRow) * plan.cellSize;
-  const height = Math.max(
+
+  const mapHeight = Math.max(plan.cellSize, plan.logicalPixelHeight);
+  const rawY = Math.min(topRow, bottomRow) * plan.cellSize;
+  const rawHeight = Math.max(
     plan.cellSize,
     (Math.abs(bottomRow - topRow) + 1) * plan.cellSize
   );
 
+  // Clamp the lens into the map so it never draws past the top / bottom edge.
+  const y = Math.max(0, Math.min(rawY, mapHeight - plan.cellSize));
+  const height = Math.max(plan.cellSize, Math.min(rawHeight, mapHeight - y));
+
   return { x: 0, y, width: plan.logicalPixelWidth, height };
+}
+
+/**
+ * #375 Document Map click navigation — the INVERSE of the layout: the 0-based
+ * SOURCE document line a map visual row belongs to.
+ *
+ *   - Every visual row of a wrapped source line resolves to that SAME line
+ *     (`line.baseVisualRow <= row < line.baseVisualRow + line.visualRowCount`).
+ *   - A row past the last visual row clamps to the LAST line (a click in the
+ *     sliver below the final wrapped row still navigates somewhere sensible).
+ *   - A negative row, or an empty layout, returns `null` (the caller no-ops).
+ */
+export function resolveTextMapVisualRowToLineIndex(
+  visualRow: number,
+  lines: readonly TextMapLine[]
+): number | null {
+  if (lines.length === 0 || !Number.isFinite(visualRow)) {
+    return null;
+  }
+
+  const row = Math.floor(visualRow);
+  if (row < 0) {
+    return null;
+  }
+
+  for (const line of lines) {
+    if (row < line.baseVisualRow + line.visualRowCount) {
+      return line.lineIndex;
+    }
+  }
+
+  return lines[lines.length - 1]!.lineIndex;
+}
+
+/**
+ * #375 Document Map click navigation — turn a click's Y (in LOGICAL map pixels,
+ * i.e. relative to the content-sized canvas host) into a 0-based source line.
+ * `mapY / cellSize` is the visual row; `cellSize` MUST be the plan's cell size
+ * ({@link GLOSSARY_TEXT_MAP_CELL_SIZE}), not a magic number. Returns `null` for
+ * a click above the map / an empty layout / a non-finite input.
+ */
+export function resolveTextMapClickToLineIndex(params: {
+  mapY: number;
+  cellSize: number;
+  lines: readonly TextMapLine[];
+}): number | null {
+  const cell = Math.max(1, Math.floor(params.cellSize));
+
+  if (!Number.isFinite(params.mapY) || params.mapY < 0) {
+    return null;
+  }
+
+  return resolveTextMapVisualRowToLineIndex(
+    Math.floor(params.mapY / cell),
+    params.lines
+  );
 }
 
 function occurrencesFromSurfaceIndex(

@@ -32,6 +32,11 @@ interface TextMapPanelProps {
   editorVisibleRange?: EditorVisibleTextRange | null;
   /** #375 `documentMap` settings — draw colours + dialogue delimiter pairs. */
   documentMapSettings?: DocumentMapSettings;
+  /**
+   * #375: a click on the map resolved to a 0-based SOURCE line — scroll the
+   * active Markdown editor there (navigation only). Omitted → not clickable.
+   */
+  onNavigateToLine?: (lineIndex: number) => void;
   translate: Translate;
 }
 
@@ -53,6 +58,7 @@ export function TextMapPanel({
   editorWidth,
   editorVisibleRange = null,
   documentMapSettings,
+  onNavigateToLine,
   translate
 }: TextMapPanelProps): JSX.Element {
   const hasContent =
@@ -125,6 +131,7 @@ export function TextMapPanel({
             visibleRange={editorVisibleRange}
             documentMapSettings={documentMapSettings}
             selectedTagIds={validSelectedTagIds}
+            onNavigateToLine={onNavigateToLine}
           />
         </div>
       ) : (

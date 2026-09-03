@@ -24,6 +24,8 @@ import {
   mapTextOffsetToVisualPosition,
   resolveGlossaryTextMapHitColor,
   resolveTextMapCellRect,
+  resolveTextMapClickToLineIndex,
+  resolveTextMapVisualRowToLineIndex,
   resolveTextMapWrapColumns,
   splitTextIntoLineSpans,
   visualRowForOffset,
@@ -845,6 +847,98 @@ describe("visualRowForOffset (#375, viewport overlay)", () => {
   });
 });
 
+describe("resolveTextMapVisualRowToLineIndex (#375, click navigation)", () => {
+  // "L0\nL1 is long enough to wrap once\nL2" @ wrap 8:
+  //   line0 → rows [0]        (baseVisualRow 0, count 1)
+  //   line1 → rows [1..5]     (baseVisualRow 1, count 5 — "L1 is long enough to wrap once" is 29 chars → ceil(29/8)=4? -> check)
+  //   line2 → rows [...]      after that
+  const layout = buildTextMapLineLayout(
+    "L0\nL1 is long enough to wrap once\nL2",
+    8
+  );
+  const { lines } = layout;
+
+  it("maps every visual row of a wrapped source line back to that same line", () => {
+    // Row 0 → source line 0.
+    expect(resolveTextMapVisualRowToLineIndex(0, lines)).toBe(0);
+    // Any row inside line 1's block → source line 1.
+    const line1 = lines[1]!;
+    for (
+      let row = line1.baseVisualRow;
+      row < line1.baseVisualRow + line1.visualRowCount;
+      row += 1
+    ) {
+      expect(resolveTextMapVisualRowToLineIndex(row, lines)).toBe(1);
+    }
+    // The first row of the last line.
+    const last = lines[lines.length - 1]!;
+    expect(resolveTextMapVisualRowToLineIndex(last.baseVisualRow, lines)).toBe(
+      last.lineIndex
+    );
+  });
+
+  it("floors a fractional row and clamps a row past the end to the last line", () => {
+    expect(resolveTextMapVisualRowToLineIndex(0.9, lines)).toBe(0);
+    expect(resolveTextMapVisualRowToLineIndex(9999, lines)).toBe(
+      lines[lines.length - 1]!.lineIndex
+    );
+  });
+
+  it("returns null for a negative row, a non-finite row, or an empty layout", () => {
+    expect(resolveTextMapVisualRowToLineIndex(-1, lines)).toBeNull();
+    expect(resolveTextMapVisualRowToLineIndex(Number.NaN, lines)).toBeNull();
+    expect(resolveTextMapVisualRowToLineIndex(0, [])).toBeNull();
+  });
+
+  it("handles an empty document (single empty visual row → line 0)", () => {
+    const { lines: emptyLines } = buildTextMapLineLayout("", 8);
+    expect(resolveTextMapVisualRowToLineIndex(0, emptyLines)).toBe(0);
+    expect(resolveTextMapVisualRowToLineIndex(5, emptyLines)).toBe(0); // clamp
+  });
+});
+
+describe("resolveTextMapClickToLineIndex (#375, click navigation)", () => {
+  const { lines } = buildTextMapLineLayout("a\nb\nc\nd\ne", 8);
+  const cellSize = GLOSSARY_TEXT_MAP_CELL_SIZE; // 2
+
+  it("mapY = 0 resolves to the first source line", () => {
+    expect(
+      resolveTextMapClickToLineIndex({ mapY: 0, cellSize, lines })
+    ).toBe(0);
+  });
+
+  it("converts mapY to a visual row with floor(mapY / cellSize)", () => {
+    // Row 3 spans mapY [6, 8) at cellSize 2 → source line 3.
+    expect(
+      resolveTextMapClickToLineIndex({ mapY: 6, cellSize, lines })
+    ).toBe(3);
+    expect(
+      resolveTextMapClickToLineIndex({ mapY: 7.5, cellSize, lines })
+    ).toBe(3);
+  });
+
+  it("a click below the last row clamps to the last source line", () => {
+    expect(
+      resolveTextMapClickToLineIndex({ mapY: 10_000, cellSize, lines })
+    ).toBe(4);
+  });
+
+  it("a click above the map (negative / non-finite mapY) is a no-op (null)", () => {
+    expect(
+      resolveTextMapClickToLineIndex({ mapY: -1, cellSize, lines })
+    ).toBeNull();
+    expect(
+      resolveTextMapClickToLineIndex({ mapY: Number.NaN, cellSize, lines })
+    ).toBeNull();
+  });
+
+  it("does not throw on an empty layout", () => {
+    expect(
+      resolveTextMapClickToLineIndex({ mapY: 4, cellSize, lines: [] })
+    ).toBeNull();
+  });
+});
+
 describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
   const plan = buildGlossaryTextMapPlan({
     text: Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n"),
@@ -892,6 +986,53 @@ describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
   it("never produces a zero-height rectangle", () => {
     const rect = buildTextMapViewportRect(plan, { from: 3, to: 4 }, 200)!;
     expect(rect.height).toBeGreaterThanOrEqual(plan.cellSize);
+  });
+
+  it("#375 lens: clamps a viewport bigger than the whole map to the map bounds", () => {
+    const textLength = plan.lines.at(-1)!.startOffset + 7;
+    const rect = buildTextMapViewportRect(
+      plan,
+      { from: 0, to: textLength },
+      textLength
+    )!;
+    expect(rect.y).toBe(0);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(plan.logicalPixelHeight);
+    // Covers ~the whole map (allowing the one-cell tail rounding).
+    expect(rect.height).toBeGreaterThanOrEqual(
+      plan.logicalPixelHeight - plan.cellSize
+    );
+  });
+
+  it("#375 lens: never draws past the bottom edge even for the final line", () => {
+    const textLength = plan.lines.at(-1)!.startOffset + 7;
+    const rect = buildTextMapViewportRect(
+      plan,
+      { from: textLength - 1, to: textLength },
+      textLength
+    )!;
+    expect(rect.y).toBeGreaterThanOrEqual(0);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(plan.logicalPixelHeight);
+  });
+
+  it("#375 lens: a very short single-line document still yields a valid clamped rect", () => {
+    const tiny = buildGlossaryTextMapPlan({ text: "hi", entries: [], wrapColumns: 40 });
+    const rect = buildTextMapViewportRect(tiny, { from: 0, to: 2 }, 2)!;
+    expect(rect).not.toBeNull();
+    expect(rect.y).toBe(0);
+    expect(rect.height).toBe(tiny.cellSize);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(tiny.logicalPixelHeight);
+  });
+
+  it("#375 lens: returns null (no throw) for a NaN / inverted / out-of-order visible range", () => {
+    expect(
+      buildTextMapViewportRect(plan, { from: Number.NaN, to: 5 }, 200)
+    ).toBeNull();
+    expect(
+      buildTextMapViewportRect(plan, { from: 5, to: Number.NaN }, 200)
+    ).toBeNull();
+    expect(
+      buildTextMapViewportRect(plan, { from: 40, to: 10 }, 200)
+    ).toBeNull();
   });
 });
 
