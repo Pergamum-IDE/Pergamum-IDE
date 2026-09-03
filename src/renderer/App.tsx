@@ -362,6 +362,7 @@ import { GlossaryTagManager } from "./GlossaryTagManager";
 import { GlossaryEntryManager } from "./GlossaryEntryManager";
 import { countGlossaryEntriesByTag } from "./glossaryTagEntryCount";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import type { EditorScrollAlign } from "./editorScrollAlign";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import {
@@ -2800,17 +2801,24 @@ export function App(): JSX.Element {
     setPendingMarkdownSelection(outcome.range);
   }
 
-  // #375: Document Map click-to-scroll. `lineIndex` is a 0-based SOURCE line
-  // the map resolved from the click. NAVIGATION only — the editor's
-  // scrollToLine centres the line and focuses the editor, and never touches
-  // the caret / selection / document. A no-op when the active editor is not a
-  // Markdown view (the controller ref is then unset).
-  function scrollActiveMarkdownEditorToLine(lineIndex: number): void {
+  // #375: Document Map navigation. `lineIndex` is a 0-based SOURCE line the map
+  // resolved (from a click or a viewport-lens drag). NAVIGATION only — the
+  // editor's scrollToLine focuses the editor and never touches the caret /
+  // selection / document. `options.align` is `"center"` for click-to-scroll
+  // (default) and `"start"` for lens drag. A no-op when the active editor is
+  // not a Markdown view (the controller ref is then unset).
+  function scrollActiveMarkdownEditorToLine(
+    lineIndex: number,
+    options?: { align?: EditorScrollAlign }
+  ): void {
     if (activeDocument?.editor.kind !== "markdown") {
       return;
     }
 
-    markdownEditorViewStateControllerRef.current?.scrollToLine(lineIndex);
+    markdownEditorViewStateControllerRef.current?.scrollToLine(
+      lineIndex,
+      options
+    );
   }
 
   useEffect(() => {

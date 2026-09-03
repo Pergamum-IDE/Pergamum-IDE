@@ -285,7 +285,11 @@ describe("TextMapPanel (#375) — click-to-scroll navigation", () => {
     clickHostAt(0); // row 0 → line 0
     clickHostAt(7); // row 3 → line 3 (happy-dom rect top = 0)
 
-    expect(onNavigateToLine.mock.calls).toEqual([[0], [3]]);
+    // Phase 5: click-to-scroll navigates with `align: "center"`.
+    expect(onNavigateToLine.mock.calls).toEqual([
+      [0, { align: "center" }],
+      [3, { align: "center" }]
+    ]);
   });
 
   it("marks the host navigable and clamps a click past the end to the last line", () => {
@@ -303,7 +307,7 @@ describe("TextMapPanel (#375) — click-to-scroll navigation", () => {
     ).toBe("true");
 
     clickHostAt(100_000);
-    expect(onNavigateToLine).toHaveBeenLastCalledWith(2);
+    expect(onNavigateToLine).toHaveBeenLastCalledWith(2, { align: "center" });
   });
 
   it("is not clickable when onNavigateToLine is omitted", () => {

@@ -24,6 +24,7 @@ import type {
   MarkdownOutlineParseResult
 } from "../shared/markdownOutline";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import type { EditorScrollAlign } from "./editorScrollAlign";
 import type { SidebarMode } from "./sidebarMode";
 
 interface WorkspaceSidebarProps {
@@ -88,9 +89,13 @@ interface WorkspaceSidebarProps {
   textMapEditorVisibleRange?: EditorVisibleTextRange | null;
   /** #375 Text Map: `documentMap` settings — draw colours + dialogue pairs. */
   textMapDocumentMapSettings?: DocumentMapSettings;
-  /** #375 Text Map: click-to-scroll — a resolved 0-based source line to scroll
-   *  the active Markdown editor to (navigation only). */
-  onTextMapNavigateToLine?: (lineIndex: number) => void;
+  /** #375 Text Map: navigation — a resolved 0-based source line to scroll the
+   *  active Markdown editor to (navigation only). `options.align` is `"center"`
+   *  for click-to-scroll, `"start"` for viewport-lens drag. */
+  onTextMapNavigateToLine?: (
+    lineIndex: number,
+    options?: { align?: EditorScrollAlign }
+  ) => void;
   onNavigateGlossaryOccurrence: (
     entry: GlossaryEntry,
     direction: "previous" | "next"

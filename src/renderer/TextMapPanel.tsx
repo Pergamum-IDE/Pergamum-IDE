@@ -3,6 +3,7 @@ import type { DocumentMapSettings } from "../shared/documentMapSettings";
 import type { GlossaryEntry, GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import type { EditorScrollAlign } from "./editorScrollAlign";
 import { GlossaryTextMinimapCanvas } from "./GlossaryTextMinimapCanvas";
 import { TextMapTagFilter } from "./TextMapTagFilter";
 
@@ -33,10 +34,15 @@ interface TextMapPanelProps {
   /** #375 `documentMap` settings — draw colours + dialogue delimiter pairs. */
   documentMapSettings?: DocumentMapSettings;
   /**
-   * #375: a click on the map resolved to a 0-based SOURCE line — scroll the
-   * active Markdown editor there (navigation only). Omitted → not clickable.
+   * #375: the map resolved a 0-based SOURCE line (from a click or a
+   * viewport-lens drag) — scroll the active Markdown editor there (navigation
+   * only). `options.align` is `"center"` for click-to-scroll, `"start"` for
+   * lens drag. Omitted → the map is neither clickable nor draggable.
    */
-  onNavigateToLine?: (lineIndex: number) => void;
+  onNavigateToLine?: (
+    lineIndex: number,
+    options?: { align?: EditorScrollAlign }
+  ) => void;
   translate: Translate;
 }
 

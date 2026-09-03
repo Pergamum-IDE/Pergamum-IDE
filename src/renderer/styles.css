@@ -1988,6 +1988,25 @@ label.settingsItemHeader {
   cursor: pointer;
 }
 
+/* #375 viewport-lens drag affordance. Declared AFTER the navigable rule so it
+   wins the cursor when the pointer is over / dragging the lens. */
+.glossaryTextMapCanvasHost[data-lens-drag="hover"] {
+  cursor: grab;
+}
+
+.glossaryTextMapCanvasHost[data-lens-drag="dragging"] {
+  cursor: grabbing;
+}
+
+/* #375 Phase 3: keep a fast lens drag from turning into a text selection. The
+   pointer is captured here anyway; scoping this to the dragging state leaves
+   normal selection / touch-scroll of the map untouched. */
+.glossaryTextMapCanvasHost[data-lens-drag="dragging"],
+.glossaryTextMapCanvasHost[data-lens-drag="dragging"] * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .glossaryTextMapCanvas {
   display: block;
   width: 100%;

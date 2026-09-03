@@ -16,6 +16,10 @@ import {
   type EditableContextSurface
 } from "../shared/editContextMenu";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import {
+  DEFAULT_EDITOR_SCROLL_ALIGN,
+  type EditorScrollAlign
+} from "./editorScrollAlign";
 import type {
   ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
@@ -180,11 +184,18 @@ export interface MarkdownEditorViewStateController {
   captureViewState(): EditorViewState | null;
   /**
    * #375 Document Map navigation: scroll the given 0-based SOURCE line into
-   * view, roughly centered, and focus the editor. This is NAVIGATION only —
-   * the caret / selection are NOT touched, no document change is dispatched.
-   * The line is clamped into the document; a no-op when no view is mounted.
+   * view and focus the editor. This is NAVIGATION only — the caret / selection
+   * are NOT touched, no document change is dispatched. The line is clamped into
+   * the document; a no-op when no view is mounted.
+   *
+   * `options.align` picks the vertical alignment: `"center"` (default —
+   * click-to-scroll) puts the line near the middle; `"start"` (viewport-lens
+   * drag) puts it near the top.
    */
-  scrollToLine(lineIndex: number): void;
+  scrollToLine(
+    lineIndex: number,
+    options?: { align?: EditorScrollAlign }
+  ): void;
 }
 
 export interface MarkdownEditorFocusRequest {
@@ -610,7 +621,7 @@ export function MarkdownEditor({
 
         return view ? captureEditorViewState(view) : null;
       },
-      scrollToLine: (lineIndex) => {
+      scrollToLine: (lineIndex, options) => {
         const view = viewRef.current;
 
         if (!view || !Number.isFinite(lineIndex)) {
@@ -626,9 +637,12 @@ export function MarkdownEditor({
         );
         const line = view.state.doc.line(target);
 
-        // Effects only — no `selection`, so the caret does not move.
+        // Effects only — no `selection`, so the caret does not move. `y` is
+        // "center" for click-to-scroll, "start" for viewport-lens drag.
         view.dispatch({
-          effects: EditorView.scrollIntoView(line.from, { y: "center" })
+          effects: EditorView.scrollIntoView(line.from, {
+            y: options?.align ?? DEFAULT_EDITOR_SCROLL_ALIGN
+          })
         });
         view.focus();
       }
