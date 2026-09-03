@@ -8,6 +8,7 @@ import {
 import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
 import { registerAssistCommands } from "../../src/renderer/assistCommands";
 import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
+import { registerDebugLogCommands } from "../../src/renderer/debugLogCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 import { registerFileExplorerCommands } from "../../src/renderer/fileExplorerCommands";
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
@@ -138,6 +139,18 @@ function buildCoreCommandRegistry(): CommandRegistry {
       open: "Open Utility Window",
       close: "Close Utility Window",
       toggle: "Toggle Utility Window"
+    }
+  );
+  // #377: the Debug Log command is registered only in `--pergamum-debug`
+  // mode, but the taxonomy guard still checks it lives under a core domain.
+  registerDebugLogCommands(
+    registry,
+    {
+      openDebugLog: () => undefined
+    },
+    {
+      open: "Open Debug Log",
+      openDescription: "Open the Debug Log tab."
     }
   );
   registerGlossaryCommands(

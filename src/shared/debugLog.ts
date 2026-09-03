@@ -600,6 +600,7 @@ export const knownDebugLogCommandIds = [
   "workbench.utilityWindow.open",
   "workbench.utilityWindow.close",
   "workbench.utilityWindow.toggle",
+  "workbench.debugLog.open",
   "glossary.entry.open",
   "glossary.entry.create",
   "glossary.entry.occurrences.previous",

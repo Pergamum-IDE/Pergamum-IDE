@@ -150,7 +150,7 @@ function DebugLogEventTable({
   return (
     <table
       className="debugLogTable"
-      aria-label={translate("utilityWindow.tabs.debugLog")}
+      aria-label={translate("debugLog.title")}
     >
       <thead>
         <tr>
