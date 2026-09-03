@@ -1,10 +1,4 @@
-import {
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  type IpcMainInvokeEvent,
-  type MessageBoxOptions
-} from "electron";
+import { ipcMain } from "electron";
 import {
   GLOSSARY_CHANNELS,
   type DeleteGlossaryEntryRequest,
@@ -45,35 +39,16 @@ import { getDebugLogger, type DebugLogger } from "./debugLogger";
 
 export type CurrentActiveProjectFilePathProvider = () => string;
 
-// index 0 ("OK") confirms the deletion; index 1 ("Cancel") is both the
-// default and cancel action, matching every dismiss path to a single safe
-// "do not delete".
-const DELETE_CONFIRM_BUTTON_INDEX = {
-  ok: 0,
-  cancel: 1
-} as const;
-
-export type ConfirmGlossaryDeletion = (
-  event: IpcMainInvokeEvent | undefined,
-  confirmMessage: string
-) => Promise<boolean>;
-
 export interface GlossaryIpcHandlers {
   create(rawRequest: unknown): Promise<GlossaryEntry>;
   getById(rawRequest: unknown): Promise<GlossaryEntry | null>;
   list(): Promise<GlossaryEntry[]>;
   update(rawRequest: unknown): Promise<GlossaryEntry>;
-  delete(
-    rawRequest: unknown,
-    event?: IpcMainInvokeEvent
-  ): Promise<DeleteGlossaryEntryResult>;
+  delete(rawRequest: unknown): Promise<DeleteGlossaryEntryResult>;
   listTags(): Promise<GlossaryTag[]>;
   createTag(rawRequest: unknown): Promise<GlossaryTag>;
   updateTag(rawRequest: unknown): Promise<GlossaryTag>;
-  deleteTag(
-    rawRequest: unknown,
-    event?: IpcMainInvokeEvent
-  ): Promise<DeleteGlossaryTagResult>;
+  deleteTag(rawRequest: unknown): Promise<DeleteGlossaryTagResult>;
 }
 
 function isRequestObject(value: unknown): value is Record<string, unknown> {
@@ -95,22 +70,12 @@ function parseGlossaryEntryIdRequest(value: unknown): GlossaryEntryIdRequest {
 function parseDeleteRequest(
   value: unknown,
   validateId: (id: unknown) => string
-): { id: string; confirmMessage: string } {
+): { id: string } {
   if (!isRequestObject(value)) {
     throw new Error("Invalid glossary delete request.");
   }
 
-  if (
-    typeof value.confirmMessage !== "string" ||
-    value.confirmMessage.length === 0
-  ) {
-    throw new Error("Invalid glossary delete confirmation message.");
-  }
-
-  return {
-    id: validateId(value.id),
-    confirmMessage: value.confirmMessage
-  };
+  return { id: validateId(value.id) };
 }
 
 function parseDeleteGlossaryEntryRequest(
@@ -123,33 +88,6 @@ function parseDeleteGlossaryTagRequest(
   value: unknown
 ): DeleteGlossaryTagRequest {
   return parseDeleteRequest(value, (id) => validateGlossaryTagId(id));
-}
-
-function parentWindow(
-  event: IpcMainInvokeEvent | undefined
-): BrowserWindow | undefined {
-  return event
-    ? BrowserWindow.fromWebContents(event.sender) ?? undefined
-    : undefined;
-}
-
-async function confirmDeletionWithDialog(
-  event: IpcMainInvokeEvent | undefined,
-  confirmMessage: string
-): Promise<boolean> {
-  const owner = parentWindow(event);
-  const options: MessageBoxOptions = {
-    type: "warning",
-    message: confirmMessage,
-    buttons: ["OK", "Cancel"],
-    defaultId: DELETE_CONFIRM_BUTTON_INDEX.cancel,
-    cancelId: DELETE_CONFIRM_BUTTON_INDEX.cancel
-  };
-  const result = owner
-    ? await dialog.showMessageBox(owner, options)
-    : await dialog.showMessageBox(options);
-
-  return result?.response === DELETE_CONFIRM_BUTTON_INDEX.ok;
 }
 
 function isMissingGlossaryStoreError(error: unknown): boolean {
@@ -178,7 +116,6 @@ async function withCurrentProjectDatabase<T>(
 export function createGlossaryIpcHandlers(
   getCurrentActiveProjectFilePath: CurrentActiveProjectFilePathProvider =
     requireCurrentActiveProjectFilePath,
-  confirmDeletion: ConfirmGlossaryDeletion = confirmDeletionWithDialog,
   logger: DebugLogger = getDebugLogger()
 ): GlossaryIpcHandlers {
   const withDatabase = <T>(
@@ -240,13 +177,8 @@ export function createGlossaryIpcHandlers(
         throw error;
       }
     },
-    async delete(rawRequest, event) {
+    async delete(rawRequest) {
       const request = parseDeleteGlossaryEntryRequest(rawRequest);
-      const confirmed = await confirmDeletion(event, request.confirmMessage);
-
-      if (!confirmed) {
-        return { deleted: false };
-      }
 
       return withDatabase(async (database) => {
         try {
@@ -277,13 +209,8 @@ export function createGlossaryIpcHandlers(
         updateGlossaryTag(database, input, logger)
       );
     },
-    async deleteTag(rawRequest, event) {
+    async deleteTag(rawRequest) {
       const request = parseDeleteGlossaryTagRequest(rawRequest);
-      const confirmed = await confirmDeletion(event, request.confirmMessage);
-
-      if (!confirmed) {
-        return { deleted: false };
-      }
 
       return withDatabase(async (database) => {
         try {
@@ -305,7 +232,6 @@ export function registerGlossaryIpc(
 ): void {
   const handlers = createGlossaryIpcHandlers(
     requireCurrentActiveProjectFilePath,
-    confirmDeletionWithDialog,
     logger
   );
 
@@ -319,8 +245,8 @@ export function registerGlossaryIpc(
   ipcMain.handle(GLOSSARY_CHANNELS.update, (_event, rawRequest: unknown) =>
     handlers.update(rawRequest)
   );
-  ipcMain.handle(GLOSSARY_CHANNELS.delete, (event, rawRequest: unknown) =>
-    handlers.delete(rawRequest, event)
+  ipcMain.handle(GLOSSARY_CHANNELS.delete, (_event, rawRequest: unknown) =>
+    handlers.delete(rawRequest)
   );
   ipcMain.handle(GLOSSARY_CHANNELS.listTags, () => handlers.listTags());
   ipcMain.handle(GLOSSARY_CHANNELS.createTag, (_event, rawRequest: unknown) =>
@@ -329,7 +255,7 @@ export function registerGlossaryIpc(
   ipcMain.handle(GLOSSARY_CHANNELS.updateTag, (_event, rawRequest: unknown) =>
     handlers.updateTag(rawRequest)
   );
-  ipcMain.handle(GLOSSARY_CHANNELS.deleteTag, (event, rawRequest: unknown) =>
-    handlers.deleteTag(rawRequest, event)
+  ipcMain.handle(GLOSSARY_CHANNELS.deleteTag, (_event, rawRequest: unknown) =>
+    handlers.deleteTag(rawRequest)
   );
 }

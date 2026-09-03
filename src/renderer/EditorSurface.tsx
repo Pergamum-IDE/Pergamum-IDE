@@ -392,10 +392,7 @@ interface EditorSurfaceProps {
     matchFlags: number
   ) => void;
   onDeleteGlossaryEntryAtom: (atomId: string) => void;
-  onMoveGlossaryEntryAtom: (
-    atomId: string,
-    direction: "up" | "down"
-  ) => void;
+  onReorderGlossaryEntryAtom: (atomId: string, toIndex: number) => void;
   onToggleGlossaryEntryTag: (tagId: string) => void;
   /** #375: open the Glossary Tag Manager special tab. */
   onOpenGlossaryTagManager: () => void;
@@ -493,7 +490,7 @@ export function EditorSurface({
   onChangeGlossaryEntryAtomValue,
   onChangeGlossaryEntryAtomMatchFlags,
   onDeleteGlossaryEntryAtom,
-  onMoveGlossaryEntryAtom,
+  onReorderGlossaryEntryAtom,
   onToggleGlossaryEntryTag,
   onOpenGlossaryTagManager,
   onDeleteGlossaryEntry,
@@ -565,7 +562,7 @@ export function EditorSurface({
           onChangeAtomValue={onChangeGlossaryEntryAtomValue}
           onChangeAtomMatchFlags={onChangeGlossaryEntryAtomMatchFlags}
           onDeleteAtom={onDeleteGlossaryEntryAtom}
-          onMoveAtom={onMoveGlossaryEntryAtom}
+          onReorderAtom={onReorderGlossaryEntryAtom}
           onToggleTag={onToggleGlossaryEntryTag}
           onOpenTagManager={onOpenGlossaryTagManager}
           onDeleteEntry={onDeleteGlossaryEntry}

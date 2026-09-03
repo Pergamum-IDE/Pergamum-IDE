@@ -20,8 +20,11 @@ interface GlossaryTagManagerProps {
   translate: Translate;
   onCreateTag: (input: CreateGlossaryTagInput) => Promise<unknown>;
   onUpdateTag: (input: UpdateGlossaryTagInput) => Promise<unknown>;
-  /** Hard delete; the confirmation dialog is shown by the main process. */
-  onDeleteTag: (tagId: string, confirmMessage: string) => Promise<unknown>;
+  /**
+   * Hard delete. The host confirms first through the Pergamum destructive
+   * confirm dialog (the tag label is passed so it can name the target).
+   */
+  onDeleteTag: (tagId: string, tagLabel: string) => Promise<unknown>;
   /**
    * #375: start with the "new tag" form already open (used when the Tag
    * Manager tab is opened from the Glossary Entry editor's "Manage tags"
@@ -107,10 +110,7 @@ export function GlossaryTagManager({
                 className="glossaryTagManagerDelete"
                 disabled={busy}
                 onClick={() => {
-                  void onDeleteTag(
-                    tag.id,
-                    translate("glossaryTagEditor.deleteConfirmMessage")
-                  );
+                  void onDeleteTag(tag.id, tag.label);
                 }}
               >
                 {translate("glossaryTagEditor.deleteTag")}

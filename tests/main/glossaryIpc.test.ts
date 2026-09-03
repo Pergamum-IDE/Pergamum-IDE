@@ -8,12 +8,13 @@ import { projectDatabaseFileName } from "../../src/main/projectDatabase";
 
 const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
-  fromWebContents: vi.fn(() => undefined),
   showMessageBox: vi.fn()
 }));
 
 vi.mock("electron", () => ({
-  BrowserWindow: { fromWebContents: electronMock.fromWebContents },
+  // #375: the delete confirmation is a Pergamum renderer dialog now — the
+  // main process must never open a native message box. `dialog` is still
+  // stubbed here purely so an accidental regression is caught.
   dialog: { showMessageBox: electronMock.showMessageBox },
   ipcMain: { handle: electronMock.handle }
 }));
@@ -24,7 +25,6 @@ import {
 } from "../../src/main/glossaryIpc";
 
 const missingEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
-const confirmMessage = "この語彙を削除します。よろしいですか？";
 
 describe("glossary IPC (#375)", () => {
   let projectRootPath: string;
@@ -32,7 +32,6 @@ describe("glossary IPC (#375)", () => {
 
   beforeEach(async () => {
     electronMock.handle.mockClear();
-    electronMock.fromWebContents.mockReset().mockReturnValue(undefined);
     electronMock.showMessageBox.mockReset();
     projectRootPath = await fs.mkdtemp(
       path.join(os.tmpdir(), "pergamum-glossary-ipc-")
@@ -107,11 +106,11 @@ describe("glossary IPC (#375)", () => {
     expect(updated).toMatchObject({ id: created.id, description: "改稿後" });
     expect(updated.tags).toEqual([]);
 
-    electronMock.showMessageBox.mockResolvedValue({ response: 0 });
-    await expect(
-      api.delete({ id: created.id, confirmMessage })
-    ).resolves.toEqual({ deleted: true });
+    await expect(api.delete({ id: created.id })).resolves.toEqual({
+      deleted: true
+    });
     await expect(api.getById({ id: created.id })).resolves.toBeNull();
+    expect(electronMock.showMessageBox).not.toHaveBeenCalled();
   });
 
   it("requires an active project before accessing glossary data", async () => {
@@ -142,7 +141,7 @@ describe("glossary IPC (#375)", () => {
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 
-  it("confirms tag deletion with a warning dialog and hard-deletes on OK", async () => {
+  it("hard-deletes a tag without opening any native dialog", async () => {
     const api = handlers();
     const tag = await api.createTag({
       label: "武将",
@@ -151,45 +150,29 @@ describe("glossary IPC (#375)", () => {
       foregroundRgb: "#ffffff"
     });
 
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 });
-    await expect(
-      api.deleteTag({ id: tag.id, confirmMessage })
-    ).resolves.toEqual({ deleted: false });
-    expect(await api.listTags()).toEqual([tag]);
-
-    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 });
-    await expect(
-      api.deleteTag({ id: tag.id, confirmMessage })
-    ).resolves.toEqual({ deleted: true });
-    expect(await api.listTags()).toEqual([]);
-
-    const options = electronMock.showMessageBox.mock.calls[0].at(-1);
-    expect(options).toMatchObject({
-      type: "warning",
-      message: confirmMessage,
-      buttons: ["OK", "Cancel"],
-      defaultId: 1,
-      cancelId: 1
+    await expect(api.deleteTag({ id: tag.id })).resolves.toEqual({
+      deleted: true
     });
+    expect(await api.listTags()).toEqual([]);
+    expect(electronMock.showMessageBox).not.toHaveBeenCalled();
   });
 
   it("treats deleting an already-missing entry / tag as idempotent success", async () => {
     const api = handlers();
-    electronMock.showMessageBox.mockResolvedValue({ response: 0 });
 
-    await expect(
-      api.delete({ id: missingEntryId, confirmMessage })
-    ).resolves.toEqual({ deleted: true });
-    await expect(
-      api.deleteTag({ id: missingEntryId, confirmMessage })
-    ).resolves.toEqual({ deleted: true });
+    await expect(api.delete({ id: missingEntryId })).resolves.toEqual({
+      deleted: true
+    });
+    await expect(api.deleteTag({ id: missingEntryId })).resolves.toEqual({
+      deleted: true
+    });
+    expect(electronMock.showMessageBox).not.toHaveBeenCalled();
   });
 
-  it("rejects a delete request missing a confirmation message", async () => {
+  it("rejects a delete request with a malformed id", async () => {
     const api = handlers();
 
-    await expect(api.delete({ id: missingEntryId })).rejects.toThrow();
-    await expect(api.deleteTag({ id: missingEntryId })).rejects.toThrow();
-    expect(electronMock.showMessageBox).not.toHaveBeenCalled();
+    await expect(api.delete({ id: 123 })).rejects.toThrow();
+    await expect(api.deleteTag({})).rejects.toThrow();
   });
 });

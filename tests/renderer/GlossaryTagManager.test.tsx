@@ -99,13 +99,10 @@ describe("GlossaryTagManager (#375)", () => {
     expect(container.querySelector(".glossaryTagEditor")).toBeNull();
   });
 
-  it("hard-deletes through onDeleteTag with a confirmation message", () => {
+  it("asks the host to delete a tag, passing its id and label (the host confirms)", () => {
     const handlers = render();
     act(() => button("glossaryTagEditor.deleteTag").click());
-    expect(handlers.onDeleteTag).toHaveBeenCalledWith(
-      tagA.id,
-      "glossaryTagEditor.deleteConfirmMessage"
-    );
+    expect(handlers.onDeleteTag).toHaveBeenCalledWith(tagA.id, tagA.label);
   });
 
   it("opens the editor for a new tag and creates it via onCreateTag", async () => {

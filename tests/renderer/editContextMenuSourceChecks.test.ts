@@ -54,6 +54,12 @@ function allSourceText(): string {
  * rows, scoped to the tree while it is focused — a local ARIA tree widget,
  * not a document-level/global shortcut listener, and it never touches the
  * Markdown editor's native-edit-command delegation.
+ *
+ * GlossaryEditor.tsx (#375) is the same category again: the per-atom drag
+ * handle's `onKeyDown` implements Arrow Up / Down reorder for its own
+ * `<button>` while that handle is focused — a keyboard fallback for the D&D
+ * reorder, scoped to the handle, not a document-level/global shortcut
+ * listener.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -61,7 +67,8 @@ const onKeyDownExemptFileNames = new Set([
   "ConfirmDialog.tsx",
   "InfoDialog.tsx",
   "DocumentTabBar.tsx",
-  "FileExplorer.tsx"
+  "FileExplorer.tsx",
+  "GlossaryEditor.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {

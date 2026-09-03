@@ -253,7 +253,8 @@ import {
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
   glossaryEntryDraftValidity,
-  moveGlossaryEntryDraftAtom,
+  representativeGlossaryAtomDraft,
+  reorderGlossaryEntryDraftAtom,
   toggleGlossaryEntryDraftTag,
   updateGlossaryEntryDraftAtomMatchFlags,
   updateGlossaryEntryDraftAtomValue,
@@ -856,6 +857,10 @@ export function App(): JSX.Element {
   // Markdown document.
   const sidebarGlossaryOccurrenceCursorRef =
     useRef<GlossaryOccurrenceCursor | null>(null);
+  // #375: guards the Glossary Entry / Tag delete flows against a second
+  // Delete press while the confirm dialog is open or the delete IPC is in
+  // flight.
+  const glossaryDeleteInFlightRef = useRef(false);
   const navigateGlossaryOccurrenceRef = useRef<
     (
       entryId: GlossaryEntryId,
@@ -2473,12 +2478,12 @@ export function App(): JSX.Element {
     );
   }
 
-  function moveActiveGlossaryEntryAtom(
+  function reorderActiveGlossaryEntryAtom(
     atomId: string,
-    direction: "up" | "down"
+    toIndex: number
   ): void {
     updateActiveGlossaryDraft((draft) =>
-      moveGlossaryEntryDraftAtom(draft, atomId, direction)
+      reorderGlossaryEntryDraftAtom(draft, atomId, toIndex)
     );
   }
 
@@ -2533,10 +2538,55 @@ export function App(): JSX.Element {
 
   async function handleDeleteGlossaryTag(
     tagId: string,
-    confirmMessage: string
+    tagLabel: string
   ): Promise<void> {
-    await window.pergamum.glossary.deleteTag(tagId, confirmMessage);
-    setGlossaryRefreshToken((token) => token + 1);
+    if (glossaryDeleteInFlightRef.current) {
+      return;
+    }
+
+    glossaryDeleteInFlightRef.current = true;
+
+    try {
+      let confirmed = false;
+      try {
+        const result = await confirmDialog({
+          title: translate("glossary.tagDeleteDialog.title"),
+          message: {
+            kind: "plainTextWithPathBlock",
+            beforeText: translate("glossary.deleteDialog.message"),
+            pathBlock: {
+              label: translate("glossary.tagDeleteDialog.targetLabel"),
+              value: tagLabel
+            },
+            afterText: ""
+          },
+          icon: { kind: "warning", tooltip: translate("dialog.icon.warning") },
+          clipboardText: null,
+          dismissOnBackdropClick: false,
+          tone: "destructive",
+          confirmLabel: translate("glossary.deleteDialog.delete"),
+          cancelLabel: translate("glossary.deleteDialog.cancel")
+        });
+        confirmed = result === "confirm";
+      } catch (error) {
+        if (
+          error instanceof AppDialogError &&
+          error.kind === "dialogAlreadyOpen"
+        ) {
+          return;
+        }
+        throw error;
+      }
+
+      if (!confirmed) {
+        return;
+      }
+
+      await window.pergamum.glossary.deleteTag(tagId);
+      setGlossaryRefreshToken((token) => token + 1);
+    } finally {
+      glossaryDeleteInFlightRef.current = false;
+    }
   }
 
   // #375: Glossary sidebar ◀ / ▶ — jump to an occurrence of `entry` (any of
@@ -4645,6 +4695,51 @@ export function App(): JSX.Element {
     }
   }
 
+  // #375: confirm through the Pergamum destructive confirm dialog (never a
+  // native OS message box) — Escape / Cancel / backdrop all resolve to "do
+  // not delete"; only the explicit "Delete" button proceeds.
+  async function confirmDeleteGlossaryEntry(
+    draft: GlossaryEntryDraft
+  ): Promise<boolean> {
+    const targetLabel =
+      representativeGlossaryAtomDraft(draft)?.value.trim() ||
+      representativeGlossarySurface(draft.entry);
+
+    try {
+      const result = await confirmDialog({
+        title: translate("glossary.deleteDialog.title"),
+        message: {
+          kind: "plainTextWithPathBlock",
+          beforeText: translate("glossary.deleteDialog.message"),
+          pathBlock: {
+            label: translate("glossary.deleteDialog.targetLabel"),
+            value: targetLabel
+          },
+          afterText: translate("glossary.deleteDialog.counts", {
+            atomCount: draft.atoms.length,
+            tagCount: draft.tagIds.length
+          })
+        },
+        icon: { kind: "warning", tooltip: translate("dialog.icon.warning") },
+        clipboardText: null,
+        dismissOnBackdropClick: false,
+        tone: "destructive",
+        confirmLabel: translate("glossary.deleteDialog.delete"),
+        cancelLabel: translate("glossary.deleteDialog.cancel")
+      });
+
+      return result === "confirm";
+    } catch (error) {
+      if (
+        error instanceof AppDialogError &&
+        error.kind === "dialogAlreadyOpen"
+      ) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async function deleteActiveGlossaryEntry(): Promise<void> {
     if (isLifecycleCommitBarrierActiveNow()) {
       return;
@@ -4654,19 +4749,24 @@ export function App(): JSX.Element {
       return;
     }
 
+    if (glossaryDeleteInFlightRef.current) {
+      return;
+    }
+
     const documentIdToDelete = activeDocument.id;
-    const entryIdToDelete = activeDocument.editor.draft.entry.id;
-    const confirmMessage = translate(
-      "glossaryEditor.deleteEntryConfirmMessage"
-    );
+    const draft = activeDocument.editor.draft;
+    const entryIdToDelete = draft.entry.id;
     const projectGeneration =
       projectActivationLifetimeRef.current.captureProjectActivationGeneration();
 
+    glossaryDeleteInFlightRef.current = true;
+
     try {
-      const result = await window.pergamum.glossary.delete(
-        entryIdToDelete,
-        confirmMessage
-      );
+      if (!(await confirmDeleteGlossaryEntry(draft))) {
+        return;
+      }
+
+      const result = await window.pergamum.glossary.delete(entryIdToDelete);
 
       if (
         !projectActivationLifetimeRef.current.isProjectActivationCurrent(
@@ -4703,6 +4803,8 @@ export function App(): JSX.Element {
         key: "status.commandFailed",
         values: { message: errorMessage(error, translate) }
       });
+    } finally {
+      glossaryDeleteInFlightRef.current = false;
     }
   }
 
@@ -7078,7 +7180,7 @@ export function App(): JSX.Element {
                           setActiveGlossaryEntryAtomMatchFlags
                         }
                         onDeleteGlossaryEntryAtom={deleteActiveGlossaryEntryAtom}
-                        onMoveGlossaryEntryAtom={moveActiveGlossaryEntryAtom}
+                        onReorderGlossaryEntryAtom={reorderActiveGlossaryEntryAtom}
                         onToggleGlossaryEntryTag={toggleActiveGlossaryEntryTag}
                         onOpenGlossaryTagManager={() =>
                           openGlossaryTagManagerTab({ autoStartCreate: true })

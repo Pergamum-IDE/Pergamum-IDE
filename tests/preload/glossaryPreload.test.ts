@@ -165,7 +165,7 @@ describe("glossary preload API", () => {
       ],
       tagIds: [tagId]
     });
-    await api.glossary.delete(entryId, "この語彙を削除します。よろしいですか？");
+    await api.glossary.delete(entryId);
     await api.glossary.listTags();
     await api.glossary.createTag({
       label: "設備",
@@ -180,7 +180,7 @@ describe("glossary preload API", () => {
       backgroundRgb: "#123456",
       foregroundRgb: "#ffffff"
     });
-    await api.glossary.deleteTag(tagId, "このタグを削除します。よろしいですか？");
+    await api.glossary.deleteTag(tagId);
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [
@@ -205,10 +205,7 @@ describe("glossary preload API", () => {
           tagIds: [tagId]
         }
       ],
-      [
-        GLOSSARY_CHANNELS.delete,
-        { id: entryId, confirmMessage: "この語彙を削除します。よろしいですか？" }
-      ],
+      [GLOSSARY_CHANNELS.delete, { id: entryId }],
       [GLOSSARY_CHANNELS.listTags],
       [
         GLOSSARY_CHANNELS.createTag,
@@ -229,10 +226,7 @@ describe("glossary preload API", () => {
           foregroundRgb: "#ffffff"
         }
       ],
-      [
-        GLOSSARY_CHANNELS.deleteTag,
-        { id: tagId, confirmMessage: "このタグを削除します。よろしいですか？" }
-      ]
+      [GLOSSARY_CHANNELS.deleteTag, { id: tagId }]
     ]);
   });
 

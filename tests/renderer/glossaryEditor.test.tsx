@@ -81,7 +81,7 @@ function noopHandlers() {
     onChangeAtomValue: vi.fn(),
     onChangeAtomMatchFlags: vi.fn(),
     onDeleteAtom: vi.fn(),
-    onMoveAtom: vi.fn(),
+    onReorderAtom: vi.fn(),
     onToggleTag: vi.fn(),
     onOpenTagManager: vi.fn(),
     onDeleteEntry: vi.fn(),
@@ -123,6 +123,33 @@ describe("GlossaryEditor (#375)", () => {
     expect(markup).not.toContain("glossaryEditor.kind");
     expect(markup).not.toContain("glossaryEditor.aliases");
     expect(markup).not.toContain("warningPolicy");
+  });
+
+  it("renders a ⣿ drag handle per atom row and no ↑ / ↓ move buttons", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
+
+    // One labelled handle per atom (2 atoms in the fixture).
+    expect(markup.match(/glossaryEditorAtomDragHandle/g)).toHaveLength(2);
+    expect(markup.match(/⣿/g)).toHaveLength(2);
+    expect(markup).toContain('aria-label="glossaryEditor.atoms.dragHandle"');
+    expect(markup).toContain('draggable="true"');
+
+    // The old up/down affordances are gone.
+    expect(markup).not.toContain("glossaryEditorAtomMoveButton");
+    expect(markup).not.toContain("glossaryEditor.atoms.moveUp");
+    expect(markup).not.toContain("glossaryEditor.atoms.moveDown");
+    expect(markup).not.toContain("↑");
+    expect(markup).not.toContain("↓");
+  });
+
+  it("disables the drag handle when there is only one atom (nothing to reorder)", () => {
+    const draft = createGlossaryEntryDraft({
+      ...entry(),
+      atoms: [entry().atoms[0]]
+    });
+    const markup = render(draft);
+
+    expect(markup).toMatch(/glossaryEditorAtomDragHandle[^>]*disabled/);
   });
 
   it("renders the per-atom match-flags editor: single-character bit + start/end boundary policy selects", () => {
@@ -259,5 +286,129 @@ describe("GlossaryEditor (#375) — tag manager link", () => {
       .click();
 
     expect(onOpenTagManager).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("GlossaryEditor (#375) — atom drag-reorder", () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  function mount(): { onReorderAtom: ReturnType<typeof vi.fn> } {
+    const onReorderAtom = vi.fn();
+    act(() => {
+      root.render(
+        React.createElement(GlossaryEditor, {
+          draft: createGlossaryEntryDraft(entry()),
+          availableTags: [tagA, tagB],
+          translate,
+          ...noopHandlers(),
+          onReorderAtom
+        })
+      );
+    });
+    return { onReorderAtom };
+  }
+
+  function handles(): HTMLButtonElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".glossaryEditorAtomDragHandle"
+      )
+    );
+  }
+
+  function rows(): HTMLLIElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLLIElement>(".glossaryEditorAtomRow")
+    );
+  }
+
+  it("keyboard: Arrow Down on the first handle asks to move a1 to index 1", () => {
+    const { onReorderAtom } = mount();
+
+    act(() => {
+      handles()[0].dispatchEvent(
+        new window.KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true
+        })
+      );
+    });
+
+    expect(onReorderAtom).toHaveBeenCalledWith("a1", 1);
+  });
+
+  it("keyboard: Arrow Up on the second handle asks to move a2 to index 0", () => {
+    const { onReorderAtom } = mount();
+
+    act(() => {
+      handles()[1].dispatchEvent(
+        new window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })
+      );
+    });
+
+    expect(onReorderAtom).toHaveBeenCalledWith("a2", 0);
+  });
+
+  it("keyboard: Arrow Up on the first (representative) handle is a no-op", () => {
+    const { onReorderAtom } = mount();
+
+    act(() => {
+      handles()[0].dispatchEvent(
+        new window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })
+      );
+    });
+
+    expect(onReorderAtom).not.toHaveBeenCalled();
+  });
+
+  it("drag-and-drop: dragging a1's handle onto the lower half of a2 asks to move a1 to index 1", () => {
+    const { onReorderAtom } = mount();
+
+    const dataTransfer = {
+      _data: new Map<string, string>(),
+      types: [] as string[],
+      dropEffect: "",
+      effectAllowed: "",
+      setData(type: string, value: string) {
+        this._data.set(type, value);
+        this.types = [...this._data.keys()];
+      },
+      getData(type: string) {
+        return this._data.get(type) ?? "";
+      }
+    };
+
+    function fire(target: EventTarget, type: string, clientY: number): void {
+      const event = new window.Event(type, {
+        bubbles: true,
+        cancelable: true
+      });
+      Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+      Object.defineProperty(event, "clientY", { value: clientY });
+      act(() => {
+        target.dispatchEvent(event);
+      });
+    }
+
+    // Row rects are 0-height in happy-dom, so any clientY > 0 lands in the
+    // lower half → the gap after that row. Dropping onto a2 (index 1) means
+    // gap 2; dragging a1 from index 0 into gap 2 resolves to final index 1.
+    fire(handles()[0], "dragstart", 0);
+    fire(rows()[1], "dragover", 5);
+    fire(rows()[1], "drop", 5);
+
+    expect(onReorderAtom).toHaveBeenCalledWith("a1", 1);
   });
 });

@@ -780,9 +780,12 @@ export interface GlossaryEntryIdRequest {
   id: string;
 }
 
+/**
+ * #375: the delete confirmation is a Pergamum renderer dialog now — the main
+ * process just performs the hard delete when asked.
+ */
 export interface DeleteGlossaryEntryRequest {
   id: string;
-  confirmMessage: string;
 }
 
 export interface DeleteGlossaryEntryResult {
@@ -792,7 +795,6 @@ export interface DeleteGlossaryEntryResult {
 /** #375: hard delete of a tag (cascades to `glossary_entry_tags` only). */
 export interface DeleteGlossaryTagRequest {
   id: string;
-  confirmMessage: string;
 }
 
 export interface DeleteGlossaryTagResult {
@@ -997,18 +999,12 @@ export interface PergamumApi {
     getById: (id: string) => Promise<GlossaryEntry | null>;
     list: () => Promise<GlossaryEntry[]>;
     update: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
-    delete: (
-      id: string,
-      confirmMessage: string
-    ) => Promise<DeleteGlossaryEntryResult>;
+    delete: (id: string) => Promise<DeleteGlossaryEntryResult>;
     /** #375: project-owned tag layer. */
     listTags: () => Promise<GlossaryTag[]>;
     createTag: (input: CreateGlossaryTagInput) => Promise<GlossaryTag>;
     updateTag: (input: UpdateGlossaryTagInput) => Promise<GlossaryTag>;
-    deleteTag: (
-      id: string,
-      confirmMessage: string
-    ) => Promise<DeleteGlossaryTagResult>;
+    deleteTag: (id: string) => Promise<DeleteGlossaryTagResult>;
   };
   debugLog: {
     logEvent: (request: RendererDebugLogRequest) => Promise<void>;

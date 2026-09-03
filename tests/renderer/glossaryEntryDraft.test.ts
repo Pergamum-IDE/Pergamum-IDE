@@ -16,7 +16,7 @@ import {
   isGlossaryEntryDraftDirty,
   isLocalGlossaryAtomId,
   markGlossaryEntryDraftSaving,
-  moveGlossaryEntryDraftAtom,
+  reorderGlossaryEntryDraftAtom,
   representativeGlossaryAtomDraft,
   toggleGlossaryEntryDraftTag,
   updateGlossaryEntryDraftAtomMatchFlags,
@@ -121,15 +121,24 @@ describe("glossaryEntryDraft (#375)", () => {
       GlossaryAtomFlags.AllowSingleCharacterMatch
     );
 
-    // Move "第六天魔王" (index 1) up → it becomes the representative.
-    draft = moveGlossaryEntryDraftAtom(draft, "a2", "up");
+    // Move "第六天魔王" (index 1) to index 0 → it becomes the representative.
+    draft = reorderGlossaryEntryDraftAtom(draft, "a2", 0);
     expect(draft.atoms.map((a) => a.id)).toEqual(["a2", "a1", added.id]);
     expect(representativeGlossaryAtomDraft(draft)?.id).toBe("a2");
 
-    // Out-of-range moves are no-ops.
+    // Move it to the end.
+    draft = reorderGlossaryEntryDraftAtom(draft, "a2", 2);
+    expect(draft.atoms.map((a) => a.id)).toEqual(["a1", added.id, "a2"]);
+    expect(representativeGlossaryAtomDraft(draft)?.id).toBe("a1");
+
+    // Unknown id / dropping on its own index / out-of-range target are no-ops
+    // (the target is clamped to 0..n-1).
     const before = draft.atoms.map((a) => a.id);
-    draft = moveGlossaryEntryDraftAtom(draft, "a2", "up");
-    expect(draft.atoms.map((a) => a.id)).toEqual(before);
+    draft = reorderGlossaryEntryDraftAtom(draft, "nope", 0);
+    draft = reorderGlossaryEntryDraftAtom(draft, "a2", 2);
+    draft = reorderGlossaryEntryDraftAtom(draft, "a1", -5);
+    expect(draft.atoms.map((a) => a.id)).toEqual(["a1", added.id, "a2"]);
+    expect(before).toEqual(["a1", added.id, "a2"]);
   });
 
   it("deletes atoms", () => {

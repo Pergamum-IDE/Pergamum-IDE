@@ -31,16 +31,37 @@ describe("supported UI languages (#186)", () => {
   });
 });
 
-describe("glossary entry deletion translations", () => {
-  it("labels the delete button and its confirmation message for ja and en", () => {
+describe("glossary deletion dialog translations (#375)", () => {
+  it("labels the entry delete confirm dialog for ja and en with a Delete (not OK) action", () => {
     expect(t("ja", "glossaryEditor.deleteEntry")).toBe("削除");
     expect(t("en", "glossaryEditor.deleteEntry")).toBe("Delete");
-    expect(t("ja", "glossaryEditor.deleteEntryConfirmMessage")).toBe(
-      "この語彙を削除します。よろしいですか？"
+
+    expect(t("ja", "glossary.deleteDialog.title")).toBe("語彙を削除しますか？");
+    expect(t("en", "glossary.deleteDialog.title")).toBe(
+      "Delete glossary entry?"
     );
-    expect(t("en", "glossaryEditor.deleteEntryConfirmMessage")).toBe(
-      "Delete this glossary entry?"
+    expect(t("ja", "glossary.deleteDialog.message")).toBe(
+      "この操作は元に戻せません。"
     );
+    expect(t("en", "glossary.deleteDialog.message")).toBe(
+      "This action cannot be undone."
+    );
+    expect(t("ja", "glossary.deleteDialog.delete")).toBe("削除");
+    expect(t("en", "glossary.deleteDialog.delete")).toBe("Delete");
+    expect(t("ja", "glossary.deleteDialog.cancel")).toBe("キャンセル");
+    expect(t("en", "glossary.deleteDialog.cancel")).toBe("Cancel");
+    // The affirmative action is never labelled "OK".
+    expect(t("ja", "glossary.deleteDialog.delete")).not.toBe("OK");
+    expect(t("en", "glossary.deleteDialog.delete")).not.toBe("OK");
+  });
+
+  it("labels the tag delete confirm dialog for ja and en", () => {
+    expect(t("ja", "glossary.tagDeleteDialog.title")).toBe(
+      "タグを削除しますか？"
+    );
+    expect(t("en", "glossary.tagDeleteDialog.title")).toBe("Delete tag?");
+    expect(t("ja", "glossary.tagDeleteDialog.targetLabel")).toBe("タグ");
+    expect(t("en", "glossary.tagDeleteDialog.targetLabel")).toBe("Tag");
   });
 });
 

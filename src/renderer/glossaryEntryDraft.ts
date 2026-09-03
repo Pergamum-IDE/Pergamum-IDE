@@ -223,26 +223,36 @@ export function deleteGlossaryEntryDraftAtom(
   });
 }
 
-/** Move an atom one slot toward index 0 (up) or the end (down). */
-export function moveGlossaryEntryDraftAtom(
+/**
+ * #375: move the atom `atomId` so it lands at array index `toIndex` (clamped
+ * to `[0, atoms.length - 1]`). Array order IS `sortOrder`, so whatever atom
+ * ends up at index 0 becomes the representative atom. Dropping an atom on its
+ * own position is a no-op. Used by the drag handle (D&D) and its keyboard
+ * fallback (Arrow Up / Down).
+ */
+export function reorderGlossaryEntryDraftAtom(
   draft: GlossaryEntryDraft,
   atomId: string,
-  direction: "up" | "down"
+  toIndex: number
 ): GlossaryEntryDraft {
-  const index = draft.atoms.findIndex((atom) => atom.id === atomId);
+  const fromIndex = draft.atoms.findIndex((atom) => atom.id === atomId);
 
-  if (index === -1) {
+  if (fromIndex === -1) {
     return draft;
   }
 
-  const target = direction === "up" ? index - 1 : index + 1;
+  const clampedToIndex = Math.max(
+    0,
+    Math.min(Math.trunc(toIndex), draft.atoms.length - 1)
+  );
 
-  if (target < 0 || target >= draft.atoms.length) {
+  if (clampedToIndex === fromIndex) {
     return draft;
   }
 
   const atoms = [...draft.atoms];
-  [atoms[index], atoms[target]] = [atoms[target], atoms[index]];
+  const [moved] = atoms.splice(fromIndex, 1);
+  atoms.splice(clampedToIndex, 0, moved);
 
   return withRecomputedSaveState({ ...draft, atoms });
 }
