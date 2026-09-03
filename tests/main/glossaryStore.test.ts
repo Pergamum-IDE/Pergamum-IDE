@@ -476,6 +476,39 @@ describe("glossary store (#375)", () => {
     ).rejects.toMatchObject({ code: "GLOSSARY_TAG_NOT_FOUND" });
   });
 
+  it("#375: rejects a tag label over 32 characters on create and update", async () => {
+    const len33 = "あ".repeat(33);
+
+    await expect(
+      createGlossaryTag(database, {
+        label: len33,
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    const tag = await makeTag("武将");
+    await expect(
+      updateGlossaryTag(database, {
+        id: tag.id,
+        label: len33,
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    // A 32-char label is accepted (a long atom value on an entry still is too).
+    const ok = await createGlossaryTag(database, {
+      label: "あ".repeat(32),
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+    expect([...ok.label].length).toBe(32);
+  });
+
   it("hard-deletes a tag: removes entry_tags links but keeps the entry and its atoms", async () => {
     const tag = await makeTag("武将");
     const entry = await createGlossaryEntry(database, {

@@ -1210,6 +1210,161 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
   });
 });
 
+describe("buildGlossaryTextMapPlan (#375, render-tag filter / selectedTagIds)", () => {
+  const PERSON = "#11aa11"; // 人名
+  const PLACE = "#1111aa"; // 地名
+  const CORE = "#aa11aa"; // コアメンバー
+  const FALLBACK = "#ff0000";
+
+  // "Aoi Kyoto Ren Edo Zzz" — 5 surfaces, each its own Entry:
+  //   Aoi   → tags [人名]
+  //   Kyoto → tags [地名]
+  //   Ren   → tags [人名, コアメンバー]   (人名 is primary)
+  //   Edo   → tags []                     (tagless)
+  //   Zzz   → tags [コアメンバー]
+  const entries = [
+    entry("e-aoi", [atom("Aoi")], [tag("t-person", PERSON)]),
+    entry("e-kyoto", [atom("Kyoto")], [tag("t-place", PLACE)]),
+    entry(
+      "e-ren",
+      [atom("Ren")],
+      [tag("t-person", PERSON), tag("t-core", CORE)]
+    ),
+    entry("e-edo", [atom("Edo")], []),
+    entry("e-zzz", [atom("Zzz")], [tag("t-core", CORE)])
+  ];
+  const text = "Aoi Kyoto Ren Edo Zzz";
+
+  function plan(selectedTagIds?: readonly string[]) {
+    return buildGlossaryTextMapPlan({
+      text,
+      entries,
+      wrapColumns: 80,
+      glossaryFallbackColor: FALLBACK,
+      selectedTagIds
+    });
+  }
+
+  it("OMITTING selectedTagIds keeps the legacy 'All' behaviour (tagged → primary colour, tagless → fallback)", () => {
+    const colours = new Set(
+      plan().occurrences.map((o) => `${o.entryId}:${o.color}`)
+    );
+    expect(colours).toEqual(
+      new Set([
+        "e-aoi:" + PERSON,
+        "e-kyoto:" + PLACE,
+        "e-ren:" + PERSON, // primary tag
+        "e-edo:" + FALLBACK, // tagless → fallback
+        "e-zzz:" + CORE
+      ])
+    );
+  });
+
+  it("selecting EVERY tag draws every tagged Entry (primary tag colour) but NOT the tagless Entry", () => {
+    const built = plan(["t-person", "t-place", "t-core"]);
+    const colours = new Set(
+      built.occurrences.map((o) => `${o.entryId}:${o.color}`)
+    );
+    expect(colours).toEqual(
+      new Set([
+        "e-aoi:" + PERSON,
+        "e-kyoto:" + PLACE,
+        "e-ren:" + PERSON, // first tag in the Entry's assignment order
+        "e-zzz:" + CORE
+      ])
+    );
+    // The tagless Entry (Edo) is never drawn, even with every tag selected.
+    expect(built.occurrences.some((o) => o.entryId === "e-edo")).toBe(false);
+  });
+
+  it("an EMPTY selection (`[]`) draws no Glossary hits at all — it is NOT read as 'All'", () => {
+    const built = plan([]);
+    expect(built.occurrences).toEqual([]);
+    expect(built.pixels.some((p) => p.hit)).toBe(false);
+  });
+
+  it("with a selection draws only Entries carrying a selected tag; tagless and non-matching Entries are dropped", () => {
+    const built = plan(["t-place"]);
+    expect(built.occurrences.map((o) => o.entryId)).toEqual(["e-kyoto"]);
+    expect(built.occurrences[0].color).toBe(PLACE);
+    // No pixel is painted for Aoi / Ren / Edo / Zzz.
+    expect(built.pixels.some((p) => p.hit && p.offset < 4)).toBe(false);
+  });
+
+  it("selecting two tags keeps every Entry that has either", () => {
+    const built = plan(["t-person", "t-place"]);
+    expect(built.occurrences.map((o) => o.entryId).sort()).toEqual([
+      "e-aoi",
+      "e-kyoto",
+      "e-ren"
+    ]);
+  });
+
+  it("colours a multi-tag Entry by the FIRST selected tag in the Entry's own assignment order, not the selection order", () => {
+    // Ren.tags = [人名, コアメンバー]; select コアメンバー THEN 人名.
+    const built = plan(["t-core", "t-person"]);
+    const ren = built.occurrences.find((o) => o.entryId === "e-ren");
+    // entry.tags order wins → 人名 (PERSON), even though t-core was selected first.
+    expect(ren?.color).toBe(PERSON);
+    // Zzz only has コアメンバー → CORE.
+    expect(
+      built.occurrences.find((o) => o.entryId === "e-zzz")?.color
+    ).toBe(CORE);
+  });
+
+  it("never draws a tagless Entry hit while a tag filter is active", () => {
+    const built = plan(["t-person", "t-place", "t-core"]);
+    expect(built.occurrences.some((o) => o.entryId === "e-edo")).toBe(false);
+  });
+
+  it("applies the visibility adjustment to the selected render tag's colour when ON", () => {
+    const built = buildGlossaryTextMapPlan({
+      text,
+      entries,
+      wrapColumns: 80,
+      glossaryFallbackColor: FALLBACK,
+      selectedTagIds: ["t-core"],
+      adjustTagColorsForVisibility: true
+    });
+    const expected = adjustDocumentMapTagColorForVisibility(CORE);
+    expect(expected).not.toBe(CORE);
+    const zzz = built.occurrences.find((o) => o.entryId === "e-zzz");
+    expect(zzz?.color).toBe(expected);
+    expect(built.tagColorCache.get("t-core")).toBe(expected);
+  });
+
+  it("uses the raw tag colour for the selected render tag when adjustment is OFF", () => {
+    const built = buildGlossaryTextMapPlan({
+      text,
+      entries,
+      wrapColumns: 80,
+      glossaryFallbackColor: FALLBACK,
+      selectedTagIds: ["t-core"],
+      adjustTagColorsForVisibility: false
+    });
+    expect(
+      built.occurrences.find((o) => o.entryId === "e-zzz")?.color
+    ).toBe(CORE);
+  });
+
+  it("keeps narration / dialogue colours untouched under a tag filter", () => {
+    const built = buildGlossaryTextMapPlan({
+      text: "地「Kyoto」",
+      entries,
+      wrapColumns: 80,
+      narrationColor: "#3c3c3c",
+      dialogueDelimiterPairs: [{ open: "「", close: "」", color: "#9e9e9e" }],
+      glossaryFallbackColor: FALLBACK,
+      selectedTagIds: ["t-place"]
+    });
+    const byOffset = new Map(built.pixels.map((p) => [p.offset, p]));
+    // 地(0) 「(1) K(2) y(3) o(4) t(5) o(6) 」(7)
+    expect(byOffset.get(0)?.color).toBe("#3c3c3c"); // narration
+    expect(byOffset.get(1)?.color).toBe("#9e9e9e"); // dialogue
+    expect(byOffset.get(2)).toMatchObject({ hit: true, color: PLACE }); // Kyoto hit
+  });
+});
+
 describe("drawGlossaryTextMap (#375, settings colours, narration -> dialogue -> hit)", () => {
   function fakeContext(): {
     context: GlossaryTextMapDrawContext;

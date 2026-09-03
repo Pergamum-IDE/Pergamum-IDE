@@ -41,7 +41,11 @@ interface GlossaryTextMinimapCanvasProps {
    * the ordered dialogue delimiter pairs. Omitted → built-in defaults.
    */
   documentMapSettings?: DocumentMapSettings;
-  /** Phase 2 hook — accepted, unused in Phase 1. */
+  /**
+   * #375 render-tag filter (the panel's "Render tags" multi-select). Empty /
+   * omitted = draw every Glossary hit ("All"); non-empty = draw only Entries
+   * carrying a selected tag. See {@link buildGlossaryTextMapPlan}.
+   */
   selectedTagIds?: readonly string[];
   /** Phase 2 hook — accepted, unused in Phase 1. */
   renderMode?: GlossaryTextMapRenderMode;

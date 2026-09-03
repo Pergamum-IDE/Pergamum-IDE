@@ -885,6 +885,22 @@ describe("project database", () => {
       });
     });
 
+    it("#375: rejects a tag label longer than 32 characters (CHECK), accepts exactly 32", async () => {
+      database = await openProjectDatabase(projectRootPath);
+
+      await expect(
+        insertTag(database, tagId, "あ".repeat(33))
+      ).rejects.toMatchObject({ code: "PROJECT_DATABASE_QUERY_ERROR" });
+
+      await expect(
+        insertTag(
+          database,
+          "018f4b8c-7a2b-7c3d-8e4f-123456789fff",
+          "あ".repeat(32)
+        )
+      ).resolves.not.toThrow();
+    });
+
     it("allows the same atom value on different entries", async () => {
       database = await openProjectDatabase(projectRootPath);
       await insertEntry(database, entryId);

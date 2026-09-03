@@ -4,7 +4,8 @@ import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
-  GlossaryEntryId
+  GlossaryEntryId,
+  GlossaryTag
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
@@ -76,6 +77,9 @@ interface WorkspaceSidebarProps {
   glossaryActiveDocumentContent: string | null;
   /** #375 Text Map: every project glossary entry (occurrence scan). */
   textMapGlossaryEntries?: readonly GlossaryEntry[];
+  /** #375 Text Map: project-wide tags (sort_order order) for the "Render
+   *  tags" multi-select. */
+  textMapGlossaryTags?: readonly GlossaryTag[];
   /** #375 Text Map: the ACTIVE EDITOR's rendered width in CSS pixels (the
    *  logical wrap width), or `null` when it cannot be measured. */
   textMapEditorWidth?: number | null;
@@ -128,6 +132,7 @@ export function WorkspaceSidebar({
   onCreateGlossaryEntry,
   glossaryActiveDocumentContent,
   textMapGlossaryEntries = [],
+  textMapGlossaryTags = [],
   textMapEditorWidth = null,
   textMapEditorVisibleRange = null,
   textMapDocumentMapSettings,
@@ -193,6 +198,7 @@ export function WorkspaceSidebar({
           translate={translate}
           activeDocumentContent={glossaryActiveDocumentContent}
           glossaryEntries={textMapGlossaryEntries}
+          glossaryTags={textMapGlossaryTags}
           editorWidth={textMapEditorWidth}
           editorVisibleRange={textMapEditorVisibleRange}
           documentMapSettings={textMapDocumentMapSettings}

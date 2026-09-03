@@ -368,5 +368,47 @@ describe("tag CRUD inputs (#375)", () => {
       id: tagId1
     });
   });
+
+  it("#375: caps a tag LABEL at 32 characters after trimming (create + update)", () => {
+    const base = {
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    };
+    const len32 = "あ".repeat(32);
+    const len33 = "あ".repeat(33);
+
+    // Exactly 32 is fine; surrounding whitespace does not count.
+    expect(
+      validateCreateGlossaryTagInput({ ...base, label: `  ${len32}  ` }).label
+    ).toBe(len32);
+    expect(
+      validateUpdateGlossaryTagInput({ ...base, id: tagId1, label: len32 }).label
+    ).toBe(len32);
+
+    // 33 trimmed characters is rejected.
+    expect(() =>
+      validateCreateGlossaryTagInput({ ...base, label: len33 })
+    ).toThrow(/32 characters or fewer/);
+    expect(() =>
+      validateUpdateGlossaryTagInput({ ...base, id: tagId1, label: len33 })
+    ).toThrow(/32 characters or fewer/);
+
+    // Empty (after trim) is still rejected.
+    expect(() =>
+      validateCreateGlossaryTagInput({ ...base, label: "   " })
+    ).toThrow();
+  });
+
+  it("#375: the 32-char cap is TAG-LABEL only — Atom values / representative terms stay unbounded", () => {
+    const longTerm = "寿限無寿限無五劫の擦り切れ海砂利水魚の水行末雲来末風来末".repeat(3);
+    const result = validateCreateGlossaryEntryInput({
+      description: "",
+      atoms: [{ value: longTerm, matchFlags: 0 }],
+      tagIds: []
+    });
+    expect(result.atoms[0].value).toBe(longTerm);
+    expect(longTerm.length).toBeGreaterThan(32);
+  });
 });
 

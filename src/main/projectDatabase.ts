@@ -434,7 +434,10 @@ export async function createSchemaVersionOne(
 
     CREATE TABLE glossary_tags (
       id TEXT PRIMARY KEY,
-      label TEXT NOT NULL CHECK (length(trim(label)) > 0),
+      -- #375: a tag label is 1..32 characters after trimming (labels only —
+      -- Atom values / the representative term stay unbounded).
+      label TEXT NOT NULL
+        CHECK (length(trim(label)) > 0 AND length(trim(label)) <= 32),
       description TEXT,
       background_rgb TEXT NOT NULL,
       foreground_rgb TEXT NOT NULL,

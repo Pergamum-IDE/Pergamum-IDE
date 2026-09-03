@@ -61,12 +61,20 @@ describe("glossaryTagDraft (#375)", () => {
     });
   });
 
-  it("validity flags an empty label and malformed colors", () => {
+  it("validity flags an empty label, an over-32-char label, and malformed colors", () => {
     const base = createGlossaryTagDraftFromTag(tag);
     expect(glossaryTagDraftValidity(base)).toEqual({ ok: true });
     expect(
       glossaryTagDraftValidity({ ...base, label: "   " })
     ).toEqual({ ok: false, reason: "emptyLabel" });
+    // Exactly 32 chars (trimmed) is still valid.
+    expect(
+      glossaryTagDraftValidity({ ...base, label: `  ${"あ".repeat(32)}  ` })
+    ).toEqual({ ok: true });
+    // 33 chars after trimming is rejected.
+    expect(
+      glossaryTagDraftValidity({ ...base, label: "あ".repeat(33) })
+    ).toEqual({ ok: false, reason: "labelTooLong" });
     expect(
       glossaryTagDraftValidity({ ...base, backgroundRgb: "xyz" })
     ).toEqual({ ok: false, reason: "invalidBackground" });

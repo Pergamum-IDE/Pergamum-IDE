@@ -1,3 +1,4 @@
+import { GLOSSARY_TAG_LABEL_MAX_LENGTH } from "../shared/glossary";
 import type { Translate, TranslationKey } from "../shared/i18n";
 import type { GlossaryTagDraftValidity } from "./glossaryTagDraft";
 import { GlossaryTagChip } from "./GlossaryTagChip";
@@ -16,6 +17,7 @@ const VALIDITY_MESSAGE_KEYS: Record<
   TranslationKey
 > = {
   emptyLabel: "glossaryTagEditor.validity.emptyLabel",
+  labelTooLong: "glossaryTagEditor.validity.labelTooLong",
   invalidBackground: "glossaryTagEditor.validity.invalidBackground",
   invalidForeground: "glossaryTagEditor.validity.invalidForeground"
 };
@@ -80,6 +82,7 @@ export function GlossaryTagEditor({
         <input
           type="text"
           value={draft.label}
+          maxLength={GLOSSARY_TAG_LABEL_MAX_LENGTH}
           disabled={busy}
           onChange={(event) => patch({ label: event.target.value })}
         />

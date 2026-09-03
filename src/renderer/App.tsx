@@ -7287,6 +7287,7 @@ export function App(): JSX.Element {
                           : null
                       }
                       textMapGlossaryEntries={glossaryEntries}
+                      textMapGlossaryTags={glossaryTags}
                       textMapEditorWidth={editorAreaWidth}
                       textMapEditorVisibleRange={markdownVisibleRange}
                       textMapDocumentMapSettings={effectiveSettings.documentMap}

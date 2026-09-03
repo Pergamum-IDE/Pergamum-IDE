@@ -73,6 +73,20 @@ describe("GlossaryTagEditor (#375) — markup", () => {
     expect(markup).toContain('role="alert"');
   });
 
+  it("shows the labelTooLong validity message and caps the input's maxlength at 32", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(GlossaryTagEditor, {
+        draft: { ...editDraft(), label: "あ".repeat(33) },
+        translate,
+        onChange: () => undefined,
+        onSubmit: () => undefined
+      })
+    );
+
+    expect(markup).toContain("glossaryTagEditor.validity.labelTooLong");
+    expect(markup).toContain('maxLength="32"');
+  });
+
   it("shows an operation error when the label is otherwise valid", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryTagEditor, {

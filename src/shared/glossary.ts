@@ -153,6 +153,36 @@ function validateNonEmptyString(value: unknown, path: string): string {
   return value;
 }
 
+/**
+ * #375: a Glossary TAG label is `1..32` characters after trimming — counted by
+ * code point (`[...s].length`), so an astral character is one. This cap is for
+ * tag LABELS only: Atom values / the representative term stay unbounded (long
+ * proper nouns like 「寿限無…長助」 are legitimate vocabulary).
+ */
+export const GLOSSARY_TAG_LABEL_MAX_LENGTH = 32;
+
+/**
+ * Strict tag-label validation for the CREATE / UPDATE input paths — trims,
+ * rejects empty, and rejects more than {@link GLOSSARY_TAG_LABEL_MAX_LENGTH}
+ * code points. The row → domain reader ({@link validateGlossaryTag}) stays
+ * lenient so a pre-existing over-long label still loads (the UI ellipsis-
+ * defends it).
+ */
+export function validateGlossaryTagLabelForWrite(
+  value: unknown,
+  path: string
+): string {
+  const trimmed = validateNonEmptyString(value, path).trim();
+
+  if ([...trimmed].length > GLOSSARY_TAG_LABEL_MAX_LENGTH) {
+    invalidGlossary(
+      `${path} must be ${GLOSSARY_TAG_LABEL_MAX_LENGTH} characters or fewer.`
+    );
+  }
+
+  return trimmed;
+}
+
 function validateString(value: unknown, path: string): string {
   if (typeof value !== "string") {
     invalidGlossary(`${path} must be a string.`);
@@ -536,7 +566,7 @@ export function validateCreateGlossaryTagInput(
   }
 
   return {
-    label: validateNonEmptyString(value.label, "label").trim(),
+    label: validateGlossaryTagLabelForWrite(value.label, "label"),
     description: validateGlossaryTagDescription(
       value.description,
       "description"
@@ -561,7 +591,7 @@ export function validateUpdateGlossaryTagInput(
 
   return {
     id: validateGlossaryTagId(value.id, "id"),
-    label: validateNonEmptyString(value.label, "label").trim(),
+    label: validateGlossaryTagLabelForWrite(value.label, "label"),
     description: validateGlossaryTagDescription(
       value.description,
       "description"

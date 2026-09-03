@@ -5,6 +5,7 @@
  */
 
 import {
+  GLOSSARY_TAG_LABEL_MAX_LENGTH,
   GlossaryValidationError,
   normalizeGlossaryRgbHex,
   type CreateGlossaryTagInput,
@@ -78,6 +79,7 @@ export type GlossaryTagDraftValidity =
       readonly ok: false;
       readonly reason:
         | "emptyLabel"
+        | "labelTooLong"
         | "invalidBackground"
         | "invalidForeground";
     };
@@ -97,8 +99,14 @@ function isValidRgbHex(value: string): boolean {
 export function glossaryTagDraftValidity(
   draft: GlossaryTagDraft
 ): GlossaryTagDraftValidity {
-  if (draft.label.trim().length === 0) {
+  const trimmedLabel = draft.label.trim();
+
+  if (trimmedLabel.length === 0) {
     return { ok: false, reason: "emptyLabel" };
+  }
+
+  if ([...trimmedLabel].length > GLOSSARY_TAG_LABEL_MAX_LENGTH) {
+    return { ok: false, reason: "labelTooLong" };
   }
 
   if (!isValidRgbHex(draft.backgroundRgb)) {

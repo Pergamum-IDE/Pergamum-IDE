@@ -22,7 +22,12 @@ export function GlossaryTagChip({
   };
 
   return (
-    <span className="glossaryTagChip" style={style} data-muted={muted}>
+    <span
+      className="glossaryTagChip"
+      style={style}
+      data-muted={muted}
+      title={tag.label}
+    >
       {tag.label}
     </span>
   );

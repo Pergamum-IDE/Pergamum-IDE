@@ -27,13 +27,17 @@
  * jump — so `matchFlags`, the single-character opt-in and the boundary
  * policies are all honoured. No ad-hoc `String.prototype.includes` matching.
  *
- * #375: a Glossary hit is painted in the Entry's PRIMARY (first-assigned) tag
- * colour (`entry.tags[0].backgroundRgb`); a tagless Entry falls back to the
- * fixed red. No tag selector / tag filter / multi-tag mixing yet.
+ * #375: a Glossary hit is painted in the render tag's colour. With the panel's
+ * "Render tags" filter active (`selectedTagIds`, default = every project tag),
+ * an Entry is drawn only when it carries a selected tag, coloured by the FIRST
+ * such tag in the Entry's own assignment order (`entry.tags`); tagless Entries
+ * and an empty selection draw nothing. When `selectedTagIds` is OMITTED the
+ * legacy "All" behaviour applies (primary tag colour, tagless → fallback). No
+ * multi-tag mixing / tag lane.
  *
- * Phase 2+ (NOT here): a tag selector, tag filter, marker hover / click jump,
- * PNG export, and a true CodeMirror wrap reproduction. `selectedTagIds` /
- * `renderMode` are accepted now so the call sites do not change later.
+ * Phase 2+ (NOT here): a `タグなし` pseudo-option, marker hover / click jump,
+ * PNG export, and a true CodeMirror wrap reproduction. `renderMode` is accepted
+ * now so the call sites do not change later.
  */
 
 import {
@@ -41,7 +45,7 @@ import {
   type DocumentMapDialogueDelimiterPair
 } from "../shared/documentMapSettings";
 import { buildDocumentMapTagColorCache } from "../shared/documentMapTagColor";
-import type { GlossaryEntry } from "../shared/glossary";
+import type { GlossaryEntry, GlossaryTag } from "../shared/glossary";
 import { primaryGlossaryTag } from "../shared/glossary";
 import {
   buildGlossarySurfaceIndex,
@@ -224,25 +228,19 @@ export interface GlossaryTextMapOccurrence {
 const HIT_COLOR_HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 /**
- * #375: the colour a Glossary hit for `entry` is drawn in — the Entry's
- * PRIMARY tag colour (`entry.tags[0]`), else `fallbackColor` (the
- * `documentMap.glossaryFallbackColor` setting, or the built-in red). A missing
- * / non-`#rrggbb` value also falls back, so a bad tag colour never breaks the
- * Canvas.
- *
- * When `tagColorCache` is given it is consulted FIRST for the primary tag's id
- * (`tagId -> colour`, pre-built once per render — see
- * `buildDocumentMapTagColorCache`); this is where the visibility adjustment is
- * applied. The tag's raw `backgroundRgb` is the per-tag fallback.
+ * The colour a Glossary hit drawn for `tag` gets — `tag`'s `backgroundRgb`
+ * (or its visibility-adjusted colour from `tagColorCache`), else
+ * `fallbackColor` (the `documentMap.glossaryFallbackColor` setting / built-in
+ * red). `tag = null` (a tagless Entry, or no selected tag matched) also falls
+ * back, and a missing / non-`#rrggbb` value never breaks the Canvas.
  */
-export function resolveGlossaryTextMapHitColor(
-  entry: Pick<GlossaryEntry, "tags">,
-  fallbackColor: string = GLOSSARY_TEXT_MAP_HIT_COLOR,
+function hitColorForTag(
+  tag: Pick<GlossaryTag, "id" | "backgroundRgb"> | null,
+  fallbackColor: string,
   tagColorCache?: ReadonlyMap<string, string>
 ): string {
-  const primaryTag = primaryGlossaryTag(entry);
-  if (primaryTag) {
-    const raw = tagColorCache?.get(primaryTag.id) ?? primaryTag.backgroundRgb;
+  if (tag) {
+    const raw = tagColorCache?.get(tag.id) ?? tag.backgroundRgb;
     if (raw && HIT_COLOR_HEX_PATTERN.test(raw)) {
       return raw;
     }
@@ -250,6 +248,19 @@ export function resolveGlossaryTextMapHitColor(
   return HIT_COLOR_HEX_PATTERN.test(fallbackColor)
     ? fallbackColor
     : GLOSSARY_TEXT_MAP_HIT_COLOR;
+}
+
+/**
+ * #375: the colour a Glossary hit for `entry` is drawn in when NO render-tag
+ * filter is active — the Entry's PRIMARY tag colour (`entry.tags[0]`), else
+ * `fallbackColor`. See {@link hitColorForTag} for the cache / fallback rules.
+ */
+export function resolveGlossaryTextMapHitColor(
+  entry: Pick<GlossaryEntry, "tags">,
+  fallbackColor: string = GLOSSARY_TEXT_MAP_HIT_COLOR,
+  tagColorCache?: ReadonlyMap<string, string>
+): string {
+  return hitColorForTag(primaryGlossaryTag(entry), fallbackColor, tagColorCache);
 }
 
 export interface GlossaryTextMapPixel {
@@ -348,7 +359,13 @@ export interface BuildGlossaryTextMapPlanInput {
    * colours, matching pre-#375 behaviour).
    */
   adjustTagColorsForVisibility?: boolean;
-  /** Phase 2 hook — accepted, unused in Phase 1. */
+  /**
+   * #375 render-tag filter (Document Map "Render tags" multi-select). A PROVIDED
+   * array (even `[]`) turns the filter on: only Entries carrying a selected tag
+   * are drawn, coloured by the FIRST tag in the Entry's OWN assignment order
+   * that is selected; tagless Entries and an empty selection draw nothing.
+   * OMITTING it keeps the legacy "All" behaviour. Not persisted anywhere.
+   */
   selectedTagIds?: readonly string[];
   /** Phase 2 hook — accepted, unused in Phase 1. */
   renderMode?: GlossaryTextMapRenderMode;
@@ -563,16 +580,28 @@ export function collectGlossaryTextMapOccurrences(
 
 /**
  * Every Glossary Atom occurrence in `text`, tagged with its owning Entry and
- * the colour to paint it (the Entry's PRIMARY tag colour, or the fallback).
- * When a span matches more than one Entry the first candidate (a deterministic
- * `entryId` / `atomId` sort from the shared matcher) decides the colour.
+ * the colour to paint it. When a span matches more than one Entry the first
+ * candidate (a deterministic `entryId` / `atomId` sort from the shared matcher)
+ * decides the Entry.
+ *
+ * #375 render-tag filter (`selectedTagIds`):
+ *   - `undefined` → legacy "All": every occurrence is kept; a tagged Entry
+ *     uses its PRIMARY tag colour, a tagless Entry the `fallbackColor`. (Not
+ *     used by the panel any more — kept for callers that pass no filter.)
+ *   - a Set (INCLUDING an empty one) → the "Render tags" filter is active:
+ *     only occurrences whose Entry has a tag in the Set are kept — coloured by
+ *     the FIRST tag in the ENTRY'S OWN assignment order (`entry.tags`) that is
+ *     selected, never the selection order. A tagless Entry, an Entry with no
+ *     selected tag, and (when the Set is empty) EVERY Entry is dropped. The
+ *     `fallbackColor` is not used in this mode.
  */
 export function collectGlossaryTextMapGlossaryOccurrences(
   text: string,
   entries: readonly GlossaryEntry[],
   surfaceIndex?: GlossarySurfaceIndex,
   fallbackColor: string = GLOSSARY_TEXT_MAP_HIT_COLOR,
-  tagColorCache?: ReadonlyMap<string, string>
+  tagColorCache?: ReadonlyMap<string, string>,
+  selectedTagIds?: ReadonlySet<string>
 ): GlossaryTextMapOccurrence[] {
   if (text.length === 0) {
     return [];
@@ -580,20 +609,48 @@ export function collectGlossaryTextMapGlossaryOccurrences(
 
   const index = surfaceIndex ?? buildGlossarySurfaceIndex(entries);
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  // The PRESENCE of the Set (even empty) means the filter is on — an empty
+  // selection then draws nothing.
+  const filtering = selectedTagIds !== undefined;
 
   return matchGlossarySurfacesInText(text, index)
-    .map((match) => {
+    .flatMap((match) => {
       const entryId = match.candidates[0]?.entryId ?? "";
       const entry = entryById.get(entryId);
-
-      return {
+      const base = {
         entryId,
         startOffset: match.range.start,
-        endOffset: match.range.end,
-        color: entry
-          ? resolveGlossaryTextMapHitColor(entry, fallbackColor, tagColorCache)
-          : fallbackColor
+        endOffset: match.range.end
       };
+
+      if (!entry) {
+        // Defensive: an occurrence with no resolvable Entry only draws in the
+        // legacy "All" mode (as a plain fallback hit); the filter drops it.
+        return filtering ? [] : [{ ...base, color: fallbackColor }];
+      }
+
+      if (filtering) {
+        const renderTag = entry.tags.find((tag) =>
+          selectedTagIds.has(tag.id)
+        );
+        if (!renderTag) {
+          return [];
+        }
+        return [
+          { ...base, color: hitColorForTag(renderTag, fallbackColor, tagColorCache) }
+        ];
+      }
+
+      return [
+        {
+          ...base,
+          color: resolveGlossaryTextMapHitColor(
+            entry,
+            fallbackColor,
+            tagColorCache
+          )
+        }
+      ];
     })
     .sort((left, right) => left.startOffset - right.startOffset);
 }
@@ -793,13 +850,22 @@ export function buildGlossaryTextMapPlan(
     adjustTagColorsForVisibility: input.adjustTagColorsForVisibility ?? false
   });
 
+  // #375 render-tag filter. A PROVIDED array (even `[]`) turns the filter on —
+  // an empty selection then draws no Glossary hits. Only an OMITTED
+  // `selectedTagIds` keeps the legacy "All" behaviour.
+  const selectedTagIds =
+    input.selectedTagIds === undefined
+      ? undefined
+      : new Set(input.selectedTagIds);
+
   const { lines, totalVisualRows } = buildTextMapLineLayout(text, wrapColumns);
   const occurrences = collectGlossaryTextMapGlossaryOccurrences(
     text,
     input.entries,
     input.surfaceIndex,
     glossaryFallbackColor,
-    tagColorCache
+    tagColorCache,
+    selectedTagIds
   );
   const dialogues = collectDocumentMapDialogueRanges(text, dialoguePairs);
 
