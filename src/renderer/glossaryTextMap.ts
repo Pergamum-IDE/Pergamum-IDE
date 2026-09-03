@@ -27,13 +27,22 @@
  * jump — so `matchFlags`, the single-character opt-in and the boundary
  * policies are all honoured. No ad-hoc `String.prototype.includes` matching.
  *
- * Phase 2+ (NOT here): a tag selector, tag-colour rendering, multi-tag
- * selection, marker hover / click jump, PNG export, and a true CodeMirror wrap
- * reproduction. `selectedTagIds` / `renderMode` are accepted now so the call
- * sites do not change later.
+ * #375: a Glossary hit is painted in the Entry's PRIMARY (first-assigned) tag
+ * colour (`entry.tags[0].backgroundRgb`); a tagless Entry falls back to the
+ * fixed red. No tag selector / tag filter / multi-tag mixing yet.
+ *
+ * Phase 2+ (NOT here): a tag selector, tag filter, marker hover / click jump,
+ * PNG export, and a true CodeMirror wrap reproduction. `selectedTagIds` /
+ * `renderMode` are accepted now so the call sites do not change later.
  */
 
+import {
+  defaultDocumentMapDialogueDelimiterPairs,
+  type DocumentMapDialogueDelimiterPair
+} from "../shared/documentMapSettings";
+import { buildDocumentMapTagColorCache } from "../shared/documentMapTagColor";
 import type { GlossaryEntry } from "../shared/glossary";
+import { primaryGlossaryTag } from "../shared/glossary";
 import {
   buildGlossarySurfaceIndex,
   matchGlossarySurfacesInText,
@@ -42,15 +51,26 @@ import {
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
 
-/** Phase 1 palette. */
-export const GLOSSARY_TEXT_MAP_NORMAL_COLOR = "#000000";
+/**
+ * Built-in narration colour — used when `buildGlossaryTextMapPlan` is called
+ * without a `documentMap.narrationColor`. Kept in sync with
+ * `DOCUMENT_MAP_DEFAULT_NARRATION_COLOR` (#375 Task Q): a dark grey, not pure
+ * black.
+ */
+export const GLOSSARY_TEXT_MAP_NORMAL_COLOR = "#3c3c3c";
+/**
+ * FALLBACK colour for a Glossary hit whose Entry has no assigned tag. A hit
+ * whose Entry HAS a primary tag is drawn in that tag's `backgroundRgb`
+ * instead (see {@link resolveGlossaryTextMapHitColor}).
+ */
 export const GLOSSARY_TEXT_MAP_HIT_COLOR = "#ff0000";
 /**
- * Rough Japanese-dialogue highlight (PoC). Characters inside `「…」` (the
- * brackets included) are painted blue, UNDER a Glossary hit. Fixed value — no
- * settings, no other delimiter pairs.
+ * Built-in colour for the default `「…」` dialogue pair — used when
+ * `buildGlossaryTextMapPlan` is called without `documentMap.dialogueDelimiterPairs`.
+ * Kept in sync with `DOCUMENT_MAP_DEFAULT_DIALOGUE_COLOR` (#375 Task Q): a mid
+ * grey. A Glossary hit is still drawn on top of it.
  */
-export const GLOSSARY_TEXT_MAP_DIALOGUE_COLOR = "#0000ff";
+export const GLOSSARY_TEXT_MAP_DIALOGUE_COLOR = "#909090";
 
 /**
  * Side length, in logical pixels, of ONE character cell. `1x1` was too fine to
@@ -175,6 +195,63 @@ export interface TextMapRange {
   endOffset: number;
 }
 
+/**
+ * A dialogue span (a `documentMap.dialogueDelimiterPairs` pair's `open`..
+ * `close`, brackets included), tagged with the pair's `color` and its index in
+ * the pairs array. On an overlap the HIGHER `pairIndex` wins (a later pair is
+ * drawn later).
+ */
+export interface DocumentMapDialogueRange {
+  startOffset: number;
+  endOffset: number;
+  color: string;
+  pairIndex: number;
+}
+
+/**
+ * A Glossary Atom occurrence, tagged with the OWNING Entry and the colour to
+ * paint it — the Entry's primary (first-assigned) tag `backgroundRgb`, or the
+ * fixed fallback when the Entry has no assigned tag / an unusable colour. The
+ * colour is decided per ENTRY, never per Atom.
+ */
+export interface GlossaryTextMapOccurrence {
+  entryId: string;
+  startOffset: number;
+  endOffset: number;
+  color: string;
+}
+
+const HIT_COLOR_HEX_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * #375: the colour a Glossary hit for `entry` is drawn in — the Entry's
+ * PRIMARY tag colour (`entry.tags[0]`), else `fallbackColor` (the
+ * `documentMap.glossaryFallbackColor` setting, or the built-in red). A missing
+ * / non-`#rrggbb` value also falls back, so a bad tag colour never breaks the
+ * Canvas.
+ *
+ * When `tagColorCache` is given it is consulted FIRST for the primary tag's id
+ * (`tagId -> colour`, pre-built once per render — see
+ * `buildDocumentMapTagColorCache`); this is where the visibility adjustment is
+ * applied. The tag's raw `backgroundRgb` is the per-tag fallback.
+ */
+export function resolveGlossaryTextMapHitColor(
+  entry: Pick<GlossaryEntry, "tags">,
+  fallbackColor: string = GLOSSARY_TEXT_MAP_HIT_COLOR,
+  tagColorCache?: ReadonlyMap<string, string>
+): string {
+  const primaryTag = primaryGlossaryTag(entry);
+  if (primaryTag) {
+    const raw = tagColorCache?.get(primaryTag.id) ?? primaryTag.backgroundRgb;
+    if (raw && HIT_COLOR_HEX_PATTERN.test(raw)) {
+      return raw;
+    }
+  }
+  return HIT_COLOR_HEX_PATTERN.test(fallbackColor)
+    ? fallbackColor
+    : GLOSSARY_TEXT_MAP_HIT_COLOR;
+}
+
 export interface GlossaryTextMapPixel {
   /** UTF-16 offset of the source character — the editor / occurrence unit. */
   offset: number;
@@ -208,10 +285,23 @@ export interface GlossaryTextMapPlan {
   lines: TextMapLine[];
   /** One entry per drawn character, in source-offset order (newlines skipped). */
   pixels: GlossaryTextMapPixel[];
-  /** The occurrence ranges the plan was built from (sorted by `start`). */
-  occurrences: GlossaryOccurrenceRange[];
-  /** The `「…」` dialogue ranges the plan was built from (PoC). */
-  dialogues: TextMapRange[];
+  /**
+   * The Glossary occurrences the plan was built from — each with its owning
+   * `entryId` and resolved primary-tag colour, sorted by `startOffset`.
+   */
+  occurrences: GlossaryTextMapOccurrence[];
+  /**
+   * The dialogue ranges the plan was built from — one per pair per `open`..
+   * `close` span, carrying the pair's `color` and `pairIndex`.
+   */
+  dialogues: DocumentMapDialogueRange[];
+  /**
+   * #375 `tagId -> colour` for every tag on `entries` — the visibility-adjusted
+   * colour when `adjustTagColorsForVisibility` is on, else the raw
+   * `backgroundRgb`. Built ONCE (per unique tag) and read by the hit-colour
+   * resolution; the draw side never converts a colour per pixel.
+   */
+  tagColorCache: Map<string, string>;
 }
 
 /**
@@ -235,6 +325,29 @@ export interface BuildGlossaryTextMapPlanInput {
   wrapColumns: number;
   /** Defaults to {@link GLOSSARY_TEXT_MAP_CELL_SIZE}. */
   cellSize?: number;
+  /**
+   * #375 `documentMap.narrationColor` — plain-text / narration colour.
+   * Defaults to {@link GLOSSARY_TEXT_MAP_NORMAL_COLOR}.
+   */
+  narrationColor?: string;
+  /**
+   * #375 `documentMap.glossaryFallbackColor` — the Glossary-hit colour for an
+   * Entry with no primary tag. Defaults to {@link GLOSSARY_TEXT_MAP_HIT_COLOR}.
+   */
+  glossaryFallbackColor?: string;
+  /**
+   * #375 `documentMap.dialogueDelimiterPairs`, IN ARRAY ORDER (= draw order; a
+   * later pair wins an overlap). Defaults to the single `「…」` blue pair.
+   */
+  dialogueDelimiterPairs?: readonly DocumentMapDialogueDelimiterPair[];
+  /**
+   * #375 `documentMap.adjustTagColorsForVisibility` — when `true`, each Glossary
+   * tag is drawn in a visibility-adjusted colour (same hue / lightness, fixed
+   * saturation), computed ONCE PER TAG into `plan.tagColorCache`. Defaults to
+   * `false` here (the caller passes the real setting; omitting it keeps raw tag
+   * colours, matching pre-#375 behaviour).
+   */
+  adjustTagColorsForVisibility?: boolean;
   /** Phase 2 hook — accepted, unused in Phase 1. */
   selectedTagIds?: readonly string[];
   /** Phase 2 hook — accepted, unused in Phase 1. */
@@ -436,17 +549,53 @@ function occurrencesFromSurfaceIndex(
 }
 
 /**
- * Every Glossary Atom occurrence in `text`, across ALL entries / atoms (Phase 1
- * has no tag filter). Delegates to the shared surface matcher, so `matchFlags`
- * / boundary policy / single-character opt-in behave exactly as they do for the
- * Sidebar jump. Ranges are `{ start, end }` UTF-16 offsets, `end` exclusive,
- * sorted by `start`.
+ * Every Glossary Atom occurrence range in `text` (`{ start, end }`, `end`
+ * exclusive, sorted). Delegates to the shared surface matcher — `matchFlags` /
+ * boundary policy / single-character opt-in behave exactly as for the Sidebar
+ * jump. No ad-hoc `includes()`.
  */
 export function collectGlossaryTextMapOccurrences(
   text: string,
   entries: readonly GlossaryEntry[]
 ): GlossaryOccurrenceRange[] {
   return occurrencesFromSurfaceIndex(text, buildGlossarySurfaceIndex(entries));
+}
+
+/**
+ * Every Glossary Atom occurrence in `text`, tagged with its owning Entry and
+ * the colour to paint it (the Entry's PRIMARY tag colour, or the fallback).
+ * When a span matches more than one Entry the first candidate (a deterministic
+ * `entryId` / `atomId` sort from the shared matcher) decides the colour.
+ */
+export function collectGlossaryTextMapGlossaryOccurrences(
+  text: string,
+  entries: readonly GlossaryEntry[],
+  surfaceIndex?: GlossarySurfaceIndex,
+  fallbackColor: string = GLOSSARY_TEXT_MAP_HIT_COLOR,
+  tagColorCache?: ReadonlyMap<string, string>
+): GlossaryTextMapOccurrence[] {
+  if (text.length === 0) {
+    return [];
+  }
+
+  const index = surfaceIndex ?? buildGlossarySurfaceIndex(entries);
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+
+  return matchGlossarySurfacesInText(text, index)
+    .map((match) => {
+      const entryId = match.candidates[0]?.entryId ?? "";
+      const entry = entryById.get(entryId);
+
+      return {
+        entryId,
+        startOffset: match.range.start,
+        endOffset: match.range.end,
+        color: entry
+          ? resolveGlossaryTextMapHitColor(entry, fallbackColor, tagColorCache)
+          : fallbackColor
+      };
+    })
+    .sort((left, right) => left.startOffset - right.startOffset);
 }
 
 /** `true` when `offset` sits inside one of `occurrences` (`start <= o < end`). */
@@ -460,34 +609,129 @@ export function isOffsetInGlossaryTextMapOccurrence(
 }
 
 /**
- * #375 Text Map dialogue highlight (PoC): every `「…」` span in `text`, the
- * brackets INCLUDED. `「` opens a range, the next `」` closes it (inclusive).
- * No nesting, no `『』`, no `" "` — an unclosed `「` runs to the end of the
- * text. Offsets are UTF-16 units, matching the editor / occurrence unit.
+ * The hit colour for `offset` — the `color` of the (first) occurrence that
+ * contains it (`startOffset <= offset < endOffset`), or `null` when `offset`
+ * is not a Glossary hit. The shared matcher produces non-overlapping ranges,
+ * so "first" is unambiguous.
  */
-export function collectJapaneseDialogueRanges(text: string): TextMapRange[] {
-  const ranges: TextMapRange[] = [];
+export function glossaryTextMapHitColorAtOffset(
+  offset: number,
+  occurrences: readonly GlossaryTextMapOccurrence[]
+): string | null {
+  const hit = occurrences.find(
+    (range) => offset >= range.startOffset && offset < range.endOffset
+  );
+
+  return hit ? hit.color : null;
+}
+
+/**
+ * #375 Text Map dialogue highlight: every `open`..`close` span for ONE
+ * delimiter pair, the delimiters INCLUDED. `open` opens a range, the next
+ * `close` closes it (inclusive). No nesting; an unclosed `open` runs to the
+ * end of the text. `open` / `close` may be multi-character (matched with
+ * `startsWith`). Offsets are UTF-16 units. Empty `open` / `close` yields no
+ * ranges (guards against an infinite scan).
+ */
+function collectDocumentMapDialogueRangesForPair(
+  text: string,
+  pair: DocumentMapDialogueDelimiterPair,
+  pairIndex: number
+): DocumentMapDialogueRange[] {
+  if (pair.open.length === 0 || pair.close.length === 0) {
+    return [];
+  }
+
+  const ranges: DocumentMapDialogueRange[] = [];
   let startOffset: number | null = null;
+  let offset = 0;
 
-  for (let offset = 0; offset < text.length; offset += 1) {
-    const character = text[offset];
-
-    if (character === "「" && startOffset === null) {
-      startOffset = offset;
+  while (offset < text.length) {
+    if (startOffset === null) {
+      if (text.startsWith(pair.open, offset)) {
+        startOffset = offset;
+        offset += pair.open.length;
+        continue;
+      }
+      offset += 1;
       continue;
     }
 
-    if (character === "」" && startOffset !== null) {
-      ranges.push({ startOffset, endOffset: offset + 1 });
+    if (text.startsWith(pair.close, offset)) {
+      ranges.push({
+        startOffset,
+        endOffset: offset + pair.close.length,
+        color: pair.color,
+        pairIndex
+      });
       startOffset = null;
+      offset += pair.close.length;
+      continue;
     }
+    offset += 1;
   }
 
   if (startOffset !== null) {
-    ranges.push({ startOffset, endOffset: text.length });
+    ranges.push({
+      startOffset,
+      endOffset: text.length,
+      color: pair.color,
+      pairIndex
+    });
   }
 
   return ranges;
+}
+
+/**
+ * #375: dialogue ranges for EVERY pair in `pairs`, IN ARRAY ORDER (each range
+ * carries its `pairIndex`). Concatenated, not merged — the draw side resolves
+ * overlaps with {@link documentMapDialogueColorAtOffset} (higher `pairIndex`
+ * wins). An empty `pairs` list yields `[]`.
+ */
+export function collectDocumentMapDialogueRanges(
+  text: string,
+  pairs: readonly DocumentMapDialogueDelimiterPair[]
+): DocumentMapDialogueRange[] {
+  return pairs.flatMap((pair, pairIndex) =>
+    collectDocumentMapDialogueRangesForPair(text, pair, pairIndex)
+  );
+}
+
+/**
+ * The colour for `offset` among `ranges` — the `color` of the containing range
+ * with the HIGHEST `pairIndex` (a later dialogue pair wins), or `null` when
+ * `offset` is not inside any dialogue range.
+ */
+export function documentMapDialogueColorAtOffset(
+  offset: number,
+  ranges: readonly DocumentMapDialogueRange[]
+): string | null {
+  let winner: DocumentMapDialogueRange | null = null;
+  for (const range of ranges) {
+    if (
+      offset >= range.startOffset &&
+      offset < range.endOffset &&
+      (winner === null || range.pairIndex >= winner.pairIndex)
+    ) {
+      winner = range;
+    }
+  }
+  return winner ? winner.color : null;
+}
+
+/**
+ * Back-compat: the default single `「…」` pair's ranges as bare
+ * `{ startOffset, endOffset }` spans.
+ */
+export function collectJapaneseDialogueRanges(text: string): TextMapRange[] {
+  return collectDocumentMapDialogueRanges(
+    text,
+    defaultDocumentMapDialogueDelimiterPairs()
+  ).map((range) => ({
+    startOffset: range.startOffset,
+    endOffset: range.endOffset
+  }));
 }
 
 /** `true` when `offset` sits inside one of `ranges` (`start <= o < end`). */
@@ -519,11 +763,45 @@ export function buildGlossaryTextMapPlan(
   );
   const { text } = input;
 
+  // #375: narration / dialogue-pair / untagged-fallback colours are the
+  // "document structure" layer — designed by brightness — and are used AS-IS.
+  // Only the Glossary tag colour (the "meaning" layer) is saturation-adjusted,
+  // via `tagColorCache` below.
+  const narrationColor =
+    input.narrationColor ?? GLOSSARY_TEXT_MAP_NORMAL_COLOR;
+  const glossaryFallbackColor =
+    input.glossaryFallbackColor ?? GLOSSARY_TEXT_MAP_HIT_COLOR;
+  const dialoguePairs =
+    input.dialogueDelimiterPairs ??
+    defaultDocumentMapDialogueDelimiterPairs();
+
+  // #375: one colour per UNIQUE tag on the entries — the visibility adjustment
+  // (HSL) happens here, NOT per pixel. `entry.tags[0]` is the primary tag.
+  const distinctTags = new Map<string, { id: string; backgroundRgb: string }>();
+  for (const entry of input.entries) {
+    for (const tag of entry.tags) {
+      if (!distinctTags.has(tag.id)) {
+        distinctTags.set(tag.id, {
+          id: tag.id,
+          backgroundRgb: tag.backgroundRgb
+        });
+      }
+    }
+  }
+  const tagColorCache = buildDocumentMapTagColorCache({
+    tags: [...distinctTags.values()],
+    adjustTagColorsForVisibility: input.adjustTagColorsForVisibility ?? false
+  });
+
   const { lines, totalVisualRows } = buildTextMapLineLayout(text, wrapColumns);
-  const occurrences = input.surfaceIndex
-    ? occurrencesFromSurfaceIndex(text, input.surfaceIndex)
-    : collectGlossaryTextMapOccurrences(text, input.entries);
-  const dialogues = collectJapaneseDialogueRanges(text);
+  const occurrences = collectGlossaryTextMapGlossaryOccurrences(
+    text,
+    input.entries,
+    input.surfaceIndex,
+    glossaryFallbackColor,
+    tagColorCache
+  );
+  const dialogues = collectDocumentMapDialogueRanges(text, dialoguePairs);
 
   const pixels: GlossaryTextMapPixel[] = [];
 
@@ -533,8 +811,10 @@ export function buildGlossaryTextMapPlan(
       const visualColumn = columnIndex % wrapColumns;
       const visualRow =
         line.baseVisualRow + Math.floor(columnIndex / wrapColumns);
-      const hit = isOffsetInGlossaryTextMapOccurrence(offset, occurrences);
-      const dialogue = isOffsetInTextMapRange(offset, dialogues);
+      const hitColor = glossaryTextMapHitColorAtOffset(offset, occurrences);
+      const hit = hitColor !== null;
+      const dialogueColor = documentMapDialogueColorAtOffset(offset, dialogues);
+      const dialogue = dialogueColor !== null;
       const rect = resolveTextMapCellRect(visualColumn, visualRow, cellSize);
 
       pixels.push({
@@ -547,12 +827,13 @@ export function buildGlossaryTextMapPlan(
         height: rect.height,
         dialogue,
         hit,
-        // Precedence: Glossary hit > dialogue > normal.
+        // Precedence: Glossary hit (primary-tag colour / fallback) > dialogue
+        // (the winning pair's colour) > narration.
         color: hit
-          ? GLOSSARY_TEXT_MAP_HIT_COLOR
-          : dialogue
-            ? GLOSSARY_TEXT_MAP_DIALOGUE_COLOR
-            : GLOSSARY_TEXT_MAP_NORMAL_COLOR
+          ? hitColor
+          : dialogueColor !== null
+            ? dialogueColor
+            : narrationColor
       });
     }
   }
@@ -566,7 +847,8 @@ export function buildGlossaryTextMapPlan(
     lines,
     pixels,
     occurrences,
-    dialogues
+    dialogues,
+    tagColorCache
   };
 }
 
@@ -579,16 +861,42 @@ export interface GlossaryTextMapDrawContext {
   imageSmoothingEnabled?: boolean;
 }
 
+function fillPixelsGroupedByColor(
+  context: GlossaryTextMapDrawContext,
+  pixels: readonly GlossaryTextMapPixel[]
+): void {
+  const byColor = new Map<string, GlossaryTextMapPixel[]>();
+  for (const pixel of pixels) {
+    const bucket = byColor.get(pixel.color);
+    if (bucket) {
+      bucket.push(pixel);
+    } else {
+      byColor.set(pixel.color, [pixel]);
+    }
+  }
+  for (const [color, group] of byColor) {
+    context.fillStyle = color;
+    for (const pixel of group) {
+      context.fillRect(pixel.x, pixel.y, pixel.width, pixel.height);
+    }
+  }
+}
+
 /**
  * Paint `plan` onto `context` in LOGICAL pixel space
  * (`plan.logicalPixelWidth` × `plan.logicalPixelHeight`). After disabling image
  * smoothing and clearing to transparent, cells are drawn in three passes so the
  * later ones overwrite the earlier ones:
- *   1. NORMAL characters  — black,
- *   2. DIALOGUE characters (`「…」`, not a Glossary hit) — blue,
- *   3. Glossary HIT characters — the hit colour, frontmost.
- * Every cell is a `cellSize x cellSize` square. Overlapping ranges need no
- * special handling — precedence is hit > dialogue > normal.
+ *   1. NARRATION characters — `documentMap.narrationColor`,
+ *   2. DIALOGUE characters (not a Glossary hit) — the winning pair's colour
+ *      (a later `dialogueDelimiterPairs` entry wins an overlap),
+ *   3. Glossary HIT characters — each in its Entry's primary-tag colour (or
+ *      `documentMap.glossaryFallbackColor`), frontmost.
+ * Each pass groups its pixels by colour to minimise `fillStyle` churn (dialogue
+ * / hit overlaps are already resolved per pixel in `pixel.color`). Every cell
+ * is a `cellSize x cellSize` square. Precedence is hit > dialogue > narration.
+ * The editor-viewport rectangle is a separate DOM overlay the renderer stacks
+ * ON TOP of this canvas, so it always reads last.
  */
 export function drawGlossaryTextMap(
   context: GlossaryTextMapDrawContext,
@@ -597,24 +905,16 @@ export function drawGlossaryTextMap(
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, plan.logicalPixelWidth, plan.logicalPixelHeight);
 
-  context.fillStyle = GLOSSARY_TEXT_MAP_NORMAL_COLOR;
-  for (const pixel of plan.pixels) {
-    if (!pixel.hit && !pixel.dialogue) {
-      context.fillRect(pixel.x, pixel.y, pixel.width, pixel.height);
-    }
-  }
-
-  context.fillStyle = GLOSSARY_TEXT_MAP_DIALOGUE_COLOR;
-  for (const pixel of plan.pixels) {
-    if (pixel.dialogue && !pixel.hit) {
-      context.fillRect(pixel.x, pixel.y, pixel.width, pixel.height);
-    }
-  }
-
-  context.fillStyle = GLOSSARY_TEXT_MAP_HIT_COLOR;
-  for (const pixel of plan.pixels) {
-    if (pixel.hit) {
-      context.fillRect(pixel.x, pixel.y, pixel.width, pixel.height);
-    }
-  }
+  fillPixelsGroupedByColor(
+    context,
+    plan.pixels.filter((pixel) => !pixel.hit && !pixel.dialogue)
+  );
+  fillPixelsGroupedByColor(
+    context,
+    plan.pixels.filter((pixel) => pixel.dialogue && !pixel.hit)
+  );
+  fillPixelsGroupedByColor(
+    context,
+    plan.pixels.filter((pixel) => pixel.hit)
+  );
 }

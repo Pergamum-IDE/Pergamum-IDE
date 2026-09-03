@@ -53,6 +53,7 @@ export type SettingCategory =
   | "appearance"
   | "editor"
   | "preview"
+  | "documentMap"
   | "files"
   | "project"
   | "commands"
@@ -106,6 +107,15 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     id: "preview",
     order: 400,
     labelKey: "settings.category.preview.label"
+  },
+  {
+    // Document Map is not a pure "appearance" tweak — it interprets and draws
+    // document structure — so it is its own category rather than a section
+    // under Appearance (#375 Task Q). It has no scalar catalog items; the
+    // Settings panel force-keeps it visible and renders a bespoke section.
+    id: "documentMap",
+    order: 450,
+    labelKey: "settings.category.documentMap.label"
   },
   {
     id: "files",

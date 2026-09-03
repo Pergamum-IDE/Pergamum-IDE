@@ -22,6 +22,7 @@ import {
   type SettingSearchTranslate
 } from "../shared/settingsUiCatalog";
 import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
+import { DocumentMapSettingsSection } from "./DocumentMapSettingsSection";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
@@ -200,7 +201,8 @@ function saveRequest(
     workbench: overrides.workbench ?? settings.workbench,
     commandPalette: overrides.commandPalette ?? settings.commandPalette,
     editor: overrides.editor ?? settings.editor,
-    files: overrides.files ?? settings.files
+    files: overrides.files ?? settings.files,
+    documentMap: overrides.documentMap ?? settings.documentMap
   };
   const notification = overrides.notification ?? settings.notification;
 
@@ -785,11 +787,15 @@ export function SettingsPanelView({
   // Only categories that currently have at least one registered catalog
   // item are shown in the left pane — settingCategoryCatalog itself keeps
   // every category (e.g. "project" has none registered yet), this is
-  // purely a display-time filter for the pane.
+  // purely a display-time filter for the pane. "documentMap" is the
+  // exception: it has no scalar catalog items but owns a bespoke section
+  // (#375 Task Q), so it is always kept.
   const categories = sortSettingCategoryCatalog((key) =>
     translateI18nKey(translate, key)
-  ).filter((category) =>
-    settingCatalogItems.some((item) => item.category === category.id)
+  ).filter(
+    (category) =>
+      category.id === "documentMap" ||
+      settingCatalogItems.some((item) => item.category === category.id)
   );
   const isSearching = normalizeSearchQuery(searchQuery).length > 0;
   const visibleItems = getVisibleSettingCatalogItems(
@@ -894,6 +900,18 @@ export function SettingsPanelView({
               ))}
             </div>
           )}
+
+          {/* #375: the Document Map section is its own Settings category. It
+              is not a catalog item — its dialogue-pair list / colour editors
+              don't fit the generic control kinds. */}
+          {!isSearching && selectedCategoryId === "documentMap" ? (
+            <DocumentMapSettingsSection
+              settings={settings}
+              isLoading={isLoading}
+              translate={translate}
+              onChangeSettings={onChangeSettings}
+            />
+          ) : null}
         </div>
       </div>
     </section>

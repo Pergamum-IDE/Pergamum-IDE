@@ -1,3 +1,4 @@
+import type { DocumentMapSettings } from "../shared/documentMapSettings";
 import type { GlossaryEntry } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
@@ -22,6 +23,8 @@ interface TextMapPanelProps {
    * "you are here" rectangle over the map. `null` → no overlay.
    */
   editorVisibleRange?: EditorVisibleTextRange | null;
+  /** #375 `documentMap` settings — draw colours + dialogue delimiter pairs. */
+  documentMapSettings?: DocumentMapSettings;
   translate: Translate;
 }
 
@@ -36,6 +39,7 @@ export function TextMapPanel({
   glossaryEntries,
   editorWidth,
   editorVisibleRange = null,
+  documentMapSettings,
   translate
 }: TextMapPanelProps): JSX.Element {
   const hasContent =
@@ -55,6 +59,7 @@ export function TextMapPanel({
             entries={glossaryEntries}
             editorWidth={editorWidth}
             visibleRange={editorVisibleRange}
+            documentMapSettings={documentMapSettings}
           />
         </div>
       ) : (

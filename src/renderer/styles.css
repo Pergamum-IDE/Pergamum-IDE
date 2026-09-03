@@ -418,6 +418,157 @@ button:active {
   gap: 20px;
 }
 
+/* #375: Document Map settings section (Appearance pane). */
+.documentMapSettingsSection {
+  display: flex;
+  max-width: 720px;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--workspace-sidebar-divider, #d7dee6);
+}
+
+.documentMapSettingsSection h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.documentMapSettingsSection h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.documentMapSettingsHint {
+  margin: 0 0 8px;
+  color: #6b7785;
+  font-size: 12px;
+}
+
+.documentMapSettingsColorField label,
+.documentMapSettingsDialogueDelimiter,
+.documentMapSettingsDialogueColor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* Reuses `.settingsItemRow` / `.settingsSwitchInput` from the catalog rows;
+   only the outer spacing differs inside this custom section. */
+.documentMapSettingsToggleField {
+  margin: 4px 0 12px;
+  padding-bottom: 12px;
+}
+
+.documentMapSettingsColorInputs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.documentMapSettingsColorSwatch {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.documentMapSettingsColorText {
+  width: 10ch;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-family: ui-monospace, monospace;
+}
+
+.documentMapSettingsColorText[aria-invalid="true"],
+.documentMapSettingsDialogueDelimiter input[aria-invalid="true"] {
+  border-color: #b4232a;
+}
+
+.documentMapSettingsError {
+  margin: 0;
+  color: #b4232a;
+  font-size: 12px;
+}
+
+.documentMapSettingsDialoguePairList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.documentMapSettingsDialoguePairRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 6px;
+  border: 1px solid #e6ebf1;
+  border-radius: 8px;
+}
+
+.documentMapSettingsDialoguePairRow[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+.documentMapSettingsDialoguePairRow[data-drop-before="true"] {
+  box-shadow: inset 0 2px 0 0 #2f6feb;
+}
+
+.documentMapSettingsDialoguePairRow .glossaryEntryTagAssignmentDragHandle {
+  align-self: center;
+}
+
+.documentMapSettingsDialogueDelimiter input {
+  width: 5ch;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.documentMapSettingsDialoguePairDelete {
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #b4232a;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.documentMapSettingsDialoguePairDelete:hover:not(:disabled) {
+  background: #fbeaea;
+  border-color: #e3b3b3;
+}
+
+.documentMapSettingsAddPair {
+  align-self: flex-start;
+  margin-top: 4px;
+  border: 1px solid #2f6feb;
+  border-radius: 6px;
+  background: #2f6feb;
+  color: #fff;
+  padding: 5px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.documentMapSettingsAddPair:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .settingsItemRow {
   display: flex;
   flex-direction: column;

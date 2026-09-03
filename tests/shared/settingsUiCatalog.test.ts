@@ -72,6 +72,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "appearance",
         "editor",
         "preview",
+        "documentMap",
         "files",
         "project",
         "commands",

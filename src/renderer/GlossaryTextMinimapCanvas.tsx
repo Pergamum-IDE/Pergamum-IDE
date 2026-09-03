@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import type { DocumentMapSettings } from "../shared/documentMapSettings";
 import type { GlossaryEntry } from "../shared/glossary";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import {
@@ -35,6 +36,11 @@ interface GlossaryTextMinimapCanvasProps {
    * here" rectangle drawn over the map. `null` → no overlay.
    */
   visibleRange?: EditorVisibleTextRange | null;
+  /**
+   * #375 `documentMap` settings — narration / glossary-fallback colours and
+   * the ordered dialogue delimiter pairs. Omitted → built-in defaults.
+   */
+  documentMapSettings?: DocumentMapSettings;
   /** Phase 2 hook — accepted, unused in Phase 1. */
   selectedTagIds?: readonly string[];
   /** Phase 2 hook — accepted, unused in Phase 1. */
@@ -54,6 +60,7 @@ export function GlossaryTextMinimapCanvas({
   entries,
   editorWidth,
   visibleRange = null,
+  documentMapSettings,
   selectedTagIds,
   renderMode
 }: GlossaryTextMinimapCanvasProps): JSX.Element {
@@ -75,10 +82,22 @@ export function GlossaryTextMinimapCanvas({
         text,
         entries,
         wrapColumns,
+        narrationColor: documentMapSettings?.narrationColor,
+        glossaryFallbackColor: documentMapSettings?.glossaryFallbackColor,
+        dialogueDelimiterPairs: documentMapSettings?.dialogueDelimiterPairs,
+        adjustTagColorsForVisibility:
+          documentMapSettings?.adjustTagColorsForVisibility,
         selectedTagIds,
         renderMode
       }),
-    [text, entries, wrapColumns, selectedTagIds, renderMode]
+    [
+      text,
+      entries,
+      wrapColumns,
+      documentMapSettings,
+      selectedTagIds,
+      renderMode
+    ]
   );
 
   // Editor-viewport rectangle over the map. Recomputed on scroll WITHOUT

@@ -71,6 +71,11 @@ function allSourceText(): string {
  * assignment D&D (Arrow Up / Down reorders an assigned tag; Enter / Space
  * assigns an available one), scoped to that handle `<button>`, not a global
  * shortcut listener.
+ *
+ * DocumentMapSettingsSection.tsx (#375) is the same category once more: the
+ * dialogue-pair drag handle's `onKeyDown` is the Arrow Up / Down keyboard
+ * fallback for reordering `documentMap.dialogueDelimiterPairs`, scoped to that
+ * handle `<button>`, not a global shortcut listener.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -81,7 +86,8 @@ const onKeyDownExemptFileNames = new Set([
   "FileExplorer.tsx",
   "GlossaryEditor.tsx",
   "GlossaryTagManager.tsx",
-  "GlossaryEntryTagAssignmentEditor.tsx"
+  "GlossaryEntryTagAssignmentEditor.tsx",
+  "DocumentMapSettingsSection.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {

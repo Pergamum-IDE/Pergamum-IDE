@@ -113,7 +113,14 @@ function saveRequest(
       paragraphIndent: defaultParagraphIndentSettings,
       characterCount: defaultCharacterCountSettings
     },
-    files: { newFile: { lineEnding: "lf", encoding: "utf8" } }
+    files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
+    documentMap: {
+      narrationColor: "#000000",
+      glossaryFallbackColor: "#ff0000",
+      dialogueDelimiterPairs: [
+        { open: "「", close: "」", color: "#0000ff" }
+      ]
+    }
   } as SaveApplicationSettingsRequest;
 }
 

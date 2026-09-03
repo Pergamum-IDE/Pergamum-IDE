@@ -12,18 +12,25 @@ import {
   buildGlossaryTextMapPlan,
   buildTextMapLineLayout,
   buildTextMapViewportRect,
+  collectDocumentMapDialogueRanges,
+  collectGlossaryTextMapGlossaryOccurrences,
   collectGlossaryTextMapOccurrences,
   collectJapaneseDialogueRanges,
+  documentMapDialogueColorAtOffset,
   drawGlossaryTextMap,
+  glossaryTextMapHitColorAtOffset,
   isOffsetInGlossaryTextMapOccurrence,
   isOffsetInTextMapRange,
   mapTextOffsetToVisualPosition,
+  resolveGlossaryTextMapHitColor,
   resolveTextMapCellRect,
   resolveTextMapWrapColumns,
   splitTextIntoLineSpans,
   visualRowForOffset,
   type GlossaryTextMapDrawContext
 } from "../../src/renderer/glossaryTextMap";
+import { adjustDocumentMapTagColorForVisibility } from "../../src/shared/documentMapTagColor";
+import type { GlossaryTag } from "../../src/shared/glossary";
 
 let atomSeq = 0;
 
@@ -40,12 +47,29 @@ function atom(value: string, matchFlags = 0): GlossaryAtom {
   };
 }
 
-function entry(id: string, atoms: GlossaryAtom[]): GlossaryEntry {
+function tag(id: string, backgroundRgb: string): GlossaryTag {
+  return {
+    id,
+    label: id,
+    description: null,
+    backgroundRgb,
+    foregroundRgb: "#ffffff",
+    sortOrder: 0,
+    createdAt: "2026-09-02T00:00:00.000Z",
+    updatedAt: "2026-09-02T00:00:00.000Z"
+  };
+}
+
+function entry(
+  id: string,
+  atoms: GlossaryAtom[],
+  tags: GlossaryTag[] = []
+): GlossaryEntry {
   return {
     id,
     description: "",
     atoms: atoms.map((a) => ({ ...a, entryId: id })),
-    tags: [],
+    tags,
     createdAt: "2026-09-02T00:00:00.000Z",
     updatedAt: "2026-09-02T00:00:00.000Z"
   };
@@ -237,6 +261,108 @@ describe("collectGlossaryTextMapOccurrences (#375)", () => {
       { start: 2, end: 3 },
       { start: 4, end: 5 }
     ]);
+  });
+});
+
+describe("resolveGlossaryTextMapHitColor (#375, primary-tag colour)", () => {
+  it("uses the PRIMARY (first-assigned) tag's backgroundRgb", () => {
+    const e = entry("e1", [atom("Foo")], [
+      tag("t-primary", "#00ff00"),
+      tag("t-second", "#0000aa")
+    ]);
+    expect(resolveGlossaryTextMapHitColor(e)).toBe("#00ff00");
+  });
+
+  it("falls back to the fixed hit colour for a tagless entry", () => {
+    expect(
+      resolveGlossaryTextMapHitColor(entry("e1", [atom("Foo")]))
+    ).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR);
+  });
+
+  it("falls back when the tag colour is not a #rrggbb hex", () => {
+    for (const bad of ["red", "#12", "#1234567", "rgb(1,2,3)", ""]) {
+      expect(
+        resolveGlossaryTextMapHitColor(
+          entry("e1", [atom("Foo")], [tag("t", bad)])
+        )
+      ).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR);
+    }
+  });
+
+  it("prefers a tagColorCache entry for the primary tag id over its raw backgroundRgb", () => {
+    const e = entry("e1", [atom("Foo")], [tag("t-primary", "#00ff00")]);
+    const cache = new Map([["t-primary", "#123456"]]);
+    expect(resolveGlossaryTextMapHitColor(e, GLOSSARY_TEXT_MAP_HIT_COLOR, cache)).toBe(
+      "#123456"
+    );
+    // A cache miss falls through to the tag's own colour.
+    expect(
+      resolveGlossaryTextMapHitColor(e, GLOSSARY_TEXT_MAP_HIT_COLOR, new Map())
+    ).toBe("#00ff00");
+  });
+});
+
+describe("collectGlossaryTextMapGlossaryOccurrences (#375)", () => {
+  it("tags each occurrence with its owning entry id and primary-tag colour", () => {
+    const occ = collectGlossaryTextMapGlossaryOccurrences("x Foo y Foo", [
+      entry("e1", [atom("Foo")], [tag("t", "#123456")])
+    ]);
+    expect(occ).toEqual([
+      { entryId: "e1", startOffset: 2, endOffset: 5, color: "#123456" },
+      { entryId: "e1", startOffset: 8, endOffset: 11, color: "#123456" }
+    ]);
+  });
+
+  it("colours per ENTRY, not per atom — every atom of an entry shares the colour", () => {
+    const occ = collectGlossaryTextMapGlossaryOccurrences("Foo Bar", [
+      entry(
+        "e1",
+        [atom("Foo"), atom("Bar")],
+        [tag("t", "#abcdef")]
+      )
+    ]);
+    expect(occ.map((o) => o.color)).toEqual(["#abcdef", "#abcdef"]);
+    expect(occ.every((o) => o.entryId === "e1")).toBe(true);
+  });
+
+  it("uses the fallback colour for a tagless entry's hits", () => {
+    const occ = collectGlossaryTextMapGlossaryOccurrences("Foo", [
+      entry("e1", [atom("Foo")])
+    ]);
+    expect(occ).toEqual([
+      {
+        entryId: "e1",
+        startOffset: 0,
+        endOffset: 3,
+        color: GLOSSARY_TEXT_MAP_HIT_COLOR
+      }
+    ]);
+  });
+
+  it("is empty for empty text or no entries, and honours matchFlags", () => {
+    expect(
+      collectGlossaryTextMapGlossaryOccurrences("", [entry("e1", [atom("Foo")])])
+    ).toEqual([]);
+    expect(collectGlossaryTextMapGlossaryOccurrences("Foo", [])).toEqual([]);
+    // single-char atom without opt-in → no occurrence.
+    expect(
+      collectGlossaryTextMapGlossaryOccurrences("z z", [
+        entry("e1", [atom("z")], [tag("t", "#00ff00")])
+      ])
+    ).toEqual([]);
+  });
+});
+
+describe("glossaryTextMapHitColorAtOffset (#375)", () => {
+  const occ = [
+    { entryId: "e1", startOffset: 4, endOffset: 7, color: "#00ff00" }
+  ];
+
+  it("returns the occurrence colour for start <= offset < end, else null", () => {
+    expect(glossaryTextMapHitColorAtOffset(3, occ)).toBeNull();
+    expect(glossaryTextMapHitColorAtOffset(4, occ)).toBe("#00ff00");
+    expect(glossaryTextMapHitColorAtOffset(6, occ)).toBe("#00ff00");
+    expect(glossaryTextMapHitColorAtOffset(7, occ)).toBeNull();
   });
 });
 
@@ -446,7 +572,14 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
     });
 
     const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
-    expect(plan.dialogues).toEqual([{ startOffset: 1, endOffset: 4 }]);
+    expect(plan.dialogues).toEqual([
+      {
+        startOffset: 1,
+        endOffset: 4,
+        color: GLOSSARY_TEXT_MAP_DIALOGUE_COLOR,
+        pairIndex: 0
+      }
+    ]);
 
     // 地 — plain text.
     expect(byOffset.get(0)).toMatchObject({
@@ -472,6 +605,42 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
       hit: false,
       color: GLOSSARY_TEXT_MAP_DIALOGUE_COLOR
     });
+  });
+
+  it("#375: a Glossary hit's pixels take the Entry's PRIMARY tag colour", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "x Foo y",
+      entries: [
+        entry("e1", [atom("Foo")], [
+          tag("primary", "#00ff00"),
+          tag("secondary", "#0000aa")
+        ])
+      ],
+      wrapColumns: 80
+    });
+
+    const foo = plan.pixels.filter((p) => p.offset >= 2 && p.offset < 5);
+    expect(foo.map((p) => p.offset)).toEqual([2, 3, 4]);
+    expect(foo.every((p) => p.hit && p.color === "#00ff00")).toBe(true);
+    // Non-hit cells are unaffected.
+    expect(plan.pixels.find((p) => p.offset === 0)?.color).toBe(
+      GLOSSARY_TEXT_MAP_NORMAL_COLOR
+    );
+    // The plan's occurrences carry the entry + colour.
+    expect(plan.occurrences).toEqual([
+      { entryId: "e1", startOffset: 2, endOffset: 5, color: "#00ff00" }
+    ]);
+  });
+
+  it("#375: a tagless Entry's hits use the fallback colour", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "Foo",
+      entries: [entry("e1", [atom("Foo")])],
+      wrapColumns: 80
+    });
+    expect(plan.pixels.every((p) => p.color === GLOSSARY_TEXT_MAP_HIT_COLOR)).toBe(
+      true
+    );
   });
 });
 
@@ -596,6 +765,62 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
       firstOf(GLOSSARY_TEXT_MAP_HIT_COLOR)
     );
   });
+
+  it("#375: fills each Entry's hits in its own primary-tag colour, after black & blue", () => {
+    // "Aa Bb" — "Aa" = green entry, "Bb" = a tagless (fallback red) entry.
+    const plan = buildGlossaryTextMapPlan({
+      text: "Aa Bb",
+      entries: [
+        entry("green", [atom("Aa")], [tag("t", "#00ff00")]),
+        entry("plain", [atom("Bb")])
+      ],
+      wrapColumns: 80
+    });
+    const { context, calls } = fakeContext();
+
+    drawGlossaryTextMap(context, plan);
+
+    const fills = calls.filter((c) => c.type === "fillRect");
+    const firstOf = (color: string): number =>
+      fills.findIndex((c) => c.fillStyle === color);
+    const lastOf = (color: string): number =>
+      fills.map((c) => c.fillStyle).lastIndexOf(color);
+
+    // "Aa" → 2 green cells, "Bb" → 2 fallback-red cells, " " → 1 black cell.
+    expect(
+      fills.filter((c) => c.fillStyle === "#00ff00")
+    ).toHaveLength(2);
+    expect(
+      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_HIT_COLOR)
+    ).toHaveLength(2);
+    expect(
+      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+    ).toHaveLength(1);
+
+    // Both hit colours are drawn AFTER the black pass.
+    expect(firstOf("#00ff00")).toBeGreaterThan(
+      lastOf(GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+    );
+    expect(firstOf(GLOSSARY_TEXT_MAP_HIT_COLOR)).toBeGreaterThan(
+      lastOf(GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+    );
+  });
+
+  it("#375: an unusable tag colour falls back without throwing", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "Foo",
+      entries: [entry("e1", [atom("Foo")], [tag("t", "not-a-color")])],
+      wrapColumns: 80
+    });
+    const { context, calls } = fakeContext();
+
+    expect(() => drawGlossaryTextMap(context, plan)).not.toThrow();
+    expect(
+      calls
+        .filter((c) => c.type === "fillRect")
+        .every((c) => c.fillStyle === GLOSSARY_TEXT_MAP_HIT_COLOR)
+    ).toBe(true);
+  });
 });
 
 describe("visualRowForOffset (#375, viewport overlay)", () => {
@@ -667,6 +892,369 @@ describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
   it("never produces a zero-height rectangle", () => {
     const rect = buildTextMapViewportRect(plan, { from: 3, to: 4 }, 200)!;
     expect(rect.height).toBeGreaterThanOrEqual(plan.cellSize);
+  });
+});
+
+describe("collectDocumentMapDialogueRanges (#375, settings-driven)", () => {
+  it("detects each pair's spans, in array order, carrying colour + pairIndex", () => {
+    const ranges = collectDocumentMapDialogueRanges("地「A」と『B』", [
+      { open: "「", close: "」", color: "#0000ff" },
+      { open: "『", close: "』", color: "#7c3aed" }
+    ]);
+    expect(ranges).toEqual([
+      { startOffset: 1, endOffset: 4, color: "#0000ff", pairIndex: 0 },
+      { startOffset: 5, endOffset: 8, color: "#7c3aed", pairIndex: 1 }
+    ]);
+  });
+
+  it("is empty for an empty pair list; an unclosed open runs to the end", () => {
+    expect(collectDocumentMapDialogueRanges("「x」", [])).toEqual([]);
+    expect(
+      collectDocumentMapDialogueRanges("地「未閉じ", [
+        { open: "「", close: "」", color: "#0000ff" }
+      ])
+    ).toEqual([
+      { startOffset: 1, endOffset: 5, color: "#0000ff", pairIndex: 0 }
+    ]);
+  });
+
+  it("supports multi-character delimiters and does not throw on empty ones", () => {
+    expect(
+      collectDocumentMapDialogueRanges('say "hi" ok', [
+        { open: '"', close: '"', color: "#0000ff" }
+      ])
+    ).toEqual([
+      { startOffset: 4, endOffset: 8, color: "#0000ff", pairIndex: 0 }
+    ]);
+    expect(
+      collectDocumentMapDialogueRanges("<<a>>", [
+        { open: "<<", close: ">>", color: "#0000ff" }
+      ])
+    ).toEqual([
+      { startOffset: 0, endOffset: 5, color: "#0000ff", pairIndex: 0 }
+    ]);
+    expect(
+      collectDocumentMapDialogueRanges("abc", [
+        { open: "", close: "", color: "#0000ff" }
+      ])
+    ).toEqual([]);
+  });
+});
+
+describe("documentMapDialogueColorAtOffset (#375, later pair wins)", () => {
+  const ranges = [
+    { startOffset: 0, endOffset: 6, color: "#0000ff", pairIndex: 0 },
+    { startOffset: 3, endOffset: 9, color: "#7c3aed", pairIndex: 1 }
+  ];
+
+  it("returns the highest-pairIndex range's colour for an overlap", () => {
+    expect(documentMapDialogueColorAtOffset(1, ranges)).toBe("#0000ff");
+    expect(documentMapDialogueColorAtOffset(4, ranges)).toBe("#7c3aed"); // overlap
+    expect(documentMapDialogueColorAtOffset(8, ranges)).toBe("#7c3aed");
+    expect(documentMapDialogueColorAtOffset(9, ranges)).toBeNull();
+  });
+});
+
+describe("buildGlossaryTextMapPlan (#375, documentMap settings)", () => {
+  it("uses narrationColor / glossaryFallbackColor / dialogueDelimiterPairs from settings", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "地『Foo』",
+      entries: [entry("e1", [atom("Foo")])], // tagless → fallback colour
+      wrapColumns: 80,
+      narrationColor: "#101010",
+      glossaryFallbackColor: "#00ff00",
+      dialogueDelimiterPairs: [
+        { open: "『", close: "』", color: "#abcdef" }
+      ]
+    });
+    const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
+    // 地(0) 『(1) F(2) o(3) o(4) 』(5)
+    expect(byOffset.get(0)?.color).toBe("#101010"); // narration
+    expect(byOffset.get(1)?.color).toBe("#abcdef"); // dialogue pair colour
+    // Foo is a glossary hit on a tagless entry → the settings fallback colour.
+    expect(byOffset.get(2)?.color).toBe("#00ff00");
+    expect(byOffset.get(2)?.hit).toBe(true);
+    expect(byOffset.get(5)?.color).toBe("#abcdef"); // 』 still dialogue
+  });
+
+  it("later dialogue pair wins on overlap; a Glossary hit still overrides both", () => {
+    // "「a『x』b」c" — pair0 「」 spans the whole quote, pair1 『』 nested; "x" = hit.
+    const plan = buildGlossaryTextMapPlan({
+      text: "「a『x』b」c",
+      entries: [
+        entry("e1", [atom("x", GlossaryAtomFlags.AllowSingleCharacterMatch)])
+      ],
+      wrapColumns: 80,
+      dialogueDelimiterPairs: [
+        { open: "「", close: "」", color: "#0000ff" },
+        { open: "『", close: "』", color: "#7c3aed" }
+      ]
+    });
+    const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
+    // 「(0) a(1) 『(2) x(3) 』(4) b(5) 」(6) c(7)
+    expect(byOffset.get(1)?.color).toBe("#0000ff"); // only pair0
+    expect(byOffset.get(2)?.color).toBe("#7c3aed"); // pair1 (later) wins
+    expect(byOffset.get(3)).toMatchObject({ hit: true }); // glossary hit
+    expect(byOffset.get(3)?.color).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR); // hit > dialogue
+    expect(byOffset.get(5)?.color).toBe("#0000ff"); // back to pair0
+    expect(byOffset.get(7)?.color).toBe(GLOSSARY_TEXT_MAP_NORMAL_COLOR); // narration
+  });
+
+  it("without documentMap input it keeps the built-in grey narration / grey dialogue / red hit defaults", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "地「x」",
+      entries: [
+        entry("e1", [atom("x", GlossaryAtomFlags.AllowSingleCharacterMatch)])
+      ],
+      wrapColumns: 80
+    });
+    const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
+    expect(byOffset.get(0)?.color).toBe(GLOSSARY_TEXT_MAP_NORMAL_COLOR);
+    expect(byOffset.get(1)?.color).toBe(GLOSSARY_TEXT_MAP_DIALOGUE_COLOR);
+    expect(byOffset.get(2)?.color).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR);
+  });
+});
+
+describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", () => {
+  const RAW_TAG_COLOR = "#3a7bd5";
+
+  function planWith(adjust: boolean | undefined) {
+    return buildGlossaryTextMapPlan({
+      text: "x Foo Foo Foo y",
+      entries: [
+        entry("e1", [atom("Foo")], [tag("primary", RAW_TAG_COLOR)])
+      ],
+      wrapColumns: 80,
+      adjustTagColorsForVisibility: adjust
+    });
+  }
+
+  it("draws the first-tag hits in the HSL-adjusted colour when ON", () => {
+    const plan = planWith(true);
+    const expected = adjustDocumentMapTagColorForVisibility(RAW_TAG_COLOR);
+    expect(expected).not.toBe(RAW_TAG_COLOR);
+
+    const hits = plan.pixels.filter((p) => p.hit);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((p) => p.color === expected)).toBe(true);
+    expect(plan.occurrences.every((o) => o.color === expected)).toBe(true);
+    // The correction is cached per tag, not recomputed per pixel.
+    expect(plan.tagColorCache.get("primary")).toBe(expected);
+    expect(plan.tagColorCache.size).toBe(1);
+  });
+
+  it("uses the raw tag backgroundRgb when OFF", () => {
+    const plan = planWith(false);
+    const hits = plan.pixels.filter((p) => p.hit);
+    expect(hits.every((p) => p.color === RAW_TAG_COLOR)).toBe(true);
+    expect(plan.tagColorCache.get("primary")).toBe(RAW_TAG_COLOR);
+  });
+
+  it("defaults to raw tag colours when the flag is omitted (pre-#375 behaviour)", () => {
+    const plan = planWith(undefined);
+    expect(plan.pixels.filter((p) => p.hit).every((p) => p.color === RAW_TAG_COLOR)).toBe(
+      true
+    );
+  });
+
+  it("never adjusts the untagged-Entry fallback colour", () => {
+    // #909090 is achromatic (s=0) → it WOULD visibly shift if it were run
+    // through the saturation adjustment.
+    const fallback = "#909090";
+    expect(adjustDocumentMapTagColorForVisibility(fallback)).not.toBe(fallback);
+
+    const plan = buildGlossaryTextMapPlan({
+      text: "x Bar y",
+      entries: [entry("e1", [atom("Bar")])], // no tags
+      wrapColumns: 80,
+      glossaryFallbackColor: fallback,
+      adjustTagColorsForVisibility: true
+    });
+    expect(
+      plan.pixels.filter((p) => p.hit).every((p) => p.color === fallback)
+    ).toBe(true);
+    expect(plan.occurrences.every((o) => o.color === fallback)).toBe(true);
+    expect(plan.tagColorCache.size).toBe(0);
+  });
+
+  it("with adjustment ON, narration and dialogue-pair colours are used AS-IS (only the tag colour shifts)", () => {
+    // 地(0) 「(1) x(2) 」(3) と(4) 『(5) y(6) 』(7)
+    const plan = buildGlossaryTextMapPlan({
+      text: "地「x」と『y』",
+      entries: [
+        entry(
+          "e1",
+          [atom("x", GlossaryAtomFlags.AllowSingleCharacterMatch)],
+          [tag("primary", RAW_TAG_COLOR)]
+        )
+      ],
+      wrapColumns: 80,
+      narrationColor: "#3c3c3c",
+      glossaryFallbackColor: "#ff0000",
+      dialogueDelimiterPairs: [
+        { open: "「", close: "」", color: "#909090" },
+        { open: "『", close: "』", color: "#123456" }
+      ],
+      adjustTagColorsForVisibility: true
+    });
+
+    // These settings colours are achromatic / distinctive — they would move if
+    // they were adjusted.
+    expect(adjustDocumentMapTagColorForVisibility("#3c3c3c")).not.toBe("#3c3c3c");
+    expect(adjustDocumentMapTagColorForVisibility("#909090")).not.toBe("#909090");
+
+    const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
+    // narration
+    expect(byOffset.get(0)?.color).toBe("#3c3c3c");
+    expect(byOffset.get(4)?.color).toBe("#3c3c3c");
+    // dialogue pair 0 (「」) — unchanged settings colour
+    expect(byOffset.get(1)).toMatchObject({ dialogue: true, color: "#909090" });
+    expect(byOffset.get(3)?.color).toBe("#909090");
+    // dialogue pair 1 (『』) — unchanged settings colour
+    expect(byOffset.get(5)?.color).toBe("#123456");
+    expect(byOffset.get(7)?.color).toBe("#123456");
+    // only the first-tag hit is shifted
+    expect(byOffset.get(2)).toMatchObject({
+      hit: true,
+      color: adjustDocumentMapTagColorForVisibility(RAW_TAG_COLOR)
+    });
+  });
+
+  it("with adjustment ON, the later dialogue pair still wins an overlap, and a hit still overrides dialogue", () => {
+    // 「(0) a(1) 『(2) x(3) 』(4) b(5) 」(6) c(7) — pair0 spans the whole quote,
+    // pair1 『』 is nested; "x" is a Glossary hit.
+    const plan = buildGlossaryTextMapPlan({
+      text: "「a『x』b」c",
+      entries: [
+        entry(
+          "e1",
+          [atom("x", GlossaryAtomFlags.AllowSingleCharacterMatch)],
+          [tag("primary", RAW_TAG_COLOR)]
+        )
+      ],
+      wrapColumns: 80,
+      narrationColor: "#3c3c3c",
+      dialogueDelimiterPairs: [
+        { open: "「", close: "」", color: "#909090" },
+        { open: "『", close: "』", color: "#123456" }
+      ],
+      adjustTagColorsForVisibility: true
+    });
+    const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
+    expect(byOffset.get(1)?.color).toBe("#909090"); // pair0 only
+    expect(byOffset.get(2)?.color).toBe("#123456"); // pair1 (later) wins
+    expect(byOffset.get(3)).toMatchObject({
+      hit: true,
+      color: adjustDocumentMapTagColorForVisibility(RAW_TAG_COLOR)
+    }); // hit > dialogue
+    expect(byOffset.get(5)?.color).toBe("#909090"); // back to pair0
+    expect(byOffset.get(7)?.color).toBe("#3c3c3c"); // narration
+  });
+
+  it("with adjustment OFF, the first-tag colour is used raw alongside untouched narration / dialogue", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "地「x」",
+      entries: [
+        entry(
+          "e1",
+          [atom("x", GlossaryAtomFlags.AllowSingleCharacterMatch)],
+          [tag("primary", RAW_TAG_COLOR)]
+        )
+      ],
+      wrapColumns: 80,
+      narrationColor: "#3c3c3c",
+      dialogueDelimiterPairs: [{ open: "「", close: "」", color: "#909090" }],
+      adjustTagColorsForVisibility: false
+    });
+    const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
+    expect(byOffset.get(0)?.color).toBe("#3c3c3c"); // narration
+    expect(byOffset.get(1)?.color).toBe("#909090"); // dialogue
+    expect(byOffset.get(2)).toMatchObject({ hit: true, color: RAW_TAG_COLOR }); // raw tag
+  });
+
+  it("adjusts each distinct tag once even across many entries", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "Foo Bar Foo Bar",
+      entries: [
+        entry("e1", [atom("Foo")], [tag("a", "#3a7bd5")]),
+        entry("e2", [atom("Bar")], [tag("b", "#d53a3a")]),
+        entry("e3", [atom("Baz")], [tag("a", "#3a7bd5")])
+      ],
+      wrapColumns: 80,
+      adjustTagColorsForVisibility: true
+    });
+    expect([...plan.tagColorCache.keys()].sort()).toEqual(["a", "b"]);
+    expect(plan.tagColorCache.get("a")).toBe(
+      adjustDocumentMapTagColorForVisibility("#3a7bd5")
+    );
+  });
+
+  it("a Glossary hit still overrides narration and dialogue with the adjusted colour", () => {
+    const plan = buildGlossaryTextMapPlan({
+      text: "地「Foo」",
+      entries: [
+        entry(
+          "e1",
+          [atom("Foo")],
+          [tag("primary", RAW_TAG_COLOR)]
+        )
+      ],
+      wrapColumns: 80,
+      adjustTagColorsForVisibility: true
+    });
+    const expected = adjustDocumentMapTagColorForVisibility(RAW_TAG_COLOR);
+    const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
+    // 地(0) 「(1) F(2) o(3) o(4) 」(5)
+    expect(byOffset.get(2)).toMatchObject({ hit: true, color: expected });
+    expect(byOffset.get(3)?.color).toBe(expected);
+  });
+});
+
+describe("drawGlossaryTextMap (#375, settings colours, narration -> dialogue -> hit)", () => {
+  function fakeContext(): {
+    context: GlossaryTextMapDrawContext;
+    fills: { fillStyle: string }[];
+  } {
+    const fills: { fillStyle: string }[] = [];
+    const context: GlossaryTextMapDrawContext = {
+      fillStyle: "",
+      imageSmoothingEnabled: true,
+      clearRect() {},
+      fillRect() {
+        fills.push({ fillStyle: String(this.fillStyle) });
+      }
+    };
+    return { context, fills };
+  }
+
+  it("draws narration, then every dialogue colour, then every hit colour", () => {
+    // "地『g』n" : g = green-tagged glossary hit; narration #101010; dialogue #abcdef.
+    const plan = buildGlossaryTextMapPlan({
+      text: "地『g』n",
+      entries: [
+        entry(
+          "e1",
+          [atom("g", GlossaryAtomFlags.AllowSingleCharacterMatch)],
+          [tag("t", "#00ff00")]
+        )
+      ],
+      wrapColumns: 80,
+      narrationColor: "#101010",
+      dialogueDelimiterPairs: [{ open: "『", close: "』", color: "#abcdef" }]
+    });
+    const { context, fills } = fakeContext();
+    drawGlossaryTextMap(context, plan);
+
+    const styles = fills.map((f) => f.fillStyle);
+    const lastOf = (c: string) => styles.lastIndexOf(c);
+    const firstOf = (c: string) => styles.indexOf(c);
+
+    expect(styles.filter((s) => s === "#101010")).toHaveLength(2); // 地, n
+    expect(styles.filter((s) => s === "#abcdef")).toHaveLength(2); // 『 』
+    expect(styles.filter((s) => s === "#00ff00")).toHaveLength(1); // g
+
+    expect(lastOf("#101010")).toBeLessThan(firstOf("#abcdef"));
+    expect(lastOf("#abcdef")).toBeLessThan(firstOf("#00ff00"));
   });
 });
 

@@ -149,7 +149,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     }
   });
 
-  it("does not show a category in the left pane when it has no registered catalog items (project, advanced)", () => {
+  it("does not show a category in the left pane when it has no registered catalog items (project, advanced), except the bespoke Document Map category", () => {
     const element = settingsPanelViewElement("ja");
     const buttons = collectElements(
       element,
@@ -164,7 +164,29 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
 
     expect(labels).not.toContain("プロジェクト");
     expect(labels).not.toContain("詳細設定");
-    expect(labels).toHaveLength(7);
+    // "文書マップ" has no scalar catalog items but is force-kept (#375 Task Q).
+    expect(labels).toContain("文書マップ");
+    expect(labels).toHaveLength(8);
+  });
+
+  it("shows the '文書マップ' heading only once in the pane body (no duplicate section heading) (#375 fix)", () => {
+    const markup = renderSettingsPanelView("ja", {
+      selectedCategoryId: "documentMap"
+    });
+
+    // Exactly one pane heading, and it is the category title.
+    const paneHeadings = markup.match(
+      /<h2[^>]*class="[^"]*settingsItemPaneHeading[^"]*"[^>]*>文書マップ<\/h2>/g
+    );
+    expect(paneHeadings).toHaveLength(1);
+
+    // The bespoke section adds NO sub-heading repeating the title — earlier it
+    // rendered a second "文書マップ" as an <h3>.
+    expect(markup).not.toMatch(/<h[34][^>]*>文書マップ<\/h[34]>/);
+    // ...it only names itself for a11y.
+    expect(markup).toMatch(
+      /<section[^>]*class="[^"]*documentMapSettingsSection[^"]*"[^>]*aria-label="文書マップ"/
+    );
   });
 
   it("shows only the selected category's settings in the right pane", () => {
@@ -270,6 +292,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "Appearance",
       "Editor",
       "Preview",
+      "Document Map",
       "Files",
       "Command Palette",
       "Sound"
@@ -771,6 +794,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { checked: false } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
@@ -802,6 +826,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { checked: false } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
@@ -830,6 +855,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { checked: false } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: defaultApplicationSettings.preview,
       notification: { output: { enabled: false } },
       workbench: defaultApplicationSettings.workbench,
@@ -856,6 +882,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { checked: false } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: defaultApplicationSettings.preview,
       workbench: defaultApplicationSettings.workbench,
       commandPalette: defaultApplicationSettings.commandPalette,
@@ -892,6 +919,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { checked: true } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -922,6 +950,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { value: "crlf" } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -956,6 +985,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { value: "   " } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -994,6 +1024,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { value: "" } });
 
     expect(onChangeSettings).toHaveBeenLastCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1007,6 +1038,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { value: "「『（〖" } });
 
     expect(onChangeSettings).toHaveBeenLastCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1037,6 +1069,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { valueAsNumber: 2500 } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: {
@@ -1376,6 +1409,7 @@ describe("SettingsPanelView preview.updateDelayMs (#250 follow-up)", () => {
     onChange({ target: { valueAsNumber: 10000 } });
 
     expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
       preview: { ...settings.preview, updateDelayMs: 10000 },
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,

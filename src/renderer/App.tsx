@@ -7125,6 +7125,7 @@ export function App(): JSX.Element {
                       textMapGlossaryEntries={glossaryEntries}
                       textMapEditorWidth={editorAreaWidth}
                       textMapEditorVisibleRange={markdownVisibleRange}
+                      textMapDocumentMapSettings={effectiveSettings.documentMap}
                       onNavigateGlossaryOccurrence={
                         navigateGlossaryOccurrenceFromSidebar
                       }

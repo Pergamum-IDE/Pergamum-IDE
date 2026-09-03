@@ -1,4 +1,5 @@
 import type { FileExplorerEntry, PergamumProject } from "../shared/api";
+import type { DocumentMapSettings } from "../shared/documentMapSettings";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import type {
   CreateGlossaryEntryInput,
@@ -81,6 +82,8 @@ interface WorkspaceSidebarProps {
   /** #375 Text Map: the active Markdown editor's on-screen document range,
    *  drawn as a "you are here" rectangle. `null` = no overlay. */
   textMapEditorVisibleRange?: EditorVisibleTextRange | null;
+  /** #375 Text Map: `documentMap` settings — draw colours + dialogue pairs. */
+  textMapDocumentMapSettings?: DocumentMapSettings;
   onNavigateGlossaryOccurrence: (
     entry: GlossaryEntry,
     direction: "previous" | "next"
@@ -127,6 +130,7 @@ export function WorkspaceSidebar({
   textMapGlossaryEntries = [],
   textMapEditorWidth = null,
   textMapEditorVisibleRange = null,
+  textMapDocumentMapSettings,
   onNavigateGlossaryOccurrence,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
@@ -191,6 +195,7 @@ export function WorkspaceSidebar({
           glossaryEntries={textMapGlossaryEntries}
           editorWidth={textMapEditorWidth}
           editorVisibleRange={textMapEditorVisibleRange}
+          documentMapSettings={textMapDocumentMapSettings}
         />
       );
     case "glossary":
