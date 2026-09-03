@@ -274,6 +274,7 @@ export const GLOSSARY_CHANNELS = {
   list: "glossary:list",
   update: "glossary:update",
   delete: "glossary:delete",
+  reorderEntries: "glossary:reorderEntries",
   /** #375: project-owned tag layer. */
   listTags: "glossary:listTags",
   createTag: "glossary:createTag",
@@ -811,6 +812,15 @@ export interface ReorderGlossaryTagsRequest {
   tagIdsInOrder: string[];
 }
 
+/**
+ * #375: persist a new project-wide glossary entry order. `entryIdsInOrder` must
+ * list every glossary entry exactly once (no missing / unknown / duplicate
+ * ids); `glossary_entries.sort_order` is re-packed to `0..n-1` in that order.
+ */
+export interface ReorderGlossaryEntriesRequest {
+  entryIdsInOrder: string[];
+}
+
 export interface PergamumRuntimeInfo {
   electron: string;
   chromium: string;
@@ -1010,6 +1020,9 @@ export interface PergamumApi {
     list: () => Promise<GlossaryEntry[]>;
     update: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
     delete: (id: string) => Promise<DeleteGlossaryEntryResult>;
+    /** #375: re-pack `glossary_entries.sort_order` to `0..n-1` in the given
+     *  order; returns the re-sorted entry list. */
+    reorderEntries: (entryIdsInOrder: string[]) => Promise<GlossaryEntry[]>;
     /** #375: project-owned tag layer. */
     listTags: () => Promise<GlossaryTag[]>;
     createTag: (input: CreateGlossaryTagInput) => Promise<GlossaryTag>;

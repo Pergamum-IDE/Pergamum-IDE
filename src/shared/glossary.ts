@@ -605,6 +605,35 @@ export function validateReorderGlossaryTagIds(
   return validateGlossaryTagIds(value, "tagIdsInOrder");
 }
 
+/**
+ * #375: the ordered entry-id list for `reorderGlossaryEntries`. Every element
+ * must be a well-formed entry id and no id may repeat. Whether the list covers
+ * exactly the project's current entry set (no missing / unknown / extra ids) is
+ * checked by the store, which needs the database.
+ */
+export function validateReorderGlossaryEntryIds(
+  value: unknown
+): GlossaryEntryId[] {
+  if (!Array.isArray(value)) {
+    invalidGlossary("entryIdsInOrder must be an array of entry ids.");
+  }
+
+  const entryIds = value.map((entryId, index) =>
+    validateGlossaryEntryId(entryId, `entryIdsInOrder[${index}]`)
+  );
+  const seen = new Set<string>();
+
+  for (const entryId of entryIds) {
+    if (seen.has(entryId)) {
+      invalidGlossary("entryIdsInOrder contains a duplicate entry id.");
+    }
+
+    seen.add(entryId);
+  }
+
+  return entryIds;
+}
+
 // ---------------------------------------------------------------------------
 // Derivations
 // ---------------------------------------------------------------------------

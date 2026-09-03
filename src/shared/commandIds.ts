@@ -31,7 +31,8 @@ export const assistCommandIds = {
  * live in shared, not the renderer-only glossary command module).
  */
 export const glossaryTabCommandIds = {
-  manageTags: defineCommandId("glossary.tag.manage")
+  manageTags: defineCommandId("glossary.tag.manage"),
+  manageEntries: defineCommandId("glossary.entry.manage")
 } as const;
 
 export const editorCommandIds = {
@@ -83,7 +84,8 @@ export const applicationMenuCommandIds = [
   assistCommandIds.showLineEndingDistribution,
   assistCommandIds.insertParagraphIndent,
   assistCommandIds.removeParagraphIndent,
-  glossaryTabCommandIds.manageTags
+  glossaryTabCommandIds.manageTags,
+  glossaryTabCommandIds.manageEntries
 ] as const;
 
 export type ApplicationMenuCommandId =

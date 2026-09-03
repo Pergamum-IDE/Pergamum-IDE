@@ -411,6 +411,11 @@ export async function createSchemaVersionOne(
     CREATE TABLE glossary_entries (
       id TEXT PRIMARY KEY,
       description TEXT NOT NULL,
+      -- #375: the entry's project-wide display order (0 = first). Distinct from
+      -- glossary_atoms.sort_order (Atom order within an entry),
+      -- glossary_tags.sort_order (project-wide Tag order) and
+      -- glossary_entry_tags.sort_order (Tag assignment order within an entry).
+      sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     ) STRICT;
@@ -570,6 +575,7 @@ export async function validateSchemaVersionOne(
   await assertTableSchema(database, "glossary_entries", [
     ["id", "TEXT", 1],
     ["description", "TEXT", 0],
+    ["sort_order", "INTEGER", 0],
     ["created_at", "TEXT", 0],
     ["updated_at", "TEXT", 0]
   ]);

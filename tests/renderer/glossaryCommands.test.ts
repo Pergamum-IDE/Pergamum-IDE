@@ -21,7 +21,9 @@ const allCommandTitles = {
   previousOccurrence: "Previous occurrence",
   nextOccurrence: "Next occurrence",
   manageTags: "Glossary: Manage Tags",
-  manageTagsDescription: "Open the glossary tag manager tab."
+  manageTagsDescription: "Open the glossary tag manager tab.",
+  manageEntries: "Glossary: Manage Entries",
+  manageEntriesDescription: "Open the glossary management tab."
 };
 
 function registerAllGlossaryCommands(
@@ -36,6 +38,7 @@ function registerAllGlossaryCommands(
       entryId: string
     ) => boolean | Promise<boolean>;
     openGlossaryTagManager: () => boolean | Promise<boolean>;
+    openGlossaryEntryManager: () => boolean | Promise<boolean>;
   }> = {}
 ): void {
   registerGlossaryCommands(
@@ -46,6 +49,7 @@ function registerAllGlossaryCommands(
       navigateToPreviousGlossaryOccurrence: () => true,
       navigateToNextGlossaryOccurrence: () => true,
       openGlossaryTagManager: () => true,
+      openGlossaryEntryManager: () => true,
       ...overrides
     },
     allCommandTitles
@@ -69,7 +73,8 @@ describe("glossary commands", () => {
       "glossary.entry.create",
       "glossary.entry.occurrences.previous",
       "glossary.entry.occurrences.next",
-      "glossary.tag.manage"
+      "glossary.tag.manage",
+      "glossary.entry.manage"
     ]);
     expect(registry.get(glossaryCommandIds.openEntry)?.title).toBe(
       "Open glossary entry"
@@ -232,7 +237,10 @@ describe("glossary commands", () => {
       nextOccurrence: "translated:command.glossary.entry.occurrences.next",
       manageTags: "translated:command.glossary.tag.manage",
       manageTagsDescription:
-        "translated:command.glossary.tag.manage.description"
+        "translated:command.glossary.tag.manage.description",
+      manageEntries: "translated:command.glossary.entry.manage",
+      manageEntriesDescription:
+        "translated:command.glossary.entry.manage.description"
     });
   });
 

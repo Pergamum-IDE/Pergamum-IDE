@@ -456,6 +456,7 @@ describe("application menu", () => {
         "改行コード分布...",
         "段落字下げ一括挿入",
         "段落字下げ一括削除",
+        "用語を管理...",
         "用語タグを管理..."
       ]);
     });
@@ -475,6 +476,7 @@ describe("application menu", () => {
         assistCommandIds.showLineEndingDistribution,
         assistCommandIds.insertParagraphIndent,
         assistCommandIds.removeParagraphIndent,
+        glossaryTabCommandIds.manageEntries,
         glossaryTabCommandIds.manageTags
       ]);
     });

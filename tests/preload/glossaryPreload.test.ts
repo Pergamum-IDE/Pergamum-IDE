@@ -134,7 +134,8 @@ describe("glossary preload API", () => {
           createTag: expect.any(Function),
           updateTag: expect.any(Function),
           deleteTag: expect.any(Function),
-          reorderTags: expect.any(Function)
+          reorderTags: expect.any(Function),
+          reorderEntries: expect.any(Function)
         })
       })
     );
@@ -183,6 +184,7 @@ describe("glossary preload API", () => {
     });
     await api.glossary.deleteTag(tagId);
     await api.glossary.reorderTags([tagId, entryId]);
+    await api.glossary.reorderEntries([entryId, tagId]);
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [
@@ -232,6 +234,10 @@ describe("glossary preload API", () => {
       [
         GLOSSARY_CHANNELS.reorderTags,
         { tagIdsInOrder: [tagId, entryId] }
+      ],
+      [
+        GLOSSARY_CHANNELS.reorderEntries,
+        { entryIdsInOrder: [entryId, tagId] }
       ]
     ]);
   });

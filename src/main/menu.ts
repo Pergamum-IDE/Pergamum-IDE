@@ -343,6 +343,12 @@ function assistMenu(
       ),
       { type: "separator" },
       commandMenuItem(
+        glossaryTabCommandIds.manageEntries,
+        language,
+        "menu.assist.manageGlossaryEntries",
+        options
+      ),
+      commandMenuItem(
         glossaryTabCommandIds.manageTags,
         language,
         "menu.assist.manageGlossaryTags",

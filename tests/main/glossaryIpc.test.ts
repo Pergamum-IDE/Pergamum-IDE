@@ -58,6 +58,7 @@ describe("glossary IPC (#375)", () => {
       GLOSSARY_CHANNELS.list,
       GLOSSARY_CHANNELS.update,
       GLOSSARY_CHANNELS.delete,
+      GLOSSARY_CHANNELS.reorderEntries,
       GLOSSARY_CHANNELS.listTags,
       GLOSSARY_CHANNELS.createTag,
       GLOSSARY_CHANNELS.updateTag,
@@ -204,6 +205,36 @@ describe("glossary IPC (#375)", () => {
     await expect(api.reorderTags({})).rejects.toThrow();
     await expect(
       api.reorderTags({ tagIdsInOrder: ["not-a-uuid"] })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("#375: reorders entries through the current project database", async () => {
+    const api = handlers();
+    const mk = (value: string) =>
+      api.create({
+        description: "",
+        atoms: [{ value, matchFlags: 0 }],
+        tagIds: []
+      });
+
+    const a = await mk("あ");
+    const b = await mk("い");
+    const c = await mk("う");
+
+    const reordered = await api.reorderEntries({
+      entryIdsInOrder: [c.id, a.id, b.id]
+    });
+
+    expect(reordered.map((e) => e.id)).toEqual([c.id, a.id, b.id]);
+    expect((await api.list()).map((e) => e.id)).toEqual([c.id, a.id, b.id]);
+  });
+
+  it("#375: rejects an entry reorder request that is not a well-formed id list", async () => {
+    const api = handlers();
+
+    await expect(api.reorderEntries({})).rejects.toThrow();
+    await expect(
+      api.reorderEntries({ entryIdsInOrder: ["not-a-uuid"] })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 

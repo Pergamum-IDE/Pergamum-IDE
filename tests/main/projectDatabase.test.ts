@@ -590,6 +590,8 @@ describe("project database", () => {
       expect(entryColumns.map((column) => [column.name, column.type])).toEqual([
         ["id", "TEXT"],
         ["description", "TEXT"],
+        // #375: project-wide glossary entry display order.
+        ["sort_order", "INTEGER"],
         ["created_at", "TEXT"],
         ["updated_at", "TEXT"]
       ]);
@@ -886,7 +888,7 @@ describe("project database", () => {
     it("allows the same atom value on different entries", async () => {
       database = await openProjectDatabase(projectRootPath);
       await insertEntry(database, entryId);
-      await insertEntry(database, otherEntryId);
+      await insertEntry(database, otherEntryId, 1);
       await insertAtom(database, atomId, entryId, 0, "帝国");
 
       await expect(
@@ -918,14 +920,17 @@ describe("project database", () => {
 
 async function insertEntry(
   database: ProjectDatabase,
-  id: string
+  id: string,
+  sortOrder = 0
 ): Promise<void> {
   await database.run(
     `
-      INSERT INTO glossary_entries (id, description, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO glossary_entries (
+        id, description, sort_order, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?)
     `,
-    [id, "説明", timestamp, timestamp]
+    [id, "説明", sortOrder, timestamp, timestamp]
   );
 }
 

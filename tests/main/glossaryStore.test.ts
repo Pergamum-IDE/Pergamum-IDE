@@ -11,6 +11,7 @@ import {
   GlossaryStoreError,
   listGlossaryEntries,
   listGlossaryTags,
+  reorderGlossaryEntries,
   reorderGlossaryTags,
   updateGlossaryEntry,
   updateGlossaryTag
@@ -263,6 +264,159 @@ describe("glossary store (#375)", () => {
           event.details?.reason === "validation_failed"
       )
     ).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // Entry reorder (#375)
+  // -----------------------------------------------------------------------
+
+  async function makeEntry(value: string): Promise<string> {
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value, matchFlags: 0 }],
+      tagIds: []
+    });
+    return entry.id;
+  }
+
+  it("assigns an appended sort_order on create and lists entries in that order", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    const c = await makeEntry("う");
+
+    // Insertion order == sort_order order (0, 1, 2).
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      a,
+      b,
+      c
+    ]);
+  });
+
+  it("uses sort_order 0 for the first entry in an empty project", async () => {
+    const only = await makeEntry("単独");
+    const row = await database.get<{ sort_order: number }>(
+      "SELECT sort_order FROM glossary_entries WHERE id = ?",
+      [only]
+    );
+    expect(row?.sort_order).toBe(0);
+  });
+
+  it("reorders entries: re-packs sort_order 0..n-1 and returns the new order", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    const c = await makeEntry("う");
+
+    const reordered = await reorderGlossaryEntries(database, [c, a, b]);
+    expect(reordered.map((e) => e.id)).toEqual([c, a, b]);
+
+    const rows = await database.all<{ id: string; sort_order: number }>(
+      "SELECT id, sort_order FROM glossary_entries ORDER BY sort_order"
+    );
+    expect(rows).toEqual([
+      { id: c, sort_order: 0 },
+      { id: a, sort_order: 1 },
+      { id: b, sort_order: 2 }
+    ]);
+
+    // A fresh list re-read sees the same order.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      c,
+      a,
+      b
+    ]);
+  });
+
+  it("reorder leaves atoms / tags / description untouched", async () => {
+    const tag = await makeTag("武将");
+    const first = await createGlossaryEntry(database, {
+      description: "説明1",
+      atoms: [
+        { value: "織田信長", matchFlags: 0 },
+        { value: "第六天魔王", matchFlags: 0 }
+      ],
+      tagIds: [tag.id]
+    });
+    const second = await makeEntry("徳川家康");
+
+    await reorderGlossaryEntries(database, [second, first.id]);
+
+    const reloaded = (await listGlossaryEntries(database)).find(
+      (e) => e.id === first.id
+    );
+    expect(reloaded?.description).toBe("説明1");
+    expect(reloaded?.atoms.map((a) => a.value)).toEqual([
+      "織田信長",
+      "第六天魔王"
+    ]);
+    expect(reloaded?.tags.map((t) => t.id)).toEqual([tag.id]);
+  });
+
+  it("rejects a reorder with a duplicate entry id (validation error)", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+
+    await expect(
+      reorderGlossaryEntries(database, [a, b, a])
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("rejects a reorder that references an unknown entry, omits one, or lists too many", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+
+    await expect(
+      reorderGlossaryEntries(database, [a, missingEntryId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_ENTRY_REORDER_MISMATCH" });
+    await expect(
+      reorderGlossaryEntries(database, [a])
+    ).rejects.toMatchObject({ code: "GLOSSARY_ENTRY_REORDER_MISMATCH" });
+    await expect(
+      reorderGlossaryEntries(database, [a, b, missingEntryId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_ENTRY_REORDER_MISMATCH" });
+
+    // The order is unchanged after a rejected reorder.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      a,
+      b
+    ]);
+  });
+
+  it("keeps a monotone list order after an entry is deleted (gaps are tolerated)", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    const c = await makeEntry("う");
+
+    await deleteGlossaryEntry(database, b);
+
+    // sort_order is now 0, 2 — still a valid ascending order.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      a,
+      c
+    ]);
+
+    // A reorder re-packs the survivors back to 0..n-1.
+    await reorderGlossaryEntries(database, [c, a]);
+    const rows = await database.all<{ id: string; sort_order: number }>(
+      "SELECT id, sort_order FROM glossary_entries ORDER BY sort_order"
+    );
+    expect(rows).toEqual([
+      { id: c, sort_order: 0 },
+      { id: a, sort_order: 1 }
+    ]);
+  });
+
+  it("appends a new entry after a reorder", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    await reorderGlossaryEntries(database, [b, a]);
+
+    const c = await makeEntry("う");
+    // New entry's sort_order = max(1) + 1 = 2 → last in the list.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      b,
+      a,
+      c
+    ]);
   });
 
   // -----------------------------------------------------------------------

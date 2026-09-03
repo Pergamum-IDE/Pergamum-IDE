@@ -5,7 +5,10 @@ import {
 } from "../shared/editorId";
 import type { DocumentTab } from "./openDocuments";
 
-export type SpecialTabId = "settings" | "glossaryTagManager";
+export type SpecialTabId =
+  | "settings"
+  | "glossaryTagManager"
+  | "glossaryEntryManager";
 
 export interface SpecialWorkspaceTab {
   readonly kind: "special";

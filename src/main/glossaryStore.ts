@@ -15,6 +15,7 @@ import {
   validateGlossaryEntryId,
   validateGlossaryTag,
   validateGlossaryTagId,
+  validateReorderGlossaryEntryIds,
   validateReorderGlossaryTagIds,
   validateUpdateGlossaryEntryInput,
   validateUpdateGlossaryTagInput,
@@ -46,7 +47,8 @@ export type GlossaryStoreErrorCode =
   | "GLOSSARY_ENTRY_NOT_FOUND"
   | "GLOSSARY_TAG_NOT_FOUND"
   | "GLOSSARY_TAG_LABEL_CONFLICT"
-  | "GLOSSARY_TAG_REORDER_MISMATCH";
+  | "GLOSSARY_TAG_REORDER_MISMATCH"
+  | "GLOSSARY_ENTRY_REORDER_MISMATCH";
 
 export class GlossaryStoreError extends Error {
   readonly code: GlossaryStoreErrorCode;
@@ -61,6 +63,7 @@ export class GlossaryStoreError extends Error {
 interface GlossaryEntryRow extends Record<string, unknown> {
   id: unknown;
   description: unknown;
+  sort_order: unknown;
   created_at: unknown;
   updated_at: unknown;
 }
@@ -144,6 +147,10 @@ function tagReorderMismatch(message: string): GlossaryStoreError {
   return new GlossaryStoreError("GLOSSARY_TAG_REORDER_MISMATCH", message);
 }
 
+function entryReorderMismatch(message: string): GlossaryStoreError {
+  return new GlossaryStoreError("GLOSSARY_ENTRY_REORDER_MISMATCH", message);
+}
+
 /**
  * #375: `tagIdsInOrder` must be a permutation of the project's current tag ids
  * — same count, same members. Duplicates are already rejected by the shared
@@ -168,6 +175,32 @@ function assertGlossaryTagReorderCoversEveryTag(
   if (unknownId !== undefined) {
     throw tagReorderMismatch(
       `Glossary tag reorder references an unknown tag: ${unknownId}`
+    );
+  }
+}
+
+/**
+ * #375: `entryIdsInOrder` must be a permutation of the project's current entry
+ * ids — same count, same members. Duplicates are already rejected by the shared
+ * validator. Raised OUTSIDE any `database.transaction(...)` wrapper.
+ */
+function assertGlossaryEntryReorderCoversEveryEntry(
+  currentEntryIds: readonly string[],
+  requestedEntryIds: readonly string[]
+): void {
+  if (requestedEntryIds.length !== currentEntryIds.length) {
+    throw entryReorderMismatch(
+      `Glossary entry reorder must list every entry exactly once ` +
+        `(have ${currentEntryIds.length}, got ${requestedEntryIds.length}).`
+    );
+  }
+
+  const current = new Set(currentEntryIds);
+  const unknownId = requestedEntryIds.find((id) => !current.has(id));
+
+  if (unknownId !== undefined) {
+    throw entryReorderMismatch(
+      `Glossary entry reorder references an unknown entry: ${unknownId}`
     );
   }
 }
@@ -370,7 +403,7 @@ async function readGlossaryEntryById(
 ): Promise<GlossaryEntry | null> {
   const entryRow = await database.get<GlossaryEntryRow>(
     `
-      SELECT id, description, created_at, updated_at
+      SELECT id, description, sort_order, created_at, updated_at
       FROM glossary_entries
       WHERE id = ?
     `,
@@ -396,17 +429,18 @@ async function readGlossaryEntryById(
 async function readGlossaryEntries(
   database: ProjectDatabase
 ): Promise<GlossaryEntry[]> {
+  // #375: entries are listed in their project-wide display order
+  // (`glossary_entries.sort_order`, re-packed 0..n-1 by reorderGlossaryEntries).
+  // `id` is the stable tie-breaker for any equal sort_order values.
   const entryRows = await database.all<GlossaryEntryRow>(`
     SELECT
       entries.id,
       entries.description,
+      entries.sort_order,
       entries.created_at,
       entries.updated_at
     FROM glossary_entries AS entries
-    LEFT JOIN glossary_atoms AS representative
-      ON representative.entry_id = entries.id
-      AND representative.sort_order = 0
-    ORDER BY representative.value COLLATE NOCASE, entries.id
+    ORDER BY entries.sort_order ASC, entries.id ASC
   `);
   const entryIds = entryRows.map((row) => stringColumn(row.id, "id"));
   const [atomRows, tagRows] = await Promise.all([
@@ -520,12 +554,32 @@ export async function createGlossaryEntry(
       await assertReferencedTagsExist(database, validatedInput.tagIds);
 
       const entry = await database.transaction(async () => {
+        // #375: a new entry goes to the END of the project-wide order.
+        const sortRow = await database.get<{ next_sort_order: unknown }>(
+          `
+            SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_sort_order
+            FROM glossary_entries
+          `
+        );
+        const sortOrder = integerColumn(
+          sortRow?.next_sort_order ?? 0,
+          "next_sort_order"
+        );
+
         await database.run(
           `
-            INSERT INTO glossary_entries (id, description, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO glossary_entries (
+              id, description, sort_order, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?)
           `,
-          [entryId, validatedInput.description, timestamp, timestamp]
+          [
+            entryId,
+            validatedInput.description,
+            sortOrder,
+            timestamp,
+            timestamp
+          ]
         );
 
         await writeEntryAtomsAndTags(
@@ -670,6 +724,51 @@ export async function deleteGlossaryEntry(
       }
 
       return dbOperationResult(undefined, result.changes);
+    }
+  );
+}
+
+/**
+ * #375: persist a new project-wide entry order. `entryIdsInOrder` must list
+ * every glossary entry exactly once; `glossary_entries.sort_order` is re-packed
+ * to `0..n-1` in that order and the re-sorted list is returned. Atoms, tag
+ * assignments and descriptions are untouched, and `updated_at` is deliberately
+ * NOT bumped — a reorder is a positional change only.
+ */
+export async function reorderGlossaryEntries(
+  database: ProjectDatabase,
+  entryIdsInOrder: readonly string[],
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryEntry[]> {
+  const validatedIds = validateOrLogDbSkipped(
+    logger,
+    "update",
+    "glossaryEntry",
+    () => validateReorderGlossaryEntryIds(entryIdsInOrder)
+  );
+
+  // Outside the transaction so a meaningful mismatch error survives.
+  const currentEntryIds = (
+    await database.all<{ id: unknown }>("SELECT id FROM glossary_entries")
+  ).map((row) => stringColumn(row.id, "id"));
+
+  assertGlossaryEntryReorderCoversEveryEntry(currentEntryIds, validatedIds);
+
+  return withDbOperationLog(
+    { logger, dbOperation: "update", dbEntityKind: "glossaryEntry" },
+    async () => {
+      const entries = await database.transaction(async () => {
+        for (let index = 0; index < validatedIds.length; index += 1) {
+          await database.run(
+            "UPDATE glossary_entries SET sort_order = ? WHERE id = ?",
+            [index, validatedIds[index]]
+          );
+        }
+
+        return readGlossaryEntries(database);
+      });
+
+      return dbOperationResult(entries, entries.length);
     }
   );
 }

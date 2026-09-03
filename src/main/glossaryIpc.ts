@@ -12,6 +12,7 @@ import {
   validateCreateGlossaryTagInput,
   validateGlossaryEntryId,
   validateGlossaryTagId,
+  validateReorderGlossaryEntryIds,
   validateReorderGlossaryTagIds,
   validateUpdateGlossaryEntryInput,
   validateUpdateGlossaryTagInput,
@@ -28,6 +29,7 @@ import {
   GlossaryStoreError,
   listGlossaryEntries,
   listGlossaryTags,
+  reorderGlossaryEntries,
   reorderGlossaryTags,
   updateGlossaryEntry,
   updateGlossaryTag
@@ -47,6 +49,7 @@ export interface GlossaryIpcHandlers {
   list(): Promise<GlossaryEntry[]>;
   update(rawRequest: unknown): Promise<GlossaryEntry>;
   delete(rawRequest: unknown): Promise<DeleteGlossaryEntryResult>;
+  reorderEntries(rawRequest: unknown): Promise<GlossaryEntry[]>;
   listTags(): Promise<GlossaryTag[]>;
   createTag(rawRequest: unknown): Promise<GlossaryTag>;
   updateTag(rawRequest: unknown): Promise<GlossaryTag>;
@@ -102,6 +105,18 @@ function parseReorderGlossaryTagsRequest(value: unknown): {
 
   return {
     tagIdsInOrder: validateReorderGlossaryTagIds(value.tagIdsInOrder)
+  };
+}
+
+function parseReorderGlossaryEntriesRequest(value: unknown): {
+  entryIdsInOrder: string[];
+} {
+  if (!isRequestObject(value)) {
+    throw new Error("Invalid glossary entry reorder request.");
+  }
+
+  return {
+    entryIdsInOrder: validateReorderGlossaryEntryIds(value.entryIdsInOrder)
   };
 }
 
@@ -207,6 +222,13 @@ export function createGlossaryIpcHandlers(
         return { deleted: true };
       });
     },
+    async reorderEntries(rawRequest) {
+      const request = parseReorderGlossaryEntriesRequest(rawRequest);
+
+      return withDatabase((database) =>
+        reorderGlossaryEntries(database, request.entryIdsInOrder, logger)
+      );
+    },
     async listTags() {
       return withDatabase((database) => listGlossaryTags(database, logger));
     },
@@ -269,6 +291,10 @@ export function registerGlossaryIpc(
   );
   ipcMain.handle(GLOSSARY_CHANNELS.delete, (_event, rawRequest: unknown) =>
     handlers.delete(rawRequest)
+  );
+  ipcMain.handle(
+    GLOSSARY_CHANNELS.reorderEntries,
+    (_event, rawRequest: unknown) => handlers.reorderEntries(rawRequest)
   );
   ipcMain.handle(GLOSSARY_CHANNELS.listTags, () => handlers.listTags());
   ipcMain.handle(GLOSSARY_CHANNELS.createTag, (_event, rawRequest: unknown) =>

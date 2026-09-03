@@ -16,6 +16,7 @@ import {
   validateGlossaryEntry,
   validateGlossaryMatchFlags,
   validateGlossaryTag,
+  validateReorderGlossaryEntryIds,
   validateUpdateGlossaryEntryInput,
   validateUpdateGlossaryTagInput,
   type GlossaryAtom
@@ -306,6 +307,34 @@ describe("validateUpdateGlossaryEntryInput (#375)", () => {
     });
     expect(result.atoms[0].id).toBe(atomId1);
     expect(result.atoms[1].id).toBeUndefined();
+  });
+});
+
+describe("validateReorderGlossaryEntryIds (#375)", () => {
+  const a = "018f4b8c-7a2b-7c3d-8e4f-1000000000a1";
+  const b = "018f4b8c-7a2b-7c3d-8e4f-1000000000a2";
+
+  it("returns the id list unchanged when it is a well-formed set of ids", () => {
+    expect(validateReorderGlossaryEntryIds([a, b])).toEqual([a, b]);
+    expect(validateReorderGlossaryEntryIds([])).toEqual([]);
+  });
+
+  it("rejects a non-array", () => {
+    expect(() =>
+      validateReorderGlossaryEntryIds({ 0: a } as unknown)
+    ).toThrow(GlossaryValidationError);
+  });
+
+  it("rejects a malformed entry id", () => {
+    expect(() =>
+      validateReorderGlossaryEntryIds([a, "not-a-uuid"])
+    ).toThrow(GlossaryValidationError);
+  });
+
+  it("rejects a duplicate entry id", () => {
+    expect(() => validateReorderGlossaryEntryIds([a, b, a])).toThrow(
+      /duplicate entry id/
+    );
   });
 });
 
