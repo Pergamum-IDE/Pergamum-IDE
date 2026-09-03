@@ -10,6 +10,7 @@
 import type {
   GlossaryAtomInput,
   GlossaryEntry,
+  GlossaryTag,
   GlossaryTagId,
   UpdateGlossaryEntryInput
 } from "../shared/glossary";
@@ -111,9 +112,11 @@ function tagIdsEqual(
   left: readonly string[],
   right: readonly string[]
 ): boolean {
+  // #375: ORDER-sensitive — reordering assigned tags (which changes the
+  // primary tag) must mark the draft dirty.
   return (
     left.length === right.length &&
-    [...left].sort().every((tagId, index) => tagId === [...right].sort()[index])
+    left.every((tagId, index) => tagId === right[index])
   );
 }
 
@@ -257,7 +260,7 @@ export function reorderGlossaryEntryDraftAtom(
   return withRecomputedSaveState({ ...draft, atoms });
 }
 
-/** Attach the tag if absent, detach it if present. */
+/** Attach the tag (at the end) if absent, detach it if present. */
 export function toggleGlossaryEntryDraftTag(
   draft: GlossaryEntryDraft,
   tagId: GlossaryTagId
@@ -268,6 +271,101 @@ export function toggleGlossaryEntryDraftTag(
       ? draft.tagIds.filter((id) => id !== tagId)
       : [...draft.tagIds, tagId]
   });
+}
+
+/**
+ * #375: assign `tagId` to the entry at array index `toIndex` (clamped to
+ * `[0, tagIds.length]`; defaults to the end). Already-assigned → no-op (a tag
+ * is never assigned twice). Index 0 makes it the entry's PRIMARY tag.
+ */
+export function assignGlossaryEntryDraftTag(
+  draft: GlossaryEntryDraft,
+  tagId: GlossaryTagId,
+  toIndex: number = draft.tagIds.length
+): GlossaryEntryDraft {
+  if (draft.tagIds.includes(tagId)) {
+    return draft;
+  }
+
+  const target = Math.max(
+    0,
+    Math.min(Math.trunc(toIndex), draft.tagIds.length)
+  );
+  const tagIds = [...draft.tagIds];
+  tagIds.splice(target, 0, tagId);
+
+  return withRecomputedSaveState({ ...draft, tagIds });
+}
+
+/** #375: unassign `tagId` from the entry. The Tag itself, the Entry and its
+ *  Atoms are untouched. No-op when `tagId` is not assigned. */
+export function unassignGlossaryEntryDraftTag(
+  draft: GlossaryEntryDraft,
+  tagId: GlossaryTagId
+): GlossaryEntryDraft {
+  if (!draft.tagIds.includes(tagId)) {
+    return draft;
+  }
+
+  return withRecomputedSaveState({
+    ...draft,
+    tagIds: draft.tagIds.filter((id) => id !== tagId)
+  });
+}
+
+/**
+ * #375: move an already-assigned `tagId` to array index `toIndex` (clamped to
+ * `[0, tagIds.length - 1]`). Whatever ends up at index 0 becomes the primary
+ * tag. A no-op move / an unknown tag returns the draft unchanged. Saved as
+ * `sort_order = 0..n-1`.
+ */
+export function reorderAssignedGlossaryEntryDraftTags(
+  draft: GlossaryEntryDraft,
+  tagId: GlossaryTagId,
+  toIndex: number
+): GlossaryEntryDraft {
+  const fromIndex = draft.tagIds.indexOf(tagId);
+
+  if (fromIndex === -1) {
+    return draft;
+  }
+
+  const target = Math.max(
+    0,
+    Math.min(Math.trunc(toIndex), draft.tagIds.length - 1)
+  );
+
+  if (target === fromIndex) {
+    return draft;
+  }
+
+  const tagIds = [...draft.tagIds];
+  const [moved] = tagIds.splice(fromIndex, 1);
+  tagIds.splice(target, 0, moved);
+
+  return withRecomputedSaveState({ ...draft, tagIds });
+}
+
+/**
+ * #375: split the project's tags into this entry's ASSIGNED tags (in
+ * assignment order — `assignedTagIds` order, ids not in `projectTags` dropped)
+ * and the AVAILABLE tags (every other project tag, kept in `projectTags`
+ * order = the project-wide `sortOrder`). Feeds the Entry editor's two-list tag
+ * assignment UI.
+ */
+export function partitionGlossaryTagsForEntry(
+  assignedTagIds: readonly string[],
+  projectTags: readonly GlossaryTag[]
+): { assigned: GlossaryTag[]; available: GlossaryTag[] } {
+  const byId = new Map(projectTags.map((tag) => [tag.id, tag]));
+  const assignedSet = new Set(assignedTagIds);
+
+  return {
+    assigned: assignedTagIds
+      .map((id) => byId.get(id))
+      .filter((tag): tag is GlossaryTag => tag !== undefined),
+    available: projectTags.filter((tag) => !assignedSet.has(tag.id))
+  };
 }
 
 // ---------------------------------------------------------------------------

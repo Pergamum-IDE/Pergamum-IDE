@@ -355,9 +355,31 @@ describe("GlossaryTagManager (#375) — editor modal", () => {
     expect(container.textContent).toContain("glossaryTagEditor.titleNew");
   });
 
-  it("opens with the create modal already up when autoStartCreate is set", () => {
-    render({ tags: [], autoStartCreate: true });
+  it("#375 blocker: mounting / re-mounting the tab never opens the create modal", () => {
+    render();
+    expect(modal()).toBeNull();
+
+    // A re-render (tab re-activation) still shows no modal.
+    render({ tags: [] });
+    expect(modal()).toBeNull();
+    render();
+    expect(modal()).toBeNull();
+  });
+
+  it("#375 blocker: closing the create modal does not let it re-open on re-render", async () => {
+    render();
+    act(() => query<HTMLButtonElement>(".glossaryTagManagerAddButton").click());
     expect(modal()).not.toBeNull();
+
+    const cancel = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".appDialogButton")
+    ).find((b) => b.textContent === "glossaryTagEditor.cancel")!;
+    act(() => cancel.click());
+    expect(modal()).toBeNull();
+
+    // Re-render (tab re-activation) — still closed.
+    render();
+    expect(modal()).toBeNull();
   });
 
   it("the edit icon opens the edit modal seeded with the tag", () => {

@@ -347,7 +347,10 @@ async function tagsByEntryId(
       FROM glossary_entry_tags AS links
       JOIN glossary_tags AS tags ON tags.id = links.tag_id
       WHERE links.entry_id IN (${placeholders})
-      ORDER BY links.entry_id, tags.sort_order, tags.id
+      -- #375: entry-local ASSIGNMENT order first (index 0 = primary tag). The
+      -- project-wide tags.sort_order is only a same-value fallback (the
+      -- assignment order is unique within an entry).
+      ORDER BY links.entry_id, links.sort_order, tags.sort_order, tags.id
     `,
     entryIds
   );
@@ -483,10 +486,16 @@ async function writeEntryAtomsAndTags(
     );
   }
 
-  for (const tagId of input.tagIds) {
+  // #375: tag assignments are re-packed to sort_order 0..n-1 in the given
+  // tagIds order (index 0 is the entry's PRIMARY tag). This is the entry-local
+  // assignment order — never `glossary_tags.sort_order` (the project-wide one).
+  for (let sortOrder = 0; sortOrder < input.tagIds.length; sortOrder += 1) {
     await database.run(
-      `INSERT INTO glossary_entry_tags (entry_id, tag_id) VALUES (?, ?)`,
-      [entryId, tagId]
+      `
+        INSERT INTO glossary_entry_tags (entry_id, tag_id, sort_order)
+        VALUES (?, ?, ?)
+      `,
+      [entryId, input.tagIds[sortOrder], sortOrder]
     );
   }
 }

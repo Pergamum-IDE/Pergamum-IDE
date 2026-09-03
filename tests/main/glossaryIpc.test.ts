@@ -206,4 +206,42 @@ describe("glossary IPC (#375)", () => {
       api.reorderTags({ tagIdsInOrder: ["not-a-uuid"] })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
+
+  it("#375: create / update carry ordered entry tag assignment; a duplicate id is rejected", async () => {
+    const api = handlers();
+    const mkTag = (label: string) =>
+      api.createTag({
+        label,
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      });
+    const person = await mkTag("人物");
+    const place = await mkTag("地名");
+    const org = await mkTag("組織");
+
+    const created = await api.create({
+      description: "",
+      atoms: [{ value: "オーダ", matchFlags: 0 }],
+      // assignment order (place is the primary tag)
+      tagIds: [place.id, person.id, org.id]
+    });
+    expect(created.tags.map((t) => t.label)).toEqual(["地名", "人物", "組織"]);
+
+    const updated = await api.update({
+      id: created.id,
+      description: "",
+      atoms: [{ value: "オーダ", matchFlags: 0 }],
+      tagIds: [org.id, place.id]
+    });
+    expect(updated.tags.map((t) => t.id)).toEqual([org.id, place.id]);
+
+    await expect(
+      api.create({
+        description: "",
+        atoms: [{ value: "x", matchFlags: 0 }],
+        tagIds: [person.id, person.id]
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
 });

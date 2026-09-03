@@ -8,6 +8,7 @@ import type {
 import {
   addGlossaryEntryDraftAtom,
   applyGlossaryEntryDraftSaveResult,
+  assignGlossaryEntryDraftTag,
   createGlossaryEntryDraft,
   createLocalGlossaryAtomId,
   deleteGlossaryEntryDraftAtom,
@@ -16,9 +17,12 @@ import {
   isGlossaryEntryDraftDirty,
   isLocalGlossaryAtomId,
   markGlossaryEntryDraftSaving,
+  partitionGlossaryTagsForEntry,
+  reorderAssignedGlossaryEntryDraftTags,
   reorderGlossaryEntryDraftAtom,
   representativeGlossaryAtomDraft,
   toggleGlossaryEntryDraftTag,
+  unassignGlossaryEntryDraftTag,
   updateGlossaryEntryDraftAtomMatchFlags,
   updateGlossaryEntryDraftAtomValue,
   updateGlossaryEntryDraftDescription
@@ -216,5 +220,90 @@ describe("glossaryEntryDraft (#375)", () => {
 
   it("createLocalGlossaryAtomId is a local id", () => {
     expect(isLocalGlossaryAtomId(createLocalGlossaryAtomId())).toBe(true);
+  });
+});
+
+describe("glossaryEntryDraft — ordered tag assignment (#375)", () => {
+  const tagId3 = "018f4b8c-7a2b-7c3d-8e4f-300000000003";
+  const tagId4 = "018f4b8c-7a2b-7c3d-8e4f-300000000004";
+  const person = tag(tagId1, "登場人物");
+  const place = tag(tagId2, "地名");
+  const org = tag(tagId3, "組織");
+  const foreshadow = tag(tagId4, "伏線");
+  const projectTags = [person, place, org, foreshadow];
+
+  function draftWithTags(tagIds: string[]) {
+    return createGlossaryEntryDraft(
+      entry({ tags: tagIds.map((id) => projectTags.find((t) => t.id === id)!) })
+    );
+  }
+
+  it("assign inserts at the given index (default: end), never duplicates", () => {
+    let draft = draftWithTags([person.id]);
+    draft = assignGlossaryEntryDraftTag(draft, place.id);
+    expect(draft.tagIds).toEqual([person.id, place.id]);
+
+    draft = assignGlossaryEntryDraftTag(draft, org.id, 0);
+    expect(draft.tagIds).toEqual([org.id, person.id, place.id]);
+
+    // Already assigned → no-op, same reference.
+    const before = draft;
+    draft = assignGlossaryEntryDraftTag(draft, org.id, 2);
+    expect(draft).toBe(before);
+  });
+
+  it("unassign removes the tag; unknown tag is a no-op", () => {
+    let draft = draftWithTags([person.id, place.id]);
+    draft = unassignGlossaryEntryDraftTag(draft, person.id);
+    expect(draft.tagIds).toEqual([place.id]);
+
+    const before = draft;
+    expect(unassignGlossaryEntryDraftTag(before, org.id)).toBe(before);
+  });
+
+  it("reorder moves an assigned tag; the head becomes the primary tag", () => {
+    let draft = draftWithTags([person.id, place.id, org.id]);
+    draft = reorderAssignedGlossaryEntryDraftTags(draft, org.id, 0);
+    expect(draft.tagIds).toEqual([org.id, person.id, place.id]);
+    // A no-op move returns the same draft.
+    expect(
+      reorderAssignedGlossaryEntryDraftTags(draft, org.id, 0)
+    ).toBe(draft);
+  });
+
+  it("reordering assigned tags marks the draft dirty (order-sensitive)", () => {
+    let draft = draftWithTags([person.id, place.id]);
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(false);
+    draft = reorderAssignedGlossaryEntryDraftTags(draft, place.id, 0);
+    expect(draft.tagIds).toEqual([place.id, person.id]);
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
+  });
+
+  it("glossaryEntryDraftUpdateInput carries the assignment order", () => {
+    const draft = draftWithTags([org.id, person.id]);
+    expect(glossaryEntryDraftUpdateInput(draft).tagIds).toEqual([
+      org.id,
+      person.id
+    ]);
+  });
+
+  it("partitionGlossaryTagsForEntry: assigned in assignment order, available in project order", () => {
+    const { assigned, available } = partitionGlossaryTagsForEntry(
+      [foreshadow.id, person.id],
+      projectTags
+    );
+    expect(assigned.map((t) => t.label)).toEqual(["伏線", "登場人物"]);
+    expect(available.map((t) => t.label)).toEqual(["地名", "組織"]);
+  });
+
+  it("partitionGlossaryTagsForEntry: drops unknown assigned ids, tolerates no project tags", () => {
+    expect(
+      partitionGlossaryTagsForEntry(["missing", person.id], projectTags).assigned
+        .map((t) => t.label)
+    ).toEqual(["登場人物"]);
+    expect(partitionGlossaryTagsForEntry([person.id], [])).toEqual({
+      assigned: [],
+      available: []
+    });
   });
 });

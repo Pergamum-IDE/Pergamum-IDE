@@ -19,7 +19,7 @@ describe("Glossary Tag Manager special tab wiring (#375)", () => {
   it("opening the tab activates the existing one instead of duplicating it", () => {
     const source = appSource();
     const fnIndex = source.indexOf(
-      "function openGlossaryTagManagerTab(options"
+      "function openGlossaryTagManagerTab(): void {"
     );
     const nextIndex = source.indexOf(
       "function activateSpecialTab(",
@@ -71,7 +71,8 @@ describe("Glossary Tag Manager special tab wiring (#375)", () => {
 
     expect(block).toContain("{isGlossaryTagManagerTabActive ? (");
     expect(block).toContain("<GlossaryTagManager");
-    expect(block).toContain("autoStartCreate={glossaryTagManagerAutoStartCreate}");
+    // #375 blocker: opening the tab must NOT pre-open the create modal.
+    expect(source).not.toContain("autoStartCreate");
     // Falls through to Settings / EditorSurface below it.
     expect(block.indexOf("{isGlossaryTagManagerTabActive ? (")).toBeLessThan(
       block.indexOf("isSettingsTabActive ? (")
@@ -86,11 +87,16 @@ describe("Glossary Tag Manager special tab wiring (#375)", () => {
     ).toBeGreaterThanOrEqual(3);
   });
 
-  it("wires the Entry editor 'manage tags' link to open the tab in create mode", () => {
+  it("#375 blocker: every Tag Manager open path just opens the tab (no create mode)", () => {
     const source = appSource();
 
+    // The Entry editor "manage tags" link, the command handler and the menu
+    // all funnel through openGlossaryTagManagerTab(), which takes no args.
     expect(source).toContain(
-      "openGlossaryTagManagerTab({ autoStartCreate: true })"
+      "onOpenGlossaryTagManager={openGlossaryTagManagerTab}"
     );
+    expect(source).toContain("function openGlossaryTagManagerTab(): void {");
+    expect(source).not.toContain("openGlossaryTagManagerTab({");
+    expect(source).not.toContain("glossaryTagManagerAutoStartCreate");
   });
 });

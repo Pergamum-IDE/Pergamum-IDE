@@ -82,7 +82,9 @@ function noopHandlers() {
     onChangeAtomMatchFlags: vi.fn(),
     onDeleteAtom: vi.fn(),
     onReorderAtom: vi.fn(),
-    onToggleTag: vi.fn(),
+    onAssignTag: vi.fn(),
+    onUnassignTag: vi.fn(),
+    onReorderAssignedTag: vi.fn(),
     onOpenTagManager: vi.fn(),
     onDeleteEntry: vi.fn(),
     onNavigateToPreviousOccurrence: vi.fn(),
@@ -130,7 +132,6 @@ describe("GlossaryEditor (#375)", () => {
 
     // One labelled handle per atom (2 atoms in the fixture).
     expect(markup.match(/glossaryEditorAtomDragHandle/g)).toHaveLength(2);
-    expect(markup.match(/⣿/g)).toHaveLength(2);
     expect(markup).toContain('aria-label="glossaryEditor.atoms.dragHandle"');
     expect(markup).toContain('draggable="true"');
 
@@ -178,25 +179,46 @@ describe("GlossaryEditor (#375)", () => {
     expect(markup).not.toContain("glossaryFormSurface");
   });
 
-  it("renders the tag picker: attached tag pressed, unattached tag muted", () => {
+  it("renders the two-list tag assignment editor: assigned left, available right", () => {
     const markup = render(createGlossaryEntryDraft(entry()));
 
     expect(markup).toContain("glossaryEditor.tags.heading");
+    expect(markup).toContain("glossaryEditor.tags.assignedTitle");
+    expect(markup).toContain("glossaryEditor.tags.availableTitle");
+    // tagA is assigned (fixture entry.tags = [tagA]); tagB is available.
     expect(markup).toContain("武将");
     expect(markup).toContain("地名");
-    // The attached tag's toggle is aria-pressed="true".
-    expect(markup).toContain('aria-pressed="true"');
-    expect(markup).toContain('aria-pressed="false"');
-    expect(markup).toContain('data-muted="true"');
+    // The first assigned tag carries the Primary badge.
+    expect(markup).toContain("glossaryEditor.tags.primary");
+    expect(
+      markup.match(/glossaryEntryTagAssignmentPrimaryBadge/g)
+    ).toHaveLength(1);
   });
 
-  it("shows a 'no project tags' notice when there are none", () => {
-    const markup = render(createGlossaryEntryDraft(entry()), {
-      availableTags: []
-    });
+  it("shows the assigned empty state when no tag is assigned", () => {
+    const markup = render(
+      createGlossaryEntryDraft({ ...entry(), tags: [] })
+    );
+
+    expect(markup).toContain("glossaryEditor.tags.noAssigned");
+    expect(markup).not.toContain("glossaryEditor.tags.primary");
+  });
+
+  it("shows the available empty state when every tag is assigned", () => {
+    const markup = render(
+      createGlossaryEntryDraft({ ...entry(), tags: [tagA, tagB] })
+    );
+
+    expect(markup).toContain("glossaryEditor.tags.noAvailable");
+  });
+
+  it("shows a 'no tags available' notice when the project has none", () => {
+    const markup = render(
+      createGlossaryEntryDraft({ ...entry(), tags: [] }),
+      { availableTags: [] }
+    );
 
     expect(markup).toContain("glossaryEditor.tags.noProjectTags");
-    expect(markup).not.toContain("glossaryEditorTagList");
   });
 
   it("shows a validity message for a duplicate atom value", () => {
@@ -243,10 +265,10 @@ describe("GlossaryEditor (#375)", () => {
     expect(markup).not.toContain("# 見出し");
   });
 
-  it("renders a 'manage tags' link near the tag picker", () => {
+  it("renders a 'manage tags' link near the tag assignment editor", () => {
     const markup = render(createGlossaryEntryDraft(entry()));
 
-    expect(markup).toContain("glossaryEditorTagsManageLink");
+    expect(markup).toContain("glossaryEntryTagAssignmentManageLink");
     expect(markup).toContain("glossaryEditor.tags.openManager");
   });
 });
@@ -282,7 +304,9 @@ describe("GlossaryEditor (#375) — tag manager link", () => {
     });
 
     container
-      .querySelector<HTMLButtonElement>(".glossaryEditorTagsManageLink")!
+      .querySelector<HTMLButtonElement>(
+        ".glossaryEntryTagAssignmentManageLink"
+      )!
       .click();
 
     expect(onOpenTagManager).toHaveBeenCalledTimes(1);

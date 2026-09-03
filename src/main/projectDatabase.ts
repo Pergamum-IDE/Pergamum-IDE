@@ -443,6 +443,9 @@ export async function createSchemaVersionOne(
         REFERENCES glossary_entries(id) ON DELETE CASCADE,
       tag_id TEXT NOT NULL
         REFERENCES glossary_tags(id) ON DELETE CASCADE,
+      -- #375: the tag's ASSIGNMENT order WITHIN this entry (0 = the primary
+      -- tag). Distinct from glossary_tags.sort_order (the project-wide order).
+      sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
       PRIMARY KEY (entry_id, tag_id)
     ) STRICT;
 
@@ -464,6 +467,11 @@ export async function createSchemaVersionOne(
 
     CREATE INDEX glossary_entry_tags_tag_id_idx
       ON glossary_entry_tags(tag_id);
+
+    -- #375: a tag's assignment order is unique within its entry (mirrors
+    -- glossary_atoms_entry_value_unique).
+    CREATE UNIQUE INDEX glossary_entry_tags_entry_sort_unique
+      ON glossary_entry_tags(entry_id, sort_order);
   `);
 }
 
@@ -586,7 +594,8 @@ export async function validateSchemaVersionOne(
   ]);
   await assertTableSchema(database, "glossary_entry_tags", [
     ["entry_id", "TEXT", 1],
-    ["tag_id", "TEXT", 2]
+    ["tag_id", "TEXT", 2],
+    ["sort_order", "INTEGER", 0]
   ]);
   await assertTableIndex(
     database,
@@ -621,6 +630,13 @@ export async function validateSchemaVersionOne(
     "glossary_entry_tags",
     "glossary_entry_tags_tag_id_idx",
     0,
+    0
+  );
+  await assertTableIndex(
+    database,
+    "glossary_entry_tags",
+    "glossary_entry_tags_entry_sort_unique",
+    1,
     0
   );
 }

@@ -2710,40 +2710,121 @@ label.settingsItemHeader {
   font-size: 13px;
 }
 
-.glossaryEditorTagList {
+/* #375: the Entry editor's ORDERED tag assignment editor — two lists. */
+.glossaryEntryTagAssignment {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.glossaryEntryTagAssignmentColumn {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.glossaryEntryTagAssignmentTitle {
   margin: 0;
-  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7785;
+}
+
+.glossaryEntryTagAssignmentList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 64px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid #d7dee6;
+  border-radius: 8px;
   list-style: none;
 }
 
-.glossaryEditorTagToggle {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: none;
+.glossaryEntryTagAssignmentList[data-drop-active="true"] {
+  border-color: #2f6feb;
+  background: #f2f6ff;
+}
+
+.glossaryEntryTagAssignmentRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px;
+  border-radius: 6px;
+}
+
+.glossaryEntryTagAssignmentRow[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+.glossaryEntryTagAssignmentRow[data-drop-before="true"] {
+  box-shadow: inset 0 2px 0 0 #2f6feb;
+}
+
+.glossaryEntryTagAssignmentDragHandle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   padding: 0;
-  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #9aa7b4;
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
 }
 
-.glossaryEditorTagToggle[aria-pressed="true"] {
-  border-color: #25313d;
+.glossaryEntryTagAssignmentDragHandle:hover:not(:disabled),
+.glossaryEntryTagAssignmentDragHandle:focus-visible {
+  background: #eef2f7;
+  border-color: #cbd5df;
+  color: #52616f;
 }
 
-.glossaryEditorTagToggle:disabled {
+.glossaryEntryTagAssignmentDragHandle:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring, #7aa7d9);
+  outline-offset: 1px;
+}
+
+.glossaryEntryTagAssignmentDragHandle:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.glossaryEntryTagAssignmentDragHandle:disabled {
+  opacity: 0.35;
   cursor: default;
 }
 
-/* #375: header row of the Entry editor tag picker + its "manage tags" link. */
-.glossaryEditorTagsHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+.glossaryEntryTagAssignmentPrimaryBadge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e7edf5;
+  color: #3a4b5c;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.glossaryEditorTagsManageLink {
+.glossaryEntryTagAssignmentEmpty {
+  color: #94a0ac;
+  font-size: 12px;
+  padding: 4px 2px;
+}
+
+.glossaryEntryTagAssignmentManageLink {
+  align-self: flex-start;
   border: none;
   background: none;
   padding: 0;
@@ -2752,14 +2833,8 @@ label.settingsItemHeader {
   cursor: pointer;
 }
 
-.glossaryEditorTagsManageLink:hover {
+.glossaryEntryTagAssignmentManageLink:hover {
   text-decoration: underline;
-}
-
-.glossaryEditorTagsEmpty {
-  margin: 6px 0 0;
-  color: #6b7785;
-  font-size: 13px;
 }
 
 .glossaryTagChip {

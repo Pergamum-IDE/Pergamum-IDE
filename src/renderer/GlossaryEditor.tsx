@@ -4,13 +4,13 @@ import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { pergamumContextSurfaceAttribute } from "../shared/editContextMenu";
 import { GlossaryAtomMatchFlagsEditor } from "./GlossaryAtomMatchFlagsEditor";
+import { GlossaryEntryTagAssignmentEditor } from "./GlossaryEntryTagAssignmentEditor";
 import {
   glossaryEntryDraftValidity,
   representativeGlossaryAtomDraft,
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
 import { representativeGlossarySurface } from "./glossaryPresentation";
-import { GlossaryTagChip } from "./GlossaryTagChip";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 
@@ -37,7 +37,16 @@ interface GlossaryEditorProps {
    * its Arrow Up / Down keyboard fallback.
    */
   onReorderAtom: (atomId: string, toIndex: number) => void;
-  onToggleTag: (tagId: string) => void;
+  /**
+   * #375: ORDERED tag assignment (two-list editor). `onAssignTag` inserts a
+   * tag at array index `toIndex` (right → left, or reorder within assigned);
+   * `onUnassignTag` removes it (left → right); `onReorderAssignedTag` moves an
+   * already-assigned tag. Index 0 is the entry's PRIMARY tag. Draft-only until
+   * the entry is saved.
+   */
+  onAssignTag: (tagId: string, toIndex: number) => void;
+  onUnassignTag: (tagId: string) => void;
+  onReorderAssignedTag: (tagId: string, toIndex: number) => void;
   /**
    * #375: open the dedicated Glossary Tag Manager tab — the "I need a tag
    * that doesn't exist yet" escape hatch from the tag picker.
@@ -59,7 +68,9 @@ export function GlossaryEditor({
   onChangeAtomMatchFlags,
   onDeleteAtom,
   onReorderAtom,
-  onToggleTag,
+  onAssignTag,
+  onUnassignTag,
+  onReorderAssignedTag,
   onOpenTagManager,
   onDeleteEntry,
   onNavigateToPreviousOccurrence,
@@ -89,7 +100,6 @@ export function GlossaryEditor({
     representativeGlossarySurface(draft.entry);
   const descriptionHtml = markdownPreviewRenderer.render(draft.description);
   const validity = glossaryEntryDraftValidity(draft);
-  const attachedTagIds = new Set(draft.tagIds);
 
   return (
     <section
@@ -299,51 +309,17 @@ export function GlossaryEditor({
       </section>
 
       <section className="glossaryEditorSection glossaryEditorTags">
-        <div className="glossaryEditorTagsHeader">
-          <h2>{translate("glossaryEditor.tags.heading")}</h2>
-          <button
-            type="button"
-            className="glossaryEditorTagsManageLink"
-            onClick={onOpenTagManager}
-          >
-            {translate("glossaryEditor.tags.openManager")}
-          </button>
-        </div>
-        {availableTags.length === 0 ? (
-          <p className="glossaryEditorTagsEmpty">
-            {translate("glossaryEditor.tags.noProjectTags")}
-          </p>
-        ) : (
-          <ul className="glossaryEditorTagList">
-            {availableTags.map((tag) => {
-              const attached = attachedTagIds.has(tag.id);
-
-              return (
-                <li key={tag.id}>
-                  <button
-                    type="button"
-                    className="glossaryEditorTagToggle"
-                    aria-pressed={attached}
-                    aria-label={translate("glossaryEditor.tags.toggle")}
-                    disabled={readOnly}
-                    onClick={() => {
-                      if (!readOnly) {
-                        onToggleTag(tag.id);
-                      }
-                    }}
-                  >
-                    <GlossaryTagChip tag={tag} muted={!attached} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {availableTags.length > 0 && draft.tagIds.length === 0 ? (
-          <p className="glossaryEditorTagsEmpty">
-            {translate("glossaryEditor.tags.empty")}
-          </p>
-        ) : null}
+        <h2>{translate("glossaryEditor.tags.heading")}</h2>
+        <GlossaryEntryTagAssignmentEditor
+          assignedTagIds={draft.tagIds}
+          projectTags={availableTags}
+          translate={translate}
+          readOnly={readOnly}
+          onAssignTag={onAssignTag}
+          onUnassignTag={onUnassignTag}
+          onReorderAssignedTag={onReorderAssignedTag}
+          onOpenTagManager={onOpenTagManager}
+        />
       </section>
 
       <section className="glossaryEditorSection glossaryEditorDescription">

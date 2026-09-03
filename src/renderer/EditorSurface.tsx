@@ -398,7 +398,13 @@ interface EditorSurfaceProps {
   ) => void;
   onDeleteGlossaryEntryAtom: (atomId: string) => void;
   onReorderGlossaryEntryAtom: (atomId: string, toIndex: number) => void;
-  onToggleGlossaryEntryTag: (tagId: string) => void;
+  /** #375: ordered tag assignment (two-list editor). */
+  onAssignGlossaryEntryTag: (tagId: string, toIndex: number) => void;
+  onUnassignGlossaryEntryTag: (tagId: string) => void;
+  onReorderAssignedGlossaryEntryTag: (
+    tagId: string,
+    toIndex: number
+  ) => void;
   /** #375: open the Glossary Tag Manager special tab. */
   onOpenGlossaryTagManager: () => void;
   onDeleteGlossaryEntry: () => void;
@@ -497,7 +503,9 @@ export function EditorSurface({
   onChangeGlossaryEntryAtomMatchFlags,
   onDeleteGlossaryEntryAtom,
   onReorderGlossaryEntryAtom,
-  onToggleGlossaryEntryTag,
+  onAssignGlossaryEntryTag,
+  onUnassignGlossaryEntryTag,
+  onReorderAssignedGlossaryEntryTag,
   onOpenGlossaryTagManager,
   onDeleteGlossaryEntry,
   onNavigateToPreviousGlossaryOccurrence,
@@ -570,7 +578,9 @@ export function EditorSurface({
           onChangeAtomMatchFlags={onChangeGlossaryEntryAtomMatchFlags}
           onDeleteAtom={onDeleteGlossaryEntryAtom}
           onReorderAtom={onReorderGlossaryEntryAtom}
-          onToggleTag={onToggleGlossaryEntryTag}
+          onAssignTag={onAssignGlossaryEntryTag}
+          onUnassignTag={onUnassignGlossaryEntryTag}
+          onReorderAssignedTag={onReorderAssignedGlossaryEntryTag}
           onOpenTagManager={onOpenGlossaryTagManager}
           onDeleteEntry={onDeleteGlossaryEntry}
           onNavigateToPreviousOccurrence={

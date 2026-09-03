@@ -8,6 +8,7 @@ import {
   GlossaryValidationError,
   nonRepresentativeGlossaryAtoms,
   normalizeGlossaryRgbHex,
+  primaryGlossaryTag,
   representativeGlossaryAtom,
   validateCreateGlossaryEntryInput,
   validateCreateGlossaryTagInput,
@@ -220,6 +221,18 @@ describe("representative atom derivations (#375)", () => {
     expect(nonRepresentativeGlossaryAtoms(built).map((a) => a.value)).toEqual([
       "第六天魔王"
     ]);
+  });
+
+  it("primaryGlossaryTag is tags[0] (assignment order), or null when tagless", () => {
+    expect(
+      primaryGlossaryTag({
+        tags: [
+          { id: "t2", label: "b" },
+          { id: "t1", label: "a" }
+        ] as never
+      })?.id
+    ).toBe("t2");
+    expect(primaryGlossaryTag({ tags: [] })).toBeNull();
   });
 });
 

@@ -62,7 +62,12 @@ export interface GlossaryEntry {
   description: string;
   /** `1..n`, ordered by `sortOrder` ascending (index 0 is representative). */
   atoms: GlossaryAtom[];
-  /** `0..n`, ordered by the tag's own `sortOrder`. */
+  /**
+   * `0..n` assigned tags in ENTRY ASSIGNMENT order
+   * (`glossary_entry_tags.sort_order`, unique within the entry). `tags[0]` is
+   * the entry's PRIMARY tag (its default Text Map colour); `[]` = no primary
+   * tag. NOT ordered by the tag's own project-wide `sortOrder`.
+   */
   tags: GlossaryTag[];
   createdAt: string;
   updatedAt: string;
@@ -611,6 +616,17 @@ export function representativeGlossaryAtom(
   return (
     entry.atoms.find((atom) => atom.sortOrder === 0) ?? entry.atoms[0] ?? null
   );
+}
+
+/**
+ * #375: the entry's PRIMARY (first-assigned) tag — `tags[0]` — or `null` when
+ * the entry has no assigned tags. Used as the entry's default Text Map colour
+ * (a tagless entry falls back to the fixed hit colour).
+ */
+export function primaryGlossaryTag(
+  entry: Pick<GlossaryEntry, "tags">
+): GlossaryTag | null {
+  return entry.tags[0] ?? null;
 }
 
 /** The non-representative atoms, in `sortOrder` order. */

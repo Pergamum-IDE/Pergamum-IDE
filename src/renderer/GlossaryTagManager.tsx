@@ -43,11 +43,6 @@ interface GlossaryTagManagerProps {
   onReorderTags: (tagIdsInOrder: string[]) => Promise<unknown>;
   /** #375: entry count per tag id (how many glossary entries carry the tag). */
   entryCountByTagId?: Readonly<Record<string, number>>;
-  /**
-   * #375: open the "add tag" modal immediately (used when the Tag Manager
-   * tab is opened from the Glossary Entry editor's "Manage tags" link).
-   */
-  autoStartCreate?: boolean;
 }
 
 /** Private DataTransfer type — keeps tag reorder drags from mixing with File
@@ -85,6 +80,9 @@ const TABLE_COLUMN_KEYS = [
  * {@link GlossaryTagEditor} for create / edit, and drag-handle reorder of the
  * tag `sortOrder`. Delete goes back to the host for the shared destructive
  * confirm dialog. No bulk operations.
+ *
+ * Opening / mounting this tab NEVER opens the create modal — that is only the
+ * "Add tag" button (`openEditor(createNewGlossaryTagDraft())`).
  */
 export function GlossaryTagManager({
   tags,
@@ -93,12 +91,10 @@ export function GlossaryTagManager({
   onUpdateTag,
   onDeleteTag,
   onReorderTags,
-  entryCountByTagId = {},
-  autoStartCreate = false
+  entryCountByTagId = {}
 }: GlossaryTagManagerProps): JSX.Element {
-  const [draft, setDraft] = useState<GlossaryTagDraft | null>(() =>
-    autoStartCreate ? createNewGlossaryTagDraft() : null
-  );
+  // `null` = no modal. Only the "Add tag" button / an edit-icon click opens it.
+  const [draft, setDraft] = useState<GlossaryTagDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const openerRef = useRef<Element | null>(null);

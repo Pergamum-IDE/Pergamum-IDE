@@ -255,7 +255,9 @@ import {
   glossaryEntryDraftValidity,
   representativeGlossaryAtomDraft,
   reorderGlossaryEntryDraftAtom,
-  toggleGlossaryEntryDraftTag,
+  assignGlossaryEntryDraftTag,
+  unassignGlossaryEntryDraftTag,
+  reorderAssignedGlossaryEntryDraftTags,
   updateGlossaryEntryDraftAtomMatchFlags,
   updateGlossaryEntryDraftAtomValue,
   updateGlossaryEntryDraftDescription,
@@ -787,14 +789,10 @@ export function App(): JSX.Element {
   );
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
   // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
-  // project-owned) — closed on project close. `autoStartCreate` opens it
-  // with the "new tag" form already up (from the Entry editor link).
+  // project-owned) — closed on project close. Opening / activating it NEVER
+  // opens the "new tag" dialog — that is only the "Add tag" button.
   const [isGlossaryTagManagerTabOpen, setIsGlossaryTagManagerTabOpen] =
     useState(false);
-  const [
-    glossaryTagManagerAutoStartCreate,
-    setGlossaryTagManagerAutoStartCreate
-  ] = useState(false);
   const [activeSpecialTabId, setActiveSpecialTabId] =
     useState<SpecialTabId | null>(null);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
@@ -2505,9 +2503,27 @@ export function App(): JSX.Element {
     );
   }
 
-  function toggleActiveGlossaryEntryTag(tagId: string): void {
+  function assignActiveGlossaryEntryTag(
+    tagId: string,
+    toIndex: number
+  ): void {
     updateActiveGlossaryDraft((draft) =>
-      toggleGlossaryEntryDraftTag(draft, tagId)
+      assignGlossaryEntryDraftTag(draft, tagId, toIndex)
+    );
+  }
+
+  function unassignActiveGlossaryEntryTag(tagId: string): void {
+    updateActiveGlossaryDraft((draft) =>
+      unassignGlossaryEntryDraftTag(draft, tagId)
+    );
+  }
+
+  function reorderAssignedActiveGlossaryEntryTag(
+    tagId: string,
+    toIndex: number
+  ): void {
+    updateActiveGlossaryDraft((draft) =>
+      reorderAssignedGlossaryEntryDraftTags(draft, tagId, toIndex)
     );
   }
 
@@ -2741,11 +2757,9 @@ export function App(): JSX.Element {
   }
 
   // #375: open (or re-activate) the Glossary Tag Manager special tab. Opening
-  // it again just activates the existing one — never a duplicate tab.
-  function openGlossaryTagManagerTab(options?: {
-    autoStartCreate?: boolean;
-  }): void {
-    setGlossaryTagManagerAutoStartCreate(options?.autoStartCreate ?? false);
+  // it again just activates the existing one — never a duplicate tab, and
+  // never the "new tag" dialog (that is the "Add tag" button's job only).
+  function openGlossaryTagManagerTab(): void {
     setIsGlossaryTagManagerTabOpen(true);
     setActiveSpecialTabId("glossaryTagManager");
   }
@@ -2771,7 +2785,6 @@ export function App(): JSX.Element {
 
     if (tabId === "glossaryTagManager") {
       setIsGlossaryTagManagerTabOpen(false);
-      setGlossaryTagManagerAutoStartCreate(false);
       setActiveSpecialTabId((current) =>
         current === tabId ? null : current
       );
@@ -5481,7 +5494,6 @@ export function App(): JSX.Element {
     // #375: the Glossary Tag Manager tab is project-scoped (tags are
     // project-owned) — it never survives a project switch / close.
     setIsGlossaryTagManagerTabOpen(false);
-    setGlossaryTagManagerAutoStartCreate(false);
     setActiveSpecialTabId((current) =>
       current === "glossaryTagManager" ? null : current
     );
@@ -5563,7 +5575,6 @@ export function App(): JSX.Element {
     // #375: the Glossary Tag Manager tab is project-scoped (tags are
     // project-owned) — it never survives a project switch / close.
     setIsGlossaryTagManagerTabOpen(false);
-    setGlossaryTagManagerAutoStartCreate(false);
     setActiveSpecialTabId((current) =>
       current === "glossaryTagManager" ? null : current
     );
@@ -6110,7 +6121,6 @@ export function App(): JSX.Element {
     // #375: the Glossary Tag Manager tab is project-scoped (tags are
     // project-owned) — it never survives a project switch / close.
     setIsGlossaryTagManagerTabOpen(false);
-    setGlossaryTagManagerAutoStartCreate(false);
     setActiveSpecialTabId((current) =>
       current === "glossaryTagManager" ? null : current
     );
@@ -7172,7 +7182,6 @@ export function App(): JSX.Element {
                       <GlossaryTagManager
                         tags={glossaryTags}
                         translate={translate}
-                        autoStartCreate={glossaryTagManagerAutoStartCreate}
                         entryCountByTagId={glossaryTagEntryCounts}
                         onCreateTag={handleCreateGlossaryTag}
                         onUpdateTag={handleUpdateGlossaryTag}
@@ -7259,10 +7268,14 @@ export function App(): JSX.Element {
                         }
                         onDeleteGlossaryEntryAtom={deleteActiveGlossaryEntryAtom}
                         onReorderGlossaryEntryAtom={reorderActiveGlossaryEntryAtom}
-                        onToggleGlossaryEntryTag={toggleActiveGlossaryEntryTag}
-                        onOpenGlossaryTagManager={() =>
-                          openGlossaryTagManagerTab({ autoStartCreate: true })
+                        onAssignGlossaryEntryTag={assignActiveGlossaryEntryTag}
+                        onUnassignGlossaryEntryTag={
+                          unassignActiveGlossaryEntryTag
                         }
+                        onReorderAssignedGlossaryEntryTag={
+                          reorderAssignedActiveGlossaryEntryTag
+                        }
+                        onOpenGlossaryTagManager={openGlossaryTagManagerTab}
                         onDeleteGlossaryEntry={() => {
                           void deleteActiveGlossaryEntry();
                         }}

@@ -111,17 +111,49 @@ describe("glossary store (#375)", () => {
     expect(listed[0].atoms[0].value).toBe("織田信長");
   });
 
-  it("attaches 0..n tags and orders them by the tag's own sortOrder", async () => {
+  it("#375: attaches 0..n tags in ENTRY ASSIGNMENT order (tagIds order), not the tag's project sortOrder", async () => {
+    // Project sortOrder: 武将 = 0, 地名 = 1.
     const first = await makeTag("武将");
     const second = await makeTag("地名");
 
     const entry = await createGlossaryEntry(database, {
       description: "",
       atoms: [{ value: "桜田門", matchFlags: 0 }],
+      // Assigned 地名 first, 武将 second → 地名 is the primary tag.
       tagIds: [second.id, first.id]
     });
 
-    expect(entry.tags.map((t) => t.label)).toEqual(["武将", "地名"]);
+    expect(entry.tags.map((t) => t.label)).toEqual(["地名", "武将"]);
+    // entry.tags[0] is the primary tag.
+    expect(entry.tags[0].id).toBe(second.id);
+
+    // A fresh get / list preserves that assignment order.
+    const listed = (await listGlossaryEntries(database))[0];
+    expect(listed.tags.map((t) => t.label)).toEqual(["地名", "武将"]);
+  });
+
+  it("#375: entry update re-packs tag assignment sort_order to the new tagIds order", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+    const c = await makeTag("C");
+
+    const created = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "x", matchFlags: 0 }],
+      tagIds: [a.id, b.id, c.id]
+    });
+    expect(created.tags.map((t) => t.label)).toEqual(["A", "B", "C"]);
+
+    const updated = await updateGlossaryEntry(database, {
+      id: created.id,
+      description: "",
+      atoms: [{ value: "x", matchFlags: 0 }],
+      tagIds: [c.id, a.id]
+    });
+    expect(updated.tags.map((t) => t.label)).toEqual(["C", "A"]);
+    expect((await listGlossaryEntries(database))[0].tags.map((t) => t.id)).toEqual(
+      [c.id, a.id]
+    );
   });
 
   it("rejects an entry that references a non-existent tag id", async () => {

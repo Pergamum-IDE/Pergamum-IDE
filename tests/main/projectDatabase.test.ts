@@ -616,7 +616,9 @@ describe("project database", () => {
         entryTagColumns.map((column) => [column.name, column.type])
       ).toEqual([
         ["entry_id", "TEXT"],
-        ["tag_id", "TEXT"]
+        ["tag_id", "TEXT"],
+        // #375: entry-local tag ASSIGNMENT order (0 = primary tag).
+        ["sort_order", "INTEGER"]
       ]);
       expect(atomIndexes).toEqual(
         expect.arrayContaining([
@@ -802,7 +804,7 @@ describe("project database", () => {
       await insertAtom(database, atomId, entryId, 0, "織田信長");
       await insertTag(database, tagId, "武将");
       await database.run(
-        "INSERT INTO glossary_entry_tags (entry_id, tag_id) VALUES (?, ?)",
+        "INSERT INTO glossary_entry_tags (entry_id, tag_id, sort_order) VALUES (?, ?, 0)",
         [entryId, tagId]
       );
 
@@ -841,7 +843,7 @@ describe("project database", () => {
       await insertAtom(database, atomId, entryId, 0, "織田信長");
       await insertTag(database, tagId, "武将");
       await database.run(
-        "INSERT INTO glossary_entry_tags (entry_id, tag_id) VALUES (?, ?)",
+        "INSERT INTO glossary_entry_tags (entry_id, tag_id, sort_order) VALUES (?, ?, 0)",
         [entryId, tagId]
       );
 
