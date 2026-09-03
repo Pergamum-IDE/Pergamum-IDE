@@ -207,14 +207,15 @@ export function DocumentMapSettingsSection({
 
   const colorField = (
     label: string,
-    field: "narrationColor" | "glossaryFallbackColor"
+    field: "narrationColor" | "glossaryFallbackColor",
+    settingKey: string
   ): JSX.Element => {
     const value = draft[field];
     const invalid = normalizeDocumentMapColor(value) === null;
     return (
-      <div className="documentMapSettingsColorField">
+      <div className="settingsItemRow documentMapSettingsColorField">
         <label>
-          <span>{label}</span>
+          <span className="settingsItemLabel">{label}</span>
           <span className="documentMapSettingsColorInputs">
             <input
               type="color"
@@ -244,6 +245,8 @@ export function DocumentMapSettingsSection({
             {translate("settings.documentMap.color.invalid")}
           </p>
         ) : null}
+        {/* Setting-key line, same look as the Application settings rows. */}
+        <code className="settingsItemKey">{settingKey}</code>
       </div>
     );
   };
@@ -259,9 +262,11 @@ export function DocumentMapSettingsSection({
       {/* #375: viewport-lens opacity — top of the category. A range slider and
           a text input edit the same value; the text input validates to
           `0.1`..`0.9`. */}
-      <div className="documentMapSettingsOpacityField">
+      <div className="settingsItemRow documentMapSettingsOpacityField">
         <label>
-          <span>{translate("settings.documentMap.viewportLensOpacity.label")}</span>
+          <span className="settingsItemLabel">
+            {translate("settings.documentMap.viewportLensOpacity.label")}
+          </span>
           <span className="documentMapSettingsOpacityInputs">
             <input
               type="range"
@@ -303,15 +308,18 @@ export function DocumentMapSettingsSection({
             )}
           </p>
         )}
+        <code className="settingsItemKey">documentMap.viewportLensOpacity</code>
       </div>
 
       {colorField(
         translate("settings.documentMap.narrationColor.label"),
-        "narrationColor"
+        "narrationColor",
+        "documentMap.narrationColor"
       )}
       {colorField(
         translate("settings.documentMap.glossaryFallbackColor.label"),
-        "glossaryFallbackColor"
+        "glossaryFallbackColor",
+        "documentMap.glossaryFallbackColor"
       )}
 
       {/* Same switch UI as the catalog-driven boolean settings (#375 fix):
@@ -348,17 +356,23 @@ export function DocumentMapSettingsSection({
             "settings.documentMap.adjustTagColorsForVisibility.description"
           )}
         </p>
+        <code className="settingsItemKey">
+          documentMap.adjustTagColorsForVisibility
+        </code>
       </div>
 
-      <div className="documentMapSettingsDialoguePairs">
-        <h4>
+      <div className="settingsItemRow documentMapSettingsDialoguePairs">
+        <span className="settingsItemLabel">
           {translate("settings.documentMap.dialogueDelimiterPairs.label")}
-        </h4>
+        </span>
         <p className="documentMapSettingsHint">
           {translate(
             "settings.documentMap.dialogueDelimiterPairs.description"
           )}
         </p>
+        <code className="settingsItemKey">
+          documentMap.dialogueDelimiterPairs
+        </code>
 
         <ul
           className="documentMapSettingsDialoguePairList"

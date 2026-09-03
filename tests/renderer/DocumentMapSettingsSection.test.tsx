@@ -286,6 +286,45 @@ describe("DocumentMapSettingsSection (#375)", () => {
     ).toBe(false);
   });
 
+  it("shows the settings.json key for every item, in order, as a code.settingsItemKey line", () => {
+    render();
+    const keys = Array.from(
+      container.querySelectorAll("code.settingsItemKey")
+    ).map((el) => el.textContent?.trim());
+    expect(keys).toEqual([
+      "documentMap.viewportLensOpacity",
+      "documentMap.narrationColor",
+      "documentMap.glossaryFallbackColor",
+      "documentMap.adjustTagColorsForVisibility",
+      "documentMap.dialogueDelimiterPairs"
+    ]);
+  });
+
+  it("wraps each item in a `.settingsItemRow` (shared separator) — one per setting", () => {
+    render();
+    const section = q<HTMLElement>("section.documentMapSettingsSection");
+    const rows = section.querySelectorAll(":scope > .settingsItemRow");
+    expect(rows).toHaveLength(5);
+    // Each row carries exactly one setting-key line.
+    rows.forEach((row) => {
+      expect(row.querySelectorAll("code.settingsItemKey")).toHaveLength(1);
+    });
+  });
+
+  it("keeps the opacity control first even with the new key line", () => {
+    render();
+    const section = q<HTMLElement>("section.documentMapSettingsSection");
+    expect(
+      (section.firstElementChild as HTMLElement).classList.contains(
+        "documentMapSettingsOpacityField"
+      )
+    ).toBe(true);
+    expect(
+      section.firstElementChild?.querySelector("code.settingsItemKey")
+        ?.textContent?.trim()
+    ).toBe("documentMap.viewportLensOpacity");
+  });
+
   it("edits a pair's open / close / colour", () => {
     const { onChangeSettings } = render();
     const row = q(".documentMapSettingsDialoguePairRow");
@@ -316,5 +355,18 @@ describe("DocumentMapSettingsSection (#375) — CSS + wiring", () => {
     const css = readFileSync("src/renderer/styles.css", "utf8");
     expect(css).toContain(".documentMapSettingsDialoguePairRow");
     expect(css).toContain(".documentMapSettingsAddPair");
+  });
+
+  it("reuses the shared Application-settings row + key styles (not a private copy)", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    // The section relies on these being defined once for the catalog rows.
+    expect(css).toMatch(/\.settingsItemRow\s*\{[^}]*border-bottom/);
+    expect(css).toContain(".settingsItemKey");
+    const componentSource = readFileSync(
+      "src/renderer/DocumentMapSettingsSection.tsx",
+      "utf8"
+    );
+    expect(componentSource).toContain('className="settingsItemRow');
+    expect(componentSource).toContain('className="settingsItemKey"');
   });
 });
