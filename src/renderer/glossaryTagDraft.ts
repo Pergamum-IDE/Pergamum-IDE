@@ -11,7 +11,10 @@ import {
   type GlossaryTag,
   type UpdateGlossaryTagInput
 } from "../shared/glossary";
-import { randomGlossaryTagBackgroundRgb } from "../shared/glossaryTagColor";
+import {
+  autoGlossaryTagForegroundRgb,
+  randomGlossaryTagBackgroundRgb
+} from "../shared/glossaryTagColor";
 
 export interface GlossaryTagDraft {
   /** `null` while creating; the tag id while editing. */
@@ -34,9 +37,26 @@ export function createNewGlossaryTagDraft(
     label: "",
     description: "",
     backgroundRgb,
-    // Kept simple: a new tag starts white-on-random; the user hits "Auto"
-    // (or types) to refine.
-    foregroundRgb: "#ffffff"
+    // #375: a fresh tag starts with the YIQ-contrasting foreground for its
+    // random background; the user is free to type over it.
+    foregroundRgb: autoGlossaryTagForegroundRgb(backgroundRgb)
+  };
+}
+
+/**
+ * #375: randomize the background AND recompute the foreground from it (YIQ) in
+ * one step — the manual "Auto foreground" affordance is gone.
+ */
+export function randomizeGlossaryTagDraftColors(
+  draft: GlossaryTagDraft,
+  random: () => number = Math.random
+): GlossaryTagDraft {
+  const backgroundRgb = randomGlossaryTagBackgroundRgb(random);
+
+  return {
+    ...draft,
+    backgroundRgb,
+    foregroundRgb: autoGlossaryTagForegroundRgb(backgroundRgb)
   };
 }
 

@@ -6,8 +6,10 @@ import {
   glossaryTagDraftCreateInput,
   glossaryTagDraftPreview,
   glossaryTagDraftUpdateInput,
-  glossaryTagDraftValidity
+  glossaryTagDraftValidity,
+  randomizeGlossaryTagDraftColors
 } from "../../src/renderer/glossaryTagDraft";
+import { autoGlossaryTagForegroundRgb } from "../../src/shared/glossaryTagColor";
 
 const tag: GlossaryTag = {
   id: "018f4b8c-7a2b-7c3d-8e4f-300000000001",
@@ -21,11 +23,30 @@ const tag: GlossaryTag = {
 };
 
 describe("glossaryTagDraft (#375)", () => {
-  it("createNewGlossaryTagDraft has no tagId and a random background", () => {
+  it("createNewGlossaryTagDraft has no tagId, a random background, and a YIQ foreground", () => {
     const draft = createNewGlossaryTagDraft(() => 0.25);
     expect(draft.tagId).toBeNull();
     expect(draft.label).toBe("");
     expect(draft.backgroundRgb).toBe("#404040");
+    expect(draft.foregroundRgb).toBe(
+      autoGlossaryTagForegroundRgb("#404040")
+    );
+  });
+
+  it("randomizeGlossaryTagDraftColors changes the background AND recomputes the foreground (YIQ)", () => {
+    const base = createGlossaryTagDraftFromTag(tag);
+    // random → 0.99 for every channel → a near-white background → #000000 fg.
+    const next = randomizeGlossaryTagDraftColors(base, () => 0.99);
+
+    expect(next.backgroundRgb).toMatch(/^#[0-9a-f]{6}$/);
+    expect(next.backgroundRgb).not.toBe(base.backgroundRgb);
+    expect(next.foregroundRgb).toBe(
+      autoGlossaryTagForegroundRgb(next.backgroundRgb)
+    );
+    expect(next.foregroundRgb).toBe("#000000");
+    // label / description are untouched.
+    expect(next.label).toBe(base.label);
+    expect(next.description).toBe(base.description);
   });
 
   it("createGlossaryTagDraftFromTag maps null description to ''", () => {

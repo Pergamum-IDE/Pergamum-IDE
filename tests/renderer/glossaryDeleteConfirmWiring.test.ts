@@ -79,7 +79,10 @@ describe("Glossary delete confirmation wiring (#375)", () => {
     expect(ipcIndex).toBeGreaterThan(confirmIndex);
     expect(tagDeleteFn).toContain('tone: "destructive"');
     expect(tagDeleteFn).toContain(
-      'translate("glossary.tagDeleteDialog.title")'
+      'translate("glossary.tagManager.deleteDialog.title")'
+    );
+    expect(tagDeleteFn).toContain(
+      'translate("glossary.tagManager.deleteDialog.message")'
     );
     expect(tagDeleteFn).toContain("value: tagLabel");
     expect(tagDeleteFn).not.toContain("confirmMessage");

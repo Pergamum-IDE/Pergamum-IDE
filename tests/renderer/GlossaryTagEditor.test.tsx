@@ -6,6 +6,7 @@ import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Translate } from "../../src/shared/i18n";
 import { GlossaryTagEditor } from "../../src/renderer/GlossaryTagEditor";
+import { autoGlossaryTagForegroundRgb } from "../../src/shared/glossaryTagColor";
 import {
   createGlossaryTagDraftFromTag,
   type GlossaryTagDraft
@@ -29,14 +30,13 @@ function editDraft(): GlossaryTagDraft {
 }
 
 describe("GlossaryTagEditor (#375) — markup", () => {
-  it("renders name / description / background / foreground fields, random + auto buttons, and a live preview chip", () => {
+  it("renders label / description / background / foreground fields and a live preview, with no Auto button", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryTagEditor, {
         draft: editDraft(),
         translate,
         onChange: () => undefined,
-        onSubmit: () => undefined,
-        onCancel: () => undefined
+        onSubmit: () => undefined
       })
     );
 
@@ -45,25 +45,42 @@ describe("GlossaryTagEditor (#375) — markup", () => {
     expect(markup).toContain("glossaryTagEditor.background");
     expect(markup).toContain("glossaryTagEditor.foreground");
     expect(markup).toContain("glossaryTagEditor.randomBackground");
-    expect(markup).toContain("glossaryTagEditor.autoForeground");
     expect(markup).toContain("glossaryTagChip");
     expect(markup).toContain("background-color:#1f77b4");
-    expect(markup).toContain("glossaryTagEditor.titleEdit");
+    // #375: the manual auto-foreground button is gone.
+    expect(markup).not.toContain("glossaryTagEditor.autoForeground");
+    // It is a plain body form — no title heading, no action buttons.
+    expect(markup).not.toContain("<h2");
+    expect(markup).not.toContain("glossaryTagEditorSave");
+    expect(markup).not.toContain("glossaryTagEditorCancel");
   });
 
-  it("disables Save and shows a validity message for an empty label", () => {
+  it("shows a validity message for an empty label", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryTagEditor, {
         draft: { ...editDraft(), label: "" },
         translate,
         onChange: () => undefined,
-        onSubmit: () => undefined,
-        onCancel: () => undefined
+        onSubmit: () => undefined
       })
     );
 
-    expect(markup).toMatch(/glossaryTagEditorSave[^>]*disabled/);
     expect(markup).toContain("glossaryTagEditor.validity.emptyLabel");
+    expect(markup).toContain('role="alert"');
+  });
+
+  it("shows an operation error when the label is otherwise valid", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(GlossaryTagEditor, {
+        draft: editDraft(),
+        translate,
+        operationError: "glossaryTagEditor.saveFailed",
+        onChange: () => undefined,
+        onSubmit: () => undefined
+      })
+    );
+
+    expect(markup).toContain("glossaryTagEditor.saveFailed");
   });
 });
 
@@ -83,58 +100,67 @@ describe("GlossaryTagEditor (#375) — interaction", () => {
     vi.restoreAllMocks();
   });
 
-  function render(draft: GlossaryTagDraft, onChange: (d: GlossaryTagDraft) => void) {
+  function render(
+    draft: GlossaryTagDraft,
+    onChange: (d: GlossaryTagDraft) => void,
+    onSubmit: () => void = vi.fn()
+  ) {
     act(() => {
       root.render(
         React.createElement(GlossaryTagEditor, {
           draft,
           translate,
           onChange,
-          onSubmit: vi.fn(),
-          onCancel: vi.fn()
+          onSubmit
         })
       );
     });
   }
 
-  it("the Random button replaces the background with a #rrggbb value", () => {
+  function findButton(text: string): HTMLButtonElement {
+    return Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === text
+    )!;
+  }
+
+  it("the Random button replaces the background AND recomputes the foreground via YIQ", () => {
     const onChange = vi.fn();
     render(editDraft(), onChange);
 
-    const randomButton = Array.from(
-      container.querySelectorAll("button")
-    ).find((b) => b.textContent === "glossaryTagEditor.randomBackground")!;
-    act(() => randomButton.click());
+    act(() => findButton("glossaryTagEditor.randomBackground").click());
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange.mock.calls[0][0].backgroundRgb).toMatch(/^#[0-9a-f]{6}$/);
+    const next = onChange.mock.calls[0][0] as GlossaryTagDraft;
+    expect(next.backgroundRgb).toMatch(/^#[0-9a-f]{6}$/);
+    expect(next.foregroundRgb).toBe(
+      autoGlossaryTagForegroundRgb(next.backgroundRgb)
+    );
   });
 
-  it("the Auto button recomputes the foreground from the background via YIQ", () => {
+  it("lets the user type the foreground by hand (no auto button)", () => {
     const onChange = vi.fn();
-    render({ ...editDraft(), backgroundRgb: "#ffffff" }, onChange);
+    render(editDraft(), onChange);
 
-    const autoButton = Array.from(container.querySelectorAll("button")).find(
-      (b) => b.textContent === "glossaryTagEditor.autoForeground"
-    )!;
-    act(() => autoButton.click());
+    expect(findButton("glossaryTagEditor.autoForeground")).toBeUndefined();
 
-    expect(onChange.mock.calls[0][0].foregroundRgb).toBe("#000000");
+    const fgInput = container.querySelectorAll<HTMLInputElement>(
+      ".glossaryTagEditorColorInput"
+    )[1];
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(fgInput, "#123456");
+      fgInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(onChange.mock.calls[0][0].foregroundRgb).toBe("#123456");
   });
 
   it("submits through onSubmit only when the draft is valid", () => {
     const onSubmit = vi.fn();
-    act(() => {
-      root.render(
-        React.createElement(GlossaryTagEditor, {
-          draft: { ...editDraft(), label: "" },
-          translate,
-          onChange: vi.fn(),
-          onSubmit,
-          onCancel: vi.fn()
-        })
-      );
-    });
+    render({ ...editDraft(), label: "" }, vi.fn(), onSubmit);
 
     act(() => {
       container
@@ -144,5 +170,15 @@ describe("GlossaryTagEditor (#375) — interaction", () => {
         );
     });
     expect(onSubmit).not.toHaveBeenCalled();
+
+    render(editDraft(), vi.fn(), onSubmit);
+    act(() => {
+      container
+        .querySelector("form")!
+        .dispatchEvent(
+          new window.Event("submit", { bubbles: true, cancelable: true })
+        );
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });

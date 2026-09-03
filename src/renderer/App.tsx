@@ -2550,15 +2550,17 @@ export function App(): JSX.Element {
       let confirmed = false;
       try {
         const result = await confirmDialog({
-          title: translate("glossary.tagDeleteDialog.title"),
+          title: translate("glossary.tagManager.deleteDialog.title"),
           message: {
             kind: "plainTextWithPathBlock",
-            beforeText: translate("glossary.deleteDialog.message"),
+            beforeText: "",
             pathBlock: {
-              label: translate("glossary.tagDeleteDialog.targetLabel"),
+              label: translate(
+                "glossary.tagManager.deleteDialog.targetLabel"
+              ),
               value: tagLabel
             },
-            afterText: ""
+            afterText: translate("glossary.tagManager.deleteDialog.message")
           },
           icon: { kind: "warning", tooltip: translate("dialog.icon.warning") },
           clipboardText: null,

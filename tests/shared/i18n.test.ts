@@ -55,13 +55,32 @@ describe("glossary deletion dialog translations (#375)", () => {
     expect(t("en", "glossary.deleteDialog.delete")).not.toBe("OK");
   });
 
-  it("labels the tag delete confirm dialog for ja and en", () => {
-    expect(t("ja", "glossary.tagDeleteDialog.title")).toBe(
+  it("labels the tag delete confirm dialog for ja and en, explaining entries survive", () => {
+    expect(t("ja", "glossary.tagManager.deleteDialog.title")).toBe(
       "タグを削除しますか？"
     );
-    expect(t("en", "glossary.tagDeleteDialog.title")).toBe("Delete tag?");
-    expect(t("ja", "glossary.tagDeleteDialog.targetLabel")).toBe("タグ");
-    expect(t("en", "glossary.tagDeleteDialog.targetLabel")).toBe("Tag");
+    expect(t("en", "glossary.tagManager.deleteDialog.title")).toBe(
+      "Delete tag?"
+    );
+    expect(t("ja", "glossary.tagManager.deleteDialog.targetLabel")).toBe(
+      "タグ"
+    );
+    expect(t("en", "glossary.tagManager.deleteDialog.targetLabel")).toBe(
+      "Tag"
+    );
+    expect(t("ja", "glossary.tagManager.deleteDialog.message")).toContain(
+      "語彙そのものは削除されません"
+    );
+    expect(t("en", "glossary.tagManager.deleteDialog.message")).toContain(
+      "will not be deleted"
+    );
+  });
+
+  it("titles the Tag Manager tab as a management screen (#375)", () => {
+    expect(t("ja", "glossary.tagManager.title")).toBe("タグ管理設定");
+    expect(t("en", "glossary.tagManager.title")).toBe("Tag Management");
+    expect(t("ja", "glossary.tagManager.addTag")).toBe("タグ追加");
+    expect(t("en", "glossary.tagManager.addTag")).toBe("Add tag");
   });
 });
 

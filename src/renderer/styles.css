@@ -2884,9 +2884,9 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
-/* #375: Glossary tag manager + editor */
-/* The dedicated Glossary Tag Manager special tab wraps the manager in a
- * scrollable, padded editor-area surface (mirrors .glossaryEditor). */
+/* #375: Glossary Tag Manager tab + tag editor modal */
+/* The tab wraps the manager in a scrollable, padded editor-area surface
+ * (mirrors .glossaryEditor). */
 .glossaryTagManagerTab {
   flex: 1;
   min-width: 0;
@@ -2899,29 +2899,32 @@ label.settingsItemHeader {
 .glossaryTagManager {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.glossaryTagManagerHeader {
+/* No page heading — the "Add tag" button is the primary action. */
+.glossaryTagManagerActions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-end;
 }
 
-.glossaryTagManagerList {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.glossaryTagManagerAddButton {
+  border: 1px solid #2f6feb;
+  border-radius: 6px;
+  background: #2f6feb;
+  color: #ffffff;
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.glossaryTagManagerRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.glossaryTagManagerAddButton:hover:not(:disabled) {
+  background: #255fd0;
+}
+
+.glossaryTagManagerAddButton:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .glossaryTagManagerEmpty {
@@ -2930,13 +2933,133 @@ label.settingsItemHeader {
   font-size: 13px;
 }
 
+/* Table-shaped management grid. */
+.glossaryTagManagerTable {
+  border: 1px solid #d7dee6;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.glossaryTagManagerTableRow {
+  display: grid;
+  grid-template-columns:
+    2.5rem minmax(8rem, 1fr) minmax(10rem, 2fr) 7rem 7rem 2.75rem 2.75rem;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e6ebf1;
+}
+
+.glossaryTagManagerTableRow:last-child {
+  border-bottom: none;
+}
+
+.glossaryTagManagerTableHead {
+  background: #f2f5f8;
+  border-bottom: 1px solid #d7dee6;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7785;
+}
+
+.glossaryTagManagerColumnHeader {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryTagManagerCell {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.glossaryTagManagerDescriptionCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryTagManagerMuted {
+  color: #94a0ac;
+}
+
+.glossaryTagManagerTimestampCell {
+  color: #52616f;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Grab-to-reorder grip — display-only for now. */
+.glossaryTagManagerDragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  color: #9aa7b4;
+  font-size: 13px;
+  cursor: grab;
+}
+
+/* Edit / delete are quiet icon buttons, not text buttons. */
+.glossaryTagManagerIconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7785;
+  cursor: pointer;
+}
+
+.glossaryTagManagerIconButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.glossaryTagManagerIconButton:hover:not(:disabled),
+.glossaryTagManagerIconButton:focus-visible {
+  background: #eef2f7;
+  border-color: #cbd5df;
+  color: #25313d;
+}
+
+.glossaryTagManagerIconButton:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring, #7aa7d9);
+  outline-offset: 1px;
+}
+
+.glossaryTagManagerIconButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Delete stays a destructive red without being loud at rest. */
+.glossaryTagManagerDeleteButton {
+  color: #b4232a;
+}
+
+.glossaryTagManagerDeleteButton:hover:not(:disabled),
+.glossaryTagManagerDeleteButton:focus-visible {
+  background: #fbeaea;
+  border-color: #e3b3b3;
+  color: #8f1b21;
+}
+
+/* Tag editor modal body (rendered inside InfoDialog). */
+.appDialog.glossaryTagEditorDialog {
+  width: min(28rem, calc(100vw - 32px));
+}
+
 .glossaryTagEditor {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border: 1px solid #d7dee6;
-  border-radius: 8px;
-  padding: 12px;
 }
 
 .glossaryTagEditorField {
@@ -2960,12 +3083,7 @@ label.settingsItemHeader {
   font-family: ui-monospace, monospace;
 }
 
-.glossaryTagEditorColorAction,
-.glossaryTagManagerNew,
-.glossaryTagManagerEdit,
-.glossaryTagManagerDelete,
-.glossaryTagEditorSave,
-.glossaryTagEditorCancel {
+.glossaryTagEditorColorAction {
   border: 1px solid #cbd5df;
   border-radius: 4px;
   background: #fff;
@@ -2973,12 +3091,7 @@ label.settingsItemHeader {
   cursor: pointer;
 }
 
-.glossaryTagEditorColorAction:disabled,
-.glossaryTagEditorSave:disabled,
-.glossaryTagEditorCancel:disabled,
-.glossaryTagManagerNew:disabled,
-.glossaryTagManagerEdit:disabled,
-.glossaryTagManagerDelete:disabled {
+.glossaryTagEditorColorAction:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -2995,11 +3108,6 @@ label.settingsItemHeader {
   margin: 0;
   color: #b4232a;
   font-size: 13px;
-}
-
-.glossaryTagEditorActions {
-  display: flex;
-  gap: 8px;
 }
 
 .statusBar {

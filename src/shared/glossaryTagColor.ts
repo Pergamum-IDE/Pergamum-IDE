@@ -3,8 +3,9 @@
  *
  * Foreground auto-calculation is a plain YIQ integer computation
  * (`R*299 + G*587 + B*114`, threshold `128000`). There is NO stored
- * auto/manual mode — the "Auto" button just recomputes `foregroundRgb` from
- * `backgroundRgb`, and the user is free to type over it afterwards.
+ * auto/manual mode and no "Auto" button — randomizing the background
+ * recomputes `foregroundRgb` from it once, and the user is free to type over
+ * the foreground afterwards.
  */
 
 import { normalizeGlossaryRgbHex } from "./glossary";

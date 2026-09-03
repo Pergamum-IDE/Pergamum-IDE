@@ -1,13 +1,15 @@
 import type { Translate, TranslationKey } from "../shared/i18n";
 import type { GlossaryTagDraftValidity } from "./glossaryTagDraft";
-import { autoGlossaryTagForegroundRgb } from "../shared/glossaryTagColor";
-import { randomGlossaryTagBackgroundRgb } from "../shared/glossaryTagColor";
 import { GlossaryTagChip } from "./GlossaryTagChip";
 import {
   glossaryTagDraftPreview,
   glossaryTagDraftValidity,
+  randomizeGlossaryTagDraftColors,
   type GlossaryTagDraft
 } from "./glossaryTagDraft";
+
+/** Stable id so a footer button outside the form can submit it. */
+export const GLOSSARY_TAG_EDITOR_FORM_ID = "glossaryTagEditorForm";
 
 const VALIDITY_MESSAGE_KEYS: Record<
   Extract<GlossaryTagDraftValidity, { ok: false }>["reason"],
@@ -22,23 +24,27 @@ interface GlossaryTagEditorProps {
   draft: GlossaryTagDraft;
   translate: Translate;
   onChange: (draft: GlossaryTagDraft) => void;
+  /** Fired on a valid `<form>` submit (Enter, or a footer submit button). */
   onSubmit: () => void;
-  onCancel: () => void;
   busy?: boolean;
+  /** An operation error from a failed create / update (e.g. label conflict). */
+  operationError?: string | null;
 }
 
 /**
- * #375: GitHub-label-style single-tag form — name, description, background /
- * foreground `#RRGGBB` inputs, a random-background button, an auto-foreground
- * (YIQ) button, and a live preview chip.
+ * #375: the Glossary Tag editor form BODY (no title, no action buttons) — it
+ * is rendered inside the {@link InfoDialog} modal shell by GlossaryTagManager.
+ * Fields: label, description, background / foreground `#RRGGBB` inputs, a
+ * random-background button (which also recomputes the foreground via YIQ),
+ * and a live preview chip. There is no manual "Auto foreground" button.
  */
 export function GlossaryTagEditor({
   draft,
   translate,
   onChange,
   onSubmit,
-  onCancel,
-  busy = false
+  busy = false,
+  operationError = null
 }: GlossaryTagEditorProps): JSX.Element {
   const validity = glossaryTagDraftValidity(draft);
   const preview = glossaryTagDraftPreview(draft);
@@ -47,12 +53,8 @@ export function GlossaryTagEditor({
 
   return (
     <form
+      id={GLOSSARY_TAG_EDITOR_FORM_ID}
       className="glossaryTagEditor"
-      aria-label={translate(
-        draft.tagId === null
-          ? "glossaryTagEditor.titleNew"
-          : "glossaryTagEditor.titleEdit"
-      )}
       onSubmit={(event) => {
         event.preventDefault();
 
@@ -61,19 +63,12 @@ export function GlossaryTagEditor({
         }
       }}
     >
-      <h2>
-        {translate(
-          draft.tagId === null
-            ? "glossaryTagEditor.titleNew"
-            : "glossaryTagEditor.titleEdit"
-        )}
-      </h2>
-
       <label className="glossaryTagEditorField">
         <span>{translate("glossaryTagEditor.name")}</span>
         <input
           type="text"
           value={draft.label}
+          disabled={busy}
           onChange={(event) => patch({ label: event.target.value })}
         />
       </label>
@@ -83,6 +78,7 @@ export function GlossaryTagEditor({
         <input
           type="text"
           value={draft.description}
+          disabled={busy}
           onChange={(event) => patch({ description: event.target.value })}
         />
       </label>
@@ -94,16 +90,14 @@ export function GlossaryTagEditor({
           className="glossaryTagEditorColorInput"
           value={draft.backgroundRgb}
           aria-label={translate("glossaryTagEditor.background")}
-          onChange={(event) =>
-            patch({ backgroundRgb: event.target.value })
-          }
+          disabled={busy}
+          onChange={(event) => patch({ backgroundRgb: event.target.value })}
         />
         <button
           type="button"
           className="glossaryTagEditorColorAction"
-          onClick={() =>
-            patch({ backgroundRgb: randomGlossaryTagBackgroundRgb() })
-          }
+          disabled={busy}
+          onClick={() => onChange(randomizeGlossaryTagDraftColors(draft))}
         >
           {translate("glossaryTagEditor.randomBackground")}
         </button>
@@ -116,27 +110,9 @@ export function GlossaryTagEditor({
           className="glossaryTagEditorColorInput"
           value={draft.foregroundRgb}
           aria-label={translate("glossaryTagEditor.foreground")}
-          onChange={(event) =>
-            patch({ foregroundRgb: event.target.value })
-          }
+          disabled={busy}
+          onChange={(event) => patch({ foregroundRgb: event.target.value })}
         />
-        <button
-          type="button"
-          className="glossaryTagEditorColorAction"
-          onClick={() => {
-            try {
-              patch({
-                foregroundRgb: autoGlossaryTagForegroundRgb(
-                  draft.backgroundRgb
-                )
-              });
-            } catch {
-              // Background is not a valid color yet — leave foreground as is.
-            }
-          }}
-        >
-          {translate("glossaryTagEditor.autoForeground")}
-        </button>
       </div>
 
       <div className="glossaryTagEditorPreview">
@@ -145,11 +121,7 @@ export function GlossaryTagEditor({
           tag={{
             label:
               preview.label ||
-              translate(
-                draft.tagId === null
-                  ? "glossaryTagEditor.newTag"
-                  : "glossaryTagEditor.titleEdit"
-              ),
+              translate("glossaryTagEditor.name"),
             backgroundRgb: preview.backgroundRgb,
             foregroundRgb: preview.foregroundRgb
           }}
@@ -160,25 +132,11 @@ export function GlossaryTagEditor({
         <p className="glossaryTagEditorValidity" role="alert">
           {translate(VALIDITY_MESSAGE_KEYS[validity.reason])}
         </p>
+      ) : operationError ? (
+        <p className="glossaryTagEditorValidity" role="alert">
+          {operationError}
+        </p>
       ) : null}
-
-      <div className="glossaryTagEditorActions">
-        <button
-          type="submit"
-          className="glossaryTagEditorSave"
-          disabled={!validity.ok || busy}
-        >
-          {translate("glossaryTagEditor.save")}
-        </button>
-        <button
-          type="button"
-          className="glossaryTagEditorCancel"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          {translate("glossaryTagEditor.cancel")}
-        </button>
-      </div>
     </form>
   );
 }
