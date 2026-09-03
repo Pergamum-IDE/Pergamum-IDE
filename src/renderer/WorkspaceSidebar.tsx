@@ -15,11 +15,13 @@ import {
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
+import { TextMapPanel } from "./TextMapPanel";
 import { WorkbenchFilesSidebar } from "./WorkbenchFilesSidebar";
 import type {
   MarkdownOutlineItem,
   MarkdownOutlineParseResult
 } from "../shared/markdownOutline";
+import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { SidebarMode } from "./sidebarMode";
 
 interface WorkspaceSidebarProps {
@@ -71,6 +73,14 @@ interface WorkspaceSidebarProps {
   ) => Promise<boolean>;
   /** #375: active Markdown document body for glossary occurrence counts. */
   glossaryActiveDocumentContent: string | null;
+  /** #375 Text Map: every project glossary entry (occurrence scan). */
+  textMapGlossaryEntries?: readonly GlossaryEntry[];
+  /** #375 Text Map: the ACTIVE EDITOR's rendered width in CSS pixels (the
+   *  logical wrap width), or `null` when it cannot be measured. */
+  textMapEditorWidth?: number | null;
+  /** #375 Text Map: the active Markdown editor's on-screen document range,
+   *  drawn as a "you are here" rectangle. `null` = no overlay. */
+  textMapEditorVisibleRange?: EditorVisibleTextRange | null;
   onNavigateGlossaryOccurrence: (
     entry: GlossaryEntry,
     direction: "previous" | "next"
@@ -114,6 +124,9 @@ export function WorkspaceSidebar({
   onActivateGlossaryEntry,
   onCreateGlossaryEntry,
   glossaryActiveDocumentContent,
+  textMapGlossaryEntries = [],
+  textMapEditorWidth = null,
+  textMapEditorVisibleRange = null,
   onNavigateGlossaryOccurrence,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
@@ -170,6 +183,16 @@ export function WorkspaceSidebar({
       );
     case "search":
       return <SearchSidebar translate={translate} />;
+    case "textMap":
+      return (
+        <TextMapPanel
+          translate={translate}
+          activeDocumentContent={glossaryActiveDocumentContent}
+          glossaryEntries={textMapGlossaryEntries}
+          editorWidth={textMapEditorWidth}
+          editorVisibleRange={textMapEditorVisibleRange}
+        />
+      );
     case "glossary":
       return (
         <GlossarySidebar

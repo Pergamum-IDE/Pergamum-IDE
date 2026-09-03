@@ -1602,6 +1602,47 @@ label.settingsItemHeader {
   border-top: 1px solid var(--workspace-sidebar-divider);
 }
 
+/* #375 Text Map / 文書マップ panel (left pane). */
+.textMapPanel {
+  min-height: 0;
+}
+
+/* Header stays put; only this body scrolls, and only vertically. */
+.textMapBody {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Sized to the map CONTENT (inline style) so the body scrolls it. Anchors the
+   viewport overlay. */
+.glossaryTextMapCanvasHost {
+  position: relative;
+  background: transparent;
+}
+
+.glossaryTextMapCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  image-rendering: pixelated;
+}
+
+/* Editor-viewport "you are here" band — 1px stroke, full width, drawn over the
+   text / dialogue / glossary cells; never intercepts pointer events. */
+.textMapViewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  border: 1px solid #666666;
+  background: transparent;
+  pointer-events: none;
+}
+
 .workspaceSidebarButton {
   width: 100%;
 }

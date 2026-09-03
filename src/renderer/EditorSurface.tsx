@@ -33,6 +33,7 @@ import {
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import type { EditorViewState } from "./editorViewState";
+import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
@@ -375,6 +376,10 @@ interface EditorSurfaceProps {
     viewState: EditorViewState | null
   ) => void;
   onViewStateDirty: () => void;
+  /** #375 Text Map: the active Markdown editor's on-screen document range. */
+  onMarkdownVisibleRangeChange?: (
+    range: EditorVisibleTextRange | null
+  ) => void;
   /** #274: persisted #273 View State to re-apply once for the active
    *  Markdown editor's document (null when nothing is pending). */
   restoreActiveEditorViewState:
@@ -480,6 +485,7 @@ export function EditorSurface({
   onViewStateControllerChange,
   onViewStateSnapshot,
   onViewStateDirty,
+  onMarkdownVisibleRangeChange,
   restoreActiveEditorViewState,
   onRestoreActiveEditorViewStateApplied,
   markdownEditorFocusRequest,
@@ -528,6 +534,7 @@ export function EditorSurface({
           onViewStateControllerChange={onViewStateControllerChange}
           onViewStateSnapshot={onViewStateSnapshot}
           onViewStateDirty={onViewStateDirty}
+          onMarkdownVisibleRangeChange={onMarkdownVisibleRangeChange}
           restoreViewState={restoreActiveEditorViewState}
           onRestoreViewStateApplied={onRestoreActiveEditorViewStateApplied}
           focusRequest={markdownEditorFocusRequest}
@@ -605,6 +612,9 @@ interface MarkdownEditorSurfaceProps {
     viewState: EditorViewState | null
   ) => void;
   onViewStateDirty: () => void;
+  onMarkdownVisibleRangeChange?: (
+    range: EditorVisibleTextRange | null
+  ) => void;
   restoreViewState:
     | { readonly key: string; readonly viewState: unknown }
     | null;
@@ -663,6 +673,7 @@ function MarkdownEditorSurface({
   onViewStateControllerChange,
   onViewStateSnapshot,
   onViewStateDirty,
+  onMarkdownVisibleRangeChange,
   restoreViewState,
   onRestoreViewStateApplied,
   focusRequest,
@@ -839,6 +850,7 @@ function MarkdownEditorSurface({
           onViewStateControllerChange={onViewStateControllerChange}
           onViewStateSnapshot={onViewStateSnapshot}
           onViewStateDirty={onViewStateDirty}
+          onVisibleRangeChange={onMarkdownVisibleRangeChange}
           restoreViewState={restoreViewState}
           onRestoreViewStateApplied={onRestoreViewStateApplied}
           focusRequest={focusRequest}

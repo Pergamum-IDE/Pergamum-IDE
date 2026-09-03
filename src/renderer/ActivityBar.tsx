@@ -4,6 +4,7 @@ import fileIcon from "../../assets/icons/feather/activity-bar/file.svg?raw";
 import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?raw";
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
 import settingsIcon from "../../assets/icons/feather/activity-bar/settings.svg?raw";
+import textMapIcon from "../../assets/icons/ionicons/map/map-outline.svg?raw";
 
 interface ActivityBarProps {
   activeMode: SidebarMode | null;
@@ -42,6 +43,7 @@ export function ActivityBar({
   const filesLabel = translate("activity.files");
   const searchLabel = translate("activity.searchReplace");
   const glossaryLabel = translate("activity.glossary");
+  const textMapLabel = translate("activity.textMap");
   const applicationSettingsLabel = translate("activity.applicationSettings");
 
   return (
@@ -88,6 +90,20 @@ export function ActivityBar({
           onClick={() => onSelectMode("glossary")}
         >
           <ActivityBarIcon label={glossaryLabel} svg={glossaryIcon} />
+        </button>
+        <button
+          type="button"
+          className={
+            activeMode === "textMap"
+              ? "activityBarItem isActive"
+              : "activityBarItem"
+          }
+          aria-label={textMapLabel}
+          aria-pressed={activeMode === "textMap"}
+          title={textMapLabel}
+          onClick={() => onSelectMode("textMap")}
+        >
+          <ActivityBarIcon label={textMapLabel} svg={textMapIcon} />
         </button>
       </div>
 

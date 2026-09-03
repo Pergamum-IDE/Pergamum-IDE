@@ -357,6 +357,7 @@ import type {
 import { SettingsPanel } from "./SettingsPanel";
 import { GlossaryTagManager } from "./GlossaryTagManager";
 import { countGlossaryEntriesByTag } from "./glossaryTagEntryCount";
+import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import {
@@ -808,6 +809,17 @@ export function App(): JSX.Element {
   const [glossaryTagEntryCounts, setGlossaryTagEntryCounts] = useState<
     Record<string, number>
   >({});
+  // #375 Text Map (Phase 1): every project glossary entry, for the left-pane
+  // Text Map panel's occurrence scan. Reloaded alongside `glossaryTags`.
+  const [glossaryEntries, setGlossaryEntries] = useState<GlossaryEntry[]>([]);
+  // #375 Text Map (Phase 1): the editor area's rendered width in CSS pixels,
+  // used as the Text Map's LOGICAL wrap width (never the left pane width).
+  const [editorAreaWidth, setEditorAreaWidth] = useState<number | null>(null);
+  // #375 Text Map: the active Markdown editor's on-screen document range,
+  // drawn as a "you are here" rectangle on the map. `null` unless a Markdown
+  // editor is active and has pushed a range.
+  const [markdownVisibleRange, setMarkdownVisibleRange] =
+    useState<EditorVisibleTextRange | null>(null);
   // #311: a Command Palette "Create New File / Folder" request handed to the
   // File Explorer. `token` is a session-monotonic counter (never reused) so a
   // repeat command re-opens the dialog; the state is cleared to null once the
@@ -2647,6 +2659,7 @@ export function App(): JSX.Element {
     if (!project) {
       setGlossaryTags([]);
       setGlossaryTagEntryCounts({});
+      setGlossaryEntries([]);
       return;
     }
 
@@ -2660,12 +2673,14 @@ export function App(): JSX.Element {
         if (isActive) {
           setGlossaryTags(tags);
           setGlossaryTagEntryCounts(countGlossaryEntriesByTag(entries));
+          setGlossaryEntries(entries);
         }
       })
       .catch(() => {
         if (isActive) {
           setGlossaryTags([]);
           setGlossaryTagEntryCounts({});
+          setGlossaryEntries([]);
         }
       });
 
@@ -2674,6 +2689,42 @@ export function App(): JSX.Element {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.rootPath ?? null, glossaryRefreshToken]);
+
+  // #375 Text Map (Phase 1): track the editor area's rendered width so the
+  // Text Map panel (in the LEFT pane) can use the ACTIVE EDITOR width as its
+  // logical wrap width. Re-attached when the editor area mounts / unmounts
+  // (full-screen Welcome).
+  useEffect(() => {
+    const node = editorAreaBodyRef.current;
+
+    if (!node) {
+      setEditorAreaWidth(null);
+      return;
+    }
+
+    const applyWidth = (): void => {
+      setEditorAreaWidth(Math.max(1, Math.round(node.clientWidth)));
+    };
+
+    applyWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(applyWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [shouldShowFullScreenWelcome]);
+
+  // #375 Text Map: drop the "you are here" rectangle whenever the active
+  // surface is not a Markdown editor (the editor also pushes `null` on
+  // unmount; this covers the rest).
+  useEffect(() => {
+    if (!activeEditorIsMarkdown) {
+      setMarkdownVisibleRange(null);
+    }
+  }, [activeEditorIsMarkdown]);
 
   function activateDocument(documentId: EditorId): void {
     if (isLifecycleCommitBarrierActiveNow()) {
@@ -7061,6 +7112,9 @@ export function App(): JSX.Element {
                           ? currentDocumentContent(activeMarkdownDocument)
                           : null
                       }
+                      textMapGlossaryEntries={glossaryEntries}
+                      textMapEditorWidth={editorAreaWidth}
+                      textMapEditorVisibleRange={markdownVisibleRange}
                       onNavigateGlossaryOccurrence={
                         navigateGlossaryOccurrenceFromSidebar
                       }
@@ -7179,6 +7233,7 @@ export function App(): JSX.Element {
                         }
                         onViewStateSnapshot={handleMarkdownViewStateSnapshot}
                         onViewStateDirty={handleMarkdownViewStateDirty}
+                        onMarkdownVisibleRangeChange={setMarkdownVisibleRange}
                         restoreActiveEditorViewState={
                           restoreActiveEditorViewState
                         }
