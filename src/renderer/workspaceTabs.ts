@@ -8,7 +8,8 @@ import type { DocumentTab } from "./openDocuments";
 export type SpecialTabId =
   | "settings"
   | "glossaryTagManager"
-  | "glossaryEntryManager";
+  | "glossaryEntryManager"
+  | "debugLog";
 
 export interface SpecialWorkspaceTab {
   readonly kind: "special";

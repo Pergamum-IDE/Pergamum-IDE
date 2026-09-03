@@ -378,6 +378,11 @@ import {
   registerUtilityWindowCommands,
   utilityWindowCommandIds
 } from "./utilityWindowCommands";
+import {
+  createDebugLogCommandTitles,
+  debugLogCommandIds,
+  registerDebugLogCommands
+} from "./debugLogCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
 import {
   shouldShowFullScreenWelcomeSurface,
@@ -738,6 +743,28 @@ export function App(): JSX.Element {
     [notificationController]
   );
 
+  // #377: learn whether the app was started with `--pergamum-debug` from the
+  // debug log snapshot (its `enabled` flag is exactly the main-process
+  // `pergamumDebugMode`). This gates the Debug Log bug icon and command.
+  useEffect(() => {
+    let cancelled = false;
+
+    void window.pergamum.debugLog
+      .getSnapshot()
+      .then((snapshot) => {
+        if (!cancelled) {
+          setIsDebugModeEnabled(snapshot.enabled);
+        }
+      })
+      .catch(() => {
+        // A snapshot failure just leaves the debug entry point hidden.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const dialogActionOrder = useMemo(
     () => getDialogActionOrder(window.pergamum.platform),
     []
@@ -800,8 +827,18 @@ export function App(): JSX.Element {
   // reorder / edit / delete). Project-scoped — closed on project close.
   const [isGlossaryEntryManagerTabOpen, setIsGlossaryEntryManagerTabOpen] =
     useState(false);
+  // #377: the Debug Log special tab. App-level (not project-scoped) like the
+  // Settings tab, but with no "default to it" fallback — it is the active
+  // surface only while explicitly selected. Its only entry point is the
+  // debug-only bug icon / `debugLog.open` command, both gated on
+  // `isDebugModeEnabled`.
+  const [isDebugLogTabOpen, setIsDebugLogTabOpen] = useState(false);
   const [activeSpecialTabId, setActiveSpecialTabId] =
     useState<SpecialTabId | null>(null);
+  // #377: mirrors the main process's `--pergamum-debug` state, read once from
+  // the debug log snapshot (`snapshot.enabled` is exactly `pergamumDebugMode`).
+  // Reused rather than introducing a new debug flag or IPC channel.
+  const [isDebugModeEnabled, setIsDebugModeEnabled] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
@@ -1341,21 +1378,29 @@ export function App(): JSX.Element {
   const isGlossaryEntryManagerTabActive =
     isGlossaryEntryManagerTabOpen &&
     activeSpecialTabId === "glossaryEntryManager";
+  // #377: the Debug Log special tab — same "explicitly selected" rule as the
+  // Glossary management tabs (no "default to it" fallback).
+  const isDebugLogTabActive =
+    isDebugLogTabOpen && activeSpecialTabId === "debugLog";
   // When the Settings tab is the only open tab (zero document tabs), it is the
   // active surface even though `activeSpecialTabId` may not have been set —
-  // but never while a Glossary management tab is the selected special tab.
+  // but never while a Glossary management tab or the Debug Log tab is the
+  // selected special tab.
   const isSettingsTabActive =
     isSettingsTabOpen &&
     !isGlossaryTagManagerTabActive &&
     !isGlossaryEntryManagerTabActive &&
+    !isDebugLogTabActive &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
-  // A full-editor-area special tab (Settings or a Glossary management tab) is
-  // showing instead of an editor. Command gates that mean "an editor is
-  // active" check this rather than isSettingsTabActive alone.
+  // A full-editor-area special tab (Settings, a Glossary management tab, or
+  // the Debug Log tab) is showing instead of an editor. Command gates that
+  // mean "an editor is active" check this rather than isSettingsTabActive
+  // alone.
   const isEditorAreaSpecialTabActive =
     isSettingsTabActive ||
     isGlossaryTagManagerTabActive ||
-    isGlossaryEntryManagerTabActive;
+    isGlossaryEntryManagerTabActive ||
+    isDebugLogTabActive;
   // #352: the Outline pane shows headings only for an active Markdown editor.
   const activeEditorIsMarkdown =
     !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
@@ -2150,6 +2195,20 @@ export function App(): JSX.Element {
       },
       createUtilityWindowCommandTitles(translate)
     );
+    // #377: the Debug Log command exists ONLY in `--pergamum-debug` mode.
+    // Leaving it unregistered on normal startup keeps it out of the Command
+    // Palette and makes execution impossible (the bug icon is hidden too).
+    if (isDebugModeEnabled) {
+      registerDebugLogCommands(
+        registry,
+        {
+          openDebugLog: () => {
+            openDebugLogTab();
+          }
+        },
+        createDebugLogCommandTitles(translate)
+      );
+    }
     registerGlossaryCommands(
       registry,
       {
@@ -2275,6 +2334,7 @@ export function App(): JSX.Element {
   }, [
     activeProjectContext,
     dialogController,
+    isDebugModeEnabled,
     layout.sidebar.collapsed,
     renameActiveEditorTargetName,
     sidebarMode,
@@ -2344,11 +2404,13 @@ export function App(): JSX.Element {
   const shouldShowFullScreenWelcome = shouldShowFullScreenWelcomeSurface({
     openDocumentsState,
     isSettingsTabOpen,
+    isDebugLogTabOpen,
     projectIsOpen: project !== null
   });
   const shouldShowWelcome = shouldShowWelcomeSurface({
     openDocumentsState,
-    isSettingsTabOpen
+    isSettingsTabOpen,
+    isDebugLogTabOpen
   });
   const activeActivityMode = resolveActiveActivityMode(
     sidebarMode,
@@ -2386,11 +2448,20 @@ export function App(): JSX.Element {
       });
     }
 
+    if (isDebugLogTabOpen) {
+      list.push({
+        kind: "special",
+        id: "debugLog",
+        title: translate("debugLog.title")
+      });
+    }
+
     return list;
   }, [
     isSettingsTabOpen,
     isGlossaryTagManagerTabOpen,
     isGlossaryEntryManagerTabOpen,
+    isDebugLogTabOpen,
     translate
   ]);
   const activeWorkspaceTabId: WorkspaceTabId | undefined =
@@ -2398,11 +2469,13 @@ export function App(): JSX.Element {
       ? specialWorkspaceTabId("glossaryTagManager")
       : isGlossaryEntryManagerTabActive
         ? specialWorkspaceTabId("glossaryEntryManager")
-        : isSettingsTabActive
-          ? specialWorkspaceTabId("settings")
-          : openDocumentsState.activeDocumentId
-            ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
-            : undefined;
+        : isDebugLogTabActive
+          ? specialWorkspaceTabId("debugLog")
+          : isSettingsTabActive
+            ? specialWorkspaceTabId("settings")
+            : openDocumentsState.activeDocumentId
+              ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+              : undefined;
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
@@ -2921,6 +2994,19 @@ export function App(): JSX.Element {
     setActiveSpecialTabId("glossaryEntryManager");
   }
 
+  // #377: open (or re-activate) the Debug Log special tab. Opening it again
+  // just activates the existing one — never a duplicate tab. Callers are
+  // gated on `isDebugModeEnabled`, but guard here too so a stale command can
+  // never open it on a normal-startup renderer.
+  function openDebugLogTab(): void {
+    if (!isDebugModeEnabled) {
+      return;
+    }
+
+    setIsDebugLogTabOpen(true);
+    setActiveSpecialTabId("debugLog");
+  }
+
   function activateSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings" && isSettingsTabOpen) {
       setActiveSpecialTabId(tabId);
@@ -2931,6 +3017,10 @@ export function App(): JSX.Element {
     }
 
     if (tabId === "glossaryEntryManager" && isGlossaryEntryManagerTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+
+    if (tabId === "debugLog" && isDebugLogTabOpen) {
       setActiveSpecialTabId(tabId);
     }
   }
@@ -2954,6 +3044,14 @@ export function App(): JSX.Element {
 
     if (tabId === "glossaryEntryManager") {
       setIsGlossaryEntryManagerTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+      return;
+    }
+
+    if (tabId === "debugLog") {
+      setIsDebugLogTabOpen(false);
       setActiveSpecialTabId((current) =>
         current === tabId ? null : current
       );
@@ -3571,6 +3669,11 @@ export function App(): JSX.Element {
 
     if (!editorId && isSettingsTabActive) {
       closeSpecialTab("settings");
+      return;
+    }
+
+    if (!editorId && isDebugLogTabActive) {
+      closeSpecialTab("debugLog");
       return;
     }
 
@@ -7131,11 +7234,13 @@ export function App(): JSX.Element {
               ? translate("glossary.tagManager.title")
               : isGlossaryEntryManagerTabActive
                 ? translate("glossary.entryManager.title")
-                : isSettingsTabActive
-                  ? translate("settings.application.title")
-                  : currentEditor
-                    ? currentEditorTitle(currentEditor)
-                    : ""}
+                : isDebugLogTabActive
+                  ? translate("debugLog.title")
+                  : isSettingsTabActive
+                    ? translate("settings.application.title")
+                    : currentEditor
+                      ? currentEditorTitle(currentEditor)
+                      : ""}
           </span>
           {!isEditorAreaSpecialTabActive && isDirty ? (
             <span className="dirtyIndicator">
@@ -7200,10 +7305,17 @@ export function App(): JSX.Element {
         <ActivityBar
           activeMode={activeActivityMode}
           isApplicationSettingsActive={isSettingsTabActive}
+          isDebugModeEnabled={isDebugModeEnabled}
+          isDebugLogActive={isDebugLogTabActive}
           translate={translate}
           onSelectMode={handleActivityBarModeClick}
           onOpenApplicationSettings={() =>
             executeUiCommand(workspaceCommandIds.openApplicationSettings, {
+              source: "activityBar"
+            })
+          }
+          onOpenDebugLog={() =>
+            executeUiCommand(debugLogCommandIds.open, {
               source: "activityBar"
             })
           }
@@ -7406,6 +7518,10 @@ export function App(): JSX.Element {
                         void changeSettings(nextSettings);
                       }}
                     />
+                  ) : isDebugLogTabActive ? (
+                    <section className="debugLogTab">
+                      <DebugLogPanel translate={translate} />
+                    </section>
                   ) : activeDocument ? (
                     <>
                       <EditorSurface
@@ -7556,38 +7672,34 @@ export function App(): JSX.Element {
                               })
                             }
                           >
-                            {layout.utilityWindow.activeTab === "debugLog" ? (
-                              <DebugLogPanel translate={translate} />
-                            ) : (
-                              <GlossaryOccurrencesPanel
-                                session={glossaryOccurrenceTrackingState}
-                                translate={translate}
-                                onNavigatePrevious={() =>
-                                  executeUiCommand(
-                                    glossaryOccurrencesCommandIds.previous,
-                                    { source: "utilityWindow" }
-                                  )
-                                }
-                                onNavigateNext={() =>
-                                  executeUiCommand(
-                                    glossaryOccurrencesCommandIds.next,
-                                    { source: "utilityWindow" }
-                                  )
-                                }
-                                onOpenEntry={() =>
-                                  executeUiCommand(
-                                    glossaryOccurrencesCommandIds.openEntry,
-                                    { source: "utilityWindow" }
-                                  )
-                                }
-                                onCloseTracking={() =>
-                                  executeUiCommand(
-                                    glossaryOccurrencesCommandIds.closeTracking,
-                                    { source: "utilityWindow" }
-                                  )
-                                }
-                              />
-                            )}
+                            <GlossaryOccurrencesPanel
+                              session={glossaryOccurrenceTrackingState}
+                              translate={translate}
+                              onNavigatePrevious={() =>
+                                executeUiCommand(
+                                  glossaryOccurrencesCommandIds.previous,
+                                  { source: "utilityWindow" }
+                                )
+                              }
+                              onNavigateNext={() =>
+                                executeUiCommand(
+                                  glossaryOccurrencesCommandIds.next,
+                                  { source: "utilityWindow" }
+                                )
+                              }
+                              onOpenEntry={() =>
+                                executeUiCommand(
+                                  glossaryOccurrencesCommandIds.openEntry,
+                                  { source: "utilityWindow" }
+                                )
+                              }
+                              onCloseTracking={() =>
+                                executeUiCommand(
+                                  glossaryOccurrencesCommandIds.closeTracking,
+                                  { source: "utilityWindow" }
+                                )
+                              }
+                            />
                           </UtilityWindow>
                         </>
                       ) : null}

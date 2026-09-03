@@ -14,7 +14,9 @@ export const UTILITY_WINDOW_MIN_HEIGHT = 140;
 export const UTILITY_WINDOW_DEFAULT_HEIGHT = 220;
 export const EDITOR_AREA_MIN_HEIGHT = 240;
 
-export type UtilityWindowTabId = "occurrences" | "debugLog";
+// #377: the Debug Log moved out of the Utility Window to a debug-only special
+// tab, leaving "occurrences" as the sole Utility Window tab for now.
+export type UtilityWindowTabId = "occurrences";
 
 export const defaultUtilityWindowTab: UtilityWindowTabId = "occurrences";
 

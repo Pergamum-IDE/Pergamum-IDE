@@ -1268,6 +1268,17 @@ label.settingsItemHeader {
   font-size: 13px;
 }
 
+/* #377: the Debug Log special tab wrapper — a scroll container that fills the
+   editor area, mirroring the Glossary management tabs. */
+.debugLogTab {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+  padding: 28px 32px;
+}
+
 .debugLogPanel {
   display: flex;
   min-height: 0;

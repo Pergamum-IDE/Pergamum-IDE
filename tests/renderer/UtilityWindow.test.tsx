@@ -7,24 +7,26 @@ import { UtilityWindow } from "../../src/renderer/UtilityWindow";
 const translate: Translate = (key) => key;
 
 describe("UtilityWindow", () => {
-  it("shows the Debug Log tab alongside Occurrences", () => {
+  it("shows the Occurrences tab and no longer the Debug Log tab (#377)", () => {
     const markup = renderToStaticMarkup(
       React.createElement(
         UtilityWindow,
         {
-          activeTab: "debugLog",
+          activeTab: "occurrences",
           height: 220,
           translate,
           onSelectTab: () => undefined,
           onClose: () => undefined
         },
-        React.createElement("p", null, "debug-panel")
+        React.createElement("p", null, "occurrences-panel")
       )
     );
 
     expect(markup).toContain("utilityWindow.tabs.occurrences");
-    expect(markup).toContain("utilityWindow.tabs.debugLog");
+    // #377: the Debug Log moved out of the Utility Window entirely.
+    expect(markup).not.toContain("utilityWindow.tabs.debugLog");
+    expect(markup).not.toContain("debugLog.title");
     expect(markup).toContain('aria-selected="true"');
-    expect(markup).toContain("debug-panel");
+    expect(markup).toContain("occurrences-panel");
   });
 });

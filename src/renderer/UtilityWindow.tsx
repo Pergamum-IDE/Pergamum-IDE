@@ -11,10 +11,7 @@ interface UtilityWindowProps {
   children?: ReactNode;
 }
 
-const utilityWindowTabs: readonly UtilityWindowTabId[] = [
-  "occurrences",
-  "debugLog"
-];
+const utilityWindowTabs: readonly UtilityWindowTabId[] = ["occurrences"];
 
 function utilityWindowTabLabel(
   tab: UtilityWindowTabId,
@@ -23,8 +20,6 @@ function utilityWindowTabLabel(
   switch (tab) {
     case "occurrences":
       return translate("utilityWindow.tabs.occurrences");
-    case "debugLog":
-      return translate("utilityWindow.tabs.debugLog");
   }
 }
 

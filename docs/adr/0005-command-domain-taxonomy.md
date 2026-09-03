@@ -298,6 +298,7 @@ Examples:
 ```text
 workbench.commandPalette.open
 workbench.utilityWindow.open
+workbench.debugLog.open
 workbench.sidebar.toggle
 workbench.layout.reset
 workbench.about.open

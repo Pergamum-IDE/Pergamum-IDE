@@ -4,14 +4,21 @@ import fileIcon from "../../assets/icons/feather/activity-bar/file.svg?raw";
 import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?raw";
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
 import settingsIcon from "../../assets/icons/feather/activity-bar/settings.svg?raw";
-import textMapIcon from "../../assets/icons/ionicons/map/map-outline.svg?raw";
+import textMapIcon from "../../assets/icons/ionicons/activity-bar/map-outline.svg?raw";
+import bugIcon from "../../assets/icons/ionicons/activity-bar/bug-outline.svg?raw";
 
 interface ActivityBarProps {
   activeMode: SidebarMode | null;
   isApplicationSettingsActive: boolean;
+  // #377: the Debug Log entry point exists only while `--pergamum-debug`
+  // mode is active. Normal startup never renders the bug icon, so these
+  // default to the "no debug entry point" state when omitted.
+  isDebugModeEnabled?: boolean;
+  isDebugLogActive?: boolean;
   translate: Translate;
   onSelectMode: (mode: SidebarMode) => void;
   onOpenApplicationSettings: () => void;
+  onOpenDebugLog?: () => void;
 }
 
 interface ActivityBarIconProps {
@@ -36,15 +43,19 @@ function ActivityBarIcon({
 export function ActivityBar({
   activeMode,
   isApplicationSettingsActive,
+  isDebugModeEnabled = false,
+  isDebugLogActive = false,
   translate,
   onSelectMode,
-  onOpenApplicationSettings
+  onOpenApplicationSettings,
+  onOpenDebugLog
 }: ActivityBarProps): JSX.Element {
   const filesLabel = translate("activity.files");
   const searchLabel = translate("activity.searchReplace");
   const glossaryLabel = translate("activity.glossary");
   const textMapLabel = translate("activity.textMap");
   const applicationSettingsLabel = translate("activity.applicationSettings");
+  const debugLogLabel = translate("activity.debugLog");
 
   return (
     <nav className="activityBar" aria-label={translate("activity.label")}>
@@ -108,6 +119,22 @@ export function ActivityBar({
       </div>
 
       <div className="activityBarSecondary">
+        {isDebugModeEnabled ? (
+          <button
+            type="button"
+            className={
+              isDebugLogActive
+                ? "activityBarItem isActive"
+                : "activityBarItem"
+            }
+            aria-label={debugLogLabel}
+            aria-pressed={isDebugLogActive}
+            title={debugLogLabel}
+            onClick={() => onOpenDebugLog?.()}
+          >
+            <ActivityBarIcon label={debugLogLabel} svg={bugIcon} />
+          </button>
+        ) : null}
         <button
           type="button"
           className={

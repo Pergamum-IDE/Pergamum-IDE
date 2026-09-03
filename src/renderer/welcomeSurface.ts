@@ -3,18 +3,26 @@ import type { OpenDocumentsState } from "./openDocuments";
 export interface WelcomeSurfaceInput {
   readonly openDocumentsState: OpenDocumentsState;
   readonly isSettingsTabOpen: boolean;
+  // #377: the debug-only Debug Log special tab also counts as an open tab, so
+  // opening it from the bug icon on an otherwise empty workbench does not
+  // leave the Welcome surface covering it. Optional so existing callers that
+  // never open it need no change.
+  readonly isDebugLogTabOpen?: boolean;
 }
 
 /**
  * #262: the Welcome surface is the main surface shown exactly when there are
  * zero open tabs of any kind — no open documents (Markdown / Untitled /
- * Glossary) and no special tab (Application Settings). It is derived purely
- * from the open-tab count; whether a project is open is deliberately not a
- * factor, so `project = open, open tabs = 0` still shows Welcome.
+ * Glossary) and no special tab (Application Settings, or the debug-only Debug
+ * Log tab). It is derived purely from the open-tab count; whether a project
+ * is open is deliberately not a factor, so `project = open, open tabs = 0`
+ * still shows Welcome.
  */
 export function shouldShowWelcomeSurface(input: WelcomeSurfaceInput): boolean {
   return (
-    input.openDocumentsState.documents.length === 0 && !input.isSettingsTabOpen
+    input.openDocumentsState.documents.length === 0 &&
+    !input.isSettingsTabOpen &&
+    !input.isDebugLogTabOpen
   );
 }
 
@@ -39,7 +47,8 @@ export function shouldShowFullScreenWelcomeSurface(
   return (
     shouldShowWelcomeSurface({
       openDocumentsState: input.openDocumentsState,
-      isSettingsTabOpen: input.isSettingsTabOpen
+      isSettingsTabOpen: input.isSettingsTabOpen,
+      isDebugLogTabOpen: input.isDebugLogTabOpen
     }) && !input.projectIsOpen
   );
 }
