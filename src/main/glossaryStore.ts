@@ -15,6 +15,7 @@ import {
   validateGlossaryEntryId,
   validateGlossaryTag,
   validateGlossaryTagId,
+  validateReorderGlossaryTagIds,
   validateUpdateGlossaryEntryInput,
   validateUpdateGlossaryTagInput,
   type CreateGlossaryEntryInput,
@@ -44,7 +45,8 @@ import type { ProjectDatabase } from "./projectDatabase";
 export type GlossaryStoreErrorCode =
   | "GLOSSARY_ENTRY_NOT_FOUND"
   | "GLOSSARY_TAG_NOT_FOUND"
-  | "GLOSSARY_TAG_LABEL_CONFLICT";
+  | "GLOSSARY_TAG_LABEL_CONFLICT"
+  | "GLOSSARY_TAG_REORDER_MISMATCH";
 
 export class GlossaryStoreError extends Error {
   readonly code: GlossaryStoreErrorCode;
@@ -136,6 +138,38 @@ function tagLabelConflict(label: string): GlossaryStoreError {
     "GLOSSARY_TAG_LABEL_CONFLICT",
     `A glossary tag with the label "${label}" already exists.`
   );
+}
+
+function tagReorderMismatch(message: string): GlossaryStoreError {
+  return new GlossaryStoreError("GLOSSARY_TAG_REORDER_MISMATCH", message);
+}
+
+/**
+ * #375: `tagIdsInOrder` must be a permutation of the project's current tag ids
+ * — same count, same members. Duplicates are already rejected by the shared
+ * validator, so equal size + every id known ⟹ a true permutation. Raised
+ * OUTSIDE any `database.transaction(...)` wrapper (which would collapse it to a
+ * generic transaction error).
+ */
+function assertGlossaryTagReorderCoversEveryTag(
+  currentTagIds: readonly string[],
+  requestedTagIds: readonly string[]
+): void {
+  if (requestedTagIds.length !== currentTagIds.length) {
+    throw tagReorderMismatch(
+      `Glossary tag reorder must list every tag exactly once ` +
+        `(have ${currentTagIds.length}, got ${requestedTagIds.length}).`
+    );
+  }
+
+  const current = new Set(currentTagIds);
+  const unknownId = requestedTagIds.find((id) => !current.has(id));
+
+  if (unknownId !== undefined) {
+    throw tagReorderMismatch(
+      `Glossary tag reorder references an unknown tag: ${unknownId}`
+    );
+  }
 }
 
 /**
@@ -781,6 +815,58 @@ export async function updateGlossaryTag(
       }
 
       return dbOperationResult(tag, 1);
+    }
+  );
+}
+
+/**
+ * #375: persist a new tag order. `tagIdsInOrder` must list every project tag
+ * exactly once; `sort_order` is re-packed to `0..n-1` in that order and the
+ * re-sorted list is returned. Label / description / color and every
+ * `glossary_entry_tags` link are untouched, and `updated_at` is deliberately
+ * NOT bumped — a reorder is a positional change, and the Tag Manager surfaces
+ * `updated_at` as the "last edited" date.
+ */
+export async function reorderGlossaryTags(
+  database: ProjectDatabase,
+  tagIdsInOrder: readonly string[],
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryTag[]> {
+  const validatedIds = validateOrLogDbSkipped(
+    logger,
+    "update",
+    "glossaryTag",
+    () => validateReorderGlossaryTagIds(tagIdsInOrder)
+  );
+
+  // Outside the transaction so a meaningful mismatch error survives.
+  const currentTagIds = (
+    await database.all<{ id: unknown }>("SELECT id FROM glossary_tags")
+  ).map((row) => stringColumn(row.id, "id"));
+
+  assertGlossaryTagReorderCoversEveryTag(currentTagIds, validatedIds);
+
+  return withDbOperationLog(
+    { logger, dbOperation: "update", dbEntityKind: "glossaryTag" },
+    async () => {
+      const tags = await database.transaction(async () => {
+        for (let index = 0; index < validatedIds.length; index += 1) {
+          await database.run(
+            "UPDATE glossary_tags SET sort_order = ? WHERE id = ?",
+            [index, validatedIds[index]]
+          );
+        }
+
+        const rows = await database.all<GlossaryTagRow>(`
+          SELECT ${TAG_COLUMNS}
+          FROM glossary_tags
+          ORDER BY sort_order, id
+        `);
+
+        return rows.map(glossaryTagFromDatabaseRow);
+      });
+
+      return dbOperationResult(tags, tags.length);
     }
   );
 }

@@ -2902,10 +2902,10 @@ label.settingsItemHeader {
   gap: 12px;
 }
 
-/* No page heading — the "Add tag" button is the primary action. */
+/* No page heading — the "Add tag" button is the primary action, top-left. */
 .glossaryTagManagerActions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .glossaryTagManagerAddButton {
@@ -2943,7 +2943,7 @@ label.settingsItemHeader {
 .glossaryTagManagerTableRow {
   display: grid;
   grid-template-columns:
-    2.5rem minmax(8rem, 1fr) minmax(10rem, 2fr) 7rem 7rem 2.75rem 2.75rem;
+    2.5rem minmax(7rem, 1.1fr) minmax(9rem, 2fr) 5rem 6rem 6rem 2.75rem 2.75rem;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
@@ -2952,6 +2952,19 @@ label.settingsItemHeader {
 
 .glossaryTagManagerTableRow:last-child {
   border-bottom: none;
+}
+
+/* Drag-reorder feedback. */
+.glossaryTagManagerTableRow[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+.glossaryTagManagerTableRow[data-drop-before="true"] {
+  box-shadow: inset 0 2px 0 0 #2f6feb;
+}
+
+.glossaryTagManagerTableRow[data-drop-after="true"] {
+  box-shadow: inset 0 -2px 0 0 #2f6feb;
 }
 
 .glossaryTagManagerTableHead {
@@ -2991,15 +3004,50 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
-/* Grab-to-reorder grip — display-only for now. */
+.glossaryTagManagerEntriesCell {
+  text-align: right;
+  padding-right: 4px;
+  color: #52616f;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Grab-to-reorder grip — a quiet button (drag + Arrow-key reorder), not a
+   heavy push button. */
 .glossaryTagManagerDragHandle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
   color: #9aa7b4;
   font-size: 13px;
+  line-height: 1;
   cursor: grab;
+}
+
+.glossaryTagManagerDragHandle:hover:not(:disabled),
+.glossaryTagManagerDragHandle:focus-visible {
+  background: #eef2f7;
+  border-color: #cbd5df;
+  color: #52616f;
+}
+
+.glossaryTagManagerDragHandle:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring, #7aa7d9);
+  outline-offset: 1px;
+}
+
+.glossaryTagManagerDragHandle:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.glossaryTagManagerDragHandle:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* Edit / delete are quiet icon buttons, not text buttons. */
@@ -3081,6 +3129,22 @@ label.settingsItemHeader {
   border-radius: 4px;
   padding: 4px 6px;
   font-family: ui-monospace, monospace;
+}
+
+.glossaryTagEditorColorSwatch {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.glossaryTagEditorColorSwatch:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .glossaryTagEditorColorAction {

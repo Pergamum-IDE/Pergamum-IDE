@@ -20,6 +20,18 @@ const VALIDITY_MESSAGE_KEYS: Record<
   invalidForeground: "glossaryTagEditor.validity.invalidForeground"
 };
 
+const HEX6_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * A safe `#rrggbb` for a native `<input type="color">` — the raw text when it
+ * is a valid 6-digit hex, otherwise the preview fallback (the picker cannot
+ * hold anything else). The text input stays the source of truth; the picker
+ * mirrors it and writes a normalized `#rrggbb` back on change.
+ */
+function colorPickerValue(raw: string, fallback: string): string {
+  return HEX6_PATTERN.test(raw.trim()) ? raw.trim().toLowerCase() : fallback;
+}
+
 interface GlossaryTagEditorProps {
   draft: GlossaryTagDraft;
   translate: Translate;
@@ -86,6 +98,14 @@ export function GlossaryTagEditor({
       <div className="glossaryTagEditorField glossaryTagEditorColorField">
         <span>{translate("glossaryTagEditor.background")}</span>
         <input
+          type="color"
+          className="glossaryTagEditorColorSwatch"
+          value={colorPickerValue(draft.backgroundRgb, preview.backgroundRgb)}
+          aria-label={translate("glossaryTagEditor.background")}
+          disabled={busy}
+          onChange={(event) => patch({ backgroundRgb: event.target.value })}
+        />
+        <input
           type="text"
           className="glossaryTagEditorColorInput"
           value={draft.backgroundRgb}
@@ -105,6 +125,14 @@ export function GlossaryTagEditor({
 
       <div className="glossaryTagEditorField glossaryTagEditorColorField">
         <span>{translate("glossaryTagEditor.foreground")}</span>
+        <input
+          type="color"
+          className="glossaryTagEditorColorSwatch"
+          value={colorPickerValue(draft.foregroundRgb, preview.foregroundRgb)}
+          aria-label={translate("glossaryTagEditor.foreground")}
+          disabled={busy}
+          onChange={(event) => patch({ foregroundRgb: event.target.value })}
+        />
         <input
           type="text"
           className="glossaryTagEditorColorInput"

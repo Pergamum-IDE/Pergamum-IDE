@@ -12,6 +12,7 @@ import {
   validateCreateGlossaryTagInput,
   validateGlossaryEntryId,
   validateGlossaryTagId,
+  validateReorderGlossaryTagIds,
   validateUpdateGlossaryEntryInput,
   validateUpdateGlossaryTagInput,
   type GlossaryEntry,
@@ -27,6 +28,7 @@ import {
   GlossaryStoreError,
   listGlossaryEntries,
   listGlossaryTags,
+  reorderGlossaryTags,
   updateGlossaryEntry,
   updateGlossaryTag
 } from "./glossaryStore";
@@ -49,6 +51,7 @@ export interface GlossaryIpcHandlers {
   createTag(rawRequest: unknown): Promise<GlossaryTag>;
   updateTag(rawRequest: unknown): Promise<GlossaryTag>;
   deleteTag(rawRequest: unknown): Promise<DeleteGlossaryTagResult>;
+  reorderTags(rawRequest: unknown): Promise<GlossaryTag[]>;
 }
 
 function isRequestObject(value: unknown): value is Record<string, unknown> {
@@ -88,6 +91,18 @@ function parseDeleteGlossaryTagRequest(
   value: unknown
 ): DeleteGlossaryTagRequest {
   return parseDeleteRequest(value, (id) => validateGlossaryTagId(id));
+}
+
+function parseReorderGlossaryTagsRequest(value: unknown): {
+  tagIdsInOrder: string[];
+} {
+  if (!isRequestObject(value)) {
+    throw new Error("Invalid glossary tag reorder request.");
+  }
+
+  return {
+    tagIdsInOrder: validateReorderGlossaryTagIds(value.tagIdsInOrder)
+  };
 }
 
 function isMissingGlossaryStoreError(error: unknown): boolean {
@@ -223,6 +238,13 @@ export function createGlossaryIpcHandlers(
 
         return { deleted: true };
       });
+    },
+    async reorderTags(rawRequest) {
+      const request = parseReorderGlossaryTagsRequest(rawRequest);
+
+      return withDatabase((database) =>
+        reorderGlossaryTags(database, request.tagIdsInOrder, logger)
+      );
     }
   };
 }
@@ -257,5 +279,9 @@ export function registerGlossaryIpc(
   );
   ipcMain.handle(GLOSSARY_CHANNELS.deleteTag, (_event, rawRequest: unknown) =>
     handlers.deleteTag(rawRequest)
+  );
+  ipcMain.handle(
+    GLOSSARY_CHANNELS.reorderTags,
+    (_event, rawRequest: unknown) => handlers.reorderTags(rawRequest)
   );
 }

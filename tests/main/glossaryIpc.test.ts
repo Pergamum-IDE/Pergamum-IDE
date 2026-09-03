@@ -61,7 +61,8 @@ describe("glossary IPC (#375)", () => {
       GLOSSARY_CHANNELS.listTags,
       GLOSSARY_CHANNELS.createTag,
       GLOSSARY_CHANNELS.updateTag,
-      GLOSSARY_CHANNELS.deleteTag
+      GLOSSARY_CHANNELS.deleteTag,
+      GLOSSARY_CHANNELS.reorderTags
     ]);
   });
 
@@ -174,5 +175,35 @@ describe("glossary IPC (#375)", () => {
 
     await expect(api.delete({ id: 123 })).rejects.toThrow();
     await expect(api.deleteTag({})).rejects.toThrow();
+  });
+
+  it("reorders tags through the current project database", async () => {
+    const api = handlers();
+    const a = await api.createTag({
+      label: "A",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+    const b = await api.createTag({
+      label: "B",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+
+    const reordered = await api.reorderTags({ tagIdsInOrder: [b.id, a.id] });
+
+    expect(reordered.map((t) => t.label)).toEqual(["B", "A"]);
+    expect((await api.listTags()).map((t) => t.id)).toEqual([b.id, a.id]);
+  });
+
+  it("rejects a reorder request that is not a well-formed id list", async () => {
+    const api = handlers();
+
+    await expect(api.reorderTags({})).rejects.toThrow();
+    await expect(
+      api.reorderTags({ tagIdsInOrder: ["not-a-uuid"] })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 });

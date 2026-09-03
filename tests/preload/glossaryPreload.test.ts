@@ -133,7 +133,8 @@ describe("glossary preload API", () => {
           listTags: expect.any(Function),
           createTag: expect.any(Function),
           updateTag: expect.any(Function),
-          deleteTag: expect.any(Function)
+          deleteTag: expect.any(Function),
+          reorderTags: expect.any(Function)
         })
       })
     );
@@ -181,6 +182,7 @@ describe("glossary preload API", () => {
       foregroundRgb: "#ffffff"
     });
     await api.glossary.deleteTag(tagId);
+    await api.glossary.reorderTags([tagId, entryId]);
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [
@@ -226,7 +228,11 @@ describe("glossary preload API", () => {
           foregroundRgb: "#ffffff"
         }
       ],
-      [GLOSSARY_CHANNELS.deleteTag, { id: tagId }]
+      [GLOSSARY_CHANNELS.deleteTag, { id: tagId }],
+      [
+        GLOSSARY_CHANNELS.reorderTags,
+        { tagIdsInOrder: [tagId, entryId] }
+      ]
     ]);
   });
 

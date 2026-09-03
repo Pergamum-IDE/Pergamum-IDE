@@ -226,7 +226,9 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(GLOSSARY_CHANNELS.createTag, input),
     updateTag: (input) =>
       ipcRenderer.invoke(GLOSSARY_CHANNELS.updateTag, input),
-    deleteTag: (id) => ipcRenderer.invoke(GLOSSARY_CHANNELS.deleteTag, { id })
+    deleteTag: (id) => ipcRenderer.invoke(GLOSSARY_CHANNELS.deleteTag, { id }),
+    reorderTags: (tagIdsInOrder) =>
+      ipcRenderer.invoke(GLOSSARY_CHANNELS.reorderTags, { tagIdsInOrder })
   },
   debugLog: {
     logEvent: (request) =>

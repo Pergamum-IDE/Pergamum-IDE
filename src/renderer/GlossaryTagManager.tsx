@@ -20,6 +20,10 @@ import {
   glossaryTagDraftUpdateInput,
   type GlossaryTagDraft
 } from "./glossaryTagDraft";
+import {
+  glossaryTagOrderChanged,
+  reorderGlossaryTagIds
+} from "./glossaryTagReorder";
 
 interface GlossaryTagManagerProps {
   tags: readonly GlossaryTag[];
@@ -32,11 +36,26 @@ interface GlossaryTagManagerProps {
    */
   onDeleteTag: (tagId: string, tagLabel: string) => Promise<unknown>;
   /**
+   * #375: persist a new tag order (drag handle / Arrow keys). `tagIdsInOrder`
+   * lists every project tag exactly once; the host re-packs `sort_order` and
+   * refreshes every glossary consumer.
+   */
+  onReorderTags: (tagIdsInOrder: string[]) => Promise<unknown>;
+  /** #375: entry count per tag id (how many glossary entries carry the tag). */
+  entryCountByTagId?: Readonly<Record<string, number>>;
+  /**
    * #375: open the "add tag" modal immediately (used when the Tag Manager
    * tab is opened from the Glossary Entry editor's "Manage tags" link).
    */
   autoStartCreate?: boolean;
 }
+
+/** Private DataTransfer type — keeps tag reorder drags from mixing with File
+ *  Explorer / tab / atom reorder drags. */
+const TAG_REORDER_MIME = "application/x-pergamum-glossary-tag-reorder";
+
+/** The grab-to-reorder glyph shown at the head of every tag row. */
+const TAG_DRAG_HANDLE_GLYPH = "⣿";
 
 /** `2026-09-03T12:34:56.000Z` → `2026-09-03`. Display-only; save values are
  *  never touched. Falls back to the raw string for a non-ISO value. */
@@ -52,6 +71,7 @@ const TABLE_COLUMN_KEYS = [
   "glossary.tagManager.columns.reorder",
   "glossary.tagManager.columns.tag",
   "glossary.tagManager.columns.description",
+  "glossary.tagManager.columns.entries",
   "glossary.tagManager.columns.createdAt",
   "glossary.tagManager.columns.updatedAt",
   "glossary.tagManager.columns.edit",
@@ -60,10 +80,11 @@ const TABLE_COLUMN_KEYS = [
 
 /**
  * #375: the Glossary Tag Manager tab — a table-shaped management surface
- * (`[⣿ handle][chip][description][created][updated][edit][delete]`), an
- * "Add tag" primary action instead of a page heading, and a modal
- * {@link GlossaryTagEditor} for create / edit. Delete goes back to the host
- * so it can show the shared destructive confirm dialog. No bulk operations.
+ * (`[⣿ handle][chip][description][entries][created][updated][edit][delete]`),
+ * an "Add tag" primary action (top-left, not a page heading), a modal
+ * {@link GlossaryTagEditor} for create / edit, and drag-handle reorder of the
+ * tag `sortOrder`. Delete goes back to the host for the shared destructive
+ * confirm dialog. No bulk operations.
  */
 export function GlossaryTagManager({
   tags,
@@ -71,6 +92,8 @@ export function GlossaryTagManager({
   onCreateTag,
   onUpdateTag,
   onDeleteTag,
+  onReorderTags,
+  entryCountByTagId = {},
   autoStartCreate = false
 }: GlossaryTagManagerProps): JSX.Element {
   const [draft, setDraft] = useState<GlossaryTagDraft | null>(() =>
@@ -79,6 +102,35 @@ export function GlossaryTagManager({
   const [busy, setBusy] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const openerRef = useRef<Element | null>(null);
+
+  // #375: transient drag state for tag reorder (D&D). `dropGap` is a slot
+  // index in `[0, tags.length]` — the position the dragged tag would land.
+  const [draggingTagId, setDraggingTagId] = useState<string | null>(null);
+  const [dropGap, setDropGap] = useState<number | null>(null);
+
+  const reorderable = tags.length > 1 && !busy;
+
+  function clearDrag(): void {
+    setDraggingTagId(null);
+    setDropGap(null);
+  }
+
+  function dropGapFor(
+    event: { clientY: number; currentTarget: HTMLElement },
+    index: number
+  ): number {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return event.clientY > rect.top + rect.height / 2 ? index + 1 : index;
+  }
+
+  function moveTag(fromIndex: number, toIndex: number): void {
+    const currentIds = tags.map((tag) => tag.id);
+    const nextOrder = reorderGlossaryTagIds(currentIds, fromIndex, toIndex);
+
+    if (glossaryTagOrderChanged(currentIds, nextOrder)) {
+      void onReorderTags(nextOrder);
+    }
+  }
 
   function openEditor(next: GlossaryTagDraft): void {
     if (typeof document !== "undefined") {
@@ -156,21 +208,87 @@ export function GlossaryTagManager({
             ))}
           </div>
 
-          {tags.map((tag) => (
+          {tags.map((tag, index) => (
             <div
               className="glossaryTagManagerTableRow"
               role="row"
               key={tag.id}
+              data-dragging={draggingTagId === tag.id || undefined}
+              data-drop-before={dropGap === index || undefined}
+              data-drop-after={
+                dropGap === index + 1 && index === tags.length - 1
+                  ? true
+                  : undefined
+              }
+              onDragOver={(event) => {
+                if (
+                  !reorderable ||
+                  draggingTagId === null ||
+                  !Array.from(event.dataTransfer.types).includes(
+                    TAG_REORDER_MIME
+                  )
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                const gap = dropGapFor(event, index);
+                if (gap !== dropGap) {
+                  setDropGap(gap);
+                }
+              }}
+              onDrop={(event) => {
+                if (!reorderable || draggingTagId === null) {
+                  return;
+                }
+                event.preventDefault();
+                const gap = dropGapFor(event, index);
+                const fromIndex = tags.findIndex(
+                  (candidate) => candidate.id === draggingTagId
+                );
+                clearDrag();
+                if (fromIndex !== -1) {
+                  moveTag(fromIndex, gap > fromIndex ? gap - 1 : gap);
+                }
+              }}
             >
               <span role="cell" className="glossaryTagManagerCell">
-                <span
+                <button
+                  type="button"
                   className="glossaryTagManagerDragHandle"
-                  role="img"
                   aria-label={translate("glossary.tagManager.reorderHint")}
                   title={translate("glossary.tagManager.reorderHint")}
+                  draggable={reorderable}
+                  disabled={!reorderable}
+                  onDragStart={(event) => {
+                    if (!reorderable) {
+                      event.preventDefault();
+                      return;
+                    }
+                    setDraggingTagId(tag.id);
+                    setDropGap(null);
+                    event.dataTransfer.setData(TAG_REORDER_MIME, tag.id);
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={clearDrag}
+                  onKeyDown={(event) => {
+                    if (!reorderable) {
+                      return;
+                    }
+                    if (event.key === "ArrowUp" && index > 0) {
+                      event.preventDefault();
+                      moveTag(index, index - 1);
+                    } else if (
+                      event.key === "ArrowDown" &&
+                      index < tags.length - 1
+                    ) {
+                      event.preventDefault();
+                      moveTag(index, index + 1);
+                    }
+                  }}
                 >
-                  ⣿
-                </span>
+                  <span aria-hidden="true">{TAG_DRAG_HANDLE_GLYPH}</span>
+                </button>
               </span>
               <span role="cell" className="glossaryTagManagerCell">
                 <GlossaryTagChip tag={tag} />
@@ -187,6 +305,12 @@ export function GlossaryTagManager({
                     {translate("glossary.tagManager.noDescription")}
                   </span>
                 )}
+              </span>
+              <span
+                role="cell"
+                className="glossaryTagManagerCell glossaryTagManagerEntriesCell"
+              >
+                {entryCountByTagId[tag.id] ?? 0}
               </span>
               <span
                 role="cell"

@@ -278,7 +278,8 @@ export const GLOSSARY_CHANNELS = {
   listTags: "glossary:listTags",
   createTag: "glossary:createTag",
   updateTag: "glossary:updateTag",
-  deleteTag: "glossary:deleteTag"
+  deleteTag: "glossary:deleteTag",
+  reorderTags: "glossary:reorderTags"
 } as const;
 
 export const DEBUG_LOG_CHANNELS = {
@@ -801,6 +802,15 @@ export interface DeleteGlossaryTagResult {
   deleted: boolean;
 }
 
+/**
+ * #375: persist a new tag order. `tagIdsInOrder` must list every project tag
+ * exactly once (no missing / unknown / duplicate ids); `sort_order` is
+ * re-packed to `0..n-1` in that order.
+ */
+export interface ReorderGlossaryTagsRequest {
+  tagIdsInOrder: string[];
+}
+
 export interface PergamumRuntimeInfo {
   electron: string;
   chromium: string;
@@ -1005,6 +1015,9 @@ export interface PergamumApi {
     createTag: (input: CreateGlossaryTagInput) => Promise<GlossaryTag>;
     updateTag: (input: UpdateGlossaryTagInput) => Promise<GlossaryTag>;
     deleteTag: (id: string) => Promise<DeleteGlossaryTagResult>;
+    /** #375: re-pack `sort_order` to `0..n-1` in the given order; returns the
+     *  re-sorted tag list. */
+    reorderTags: (tagIdsInOrder: string[]) => Promise<GlossaryTag[]>;
   };
   debugLog: {
     logEvent: (request: RendererDebugLogRequest) => Promise<void>;

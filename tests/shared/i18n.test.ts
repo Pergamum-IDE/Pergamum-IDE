@@ -82,6 +82,17 @@ describe("glossary deletion dialog translations (#375)", () => {
     expect(t("ja", "glossary.tagManager.addTag")).toBe("タグ追加");
     expect(t("en", "glossary.tagManager.addTag")).toBe("Add tag");
   });
+
+  it("labels the Tag Manager table columns, incl. Entries and date-only columns (#375)", () => {
+    // Date columns are "作成日" / "更新日" now (no longer 作成日時 / 更新日時).
+    expect(t("ja", "glossary.tagManager.columns.createdAt")).toBe("作成日");
+    expect(t("ja", "glossary.tagManager.columns.updatedAt")).toBe("更新日");
+    expect(t("en", "glossary.tagManager.columns.createdAt")).toBe("Created");
+    expect(t("en", "glossary.tagManager.columns.updatedAt")).toBe("Updated");
+    // The entry-count column.
+    expect(t("ja", "glossary.tagManager.columns.entries")).toBe("利用語彙数");
+    expect(t("en", "glossary.tagManager.columns.entries")).toBe("Entries");
+  });
 });
 
 describe("unsaved-changes close dialog translations (#192/#271)", () => {

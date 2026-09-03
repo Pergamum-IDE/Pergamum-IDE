@@ -60,6 +60,11 @@ function allSourceText(): string {
  * `<button>` while that handle is focused — a keyboard fallback for the D&D
  * reorder, scoped to the handle, not a document-level/global shortcut
  * listener.
+ *
+ * GlossaryTagManager.tsx (#375) is the same category once more: the per-row
+ * tag drag handle's `onKeyDown` implements Arrow Up / Down reorder for its own
+ * `<button>` while that handle is focused — the keyboard fallback for the tag
+ * sortOrder D&D reorder, scoped to the handle, not a global shortcut listener.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -68,7 +73,8 @@ const onKeyDownExemptFileNames = new Set([
   "InfoDialog.tsx",
   "DocumentTabBar.tsx",
   "FileExplorer.tsx",
-  "GlossaryEditor.tsx"
+  "GlossaryEditor.tsx",
+  "GlossaryTagManager.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {

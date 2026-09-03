@@ -561,6 +561,7 @@ export const enTranslations = {
   "glossary.tagManager.columns.delete": "Delete",
   "glossary.tagManager.columns.description": "Description",
   "glossary.tagManager.columns.edit": "Edit",
+  "glossary.tagManager.columns.entries": "Entries",
   "glossary.tagManager.columns.reorder": "Reorder",
   "glossary.tagManager.columns.tag": "Tag",
   "glossary.tagManager.columns.updatedAt": "Updated",

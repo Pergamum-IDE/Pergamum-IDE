@@ -47,6 +47,10 @@ describe("GlossaryTagEditor (#375) — markup", () => {
     expect(markup).toContain("glossaryTagEditor.randomBackground");
     expect(markup).toContain("glossaryTagChip");
     expect(markup).toContain("background-color:#1f77b4");
+    // #375: background AND foreground each get a text input + a native color
+    // picker.
+    expect(markup.match(/type="color"/g)).toHaveLength(2);
+    expect(markup.match(/glossaryTagEditorColorInput/g)).toHaveLength(2);
     // #375: the manual auto-foreground button is gone.
     expect(markup).not.toContain("glossaryTagEditor.autoForeground");
     // It is a plain body form — no title heading, no action buttons.
@@ -156,6 +160,41 @@ describe("GlossaryTagEditor (#375) — interaction", () => {
     });
 
     expect(onChange.mock.calls[0][0].foregroundRgb).toBe("#123456");
+  });
+
+  it("keeps the native color pickers in sync with the text inputs", () => {
+    const onChange = vi.fn();
+    render(editDraft(), onChange);
+
+    const pickers = container.querySelectorAll<HTMLInputElement>(
+      'input[type="color"]'
+    );
+    expect(pickers).toHaveLength(2);
+    // The background picker mirrors the current #RRGGBB text value.
+    expect(pickers[0].value).toBe("#1f77b4");
+    expect(pickers[1].value).toBe("#ffffff");
+
+    // Choosing a color in the background picker writes it back as #RRGGBB.
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(pickers[0], "#00ff00");
+      pickers[0].dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onChange.mock.calls[0][0].backgroundRgb).toBe("#00ff00");
+
+    // The foreground picker is a manual control too — no auto mode.
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(pickers[1], "#abcdef");
+      pickers[1].dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onChange.mock.calls[1][0].foregroundRgb).toBe("#abcdef");
   });
 
   it("submits through onSubmit only when the draft is valid", () => {

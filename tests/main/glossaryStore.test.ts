@@ -11,6 +11,7 @@ import {
   GlossaryStoreError,
   listGlossaryEntries,
   listGlossaryTags,
+  reorderGlossaryTags,
   updateGlossaryEntry,
   updateGlossaryTag
 } from "../../src/main/glossaryStore";
@@ -365,6 +366,98 @@ describe("glossary store (#375)", () => {
         foregroundRgb: "#ffffff"
       })
     ).resolves.toMatchObject({ id: people.id, label: "人物" });
+  });
+
+  // -----------------------------------------------------------------------
+  // Tag reorder (#375)
+  // -----------------------------------------------------------------------
+
+  it("reorders tags: re-packs sort_order 0..n-1 and returns the new order", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+    const c = await makeTag("C");
+
+    const reordered = await reorderGlossaryTags(database, [c.id, a.id, b.id]);
+
+    expect(reordered.map((t) => [t.label, t.sortOrder])).toEqual([
+      ["C", 0],
+      ["A", 1],
+      ["B", 2]
+    ]);
+    // A fresh list re-read by (sort_order, id) sees the same order.
+    expect((await listGlossaryTags(database)).map((t) => t.id)).toEqual([
+      c.id,
+      a.id,
+      b.id
+    ]);
+  });
+
+  it("reorder leaves label / description / color and entry links untouched", async () => {
+    const a = await createGlossaryTag(database, {
+      label: "武将",
+      description: "説明",
+      backgroundRgb: "#abcdef",
+      foregroundRgb: "#000000"
+    });
+    const b = await makeTag("地名");
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "織田信長", matchFlags: 0 }],
+      tagIds: [a.id]
+    });
+
+    await reorderGlossaryTags(database, [b.id, a.id]);
+
+    const moved = (await listGlossaryTags(database)).find((t) => t.id === a.id);
+    expect(moved).toMatchObject({
+      label: "武将",
+      description: "説明",
+      backgroundRgb: "#abcdef",
+      foregroundRgb: "#000000"
+    });
+    const stillTagged = await getGlossaryEntryById(database, entry.id);
+    expect(stillTagged!.tags.map((t) => t.id)).toEqual([a.id]);
+  });
+
+  it("rejects a reorder with a duplicate id", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id, b.id, a.id])
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("rejects a reorder that references an unknown tag", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id, missingTagId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_REORDER_MISMATCH" });
+    // The order is unchanged.
+    expect((await listGlossaryTags(database)).map((t) => t.id)).toEqual([
+      a.id,
+      b.id
+    ]);
+  });
+
+  it("rejects a reorder that omits a tag (too few ids)", async () => {
+    const a = await makeTag("A");
+    await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id])
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_REORDER_MISMATCH" });
+  });
+
+  it("rejects a reorder with more ids than there are tags", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id, b.id, missingTagId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_REORDER_MISMATCH" });
   });
 
   // -----------------------------------------------------------------------

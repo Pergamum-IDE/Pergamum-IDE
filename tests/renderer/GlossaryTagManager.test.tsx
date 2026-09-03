@@ -24,6 +24,7 @@ function tag(id: string, label: string, description: string | null): GlossaryTag
 
 const tagA = tag("018f4b8c-7a2b-7c3d-8e4f-300000000001", "武将", "戦国武将");
 const tagB = tag("018f4b8c-7a2b-7c3d-8e4f-300000000002", "地名", null);
+const tagC = tag("018f4b8c-7a2b-7c3d-8e4f-300000000003", "組織", "勢力");
 
 let container: HTMLDivElement;
 let root: Root;
@@ -46,7 +47,8 @@ function render(
   const handlers = {
     onCreateTag: vi.fn().mockResolvedValue(undefined),
     onUpdateTag: vi.fn().mockResolvedValue(undefined),
-    onDeleteTag: vi.fn().mockResolvedValue(undefined)
+    onDeleteTag: vi.fn().mockResolvedValue(undefined),
+    onReorderTags: vi.fn().mockResolvedValue(undefined)
   };
   act(() => {
     root.render(
@@ -84,9 +86,15 @@ async function flush(): Promise<void> {
 }
 
 describe("GlossaryTagManager (#375) — table", () => {
-  it("has no page heading; the Add tag button is the primary action", () => {
+  it("has no page heading; the Add tag button is the primary action, top-left", () => {
     render();
     expect(container.querySelector("h2")).toBeNull();
+
+    const section = query(".glossaryTagManager");
+    // The action bar is the first thing in the tab body (above the table).
+    expect(section.firstElementChild?.classList.contains(
+      "glossaryTagManagerActions"
+    )).toBe(true);
     expect(query(".glossaryTagManagerAddButton").textContent).toBe(
       "glossary.tagManager.addTag"
     );
@@ -103,6 +111,7 @@ describe("GlossaryTagManager (#375) — table", () => {
       "glossary.tagManager.columns.reorder",
       "glossary.tagManager.columns.tag",
       "glossary.tagManager.columns.description",
+      "glossary.tagManager.columns.entries",
       "glossary.tagManager.columns.createdAt",
       "glossary.tagManager.columns.updatedAt",
       "glossary.tagManager.columns.edit",
@@ -111,20 +120,46 @@ describe("GlossaryTagManager (#375) — table", () => {
     expect(rows()).toHaveLength(2);
   });
 
+  it("shows the entry count per tag (entries, not occurrences), 0 when none", () => {
+    render({
+      tags: [tagA, tagB],
+      entryCountByTagId: { [tagA.id]: 3 }
+    });
+
+    const first = rows()[0].querySelector(".glossaryTagManagerEntriesCell");
+    const second = rows()[1].querySelector(".glossaryTagManagerEntriesCell");
+    expect(first?.textContent).toBe("3");
+    expect(second?.textContent).toBe("0");
+  });
+
   it("column headers are not buttons and do not sort on click", () => {
     render();
     const headerRow = query(".glossaryTagManagerTableHead");
     expect(headerRow.querySelector("button")).toBeNull();
   });
 
-  it("shows a ⣿ reorder handle with an accessible label in every row", () => {
+  it("shows a ⣿ reorder handle (a draggable button) with an accessible label in every row", () => {
     render();
-    const handles = container.querySelectorAll(".glossaryTagManagerDragHandle");
+    const handles = container.querySelectorAll<HTMLButtonElement>(
+      ".glossaryTagManagerDragHandle"
+    );
     expect(handles).toHaveLength(2);
+    expect(handles[0].tagName).toBe("BUTTON");
+    expect(handles[0].getAttribute("draggable")).toBe("true");
     expect(handles[0].getAttribute("aria-label")).toBe(
       "glossary.tagManager.reorderHint"
     );
+    expect(handles[0].getAttribute("title")).toBe(
+      "glossary.tagManager.reorderHint"
+    );
     expect(handles[0].textContent).toBe("⣿");
+  });
+
+  it("makes the handle non-draggable when there is only one tag (nothing to reorder)", () => {
+    render({ tags: [tagA] });
+    const handle = query<HTMLButtonElement>(".glossaryTagManagerDragHandle");
+    expect(handle.disabled).toBe(true);
+    expect(handle.getAttribute("draggable")).toBe("false");
   });
 
   it("renders the tag chip, the description, and a muted placeholder when absent", () => {
@@ -180,6 +215,127 @@ describe("GlossaryTagManager (#375) — table", () => {
       query<HTMLButtonElement>(".glossaryTagManagerDeleteButton").click()
     );
     expect(handlers.onDeleteTag).toHaveBeenCalledWith(tagA.id, tagA.label);
+  });
+
+  it("column headers carry no reorder / sort controls", () => {
+    render();
+    const headerRow = query(".glossaryTagManagerTableHead");
+    expect(headerRow.querySelector("button")).toBeNull();
+    expect(headerRow.querySelector(".glossaryTagManagerDragHandle")).toBeNull();
+  });
+});
+
+describe("GlossaryTagManager (#375) — tag reorder", () => {
+  function handles(): HTMLButtonElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".glossaryTagManagerDragHandle"
+      )
+    );
+  }
+
+  function dataRows(): HTMLElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(
+        ".glossaryTagManagerTableRow:not(.glossaryTagManagerTableHead)"
+      )
+    );
+  }
+
+  it("keyboard: Arrow Down on the first handle asks to move that tag after the next", () => {
+    const { onReorderTags } = render({ tags: [tagA, tagB, tagC] });
+
+    act(() => {
+      handles()[0].dispatchEvent(
+        new window.KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true
+        })
+      );
+    });
+
+    expect(onReorderTags).toHaveBeenCalledWith([tagB.id, tagA.id, tagC.id]);
+  });
+
+  it("keyboard: Arrow Up on the first handle is a no-op", () => {
+    const { onReorderTags } = render({ tags: [tagA, tagB, tagC] });
+
+    act(() => {
+      handles()[0].dispatchEvent(
+        new window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })
+      );
+    });
+
+    expect(onReorderTags).not.toHaveBeenCalled();
+  });
+
+  it("drag-and-drop: dropping tagA's handle onto the lower half of tagB moves tagA after tagB", () => {
+    const { onReorderTags } = render({ tags: [tagA, tagB, tagC] });
+
+    const dataTransfer = {
+      _data: new Map<string, string>(),
+      types: [] as string[],
+      dropEffect: "",
+      effectAllowed: "",
+      setData(type: string, value: string) {
+        this._data.set(type, value);
+        this.types = [...this._data.keys()];
+      },
+      getData(type: string) {
+        return this._data.get(type) ?? "";
+      }
+    };
+
+    function fire(target: EventTarget, type: string, clientY: number): void {
+      const event = new window.Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+      Object.defineProperty(event, "clientY", { value: clientY });
+      act(() => {
+        target.dispatchEvent(event);
+      });
+    }
+
+    // Row rects are 0-height in happy-dom, so any clientY > 0 lands in the
+    // lower half → the gap after that row. Dropping onto tagB (index 1) is
+    // gap 2; dragging tagA from index 0 into gap 2 resolves to final index 1.
+    fire(handles()[0], "dragstart", 0);
+    fire(dataRows()[1], "dragover", 5);
+    fire(dataRows()[1], "drop", 5);
+
+    expect(onReorderTags).toHaveBeenCalledWith([tagB.id, tagA.id, tagC.id]);
+  });
+
+  it("does not call the host when a drop lands back on the same position", () => {
+    const { onReorderTags } = render({ tags: [tagA, tagB, tagC] });
+
+    const dataTransfer = {
+      _data: new Map<string, string>(),
+      types: [] as string[],
+      dropEffect: "",
+      effectAllowed: "",
+      setData(type: string, value: string) {
+        this._data.set(type, value);
+        this.types = [...this._data.keys()];
+      },
+      getData(type: string) {
+        return this._data.get(type) ?? "";
+      }
+    };
+
+    function fire(target: EventTarget, type: string, clientY: number): void {
+      const event = new window.Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+      Object.defineProperty(event, "clientY", { value: clientY });
+      act(() => {
+        target.dispatchEvent(event);
+      });
+    }
+
+    // Drop tagA onto the upper half of its own row → gap 0 → final index 0.
+    fire(handles()[0], "dragstart", 0);
+    fire(dataRows()[0], "drop", 0);
+
+    expect(onReorderTags).not.toHaveBeenCalled();
   });
 });
 

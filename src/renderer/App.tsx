@@ -356,6 +356,7 @@ import type {
 } from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
 import { GlossaryTagManager } from "./GlossaryTagManager";
+import { countGlossaryEntriesByTag } from "./glossaryTagEntryCount";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import {
@@ -802,6 +803,11 @@ export function App(): JSX.Element {
   // the sidebar (tag filter + tag manager). Reloaded whenever
   // `glossaryRefreshToken` bumps.
   const [glossaryTags, setGlossaryTags] = useState<GlossaryTag[]>([]);
+  // #375: how many glossary entries carry each tag (by tag id) — the Tag
+  // Manager's "Entries" column. Reloaded alongside `glossaryTags`.
+  const [glossaryTagEntryCounts, setGlossaryTagEntryCounts] = useState<
+    Record<string, number>
+  >({});
   // #311: a Command Palette "Create New File / Folder" request handed to the
   // File Explorer. `token` is a session-monotonic counter (never reused) so a
   // repeat command re-opens the dialog; the state is cleared to null once the
@@ -2536,6 +2542,14 @@ export function App(): JSX.Element {
     return tag;
   }
 
+  async function handleReorderGlossaryTags(
+    tagIdsInOrder: string[]
+  ): Promise<GlossaryTag[]> {
+    const tags = await window.pergamum.glossary.reorderTags(tagIdsInOrder);
+    setGlossaryRefreshToken((token) => token + 1);
+    return tags;
+  }
+
   async function handleDeleteGlossaryTag(
     tagId: string,
     tagLabel: string
@@ -2632,21 +2646,26 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (!project) {
       setGlossaryTags([]);
+      setGlossaryTagEntryCounts({});
       return;
     }
 
     let isActive = true;
 
-    void window.pergamum.glossary
-      .listTags()
-      .then((tags) => {
+    void Promise.all([
+      window.pergamum.glossary.listTags(),
+      window.pergamum.glossary.list()
+    ])
+      .then(([tags, entries]) => {
         if (isActive) {
           setGlossaryTags(tags);
+          setGlossaryTagEntryCounts(countGlossaryEntriesByTag(entries));
         }
       })
       .catch(() => {
         if (isActive) {
           setGlossaryTags([]);
+          setGlossaryTagEntryCounts({});
         }
       });
 
@@ -7100,9 +7119,11 @@ export function App(): JSX.Element {
                         tags={glossaryTags}
                         translate={translate}
                         autoStartCreate={glossaryTagManagerAutoStartCreate}
+                        entryCountByTagId={glossaryTagEntryCounts}
                         onCreateTag={handleCreateGlossaryTag}
                         onUpdateTag={handleUpdateGlossaryTag}
                         onDeleteTag={handleDeleteGlossaryTag}
+                        onReorderTags={handleReorderGlossaryTags}
                       />
                     </section>
                   ) : isSettingsTabActive ? (

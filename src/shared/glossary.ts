@@ -584,6 +584,22 @@ export function validateDeleteGlossaryTagInput(
   };
 }
 
+/**
+ * #375: the ordered tag-id list for `reorderGlossaryTags`. Every entry must be
+ * a well-formed tag id and no id may repeat. Whether the list covers exactly
+ * the project's current tag set (no missing / unknown / extra ids) is checked
+ * by the store, which needs the database.
+ */
+export function validateReorderGlossaryTagIds(
+  value: unknown
+): GlossaryTagId[] {
+  if (!Array.isArray(value)) {
+    invalidGlossary("tagIdsInOrder must be an array of tag ids.");
+  }
+
+  return validateGlossaryTagIds(value, "tagIdsInOrder");
+}
+
 // ---------------------------------------------------------------------------
 // Derivations
 // ---------------------------------------------------------------------------
