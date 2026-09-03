@@ -1,18 +1,32 @@
+/**
+ * #375 PoC: Glossary persistence over the four-table schema
+ * (`glossary_entries` / `glossary_atoms` / `glossary_tags` /
+ * `glossary_entry_tags`). No migration runner — the schema is recreated from
+ * {@link src/main/projectDatabase.ts}.
+ */
+
 import {
-  DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
   GlossaryValidationError,
   validateCreateGlossaryEntryInput,
+  validateCreateGlossaryTagInput,
+  validateDeleteGlossaryTagInput,
+  validateGlossaryAtom,
   validateGlossaryEntry,
   validateGlossaryEntryId,
-  validateGlossaryForm,
-  validateGlossarySurfaceLookupInput,
+  validateGlossaryTag,
+  validateGlossaryTagId,
+  validateReorderGlossaryEntryIds,
+  validateReorderGlossaryTagIds,
   validateUpdateGlossaryEntryInput,
+  validateUpdateGlossaryTagInput,
   type CreateGlossaryEntryInput,
+  type CreateGlossaryTagInput,
+  type DeleteGlossaryTagInput,
+  type GlossaryAtom,
   type GlossaryEntry,
-  type GlossaryForm,
-  type GlossarySurfaceLookupInput,
-  type GlossarySurfaceLookupResult,
-  type UpdateGlossaryEntryInput
+  type GlossaryTag,
+  type UpdateGlossaryEntryInput,
+  type UpdateGlossaryTagInput
 } from "../shared/glossary";
 import type {
   DebugLogDbEntityKind,
@@ -29,7 +43,12 @@ import { getDebugLogger } from "./debugLogger";
 import { createUuidv7 } from "./ids";
 import type { ProjectDatabase } from "./projectDatabase";
 
-export type GlossaryStoreErrorCode = "GLOSSARY_ENTRY_NOT_FOUND";
+export type GlossaryStoreErrorCode =
+  | "GLOSSARY_ENTRY_NOT_FOUND"
+  | "GLOSSARY_TAG_NOT_FOUND"
+  | "GLOSSARY_TAG_LABEL_CONFLICT"
+  | "GLOSSARY_TAG_REORDER_MISMATCH"
+  | "GLOSSARY_ENTRY_REORDER_MISMATCH";
 
 export class GlossaryStoreError extends Error {
   readonly code: GlossaryStoreErrorCode;
@@ -43,43 +62,36 @@ export class GlossaryStoreError extends Error {
 
 interface GlossaryEntryRow extends Record<string, unknown> {
   id: unknown;
-  kind: unknown;
   description: unknown;
+  sort_order: unknown;
   created_at: unknown;
   updated_at: unknown;
 }
 
-interface GlossaryFormRow extends Record<string, unknown> {
+interface GlossaryAtomRow extends Record<string, unknown> {
   id: unknown;
   entry_id: unknown;
-  surface: unknown;
-  relation: unknown;
-  warning_policy: unknown;
-  match_boundary_start: unknown;
-  match_boundary_end: unknown;
-  allow_single_character_match: unknown;
-  is_canonical: unknown;
+  sort_order: unknown;
+  value: unknown;
+  match_flags: unknown;
   created_at: unknown;
   updated_at: unknown;
 }
 
-interface GlossarySurfaceMatchRow extends Record<string, unknown> {
+interface GlossaryTagRow extends Record<string, unknown> {
+  id: unknown;
+  label: unknown;
+  description: unknown;
+  background_rgb: unknown;
+  foreground_rgb: unknown;
+  sort_order: unknown;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+interface EntryTagLinkRow extends Record<string, unknown> {
   entry_id: unknown;
-  entry_kind: unknown;
-  entry_description: unknown;
-  entry_created_at: unknown;
-  entry_updated_at: unknown;
-  form_id: unknown;
-  form_entry_id: unknown;
-  form_surface: unknown;
-  form_relation: unknown;
-  form_warning_policy: unknown;
-  form_match_boundary_start: unknown;
-  form_match_boundary_end: unknown;
-  form_allow_single_character_match: unknown;
-  form_is_canonical: unknown;
-  form_created_at: unknown;
-  form_updated_at: unknown;
+  tag_id: unknown;
 }
 
 function invalidDatabaseRow(message: string): never {
@@ -95,30 +107,127 @@ function stringColumn(value: unknown, column: string): string {
 }
 
 function nullableStringColumn(value: unknown, column: string): string | null {
-  if (value === null) {
-    return null;
-  }
-
-  return stringColumn(value, column);
+  return value === null ? null : stringColumn(value, column);
 }
 
-function booleanColumn(value: unknown, column: string): boolean {
-  if (value !== 0 && value !== 1) {
-    invalidDatabaseRow(`${column} must be 0 or 1.`);
+function integerColumn(value: unknown, column: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    invalidDatabaseRow(`${column} must be an integer.`);
   }
 
-  return value === 1;
+  return value;
 }
 
 function nowTimestamp(): string {
   return new Date().toISOString();
 }
 
-function notFound(id: string): GlossaryStoreError {
+function entryNotFound(id: string): GlossaryStoreError {
   return new GlossaryStoreError(
     "GLOSSARY_ENTRY_NOT_FOUND",
     `Glossary entry not found: ${id}`
   );
+}
+
+function tagNotFound(id: string): GlossaryStoreError {
+  return new GlossaryStoreError(
+    "GLOSSARY_TAG_NOT_FOUND",
+    `Glossary tag not found: ${id}`
+  );
+}
+
+function tagLabelConflict(label: string): GlossaryStoreError {
+  return new GlossaryStoreError(
+    "GLOSSARY_TAG_LABEL_CONFLICT",
+    `A glossary tag with the label "${label}" already exists.`
+  );
+}
+
+function tagReorderMismatch(message: string): GlossaryStoreError {
+  return new GlossaryStoreError("GLOSSARY_TAG_REORDER_MISMATCH", message);
+}
+
+function entryReorderMismatch(message: string): GlossaryStoreError {
+  return new GlossaryStoreError("GLOSSARY_ENTRY_REORDER_MISMATCH", message);
+}
+
+/**
+ * #375: `tagIdsInOrder` must be a permutation of the project's current tag ids
+ * — same count, same members. Duplicates are already rejected by the shared
+ * validator, so equal size + every id known ⟹ a true permutation. Raised
+ * OUTSIDE any `database.transaction(...)` wrapper (which would collapse it to a
+ * generic transaction error).
+ */
+function assertGlossaryTagReorderCoversEveryTag(
+  currentTagIds: readonly string[],
+  requestedTagIds: readonly string[]
+): void {
+  if (requestedTagIds.length !== currentTagIds.length) {
+    throw tagReorderMismatch(
+      `Glossary tag reorder must list every tag exactly once ` +
+        `(have ${currentTagIds.length}, got ${requestedTagIds.length}).`
+    );
+  }
+
+  const current = new Set(currentTagIds);
+  const unknownId = requestedTagIds.find((id) => !current.has(id));
+
+  if (unknownId !== undefined) {
+    throw tagReorderMismatch(
+      `Glossary tag reorder references an unknown tag: ${unknownId}`
+    );
+  }
+}
+
+/**
+ * #375: `entryIdsInOrder` must be a permutation of the project's current entry
+ * ids — same count, same members. Duplicates are already rejected by the shared
+ * validator. Raised OUTSIDE any `database.transaction(...)` wrapper.
+ */
+function assertGlossaryEntryReorderCoversEveryEntry(
+  currentEntryIds: readonly string[],
+  requestedEntryIds: readonly string[]
+): void {
+  if (requestedEntryIds.length !== currentEntryIds.length) {
+    throw entryReorderMismatch(
+      `Glossary entry reorder must list every entry exactly once ` +
+        `(have ${currentEntryIds.length}, got ${requestedEntryIds.length}).`
+    );
+  }
+
+  const current = new Set(currentEntryIds);
+  const unknownId = requestedEntryIds.find((id) => !current.has(id));
+
+  if (unknownId !== undefined) {
+    throw entryReorderMismatch(
+      `Glossary entry reorder references an unknown entry: ${unknownId}`
+    );
+  }
+}
+
+/**
+ * #375: reject a tag label already used by another tag. Trimmed, case
+ * sensitive — the input is already trimmed by the shared validators, so this
+ * is a plain equality check that the DB `glossary_tags_label_unique` index
+ * also enforces. Raised OUTSIDE any `database.transaction(...)` wrapper (which
+ * would re-wrap it as a transaction error).
+ */
+async function assertGlossaryTagLabelAvailable(
+  database: ProjectDatabase,
+  label: string,
+  excludeTagId: string | null
+): Promise<void> {
+  const rows = await database.all<{ id: unknown }>(
+    "SELECT id FROM glossary_tags WHERE label = ?",
+    [label]
+  );
+  const conflict = rows
+    .map((row) => stringColumn(row.id, "id"))
+    .some((id) => id !== excludeTagId);
+
+  if (conflict) {
+    throw tagLabelConflict(label);
+  }
 }
 
 function validateOrLogDbSkipped<T>(
@@ -140,31 +249,30 @@ function validateOrLogDbSkipped<T>(
   }
 }
 
-export function glossaryFormFromDatabaseRow(
-  row: GlossaryFormRow
-): GlossaryForm {
-  return validateGlossaryForm({
+// ---------------------------------------------------------------------------
+// Row → domain
+// ---------------------------------------------------------------------------
+
+export function glossaryAtomFromDatabaseRow(row: GlossaryAtomRow): GlossaryAtom {
+  return validateGlossaryAtom({
     id: stringColumn(row.id, "id"),
     entryId: stringColumn(row.entry_id, "entry_id"),
-    surface: stringColumn(row.surface, "surface"),
-    relation: nullableStringColumn(row.relation, "relation"),
-    warningPolicy: nullableStringColumn(
-      row.warning_policy,
-      "warning_policy"
-    ),
-    matchBoundaryStart: stringColumn(
-      row.match_boundary_start,
-      "match_boundary_start"
-    ),
-    matchBoundaryEnd: stringColumn(
-      row.match_boundary_end,
-      "match_boundary_end"
-    ),
-    allowSingleCharacterMatch: booleanColumn(
-      row.allow_single_character_match,
-      "allow_single_character_match"
-    ),
-    isCanonical: booleanColumn(row.is_canonical, "is_canonical"),
+    sortOrder: integerColumn(row.sort_order, "sort_order"),
+    value: stringColumn(row.value, "value"),
+    matchFlags: integerColumn(row.match_flags, "match_flags"),
+    createdAt: stringColumn(row.created_at, "created_at"),
+    updatedAt: stringColumn(row.updated_at, "updated_at")
+  });
+}
+
+export function glossaryTagFromDatabaseRow(row: GlossaryTagRow): GlossaryTag {
+  return validateGlossaryTag({
+    id: stringColumn(row.id, "id"),
+    label: stringColumn(row.label, "label"),
+    description: nullableStringColumn(row.description, "description"),
+    backgroundRgb: stringColumn(row.background_rgb, "background_rgb"),
+    foregroundRgb: stringColumn(row.foreground_rgb, "foreground_rgb"),
+    sortOrder: integerColumn(row.sort_order, "sort_order"),
     createdAt: stringColumn(row.created_at, "created_at"),
     updatedAt: stringColumn(row.updated_at, "updated_at")
   });
@@ -172,152 +280,258 @@ export function glossaryFormFromDatabaseRow(
 
 export function glossaryEntryFromDatabaseRows(
   entryRow: GlossaryEntryRow,
-  formRows: GlossaryFormRow[]
+  atomRows: GlossaryAtomRow[],
+  tagRows: GlossaryTagRow[]
 ): GlossaryEntry {
-  const id = stringColumn(entryRow.id, "id");
-  const forms = formRows.map(glossaryFormFromDatabaseRow);
-
   return validateGlossaryEntry({
-    id,
-    kind: stringColumn(entryRow.kind, "kind"),
+    id: stringColumn(entryRow.id, "id"),
     description: stringColumn(entryRow.description, "description"),
-    forms,
+    atoms: atomRows.map(glossaryAtomFromDatabaseRow),
+    tags: tagRows.map(glossaryTagFromDatabaseRow),
     createdAt: stringColumn(entryRow.created_at, "created_at"),
     updatedAt: stringColumn(entryRow.updated_at, "updated_at")
   });
 }
 
-async function listFormsForEntry(
-  database: ProjectDatabase,
-  entryId: string
-): Promise<GlossaryFormRow[]> {
-  return database.all<GlossaryFormRow>(
-    `
-      SELECT
-        id,
-        entry_id,
-        surface,
-        relation,
-        warning_policy,
-        match_boundary_start,
-        match_boundary_end,
-        allow_single_character_match,
-        is_canonical,
-        created_at,
-        updated_at
-      FROM glossary_forms
-      WHERE entry_id = ?
-      ORDER BY is_canonical DESC, surface COLLATE NOCASE, id
-    `,
-    [entryId]
-  );
-}
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
 
-async function listFormsForEntries(
+const ATOM_COLUMNS = `
+  id,
+  entry_id,
+  sort_order,
+  value,
+  match_flags,
+  created_at,
+  updated_at
+`;
+
+const TAG_COLUMNS = `
+  id,
+  label,
+  description,
+  background_rgb,
+  foreground_rgb,
+  sort_order,
+  created_at,
+  updated_at
+`;
+
+async function atomsByEntryId(
   database: ProjectDatabase,
   entryIds: string[]
-): Promise<Map<string, GlossaryFormRow[]>> {
-  const formsByEntryId = new Map<string, GlossaryFormRow[]>();
+): Promise<Map<string, GlossaryAtomRow[]>> {
+  const byEntryId = new Map<string, GlossaryAtomRow[]>();
 
   for (const entryId of entryIds) {
-    formsByEntryId.set(entryId, []);
+    byEntryId.set(entryId, []);
   }
 
   if (entryIds.length === 0) {
-    return formsByEntryId;
+    return byEntryId;
   }
 
   const placeholders = entryIds.map(() => "?").join(", ");
-  const rows = await database.all<GlossaryFormRow>(
+  const rows = await database.all<GlossaryAtomRow>(
     `
-      SELECT
-        id,
-        entry_id,
-        surface,
-        relation,
-        warning_policy,
-        match_boundary_start,
-        match_boundary_end,
-        allow_single_character_match,
-        is_canonical,
-        created_at,
-        updated_at
-      FROM glossary_forms
+      SELECT ${ATOM_COLUMNS}
+      FROM glossary_atoms
       WHERE entry_id IN (${placeholders})
-      ORDER BY is_canonical DESC, surface COLLATE NOCASE, id
+      ORDER BY entry_id, sort_order
     `,
     entryIds
   );
 
   for (const row of rows) {
-    const entryId = stringColumn(row.entry_id, "entry_id");
-    formsByEntryId.get(entryId)?.push(row);
+    byEntryId.get(stringColumn(row.entry_id, "entry_id"))?.push(row);
   }
 
-  return formsByEntryId;
+  return byEntryId;
 }
 
-function entryRowFromSurfaceMatchRow(
-  row: GlossarySurfaceMatchRow
-): GlossaryEntryRow {
-  return {
-    id: row.entry_id,
-    kind: row.entry_kind,
-    description: row.entry_description,
-    created_at: row.entry_created_at,
-    updated_at: row.entry_updated_at
-  };
-}
-
-function formRowFromSurfaceMatchRow(
-  row: GlossarySurfaceMatchRow
-): GlossaryFormRow {
-  return {
-    id: row.form_id,
-    entry_id: row.form_entry_id,
-    surface: row.form_surface,
-    relation: row.form_relation,
-    warning_policy: row.form_warning_policy,
-    match_boundary_start: row.form_match_boundary_start,
-    match_boundary_end: row.form_match_boundary_end,
-    allow_single_character_match: row.form_allow_single_character_match,
-    is_canonical: row.form_is_canonical,
-    created_at: row.form_created_at,
-    updated_at: row.form_updated_at
-  };
-}
-
-async function listSurfaceMatchRows(
+async function tagsByEntryId(
   database: ProjectDatabase,
-  surface: string
-): Promise<GlossarySurfaceMatchRow[]> {
-  return database.all<GlossarySurfaceMatchRow>(
+  entryIds: string[]
+): Promise<Map<string, GlossaryTagRow[]>> {
+  const byEntryId = new Map<string, GlossaryTagRow[]>();
+
+  for (const entryId of entryIds) {
+    byEntryId.set(entryId, []);
+  }
+
+  if (entryIds.length === 0) {
+    return byEntryId;
+  }
+
+  const placeholders = entryIds.map(() => "?").join(", ");
+  const rows = await database.all<GlossaryTagRow & { link_entry_id: unknown }>(
     `
       SELECT
-        entries.id AS entry_id,
-        entries.kind AS entry_kind,
-        entries.description AS entry_description,
-        entries.created_at AS entry_created_at,
-        entries.updated_at AS entry_updated_at,
-        forms.id AS form_id,
-        forms.entry_id AS form_entry_id,
-        forms.surface AS form_surface,
-        forms.relation AS form_relation,
-        forms.warning_policy AS form_warning_policy,
-        forms.match_boundary_start AS form_match_boundary_start,
-        forms.match_boundary_end AS form_match_boundary_end,
-        forms.allow_single_character_match AS form_allow_single_character_match,
-        forms.is_canonical AS form_is_canonical,
-        forms.created_at AS form_created_at,
-        forms.updated_at AS form_updated_at
-      FROM glossary_forms AS forms
-      JOIN glossary_entries AS entries
-        ON entries.id = forms.entry_id
-      WHERE forms.surface = ?
-      ORDER BY forms.entry_id, forms.id
+        links.entry_id AS link_entry_id,
+        tags.id AS id,
+        tags.label AS label,
+        tags.description AS description,
+        tags.background_rgb AS background_rgb,
+        tags.foreground_rgb AS foreground_rgb,
+        tags.sort_order AS sort_order,
+        tags.created_at AS created_at,
+        tags.updated_at AS updated_at
+      FROM glossary_entry_tags AS links
+      JOIN glossary_tags AS tags ON tags.id = links.tag_id
+      WHERE links.entry_id IN (${placeholders})
+      -- #375: entry-local ASSIGNMENT order first (index 0 = primary tag). The
+      -- project-wide tags.sort_order is only a same-value fallback (the
+      -- assignment order is unique within an entry).
+      ORDER BY links.entry_id, links.sort_order, tags.sort_order, tags.id
     `,
-    [surface]
+    entryIds
   );
+
+  for (const row of rows) {
+    byEntryId
+      .get(stringColumn(row.link_entry_id, "link_entry_id"))
+      ?.push(row);
+  }
+
+  return byEntryId;
+}
+
+async function readGlossaryEntryById(
+  database: ProjectDatabase,
+  id: string
+): Promise<GlossaryEntry | null> {
+  const entryRow = await database.get<GlossaryEntryRow>(
+    `
+      SELECT id, description, sort_order, created_at, updated_at
+      FROM glossary_entries
+      WHERE id = ?
+    `,
+    [id]
+  );
+
+  if (!entryRow) {
+    return null;
+  }
+
+  const [atomRows, tagRows] = await Promise.all([
+    atomsByEntryId(database, [id]),
+    tagsByEntryId(database, [id])
+  ]);
+
+  return glossaryEntryFromDatabaseRows(
+    entryRow,
+    atomRows.get(id) ?? [],
+    tagRows.get(id) ?? []
+  );
+}
+
+async function readGlossaryEntries(
+  database: ProjectDatabase
+): Promise<GlossaryEntry[]> {
+  // #375: entries are listed in their project-wide display order
+  // (`glossary_entries.sort_order`, re-packed 0..n-1 by reorderGlossaryEntries).
+  // `id` is the stable tie-breaker for any equal sort_order values.
+  const entryRows = await database.all<GlossaryEntryRow>(`
+    SELECT
+      entries.id,
+      entries.description,
+      entries.sort_order,
+      entries.created_at,
+      entries.updated_at
+    FROM glossary_entries AS entries
+    ORDER BY entries.sort_order ASC, entries.id ASC
+  `);
+  const entryIds = entryRows.map((row) => stringColumn(row.id, "id"));
+  const [atomRows, tagRows] = await Promise.all([
+    atomsByEntryId(database, entryIds),
+    tagsByEntryId(database, entryIds)
+  ]);
+
+  return entryRows.map((entryRow) => {
+    const id = stringColumn(entryRow.id, "id");
+
+    return glossaryEntryFromDatabaseRows(
+      entryRow,
+      atomRows.get(id) ?? [],
+      tagRows.get(id) ?? []
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Writes — entries
+// ---------------------------------------------------------------------------
+
+async function assertReferencedTagsExist(
+  database: ProjectDatabase,
+  tagIds: string[]
+): Promise<void> {
+  if (tagIds.length === 0) {
+    return;
+  }
+
+  const placeholders = tagIds.map(() => "?").join(", ");
+  const rows = await database.all<{ id: unknown }>(
+    `SELECT id FROM glossary_tags WHERE id IN (${placeholders})`,
+    tagIds
+  );
+  const found = new Set(rows.map((row) => stringColumn(row.id, "id")));
+  const missing = tagIds.find((tagId) => !found.has(tagId));
+
+  if (missing) {
+    skipDbOperation("not_found", tagNotFound(missing));
+  }
+}
+
+async function writeEntryAtomsAndTags(
+  database: ProjectDatabase,
+  entryId: string,
+  input: CreateGlossaryEntryInput | UpdateGlossaryEntryInput,
+  timestamp: string
+): Promise<void> {
+  await database.run(`DELETE FROM glossary_atoms WHERE entry_id = ?`, [
+    entryId
+  ]);
+  await database.run(`DELETE FROM glossary_entry_tags WHERE entry_id = ?`, [
+    entryId
+  ]);
+
+  // Atoms are re-packed to sort_order 0..n-1 in the given order.
+  for (let sortOrder = 0; sortOrder < input.atoms.length; sortOrder += 1) {
+    const atom = input.atoms[sortOrder];
+
+    await database.run(
+      `
+        INSERT INTO glossary_atoms (
+          id, entry_id, sort_order, value, match_flags, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        atom.id ?? createUuidv7(),
+        entryId,
+        sortOrder,
+        atom.value,
+        atom.matchFlags,
+        timestamp,
+        timestamp
+      ]
+    );
+  }
+
+  // #375: tag assignments are re-packed to sort_order 0..n-1 in the given
+  // tagIds order (index 0 is the entry's PRIMARY tag). This is the entry-local
+  // assignment order — never `glossary_tags.sort_order` (the project-wide one).
+  for (let sortOrder = 0; sortOrder < input.tagIds.length; sortOrder += 1) {
+    await database.run(
+      `
+        INSERT INTO glossary_entry_tags (entry_id, tag_id, sort_order)
+        VALUES (?, ?, ?)
+      `,
+      [entryId, input.tagIds[sortOrder], sortOrder]
+    );
+  }
 }
 
 export async function createGlossaryEntry(
@@ -332,105 +546,61 @@ export async function createGlossaryEntry(
     () => validateCreateGlossaryEntryInput(input)
   );
   const entryId = createUuidv7();
-  const canonicalFormId = createUuidv7();
   const timestamp = nowTimestamp();
 
   return withDbOperationLog(
-    {
-      logger,
-      dbOperation: "create",
-      dbEntityKind: "glossaryEntry"
-    },
+    { logger, dbOperation: "create", dbEntityKind: "glossaryEntry" },
     async () => {
+      await assertReferencedTagsExist(database, validatedInput.tagIds);
+
       const entry = await database.transaction(async () => {
+        // #375: a new entry goes to the END of the project-wide order.
+        const sortRow = await database.get<{ next_sort_order: unknown }>(
+          `
+            SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_sort_order
+            FROM glossary_entries
+          `
+        );
+        const sortOrder = integerColumn(
+          sortRow?.next_sort_order ?? 0,
+          "next_sort_order"
+        );
+
         await database.run(
           `
             INSERT INTO glossary_entries (
-              id,
-              kind,
-              description,
-              created_at,
-              updated_at
+              id, description, sort_order, created_at, updated_at
             )
             VALUES (?, ?, ?, ?, ?)
           `,
           [
             entryId,
-            validatedInput.kind,
             validatedInput.description,
-            timestamp,
-            timestamp
-          ]
-        );
-        await database.run(
-          `
-            INSERT INTO glossary_forms (
-              id,
-              entry_id,
-              surface,
-              relation,
-              warning_policy,
-              match_boundary_start,
-              match_boundary_end,
-              allow_single_character_match,
-              is_canonical,
-              created_at,
-              updated_at
-            )
-            VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, 1, ?, ?)
-          `,
-          [
-            canonicalFormId,
-            entryId,
-            validatedInput.canonicalSurface,
-            validatedInput.matchBoundaryStart ??
-              DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-            validatedInput.matchBoundaryEnd ??
-              DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-            validatedInput.allowSingleCharacterMatch ? 1 : 0,
+            sortOrder,
             timestamp,
             timestamp
           ]
         );
 
-        const createdEntry = await readGlossaryEntryById(database, entryId);
+        await writeEntryAtomsAndTags(
+          database,
+          entryId,
+          validatedInput,
+          timestamp
+        );
 
-        if (!createdEntry) {
-          throw notFound(entryId);
+        const created = await readGlossaryEntryById(database, entryId);
+
+        if (!created) {
+          throw entryNotFound(entryId);
         }
 
-        return createdEntry;
+        return created;
       });
 
       return dbOperationResult(entry, 1);
     }
   );
-}
-
-async function readGlossaryEntryById(
-  database: ProjectDatabase,
-  id: string
-): Promise<GlossaryEntry | null> {
-  const row = await database.get<GlossaryEntryRow>(
-    `
-      SELECT
-        id,
-        kind,
-        description,
-        created_at,
-        updated_at
-      FROM glossary_entries
-      WHERE id = ?
-    `,
-    [id]
-  );
-
-  if (!row) {
-    return null;
-  }
-
-  const formRows = await listFormsForEntry(database, id);
-  return glossaryEntryFromDatabaseRows(row, formRows);
 }
 
 export async function getGlossaryEntryById(
@@ -446,11 +616,7 @@ export async function getGlossaryEntryById(
   );
 
   return withDbOperationLog(
-    {
-      logger,
-      dbOperation: "read",
-      dbEntityKind: "glossaryEntry"
-    },
+    { logger, dbOperation: "read", dbEntityKind: "glossaryEntry" },
     async () => {
       const entry = await readGlossaryEntryById(database, validatedId);
 
@@ -459,45 +625,12 @@ export async function getGlossaryEntryById(
   );
 }
 
-async function readGlossaryEntries(
-  database: ProjectDatabase
-): Promise<GlossaryEntry[]> {
-  const rows = await database.all<GlossaryEntryRow>(`
-    SELECT
-      entries.id,
-      entries.kind,
-      entries.description,
-      entries.created_at,
-      entries.updated_at
-    FROM glossary_entries AS entries
-    LEFT JOIN glossary_forms AS canonical_forms
-      ON canonical_forms.entry_id = entries.id
-      AND canonical_forms.is_canonical = 1
-    ORDER BY canonical_forms.surface COLLATE NOCASE, entries.id
-  `);
-  const formsByEntryId = await listFormsForEntries(
-    database,
-    rows.map((row) => stringColumn(row.id, "id"))
-  );
-
-  return rows.map((row) =>
-    glossaryEntryFromDatabaseRows(
-      row,
-      formsByEntryId.get(stringColumn(row.id, "id")) ?? []
-    )
-  );
-}
-
 export async function listGlossaryEntries(
   database: ProjectDatabase,
   logger: DbOperationLogger = getDebugLogger()
 ): Promise<GlossaryEntry[]> {
   return withDbOperationLog(
-    {
-      logger,
-      dbOperation: "list",
-      dbEntityKind: "glossaryEntry"
-    },
+    { logger, dbOperation: "list", dbEntityKind: "glossaryEntry" },
     async () => {
       const entries = await readGlossaryEntries(database);
 
@@ -511,7 +644,7 @@ export async function updateGlossaryEntry(
   input: UpdateGlossaryEntryInput,
   logger: DbOperationLogger = getDebugLogger()
 ): Promise<GlossaryEntry> {
-  const entry = validateOrLogDbSkipped(
+  const validatedInput = validateOrLogDbSkipped(
     logger,
     "update",
     "glossaryEntry",
@@ -520,121 +653,48 @@ export async function updateGlossaryEntry(
   const timestamp = nowTimestamp();
 
   return withDbOperationLog(
-    {
-      logger,
-      dbOperation: "update",
-      dbEntityKind: "glossaryEntry"
-    },
+    { logger, dbOperation: "update", dbEntityKind: "glossaryEntry" },
     async () => {
-      if (!(await readGlossaryEntryById(database, entry.id))) {
-        skipDbOperation("not_found", notFound(entry.id));
+      if (!(await readGlossaryEntryById(database, validatedInput.id))) {
+        skipDbOperation("not_found", entryNotFound(validatedInput.id));
       }
 
-      const updatedEntry = await database.transaction(async () => {
+      await assertReferencedTagsExist(database, validatedInput.tagIds);
+
+      const updated = await database.transaction(async () => {
         const entryResult = await database.run(
           `
             UPDATE glossary_entries
-            SET
-              kind = ?,
-              description = ?,
-              updated_at = ?
+            SET description = ?, updated_at = ?
             WHERE id = ?
           `,
-          [entry.kind, entry.description, timestamp, entry.id]
+          [validatedInput.description, timestamp, validatedInput.id]
         );
 
         if (entryResult.changes === 0) {
-          throw notFound(entry.id);
+          throw entryNotFound(validatedInput.id);
         }
 
-        await database.run(
-          `
-            DELETE FROM glossary_forms
-            WHERE entry_id = ?
-              AND is_canonical = 0
-          `,
-          [entry.id]
-        );
-
-        const canonicalResult = await database.run(
-          `
-            UPDATE glossary_forms
-            SET
-              surface = ?,
-              match_boundary_start = COALESCE(?, match_boundary_start),
-              match_boundary_end = COALESCE(?, match_boundary_end),
-              allow_single_character_match =
-                COALESCE(?, allow_single_character_match),
-              updated_at = ?
-            WHERE entry_id = ?
-              AND is_canonical = 1
-          `,
-          [
-            entry.canonicalSurface,
-            entry.matchBoundaryStart ?? null,
-            entry.matchBoundaryEnd ?? null,
-            entry.allowSingleCharacterMatch === undefined
-              ? null
-              : entry.allowSingleCharacterMatch
-                ? 1
-                : 0,
-            timestamp,
-            entry.id
-          ]
-        );
-
-        if (canonicalResult.changes !== 1) {
-          throw new GlossaryValidationError(
-            "Glossary entry must contain exactly one canonical form."
-          );
-        }
-
-        for (const form of entry.forms) {
-          await database.run(
-            `
-              INSERT INTO glossary_forms (
-                id,
-                entry_id,
-                surface,
-                relation,
-                warning_policy,
-                match_boundary_start,
-                match_boundary_end,
-                allow_single_character_match,
-                is_canonical,
-                created_at,
-                updated_at
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-            `,
-            [
-              form.id ?? createUuidv7(),
-              entry.id,
-              form.surface,
-              form.relation,
-              form.warningPolicy,
-              form.matchBoundaryStart,
-              form.matchBoundaryEnd,
-              form.allowSingleCharacterMatch ? 1 : 0,
-              timestamp,
-              timestamp
-            ]
-          );
-        }
-
-        const updatedEntryResult = await readGlossaryEntryById(
+        await writeEntryAtomsAndTags(
           database,
-          entry.id
+          validatedInput.id,
+          validatedInput,
+          timestamp
         );
 
-        if (!updatedEntryResult) {
-          throw notFound(entry.id);
+        const result = await readGlossaryEntryById(
+          database,
+          validatedInput.id
+        );
+
+        if (!result) {
+          throw entryNotFound(validatedInput.id);
         }
 
-        return updatedEntryResult;
+        return result;
       });
 
-      return dbOperationResult(updatedEntry, 1);
+      return dbOperationResult(updated, 1);
     }
   );
 }
@@ -652,11 +712,7 @@ export async function deleteGlossaryEntry(
   );
 
   await withDbOperationLog(
-    {
-      logger,
-      dbOperation: "delete",
-      dbEntityKind: "glossaryEntry"
-    },
+    { logger, dbOperation: "delete", dbEntityKind: "glossaryEntry" },
     async () => {
       const result = await database.run(
         "DELETE FROM glossary_entries WHERE id = ?",
@@ -664,7 +720,7 @@ export async function deleteGlossaryEntry(
       );
 
       if (result.changes === 0) {
-        throw notFound(validatedId);
+        throw entryNotFound(validatedId);
       }
 
       return dbOperationResult(undefined, result.changes);
@@ -672,72 +728,284 @@ export async function deleteGlossaryEntry(
   );
 }
 
-export async function lookupGlossarySurface(
+/**
+ * #375: persist a new project-wide entry order. `entryIdsInOrder` must list
+ * every glossary entry exactly once; `glossary_entries.sort_order` is re-packed
+ * to `0..n-1` in that order and the re-sorted list is returned. Atoms, tag
+ * assignments and descriptions are untouched, and `updated_at` is deliberately
+ * NOT bumped — a reorder is a positional change only.
+ */
+export async function reorderGlossaryEntries(
   database: ProjectDatabase,
-  input: GlossarySurfaceLookupInput,
+  entryIdsInOrder: readonly string[],
   logger: DbOperationLogger = getDebugLogger()
-): Promise<GlossarySurfaceLookupResult> {
-  const { surface } = validateOrLogDbSkipped(
+): Promise<GlossaryEntry[]> {
+  const validatedIds = validateOrLogDbSkipped(
     logger,
-    "read",
-    "glossaryForm",
-    () => validateGlossarySurfaceLookupInput(input)
+    "update",
+    "glossaryEntry",
+    () => validateReorderGlossaryEntryIds(entryIdsInOrder)
   );
 
-  return withDbOperationLog<GlossarySurfaceLookupResult>(
-    {
-      logger,
-      dbOperation: "read",
-      dbEntityKind: "glossaryForm"
-    },
+  // Outside the transaction so a meaningful mismatch error survives.
+  const currentEntryIds = (
+    await database.all<{ id: unknown }>("SELECT id FROM glossary_entries")
+  ).map((row) => stringColumn(row.id, "id"));
+
+  assertGlossaryEntryReorderCoversEveryEntry(currentEntryIds, validatedIds);
+
+  return withDbOperationLog(
+    { logger, dbOperation: "update", dbEntityKind: "glossaryEntry" },
     async () => {
-      const matchRows = await listSurfaceMatchRows(database, surface);
+      const entries = await database.transaction(async () => {
+        for (let index = 0; index < validatedIds.length; index += 1) {
+          await database.run(
+            "UPDATE glossary_entries SET sort_order = ? WHERE id = ?",
+            [index, validatedIds[index]]
+          );
+        }
 
-      if (matchRows.length === 0) {
-        return dbOperationResult(
-          {
-            status: "none",
-            surface
-          },
-          0
-        );
-      }
-
-      const entryIds = Array.from(
-        new Set(matchRows.map((row) => stringColumn(row.entry_id, "entry_id")))
-      );
-      const formsByEntryId = await listFormsForEntries(database, entryIds);
-      const matches = matchRows.map((row) => {
-        const entryId = stringColumn(row.entry_id, "entry_id");
-
-        return {
-          entry: glossaryEntryFromDatabaseRows(
-            entryRowFromSurfaceMatchRow(row),
-            formsByEntryId.get(entryId) ?? []
-          ),
-          form: glossaryFormFromDatabaseRow(formRowFromSurfaceMatchRow(row))
-        };
+        return readGlossaryEntries(database);
       });
 
-      if (matches.length === 1) {
-        return dbOperationResult(
-          {
-            status: "unique",
-            surface,
-            match: matches[0]
-          },
-          matchRows.length
+      return dbOperationResult(entries, entries.length);
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Writes — tags
+// ---------------------------------------------------------------------------
+
+async function readGlossaryTagById(
+  database: ProjectDatabase,
+  id: string
+): Promise<GlossaryTag | null> {
+  const row = await database.get<GlossaryTagRow>(
+    `SELECT ${TAG_COLUMNS} FROM glossary_tags WHERE id = ?`,
+    [id]
+  );
+
+  return row ? glossaryTagFromDatabaseRow(row) : null;
+}
+
+export async function listGlossaryTags(
+  database: ProjectDatabase,
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryTag[]> {
+  return withDbOperationLog(
+    { logger, dbOperation: "list", dbEntityKind: "glossaryTag" },
+    async () => {
+      const rows = await database.all<GlossaryTagRow>(`
+        SELECT ${TAG_COLUMNS}
+        FROM glossary_tags
+        ORDER BY sort_order, id
+      `);
+      const tags = rows.map(glossaryTagFromDatabaseRow);
+
+      return dbOperationResult(tags, tags.length);
+    }
+  );
+}
+
+export async function createGlossaryTag(
+  database: ProjectDatabase,
+  input: CreateGlossaryTagInput,
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryTag> {
+  const validatedInput = validateOrLogDbSkipped(
+    logger,
+    "create",
+    "glossaryTag",
+    () => validateCreateGlossaryTagInput(input)
+  );
+  const tagId = createUuidv7();
+  const timestamp = nowTimestamp();
+
+  await assertGlossaryTagLabelAvailable(database, validatedInput.label, null);
+
+  return withDbOperationLog(
+    { logger, dbOperation: "create", dbEntityKind: "glossaryTag" },
+    async () => {
+      const tag = await database.transaction(async () => {
+        const sortRow = await database.get<{ next_sort_order: unknown }>(
+          `
+            SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_sort_order
+            FROM glossary_tags
+          `
         );
+        const sortOrder = integerColumn(
+          sortRow?.next_sort_order ?? 0,
+          "next_sort_order"
+        );
+
+        await database.run(
+          `
+            INSERT INTO glossary_tags (
+              id, label, description, background_rgb, foreground_rgb,
+              sort_order, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            tagId,
+            validatedInput.label,
+            validatedInput.description,
+            validatedInput.backgroundRgb,
+            validatedInput.foregroundRgb,
+            sortOrder,
+            timestamp,
+            timestamp
+          ]
+        );
+
+        const created = await readGlossaryTagById(database, tagId);
+
+        if (!created) {
+          throw tagNotFound(tagId);
+        }
+
+        return created;
+      });
+
+      return dbOperationResult(tag, 1);
+    }
+  );
+}
+
+export async function updateGlossaryTag(
+  database: ProjectDatabase,
+  input: UpdateGlossaryTagInput,
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryTag> {
+  const validatedInput = validateOrLogDbSkipped(
+    logger,
+    "update",
+    "glossaryTag",
+    () => validateUpdateGlossaryTagInput(input)
+  );
+  const timestamp = nowTimestamp();
+
+  await assertGlossaryTagLabelAvailable(
+    database,
+    validatedInput.label,
+    validatedInput.id
+  );
+
+  return withDbOperationLog(
+    { logger, dbOperation: "update", dbEntityKind: "glossaryTag" },
+    async () => {
+      const result = await database.run(
+        `
+          UPDATE glossary_tags
+          SET label = ?, description = ?, background_rgb = ?,
+              foreground_rgb = ?, updated_at = ?
+          WHERE id = ?
+        `,
+        [
+          validatedInput.label,
+          validatedInput.description,
+          validatedInput.backgroundRgb,
+          validatedInput.foregroundRgb,
+          timestamp,
+          validatedInput.id
+        ]
+      );
+
+      if (result.changes === 0) {
+        skipDbOperation("not_found", tagNotFound(validatedInput.id));
       }
 
-      return dbOperationResult(
-        {
-          status: "ambiguous",
-          surface,
-          matches
-        },
-        matchRows.length
+      const tag = await readGlossaryTagById(database, validatedInput.id);
+
+      if (!tag) {
+        throw tagNotFound(validatedInput.id);
+      }
+
+      return dbOperationResult(tag, 1);
+    }
+  );
+}
+
+/**
+ * #375: persist a new tag order. `tagIdsInOrder` must list every project tag
+ * exactly once; `sort_order` is re-packed to `0..n-1` in that order and the
+ * re-sorted list is returned. Label / description / color and every
+ * `glossary_entry_tags` link are untouched, and `updated_at` is deliberately
+ * NOT bumped — a reorder is a positional change, and the Tag Manager surfaces
+ * `updated_at` as the "last edited" date.
+ */
+export async function reorderGlossaryTags(
+  database: ProjectDatabase,
+  tagIdsInOrder: readonly string[],
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryTag[]> {
+  const validatedIds = validateOrLogDbSkipped(
+    logger,
+    "update",
+    "glossaryTag",
+    () => validateReorderGlossaryTagIds(tagIdsInOrder)
+  );
+
+  // Outside the transaction so a meaningful mismatch error survives.
+  const currentTagIds = (
+    await database.all<{ id: unknown }>("SELECT id FROM glossary_tags")
+  ).map((row) => stringColumn(row.id, "id"));
+
+  assertGlossaryTagReorderCoversEveryTag(currentTagIds, validatedIds);
+
+  return withDbOperationLog(
+    { logger, dbOperation: "update", dbEntityKind: "glossaryTag" },
+    async () => {
+      const tags = await database.transaction(async () => {
+        for (let index = 0; index < validatedIds.length; index += 1) {
+          await database.run(
+            "UPDATE glossary_tags SET sort_order = ? WHERE id = ?",
+            [index, validatedIds[index]]
+          );
+        }
+
+        const rows = await database.all<GlossaryTagRow>(`
+          SELECT ${TAG_COLUMNS}
+          FROM glossary_tags
+          ORDER BY sort_order, id
+        `);
+
+        return rows.map(glossaryTagFromDatabaseRow);
+      });
+
+      return dbOperationResult(tags, tags.length);
+    }
+  );
+}
+
+export async function deleteGlossaryTag(
+  database: ProjectDatabase,
+  input: DeleteGlossaryTagInput,
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<void> {
+  const validatedInput = validateOrLogDbSkipped(
+    logger,
+    "delete",
+    "glossaryTag",
+    () => validateDeleteGlossaryTagInput(input)
+  );
+
+  await withDbOperationLog(
+    { logger, dbOperation: "delete", dbEntityKind: "glossaryTag" },
+    async () => {
+      // Hard delete. The FK cascade removes `glossary_entry_tags` rows only —
+      // entries and atoms are untouched, which may leave tag-less entries.
+      const result = await database.run(
+        "DELETE FROM glossary_tags WHERE id = ?",
+        [validatedInput.id]
       );
+
+      if (result.changes === 0) {
+        throw tagNotFound(validatedInput.id);
+      }
+
+      return dbOperationResult(undefined, result.changes);
     }
   );
 }

@@ -41,22 +41,21 @@ const newDocument: ProjectDocument = {
 
 const oldGlossaryEntry: GlossaryEntry = {
   id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  kind: "term",
   description: "旧 Project の用語",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
-  forms: [
+  atoms: [
     {
       id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
       entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      surface: "旧用語",
-      relation: null,
-      warningPolicy: null,
-      isCanonical: true,
+      sortOrder: 0,
+      value: "旧用語",
+      matchFlags: 0,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
     }
-  ]
+  ],
+  tags: []
 };
 
 function oldProjectScopedOpenDocuments(): OpenDocumentsState {

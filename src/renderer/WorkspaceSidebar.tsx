@@ -1,6 +1,12 @@
 import type { FileExplorerEntry, PergamumProject } from "../shared/api";
+import type { DocumentMapSettings } from "../shared/documentMapSettings";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
-import type { CreateGlossaryEntryInput, GlossaryEntryId } from "../shared/glossary";
+import type {
+  CreateGlossaryEntryInput,
+  GlossaryEntry,
+  GlossaryEntryId,
+  GlossaryTag
+} from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
   FileExplorer,
@@ -11,11 +17,14 @@ import {
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
+import { TextMapPanel } from "./TextMapPanel";
 import { WorkbenchFilesSidebar } from "./WorkbenchFilesSidebar";
 import type {
   MarkdownOutlineItem,
   MarkdownOutlineParseResult
 } from "../shared/markdownOutline";
+import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import type { EditorScrollAlign } from "./editorScrollAlign";
 import type { SidebarMode } from "./sidebarMode";
 
 interface WorkspaceSidebarProps {
@@ -65,6 +74,32 @@ interface WorkspaceSidebarProps {
   onCreateGlossaryEntry: (
     input: CreateGlossaryEntryInput
   ) => Promise<boolean>;
+  /** #375: active Markdown document body for glossary occurrence counts. */
+  glossaryActiveDocumentContent: string | null;
+  /** #375 Text Map: every project glossary entry (occurrence scan). */
+  textMapGlossaryEntries?: readonly GlossaryEntry[];
+  /** #375 Text Map: project-wide tags (sort_order order) for the "Render
+   *  tags" multi-select. */
+  textMapGlossaryTags?: readonly GlossaryTag[];
+  /** #375 Text Map: the ACTIVE EDITOR's rendered width in CSS pixels (the
+   *  logical wrap width), or `null` when it cannot be measured. */
+  textMapEditorWidth?: number | null;
+  /** #375 Text Map: the active Markdown editor's on-screen document range,
+   *  drawn as a "you are here" rectangle. `null` = no overlay. */
+  textMapEditorVisibleRange?: EditorVisibleTextRange | null;
+  /** #375 Text Map: `documentMap` settings — draw colours + dialogue pairs. */
+  textMapDocumentMapSettings?: DocumentMapSettings;
+  /** #375 Text Map: navigation — a resolved 0-based source line to scroll the
+   *  active Markdown editor to (navigation only). `options.align` is `"center"`
+   *  for click-to-scroll, `"start"` for viewport-lens drag. */
+  onTextMapNavigateToLine?: (
+    lineIndex: number,
+    options?: { align?: EditorScrollAlign }
+  ) => void;
+  onNavigateGlossaryOccurrence: (
+    entry: GlossaryEntry,
+    direction: "previous" | "next"
+  ) => void;
   /** #352: the ACTIVE Markdown document's heading outline (working text), or
    *  `null` when there is no active Markdown document. */
   markdownOutline?: MarkdownOutlineParseResult | null;
@@ -103,6 +138,14 @@ export function WorkspaceSidebar({
   onFileExplorerMoveResultMessage,
   onActivateGlossaryEntry,
   onCreateGlossaryEntry,
+  glossaryActiveDocumentContent,
+  textMapGlossaryEntries = [],
+  textMapGlossaryTags = [],
+  textMapEditorWidth = null,
+  textMapEditorVisibleRange = null,
+  textMapDocumentMapSettings,
+  onTextMapNavigateToLine,
+  onNavigateGlossaryOccurrence,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
   activeOutlineDocumentKey = null,
@@ -158,6 +201,19 @@ export function WorkspaceSidebar({
       );
     case "search":
       return <SearchSidebar translate={translate} />;
+    case "textMap":
+      return (
+        <TextMapPanel
+          translate={translate}
+          activeDocumentContent={glossaryActiveDocumentContent}
+          glossaryEntries={textMapGlossaryEntries}
+          glossaryTags={textMapGlossaryTags}
+          editorWidth={textMapEditorWidth}
+          editorVisibleRange={textMapEditorVisibleRange}
+          documentMapSettings={textMapDocumentMapSettings}
+          onNavigateToLine={onTextMapNavigateToLine}
+        />
+      );
     case "glossary":
       return (
         <GlossarySidebar
@@ -166,8 +222,10 @@ export function WorkspaceSidebar({
           highlightedEntryId={project ? highlightedGlossaryEntryId : null}
           refreshToken={glossaryRefreshToken}
           translate={translate}
+          activeDocumentContent={glossaryActiveDocumentContent}
           onActivateEntry={onActivateGlossaryEntry}
           onCreateEntry={onCreateGlossaryEntry}
+          onNavigateOccurrence={onNavigateGlossaryOccurrence}
         />
       );
   }

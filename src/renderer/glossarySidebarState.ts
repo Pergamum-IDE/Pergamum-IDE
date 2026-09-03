@@ -1,8 +1,14 @@
 import type {
   GlossaryEntry,
-  GlossaryEntryId
+  GlossaryEntryId,
+  GlossaryTag
 } from "../shared/glossary";
-export { canonicalGlossarySurface } from "./glossaryPresentation";
+import {
+  GLOSSARY_TAG_FILTER_ALL,
+  type GlossaryTagFilter
+} from "./glossaryNavigatorSearch";
+
+export { representativeGlossarySurface } from "./glossaryPresentation";
 
 export type GlossarySidebarStatus =
   | "noProject"
@@ -13,34 +19,34 @@ export type GlossarySidebarStatus =
 export interface GlossarySidebarState {
   status: GlossarySidebarStatus;
   entries: GlossaryEntry[];
+  tags: GlossaryTag[];
   selectedEntryId: GlossaryEntryId | null;
 }
 
+const emptyGlossary = {
+  entries: [] as GlossaryEntry[],
+  tags: [] as GlossaryTag[]
+};
+
 export function createNoProjectGlossarySidebarState(): GlossarySidebarState {
-  return {
-    status: "noProject",
-    entries: [],
-    selectedEntryId: null
-  };
+  return { status: "noProject", ...emptyGlossary, selectedEntryId: null };
 }
 
 export function createLoadingGlossarySidebarState(
   selectedEntryId: GlossaryEntryId | null
 ): GlossarySidebarState {
-  return {
-    status: "loading",
-    entries: [],
-    selectedEntryId
-  };
+  return { status: "loading", ...emptyGlossary, selectedEntryId };
 }
 
 export function createLoadedGlossarySidebarState(
   entries: GlossaryEntry[],
+  tags: GlossaryTag[],
   selectedEntryId: GlossaryEntryId | null
 ): GlossarySidebarState {
   return {
     status: "loaded",
     entries,
+    tags,
     selectedEntryId: preserveGlossarySelection(entries, selectedEntryId)
   };
 }
@@ -48,11 +54,7 @@ export function createLoadedGlossarySidebarState(
 export function createErrorGlossarySidebarState(
   selectedEntryId: GlossaryEntryId | null
 ): GlossarySidebarState {
-  return {
-    status: "error",
-    entries: [],
-    selectedEntryId
-  };
+  return { status: "error", ...emptyGlossary, selectedEntryId };
 }
 
 export function preserveGlossarySelection(
@@ -68,6 +70,23 @@ export function preserveGlossarySelection(
     : null;
 }
 
+/**
+ * Drop a `tag` filter whose tag no longer exists (falls back to `all`). The
+ * `all` / `none` pseudo-filters always survive a reload.
+ */
+export function preserveGlossaryTagFilter(
+  tags: readonly GlossaryTag[],
+  filter: GlossaryTagFilter
+): GlossaryTagFilter {
+  if (filter.kind !== "tag") {
+    return filter;
+  }
+
+  return tags.some((tag) => tag.id === filter.tagId)
+    ? filter
+    : GLOSSARY_TAG_FILTER_ALL;
+}
+
 export function shouldApplyGlossaryLoadResult(
   currentRequestId: number,
   requestId: number
@@ -75,6 +94,16 @@ export function shouldApplyGlossaryLoadResult(
   return currentRequestId === requestId;
 }
 
-export async function loadGlossaryEntries(): Promise<GlossaryEntry[]> {
-  return window.pergamum.glossary.list();
+export interface LoadedGlossary {
+  entries: GlossaryEntry[];
+  tags: GlossaryTag[];
+}
+
+export async function loadGlossary(): Promise<LoadedGlossary> {
+  const [entries, tags] = await Promise.all([
+    window.pergamum.glossary.list(),
+    window.pergamum.glossary.listTags()
+  ]);
+
+  return { entries, tags };
 }

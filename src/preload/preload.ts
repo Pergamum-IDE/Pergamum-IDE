@@ -219,16 +219,18 @@ const pergamumApi: PergamumApi = {
         id
       }),
     list: () => ipcRenderer.invoke(GLOSSARY_CHANNELS.list),
-    lookupSurface: (surface) =>
-      ipcRenderer.invoke(GLOSSARY_CHANNELS.lookupSurface, {
-        surface
-      }),
     update: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.update, input),
-    delete: (id, confirmMessage) =>
-      ipcRenderer.invoke(GLOSSARY_CHANNELS.delete, {
-        id,
-        confirmMessage
-      })
+    delete: (id) => ipcRenderer.invoke(GLOSSARY_CHANNELS.delete, { id }),
+    reorderEntries: (entryIdsInOrder) =>
+      ipcRenderer.invoke(GLOSSARY_CHANNELS.reorderEntries, { entryIdsInOrder }),
+    listTags: () => ipcRenderer.invoke(GLOSSARY_CHANNELS.listTags),
+    createTag: (input) =>
+      ipcRenderer.invoke(GLOSSARY_CHANNELS.createTag, input),
+    updateTag: (input) =>
+      ipcRenderer.invoke(GLOSSARY_CHANNELS.updateTag, input),
+    deleteTag: (id) => ipcRenderer.invoke(GLOSSARY_CHANNELS.deleteTag, { id }),
+    reorderTags: (tagIdsInOrder) =>
+      ipcRenderer.invoke(GLOSSARY_CHANNELS.reorderTags, { tagIdsInOrder })
   },
   debugLog: {
     logEvent: (request) =>

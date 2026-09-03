@@ -1,76 +1,50 @@
 import { describe, expect, it } from "vitest";
-import type {
-  GlossaryEntry,
-  GlossaryEntryKind,
-  GlossaryForm,
-  GlossaryFormMatchBoundary,
-  GlossaryFormRelation,
-  GlossaryWarningPolicy
-} from "../../src/shared/glossary";
+import type { GlossaryEntry, GlossaryTag } from "../../src/shared/glossary";
 import {
+  GLOSSARY_TAG_FILTER_ALL,
+  GLOSSARY_TAG_FILTER_NONE,
+  filterGlossaryEntriesByTag,
   filterGlossaryEntriesForNavigator,
+  glossaryTagFilterForTagId,
   matchesGlossaryNavigatorSearch
 } from "../../src/renderer/glossaryNavigatorSearch";
 
-const timestamp = "2026-08-14T00:00:00.000Z";
+const ts = "2026-09-02T00:00:00.000Z";
 
-function canonicalForm(
-  entryId: string,
-  id: string,
-  surface: string,
-  matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
-): GlossaryForm {
+function tag(id: string, label: string): GlossaryTag {
   return {
     id,
-    entryId,
-    surface,
-    relation: null,
-    warningPolicy: null,
-    isCanonical: true,
-    matchBoundaryStart,
-    matchBoundaryEnd,
-    createdAt: timestamp,
-    updatedAt: timestamp
-  };
-}
-
-function nonCanonicalForm(
-  entryId: string,
-  id: string,
-  surface: string,
-  relation: GlossaryFormRelation,
-  warningPolicy: GlossaryWarningPolicy,
-  matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
-): GlossaryForm {
-  return {
-    id,
-    entryId,
-    surface,
-    relation,
-    warningPolicy,
-    isCanonical: false,
-    matchBoundaryStart,
-    matchBoundaryEnd,
-    createdAt: timestamp,
-    updatedAt: timestamp
+    label,
+    description: null,
+    backgroundRgb: "#123456",
+    foregroundRgb: "#ffffff",
+    sortOrder: 0,
+    createdAt: ts,
+    updatedAt: ts
   };
 }
 
 function glossaryEntry(
   id: string,
-  kind: GlossaryEntryKind,
   description: string,
-  forms: GlossaryForm[]
+  values: string[],
+  tags: GlossaryTag[] = []
 ): GlossaryEntry {
   return {
     id,
-    kind,
     description,
-    forms,
-    createdAt: timestamp,
-    updatedAt: timestamp
+    atoms: values.map((value, index) => ({
+      id: `${id}-atom-${index}`,
+      entryId: id,
+      sortOrder: index,
+      value,
+      matchFlags: 0,
+      createdAt: ts,
+      updatedAt: ts
+    })),
+    tags,
+    createdAt: ts,
+    updatedAt: ts
   };
 }
 
@@ -78,45 +52,21 @@ function entryIds(entries: readonly GlossaryEntry[]): string[] {
   return entries.map((entry) => entry.id);
 }
 
-const albertEntry = glossaryEntry("entry-albert", "person", "辺境領主", [
-  canonicalForm("entry-albert", "form-albert-canonical", "アルベルト"),
-  nonCanonicalForm(
-    "entry-albert",
-    "form-albert-alias",
-    "アル",
-    "alias",
-    "default"
-  ),
-  nonCanonicalForm(
-    "entry-albert",
-    "form-albert-variant",
-    "Albert",
-    "variant",
-    "ignore"
-  )
+const tagWarrior = tag("018f4b8c-7a2b-7c3d-8e4f-300000000001", "武将");
+const albertEntry = glossaryEntry(
+  "entry-albert",
+  "辺境領主",
+  ["アルベルト", "アル", "Albert"],
+  [tagWarrior]
+);
+const maidEntry = glossaryEntry("entry-maid", "王城に仕える人", [
+  "メイド",
+  "侍女",
+  "Maid"
 ]);
-
-const maidEntry = glossaryEntry("entry-maid", "term", "王城に仕える人", [
-  canonicalForm("entry-maid", "form-maid-canonical", "メイド"),
-  nonCanonicalForm(
-    "entry-maid",
-    "form-maid-alias",
-    "侍女",
-    "alias",
-    "default"
-  ),
-  nonCanonicalForm(
-    "entry-maid",
-    "form-maid-variant",
-    "Maid",
-    "variant",
-    "warn"
-  )
-]);
-
 const glossaryEntries = [maidEntry, albertEntry];
 
-describe("Glossary Navigator search filter", () => {
+describe("Glossary Navigator search filter (#375)", () => {
   it("returns all entries for an empty or trim-empty query", () => {
     expect(filterGlossaryEntriesForNavigator(glossaryEntries, "")).toBe(
       glossaryEntries
@@ -126,13 +76,10 @@ describe("Glossary Navigator search filter", () => {
     );
   });
 
-  it("trims query whitespace before matching", () => {
+  it("matches every atom value by substring, trimming the query", () => {
     expect(
       entryIds(filterGlossaryEntriesForNavigator(glossaryEntries, "  イド  "))
     ).toEqual(["entry-maid"]);
-  });
-
-  it("matches canonical, alias, and variant surfaces by substring", () => {
     expect(
       entryIds(filterGlossaryEntriesForNavigator(glossaryEntries, "ベルト"))
     ).toEqual(["entry-albert"]);
@@ -144,115 +91,77 @@ describe("Glossary Navigator search filter", () => {
     ).toEqual(["entry-albert"]);
   });
 
-  it("does not search description or kind", () => {
+  it("does not search description", () => {
     expect(
       entryIds(filterGlossaryEntriesForNavigator(glossaryEntries, "王城"))
     ).toEqual([]);
-    expect(
-      entryIds(filterGlossaryEntriesForNavigator(glossaryEntries, "person"))
-    ).toEqual([]);
   });
 
-  it("matches ASCII alphabet case-insensitively within the ASCII range only", () => {
-    const entry = glossaryEntry("entry-ascii", "term", "", [
-      canonicalForm("entry-ascii", "form-ascii-canonical", "HandMAIDen")
-    ]);
-
+  it("matches ASCII case-insensitively within the ASCII range only", () => {
+    const entry = glossaryEntry("entry-ascii", "", ["HandMAIDen"]);
     expect(matchesGlossaryNavigatorSearch(entry, "maid")).toBe(true);
     expect(matchesGlossaryNavigatorSearch(entry, "MAID")).toBe(true);
     expect(matchesGlossaryNavigatorSearch(entry, "mAiDeN")).toBe(true);
   });
 
-  it("does not case-fold, normalize, or absorb non-ASCII notation variants", () => {
+  it("does not case-fold or normalize non-ASCII notation", () => {
     const entries = [
-      glossaryEntry("entry-dotted-i", "place", "", [
-        canonicalForm("entry-dotted-i", "form-dotted-i", "İstanbul")
-      ]),
-      glossaryEntry("entry-sharp-s", "term", "", [
-        canonicalForm("entry-sharp-s", "form-sharp-s", "Straße")
-      ]),
-      glossaryEntry("entry-fullwidth", "term", "", [
-        canonicalForm("entry-fullwidth", "form-fullwidth", "ＭＡＩＤ")
-      ]),
-      glossaryEntry("entry-accent", "term", "", [
-        canonicalForm("entry-accent", "form-accent", "Cafe\u0301")
-      ]),
-      glossaryEntry("entry-middle-dot", "person", "", [
-        canonicalForm(
-          "entry-middle-dot",
-          "form-middle-dot",
-          "ジャンヌ・ダルク"
-        )
-      ]),
-      glossaryEntry("entry-kana", "term", "", [
-        canonicalForm("entry-kana", "form-kana", "メイド")
-      ])
+      glossaryEntry("entry-sharp-s", "", ["Straße"]),
+      glossaryEntry("entry-fullwidth", "", ["ＭＡＩＤ"]),
+      glossaryEntry("entry-kana", "", ["メイド"])
     ];
 
-    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "istanbul"))).toEqual([]);
-    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "strasse"))).toEqual([]);
-    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "maid"))).toEqual([]);
-    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "Café"))).toEqual([]);
     expect(
-      entryIds(filterGlossaryEntriesForNavigator(entries, "ジャンヌダルク"))
+      entryIds(filterGlossaryEntriesForNavigator(entries, "strasse"))
     ).toEqual([]);
-    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "めいど"))).toEqual([]);
+    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "maid"))).toEqual(
+      []
+    );
+    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "めいど"))).toEqual(
+      []
+    );
   });
 
-  it("does not apply boundary policy to Navigator search", () => {
-    const entry = glossaryEntry("entry-boundary", "term", "", [
-      canonicalForm(
-        "entry-boundary",
-        "form-boundary-canonical",
-        "オーダーメイド",
-        "strict",
-        "strict"
-      ),
-      nonCanonicalForm(
-        "entry-boundary",
-        "form-boundary-alias",
-        "AlphaMaidBeta",
-        "alias",
-        "default",
-        "strict",
-        "strict"
+  it("preserves entry order without relevance ranking", () => {
+    const entries = [
+      glossaryEntry("entry-gamma", "", ["Gamma Maid"]),
+      glossaryEntry("entry-alpha", "", ["Alpha Maid"])
+    ];
+    expect(
+      entryIds(filterGlossaryEntriesForNavigator(entries, "maid"))
+    ).toEqual(["entry-gamma", "entry-alpha"]);
+  });
+});
+
+describe("filterGlossaryEntriesByTag (#375)", () => {
+  it("returns everything for the `all` filter", () => {
+    expect(
+      filterGlossaryEntriesByTag(glossaryEntries, GLOSSARY_TAG_FILTER_ALL)
+    ).toBe(glossaryEntries);
+  });
+
+  it("keeps only tagless entries for the `none` filter", () => {
+    expect(
+      entryIds(
+        filterGlossaryEntriesByTag(glossaryEntries, GLOSSARY_TAG_FILTER_NONE)
       )
-    ]);
-
-    expect(matchesGlossaryNavigatorSearch(entry, "メイド")).toBe(true);
-    expect(matchesGlossaryNavigatorSearch(entry, "maid")).toBe(true);
+    ).toEqual(["entry-maid"]);
   });
 
-  it("preserves the existing entry order without relevance ranking", () => {
-    const entries = [
-      glossaryEntry("entry-gamma", "term", "", [
-        canonicalForm("entry-gamma", "form-gamma", "Gamma Maid")
-      ]),
-      glossaryEntry("entry-alpha", "term", "", [
-        canonicalForm("entry-alpha", "form-alpha", "Alpha Maid")
-      ])
-    ];
-
-    expect(entryIds(filterGlossaryEntriesForNavigator(entries, "maid"))).toEqual([
-      "entry-gamma",
-      "entry-alpha"
-    ]);
-  });
-
-  it("re-evaluates refreshed entry lists with the same query", () => {
-    const createdEntry = glossaryEntry("entry-created", "term", "", [
-      canonicalForm("entry-created", "form-created", "メイド長")
-    ]);
-    const updatedAwayEntry = glossaryEntry("entry-maid", "term", "", [
-      canonicalForm("entry-maid", "form-maid-updated", "王都")
-    ]);
-
+  it("keeps only entries carrying the selected tag", () => {
     expect(
-      entryIds(filterGlossaryEntriesForNavigator([maidEntry, createdEntry], "メイド"))
-    ).toEqual(["entry-maid", "entry-created"]);
+      entryIds(
+        filterGlossaryEntriesByTag(
+          glossaryEntries,
+          glossaryTagFilterForTagId(tagWarrior.id)
+        )
+      )
+    ).toEqual(["entry-albert"]);
     expect(
-      entryIds(filterGlossaryEntriesForNavigator([updatedAwayEntry], "メイド"))
+      filterGlossaryEntriesByTag(
+        glossaryEntries,
+        glossaryTagFilterForTagId("no-such-tag")
+      )
     ).toEqual([]);
-    expect(entryIds(filterGlossaryEntriesForNavigator([], "メイド"))).toEqual([]);
   });
 });

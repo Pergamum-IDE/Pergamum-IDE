@@ -88,7 +88,7 @@ describe("project access mode command wiring (#211)", () => {
     const setActiveDocumentContentBlock = sourceBlock(
       source,
       "function setActiveDocumentContent",
-      "function setActiveGlossaryEntryKind"
+      "function updateActiveGlossaryDraft"
     );
 
     expect(setActiveDocumentContentBlock).toContain(

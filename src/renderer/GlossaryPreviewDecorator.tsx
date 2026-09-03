@@ -1,19 +1,9 @@
-import {
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties
-} from "react";
+import { useLayoutEffect, useRef } from "react";
 import {
   isAmbiguousGlossarySurfaceTextMatch,
-  type GlossarySurfaceIndex,
-  type GlossarySurfaceTextMatch
+  type GlossarySurfaceIndex
 } from "../shared/glossarySurfaceMatching";
-import type { GlossaryEntry } from "../shared/glossary";
 import { durationSincePerformanceMark } from "./debugLog";
-import { GlossaryHoverCard } from "./GlossaryHoverCard";
-import { buildGlossaryHoverCardContent } from "./glossaryHoverCardContent";
 import {
   buildGlossarySurfaceDecorationSegments,
   shouldSkipGlossarySurfaceDecorationTextNode
@@ -21,7 +11,6 @@ import {
 
 interface GlossaryPreviewDecoratorProps {
   previewHtml: string;
-  entries: readonly GlossaryEntry[];
   surfaceIndex: GlossarySurfaceIndex;
   /** In-flight document-open correlation id (#152), or null when idle. */
   documentOpenId: string | null;
@@ -59,43 +48,14 @@ interface PreviewDecorationStats {
   matchCount: number;
 }
 
-type GlossaryHoverCardState = {
-  match: GlossarySurfaceTextMatch;
-  anchorRect: DOMRect;
-} | null;
-
-function clamp(value: number, min: number, max: number): number {
-  if (max < min) {
-    return min;
-  }
-
-  return Math.min(Math.max(value, min), max);
-}
-
-function hoverCardLayerStyle(anchorRect: DOMRect): CSSProperties {
-  const margin = 8;
-  const cardWidth = 320;
-  const topOffset = 6;
-
-  return {
-    left: clamp(
-      anchorRect.left,
-      margin,
-      window.innerWidth - cardWidth - margin
-    ),
-    top: clamp(
-      anchorRect.bottom + topOffset,
-      margin,
-      window.innerHeight - 48
-    )
-  };
-}
-
+// #375 PoC: body-text glossary matches are still visually decorated so
+// readers can see which surfaces resolve to an entry, but the reader-
+// assistance hover card / tooltip is intentionally gone — the sidebar
+// atom list and occurrence navigation are the only glossary affordances
+// on the reading surface now.
 function replaceTextNodeWithDecorationSegments(
   textNode: Text,
-  segments: ReturnType<typeof buildGlossarySurfaceDecorationSegments>,
-  onHoverMatch: (match: GlossarySurfaceTextMatch, anchorRect: DOMRect) => void,
-  onLeaveMatch: () => void
+  segments: ReturnType<typeof buildGlossarySurfaceDecorationSegments>
 ): number {
   const parentNode = textNode.parentNode;
   const matchSegmentCount = segments.filter(
@@ -122,10 +82,6 @@ function replaceTextNodeWithDecorationSegments(
     span.dataset.glossarySurface = segment.match.matchedText;
     span.dataset.glossaryAmbiguous =
       isAmbiguousGlossarySurfaceTextMatch(segment.match) ? "true" : "false";
-    span.addEventListener("mouseenter", () => {
-      onHoverMatch(segment.match, span.getBoundingClientRect());
-    });
-    span.addEventListener("mouseleave", onLeaveMatch);
     fragment.appendChild(span);
   }
 
@@ -136,9 +92,7 @@ function replaceTextNodeWithDecorationSegments(
 
 function decoratePreviewContainer(
   container: HTMLElement,
-  surfaceIndex: GlossarySurfaceIndex,
-  onHoverMatch: (match: GlossarySurfaceTextMatch, anchorRect: DOMRect) => void,
-  onLeaveMatch: () => void
+  surfaceIndex: GlossarySurfaceIndex
 ): PreviewDecorationStats {
   if (surfaceIndex.entries.length === 0) {
     return { visitedTextNodeCount: 0, decoratedNodeCount: 0, matchCount: 0 };
@@ -173,9 +127,7 @@ function decoratePreviewContainer(
       buildGlossarySurfaceDecorationSegments(
         textNode.textContent ?? "",
         surfaceIndex
-      ),
-      onHoverMatch,
-      onLeaveMatch
+      )
     );
 
     if (matchSegmentCount > 0) {
@@ -189,7 +141,6 @@ function decoratePreviewContainer(
 
 export function GlossaryPreviewDecorator({
   previewHtml,
-  entries,
   surfaceIndex,
   documentOpenId,
   previewRenderStartedAt,
@@ -198,8 +149,6 @@ export function GlossaryPreviewDecorator({
   onPreviewFrameObserved
 }: GlossaryPreviewDecoratorProps): JSX.Element {
   const previewRef = useRef<HTMLElement | null>(null);
-  const [hoverCardState, setHoverCardState] =
-    useState<GlossaryHoverCardState>(null);
   // Guards against React StrictMode's dev-only double layout-effect
   // invocation, and against re-firing for the same open on a later,
   // unrelated re-run of this effect — mirrors the reportedDocumentOpenIdRef
@@ -219,20 +168,6 @@ export function GlossaryPreviewDecorator({
   // reports exactly once from whichever request survives to fire — see the
   // effect below.
   const reportedPreviewFrameDocumentOpenIdRef = useRef<string | null>(null);
-  const hoverCardContent = useMemo(
-    () =>
-      hoverCardState
-        ? buildGlossaryHoverCardContent(hoverCardState.match, entries)
-        : null,
-    [entries, hoverCardState]
-  );
-  const hoverCardStyle = useMemo(
-    () =>
-      hoverCardState
-        ? hoverCardLayerStyle(hoverCardState.anchorRect)
-        : undefined,
-    [hoverCardState]
-  );
 
   useLayoutEffect(() => {
     const previewElement = previewRef.current;
@@ -241,7 +176,6 @@ export function GlossaryPreviewDecorator({
       return;
     }
 
-    setHoverCardState(null);
     previewElement.innerHTML = previewHtml;
 
     // Proxy measurement (#154): React's own commit timing isn't directly
@@ -271,9 +205,7 @@ export function GlossaryPreviewDecorator({
     const decorationStartedAt = performance.now();
     const decorationStats = decoratePreviewContainer(
       previewElement,
-      surfaceIndex,
-      (match, anchorRect) => setHoverCardState({ match, anchorRect }),
-      () => setHoverCardState(null)
+      surfaceIndex
     );
 
     if (
@@ -342,14 +274,5 @@ export function GlossaryPreviewDecorator({
     // documentOpenId after handleDocumentOpenMeasured — see comment above.
   }, [previewHtml, surfaceIndex]);
 
-  return (
-    <>
-      <article className="preview" ref={previewRef} />
-      {hoverCardContent && hoverCardStyle ? (
-        <div className="glossaryHoverCardLayer" style={hoverCardStyle}>
-          <GlossaryHoverCard content={hoverCardContent} />
-        </div>
-      ) : null}
-    </>
-  );
+  return <article className="preview" ref={previewRef} />;
 }

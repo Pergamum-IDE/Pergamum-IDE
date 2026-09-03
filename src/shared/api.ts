@@ -5,9 +5,11 @@ import type {
 } from "./settings";
 import type {
   CreateGlossaryEntryInput,
+  CreateGlossaryTagInput,
   GlossaryEntry,
-  GlossarySurfaceLookupResult,
-  UpdateGlossaryEntryInput
+  GlossaryTag,
+  UpdateGlossaryEntryInput,
+  UpdateGlossaryTagInput
 } from "./glossary";
 import type {
   DebugLogReason,
@@ -134,18 +136,17 @@ export type {
 } from "./settings";
 export type {
   CreateGlossaryEntryInput,
+  CreateGlossaryTagInput,
+  GlossaryAtom,
+  GlossaryAtomId,
+  GlossaryAtomInput,
   GlossaryEntry,
   GlossaryEntryId,
-  GlossaryEntryKind,
-  GlossaryForm,
-  GlossaryFormId,
-  GlossaryFormInput,
-  GlossaryFormMatchBoundary,
-  GlossaryFormRelation,
-  GlossarySurfaceLookupInput,
-  GlossarySurfaceLookupResult,
-  GlossaryWarningPolicy,
-  UpdateGlossaryEntryInput
+  GlossaryEntryTag,
+  GlossaryTag,
+  GlossaryTagId,
+  UpdateGlossaryEntryInput,
+  UpdateGlossaryTagInput
 } from "./glossary";
 
 export const FILE_CHANNELS = {
@@ -271,9 +272,15 @@ export const GLOSSARY_CHANNELS = {
   create: "glossary:create",
   getById: "glossary:getById",
   list: "glossary:list",
-  lookupSurface: "glossary:lookupSurface",
   update: "glossary:update",
-  delete: "glossary:delete"
+  delete: "glossary:delete",
+  reorderEntries: "glossary:reorderEntries",
+  /** #375: project-owned tag layer. */
+  listTags: "glossary:listTags",
+  createTag: "glossary:createTag",
+  updateTag: "glossary:updateTag",
+  deleteTag: "glossary:deleteTag",
+  reorderTags: "glossary:reorderTags"
 } as const;
 
 export const DEBUG_LOG_CHANNELS = {
@@ -775,17 +782,43 @@ export interface GlossaryEntryIdRequest {
   id: string;
 }
 
+/**
+ * #375: the delete confirmation is a Pergamum renderer dialog now — the main
+ * process just performs the hard delete when asked.
+ */
 export interface DeleteGlossaryEntryRequest {
   id: string;
-  confirmMessage: string;
 }
 
 export interface DeleteGlossaryEntryResult {
   deleted: boolean;
 }
 
-export interface GlossarySurfaceLookupRequest {
-  surface: string;
+/** #375: hard delete of a tag (cascades to `glossary_entry_tags` only). */
+export interface DeleteGlossaryTagRequest {
+  id: string;
+}
+
+export interface DeleteGlossaryTagResult {
+  deleted: boolean;
+}
+
+/**
+ * #375: persist a new tag order. `tagIdsInOrder` must list every project tag
+ * exactly once (no missing / unknown / duplicate ids); `sort_order` is
+ * re-packed to `0..n-1` in that order.
+ */
+export interface ReorderGlossaryTagsRequest {
+  tagIdsInOrder: string[];
+}
+
+/**
+ * #375: persist a new project-wide glossary entry order. `entryIdsInOrder` must
+ * list every glossary entry exactly once (no missing / unknown / duplicate
+ * ids); `glossary_entries.sort_order` is re-packed to `0..n-1` in that order.
+ */
+export interface ReorderGlossaryEntriesRequest {
+  entryIdsInOrder: string[];
 }
 
 export interface PergamumRuntimeInfo {
@@ -985,12 +1018,19 @@ export interface PergamumApi {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;
     getById: (id: string) => Promise<GlossaryEntry | null>;
     list: () => Promise<GlossaryEntry[]>;
-    lookupSurface: (surface: string) => Promise<GlossarySurfaceLookupResult>;
     update: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
-    delete: (
-      id: string,
-      confirmMessage: string
-    ) => Promise<DeleteGlossaryEntryResult>;
+    delete: (id: string) => Promise<DeleteGlossaryEntryResult>;
+    /** #375: re-pack `glossary_entries.sort_order` to `0..n-1` in the given
+     *  order; returns the re-sorted entry list. */
+    reorderEntries: (entryIdsInOrder: string[]) => Promise<GlossaryEntry[]>;
+    /** #375: project-owned tag layer. */
+    listTags: () => Promise<GlossaryTag[]>;
+    createTag: (input: CreateGlossaryTagInput) => Promise<GlossaryTag>;
+    updateTag: (input: UpdateGlossaryTagInput) => Promise<GlossaryTag>;
+    deleteTag: (id: string) => Promise<DeleteGlossaryTagResult>;
+    /** #375: re-pack `sort_order` to `0..n-1` in the given order; returns the
+     *  re-sorted tag list. */
+    reorderTags: (tagIdsInOrder: string[]) => Promise<GlossaryTag[]>;
   };
   debugLog: {
     logEvent: (request: RendererDebugLogRequest) => Promise<void>;

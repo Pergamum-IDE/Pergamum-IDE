@@ -2,6 +2,10 @@ import { app } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
+  parseDocumentMapSettingsForWrite,
+  readDocumentMapSettings
+} from "../shared/documentMapSettings";
+import {
   createDefaultApplicationSettings,
   type ApplicationSettings,
   type RecordRecentProjectInput,
@@ -475,6 +479,7 @@ function readSettingsValue(value: unknown): ApplicationSettings {
     commandPalette: readCommandPaletteSettings(value.commandPalette),
     editor: readEditorSettings(value.editor),
     files: readFilesSettings(value.files),
+    documentMap: readDocumentMapSettings(value.documentMap),
     recentProjects: readRecentProjects(value.recentProjects)
   };
 }
@@ -542,7 +547,7 @@ export function parseSaveApplicationSettingsRequest(
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 5 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 6 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -550,7 +555,8 @@ export function parseSaveApplicationSettingsRequest(
     !keys.includes("workbench") ||
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
-    !keys.includes("files")
+    !keys.includes("files") ||
+    !keys.includes("documentMap")
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -567,8 +573,23 @@ export function parseSaveApplicationSettingsRequest(
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
-    files: parseFilesSettingsForWrite(value.files)
+    files: parseFilesSettingsForWrite(value.files),
+    documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap)
   };
+}
+
+function parseDocumentMapSettingsForWriteStore(
+  value: unknown
+): ApplicationSettings["documentMap"] {
+  try {
+    return parseDocumentMapSettingsForWrite(value);
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? `Invalid application settings: ${error.message}`
+        : "Invalid application settings."
+    );
+  }
 }
 
 function parseNotificationSettingsForWrite(
@@ -1262,7 +1283,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 6 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 7 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1271,6 +1292,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
     !keys.includes("files") ||
+    !keys.includes("documentMap") ||
     !keys.includes("recentProjects")
   ) {
     throw new Error("Invalid application settings.");
@@ -1289,6 +1311,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     files: parseFilesSettingsForWrite(value.files),
+    documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap),
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
   };
 }
@@ -1346,6 +1369,13 @@ export async function saveApplicationSettings(
 
   if (settingsRequest.notification !== undefined) {
     nextSettings.notification = settingsRequest.notification;
+  }
+
+  // #375: the Document Map settings are write-through — a save request always
+  // carries the full `documentMap` (dialogue-pair colours included). Without
+  // this the user's edits were silently dropped and the on-disk value kept.
+  if (settingsRequest.documentMap !== undefined) {
+    nextSettings.documentMap = settingsRequest.documentMap;
   }
 
   return saveSettings(nextSettings);

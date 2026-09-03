@@ -1,9 +1,9 @@
-import type { GlossaryEntry } from "../shared/glossary";
+import {
+  representativeGlossaryAtom,
+  type GlossaryEntry
+} from "../shared/glossary";
 
-export function canonicalGlossarySurface(entry: GlossaryEntry): string {
-  const canonicalForm = entry.forms.find(
-    (form) => form.isCanonical === true
-  );
-
-  return canonicalForm?.surface ?? entry.id;
+/** #375: the entry's primary label — its representative (`sortOrder = 0`) atom. */
+export function representativeGlossarySurface(entry: GlossaryEntry): string {
+  return representativeGlossaryAtom(entry)?.value ?? entry.id;
 }

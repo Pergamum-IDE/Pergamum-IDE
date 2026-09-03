@@ -15,6 +15,11 @@ import {
   pergamumContextSurfaceAttribute,
   type EditableContextSurface
 } from "../shared/editContextMenu";
+import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import {
+  DEFAULT_EDITOR_SCROLL_ALIGN,
+  type EditorScrollAlign
+} from "./editorScrollAlign";
 import type {
   ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
@@ -143,6 +148,12 @@ interface MarkdownEditorProps {
    */
   onViewStateDirty?: () => void;
   /**
+   * #375 Text Map: the editor's on-screen document range, pushed on viewport /
+   * geometry change (rAF-coalesced) so the Text Map can draw a "you are here"
+   * rectangle. `null` on unmount. Never captures / serializes anything.
+   */
+  onVisibleRangeChange?: (range: EditorVisibleTextRange | null) => void;
+  /**
    * #274: a persisted #273 View State to re-apply once, when the editor
    * first shows the document identified by `key` (which must equal
    * `documentKey`). Applied via `applyEditorViewState`, so the digest gate
@@ -171,6 +182,20 @@ export interface MarkdownEditorViewStateController {
   /** Read-only snapshot of the current CodeMirror View State, or `null`
    *  when no editor view is mounted. */
   captureViewState(): EditorViewState | null;
+  /**
+   * #375 Document Map navigation: scroll the given 0-based SOURCE line into
+   * view and focus the editor. This is NAVIGATION only — the caret / selection
+   * are NOT touched, no document change is dispatched. The line is clamped into
+   * the document; a no-op when no view is mounted.
+   *
+   * `options.align` picks the vertical alignment: `"center"` (default —
+   * click-to-scroll) puts the line near the middle; `"start"` (viewport-lens
+   * drag) puts it near the top.
+   */
+  scrollToLine(
+    lineIndex: number,
+    options?: { align?: EditorScrollAlign }
+  ): void;
 }
 
 export interface MarkdownEditorFocusRequest {
@@ -277,6 +302,7 @@ export function MarkdownEditor({
   onViewStateControllerChange,
   onViewStateSnapshot,
   onViewStateDirty,
+  onVisibleRangeChange,
   restoreViewState,
   onRestoreViewStateApplied,
   focusRequest,
@@ -298,6 +324,11 @@ export function MarkdownEditor({
   // #272: read by the (mount-only) CodeMirror updateListener; kept fresh so
   // the current coordinator's cheap dirty-signal is always the one called.
   const onViewStateDirtyRef = useRef(onViewStateDirty);
+  // #375 Text Map: read by the mount-only updateListener; kept fresh so the
+  // current Text Map coordinator receives the viewport pushes.
+  const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
+  // #375 Text Map: rAF handle coalescing viewport pushes on fast scroll.
+  const visibleRangeFrameRef = useRef<number | null>(null);
   const soundFeedbackRef = useRef(soundFeedback);
   const soundSettingsRef = useRef(soundSettings);
   const readOnlyRef = useRef(readOnly);
@@ -359,6 +390,10 @@ export function MarkdownEditor({
   useEffect(() => {
     onViewStateDirtyRef.current = onViewStateDirty;
   }, [onViewStateDirty]);
+
+  useEffect(() => {
+    onVisibleRangeChangeRef.current = onVisibleRangeChange;
+  }, [onVisibleRangeChange]);
 
   useEffect(() => {
     soundFeedbackRef.current = soundFeedback;
@@ -466,12 +501,54 @@ export function MarkdownEditor({
             ) {
               onViewStateDirtyRef.current?.();
             }
+
+            // #375 Text Map: push the on-screen document range whenever the
+            // viewport / geometry / document changed, rAF-coalesced so a fast
+            // scroll doesn't spam the parent's setState.
+            if (
+              update.viewportChanged ||
+              update.geometryChanged ||
+              update.docChanged
+            ) {
+              scheduleVisibleRangePush();
+            }
           })
         ]
       })
     });
 
     viewRef.current = view;
+
+    function scheduleVisibleRangePush(): void {
+      if (
+        !onVisibleRangeChangeRef.current ||
+        visibleRangeFrameRef.current !== null ||
+        typeof requestAnimationFrame === "undefined"
+      ) {
+        if (onVisibleRangeChangeRef.current && !visibleRangeFrameRef.current) {
+          pushVisibleRange();
+        }
+        return;
+      }
+
+      visibleRangeFrameRef.current = requestAnimationFrame(() => {
+        visibleRangeFrameRef.current = null;
+        pushVisibleRange();
+      });
+    }
+
+    function pushVisibleRange(): void {
+      const currentView = viewRef.current;
+      if (!currentView || !onVisibleRangeChangeRef.current) {
+        return;
+      }
+
+      const { from, to } = currentView.viewport;
+      onVisibleRangeChangeRef.current({ from, to });
+    }
+
+    // First push once the initial layout has settled.
+    scheduleVisibleRangePush();
 
     return () => {
       // #272: report this editor's final View State (keyed by whatever
@@ -481,6 +558,15 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
+      // #375 Text Map: stop the coalesced viewport push and clear the overlay.
+      if (
+        visibleRangeFrameRef.current !== null &&
+        typeof cancelAnimationFrame !== "undefined"
+      ) {
+        cancelAnimationFrame(visibleRangeFrameRef.current);
+      }
+      visibleRangeFrameRef.current = null;
+      onVisibleRangeChangeRef.current?.(null);
       view.destroy();
       viewRef.current = null;
     };
@@ -534,6 +620,31 @@ export function MarkdownEditor({
         const view = viewRef.current;
 
         return view ? captureEditorViewState(view) : null;
+      },
+      scrollToLine: (lineIndex, options) => {
+        const view = viewRef.current;
+
+        if (!view || !Number.isFinite(lineIndex)) {
+          return;
+        }
+
+        // CodeMirror lines are 1-based; the Document Map speaks 0-based
+        // source lines. Clamp into the document.
+        const totalLines = view.state.doc.lines;
+        const target = Math.max(
+          1,
+          Math.min(Math.floor(lineIndex) + 1, totalLines)
+        );
+        const line = view.state.doc.line(target);
+
+        // Effects only — no `selection`, so the caret does not move. `y` is
+        // "center" for click-to-scroll, "start" for viewport-lens drag.
+        view.dispatch({
+          effects: EditorView.scrollIntoView(line.from, {
+            y: options?.align ?? DEFAULT_EDITOR_SCROLL_ALIGN
+          })
+        });
+        view.focus();
       }
     };
 

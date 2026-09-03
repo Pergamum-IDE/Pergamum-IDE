@@ -7,6 +7,7 @@ import {
 import {
   createGlossaryCommandTitles,
   glossaryCommandIds,
+  glossaryTagManagerCommandWhen,
   glossaryWriteCommandWhen,
   registerGlossaryCommands
 } from "../../src/renderer/glossaryCommands";
@@ -18,7 +19,11 @@ const allCommandTitles = {
   openEntry: "Open glossary entry",
   createEntry: "Create glossary entry",
   previousOccurrence: "Previous occurrence",
-  nextOccurrence: "Next occurrence"
+  nextOccurrence: "Next occurrence",
+  manageTags: "Glossary: Manage Tags",
+  manageTagsDescription: "Open the glossary tag manager tab.",
+  manageEntries: "Glossary: Manage Entries",
+  manageEntriesDescription: "Open the glossary management tab."
 };
 
 function registerAllGlossaryCommands(
@@ -32,6 +37,8 @@ function registerAllGlossaryCommands(
     navigateToNextGlossaryOccurrence: (
       entryId: string
     ) => boolean | Promise<boolean>;
+    openGlossaryTagManager: () => boolean | Promise<boolean>;
+    openGlossaryEntryManager: () => boolean | Promise<boolean>;
   }> = {}
 ): void {
   registerGlossaryCommands(
@@ -41,6 +48,8 @@ function registerAllGlossaryCommands(
       createGlossaryEntry: () => true,
       navigateToPreviousGlossaryOccurrence: () => true,
       navigateToNextGlossaryOccurrence: () => true,
+      openGlossaryTagManager: () => true,
+      openGlossaryEntryManager: () => true,
       ...overrides
     },
     allCommandTitles
@@ -54,7 +63,7 @@ function registerAllGlossaryCommands(
 }
 
 describe("glossary commands", () => {
-  it("registers the Glossary entry open, create, and occurrence navigation commands", () => {
+  it("registers entry open/create, occurrence navigation, and tag manager commands", () => {
     const registry = new CommandRegistry();
 
     registerAllGlossaryCommands(registry);
@@ -63,7 +72,9 @@ describe("glossary commands", () => {
       "glossary.entry.open",
       "glossary.entry.create",
       "glossary.entry.occurrences.previous",
-      "glossary.entry.occurrences.next"
+      "glossary.entry.occurrences.next",
+      "glossary.tag.manage",
+      "glossary.entry.manage"
     ]);
     expect(registry.get(glossaryCommandIds.openEntry)?.title).toBe(
       "Open glossary entry"
@@ -80,6 +91,40 @@ describe("glossary commands", () => {
     expect(registry.get(glossaryCommandIds.nextOccurrence)?.title).toBe(
       "Next occurrence"
     );
+    expect(registry.get(glossaryCommandIds.manageTags)?.title).toBe(
+      "Glossary: Manage Tags"
+    );
+    expect(registry.get(glossaryCommandIds.manageTags)?.when).toEqual(
+      glossaryTagManagerCommandWhen
+    );
+    // Palette-visible (unlike the entry / occurrence commands).
+    expect(registry.get(glossaryCommandIds.manageTags)?.palette).toBeUndefined();
+  });
+
+  it("opens the Glossary Tag Manager tab through the tag manage command", async () => {
+    const registry = new CommandRegistry();
+    const openGlossaryTagManager = vi.fn(() => true);
+
+    registerAllGlossaryCommands(registry, { openGlossaryTagManager });
+
+    await expect(
+      registry.execute(glossaryCommandIds.manageTags, executionOptions)
+    ).resolves.toBe(true);
+    expect(openGlossaryTagManager).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the tag manage command when no project is open", () => {
+    const registry = new CommandRegistry();
+
+    registerAllGlossaryCommands(registry);
+
+    expect(
+      registry.enablementForContext(glossaryCommandIds.manageTags, {
+        "project.isOpen": false,
+        "project.access.readWrite": false,
+        "project.access.readOnly": false
+      }).enabled
+    ).toBe(false);
   });
 
   it("opens Glossary entries through a typed command argument", async () => {
@@ -98,9 +143,9 @@ describe("glossary commands", () => {
     const registry = new CommandRegistry();
     const createGlossaryEntry = vi.fn(async () => true);
     const input = {
-      kind: "place" as const,
-      canonicalSurface: "王都",
-      description: ""
+      description: "",
+      atoms: [{ value: "王都", matchFlags: 0 }],
+      tagIds: []
     };
 
     registerAllGlossaryCommands(registry, { createGlossaryEntry });
@@ -115,9 +160,9 @@ describe("glossary commands", () => {
     const registry = new CommandRegistry();
     const createGlossaryEntry = vi.fn(async () => true);
     const input = {
-      kind: "place" as const,
-      canonicalSurface: "王都",
-      description: ""
+      description: "",
+      atoms: [{ value: "王都", matchFlags: 0 }],
+      tagIds: []
     };
 
     registerAllGlossaryCommands(registry, { createGlossaryEntry });
@@ -189,7 +234,13 @@ describe("glossary commands", () => {
       createEntry: "translated:command.glossary.entry.create",
       previousOccurrence:
         "translated:command.glossary.entry.occurrences.previous",
-      nextOccurrence: "translated:command.glossary.entry.occurrences.next"
+      nextOccurrence: "translated:command.glossary.entry.occurrences.next",
+      manageTags: "translated:command.glossary.tag.manage",
+      manageTagsDescription:
+        "translated:command.glossary.tag.manage.description",
+      manageEntries: "translated:command.glossary.entry.manage",
+      manageEntriesDescription:
+        "translated:command.glossary.entry.manage.description"
     });
   });
 

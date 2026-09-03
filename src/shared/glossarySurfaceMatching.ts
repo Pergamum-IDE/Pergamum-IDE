@@ -1,17 +1,21 @@
-import type {
-  GlossaryEntry,
-  GlossaryEntryId,
-  GlossaryForm,
-  GlossaryFormId,
-  GlossaryFormMatchBoundary,
-  GlossaryWarningPolicy
-} from "./glossary";
-import { shouldAcceptGlossarySurfaceBoundary } from "./glossarySurfaceBoundary";
+/**
+ * #375: build a glossary surface index from `GlossaryAtom` values and match it
+ * against manuscript text.
+ *
+ * The former alias / variant / canonical relation and warning-policy metadata
+ * are gone — an atom is just a value plus a `matchFlags` bitmask. A candidate
+ * now carries only its `entryId` / `atomId` / `surface`.
+ */
 
-export type GlossarySurfaceMatchRelation =
-  | "canonical"
-  | "alias"
-  | "variant";
+import type { GlossaryEntry, GlossaryEntryId, GlossaryAtomId } from "./glossary";
+import {
+  GlossaryAtomFlags,
+  getGlossaryAtomBoundaryEndPolicy,
+  getGlossaryAtomBoundaryStartPolicy,
+  glossaryBoundaryPolicyChecksBoundary,
+  hasGlossaryAtomFlag
+} from "./glossaryAtomFlags";
+import { shouldAcceptGlossarySurfaceBoundary } from "./glossarySurfaceBoundary";
 
 export interface GlossarySurfaceMatchingOptions {
   minimumSurfaceLength?: number;
@@ -19,16 +23,14 @@ export interface GlossarySurfaceMatchingOptions {
 
 export interface GlossarySurfaceIndexEntry {
   entryId: GlossaryEntryId;
-  formId: GlossaryFormId;
+  atomId: GlossaryAtomId;
   surface: string;
-  relation: GlossarySurfaceMatchRelation;
-  warningPolicy: GlossaryWarningPolicy | null;
-  matchBoundaryStart: GlossaryFormMatchBoundary;
-  matchBoundaryEnd: GlossaryFormMatchBoundary;
+  checkStartBoundary: boolean;
+  checkEndBoundary: boolean;
   /**
-   * #365: `true` when this is an opted-in single-code-point form whose
-   * surface is a CJK ideograph. Such a match is additionally rejected when
-   * the character immediately before or after it is a DIFFERENT kanji
+   * #365 carry-over: `true` for an opted-in single-code-point atom whose
+   * value is a CJK ideograph. Such a match is additionally rejected when the
+   * character immediately before or after it is a DIFFERENT kanji
    * (compound-word guard). Same kanji, a Japanese iteration mark, kana,
    * punctuation, or the text edge do not reject.
    */
@@ -41,10 +43,8 @@ export interface GlossarySurfaceIndex {
 
 export interface GlossarySurfaceMatchCandidate {
   entryId: GlossaryEntryId;
-  formId: GlossaryFormId;
+  atomId: GlossaryAtomId;
   surface: string;
-  relation: GlossarySurfaceMatchRelation;
-  warningPolicy: GlossaryWarningPolicy | null;
 }
 
 export interface GlossarySurfaceTextMatch {
@@ -57,12 +57,6 @@ export interface GlossarySurfaceTextMatch {
 }
 
 const defaultMinimumSurfaceLength = 2;
-
-const relationSortRank: Record<GlossarySurfaceMatchRelation, number> = {
-  canonical: 0,
-  alias: 1,
-  variant: 2
-};
 
 interface RawGlossarySurfaceMatch {
   start: number;
@@ -84,14 +78,10 @@ function surfaceCharacterLength(surface: string): number {
 }
 
 /**
- * #365: Japanese iteration / repetition marks. Handled by an EXPLICIT
- * allowlist (not a Unicode category), so widening the ideograph ranges later
- * never silently changes iteration-mark behaviour.
- *   々  U+3005  ideographic iteration mark
- *   ゝ  U+309D  hiragana iteration mark
- *   ゞ  U+309E  hiragana voiced iteration mark
- *   ヽ  U+30FD  katakana iteration mark
- *   ヾ  U+30FE  katakana voiced iteration mark
+ * #365: Japanese iteration / repetition marks. Explicit allowlist (not a
+ * Unicode category), so widening the ideograph ranges later never silently
+ * changes iteration-mark behaviour.
+ *   々 U+3005 · ゝ U+309D · ゞ U+309E · ヽ U+30FD · ヾ U+30FE
  */
 const JAPANESE_ITERATION_MARKS: ReadonlySet<string> = new Set([
   "々",
@@ -149,16 +139,6 @@ function singleKanjiNeighbourBlocks(
   return isCjkIdeographCodePoint(neighbour);
 }
 
-function relationForForm(form: GlossaryForm): GlossarySurfaceMatchRelation {
-  return form.isCanonical ? "canonical" : form.relation;
-}
-
-function warningPolicyForForm(
-  form: GlossaryForm
-): GlossaryWarningPolicy | null {
-  return form.isCanonical ? null : form.warningPolicy;
-}
-
 function compareIndexEntries(
   left: GlossarySurfaceIndexEntry,
   right: GlossarySurfaceIndexEntry
@@ -166,9 +146,8 @@ function compareIndexEntries(
   return (
     right.surface.length - left.surface.length ||
     left.surface.localeCompare(right.surface) ||
-    relationSortRank[left.relation] - relationSortRank[right.relation] ||
     left.entryId.localeCompare(right.entryId) ||
-    left.formId.localeCompare(right.formId)
+    left.atomId.localeCompare(right.atomId)
   );
 }
 
@@ -177,9 +156,8 @@ function compareCandidates(
   right: GlossarySurfaceMatchCandidate
 ): number {
   return (
-    relationSortRank[left.relation] - relationSortRank[right.relation] ||
     left.entryId.localeCompare(right.entryId) ||
-    left.formId.localeCompare(right.formId)
+    left.atomId.localeCompare(right.atomId)
   );
 }
 
@@ -188,10 +166,8 @@ function candidateFromIndexEntry(
 ): GlossarySurfaceMatchCandidate {
   return {
     entryId: entry.entryId,
-    formId: entry.formId,
-    surface: entry.surface,
-    relation: entry.relation,
-    warningPolicy: entry.warningPolicy
+    atomId: entry.atomId,
+    surface: entry.surface
   };
 }
 
@@ -203,13 +179,17 @@ export function buildGlossarySurfaceIndex(
   const indexEntries: GlossarySurfaceIndexEntry[] = [];
 
   for (const entry of entries) {
-    for (const form of entry.forms) {
-      const surface = form.surface.trim();
+    for (const atom of entry.atoms) {
+      const surface = atom.value.trim();
       const surfaceLength = surfaceCharacterLength(surface);
-      // #365: a single-code-point surface is only indexed when the form
+      // #365: a single-code-point value is only indexed when the atom
       // explicitly opts in. 2+ code points are unaffected.
       const singleCharacterOptIn =
-        surfaceLength === 1 && form.allowSingleCharacterMatch === true;
+        surfaceLength === 1 &&
+        hasGlossaryAtomFlag(
+          atom.matchFlags,
+          GlossaryAtomFlags.AllowSingleCharacterMatch
+        );
 
       if (
         surface.length === 0 ||
@@ -220,12 +200,14 @@ export function buildGlossarySurfaceIndex(
 
       indexEntries.push({
         entryId: entry.id,
-        formId: form.id,
+        atomId: atom.id,
         surface,
-        relation: relationForForm(form),
-        warningPolicy: warningPolicyForForm(form),
-        matchBoundaryStart: form.matchBoundaryStart,
-        matchBoundaryEnd: form.matchBoundaryEnd,
+        checkStartBoundary: glossaryBoundaryPolicyChecksBoundary(
+          getGlossaryAtomBoundaryStartPolicy(atom.matchFlags)
+        ),
+        checkEndBoundary: glossaryBoundaryPolicyChecksBoundary(
+          getGlossaryAtomBoundaryEndPolicy(atom.matchFlags)
+        ),
         singleCharacterKanjiGuard:
           singleCharacterOptIn &&
           isCjkIdeographCodePoint(surface.codePointAt(0) ?? 0)
@@ -269,18 +251,16 @@ function isBoundaryAcceptedRawMatch(
     text,
     start: rawMatch.start,
     end: rawMatch.end,
-    matchBoundaryStart: rawMatch.entry.matchBoundaryStart,
-    matchBoundaryEnd: rawMatch.entry.matchBoundaryEnd
+    checkStartBoundary: rawMatch.entry.checkStartBoundary,
+    checkEndBoundary: rawMatch.entry.checkEndBoundary
   });
 }
 
 /**
- * #365: for an opted-in single-code-point KANJI form, reject the raw match
+ * #365: for an opted-in single-code-point KANJI atom, reject the raw match
  * when the character immediately before or after it is a different kanji
  * (e.g. `蝕` inside `腐蝕` / `蝕牙`). The same kanji (`蝕蝕`), a Japanese
  * iteration mark (`蝕々`), kana, punctuation, or the text edge never reject.
- * Non-kanji single-character forms are unaffected (`matchBoundary*` still
- * applies to them as before).
  */
 function isSingleCharacterKanjiAdjacencyAccepted(
   text: string,

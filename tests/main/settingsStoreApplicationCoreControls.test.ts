@@ -197,6 +197,95 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       renderer: getCatalogDefaultValue("preview.renderer"),
       updateDelayMs: getCatalogDefaultValue("preview.updateDelayMs")
     });
+    // #375 Task Q/R: Document Map defaults — dark-grey narration, red fallback,
+    // one grey 「」 pair, tag-colour visibility adjustment ON, 0.28 lens opacity.
+    expect(settings.documentMap).toEqual({
+      narrationColor: "#3c3c3c",
+      glossaryFallbackColor: "#ff0000",
+      dialogueDelimiterPairs: [{ open: "「", close: "」", color: "#909090" }],
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
+    });
+  });
+
+  it("#375: reads documentMap colours + dialogue pairs, per-field tolerant", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        documentMap: {
+          narrationColor: "#123456",
+          glossaryFallbackColor: "not-a-color",
+          dialogueDelimiterPairs: [
+            { open: "「", close: "」", color: "#0000FF" },
+            { open: "『", close: "』", color: "#7c3aed" },
+            { open: "", close: "」", color: "#000000" }
+          ]
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.documentMap).toEqual({
+      narrationColor: "#123456",
+      // invalid → falls back to the default
+      glossaryFallbackColor: "#ff0000",
+      // the empty-open pair is dropped, colours normalised
+      dialogueDelimiterPairs: [
+        { open: "「", close: "」", color: "#0000ff" },
+        { open: "『", close: "』", color: "#7c3aed" }
+      ],
+      // omitted on disk → the built-in defaults
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
+    });
+  });
+
+  it("#375: reads an explicit documentMap.adjustTagColorsForVisibility=false", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        documentMap: { adjustTagColorsForVisibility: false }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.documentMap.adjustTagColorsForVisibility).toBe(false);
+  });
+
+  it("#375: parseSaveApplicationSettingsRequest requires documentMap and validates it", () => {
+    expect(() =>
+      parseSaveApplicationSettingsRequest(
+        validSaveRequest({
+          documentMap: {
+            narrationColor: "#111111",
+            glossaryFallbackColor: "#222222",
+            dialogueDelimiterPairs: []
+          }
+        })
+      )
+    ).not.toThrow();
+
+    // Missing documentMap → rejected.
+    const noDocumentMap = validSaveRequest();
+    delete (noDocumentMap as { documentMap?: unknown }).documentMap;
+    expect(() =>
+      parseSaveApplicationSettingsRequest(noDocumentMap)
+    ).toThrow();
+
+    // Invalid dialogue pair colour → rejected.
+    expect(() =>
+      parseSaveApplicationSettingsRequest(
+        validSaveRequest({
+          documentMap: {
+            narrationColor: "#000000",
+            glossaryFallbackColor: "#ff0000",
+            dialogueDelimiterPairs: [
+              { open: "「", close: "」", color: "nope" }
+            ]
+          }
+        })
+      )
+    ).toThrow();
   });
 
   it("reads valid editor font, line ending, and encoding values", async () => {
@@ -551,6 +640,62 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     const written = JSON.parse(writtenContent);
 
     expect(written.preview).toEqual({ renderer: "markdown", updateDelayMs: 0 });
+  });
+
+  it("#375: writes documentMap (dialogue-pair colour / narration / toggle / lens opacity) from the save request instead of dropping it", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    const requestedDocumentMap = {
+      narrationColor: "#222222",
+      glossaryFallbackColor: "#ff0000",
+      dialogueDelimiterPairs: [
+        { open: "「", close: "」", color: "#9e9e9e" },
+        { open: "『", close: "』", color: "#123456" }
+      ],
+      adjustTagColorsForVisibility: false,
+      viewportLensOpacity: 0.5
+    };
+
+    const saved = await saveApplicationSettings(
+      validSaveRequest({
+        documentMap: requestedDocumentMap
+      } as Partial<SaveApplicationSettingsRequest>)
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+
+    // Persisted to disk...
+    expect(written.documentMap).toEqual(requestedDocumentMap);
+    // ...and returned to the renderer (so the map redraws with the new colour).
+    expect(saved.documentMap).toEqual(requestedDocumentMap);
+  });
+
+  it("#375: keeps the on-disk documentMap when a (malformed) save request omits it", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        documentMap: {
+          narrationColor: "#111111",
+          glossaryFallbackColor: "#ff0000",
+          dialogueDelimiterPairs: [{ open: "「", close: "」", color: "#abcdef" }],
+          adjustTagColorsForVisibility: true
+        }
+      })
+    );
+
+    await saveApplicationSettings(validSaveRequest());
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+    expect(written.documentMap.dialogueDelimiterPairs).toEqual([
+      { open: "「", close: "」", color: "#abcdef" }
+    ]);
   });
 
   it("rejects a save request still carrying the obsolete workbench.advancedSettings key, and invalid editor font/sound/line ending/encoding save values (#232)", () => {

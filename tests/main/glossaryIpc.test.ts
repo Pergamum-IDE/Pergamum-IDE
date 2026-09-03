@@ -3,29 +3,20 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GLOSSARY_CHANNELS } from "../../src/shared/api";
-import {
-  GlossaryValidationError,
-  type GlossaryEntry,
-  type GlossaryForm
-} from "../../src/shared/glossary";
+import { GlossaryValidationError } from "../../src/shared/glossary";
 import { projectDatabaseFileName } from "../../src/main/projectDatabase";
 
 const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
-  fromWebContents: vi.fn(() => undefined),
   showMessageBox: vi.fn()
 }));
 
 vi.mock("electron", () => ({
-  BrowserWindow: {
-    fromWebContents: electronMock.fromWebContents
-  },
-  dialog: {
-    showMessageBox: electronMock.showMessageBox
-  },
-  ipcMain: {
-    handle: electronMock.handle
-  }
+  // #375: the delete confirmation is a Pergamum renderer dialog now — the
+  // main process must never open a native message box. `dialog` is still
+  // stubbed here purely so an accidental regression is caught.
+  dialog: { showMessageBox: electronMock.showMessageBox },
+  ipcMain: { handle: electronMock.handle }
 }));
 
 import {
@@ -34,15 +25,13 @@ import {
 } from "../../src/main/glossaryIpc";
 
 const missingEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
-const confirmMessage = "この語彙を削除します。よろしいですか？";
 
-describe("glossary IPC", () => {
+describe("glossary IPC (#375)", () => {
   let projectRootPath: string;
   let activeProjectFilePath: string;
 
   beforeEach(async () => {
     electronMock.handle.mockClear();
-    electronMock.fromWebContents.mockReset().mockReturnValue(undefined);
     electronMock.showMessageBox.mockReset();
     projectRootPath = await fs.mkdtemp(
       path.join(os.tmpdir(), "pergamum-glossary-ipc-")
@@ -51,268 +40,239 @@ describe("glossary IPC", () => {
   });
 
   afterEach(async () => {
-    await fs.rm(projectRootPath, {
-      recursive: true,
-      force: true
-    });
+    await fs.rm(projectRootPath, { recursive: true, force: true });
   });
 
-  it("registers glossary IPC channels", () => {
+  function handlers() {
+    return createGlossaryIpcHandlers(() => activeProjectFilePath);
+  }
+
+  it("registers every glossary IPC channel including the tag layer", () => {
     registerGlossaryIpc();
 
-    expect(electronMock.handle.mock.calls.map(([channel]) => channel)).toEqual([
+    expect(
+      electronMock.handle.mock.calls.map(([channel]) => channel)
+    ).toEqual([
       GLOSSARY_CHANNELS.create,
       GLOSSARY_CHANNELS.getById,
       GLOSSARY_CHANNELS.list,
-      GLOSSARY_CHANNELS.lookupSurface,
       GLOSSARY_CHANNELS.update,
-      GLOSSARY_CHANNELS.delete
+      GLOSSARY_CHANNELS.delete,
+      GLOSSARY_CHANNELS.reorderEntries,
+      GLOSSARY_CHANNELS.listTags,
+      GLOSSARY_CHANNELS.createTag,
+      GLOSSARY_CHANNELS.updateTag,
+      GLOSSARY_CHANNELS.deleteTag,
+      GLOSSARY_CHANNELS.reorderTags
     ]);
   });
 
-  it("runs glossary operations against the current project database", async () => {
-    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
-    const createdEntry = await handlers.create({
-      kind: "place",
-      canonicalSurface: "王都アルセリア",
-      description: "王国の首都"
+  it("runs entry + atom + tag operations against the current project database", async () => {
+    const api = handlers();
+
+    const tag = await api.createTag({
+      label: "地名",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+    expect(await api.listTags()).toEqual([tag]);
+
+    const created = await api.create({
+      description: "王国の首都",
+      atoms: [
+        { value: "王都アルセリア", matchFlags: 0 },
+        { value: "アルセリア", matchFlags: 2 }
+      ],
+      tagIds: [tag.id]
     });
 
-    expect(createdEntry.id).toMatch(
+    expect(created.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
-    const canonicalForm = canonicalFormOf(createdEntry);
+    expect(created.atoms.map((a) => a.value)).toEqual([
+      "王都アルセリア",
+      "アルセリア"
+    ]);
+    expect(created.tags.map((t) => t.id)).toEqual([tag.id]);
 
-    expect(canonicalForm.surface).toBe("王都アルセリア");
-    await expect(
-      fs.access(path.join(projectRootPath, projectDatabaseFileName))
-    ).resolves.toBeUndefined();
+    await expect(api.getById({ id: created.id })).resolves.toEqual(created);
+    await expect(api.list()).resolves.toEqual([created]);
 
-    await expect(
-      handlers.getById({
-        id: createdEntry.id
-      })
-    ).resolves.toEqual(createdEntry);
-    await expect(handlers.list()).resolves.toEqual([createdEntry]);
-    await expect(
-      handlers.lookupSurface({
-        surface: "王都アルセリア"
-      })
-    ).resolves.toEqual({
-      status: "unique",
-      surface: "王都アルセリア",
-      match: {
-        entry: createdEntry,
-        form: canonicalForm
-      }
+    const updated = await api.update({
+      id: created.id,
+      description: "改稿後",
+      atoms: [{ value: "王都アルセリア", matchFlags: 0 }],
+      tagIds: []
     });
+    expect(updated).toMatchObject({ id: created.id, description: "改稿後" });
+    expect(updated.tags).toEqual([]);
 
-    const updatedEntry = await handlers.update({
-      id: createdEntry.id,
-      kind: "concept",
-      description: "改稿後の首都設定",
-      canonicalSurface: "王都アルセリア",
-      forms: []
+    await expect(api.delete({ id: created.id })).resolves.toEqual({
+      deleted: true
     });
-
-    expect(updatedEntry).toMatchObject({
-      id: createdEntry.id,
-      kind: "concept",
-      description: "改稿後の首都設定"
-    });
-    expect(canonicalFormOf(updatedEntry).surface).toBe("王都アルセリア");
-
-    electronMock.showMessageBox.mockResolvedValue({
-      response: 0,
-      checkboxChecked: false
-    });
-
-    await expect(
-      handlers.delete({
-        id: createdEntry.id,
-        confirmMessage
-      })
-    ).resolves.toEqual({ deleted: true });
-    await expect(
-      handlers.getById({
-        id: createdEntry.id
-      })
-    ).resolves.toBeNull();
-    await expect(handlers.list()).resolves.toEqual([]);
+    await expect(api.getById({ id: created.id })).resolves.toBeNull();
+    expect(electronMock.showMessageBox).not.toHaveBeenCalled();
   });
 
   it("requires an active project before accessing glossary data", async () => {
-    const handlers = createGlossaryIpcHandlers(() => {
+    const api = createGlossaryIpcHandlers(() => {
       throw new Error("No project is currently open.");
     });
 
-    await expect(handlers.list()).rejects.toThrow(
+    await expect(api.list()).rejects.toThrow("No project is currently open.");
+    await expect(api.listTags()).rejects.toThrow(
       "No project is currently open."
     );
   });
 
-  it("rejects invalid glossary input through the shared validation model", async () => {
-    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
+  it("rejects invalid input through the shared validation model", async () => {
+    const api = handlers();
 
     await expect(
-      handlers.create({
-        kind: "term",
-        canonicalSurface: " ",
-        description: "invalid"
-      })
+      api.create({ description: "", atoms: [], tagIds: [] })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
 
     await expect(
-      handlers.create({
-        kind: "term",
-        canonicalSurface: "魔導炉",
-        description: "invalid",
-        matchBoundaryStart: "word"
+      api.createTag({
+        label: " ",
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 
-  it("rejects delete requests missing a confirmation message", async () => {
-    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
+  it("hard-deletes a tag without opening any native dialog", async () => {
+    const api = handlers();
+    const tag = await api.createTag({
+      label: "武将",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
 
-    await expect(
-      handlers.delete({
-        id: missingEntryId
-      })
-    ).rejects.toThrow();
-
+    await expect(api.deleteTag({ id: tag.id })).resolves.toEqual({
+      deleted: true
+    });
+    expect(await api.listTags()).toEqual([]);
     expect(electronMock.showMessageBox).not.toHaveBeenCalled();
   });
 
-  it("treats deleting an already-missing entry as idempotent success", async () => {
-    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
-    electronMock.showMessageBox.mockResolvedValue({
-      response: 0,
-      checkboxChecked: false
+  it("treats deleting an already-missing entry / tag as idempotent success", async () => {
+    const api = handlers();
+
+    await expect(api.delete({ id: missingEntryId })).resolves.toEqual({
+      deleted: true
     });
+    await expect(api.deleteTag({ id: missingEntryId })).resolves.toEqual({
+      deleted: true
+    });
+    expect(electronMock.showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it("rejects a delete request with a malformed id", async () => {
+    const api = handlers();
+
+    await expect(api.delete({ id: 123 })).rejects.toThrow();
+    await expect(api.deleteTag({})).rejects.toThrow();
+  });
+
+  it("reorders tags through the current project database", async () => {
+    const api = handlers();
+    const a = await api.createTag({
+      label: "A",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+    const b = await api.createTag({
+      label: "B",
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+
+    const reordered = await api.reorderTags({ tagIdsInOrder: [b.id, a.id] });
+
+    expect(reordered.map((t) => t.label)).toEqual(["B", "A"]);
+    expect((await api.listTags()).map((t) => t.id)).toEqual([b.id, a.id]);
+  });
+
+  it("rejects a reorder request that is not a well-formed id list", async () => {
+    const api = handlers();
+
+    await expect(api.reorderTags({})).rejects.toThrow();
+    await expect(
+      api.reorderTags({ tagIdsInOrder: ["not-a-uuid"] })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("#375: reorders entries through the current project database", async () => {
+    const api = handlers();
+    const mk = (value: string) =>
+      api.create({
+        description: "",
+        atoms: [{ value, matchFlags: 0 }],
+        tagIds: []
+      });
+
+    const a = await mk("あ");
+    const b = await mk("い");
+    const c = await mk("う");
+
+    const reordered = await api.reorderEntries({
+      entryIdsInOrder: [c.id, a.id, b.id]
+    });
+
+    expect(reordered.map((e) => e.id)).toEqual([c.id, a.id, b.id]);
+    expect((await api.list()).map((e) => e.id)).toEqual([c.id, a.id, b.id]);
+  });
+
+  it("#375: rejects an entry reorder request that is not a well-formed id list", async () => {
+    const api = handlers();
+
+    await expect(api.reorderEntries({})).rejects.toThrow();
+    await expect(
+      api.reorderEntries({ entryIdsInOrder: ["not-a-uuid"] })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("#375: create / update carry ordered entry tag assignment; a duplicate id is rejected", async () => {
+    const api = handlers();
+    const mkTag = (label: string) =>
+      api.createTag({
+        label,
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      });
+    const person = await mkTag("人物");
+    const place = await mkTag("地名");
+    const org = await mkTag("組織");
+
+    const created = await api.create({
+      description: "",
+      atoms: [{ value: "オーダ", matchFlags: 0 }],
+      // assignment order (place is the primary tag)
+      tagIds: [place.id, person.id, org.id]
+    });
+    expect(created.tags.map((t) => t.label)).toEqual(["地名", "人物", "組織"]);
+
+    const updated = await api.update({
+      id: created.id,
+      description: "",
+      atoms: [{ value: "オーダ", matchFlags: 0 }],
+      tagIds: [org.id, place.id]
+    });
+    expect(updated.tags.map((t) => t.id)).toEqual([org.id, place.id]);
 
     await expect(
-      handlers.delete({
-        id: missingEntryId,
-        confirmMessage
+      api.create({
+        description: "",
+        atoms: [{ value: "x", matchFlags: 0 }],
+        tagIds: [person.id, person.id]
       })
-    ).resolves.toEqual({ deleted: true });
-  });
-
-  describe("delete confirmation dialog", () => {
-    async function seedEntry(): Promise<GlossaryEntry> {
-      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
-
-      return handlers.create({
-        kind: "term",
-        canonicalSurface: "メイド",
-        description: "使用人"
-      });
-    }
-
-    it("shows a warning-type confirmation dialog with Cancel as default and cancel id", async () => {
-      const entry = await seedEntry();
-      electronMock.showMessageBox.mockResolvedValue({
-        response: 1,
-        checkboxChecked: false
-      });
-
-      registerGlossaryIpc();
-      const deleteHandler = registeredHandler(GLOSSARY_CHANNELS.delete);
-
-      await deleteHandler({ sender: {} }, { id: entry.id, confirmMessage });
-
-      expect(electronMock.showMessageBox).toHaveBeenCalledTimes(1);
-      const options = electronMock.showMessageBox.mock.calls[0].at(-1);
-
-      expect(options).toMatchObject({
-        type: "warning",
-        message: confirmMessage,
-        buttons: ["OK", "Cancel"],
-        defaultId: 1,
-        cancelId: 1
-      });
-    });
-
-    it("does not add i18n keys for the OK / Cancel button labels", async () => {
-      const entry = await seedEntry();
-      electronMock.showMessageBox.mockResolvedValue({
-        response: 1,
-        checkboxChecked: false
-      });
-
-      registerGlossaryIpc();
-      const deleteHandler = registeredHandler(GLOSSARY_CHANNELS.delete);
-
-      await deleteHandler({ sender: {} }, { id: entry.id, confirmMessage });
-
-      const options = electronMock.showMessageBox.mock.calls[0].at(-1);
-
-      expect(options.buttons).toEqual(["OK", "Cancel"]);
-    });
-
-    it("does not delete when the Cancel-equivalent button is chosen", async () => {
-      const entry = await seedEntry();
-      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
-      electronMock.showMessageBox.mockResolvedValue({
-        response: 1,
-        checkboxChecked: false
-      });
-
-      await expect(
-        handlers.delete({ id: entry.id, confirmMessage })
-      ).resolves.toEqual({ deleted: false });
-      await expect(handlers.getById({ id: entry.id })).resolves.not.toBeNull();
-    });
-
-    it("does not delete when the dialog is dismissed (undefined response)", async () => {
-      const entry = await seedEntry();
-      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
-      electronMock.showMessageBox.mockResolvedValue({
-        response: undefined,
-        checkboxChecked: false
-      });
-
-      await expect(
-        handlers.delete({ id: entry.id, confirmMessage })
-      ).resolves.toEqual({ deleted: false });
-      await expect(handlers.getById({ id: entry.id })).resolves.not.toBeNull();
-    });
-
-    it("deletes only when the OK-equivalent button is chosen", async () => {
-      const entry = await seedEntry();
-      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
-      electronMock.showMessageBox.mockResolvedValue({
-        response: 0,
-        checkboxChecked: false
-      });
-
-      await expect(
-        handlers.delete({ id: entry.id, confirmMessage })
-      ).resolves.toEqual({ deleted: true });
-      await expect(handlers.getById({ id: entry.id })).resolves.toBeNull();
-    });
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 });
-
-function canonicalFormOf(entry: GlossaryEntry): GlossaryForm {
-  const canonicalForms = entry.forms.filter((form) => form.isCanonical);
-
-  expect(canonicalForms).toHaveLength(1);
-
-  return canonicalForms[0];
-}
-
-function registeredHandler(
-  channel: string
-): (...args: unknown[]) => unknown {
-  const registration = electronMock.handle.mock.calls.find(
-    ([registeredChannel]) => registeredChannel === channel
-  );
-
-  if (!registration) {
-    throw new Error(`Handler was not registered for ${channel}.`);
-  }
-
-  return registration[1] as (...args: unknown[]) => unknown;
-}

@@ -45,22 +45,21 @@ const project: PergamumProject = {
 
 const glossaryEntry: GlossaryEntry = {
   id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  kind: "place",
   description: "",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
-  forms: [
+  atoms: [
     {
       id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
       entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      surface: "王都",
-      relation: null,
-      warningPolicy: null,
-      isCanonical: true,
+      sortOrder: 0,
+      value: "王都",
+      matchFlags: 0,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
     }
-  ]
+  ],
+  tags: []
 };
 
 const SESSION_ID = "018f0000-0000-7000-8000-000000000000";

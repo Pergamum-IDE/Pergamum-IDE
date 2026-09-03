@@ -140,14 +140,17 @@ describe("Settings special tab wiring (#181)", () => {
 
     const savePrefix = source.slice(saveFunctionIndex, saveRequestLogIndex);
 
-    expect(savePrefix).toContain(
-      "if (!targetOpenDocument || (!options.editorId && isSettingsTabActive))"
+    // #375: `isEditorAreaSpecialTabActive` covers both the Settings tab and
+    // the Glossary Tag Manager tab (it is `isSettingsTabActive || ...`), so
+    // a Settings-active save still cannot target the last active document.
+    expect(savePrefix.replace(/\s+/g, " ")).toContain(
+      "if ( !targetOpenDocument || (!options.editorId && isEditorAreaSpecialTabActive) )"
     );
     expect(source).toContain(
-      "editorIsDirty: !isSettingsTabActive && isDirty"
+      "editorIsDirty: !isEditorAreaSpecialTabActive && isDirty"
     );
     expect(source).toContain(
-      "editorKindMarkdown:\n          !isSettingsTabActive"
+      "editorKindMarkdown:\n          !isEditorAreaSpecialTabActive"
     );
   });
 });

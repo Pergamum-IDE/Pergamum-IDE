@@ -410,61 +410,76 @@ export async function createSchemaVersionOne(
 
     CREATE TABLE glossary_entries (
       id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL CHECK (
-        kind IN ('term', 'person', 'place', 'organization', 'item', 'concept')
-      ),
       description TEXT NOT NULL,
+      -- #375: the entry's project-wide display order (0 = first). Distinct from
+      -- glossary_atoms.sort_order (Atom order within an entry),
+      -- glossary_tags.sort_order (project-wide Tag order) and
+      -- glossary_entry_tags.sort_order (Tag assignment order within an entry).
+      sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     ) STRICT;
 
-    CREATE TABLE glossary_forms (
+    CREATE TABLE glossary_atoms (
       id TEXT PRIMARY KEY,
       entry_id TEXT NOT NULL
         REFERENCES glossary_entries(id) ON DELETE CASCADE,
-      surface TEXT NOT NULL CHECK (length(trim(surface)) > 0),
-      relation TEXT CHECK (
-        relation IS NULL OR relation IN ('variant', 'alias')
-      ),
-      warning_policy TEXT CHECK (
-        warning_policy IS NULL OR warning_policy IN ('default', 'ignore', 'warn')
-      ),
-      match_boundary_start TEXT NOT NULL DEFAULT 'auto' CHECK (
-        match_boundary_start IN ('auto', 'strict', 'none')
-      ),
-      match_boundary_end TEXT NOT NULL DEFAULT 'auto' CHECK (
-        match_boundary_end IN ('auto', 'strict', 'none')
-      ),
-      allow_single_character_match INTEGER NOT NULL DEFAULT 0 CHECK (
-        allow_single_character_match IN (0, 1)
-      ),
-      is_canonical INTEGER NOT NULL CHECK (is_canonical IN (0, 1)),
+      sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
+      value TEXT NOT NULL CHECK (length(trim(value)) > 0),
+      match_flags INTEGER NOT NULL DEFAULT 0 CHECK (match_flags >= 0),
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(entry_id, surface),
-      CHECK (
-        (
-          is_canonical = 1
-          AND relation IS NULL
-          AND warning_policy IS NULL
-        )
-        OR
-        (
-          is_canonical = 0
-          AND relation IS NOT NULL
-          AND warning_policy IS NOT NULL
-          AND relation IN ('variant', 'alias')
-          AND warning_policy IN ('default', 'ignore', 'warn')
-        )
-      )
+      UNIQUE(entry_id, sort_order)
     ) STRICT;
 
-    CREATE INDEX glossary_forms_surface_idx
-      ON glossary_forms(surface);
+    CREATE TABLE glossary_tags (
+      id TEXT PRIMARY KEY,
+      -- #375: a tag label is 1..32 characters after trimming (labels only —
+      -- Atom values / the representative term stay unbounded).
+      label TEXT NOT NULL
+        CHECK (length(trim(label)) > 0 AND length(trim(label)) <= 32),
+      description TEXT,
+      background_rgb TEXT NOT NULL,
+      foreground_rgb TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
 
-    CREATE UNIQUE INDEX glossary_forms_one_canonical_per_entry_idx
-      ON glossary_forms(entry_id)
-      WHERE is_canonical = 1;
+    CREATE TABLE glossary_entry_tags (
+      entry_id TEXT NOT NULL
+        REFERENCES glossary_entries(id) ON DELETE CASCADE,
+      tag_id TEXT NOT NULL
+        REFERENCES glossary_tags(id) ON DELETE CASCADE,
+      -- #375: the tag's ASSIGNMENT order WITHIN this entry (0 = the primary
+      -- tag). Distinct from glossary_tags.sort_order (the project-wide order).
+      sort_order INTEGER NOT NULL CHECK (sort_order >= 0),
+      PRIMARY KEY (entry_id, tag_id)
+    ) STRICT;
+
+    CREATE INDEX glossary_atoms_value_idx
+      ON glossary_atoms(value);
+
+    CREATE INDEX glossary_atoms_entry_id_idx
+      ON glossary_atoms(entry_id);
+
+    -- #375: an atom value is unique within its entry (trimmed, case-sensitive
+    -- — stored values are always pre-trimmed by the shared validators).
+    CREATE UNIQUE INDEX glossary_atoms_entry_value_unique
+      ON glossary_atoms(entry_id, value);
+
+    -- #375: a glossary tag label is unique project-wide (trimmed,
+    -- case-sensitive).
+    CREATE UNIQUE INDEX glossary_tags_label_unique
+      ON glossary_tags(label);
+
+    CREATE INDEX glossary_entry_tags_tag_id_idx
+      ON glossary_entry_tags(tag_id);
+
+    -- #375: a tag's assignment order is unique within its entry (mirrors
+    -- glossary_atoms_entry_value_unique).
+    CREATE UNIQUE INDEX glossary_entry_tags_entry_sort_unique
+      ON glossary_entry_tags(entry_id, sort_order);
   `);
 }
 
@@ -485,7 +500,12 @@ function columnDetail(row: TableColumnRow): [string, string, number] {
 
 async function assertTableSchema(
   database: ProjectDatabase,
-  tableName: "metadata" | "glossary_entries" | "glossary_forms",
+  tableName:
+    | "metadata"
+    | "glossary_entries"
+    | "glossary_atoms"
+    | "glossary_tags"
+    | "glossary_entry_tags",
   expectedColumns: readonly [string, string, number][]
 ): Promise<void> {
   const columns = await database.all<TableColumnRow>(
@@ -512,14 +532,15 @@ function readIndexFlag(value: unknown, column: string): number {
   return value;
 }
 
-async function assertGlossaryFormIndex(
+async function assertTableIndex(
   database: ProjectDatabase,
+  tableName: string,
   indexName: string,
   expectedUnique: number,
   expectedPartial: number
 ): Promise<void> {
   const indexes = await database.all<IndexListRow>(
-    "PRAGMA index_list(glossary_forms)"
+    `PRAGMA index_list(${tableName})`
   );
   const index = indexes.find((row) => row.name === indexName);
 
@@ -556,35 +577,76 @@ export async function validateSchemaVersionOne(
   ]);
   await assertTableSchema(database, "glossary_entries", [
     ["id", "TEXT", 1],
-    ["kind", "TEXT", 0],
     ["description", "TEXT", 0],
+    ["sort_order", "INTEGER", 0],
     ["created_at", "TEXT", 0],
     ["updated_at", "TEXT", 0]
   ]);
-  await assertTableSchema(database, "glossary_forms", [
+  await assertTableSchema(database, "glossary_atoms", [
     ["id", "TEXT", 1],
     ["entry_id", "TEXT", 0],
-    ["surface", "TEXT", 0],
-    ["relation", "TEXT", 0],
-    ["warning_policy", "TEXT", 0],
-    ["match_boundary_start", "TEXT", 0],
-    ["match_boundary_end", "TEXT", 0],
-    ["allow_single_character_match", "INTEGER", 0],
-    ["is_canonical", "INTEGER", 0],
+    ["sort_order", "INTEGER", 0],
+    ["value", "TEXT", 0],
+    ["match_flags", "INTEGER", 0],
     ["created_at", "TEXT", 0],
     ["updated_at", "TEXT", 0]
   ]);
-  await assertGlossaryFormIndex(
+  await assertTableSchema(database, "glossary_tags", [
+    ["id", "TEXT", 1],
+    ["label", "TEXT", 0],
+    ["description", "TEXT", 0],
+    ["background_rgb", "TEXT", 0],
+    ["foreground_rgb", "TEXT", 0],
+    ["sort_order", "INTEGER", 0],
+    ["created_at", "TEXT", 0],
+    ["updated_at", "TEXT", 0]
+  ]);
+  await assertTableSchema(database, "glossary_entry_tags", [
+    ["entry_id", "TEXT", 1],
+    ["tag_id", "TEXT", 2],
+    ["sort_order", "INTEGER", 0]
+  ]);
+  await assertTableIndex(
     database,
-    "glossary_forms_surface_idx",
+    "glossary_atoms",
+    "glossary_atoms_value_idx",
     0,
     0
   );
-  await assertGlossaryFormIndex(
+  await assertTableIndex(
     database,
-    "glossary_forms_one_canonical_per_entry_idx",
+    "glossary_atoms",
+    "glossary_atoms_entry_id_idx",
+    0,
+    0
+  );
+  await assertTableIndex(
+    database,
+    "glossary_atoms",
+    "glossary_atoms_entry_value_unique",
     1,
-    1
+    0
+  );
+  await assertTableIndex(
+    database,
+    "glossary_tags",
+    "glossary_tags_label_unique",
+    1,
+    0
+  );
+  await assertTableIndex(
+    database,
+    "glossary_entry_tags",
+    "glossary_entry_tags_tag_id_idx",
+    0,
+    0
+  );
+  await assertTableIndex(
+    database,
+    "glossary_entry_tags",
+    "glossary_entry_tags_entry_sort_unique",
+    1,
+    0
   );
 }
 

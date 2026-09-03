@@ -55,22 +55,21 @@ const translateEn: Translate = (key, values) => t("en", key, values);
 const projectContext: ActiveProjectContext = { rootPath: "C:\\Novel" };
 const glossaryEntry: GlossaryEntry = {
   id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  kind: "place",
   description: "Capital city",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
-  forms: [
+  atoms: [
     {
       id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
       entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      surface: "Alice",
-      relation: null,
-      warningPolicy: null,
-      isCanonical: true,
+      sortOrder: 0,
+      value: "Alice",
+      matchFlags: 0,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
     }
-  ]
+  ],
+  tags: []
 };
 
 function addDirtyProjectDocument(

@@ -5,25 +5,20 @@ function asciiLowercaseForNavigatorSearch(value: string): string {
 
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
-    result += code >= 0x41 && code <= 0x5a
-      ? String.fromCharCode(code + 0x20)
-      : value[index];
+    result +=
+      code >= 0x41 && code <= 0x5a
+        ? String.fromCharCode(code + 0x20)
+        : value[index];
   }
 
   return result;
 }
 
-function glossaryNavigatorSearchSurfaces(
+/** #375: every atom value of the entry is searchable. */
+function glossaryNavigatorSearchValues(
   entry: GlossaryEntry
 ): readonly string[] {
-  return entry.forms
-    .filter(
-      (form) =>
-        form.isCanonical === true ||
-        form.relation === "alias" ||
-        form.relation === "variant"
-    )
-    .map((form) => form.surface);
+  return entry.atoms.map((atom) => atom.value);
 }
 
 export function matchesGlossaryNavigatorSearch(
@@ -36,8 +31,8 @@ export function matchesGlossaryNavigatorSearch(
     return true;
   }
 
-  return glossaryNavigatorSearchSurfaces(entry).some((surface) =>
-    asciiLowercaseForNavigatorSearch(surface).includes(normalizedQuery)
+  return glossaryNavigatorSearchValues(entry).some((value) =>
+    asciiLowercaseForNavigatorSearch(value).includes(normalizedQuery)
   );
 }
 
@@ -54,4 +49,36 @@ export function filterGlossaryEntriesForNavigator(
   return entries.filter((entry) =>
     matchesGlossaryNavigatorSearch(entry, trimmedQuery)
   );
+}
+
+/**
+ * #375: the sidebar tag filter. `none` is a UI-only pseudo-tag (entries that
+ * carry no tag at all); it is never a real `GlossaryTag`.
+ */
+export type GlossaryTagFilter =
+  | { readonly kind: "all" }
+  | { readonly kind: "none" }
+  | { readonly kind: "tag"; readonly tagId: string };
+
+export const GLOSSARY_TAG_FILTER_ALL: GlossaryTagFilter = { kind: "all" };
+export const GLOSSARY_TAG_FILTER_NONE: GlossaryTagFilter = { kind: "none" };
+
+export function glossaryTagFilterForTagId(tagId: string): GlossaryTagFilter {
+  return { kind: "tag", tagId };
+}
+
+export function filterGlossaryEntriesByTag(
+  entries: readonly GlossaryEntry[],
+  filter: GlossaryTagFilter
+): readonly GlossaryEntry[] {
+  switch (filter.kind) {
+    case "all":
+      return entries;
+    case "none":
+      return entries.filter((entry) => entry.tags.length === 0);
+    case "tag":
+      return entries.filter((entry) =>
+        entry.tags.some((tag) => tag.id === filter.tagId)
+      );
+  }
 }

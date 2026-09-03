@@ -53,12 +53,11 @@ describe("edit context menu shared definitions", () => {
     );
   });
 
-  it("allows only the four supported editable surfaces to open the popup", () => {
+  it("allows only the three supported editable surfaces to open the popup", () => {
     expect([...editableContextSurfaces]).toEqual([
       "markdownEditor",
-      "glossaryCanonicalInput",
       "glossaryDescription",
-      "glossaryFormSurface"
+      "glossaryAtomValue"
     ]);
     expect(isEditableContextSurface("unknownEditable")).toBe(false);
     expect(isEditableContextSurface("unsupported")).toBe(false);

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type {
-  GlossaryEntry,
-  GlossaryForm,
-  GlossaryFormMatchBoundary,
-  GlossaryFormRelation,
-  GlossaryWarningPolicy
-} from "../../src/shared/glossary";
+import type { GlossaryEntry } from "../../src/shared/glossary";
+import {
+  GlossaryAtomFlags,
+  GlossaryBoundaryPolicy,
+  setGlossaryAtomBoundaryEndPolicy,
+  setGlossaryAtomBoundaryStartPolicy
+} from "../../src/shared/glossaryAtomFlags";
 import {
   createUntitledEditorId,
   type EditorId
@@ -36,66 +36,36 @@ const timestamp = "2026-08-14T00:00:00.000Z";
 const maidEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000001";
 const otherEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000002";
 
-function canonicalForm(
-  entryId: string,
-  id: string,
-  surface: string,
-  matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
-): GlossaryForm {
-  return {
-    id,
-    entryId,
-    surface,
-    matchBoundaryStart,
-    matchBoundaryEnd,
-    relation: null,
-    warningPolicy: null,
-    isCanonical: true,
-    createdAt: timestamp,
-    updatedAt: timestamp
-  };
-}
+const CHECK_BOTH = setGlossaryAtomBoundaryEndPolicy(
+  setGlossaryAtomBoundaryStartPolicy(0, GlossaryBoundaryPolicy.Auto),
+  GlossaryBoundaryPolicy.Auto
+);
 
-function nonCanonicalForm(
-  entryId: string,
+function glossaryEntry(
   id: string,
-  surface: string,
-  relation: GlossaryFormRelation,
-  warningPolicy: GlossaryWarningPolicy = "default"
-): GlossaryForm {
+  values: string[],
+  matchFlags: number = CHECK_BOTH
+): GlossaryEntry {
   return {
     id,
-    entryId,
-    surface,
-    relation,
-    warningPolicy,
-    matchBoundaryStart: "auto",
-    matchBoundaryEnd: "auto",
-    isCanonical: false,
-    createdAt: timestamp,
-    updatedAt: timestamp
-  };
-}
-
-function glossaryEntry(id: string, forms: GlossaryForm[]): GlossaryEntry {
-  return {
-    id,
-    kind: "term",
     description: "",
-    forms,
+    atoms: values.map((value, index) => ({
+      id: `${id}-atom-${index}`,
+      entryId: id,
+      sortOrder: index,
+      value,
+      matchFlags,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    })),
+    tags: [],
     createdAt: timestamp,
     updatedAt: timestamp
   };
 }
 
-const maidEntry = glossaryEntry(maidEntryId, [
-  canonicalForm(maidEntryId, "018f4b8c-7a2b-7c3d-8e4f-200000000001", "メイド")
-]);
-
-const otherEntry = glossaryEntry(otherEntryId, [
-  canonicalForm(otherEntryId, "018f4b8c-7a2b-7c3d-8e4f-200000000002", "騎士")
-]);
+const maidEntry = glossaryEntry(maidEntryId, ["メイド"]);
+const otherEntry = glossaryEntry(otherEntryId, ["騎士"]);
 
 const documentEditorId: EditorId = createUntitledEditorId(1);
 const otherDocumentEditorId: EditorId = createUntitledEditorId(2);
@@ -350,20 +320,8 @@ describe("startGlossaryOccurrenceTracking", () => {
     expect(secondOutcome.session.currentIndex).toBe(1);
   });
 
-  it("finds occurrences from canonical, alias, and variant forms, matching #81 semantics", () => {
-    const entry = glossaryEntry(maidEntryId, [
-      canonicalForm(
-        maidEntryId,
-        "018f4b8c-7a2b-7c3d-8e4f-200000000003",
-        "メイド"
-      ),
-      nonCanonicalForm(
-        maidEntryId,
-        "018f4b8c-7a2b-7c3d-8e4f-200000000004",
-        "女中",
-        "alias"
-      )
-    ]);
+  it("finds occurrences from every atom value, matching #81 semantics", () => {
+    const entry = glossaryEntry(maidEntryId, ["メイド", "女中"]);
     const outcome = startGlossaryOccurrenceTracking({
       currentSession: inactiveGlossaryOccurrenceTrackingState,
       entry,

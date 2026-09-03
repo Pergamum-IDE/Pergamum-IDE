@@ -11,13 +11,15 @@ export const workspaceCommandIds = {
   toggleFiles: defineCommandId("workspace.files.toggle"),
   focusSearch: defineCommandId("workspace.search.focus"),
   focusGlossary: defineCommandId("workspace.glossary.focus"),
+  focusTextMap: defineCommandId("workspace.textMap.focus"),
   openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
 } as const;
 
 export type WorkspaceFocusCommandId =
   | typeof workspaceCommandIds.toggleFiles
   | typeof workspaceCommandIds.focusSearch
-  | typeof workspaceCommandIds.focusGlossary;
+  | typeof workspaceCommandIds.focusGlossary
+  | typeof workspaceCommandIds.focusTextMap;
 
 export interface WorkspaceCommandController {
   focusSidebarMode(mode: SidebarMode): void;
@@ -31,6 +33,8 @@ export interface WorkspaceCommandTitles {
   focusSearchDescription: string;
   focusGlossary: string;
   focusGlossaryDescription: string;
+  focusTextMap: string;
+  focusTextMapDescription: string;
   openApplicationSettings: string;
   openApplicationSettingsDescription: string;
 }
@@ -51,6 +55,10 @@ export function createWorkspaceCommandTitles(
     focusGlossaryDescription: translate(
       "command.workspace.glossary.focus.description"
     ),
+    focusTextMap: translate("command.workspace.textMap.focus"),
+    focusTextMapDescription: translate(
+      "command.workspace.textMap.focus.description"
+    ),
     openApplicationSettings: translate(
       "command.workspace.applicationSettings.open"
     ),
@@ -70,6 +78,8 @@ export function workspaceFocusCommandIdForMode(
       return workspaceCommandIds.focusSearch;
     case "glossary":
       return workspaceCommandIds.focusGlossary;
+    case "textMap":
+      return workspaceCommandIds.focusTextMap;
   }
 }
 
@@ -100,6 +110,14 @@ export function createWorkspaceCommands(
       description: titles.focusGlossaryDescription,
       execute: () => {
         controller.focusSidebarMode("glossary");
+      }
+    },
+    {
+      id: workspaceCommandIds.focusTextMap,
+      title: titles.focusTextMap,
+      description: titles.focusTextMapDescription,
+      execute: () => {
+        controller.focusSidebarMode("textMap");
       }
     },
     {

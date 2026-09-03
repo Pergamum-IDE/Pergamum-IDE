@@ -78,6 +78,56 @@ describe("MarkdownEditor view state controller (#272)", () => {
   });
 });
 
+describe("MarkdownEditor scrollToLine (#375 Document Map navigation)", () => {
+  it("scrolls to a 0-based source line, focuses the editor, and never moves the caret / selection", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const { controller } = mount(
+      Array.from({ length: 12 }, (_, i) => `line ${i}`).join("\n")
+    );
+
+    const before = controller()!.captureViewState();
+    act(() => controller()!.scrollToLine(7));
+    const after = controller()!.captureViewState();
+
+    expect(after?.selection).toEqual(before?.selection);
+    expect(focus).toHaveBeenCalled();
+    focus.mockRestore();
+  });
+
+  it("clamps an out-of-range line (past the end / negative) without throwing", () => {
+    const { controller } = mount("only one line");
+    const before = controller()!.captureViewState();
+
+    expect(() => act(() => controller()!.scrollToLine(999))).not.toThrow();
+    expect(() => act(() => controller()!.scrollToLine(-4))).not.toThrow();
+    expect(() =>
+      act(() => controller()!.scrollToLine(Number.NaN))
+    ).not.toThrow();
+
+    expect(controller()!.captureViewState()?.selection).toEqual(
+      before?.selection
+    );
+  });
+
+  it("accepts the Phase 5 align option ('start' for lens drag) without throwing or moving the caret", () => {
+    const { controller } = mount(
+      Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n")
+    );
+    const before = controller()!.captureViewState();
+
+    expect(() =>
+      act(() => controller()!.scrollToLine(15, { align: "start" }))
+    ).not.toThrow();
+    expect(() =>
+      act(() => controller()!.scrollToLine(3, { align: "center" }))
+    ).not.toThrow();
+
+    expect(controller()!.captureViewState()?.selection).toEqual(
+      before?.selection
+    );
+  });
+});
+
 describe("MarkdownEditor onViewStateSnapshot boundary (#272 review Blocker 3)", () => {
   interface SnapshotCall {
     key: string;

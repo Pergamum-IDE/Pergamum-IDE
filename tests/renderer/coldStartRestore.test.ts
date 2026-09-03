@@ -41,10 +41,19 @@ const MD_FILE: MarkdownFile = {
 
 const GLOSSARY_ENTRY = {
   id: "e1",
-  kind: "term",
-  canonicalSurface: "Term",
   description: "",
-  forms: []
+  atoms: [
+    {
+      id: "atom-1",
+      entryId: "e1",
+      sortOrder: 0,
+      value: "Term",
+      matchFlags: 0,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  tags: []
 } as unknown as GlossaryEntry;
 
 function record(overrides: Partial<SessionRecord> = {}): SessionRecord {

@@ -1,22 +1,32 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  glossaryEntryKinds,
-  type CreateGlossaryEntryInput,
-  type GlossaryEntryId,
-  type GlossaryEntryKind
+import type {
+  CreateGlossaryEntryInput,
+  GlossaryEntry,
+  GlossaryEntryId,
+  GlossaryTagId
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
+import { findGlossaryEntryOccurrences } from "./glossaryOccurrenceNavigation";
 import {
-  canonicalGlossarySurface,
+  GLOSSARY_TAG_FILTER_ALL,
+  GLOSSARY_TAG_FILTER_NONE,
+  filterGlossaryEntriesByTag,
+  filterGlossaryEntriesForNavigator,
+  glossaryTagFilterForTagId,
+  type GlossaryTagFilter
+} from "./glossaryNavigatorSearch";
+import { GlossaryTagChip } from "./GlossaryTagChip";
+import {
   createErrorGlossarySidebarState,
   createLoadedGlossarySidebarState,
   createLoadingGlossarySidebarState,
   createNoProjectGlossarySidebarState,
-  loadGlossaryEntries,
+  loadGlossary,
+  preserveGlossaryTagFilter,
+  representativeGlossarySurface,
   shouldApplyGlossaryLoadResult,
   type GlossarySidebarState
 } from "./glossarySidebarState";
-import { filterGlossaryEntriesForNavigator } from "./glossaryNavigatorSearch";
 
 interface GlossarySidebarProps {
   projectRootPath: string | null;
@@ -24,254 +34,67 @@ interface GlossarySidebarProps {
   highlightedEntryId: GlossaryEntryId | null;
   refreshToken: number;
   translate: Translate;
+  /** Active Markdown document body for occurrence hit counts, or null. */
+  activeDocumentContent: string | null;
   onActivateEntry: (entryId: GlossaryEntryId) => void;
   onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<boolean>;
+  onNavigateOccurrence: (
+    entry: GlossaryEntry,
+    direction: "previous" | "next"
+  ) => void;
 }
 
-export interface GlossaryCreateFormState {
+interface GlossaryCreateFormState {
   isOpen: boolean;
-  canonicalSurface: string;
-  kind: GlossaryEntryKind;
+  representativeValue: string;
+  tagIds: GlossaryTagId[];
   isSubmitting: boolean;
   error: string | null;
 }
 
-export const initialGlossaryCreateFormState: GlossaryCreateFormState = {
+const INITIAL_CREATE_FORM: GlossaryCreateFormState = {
   isOpen: false,
-  canonicalSurface: "",
-  kind: glossaryEntryKinds[0],
+  representativeValue: "",
+  tagIds: [],
   isSubmitting: false,
   error: null
 };
 
-interface GlossarySidebarViewProps {
-  state: GlossarySidebarState;
-  highlightedEntryId: GlossaryEntryId | null;
-  translate: Translate;
-  onSelectEntry: (entryId: GlossaryEntryId) => void;
-  onActivateEntry: (entryId: GlossaryEntryId) => void;
-  canCreateEntry: boolean;
-  searchQuery: string;
-  createForm: GlossaryCreateFormState;
-  onChangeSearchQuery: (query: string) => void;
-  onToggleCreateForm: () => void;
-  onChangeCreateSurface: (surface: string) => void;
-  onChangeCreateKind: (kind: GlossaryEntryKind) => void;
-  onSubmitCreateForm: () => void;
-  readOnly?: boolean;
-}
-
-function initialGlossarySidebarState(
-  projectRootPath: string | null
-): GlossarySidebarState {
-  return projectRootPath
-    ? createLoadingGlossarySidebarState(null)
-    : createNoProjectGlossarySidebarState();
-}
-
-export function GlossarySidebarView({
-  state,
-  highlightedEntryId,
-  translate,
-  onSelectEntry,
-  onActivateEntry,
-  canCreateEntry,
-  searchQuery,
-  createForm,
-  onChangeSearchQuery,
-  onToggleCreateForm,
-  onChangeCreateSurface,
-  onChangeCreateKind,
-  onSubmitCreateForm,
-  readOnly = false
-}: GlossarySidebarViewProps): JSX.Element {
-  let content: JSX.Element;
-  const filteredEntries =
-    state.status === "loaded"
-      ? filterGlossaryEntriesForNavigator(state.entries, searchQuery)
-      : [];
-  const hasSearchQuery = searchQuery.trim().length > 0;
-
-  switch (state.status) {
-    case "noProject":
-      content = (
-        <div className="workspacePlaceholder">
-          {translate("glossary.noProject")}
-        </div>
-      );
-      break;
-    case "loading":
-      content = (
-        <div className="workspacePlaceholder" role="status">
-          {translate("glossary.loading")}
-        </div>
-      );
-      break;
-    case "error":
-      content = (
-        <div className="workspacePlaceholder" role="alert">
-          {translate("glossary.loadError")}
-        </div>
-      );
-      break;
-    case "loaded":
-      content =
-        state.entries.length === 0 ? (
-          <div className="workspacePlaceholder">
-            {translate("glossary.empty")}
-          </div>
-        ) : filteredEntries.length === 0 && hasSearchQuery ? (
-          <div className="workspacePlaceholder">
-            {translate("glossaryNavigator.emptySearchResult")}
-          </div>
-        ) : (
-          <div
-            className="workspaceSidebarList"
-            aria-label={translate("glossary.entries")}
-          >
-            {filteredEntries.map((entry) => {
-              const label = canonicalGlossarySurface(entry);
-              const isHighlighted = highlightedEntryId === entry.id;
-              const isSelected = state.selectedEntryId === entry.id;
-
-              return (
-                <button
-                  type="button"
-                  key={entry.id}
-                  className={
-                    [
-                      "workspaceSidebarItem",
-                      isHighlighted ? "isActive" : null,
-                      isSelected ? "isSelected" : null
-                    ]
-                      .filter(Boolean)
-                      .join(" ")
-                  }
-                  aria-current={isHighlighted ? "page" : undefined}
-                  data-selected={isSelected ? "true" : undefined}
-                  title={label}
-                  onClick={() => {
-                    onSelectEntry(entry.id);
-                    onActivateEntry(entry.id);
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        );
-      break;
+function entryHitCount(
+  entry: GlossaryEntry,
+  activeDocumentContent: string | null
+): number {
+  if (activeDocumentContent === null) {
+    return 0;
   }
 
-  return (
-    <aside
-      className="workspaceSidebarPanel"
-      aria-label={translate("glossary.sidebarTitle")}
-    >
-      <div className="sidebarHeader">
-        {translate("glossary.sidebarTitle")}
-      </div>
-      <div className="workspacePlaceholderList">
-        {state.status === "loaded" ? (
-          <div className="glossaryNavigatorSearch">
-            <input
-              type="search"
-              value={searchQuery}
-              aria-label={translate("glossaryNavigator.search")}
-              placeholder={translate("glossaryNavigator.searchPlaceholder")}
-              onChange={(event) => onChangeSearchQuery(event.target.value)}
-            />
-          </div>
-        ) : null}
-        {content}
-      </div>
-      {createForm.isOpen ? (
-        <form
-          className="glossaryCreateForm"
-          aria-label={translate("glossary.create.title")}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!readOnly) {
-              onSubmitCreateForm();
-            }
-          }}
-        >
-          <label className="glossaryCreateFormField">
-            <span>{translate("glossary.create.surfaceLabel")}</span>
-            <input
-              type="text"
-              value={createForm.canonicalSurface}
-              disabled={createForm.isSubmitting || readOnly}
-              onChange={(event) => {
-                if (!readOnly) {
-                  onChangeCreateSurface(event.target.value);
-                }
-              }}
-            />
-          </label>
-          <label className="glossaryCreateFormField">
-            <span>{translate("glossary.create.kindLabel")}</span>
-            <select
-              value={createForm.kind}
-              disabled={createForm.isSubmitting || readOnly}
-              onChange={(event) =>
-                !readOnly
-                  ? onChangeCreateKind(
-                      event.target.value as GlossaryEntryKind
-                    )
-                  : undefined
-              }
-            >
-              {glossaryEntryKinds.map((kind) => (
-                <option key={kind} value={kind}>
-                  {kind}
-                </option>
-              ))}
-            </select>
-          </label>
-          {createForm.error ? (
-            <p className="glossaryCreateFormError" role="alert">
-              {createForm.error}
-            </p>
-          ) : null}
-          <div className="glossaryCreateFormActions">
-            <button
-              type="button"
-              onClick={onToggleCreateForm}
-              disabled={createForm.isSubmitting}
-            >
-              {translate("glossary.create.cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={
-                createForm.isSubmitting ||
-                readOnly ||
-                createForm.canonicalSurface.trim().length === 0
-              }
-            >
-              {translate("glossary.create.submit")}
-            </button>
-          </div>
-        </form>
-      ) : null}
-      <div className="workspaceSidebarActions">
-        <button
-          type="button"
-          className="workspaceSidebarButton"
-          disabled={!canCreateEntry || readOnly}
-          onClick={() => {
-            if (!readOnly) {
-              onToggleCreateForm();
-            }
-          }}
-        >
-          {translate("glossary.add")}
-        </button>
-      </div>
-    </aside>
-  );
+  return findGlossaryEntryOccurrences(activeDocumentContent, entry).length;
+}
+
+/** `<option>` value for the "no tags" pseudo-filter (never a real tag id). */
+const TAG_FILTER_NONE_OPTION = "__none__";
+
+function tagFilterToOptionValue(filter: GlossaryTagFilter): string {
+  switch (filter.kind) {
+    case "all":
+      return "";
+    case "none":
+      return TAG_FILTER_NONE_OPTION;
+    case "tag":
+      return filter.tagId;
+  }
+}
+
+function optionValueToTagFilter(value: string): GlossaryTagFilter {
+  if (value === "") {
+    return GLOSSARY_TAG_FILTER_ALL;
+  }
+
+  if (value === TAG_FILTER_NONE_OPTION) {
+    return GLOSSARY_TAG_FILTER_NONE;
+  }
+
+  return glossaryTagFilterForTagId(value);
 }
 
 export function GlossarySidebar({
@@ -280,16 +103,25 @@ export function GlossarySidebar({
   highlightedEntryId,
   refreshToken,
   translate,
+  activeDocumentContent,
   onActivateEntry,
-  onCreateEntry
+  onCreateEntry,
+  onNavigateOccurrence
 }: GlossarySidebarProps): JSX.Element {
   const [state, setState] = useState<GlossarySidebarState>(() =>
-    initialGlossarySidebarState(projectRootPath)
-  );
-  const [createForm, setCreateForm] = useState<GlossaryCreateFormState>(
-    initialGlossaryCreateFormState
+    projectRootPath
+      ? createLoadingGlossarySidebarState(null)
+      : createNoProjectGlossarySidebarState()
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState<GlossaryTagFilter>(
+    GLOSSARY_TAG_FILTER_ALL
+  );
+  const [expandedEntryIds, setExpandedEntryIds] = useState<
+    ReadonlySet<GlossaryEntryId>
+  >(new Set());
+  const [createForm, setCreateForm] =
+    useState<GlossaryCreateFormState>(INITIAL_CREATE_FORM);
   const projectRootPathRef = useRef<string | null>(projectRootPath);
   const loadRequestIdRef = useRef(0);
 
@@ -305,47 +137,47 @@ export function GlossarySidebar({
       return;
     }
 
-    setState((currentState) =>
+    setState((current) =>
       createLoadingGlossarySidebarState(
-        didProjectChange ? null : currentState.selectedEntryId
+        didProjectChange ? null : current.selectedEntryId
       )
     );
 
     let isActive = true;
 
-    void loadGlossaryEntries()
-      .then((entries) => {
+    void loadGlossary()
+      .then(({ entries, tags }) => {
         if (
           !isActive ||
-          !shouldApplyGlossaryLoadResult(
-            loadRequestIdRef.current,
-            requestId
-          )
+          !shouldApplyGlossaryLoadResult(loadRequestIdRef.current, requestId)
         ) {
           return;
         }
 
-        setState((currentState) =>
+        setState((current) =>
           createLoadedGlossarySidebarState(
             entries,
-            didProjectChange ? null : currentState.selectedEntryId
+            tags,
+            didProjectChange ? null : current.selectedEntryId
           )
+        );
+        setTagFilter((current) =>
+          didProjectChange
+            ? GLOSSARY_TAG_FILTER_ALL
+            : preserveGlossaryTagFilter(tags, current)
         );
       })
       .catch(() => {
         if (
           !isActive ||
-          !shouldApplyGlossaryLoadResult(
-            loadRequestIdRef.current,
-            requestId
-          )
+          !shouldApplyGlossaryLoadResult(loadRequestIdRef.current, requestId)
         ) {
           return;
         }
 
-        setState((currentState) =>
+        setState((current) =>
           createErrorGlossarySidebarState(
-            didProjectChange ? null : currentState.selectedEntryId
+            didProjectChange ? null : current.selectedEntryId
           )
         );
       });
@@ -355,86 +187,323 @@ export function GlossarySidebar({
     };
   }, [projectRootPath, refreshToken]);
 
-  useEffect(() => {
-    if (!projectRootPath) {
-      setCreateForm(initialGlossaryCreateFormState);
-    }
-  }, [projectRootPath]);
-
   async function submitCreateForm(): Promise<void> {
-    const canonicalSurface = createForm.canonicalSurface.trim();
+    const value = createForm.representativeValue.trim();
 
-    if (readOnly || canonicalSurface.length === 0 || createForm.isSubmitting) {
+    if (readOnly || value.length === 0 || createForm.isSubmitting) {
       return;
     }
 
-    setCreateForm((currentForm) => ({
-      ...currentForm,
-      isSubmitting: true,
-      error: null
-    }));
+    setCreateForm((form) => ({ ...form, isSubmitting: true, error: null }));
 
     try {
       const didOpen = await onCreateEntry({
-        kind: createForm.kind,
-        canonicalSurface,
-        description: ""
+        description: "",
+        atoms: [{ value, matchFlags: 0 }],
+        tagIds: [...createForm.tagIds]
       });
 
-      if (didOpen) {
-        setCreateForm(initialGlossaryCreateFormState);
-      } else {
-        setCreateForm((currentForm) => ({
-          ...currentForm,
-          isSubmitting: false,
-          error: translate("glossary.create.error")
-        }));
-      }
+      setCreateForm(
+        didOpen
+          ? INITIAL_CREATE_FORM
+          : {
+              ...createForm,
+              isSubmitting: false,
+              error: translate("glossary.create.error")
+            }
+      );
     } catch {
-      setCreateForm((currentForm) => ({
-        ...currentForm,
+      setCreateForm((form) => ({
+        ...form,
         isSubmitting: false,
         error: translate("glossary.create.error")
       }));
     }
   }
 
-  return (
-    <GlossarySidebarView
-      state={state}
-      highlightedEntryId={highlightedEntryId}
-      translate={translate}
-      onSelectEntry={(entryId) =>
-        setState((currentState) => ({
-          ...currentState,
-          selectedEntryId: entryId
-        }))
-      }
-      onActivateEntry={onActivateEntry}
-      canCreateEntry={projectRootPath !== null && !readOnly}
-      searchQuery={searchQuery}
-      createForm={createForm}
-      onChangeSearchQuery={setSearchQuery}
-      onToggleCreateForm={() =>
-        setCreateForm((currentForm) =>
-          currentForm.isOpen || readOnly
-            ? initialGlossaryCreateFormState
-            : { ...initialGlossaryCreateFormState, isOpen: true }
+  const visibleEntries =
+    state.status === "loaded"
+      ? filterGlossaryEntriesForNavigator(
+          filterGlossaryEntriesByTag(state.entries, tagFilter),
+          searchQuery
         )
-      }
-      onChangeCreateSurface={(canonicalSurface) =>
-        setCreateForm((currentForm) => ({
-          ...currentForm,
-          canonicalSurface
-        }))
-      }
-      onChangeCreateKind={(kind) =>
-        setCreateForm((currentForm) => ({ ...currentForm, kind }))
-      }
-      onSubmitCreateForm={() => {
-        void submitCreateForm();
-      }}
-      readOnly={readOnly}
-    />
+      : [];
+
+  return (
+    <aside
+      className="workspaceSidebarPanel glossarySidebar"
+      aria-label={translate("glossary.sidebarTitle")}
+    >
+      <div className="sidebarHeader">{translate("glossary.sidebarTitle")}</div>
+
+      {state.status === "loaded" ? (
+        <div className="glossarySidebarControls">
+          <div className="glossarySidebarTagFilter">
+            <select
+              aria-label={translate("glossary.tagFilter")}
+              value={tagFilterToOptionValue(tagFilter)}
+              onChange={(event) =>
+                setTagFilter(optionValueToTagFilter(event.target.value))
+              }
+            >
+              <option value="">{translate("glossary.tagFilter.all")}</option>
+              <option value={TAG_FILTER_NONE_OPTION}>
+                {translate("glossary.tagFilter.none")}
+              </option>
+              {state.tags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <input
+            type="search"
+            className="glossarySidebarSearch"
+            value={searchQuery}
+            aria-label={translate("glossaryNavigator.search")}
+            placeholder={translate("glossaryNavigator.searchPlaceholder")}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+      ) : null}
+
+      <div className="workspacePlaceholderList">
+        {state.status === "noProject" ? (
+          <div className="workspacePlaceholder">
+            {translate("glossary.noProject")}
+          </div>
+        ) : state.status === "loading" ? (
+          <div className="workspacePlaceholder" role="status">
+            {translate("glossary.loading")}
+          </div>
+        ) : state.status === "error" ? (
+          <div className="workspacePlaceholder" role="alert">
+            {translate("glossary.loadError")}
+          </div>
+        ) : state.entries.length === 0 ? (
+          <div className="workspacePlaceholder">
+            {translate("glossary.empty")}
+          </div>
+        ) : visibleEntries.length === 0 ? (
+          <div className="workspacePlaceholder">
+            {translate("glossaryNavigator.emptySearchResult")}
+          </div>
+        ) : (
+          <ul
+            className="glossarySidebarEntries"
+            aria-label={translate("glossary.entries")}
+          >
+            {visibleEntries.map((entry) => {
+              const label = representativeGlossarySurface(entry);
+              const expanded = expandedEntryIds.has(entry.id);
+              const hitCount = entryHitCount(entry, activeDocumentContent);
+              // #375: occurrence jump targets the ACTIVE Markdown document
+              // only. No active Markdown body, or no hits for this entry ⇒
+              // the ◀ / ▶ buttons are disabled.
+              const occurrenceNavDisabled =
+                activeDocumentContent === null || hitCount === 0;
+
+              return (
+                <li
+                  key={entry.id}
+                  className={[
+                    "glossarySidebarEntryRow",
+                    highlightedEntryId === entry.id ? "isActive" : null
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-current={
+                    highlightedEntryId === entry.id ? "page" : undefined
+                  }
+                >
+                  <div className="glossarySidebarEntryHeader">
+                    <button
+                      type="button"
+                      className="glossarySidebarIconButton glossarySidebarOccurrenceButton"
+                      aria-label={translate("glossary.previousOccurrence")}
+                      title={translate("glossary.previousOccurrence")}
+                      disabled={occurrenceNavDisabled}
+                      onClick={() =>
+                        onNavigateOccurrence(entry, "previous")
+                      }
+                    >
+                      ◀
+                    </button>
+                    <button
+                      type="button"
+                      className="glossarySidebarIconButton glossarySidebarExpandButton"
+                      aria-expanded={expanded}
+                      aria-label={translate(
+                        expanded
+                          ? "glossary.collapseEntry"
+                          : "glossary.expandEntry"
+                      )}
+                      onClick={() =>
+                        setExpandedEntryIds((current) => {
+                          const next = new Set(current);
+                          if (next.has(entry.id)) {
+                            next.delete(entry.id);
+                          } else {
+                            next.add(entry.id);
+                          }
+                          return next;
+                        })
+                      }
+                    >
+                      {expanded ? "∨" : "＞"}
+                    </button>
+                    <span
+                      className="glossarySidebarEntryLabel"
+                      title={label}
+                    >
+                      {label}
+                    </span>
+                    <button
+                      type="button"
+                      className="glossarySidebarIconButton glossarySidebarOccurrenceButton glossarySidebarNextOccurrenceButton"
+                      aria-label={translate("glossary.nextOccurrence")}
+                      title={translate("glossary.nextOccurrence")}
+                      disabled={occurrenceNavDisabled}
+                      onClick={() => onNavigateOccurrence(entry, "next")}
+                    >
+                      ▶
+                    </button>
+                  </div>
+
+                  {expanded ? (
+                    <div className="glossarySidebarEntryDetail">
+                      {entry.tags.length > 0 ? (
+                        <div className="glossarySidebarEntryTags">
+                          {entry.tags.map((tag) => (
+                            <GlossaryTagChip key={tag.id} tag={tag} />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="glossarySidebarEntryTags">
+                          <span className="glossarySidebarNoTagsChip">
+                            {translate("glossary.noTags")}
+                          </span>
+                        </div>
+                      )}
+                      <div className="glossarySidebarEntryFooter">
+                        <span className="glossarySidebarHitCount">
+                          {translate("glossary.hitCount", {
+                            count: hitCount
+                          })}
+                        </span>
+                        <button
+                          type="button"
+                          className="glossarySidebarIconButton glossarySidebarEditButton"
+                          aria-label={translate("glossary.editEntry")}
+                          title={translate("glossary.editEntry")}
+                          onClick={() => onActivateEntry(entry.id)}
+                        >
+                          …
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {createForm.isOpen ? (
+        <form
+          className="glossaryCreateForm"
+          aria-label={translate("glossary.create.title")}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!readOnly) {
+              void submitCreateForm();
+            }
+          }}
+        >
+          <label className="glossaryCreateFormField">
+            <span>{translate("glossary.create.surfaceLabel")}</span>
+            <input
+              type="text"
+              value={createForm.representativeValue}
+              disabled={createForm.isSubmitting || readOnly}
+              onChange={(event) =>
+                setCreateForm((form) => ({
+                  ...form,
+                  representativeValue: event.target.value
+                }))
+              }
+            />
+          </label>
+          {state.status === "loaded" && state.tags.length > 0 ? (
+            <div className="glossaryCreateFormTags">
+              {state.tags.map((tag) => {
+                const attached = createForm.tagIds.includes(tag.id);
+                return (
+                  <button
+                    type="button"
+                    key={tag.id}
+                    aria-pressed={attached}
+                    className="glossaryCreateFormTagToggle"
+                    onClick={() =>
+                      setCreateForm((form) => ({
+                        ...form,
+                        tagIds: attached
+                          ? form.tagIds.filter((id) => id !== tag.id)
+                          : [...form.tagIds, tag.id]
+                      }))
+                    }
+                  >
+                    <GlossaryTagChip tag={tag} muted={!attached} />
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {createForm.error ? (
+            <p className="glossaryCreateFormError" role="alert">
+              {createForm.error}
+            </p>
+          ) : null}
+          <div className="glossaryCreateFormActions">
+            <button
+              type="button"
+              disabled={createForm.isSubmitting}
+              onClick={() => setCreateForm(INITIAL_CREATE_FORM)}
+            >
+              {translate("glossary.create.cancel")}
+            </button>
+            <button
+              type="submit"
+              disabled={
+                createForm.isSubmitting ||
+                readOnly ||
+                createForm.representativeValue.trim().length === 0
+              }
+            >
+              {translate("glossary.create.submit")}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      <div className="workspaceSidebarActions glossarySidebarActions">
+        <button
+          type="button"
+          className="workspaceSidebarButton"
+          disabled={projectRootPath === null || readOnly}
+          onClick={() =>
+            setCreateForm((form) =>
+              form.isOpen
+                ? INITIAL_CREATE_FORM
+                : { ...INITIAL_CREATE_FORM, isOpen: true }
+            )
+          }
+        >
+          {translate("glossary.addEntry")}
+        </button>
+      </div>
+    </aside>
   );
 }

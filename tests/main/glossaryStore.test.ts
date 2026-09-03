@@ -4,31 +4,55 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGlossaryEntry,
+  createGlossaryTag,
   deleteGlossaryEntry,
+  deleteGlossaryTag,
   getGlossaryEntryById,
-  glossaryEntryFromDatabaseRows,
+  GlossaryStoreError,
   listGlossaryEntries,
-  lookupGlossarySurface,
+  listGlossaryTags,
+  reorderGlossaryEntries,
+  reorderGlossaryTags,
   updateGlossaryEntry,
-  GlossaryStoreError
+  updateGlossaryTag
 } from "../../src/main/glossaryStore";
 import {
   openProjectDatabase,
   type ProjectDatabase
 } from "../../src/main/projectDatabase";
 import {
+  GlossaryBoundaryPolicy,
+  setGlossaryAtomBoundaryEndPolicy,
+  setGlossaryAtomBoundaryStartPolicy
+} from "../../src/shared/glossaryAtomFlags";
+import {
   GlossaryValidationError,
-  type GlossaryEntry,
-  type GlossaryForm
+  type GlossaryTag
 } from "../../src/shared/glossary";
 
-const missingEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
-const entryRowId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
-const formRowId = "018f4b8c-7a2b-7c3d-8e4f-123456789abe";
+const BOUNDARY_START_AUTO = setGlossaryAtomBoundaryStartPolicy(
+  0,
+  GlossaryBoundaryPolicy.Auto
+);
+const BOUNDARY_END_AUTO = setGlossaryAtomBoundaryEndPolicy(
+  0,
+  GlossaryBoundaryPolicy.Auto
+);
 
-describe("glossary store", () => {
+const missingEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
+const missingTagId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
+
+function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
+  return { log: vi.fn() };
+}
+
+function dbLogEvents(logger: { log: ReturnType<typeof vi.fn> }) {
+  return logger.log.mock.calls.map((call) => call[0]);
+}
+
+describe("glossary store (#375)", () => {
   let projectRootPath: string;
-  let database: ProjectDatabase | null = null;
+  let database: ProjectDatabase;
 
   beforeEach(async () => {
     projectRootPath = await fs.mkdtemp(
@@ -38,877 +62,675 @@ describe("glossary store", () => {
   });
 
   afterEach(async () => {
-    if (database) {
-      await database.close();
-      database = null;
-    }
-
-    await fs.rm(projectRootPath, {
-      recursive: true,
-      force: true
-    });
+    await database.close();
+    await fs.rm(projectRootPath, { recursive: true, force: true });
   });
+
+  async function makeTag(
+    label: string,
+    background = "#123456"
+  ): Promise<GlossaryTag> {
+    return createGlossaryTag(database, {
+      label,
+      description: null,
+      backgroundRgb: background,
+      foregroundRgb: "#ffffff"
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Entries + atoms
+  // -----------------------------------------------------------------------
 
   it("lists an empty glossary from a new project database", async () => {
-    await expect(listGlossaryEntries(database!)).resolves.toEqual([]);
+    await expect(listGlossaryEntries(database)).resolves.toEqual([]);
   });
 
-  it("logs empty glossary list as succeeded with count zero", async () => {
-    const logger = debugLoggerMock();
-
-    await expect(listGlossaryEntries(database!, logger)).resolves.toEqual([]);
-
-    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
-      "db.operation.started",
-      "db.operation.succeeded"
-    ]);
-    expect(dbLogEvents(logger)[1]).toMatchObject({
-      level: "debug",
-      event: "db.operation.succeeded",
-      details: {
-        dbOperation: "list",
-        dbEntityKind: "glossaryEntry",
-        result: "succeeded",
-        count: 0
-      }
-    });
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
-      "db.operation.skipped"
-    );
-  });
-
-  it("logs missing glossary entry reads as succeeded with count zero", async () => {
-    const logger = debugLoggerMock();
-
-    await expect(
-      getGlossaryEntryById(database!, missingEntryId, logger)
-    ).resolves.toBeNull();
-
-    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
-      "db.operation.started",
-      "db.operation.succeeded"
-    ]);
-    expect(dbLogEvents(logger)[1]).toMatchObject({
-      event: "db.operation.succeeded",
-      details: {
-        dbOperation: "read",
-        dbEntityKind: "glossaryEntry",
-        result: "succeeded",
-        count: 0
-      }
-    });
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
-      "db.operation.skipped"
-    );
-  });
-
-  it("logs glossary create without surface or description content", async () => {
-    const logger = debugLoggerMock();
-
-    await createGlossaryEntry(
-      database!,
-      {
-        kind: "person",
-        canonicalSurface: "エリシア・フォン・アルセリア",
-        description: "アルセリア王国の第三皇女"
-      },
-      logger
-    );
-
-    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
-      "db.operation.started",
-      "db.operation.succeeded"
-    ]);
-    expect(dbLogEvents(logger)[1]).toMatchObject({
-      event: "db.operation.succeeded",
-      details: {
-        dbOperation: "create",
-        dbEntityKind: "glossaryEntry",
-        result: "succeeded",
-        count: 1
-      }
-    });
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("エリシア");
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("第三皇女");
-  });
-
-  it("creates an entry and its canonical form transactionally", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "person",
-      canonicalSurface: "エリシア・フォン・アルセリア",
-      description: "アルセリア王国の第三皇女"
-    });
-
-    expect(entry.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    );
-    expect(entry.kind).toBe("person");
-    expect(entry.description).toBe("アルセリア王国の第三皇女");
-    expect(entry.forms).toHaveLength(1);
-    const canonicalForm = canonicalFormOf(entry);
-
-    expect(canonicalForm).toMatchObject({
-      entryId: entry.id,
-      surface: "エリシア・フォン・アルセリア",
-      relation: null,
-      warningPolicy: null,
-      matchBoundaryStart: "auto",
-      matchBoundaryEnd: "auto",
-      allowSingleCharacterMatch: false,
-      isCanonical: true
-    });
-    expect(Date.parse(entry.createdAt)).not.toBeNaN();
-    expect(Date.parse(entry.updatedAt)).not.toBeNaN();
-    expect(Date.parse(canonicalForm.createdAt)).not.toBeNaN();
-    expect(Date.parse(canonicalForm.updatedAt)).not.toBeNaN();
-
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
-      entry
-    );
-  });
-
-  it("creates an entry with explicit canonical match boundaries", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "person",
-      canonicalSurface: "オーダ",
-      description: "千年領主制度",
-      matchBoundaryStart: "strict",
-      matchBoundaryEnd: "none"
-    });
-
-    expect(canonicalFormOf(entry)).toMatchObject({
-      surface: "オーダ",
-      matchBoundaryStart: "strict",
-      matchBoundaryEnd: "none"
-    });
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
-      entry
-    );
-  });
-
-  it("lists glossary entries ordered by canonical surface", async () => {
-    const secondEntry = await createGlossaryEntry(database!, {
-      kind: "item",
-      canonicalSurface: "魔導炉",
-      description: "魔力を生成する設備"
-    });
-    const firstEntry = await createGlossaryEntry(database!, {
-      kind: "place",
-      canonicalSurface: "王都アルセリア",
-      description: "王国の首都"
-    });
-
-    await expect(listGlossaryEntries(database!)).resolves.toEqual([
-      firstEntry,
-      secondEntry
-    ]);
-  });
-
-  it("updates glossary entry fields while preserving canonical surface", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "term",
-      canonicalSurface: "魔導炉",
-      description: "旧式の説明",
-      matchBoundaryStart: "strict",
-      matchBoundaryEnd: "none"
-    });
-    const updatedEntry = await updateGlossaryEntry(database!, {
-      id: entry.id,
-      kind: "concept",
-      description: "魔力を大量生成する技術",
-      canonicalSurface: "魔導炉",
-      forms: []
-    });
-
-    expect(updatedEntry).toMatchObject({
-      id: entry.id,
-      kind: "concept",
-      description: "魔力を大量生成する技術",
-      createdAt: entry.createdAt
-    });
-    expect(canonicalFormOf(updatedEntry)).toMatchObject({
-      surface: "魔導炉",
-      relation: null,
-      warningPolicy: null,
-      matchBoundaryStart: "strict",
-      matchBoundaryEnd: "none",
-      isCanonical: true
-    });
-    expect(Date.parse(updatedEntry.updatedAt)).not.toBeNaN();
-
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
-      updatedEntry
-    );
-  });
-
-  it("updates the canonical match boundaries when explicitly provided", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "term",
-      canonicalSurface: "メイド",
-      description: "使用人",
-      matchBoundaryStart: "auto",
-      matchBoundaryEnd: "auto"
-    });
-    const updatedEntry = await updateGlossaryEntry(database!, {
-      id: entry.id,
-      kind: "term",
-      description: "使用人",
-      canonicalSurface: "メイド",
-      matchBoundaryStart: "none",
-      matchBoundaryEnd: "auto",
-      forms: []
-    });
-
-    expect(canonicalFormOf(updatedEntry)).toMatchObject({
-      surface: "メイド",
-      matchBoundaryStart: "none",
-      matchBoundaryEnd: "auto"
-    });
-
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
-      updatedEntry
-    );
-  });
-
-  it("persists allowSingleCharacterMatch on create, update, and read (#365)", async () => {
-    // create: canonical form defaults to false when not provided
-    const created = await createGlossaryEntry(database!, {
-      kind: "term",
-      canonicalSurface: "蝕",
-      description: ""
-    });
-    expect(canonicalFormOf(created).allowSingleCharacterMatch).toBe(false);
-
-    // create with the opt-in on the canonical form
-    const createdOptIn = await createGlossaryEntry(database!, {
-      kind: "term",
-      canonicalSurface: "牙",
-      description: "",
-      allowSingleCharacterMatch: true
-    });
-    expect(canonicalFormOf(createdOptIn).allowSingleCharacterMatch).toBe(true);
-
-    // update: flip the canonical form on and add a non-canonical form with it on
-    const updated = await updateGlossaryEntry(database!, {
-      id: created.id,
-      kind: "term",
-      description: "",
-      canonicalSurface: "蝕",
-      allowSingleCharacterMatch: true,
-      forms: [
+  it("creates an entry with multiple atoms packed to sortOrder 0..n-1 and no tags", async () => {
+    const entry = await createGlossaryEntry(database, {
+      description: "戦国大名",
+      atoms: [
+        { value: "織田信長", matchFlags: 0 },
         {
-          surface: "喰",
-          relation: "alias",
-          warningPolicy: "default",
-          matchBoundaryStart: "auto",
-          matchBoundaryEnd: "auto",
-          allowSingleCharacterMatch: true
-        },
-        {
-          surface: "蝕変",
-          relation: "variant",
-          warningPolicy: "default",
-          matchBoundaryStart: "auto",
-          matchBoundaryEnd: "auto"
+          value: "第六天魔王",
+          matchFlags: BOUNDARY_START_AUTO
         }
-      ]
-    });
-    expect(canonicalFormOf(updated).allowSingleCharacterMatch).toBe(true);
-    const aliasForm = updated.forms.find((form) => form.surface === "喰");
-    const variantForm = updated.forms.find((form) => form.surface === "蝕変");
-    expect(aliasForm?.allowSingleCharacterMatch).toBe(true);
-    // missing on input ⇒ false
-    expect(variantForm?.allowSingleCharacterMatch).toBe(false);
-
-    // read back after reopen equals the in-memory result
-    await expect(getGlossaryEntryById(database!, created.id)).resolves.toEqual(
-      updated
-    );
-  });
-
-  it("deletes a glossary entry", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "organization",
-      canonicalSurface: "帝国",
-      description: "北方の大国"
+      ],
+      tagIds: []
     });
 
-    await deleteGlossaryEntry(database!, entry.id);
-
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toBeNull();
-    await expect(listGlossaryEntries(database!)).resolves.toEqual([]);
-  });
-
-  it("persists glossary entries after closing and reopening the project database", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "place",
-      canonicalSurface: "王都アルセリア",
-      description: "王国の首都"
-    });
-
-    await database!.close();
-    database = await openProjectDatabase(projectRootPath);
-
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
-      entry
-    );
-  });
-
-  it("rejects missing entries on update and delete", async () => {
-    await expect(
-      updateGlossaryEntry(database!, {
-        id: missingEntryId,
-        kind: "term",
-        description: "更新できない",
-        canonicalSurface: "存在しない用語",
-        forms: []
-      })
-    ).rejects.toBeInstanceOf(GlossaryStoreError);
-
-    await expect(
-      deleteGlossaryEntry(database!, missingEntryId)
-    ).rejects.toBeInstanceOf(GlossaryStoreError);
-  });
-
-  it("logs update precondition misses as skipped before running update", async () => {
-    const logger = debugLoggerMock();
-
-    await expect(
-      updateGlossaryEntry(
-        database!,
-        {
-          id: missingEntryId,
-          kind: "term",
-          description: "更新できない",
-          canonicalSurface: "存在しない用語",
-          forms: []
-        },
-        logger
-      )
-    ).rejects.toBeInstanceOf(GlossaryStoreError);
-
-    const events = dbLogEvents(logger);
-
-    expect(events.map((event) => event.event)).toEqual([
-      "db.operation.started",
-      "db.operation.skipped"
+    expect(entry.atoms.map((a) => [a.sortOrder, a.value])).toEqual([
+      [0, "織田信長"],
+      [1, "第六天魔王"]
     ]);
-    expect(events[1].details.dbOperationId).toBe(
-      events[0].details.dbOperationId
-    );
-    expect(events[1]).toMatchObject({
-      level: "debug",
-      event: "db.operation.skipped",
-      details: {
-        dbOperation: "update",
-        dbEntityKind: "glossaryEntry",
-        result: "ignored",
-        reason: "not_found",
-        durationMs: expect.any(Number)
-      }
-    });
+    expect(entry.atoms[1].matchFlags).toBe(BOUNDARY_START_AUTO);
+    expect(entry.tags).toEqual([]);
+    expect("kind" in entry).toBe(false);
+
+    const listed = await listGlossaryEntries(database);
+    expect(listed).toHaveLength(1);
+    expect(listed[0].atoms[0].value).toBe("織田信長");
   });
 
-  it("logs create validation failures as skipped without content details", async () => {
+  it("#375: attaches 0..n tags in ENTRY ASSIGNMENT order (tagIds order), not the tag's project sortOrder", async () => {
+    // Project sortOrder: 武将 = 0, 地名 = 1.
+    const first = await makeTag("武将");
+    const second = await makeTag("地名");
+
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "桜田門", matchFlags: 0 }],
+      // Assigned 地名 first, 武将 second → 地名 is the primary tag.
+      tagIds: [second.id, first.id]
+    });
+
+    expect(entry.tags.map((t) => t.label)).toEqual(["地名", "武将"]);
+    // entry.tags[0] is the primary tag.
+    expect(entry.tags[0].id).toBe(second.id);
+
+    // A fresh get / list preserves that assignment order.
+    const listed = (await listGlossaryEntries(database))[0];
+    expect(listed.tags.map((t) => t.label)).toEqual(["地名", "武将"]);
+  });
+
+  it("#375: entry update re-packs tag assignment sort_order to the new tagIds order", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+    const c = await makeTag("C");
+
+    const created = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "x", matchFlags: 0 }],
+      tagIds: [a.id, b.id, c.id]
+    });
+    expect(created.tags.map((t) => t.label)).toEqual(["A", "B", "C"]);
+
+    const updated = await updateGlossaryEntry(database, {
+      id: created.id,
+      description: "",
+      atoms: [{ value: "x", matchFlags: 0 }],
+      tagIds: [c.id, a.id]
+    });
+    expect(updated.tags.map((t) => t.label)).toEqual(["C", "A"]);
+    expect((await listGlossaryEntries(database))[0].tags.map((t) => t.id)).toEqual(
+      [c.id, a.id]
+    );
+  });
+
+  it("rejects an entry that references a non-existent tag id", async () => {
+    await expect(
+      createGlossaryEntry(database, {
+        description: "",
+        atoms: [{ value: "x", matchFlags: 0 }],
+        tagIds: [missingTagId]
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_NOT_FOUND" });
+
+    expect(await listGlossaryEntries(database)).toEqual([]);
+  });
+
+  it("updates an entry: replaces atoms (re-packing sortOrder) and tag links, keeping supplied atom ids", async () => {
+    const tag = await makeTag("武将");
+    const created = await createGlossaryEntry(database, {
+      description: "d1",
+      atoms: [
+        { value: "keep", matchFlags: 0 },
+        { value: "drop", matchFlags: 0 }
+      ],
+      tagIds: []
+    });
+    const keepId = created.atoms[0].id;
+
+    const updated = await updateGlossaryEntry(database, {
+      id: created.id,
+      description: "d2",
+      atoms: [
+        { value: "prepended", matchFlags: 0 },
+        { id: keepId, value: "keep", matchFlags: BOUNDARY_END_AUTO }
+      ],
+      tagIds: [tag.id]
+    });
+
+    expect(updated.description).toBe("d2");
+    expect(updated.atoms.map((a) => [a.sortOrder, a.value])).toEqual([
+      [0, "prepended"],
+      [1, "keep"]
+    ]);
+    expect(updated.atoms[1].id).toBe(keepId);
+    expect(updated.atoms[1].matchFlags).toBe(BOUNDARY_END_AUTO);
+    expect(updated.tags.map((t) => t.label)).toEqual(["武将"]);
+  });
+
+  it("skips an update for a missing entry (not found)", async () => {
+    await expect(
+      updateGlossaryEntry(database, {
+        id: missingEntryId,
+        description: "",
+        atoms: [{ value: "x", matchFlags: 0 }],
+        tagIds: []
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_ENTRY_NOT_FOUND" });
+  });
+
+  it("deletes an entry and cascades to its atoms and tag links", async () => {
+    const tag = await makeTag("武将");
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "織田信長", matchFlags: 0 }],
+      tagIds: [tag.id]
+    });
+
+    await deleteGlossaryEntry(database, entry.id);
+
+    expect(await getGlossaryEntryById(database, entry.id)).toBeNull();
+    expect(
+      await database.all("SELECT * FROM glossary_atoms WHERE entry_id = ?", [
+        entry.id
+      ])
+    ).toEqual([]);
+    expect(
+      await database.all(
+        "SELECT * FROM glossary_entry_tags WHERE entry_id = ?",
+        [entry.id]
+      )
+    ).toEqual([]);
+    // The tag itself is untouched.
+    expect((await listGlossaryTags(database)).map((t) => t.id)).toEqual([
+      tag.id
+    ]);
+  });
+
+  it("throws when deleting a missing entry", async () => {
+    await expect(
+      deleteGlossaryEntry(database, missingEntryId)
+    ).rejects.toBeInstanceOf(GlossaryStoreError);
+  });
+
+  it("rejects an invalid create input and logs it as skipped/validation_failed", async () => {
     const logger = debugLoggerMock();
 
     await expect(
       createGlossaryEntry(
-        database!,
-        {
-          kind: "term",
-          canonicalSurface: " ",
-          description: "invalid"
-        },
+        database,
+        { description: "", atoms: [], tagIds: [] },
         logger
       )
     ).rejects.toBeInstanceOf(GlossaryValidationError);
 
-    expect(dbLogEvents(logger)).toEqual([
-      {
-        level: "debug",
-        event: "db.operation.skipped",
-        details: {
-          dbOperationId: expect.any(String),
-          dbOperation: "create",
-          dbEntityKind: "glossaryEntry",
-          result: "ignored",
-          reason: "validation_failed",
-          durationMs: expect.any(Number)
-        }
-      }
-    ]);
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("invalid");
-  });
-
-  it("logs update validation failures as skipped without DB access", async () => {
-    const logger = debugLoggerMock();
-
-    await expect(
-      updateGlossaryEntry(
-        database!,
-        {
-          id: missingEntryId,
-          kind: "term",
-          canonicalSurface: " ",
-          description: "invalid update text",
-          forms: []
-        },
-        logger
+    expect(
+      dbLogEvents(logger).some(
+        (event) =>
+          event.event === "db.operation.skipped" &&
+          event.details?.reason === "validation_failed"
       )
-    ).rejects.toBeInstanceOf(GlossaryValidationError);
-
-    expect(dbLogEvents(logger)).toEqual([
-      {
-        level: "debug",
-        event: "db.operation.skipped",
-        details: {
-          dbOperationId: expect.any(String),
-          dbOperation: "update",
-          dbEntityKind: "glossaryEntry",
-          result: "ignored",
-          reason: "validation_failed",
-          durationMs: expect.any(Number)
-        }
-      }
-    ]);
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
-      "invalid update text"
-    );
+    ).toBe(true);
   });
 
-  it("logs update precondition read failures as failed without unsafe details", async () => {
-    const logger = debugLoggerMock();
-    const unsafeSurface = "禁書庫";
-    const unsafeDescription = "読者入力の説明";
-    const readError = Object.assign(
-      new Error(
-        `SELECT * FROM glossary_entries parameters ${missingEntryId} ${unsafeSurface} ${unsafeDescription} C:\\Users\\technerd\\novel.md row data`
-      ),
-      {
-        code: "SQLITE_IOERR",
-        stack: `raw stack ${unsafeDescription}`
-      }
-    );
+  // -----------------------------------------------------------------------
+  // Entry reorder (#375)
+  // -----------------------------------------------------------------------
 
-    await expect(
-      updateGlossaryEntry(
-        databaseWithFailingGet(database!, readError),
-        {
-          id: missingEntryId,
-          kind: "term",
-          canonicalSurface: unsafeSurface,
-          description: unsafeDescription,
-          forms: []
-        },
-        logger
-      )
-    ).rejects.toBe(readError);
-
-    const events = dbLogEvents(logger);
-
-    expect(events.map((event) => event.event)).toEqual([
-      "db.operation.started",
-      "db.operation.failed"
-    ]);
-    expect(events[1].details.dbOperationId).toBe(
-      events[0].details.dbOperationId
-    );
-    expect(events[1]).toMatchObject({
-      level: "error",
-      event: "db.operation.failed",
-      details: {
-        dbOperation: "update",
-        dbEntityKind: "glossaryEntry",
-        result: "failed",
-        durationMs: expect.any(Number),
-        error: {
-          name: "Error",
-          code: "SQLITE_IOERR",
-          category: "database"
-        }
-      }
+  async function makeEntry(value: string): Promise<string> {
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value, matchFlags: 0 }],
+      tagIds: []
     });
+    return entry.id;
+  }
 
-    const serializedEvents = JSON.stringify(events);
+  it("assigns an appended sort_order on create and lists entries in that order", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    const c = await makeEntry("う");
 
-    expect(serializedEvents).not.toContain("SELECT * FROM glossary_entries");
-    expect(serializedEvents).not.toContain("parameters");
-    expect(serializedEvents).not.toContain(missingEntryId);
-    expect(serializedEvents).not.toContain(unsafeSurface);
-    expect(serializedEvents).not.toContain(unsafeDescription);
-    expect(serializedEvents).not.toContain("novel.md");
-    expect(serializedEvents).not.toContain("row data");
-    expect(serializedEvents).not.toContain("raw stack");
+    // Insertion order == sort_order order (0, 1, 2).
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      a,
+      b,
+      c
+    ]);
   });
 
-  it("rejects invalid glossary input", async () => {
-    await expect(
-      createGlossaryEntry(database!, {
-        kind: "term",
-        canonicalSurface: " ",
-        description: "invalid"
-      })
-    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  it("uses sort_order 0 for the first entry in an empty project", async () => {
+    const only = await makeEntry("単独");
+    const row = await database.get<{ sort_order: number }>(
+      "SELECT sort_order FROM glossary_entries WHERE id = ?",
+      [only]
+    );
+    expect(row?.sort_order).toBe(0);
+  });
 
-    await expect(
-      createGlossaryEntry(database!, {
-        kind: "term",
-        canonicalSurface: "魔導炉",
-        description: "invalid",
-        matchBoundaryStart: "word" as never
-      })
-    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  it("reorders entries: re-packs sort_order 0..n-1 and returns the new order", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    const c = await makeEntry("う");
 
-    const entry = await createGlossaryEntry(database!, {
-      kind: "term",
-      canonicalSurface: "魔導炉",
-      description: "valid"
+    const reordered = await reorderGlossaryEntries(database, [c, a, b]);
+    expect(reordered.map((e) => e.id)).toEqual([c, a, b]);
+
+    const rows = await database.all<{ id: string; sort_order: number }>(
+      "SELECT id, sort_order FROM glossary_entries ORDER BY sort_order"
+    );
+    expect(rows).toEqual([
+      { id: c, sort_order: 0 },
+      { id: a, sort_order: 1 },
+      { id: b, sort_order: 2 }
+    ]);
+
+    // A fresh list re-read sees the same order.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      c,
+      a,
+      b
+    ]);
+  });
+
+  it("reorder leaves atoms / tags / description untouched", async () => {
+    const tag = await makeTag("武将");
+    const first = await createGlossaryEntry(database, {
+      description: "説明1",
+      atoms: [
+        { value: "織田信長", matchFlags: 0 },
+        { value: "第六天魔王", matchFlags: 0 }
+      ],
+      tagIds: [tag.id]
     });
+    const second = await makeEntry("徳川家康");
+
+    await reorderGlossaryEntries(database, [second, first.id]);
+
+    const reloaded = (await listGlossaryEntries(database)).find(
+      (e) => e.id === first.id
+    );
+    expect(reloaded?.description).toBe("説明1");
+    expect(reloaded?.atoms.map((a) => a.value)).toEqual([
+      "織田信長",
+      "第六天魔王"
+    ]);
+    expect(reloaded?.tags.map((t) => t.id)).toEqual([tag.id]);
+  });
+
+  it("rejects a reorder with a duplicate entry id (validation error)", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
 
     await expect(
-      updateGlossaryEntry(database!, {
-        id: entry.id,
-        kind: "term",
-        description: "invalid",
-        canonicalSurface: "魔導炉",
-        forms: [
-          {
-            surface: "魔力炉",
-            relation: "alias",
-            warningPolicy: "default",
-            matchBoundaryStart: "word" as never,
-            matchBoundaryEnd: "auto"
-          }
-        ]
-      })
+      reorderGlossaryEntries(database, [a, b, a])
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 
-  it("updates canonical, alias, variant, and warning policy forms", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "term",
-      canonicalSurface: "魔導炉",
-      description: "旧式の説明"
-    });
-    const updatedEntry = await updateGlossaryEntry(database!, {
-      id: entry.id,
-      kind: "concept",
-      description: "魔力を大量生成する設備",
-      canonicalSurface: "新型魔導炉",
-      forms: [
-        {
-          surface: "魔力炉",
-          relation: "alias",
-          warningPolicy: "warn",
-          matchBoundaryStart: "strict",
-          matchBoundaryEnd: "none"
-        },
-        {
-          surface: "Magic Reactor",
-          relation: "variant",
-          warningPolicy: "ignore",
-          matchBoundaryStart: "none",
-          matchBoundaryEnd: "auto"
-        }
-      ]
-    });
+  it("rejects a reorder that references an unknown entry, omits one, or lists too many", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
 
-    expect(canonicalFormOf(updatedEntry)).toMatchObject({
-      surface: "新型魔導炉",
-      relation: null,
-      warningPolicy: null,
-      isCanonical: true
-    });
-    expect(nonCanonicalFormsOf(updatedEntry)).toHaveLength(2);
-    expect(nonCanonicalFormsOf(updatedEntry)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          surface: "Magic Reactor",
-          relation: "variant",
-          warningPolicy: "ignore",
-          matchBoundaryStart: "none",
-          matchBoundaryEnd: "auto",
-          isCanonical: false
-        }),
-        expect.objectContaining({
-          surface: "魔力炉",
-          relation: "alias",
-          warningPolicy: "warn",
-          matchBoundaryStart: "strict",
-          matchBoundaryEnd: "none",
-          isCanonical: false
-        })
-      ])
-    );
+    await expect(
+      reorderGlossaryEntries(database, [a, missingEntryId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_ENTRY_REORDER_MISMATCH" });
+    await expect(
+      reorderGlossaryEntries(database, [a])
+    ).rejects.toMatchObject({ code: "GLOSSARY_ENTRY_REORDER_MISMATCH" });
+    await expect(
+      reorderGlossaryEntries(database, [a, b, missingEntryId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_ENTRY_REORDER_MISMATCH" });
 
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
-      updatedEntry
-    );
-  });
-
-  it("rebuilds non-canonical forms without auto-aliasing the old canonical surface", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "person",
-      canonicalSurface: "アルベルト",
-      description: "王国の騎士"
-    });
-    const firstUpdate = await updateGlossaryEntry(database!, {
-      id: entry.id,
-      kind: "person",
-      description: "王国の騎士",
-      canonicalSurface: "アルベルト",
-      forms: [
-        {
-          surface: "アル",
-          relation: "alias",
-          warningPolicy: "default",
-          matchBoundaryStart: "strict",
-          matchBoundaryEnd: "none"
-        },
-        {
-          surface: "Albert",
-          relation: "variant",
-          warningPolicy: "warn",
-          matchBoundaryStart: "none",
-          matchBoundaryEnd: "strict"
-        }
-      ]
-    });
-    const savedAlias = nonCanonicalFormsOf(firstUpdate).find(
-      (form) => form.surface === "アル"
-    );
-
-    expect(savedAlias).toBeDefined();
-
-    const secondUpdate = await updateGlossaryEntry(database!, {
-      id: entry.id,
-      kind: "person",
-      description: "王国の騎士",
-      canonicalSurface: "アルバート",
-      forms: [
-        {
-          id: savedAlias?.id,
-          surface: "アル",
-          relation: "alias",
-          warningPolicy: "ignore",
-          matchBoundaryStart: savedAlias?.matchBoundaryStart ?? "strict",
-          matchBoundaryEnd: savedAlias?.matchBoundaryEnd ?? "none"
-        }
-      ]
-    });
-
-    expect(canonicalFormOf(secondUpdate).surface).toBe("アルバート");
-    expect(secondUpdate.forms.map((form) => form.surface)).not.toContain(
-      "アルベルト"
-    );
-    expect(nonCanonicalFormsOf(secondUpdate)).toEqual([
-      expect.objectContaining({
-        surface: "アル",
-        relation: "alias",
-        warningPolicy: "ignore",
-        matchBoundaryStart: "strict",
-        matchBoundaryEnd: "none"
-      })
+    // The order is unchanged after a rejected reorder.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      a,
+      b
     ]);
-    expect(canonicalFormOf(secondUpdate)).toBeTruthy();
   });
 
-  it("rolls back entry and forms when a form insert fails inside update", async () => {
-    const entry = await createGlossaryEntry(database!, {
-      kind: "term",
-      canonicalSurface: "魔導炉",
-      description: "旧式の説明"
-    });
-    const duplicateFormId = "018f4b8c-7a2b-7c3d-8e4f-623456789abc";
+  it("keeps a monotone list order after an entry is deleted (gaps are tolerated)", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    const c = await makeEntry("う");
 
-    await expect(
-      updateGlossaryEntry(database!, {
-        id: entry.id,
-        kind: "concept",
-        description: "途中で失敗する説明",
-        canonicalSurface: "新型魔導炉",
-        forms: [
-          {
-            id: duplicateFormId,
-            surface: "魔力炉",
-            relation: "alias",
-            warningPolicy: "default",
-            matchBoundaryStart: "auto",
-            matchBoundaryEnd: "auto"
-          },
-          {
-            id: duplicateFormId,
-            surface: "Magic Reactor",
-            relation: "variant",
-            warningPolicy: "warn",
-            matchBoundaryStart: "auto",
-            matchBoundaryEnd: "auto"
-          }
-        ]
-      })
-    ).rejects.toThrow();
+    await deleteGlossaryEntry(database, b);
 
-    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
-      entry
-    );
-  });
-
-  it("allows exact surface lookup with none, unique, and ambiguous results", async () => {
-    await expect(
-      lookupGlossarySurface(database!, {
-        surface: "帝国"
-      })
-    ).resolves.toEqual({
-      status: "none",
-      surface: "帝国"
-    });
-
-    const firstEntry = await createGlossaryEntry(database!, {
-      kind: "organization",
-      canonicalSurface: "帝国",
-      description: "北方の大国"
-    });
-
-    await expect(
-      lookupGlossarySurface(database!, {
-        surface: "帝国"
-      })
-    ).resolves.toEqual({
-      status: "unique",
-      surface: "帝国",
-      match: {
-        entry: firstEntry,
-        form: canonicalFormOf(firstEntry)
-      }
-    });
-
-    const secondEntry = await createGlossaryEntry(database!, {
-      kind: "organization",
-      canonicalSurface: "帝国",
-      description: "南方の大国"
-    });
-    const lookupResult = await lookupGlossarySurface(database!, {
-      surface: "帝国"
-    });
-
-    expect(lookupResult).toEqual({
-      status: "ambiguous",
-      surface: "帝国",
-      matches: [
-        {
-          entry: firstEntry,
-          form: canonicalFormOf(firstEntry)
-        },
-        {
-          entry: secondEntry,
-          form: canonicalFormOf(secondEntry)
-        }
-      ]
-    });
-  });
-
-  it("logs zero-row glossary surface lookup as succeeded with count zero", async () => {
-    const logger = debugLoggerMock();
-
-    await expect(
-      lookupGlossarySurface(
-        database!,
-        {
-          surface: "帝国"
-        },
-        logger
-      )
-    ).resolves.toEqual({
-      status: "none",
-      surface: "帝国"
-    });
-
-    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
-      "db.operation.started",
-      "db.operation.succeeded"
+    // sort_order is now 0, 2 — still a valid ascending order.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      a,
+      c
     ]);
-    expect(dbLogEvents(logger)[1]).toMatchObject({
-      event: "db.operation.succeeded",
-      details: {
-        dbOperation: "read",
-        dbEntityKind: "glossaryForm",
-        result: "succeeded",
-        count: 0
-      }
-    });
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
-      "db.operation.skipped"
+
+    // A reorder re-packs the survivors back to 0..n-1.
+    await reorderGlossaryEntries(database, [c, a]);
+    const rows = await database.all<{ id: string; sort_order: number }>(
+      "SELECT id, sort_order FROM glossary_entries ORDER BY sort_order"
     );
-    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("帝国");
+    expect(rows).toEqual([
+      { id: c, sort_order: 0 },
+      { id: a, sort_order: 1 }
+    ]);
   });
 
-  it("rejects invalid database rows during domain conversion", () => {
-    expect(() =>
-      glossaryEntryFromDatabaseRows(
-        {
-          id: entryRowId,
-          kind: "chapter",
-          description: "invalid row",
-          created_at: "2026-08-11T12:00:00.000Z",
-          updated_at: "2026-08-11T12:00:00.000Z"
-        },
-        [
-          {
-            id: formRowId,
-            entry_id: entryRowId,
-            surface: "王都アルセリア",
-            relation: null,
-            warning_policy: null,
-            match_boundary_start: "auto",
-            match_boundary_end: "auto",
-            is_canonical: 1,
-            created_at: "2026-08-11T12:00:00.000Z",
-            updated_at: "2026-08-11T12:00:00.000Z"
-          }
-        ]
-      )
-    ).toThrow(GlossaryValidationError);
+  it("appends a new entry after a reorder", async () => {
+    const a = await makeEntry("あ");
+    const b = await makeEntry("い");
+    await reorderGlossaryEntries(database, [b, a]);
+
+    const c = await makeEntry("う");
+    // New entry's sort_order = max(1) + 1 = 2 → last in the list.
+    expect((await listGlossaryEntries(database)).map((e) => e.id)).toEqual([
+      b,
+      a,
+      c
+    ]);
+  });
+
+  // -----------------------------------------------------------------------
+  // Tags
+  // -----------------------------------------------------------------------
+
+  it("creates tags with normalized colors and increasing sortOrder", async () => {
+    const a = await createGlossaryTag(database, {
+      label: "  武将 ",
+      description: "  ",
+      backgroundRgb: "#AABBCC",
+      foregroundRgb: "#000"
+    });
+    const b = await makeTag("地名");
+
+    expect(a).toMatchObject({
+      label: "武将",
+      description: null,
+      backgroundRgb: "#aabbcc",
+      foregroundRgb: "#000000",
+      sortOrder: 0
+    });
+    expect(b.sortOrder).toBe(1);
+    expect((await listGlossaryTags(database)).map((t) => t.label)).toEqual([
+      "武将",
+      "地名"
+    ]);
+  });
+
+  it("renames a tag", async () => {
+    const tag = await makeTag("武将");
+    const renamed = await updateGlossaryTag(database, {
+      id: tag.id,
+      label: "軍人",
+      description: "説明",
+      backgroundRgb: "#654321",
+      foregroundRgb: "#ffffff"
+    });
+
+    expect(renamed).toMatchObject({
+      id: tag.id,
+      label: "軍人",
+      description: "説明",
+      backgroundRgb: "#654321"
+    });
+  });
+
+  it("skips renaming a missing tag", async () => {
+    await expect(
+      updateGlossaryTag(database, {
+        id: missingTagId,
+        label: "x",
+        description: null,
+        backgroundRgb: "#000000",
+        foregroundRgb: "#ffffff"
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_NOT_FOUND" });
+  });
+
+  it("#375: rejects a tag label over 32 characters on create and update", async () => {
+    const len33 = "あ".repeat(33);
+
+    await expect(
+      createGlossaryTag(database, {
+        label: len33,
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    const tag = await makeTag("武将");
+    await expect(
+      updateGlossaryTag(database, {
+        id: tag.id,
+        label: len33,
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    // A 32-char label is accepted (a long atom value on an entry still is too).
+    const ok = await createGlossaryTag(database, {
+      label: "あ".repeat(32),
+      description: null,
+      backgroundRgb: "#123456",
+      foregroundRgb: "#ffffff"
+    });
+    expect([...ok.label].length).toBe(32);
+  });
+
+  it("hard-deletes a tag: removes entry_tags links but keeps the entry and its atoms", async () => {
+    const tag = await makeTag("武将");
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [
+        { value: "織田信長", matchFlags: 0 },
+        { value: "第六天魔王", matchFlags: 0 }
+      ],
+      tagIds: [tag.id]
+    });
+
+    await deleteGlossaryTag(database, { id: tag.id });
+
+    expect(await listGlossaryTags(database)).toEqual([]);
+    const stillThere = await getGlossaryEntryById(database, entry.id);
+    expect(stillThere).not.toBeNull();
+    expect(stillThere!.atoms.map((a) => a.value)).toEqual([
+      "織田信長",
+      "第六天魔王"
+    ]);
+    expect(stillThere!.tags).toEqual([]);
+  });
+
+  it("throws when deleting a missing tag", async () => {
+    await expect(
+      deleteGlossaryTag(database, { id: missingTagId })
+    ).rejects.toBeInstanceOf(GlossaryStoreError);
+  });
+
+  it("rejects a create whose label (trimmed) collides with an existing tag", async () => {
+    await makeTag("人物");
+
+    await expect(
+      createGlossaryTag(database, {
+        label: "  人物  ",
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_LABEL_CONFLICT" });
+
+    // Case-sensitive: "hero" and "Hero" are different labels.
+    await makeTag("Hero");
+    await expect(makeTag("hero")).resolves.toMatchObject({ label: "hero" });
+
+    expect((await listGlossaryTags(database)).map((t) => t.label)).toEqual([
+      "人物",
+      "Hero",
+      "hero"
+    ]);
+  });
+
+  it("rejects a rename onto another tag's label but allows a tag to keep its own", async () => {
+    const people = await makeTag("人物");
+    const place = await makeTag("地名");
+
+    await expect(
+      updateGlossaryTag(database, {
+        id: place.id,
+        label: " 人物 ",
+        description: null,
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_LABEL_CONFLICT" });
+
+    // Renaming a tag to (a trimmed form of) its own current label is fine.
+    await expect(
+      updateGlossaryTag(database, {
+        id: people.id,
+        label: " 人物 ",
+        description: "same",
+        backgroundRgb: "#123456",
+        foregroundRgb: "#ffffff"
+      })
+    ).resolves.toMatchObject({ id: people.id, label: "人物" });
+  });
+
+  // -----------------------------------------------------------------------
+  // Tag reorder (#375)
+  // -----------------------------------------------------------------------
+
+  it("reorders tags: re-packs sort_order 0..n-1 and returns the new order", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+    const c = await makeTag("C");
+
+    const reordered = await reorderGlossaryTags(database, [c.id, a.id, b.id]);
+
+    expect(reordered.map((t) => [t.label, t.sortOrder])).toEqual([
+      ["C", 0],
+      ["A", 1],
+      ["B", 2]
+    ]);
+    // A fresh list re-read by (sort_order, id) sees the same order.
+    expect((await listGlossaryTags(database)).map((t) => t.id)).toEqual([
+      c.id,
+      a.id,
+      b.id
+    ]);
+  });
+
+  it("reorder leaves label / description / color and entry links untouched", async () => {
+    const a = await createGlossaryTag(database, {
+      label: "武将",
+      description: "説明",
+      backgroundRgb: "#abcdef",
+      foregroundRgb: "#000000"
+    });
+    const b = await makeTag("地名");
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "織田信長", matchFlags: 0 }],
+      tagIds: [a.id]
+    });
+
+    await reorderGlossaryTags(database, [b.id, a.id]);
+
+    const moved = (await listGlossaryTags(database)).find((t) => t.id === a.id);
+    expect(moved).toMatchObject({
+      label: "武将",
+      description: "説明",
+      backgroundRgb: "#abcdef",
+      foregroundRgb: "#000000"
+    });
+    const stillTagged = await getGlossaryEntryById(database, entry.id);
+    expect(stillTagged!.tags.map((t) => t.id)).toEqual([a.id]);
+  });
+
+  it("rejects a reorder with a duplicate id", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id, b.id, a.id])
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("rejects a reorder that references an unknown tag", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id, missingTagId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_REORDER_MISMATCH" });
+    // The order is unchanged.
+    expect((await listGlossaryTags(database)).map((t) => t.id)).toEqual([
+      a.id,
+      b.id
+    ]);
+  });
+
+  it("rejects a reorder that omits a tag (too few ids)", async () => {
+    const a = await makeTag("A");
+    await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id])
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_REORDER_MISMATCH" });
+  });
+
+  it("rejects a reorder with more ids than there are tags", async () => {
+    const a = await makeTag("A");
+    const b = await makeTag("B");
+
+    await expect(
+      reorderGlossaryTags(database, [a.id, b.id, missingTagId])
+    ).rejects.toMatchObject({ code: "GLOSSARY_TAG_REORDER_MISMATCH" });
+  });
+
+  // -----------------------------------------------------------------------
+  // Atom value uniqueness (per entry, trimmed, case-sensitive)
+  // -----------------------------------------------------------------------
+
+  it("rejects a create with two atom values equal after trimming", async () => {
+    await expect(
+      createGlossaryEntry(database, {
+        description: "",
+        atoms: [
+          { value: "信長", matchFlags: 0 },
+          { value: "  信長  ", matchFlags: 0 }
+        ],
+        tagIds: []
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    expect(await listGlossaryEntries(database)).toEqual([]);
+  });
+
+  it("treats atom values as case-sensitive within an entry", async () => {
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [
+        { value: "Nobunaga", matchFlags: 0 },
+        { value: "nobunaga", matchFlags: 0 }
+      ],
+      tagIds: []
+    });
+
+    expect(entry.atoms.map((a) => a.value)).toEqual([
+      "Nobunaga",
+      "nobunaga"
+    ]);
+  });
+
+  it("rejects an update that would give one entry two equal atom values", async () => {
+    const created = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "信長", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    await expect(
+      updateGlossaryEntry(database, {
+        id: created.id,
+        description: "",
+        atoms: [
+          { value: "信長", matchFlags: 0 },
+          { value: " 信長 ", matchFlags: 0 }
+        ],
+        tagIds: []
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 });
-
-function canonicalFormOf(entry: GlossaryEntry): GlossaryForm {
-  const canonicalForms = entry.forms.filter((form) => form.isCanonical);
-
-  expect(canonicalForms).toHaveLength(1);
-
-  return canonicalForms[0];
-}
-
-function nonCanonicalFormsOf(entry: GlossaryEntry): GlossaryForm[] {
-  return entry.forms.filter((form) => !form.isCanonical);
-}
-
-function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
-  return {
-    log: vi.fn()
-  };
-}
-
-function dbLogEvents(logger: { log: ReturnType<typeof vi.fn> }) {
-  return logger.log.mock.calls.map((call) => call[0]);
-}
-
-function databaseWithFailingGet(
-  database: ProjectDatabase,
-  error: unknown
-): ProjectDatabase {
-  const get: ProjectDatabase["get"] = async () => {
-    throw error;
-  };
-
-  return {
-    databasePath: database.databasePath,
-    run: database.run.bind(database),
-    get,
-    all: database.all.bind(database),
-    exec: database.exec.bind(database),
-    transaction: database.transaction.bind(database),
-    close: database.close.bind(database)
-  };
-}

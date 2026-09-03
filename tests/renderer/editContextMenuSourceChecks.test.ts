@@ -54,6 +54,33 @@ function allSourceText(): string {
  * rows, scoped to the tree while it is focused — a local ARIA tree widget,
  * not a document-level/global shortcut listener, and it never touches the
  * Markdown editor's native-edit-command delegation.
+ *
+ * GlossaryEditor.tsx (#375) is the same category again: the per-atom drag
+ * handle's `onKeyDown` implements Arrow Up / Down reorder for its own
+ * `<button>` while that handle is focused — a keyboard fallback for the D&D
+ * reorder, scoped to the handle, not a document-level/global shortcut
+ * listener.
+ *
+ * GlossaryTagManager.tsx (#375) is the same category once more: the per-row
+ * tag drag handle's `onKeyDown` implements Arrow Up / Down reorder for its own
+ * `<button>` while that handle is focused — the keyboard fallback for the tag
+ * sortOrder D&D reorder, scoped to the handle, not a global shortcut listener.
+ *
+ * GlossaryEntryTagAssignmentEditor.tsx (#375) is the same category again: each
+ * tag drag handle's `onKeyDown` is the keyboard fallback for the two-list tag
+ * assignment D&D (Arrow Up / Down reorders an assigned tag; Enter / Space
+ * assigns an available one), scoped to that handle `<button>`, not a global
+ * shortcut listener.
+ *
+ * DocumentMapSettingsSection.tsx (#375) is the same category once more: the
+ * dialogue-pair drag handle's `onKeyDown` is the Arrow Up / Down keyboard
+ * fallback for reordering `documentMap.dialogueDelimiterPairs`, scoped to that
+ * handle `<button>`, not a global shortcut listener.
+ *
+ * GlossaryEntryManager.tsx (#375) is the same category once more: the per-row
+ * entry drag handle's `onKeyDown` implements Arrow Up / Down reorder for its
+ * own `<button>` while focused — the keyboard fallback for the
+ * `glossary_entries.sort_order` D&D reorder, not a global shortcut listener.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -61,7 +88,12 @@ const onKeyDownExemptFileNames = new Set([
   "ConfirmDialog.tsx",
   "InfoDialog.tsx",
   "DocumentTabBar.tsx",
-  "FileExplorer.tsx"
+  "FileExplorer.tsx",
+  "GlossaryEditor.tsx",
+  "GlossaryTagManager.tsx",
+  "GlossaryEntryTagAssignmentEditor.tsx",
+  "DocumentMapSettingsSection.tsx",
+  "GlossaryEntryManager.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {

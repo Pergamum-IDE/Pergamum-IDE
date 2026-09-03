@@ -1,71 +1,46 @@
 import { describe, expect, it } from "vitest";
-import type {
-  GlossaryEntry,
-  GlossaryForm,
-  GlossaryFormRelation,
-  GlossaryWarningPolicy
-} from "../../src/shared/glossary";
+import {
+  GlossaryAtomFlags,
+  GlossaryBoundaryPolicy,
+  setGlossaryAtomBoundaryEndPolicy,
+  setGlossaryAtomBoundaryStartPolicy
+} from "../../src/shared/glossaryAtomFlags";
+import type { GlossaryAtom, GlossaryEntry } from "../../src/shared/glossary";
 import {
   buildGlossarySurfaceIndex,
   matchGlossarySurfacesInText
 } from "../../src/shared/glossarySurfaceMatching";
 import { renderGlossaryMatchesForDebug } from "../../src/shared/glossarySurfaceMatchingDebug";
 
-const timestamp = "2026-08-13T00:00:00.000Z";
+const timestamp = "2026-09-02T00:00:00.000Z";
 const albertEntryId = "018f4b8c-7a2b-7c3d-8e4f-300000000001";
 const eclipseEntryId = "018f4b8c-7a2b-7c3d-8e4f-300000000002";
 const fixtureText =
   "アルベルトはアルと呼ばれていた。蝕の夜、アルベルト卿はAlbertと署名した。";
 
-function canonicalForm(
-  entryId: string,
-  id: string,
-  surface: string
-): GlossaryForm {
+const CHECK_BOTH = setGlossaryAtomBoundaryEndPolicy(
+  setGlossaryAtomBoundaryStartPolicy(0, GlossaryBoundaryPolicy.Auto),
+  GlossaryBoundaryPolicy.Auto
+);
+
+function atom(entryId: string, id: string, value: string): GlossaryAtom {
   return {
     id,
     entryId,
-    surface,
-    matchBoundaryStart: "auto",
-    matchBoundaryEnd: "auto",
-    relation: null,
-    warningPolicy: null,
-    isCanonical: true,
+    sortOrder: 0,
+    value,
+    matchFlags: CHECK_BOTH,
     createdAt: timestamp,
     updatedAt: timestamp
   };
 }
 
-function nonCanonicalForm(
-  entryId: string,
-  id: string,
-  surface: string,
-  relation: GlossaryFormRelation,
-  warningPolicy: GlossaryWarningPolicy
-): GlossaryForm {
+function glossaryEntry(id: string, atoms: GlossaryAtom[]): GlossaryEntry {
   return {
     id,
-    entryId,
-    surface,
-    relation,
-    warningPolicy,
-    matchBoundaryStart: "auto",
-    matchBoundaryEnd: "auto",
-    isCanonical: false,
-    createdAt: timestamp,
-    updatedAt: timestamp
-  };
-}
-
-function glossaryEntry(
-  id: string,
-  forms: GlossaryForm[]
-): GlossaryEntry {
-  return {
-    id,
-    kind: "term",
     description: "",
-    forms,
+    atoms: atoms.map((a, index) => ({ ...a, sortOrder: index })),
+    tags: [],
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -74,51 +49,27 @@ function glossaryEntry(
 function fixtureEntries(): GlossaryEntry[] {
   return [
     glossaryEntry(albertEntryId, [
-      canonicalForm(
-        albertEntryId,
-        "018f4b8c-7a2b-7c3d-8e4f-400000000001",
-        "アルベルト"
-      ),
-      nonCanonicalForm(
-        albertEntryId,
-        "018f4b8c-7a2b-7c3d-8e4f-400000000002",
-        "アル",
-        "alias",
-        "default"
-      ),
-      nonCanonicalForm(
+      atom(albertEntryId, "018f4b8c-7a2b-7c3d-8e4f-400000000001", "アルベルト"),
+      atom(albertEntryId, "018f4b8c-7a2b-7c3d-8e4f-400000000002", "アル"),
+      atom(
         albertEntryId,
         "018f4b8c-7a2b-7c3d-8e4f-400000000003",
-        "アルベルト卿",
-        "alias",
-        "warn"
+        "アルベルト卿"
       ),
-      nonCanonicalForm(
-        albertEntryId,
-        "018f4b8c-7a2b-7c3d-8e4f-400000000004",
-        "Albert",
-        "variant",
-        "ignore"
-      )
+      atom(albertEntryId, "018f4b8c-7a2b-7c3d-8e4f-400000000004", "Albert")
     ]),
     glossaryEntry(eclipseEntryId, [
-      canonicalForm(
-        eclipseEntryId,
-        "018f4b8c-7a2b-7c3d-8e4f-400000000005",
-        "蝕"
-      ),
-      nonCanonicalForm(
+      atom(eclipseEntryId, "018f4b8c-7a2b-7c3d-8e4f-400000000005", "蝕"),
+      atom(
         eclipseEntryId,
         "018f4b8c-7a2b-7c3d-8e4f-400000000006",
-        "トータル・エクリプス",
-        "alias",
-        "default"
+        "トータル・エクリプス"
       )
     ])
   ];
 }
 
-describe("glossary surface matching debug helper", () => {
+describe("glossary surface matching debug helper (#375)", () => {
   it("renders default fixture matches as bracketed ranges", () => {
     const matches = matchGlossarySurfacesInText(
       fixtureText,
@@ -150,11 +101,7 @@ describe("glossary surface matching debug helper", () => {
       text,
       buildGlossarySurfaceIndex([
         glossaryEntry(entryId, [
-          canonicalForm(
-            entryId,
-            "018f4b8c-7a2b-7c3d-8e4f-400000000007",
-            "Pergamum"
-          )
+          atom(entryId, "018f4b8c-7a2b-7c3d-8e4f-400000000007", "Pergamum")
         ])
       ])
     );

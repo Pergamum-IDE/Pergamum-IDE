@@ -19,6 +19,8 @@ describe("workspace commands", () => {
     focusSearchDescription: "Not implemented.",
     focusGlossary: "Focus Glossary",
     focusGlossaryDescription: "Show the Glossary panel.",
+    focusTextMap: "Focus Text Map",
+    focusTextMapDescription: "Show the Text Map panel in the left pane.",
     openApplicationSettings: "Open Application Settings",
     openApplicationSettingsDescription: "Open application-wide settings."
   };
@@ -39,6 +41,7 @@ describe("workspace commands", () => {
       workspaceCommandIds.toggleFiles,
       workspaceCommandIds.focusSearch,
       workspaceCommandIds.focusGlossary,
+      workspaceCommandIds.focusTextMap,
       workspaceCommandIds.openApplicationSettings
     ]);
   });
@@ -61,8 +64,9 @@ describe("workspace commands", () => {
     await registry.execute(workspaceCommandIds.toggleFiles, executionOptions);
     await registry.execute(workspaceCommandIds.focusSearch, executionOptions);
     await registry.execute(workspaceCommandIds.focusGlossary, executionOptions);
+    await registry.execute(workspaceCommandIds.focusTextMap, executionOptions);
 
-    expect(focusedModes).toEqual(["files", "search", "glossary"]);
+    expect(focusedModes).toEqual(["files", "search", "glossary", "textMap"]);
   });
 
   it("opens Application Settings through a command", async () => {
@@ -96,6 +100,9 @@ describe("workspace commands", () => {
     expect(workspaceFocusCommandIdForMode("glossary")).toBe(
       workspaceCommandIds.focusGlossary
     );
+    expect(workspaceFocusCommandIdForMode("textMap")).toBe(
+      workspaceCommandIds.focusTextMap
+    );
   });
 
   it("creates localized command titles outside the registry", () => {
@@ -111,6 +118,9 @@ describe("workspace commands", () => {
       focusGlossary: "translated:command.workspace.glossary.focus",
       focusGlossaryDescription:
         "translated:command.workspace.glossary.focus.description",
+      focusTextMap: "translated:command.workspace.textMap.focus",
+      focusTextMapDescription:
+        "translated:command.workspace.textMap.focus.description",
       openApplicationSettings:
         "translated:command.workspace.applicationSettings.open",
       openApplicationSettingsDescription:

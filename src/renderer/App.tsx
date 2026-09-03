@@ -53,12 +53,11 @@ import {
 } from "../shared/sessionRestore";
 import type {
   CreateGlossaryEntryInput,
+  CreateGlossaryTagInput,
   GlossaryEntry,
   GlossaryEntryId,
-  GlossaryEntryKind,
-  GlossaryFormMatchBoundary,
-  GlossaryFormRelation,
-  GlossaryWarningPolicy
+  GlossaryTag,
+  UpdateGlossaryTagInput
 } from "../shared/glossary";
 import {
   t,
@@ -246,26 +245,26 @@ import {
   type OpenEditorOptions
 } from "./editorNavigation";
 import {
+  addGlossaryEntryDraftAtom,
   applyGlossaryEntryDraftSaveResult,
-  addGlossaryEntryDraftForm,
-  deleteGlossaryEntryDraftForm,
+  createGlossaryEntryDraft,
+  deleteGlossaryEntryDraftAtom,
   glossaryEntryDraftUpdateInput,
   isGlossaryEntryDraftDirty,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
-  updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch,
-  updateGlossaryEntryDraftCanonicalMatchBoundaryEnd,
-  updateGlossaryEntryDraftCanonicalMatchBoundaryStart,
-  updateGlossaryEntryDraftCanonicalSurface,
+  glossaryEntryDraftValidity,
+  representativeGlossaryAtomDraft,
+  reorderGlossaryEntryDraftAtom,
+  assignGlossaryEntryDraftTag,
+  unassignGlossaryEntryDraftTag,
+  reorderAssignedGlossaryEntryDraftTags,
+  updateGlossaryEntryDraftAtomMatchFlags,
+  updateGlossaryEntryDraftAtomValue,
   updateGlossaryEntryDraftDescription,
-  updateGlossaryEntryDraftFormAllowSingleCharacterMatch,
-  updateGlossaryEntryDraftFormMatchBoundaryEnd,
-  updateGlossaryEntryDraftFormMatchBoundaryStart,
-  updateGlossaryEntryDraftFormSurface,
-  updateGlossaryEntryDraftFormWarningPolicy,
-  updateGlossaryEntryDraftKind
+  type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
-import { canonicalGlossarySurface } from "./glossaryPresentation";
+import { representativeGlossarySurface } from "./glossaryPresentation";
 import {
   createGlossaryCommandTitles,
   glossaryCommandIds,
@@ -283,6 +282,10 @@ import {
   type ResolveGlossaryOccurrenceTrackingSessionContext,
   type ResolveGlossaryOccurrenceTrackingSessionResult
 } from "./glossaryOccurrenceTracking";
+import {
+  planGlossaryOccurrenceNavigation,
+  type GlossaryOccurrenceCursor
+} from "./glossaryOccurrenceNavigation";
 import {
   createGlossaryOccurrencesCommandTitles,
   glossaryOccurrencesCommandIds,
@@ -355,6 +358,11 @@ import type {
   NotificationToastPlacement
 } from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
+import { GlossaryTagManager } from "./GlossaryTagManager";
+import { GlossaryEntryManager } from "./GlossaryEntryManager";
+import { countGlossaryEntriesByTag } from "./glossaryTagEntryCount";
+import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import type { EditorScrollAlign } from "./editorScrollAlign";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import {
@@ -783,11 +791,40 @@ export function App(): JSX.Element {
     createInitialWorkbenchLayoutState
   );
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
+  // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
+  // project-owned) — closed on project close. Opening / activating it NEVER
+  // opens the "new tag" dialog — that is only the "Add tag" button.
+  const [isGlossaryTagManagerTabOpen, setIsGlossaryTagManagerTabOpen] =
+    useState(false);
+  // #375: the Glossary Management special tab (the glossary ENTRIES themselves —
+  // reorder / edit / delete). Project-scoped — closed on project close.
+  const [isGlossaryEntryManagerTabOpen, setIsGlossaryEntryManagerTabOpen] =
+    useState(false);
   const [activeSpecialTabId, setActiveSpecialTabId] =
     useState<SpecialTabId | null>(null);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
+  // #375: project tag list, shared by the editor (attach/detach picker) and
+  // the sidebar (tag filter + tag manager). Reloaded whenever
+  // `glossaryRefreshToken` bumps.
+  const [glossaryTags, setGlossaryTags] = useState<GlossaryTag[]>([]);
+  // #375: how many glossary entries carry each tag (by tag id) — the Tag
+  // Manager's "Entries" column. Reloaded alongside `glossaryTags`.
+  const [glossaryTagEntryCounts, setGlossaryTagEntryCounts] = useState<
+    Record<string, number>
+  >({});
+  // #375 Text Map (Phase 1): every project glossary entry, for the left-pane
+  // Text Map panel's occurrence scan. Reloaded alongside `glossaryTags`.
+  const [glossaryEntries, setGlossaryEntries] = useState<GlossaryEntry[]>([]);
+  // #375 Text Map (Phase 1): the editor area's rendered width in CSS pixels,
+  // used as the Text Map's LOGICAL wrap width (never the left pane width).
+  const [editorAreaWidth, setEditorAreaWidth] = useState<number | null>(null);
+  // #375 Text Map: the active Markdown editor's on-screen document range,
+  // drawn as a "you are here" rectangle on the map. `null` unless a Markdown
+  // editor is active and has pushed a range.
+  const [markdownVisibleRange, setMarkdownVisibleRange] =
+    useState<EditorVisibleTextRange | null>(null);
   // #311: a Command Palette "Create New File / Folder" request handed to the
   // File Explorer. `token` is a session-monotonic counter (never reused) so a
   // repeat command re-opens the dialog; the state is cleared to null once the
@@ -837,6 +874,16 @@ export function App(): JSX.Element {
     new ProjectActivationLifetime()
   );
   const lastActiveMarkdownEditorIdRef = useRef<EditorId | null>(null);
+  // #375: cursor for the Glossary SIDEBAR's ◀ / ▶ occurrence jump. Distinct
+  // from the utility-window occurrence-tracking session (which the Glossary
+  // Entry editor drives); the sidebar path is a plain jump over the ACTIVE
+  // Markdown document.
+  const sidebarGlossaryOccurrenceCursorRef =
+    useRef<GlossaryOccurrenceCursor | null>(null);
+  // #375: guards the Glossary Entry / Tag delete flows against a second
+  // Delete press while the confirm dialog is open or the delete IPC is in
+  // flight.
+  const glossaryDeleteInFlightRef = useRef(false);
   const navigateGlossaryOccurrenceRef = useRef<
     (
       entryId: GlossaryEntryId,
@@ -1284,14 +1331,34 @@ export function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDocumentKey, pendingRestoreViewStateVersion]);
   const hasOpenDocumentTab = openDocumentsState.documents.length > 0;
+  // #375: the Glossary Tag Manager special tab is active only when it is
+  // explicitly the selected special tab (no "default to it" fallback).
+  const isGlossaryTagManagerTabActive =
+    isGlossaryTagManagerTabOpen &&
+    activeSpecialTabId === "glossaryTagManager";
+  // #375: the Glossary Management special tab — same "explicitly selected"
+  // rule as the Tag Manager tab.
+  const isGlossaryEntryManagerTabActive =
+    isGlossaryEntryManagerTabOpen &&
+    activeSpecialTabId === "glossaryEntryManager";
   // When the Settings tab is the only open tab (zero document tabs), it is the
-  // active surface even though `activeSpecialTabId` may not have been set.
+  // active surface even though `activeSpecialTabId` may not have been set —
+  // but never while a Glossary management tab is the selected special tab.
   const isSettingsTabActive =
     isSettingsTabOpen &&
+    !isGlossaryTagManagerTabActive &&
+    !isGlossaryEntryManagerTabActive &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
+  // A full-editor-area special tab (Settings or a Glossary management tab) is
+  // showing instead of an editor. Command gates that mean "an editor is
+  // active" check this rather than isSettingsTabActive alone.
+  const isEditorAreaSpecialTabActive =
+    isSettingsTabActive ||
+    isGlossaryTagManagerTabActive ||
+    isGlossaryEntryManagerTabActive;
   // #352: the Outline pane shows headings only for an active Markdown editor.
   const activeEditorIsMarkdown =
-    !isSettingsTabActive && currentEditor?.kind === "markdown";
+    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
 
   // #352: jump the active Markdown editor to a clicked outline heading. Reuses
   // the existing pending-selection plumbing (same as Go to Line / glossary
@@ -1311,7 +1378,7 @@ export function App(): JSX.Element {
     });
   }
 
-  const activeEditorFocusSurface = isSettingsTabActive
+  const activeEditorFocusSurface = isEditorAreaSpecialTabActive
     ? "special"
     : currentEditor?.kind === "markdown"
       ? "markdown"
@@ -1655,7 +1722,7 @@ export function App(): JSX.Element {
   const shouldComputeStatusBarCharacterCount =
     effectiveSettings.workbench.statusBar.visible &&
     effectiveSettings.workbench.statusBar.characterCount.visible &&
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown";
   const statusBarCharacterCountDocumentKey =
     shouldComputeStatusBarCharacterCount && activeDocument
@@ -1698,7 +1765,7 @@ export function App(): JSX.Element {
   const isReadOnlyProject = project?.accessMode.kind === "readOnly";
   const isReadWriteProject = project?.accessMode.kind === "readWrite";
   const isProjectOwnedCurrentEditor =
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     (currentEditor?.kind === "glossaryEntry" ||
       (currentEditor?.kind === "markdown" &&
         activeMarkdownDocument?.kind === "project"));
@@ -1707,7 +1774,7 @@ export function App(): JSX.Element {
   // Drives the Rename command label so the Command Palette shows which file
   // it will act on. Independent of dirtiness — a dirty target still shows
   // its name, the `when` gate makes the command unavailable.
-  const renameActiveEditorTargetRelativePath = isSettingsTabActive
+  const renameActiveEditorTargetRelativePath = isEditorAreaSpecialTabActive
     ? null
     : activeProjectDocumentRelativePath(openDocumentsState);
   const renameActiveEditorTargetName = renameActiveEditorTargetRelativePath
@@ -1745,13 +1812,13 @@ export function App(): JSX.Element {
   const canSaveGlossaryEntry =
     currentEditor?.kind === "glossaryEntry" &&
     !isSavingGlossaryEntry &&
-    currentEditor.draft.canonicalSurface.trim().length > 0;
+    glossaryEntryDraftValidity(currentEditor.draft).ok;
   const canSave =
-    !isSettingsTabActive && currentEditor?.kind === "markdown"
+    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
-      : !isSettingsTabActive && canSaveGlossaryEntry;
+      : !isEditorAreaSpecialTabActive && canSaveGlossaryEntry;
   const canSaveAs =
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
     Boolean(activeMarkdownDocument);
   const isLifecycleCommitBarrierActive =
@@ -1816,7 +1883,7 @@ export function App(): JSX.Element {
   }
 
   const activeEditorSaveBlockedByReadOnlyProjectRootForUi =
-    !isSettingsTabActive &&
+    !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
     activeMarkdownDocument &&
     project
@@ -1838,14 +1905,14 @@ export function App(): JSX.Element {
         projectAccessReadWrite: isReadWriteProject,
         projectAccessReadOnly: isReadOnlyProject,
         editorHasDocument:
-          !isSettingsTabActive && currentEditor?.kind === "markdown"
+          !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
             ? Boolean(activeMarkdownDocument)
-            : !isSettingsTabActive && currentEditor?.kind === "glossaryEntry",
-        editorIsDirty: !isSettingsTabActive && isDirty,
+            : !isEditorAreaSpecialTabActive && currentEditor?.kind === "glossaryEntry",
+        editorIsDirty: !isEditorAreaSpecialTabActive && isDirty,
         editorKindMarkdown:
-          !isSettingsTabActive && currentEditor?.kind === "markdown",
+          !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown",
         editorKindGlossary:
-          !isSettingsTabActive && currentEditor?.kind === "glossaryEntry",
+          !isEditorAreaSpecialTabActive && currentEditor?.kind === "glossaryEntry",
         editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
         // #318: same source of truth as the Rename target resolution — an
         // active Markdown editor over a current-project document. Untitled,
@@ -1863,7 +1930,7 @@ export function App(): JSX.Element {
       project,
       isReadWriteProject,
       isReadOnlyProject,
-      isSettingsTabActive,
+      isEditorAreaSpecialTabActive,
       currentEditor?.kind,
       activeMarkdownDocument,
       isProjectOwnedCurrentEditor,
@@ -2136,7 +2203,15 @@ export function App(): JSX.Element {
         navigateToPreviousGlossaryOccurrence: (entryId) =>
           navigateGlossaryOccurrenceRef.current(entryId, "previous"),
         navigateToNextGlossaryOccurrence: (entryId) =>
-          navigateGlossaryOccurrenceRef.current(entryId, "next")
+          navigateGlossaryOccurrenceRef.current(entryId, "next"),
+        openGlossaryTagManager: () => {
+          openGlossaryTagManagerTab();
+          return true;
+        },
+        openGlossaryEntryManager: () => {
+          openGlossaryEntryManagerTab();
+          return true;
+        }
       },
       createGlossaryCommandTitles(translate)
     );
@@ -2284,24 +2359,50 @@ export function App(): JSX.Element {
     () => documentTabs(openDocumentsState),
     [openDocumentsState]
   );
-  const specialTabs = useMemo<SpecialWorkspaceTab[]>(
-    () =>
-      isSettingsTabOpen
-        ? [
-            {
-              kind: "special",
-              id: "settings",
-              title: translate("settings.application.title")
-            }
-          ]
-        : [],
-    [isSettingsTabOpen, translate]
-  );
-  const activeWorkspaceTabId: WorkspaceTabId | undefined = isSettingsTabActive
-    ? specialWorkspaceTabId("settings")
-    : openDocumentsState.activeDocumentId
-      ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
-      : undefined;
+  const specialTabs = useMemo<SpecialWorkspaceTab[]>(() => {
+    const list: SpecialWorkspaceTab[] = [];
+
+    if (isSettingsTabOpen) {
+      list.push({
+        kind: "special",
+        id: "settings",
+        title: translate("settings.application.title")
+      });
+    }
+
+    if (isGlossaryTagManagerTabOpen) {
+      list.push({
+        kind: "special",
+        id: "glossaryTagManager",
+        title: translate("glossary.tagManager.title")
+      });
+    }
+
+    if (isGlossaryEntryManagerTabOpen) {
+      list.push({
+        kind: "special",
+        id: "glossaryEntryManager",
+        title: translate("glossary.entryManager.title")
+      });
+    }
+
+    return list;
+  }, [
+    isSettingsTabOpen,
+    isGlossaryTagManagerTabOpen,
+    isGlossaryEntryManagerTabOpen,
+    translate
+  ]);
+  const activeWorkspaceTabId: WorkspaceTabId | undefined =
+    isGlossaryTagManagerTabActive
+      ? specialWorkspaceTabId("glossaryTagManager")
+      : isGlossaryEntryManagerTabActive
+        ? specialWorkspaceTabId("glossaryEntryManager")
+        : isSettingsTabActive
+          ? specialWorkspaceTabId("settings")
+          : openDocumentsState.activeDocumentId
+            ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+            : undefined;
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
@@ -2377,7 +2478,9 @@ export function App(): JSX.Element {
     );
   }
 
-  function setActiveGlossaryEntryKind(kind: GlossaryEntryKind): void {
+  function updateActiveGlossaryDraft(
+    update: (draft: GlossaryEntryDraft) => GlossaryEntryDraft
+  ): void {
     if (!canMutateActiveWorkingCopy()) {
       return;
     }
@@ -2385,274 +2488,79 @@ export function App(): JSX.Element {
     setOpenDocumentsState((state) =>
       updateActiveOpenEditor(state, (editor) =>
         editor.kind === "glossaryEntry"
-          ? { ...editor, draft: updateGlossaryEntryDraftKind(editor.draft, kind) }
+          ? { ...editor, draft: update(editor.draft) }
           : editor
       )
     );
   }
 
   function setActiveGlossaryEntryDescription(description: string): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftDescription(
-                editor.draft,
-                description
-              )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      updateGlossaryEntryDraftDescription(draft, description)
     );
   }
 
-  function setActiveGlossaryEntryCanonicalSurface(surface: string): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftCanonicalSurface(
-                editor.draft,
-                surface
-              )
-            }
-          : editor
-      )
-    );
+  function addActiveGlossaryEntryAtom(): void {
+    updateActiveGlossaryDraft(addGlossaryEntryDraftAtom);
   }
 
-  function setActiveGlossaryEntryCanonicalMatchBoundaryStart(
-    matchBoundaryStart: GlossaryFormMatchBoundary
+  function setActiveGlossaryEntryAtomValue(
+    atomId: string,
+    value: string
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
-                editor.draft,
-                matchBoundaryStart
-              )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      updateGlossaryEntryDraftAtomValue(draft, atomId, value)
     );
   }
 
-  function setActiveGlossaryEntryCanonicalMatchBoundaryEnd(
-    matchBoundaryEnd: GlossaryFormMatchBoundary
+  function setActiveGlossaryEntryAtomMatchFlags(
+    atomId: string,
+    matchFlags: number
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftCanonicalMatchBoundaryEnd(
-                editor.draft,
-                matchBoundaryEnd
-              )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      updateGlossaryEntryDraftAtomMatchFlags(draft, atomId, matchFlags)
     );
   }
 
-  function setActiveGlossaryEntryCanonicalAllowSingleCharacterMatch(
-    value: boolean
+  function deleteActiveGlossaryEntryAtom(atomId: string): void {
+    updateActiveGlossaryDraft((draft) =>
+      deleteGlossaryEntryDraftAtom(draft, atomId)
+    );
+  }
+
+  function reorderActiveGlossaryEntryAtom(
+    atomId: string,
+    toIndex: number
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft:
-                updateGlossaryEntryDraftCanonicalAllowSingleCharacterMatch(
-                  editor.draft,
-                  value
-                )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      reorderGlossaryEntryDraftAtom(draft, atomId, toIndex)
     );
   }
 
-  function addActiveGlossaryEntryForm(
-    relation: GlossaryFormRelation
+  function assignActiveGlossaryEntryTag(
+    tagId: string,
+    toIndex: number
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: addGlossaryEntryDraftForm(editor.draft, relation)
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      assignGlossaryEntryDraftTag(draft, tagId, toIndex)
     );
   }
 
-  function setActiveGlossaryEntryFormSurface(
-    formId: string,
-    surface: string
+  function unassignActiveGlossaryEntryTag(tagId: string): void {
+    updateActiveGlossaryDraft((draft) =>
+      unassignGlossaryEntryDraftTag(draft, tagId)
+    );
+  }
+
+  function reorderAssignedActiveGlossaryEntryTag(
+    tagId: string,
+    toIndex: number
   ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormSurface(
-                editor.draft,
-                formId,
-                surface
-              )
-            }
-          : editor
-      )
+    updateActiveGlossaryDraft((draft) =>
+      reorderAssignedGlossaryEntryDraftTags(draft, tagId, toIndex)
     );
   }
 
-  function setActiveGlossaryEntryFormWarningPolicy(
-    formId: string,
-    warningPolicy: GlossaryWarningPolicy
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormWarningPolicy(
-                editor.draft,
-                formId,
-                warningPolicy
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryFormMatchBoundaryStart(
-    formId: string,
-    matchBoundaryStart: GlossaryFormMatchBoundary
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormMatchBoundaryStart(
-                editor.draft,
-                formId,
-                matchBoundaryStart
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryFormMatchBoundaryEnd(
-    formId: string,
-    matchBoundaryEnd: GlossaryFormMatchBoundary
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormMatchBoundaryEnd(
-                editor.draft,
-                formId,
-                matchBoundaryEnd
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryFormAllowSingleCharacterMatch(
-    formId: string,
-    value: boolean
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: updateGlossaryEntryDraftFormAllowSingleCharacterMatch(
-                editor.draft,
-                formId,
-                value
-              )
-            }
-          : editor
-      )
-    );
-  }
-
-  function deleteActiveGlossaryEntryForm(formId: string): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? {
-              ...editor,
-              draft: deleteGlossaryEntryDraftForm(editor.draft, formId)
-            }
-          : editor
-      )
-    );
-  }
 
   async function createGlossaryEntryFromSidebar(
     input: CreateGlossaryEntryInput
@@ -2676,6 +2584,314 @@ export function App(): JSX.Element {
     }
   }
 
+  // #375: Glossary tag CRUD, driven by the Glossary Tag Manager special
+  // tab. Each mutation bumps `glossaryRefreshToken`, which reloads the tag
+  // list (and every glossary consumer — sidebar filter, entry-row chips,
+  // entry editor tag picker) below.
+  async function handleCreateGlossaryTag(
+    input: CreateGlossaryTagInput
+  ): Promise<GlossaryTag> {
+    const tag = await window.pergamum.glossary.createTag(input);
+    setGlossaryRefreshToken((token) => token + 1);
+    return tag;
+  }
+
+  async function handleUpdateGlossaryTag(
+    input: UpdateGlossaryTagInput
+  ): Promise<GlossaryTag> {
+    const tag = await window.pergamum.glossary.updateTag(input);
+    setGlossaryRefreshToken((token) => token + 1);
+    return tag;
+  }
+
+  async function handleReorderGlossaryTags(
+    tagIdsInOrder: string[]
+  ): Promise<GlossaryTag[]> {
+    const tags = await window.pergamum.glossary.reorderTags(tagIdsInOrder);
+    setGlossaryRefreshToken((token) => token + 1);
+    return tags;
+  }
+
+  async function handleDeleteGlossaryTag(
+    tagId: string,
+    tagLabel: string
+  ): Promise<void> {
+    if (glossaryDeleteInFlightRef.current) {
+      return;
+    }
+
+    glossaryDeleteInFlightRef.current = true;
+
+    try {
+      let confirmed = false;
+      try {
+        const result = await confirmDialog({
+          title: translate("glossary.tagManager.deleteDialog.title"),
+          message: {
+            kind: "plainTextWithPathBlock",
+            beforeText: "",
+            pathBlock: {
+              label: translate(
+                "glossary.tagManager.deleteDialog.targetLabel"
+              ),
+              value: tagLabel
+            },
+            afterText: translate("glossary.tagManager.deleteDialog.message")
+          },
+          icon: { kind: "warning", tooltip: translate("dialog.icon.warning") },
+          clipboardText: null,
+          dismissOnBackdropClick: false,
+          tone: "destructive",
+          confirmLabel: translate("glossary.deleteDialog.delete"),
+          cancelLabel: translate("glossary.deleteDialog.cancel")
+        });
+        confirmed = result === "confirm";
+      } catch (error) {
+        if (
+          error instanceof AppDialogError &&
+          error.kind === "dialogAlreadyOpen"
+        ) {
+          return;
+        }
+        throw error;
+      }
+
+      if (!confirmed) {
+        return;
+      }
+
+      await window.pergamum.glossary.deleteTag(tagId);
+      setGlossaryRefreshToken((token) => token + 1);
+    } finally {
+      glossaryDeleteInFlightRef.current = false;
+    }
+  }
+
+  // #375: Glossary Management tab — persist a new project-wide entry order.
+  // Re-packs `glossary_entries.sort_order` and refreshes every glossary
+  // consumer (sidebar / Document Map / the manager table).
+  async function handleReorderGlossaryEntries(
+    entryIdsInOrder: string[]
+  ): Promise<GlossaryEntry[]> {
+    const entries =
+      await window.pergamum.glossary.reorderEntries(entryIdsInOrder);
+    setGlossaryRefreshToken((token) => token + 1);
+    return entries;
+  }
+
+  // #375: Glossary Management tab — the top-left "Add entry" button. Goes
+  // through the SAME create flow as the Glossary sidebar's "Add entry"
+  // (glossary.entry.create): it persists a new entry (seeded with a
+  // placeholder surface for the user to rename), bumps the refresh token so
+  // every glossary consumer reloads, and opens its editor tab.
+  function handleAddGlossaryEntryFromManager(): void {
+    void createGlossaryEntryFromSidebar({
+      description: "",
+      atoms: [
+        { value: translate("glossary.entryManager.newEntryValue"), matchFlags: 0 }
+      ],
+      tagIds: []
+    });
+  }
+
+  // #375: Glossary Management tab — hard delete of an entry through the shared
+  // destructive confirm dialog. Closes the entry's editor tab if it is open.
+  async function handleDeleteGlossaryEntryFromManager(
+    entryId: string
+  ): Promise<void> {
+    if (glossaryDeleteInFlightRef.current) {
+      return;
+    }
+
+    const entry = glossaryEntries.find((candidate) => candidate.id === entryId);
+
+    if (!entry) {
+      return;
+    }
+
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+
+    glossaryDeleteInFlightRef.current = true;
+
+    try {
+      if (!(await confirmDeleteGlossaryEntry(createGlossaryEntryDraft(entry)))) {
+        return;
+      }
+
+      const result = await window.pergamum.glossary.delete(entryId);
+
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        return;
+      }
+
+      if (!result.deleted) {
+        return;
+      }
+
+      const editorId = createGlossaryEntryEditorId(
+        entryId,
+        activeProjectContext
+      );
+      editorNavigation.invalidateEditor(editorId);
+      setOpenDocumentsState((state) => closeOpenEditor(state, editorId));
+      setGlossaryRefreshToken((token) => token + 1);
+      setGlossaryOccurrenceTrackingState((state) =>
+        state.kind === "active" && state.entryId === entryId
+          ? inactiveGlossaryOccurrenceTrackingState
+          : state
+      );
+    } catch (error) {
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        return;
+      }
+
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    } finally {
+      glossaryDeleteInFlightRef.current = false;
+    }
+  }
+
+  // #375: Glossary sidebar ◀ / ▶ — jump to an occurrence of `entry` (any of
+  // its atoms) in the ACTIVE Markdown document. No-op when the active editor
+  // is not Markdown or the entry has no hits (the sidebar also disables the
+  // buttons in those cases). Advances a per-(entry, document) cursor and
+  // wraps, matching planGlossaryOccurrenceNavigation. Applying the selection
+  // returns focus to the editor (MarkdownEditor focuses on pendingSelection).
+  function navigateGlossaryOccurrenceFromSidebar(
+    entry: GlossaryEntry,
+    direction: "previous" | "next"
+  ): void {
+    if (activeDocument?.editor.kind !== "markdown") {
+      return;
+    }
+
+    const targetDocument = {
+      editorId: activeDocument.id,
+      content: currentDocumentContent(activeDocument.editor.document)
+    };
+    const outcome = planGlossaryOccurrenceNavigation({
+      entry,
+      targetDocument,
+      direction,
+      currentCursor: sidebarGlossaryOccurrenceCursorRef.current
+    });
+
+    if (outcome.kind === "noOccurrences") {
+      setStatus({ key: "status.glossaryOccurrenceNotFound" });
+      return;
+    }
+
+    if (outcome.kind !== "navigated") {
+      return;
+    }
+
+    sidebarGlossaryOccurrenceCursorRef.current = outcome.cursor;
+    setPendingMarkdownSelection(outcome.range);
+  }
+
+  // #375: Document Map navigation. `lineIndex` is a 0-based SOURCE line the map
+  // resolved (from a click or a viewport-lens drag). NAVIGATION only — the
+  // editor's scrollToLine focuses the editor and never touches the caret /
+  // selection / document. `options.align` is `"center"` for click-to-scroll
+  // (default) and `"start"` for lens drag. A no-op when the active editor is
+  // not a Markdown view (the controller ref is then unset).
+  function scrollActiveMarkdownEditorToLine(
+    lineIndex: number,
+    options?: { align?: EditorScrollAlign }
+  ): void {
+    if (activeDocument?.editor.kind !== "markdown") {
+      return;
+    }
+
+    markdownEditorViewStateControllerRef.current?.scrollToLine(
+      lineIndex,
+      options
+    );
+  }
+
+  useEffect(() => {
+    if (!project) {
+      setGlossaryTags([]);
+      setGlossaryTagEntryCounts({});
+      setGlossaryEntries([]);
+      return;
+    }
+
+    let isActive = true;
+
+    void Promise.all([
+      window.pergamum.glossary.listTags(),
+      window.pergamum.glossary.list()
+    ])
+      .then(([tags, entries]) => {
+        if (isActive) {
+          setGlossaryTags(tags);
+          setGlossaryTagEntryCounts(countGlossaryEntriesByTag(entries));
+          setGlossaryEntries(entries);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setGlossaryTags([]);
+          setGlossaryTagEntryCounts({});
+          setGlossaryEntries([]);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.rootPath ?? null, glossaryRefreshToken]);
+
+  // #375 Text Map (Phase 1): track the editor area's rendered width so the
+  // Text Map panel (in the LEFT pane) can use the ACTIVE EDITOR width as its
+  // logical wrap width. Re-attached when the editor area mounts / unmounts
+  // (full-screen Welcome).
+  useEffect(() => {
+    const node = editorAreaBodyRef.current;
+
+    if (!node) {
+      setEditorAreaWidth(null);
+      return;
+    }
+
+    const applyWidth = (): void => {
+      setEditorAreaWidth(Math.max(1, Math.round(node.clientWidth)));
+    };
+
+    applyWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(applyWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [shouldShowFullScreenWelcome]);
+
+  // #375 Text Map: drop the "you are here" rectangle whenever the active
+  // surface is not a Markdown editor (the editor also pushes `null` on
+  // unmount; this covers the rest).
+  useEffect(() => {
+    if (!activeEditorIsMarkdown) {
+      setMarkdownVisibleRange(null);
+    }
+  }, [activeEditorIsMarkdown]);
+
   function activateDocument(documentId: EditorId): void {
     if (isLifecycleCommitBarrierActiveNow()) {
       return;
@@ -2690,19 +2906,58 @@ export function App(): JSX.Element {
     setActiveSpecialTabId("settings");
   }
 
+  // #375: open (or re-activate) the Glossary Tag Manager special tab. Opening
+  // it again just activates the existing one — never a duplicate tab, and
+  // never the "new tag" dialog (that is the "Add tag" button's job only).
+  function openGlossaryTagManagerTab(): void {
+    setIsGlossaryTagManagerTabOpen(true);
+    setActiveSpecialTabId("glossaryTagManager");
+  }
+
+  // #375: open (or re-activate) the Glossary Management special tab. Opening it
+  // again just activates the existing one — never a duplicate tab.
+  function openGlossaryEntryManagerTab(): void {
+    setIsGlossaryEntryManagerTabOpen(true);
+    setActiveSpecialTabId("glossaryEntryManager");
+  }
+
   function activateSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings" && isSettingsTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+
+    if (tabId === "glossaryTagManager" && isGlossaryTagManagerTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+
+    if (tabId === "glossaryEntryManager" && isGlossaryEntryManagerTabOpen) {
       setActiveSpecialTabId(tabId);
     }
   }
 
   function closeSpecialTab(tabId: SpecialTabId): void {
-    if (tabId !== "settings") {
+    if (tabId === "settings") {
+      setIsSettingsTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
       return;
     }
 
-    setIsSettingsTabOpen(false);
-    setActiveSpecialTabId((current) => (current === tabId ? null : current));
+    if (tabId === "glossaryTagManager") {
+      setIsGlossaryTagManagerTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+      return;
+    }
+
+    if (tabId === "glossaryEntryManager") {
+      setIsGlossaryEntryManagerTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+    }
   }
 
   async function openAboutDialog(): Promise<void> {
@@ -3238,7 +3493,7 @@ export function App(): JSX.Element {
     operation: "insert" | "remove"
   ): void {
     if (
-      isSettingsTabActive ||
+      isEditorAreaSpecialTabActive ||
       currentEditor?.kind !== "markdown" ||
       !activeMarkdownDocument ||
       isLifecycleCommitBarrierActiveNow() ||
@@ -3290,7 +3545,7 @@ export function App(): JSX.Element {
   }
 
   function canCloseEditorNow(editorId?: EditorId): boolean {
-    if (!editorId && isSettingsTabActive) {
+    if (!editorId && isEditorAreaSpecialTabActive) {
       return true;
     }
 
@@ -3301,6 +3556,16 @@ export function App(): JSX.Element {
     editorId?: EditorId
   ): Promise<void> {
     if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
+    if (!editorId && isGlossaryTagManagerTabActive) {
+      closeSpecialTab("glossaryTagManager");
+      return;
+    }
+
+    if (!editorId && isGlossaryEntryManagerTabActive) {
+      closeSpecialTab("glossaryEntryManager");
       return;
     }
 
@@ -4625,7 +4890,7 @@ export function App(): JSX.Element {
       setGlossaryRefreshToken((token) => token + 1);
       setStatus({
         key: "status.savedPath",
-        values: { path: canonicalGlossarySurface(savedEntry) }
+        values: { path: representativeGlossarySurface(savedEntry) }
       });
       logRendererDebugEvent({
         level: "debug",
@@ -4689,6 +4954,51 @@ export function App(): JSX.Element {
     }
   }
 
+  // #375: confirm through the Pergamum destructive confirm dialog (never a
+  // native OS message box) — Escape / Cancel / backdrop all resolve to "do
+  // not delete"; only the explicit "Delete" button proceeds.
+  async function confirmDeleteGlossaryEntry(
+    draft: GlossaryEntryDraft
+  ): Promise<boolean> {
+    const targetLabel =
+      representativeGlossaryAtomDraft(draft)?.value.trim() ||
+      representativeGlossarySurface(draft.entry);
+
+    try {
+      const result = await confirmDialog({
+        title: translate("glossary.deleteDialog.title"),
+        message: {
+          kind: "plainTextWithPathBlock",
+          beforeText: translate("glossary.deleteDialog.message"),
+          pathBlock: {
+            label: translate("glossary.deleteDialog.targetLabel"),
+            value: targetLabel
+          },
+          afterText: translate("glossary.deleteDialog.counts", {
+            atomCount: draft.atoms.length,
+            tagCount: draft.tagIds.length
+          })
+        },
+        icon: { kind: "warning", tooltip: translate("dialog.icon.warning") },
+        clipboardText: null,
+        dismissOnBackdropClick: false,
+        tone: "destructive",
+        confirmLabel: translate("glossary.deleteDialog.delete"),
+        cancelLabel: translate("glossary.deleteDialog.cancel")
+      });
+
+      return result === "confirm";
+    } catch (error) {
+      if (
+        error instanceof AppDialogError &&
+        error.kind === "dialogAlreadyOpen"
+      ) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async function deleteActiveGlossaryEntry(): Promise<void> {
     if (isLifecycleCommitBarrierActiveNow()) {
       return;
@@ -4698,19 +5008,24 @@ export function App(): JSX.Element {
       return;
     }
 
+    if (glossaryDeleteInFlightRef.current) {
+      return;
+    }
+
     const documentIdToDelete = activeDocument.id;
-    const entryIdToDelete = activeDocument.editor.draft.entry.id;
-    const confirmMessage = translate(
-      "glossaryEditor.deleteEntryConfirmMessage"
-    );
+    const draft = activeDocument.editor.draft;
+    const entryIdToDelete = draft.entry.id;
     const projectGeneration =
       projectActivationLifetimeRef.current.captureProjectActivationGeneration();
 
+    glossaryDeleteInFlightRef.current = true;
+
     try {
-      const result = await window.pergamum.glossary.delete(
-        entryIdToDelete,
-        confirmMessage
-      );
+      if (!(await confirmDeleteGlossaryEntry(draft))) {
+        return;
+      }
+
+      const result = await window.pergamum.glossary.delete(entryIdToDelete);
 
       if (
         !projectActivationLifetimeRef.current.isProjectActivationCurrent(
@@ -4747,6 +5062,8 @@ export function App(): JSX.Element {
         key: "status.commandFailed",
         values: { message: errorMessage(error, translate) }
       });
+    } finally {
+      glossaryDeleteInFlightRef.current = false;
     }
   }
 
@@ -4804,7 +5121,7 @@ export function App(): JSX.Element {
       outcome = startGlossaryOccurrenceTracking({
         currentSession: glossaryOccurrenceTrackingState,
         entry,
-        entryLabel: canonicalGlossarySurface(entry),
+        entryLabel: representativeGlossarySurface(entry),
         targetDocument,
         direction
       });
@@ -5019,7 +5336,10 @@ export function App(): JSX.Element {
       targetOpenDocument?.id ?? options.editorId ?? activeDocument?.id
     );
 
-    if (!targetOpenDocument || (!options.editorId && isSettingsTabActive)) {
+    if (
+      !targetOpenDocument ||
+      (!options.editorId && isEditorAreaSpecialTabActive)
+    ) {
       logRendererDebugEvent({
         level: "debug",
         event: "save.skipped",
@@ -5040,7 +5360,7 @@ export function App(): JSX.Element {
         ? true
         : targetEditor.kind === "glossaryEntry" &&
           targetEditor.draft.saveState !== "saving" &&
-          targetEditor.draft.canonicalSurface.trim().length > 0;
+          glossaryEntryDraftValidity(targetEditor.draft).ok;
 
     logRendererDebugEvent({
       level: "debug",
@@ -5344,6 +5664,16 @@ export function App(): JSX.Element {
 
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
+    sidebarGlossaryOccurrenceCursorRef.current = null;
+    // #375: the Glossary Tag Manager tab is project-scoped (tags are
+    // project-owned) — it never survives a project switch / close.
+    setIsGlossaryTagManagerTabOpen(false);
+    setIsGlossaryEntryManagerTabOpen(false);
+    setActiveSpecialTabId((current) =>
+      current === "glossaryTagManager" || current === "glossaryEntryManager"
+        ? null
+        : current
+    );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
     setOpenDocumentsState((state) =>
@@ -5418,6 +5748,16 @@ export function App(): JSX.Element {
     projectActivationLifetimeRef.current.startProjectContextSwitch();
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
+    sidebarGlossaryOccurrenceCursorRef.current = null;
+    // #375: the Glossary Tag Manager tab is project-scoped (tags are
+    // project-owned) — it never survives a project switch / close.
+    setIsGlossaryTagManagerTabOpen(false);
+    setIsGlossaryEntryManagerTabOpen(false);
+    setActiveSpecialTabId((current) =>
+      current === "glossaryTagManager" || current === "glossaryEntryManager"
+        ? null
+        : current
+    );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
     const nextOpenDocumentsState = removeProjectScopedOpenEditors(
@@ -5957,6 +6297,16 @@ export function App(): JSX.Element {
     projectActivationLifetimeRef.current.startProjectContextSwitch();
     projectActivationLifetimeRef.current.markExplicitEditorActivation();
     lastActiveMarkdownEditorIdRef.current = null;
+    sidebarGlossaryOccurrenceCursorRef.current = null;
+    // #375: the Glossary Tag Manager tab is project-scoped (tags are
+    // project-owned) — it never survives a project switch / close.
+    setIsGlossaryTagManagerTabOpen(false);
+    setIsGlossaryEntryManagerTabOpen(false);
+    setActiveSpecialTabId((current) =>
+      current === "glossaryTagManager" || current === "glossaryEntryManager"
+        ? null
+        : current
+    );
     coldStartMarkdownFocusRequestedRef.current = false;
     setMarkdownEditorFocusRequest(null);
     setCommandPaletteMarkdownFocusRestorePending(false);
@@ -6307,7 +6657,7 @@ export function App(): JSX.Element {
       return;
     }
 
-    if (isSettingsTabActive) {
+    if (isEditorAreaSpecialTabActive) {
       return;
     }
 
@@ -6329,7 +6679,7 @@ export function App(): JSX.Element {
   // lazily split (see createLineJumpEditorSnapshot), so it costs nothing on
   // renders where the Palette isn't open in line mode.
   const lineJumpEditorSnapshot =
-    !isSettingsTabActive && currentEditor?.kind === "markdown"
+    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
       ? createLineJumpEditorSnapshot(
           currentDocumentContent(currentEditor.document)
         )
@@ -6777,13 +7127,17 @@ export function App(): JSX.Element {
       <header className="toolbar">
         <div className="documentTitle">
           <span>
-            {isSettingsTabActive
-              ? translate("settings.application.title")
-              : currentEditor
-                ? currentEditorTitle(currentEditor)
-                : ""}
+            {isGlossaryTagManagerTabActive
+              ? translate("glossary.tagManager.title")
+              : isGlossaryEntryManagerTabActive
+                ? translate("glossary.entryManager.title")
+                : isSettingsTabActive
+                  ? translate("settings.application.title")
+                  : currentEditor
+                    ? currentEditorTitle(currentEditor)
+                    : ""}
           </span>
-          {!isSettingsTabActive && isDirty ? (
+          {!isEditorAreaSpecialTabActive && isDirty ? (
             <span className="dirtyIndicator">
               {translate("document.unsaved")}
             </span>
@@ -6948,6 +7302,20 @@ export function App(): JSX.Element {
                         );
                       }}
                       onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
+                      glossaryActiveDocumentContent={
+                        activeMarkdownDocument
+                          ? currentDocumentContent(activeMarkdownDocument)
+                          : null
+                      }
+                      textMapGlossaryEntries={glossaryEntries}
+                      textMapGlossaryTags={glossaryTags}
+                      textMapEditorWidth={editorAreaWidth}
+                      textMapEditorVisibleRange={markdownVisibleRange}
+                      textMapDocumentMapSettings={effectiveSettings.documentMap}
+                      onTextMapNavigateToLine={scrollActiveMarkdownEditorToLine}
+                      onNavigateGlossaryOccurrence={
+                        navigateGlossaryOccurrenceFromSidebar
+                      }
                       markdownOutline={activeMarkdownOutline}
                       activeEditorIsMarkdown={activeEditorIsMarkdown}
                       activeOutlineDocumentKey={activeDocumentKey}
@@ -6997,7 +7365,38 @@ export function App(): JSX.Element {
                 />
 
                 <section className="editorAreaBody" ref={editorAreaBodyRef}>
-                  {isSettingsTabActive ? (
+                  {isGlossaryTagManagerTabActive ? (
+                    <section className="glossaryTagManagerTab">
+                      <GlossaryTagManager
+                        tags={glossaryTags}
+                        translate={translate}
+                        entryCountByTagId={glossaryTagEntryCounts}
+                        onCreateTag={handleCreateGlossaryTag}
+                        onUpdateTag={handleUpdateGlossaryTag}
+                        onDeleteTag={handleDeleteGlossaryTag}
+                        onReorderTags={handleReorderGlossaryTags}
+                      />
+                    </section>
+                  ) : isGlossaryEntryManagerTabActive ? (
+                    <section className="glossaryEntryManagerTab">
+                      <GlossaryEntryManager
+                        entries={glossaryEntries}
+                        translate={translate}
+                        onAddEntry={handleAddGlossaryEntryFromManager}
+                        onOpenEntry={(entryId) => {
+                          executeUiCommand(
+                            glossaryCommandIds.openEntry,
+                            { source: "editorSurface" },
+                            entryId
+                          );
+                        }}
+                        onDeleteEntry={(entryId) =>
+                          handleDeleteGlossaryEntryFromManager(entryId)
+                        }
+                        onReorderEntries={handleReorderGlossaryEntries}
+                      />
+                    </section>
+                  ) : isSettingsTabActive ? (
                     <SettingsPanel
                       settings={settings}
                       isLoading={isSettingsLoading}
@@ -7050,6 +7449,7 @@ export function App(): JSX.Element {
                         }
                         onViewStateSnapshot={handleMarkdownViewStateSnapshot}
                         onViewStateDirty={handleMarkdownViewStateDirty}
+                        onMarkdownVisibleRangeChange={setMarkdownVisibleRange}
                         restoreActiveEditorViewState={
                           restoreActiveEditorViewState
                         }
@@ -7062,39 +7462,27 @@ export function App(): JSX.Element {
                         onMarkdownEditorFocusRequestApplied={
                           handleMarkdownEditorFocusRequestApplied
                         }
-                        onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
+                        glossaryAvailableTags={glossaryTags}
                         onChangeGlossaryEntryDescription={
                           setActiveGlossaryEntryDescription
                         }
-                        onChangeGlossaryEntryCanonicalSurface={
-                          setActiveGlossaryEntryCanonicalSurface
+                        onAddGlossaryEntryAtom={addActiveGlossaryEntryAtom}
+                        onChangeGlossaryEntryAtomValue={
+                          setActiveGlossaryEntryAtomValue
                         }
-                        onChangeGlossaryEntryCanonicalMatchBoundaryStart={
-                          setActiveGlossaryEntryCanonicalMatchBoundaryStart
+                        onChangeGlossaryEntryAtomMatchFlags={
+                          setActiveGlossaryEntryAtomMatchFlags
                         }
-                        onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
-                          setActiveGlossaryEntryCanonicalMatchBoundaryEnd
+                        onDeleteGlossaryEntryAtom={deleteActiveGlossaryEntryAtom}
+                        onReorderGlossaryEntryAtom={reorderActiveGlossaryEntryAtom}
+                        onAssignGlossaryEntryTag={assignActiveGlossaryEntryTag}
+                        onUnassignGlossaryEntryTag={
+                          unassignActiveGlossaryEntryTag
                         }
-                        onChangeGlossaryEntryCanonicalAllowSingleCharacterMatch={
-                          setActiveGlossaryEntryCanonicalAllowSingleCharacterMatch
+                        onReorderAssignedGlossaryEntryTag={
+                          reorderAssignedActiveGlossaryEntryTag
                         }
-                        onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
-                        onChangeGlossaryEntryFormSurface={
-                          setActiveGlossaryEntryFormSurface
-                        }
-                        onChangeGlossaryEntryFormWarningPolicy={
-                          setActiveGlossaryEntryFormWarningPolicy
-                        }
-                        onChangeGlossaryEntryFormMatchBoundaryStart={
-                          setActiveGlossaryEntryFormMatchBoundaryStart
-                        }
-                        onChangeGlossaryEntryFormMatchBoundaryEnd={
-                          setActiveGlossaryEntryFormMatchBoundaryEnd
-                        }
-                        onChangeGlossaryEntryFormAllowSingleCharacterMatch={
-                          setActiveGlossaryEntryFormAllowSingleCharacterMatch
-                        }
-                        onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
+                        onOpenGlossaryTagManager={openGlossaryTagManagerTab}
                         onDeleteGlossaryEntry={() => {
                           void deleteActiveGlossaryEntry();
                         }}

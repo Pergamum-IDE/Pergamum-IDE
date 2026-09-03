@@ -19,18 +19,15 @@ const translate: Translate = (key, values) => {
 
 const maidEntry: GlossaryEntry = {
   id: "018f4b8c-7a2b-7c3d-8e4f-100000000001",
-  kind: "term",
   description: "",
-  forms: [
+  tags: [],
+  atoms: [
     {
       id: "018f4b8c-7a2b-7c3d-8e4f-200000000001",
       entryId: "018f4b8c-7a2b-7c3d-8e4f-100000000001",
-      surface: "メイド",
-      matchBoundaryStart: "auto",
-      matchBoundaryEnd: "auto",
-      relation: null,
-      warningPolicy: null,
-      isCanonical: true,
+      sortOrder: 0,
+      value: "メイド",
+      matchFlags: 0,
       createdAt: "2026-08-14T00:00:00.000Z",
       updatedAt: "2026-08-14T00:00:00.000Z"
     }

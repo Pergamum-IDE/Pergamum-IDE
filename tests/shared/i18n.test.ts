@@ -7,30 +7,11 @@ import {
 import { enTranslations } from "../../src/shared/i18n/en";
 import { jaTranslations } from "../../src/shared/i18n/ja";
 
-const matchBoundaryKeys = [
-  "glossaryEditor.advancedMatchingSettings",
-  "glossaryEditor.matchBoundaryStart",
-  "glossaryEditor.matchBoundaryEnd",
-  "glossaryEditor.matchBoundary.auto.label",
-  "glossaryEditor.matchBoundary.strict.label",
-  "glossaryEditor.matchBoundary.none.label",
-  "glossaryEditor.matchBoundary.auto.description",
-  "glossaryEditor.matchBoundary.strict.description",
-  "glossaryEditor.matchBoundary.none.description"
-] as const;
-
 const glossaryNavigatorSearchKeys = [
   "glossaryNavigator.search",
   "glossaryNavigator.searchPlaceholder",
   "glossaryNavigator.emptySearchResult"
 ] as const;
-
-const disallowedBoundaryWords = [
-  "左端",
-  "右端",
-  "left boundary",
-  "right boundary"
-];
 
 describe("supported UI languages (#186)", () => {
   it("keeps selectable UI language values exactly ja and en", () => {
@@ -50,16 +31,67 @@ describe("supported UI languages (#186)", () => {
   });
 });
 
-describe("glossary entry deletion translations", () => {
-  it("labels the delete button and its confirmation message for ja and en", () => {
+describe("glossary deletion dialog translations (#375)", () => {
+  it("labels the entry delete confirm dialog for ja and en with a Delete (not OK) action", () => {
     expect(t("ja", "glossaryEditor.deleteEntry")).toBe("削除");
     expect(t("en", "glossaryEditor.deleteEntry")).toBe("Delete");
-    expect(t("ja", "glossaryEditor.deleteEntryConfirmMessage")).toBe(
-      "この語彙を削除します。よろしいですか？"
+
+    expect(t("ja", "glossary.deleteDialog.title")).toBe("語彙を削除しますか？");
+    expect(t("en", "glossary.deleteDialog.title")).toBe(
+      "Delete glossary entry?"
     );
-    expect(t("en", "glossaryEditor.deleteEntryConfirmMessage")).toBe(
-      "Delete this glossary entry?"
+    expect(t("ja", "glossary.deleteDialog.message")).toBe(
+      "この操作は元に戻せません。"
     );
+    expect(t("en", "glossary.deleteDialog.message")).toBe(
+      "This action cannot be undone."
+    );
+    expect(t("ja", "glossary.deleteDialog.delete")).toBe("削除");
+    expect(t("en", "glossary.deleteDialog.delete")).toBe("Delete");
+    expect(t("ja", "glossary.deleteDialog.cancel")).toBe("キャンセル");
+    expect(t("en", "glossary.deleteDialog.cancel")).toBe("Cancel");
+    // The affirmative action is never labelled "OK".
+    expect(t("ja", "glossary.deleteDialog.delete")).not.toBe("OK");
+    expect(t("en", "glossary.deleteDialog.delete")).not.toBe("OK");
+  });
+
+  it("labels the tag delete confirm dialog for ja and en, explaining entries survive", () => {
+    expect(t("ja", "glossary.tagManager.deleteDialog.title")).toBe(
+      "タグを削除しますか？"
+    );
+    expect(t("en", "glossary.tagManager.deleteDialog.title")).toBe(
+      "Delete tag?"
+    );
+    expect(t("ja", "glossary.tagManager.deleteDialog.targetLabel")).toBe(
+      "タグ"
+    );
+    expect(t("en", "glossary.tagManager.deleteDialog.targetLabel")).toBe(
+      "Tag"
+    );
+    expect(t("ja", "glossary.tagManager.deleteDialog.message")).toContain(
+      "語彙そのものは削除されません"
+    );
+    expect(t("en", "glossary.tagManager.deleteDialog.message")).toContain(
+      "will not be deleted"
+    );
+  });
+
+  it("titles the Tag Manager tab as a management screen (#375)", () => {
+    expect(t("ja", "glossary.tagManager.title")).toBe("タグ管理設定");
+    expect(t("en", "glossary.tagManager.title")).toBe("Tag Management");
+    expect(t("ja", "glossary.tagManager.addTag")).toBe("タグ追加");
+    expect(t("en", "glossary.tagManager.addTag")).toBe("Add tag");
+  });
+
+  it("labels the Tag Manager table columns, incl. Entries and date-only columns (#375)", () => {
+    // Date columns are "作成日" / "更新日" now (no longer 作成日時 / 更新日時).
+    expect(t("ja", "glossary.tagManager.columns.createdAt")).toBe("作成日");
+    expect(t("ja", "glossary.tagManager.columns.updatedAt")).toBe("更新日");
+    expect(t("en", "glossary.tagManager.columns.createdAt")).toBe("Created");
+    expect(t("en", "glossary.tagManager.columns.updatedAt")).toBe("Updated");
+    // The entry-count column.
+    expect(t("ja", "glossary.tagManager.columns.entries")).toBe("利用語彙数");
+    expect(t("en", "glossary.tagManager.columns.entries")).toBe("Entries");
   });
 });
 
@@ -584,75 +616,6 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("en", "status.characterCount", { count: 123 })).toBe(
       "123 characters"
     );
-  });
-});
-
-describe("glossary form match boundary translations", () => {
-  it("defines every advanced matching settings key for ja and en", () => {
-    for (const key of matchBoundaryKeys) {
-      expect(t("ja", key).length).toBeGreaterThan(0);
-      expect(t("en", key).length).toBeGreaterThan(0);
-    }
-  });
-
-  it("labels the disclosure and both boundary fields without left/right vocabulary", () => {
-    expect(t("ja", "glossaryEditor.advancedMatchingSettings")).toBe(
-      "機械検索用詳細設定"
-    );
-    expect(t("en", "glossaryEditor.advancedMatchingSettings")).toBe(
-      "Advanced matching settings"
-    );
-    expect(t("ja", "glossaryEditor.matchBoundaryStart")).toBe(
-      "一致開始側の境界"
-    );
-    expect(t("en", "glossaryEditor.matchBoundaryStart")).toBe(
-      "Match start boundary"
-    );
-    expect(t("ja", "glossaryEditor.matchBoundaryEnd")).toBe(
-      "一致終了側の境界"
-    );
-    expect(t("en", "glossaryEditor.matchBoundaryEnd")).toBe(
-      "Match end boundary"
-    );
-  });
-
-  it("labels the auto/strict/none options using the internal values as keys, not left/right", () => {
-    expect(t("ja", "glossaryEditor.matchBoundary.auto.label")).toBe("自動");
-    expect(t("ja", "glossaryEditor.matchBoundary.strict.label")).toBe("厳密");
-    expect(t("ja", "glossaryEditor.matchBoundary.none.label")).toBe("なし");
-    expect(t("en", "glossaryEditor.matchBoundary.auto.label")).toBe("Auto");
-    expect(t("en", "glossaryEditor.matchBoundary.strict.label")).toBe(
-      "Strict"
-    );
-    expect(t("en", "glossaryEditor.matchBoundary.none.label")).toBe("None");
-  });
-
-  it("warns in the ja strict description that behavior may become stricter in the future", () => {
-    expect(t("ja", "glossaryEditor.matchBoundary.strict.description")).toContain(
-      "今後より厳しくなる場合があります"
-    );
-  });
-
-  it("warns in the en strict description that behavior may become stricter in the future", () => {
-    const description = t(
-      "en",
-      "glossaryEditor.matchBoundary.strict.description"
-    );
-
-    expect(description).toMatch(/future/i);
-    expect(description).toMatch(/stricter/i);
-  });
-
-  it("never exposes left/right boundary vocabulary in the new translation content", () => {
-    for (const key of matchBoundaryKeys) {
-      for (const language of supportedLanguages) {
-        const value = t(language, key);
-
-        for (const disallowedWord of disallowedBoundaryWords) {
-          expect(value).not.toContain(disallowedWord);
-        }
-      }
-    }
   });
 });
 

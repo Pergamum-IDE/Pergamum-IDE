@@ -1,35 +1,38 @@
-import {
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  type IpcMainInvokeEvent,
-  type MessageBoxOptions
-} from "electron";
+import { ipcMain } from "electron";
 import {
   GLOSSARY_CHANNELS,
   type DeleteGlossaryEntryRequest,
   type DeleteGlossaryEntryResult,
-  type GlossaryEntryIdRequest,
-  type GlossarySurfaceLookupRequest
+  type DeleteGlossaryTagRequest,
+  type DeleteGlossaryTagResult,
+  type GlossaryEntryIdRequest
 } from "../shared/api";
 import {
   validateCreateGlossaryEntryInput,
+  validateCreateGlossaryTagInput,
   validateGlossaryEntryId,
-  validateGlossarySurfaceLookupInput,
+  validateGlossaryTagId,
+  validateReorderGlossaryEntryIds,
+  validateReorderGlossaryTagIds,
   validateUpdateGlossaryEntryInput,
-  type CreateGlossaryEntryInput,
+  validateUpdateGlossaryTagInput,
   type GlossaryEntry,
-  type GlossarySurfaceLookupResult,
+  type GlossaryTag,
   type UpdateGlossaryEntryInput
 } from "../shared/glossary";
 import {
   createGlossaryEntry,
+  createGlossaryTag,
   deleteGlossaryEntry,
+  deleteGlossaryTag,
   getGlossaryEntryById,
+  GlossaryStoreError,
   listGlossaryEntries,
-  lookupGlossarySurface,
+  listGlossaryTags,
+  reorderGlossaryEntries,
+  reorderGlossaryTags,
   updateGlossaryEntry,
-  GlossaryStoreError
+  updateGlossaryTag
 } from "./glossaryStore";
 import {
   openProjectDatabase,
@@ -40,29 +43,18 @@ import { getDebugLogger, type DebugLogger } from "./debugLogger";
 
 export type CurrentActiveProjectFilePathProvider = () => string;
 
-// index 0 ("OK") confirms the deletion; index 1 ("Cancel") is both the
-// default and cancel action, matching every dismiss path (Cancel, ESC,
-// dialog close, window close, undefined) to a single safe "do not delete".
-const DELETE_CONFIRM_BUTTON_INDEX = {
-  ok: 0,
-  cancel: 1
-} as const;
-
-export type ConfirmGlossaryEntryDeletion = (
-  event: IpcMainInvokeEvent | undefined,
-  confirmMessage: string
-) => Promise<boolean>;
-
 export interface GlossaryIpcHandlers {
   create(rawRequest: unknown): Promise<GlossaryEntry>;
   getById(rawRequest: unknown): Promise<GlossaryEntry | null>;
   list(): Promise<GlossaryEntry[]>;
-  lookupSurface(rawRequest: unknown): Promise<GlossarySurfaceLookupResult>;
   update(rawRequest: unknown): Promise<GlossaryEntry>;
-  delete(
-    rawRequest: unknown,
-    event?: IpcMainInvokeEvent
-  ): Promise<DeleteGlossaryEntryResult>;
+  delete(rawRequest: unknown): Promise<DeleteGlossaryEntryResult>;
+  reorderEntries(rawRequest: unknown): Promise<GlossaryEntry[]>;
+  listTags(): Promise<GlossaryTag[]>;
+  createTag(rawRequest: unknown): Promise<GlossaryTag>;
+  updateTag(rawRequest: unknown): Promise<GlossaryTag>;
+  deleteTag(rawRequest: unknown): Promise<DeleteGlossaryTagResult>;
+  reorderTags(rawRequest: unknown): Promise<GlossaryTag[]>;
 }
 
 function isRequestObject(value: unknown): value is Record<string, unknown> {
@@ -73,71 +65,67 @@ function durationSince(startedAt: number): number {
   return Date.now() - startedAt;
 }
 
-function parseGlossaryEntryIdRequest(
-  value: unknown
-): GlossaryEntryIdRequest {
+function parseGlossaryEntryIdRequest(value: unknown): GlossaryEntryIdRequest {
   if (!isRequestObject(value)) {
     throw new Error("Invalid glossary entry ID request.");
   }
 
-  return {
-    id: validateGlossaryEntryId(value.id)
-  };
+  return { id: validateGlossaryEntryId(value.id) };
+}
+
+function parseDeleteRequest(
+  value: unknown,
+  validateId: (id: unknown) => string
+): { id: string } {
+  if (!isRequestObject(value)) {
+    throw new Error("Invalid glossary delete request.");
+  }
+
+  return { id: validateId(value.id) };
 }
 
 function parseDeleteGlossaryEntryRequest(
   value: unknown
 ): DeleteGlossaryEntryRequest {
-  if (!isRequestObject(value)) {
-    throw new Error("Invalid glossary entry delete request.");
-  }
+  return parseDeleteRequest(value, (id) => validateGlossaryEntryId(id));
+}
 
-  if (typeof value.confirmMessage !== "string" || value.confirmMessage.length === 0) {
-    throw new Error("Invalid glossary entry delete confirmation message.");
+function parseDeleteGlossaryTagRequest(
+  value: unknown
+): DeleteGlossaryTagRequest {
+  return parseDeleteRequest(value, (id) => validateGlossaryTagId(id));
+}
+
+function parseReorderGlossaryTagsRequest(value: unknown): {
+  tagIdsInOrder: string[];
+} {
+  if (!isRequestObject(value)) {
+    throw new Error("Invalid glossary tag reorder request.");
   }
 
   return {
-    id: validateGlossaryEntryId(value.id),
-    confirmMessage: value.confirmMessage
+    tagIdsInOrder: validateReorderGlossaryTagIds(value.tagIdsInOrder)
   };
 }
 
-function parentWindow(
-  event: IpcMainInvokeEvent | undefined
-): BrowserWindow | undefined {
-  return event ? BrowserWindow.fromWebContents(event.sender) ?? undefined : undefined;
-}
+function parseReorderGlossaryEntriesRequest(value: unknown): {
+  entryIdsInOrder: string[];
+} {
+  if (!isRequestObject(value)) {
+    throw new Error("Invalid glossary entry reorder request.");
+  }
 
-async function confirmGlossaryEntryDeletionWithDialog(
-  event: IpcMainInvokeEvent | undefined,
-  confirmMessage: string
-): Promise<boolean> {
-  const owner = parentWindow(event);
-  const options: MessageBoxOptions = {
-    type: "warning",
-    message: confirmMessage,
-    buttons: ["OK", "Cancel"],
-    defaultId: DELETE_CONFIRM_BUTTON_INDEX.cancel,
-    cancelId: DELETE_CONFIRM_BUTTON_INDEX.cancel
+  return {
+    entryIdsInOrder: validateReorderGlossaryEntryIds(value.entryIdsInOrder)
   };
-  const result = owner
-    ? await dialog.showMessageBox(owner, options)
-    : await dialog.showMessageBox(options);
-
-  return result?.response === DELETE_CONFIRM_BUTTON_INDEX.ok;
 }
 
-function isMissingGlossaryEntryError(error: unknown): boolean {
+function isMissingGlossaryStoreError(error: unknown): boolean {
   return (
     error instanceof GlossaryStoreError &&
-    error.code === "GLOSSARY_ENTRY_NOT_FOUND"
+    (error.code === "GLOSSARY_ENTRY_NOT_FOUND" ||
+      error.code === "GLOSSARY_TAG_NOT_FOUND")
   );
-}
-
-function parseGlossarySurfaceLookupRequest(
-  value: unknown
-): GlossarySurfaceLookupRequest {
-  return validateGlossarySurfaceLookupInput(value);
 }
 
 async function withCurrentProjectDatabase<T>(
@@ -158,58 +146,45 @@ async function withCurrentProjectDatabase<T>(
 export function createGlossaryIpcHandlers(
   getCurrentActiveProjectFilePath: CurrentActiveProjectFilePathProvider =
     requireCurrentActiveProjectFilePath,
-  confirmDeletion: ConfirmGlossaryEntryDeletion =
-    confirmGlossaryEntryDeletionWithDialog,
   logger: DebugLogger = getDebugLogger()
 ): GlossaryIpcHandlers {
+  const withDatabase = <T>(
+    operation: (database: ProjectDatabase) => Promise<T>
+  ): Promise<T> =>
+    withCurrentProjectDatabase(
+      getCurrentActiveProjectFilePath,
+      logger,
+      operation
+    );
+
   return {
     async create(rawRequest) {
-      const input: CreateGlossaryEntryInput =
-        validateCreateGlossaryEntryInput(rawRequest);
+      const input = validateCreateGlossaryEntryInput(rawRequest);
 
-      return withCurrentProjectDatabase(
-        getCurrentActiveProjectFilePath,
-        logger,
-        (database) => createGlossaryEntry(database, input, logger)
+      return withDatabase((database) =>
+        createGlossaryEntry(database, input, logger)
       );
     },
     async getById(rawRequest) {
       const request = parseGlossaryEntryIdRequest(rawRequest);
 
-      return withCurrentProjectDatabase(
-        getCurrentActiveProjectFilePath,
-        logger,
-        (database) => getGlossaryEntryById(database, request.id, logger)
+      return withDatabase((database) =>
+        getGlossaryEntryById(database, request.id, logger)
       );
     },
     async list() {
-      return withCurrentProjectDatabase(
-        getCurrentActiveProjectFilePath,
-        logger,
-        (database) => listGlossaryEntries(database, logger)
-      );
-    },
-    async lookupSurface(rawRequest) {
-      const request = parseGlossarySurfaceLookupRequest(rawRequest);
-
-      return withCurrentProjectDatabase(
-        getCurrentActiveProjectFilePath,
-        logger,
-        (database) => lookupGlossarySurface(database, request, logger)
-      );
+      return withDatabase((database) => listGlossaryEntries(database, logger));
     },
     async update(rawRequest) {
       const startedAt = Date.now();
       let input: UpdateGlossaryEntryInput | null = null;
 
       try {
-        const validatedInput = validateUpdateGlossaryEntryInput(rawRequest);
-        input = validatedInput;
+        input = validateUpdateGlossaryEntryInput(rawRequest);
+        const validatedInput = input;
 
-        return await withCurrentProjectDatabase(
-          getCurrentActiveProjectFilePath,
-          logger,
-          (database) => updateGlossaryEntry(database, validatedInput, logger)
+        return await withDatabase((database) =>
+          updateGlossaryEntry(database, validatedInput, logger)
         );
       } catch (error) {
         const documentRef = input
@@ -232,28 +207,65 @@ export function createGlossaryIpcHandlers(
         throw error;
       }
     },
-    async delete(rawRequest, event) {
+    async delete(rawRequest) {
       const request = parseDeleteGlossaryEntryRequest(rawRequest);
-      const confirmed = await confirmDeletion(event, request.confirmMessage);
 
-      if (!confirmed) {
-        return { deleted: false };
-      }
-
-      return withCurrentProjectDatabase(
-        getCurrentActiveProjectFilePath,
-        logger,
-        async (database) => {
-          try {
-            await deleteGlossaryEntry(database, request.id, logger);
-          } catch (error) {
-            if (!isMissingGlossaryEntryError(error)) {
-              throw error;
-            }
+      return withDatabase(async (database) => {
+        try {
+          await deleteGlossaryEntry(database, request.id, logger);
+        } catch (error) {
+          if (!isMissingGlossaryStoreError(error)) {
+            throw error;
           }
-
-          return { deleted: true };
         }
+
+        return { deleted: true };
+      });
+    },
+    async reorderEntries(rawRequest) {
+      const request = parseReorderGlossaryEntriesRequest(rawRequest);
+
+      return withDatabase((database) =>
+        reorderGlossaryEntries(database, request.entryIdsInOrder, logger)
+      );
+    },
+    async listTags() {
+      return withDatabase((database) => listGlossaryTags(database, logger));
+    },
+    async createTag(rawRequest) {
+      const input = validateCreateGlossaryTagInput(rawRequest);
+
+      return withDatabase((database) =>
+        createGlossaryTag(database, input, logger)
+      );
+    },
+    async updateTag(rawRequest) {
+      const input = validateUpdateGlossaryTagInput(rawRequest);
+
+      return withDatabase((database) =>
+        updateGlossaryTag(database, input, logger)
+      );
+    },
+    async deleteTag(rawRequest) {
+      const request = parseDeleteGlossaryTagRequest(rawRequest);
+
+      return withDatabase(async (database) => {
+        try {
+          await deleteGlossaryTag(database, { id: request.id }, logger);
+        } catch (error) {
+          if (!isMissingGlossaryStoreError(error)) {
+            throw error;
+          }
+        }
+
+        return { deleted: true };
+      });
+    },
+    async reorderTags(rawRequest) {
+      const request = parseReorderGlossaryTagsRequest(rawRequest);
+
+      return withDatabase((database) =>
+        reorderGlossaryTags(database, request.tagIdsInOrder, logger)
       );
     }
   };
@@ -264,7 +276,6 @@ export function registerGlossaryIpc(
 ): void {
   const handlers = createGlossaryIpcHandlers(
     requireCurrentActiveProjectFilePath,
-    confirmGlossaryEntryDeletionWithDialog,
     logger
   );
 
@@ -275,14 +286,28 @@ export function registerGlossaryIpc(
     handlers.getById(rawRequest)
   );
   ipcMain.handle(GLOSSARY_CHANNELS.list, () => handlers.list());
-  ipcMain.handle(
-    GLOSSARY_CHANNELS.lookupSurface,
-    (_event, rawRequest: unknown) => handlers.lookupSurface(rawRequest)
-  );
   ipcMain.handle(GLOSSARY_CHANNELS.update, (_event, rawRequest: unknown) =>
     handlers.update(rawRequest)
   );
-  ipcMain.handle(GLOSSARY_CHANNELS.delete, (event, rawRequest: unknown) =>
-    handlers.delete(rawRequest, event)
+  ipcMain.handle(GLOSSARY_CHANNELS.delete, (_event, rawRequest: unknown) =>
+    handlers.delete(rawRequest)
+  );
+  ipcMain.handle(
+    GLOSSARY_CHANNELS.reorderEntries,
+    (_event, rawRequest: unknown) => handlers.reorderEntries(rawRequest)
+  );
+  ipcMain.handle(GLOSSARY_CHANNELS.listTags, () => handlers.listTags());
+  ipcMain.handle(GLOSSARY_CHANNELS.createTag, (_event, rawRequest: unknown) =>
+    handlers.createTag(rawRequest)
+  );
+  ipcMain.handle(GLOSSARY_CHANNELS.updateTag, (_event, rawRequest: unknown) =>
+    handlers.updateTag(rawRequest)
+  );
+  ipcMain.handle(GLOSSARY_CHANNELS.deleteTag, (_event, rawRequest: unknown) =>
+    handlers.deleteTag(rawRequest)
+  );
+  ipcMain.handle(
+    GLOSSARY_CHANNELS.reorderTags,
+    (_event, rawRequest: unknown) => handlers.reorderTags(rawRequest)
   );
 }

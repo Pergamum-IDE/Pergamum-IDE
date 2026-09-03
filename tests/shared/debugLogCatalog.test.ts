@@ -54,9 +54,8 @@ describe("debug log catalog", () => {
   it("defines unknownEditable only as the fallback surface, not unsupported", () => {
     expect([...contextMenuSurfaces]).toEqual([
       "markdownEditor",
-      "glossaryCanonicalInput",
       "glossaryDescription",
-      "glossaryFormSurface",
+      "glossaryAtomValue",
       "unknownEditable"
     ]);
     expect([...contextMenuSurfaces]).not.toContain("unsupported");
@@ -126,7 +125,8 @@ describe("debug log catalog", () => {
     expect([...debugLogDbOperations]).not.toContain("save");
     expect([...debugLogDbEntityKinds]).toEqual([
       "glossaryEntry",
-      "glossaryForm",
+      "glossaryAtom",
+      "glossaryTag",
       "database",
       "unknown"
     ]);

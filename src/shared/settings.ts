@@ -1,3 +1,7 @@
+import {
+  defaultDocumentMapSettings,
+  type DocumentMapSettings
+} from "./documentMapSettings";
 import type { Language } from "./i18n";
 import {
   getCatalogDefaultValue,
@@ -197,6 +201,9 @@ export interface ApplicationSettings {
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   files: ApplicationFilesSettings;
+  // #375: Document Map draw colours + dialogue delimiter pairs.
+  // applicationOnly, always concrete (never sparse).
+  documentMap: DocumentMapSettings;
   recentProjects: RecentProject[];
 }
 
@@ -211,6 +218,7 @@ export interface SaveApplicationSettingsRequest {
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   files: ApplicationFilesSettings;
+  documentMap: DocumentMapSettings;
 }
 
 export interface ProjectPreviewSettings {
@@ -261,6 +269,8 @@ export interface EffectiveSettings {
   commandPalette: EffectiveCommandPaletteSettings;
   editor: EffectiveEditorSettings;
   files: EffectiveFilesSettings;
+  /** #375: applicationOnly, passes straight through (always concrete). */
+  documentMap: DocumentMapSettings;
 }
 
 // The settings catalog is the only source of truth for this default —
@@ -391,7 +401,8 @@ export const builtInDefaultSettings: EffectiveSettings = {
       lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
       encoding: getCatalogDefaultValue("files.newFile.encoding")
     }
-  }
+  },
+  documentMap: defaultDocumentMapSettings()
 };
 
 // fontFamily values are intentionally omitted here, not copied from
@@ -478,6 +489,7 @@ export const defaultApplicationSettings: ApplicationSettings = {
       encoding: builtInDefaultSettings.files.newFile.encoding
     }
   },
+  documentMap: defaultDocumentMapSettings(),
   recentProjects: []
 };
 
@@ -562,6 +574,7 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
         encoding: defaultApplicationSettings.files.newFile.encoding
       }
     },
+    documentMap: defaultDocumentMapSettings(),
     recentProjects: []
   };
 }
@@ -661,6 +674,9 @@ export function resolveEffectiveSettings(
         lineEnding: applicationSettings.files.newFile.lineEnding,
         encoding: applicationSettings.files.newFile.encoding
       }
-    }
+    },
+    // #375: applicationOnly, no project override — passes straight through
+    // (already concrete, resolved at settings.json read time).
+    documentMap: applicationSettings.documentMap
   };
 }
