@@ -21,6 +21,9 @@ describe("workspace commands", () => {
     focusGlossaryDescription: "Show the Glossary panel.",
     focusTextMap: "Focus Text Map",
     focusTextMapDescription: "Show the Text Map panel in the left pane.",
+    focusDocumentNavigation: "Focus Document Navigation",
+    focusDocumentNavigationDescription:
+      "Show the Document Navigation panel in the left pane.",
     openApplicationSettings: "Open Application Settings",
     openApplicationSettingsDescription: "Open application-wide settings."
   };
@@ -42,6 +45,7 @@ describe("workspace commands", () => {
       workspaceCommandIds.focusSearch,
       workspaceCommandIds.focusGlossary,
       workspaceCommandIds.focusTextMap,
+      workspaceCommandIds.focusDocumentNavigation,
       workspaceCommandIds.openApplicationSettings
     ]);
   });
@@ -65,8 +69,18 @@ describe("workspace commands", () => {
     await registry.execute(workspaceCommandIds.focusSearch, executionOptions);
     await registry.execute(workspaceCommandIds.focusGlossary, executionOptions);
     await registry.execute(workspaceCommandIds.focusTextMap, executionOptions);
+    await registry.execute(
+      workspaceCommandIds.focusDocumentNavigation,
+      executionOptions
+    );
 
-    expect(focusedModes).toEqual(["files", "search", "glossary", "textMap"]);
+    expect(focusedModes).toEqual([
+      "files",
+      "search",
+      "glossary",
+      "textMap",
+      "documentNavigation"
+    ]);
   });
 
   it("opens Application Settings through a command", async () => {
@@ -103,6 +117,9 @@ describe("workspace commands", () => {
     expect(workspaceFocusCommandIdForMode("textMap")).toBe(
       workspaceCommandIds.focusTextMap
     );
+    expect(workspaceFocusCommandIdForMode("documentNavigation")).toBe(
+      workspaceCommandIds.focusDocumentNavigation
+    );
   });
 
   it("creates localized command titles outside the registry", () => {
@@ -121,6 +138,10 @@ describe("workspace commands", () => {
       focusTextMap: "translated:command.workspace.textMap.focus",
       focusTextMapDescription:
         "translated:command.workspace.textMap.focus.description",
+      focusDocumentNavigation:
+        "translated:command.workspace.documentNavigation.focus",
+      focusDocumentNavigationDescription:
+        "translated:command.workspace.documentNavigation.focus.description",
       openApplicationSettings:
         "translated:command.workspace.applicationSettings.open",
       openApplicationSettingsDescription:

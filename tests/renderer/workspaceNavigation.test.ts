@@ -266,6 +266,7 @@ describe("workspace navigation", () => {
     expect(markup).toContain("activity.searchReplace");
     expect(markup).toContain("activity.glossary");
     expect(markup).toContain("activity.textMap");
+    expect(markup).toContain("activity.documentNavigation");
     expect(markup).toContain("activity.applicationSettings");
     expect(markup).toContain("aria-pressed=\"true\"");
     expect(markup).not.toContain("disabled");
@@ -305,7 +306,8 @@ describe("workspace navigation", () => {
       ["activity.files", "files"],
       ["activity.searchReplace", "search"],
       ["activity.glossary", "glossary"],
-      ["activity.textMap", "textMap"]
+      ["activity.textMap", "textMap"],
+      ["activity.documentNavigation", "documentNavigation"]
     ] as const;
 
     for (const [label, mode] of modeLabels) {

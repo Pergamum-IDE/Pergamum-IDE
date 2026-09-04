@@ -415,6 +415,12 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import type { DocumentNavigationFileInfo } from "./DocumentNavigationPanel";
+import {
+  analyzeDocumentNavigationDocument,
+  type DocumentNavigationAnalysis
+} from "./documentNavigationAnalysis";
+import { projectDocumentAbsolutePath } from "../shared/tabPathDisplay";
 import {
   documentWorkspaceTabId,
   specialWorkspaceTabId,
@@ -671,7 +677,10 @@ export function App(): JSX.Element {
 
   const dialogController = dialogControllerRef.current;
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
-  const [statusBarCharacterCount, setStatusBarCharacterCount] = useState<{
+  // #360: the shared Markdown character count (#259 algorithm + settings,
+  // debounced). Rendered by both the Status Bar and the Document Navigation
+  // pane so the two always agree.
+  const [markdownCharacterCount, setMarkdownCharacterCount] = useState<{
     readonly documentKey: string;
     readonly count: number;
   } | null>(null);
@@ -1405,6 +1414,86 @@ export function App(): JSX.Element {
   const activeEditorIsMarkdown =
     !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
 
+  // #360: Document Navigation "ファイル情報" — the active Markdown document's
+  // backing-file absolute path (a stable string, so this does not churn on
+  // typing), or `null` for an Untitled document / no Markdown editor.
+  const documentNavigationAbsolutePath = useMemo(() => {
+    if (!activeEditorIsMarkdown || !activeMarkdownDocument) {
+      return null;
+    }
+    if (activeMarkdownDocument.kind === "file") {
+      return activeMarkdownDocument.path;
+    }
+    if (activeMarkdownDocument.kind === "project") {
+      return project
+        ? projectDocumentAbsolutePath(
+            project.rootPath,
+            activeMarkdownDocument.relativePath
+          )
+        : null;
+    }
+    return null;
+  }, [activeEditorIsMarkdown, activeMarkdownDocument, project]);
+  const documentNavigationIsUntitled =
+    activeEditorIsMarkdown && activeMarkdownDocument?.kind === "untitled";
+  // Last successfully saved content — changes on open / save but NOT on
+  // typing, so it is a safe "re-stat after save" trigger for the effect
+  // below without re-running it on every keystroke.
+  const documentNavigationSavedContent =
+    activeEditorIsMarkdown && activeMarkdownDocument
+      ? activeMarkdownDocument.savedContent
+      : null;
+  // Perf policy (#360): only stat the file while the Document Navigation pane
+  // is actually on screen — no IPC round trips for a hidden pane.
+  const isDocumentNavigationPaneVisible =
+    sidebarMode === "documentNavigation" && !layout.sidebar.collapsed;
+  const [documentNavigationFileInfo, setDocumentNavigationFileInfo] =
+    useState<DocumentNavigationFileInfo | null>(null);
+  useEffect(() => {
+    if (!isDocumentNavigationPaneVisible) {
+      return;
+    }
+    if (documentNavigationIsUntitled) {
+      setDocumentNavigationFileInfo({ kind: "unsaved" });
+      return;
+    }
+    if (!documentNavigationAbsolutePath) {
+      setDocumentNavigationFileInfo(null);
+      return;
+    }
+
+    let cancelled = false;
+    void window.pergamum.files
+      .statMarkdownFile(documentNavigationAbsolutePath)
+      .then((stat) => {
+        if (!cancelled) {
+          setDocumentNavigationFileInfo({
+            kind: "timestamps",
+            modifiedAtIso: stat.modifiedAtIso
+          });
+        }
+      })
+      .catch(() => {
+        // A stat failure only downgrades the pane to its "unavailable"
+        // state — it never surfaces a toast / dialog or blocks the editor.
+        if (!cancelled) {
+          setDocumentNavigationFileInfo({ kind: "unavailable" });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // `documentNavigationSavedContent` is a re-fetch trigger only (post-save
+    // mtime refresh) and is intentionally not read in the effect body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isDocumentNavigationPaneVisible,
+    documentNavigationIsUntitled,
+    documentNavigationAbsolutePath,
+    documentNavigationSavedContent
+  ]);
+
   // #352: jump the active Markdown editor to a clicked outline heading. Reuses
   // the existing pending-selection plumbing (same as Go to Line / glossary
   // occurrence navigation) — an offset jump, never a line-number jump — but
@@ -1761,35 +1850,44 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyEditorFontFamily(effectiveSettings.editor.fontFamily);
   }, [effectiveSettings.editor.fontFamily]);
-  // #262: with no active editor (`currentEditor === null`) this is false, so
-  // the debounced count below never runs and the Status Bar shows nothing —
-  // the #259 character-count algorithm/settings/debounce are untouched.
-  const shouldComputeStatusBarCharacterCount =
+  // #360: ONE Markdown character count, shared by the Status Bar (#259) and
+  // the Document Navigation pane, so the two never disagree. It is computed
+  // with the #259 algorithm + `editor.characterCount.exclude` settings and
+  // the same 250ms debounce; it runs whenever EITHER surface needs it. Each
+  // surface still applies its own visibility gate when rendering.
+  // #262: with no active Markdown editor this is false, so the debounced
+  // count never runs and the Status Bar shows nothing.
+  const markdownCharacterCountEditorIsActive =
+    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
+  const statusBarWantsCharacterCount =
     effectiveSettings.workbench.statusBar.visible &&
     effectiveSettings.workbench.statusBar.characterCount.visible &&
-    !isEditorAreaSpecialTabActive &&
-    currentEditor?.kind === "markdown";
-  const statusBarCharacterCountDocumentKey =
-    shouldComputeStatusBarCharacterCount && activeDocument
+    markdownCharacterCountEditorIsActive;
+  const documentNavigationWantsCharacterCount =
+    isDocumentNavigationPaneVisible && markdownCharacterCountEditorIsActive;
+  const shouldComputeMarkdownCharacterCount =
+    statusBarWantsCharacterCount || documentNavigationWantsCharacterCount;
+  const markdownCharacterCountDocumentKey =
+    shouldComputeMarkdownCharacterCount && activeDocument
       ? serializeEditorId(activeDocument.id)
       : null;
-  const statusBarCharacterCountContent =
-    shouldComputeStatusBarCharacterCount && currentEditor?.kind === "markdown"
+  const markdownCharacterCountContent =
+    shouldComputeMarkdownCharacterCount && currentEditor?.kind === "markdown"
       ? currentDocumentContent(currentEditor.document)
       : "";
   useEffect(() => {
     if (
-      !shouldComputeStatusBarCharacterCount ||
-      statusBarCharacterCountDocumentKey === null
+      !shouldComputeMarkdownCharacterCount ||
+      markdownCharacterCountDocumentKey === null
     ) {
-      setStatusBarCharacterCount(null);
+      setMarkdownCharacterCount(null);
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setStatusBarCharacterCount({
-        documentKey: statusBarCharacterCountDocumentKey,
-        count: countMarkdownDocumentCharacters(statusBarCharacterCountContent, {
+      setMarkdownCharacterCount({
+        documentKey: markdownCharacterCountDocumentKey,
+        count: countMarkdownDocumentCharacters(markdownCharacterCountContent, {
           exclude: effectiveSettings.editor.characterCount.exclude
         })
       });
@@ -1797,15 +1895,68 @@ export function App(): JSX.Element {
 
     return () => window.clearTimeout(timeoutId);
   }, [
-    shouldComputeStatusBarCharacterCount,
-    statusBarCharacterCountDocumentKey,
-    statusBarCharacterCountContent,
+    shouldComputeMarkdownCharacterCount,
+    markdownCharacterCountDocumentKey,
+    markdownCharacterCountContent,
     effectiveSettings.editor.characterCount.exclude.whitespace,
     effectiveSettings.editor.characterCount.exclude.lineBreaks,
     effectiveSettings.editor.characterCount.exclude.headings,
     effectiveSettings.editor.characterCount.exclude.markdownSyntax,
     effectiveSettings.editor.characterCount.exclude.markdownComments
   ]);
+  // The count for the CURRENT document only (a stale count from the previous
+  // document — still within its debounce — resolves to `null`).
+  const activeMarkdownCharacterCount =
+    markdownCharacterCountDocumentKey !== null &&
+    markdownCharacterCount?.documentKey === markdownCharacterCountDocumentKey
+      ? markdownCharacterCount.count
+      : null;
+  const documentNavigationCharacterCount = documentNavigationWantsCharacterCount
+    ? activeMarkdownCharacterCount
+    : null;
+
+  // #360 Phase 2: glossary / tag / dialogue analysis of the active Markdown
+  // document. Debounced (same 250ms as the #259 count) and computed ONLY
+  // while the pane is on screen — the glossary scan is heavier than Phase 1.
+  // A parse failure just clears the sections; it never blocks the editor.
+  const documentNavigationAnalysisContent =
+    isDocumentNavigationPaneVisible &&
+    activeEditorIsMarkdown &&
+    activeMarkdownDocument
+      ? currentDocumentContent(activeMarkdownDocument)
+      : null;
+  const documentNavigationDialoguePairs =
+    effectiveSettings.documentMap.dialogueDelimiterPairs;
+  const [documentNavigationAnalysis, setDocumentNavigationAnalysis] =
+    useState<DocumentNavigationAnalysis | null>(null);
+  useEffect(() => {
+    if (documentNavigationAnalysisContent === null) {
+      setDocumentNavigationAnalysis(null);
+      return;
+    }
+
+    const content = documentNavigationAnalysisContent;
+    const timeoutId = window.setTimeout(() => {
+      try {
+        setDocumentNavigationAnalysis(
+          analyzeDocumentNavigationDocument(
+            content,
+            glossaryEntries,
+            documentNavigationDialoguePairs
+          )
+        );
+      } catch {
+        setDocumentNavigationAnalysis(null);
+      }
+    }, CHARACTER_COUNT_UPDATE_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    documentNavigationAnalysisContent,
+    glossaryEntries,
+    documentNavigationDialoguePairs
+  ]);
+
   const isDirty = currentEditor ? isCurrentEditorDirty(currentEditor) : false;
   const isReadOnlyProject = project?.accessMode.kind === "readOnly";
   const isReadWriteProject = project?.accessMode.kind === "readWrite";
@@ -1998,10 +2149,9 @@ export function App(): JSX.Element {
     [displayLanguage]
   );
   const statusBarCharacterCountText =
-    statusBarCharacterCountDocumentKey !== null &&
-    statusBarCharacterCount?.documentKey === statusBarCharacterCountDocumentKey
+    statusBarWantsCharacterCount && activeMarkdownCharacterCount !== null
       ? translate("status.characterCount", {
-          count: statusBarNumberFormatter.format(statusBarCharacterCount.count)
+          count: statusBarNumberFormatter.format(activeMarkdownCharacterCount)
         })
       : null;
   const commandRegistry = useMemo(() => {
@@ -7432,6 +7582,12 @@ export function App(): JSX.Element {
                       activeEditorIsMarkdown={activeEditorIsMarkdown}
                       activeOutlineDocumentKey={activeDocumentKey}
                       onOutlineHeadingClick={handleOutlineHeadingClick}
+                      hasActiveDocument={activeDocument !== null}
+                      documentNavigationCharacterCount={
+                        documentNavigationCharacterCount
+                      }
+                      documentNavigationAnalysis={documentNavigationAnalysis}
+                      documentNavigationFileInfo={documentNavigationFileInfo}
                     />
                   </div>
                   <div

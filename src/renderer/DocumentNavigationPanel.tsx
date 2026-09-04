@@ -1,0 +1,402 @@
+import { useMemo, useState, type ReactNode } from "react";
+import type { Translate } from "../shared/i18n";
+import { estimateManuscriptPages } from "../shared/documentNavigationMetrics";
+import type {
+  DocumentNavigationAnalysis,
+  DocumentNavigationGlossaryCount,
+  DocumentNavigationTagCount
+} from "./documentNavigationAnalysis";
+import { CollapsibleSidebarSection } from "./CollapsibleSidebarSection";
+import { GlossaryTagChip } from "./GlossaryTagChip";
+import { DocumentDialogueRatioPieChart } from "./DocumentDialogueRatioPieChart";
+
+/**
+ * #360 — the Document Navigation (文書ナビ) left pane. Shows the ACTIVE
+ * Markdown document "in numbers":
+ *
+ *   - Phase 1: character count (the SAME value the status bar shows — the
+ *     host computes it once with the #259 algorithm/settings and hands it to
+ *     both surfaces) + a 原稿用紙 estimate, and the backing file's last
+ *     modified time. File creation time is intentionally NOT shown (birthtime
+ *     is misleading for a manuscript — copy / restore / checkout / unzip).
+ *   - Phase 2: per-Entry glossary occurrence counts, first-tag occurrence
+ *     counts, and an approximate narration / dialogue character split. These
+ *     come from a single debounced `DocumentNavigationAnalysis` the host runs
+ *     only while this pane is visible.
+ */
+export type DocumentNavigationFileInfo =
+  | { readonly kind: "unsaved" }
+  | { readonly kind: "unavailable" }
+  | { readonly kind: "timestamps"; readonly modifiedAtIso: string | null };
+
+interface DocumentNavigationPanelProps {
+  readonly translate: Translate;
+  /** Whether any document tab is active (Markdown or not). */
+  readonly hasActiveDocument: boolean;
+  /** Whether the active editor is a Markdown document. */
+  readonly activeEditorIsMarkdown: boolean;
+  /**
+   * The active Markdown document's character count — the exact value the
+   * status bar renders (#259 algorithm + `editor.characterCount.exclude`
+   * settings). `null` while the shared debounced count has not resolved yet
+   * for the current document.
+   */
+  readonly characterCount: number | null;
+  /**
+   * Phase 2 glossary / tag / dialogue analysis of the active document, or
+   * `null` while the debounced analysis has not resolved yet.
+   */
+  readonly analysis: DocumentNavigationAnalysis | null;
+  /** Backing-file last-modified time / unsaved / error state; `null` when N/A. */
+  readonly fileInfo: DocumentNavigationFileInfo | null;
+}
+
+const EMPTY_VALUE = "-";
+
+/** ISO string → locale date+time, or `-` for a missing / unparseable value. */
+function formatFileTimestamp(iso: string | null): string {
+  if (iso === null) {
+    return EMPTY_VALUE;
+  }
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? EMPTY_VALUE : date.toLocaleString();
+}
+
+function MetricRow({
+  label,
+  value
+}: {
+  label: string;
+  value: string;
+}): JSX.Element {
+  return (
+    <div className="documentNavigationMetric">
+      <dt className="documentNavigationMetricLabel">{label}</dt>
+      <dd className="documentNavigationMetricValue">{value}</dd>
+    </div>
+  );
+}
+
+interface CountsTableRow {
+  readonly key: string;
+  /** Full text — used for the `title` tooltip on the plain-text variant. */
+  readonly label: string;
+  /** Optional rich label (a tag chip); falls back to plain ellipsised text. */
+  readonly labelNode?: ReactNode;
+  readonly count: number;
+}
+
+/** A compact `label | count` table. The label ellipsises; the full text is a
+ *  `title` tooltip. Counts are right-aligned. Callers pass only rows with
+ *  `count > 0`, already sorted. */
+function CountsTable({
+  headLabel,
+  headCount,
+  rows
+}: {
+  headLabel: string;
+  headCount: string;
+  rows: readonly CountsTableRow[];
+}): JSX.Element {
+  return (
+    <table className="documentNavigationCountsTable">
+      <thead>
+        <tr>
+          <th scope="col">{headLabel}</th>
+          <th scope="col" className="documentNavigationCountsCount">
+            {headCount}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.key}>
+            <td className="documentNavigationCountsLabel">
+              {row.labelNode ?? (
+                <span
+                  className="documentNavigationCountsLabelText"
+                  title={row.label}
+                >
+                  {row.label}
+                </span>
+              )}
+            </td>
+            <td className="documentNavigationCountsCount">
+              {row.count.toLocaleString()}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** One narration / dialogue row — a colour swatch keyed to the pie chart,
+ *  the label (left), and the right-aligned / tabular-nums value. */
+function DialogueRatioRow({
+  series,
+  label,
+  value
+}: {
+  series: "narration" | "dialogue";
+  label: string;
+  value: string;
+}): JSX.Element {
+  return (
+    <div className="documentNavigationDialogueRatioRow">
+      <dt className="documentNavigationDialogueRatioLabel">
+        <span
+          className="documentNavigationDialogueSwatch"
+          data-series={series}
+          aria-hidden="true"
+        />
+        {label}
+      </dt>
+      <dd className="documentNavigationDialogueRatioValue">{value}</dd>
+    </div>
+  );
+}
+
+export function DocumentNavigationPanel({
+  translate,
+  hasActiveDocument,
+  activeEditorIsMarkdown,
+  characterCount,
+  analysis,
+  fileInfo
+}: DocumentNavigationPanelProps): JSX.Element {
+  const [statisticsCollapsed, setStatisticsCollapsed] = useState(false);
+  const [glossaryCountsCollapsed, setGlossaryCountsCollapsed] = useState(false);
+  const [tagCountsCollapsed, setTagCountsCollapsed] = useState(false);
+  const [dialogueRatioCollapsed, setDialogueRatioCollapsed] = useState(false);
+  const [fileInfoCollapsed, setFileInfoCollapsed] = useState(false);
+
+  const manuscriptPages = useMemo(
+    () =>
+      characterCount === null ? null : estimateManuscriptPages(characterCount),
+    [characterCount]
+  );
+
+  const title = translate("documentNavigation.title");
+
+  let body: JSX.Element;
+  if (!hasActiveDocument) {
+    body = (
+      <div className="workspacePlaceholderList">
+        <p className="workspacePlaceholder" role="status">
+          {translate("documentNavigation.empty.noActiveDocument")}
+        </p>
+      </div>
+    );
+  } else if (!activeEditorIsMarkdown) {
+    body = (
+      <div className="workspacePlaceholderList">
+        <p className="workspacePlaceholder" role="status">
+          {translate("documentNavigation.empty.unsupportedDocument")}
+        </p>
+      </div>
+    );
+  } else {
+    const charactersText =
+      characterCount === null ? EMPTY_VALUE : characterCount.toLocaleString();
+    const manuscriptPagesText =
+      manuscriptPages === null
+        ? EMPTY_VALUE
+        : manuscriptPages === 0
+          ? String(0)
+          : translate("documentNavigation.metrics.aboutPages", {
+              count: manuscriptPages
+            });
+
+    const glossaryRows: readonly DocumentNavigationGlossaryCount[] =
+      analysis?.glossaryCounts ?? [];
+    const tagRows: readonly DocumentNavigationTagCount[] =
+      analysis?.tagCounts ?? [];
+    const dialogueRatio = analysis?.dialogueRatio ?? null;
+
+    const dialogueValue = (chars: number, percent: number): string =>
+      translate("documentNavigation.dialogue.charsWithPercent", {
+        count: chars.toLocaleString(),
+        percent
+      });
+
+    body = (
+      <div className="documentNavigationSections">
+        <CollapsibleSidebarSection
+          title={translate("documentNavigation.sections.statistics")}
+          toggleLabel={translate("documentNavigation.sections.statistics")}
+          collapsed={statisticsCollapsed}
+          onToggleCollapsed={() =>
+            setStatisticsCollapsed((current) => !current)
+          }
+        >
+          <dl className="documentNavigationMetricList">
+            <MetricRow
+              label={translate("documentNavigation.metrics.characters")}
+              value={charactersText}
+            />
+            <MetricRow
+              label={translate(
+                "documentNavigation.metrics.manuscriptPagesEstimate"
+              )}
+              value={manuscriptPagesText}
+            />
+          </dl>
+        </CollapsibleSidebarSection>
+
+        <CollapsibleSidebarSection
+          title={translate("documentNavigation.sections.glossaryCounts")}
+          toggleLabel={translate("documentNavigation.sections.glossaryCounts")}
+          collapsed={glossaryCountsCollapsed}
+          onToggleCollapsed={() =>
+            setGlossaryCountsCollapsed((current) => !current)
+          }
+        >
+          {analysis === null ? null : glossaryRows.length === 0 ? (
+            <p className="documentNavigationNote">
+              {translate("documentNavigation.empty.noGlossaryTerms")}
+            </p>
+          ) : (
+            <CountsTable
+              headLabel={translate("documentNavigation.tables.term")}
+              headCount={translate("documentNavigation.tables.count")}
+              rows={glossaryRows.map((row) => ({
+                key: row.entryId,
+                label: row.label,
+                count: row.count
+              }))}
+            />
+          )}
+        </CollapsibleSidebarSection>
+
+        <CollapsibleSidebarSection
+          title={translate("documentNavigation.sections.tagCounts")}
+          toggleLabel={translate("documentNavigation.sections.tagCounts")}
+          collapsed={tagCountsCollapsed}
+          onToggleCollapsed={() =>
+            setTagCountsCollapsed((current) => !current)
+          }
+        >
+          {analysis === null ? null : tagRows.length === 0 ? (
+            <p className="documentNavigationNote">
+              {translate("documentNavigation.empty.noTaggedTerms")}
+            </p>
+          ) : (
+            <>
+              <p className="documentNavigationNote">
+                {translate("documentNavigation.tagCounts.description")}
+              </p>
+              <CountsTable
+                headLabel={translate("documentNavigation.tables.tag")}
+                headCount={translate("documentNavigation.tables.count")}
+                rows={tagRows.map((row) => ({
+                  key: row.tagId,
+                  label: row.label,
+                  labelNode: (
+                    <GlossaryTagChip
+                      tag={{
+                        label: row.label,
+                        backgroundRgb: row.backgroundRgb,
+                        foregroundRgb: row.foregroundRgb
+                      }}
+                      compact
+                    />
+                  ),
+                  count: row.count
+                }))}
+              />
+            </>
+          )}
+        </CollapsibleSidebarSection>
+
+        <CollapsibleSidebarSection
+          title={translate("documentNavigation.sections.dialogueRatio")}
+          toggleLabel={translate("documentNavigation.sections.dialogueRatio")}
+          collapsed={dialogueRatioCollapsed}
+          onToggleCollapsed={() =>
+            setDialogueRatioCollapsed((current) => !current)
+          }
+        >
+          {dialogueRatio === null ? null : (
+            <>
+              <div className="documentNavigationDialoguePieWrap">
+                <DocumentDialogueRatioPieChart
+                  narrationPercent={dialogueRatio.narrationPercent}
+                  dialoguePercent={dialogueRatio.dialoguePercent}
+                  totalCharacters={dialogueRatio.totalCharacters}
+                  ariaLabel={`${translate(
+                    "documentNavigation.dialogue.narration"
+                  )} ${dialogueRatio.narrationPercent}% / ${translate(
+                    "documentNavigation.dialogue.dialogue"
+                  )} ${dialogueRatio.dialoguePercent}%`}
+                />
+              </div>
+              <dl className="documentNavigationMetricList">
+                <DialogueRatioRow
+                  series="narration"
+                  label={translate("documentNavigation.dialogue.narration")}
+                  value={dialogueValue(
+                    dialogueRatio.narrationCharacters,
+                    dialogueRatio.narrationPercent
+                  )}
+                />
+                <DialogueRatioRow
+                  series="dialogue"
+                  label={translate("documentNavigation.dialogue.dialogue")}
+                  value={dialogueValue(
+                    dialogueRatio.dialogueCharacters,
+                    dialogueRatio.dialoguePercent
+                  )}
+                />
+              </dl>
+              <p className="documentNavigationNote">
+                {translate("documentNavigation.dialogue.approximate")}
+              </p>
+            </>
+          )}
+        </CollapsibleSidebarSection>
+
+        <CollapsibleSidebarSection
+          title={translate("documentNavigation.sections.fileInfo")}
+          toggleLabel={translate("documentNavigation.sections.fileInfo")}
+          collapsed={fileInfoCollapsed}
+          onToggleCollapsed={() => setFileInfoCollapsed((current) => !current)}
+        >
+          {fileInfo?.kind === "unsaved" ? (
+            <p className="documentNavigationNote">
+              {translate("documentNavigation.fileInfo.unsavedDocument")}
+            </p>
+          ) : (
+            <>
+              <dl className="documentNavigationMetricList">
+                <MetricRow
+                  label={translate("documentNavigation.fileInfo.lastModified")}
+                  value={
+                    fileInfo?.kind === "timestamps"
+                      ? formatFileTimestamp(fileInfo.modifiedAtIso)
+                      : EMPTY_VALUE
+                  }
+                />
+              </dl>
+              {fileInfo?.kind === "unavailable" ? (
+                <p className="documentNavigationNote">
+                  {translate("documentNavigation.fileInfo.unavailable")}
+                </p>
+              ) : null}
+            </>
+          )}
+        </CollapsibleSidebarSection>
+      </div>
+    );
+  }
+
+  return (
+    <aside
+      className="workspaceSidebarPanel documentNavigationPanel"
+      aria-label={title}
+    >
+      <div className="sidebarHeader">{title}</div>
+      {body}
+    </aside>
+  );
+}

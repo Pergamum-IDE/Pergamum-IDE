@@ -12,6 +12,7 @@ export const workspaceCommandIds = {
   focusSearch: defineCommandId("workspace.search.focus"),
   focusGlossary: defineCommandId("workspace.glossary.focus"),
   focusTextMap: defineCommandId("workspace.textMap.focus"),
+  focusDocumentNavigation: defineCommandId("workspace.documentNavigation.focus"),
   openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
 } as const;
 
@@ -19,7 +20,8 @@ export type WorkspaceFocusCommandId =
   | typeof workspaceCommandIds.toggleFiles
   | typeof workspaceCommandIds.focusSearch
   | typeof workspaceCommandIds.focusGlossary
-  | typeof workspaceCommandIds.focusTextMap;
+  | typeof workspaceCommandIds.focusTextMap
+  | typeof workspaceCommandIds.focusDocumentNavigation;
 
 export interface WorkspaceCommandController {
   focusSidebarMode(mode: SidebarMode): void;
@@ -35,6 +37,8 @@ export interface WorkspaceCommandTitles {
   focusGlossaryDescription: string;
   focusTextMap: string;
   focusTextMapDescription: string;
+  focusDocumentNavigation: string;
+  focusDocumentNavigationDescription: string;
   openApplicationSettings: string;
   openApplicationSettingsDescription: string;
 }
@@ -59,6 +63,12 @@ export function createWorkspaceCommandTitles(
     focusTextMapDescription: translate(
       "command.workspace.textMap.focus.description"
     ),
+    focusDocumentNavigation: translate(
+      "command.workspace.documentNavigation.focus"
+    ),
+    focusDocumentNavigationDescription: translate(
+      "command.workspace.documentNavigation.focus.description"
+    ),
     openApplicationSettings: translate(
       "command.workspace.applicationSettings.open"
     ),
@@ -80,6 +90,8 @@ export function workspaceFocusCommandIdForMode(
       return workspaceCommandIds.focusGlossary;
     case "textMap":
       return workspaceCommandIds.focusTextMap;
+    case "documentNavigation":
+      return workspaceCommandIds.focusDocumentNavigation;
   }
 }
 
@@ -118,6 +130,14 @@ export function createWorkspaceCommands(
       description: titles.focusTextMapDescription,
       execute: () => {
         controller.focusSidebarMode("textMap");
+      }
+    },
+    {
+      id: workspaceCommandIds.focusDocumentNavigation,
+      title: titles.focusDocumentNavigation,
+      description: titles.focusDocumentNavigationDescription,
+      execute: () => {
+        controller.focusSidebarMode("documentNavigation");
       }
     },
     {

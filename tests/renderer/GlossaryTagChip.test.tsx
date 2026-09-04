@@ -29,4 +29,18 @@ describe("GlossaryTagChip (#375)", () => {
     expect(markup).toContain('data-muted="true"');
     expect(markup).toMatch(/opacity:0?\.55/);
   });
+
+  it("marks a compact chip and omits the attribute otherwise (#360)", () => {
+    const compactMarkup = renderToStaticMarkup(
+      React.createElement(GlossaryTagChip, { tag, compact: true })
+    );
+    const defaultMarkup = renderToStaticMarkup(
+      React.createElement(GlossaryTagChip, { tag })
+    );
+
+    expect(compactMarkup).toContain('data-compact="true"');
+    expect(compactMarkup).toContain("武将");
+    expect(compactMarkup).toContain("background-color:#1f77b4");
+    expect(defaultMarkup).not.toContain("data-compact");
+  });
 });

@@ -154,6 +154,10 @@ export const FILE_CHANNELS = {
   /** #274: read a Markdown file by absolute path — no dialog. Used to
    *  reopen a standalone Markdown editor / route a Markdown launch target. */
   readMarkdownFile: "files:readMarkdownFile",
+  /** #360: filesystem timestamps (birthtime / mtime) for one file by
+   *  absolute path — no content read, no dialog. Feeds the Document
+   *  Navigation pane's "ファイル情報" section only. */
+  statMarkdownFile: "files:statMarkdownFile",
   saveMarkdown: "files:saveMarkdown",
   selectMarkdownSavePath: "files:selectMarkdownSavePath",
   writeMarkdown: "files:writeMarkdown"
@@ -348,6 +352,18 @@ export interface MarkdownFile {
   path: string;
   content: string;
   metadata: MarkdownFileReadMetadata;
+}
+
+/**
+ * #360: last-modified time for one file, for the Document Navigation pane's
+ * "ファイル情報" section. ISO 8601 string, or `null` when the filesystem
+ * does not report a usable value. A failed stat rejects the call rather than
+ * returning this. (Creation time / birthtime is deliberately not surfaced —
+ * see DocumentNavigationPanel.)
+ */
+export interface MarkdownFileStat {
+  /** mtime — last content modification time. */
+  modifiedAtIso: string | null;
 }
 
 export interface SaveMarkdownRequest {
@@ -857,6 +873,10 @@ export interface PergamumApi {
     /** #274: read a Markdown file by absolute path (no dialog). Rejects
      *  with a sanitized error when the file is missing / unreadable. */
     readMarkdownFile: (filePath: string) => Promise<MarkdownFile>;
+    /** #360: filesystem timestamps for one file by absolute path (no
+     *  content read, no dialog). Rejects with a sanitized error on failure;
+     *  the Document Navigation pane then shows its "unavailable" state. */
+    statMarkdownFile: (filePath: string) => Promise<MarkdownFileStat>;
     saveMarkdown: (
       path: string | null,
       content: string

@@ -11,6 +11,7 @@ import path from "node:path";
 import {
   FILE_CHANNELS,
   type MarkdownFile,
+  type MarkdownFileStat,
   type SaveMarkdownRequest,
   type SaveMarkdownResult,
   type SelectMarkdownSavePathRequest,
@@ -66,6 +67,16 @@ function documentOpenIdFromRequest(value: unknown): string | undefined {
 
 function durationSince(startedAt: number): number {
   return Date.now() - startedAt;
+}
+
+/**
+ * #360: an `fs.Stats` timestamp → ISO string, or `null` when it is not a
+ * usable date (NaN, or the Unix epoch, which several filesystems report when
+ * birthtime is unsupported).
+ */
+function isoTimestampOrNull(value: Date): string | null {
+  const ms = value.getTime();
+  return Number.isFinite(ms) && ms > 0 ? value.toISOString() : null;
 }
 
 function parseSaveRequest(value: unknown): SaveMarkdownRequest {
@@ -518,6 +529,50 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             result: "failed",
             reason: safeError.reason,
             durationMs: durationSince(startedAt),
+            error: safeError
+          }
+        });
+
+        throw safeError;
+      }
+    }
+  );
+
+  // #360: Document Navigation "ファイル情報" — last-modified time (mtime) for
+  // one file by absolute path. No content read. A failed stat rejects with a
+  // sanitized error; the renderer then shows its "unavailable" state, so a
+  // missing / unreadable file never disrupts the editor. Creation time is
+  // not surfaced — birthtime is misleading for a manuscript (see #360).
+  ipcMain.handle(
+    FILE_CHANNELS.statMarkdownFile,
+    async (_event, rawRequest: unknown): Promise<MarkdownFileStat> => {
+      let filePath: string | null = null;
+
+      try {
+        filePath = parseReadMarkdownFileRequest(rawRequest).path;
+
+        const stats = await fs.stat(filePath);
+
+        return {
+          modifiedAtIso: isoTimestampOrNull(stats.mtime)
+        };
+      } catch (error) {
+        const safeError = sanitizedFileIoError(error);
+
+        logger.log({
+          level: "debug",
+          event: "document.open.failed",
+          details: {
+            ...(filePath
+              ? { documentRef: logger.documentRefForKey(filePath) }
+              : {}),
+            extension: filePath
+              ? debugLogExtensionForPath(filePath)
+              : "unknown",
+            pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
+            operation: "read",
+            result: "failed",
+            reason: safeError.reason,
             error: safeError
           }
         });
