@@ -26,6 +26,7 @@ import {
   newSearchRunId,
   type SearchTelemetryContext
 } from "./searchTelemetry";
+import type { ReplacePreviewOpenRequest } from "./replace/replacePreviewTypes";
 import glossarySearchIconRaw from "../../assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw";
 import wholeWordIconRaw from "../../assets/icons/Pergamum/search/word.svg?raw";
 import caseSensitiveIconRaw from "../../assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw";
@@ -55,6 +56,15 @@ import useRegexIconRaw from "../../assets/icons/svgrepo/search/regex-svgrepo-com
 
 /** `'text'` = query-box search; `'glossary'` = GlossaryAtom relation search. */
 export type SearchMode = "text" | "glossary";
+
+/**
+ * #386: the Search pane's two tabs. `search` is the existing pane; `replace`
+ * reuses the shared query + options (`Ab` / `Aa` / `.*` only — no glossary),
+ * adds a replace-with box and two replace-scope buttons, and keeps showing the
+ * search results. No replace processing exists yet - the buttons open
+ * placeholder confirm dialogs.
+ */
+export type SearchPaneTab = "search" | "replace";
 
 /** Relation-selector options, in display order, with their i18n keys. */
 const GLOSSARY_RELATION_MODES = [
@@ -581,6 +591,23 @@ interface SearchSidebarProps {
     readonly token: number;
     readonly query: string;
   } | null;
+  /**
+   * #386: bumped by the host after an Open Documents Replace is applied. A new
+   * value re-runs the current text search over the now-changed editor buffers
+   * so results / offsets do not go stale.
+   */
+  readonly searchInvalidationToken?: number;
+  /** #386: `[開いている文書のみ置換...]`. Hands the host the current find /
+   *  replace / options; the host opens the Replace Preview Dialog immediately
+   *  (loading state) and generates the candidates itself. No replace
+   *  processing. */
+  readonly onReplaceInOpenDocuments?: (
+    request: ReplacePreviewOpenRequest
+  ) => void;
+  /** #386: `[プロジェクト内文書置換...]`. Hands the host the current find /
+   *  replace / options; the host runs the dirty-document gate, scans project
+   *  files, and opens the Replace Preview Dialog (project scope). */
+  readonly onReplaceInProject?: (request: ReplacePreviewOpenRequest) => void;
 }
 
 export function SearchSidebar({
@@ -590,10 +617,15 @@ export function SearchSidebar({
   glossaryEntries = NO_GLOSSARY_ENTRIES,
   runGlossarySearch,
   onOpenMatch,
-  queryRequest = null
+  queryRequest = null,
+  searchInvalidationToken = 0,
+  onReplaceInOpenDocuments,
+  onReplaceInProject
 }: SearchSidebarProps): JSX.Element {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("text");
+  const [activeTab, setActiveTab] = useState<SearchPaneTab>("search");
+  const [replaceText, setReplaceText] = useState("");
   const [options, setOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
   const [selectedAtomIds, setSelectedAtomIds] = useState<string[]>([]);
   const [glossaryRelationMode, setGlossaryRelationMode] =
@@ -655,8 +687,17 @@ export function SearchSidebar({
 
   const trimmedQuery = query.trim();
   const glossaryMode = mode === "glossary";
+  const replaceTab = activeTab === "replace";
   const textSearchAvailable = runSearch !== undefined;
   const glossarySearchAvailable = runGlossarySearch !== undefined;
+
+  // #386: the replace-scope buttons must not open a confirm while the pattern
+  // is an invalid regex (there is nothing meaningful to preview / replace).
+  const replaceBlockedByInvalidRegex =
+    mode === "text" &&
+    options.useRegex &&
+    trimmedQuery.length > 0 &&
+    compileSearchRegex(trimmedQuery, options.caseSensitive).regex === null;
 
   const selectableAtoms = useMemo(
     () => collectSelectableGlossaryAtoms(glossaryEntries),
@@ -856,7 +897,9 @@ export function SearchSidebar({
     trimmedQuery,
     options.caseSensitive,
     options.wholeWord,
-    options.useRegex
+    options.useRegex,
+    // #386: a replace was applied - re-run over the changed buffers.
+    searchInvalidationToken
   ]);
 
   const toggleGlossaryMode = (): void => {
@@ -866,6 +909,54 @@ export function SearchSidebar({
     setOptions(DEFAULT_SEARCH_OPTIONS);
     setGlossaryRelationMode("any");
     setMode((current) => (current === "glossary" ? "text" : "glossary"));
+  };
+
+  const switchTab = (tab: SearchPaneTab): void => {
+    // #386: the replace tab has no glossary search — leaving glossary mode for
+    // it drops to plain text search (the query is kept). The search tab keeps
+    // whatever mode was active.
+    if (tab === "replace" && mode === "glossary") {
+      setMode("text");
+      setOptions(DEFAULT_SEARCH_OPTIONS);
+      setGlossaryRelationMode("any");
+      setSelectedAtomIds([]);
+    }
+    setActiveTab(tab);
+  };
+
+  const handleReplaceInOpenDocuments = (): void => {
+    if (replaceBlockedByInvalidRegex) {
+      return;
+    }
+    // Hand the host the find / replace / options only. It opens the Replace
+    // Preview Dialog immediately in a loading state and generates the
+    // candidates itself, so a slow generation never looks like a dead click.
+    onReplaceInOpenDocuments?.({
+      findText: trimmedQuery,
+      replaceText,
+      searchOptions: {
+        wholeWord: options.wholeWord,
+        caseSensitive: options.caseSensitive,
+        useRegex: options.useRegex
+      }
+    });
+  };
+
+  const handleReplaceInProject = (): void => {
+    if (replaceBlockedByInvalidRegex) {
+      return;
+    }
+    // Same payload as the open-documents button; the host runs the dirty gate,
+    // scans project files, and opens the Replace Preview Dialog (project scope).
+    onReplaceInProject?.({
+      findText: trimmedQuery,
+      replaceText,
+      searchOptions: {
+        wholeWord: options.wholeWord,
+        caseSensitive: options.caseSensitive,
+        useRegex: options.useRegex
+      }
+    });
   };
 
   const toggleOption = (key: keyof SearchOptions): void => {
@@ -897,7 +988,32 @@ export function SearchSidebar({
       className="workspaceSidebarPanel searchPane"
       aria-label={translate("search.sidebarTitle")}
     >
-      <div className="sidebarHeader">{translate("search.sidebarTitle")}</div>
+      <div
+        className="sidebarHeader searchPaneTabs"
+        role="tablist"
+        aria-label={translate("search.sidebarTitle")}
+      >
+        <button
+          type="button"
+          role="tab"
+          className="searchPaneTab"
+          aria-selected={!replaceTab}
+          data-active={!replaceTab ? "true" : undefined}
+          onClick={() => switchTab("search")}
+        >
+          {translate("search.tab.search")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className="searchPaneTab"
+          aria-selected={replaceTab}
+          data-active={replaceTab ? "true" : undefined}
+          onClick={() => switchTab("replace")}
+        >
+          {translate("search.tab.replace")}
+        </button>
+      </div>
 
       <div className="searchPaneControls">
         <div className="searchPaneInputRow">
@@ -926,13 +1042,15 @@ export function SearchSidebar({
             role="group"
             aria-label={translate("search.options.label")}
           >
-            <SearchOptionToggle
-              icon={GLOSSARY_SEARCH_ICON}
-              pressed={glossaryMode}
-              label={translate("search.option.glossary")}
-              hint={translate("search.option.glossary.hint")}
-              onToggle={toggleGlossaryMode}
-            />
+            {replaceTab ? null : (
+              <SearchOptionToggle
+                icon={GLOSSARY_SEARCH_ICON}
+                pressed={glossaryMode}
+                label={translate("search.option.glossary")}
+                hint={translate("search.option.glossary.hint")}
+                onToggle={toggleGlossaryMode}
+              />
+            )}
             {glossaryMode ? (
               <GlossaryRelationSelect
                 translate={translate}
@@ -971,6 +1089,46 @@ export function SearchSidebar({
             )}
           </div>
         </div>
+
+        {replaceTab ? (
+          <div className="searchPaneReplace">
+            <div className="searchPaneReplaceRow">
+              <input
+                type="text"
+                className="searchPaneInput searchPaneReplaceInput"
+                value={replaceText}
+                placeholder={translate("search.replace.replaceWith")}
+                aria-label={translate("search.replace.replaceWith")}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => setReplaceText(event.currentTarget.value)}
+              />
+            </div>
+            <div className="searchPaneReplaceActions">
+              <button
+                type="button"
+                className="searchPaneReplaceButton"
+                disabled={replaceBlockedByInvalidRegex}
+                onClick={handleReplaceInOpenDocuments}
+              >
+                {translate("search.replace.inOpenDocuments")}
+              </button>
+              <button
+                type="button"
+                className="searchPaneReplaceButton"
+                disabled={replaceBlockedByInvalidRegex}
+                onClick={handleReplaceInProject}
+              >
+                {translate("search.replace.inProject")}
+              </button>
+            </div>
+            {replaceBlockedByInvalidRegex ? (
+              <p className="searchPaneReplaceNotice" role="alert">
+                {translate("search.replace.invalidRegex")}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="searchPaneBody">

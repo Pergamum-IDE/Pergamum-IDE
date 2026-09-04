@@ -69,6 +69,16 @@ interface RenderOptions {
     endOffset: number
   ) => void;
   readonly queryRequest?: { readonly token: number; readonly query: string } | null;
+  readonly onReplaceInOpenDocuments?: (request: {
+    findText: string;
+    replaceText: string;
+    searchOptions: {
+      wholeWord: boolean;
+      caseSensitive: boolean;
+      useRegex: boolean;
+    };
+  }) => void;
+  readonly onReplaceInProject?: () => void;
 }
 
 function renderWith(props: RenderOptions): void {
@@ -196,9 +206,15 @@ describe("SearchSidebar (#384 Phase 1 — Search pane UI foundation)", () => {
   it("renders the header, query input and empty state", () => {
     render();
 
-    expect(
-      container.querySelector(".sidebarHeader")?.textContent
-    ).toBe("search.sidebarTitle");
+    // #386: the header is a Search / Replace tablist, Search selected.
+    const tabs = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    );
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      "search.tab.search",
+      "search.tab.replace"
+    ]);
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
 
     const input = container.querySelector<HTMLInputElement>(".searchPaneInput");
     expect(input).not.toBeNull();
@@ -1059,5 +1075,265 @@ describe("SearchSidebar (#384 — Command Palette `%` query request)", () => {
     });
     await advance(0);
     expect(searchInput()?.value).toBe("second");
+  });
+});
+
+describe("SearchSidebar (#386 — Search / Replace tabs)", () => {
+  function tab(name: "search.tab.search" | "search.tab.replace"): HTMLButtonElement {
+    return Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    ).find((t) => t.textContent === name)!;
+  }
+  function replaceInput(): HTMLInputElement | null {
+    return container.querySelector<HTMLInputElement>(".searchPaneReplaceInput");
+  }
+  function replaceButtons(): HTMLButtonElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".searchPaneReplaceButton")
+    );
+  }
+  function glossaryToggle(): HTMLButtonElement | undefined {
+    return toggleButtons().find(
+      (b) => b.getAttribute("aria-label") === "search.option.glossary"
+    );
+  }
+  function goReplace(): void {
+    act(() => tab("search.tab.replace").click());
+  }
+  function goSearch(): void {
+    act(() => tab("search.tab.search").click());
+  }
+
+  it("defaults to the Search tab and can switch to Replace and back", () => {
+    renderWith({ projectAvailable: true, runSearch: vi.fn<RunSearchFn>(async () => makeResult()) });
+
+    expect(tab("search.tab.search").getAttribute("aria-selected")).toBe("true");
+    expect(replaceInput()).toBeNull();
+
+    goReplace();
+    expect(tab("search.tab.replace").getAttribute("aria-selected")).toBe("true");
+    expect(replaceInput()).not.toBeNull();
+
+    goSearch();
+    expect(tab("search.tab.search").getAttribute("aria-selected")).toBe("true");
+    expect(replaceInput()).toBeNull();
+  });
+
+  it("shares the search query across tabs", () => {
+    renderWith({ projectAvailable: true, runSearch: vi.fn<RunSearchFn>(async () => makeResult()) });
+
+    typeQuery("メイド");
+    goReplace();
+    expect(
+      container.querySelector<HTMLInputElement>(".searchPaneInput")!.value
+    ).toBe("メイド");
+
+    // Change it on the Replace tab.
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )!.set!;
+    act(() => {
+      const el = container.querySelector<HTMLInputElement>(".searchPaneInput")!;
+      setter.call(el, "ジャンヌ");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    goSearch();
+    expect(
+      container.querySelector<HTMLInputElement>(".searchPaneInput")!.value
+    ).toBe("ジャンヌ");
+  });
+
+  it("hides the glossary toggle on the Replace tab and shows it again on Search", () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      runGlossarySearch: vi.fn<RunGlossarySearchFn>(async () => makeResult()),
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
+    expect(glossaryToggle()).toBeDefined();
+    goReplace();
+    expect(glossaryToggle()).toBeUndefined();
+    // Ab / Aa / .* still present.
+    expect(
+      toggleButtons().map((b) => b.getAttribute("aria-label"))
+    ).toEqual([
+      "search.option.wholeWord",
+      "search.option.caseSensitive",
+      "search.option.useRegex"
+    ]);
+    goSearch();
+    expect(glossaryToggle()).toBeDefined();
+  });
+
+  it("drops out of glossary mode when the Replace tab is opened", () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      runGlossarySearch: vi.fn<RunGlossarySearchFn>(async () => makeResult()),
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
+    act(() => glossaryToggle()!.click());
+    expect(container.querySelector(".glossaryAtomSelect")).not.toBeNull();
+
+    goReplace();
+    expect(container.querySelector(".glossaryAtomSelect")).toBeNull();
+    expect(container.querySelector(".searchPaneInput")).not.toBeNull();
+
+    // Back on Search: plain text mode, glossary toggle available again.
+    goSearch();
+    expect(container.querySelector(".glossaryAtomSelect")).toBeNull();
+    expect(glossaryToggle()).toBeDefined();
+  });
+
+  it("renders the replace-with input and both scope buttons only on the Replace tab", () => {
+    renderWith({ projectAvailable: true, runSearch: vi.fn<RunSearchFn>(async () => makeResult()) });
+
+    expect(replaceButtons()).toHaveLength(0);
+    goReplace();
+    expect(replaceInput()?.getAttribute("placeholder")).toBe(
+      "search.replace.replaceWith"
+    );
+    expect(replaceButtons().map((b) => b.textContent)).toEqual([
+      "search.replace.inOpenDocuments",
+      "search.replace.inProject"
+    ]);
+  });
+
+  it("calls onReplaceInOpenDocuments / onReplaceInProject on the button clicks", () => {
+    const onReplaceInOpenDocuments = vi.fn();
+    const onReplaceInProject = vi.fn();
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      onReplaceInOpenDocuments,
+      onReplaceInProject
+    });
+
+    goReplace();
+    typeQuery("メイド");
+    act(() => replaceButtons()[0].click());
+    act(() => replaceButtons()[1].click());
+
+    expect(onReplaceInOpenDocuments).toHaveBeenCalledTimes(1);
+    expect(onReplaceInProject).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks the replace buttons while the regex pattern is invalid", () => {
+    const onReplaceInOpenDocuments = vi.fn();
+    const onReplaceInProject = vi.fn();
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      onReplaceInOpenDocuments,
+      onReplaceInProject
+    });
+
+    goReplace();
+    // Turn Regex on (3rd toggle on the replace tab), then type an invalid pattern.
+    act(() => toggleButtons()[2].click());
+    typeQuery("(");
+
+    for (const button of replaceButtons()) {
+      expect(button.disabled).toBe(true);
+      act(() => button.click());
+    }
+    expect(onReplaceInOpenDocuments).not.toHaveBeenCalled();
+    expect(onReplaceInProject).not.toHaveBeenCalled();
+    expect(
+      container.querySelector(".searchPaneReplaceNotice")?.textContent
+    ).toBe("search.replace.invalidRegex");
+  });
+
+  it("hands the current find text, replace text and options to onReplaceInOpenDocuments (candidates are generated by the host)", () => {
+    const onReplaceInOpenDocuments = vi.fn();
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      onReplaceInOpenDocuments
+    });
+
+    goReplace();
+    typeQuery("  メイド  ");
+    const replaceInput = container.querySelector<HTMLInputElement>(
+      ".searchPaneReplaceInput"
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )!.set!;
+    act(() => {
+      setter.call(replaceInput, "使用人");
+      replaceInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    act(() => replaceButtons()[0].click());
+
+    expect(onReplaceInOpenDocuments).toHaveBeenCalledTimes(1);
+    const request = onReplaceInOpenDocuments.mock.calls[0][0] as {
+      findText: string;
+      replaceText: string;
+      searchOptions: {
+        wholeWord: boolean;
+        caseSensitive: boolean;
+        useRegex: boolean;
+      };
+    };
+    expect(request.findText).toBe("メイド"); // trimmed
+    expect(request.replaceText).toBe("使用人");
+    expect(request.searchOptions).toEqual({
+      wholeWord: false,
+      caseSensitive: false,
+      useRegex: false
+    });
+    // No candidates in the request - the host generates them asynchronously.
+    expect(request).not.toHaveProperty("candidates");
+  });
+
+  it("carries the active search options through to onReplaceInOpenDocuments", () => {
+    const onReplaceInOpenDocuments = vi.fn();
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      onReplaceInOpenDocuments
+    });
+
+    goReplace();
+    typeQuery("メイド");
+    // Match Case is the 2nd toggle on the replace tab.
+    act(() => toggleButtons()[1].click());
+    act(() => replaceButtons()[0].click());
+
+    const request = onReplaceInOpenDocuments.mock.calls[0][0] as {
+      searchOptions: {
+        wholeWord: boolean;
+        caseSensitive: boolean;
+        useRegex: boolean;
+      };
+    };
+    expect(request.searchOptions).toEqual({
+      wholeWord: false,
+      caseSensitive: true,
+      useRegex: false
+    });
+  });
+
+  it("fires onReplaceInOpenDocuments synchronously and never disables the button (the host opens the dialog immediately)", () => {
+    const onReplaceInOpenDocuments = vi.fn();
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      onReplaceInOpenDocuments
+    });
+
+    goReplace();
+    typeQuery("メイド");
+
+    expect(replaceButtons()[0].disabled).toBe(false);
+    act(() => replaceButtons()[0].click());
+    expect(onReplaceInOpenDocuments).toHaveBeenCalledTimes(1);
+    expect(replaceButtons()[0].disabled).toBe(false);
   });
 });

@@ -145,6 +145,39 @@ describe("runProjectTextSearch (#384 Phase 2)", () => {
     expect(result.truncated).toBe(true);
   });
 
+  it("#386: honours a caller-supplied match cap above the default 1000 (Replace Preview)", async () => {
+    const documents = Array.from({ length: 20 }, (_, index) =>
+      doc(`file-${String(index).padStart(2, "0")}.md`)
+    );
+
+    const result = await runProjectTextSearch({
+      documents,
+      readText: async () => "x".repeat(200),
+      query: "x",
+      options: PLAIN,
+      maxTotalMatches: 5000,
+      maxMatchesPerFile: 5000
+    });
+
+    // 20 files x 200 matches = 4000, all kept because the cap was raised.
+    expect(result.totalMatches).toBe(4000);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("#386: a caller-supplied per-file cap still flags truncation when hit", async () => {
+    const result = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText: async () => "x".repeat(300),
+      query: "x",
+      options: PLAIN,
+      maxTotalMatches: 5000,
+      maxMatchesPerFile: 150
+    });
+
+    expect(result.files[0].matches).toHaveLength(150);
+    expect(result.truncated).toBe(true);
+  });
+
   it("threads the regex option through to every file (#384)", async () => {
     const texts: Record<string, string> = {
       "a.md": "メイドさん",

@@ -700,9 +700,79 @@ export const enTranslations = {
   "glossaryTagEditor.validity.invalidBackground": "Background color must be a #RRGGBB hex value.",
   "glossaryTagEditor.validity.invalidForeground": "Text color must be a #RRGGBB hex value.",
   "search.sidebarTitle": "Search",
+  "search.tab.search": "Search",
+  "search.tab.replace": "Replace",
   "search.query.placeholder": "Search",
   "search.query.label": "Search query",
   "search.options.label": "Search options",
+  "search.replace.replaceWith": "Replace with",
+  "search.replace.inOpenDocuments": "Replace in Open Documents...",
+  "search.replace.inProject": "Replace in Project...",
+  "search.replace.invalidRegex":
+    "Invalid regular expression.\nFix the search pattern before previewing replacements.",
+  "search.replace.emptyFindText": "Enter text to find before replacing.",
+  "search.replace.noOpenDocuments":
+    "There are no open Markdown documents to replace in.",
+  "search.replace.template.unsupported":
+    "The replacement text contains an unsupported capture reference.\nRegex replace supports only $1-$99, ${1}-${99}, and $$.",
+  "search.replace.template.missingGroup":
+    "The replacement text references a capture group that does not exist.",
+  "search.replace.appliedAsEdits":
+    "Applied {count} replacements as edits. Files will not be updated until saved.",
+  "search.replace.project.emptyCandidates":
+    "No replacement candidates were found in the project's Markdown documents.",
+  "search.replace.project.savedSummary":
+    "Saved {replacementCount} replacements in {fileCount} files.",
+  "search.replace.project.partialFailure.title": "Some files could not be saved",
+  "search.replace.project.partialFailure.message":
+    "Some files could not be saved.\nSucceeded: {successFileCount} / Failed: {failureFileCount}",
+  "search.replace.project.allFailure.title": "Could not save replacements",
+  "search.replace.project.allFailure.message": "Could not save replacements.",
+  "search.replace.project.fileChanged":
+    "The file changed after replacement candidates were prepared, so it was not saved.",
+  "search.replace.preview.openDocs.title": "Replace in Open Documents",
+  "search.replace.preview.openDocs.description":
+    "Preview replacement candidates only in open Markdown documents.\nSelected replacements will be applied as edits and will not be written to files until saved.",
+  "search.replace.preview.openDocs.noCandidates":
+    "No replacement candidates were found in open documents.",
+  "search.replace.preview.project.title": "Replace in Project",
+  "search.replace.preview.project.description":
+    "Directly modifies and saves Markdown documents in the project.\nReview replacement candidates and choose which ones to apply before continuing.",
+  "search.replace.preview.project.destructiveWarning":
+    "This operation saves selected replacements directly to files. It cannot be undone with Pergamum Undo after saving.",
+  "search.replace.preview.project.replaceLabel": "Replace",
+  "search.replace.preview.project.applying": "Replacing...",
+  "search.replace.preview.project.delayTooltip":
+    "Replacement will become available after a short safety delay.",
+  "search.replace.preview.findLabel": "Find",
+  "search.replace.preview.replaceLabel": "Replace with",
+  "search.replace.preview.modeLabel": "Mode",
+  "search.replace.preview.mode.plain": "Plain text",
+  "search.replace.preview.mode.wholeWord": "Whole word",
+  "search.replace.preview.mode.caseSensitive": "Match case",
+  "search.replace.preview.mode.regex": "Regular expression",
+  "search.replace.preview.summary":
+    "{candidateCount} candidates / {selectedCount} selected / {fileCount} files",
+  "search.replace.preview.preparing": "Preparing replacement candidates...",
+  "search.replace.preview.limitReached":
+    "Replacement candidates reached the preview limit. Narrow the search condition.",
+  "search.replace.preview.applyAll": "Apply all {count}",
+  "search.replace.preview.ignoreAll": "Ignore all {count}",
+  "search.replace.preview.applyInFile": "Apply {count} in this file",
+  "search.replace.preview.ignoreInFile": "Ignore {count} in this file",
+  "search.replace.preview.fileGroupCount": "{count} matches",
+  "search.replace.preview.fileGroupSelected": "{selectedCount} selected",
+  "search.replace.preview.groupNavLabel": "Jump between files",
+  "search.replace.preview.groupNavPrev": "Previous file",
+  "search.replace.preview.groupNavNext": "Next file",
+  "search.replace.preview.rowApply": "Apply",
+  "search.replace.preview.rowIgnore": "Ignore",
+  "search.replace.preview.rowControlLabel": "Apply or ignore this candidate",
+  "search.replace.preview.applyAsEdits": "Apply selected as edits",
+  "search.replace.preview.applyAndSave": "Apply selected and save",
+  "search.replace.unsavedGate.title": "There are unsaved documents",
+  "search.replace.unsavedGate.message":
+    "Replace in Project directly modifies and saves Markdown documents in the project.\nIt cannot run while unsaved documents are open because edited content may differ from the content on disk.\n\nPlease save or discard open documents, then try again.",
   "search.option.glossary": "Glossary Search",
   "search.option.glossary.hint": "Glossary Search: search the glossary",
   "search.option.wholeWord": "Match Whole Word",

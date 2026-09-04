@@ -43,6 +43,7 @@ import {
   createEditorIdForPath,
   createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
+  editorIdEquals,
   serializeEditorId,
   type ActiveProjectContext,
   type EditorId
@@ -110,10 +111,15 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import {
+  buildLineEndingBreakSet,
   lineEndingBreakSetToArray,
   type LineEndingBreakSet
 } from "./editorLineEndingField";
-import { serializeLineEndings } from "./lineEndingTracking";
+import {
+  analyzeLineEndings,
+  normalizeLineEndings,
+  serializeLineEndings
+} from "./lineEndingTracking";
 import {
   createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
@@ -224,6 +230,13 @@ import {
   registerAssistCommands
 } from "./assistCommands";
 import { LineEndingDistributionDialog } from "./dialog/LineEndingDistributionDialog";
+import {
+  ReplacePreviewDialog,
+  type ReplaceApplyResult,
+  type ReplacePreviewCandidate,
+  type ReplacePreviewOpenRequest,
+  type ReplacePreviewScope
+} from "./replace/ReplacePreviewDialog";
 import {
   computeLineEndingDistribution,
   type LineEndingDistribution
@@ -421,6 +434,14 @@ import {
   runProjectTextSearch,
   type ProjectTextSearchResult
 } from "./projectTextSearch";
+import {
+  applyReplacementEditsToText,
+  generateOpenDocumentsReplaceCandidates,
+  REPLACE_PREVIEW_CANDIDATE_LIMIT,
+  type OpenDocumentReplaceTarget,
+  type OpenDocumentsReplaceResult
+} from "./replace/openDocumentsReplace";
+import { ChangeSet, Text as CodeMirrorText } from "@codemirror/state";
 import type {
   GlossaryAtomSearchTerm,
   GlossarySearchRelationMode
@@ -724,6 +745,38 @@ export function App(): JSX.Element {
   const isLineEndingDistributionDialogPendingOrOpenRef = useRef(false);
   const [lineEndingDistributionData, setLineEndingDistributionData] =
     useState<LineEndingDistribution | null>(null);
+  // #386: the Replace Preview Dialog. The dialog opens immediately in a loading
+  // state; candidates are generated from open Markdown buffers and filled in
+  // when ready. `replacePreviewGenerationRef` is bumped on every open and on
+  // close, so a generation whose result lands after Cancel (or after a re-open)
+  // is discarded. `searchInvalidationToken` is bumped after a replace is
+  // applied so the Search pane re-runs over the now-changed buffers.
+  const replacePreviewDialogOpenerRef = useRef<Element | null>(null);
+  const isReplacePreviewDialogPendingOrOpenRef = useRef(false);
+  const replacePreviewGenerationRef = useRef(0);
+  // #386: project scope only - the disk text each candidate was generated from,
+  // keyed by relative path. Used at apply time to detect files changed after
+  // the preview was built.
+  const replaceProjectApplyBaseRef = useRef<
+    Map<string, { readonly baseText: string; readonly baseBreaks: LineEndingBreakSet }>
+  >(new Map());
+  const [searchInvalidationToken, setSearchInvalidationToken] = useState(0);
+  const [replacePreviewDialogState, setReplacePreviewDialogState] = useState<
+    | {
+        readonly scope: ReplacePreviewScope;
+        readonly findText: string;
+        readonly replaceText: string;
+        readonly searchOptions: ReplacePreviewOpenRequest["searchOptions"];
+        readonly loading: boolean;
+        readonly candidates: readonly ReplacePreviewCandidate[];
+        readonly limitReached: boolean;
+        // #386 destructive (project) scope only - the async save's progress.
+        // openDocuments never sets these (its apply is synchronous).
+        readonly applying: boolean;
+        readonly applyResult: ReplaceApplyResult | null;
+      }
+    | null
+  >(null);
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
       dialogController.getPendingRequest()
@@ -1550,6 +1603,8 @@ export function App(): JSX.Element {
     aboutDialogAppInfo !== null ||
     isLineEndingDistributionDialogPendingOrOpenRef.current ||
     lineEndingDistributionData !== null ||
+    isReplacePreviewDialogPendingOrOpenRef.current ||
+    replacePreviewDialogState !== null ||
     isRecoveryCandidateDialogPendingOrOpenRef.current ||
     recoveryCandidateDialogData !== null;
   const isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose =
@@ -1558,6 +1613,8 @@ export function App(): JSX.Element {
     aboutDialogAppInfo !== null ||
     isLineEndingDistributionDialogPendingOrOpenRef.current ||
     lineEndingDistributionData !== null ||
+    isReplacePreviewDialogPendingOrOpenRef.current ||
+    replacePreviewDialogState !== null ||
     isRecoveryCandidateDialogPendingOrOpenRef.current ||
     recoveryCandidateDialogData !== null;
 
@@ -2471,6 +2528,7 @@ export function App(): JSX.Element {
       dialogController.getPendingRequest() ||
       isAboutDialogPendingOrOpenRef.current ||
       isLineEndingDistributionDialogPendingOrOpenRef.current ||
+      isReplacePreviewDialogPendingOrOpenRef.current ||
       isRecoveryCandidateDialogPendingOrOpenRef.current
         ? "app_modal_open"
         : null
@@ -7208,6 +7266,791 @@ export function App(): JSX.Element {
     );
   }
 
+  // #386: Search pane Replace tab.
+  //
+  // Open Documents Replace runs entirely against the CURRENT text of open
+  // Markdown editor buffers — never disk, never the Search pane's 1000-capped
+  // result list. `選択した置換を編集状態にする` writes the selected candidates
+  // into those buffers (making them dirty) and NEVER saves a file. The Project
+  // button still only shows a placeholder confirm behind its dirty gate.
+  function replaceValidationInfoDialog(
+    messageKey: TranslationKey,
+    iconKind: "warning" | "error" = "warning"
+  ): void {
+    void confirmDialog({
+      title: translate("search.replace.preview.openDocs.title"),
+      message: { kind: "plainText", text: translate(messageKey) },
+      icon: {
+        kind: iconKind,
+        tooltip: translate(
+          iconKind === "error" ? "dialog.icon.error" : "dialog.icon.warning"
+        )
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: true,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    }).catch((error) => {
+      if (
+        error instanceof AppDialogError &&
+        error.kind === "dialogAlreadyOpen"
+      ) {
+        return;
+      }
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    });
+  }
+
+  // Open Markdown editor buffers eligible for replace: excludes non-Markdown
+  // editors and — when the project is read-only — its project-owned documents.
+  function collectOpenDocumentReplaceTargets(): OpenDocumentReplaceTarget[] {
+    const targets: OpenDocumentReplaceTarget[] = [];
+    for (const openDocument of openDocumentsStateRef.current.documents) {
+      if (openDocument.editor.kind !== "markdown") {
+        continue;
+      }
+      const markdownDocument = openDocument.editor.document;
+      if (isReadOnlyProject && markdownDocument.kind === "project") {
+        continue;
+      }
+      targets.push({
+        documentId: serializeEditorId(openDocument.id),
+        fileLabel: markdownDocument.name,
+        filePath:
+          markdownDocument.kind === "project"
+            ? markdownDocument.relativePath
+            : markdownDocument.kind === "file"
+              ? markdownDocument.path
+              : undefined,
+        text: markdownDocument.content
+      });
+    }
+    return targets;
+  }
+
+  function replaceTemplateErrorMessageKey(
+    result: Extract<OpenDocumentsReplaceResult, { status: "invalidTemplate" }>
+  ): TranslationKey {
+    return result.error === "missingGroup"
+      ? "search.replace.template.missingGroup"
+      : "search.replace.template.unsupported";
+  }
+
+  // The dialog opens IMMEDIATELY in a loading state, then candidates are
+  // generated (a synchronous buffer scan, deferred one frame so the loading
+  // state paints). A result that lands after Cancel — or after a re-open — is
+  // discarded via `replacePreviewGenerationRef`.
+  async function generateReplacePreviewCandidates(
+    generation: number,
+    request: ReplacePreviewOpenRequest,
+    targets: readonly OpenDocumentReplaceTarget[]
+  ): Promise<void> {
+    await Promise.resolve();
+    if (replacePreviewGenerationRef.current !== generation) {
+      return;
+    }
+
+    const result = generateOpenDocumentsReplaceCandidates(
+      targets,
+      request.findText,
+      request.replaceText,
+      {
+        caseSensitive: request.searchOptions.caseSensitive,
+        wholeWord: request.searchOptions.wholeWord,
+        useRegex: request.searchOptions.useRegex
+      }
+    );
+
+    if (replacePreviewGenerationRef.current !== generation) {
+      return;
+    }
+
+    if (result.status !== "ok") {
+      // Preflighted before opening, so this is defensive only.
+      closeReplacePreviewDialog();
+      replaceValidationInfoDialog(
+        result.status === "invalidRegex"
+          ? "search.replace.invalidRegex"
+          : replaceTemplateErrorMessageKey(result)
+      );
+      return;
+    }
+
+    setReplacePreviewDialogState((current) =>
+      current && replacePreviewGenerationRef.current === generation
+        ? {
+            ...current,
+            loading: false,
+            candidates: result.candidates,
+            limitReached: false
+          }
+        : current
+    );
+  }
+
+  function openReplacePreviewForOpenDocuments(
+    request: ReplacePreviewOpenRequest
+  ): void {
+    if (isReplacePreviewDialogPendingOrOpenRef.current) {
+      return;
+    }
+
+    if (request.findText.trim().length === 0) {
+      replaceValidationInfoDialog("search.replace.emptyFindText");
+      return;
+    }
+
+    const targets = collectOpenDocumentReplaceTargets();
+    if (targets.length === 0) {
+      replaceValidationInfoDialog("search.replace.noOpenDocuments");
+      return;
+    }
+
+    if (request.searchOptions.useRegex) {
+      // Preflight the regex + replacement template BEFORE opening the dialog.
+      const preflight = generateOpenDocumentsReplaceCandidates(
+        [],
+        request.findText,
+        request.replaceText,
+        {
+          caseSensitive: request.searchOptions.caseSensitive,
+          wholeWord: request.searchOptions.wholeWord,
+          useRegex: true
+        }
+      );
+      if (preflight.status === "invalidRegex") {
+        replaceValidationInfoDialog("search.replace.invalidRegex");
+        return;
+      }
+      if (preflight.status === "invalidTemplate") {
+        replaceValidationInfoDialog(
+          replaceTemplateErrorMessageKey(preflight)
+        );
+        return;
+      }
+    }
+
+    if (typeof document !== "undefined") {
+      replacePreviewDialogOpenerRef.current = document.activeElement;
+    }
+    isReplacePreviewDialogPendingOrOpenRef.current = true;
+
+    const generation = replacePreviewGenerationRef.current + 1;
+    replacePreviewGenerationRef.current = generation;
+
+    setReplacePreviewDialogState({
+      scope: "openDocuments",
+      findText: request.findText,
+      replaceText: request.replaceText,
+      searchOptions: request.searchOptions,
+      loading: true,
+      candidates: [],
+      limitReached: false,
+      applying: false,
+      applyResult: null
+    });
+
+    void generateReplacePreviewCandidates(generation, request, targets);
+  }
+
+  function closeReplacePreviewDialog(): void {
+    // Invalidate any in-flight generation so a late result is dropped.
+    replacePreviewGenerationRef.current += 1;
+    isReplacePreviewDialogPendingOrOpenRef.current = false;
+    setReplacePreviewDialogState(null);
+  }
+
+  // #386: the Replace Preview Dialog footer button. Routes by scope.
+  function applyReplacePreviewSelection(enabledIds: readonly string[]): void {
+    const state = replacePreviewDialogState;
+    if (!state || state.loading) {
+      closeReplacePreviewDialog();
+      return;
+    }
+    if (state.scope === "projectDocuments") {
+      // The dialog itself already disables the button once applying/completed
+      // (and guards a double-click locally); this is defense in depth so a
+      // stray extra call can never start a second save.
+      if (state.applying || state.applyResult !== null) {
+        return;
+      }
+      void applyProjectReplaceSelection(state, enabledIds);
+      return;
+    }
+    applyOpenDocumentsReplaceSelection(state, enabledIds);
+  }
+
+  // Open Documents Replace: write the still-enabled candidates into their editor
+  // buffers.
+  //  - the buffer is the ONLY target: no disk write, no Save
+  //  - each affected document becomes (or stays) dirty
+  //  - per document, edits are applied as ONE transaction / change set, in
+  //    original-document coordinates (no manual offset correction)
+  //  - the active Markdown editor goes through a CodeMirror `input.replace`
+  //    transaction on the live shared view, so it is one undo step. Other open
+  //    buffers hold only a text string (Pergamum reuses a single EditorView
+  //    across all tabs — #250), so they cannot receive a transaction and their
+  //    replace is not on any undo stack. Per-tab EditorState/history would be
+  //    an editor-architecture change beyond #386 — tracked as a follow-up.
+  function applyOpenDocumentsReplaceSelection(
+    state: NonNullable<typeof replacePreviewDialogState>,
+    enabledIds: readonly string[]
+  ): void {
+    const enabled = new Set(enabledIds);
+    const editsByDocument = new Map<
+      string,
+      Array<{ startOffset: number; endOffset: number; afterText: string }>
+    >();
+    for (const candidate of state.candidates) {
+      if (
+        !enabled.has(candidate.id) ||
+        candidate.documentId === undefined ||
+        candidate.startOffset === undefined ||
+        candidate.endOffset === undefined
+      ) {
+        continue;
+      }
+      const list = editsByDocument.get(candidate.documentId) ?? [];
+      list.push({
+        startOffset: candidate.startOffset,
+        endOffset: candidate.endOffset,
+        afterText: candidate.afterText
+      });
+      editsByDocument.set(candidate.documentId, list);
+    }
+
+    const openState = openDocumentsStateRef.current;
+    const activeId = openState.activeDocumentId;
+    const activeMarkdownControllerAvailable =
+      !isEditorAreaSpecialTabActive &&
+      currentEditor?.kind === "markdown" &&
+      paragraphIndentControllerRef.current !== null;
+
+    let appliedCount = 0;
+
+    for (const [documentId, edits] of editsByDocument) {
+      const openDocument = openState.documents.find(
+        (candidate) => serializeEditorId(candidate.id) === documentId
+      );
+      if (!openDocument || openDocument.editor.kind !== "markdown") {
+        continue;
+      }
+      const markdownDocument = openDocument.editor.document;
+      if (isReadOnlyProject && markdownDocument.kind === "project") {
+        continue;
+      }
+
+      // Ascending, overlap-free change list (CodeMirror + ChangeSet want that).
+      const ascending = [...edits].sort(
+        (left, right) => left.startOffset - right.startOffset
+      );
+      const changeSpecs: Array<{ from: number; to: number; insert: string }> =
+        [];
+      let previousEnd = -1;
+      for (const edit of ascending) {
+        if (
+          edit.startOffset < previousEnd ||
+          edit.startOffset > edit.endOffset ||
+          edit.endOffset > markdownDocument.content.length
+        ) {
+          continue;
+        }
+        changeSpecs.push({
+          from: edit.startOffset,
+          to: edit.endOffset,
+          insert: edit.afterText
+        });
+        previousEnd = edit.endOffset;
+      }
+      if (changeSpecs.length === 0) {
+        continue;
+      }
+
+      const isActiveMarkdownBuffer =
+        activeMarkdownControllerAvailable &&
+        activeId !== null &&
+        editorIdEquals(openDocument.id, activeId);
+
+      if (isActiveMarkdownBuffer) {
+        // Active editor: one CodeMirror transaction on the live view — its
+        // update listener syncs content + dirty + line-ending tracking, and
+        // it lands as a single `input.replace` undo step (undoable until the
+        // user switches tabs, which — by #250/#253 design — resets the shared
+        // view's history for every editing feature, not just replace).
+        const applied =
+          paragraphIndentControllerRef.current?.applyReplaceInBufferChanges(
+            changeSpecs
+          ) ?? false;
+        if (!applied) {
+          continue;
+        }
+      } else {
+        const changeSet = ChangeSet.of(
+          changeSpecs,
+          markdownDocument.content.length
+        );
+        const nextContent = changeSet
+          .apply(CodeMirrorText.of(markdownDocument.content.split("\n")))
+          .toString();
+        const nextLineEndingBreaks = markdownDocument.lineEndingBreaks.map(
+          changeSet
+        ) as LineEndingBreakSet;
+        setOpenDocumentsState((current) =>
+          updateOpenEditor(current, openDocument.id, (editor) =>
+            editor.kind === "markdown"
+              ? {
+                  ...editor,
+                  document: updateCurrentDocumentContent(
+                    editor.document,
+                    nextContent,
+                    nextLineEndingBreaks
+                  )
+                }
+              : editor
+          )
+        );
+      }
+
+      appliedCount += changeSpecs.length;
+    }
+
+    closeReplacePreviewDialog();
+
+    if (appliedCount > 0) {
+      // Offsets in the current results are now stale — re-run the search over
+      // the (post-replace) buffers.
+      setSearchInvalidationToken((token) => token + 1);
+      setStatus({
+        key: "search.replace.appliedAsEdits",
+        values: { count: appliedCount }
+      });
+    }
+  }
+
+  // #386: Project Documents Replace - DESTRUCTIVE (saves straight to disk).
+  //  - dirty gate: refuse while any open document is unsaved
+  //  - scan the project's Markdown files from disk, remember each file's base
+  //    text for the "changed after preview" check
+  //  - the Replace Preview Dialog (project scope) has the 5s delayed apply
+  //  - apply: per file, re-read disk, compare to the base text, apply the
+  //    still-enabled edits, atomic-save; results are aggregated
+  //  - open CLEAN buffers for saved files are synced to the saved content and
+  //    stay clean (dirty gate guarantees they were == disk beforehand)
+  function openReplacePreviewForProjectDocuments(
+    request: ReplacePreviewOpenRequest
+  ): void {
+    if (isReplacePreviewDialogPendingOrOpenRef.current) {
+      return;
+    }
+
+    const hasUnsavedOpenDocument =
+      openDocumentsStateRef.current.documents.some((openDocument) =>
+        isCurrentEditorDirty(openDocument.editor)
+      );
+    if (hasUnsavedOpenDocument) {
+      // Dirty gate: stop before any candidate generation / write.
+      void confirmDialog({
+        title: translate("search.replace.unsavedGate.title"),
+        message: {
+          kind: "plainText",
+          text: translate("search.replace.unsavedGate.message")
+        },
+        icon: { kind: "warning", tooltip: translate("dialog.icon.warning") },
+        clipboardText: null,
+        dismissOnBackdropClick: true,
+        confirmLabel: translate("common.ok"),
+        cancelLabel: null
+      }).catch(() => undefined);
+      return;
+    }
+
+    if (request.findText.trim().length === 0) {
+      replaceValidationInfoDialog("search.replace.emptyFindText");
+      return;
+    }
+    if (!project) {
+      return;
+    }
+    if (isReadOnlyProject) {
+      replaceValidationInfoDialog("command.disabled.readOnlyProject");
+      return;
+    }
+    if (request.searchOptions.useRegex) {
+      const preflight = generateOpenDocumentsReplaceCandidates(
+        [],
+        request.findText,
+        request.replaceText,
+        {
+          caseSensitive: request.searchOptions.caseSensitive,
+          wholeWord: request.searchOptions.wholeWord,
+          useRegex: true
+        }
+      );
+      if (preflight.status === "invalidRegex") {
+        replaceValidationInfoDialog("search.replace.invalidRegex");
+        return;
+      }
+      if (preflight.status === "invalidTemplate") {
+        replaceValidationInfoDialog(replaceTemplateErrorMessageKey(preflight));
+        return;
+      }
+    }
+
+    if (typeof document !== "undefined") {
+      replacePreviewDialogOpenerRef.current = document.activeElement;
+    }
+    isReplacePreviewDialogPendingOrOpenRef.current = true;
+    replaceProjectApplyBaseRef.current = new Map();
+
+    const generation = replacePreviewGenerationRef.current + 1;
+    replacePreviewGenerationRef.current = generation;
+
+    setReplacePreviewDialogState({
+      scope: "projectDocuments",
+      findText: request.findText,
+      replaceText: request.replaceText,
+      searchOptions: request.searchOptions,
+      loading: true,
+      candidates: [],
+      limitReached: false,
+      applying: false,
+      applyResult: null
+    });
+
+    void generateProjectReplacePreviewCandidates(generation, request);
+  }
+
+  async function generateProjectReplacePreviewCandidates(
+    generation: number,
+    request: ReplacePreviewOpenRequest
+  ): Promise<void> {
+    const activeProject = project;
+    if (!activeProject) {
+      closeReplacePreviewDialog();
+      return;
+    }
+
+    const targets: OpenDocumentReplaceTarget[] = [];
+    const baseByRelativePath = new Map<
+      string,
+      { readonly baseText: string; readonly baseBreaks: LineEndingBreakSet }
+    >();
+
+    for (const projectDocument of activeProject.documents) {
+      if (replacePreviewGenerationRef.current !== generation) {
+        return;
+      }
+      let raw: string;
+      try {
+        raw = (
+          await window.pergamum.projects.readProjectDocument(
+            projectDocument.relativePath
+          )
+        ).content;
+      } catch {
+        // Unreadable / inaccessible file: leave it out of the scan.
+        continue;
+      }
+      const baseText = normalizeLineEndings(raw);
+      const baseBreaks = buildLineEndingBreakSet(analyzeLineEndings(raw));
+      targets.push({
+        documentId: projectDocument.relativePath,
+        fileLabel: projectDocument.name,
+        filePath: projectDocument.relativePath,
+        text: baseText
+      });
+      baseByRelativePath.set(projectDocument.relativePath, {
+        baseText,
+        baseBreaks
+      });
+    }
+
+    if (replacePreviewGenerationRef.current !== generation) {
+      return;
+    }
+
+    const result = generateOpenDocumentsReplaceCandidates(
+      targets,
+      request.findText,
+      request.replaceText,
+      {
+        caseSensitive: request.searchOptions.caseSensitive,
+        wholeWord: request.searchOptions.wholeWord,
+        useRegex: request.searchOptions.useRegex
+      }
+    );
+
+    if (replacePreviewGenerationRef.current !== generation) {
+      return;
+    }
+
+    if (result.status !== "ok") {
+      closeReplacePreviewDialog();
+      replaceValidationInfoDialog(
+        result.status === "invalidRegex"
+          ? "search.replace.invalidRegex"
+          : replaceTemplateErrorMessageKey(result)
+      );
+      return;
+    }
+
+    const limitReached =
+      result.candidates.length > REPLACE_PREVIEW_CANDIDATE_LIMIT;
+    const candidates = limitReached
+      ? result.candidates.slice(0, REPLACE_PREVIEW_CANDIDATE_LIMIT)
+      : result.candidates;
+
+    replaceProjectApplyBaseRef.current = baseByRelativePath;
+
+    setReplacePreviewDialogState((current) =>
+      current && replacePreviewGenerationRef.current === generation
+        ? { ...current, loading: false, candidates, limitReached }
+        : current
+    );
+  }
+
+  // #386: runs the destructive save. The dialog stays OPEN and mounted for the
+  // whole call - it goes `applying: true` immediately, then `applying: false`
+  // + `applyResult` once every file has settled. It is never closed here;
+  // only the user's "閉じる" click (after the result is shown) closes it.
+  async function applyProjectReplaceSelection(
+    state: NonNullable<typeof replacePreviewDialogState>,
+    enabledIds: readonly string[]
+  ): Promise<void> {
+    const enabled = new Set(enabledIds);
+    const editsByRelativePath = new Map<
+      string,
+      Array<{ startOffset: number; endOffset: number; afterText: string }>
+    >();
+    for (const candidate of state.candidates) {
+      if (
+        !enabled.has(candidate.id) ||
+        candidate.documentId === undefined ||
+        candidate.startOffset === undefined ||
+        candidate.endOffset === undefined
+      ) {
+        continue;
+      }
+      const list = editsByRelativePath.get(candidate.documentId) ?? [];
+      list.push({
+        startOffset: candidate.startOffset,
+        endOffset: candidate.endOffset,
+        afterText: candidate.afterText
+      });
+      editsByRelativePath.set(candidate.documentId, list);
+    }
+
+    // Nothing enabled: the dialog already disables the button at
+    // selectedCount === 0, so this is defensive only - never enters
+    // "applying" for a no-op.
+    if (editsByRelativePath.size === 0) {
+      return;
+    }
+
+    const baseByRelativePath = replaceProjectApplyBaseRef.current;
+    const generation = replacePreviewGenerationRef.current;
+    setReplacePreviewDialogState((current) =>
+      current && replacePreviewGenerationRef.current === generation
+        ? { ...current, applying: true }
+        : current
+    );
+
+    type SavedFile = {
+      readonly relativePath: string;
+      readonly nextText: string;
+      readonly nextBreaks: LineEndingBreakSet;
+      readonly replacementCount: number;
+    };
+    const saved: SavedFile[] = [];
+    let failureFileCount = 0;
+    let changedFileCount = 0;
+
+    for (const [relativePath, edits] of editsByRelativePath) {
+      const base = baseByRelativePath.get(relativePath);
+      if (!base) {
+        failureFileCount += 1;
+        continue;
+      }
+
+      let currentRaw: string;
+      try {
+        currentRaw = (
+          await window.pergamum.projects.readProjectDocument(relativePath)
+        ).content;
+      } catch {
+        failureFileCount += 1;
+        continue;
+      }
+      if (normalizeLineEndings(currentRaw) !== base.baseText) {
+        // Changed after the preview was built - do not overwrite it.
+        failureFileCount += 1;
+        changedFileCount += 1;
+        continue;
+      }
+
+      const ascending = [...edits].sort(
+        (left, right) => left.startOffset - right.startOffset
+      );
+      const changeSpecs: Array<{ from: number; to: number; insert: string }> =
+        [];
+      let previousEnd = -1;
+      for (const edit of ascending) {
+        if (
+          edit.startOffset < previousEnd ||
+          edit.startOffset > edit.endOffset ||
+          edit.endOffset > base.baseText.length
+        ) {
+          continue;
+        }
+        changeSpecs.push({
+          from: edit.startOffset,
+          to: edit.endOffset,
+          insert: edit.afterText
+        });
+        previousEnd = edit.endOffset;
+      }
+      if (changeSpecs.length === 0) {
+        failureFileCount += 1;
+        continue;
+      }
+
+      const { text: nextText } = applyReplacementEditsToText(
+        base.baseText,
+        changeSpecs.map((spec) => ({
+          startOffset: spec.from,
+          endOffset: spec.to,
+          afterText: spec.insert
+        }))
+      );
+      const changeSet = ChangeSet.of(changeSpecs, base.baseText.length);
+      const nextBreaks = base.baseBreaks.map(changeSet) as LineEndingBreakSet;
+      const serialized = serializeLineEndings(
+        nextText,
+        lineEndingBreakSetToArray(nextBreaks)
+      );
+
+      try {
+        await window.pergamum.projects.saveProjectDocument(
+          relativePath,
+          serialized
+        );
+      } catch {
+        failureFileCount += 1;
+        continue;
+      }
+
+      saved.push({
+        relativePath,
+        nextText,
+        nextBreaks,
+        replacementCount: changeSpecs.length
+      });
+    }
+
+    if (saved.length > 0) {
+      syncOpenCleanBuffersAfterProjectReplace(saved);
+      setSearchInvalidationToken((token) => token + 1);
+    }
+
+    const successFileCount = saved.length;
+    const replacementCount = saved.reduce(
+      (total, file) => total + file.replacementCount,
+      0
+    );
+
+    const result: ReplaceApplyResult =
+      failureFileCount === 0 && successFileCount > 0
+        ? { kind: "success", replacementCount, fileCount: successFileCount }
+        : successFileCount > 0
+          ? { kind: "partialFailure", successFileCount, failureFileCount }
+          : {
+              kind: "allFailure",
+              reason:
+                changedFileCount === failureFileCount && changedFileCount > 0
+                  ? "fileChanged"
+                  : "generic"
+            };
+
+    // Land the result in the (still-open) dialog rather than a stacked
+    // confirmDialog / status toast - the dialog shows it in place of the
+    // destructive warning and enables Close. Never closes itself.
+    setReplacePreviewDialogState((current) =>
+      current && replacePreviewGenerationRef.current === generation
+        ? { ...current, applying: false, applyResult: result }
+        : current
+    );
+  }
+
+  // #386: after Project Documents Replace saved to disk, keep any OPEN CLEAN
+  // Markdown buffer for a saved file in sync with what was written (content +
+  // savedContent, still clean). The active editor's live view is refreshed via
+  // a non-undoable full-document replace (disk sync, not an edit).
+  function syncOpenCleanBuffersAfterProjectReplace(
+    saved: ReadonlyArray<{
+      readonly relativePath: string;
+      readonly nextText: string;
+      readonly nextBreaks: LineEndingBreakSet;
+    }>
+  ): void {
+    const savedByRelativePath = new Map(
+      saved.map((file) => [file.relativePath, file])
+    );
+    const openState = openDocumentsStateRef.current;
+    const activeId = openState.activeDocumentId;
+
+    for (const openDocument of openState.documents) {
+      if (openDocument.editor.kind !== "markdown") {
+        continue;
+      }
+      const relativePath = currentProjectRelativePath(
+        openDocument.editor.document
+      );
+      if (relativePath === null) {
+        continue;
+      }
+      const savedFile = savedByRelativePath.get(relativePath);
+      if (!savedFile) {
+        continue;
+      }
+      // The dirty gate guarantees this was clean (== disk) before the replace.
+      if (isCurrentEditorDirty(openDocument.editor)) {
+        continue;
+      }
+
+      const isActive =
+        activeId !== null &&
+        editorIdEquals(openDocument.id, activeId) &&
+        !isEditorAreaSpecialTabActive &&
+        currentEditor?.kind === "markdown";
+      if (isActive) {
+        paragraphIndentControllerRef.current?.syncBufferToDiskContent?.(
+          savedFile.nextText,
+          savedFile.nextBreaks
+        );
+      }
+
+      setOpenDocumentsState((current) =>
+        updateOpenEditor(current, openDocument.id, (editor) =>
+          editor.kind === "markdown"
+            ? {
+                ...editor,
+                document: markCurrentDocumentSaved(
+                  updateCurrentDocumentContent(
+                    editor.document,
+                    savedFile.nextText,
+                    savedFile.nextBreaks
+                  )
+                )
+              }
+            : editor
+        )
+      );
+    }
+  }
+
   async function activateProjectDocument(relativePath: string): Promise<void> {
     if (isLifecycleCommitBarrierActiveNow()) {
       return;
@@ -7388,6 +8231,7 @@ export function App(): JSX.Element {
     });
   }
 
+
   // #384 Glossary Search: search the picked atoms across the project's Markdown
   // files under the chosen relation mode (any / all / nearby). Same file
   // discovery / dirty-buffer policy as the text search; each result match
@@ -7439,6 +8283,7 @@ export function App(): JSX.Element {
       query
     });
   }
+
 
   // #384 Phase 2: open (or activate) the file behind a Search pane result row
   // and select the matched range. `editorNavigation.openEditor` both activates
@@ -7765,6 +8610,11 @@ export function App(): JSX.Element {
                       runProjectSearch={runProjectSearch}
                       runProjectGlossarySearch={runProjectGlossarySearch}
                       searchQueryRequest={searchQueryRequest}
+                      searchInvalidationToken={searchInvalidationToken}
+                      onReplaceInOpenDocuments={
+                        openReplacePreviewForOpenDocuments
+                      }
+                      onReplaceInProject={openReplacePreviewForProjectDocuments}
                       onOpenSearchMatch={(
                         relativePath,
                         startOffset,
@@ -8143,6 +8993,24 @@ export function App(): JSX.Element {
           translate={translate}
           opener={lineEndingDistributionDialogOpenerRef.current}
           onClose={closeLineEndingDistributionDialog}
+        />
+      ) : null}
+
+      {replacePreviewDialogState ? (
+        <ReplacePreviewDialog
+          scope={replacePreviewDialogState.scope}
+          findText={replacePreviewDialogState.findText}
+          replaceText={replacePreviewDialogState.replaceText}
+          searchOptions={replacePreviewDialogState.searchOptions}
+          loading={replacePreviewDialogState.loading}
+          candidates={replacePreviewDialogState.candidates}
+          limitReached={replacePreviewDialogState.limitReached}
+          applying={replacePreviewDialogState.applying}
+          applyResult={replacePreviewDialogState.applyResult}
+          translate={translate}
+          opener={replacePreviewDialogOpenerRef.current}
+          onCancel={closeReplacePreviewDialog}
+          onApplySelected={applyReplacePreviewSelection}
         />
       ) : null}
 

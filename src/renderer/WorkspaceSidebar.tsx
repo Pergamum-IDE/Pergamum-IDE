@@ -23,6 +23,7 @@ import type {
   GlossarySearchRelationMode
 } from "./glossaryAtomSearch";
 import type { TextSearchOptions } from "../shared/textSearch";
+import type { ReplacePreviewOpenRequest } from "./replace/replacePreviewTypes";
 import { DocumentMapPanel } from "./DocumentMapPanel";
 import {
   DocumentMetricsPanel,
@@ -162,6 +163,16 @@ interface WorkspaceSidebarProps {
     readonly token: number;
     readonly query: string;
   } | null;
+  /** #386: bumped after an Open Documents Replace is applied so the Search pane
+   *  re-runs its current search over the now-changed buffers. */
+  searchInvalidationToken?: number;
+  /** #386: Replace tab `[開いている文書のみ置換...]` - hands the host the current
+   *  find / replace / options; the host opens the Replace Preview Dialog
+   *  (loading state) and generates candidates itself. */
+  onReplaceInOpenDocuments?: (request: ReplacePreviewOpenRequest) => void;
+  /** #386: Replace tab `[プロジェクト内文書置換...]` - dirty gate, project file
+   *  scan, then the Replace Preview Dialog (project scope). */
+  onReplaceInProject?: (request: ReplacePreviewOpenRequest) => void;
 }
 
 export function WorkspaceSidebar({
@@ -209,7 +220,10 @@ export function WorkspaceSidebar({
   runProjectSearch,
   onOpenSearchMatch,
   runProjectGlossarySearch,
-  searchQueryRequest = null
+  searchQueryRequest = null,
+  searchInvalidationToken = 0,
+  onReplaceInOpenDocuments,
+  onReplaceInProject
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -269,6 +283,9 @@ export function WorkspaceSidebar({
           runGlossarySearch={runProjectGlossarySearch}
           onOpenMatch={onOpenSearchMatch}
           queryRequest={searchQueryRequest}
+          searchInvalidationToken={searchInvalidationToken}
+          onReplaceInOpenDocuments={onReplaceInOpenDocuments}
+          onReplaceInProject={onReplaceInProject}
         />
       );
     case "documentMap":
