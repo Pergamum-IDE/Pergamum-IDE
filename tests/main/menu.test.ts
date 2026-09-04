@@ -456,8 +456,8 @@ describe("application menu", () => {
         "改行コード分布...",
         "段落字下げ一括挿入",
         "段落字下げ一括削除",
-        "用語を管理...",
-        "用語タグを管理..."
+        "語彙を管理...",
+        "タグを管理..."
       ]);
     });
 
@@ -497,7 +497,7 @@ describe("application menu", () => {
       );
     });
 
-    it("sends the glossary tag manage command from the 用語タグを管理... item", () => {
+    it("sends the glossary tag manage command from the タグを管理... item", () => {
       const { window, send } = menuWindowMock();
       const assistItems = submenuItems(
         findTopLevelMenu(
@@ -510,7 +510,7 @@ describe("application menu", () => {
         )
       );
       const manageItem = assistItems.find(
-        (item) => item.label === "用語タグを管理..."
+        (item) => item.label === "タグを管理..."
       );
 
       expect(manageItem?.id).toBe(glossaryTabCommandIds.manageTags);

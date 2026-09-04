@@ -54,6 +54,8 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(FILE_CHANNELS.openMarkdown, { documentOpenId }),
     readMarkdownFile: (filePath) =>
       ipcRenderer.invoke(FILE_CHANNELS.readMarkdownFile, { path: filePath }),
+    statMarkdownFile: (filePath) =>
+      ipcRenderer.invoke(FILE_CHANNELS.statMarkdownFile, { path: filePath }),
     saveMarkdown: (filePath, content) =>
       ipcRenderer.invoke(FILE_CHANNELS.saveMarkdown, {
         path: filePath,

@@ -1780,6 +1780,190 @@ label.settingsItemHeader {
   border-top: 1px solid var(--workspace-sidebar-divider);
 }
 
+/* #360 Document Navigation / 文書ナビ panel (left pane). */
+.documentNavigationPanel {
+  min-height: 0;
+}
+
+/* The Document Navigation sections are read top-to-bottom in the scrolling
+   pane, so each collapsible body hugs its content instead of the shared
+   200px fixed height (that default exists for the resize-handled Outline
+   pane). */
+.documentNavigationPanel .collapsibleSidebarSectionBody {
+  block-size: auto;
+  overflow: visible;
+}
+
+.documentNavigationSections {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.documentNavigationMetricList {
+  margin: 0;
+  padding: 4px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.documentNavigationMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.documentNavigationMetricLabel {
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.documentNavigationMetricValue {
+  margin: 0;
+  color: var(--workspace-sidebar-item-foreground);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.documentNavigationNote {
+  margin: 0;
+  padding: 0 12px 8px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+/* #360 Phase 2 — compact `label | count` tables (Glossary / Tag counts). */
+.documentNavigationCountsTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.documentNavigationCountsTable th {
+  padding: 2px 12px 4px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-align: start;
+}
+
+.documentNavigationCountsTable td {
+  padding: 2px 12px;
+  color: var(--workspace-sidebar-item-foreground);
+}
+
+.documentNavigationCountsLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.documentNavigationCountsLabelText {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* #360 Phase 2 polish: a colored tag chip in the Tag counts table. The chip
+   keeps its own ellipsis (see .glossaryTagChip) and never widens the fixed
+   table layout. */
+.documentNavigationCountsLabel .glossaryTagChip {
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.documentNavigationCountsCount {
+  width: 3.5rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* #360 Phase 2 polish: narration / dialogue rows — label left, value right,
+   figures aligned for quick comparison. */
+.documentNavigationDialogueRatioRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.documentNavigationDialogueRatioLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.documentNavigationDialogueRatioValue {
+  margin: 0;
+  color: var(--workspace-sidebar-item-foreground);
+  font-size: 13px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* #360 UI polish: swatch keying each row to a pie slice. Colour tokens are
+   shared with the pie itself (below) so light / dark both stay legible. */
+.documentNavigationDialogueSwatch {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  align-self: center;
+}
+
+.documentNavigationDialogueSwatch[data-series="narration"] {
+  background: var(--workspace-sidebar-muted-foreground);
+}
+
+.documentNavigationDialogueSwatch[data-series="dialogue"] {
+  background: var(--workspace-sidebar-focus-ring);
+}
+
+/* #360 UI polish: narration / dialogue donut chart (replaces the old ratio
+   bar). SVG, `r = 100 / 2π` so a percent maps 1:1 to arc length. */
+.documentNavigationDialoguePieWrap {
+  display: flex;
+  justify-content: center;
+  padding: 4px 12px 10px;
+}
+
+.documentNavigationDialoguePie {
+  width: 84px;
+  height: 84px;
+}
+
+.documentNavigationDialoguePie circle {
+  stroke-width: 4;
+}
+
+.documentNavigationDialoguePieTrack {
+  stroke: var(--workspace-sidebar-border);
+}
+
+.documentNavigationDialoguePieDialogue {
+  stroke: var(--workspace-sidebar-focus-ring);
+}
+
+.documentNavigationDialoguePieNarration {
+  stroke: var(--workspace-sidebar-muted-foreground);
+  stroke-linecap: butt;
+}
+
 /* #375 Text Map / 文書マップ panel (left pane). */
 .textMapPanel {
   min-height: 0;
@@ -3289,6 +3473,13 @@ label.settingsItemHeader {
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: bottom;
+}
+
+/* #360: a tighter chip for the Document Navigation tag-counts table. */
+.glossaryTagChip[data-compact] {
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 /*

@@ -18,6 +18,11 @@ import {
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
 import { TextMapPanel } from "./TextMapPanel";
+import {
+  DocumentNavigationPanel,
+  type DocumentNavigationFileInfo
+} from "./DocumentNavigationPanel";
+import type { DocumentNavigationAnalysis } from "./documentNavigationAnalysis";
 import { WorkbenchFilesSidebar } from "./WorkbenchFilesSidebar";
 import type {
   MarkdownOutlineItem,
@@ -111,6 +116,20 @@ interface WorkspaceSidebarProps {
   activeOutlineDocumentKey?: string | null;
   /** #352: jump the editor to a clicked outline heading. */
   onOutlineHeadingClick?: (item: MarkdownOutlineItem) => void;
+  /** #360: whether any document tab is active (Markdown or not). Drives the
+   *  Document Navigation pane's "no active document" empty state. */
+  hasActiveDocument?: boolean;
+  /** #360: the active Markdown document's character count — the SAME value
+   *  the status bar shows (#259). `null` while the shared debounced count
+   *  has not resolved for the current document. */
+  documentNavigationCharacterCount?: number | null;
+  /** #360 Phase 2: the active document's glossary / tag / dialogue analysis,
+   *  or `null` while the debounced analysis has not resolved. */
+  documentNavigationAnalysis?: DocumentNavigationAnalysis | null;
+  /** #360: the active Markdown document's backing-file last-modified time /
+   *  unsaved / unavailable state, or `null` when there is no active
+   *  Markdown file. */
+  documentNavigationFileInfo?: DocumentNavigationFileInfo | null;
 }
 
 export function WorkspaceSidebar({
@@ -149,7 +168,11 @@ export function WorkspaceSidebar({
   markdownOutline = null,
   activeEditorIsMarkdown = false,
   activeOutlineDocumentKey = null,
-  onOutlineHeadingClick = () => undefined
+  onOutlineHeadingClick = () => undefined,
+  hasActiveDocument = false,
+  documentNavigationCharacterCount = null,
+  documentNavigationAnalysis = null,
+  documentNavigationFileInfo = null
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -212,6 +235,17 @@ export function WorkspaceSidebar({
           editorVisibleRange={textMapEditorVisibleRange}
           documentMapSettings={textMapDocumentMapSettings}
           onNavigateToLine={onTextMapNavigateToLine}
+        />
+      );
+    case "documentNavigation":
+      return (
+        <DocumentNavigationPanel
+          translate={translate}
+          hasActiveDocument={hasActiveDocument}
+          activeEditorIsMarkdown={activeEditorIsMarkdown}
+          characterCount={documentNavigationCharacterCount}
+          analysis={documentNavigationAnalysis}
+          fileInfo={documentNavigationFileInfo}
         />
       );
     case "glossary":

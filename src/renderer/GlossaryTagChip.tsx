@@ -5,6 +5,12 @@ interface GlossaryTagChipProps {
   tag: Pick<GlossaryTag, "label" | "backgroundRgb" | "foregroundRgb">;
   /** Render dimmed (e.g. an available-but-not-attached tag in the picker). */
   muted?: boolean;
+  /**
+   * #360: a tighter chip for dense left-pane tables (Document Navigation tag
+   * counts) — smaller padding / font, otherwise identical. Colours and the
+   * `title` tooltip are unchanged.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -13,7 +19,8 @@ interface GlossaryTagChipProps {
  */
 export function GlossaryTagChip({
   tag,
-  muted = false
+  muted = false,
+  compact = false
 }: GlossaryTagChipProps): JSX.Element {
   const style: CSSProperties = {
     backgroundColor: tag.backgroundRgb,
@@ -26,6 +33,7 @@ export function GlossaryTagChip({
       className="glossaryTagChip"
       style={style}
       data-muted={muted}
+      data-compact={compact || undefined}
       title={tag.label}
     >
       {tag.label}

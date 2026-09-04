@@ -318,7 +318,7 @@ describe("CommandPalette", () => {
       ],
       [
         "command.workspace.glossary.focus.description",
-        "用語集を表示します。",
+        "語彙集を表示します。",
         "Show the Glossary panel."
       ],
       [

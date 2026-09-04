@@ -5,6 +5,7 @@ import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?r
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
 import settingsIcon from "../../assets/icons/feather/activity-bar/settings.svg?raw";
 import textMapIcon from "../../assets/icons/ionicons/activity-bar/map-outline.svg?raw";
+import documentNavigationIcon from "../../assets/icons/ionicons/activity-bar/bar-chart-outline.svg?raw";
 import bugIcon from "../../assets/icons/ionicons/activity-bar/bug-outline.svg?raw";
 
 interface ActivityBarProps {
@@ -54,6 +55,7 @@ export function ActivityBar({
   const searchLabel = translate("activity.searchReplace");
   const glossaryLabel = translate("activity.glossary");
   const textMapLabel = translate("activity.textMap");
+  const documentNavigationLabel = translate("activity.documentNavigation");
   const applicationSettingsLabel = translate("activity.applicationSettings");
   const debugLogLabel = translate("activity.debugLog");
 
@@ -115,6 +117,23 @@ export function ActivityBar({
           onClick={() => onSelectMode("textMap")}
         >
           <ActivityBarIcon label={textMapLabel} svg={textMapIcon} />
+        </button>
+        <button
+          type="button"
+          className={
+            activeMode === "documentNavigation"
+              ? "activityBarItem isActive"
+              : "activityBarItem"
+          }
+          aria-label={documentNavigationLabel}
+          aria-pressed={activeMode === "documentNavigation"}
+          title={documentNavigationLabel}
+          onClick={() => onSelectMode("documentNavigation")}
+        >
+          <ActivityBarIcon
+            label={documentNavigationLabel}
+            svg={documentNavigationIcon}
+          />
         </button>
       </div>
 

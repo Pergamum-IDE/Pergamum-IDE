@@ -169,12 +169,14 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
 });
 
 describe("status bar character count runtime wiring (#259)", () => {
-  it("App.tsx computes the status-bar character count only behind the status bar and character-count visibility settings", () => {
+  it("App.tsx shows the status-bar character count only behind the status bar and character-count visibility settings", () => {
     const appSource = readFileSync("src/renderer/App.tsx", "utf8");
 
     expect(appSource).toContain("countMarkdownDocumentCharacters");
     expect(appSource).toContain("CHARACTER_COUNT_UPDATE_DEBOUNCE_MS");
-    expect(appSource).toContain("shouldComputeStatusBarCharacterCount");
+    // The Status Bar's own visibility gate (#259) — still required for the
+    // Status Bar to render the count.
+    expect(appSource).toContain("statusBarWantsCharacterCount");
     expect(appSource).toContain(
       "effectiveSettings.workbench.statusBar.visible"
     );
@@ -183,6 +185,24 @@ describe("status bar character count runtime wiring (#259)", () => {
     );
     expect(appSource).toContain("currentEditor?.kind === \"markdown\"");
     expect(appSource).toContain("!isEditorAreaSpecialTabActive");
+  });
+
+  it("App.tsx computes ONE Markdown character count shared by the Status Bar and Document Navigation (#360)", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+
+    // A single debounced computation, fired when either surface needs it.
+    expect(appSource).toContain("shouldComputeMarkdownCharacterCount");
+    expect(appSource).toContain(
+      "statusBarWantsCharacterCount || documentNavigationWantsCharacterCount"
+    );
+    // Exactly one call site for the count helper.
+    expect(
+      appSource.match(/countMarkdownDocumentCharacters\(/g) ?? []
+    ).toHaveLength(1);
+    // The Document Navigation pane is handed that same resolved value.
+    expect(appSource).toContain(
+      "documentNavigationCharacterCount={"
+    );
   });
 
   it("keeps the Markdown Preview renderer parser configuration unchanged", () => {
