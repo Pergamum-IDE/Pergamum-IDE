@@ -1,8 +1,8 @@
 /**
- * #360 Phase 1 — pure helper for the Document Navigation (文書ナビ) left
+ * #360 Phase 1 — pure helper for the Document Metrics (文書統計) left
  * pane's 原稿用紙 estimate.
  *
- * The character count itself is NOT computed here: the Document Navigation
+ * The character count itself is NOT computed here: the Document Metrics
  * pane reuses the status-bar character-count value (#259 —
  * `countMarkdownDocumentCharacters` + `editor.characterCount.exclude`
  * settings) so the two surfaces always agree. This module only turns that

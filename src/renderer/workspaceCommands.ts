@@ -12,7 +12,7 @@ export const workspaceCommandIds = {
   focusSearch: defineCommandId("workspace.search.focus"),
   focusGlossary: defineCommandId("workspace.glossary.focus"),
   focusTextMap: defineCommandId("workspace.textMap.focus"),
-  focusDocumentNavigation: defineCommandId("workspace.documentNavigation.focus"),
+  focusDocumentMetrics: defineCommandId("workspace.documentMetrics.focus"),
   openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
 } as const;
 
@@ -21,7 +21,7 @@ export type WorkspaceFocusCommandId =
   | typeof workspaceCommandIds.focusSearch
   | typeof workspaceCommandIds.focusGlossary
   | typeof workspaceCommandIds.focusTextMap
-  | typeof workspaceCommandIds.focusDocumentNavigation;
+  | typeof workspaceCommandIds.focusDocumentMetrics;
 
 export interface WorkspaceCommandController {
   focusSidebarMode(mode: SidebarMode): void;
@@ -37,8 +37,8 @@ export interface WorkspaceCommandTitles {
   focusGlossaryDescription: string;
   focusTextMap: string;
   focusTextMapDescription: string;
-  focusDocumentNavigation: string;
-  focusDocumentNavigationDescription: string;
+  focusDocumentMetrics: string;
+  focusDocumentMetricsDescription: string;
   openApplicationSettings: string;
   openApplicationSettingsDescription: string;
 }
@@ -63,11 +63,11 @@ export function createWorkspaceCommandTitles(
     focusTextMapDescription: translate(
       "command.workspace.textMap.focus.description"
     ),
-    focusDocumentNavigation: translate(
-      "command.workspace.documentNavigation.focus"
+    focusDocumentMetrics: translate(
+      "command.workspace.documentMetrics.focus"
     ),
-    focusDocumentNavigationDescription: translate(
-      "command.workspace.documentNavigation.focus.description"
+    focusDocumentMetricsDescription: translate(
+      "command.workspace.documentMetrics.focus.description"
     ),
     openApplicationSettings: translate(
       "command.workspace.applicationSettings.open"
@@ -90,8 +90,8 @@ export function workspaceFocusCommandIdForMode(
       return workspaceCommandIds.focusGlossary;
     case "textMap":
       return workspaceCommandIds.focusTextMap;
-    case "documentNavigation":
-      return workspaceCommandIds.focusDocumentNavigation;
+    case "documentMetrics":
+      return workspaceCommandIds.focusDocumentMetrics;
   }
 }
 
@@ -133,11 +133,11 @@ export function createWorkspaceCommands(
       }
     },
     {
-      id: workspaceCommandIds.focusDocumentNavigation,
-      title: titles.focusDocumentNavigation,
-      description: titles.focusDocumentNavigationDescription,
+      id: workspaceCommandIds.focusDocumentMetrics,
+      title: titles.focusDocumentMetrics,
+      description: titles.focusDocumentMetricsDescription,
       execute: () => {
-        controller.focusSidebarMode("documentNavigation");
+        controller.focusSidebarMode("documentMetrics");
       }
     },
     {

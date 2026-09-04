@@ -5,7 +5,7 @@ import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?r
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
 import settingsIcon from "../../assets/icons/feather/activity-bar/settings.svg?raw";
 import textMapIcon from "../../assets/icons/ionicons/activity-bar/map-outline.svg?raw";
-import documentNavigationIcon from "../../assets/icons/ionicons/activity-bar/bar-chart-outline.svg?raw";
+import documentMetricsIcon from "../../assets/icons/ionicons/activity-bar/bar-chart-outline.svg?raw";
 import bugIcon from "../../assets/icons/ionicons/activity-bar/bug-outline.svg?raw";
 
 interface ActivityBarProps {
@@ -55,7 +55,7 @@ export function ActivityBar({
   const searchLabel = translate("activity.searchReplace");
   const glossaryLabel = translate("activity.glossary");
   const textMapLabel = translate("activity.textMap");
-  const documentNavigationLabel = translate("activity.documentNavigation");
+  const documentMetricsLabel = translate("activity.documentMetrics");
   const applicationSettingsLabel = translate("activity.applicationSettings");
   const debugLogLabel = translate("activity.debugLog");
 
@@ -121,18 +121,18 @@ export function ActivityBar({
         <button
           type="button"
           className={
-            activeMode === "documentNavigation"
+            activeMode === "documentMetrics"
               ? "activityBarItem isActive"
               : "activityBarItem"
           }
-          aria-label={documentNavigationLabel}
-          aria-pressed={activeMode === "documentNavigation"}
-          title={documentNavigationLabel}
-          onClick={() => onSelectMode("documentNavigation")}
+          aria-label={documentMetricsLabel}
+          aria-pressed={activeMode === "documentMetrics"}
+          title={documentMetricsLabel}
+          onClick={() => onSelectMode("documentMetrics")}
         >
           <ActivityBarIcon
-            label={documentNavigationLabel}
-            svg={documentNavigationIcon}
+            label={documentMetricsLabel}
+            svg={documentMetricsIcon}
           />
         </button>
       </div>

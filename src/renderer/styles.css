@@ -1780,28 +1780,28 @@ label.settingsItemHeader {
   border-top: 1px solid var(--workspace-sidebar-divider);
 }
 
-/* #360 Document Navigation / 文書ナビ panel (left pane). */
-.documentNavigationPanel {
+/* #360 Document Metrics / 文書統計 panel (left pane). */
+.documentMetricsPanel {
   min-height: 0;
 }
 
-/* The Document Navigation sections are read top-to-bottom in the scrolling
+/* The Document Metrics sections are read top-to-bottom in the scrolling
    pane, so each collapsible body hugs its content instead of the shared
    200px fixed height (that default exists for the resize-handled Outline
    pane). */
-.documentNavigationPanel .collapsibleSidebarSectionBody {
+.documentMetricsPanel .collapsibleSidebarSectionBody {
   block-size: auto;
   overflow: visible;
 }
 
-.documentNavigationSections {
+.documentMetricsSections {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.documentNavigationMetricList {
+.documentMetricsMetricList {
   margin: 0;
   padding: 4px 12px 10px;
   display: flex;
@@ -1809,13 +1809,13 @@ label.settingsItemHeader {
   gap: 8px;
 }
 
-.documentNavigationMetric {
+.documentMetricsMetric {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.documentNavigationMetricLabel {
+.documentMetricsMetricLabel {
   margin: 0;
   color: var(--workspace-sidebar-muted-foreground);
   font-size: 11px;
@@ -1824,14 +1824,14 @@ label.settingsItemHeader {
   letter-spacing: 0.02em;
 }
 
-.documentNavigationMetricValue {
+.documentMetricsMetricValue {
   margin: 0;
   color: var(--workspace-sidebar-item-foreground);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 
-.documentNavigationNote {
+.documentMetricsNote {
   margin: 0;
   padding: 0 12px 8px;
   color: var(--workspace-sidebar-muted-foreground);
@@ -1839,14 +1839,14 @@ label.settingsItemHeader {
 }
 
 /* #360 Phase 2 — compact `label | count` tables (Glossary / Tag counts). */
-.documentNavigationCountsTable {
+.documentMetricsCountsTable {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 12px;
 }
 
-.documentNavigationCountsTable th {
+.documentMetricsCountsTable th {
   padding: 2px 12px 4px;
   color: var(--workspace-sidebar-muted-foreground);
   font-size: 11px;
@@ -1856,18 +1856,18 @@ label.settingsItemHeader {
   text-align: start;
 }
 
-.documentNavigationCountsTable td {
+.documentMetricsCountsTable td {
   padding: 2px 12px;
   color: var(--workspace-sidebar-item-foreground);
 }
 
-.documentNavigationCountsLabel {
+.documentMetricsCountsLabel {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.documentNavigationCountsLabelText {
+.documentMetricsCountsLabelText {
   display: block;
   overflow: hidden;
   white-space: nowrap;
@@ -1877,12 +1877,12 @@ label.settingsItemHeader {
 /* #360 Phase 2 polish: a colored tag chip in the Tag counts table. The chip
    keeps its own ellipsis (see .glossaryTagChip) and never widens the fixed
    table layout. */
-.documentNavigationCountsLabel .glossaryTagChip {
+.documentMetricsCountsLabel .glossaryTagChip {
   max-width: 100%;
   vertical-align: middle;
 }
 
-.documentNavigationCountsCount {
+.documentMetricsCountsCount {
   width: 3.5rem;
   text-align: end;
   font-variant-numeric: tabular-nums;
@@ -1890,14 +1890,14 @@ label.settingsItemHeader {
 
 /* #360 Phase 2 polish: narration / dialogue rows — label left, value right,
    figures aligned for quick comparison. */
-.documentNavigationDialogueRatioRow {
+.documentMetricsDialogueRatioRow {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: baseline;
 }
 
-.documentNavigationDialogueRatioLabel {
+.documentMetricsDialogueRatioLabel {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -1907,7 +1907,7 @@ label.settingsItemHeader {
   font-size: 12px;
 }
 
-.documentNavigationDialogueRatioValue {
+.documentMetricsDialogueRatioValue {
   margin: 0;
   color: var(--workspace-sidebar-item-foreground);
   font-size: 13px;
@@ -1918,7 +1918,7 @@ label.settingsItemHeader {
 
 /* #360 UI polish: swatch keying each row to a pie slice. Colour tokens are
    shared with the pie itself (below) so light / dark both stay legible. */
-.documentNavigationDialogueSwatch {
+.documentMetricsDialogueSwatch {
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
@@ -1926,40 +1926,40 @@ label.settingsItemHeader {
   align-self: center;
 }
 
-.documentNavigationDialogueSwatch[data-series="narration"] {
+.documentMetricsDialogueSwatch[data-series="narration"] {
   background: var(--workspace-sidebar-muted-foreground);
 }
 
-.documentNavigationDialogueSwatch[data-series="dialogue"] {
+.documentMetricsDialogueSwatch[data-series="dialogue"] {
   background: var(--workspace-sidebar-focus-ring);
 }
 
 /* #360 UI polish: narration / dialogue donut chart (replaces the old ratio
    bar). SVG, `r = 100 / 2π` so a percent maps 1:1 to arc length. */
-.documentNavigationDialoguePieWrap {
+.documentMetricsDialoguePieWrap {
   display: flex;
   justify-content: center;
   padding: 4px 12px 10px;
 }
 
-.documentNavigationDialoguePie {
+.documentMetricsDialoguePie {
   width: 84px;
   height: 84px;
 }
 
-.documentNavigationDialoguePie circle {
+.documentMetricsDialoguePie circle {
   stroke-width: 4;
 }
 
-.documentNavigationDialoguePieTrack {
+.documentMetricsDialoguePieTrack {
   stroke: var(--workspace-sidebar-border);
 }
 
-.documentNavigationDialoguePieDialogue {
+.documentMetricsDialoguePieDialogue {
   stroke: var(--workspace-sidebar-focus-ring);
 }
 
-.documentNavigationDialoguePieNarration {
+.documentMetricsDialoguePieNarration {
   stroke: var(--workspace-sidebar-muted-foreground);
   stroke-linecap: butt;
 }
@@ -3475,7 +3475,7 @@ label.settingsItemHeader {
   vertical-align: bottom;
 }
 
-/* #360: a tighter chip for the Document Navigation tag-counts table. */
+/* #360: a tighter chip for the Document Metrics tag-counts table. */
 .glossaryTagChip[data-compact] {
   padding: 0 8px;
   font-size: 11px;

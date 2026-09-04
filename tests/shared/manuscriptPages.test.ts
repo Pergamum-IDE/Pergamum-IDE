@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MANUSCRIPT_PAGE_CHARACTER_COUNT,
   estimateManuscriptPages
-} from "../../src/shared/documentNavigationMetrics";
+} from "../../src/shared/manuscriptPages";
 
 describe("estimateManuscriptPages (#360)", () => {
   it("uses 400 characters per manuscript page", () => {

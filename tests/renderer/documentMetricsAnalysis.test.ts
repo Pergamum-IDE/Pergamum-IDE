@@ -6,11 +6,11 @@ import type {
 } from "../../src/shared/glossary";
 import type { DocumentMapDialogueDelimiterPair } from "../../src/shared/documentMapSettings";
 import {
-  analyzeDocumentNavigationDialogueRatio,
-  analyzeDocumentNavigationDocument,
-  collectDocumentNavigationGlossaryCounts,
-  collectDocumentNavigationTagCounts
-} from "../../src/renderer/documentNavigationAnalysis";
+  analyzeDocumentMetricsDialogueRatio,
+  analyzeDocumentMetricsDocument,
+  collectDocumentMetricsGlossaryCounts,
+  collectDocumentMetricsTagCounts
+} from "../../src/renderer/documentMetricsAnalysis";
 
 let seq = 0;
 
@@ -73,24 +73,24 @@ function tagRow(tagId: string, label: string, count: number) {
   };
 }
 
-describe("collectDocumentNavigationGlossaryCounts (#360 Phase 2)", () => {
+describe("collectDocumentMetricsGlossaryCounts (#360 Phase 2)", () => {
   it("returns no rows when there are no hits", () => {
     const entries = [entry("e1", ["山田太郎", "山田", "太郎"])];
     expect(
-      collectDocumentNavigationGlossaryCounts("誰もいない部屋。", entries)
+      collectDocumentMetricsGlossaryCounts("誰もいない部屋。", entries)
     ).toEqual([]);
   });
 
   it("returns no rows for empty text or no entries", () => {
-    expect(collectDocumentNavigationGlossaryCounts("", [])).toEqual([]);
+    expect(collectDocumentMetricsGlossaryCounts("", [])).toEqual([]);
     expect(
-      collectDocumentNavigationGlossaryCounts("山田", [])
+      collectDocumentMetricsGlossaryCounts("山田", [])
     ).toEqual([]);
   });
 
   it("counts a single atom hit against its Entry", () => {
     const entries = [entry("e1", ["山田太郎"])];
-    const rows = collectDocumentNavigationGlossaryCounts(
+    const rows = collectDocumentMetricsGlossaryCounts(
       "山田太郎が来た。",
       entries
     );
@@ -101,7 +101,7 @@ describe("collectDocumentNavigationGlossaryCounts (#360 Phase 2)", () => {
     // "山田太郎" longest-matches once; "山田" and "太郎" match once each
     // elsewhere — all three Atoms belong to e1, so the Entry row is 3.
     const entries = [entry("e1", ["山田太郎", "山田", "太郎"])];
-    const rows = collectDocumentNavigationGlossaryCounts(
+    const rows = collectDocumentMetricsGlossaryCounts(
       "山田太郎。山田さん。太郎くん。",
       entries
     );
@@ -110,7 +110,7 @@ describe("collectDocumentNavigationGlossaryCounts (#360 Phase 2)", () => {
 
   it("uses the representative (sortOrder 0) atom as the label", () => {
     const entries = [entry("e1", ["山田太郎", "山田"])];
-    const rows = collectDocumentNavigationGlossaryCounts("山田さん。", entries);
+    const rows = collectDocumentMetricsGlossaryCounts("山田さん。", entries);
     expect(rows[0]?.label).toBe("山田太郎");
     expect(rows[0]?.count).toBe(1);
   });
@@ -121,7 +121,7 @@ describe("collectDocumentNavigationGlossaryCounts (#360 Phase 2)", () => {
       entry("e2", ["ミカン"]),
       entry("e3", ["ブドウ"])
     ];
-    const rows = collectDocumentNavigationGlossaryCounts(
+    const rows = collectDocumentMetricsGlossaryCounts(
       "リンゴ、リンゴ、リンゴ。ミカン。",
       entries
     );
@@ -134,13 +134,13 @@ describe("collectDocumentNavigationGlossaryCounts (#360 Phase 2)", () => {
   });
 });
 
-describe("collectDocumentNavigationTagCounts (#360 Phase 2)", () => {
+describe("collectDocumentMetricsTagCounts (#360 Phase 2)", () => {
   it("credits only the Entry's FIRST assigned tag", () => {
     const people = tag("t-people", "人物", 0);
     const place = tag("t-place", "地名", 1);
     // e1's assignment order is [people, place]; a hit adds to 人物 only.
     const entries = [entry("e1", ["山田太郎"], [people, place])];
-    const rows = collectDocumentNavigationTagCounts(
+    const rows = collectDocumentMetricsTagCounts(
       "山田太郎。山田太郎。",
       entries
     );
@@ -153,7 +153,7 @@ describe("collectDocumentNavigationTagCounts (#360 Phase 2)", () => {
       entry("e1", ["山田太郎"], [people]),
       entry("e2", ["謎の男"]) // no tags
     ];
-    const rows = collectDocumentNavigationTagCounts(
+    const rows = collectDocumentMetricsTagCounts(
       "山田太郎と謎の男。",
       entries
     );
@@ -168,7 +168,7 @@ describe("collectDocumentNavigationTagCounts (#360 Phase 2)", () => {
       entry("e2", ["花子"], [people]),
       entry("e3", ["魔剣"], [item])
     ];
-    const rows = collectDocumentNavigationTagCounts(
+    const rows = collectDocumentMetricsTagCounts(
       "山田、山田、花子。魔剣。",
       entries
     );
@@ -182,14 +182,14 @@ describe("collectDocumentNavigationTagCounts (#360 Phase 2)", () => {
     const people = tag("t-people", "人物");
     const entries = [entry("e1", ["山田太郎"], [people])];
     expect(
-      collectDocumentNavigationTagCounts("空っぽの文章。", entries)
+      collectDocumentMetricsTagCounts("空っぽの文章。", entries)
     ).toEqual([]);
   });
 });
 
-describe("analyzeDocumentNavigationDialogueRatio (#360 Phase 2)", () => {
+describe("analyzeDocumentMetricsDialogueRatio (#360 Phase 2)", () => {
   it("returns an all-zero split for empty text", () => {
-    expect(analyzeDocumentNavigationDialogueRatio("", defaultPairs)).toEqual({
+    expect(analyzeDocumentMetricsDialogueRatio("", defaultPairs)).toEqual({
       narrationCharacters: 0,
       dialogueCharacters: 0,
       totalCharacters: 0,
@@ -200,7 +200,7 @@ describe("analyzeDocumentNavigationDialogueRatio (#360 Phase 2)", () => {
 
   it("counts delimiter-pair spans (brackets included) as dialogue, the rest as narration", () => {
     // 「あ」 = 3 dialogue chars; "。" = 1 narration char.
-    const result = analyzeDocumentNavigationDialogueRatio("「あ」。", defaultPairs);
+    const result = analyzeDocumentMetricsDialogueRatio("「あ」。", defaultPairs);
     expect(result.dialogueCharacters).toBe(3);
     expect(result.narrationCharacters).toBe(1);
     expect(result.totalCharacters).toBe(4);
@@ -209,7 +209,7 @@ describe("analyzeDocumentNavigationDialogueRatio (#360 Phase 2)", () => {
 
   it("keeps total = narration + dialogue and percents summing to 100", () => {
     const text = "地の文がしばらく続いて「短い会話」また地の文。";
-    const result = analyzeDocumentNavigationDialogueRatio(text, defaultPairs);
+    const result = analyzeDocumentMetricsDialogueRatio(text, defaultPairs);
     expect(result.narrationCharacters + result.dialogueCharacters).toBe(
       result.totalCharacters
     );
@@ -220,7 +220,7 @@ describe("analyzeDocumentNavigationDialogueRatio (#360 Phase 2)", () => {
 
   it("treats an unclosed opening delimiter as running to end-of-text", () => {
     const text = "始まり「閉じ忘れた会話";
-    const result = analyzeDocumentNavigationDialogueRatio(text, defaultPairs);
+    const result = analyzeDocumentMetricsDialogueRatio(text, defaultPairs);
     // "始まり" (3) narration; "「閉じ忘れた会話" (8) dialogue.
     expect(result.narrationCharacters).toBe(3);
     expect(result.dialogueCharacters).toBe(8);
@@ -233,7 +233,7 @@ describe("analyzeDocumentNavigationDialogueRatio (#360 Phase 2)", () => {
       { open: "『", close: "』", color: "#707070" }
     ];
     const text = "地『二重』の文「会話」おわり";
-    const result = analyzeDocumentNavigationDialogueRatio(text, pairs);
+    const result = analyzeDocumentMetricsDialogueRatio(text, pairs);
     expect(result.narrationCharacters + result.dialogueCharacters).toBe(
       result.totalCharacters
     );
@@ -243,19 +243,19 @@ describe("analyzeDocumentNavigationDialogueRatio (#360 Phase 2)", () => {
   });
 
   it("does not throw when there are no delimiter pairs configured", () => {
-    const result = analyzeDocumentNavigationDialogueRatio("「あ」。", []);
+    const result = analyzeDocumentMetricsDialogueRatio("「あ」。", []);
     expect(result.dialogueCharacters).toBe(0);
     expect(result.narrationCharacters).toBe(result.totalCharacters);
   });
 });
 
-describe("analyzeDocumentNavigationDocument (#360 Phase 2)", () => {
+describe("analyzeDocumentMetricsDocument (#360 Phase 2)", () => {
   it("computes glossary counts, tag counts and the dialogue split in one call", () => {
     const people = tag("t-people", "人物");
     const entries = [entry("e1", ["山田太郎", "山田"], [people])];
     const text = "山田太郎は言った。「やあ、山田です」";
 
-    const analysis = analyzeDocumentNavigationDocument(
+    const analysis = analyzeDocumentMetricsDocument(
       text,
       entries,
       defaultPairs
@@ -273,7 +273,7 @@ describe("analyzeDocumentNavigationDocument (#360 Phase 2)", () => {
   });
 
   it("returns empty sections (never throws) for an empty document", () => {
-    const analysis = analyzeDocumentNavigationDocument("", [], defaultPairs);
+    const analysis = analyzeDocumentMetricsDocument("", [], defaultPairs);
     expect(analysis.glossaryCounts).toEqual([]);
     expect(analysis.tagCounts).toEqual([]);
     expect(analysis.dialogueRatio.totalCharacters).toBe(0);
