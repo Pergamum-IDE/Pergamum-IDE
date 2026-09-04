@@ -95,6 +95,20 @@ describe("command palette wiring", () => {
     );
   });
 
+  it("passes the project's Glossary entries for `@` glossary-jump candidates, executed through the existing onExecuteCommand path (#142)", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const componentIndex = source.indexOf("<CommandPalette");
+    const closeIndex = source.indexOf("/>", componentIndex);
+    const propsBlock = source.slice(componentIndex, closeIndex);
+
+    // Same array already handed to the Search pane's atom picker (#384) - no
+    // separate Glossary fetch/prop is introduced for the Palette.
+    expect(propsBlock).toContain("glossaryEntries={glossaryEntries}");
+    // No dedicated execute callback: glossary jump reuses onExecuteCommand
+    // with the existing glossary.entry.open / glossary.entry.manage commands.
+    expect(propsBlock).not.toContain("onExecuteGlossaryJumpCandidate");
+  });
+
   it("reuses the existing IME composition guard instead of a new tracking mechanism", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const componentIndex = source.indexOf("<CommandPalette");

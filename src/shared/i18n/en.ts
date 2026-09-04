@@ -109,6 +109,10 @@ export const enTranslations = {
   "commandPalette.footer.runHint": "Enter",
   "commandPalette.footer.searchHint": "Search commands",
   "commandPalette.footer.selectHint": "↑↓",
+  "commandPalette.glossaryJump.entryLabel": "Glossary entry: {entryLabel}",
+  "commandPalette.glossaryJump.footer": "Search glossary forms by prefix after @",
+  "commandPalette.glossaryJump.noResults": "No matching glossary forms",
+  "commandPalette.glossaryJump.openManager": "Open Glossary Manager",
   "commandPalette.headingJump.noOpenHeadings": "No headings in open Markdown documents",
   "commandPalette.headingJump.noResults": "No matching headings",
   "commandPalette.inputPlaceholder": "Search commands",
@@ -128,7 +132,6 @@ export const enTranslations = {
   "commandPalette.projectSearch.footer":
     "Search the project for the text after %",
   "commandPalette.projectSearch.open": "Open project search",
-  "commandPalette.reserved.glossary": "Glossary search is not available yet",
   "commandPalette.searchLabel": "Search commands",
   "commandPalette.title": "Command Palette",
   "confirm.discardOpenDocuments": "There are unsaved documents. Discard them and open a project?",

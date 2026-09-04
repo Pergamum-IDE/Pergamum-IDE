@@ -571,30 +571,14 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("en", "commandPalette.projectFileQuickOpen.noResults")).toBe(
       "Type a valid file name"
     );
-
-    // The still-reserved glossary mode is untouched.
-    expect(t("ja", "commandPalette.reserved.glossary").length).toBeGreaterThan(
-      0
-    );
-    expect(t("en", "commandPalette.reserved.glossary").length).toBeGreaterThan(
-      0
-    );
   });
 
-  it("#141: drops the unused reserved heading-mode key, keeps reserved glossary, and defines heading-jump empty copy", () => {
+  it("#141: drops the unused reserved heading-mode key and defines heading-jump empty copy", () => {
     expect(Object.keys(jaTranslations)).not.toContain(
       "commandPalette.reserved.heading"
     );
     expect(Object.keys(enTranslations)).not.toContain(
       "commandPalette.reserved.heading"
-    );
-
-    // `@` glossary stays reserved.
-    expect(Object.keys(jaTranslations)).toContain(
-      "commandPalette.reserved.glossary"
-    );
-    expect(Object.keys(enTranslations)).toContain(
-      "commandPalette.reserved.glossary"
     );
 
     expect(t("ja", "commandPalette.headingJump.noResults")).toBe(
@@ -609,6 +593,44 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("en", "commandPalette.headingJump.noOpenHeadings")).toBe(
       "No headings in open Markdown documents"
     );
+  });
+
+  it("#142: drops the unused reserved glossary-mode key and defines glossary-jump copy", () => {
+    expect(Object.keys(jaTranslations)).not.toContain(
+      "commandPalette.reserved.glossary"
+    );
+    expect(Object.keys(enTranslations)).not.toContain(
+      "commandPalette.reserved.glossary"
+    );
+
+    expect(t("ja", "commandPalette.glossaryJump.footer")).toBe(
+      "＠以降の語句で語彙の表記を前方一致検索します"
+    );
+    expect(t("en", "commandPalette.glossaryJump.footer")).toBe(
+      "Search glossary forms by prefix after @"
+    );
+    expect(t("ja", "commandPalette.glossaryJump.noResults")).toBe(
+      "一致する語彙の表記がありません"
+    );
+    expect(t("en", "commandPalette.glossaryJump.noResults")).toBe(
+      "No matching glossary forms"
+    );
+    expect(t("ja", "commandPalette.glossaryJump.openManager")).toBe(
+      "語彙管理を開く"
+    );
+    expect(t("en", "commandPalette.glossaryJump.openManager")).toBe(
+      "Open Glossary Manager"
+    );
+    expect(
+      t("ja", "commandPalette.glossaryJump.entryLabel", {
+        entryLabel: "オーダ"
+      })
+    ).toBe("親語彙: オーダ");
+    expect(
+      t("en", "commandPalette.glossaryJump.entryLabel", {
+        entryLabel: "Order"
+      })
+    ).toBe("Glossary entry: Order");
   });
 
   it("defines the status-bar character count message for ja and en (#259)", () => {

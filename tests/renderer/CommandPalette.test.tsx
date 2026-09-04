@@ -25,6 +25,7 @@ import {
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import type { LineJumpEditorSnapshot } from "../../src/renderer/lineJumpQuery";
 import type { CommandPaletteFooterDetailSettings } from "../../src/shared/settings";
+import type { GlossaryAtom, GlossaryEntry } from "../../src/shared/glossary";
 
 const translate: Translate = (key) => key;
 const realTranslateEn: Translate = (key, values) => t("en", key, values);
@@ -132,6 +133,7 @@ function renderPalette(overrides: {
   recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
   footerDetailSettings?: CommandPaletteFooterDetailSettings;
+  glossaryEntries?: readonly GlossaryEntry[];
 } = {}): string {
   return renderToStaticMarkup(
     React.createElement(CommandPalette, {
@@ -149,9 +151,38 @@ function renderPalette(overrides: {
         overrides.recentProjectFileQuickOpenDocuments,
       onClose: noop,
       lineJumpEditorSnapshot: overrides.lineJumpEditorSnapshot,
-      footerDetailSettings: overrides.footerDetailSettings
+      footerDetailSettings: overrides.footerDetailSettings,
+      glossaryEntries: overrides.glossaryEntries
     })
   );
+}
+
+let glossaryAtomSeq = 0;
+
+function glossaryAtom(overrides: Partial<GlossaryAtom> = {}): GlossaryAtom {
+  glossaryAtomSeq += 1;
+  return {
+    id: `atom-${glossaryAtomSeq}`,
+    entryId: "entry-1",
+    sortOrder: 0,
+    value: "オーダー",
+    matchFlags: 0,
+    createdAt: "",
+    updatedAt: "",
+    ...overrides
+  };
+}
+
+function glossaryEntry(overrides: Partial<GlossaryEntry> = {}): GlossaryEntry {
+  return {
+    id: "entry-1",
+    description: "",
+    atoms: [glossaryAtom({ entryId: overrides.id ?? "entry-1" })],
+    tags: [],
+    createdAt: "",
+    updatedAt: "",
+    ...overrides
+  };
 }
 
 function buildLineJumpEditorSnapshot(
@@ -548,18 +579,11 @@ describe("CommandPalette", () => {
     expect(markup).toContain("ionicon");
   });
 
-  it("renders the Construct icon for reserved not-implemented palette modes", () => {
-    const markup = renderPalette({
-      initialInputValue: "@alice"
-    });
-
-    expect(markup).toContain("commandPalette.reserved.glossary");
-    expect(markup).toContain(
-      'data-command-palette-status-icon="notImplemented"'
-    );
-    expect(markup).toContain("commandPaletteStatusIcon-notImplemented");
-    expect(markup).toContain("ionicon");
-  });
+  // #142: `@` glossary jump was the last reserved Quick Access mode: every
+  // QuickAccessMode is now implemented, so there is no remaining Palette
+  // input that renders the "not implemented" Construct icon. The icon/status
+  // indicator itself stays covered as general-purpose infrastructure by
+  // commandPaletteStatusIndicators.test.ts.
 
   it("uses the original primary label as the result accessible name", () => {
     const markup = renderPalette();
@@ -1099,32 +1123,11 @@ describe("CommandPalette highlighting and footer model", () => {
   });
 });
 
-describe("CommandPalette reserved Quick Access modes (#145)", () => {
-  // `#` heading mode is implemented (#141); only `@` glossary stays reserved.
-  const reservedCases = [
-    { initialInputValue: "@alice", mode: "glossary", key: "commandPalette.reserved.glossary" },
-    { initialInputValue: "＠alice", mode: "glossary", key: "commandPalette.reserved.glossary" }
-  ] as const;
-
-  it.each(reservedCases.map((c) => [c.initialInputValue, c] as const))(
-    "shows the reserved-mode message for %j, not the command results list",
-    (_input, testCase) => {
-      const markup = renderPalette({
-        initialInputValue: testCase.initialInputValue
-      });
-
-      expect(markup).toContain("commandPaletteReservedPlaceholder");
-      expect(markup).toContain(testCase.key);
-      // Reserved-mode precedence: no command list, no empty-result text, no
-      // result count, and no selectable/clickable result item — so Enter
-      // and click can never resolve to a command in a reserved mode.
-      expect(markup).not.toContain("commandPaletteList");
-      expect(markup).not.toContain("commandPaletteEmpty");
-      expect(markup).not.toContain("commandPalette.noResults");
-      expect(markup).not.toContain("commandPaletteItem");
-      expect(markup).not.toContain("commandPalette.footer.results");
-    }
-  );
+describe("CommandPalette Quick Access mode dispatch (#145)", () => {
+  // #142: `@` / `＠` glossary jump was the last reserved mode; every
+  // QuickAccessMode is now implemented, so there is no remaining reserved
+  // mode to exercise here. Coverage for `@` / `＠` lives in
+  // commandPaletteGlossaryJump.test.ts / commandPaletteGlossaryJumpMode.test.tsx.
 
   it("renders no-prefix file mode as quick-open empty results when there is no Project", () => {
     const markup = renderPalette({ initialInputValue: "abc" });
@@ -1230,41 +1233,15 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
     expect(markup).not.toContain("all-files-are-not-listed.md");
   });
 
-  it("dims the Enter hint in every reserved mode, same as a disabled selection", () => {
-    for (const testCase of reservedCases) {
-      const markup = renderPalette({
-        initialInputValue: testCase.initialInputValue
-      });
-
-      expect(markup).toContain("commandPaletteFooterHintUnavailable");
-    }
-  });
-
-  it("keeps the select/run/close footer key hints visible in reserved modes", () => {
-    const markup = renderPalette({ initialInputValue: "@alice" });
-
-    expect(markup).toContain("commandPalette.footer.selectHint");
-    expect(markup).toContain("commandPalette.footer.runHint");
-    expect(markup).toContain("commandPalette.footer.closeHint");
-  });
-
-  it("shows no footer status text (no result count, no search hint) in reserved modes", () => {
-    const markup = renderPalette({
-      translate: realTranslateEn,
-      initialInputValue: "@alice"
-    });
-
-    expect(markup).toContain('<div class="commandPaletteFooterStatus"></div>');
-  });
-
-  it("computes empty entries for every reserved mode, so Enter/click can never execute or block a command (#145)", () => {
+  it("computes empty `entries` outside command mode, so Enter/click can never execute or block a command through the generic command list (#145)", () => {
     // CommandPalette.tsx has no logging calls at all (see the wiring
     // describe block below) and only calls onExecuteCommand/onBlockedCommand
-    // from a truthy entries[index] lookup. Reserved modes route through this
-    // same `entries` computation, gated on mode === "command", so no command
-    // lifecycle event (command.invoked / command.ignored / command.blocked)
-    // can be emitted from a reserved mode without a code path existing to
-    // call either callback in the first place.
+    // from a truthy entries[index] lookup. Every non-command mode routes
+    // through this same `entries` computation, gated on mode === "command",
+    // so no command lifecycle event (command.invoked / command.ignored /
+    // command.blocked) can be emitted through THIS path from any other mode.
+    // (Glossary jump calls onExecuteCommand too, but from its own dedicated
+    // execute functions - see commandPaletteGlossaryJumpMode.test.tsx.)
     const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
 
     expect(source).toContain(
@@ -1279,11 +1256,11 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
     expect(resolveCommandPaletteEnterSelection([], 5)).toBeNull();
   });
 
-  it("recognizes '@' as a reserved prefix and '#' as heading-jump mode, not as file queries", () => {
+  it("recognizes '@' as glossary-jump mode and '#' as heading-jump mode, not as file queries", () => {
     // Unknown leading characters (e.g. "/") fall back to file mode per #139;
-    // '@' stays a reserved prefix with its own message; ':' is line jump
-    // (#140) and '#' is heading jump (#141), each distinct from the plain
-    // no-prefix file message.
+    // '@' is glossary jump (#142) and '#' is heading jump (#141), ':' is
+    // line jump (#140) - each distinct from the plain no-prefix file message,
+    // and none of them a reserved placeholder any more.
     const fileMarkup = renderPalette({ initialInputValue: "/abc" });
     const glossaryMarkup = renderPalette({ initialInputValue: "@abc" });
     const headingMarkup = renderPalette({ initialInputValue: "#abc" });
@@ -1291,7 +1268,9 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
     expect(fileMarkup).toContain(
       "commandPalette.projectFileQuickOpen.noResults"
     );
-    expect(glossaryMarkup).toContain("commandPalette.reserved.glossary");
+    // Glossary mode: no reserved placeholder, its own no-results copy instead.
+    expect(glossaryMarkup).not.toContain("commandPaletteReservedPlaceholder");
+    expect(glossaryMarkup).toContain("commandPalette.glossaryJump.noResults");
     // Heading mode: no reserved placeholder, its own empty copy instead.
     expect(headingMarkup).not.toContain("commandPaletteReservedPlaceholder");
     expect(headingMarkup).toContain("commandPalette.headingJump.noOpenHeadings");
@@ -1327,10 +1306,12 @@ describe("CommandPalette snapshot and UI-level block wiring", () => {
     expect(source).toContain("lineJumpMessageKey(");
   });
 
-  it("does not implement the remaining reserved-mode actions — only the reserved message and mode dispatch", () => {
-    // File mode (#143), line jump (#140) and heading jump (#141) are
-    // implemented. `@` glossary remains reserved and must not gain its own
-    // search/execution logic here.
+  it("keeps glossary-jump (#142) separate from the Search pane's Glossary Search feature, and never implements an unreserved symbol-jump mode", () => {
+    // File mode (#143), line jump (#140), heading jump (#141) and glossary
+    // jump (#142) are all implemented, each through its own dedicated
+    // module/naming (`commandPaletteGlossaryJump`, not `glossarySearch` -
+    // that is the unrelated, untouched Search pane feature, #384).
+    // `symbolJump` was never a real mode and must not appear either.
     expect(source).not.toContain("symbolJump");
     expect(source).not.toContain("glossarySearch");
   });
@@ -1584,7 +1565,7 @@ describe("CommandPalette line jump mode (#140 / #148)", () => {
     );
   });
 
-  it("preserves existing command mode and file mode, and the glossary reserved mode", () => {
+  it("preserves existing command mode and file mode, alongside heading-jump and glossary-jump mode", () => {
     const commandMarkup = renderPalette({ initialInputValue: ">save" });
     const fileMarkup = renderPalette({ initialInputValue: "abc" });
     const headingMarkup = renderPalette({ initialInputValue: "#intro" });
@@ -1597,7 +1578,9 @@ describe("CommandPalette line jump mode (#140 / #148)", () => {
     // #141: heading mode is a real candidate list now, not a reserved row.
     expect(headingMarkup).not.toContain("commandPaletteReservedPlaceholder");
     expect(headingMarkup).toContain("commandPalette.headingJump.noOpenHeadings");
-    expect(glossaryMarkup).toContain("commandPalette.reserved.glossary");
+    // #142: glossary mode is a real candidate list now, not a reserved row.
+    expect(glossaryMarkup).not.toContain("commandPaletteReservedPlaceholder");
+    expect(glossaryMarkup).toContain("commandPalette.glossaryJump.noResults");
   });
 });
 

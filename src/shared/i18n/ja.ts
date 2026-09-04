@@ -107,6 +107,11 @@ export const jaTranslations = {
   "commandPalette.footer.runHint": "Enter",
   "commandPalette.footer.searchHint": "コマンドを検索します",
   "commandPalette.footer.selectHint": "↑↓",
+  "commandPalette.glossaryJump.entryLabel": "親語彙: {entryLabel}",
+  "commandPalette.glossaryJump.footer":
+    "＠以降の語句で語彙の表記を前方一致検索します",
+  "commandPalette.glossaryJump.noResults": "一致する語彙の表記がありません",
+  "commandPalette.glossaryJump.openManager": "語彙管理を開く",
   "commandPalette.headingJump.noOpenHeadings": "開いているMarkdown文書に見出しがありません",
   "commandPalette.headingJump.noResults": "一致する見出しがありません",
   "commandPalette.inputPlaceholder": "コマンドを検索",
@@ -126,7 +131,6 @@ export const jaTranslations = {
   "commandPalette.projectSearch.footer":
     "％以降の語句でプロジェクト内全文検索します",
   "commandPalette.projectSearch.open": "プロジェクト検索を開く",
-  "commandPalette.reserved.glossary": "語彙検索はまだ使用できません",
   "commandPalette.searchLabel": "コマンドを検索",
   "commandPalette.title": "コマンドパレット",
   "confirm.discardOpenDocuments": "未保存の文書があります。破棄してプロジェクトを開きますか？",
