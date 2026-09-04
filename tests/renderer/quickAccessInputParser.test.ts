@@ -19,7 +19,6 @@ const cases: readonly Case[] = [
   { rawInput: "", mode: "file", prefix: "", query: "" },
   { rawInput: "abc", mode: "file", prefix: "", query: "abc" },
   { rawInput: " abc", mode: "file", prefix: "", query: " abc" },
-  { rawInput: "%abc", mode: "file", prefix: "", query: "%abc" },
   { rawInput: "/abc", mode: "file", prefix: "", query: "/abc" },
   { rawInput: "😀abc", mode: "file", prefix: "", query: "😀abc" },
 
@@ -50,6 +49,14 @@ const cases: readonly Case[] = [
   { rawInput: "@alice", mode: "glossary", prefix: "@", query: "alice" },
   { rawInput: "@ alice", mode: "glossary", prefix: "@", query: "alice" },
   { rawInput: "＠alice", mode: "glossary", prefix: "@", query: "alice" },
+
+  // "%" / "％" -> project full-text search shortcut (#384).
+  { rawInput: "%", mode: "search", prefix: "%", query: "" },
+  { rawInput: "%メイド", mode: "search", prefix: "%", query: "メイド" },
+  { rawInput: "% メイド", mode: "search", prefix: "%", query: "メイド" },
+  { rawInput: "％メイド", mode: "search", prefix: "%", query: "メイド" },
+  { rawInput: "％ メイド", mode: "search", prefix: "%", query: "メイド" },
+  { rawInput: "%%", mode: "search", prefix: "%", query: "%" },
 
   // The `file.md:42` suffix form is Future Work (#140) and must not be
   // interpreted as line mode here: "f" is not a reserved prefix, so the

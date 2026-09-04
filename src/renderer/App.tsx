@@ -415,6 +415,17 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import {
+  emptyProjectTextSearchResult,
+  runProjectGlossaryAtomSearch,
+  runProjectTextSearch,
+  type ProjectTextSearchResult
+} from "./projectTextSearch";
+import type {
+  GlossaryAtomSearchTerm,
+  GlossarySearchRelationMode
+} from "./glossaryAtomSearch";
+import type { TextSearchOptions } from "../shared/textSearch";
 import type { DocumentMetricsFileInfo } from "./DocumentMetricsPanel";
 import {
   analyzeDocumentMetricsDocument,
@@ -895,6 +906,13 @@ export function App(): JSX.Element {
   const fileExplorerRevealRequestSeqRef = useRef(0);
   const [fileExplorerRevealRequest, setFileExplorerRevealRequest] =
     useState<FileExplorerRevealRequest | null>(null);
+  // #384: Command Palette `%` project-search request handed to the Search pane.
+  // `token` is a session-monotonic counter so a repeat `%` re-applies.
+  const searchQueryRequestSeqRef = useRef(0);
+  const [searchQueryRequest, setSearchQueryRequest] = useState<{
+    token: number;
+    query: string;
+  } | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<PendingMarkdownSelection | null>(null);
   /**
@@ -7307,6 +7325,161 @@ export function App(): JSX.Element {
     }
   }
 
+  // #384: the per-file reader shared by both Search pane modes. Dirty-buffer
+  // priority — an open Markdown editor's live text wins over the disk file;
+  // an unreadable file resolves to `null` so the orchestrator skips it and
+  // bumps `skippedFileCount` instead of crashing the search.
+  function createProjectSearchReadText(
+    activeContext: ActiveProjectContext
+  ): (relativePath: string) => Promise<string | null> {
+    return async (relativePath: string): Promise<string | null> => {
+      const editorId = createProjectDocumentEditorId(
+        relativePath,
+        activeContext
+      );
+      const openDocument = findOpenDocument(
+        openDocumentsStateRef.current,
+        editorId
+      );
+
+      if (openDocument && openDocument.editor.kind === "markdown") {
+        return currentDocumentContent(openDocument.editor.document);
+      }
+
+      try {
+        const projectFile =
+          await window.pergamum.projects.readProjectDocument(relativePath);
+
+        return projectFile.content;
+      } catch (error) {
+        // Skip unreadable files safely (#384) — no error-list UI, just a
+        // console breadcrumb; the orchestrator counts it toward
+        // `skippedFileCount`, shown as a footer notice in the pane.
+        console.warn(
+          `Project search skipped unreadable file: ${relativePath}`,
+          error
+        );
+
+        return null;
+      }
+    };
+  }
+
+  // #384 Phase 2: project-wide text search executed for the Search pane.
+  // Returns an empty result when there is no project.
+  async function runProjectSearch(
+    query: string,
+    options: TextSearchOptions,
+    isCancelled: () => boolean
+  ): Promise<ProjectTextSearchResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return emptyProjectTextSearchResult(query);
+    }
+
+    return await runProjectTextSearch({
+      documents: activeProject.documents,
+      readText: createProjectSearchReadText(activeContext),
+      query,
+      options,
+      isCancelled
+    });
+  }
+
+  // #384 Glossary Search: search the picked atoms across the project's Markdown
+  // files under the chosen relation mode (any / all / nearby). Same file
+  // discovery / dirty-buffer policy as the text search; each result match
+  // carries its glossary atom / entry identity.
+  async function runProjectGlossarySearch(
+    terms: readonly GlossaryAtomSearchTerm[],
+    relationMode: GlossarySearchRelationMode,
+    isCancelled: () => boolean
+  ): Promise<ProjectTextSearchResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return emptyProjectTextSearchResult("");
+    }
+
+    return await runProjectGlossaryAtomSearch({
+      documents: activeProject.documents,
+      readText: createProjectSearchReadText(activeContext),
+      terms,
+      relationMode,
+      isCancelled
+    });
+  }
+
+  // #384: Command Palette `%` / `％` shortcut. Unconditionally opens the Search
+  // pane (never a toggle) and hands `query` to it: a non-empty query lands in
+  // the text search box and runs; an empty query just opens + focuses. The
+  // Search pane owns the reset-to-text-mode and the actual search.
+  function openProjectSearch(query: string): void {
+    setSidebarMode("search");
+    setLayout((current) =>
+      current.sidebar.collapsed
+        ? {
+            ...current,
+            sidebar: {
+              collapsed: false,
+              width: clampSidebarWidth(
+                current.sidebar.width,
+                mainAreaRef.current?.clientWidth
+              )
+            }
+          }
+        : current
+    );
+    searchQueryRequestSeqRef.current += 1;
+    setSearchQueryRequest({
+      token: searchQueryRequestSeqRef.current,
+      query
+    });
+  }
+
+  // #384 Phase 2: open (or activate) the file behind a Search pane result row
+  // and select the matched range. `editorNavigation.openEditor` both activates
+  // an already-open tab and reads an unopened project document from disk, so
+  // one call covers both. Offsets are JS UTF-16 code-unit offsets, so they
+  // feed `setPendingMarkdownSelection` directly; the CENTER scroll strategy
+  // matches the Outline / heading-jump behavior.
+  async function openSearchMatch(
+    relativePath: string,
+    startOffset: number,
+    endOffset: number
+  ): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
+    const activeContext = activeProjectContext;
+
+    if (!project || !activeContext) {
+      return;
+    }
+
+    const editorId = createProjectDocumentEditorId(
+      relativePath,
+      activeContext
+    );
+    const didOpen = await editorNavigation.openEditor(editorId, {
+      history: "record"
+    });
+
+    if (!didOpen) {
+      return;
+    }
+
+    setPendingMarkdownSelection({
+      start: startOffset,
+      end: endOffset,
+      scrollY: "center"
+    });
+  }
+
   // #141: Command Palette `#` heading jump. Activates the target open Markdown
   // tab (already open — never a disk read, never a File Explorer reveal /
   // selection sync) then jumps to the heading offset with the SAME behavior as
@@ -7588,6 +7761,21 @@ export function App(): JSX.Element {
                       }
                       documentMetricsAnalysis={documentMetricsAnalysis}
                       documentMetricsFileInfo={documentMetricsFileInfo}
+                      searchProjectAvailable={project !== null}
+                      runProjectSearch={runProjectSearch}
+                      runProjectGlossarySearch={runProjectGlossarySearch}
+                      searchQueryRequest={searchQueryRequest}
+                      onOpenSearchMatch={(
+                        relativePath,
+                        startOffset,
+                        endOffset
+                      ) => {
+                        void openSearchMatch(
+                          relativePath,
+                          startOffset,
+                          endOffset
+                        );
+                      }}
                     />
                   </div>
                   <div
@@ -7911,6 +8099,10 @@ export function App(): JSX.Element {
           onExecuteHeadingJumpCandidate={(candidate) => {
             void activateHeadingJumpTarget(candidate);
             closeCommandPaletteAndRestoreMarkdownFocus();
+          }}
+          onExecuteProjectSearch={(searchQuery) => {
+            openProjectSearch(searchQuery);
+            setIsCommandPaletteOpen(false);
           }}
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);

@@ -76,6 +76,11 @@ export const debugLogEventNames = [
   "save.succeeded",
   "save.failed",
   "glossary.occurrences.scan.failed",
+  "search.started",
+  "search.completed",
+  "search.staleDiscarded",
+  "search.cancelled",
+  "search.failed",
   "recovery.store.init.started",
   "recovery.store.init.succeeded",
   "recovery.store.init.skipped",
@@ -370,6 +375,22 @@ export const debugLogViewportChangeSources = [
 export type DebugLogViewportChangeSource =
   (typeof debugLogViewportChangeSources)[number];
 
+/** #384 Search pane: which search mode a `search.*` event describes. */
+export const debugLogSearchModes = ["text", "glossary", "unknown"] as const;
+
+export type DebugLogSearchMode = (typeof debugLogSearchModes)[number];
+
+/** #384 Glossary Search: relation mode on a glossary `search.*` event. */
+export const debugLogGlossarySearchRelationModes = [
+  "any",
+  "all",
+  "nearby",
+  "unknown"
+] as const;
+
+export type DebugLogGlossarySearchRelationMode =
+  (typeof debugLogGlossarySearchRelationModes)[number];
+
 export type DebugLogErrorCategory =
   | "notFound"
   | "permissionDenied"
@@ -503,6 +524,34 @@ export interface DebugLogDetails {
   ownerPid?: number;
   ownerAppVersion?: string;
   ownerCreatedAt?: string;
+
+  /**
+   * #384 Search pane telemetry (`search.started` / `search.completed` /
+   * `search.staleDiscarded` / `search.cancelled` / `search.failed`). Privacy:
+   * NEVER carries the query text, a regex pattern, a GlossaryAtom value, a
+   * Glossary Entry label, a preview, matched text, the searched body, or any
+   * file path / name. Glossary mode records only atom UUIDs + counts.
+   * `searchRunId` correlates the events of one search execution.
+   */
+  searchRunId?: string;
+  searchMode?: DebugLogSearchMode;
+  searchWholeWord?: boolean;
+  searchCaseSensitive?: boolean;
+  searchRegex?: boolean;
+  searchRelationMode?: DebugLogGlossarySearchRelationMode;
+  /** Selected GlossaryAtom UUIDs (project-local identifiers, not values). */
+  selectedAtomIds?: readonly string[];
+  selectedAtomCount?: number;
+  /** Markdown documents actually processed by the scan. */
+  searchDocumentCount?: number;
+  /** Total characters actually scanned (JS string length sum). */
+  searchedCharacterCount?: number;
+  /** Result rows shown in the pane (`all` / `nearby` = group rows). */
+  searchResultCount?: number;
+  /** `true` when a completed search became the pane's current result. */
+  searchAppliedToUi?: boolean;
+  /** ISO timestamp the search execution started. */
+  searchStartedAt?: string;
 
   error?: SanitizedErrorInfo;
 }

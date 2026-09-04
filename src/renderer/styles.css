@@ -1780,6 +1780,537 @@ label.settingsItemHeader {
   border-top: 1px solid var(--workspace-sidebar-divider);
 }
 
+/* #384 Search pane (left pane) — Phase 1 UI foundation. */
+.searchPane {
+  min-height: 0;
+}
+
+.searchPaneControls {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--workspace-sidebar-border);
+}
+
+.searchPaneInputRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.searchPaneInput {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 13px;
+  appearance: none;
+}
+
+.searchPaneInput::-webkit-search-cancel-button {
+  display: none;
+}
+
+.searchPaneInput::placeholder {
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.searchPaneInput:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -1px;
+}
+
+.searchPaneOptions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+/* #384 Glossary Search relation selector (replaces Ab / Aa / .* in that mode). */
+.glossaryRelationSelect {
+  flex: 0 0 auto;
+  max-width: 7.5em;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 12px;
+}
+
+.glossaryRelationSelect:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -1px;
+}
+
+.searchOptionToggle {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--workspace-sidebar-item-foreground);
+  padding: 0;
+  cursor: pointer;
+}
+
+.searchOptionToggle:hover {
+  background: var(--workspace-sidebar-hover);
+}
+
+.searchOptionToggle:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -2px;
+}
+
+.searchOptionToggle[data-pressed="true"] {
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
+  box-shadow: inset 0 0 0 1px var(--workspace-sidebar-focus-ring);
+}
+
+.searchOptionToggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.searchOptionToggle:disabled:hover {
+  background: transparent;
+}
+
+.searchOptionToggleIcon {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+.searchOptionToggleIcon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* #384 Search pane — Phase 2 results body. */
+.searchPaneBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 0 10px;
+}
+
+.searchPaneNotices {
+  padding: 0 10px;
+}
+
+/* #384 invalid regular expression notice. Uses the shared placeholder look;
+   the accent border marks it as a validation problem, not an empty state. */
+.searchInvalidRegex {
+  margin: 8px 10px;
+  padding: 6px 8px;
+  border-inline-start: 2px solid var(--workspace-sidebar-focus-ring);
+  background: var(--workspace-sidebar-hover);
+}
+
+/* #384 delayed loading skeleton — shown only once a search runs past
+   SEARCH_LOADING_SKELETON_DELAY_MS. */
+.searchLoadingSkeleton {
+  padding-top: 2px;
+}
+
+.searchLoadingSkeletonLabel {
+  border-top: 0;
+}
+
+.searchLoadingSkeletonRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 10px 0;
+}
+
+.searchLoadingSkeletonRow {
+  display: block;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--workspace-sidebar-hover);
+}
+
+.searchLoadingSkeletonRow:nth-child(2) {
+  width: 82%;
+}
+
+.searchLoadingSkeletonRow:nth-child(3) {
+  width: 68%;
+}
+
+.searchLoadingSkeletonRow:nth-child(4) {
+  width: 76%;
+}
+
+/* Animate only when the viewer has not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .searchLoadingSkeletonRow {
+    animation: searchLoadingSkeletonPulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes searchLoadingSkeletonPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.searchResultsSummary {
+  margin: 4px 0 6px;
+  padding: 0 10px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.searchResultsNote {
+  margin: 0 0 6px;
+  padding: 0 10px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+}
+
+.searchResultGroups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.searchResultGroup {
+  margin-bottom: 4px;
+}
+
+.searchResultGroupHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  color: var(--workspace-sidebar-header-foreground);
+}
+
+.searchResultGroupName {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.searchResultGroupPath {
+  flex: 1;
+  min-width: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.searchResultRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.searchResultRow {
+  display: flex;
+  width: 100%;
+  height: 20px;
+  align-items: baseline;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 3px 10px 3px 20px;
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.searchResultRow:hover {
+  background: var(--workspace-sidebar-hover);
+}
+
+.searchResultRow:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -2px;
+}
+
+.searchResultRow:active {
+  background: var(--workspace-sidebar-active-background);
+}
+
+.searchResultRowLocation {
+  flex: 0 0 auto;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.searchResultPreview {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.searchResultMatch {
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
+  border-radius: 2px;
+}
+
+/* #384 Glossary Search: matched-atom badge(s) on a result row. `all` /
+   `nearby` group rows carry several. */
+.searchResultRowAtoms {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 12em;
+}
+
+.searchResultRowAtom {
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
+  font-size: 11px;
+}
+
+/* #384 Glossary Atom Search: the atom multi-select in the query row. */
+.glossaryAtomSelect {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.glossaryAtomSelectRow {
+  position: relative;
+  display: flex;
+}
+
+.glossaryAtomSelectTrigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.glossaryAtomSelectTrigger:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -1px;
+}
+
+.glossaryAtomSelectValue {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.glossaryAtomSelectPlaceholder {
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryAtomSelectCaret {
+  flex: 0 0 auto;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryAtomSelectPopup {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+
+.glossaryAtomSelectFilter {
+  margin: 6px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 12px;
+  appearance: none;
+}
+
+.glossaryAtomSelectFilter:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -1px;
+}
+
+.glossaryAtomSelectOptions {
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.glossaryAtomSelectNoMatch {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.glossaryAtomSelectOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.glossaryAtomSelectOption:hover {
+  background: var(--workspace-sidebar-hover);
+}
+
+.glossaryAtomSelectOption:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -2px;
+}
+
+.glossaryAtomSelectCheck {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 2px;
+}
+
+.glossaryAtomSelectCheck[data-checked] {
+  background: var(--workspace-sidebar-focus-ring);
+  border-color: var(--workspace-sidebar-focus-ring);
+}
+
+.glossaryAtomSelectOptionText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.glossaryAtomSelectOptionValue {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryAtomSelectOptionEntry {
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryAtomSelectChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.glossaryAtomChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 1px 2px 1px 6px;
+  border-radius: 10px;
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
+  font-size: 11px;
+}
+
+.glossaryAtomChipValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryAtomChipRemove {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.glossaryAtomChipRemove:hover {
+  background: var(--workspace-sidebar-hover);
+}
+
+.glossaryAtomSelectClear {
+  border: 0;
+  background: transparent;
+  color: var(--workspace-sidebar-muted-foreground);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* #360 Document Metrics / 文書統計 panel (left pane). */
 .documentMetricsPanel {
   min-height: 0;

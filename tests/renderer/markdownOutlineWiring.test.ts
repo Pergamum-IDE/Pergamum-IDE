@@ -41,9 +41,10 @@ describe("Markdown Outline wiring (#352)", () => {
   });
 
   it("only heading jumps pass scrollY: center — line jump / glossary occurrence stay nearest", () => {
-    // #352 Outline heading click + #141 Command Palette `#` heading jump are
-    // the only `scrollY:` uses in App; both jump to a heading.
-    expect(appSource.match(/scrollY:/g) ?? []).toHaveLength(2);
+    // #352 Outline heading click + #141 Command Palette `#` heading jump +
+    // #384 Phase 2 Search-result jump are the only `scrollY:` uses in App;
+    // each jumps the editor to a specific location.
+    expect(appSource.match(/scrollY:/g) ?? []).toHaveLength(3);
     const goToLine = appSource.slice(
       appSource.indexOf("goToLineCommandRef.current = (line) =>"),
       appSource.indexOf("lineJumpEditorSnapshot")

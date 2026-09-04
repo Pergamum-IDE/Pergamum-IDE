@@ -263,7 +263,7 @@ describe("workspace navigation", () => {
 
     expect(markup).toContain("activity.label");
     expect(markup).toContain("activity.files");
-    expect(markup).toContain("activity.searchReplace");
+    expect(markup).toContain("activity.search");
     expect(markup).toContain("activity.glossary");
     expect(markup).toContain("activity.documentMap");
     expect(markup).toContain("activity.documentMetrics");
@@ -304,7 +304,7 @@ describe("workspace navigation", () => {
 
     const modeLabels = [
       ["activity.files", "files"],
-      ["activity.searchReplace", "search"],
+      ["activity.search", "search"],
       ["activity.glossary", "glossary"],
       ["activity.documentMap", "documentMap"],
       ["activity.documentMetrics", "documentMetrics"]
@@ -367,7 +367,7 @@ describe("workspace navigation", () => {
       (child) => child.type === "button"
     );
     const searchButton = buttons.find(
-      (button) => button.props["aria-label"] === "activity.searchReplace"
+      (button) => button.props["aria-label"] === "activity.search"
     );
     const filesButton = buttons.find(
       (button) => button.props["aria-label"] === "activity.files"
@@ -804,7 +804,7 @@ describe("workspace navigation", () => {
     expect(onActivateDocument).not.toHaveBeenCalled();
   });
 
-  it("switches Sidebar content to the Search placeholder", () => {
+  it("switches Sidebar content to the Search pane (#384 Phase 1 foundation)", () => {
     const markup = renderToStaticMarkup(
       React.createElement(WorkspaceSidebar, {
         mode: "search",
@@ -818,7 +818,8 @@ describe("workspace navigation", () => {
     );
 
     expect(markup).toContain("search.sidebarTitle");
-    expect(markup).toContain("search.notImplemented");
+    expect(markup).toContain("search.query.placeholder");
+    expect(markup).toContain("search.emptyResults");
     expect(markup).not.toContain("chapter-01.md");
   });
 

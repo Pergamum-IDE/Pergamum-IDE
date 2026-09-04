@@ -17,6 +17,12 @@ import {
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
+import type { ProjectTextSearchResult } from "./projectTextSearch";
+import type {
+  GlossaryAtomSearchTerm,
+  GlossarySearchRelationMode
+} from "./glossaryAtomSearch";
+import type { TextSearchOptions } from "../shared/textSearch";
 import { DocumentMapPanel } from "./DocumentMapPanel";
 import {
   DocumentMetricsPanel,
@@ -130,6 +136,32 @@ interface WorkspaceSidebarProps {
    *  unsaved / unavailable state, or `null` when there is no active
    *  Markdown file. */
   documentMetricsFileInfo?: DocumentMetricsFileInfo | null;
+  /** #384 Phase 2: whether a project is open (nothing to search otherwise). */
+  searchProjectAvailable?: boolean;
+  /** #384 Phase 2: runs the project-wide plain-text search. */
+  runProjectSearch?: (
+    query: string,
+    options: TextSearchOptions,
+    isCancelled: () => boolean
+  ) => Promise<ProjectTextSearchResult>;
+  /** #384 Phase 2: open the file behind a search result and select the match. */
+  onOpenSearchMatch?: (
+    relativePath: string,
+    startOffset: number,
+    endOffset: number
+  ) => void;
+  /** #384 Glossary Search: search the selected atoms across the project under
+   *  the chosen relation mode (any / all / nearby). */
+  runProjectGlossarySearch?: (
+    terms: readonly GlossaryAtomSearchTerm[],
+    relationMode: GlossarySearchRelationMode,
+    isCancelled: () => boolean
+  ) => Promise<ProjectTextSearchResult>;
+  /** #384: Command Palette `%` project-search request handed to the Search pane. */
+  searchQueryRequest?: {
+    readonly token: number;
+    readonly query: string;
+  } | null;
 }
 
 export function WorkspaceSidebar({
@@ -172,7 +204,12 @@ export function WorkspaceSidebar({
   hasActiveDocument = false,
   documentMetricsCharacterCount = null,
   documentMetricsAnalysis = null,
-  documentMetricsFileInfo = null
+  documentMetricsFileInfo = null,
+  searchProjectAvailable = false,
+  runProjectSearch,
+  onOpenSearchMatch,
+  runProjectGlossarySearch,
+  searchQueryRequest = null
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -223,7 +260,17 @@ export function WorkspaceSidebar({
         />
       );
     case "search":
-      return <SearchSidebar translate={translate} />;
+      return (
+        <SearchSidebar
+          translate={translate}
+          projectAvailable={searchProjectAvailable}
+          runSearch={runProjectSearch}
+          glossaryEntries={documentMapGlossaryEntries}
+          runGlossarySearch={runProjectGlossarySearch}
+          onOpenMatch={onOpenSearchMatch}
+          queryRequest={searchQueryRequest}
+        />
+      );
     case "documentMap":
       return (
         <DocumentMapPanel

@@ -6,19 +6,25 @@
  * became the sole interpretation path — see #145 for the resolver/parser
  * behavior comparison that justified the removal.
  *
- * `file`, `line`, `heading`, and `glossary` are recognized modes but remain
- * reserved (UI shows a "not available yet" state); only `command` is fully
- * implemented today. Later mode issues (#140-#143) are expected to build
- * their behavior directly on this parser's output.
+ * `command` (`>`), `file` (no prefix), `line` (`:`), `heading` (`#`) and
+ * `search` (`%` / `％`, #384) are implemented; `glossary` (`@`) is still
+ * reserved (UI shows a "not available yet" state). Mode is derived from
+ * `rawInput` on every parse.
  *
  * `rawInput` is the source of truth: mode is derived from it on every parse
  * rather than tracked as separate state, so deleting/replacing a prefix
  * character changes mode for free.
  */
 
-export type QuickAccessMode = "file" | "command" | "line" | "heading" | "glossary";
+export type QuickAccessMode =
+  | "file"
+  | "command"
+  | "line"
+  | "heading"
+  | "glossary"
+  | "search";
 
-export type QuickAccessPrefix = "" | ">" | ":" | "#" | "@";
+export type QuickAccessPrefix = "" | ">" | ":" | "#" | "@" | "%";
 
 export interface QuickAccessInput {
   readonly rawInput: string;
@@ -32,7 +38,8 @@ const modeByPrefix: Record<QuickAccessPrefix, QuickAccessMode> = {
   ">": "command",
   ":": "line",
   "#": "heading",
-  "@": "glossary"
+  "@": "glossary",
+  "%": "search"
 };
 
 /**
@@ -46,10 +53,12 @@ const fullWidthPrefixByCodePoint = new Map<string, QuickAccessPrefix>([
   [":", ":"],
   ["#", "#"],
   ["@", "@"],
+  ["%", "%"],
   ["＞", ">"], // ＞
   ["：", ":"], // ：
   ["＃", "#"], // ＃
-  ["＠", "@"] // ＠
+  ["＠", "@"], // ＠
+  ["％", "%"] // ％
 ]);
 
 function fileResult(rawInput: string): QuickAccessInput {

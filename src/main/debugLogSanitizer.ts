@@ -15,10 +15,12 @@ import {
   debugLogPathKinds,
   debugLogPlatforms,
   debugLogReasons,
+  debugLogGlossarySearchRelationModes,
   debugLogRecoveryJournalModes,
   debugLogRecoverySynchronousLevels,
   debugLogResults,
   debugLogSaveTargetKinds,
+  debugLogSearchModes,
   debugLogSizeBuckets,
   debugLogViewportChangeSources,
   isDebugLogContextMenuSurface,
@@ -41,10 +43,12 @@ import {
   type DebugLogPathKind,
   type DebugLogPlatform,
   type DebugLogReason,
+  type DebugLogGlossarySearchRelationMode,
   type DebugLogRecoveryJournalMode,
   type DebugLogRecoverySynchronousLevel,
   type DebugLogResult,
   type DebugLogSaveTargetKind,
+  type DebugLogSearchMode,
   type DebugLogSizeBucket,
   type DebugLogViewportChangeSource,
   type SanitizedErrorInfo
@@ -139,6 +143,33 @@ function sanitizeIsoTimestamp(value: unknown): string | undefined {
 
 function sanitizeBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+/**
+ * #384: echo an array of already-opaque identifiers (GlossaryAtom UUIDs),
+ * keeping only entries that match the safe-code shape and capping the count so
+ * a pathological selection cannot bloat the log. Never derived from text.
+ */
+function sanitizeSafeCodeArray(
+  value: unknown,
+  maxCount: number
+): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const codes: string[] = [];
+  for (const entry of value) {
+    if (codes.length >= maxCount) {
+      break;
+    }
+    const code = sanitizeSafeCode(entry);
+    if (code) {
+      codes.push(code);
+    }
+  }
+
+  return codes;
 }
 
 function enumOrUnknown<TValue extends string>(
@@ -785,6 +816,107 @@ export function sanitizeDebugLogDetails(
             value
           );
         break;
+      case "searchRunId": {
+        const searchRunId = sanitizeSafeCode(value);
+
+        if (searchRunId) {
+          sanitized.searchRunId = searchRunId;
+        }
+        break;
+      }
+      case "searchMode":
+        sanitized.searchMode = enumOrUnknown<DebugLogSearchMode>(
+          debugLogSearchModes,
+          value
+        );
+        break;
+      case "searchRelationMode":
+        sanitized.searchRelationMode =
+          enumOrUnknown<DebugLogGlossarySearchRelationMode>(
+            debugLogGlossarySearchRelationModes,
+            value
+          );
+        break;
+      case "searchWholeWord": {
+        const searchWholeWord = sanitizeBoolean(value);
+
+        if (searchWholeWord !== undefined) {
+          sanitized.searchWholeWord = searchWholeWord;
+        }
+        break;
+      }
+      case "searchCaseSensitive": {
+        const searchCaseSensitive = sanitizeBoolean(value);
+
+        if (searchCaseSensitive !== undefined) {
+          sanitized.searchCaseSensitive = searchCaseSensitive;
+        }
+        break;
+      }
+      case "searchRegex": {
+        const searchRegex = sanitizeBoolean(value);
+
+        if (searchRegex !== undefined) {
+          sanitized.searchRegex = searchRegex;
+        }
+        break;
+      }
+      case "searchAppliedToUi": {
+        const searchAppliedToUi = sanitizeBoolean(value);
+
+        if (searchAppliedToUi !== undefined) {
+          sanitized.searchAppliedToUi = searchAppliedToUi;
+        }
+        break;
+      }
+      case "selectedAtomIds": {
+        const selectedAtomIds = sanitizeSafeCodeArray(value, 200);
+
+        if (selectedAtomIds !== undefined) {
+          sanitized.selectedAtomIds = selectedAtomIds;
+        }
+        break;
+      }
+      case "selectedAtomCount": {
+        const selectedAtomCount = sanitizeNonNegativeInteger(value);
+
+        if (selectedAtomCount !== undefined) {
+          sanitized.selectedAtomCount = selectedAtomCount;
+        }
+        break;
+      }
+      case "searchDocumentCount": {
+        const searchDocumentCount = sanitizeNonNegativeInteger(value);
+
+        if (searchDocumentCount !== undefined) {
+          sanitized.searchDocumentCount = searchDocumentCount;
+        }
+        break;
+      }
+      case "searchedCharacterCount": {
+        const searchedCharacterCount = sanitizeNonNegativeInteger(value);
+
+        if (searchedCharacterCount !== undefined) {
+          sanitized.searchedCharacterCount = searchedCharacterCount;
+        }
+        break;
+      }
+      case "searchResultCount": {
+        const searchResultCount = sanitizeNonNegativeInteger(value);
+
+        if (searchResultCount !== undefined) {
+          sanitized.searchResultCount = searchResultCount;
+        }
+        break;
+      }
+      case "searchStartedAt": {
+        const searchStartedAt = sanitizeIsoTimestamp(value);
+
+        if (searchStartedAt) {
+          sanitized.searchStartedAt = searchStartedAt;
+        }
+        break;
+      }
       case "error":
         sanitized.error = sanitizeErrorForDebugLog(value);
         break;

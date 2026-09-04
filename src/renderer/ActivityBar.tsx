@@ -52,7 +52,7 @@ export function ActivityBar({
   onOpenDebugLog
 }: ActivityBarProps): JSX.Element {
   const filesLabel = translate("activity.files");
-  const searchLabel = translate("activity.searchReplace");
+  const searchLabel = translate("activity.search");
   const glossaryLabel = translate("activity.glossary");
   const documentMapLabel = translate("activity.documentMap");
   const documentMetricsLabel = translate("activity.documentMetrics");
