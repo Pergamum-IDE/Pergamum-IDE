@@ -313,8 +313,8 @@ describe("CommandPalette", () => {
       ],
       [
         "command.workspace.search.focus.description",
-        "（未実装です）",
-        "Not implemented."
+        "左ペインに検索を表示します。",
+        "Show the Search panel in the left pane."
       ],
       [
         "command.workspace.glossary.focus.description",

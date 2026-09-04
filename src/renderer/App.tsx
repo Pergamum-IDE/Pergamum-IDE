@@ -415,6 +415,12 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import {
+  emptyProjectTextSearchResult,
+  runProjectTextSearch,
+  type ProjectTextSearchResult
+} from "./projectTextSearch";
+import type { TextSearchOptions } from "../shared/textSearch";
 import type { DocumentMetricsFileInfo } from "./DocumentMetricsPanel";
 import {
   analyzeDocumentMetricsDocument,
@@ -7307,6 +7313,106 @@ export function App(): JSX.Element {
     }
   }
 
+  // #384 Phase 2: project-wide text search executed for the Search pane.
+  // Returns an empty result when there is no project. `readText` applies the
+  // dirty-buffer priority (an open Markdown editor's live text wins over the
+  // disk file); an unreadable file resolves to `null` so the orchestrator
+  // skips it and bumps `skippedFileCount` instead of crashing the search.
+  async function runProjectSearch(
+    query: string,
+    options: TextSearchOptions,
+    isCancelled: () => boolean
+  ): Promise<ProjectTextSearchResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return emptyProjectTextSearchResult(query);
+    }
+
+    const readText = async (
+      relativePath: string
+    ): Promise<string | null> => {
+      const editorId = createProjectDocumentEditorId(
+        relativePath,
+        activeContext
+      );
+      const openDocument = findOpenDocument(
+        openDocumentsStateRef.current,
+        editorId
+      );
+
+      if (openDocument && openDocument.editor.kind === "markdown") {
+        return currentDocumentContent(openDocument.editor.document);
+      }
+
+      try {
+        const projectFile =
+          await window.pergamum.projects.readProjectDocument(relativePath);
+
+        return projectFile.content;
+      } catch (error) {
+        // Skip unreadable files safely (#384) — no error-list UI, just a
+        // console breadcrumb; the orchestrator counts it toward
+        // `skippedFileCount`, shown as a footer notice in the pane.
+        console.warn(
+          `Project text search skipped unreadable file: ${relativePath}`,
+          error
+        );
+
+        return null;
+      }
+    };
+
+    return await runProjectTextSearch({
+      documents: activeProject.documents,
+      readText,
+      query,
+      options,
+      isCancelled
+    });
+  }
+
+  // #384 Phase 2: open (or activate) the file behind a Search pane result row
+  // and select the matched range. `editorNavigation.openEditor` both activates
+  // an already-open tab and reads an unopened project document from disk, so
+  // one call covers both. Offsets are JS UTF-16 code-unit offsets, so they
+  // feed `setPendingMarkdownSelection` directly; the CENTER scroll strategy
+  // matches the Outline / heading-jump behavior.
+  async function openSearchMatch(
+    relativePath: string,
+    startOffset: number,
+    endOffset: number
+  ): Promise<void> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return;
+    }
+
+    const activeContext = activeProjectContext;
+
+    if (!project || !activeContext) {
+      return;
+    }
+
+    const editorId = createProjectDocumentEditorId(
+      relativePath,
+      activeContext
+    );
+    const didOpen = await editorNavigation.openEditor(editorId, {
+      history: "record"
+    });
+
+    if (!didOpen) {
+      return;
+    }
+
+    setPendingMarkdownSelection({
+      start: startOffset,
+      end: endOffset,
+      scrollY: "center"
+    });
+  }
+
   // #141: Command Palette `#` heading jump. Activates the target open Markdown
   // tab (already open — never a disk read, never a File Explorer reveal /
   // selection sync) then jumps to the heading offset with the SAME behavior as
@@ -7588,6 +7694,19 @@ export function App(): JSX.Element {
                       }
                       documentMetricsAnalysis={documentMetricsAnalysis}
                       documentMetricsFileInfo={documentMetricsFileInfo}
+                      searchProjectAvailable={project !== null}
+                      runProjectSearch={runProjectSearch}
+                      onOpenSearchMatch={(
+                        relativePath,
+                        startOffset,
+                        endOffset
+                      ) => {
+                        void openSearchMatch(
+                          relativePath,
+                          startOffset,
+                          endOffset
+                        );
+                      }}
                     />
                   </div>
                   <div

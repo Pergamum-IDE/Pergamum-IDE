@@ -17,6 +17,8 @@ import {
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
+import type { ProjectTextSearchResult } from "./projectTextSearch";
+import type { TextSearchOptions } from "../shared/textSearch";
 import { DocumentMapPanel } from "./DocumentMapPanel";
 import {
   DocumentMetricsPanel,
@@ -130,6 +132,20 @@ interface WorkspaceSidebarProps {
    *  unsaved / unavailable state, or `null` when there is no active
    *  Markdown file. */
   documentMetricsFileInfo?: DocumentMetricsFileInfo | null;
+  /** #384 Phase 2: whether a project is open (nothing to search otherwise). */
+  searchProjectAvailable?: boolean;
+  /** #384 Phase 2: runs the project-wide plain-text search. */
+  runProjectSearch?: (
+    query: string,
+    options: TextSearchOptions,
+    isCancelled: () => boolean
+  ) => Promise<ProjectTextSearchResult>;
+  /** #384 Phase 2: open the file behind a search result and select the match. */
+  onOpenSearchMatch?: (
+    relativePath: string,
+    startOffset: number,
+    endOffset: number
+  ) => void;
 }
 
 export function WorkspaceSidebar({
@@ -172,7 +188,10 @@ export function WorkspaceSidebar({
   hasActiveDocument = false,
   documentMetricsCharacterCount = null,
   documentMetricsAnalysis = null,
-  documentMetricsFileInfo = null
+  documentMetricsFileInfo = null,
+  searchProjectAvailable = false,
+  runProjectSearch,
+  onOpenSearchMatch
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -223,7 +242,14 @@ export function WorkspaceSidebar({
         />
       );
     case "search":
-      return <SearchSidebar translate={translate} />;
+      return (
+        <SearchSidebar
+          translate={translate}
+          projectAvailable={searchProjectAvailable}
+          runSearch={runProjectSearch}
+          onOpenMatch={onOpenSearchMatch}
+        />
+      );
     case "documentMap":
       return (
         <DocumentMapPanel
