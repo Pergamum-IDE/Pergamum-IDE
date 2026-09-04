@@ -51,6 +51,25 @@ describe("runProjectTextSearch (#384 Phase 2)", () => {
     expect(result.fileCount).toBe(2);
     expect(result.truncated).toBe(false);
     expect(result.skippedFileCount).toBe(0);
+    // #384 telemetry metrics.
+    expect(result.documentCount).toBe(2);
+    expect(result.searchedCharacterCount).toBe(
+      "maid here".length + "a maid and another maid".length
+    );
+  });
+
+  it("telemetry: searchedCharacterCount excludes skipped files", async () => {
+    const result = await runProjectTextSearch({
+      documents: [doc("ok.md"), doc("bad.md")],
+      readText: async (relativePath) =>
+        relativePath === "ok.md" ? "a maid" : null,
+      query: "maid",
+      options: PLAIN
+    });
+
+    expect(result.documentCount).toBe(2);
+    expect(result.searchedCharacterCount).toBe("a maid".length);
+    expect(result.skippedFileCount).toBe(1);
   });
 
   it("counts unreadable files as skipped instead of failing", async () => {
@@ -204,5 +223,39 @@ describe("runProjectGlossaryAtomSearch (#384)", () => {
 
     expect(result.totalMatches).toBe(1);
     expect(result.skippedFileCount).toBe(1);
+  });
+
+  it("threads the relation mode: 'all' groups per paragraph", async () => {
+    const text = [
+      "オーダは立ち止まった。",
+      "",
+      "オーダとドミニクスは対峙した。"
+    ].join("\n");
+
+    const anyResult = await runProjectGlossaryAtomSearch({
+      documents: [doc("a.md")],
+      readText: async () => text,
+      terms: [term("オーダ"), term("ドミニクス")],
+      relationMode: "any"
+    });
+    // any: オーダ x2 + ドミニクス x1.
+    expect(anyResult.totalMatches).toBe(3);
+
+    const allResult = await runProjectGlossaryAtomSearch({
+      documents: [doc("a.md")],
+      readText: async () => text,
+      terms: [term("オーダ"), term("ドミニクス")],
+      relationMode: "all"
+    });
+    // all: only the second paragraph has both.
+    expect(allResult.totalMatches).toBe(1);
+    const [group] = allResult.files[0].matches;
+    if (!isGlossarySearchMatch(group)) {
+      throw new Error("expected a glossary match");
+    }
+    expect(group.glossaryAtoms?.map((atom) => atom.atomValue)).toEqual([
+      "オーダ",
+      "ドミニクス"
+    ]);
   });
 });

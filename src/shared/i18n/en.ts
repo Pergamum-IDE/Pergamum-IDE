@@ -716,8 +716,6 @@ export const enTranslations = {
   "search.invalidRegex": "Invalid regular expression",
   "search.wholeWordUnavailableWithRegex":
     "Match Whole Word is unavailable while using regular expressions.",
-  "search.optionUnavailableWithGlossary":
-    "This search option is unavailable while using Glossary Search.",
   "search.glossary.placeholder": "Select glossary terms...",
   "search.glossary.filterPlaceholder": "Filter glossary terms...",
   "search.glossary.selectedCount": "{count} selected",
@@ -727,6 +725,15 @@ export const enTranslations = {
   "search.glossary.emptySelection":
     "Select glossary terms to search Markdown documents in the project.",
   "search.glossary.noGlossary": "No glossary terms are available.",
+  "search.glossary.relation.label": "Glossary search relation",
+  "search.glossary.relation.any": "Any",
+  "search.glossary.relation.all": "All",
+  "search.glossary.relation.nearby": "Nearby",
+  "search.glossary.relation.any.hint": "Find any selected glossary term",
+  "search.glossary.relation.all.hint":
+    "Find paragraphs containing all selected glossary terms",
+  "search.glossary.relation.nearby.hint":
+    "Find nearby occurrences of all selected glossary terms",
   "documentMap.title": "Document Map",
   "documentMap.empty": "No document map available",
   "documentMap.renderTags.label": "Render tags",

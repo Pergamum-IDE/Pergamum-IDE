@@ -363,6 +363,43 @@ describe("debug log catalog", () => {
     );
   });
 
+  it("includes the #384 Search pane telemetry events, none carrying a query/label field", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "search.started",
+        "search.completed",
+        "search.staleDiscarded",
+        "search.cancelled",
+        "search.failed"
+      ])
+    );
+    // Privacy: only opaque / structural fields are part of the catalog.
+    expect(debugLogEventNames).not.toContain("search.query");
+
+    type HasSearchRunId = "searchRunId" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasSelectedAtomIds = "selectedAtomIds" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasSearchResultCount = "searchResultCount" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasSearchRunId: HasSearchRunId = true;
+    const hasSelectedAtomIds: HasSelectedAtomIds = true;
+    const hasSearchResultCount: HasSearchResultCount = true;
+    expect(hasSearchRunId).toBe(true);
+    expect(hasSelectedAtomIds).toBe(true);
+    expect(hasSearchResultCount).toBe(true);
+
+    // No free-text field was smuggled in for search.
+    type HasSearchQuery = "searchQuery" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasSearchQuery: HasSearchQuery = false;
+    expect(hasSearchQuery).toBe(false);
+  });
+
   it("includes the Recovery Store lifecycle events (Phase 6-4-2)", () => {
     expect(debugLogEventNames).toEqual(
       expect.arrayContaining([

@@ -571,4 +571,92 @@ describe("debug log details sanitizer", () => {
       sanitizeDebugLogDetails({ pathKind: "appData", ownerPid: 1.5 }, context())
     ).toEqual({ pathKind: "appData" });
   });
+
+  it("accepts #384 search telemetry details, echoing only opaque / structural values", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        searchRunId: "018f4b8c-7a2b-7c3d-8e4f-a00000000009",
+        searchMode: "glossary",
+        searchRelationMode: "nearby",
+        searchWholeWord: false,
+        searchCaseSensitive: false,
+        searchRegex: false,
+        selectedAtomIds: [
+          "018f4b8c-7a2b-7c3d-8e4f-a00000000001",
+          "018f4b8c-7a2b-7c3d-8e4f-a00000000002"
+        ],
+        selectedAtomCount: 2,
+        searchDocumentCount: 42,
+        searchedCharacterCount: 1_080_000,
+        searchResultCount: 12,
+        searchAppliedToUi: true,
+        searchStartedAt: "2026-09-04T14:20:00.000Z",
+        durationMs: 83
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      searchRunId: "018f4b8c-7a2b-7c3d-8e4f-a00000000009",
+      searchMode: "glossary",
+      searchRelationMode: "nearby",
+      searchWholeWord: false,
+      searchCaseSensitive: false,
+      searchRegex: false,
+      selectedAtomIds: [
+        "018f4b8c-7a2b-7c3d-8e4f-a00000000001",
+        "018f4b8c-7a2b-7c3d-8e4f-a00000000002"
+      ],
+      selectedAtomCount: 2,
+      searchDocumentCount: 42,
+      searchedCharacterCount: 1_080_000,
+      searchResultCount: 12,
+      searchAppliedToUi: true,
+      searchStartedAt: "2026-09-04T14:20:00.000Z",
+      durationMs: 83
+    });
+  });
+
+  it("strips a non-UUID / manuscript-looking entry from search selectedAtomIds", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        searchMode: "glossary",
+        selectedAtomIds: [
+          "018f4b8c-7a2b-7c3d-8e4f-a00000000001",
+          "オーダ",
+          "王都の路地裏",
+          "not a uuid with spaces"
+        ]
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      searchMode: "glossary",
+      selectedAtomIds: ["018f4b8c-7a2b-7c3d-8e4f-a00000000001"]
+    });
+    expect(JSON.stringify(details)).not.toContain("オーダ");
+    expect(JSON.stringify(details)).not.toContain("王都");
+  });
+
+  it("normalizes an unknown search mode / relation mode and drops junk metrics", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        searchMode: "semantic",
+        searchRelationMode: "fuzzy",
+        searchResultCount: -3,
+        searchedCharacterCount: 1.5,
+        searchStartedAt: "not-a-timestamp"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      searchMode: "unknown",
+      searchRelationMode: "unknown"
+    });
+    expect(details).not.toHaveProperty("searchResultCount");
+    expect(details).not.toHaveProperty("searchedCharacterCount");
+    expect(details).not.toHaveProperty("searchStartedAt");
+  });
 });

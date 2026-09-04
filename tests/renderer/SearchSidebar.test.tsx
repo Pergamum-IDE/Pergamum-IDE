@@ -4,6 +4,15 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockDebugLogEvent } = vi.hoisted(() => ({
+  mockDebugLogEvent: vi.fn()
+}));
+vi.mock("../../src/renderer/debugLog", () => ({
+  logRendererDebugEvent: mockDebugLogEvent,
+  rendererDebugErrorInfo: (error: unknown) =>
+    error instanceof Error ? { name: error.name } : {}
+}));
 import type { Translate } from "../../src/shared/i18n";
 import { SearchSidebar } from "../../src/renderer/SearchSidebar";
 import type { ProjectTextSearchResult } from "../../src/renderer/projectTextSearch";
@@ -45,6 +54,7 @@ type RunSearchFn = (
 
 type RunGlossarySearchFn = (
   terms: readonly GlossaryAtomSearchTerm[],
+  relationMode: "any" | "all" | "nearby",
   isCancelled: () => boolean
 ) => Promise<ProjectTextSearchResult>;
 
@@ -95,12 +105,16 @@ function glossaryEntry(id: string, atoms: GlossaryAtom[]): GlossaryEntry {
   };
 }
 
+const ATOM_ID_JANNE = "018f4b8c-7a2b-7c3d-8e4f-a00000000001";
+const ATOM_ID_VALJEAN = "018f4b8c-7a2b-7c3d-8e4f-a00000000002";
+const ATOM_ID_MAID = "018f4b8c-7a2b-7c3d-8e4f-a00000000003";
+
 const GLOSSARY_ENTRIES: GlossaryEntry[] = [
   glossaryEntry("e1", [
-    glossaryAtom("e1", "a-janne", "ジャンヌ"),
-    glossaryAtom("e1", "a-valjean", "ヴァルジャン")
+    glossaryAtom("e1", ATOM_ID_JANNE, "ジャンヌ"),
+    glossaryAtom("e1", ATOM_ID_VALJEAN, "ヴァルジャン")
   ]),
-  glossaryEntry("e2", [glossaryAtom("e2", "a-maid", "メイド")])
+  glossaryEntry("e2", [glossaryAtom("e2", ATOM_ID_MAID, "メイド")])
 ];
 
 function optionToggle(index: number): HTMLButtonElement {
@@ -141,6 +155,8 @@ function makeResult(
     fileCount: 0,
     truncated: false,
     skippedFileCount: 0,
+    documentCount: 0,
+    searchedCharacterCount: 0,
     ...partial
   };
 }
@@ -571,32 +587,139 @@ describe("SearchSidebar (#384 — Glossary Atom Search mode)", () => {
     act(() => option.click());
   }
 
-  it("resets and disables Ab / Aa / .* when entering glossary mode", () => {
+  function optionLabels(): (string | null)[] {
+    return Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".searchOptionToggle")
+    ).map((button) => button.getAttribute("aria-label"));
+  }
+
+  it("swaps the Ab / Aa / .* icons for the relation selector in glossary mode", () => {
     renderWith({
       projectAvailable: true,
       runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      runGlossarySearch: vi.fn<RunGlossarySearchFn>(async () => makeResult()),
       glossaryEntries: GLOSSARY_ENTRIES
     });
 
-    const [, wholeWord, matchCase, useRegex] = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".searchOptionToggle")
+    // Text mode: the four option toggles, no relation selector.
+    expect(optionLabels()).toEqual([
+      "search.option.glossary",
+      "search.option.wholeWord",
+      "search.option.caseSensitive",
+      "search.option.useRegex"
+    ]);
+    expect(container.querySelector(".glossaryRelationSelect")).toBeNull();
+
+    // Turn on whole word, then enter glossary mode.
+    act(() => optionToggle(1).click());
+    enterGlossaryMode();
+
+    // Only the glossary toggle remains; the relation selector appears.
+    expect(optionLabels()).toEqual(["search.option.glossary"]);
+    const relation = container.querySelector<HTMLSelectElement>(
+      ".glossaryRelationSelect"
     );
-    act(() => wholeWord.click());
-    act(() => matchCase.click());
-    expect(wholeWord.getAttribute("aria-pressed")).toBe("true");
+    expect(relation).not.toBeNull();
+    expect(relation!.value).toBe("any");
+
+    // Leaving glossary mode brings the toggles back, unpressed.
+    enterGlossaryMode();
+    expect(optionLabels()).toEqual([
+      "search.option.glossary",
+      "search.option.wholeWord",
+      "search.option.caseSensitive",
+      "search.option.useRegex"
+    ]);
+    expect(optionToggle(1).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("re-searches with the chosen relation mode", async () => {
+    const runGlossarySearch = vi.fn<RunGlossarySearchFn>(async () =>
+      makeResult()
+    );
+    renderWith({
+      projectAvailable: true,
+      runGlossarySearch,
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
 
     enterGlossaryMode();
+    openAtomPicker();
+    pickAtom("ジャンヌ");
+    pickAtom("メイド");
+    await advance(300);
 
-    for (const toggle of [wholeWord, matchCase, useRegex]) {
-      expect(toggle.disabled).toBe(true);
-      expect(toggle.getAttribute("aria-pressed")).toBe("false");
-    }
+    expect(runGlossarySearch).toHaveBeenCalledTimes(1);
+    expect(runGlossarySearch.mock.calls[0][1]).toBe("any");
 
-    // Leaving glossary mode re-enables them but does not restore prior state.
+    const relation = container.querySelector<HTMLSelectElement>(
+      ".glossaryRelationSelect"
+    )!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLSelectElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(relation, "all");
+      relation.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await advance(300);
+
+    expect(runGlossarySearch).toHaveBeenCalledTimes(2);
+    expect(runGlossarySearch.mock.calls[1][1]).toBe("all");
+  });
+
+  it("emits search.started + search.completed to the debug log on a completed glossary search", async () => {
+    mockDebugLogEvent.mockClear();
+    const runGlossarySearch = vi.fn<RunGlossarySearchFn>(async () =>
+      makeResult({
+        totalMatches: 4,
+        fileCount: 2,
+        documentCount: 9,
+        searchedCharacterCount: 123_456
+      })
+    );
+    renderWith({
+      projectAvailable: true,
+      runGlossarySearch,
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
     enterGlossaryMode();
-    for (const toggle of [wholeWord, matchCase, useRegex]) {
-      expect(toggle.disabled).toBe(false);
-      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    openAtomPicker();
+    pickAtom("ジャンヌ");
+    await advance(300);
+
+    const events = mockDebugLogEvent.mock.calls.map(
+      (args) => args[0] as { event: string; details: Record<string, unknown> }
+    );
+    const started = events.find((entry) => entry.event === "search.started");
+    const completed = events.find((entry) => entry.event === "search.completed");
+    expect(started).toBeDefined();
+    expect(completed).toBeDefined();
+
+    expect(started!.details).toMatchObject({
+      searchMode: "glossary",
+      searchRelationMode: "any",
+      selectedAtomIds: [ATOM_ID_JANNE],
+      selectedAtomCount: 1
+    });
+    expect(completed!.details).toMatchObject({
+      searchMode: "glossary",
+      searchRelationMode: "any",
+      searchDocumentCount: 9,
+      searchedCharacterCount: 123_456,
+      searchResultCount: 4,
+      searchAppliedToUi: true
+    });
+    expect(typeof completed!.details.durationMs).toBe("number");
+    // One execution → shared searchRunId.
+    expect(completed!.details.searchRunId).toBe(started!.details.searchRunId);
+
+    // No query text, atom value, entry label or path anywhere in the records.
+    const serialized = JSON.stringify(mockDebugLogEvent.mock.calls);
+    for (const needle of ["ジャンヌ", "ヴァルジャン", "メイド", "chapters/"]) {
+      expect(serialized).not.toContain(needle);
     }
   });
 
@@ -712,5 +835,100 @@ describe("SearchSidebar (#384 — Glossary Atom Search mode)", () => {
     await advance(400);
 
     expect(bodyText()).toContain("search.glossary.emptySelection");
+  });
+});
+
+describe("SearchSidebar (#384 — delayed loading skeleton)", () => {
+  function skeleton(): Element | null {
+    return container.querySelector(".searchLoadingSkeleton");
+  }
+
+  function deferredRunSearch(): {
+    runSearch: ReturnType<typeof vi.fn<RunSearchFn>>;
+    resolve: (value: ProjectTextSearchResult) => void;
+  } {
+    let inner: (value: ProjectTextSearchResult) => void = () => {};
+    const runSearch = vi.fn<RunSearchFn>(
+      () =>
+        new Promise<ProjectTextSearchResult>((r) => {
+          inner = r;
+        })
+    );
+    // Stable wrapper so callers resolve the LATEST pending promise.
+    return { runSearch, resolve: (value) => inner(value) };
+  }
+
+  it("does not show a skeleton for a fast search", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => ONE_MATCH_RESULT);
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("maid");
+    // Past the debounce; the mock resolves on the next microtask, well before
+    // the 200ms skeleton delay.
+    await advance(300);
+
+    expect(skeleton()).toBeNull();
+    expect(bodyText()).toContain("search.summary");
+  });
+
+  it("shows a skeleton once a slow search runs past the delay, then clears it", async () => {
+    const { runSearch, resolve } = deferredRunSearch();
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("maid");
+    await advance(300); // debounce elapsed → search running, skeleton armed
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    expect(skeleton()).toBeNull();
+
+    await advance(250); // past SEARCH_LOADING_SKELETON_DELAY_MS
+    const shown = skeleton();
+    expect(shown).not.toBeNull();
+    expect(shown!.getAttribute("aria-busy")).toBe("true");
+    expect(
+      container.querySelectorAll(".searchLoadingSkeletonRow").length
+    ).toBeGreaterThanOrEqual(3);
+
+    await act(async () => {
+      resolve(ONE_MATCH_RESULT);
+    });
+
+    expect(skeleton()).toBeNull();
+    expect(bodyText()).toContain("search.summary");
+  });
+
+  it("does not leave a skeleton behind when a slow search goes stale", async () => {
+    const { runSearch, resolve } = deferredRunSearch();
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("maid");
+    await advance(300);
+    await advance(250);
+    expect(skeleton()).not.toBeNull();
+
+    // A newer search supersedes the first; its own debounce has not fired yet.
+    typeQuery("maiden");
+    await advance(0);
+    expect(skeleton()).toBeNull();
+
+    // The stale first search finally resolves — must not resurrect a skeleton
+    // or apply its result.
+    await act(async () => {
+      resolve(ONE_MATCH_RESULT);
+    });
+    expect(skeleton()).toBeNull();
+    expect(bodyText()).toContain("search.searching");
+  });
+
+  it("does not show a skeleton during the debounce window", async () => {
+    const { runSearch } = deferredRunSearch();
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("maid");
+    // Debounce (250ms) not yet elapsed: search has not started, so even well
+    // past the 200ms skeleton delay nothing appears.
+    await advance(230);
+    expect(runSearch).not.toHaveBeenCalled();
+    expect(skeleton()).toBeNull();
+    expect(bodyText()).toContain("search.searching");
   });
 });

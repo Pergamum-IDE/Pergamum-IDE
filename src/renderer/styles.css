@@ -1827,7 +1827,27 @@ label.settingsItemHeader {
 .searchPaneOptions {
   display: flex;
   flex: 0 0 auto;
+  align-items: center;
   gap: 2px;
+}
+
+/* #384 Glossary Search relation selector (replaces Ab / Aa / .* in that mode). */
+.glossaryRelationSelect {
+  flex: 0 0 auto;
+  max-width: 7.5em;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 12px;
+}
+
+.glossaryRelationSelect:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -1px;
 }
 
 .searchOptionToggle {
@@ -1901,6 +1921,59 @@ label.settingsItemHeader {
   padding: 6px 8px;
   border-inline-start: 2px solid var(--workspace-sidebar-focus-ring);
   background: var(--workspace-sidebar-hover);
+}
+
+/* #384 delayed loading skeleton — shown only once a search runs past
+   SEARCH_LOADING_SKELETON_DELAY_MS. */
+.searchLoadingSkeleton {
+  padding-top: 2px;
+}
+
+.searchLoadingSkeletonLabel {
+  border-top: 0;
+}
+
+.searchLoadingSkeletonRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 10px 0;
+}
+
+.searchLoadingSkeletonRow {
+  display: block;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--workspace-sidebar-hover);
+}
+
+.searchLoadingSkeletonRow:nth-child(2) {
+  width: 82%;
+}
+
+.searchLoadingSkeletonRow:nth-child(3) {
+  width: 68%;
+}
+
+.searchLoadingSkeletonRow:nth-child(4) {
+  width: 76%;
+}
+
+/* Animate only when the viewer has not asked for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .searchLoadingSkeletonRow {
+    animation: searchLoadingSkeletonPulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes searchLoadingSkeletonPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
 }
 
 .searchResultsSummary {
@@ -2008,9 +2081,17 @@ label.settingsItemHeader {
   border-radius: 2px;
 }
 
-/* #384 Glossary Atom Search: matched-atom badge on a result row. */
-.searchResultRowAtom {
+/* #384 Glossary Search: matched-atom badge(s) on a result row. `all` /
+   `nearby` group rows carry several. */
+.searchResultRowAtoms {
+  display: inline-flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 12em;
+}
+
+.searchResultRowAtom {
   max-width: 8em;
   overflow: hidden;
   text-overflow: ellipsis;

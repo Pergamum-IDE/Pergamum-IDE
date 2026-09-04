@@ -421,7 +421,10 @@ import {
   runProjectTextSearch,
   type ProjectTextSearchResult
 } from "./projectTextSearch";
-import type { GlossaryAtomSearchTerm } from "./glossaryAtomSearch";
+import type {
+  GlossaryAtomSearchTerm,
+  GlossarySearchRelationMode
+} from "./glossaryAtomSearch";
 import type { TextSearchOptions } from "../shared/textSearch";
 import type { DocumentMetricsFileInfo } from "./DocumentMetricsPanel";
 import {
@@ -7378,11 +7381,13 @@ export function App(): JSX.Element {
     });
   }
 
-  // #384 Glossary Atom Search: OR-search the picked atoms' values across the
-  // project's Markdown files. Same file discovery / dirty-buffer policy as the
-  // text search; each result match carries its glossary atom / entry identity.
+  // #384 Glossary Search: search the picked atoms across the project's Markdown
+  // files under the chosen relation mode (any / all / nearby). Same file
+  // discovery / dirty-buffer policy as the text search; each result match
+  // carries its glossary atom / entry identity.
   async function runProjectGlossarySearch(
     terms: readonly GlossaryAtomSearchTerm[],
+    relationMode: GlossarySearchRelationMode,
     isCancelled: () => boolean
   ): Promise<ProjectTextSearchResult> {
     const activeProject = project;
@@ -7396,6 +7401,7 @@ export function App(): JSX.Element {
       documents: activeProject.documents,
       readText: createProjectSearchReadText(activeContext),
       terms,
+      relationMode,
       isCancelled
     });
   }

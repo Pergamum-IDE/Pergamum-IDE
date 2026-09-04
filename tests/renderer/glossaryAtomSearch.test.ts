@@ -9,7 +9,10 @@ import {
   buildGlossaryAtomSearchTerms,
   collectSelectableGlossaryAtoms,
   findGlossaryAtomMatches,
+  findGlossaryAtomRelationMatches,
   isGlossarySearchMatch,
+  NEARBY_WINDOW_CHARACTERS,
+  splitTextParagraphs,
   type GlossaryAtomSearchTerm
 } from "../../src/renderer/glossaryAtomSearch";
 
@@ -279,5 +282,126 @@ describe("findGlossaryAtomMatches respects Atom match settings (#384)", () => {
     );
     expect(matches).toHaveLength(1);
     expect(matches[0].startOffset).toBe(0);
+  });
+});
+
+describe("splitTextParagraphs (#384)", () => {
+  it("splits on blank (whitespace-only) lines and keeps offsets", () => {
+    const text = "one\ntwo\n\n  \nthree";
+    expect(splitTextParagraphs(text)).toEqual([
+      { start: 0, end: 7 }, // "one\ntwo"
+      { start: text.indexOf("three"), end: text.length }
+    ]);
+  });
+
+  it("returns nothing for blank-only text", () => {
+    expect(splitTextParagraphs("\n  \n\t\n")).toEqual([]);
+  });
+});
+
+describe("findGlossaryAtomRelationMatches — all (#384)", () => {
+  const ORDA = term("オーダ", "a-orda", "e-orda", "オーダ");
+  const DOMINICUS = term("ドミニクス", "a-dom", "e-dom", "ドミニクス");
+
+  const TEXT = [
+    "オーダは立ち止まった。",
+    "",
+    "ドミニクスが現れた。",
+    "",
+    "オーダとドミニクスは対峙した。"
+  ].join("\n");
+
+  it("returns only the paragraph that holds every selected atom", () => {
+    const matches = findGlossaryAtomRelationMatches(TEXT, [ORDA, DOMINICUS], "all");
+    expect(matches).toHaveLength(1);
+
+    const [group] = matches;
+    expect(group.glossaryRelationMode).toBe("all");
+    expect(
+      group.glossaryAtoms?.map((atom) => atom.atomValue)
+    ).toEqual(["オーダ", "ドミニクス"]);
+    // Anchored at the earliest atom in the paragraph.
+    expect(group.startOffset).toBe(TEXT.lastIndexOf("オーダ"));
+    expect(group.line).toBe(5);
+  });
+
+  it("no result when an atom never occurs anywhere", () => {
+    expect(
+      findGlossaryAtomRelationMatches(TEXT, [ORDA, term("欠落")], "all")
+    ).toEqual([]);
+  });
+
+  it("respects Atom boundary settings inside a paragraph", () => {
+    const text = "ジャンとドミニクスは話した。";
+    const strictJan = term("ジャン", "a-jan", "e-jan", "ジャン", STRICT_BOTH);
+    // `ジャン` strict/strict does hit `ジャン` here (followed by と), so a
+    // paragraph with ジャン + ドミニクス qualifies...
+    expect(
+      findGlossaryAtomRelationMatches(text, [strictJan, DOMINICUS], "all")
+    ).toHaveLength(1);
+    // ...but `ジャン` strict/strict must NOT hit `ヴァルジャン`.
+    expect(
+      findGlossaryAtomRelationMatches(
+        "ヴァルジャンとドミニクスは話した。",
+        [strictJan, DOMINICUS],
+        "all"
+      )
+    ).toEqual([]);
+  });
+
+  it("one selected atom: a result per paragraph it appears in", () => {
+    expect(
+      findGlossaryAtomRelationMatches(TEXT, [ORDA], "all").map((m) => m.line)
+    ).toEqual([1, 5]);
+  });
+});
+
+describe("findGlossaryAtomRelationMatches — nearby (#384)", () => {
+  const ORDA = term("オーダ", "a-orda", "e-orda", "オーダ");
+  const DOMINICUS = term("ドミニクス", "a-dom", "e-dom", "ドミニクス");
+
+  it("hits when all atoms fall inside the window, misses when too far", () => {
+    const near = `オーダ${"あ".repeat(50)}ドミニクス`;
+    expect(
+      findGlossaryAtomRelationMatches(near, [ORDA, DOMINICUS], "nearby")
+    ).toHaveLength(1);
+
+    const far = `オーダ${"あ".repeat(NEARBY_WINDOW_CHARACTERS + 20)}ドミニクス`;
+    expect(
+      findGlossaryAtomRelationMatches(far, [ORDA, DOMINICUS], "nearby")
+    ).toEqual([]);
+  });
+
+  it("group result carries every atom in the window, anchored at the first", () => {
+    const text = `まえ オーダ なか ドミニクス あと`;
+    const [group] = findGlossaryAtomRelationMatches(
+      text,
+      [DOMINICUS, ORDA],
+      "nearby"
+    );
+    expect(group.glossaryRelationMode).toBe("nearby");
+    expect(group.startOffset).toBe(text.indexOf("オーダ"));
+    expect(
+      group.glossaryAtoms?.map((atom) => atom.atomValue).sort()
+    ).toEqual(["オーダ", "ドミニクス"]);
+  });
+
+  it("dedupes windows that share the same leading occurrence", () => {
+    // オーダ once, ドミニクス twice, all within the window: one result.
+    const text = `オーダ ドミニクス なか ドミニクス`;
+    expect(
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby")
+    ).toHaveLength(1);
+  });
+
+  it("respects Atom boundary settings", () => {
+    const strictJan = term("ジャン", "a-jan", "e-jan", "ジャン", STRICT_BOTH);
+    expect(
+      findGlossaryAtomRelationMatches(
+        "ヴァルジャン すぐ ドミニクス",
+        [strictJan, DOMINICUS],
+        "nearby"
+      )
+    ).toEqual([]);
   });
 });

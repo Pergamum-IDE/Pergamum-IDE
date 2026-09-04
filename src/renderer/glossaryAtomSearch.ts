@@ -51,12 +51,42 @@ export interface GlossaryAtomSearchTerm {
   readonly entryLabel: string;
 }
 
+/**
+ * #384 Glossary Search relation mode.
+ * - `any`    — OR: show any occurrence of any selected atom (v1 behaviour).
+ * - `all`    — show a PARAGRAPH (blank-line block) that contains every
+ *              selected atom at least once.
+ * - `nearby` — show a window at most {@link NEARBY_WINDOW_CHARACTERS} wide
+ *              that contains every selected atom.
+ */
+export type GlossarySearchRelationMode = "any" | "all" | "nearby";
+
+/** `nearby` window width in UTF-16 code units (~one 400-char manuscript page).
+ *  Not user-configurable in this phase. */
+export const NEARBY_WINDOW_CHARACTERS = 400;
+
+/** One selected atom's representative occurrence inside an `all` / `nearby`
+ *  group result. */
+export interface GlossarySearchMatchAtom {
+  readonly atomId: string;
+  readonly atomValue: string;
+  readonly entryId: string;
+  readonly entryLabel: string;
+  readonly startOffset: number;
+  readonly endOffset: number;
+}
+
 /** A `TextSearchMatch` that carries the glossary atom / entry it came from. */
 export interface GlossarySearchMatch extends TextSearchMatch {
   readonly glossaryAtomId: string;
   readonly glossaryAtomValue: string;
   readonly glossaryEntryId: string;
   readonly glossaryEntryLabel: string;
+  /** The relation mode that produced this row. Absent / `any` for OR matches. */
+  readonly glossaryRelationMode?: GlossarySearchRelationMode;
+  /** `all` / `nearby`: every selected atom's representative occurrence covered
+   *  by this group (length >= 2). Absent for `any` match rows. */
+  readonly glossaryAtoms?: readonly GlossarySearchMatchAtom[];
 }
 
 /** Narrow a `TextSearchMatch` to a glossary-search match. */
@@ -145,8 +175,14 @@ export function buildGlossaryAtomSearchTerms(
 }
 
 export interface FindGlossaryAtomMatchesOptions {
-  /** Stop after this many matches (per document). `0` / omitted = no cap. */
+  /** Stop after this many result rows (per document). `0` / omitted = no cap. */
   readonly limit?: number;
+}
+
+function resolveLimit(limit: number | undefined): number {
+  return typeof limit === "number" && limit > 0
+    ? limit
+    : Number.POSITIVE_INFINITY;
 }
 
 const SYNTHETIC_TIMESTAMP = "";
@@ -208,10 +244,7 @@ export function findGlossaryAtomMatches(
     return [];
   }
 
-  const limit =
-    typeof options.limit === "number" && options.limit > 0
-      ? options.limit
-      : Number.POSITIVE_INFINITY;
+  const limit = resolveLimit(options.limit);
 
   const entryLabelByAtomId = new Map(
     usableTerms.map((term) => [term.atomId, term.entryLabel])
@@ -251,4 +284,233 @@ export function findGlossaryAtomMatches(
   }
 
   return matches;
+}
+
+/**
+ * Dispatch by relation mode. `any` is the OR search above; `all` / `nearby`
+ * return GROUP rows (one per qualifying paragraph / window) whose
+ * `glossaryAtoms` lists every selected atom's occurrence.
+ */
+export function findGlossaryAtomRelationMatches(
+  text: string,
+  terms: readonly GlossaryAtomSearchTerm[],
+  relationMode: GlossarySearchRelationMode,
+  options: FindGlossaryAtomMatchesOptions = {}
+): GlossarySearchMatch[] {
+  if (relationMode === "all") {
+    return findGlossaryAtomAllMatches(text, terms, options);
+  }
+  if (relationMode === "nearby") {
+    return findGlossaryAtomNearbyMatches(text, terms, options);
+  }
+  return findGlossaryAtomMatches(text, terms, options);
+}
+
+interface TermOccurrences {
+  readonly term: GlossaryAtomSearchTerm;
+  readonly hits: readonly GlossarySearchMatch[];
+}
+
+/** Each term's own occurrences (unambiguous — one term per pass). */
+function collectTermOccurrences(
+  text: string,
+  terms: readonly GlossaryAtomSearchTerm[]
+): TermOccurrences[] {
+  return terms.map((term) => ({
+    term,
+    hits: findGlossaryAtomMatches(text, [term], {})
+  }));
+}
+
+function occurrenceOf(
+  term: GlossaryAtomSearchTerm,
+  hit: GlossarySearchMatch
+): GlossarySearchMatchAtom {
+  return {
+    atomId: term.atomId,
+    atomValue: hit.glossaryAtomValue,
+    entryId: term.entryId,
+    entryLabel: term.entryLabel,
+    startOffset: hit.startOffset,
+    endOffset: hit.endOffset
+  };
+}
+
+/** Build a group result anchored at the earliest atom occurrence. */
+function groupMatch(
+  text: string,
+  lineStarts: readonly number[],
+  atoms: readonly GlossarySearchMatchAtom[],
+  relationMode: GlossarySearchRelationMode
+): GlossarySearchMatch {
+  const ordered = [...atoms].sort(
+    (left, right) =>
+      left.startOffset - right.startOffset || left.endOffset - right.endOffset
+  );
+  const anchor = ordered[0];
+
+  return {
+    ...createTextSearchMatch(
+      text,
+      lineStarts,
+      anchor.startOffset,
+      anchor.endOffset
+    ),
+    glossaryAtomId: anchor.atomId,
+    glossaryAtomValue: anchor.atomValue,
+    glossaryEntryId: anchor.entryId,
+    glossaryEntryLabel: anchor.entryLabel,
+    glossaryRelationMode: relationMode,
+    glossaryAtoms: ordered
+  };
+}
+
+/**
+ * Blank-line-separated paragraphs of `text` as `[start, end)` code-unit
+ * ranges. A "paragraph" is a run of consecutive lines that each contain a
+ * non-whitespace character; whitespace-only lines are separators. No Markdown
+ * AST — this is the deliberately simple v1 split.
+ */
+export function splitTextParagraphs(
+  text: string
+): Array<{ start: number; end: number }> {
+  const paragraphs: Array<{ start: number; end: number }> = [];
+  const paragraphPattern = /[^\n]*\S[^\n]*(?:\n[^\n]*\S[^\n]*)*/g;
+  let match: RegExpExecArray | null;
+  while ((match = paragraphPattern.exec(text)) !== null) {
+    paragraphs.push({
+      start: match.index,
+      end: match.index + match[0].length
+    });
+    if (match[0].length === 0) {
+      paragraphPattern.lastIndex += 1;
+    }
+  }
+  return paragraphs;
+}
+
+function findGlossaryAtomAllMatches(
+  text: string,
+  terms: readonly GlossaryAtomSearchTerm[],
+  options: FindGlossaryAtomMatchesOptions
+): GlossarySearchMatch[] {
+  const usableTerms = terms.filter((term) => term.value.trim().length > 0);
+  if (text.length === 0 || usableTerms.length === 0) {
+    return [];
+  }
+
+  const perTerm = collectTermOccurrences(text, usableTerms);
+  if (perTerm.some(({ hits }) => hits.length === 0)) {
+    return [];
+  }
+
+  const limit = resolveLimit(options.limit);
+  const lineStarts = lineStartOffsets(text);
+  const results: GlossarySearchMatch[] = [];
+
+  for (const paragraph of splitTextParagraphs(text)) {
+    if (results.length >= limit) {
+      break;
+    }
+
+    const atoms: GlossarySearchMatchAtom[] = [];
+    let complete = true;
+    for (const { term, hits } of perTerm) {
+      const inParagraph = hits.find(
+        (hit) =>
+          hit.startOffset >= paragraph.start && hit.endOffset <= paragraph.end
+      );
+      if (!inParagraph) {
+        complete = false;
+        break;
+      }
+      atoms.push(occurrenceOf(term, inParagraph));
+    }
+    if (!complete) {
+      continue;
+    }
+
+    results.push(groupMatch(text, lineStarts, atoms, "all"));
+  }
+
+  return results;
+}
+
+function findGlossaryAtomNearbyMatches(
+  text: string,
+  terms: readonly GlossaryAtomSearchTerm[],
+  options: FindGlossaryAtomMatchesOptions
+): GlossarySearchMatch[] {
+  const usableTerms = terms.filter((term) => term.value.trim().length > 0);
+  if (text.length === 0 || usableTerms.length === 0) {
+    return [];
+  }
+
+  const perTerm = collectTermOccurrences(text, usableTerms);
+  if (perTerm.some(({ hits }) => hits.length === 0)) {
+    return [];
+  }
+
+  // Every occurrence, tagged with its term index, in document order.
+  const flat: Array<{ termIndex: number; occurrence: GlossarySearchMatchAtom }> =
+    [];
+  perTerm.forEach(({ term, hits }, termIndex) => {
+    for (const hit of hits) {
+      flat.push({ termIndex, occurrence: occurrenceOf(term, hit) });
+    }
+  });
+  flat.sort(
+    (left, right) =>
+      left.occurrence.startOffset - right.occurrence.startOffset ||
+      left.occurrence.endOffset - right.occurrence.endOffset
+  );
+
+  const need = usableTerms.length;
+  const limit = resolveLimit(options.limit);
+  const lineStarts = lineStartOffsets(text);
+  const counts = new Array<number>(need).fill(0);
+  const results: GlossarySearchMatch[] = [];
+  let distinctTerms = 0;
+  let low = 0;
+  let lastWindowStart = -1;
+
+  for (let high = 0; high < flat.length; high += 1) {
+    if (counts[flat[high].termIndex]++ === 0) {
+      distinctTerms += 1;
+    }
+    // Shrink to the smallest window ending at `high` that still holds them all.
+    while (distinctTerms === need && counts[flat[low].termIndex] > 1) {
+      counts[flat[low].termIndex] -= 1;
+      low += 1;
+    }
+    if (distinctTerms !== need) {
+      continue;
+    }
+
+    const windowStart = flat[low].occurrence.startOffset;
+    const windowEnd = flat[high].occurrence.endOffset;
+    if (windowEnd - windowStart > NEARBY_WINDOW_CHARACTERS) {
+      continue;
+    }
+    // Dedupe: one result per distinct leading occurrence.
+    if (windowStart === lastWindowStart) {
+      continue;
+    }
+    lastWindowStart = windowStart;
+
+    const firstByTerm = new Map<number, GlossarySearchMatchAtom>();
+    for (let index = low; index <= high; index += 1) {
+      if (!firstByTerm.has(flat[index].termIndex)) {
+        firstByTerm.set(flat[index].termIndex, flat[index].occurrence);
+      }
+    }
+    results.push(
+      groupMatch(text, lineStarts, [...firstByTerm.values()], "nearby")
+    );
+    if (results.length >= limit) {
+      break;
+    }
+  }
+
+  return results;
 }

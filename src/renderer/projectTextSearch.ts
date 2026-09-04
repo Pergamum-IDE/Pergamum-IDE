@@ -5,8 +5,9 @@ import {
   type TextSearchOptions
 } from "../shared/textSearch";
 import {
-  findGlossaryAtomMatches,
-  type GlossaryAtomSearchTerm
+  findGlossaryAtomRelationMatches,
+  type GlossaryAtomSearchTerm,
+  type GlossarySearchRelationMode
 } from "./glossaryAtomSearch";
 
 /**
@@ -40,6 +41,11 @@ export interface ProjectTextSearchResult {
   readonly truncated: boolean;
   /** Files that could not be read (skipped, not fatal). */
   readonly skippedFileCount: number;
+  /** #384 telemetry: how many project documents the scan considered. */
+  readonly documentCount: number;
+  /** #384 telemetry: total characters actually scanned (skipped files and any
+   *  documents past the total-match cap are not counted). */
+  readonly searchedCharacterCount: number;
 }
 
 export function emptyProjectTextSearchResult(
@@ -51,7 +57,9 @@ export function emptyProjectTextSearchResult(
     totalMatches: 0,
     fileCount: 0,
     truncated: false,
-    skippedFileCount: 0
+    skippedFileCount: 0,
+    documentCount: 0,
+    searchedCharacterCount: 0
   };
 }
 
@@ -89,6 +97,7 @@ async function scanProjectDocuments(
   const files: ProjectTextSearchFileResult[] = [];
   let totalMatches = 0;
   let skippedFileCount = 0;
+  let searchedCharacterCount = 0;
   let truncated = false;
 
   for (const document of ordered) {
@@ -110,6 +119,7 @@ async function scanProjectDocuments(
       skippedFileCount += 1;
       continue;
     }
+    searchedCharacterCount += text.length;
 
     const perFileLimit = Math.min(
       PROJECT_TEXT_SEARCH_MAX_MATCHES_PER_FILE,
@@ -143,7 +153,9 @@ async function scanProjectDocuments(
     totalMatches,
     fileCount: files.length,
     truncated,
-    skippedFileCount
+    skippedFileCount,
+    documentCount: ordered.length,
+    searchedCharacterCount
   };
 }
 
@@ -181,16 +193,18 @@ export async function runProjectTextSearch(
 export interface RunProjectGlossaryAtomSearchInput {
   readonly documents: readonly ProjectDocument[];
   readonly readText: ProjectDocumentReader;
-  /** The selected atoms' OR terms. An empty list yields an empty result. */
+  /** The selected atoms' terms. An empty list yields an empty result. */
   readonly terms: readonly GlossaryAtomSearchTerm[];
+  /** `any` (OR, default), `all` (per paragraph) or `nearby` (400-char window). */
+  readonly relationMode?: GlossarySearchRelationMode;
   readonly isCancelled?: () => boolean;
 }
 
 /**
- * #384 Glossary Atom Search: OR-search the selected atoms' values across the
- * project. Shares the file walk, caps, skip handling and result shape with
- * {@link runProjectTextSearch}; each match additionally carries its glossary
- * atom / entry identity (see {@link import("./glossaryAtomSearch")}).
+ * #384 Glossary Search: search the selected atoms across the project under the
+ * chosen relation mode. Shares the file walk, caps, skip handling and result
+ * shape with {@link runProjectTextSearch}; each match additionally carries its
+ * glossary atom / entry identity (see {@link import("./glossaryAtomSearch")}).
  */
 export async function runProjectGlossaryAtomSearch(
   input: RunProjectGlossaryAtomSearchInput
@@ -203,11 +217,15 @@ export async function runProjectGlossaryAtomSearch(
     return emptyProjectTextSearchResult("");
   }
 
+  const relationMode = input.relationMode ?? "any";
+
   return scanProjectDocuments("", {
     documents: input.documents,
     readText: input.readText,
     isCancelled: input.isCancelled,
     findMatches: (text, perFileLimit) =>
-      findGlossaryAtomMatches(text, terms, { limit: perFileLimit })
+      findGlossaryAtomRelationMatches(text, terms, relationMode, {
+        limit: perFileLimit
+      })
   });
 }

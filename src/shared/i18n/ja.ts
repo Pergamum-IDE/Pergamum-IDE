@@ -714,8 +714,6 @@ export const jaTranslations = {
   "search.invalidRegex": "正規表現が無効です",
   "search.wholeWordUnavailableWithRegex":
     "正規表現検索中は単語単位検索を使用できません",
-  "search.optionUnavailableWithGlossary":
-    "語彙検索中はこの検索オプションを使用できません",
   "search.glossary.placeholder": "語彙を選択...",
   "search.glossary.filterPlaceholder": "語彙を絞り込み...",
   "search.glossary.selectedCount": "{count}件選択",
@@ -725,6 +723,15 @@ export const jaTranslations = {
   "search.glossary.emptySelection":
     "語彙を選択すると、プロジェクト内のMarkdown文書を検索します。",
   "search.glossary.noGlossary": "検索できる語彙がありません。",
+  "search.glossary.relation.label": "語彙検索条件",
+  "search.glossary.relation.any": "いずれか",
+  "search.glossary.relation.all": "すべて",
+  "search.glossary.relation.nearby": "近傍",
+  "search.glossary.relation.any.hint": "選択した語彙のいずれかを検索します",
+  "search.glossary.relation.all.hint":
+    "同じ段落に選択した語彙がすべて出る箇所を検索します",
+  "search.glossary.relation.nearby.hint":
+    "近い範囲に選択した語彙がすべて出る箇所を検索します",
   "documentMap.title": "文書マップ",
   "documentMap.empty": "表示できる文書マップはありません",
   "documentMap.renderTags.label": "描画タグ",

@@ -18,7 +18,10 @@ import {
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
 import type { ProjectTextSearchResult } from "./projectTextSearch";
-import type { GlossaryAtomSearchTerm } from "./glossaryAtomSearch";
+import type {
+  GlossaryAtomSearchTerm,
+  GlossarySearchRelationMode
+} from "./glossaryAtomSearch";
 import type { TextSearchOptions } from "../shared/textSearch";
 import { DocumentMapPanel } from "./DocumentMapPanel";
 import {
@@ -147,9 +150,11 @@ interface WorkspaceSidebarProps {
     startOffset: number,
     endOffset: number
   ) => void;
-  /** #384 Glossary Atom Search: OR-search the selected atoms across the project. */
+  /** #384 Glossary Search: search the selected atoms across the project under
+   *  the chosen relation mode (any / all / nearby). */
   runProjectGlossarySearch?: (
     terms: readonly GlossaryAtomSearchTerm[],
+    relationMode: GlossarySearchRelationMode,
     isCancelled: () => boolean
   ) => Promise<ProjectTextSearchResult>;
 }

@@ -14,8 +14,18 @@ import {
   collectSelectableGlossaryAtoms,
   isGlossarySearchMatch,
   type GlossaryAtomSearchTerm,
+  type GlossarySearchMatch,
+  type GlossarySearchRelationMode,
   type SelectableGlossaryAtom
 } from "./glossaryAtomSearch";
+import {
+  logSearchCompleted,
+  logSearchFailed,
+  logSearchStaleDiscarded,
+  logSearchStarted,
+  newSearchRunId,
+  type SearchTelemetryContext
+} from "./searchTelemetry";
 import glossarySearchIconRaw from "../../assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw";
 import wholeWordIconRaw from "../../assets/icons/Pergamum/search/word.svg?raw";
 import caseSensitiveIconRaw from "../../assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw";
@@ -31,10 +41,11 @@ import useRegexIconRaw from "../../assets/icons/svgrepo/search/regex-svgrepo-com
  *   (`.*`). Regex and whole-word are mutually exclusive; an invalid pattern
  *   shows a validation message and runs nothing.
  *
- * - `glossary`: the query box becomes a GlossaryAtom multi-select; the picked
- *   atoms' exact values are OR-searched. `Ab` / `Aa` / `.*` do not apply and
- *   are forced off + disabled while this mode is active (turning the mode off
- *   does not restore them). No search runs until at least one atom is picked.
+ * - `glossary`: the query box becomes a GlossaryAtom multi-select and the
+ *   `Ab` / `Aa` / `.*` icons are replaced by a relation-mode selector
+ *   (`any` OR / `all` per paragraph / `nearby` 400-char window). The text
+ *   options are forced off while this mode is active and are not restored when
+ *   it is turned off. No search runs until at least one atom is picked.
  *
  * The host supplies `runSearch` (text) / `runGlossarySearch` (glossary) — both
  * read a dirty editor buffer first, the disk file otherwise — and `onOpenMatch`
@@ -42,8 +53,31 @@ import useRegexIconRaw from "../../assets/icons/svgrepo/search/regex-svgrepo-com
  * generation counter.
  */
 
-/** `'text'` = query-box search; `'glossary'` = GlossaryAtom OR search. */
+/** `'text'` = query-box search; `'glossary'` = GlossaryAtom relation search. */
 export type SearchMode = "text" | "glossary";
+
+/** Relation-selector options, in display order, with their i18n keys. */
+const GLOSSARY_RELATION_MODES = [
+  {
+    mode: "any",
+    labelKey: "search.glossary.relation.any",
+    hintKey: "search.glossary.relation.any.hint"
+  },
+  {
+    mode: "all",
+    labelKey: "search.glossary.relation.all",
+    hintKey: "search.glossary.relation.all.hint"
+  },
+  {
+    mode: "nearby",
+    labelKey: "search.glossary.relation.nearby",
+    hintKey: "search.glossary.relation.nearby.hint"
+  }
+] as const satisfies ReadonlyArray<{
+  mode: GlossarySearchRelationMode;
+  labelKey: string;
+  hintKey: string;
+}>;
 
 export interface SearchOptions {
   readonly wholeWord: boolean;
@@ -62,6 +96,14 @@ const NO_GLOSSARY_ENTRIES: readonly GlossaryEntry[] = [];
 
 /** Debounce between the last change and running the project search. */
 const SEARCH_DEBOUNCE_MS = 250;
+
+/**
+ * How long a search must actually run before the result area shows a loading
+ * skeleton. Fast searches finish before this and never flash one; slow ones
+ * (huge project, slow storage, heavy regex / glossary nearby) show it so the
+ * pane does not look frozen.
+ */
+const SEARCH_LOADING_SKELETON_DELAY_MS = 200;
 
 type SearchState =
   | { readonly kind: "idle" }
@@ -157,6 +199,70 @@ function SearchResultPreview({
   );
 }
 
+/**
+ * Matched-atom badge(s) on a result row. `any` rows carry one atom; `all` /
+ * `nearby` group rows list every selected atom they cover.
+ */
+function GlossaryMatchBadges({
+  match
+}: {
+  match: GlossarySearchMatch;
+}): JSX.Element {
+  const atoms =
+    match.glossaryAtoms && match.glossaryAtoms.length > 0
+      ? match.glossaryAtoms
+      : [
+          {
+            atomId: match.glossaryAtomId,
+            atomValue: match.glossaryAtomValue,
+            entryId: match.glossaryEntryId,
+            entryLabel: match.glossaryEntryLabel,
+            startOffset: match.startOffset,
+            endOffset: match.endOffset
+          }
+        ];
+
+  return (
+    <span className="searchResultRowAtoms">
+      {atoms.map((atom) => (
+        <span
+          key={atom.atomId}
+          className="searchResultRowAtom"
+          title={`${atom.atomValue}\n${atom.entryLabel}`}
+        >
+          {atom.atomValue}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Delayed loading state for the result area: the "searching" label plus a few
+ * inert placeholder rows. Only rendered once a search has run past
+ * {@link SEARCH_LOADING_SKELETON_DELAY_MS}. `aria-busy` marks the region;
+ * the rows are decorative (`aria-hidden`) and their pulse is disabled under
+ * `prefers-reduced-motion: reduce` (see styles.css).
+ */
+function SearchLoadingSkeleton({
+  translate
+}: {
+  translate: Translate;
+}): JSX.Element {
+  return (
+    <div className="searchLoadingSkeleton" role="status" aria-busy="true">
+      <p className="workspacePlaceholder searchLoadingSkeletonLabel">
+        {translate("search.searching")}
+      </p>
+      <div className="searchLoadingSkeletonRows" aria-hidden="true">
+        {[0, 1, 2, 3].map((row) => (
+          <span key={row} className="searchLoadingSkeletonRow" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** The grouped result list, shared by text and glossary search. */
 function SearchResults({
   translate,
@@ -221,12 +327,7 @@ function SearchResults({
                       {match.line}:{match.column}
                     </span>
                     {isGlossarySearchMatch(match) ? (
-                      <span
-                        className="searchResultRowAtom"
-                        title={`${match.glossaryAtomValue}\n${match.glossaryEntryLabel}`}
-                      >
-                        {match.glossaryAtomValue}
-                      </span>
+                      <GlossaryMatchBadges match={match} />
                     ) : null}
                     <SearchResultPreview
                       previewText={match.previewText}
@@ -410,6 +511,38 @@ function GlossaryAtomSelect({
   );
 }
 
+/**
+ * `語彙検索` mode's relation selector, shown in place of the `Ab` / `Aa` / `.*`
+ * icons. A compact native `<select>` so it never overflows the narrow pane.
+ */
+function GlossaryRelationSelect({
+  translate,
+  value,
+  onChange
+}: {
+  translate: Translate;
+  value: GlossarySearchRelationMode;
+  onChange: (mode: GlossarySearchRelationMode) => void;
+}): JSX.Element {
+  return (
+    <select
+      className="glossaryRelationSelect"
+      aria-label={translate("search.glossary.relation.label")}
+      title={translate("search.glossary.relation.label")}
+      value={value}
+      onChange={(event) =>
+        onChange(event.currentTarget.value as GlossarySearchRelationMode)
+      }
+    >
+      {GLOSSARY_RELATION_MODES.map(({ mode, labelKey, hintKey }) => (
+        <option key={mode} value={mode} title={translate(hintKey)}>
+          {translate(labelKey)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 interface SearchSidebarProps {
   readonly translate: Translate;
   /** Whether a project is open (nothing to search without one). */
@@ -423,11 +556,12 @@ interface SearchSidebarProps {
     options: TextSearchOptions,
     isCancelled: () => boolean
   ) => Promise<ProjectTextSearchResult>;
-  /** #384 Glossary Atom Search: every project glossary entry, for the picker. */
+  /** #384 Glossary Search: every project glossary entry, for the atom picker. */
   readonly glossaryEntries?: readonly GlossaryEntry[];
-  /** #384 Glossary Atom Search: OR-search the selected atoms' values. */
+  /** #384 Glossary Search: search the selected atoms under a relation mode. */
   readonly runGlossarySearch?: (
     terms: readonly GlossaryAtomSearchTerm[],
+    relationMode: GlossarySearchRelationMode,
     isCancelled: () => boolean
   ) => Promise<ProjectTextSearchResult>;
   /** Open the file and select the match range. */
@@ -450,13 +584,25 @@ export function SearchSidebar({
   const [mode, setMode] = useState<SearchMode>("text");
   const [options, setOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
   const [selectedAtomIds, setSelectedAtomIds] = useState<string[]>([]);
+  const [glossaryRelationMode, setGlossaryRelationMode] =
+    useState<GlossarySearchRelationMode>("any");
   const [searchState, setSearchState] = useState<SearchState>(IDLE_STATE);
+  // `true` once the CURRENT search has run past the skeleton delay.
+  const [loadingSkeletonVisible, setLoadingSkeletonVisible] = useState(false);
 
   const runSearchRef = useRef(runSearch);
   runSearchRef.current = runSearch;
   const runGlossaryRef = useRef(runGlossarySearch);
   runGlossaryRef.current = runGlossarySearch;
   const generationRef = useRef(0);
+  const skeletonTimerRef = useRef<number | undefined>(undefined);
+
+  const clearSkeletonTimer = (): void => {
+    if (skeletonTimerRef.current !== undefined) {
+      window.clearTimeout(skeletonTimerRef.current);
+      skeletonTimerRef.current = undefined;
+    }
+  };
 
   // Any in-flight search that resolves after unmount must not set state.
   useEffect(
@@ -482,6 +628,11 @@ export function SearchSidebar({
   );
 
   useEffect(() => {
+    // A fresh effect pass = a new / cancelled / debounced search: drop any
+    // pending skeleton timer and hide an old skeleton before re-arming below.
+    clearSkeletonTimer();
+    setLoadingSkeletonVisible(false);
+
     if (!projectAvailable) {
       setSearchState((current) => (current === IDLE_STATE ? current : IDLE_STATE));
       return;
@@ -506,23 +657,64 @@ export function SearchSidebar({
         if (!run) {
           return;
         }
+        const telemetry: SearchTelemetryContext = {
+          searchRunId: newSearchRunId(),
+          mode: "glossary",
+          startedAt: new Date(),
+          glossary: {
+            relationMode: glossaryRelationMode,
+            selectedAtomIds: glossaryTerms.map((term) => term.atomId)
+          }
+        };
+        // Only show the skeleton once THIS search has actually run past the
+        // delay and is still the current generation.
+        clearSkeletonTimer();
+        const skeletonHandle = window.setTimeout(() => {
+          if (generationRef.current === generation) {
+            setLoadingSkeletonVisible(true);
+          }
+        }, SEARCH_LOADING_SKELETON_DELAY_MS);
+        skeletonTimerRef.current = skeletonHandle;
+        logSearchStarted(telemetry);
+        const startedAt = performance.now();
         void run(
           glossaryTerms,
+          glossaryRelationMode,
           () => generationRef.current !== generation
         )
           .then((result) => {
-            if (generationRef.current === generation) {
-              setSearchState({ kind: "results", result });
+            window.clearTimeout(skeletonHandle);
+            const metrics = {
+              durationMs: Math.round(performance.now() - startedAt),
+              documentCount: result.documentCount,
+              searchedCharacterCount: result.searchedCharacterCount,
+              resultCount: result.totalMatches
+            };
+            if (generationRef.current !== generation) {
+              logSearchStaleDiscarded(telemetry, metrics);
+              return;
             }
+            setLoadingSkeletonVisible(false);
+            setSearchState({ kind: "results", result });
+            logSearchCompleted(telemetry, metrics);
           })
-          .catch(() => {
+          .catch((error: unknown) => {
+            window.clearTimeout(skeletonHandle);
             if (generationRef.current === generation) {
+              setLoadingSkeletonVisible(false);
               setSearchState({ kind: "error" });
             }
+            logSearchFailed(telemetry, {
+              durationMs: Math.round(performance.now() - startedAt),
+              error
+            });
           });
       }, SEARCH_DEBOUNCE_MS);
 
-      return () => window.clearTimeout(handle);
+      return () => {
+        window.clearTimeout(handle);
+        clearSkeletonTimer();
+      };
     }
 
     // Text mode.
@@ -551,6 +743,25 @@ export function SearchSidebar({
       if (!run) {
         return;
       }
+      const telemetry: SearchTelemetryContext = {
+        searchRunId: newSearchRunId(),
+        mode: "text",
+        startedAt: new Date(),
+        text: {
+          wholeWord: options.wholeWord,
+          caseSensitive: options.caseSensitive,
+          regex: options.useRegex
+        }
+      };
+      clearSkeletonTimer();
+      const skeletonHandle = window.setTimeout(() => {
+        if (generationRef.current === generation) {
+          setLoadingSkeletonVisible(true);
+        }
+      }, SEARCH_LOADING_SKELETON_DELAY_MS);
+      skeletonTimerRef.current = skeletonHandle;
+      logSearchStarted(telemetry);
+      const startedAt = performance.now();
       void run(
         trimmedQuery,
         {
@@ -561,18 +772,38 @@ export function SearchSidebar({
         () => generationRef.current !== generation
       )
         .then((result) => {
-          if (generationRef.current === generation) {
-            setSearchState({ kind: "results", result });
+          window.clearTimeout(skeletonHandle);
+          const metrics = {
+            durationMs: Math.round(performance.now() - startedAt),
+            documentCount: result.documentCount,
+            searchedCharacterCount: result.searchedCharacterCount,
+            resultCount: result.totalMatches
+          };
+          if (generationRef.current !== generation) {
+            logSearchStaleDiscarded(telemetry, metrics);
+            return;
           }
+          setLoadingSkeletonVisible(false);
+          setSearchState({ kind: "results", result });
+          logSearchCompleted(telemetry, metrics);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
+          window.clearTimeout(skeletonHandle);
           if (generationRef.current === generation) {
+            setLoadingSkeletonVisible(false);
             setSearchState({ kind: "error" });
           }
+          logSearchFailed(telemetry, {
+            durationMs: Math.round(performance.now() - startedAt),
+            error
+          });
         });
     }, SEARCH_DEBOUNCE_MS);
 
-    return () => window.clearTimeout(handle);
+    return () => {
+      window.clearTimeout(handle);
+      clearSkeletonTimer();
+    };
   }, [
     glossaryMode,
     projectAvailable,
@@ -580,6 +811,7 @@ export function SearchSidebar({
     glossarySearchAvailable,
     hasGlossaryAtoms,
     glossaryTerms,
+    glossaryRelationMode,
     trimmedQuery,
     options.caseSensitive,
     options.wholeWord,
@@ -588,8 +820,10 @@ export function SearchSidebar({
 
   const toggleGlossaryMode = (): void => {
     // Glossary search is a distinct mode, not an add-on option: entering or
-    // leaving it clears the text-mode options (no auto-restore).
+    // leaving it clears the text-mode options and resets the relation mode to
+    // the `any` default (no auto-restore of prior state either way).
     setOptions(DEFAULT_SEARCH_OPTIONS);
+    setGlossaryRelationMode("any");
     setMode((current) => (current === "glossary" ? "text" : "glossary"));
   };
 
@@ -616,8 +850,6 @@ export function SearchSidebar({
   ): void => {
     onOpenMatch?.(relativePath, startOffset, endOffset);
   };
-
-  const optionDisabledHint = translate("search.optionUnavailableWithGlossary");
 
   return (
     <aside
@@ -659,44 +891,42 @@ export function SearchSidebar({
               hint={translate("search.option.glossary.hint")}
               onToggle={toggleGlossaryMode}
             />
-            <SearchOptionToggle
-              icon={WHOLE_WORD_ICON}
-              pressed={options.wholeWord}
-              disabled={glossaryMode || options.useRegex}
-              label={translate("search.option.wholeWord")}
-              hint={
-                glossaryMode
-                  ? optionDisabledHint
-                  : options.useRegex
-                    ? translate("search.wholeWordUnavailableWithRegex")
-                    : translate("search.option.wholeWord.hint")
-              }
-              onToggle={() => toggleOption("wholeWord")}
-            />
-            <SearchOptionToggle
-              icon={CASE_SENSITIVE_ICON}
-              pressed={options.caseSensitive}
-              disabled={glossaryMode}
-              label={translate("search.option.caseSensitive")}
-              hint={
-                glossaryMode
-                  ? optionDisabledHint
-                  : translate("search.option.caseSensitive.hint")
-              }
-              onToggle={() => toggleOption("caseSensitive")}
-            />
-            <SearchOptionToggle
-              icon={USE_REGEX_ICON}
-              pressed={options.useRegex}
-              disabled={glossaryMode}
-              label={translate("search.option.useRegex")}
-              hint={
-                glossaryMode
-                  ? optionDisabledHint
-                  : translate("search.option.useRegex.hint")
-              }
-              onToggle={() => toggleOption("useRegex")}
-            />
+            {glossaryMode ? (
+              <GlossaryRelationSelect
+                translate={translate}
+                value={glossaryRelationMode}
+                onChange={setGlossaryRelationMode}
+              />
+            ) : (
+              <>
+                <SearchOptionToggle
+                  icon={WHOLE_WORD_ICON}
+                  pressed={options.wholeWord}
+                  disabled={options.useRegex}
+                  label={translate("search.option.wholeWord")}
+                  hint={
+                    options.useRegex
+                      ? translate("search.wholeWordUnavailableWithRegex")
+                      : translate("search.option.wholeWord.hint")
+                  }
+                  onToggle={() => toggleOption("wholeWord")}
+                />
+                <SearchOptionToggle
+                  icon={CASE_SENSITIVE_ICON}
+                  pressed={options.caseSensitive}
+                  label={translate("search.option.caseSensitive")}
+                  hint={translate("search.option.caseSensitive.hint")}
+                  onToggle={() => toggleOption("caseSensitive")}
+                />
+                <SearchOptionToggle
+                  icon={USE_REGEX_ICON}
+                  pressed={options.useRegex}
+                  label={translate("search.option.useRegex")}
+                  hint={translate("search.option.useRegex.hint")}
+                  onToggle={() => toggleOption("useRegex")}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -726,6 +956,8 @@ export function SearchSidebar({
             <p className="workspacePlaceholder" role="status">
               {translate("search.error")}
             </p>
+          ) : loadingSkeletonVisible ? (
+            <SearchLoadingSkeleton translate={translate} />
           ) : (
             <p className="workspacePlaceholder" role="status">
               {translate("search.searching")}
@@ -740,9 +972,13 @@ export function SearchSidebar({
             {translate("search.emptyResults")}
           </p>
         ) : searchState.kind === "searching" ? (
-          <p className="workspacePlaceholder" role="status">
-            {translate("search.searching")}
-          </p>
+          loadingSkeletonVisible ? (
+            <SearchLoadingSkeleton translate={translate} />
+          ) : (
+            <p className="workspacePlaceholder" role="status">
+              {translate("search.searching")}
+            </p>
+          )
         ) : searchState.kind === "error" ? (
           <p className="workspacePlaceholder" role="status">
             {translate("search.error")}
