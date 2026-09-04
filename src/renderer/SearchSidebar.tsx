@@ -591,6 +591,12 @@ interface SearchSidebarProps {
     readonly token: number;
     readonly query: string;
   } | null;
+  /**
+   * #386: bumped by the host after an Open Documents Replace is applied. A new
+   * value re-runs the current text search over the now-changed editor buffers
+   * so results / offsets do not go stale.
+   */
+  readonly searchInvalidationToken?: number;
   /** #386: `[開いている文書のみ置換...]`. Hands the host the current find /
    *  replace / options; the host opens the Replace Preview Dialog immediately
    *  (loading state) and generates the candidates itself. No replace
@@ -611,6 +617,7 @@ export function SearchSidebar({
   runGlossarySearch,
   onOpenMatch,
   queryRequest = null,
+  searchInvalidationToken = 0,
   onReplaceInOpenDocuments,
   onReplaceInProject
 }: SearchSidebarProps): JSX.Element {
@@ -889,7 +896,9 @@ export function SearchSidebar({
     trimmedQuery,
     options.caseSensitive,
     options.wholeWord,
-    options.useRegex
+    options.useRegex,
+    // #386: a replace was applied - re-run over the changed buffers.
+    searchInvalidationToken
   ]);
 
   const toggleGlossaryMode = (): void => {

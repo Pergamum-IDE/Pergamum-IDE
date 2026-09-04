@@ -710,9 +710,20 @@ export const enTranslations = {
   "search.replace.inProject": "Replace in Project...",
   "search.replace.invalidRegex":
     "Invalid regular expression.\nFix the search pattern before previewing replacements.",
+  "search.replace.emptyFindText": "Enter text to find before replacing.",
+  "search.replace.noOpenDocuments":
+    "There are no open Markdown documents to replace in.",
+  "search.replace.template.unsupported":
+    "The replacement text contains an unsupported capture reference.\nRegex replace supports only $1-$99, ${1}-${99}, and $$.",
+  "search.replace.template.missingGroup":
+    "The replacement text references a capture group that does not exist.",
+  "search.replace.appliedAsEdits":
+    "Applied {count} replacements as edits. Files will not be updated until saved.",
   "search.replace.preview.openDocs.title": "Replace in Open Documents",
   "search.replace.preview.openDocs.description":
     "Preview replacement candidates only in open Markdown documents.\nSelected replacements will be applied as edits and will not be written to files until saved.",
+  "search.replace.preview.openDocs.noCandidates":
+    "No replacement candidates were found in open documents.",
   "search.replace.preview.project.title": "Replace in Project",
   "search.replace.preview.project.description":
     "This directly modifies and saves Markdown documents in the project.\nBefore execution, replacement candidates are reviewed and the destructive action requires a 5-second delayed confirmation button.",

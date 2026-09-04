@@ -30,6 +30,9 @@ interface ReplacePreviewScopeConfig {
   readonly titleKey: TranslationKey;
   readonly descriptionKey: TranslationKey;
   readonly applyButtonKey: TranslationKey;
+  readonly emptyKey: TranslationKey;
+  /** Shown only for a scope whose replace execution is not implemented yet. */
+  readonly notImplementedKey?: TranslationKey;
   readonly destructive: boolean;
 }
 
@@ -38,12 +41,15 @@ const SCOPE_CONFIG: Record<ReplacePreviewScope, ReplacePreviewScopeConfig> = {
     titleKey: "search.replace.preview.openDocs.title",
     descriptionKey: "search.replace.preview.openDocs.description",
     applyButtonKey: "search.replace.preview.applyAsEdits",
+    emptyKey: "search.replace.preview.openDocs.noCandidates",
     destructive: false
   },
   projectDocuments: {
     titleKey: "search.replace.preview.project.title",
     descriptionKey: "search.replace.preview.project.description",
     applyButtonKey: "search.replace.preview.applyAndSave",
+    emptyKey: "search.replace.preview.empty",
+    notImplementedKey: "search.replace.preview.notImplemented",
     destructive: true
   }
 };
@@ -275,9 +281,11 @@ export function ReplacePreviewDialog({
         <p className="replacePreviewDescription">
           {translate(config.descriptionKey)}
         </p>
-        <p className="replacePreviewNotImplemented">
-          {translate("search.replace.preview.notImplemented")}
-        </p>
+        {config.notImplementedKey ? (
+          <p className="replacePreviewNotImplemented">
+            {translate(config.notImplementedKey)}
+          </p>
+        ) : null}
 
         <dl className="replacePreviewConditions">
           <div className="replacePreviewCondition">
@@ -348,7 +356,7 @@ export function ReplacePreviewDialog({
 
             {totalCount === 0 ? (
               <p className="replacePreviewEmpty">
-                {translate("search.replace.preview.empty")}
+                {translate(config.emptyKey)}
               </p>
             ) : (
               <>

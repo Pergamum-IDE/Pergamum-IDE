@@ -66,4 +66,14 @@ export interface ReplacePreviewCandidate {
   readonly afterText: string;
   /** Initial apply (`true`) / ignore (`false`) state. */
   readonly enabled: boolean;
+
+  // --- #386 execution metadata (ignored by the dialog's rendering) ---------
+  /** The open document this candidate belongs to (a serialized EditorId).
+   *  Present for Open Documents Replace candidates; the host uses it to route
+   *  the edit to the right editor buffer. */
+  readonly documentId?: string;
+  /** Match start offset in that buffer's current text (UTF-16 units). */
+  readonly startOffset?: number;
+  /** Match end offset in that buffer's current text (UTF-16 units). */
+  readonly endOffset?: number;
 }

@@ -142,7 +142,7 @@ function clickButton(text: string): void {
 }
 
 describe("ReplacePreviewDialog (#386)", () => {
-  it("renders the Open Documents scope header, description and not-implemented note", () => {
+  it("renders the Open Documents scope header and description (replace IS implemented for this scope, so no not-implemented note)", () => {
     renderDialog();
     expect(
       container.querySelector(".appDialogTitle")?.textContent
@@ -150,6 +150,13 @@ describe("ReplacePreviewDialog (#386)", () => {
     expect(
       container.querySelector(".replacePreviewDescription")?.textContent
     ).toBe("search.replace.preview.openDocs.description");
+    expect(
+      container.querySelector(".replacePreviewNotImplemented")
+    ).toBeNull();
+  });
+
+  it("still shows the not-implemented note for the projectDocuments scope", () => {
+    renderDialog({ scope: "projectDocuments" });
     expect(
       container.querySelector(".replacePreviewNotImplemented")?.textContent
     ).toBe("search.replace.preview.notImplemented");
@@ -370,13 +377,18 @@ describe("ReplacePreviewDialog (#386)", () => {
     ).toBeNull();
   });
 
-  it("shows an empty state and no bulk actions when there are no candidates", () => {
+  it("shows a scope-specific empty state and no bulk actions when there are no candidates", () => {
     renderDialog({ candidates: [] });
     expect(
       container.querySelector(".replacePreviewEmpty")?.textContent
-    ).toBe("search.replace.preview.empty");
+    ).toBe("search.replace.preview.openDocs.noCandidates");
     expect(container.querySelector(".replacePreviewBulkActions")).toBeNull();
     expect(summaryText()).toContain('"candidateCount":0');
+
+    renderDialog({ scope: "projectDocuments", candidates: [] });
+    expect(
+      container.querySelector(".replacePreviewEmpty")?.textContent
+    ).toBe("search.replace.preview.empty");
   });
 
   it("is prepared for the projectDocuments scope (title, apply label, destructive class)", () => {

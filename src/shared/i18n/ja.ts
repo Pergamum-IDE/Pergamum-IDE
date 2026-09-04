@@ -708,9 +708,20 @@ export const jaTranslations = {
   "search.replace.inProject": "プロジェクト内文書置換...",
   "search.replace.invalidRegex":
     "正規表現が正しくありません。\n置換確認を行う前に検索条件を修正してください。",
+  "search.replace.emptyFindText": "置換前の文字列を入力してください。",
+  "search.replace.noOpenDocuments":
+    "置換対象の開いている Markdown 文書がありません。",
+  "search.replace.template.unsupported":
+    "置換後文字列に使用できないキャプチャ参照があります。\n正規表現置換では $1〜$99、${1}〜${99}、$$ のみ使用できます。",
+  "search.replace.template.missingGroup":
+    "置換後文字列が存在しないキャプチャグループを参照しています。",
+  "search.replace.appliedAsEdits":
+    "{count} 件の置換を編集状態にしました。保存するまでファイルには書き込まれません。",
   "search.replace.preview.openDocs.title": "開いている文書のみ置換",
   "search.replace.preview.openDocs.description":
     "開いている Markdown 文書のみを対象に置換候補を確認します。\n選択した置換は編集状態として反映され、保存するまでファイルには書き込まれません。",
+  "search.replace.preview.openDocs.noCandidates":
+    "開いている文書に置換候補がありません。",
   "search.replace.preview.project.title": "プロジェクト内文書置換",
   "search.replace.preview.project.description":
     "プロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、破壊的変更として5秒遅延ボタンを経由します。",

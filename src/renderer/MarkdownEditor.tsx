@@ -172,8 +172,20 @@ interface MarkdownEditorProps {
   onFocusRequestApplied?: (requestId: number) => void;
 }
 
+/**
+ * A small handle onto the (single, shared) active-editor `EditorView` for
+ * batch, model-driven edits — paragraph indent (#252) and Open Documents
+ * Replace (#386). Each call dispatches ONE CodeMirror transaction (one undo
+ * step) whose `{from,to,insert}` changes are in original-document coordinates;
+ * returns `false` when the editor is read-only or no view is mounted.
+ */
 export interface MarkdownEditorParagraphIndentController {
   applyParagraphIndentChanges(
+    changes: readonly ParagraphIndentChange[]
+  ): boolean;
+  /** #386: like `applyParagraphIndentChanges`, but tags the transaction
+   *  `input.replace` so it is a clean, isolated undo step. */
+  applyReplaceInBufferChanges(
     changes: readonly ParagraphIndentChange[]
   ): boolean;
 }
@@ -582,27 +594,42 @@ export function MarkdownEditor({
       return undefined;
     }
 
-    const controller: MarkdownEditorParagraphIndentController = {
-      applyParagraphIndentChanges: (changes) => {
-        const view = viewRef.current;
+    const dispatchBufferChanges = (
+      changes: readonly ParagraphIndentChange[],
+      userEvent: string | undefined
+    ): boolean => {
+      const view = viewRef.current;
 
-        if (!view || readOnlyRef.current) {
-          return false;
-        }
+      if (!view || readOnlyRef.current) {
+        return false;
+      }
 
-        if (changes.length === 0) {
-          return true;
-        }
-
-        const codeMirrorChanges: ChangeSpec[] = changes.map((change) => ({
-          from: change.from,
-          to: change.to,
-          insert: change.insert
-        }));
-
-        view.dispatch({ changes: codeMirrorChanges });
+      if (changes.length === 0) {
         return true;
       }
+
+      const codeMirrorChanges: ChangeSpec[] = changes.map((change) => ({
+        from: change.from,
+        to: change.to,
+        insert: change.insert
+      }));
+
+      // One dispatch = one transaction = one undo step. ChangeSpec `from`/`to`
+      // are original-document offsets; CodeMirror resolves them all against the
+      // pre-transaction document, so no manual offset correction is needed.
+      view.dispatch(
+        userEvent === undefined
+          ? { changes: codeMirrorChanges }
+          : { changes: codeMirrorChanges, userEvent }
+      );
+      return true;
+    };
+
+    const controller: MarkdownEditorParagraphIndentController = {
+      applyParagraphIndentChanges: (changes) =>
+        dispatchBufferChanges(changes, undefined),
+      applyReplaceInBufferChanges: (changes) =>
+        dispatchBufferChanges(changes, "input.replace")
     };
 
     onParagraphIndentControllerChange(controller);

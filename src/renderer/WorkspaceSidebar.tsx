@@ -163,9 +163,12 @@ interface WorkspaceSidebarProps {
     readonly token: number;
     readonly query: string;
   } | null;
+  /** #386: bumped after an Open Documents Replace is applied so the Search pane
+   *  re-runs its current search over the now-changed buffers. */
+  searchInvalidationToken?: number;
   /** #386: Replace tab `[開いている文書のみ置換...]` - hands the host the current
    *  find / replace / options; the host opens the Replace Preview Dialog
-   *  (loading state) and generates candidates itself. No replace processing. */
+   *  (loading state) and generates candidates itself. */
   onReplaceInOpenDocuments?: (request: ReplacePreviewOpenRequest) => void;
   /** #386: Replace tab `[プロジェクト内文書置換...]` - dirty gate + placeholder. */
   onReplaceInProject?: () => void;
@@ -217,6 +220,7 @@ export function WorkspaceSidebar({
   onOpenSearchMatch,
   runProjectGlossarySearch,
   searchQueryRequest = null,
+  searchInvalidationToken = 0,
   onReplaceInOpenDocuments,
   onReplaceInProject
 }: WorkspaceSidebarProps): JSX.Element {
@@ -278,6 +282,7 @@ export function WorkspaceSidebar({
           runGlossarySearch={runProjectGlossarySearch}
           onOpenMatch={onOpenSearchMatch}
           queryRequest={searchQueryRequest}
+          searchInvalidationToken={searchInvalidationToken}
           onReplaceInOpenDocuments={onReplaceInOpenDocuments}
           onReplaceInProject={onReplaceInProject}
         />
