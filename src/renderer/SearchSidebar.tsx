@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Translate } from "../shared/i18n";
-import type { TextSearchOptions } from "../shared/textSearch";
+import { compileSearchRegex, type TextSearchOptions } from "../shared/textSearch";
 import type { ProjectTextSearchResult } from "./projectTextSearch";
 import glossarySearchIconRaw from "../../assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw";
 import wholeWordIconRaw from "../../assets/icons/Pergamum/search/word.svg?raw";
@@ -13,12 +13,17 @@ import useRegexIconRaw from "../../assets/icons/svgrepo/search/regex-svgrepo-com
  * Phase 1 built the input row + the four option toggles (glossary next to the
  * box, then whole-word, match-case, and the advanced regex toggle last).
  *
- * Phase 2 wires a debounced project-wide PLAIN-TEXT search: the host supplies
- * `runSearch` (which reads a dirty editor buffer first, the disk file
- * otherwise) and `onOpenMatch` (open the file + select the match). Stale
- * results are discarded by a generation counter. The regex and glossary
- * toggles stay in the UI but are not connected to any search yet — turning
- * either on shows a "not implemented" notice and runs nothing.
+ * Phase 2 wires a debounced project-wide search: the host supplies `runSearch`
+ * (which reads a dirty editor buffer first, the disk file otherwise) and
+ * `onOpenMatch` (open the file + select the match). Stale results are
+ * discarded by a generation counter.
+ *
+ * The `.*` toggle switches the query to a JavaScript regular expression.
+ * Regex and whole-word are mutually exclusive: turning `.*` on forces the
+ * whole-word toggle off and disables it (turning `.*` back off does not
+ * restore it). An invalid pattern shows a validation message and runs no
+ * search. The glossary toggle is still inert — turning it on shows a "not
+ * implemented" notice and runs nothing.
  */
 
 /** `'text'` = ordinary query; `'glossary'` = search the glossary (later phase). */
@@ -43,6 +48,7 @@ type SearchState =
   | { readonly kind: "idle" }
   | { readonly kind: "searching" }
   | { readonly kind: "results"; readonly result: ProjectTextSearchResult }
+  | { readonly kind: "invalidRegex" }
   | { readonly kind: "error" };
 
 /**
@@ -74,6 +80,7 @@ interface SearchOptionToggleProps {
   readonly pressed: boolean;
   readonly label: string;
   readonly hint: string;
+  readonly disabled?: boolean;
   readonly onToggle: () => void;
 }
 
@@ -82,16 +89,18 @@ function SearchOptionToggle({
   pressed,
   label,
   hint,
+  disabled = false,
   onToggle
 }: SearchOptionToggleProps): JSX.Element {
   return (
     <button
       type="button"
       className="searchOptionToggle"
-      data-pressed={pressed ? "true" : undefined}
-      aria-pressed={pressed}
+      data-pressed={pressed && !disabled ? "true" : undefined}
+      aria-pressed={pressed && !disabled}
       aria-label={label}
       title={hint}
+      disabled={disabled}
       onClick={onToggle}
     >
       <span
@@ -172,17 +181,26 @@ export function SearchSidebar({
 
   const trimmedQuery = query.trim();
   const glossaryPending = mode === "glossary";
-  const regexPending = options.useRegex;
   const searchEnabled =
     trimmedQuery.length > 0 &&
     projectAvailable &&
     !glossaryPending &&
-    !regexPending &&
     runSearch !== undefined;
 
   useEffect(() => {
     if (!searchEnabled) {
       setSearchState({ kind: "idle" });
+      return;
+    }
+
+    if (
+      options.useRegex &&
+      compileSearchRegex(trimmedQuery, options.caseSensitive).regex === null
+    ) {
+      // Invalid pattern: run nothing and invalidate any in-flight search so a
+      // previously good result cannot linger as the current one.
+      generationRef.current += 1;
+      setSearchState({ kind: "invalidRegex" });
       return;
     }
 
@@ -199,7 +217,8 @@ export function SearchSidebar({
         trimmedQuery,
         {
           caseSensitive: options.caseSensitive,
-          wholeWord: options.wholeWord
+          wholeWord: options.wholeWord,
+          useRegex: options.useRegex
         },
         () => generationRef.current !== generation
       )
@@ -220,11 +239,24 @@ export function SearchSidebar({
     searchEnabled,
     trimmedQuery,
     options.caseSensitive,
-    options.wholeWord
+    options.wholeWord,
+    options.useRegex
   ]);
 
   const toggleOption = (key: keyof SearchOptions): void => {
-    setOptions((current) => ({ ...current, [key]: !current[key] }));
+    setOptions((current) => {
+      const next = !current[key];
+      if (key === "useRegex") {
+        // Regex and whole-word are mutually exclusive. Turning regex on forces
+        // whole-word off; turning it off leaves whole-word off (no restore).
+        return {
+          ...current,
+          useRegex: next,
+          wholeWord: next ? false : current.wholeWord
+        };
+      }
+      return { ...current, [key]: next };
+    });
   };
 
   const handleRowClick = (
@@ -273,8 +305,13 @@ export function SearchSidebar({
             <SearchOptionToggle
               icon={WHOLE_WORD_ICON}
               pressed={options.wholeWord}
+              disabled={options.useRegex}
               label={translate("search.option.wholeWord")}
-              hint={translate("search.option.wholeWord.hint")}
+              hint={
+                options.useRegex
+                  ? translate("search.wholeWordUnavailableWithRegex")
+                  : translate("search.option.wholeWord.hint")
+              }
               onToggle={() => toggleOption("wholeWord")}
             />
             <SearchOptionToggle
@@ -296,19 +333,16 @@ export function SearchSidebar({
       </div>
 
       <div className="searchPaneBody">
-        {glossaryPending || regexPending ? (
+        {glossaryPending ? (
           <div className="searchPaneNotices">
-            {glossaryPending ? (
-              <p className="workspacePlaceholder" role="status">
-                {translate("search.notImplemented.glossary")}
-              </p>
-            ) : null}
-            {regexPending ? (
-              <p className="workspacePlaceholder" role="status">
-                {translate("search.notImplemented.regex")}
-              </p>
-            ) : null}
+            <p className="workspacePlaceholder" role="status">
+              {translate("search.notImplemented.glossary")}
+            </p>
           </div>
+        ) : searchState.kind === "invalidRegex" ? (
+          <p className="workspacePlaceholder searchInvalidRegex" role="alert">
+            {translate("search.invalidRegex")}
+          </p>
         ) : searchState.kind === "idle" ? (
           <p className="workspacePlaceholder" role="status">
             {translate("search.emptyResults")}

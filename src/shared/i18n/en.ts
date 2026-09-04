@@ -713,8 +713,10 @@ export const enTranslations = {
   "search.truncated": "Showing only some matches because there are too many results.",
   "search.skipped": "{count} files could not be read and were skipped.",
   "search.error": "An error occurred while searching.",
+  "search.invalidRegex": "Invalid regular expression",
+  "search.wholeWordUnavailableWithRegex":
+    "Match Whole Word is unavailable while using regular expressions.",
   "search.notImplemented.glossary": "Glossary Search is not implemented yet.",
-  "search.notImplemented.regex": "Regular Expression Search is not implemented yet.",
   "documentMap.title": "Document Map",
   "documentMap.empty": "No document map available",
   "documentMap.renderTags.label": "Render tags",

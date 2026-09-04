@@ -1859,6 +1859,15 @@ label.settingsItemHeader {
   box-shadow: inset 0 0 0 1px var(--workspace-sidebar-focus-ring);
 }
 
+.searchOptionToggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.searchOptionToggle:disabled:hover {
+  background: transparent;
+}
+
 .searchOptionToggleIcon {
   display: flex;
   width: 16px;
@@ -1883,6 +1892,15 @@ label.settingsItemHeader {
 
 .searchPaneNotices {
   padding: 0 10px;
+}
+
+/* #384 invalid regular expression notice. Uses the shared placeholder look;
+   the accent border marks it as a validation problem, not an empty state. */
+.searchInvalidRegex {
+  margin: 8px 10px;
+  padding: 6px 8px;
+  border-inline-start: 2px solid var(--workspace-sidebar-focus-ring);
+  background: var(--workspace-sidebar-hover);
 }
 
 .searchResultsSummary {

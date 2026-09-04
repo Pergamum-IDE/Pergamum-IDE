@@ -253,7 +253,8 @@ describe("SearchSidebar (#384 Phase 2 — project-wide text search)", () => {
     expect(runSearch.mock.calls[0][0]).toBe("maid");
     expect(runSearch.mock.calls[0][1]).toEqual({
       caseSensitive: false,
-      wholeWord: false
+      wholeWord: false,
+      useRegex: false
     });
 
     await act(async () => {
@@ -300,7 +301,8 @@ describe("SearchSidebar (#384 Phase 2 — project-wide text search)", () => {
     expect(runSearch).toHaveBeenCalledTimes(1);
     expect(runSearch.mock.calls[0][1]).toEqual({
       caseSensitive: true,
-      wholeWord: false
+      wholeWord: false,
+      useRegex: false
     });
   });
 
@@ -400,8 +402,8 @@ describe("SearchSidebar (#384 Phase 2 — project-wide text search)", () => {
     expect(bodyText()).toContain("search.notImplemented.glossary");
   });
 
-  it("does not run a text search while the regex toggle is on", async () => {
-    const runSearch = vi.fn(async () => makeResult());
+  it("runs a regular expression search when the regex toggle is on", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => ONE_MATCH_RESULT);
     renderWith({ projectAvailable: true, runSearch });
 
     const regexToggle = container.querySelectorAll<HTMLButtonElement>(
@@ -409,10 +411,85 @@ describe("SearchSidebar (#384 Phase 2 — project-wide text search)", () => {
     )[3];
     act(() => regexToggle.click());
 
-    typeQuery("maid");
+    typeQuery("メイド|ジャンヌ");
+    await advance(300);
+
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    expect(runSearch.mock.calls[0][0]).toBe("メイド|ジャンヌ");
+    expect(runSearch.mock.calls[0][1]).toEqual({
+      caseSensitive: false,
+      wholeWord: false,
+      useRegex: true
+    });
+  });
+
+  it("turning the regex toggle on forces whole-word off and disables it", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    const [, wholeWordToggle, , regexToggle] =
+      container.querySelectorAll<HTMLButtonElement>(".searchOptionToggle");
+
+    act(() => wholeWordToggle.click());
+    expect(wholeWordToggle.getAttribute("aria-pressed")).toBe("true");
+    expect(wholeWordToggle.disabled).toBe(false);
+
+    act(() => regexToggle.click());
+    expect(wholeWordToggle.getAttribute("aria-pressed")).toBe("false");
+    expect(wholeWordToggle.disabled).toBe(true);
+    expect(regexToggle.getAttribute("aria-pressed")).toBe("true");
+
+    // Turning regex back off re-enables the toggle but does not restore it.
+    act(() => regexToggle.click());
+    expect(wholeWordToggle.disabled).toBe(false);
+    expect(wholeWordToggle.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("shows a validation message and runs nothing for an invalid regex", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    const regexToggle = container.querySelectorAll<HTMLButtonElement>(
+      ".searchOptionToggle"
+    )[3];
+    act(() => regexToggle.click());
+
+    typeQuery("(");
     await advance(400);
 
     expect(runSearch).not.toHaveBeenCalled();
-    expect(bodyText()).toContain("search.notImplemented.regex");
+    expect(bodyText()).toContain("search.invalidRegex");
+  });
+
+  it("does not surface a stale result once the pattern becomes invalid", async () => {
+    let resolveSearch: (value: ProjectTextSearchResult) => void = () => {};
+    const runSearch = vi.fn<RunSearchFn>(
+      () =>
+        new Promise<ProjectTextSearchResult>((resolve) => {
+          resolveSearch = resolve;
+        })
+    );
+    renderWith({ projectAvailable: true, runSearch });
+
+    const regexToggle = container.querySelectorAll<HTMLButtonElement>(
+      ".searchOptionToggle"
+    )[3];
+    act(() => regexToggle.click());
+
+    typeQuery("メイ");
+    await advance(300);
+    expect(runSearch).toHaveBeenCalledTimes(1);
+
+    // Type on into an invalid pattern before the first search resolves.
+    typeQuery("メイ(");
+    await advance(300);
+    expect(bodyText()).toContain("search.invalidRegex");
+
+    await act(async () => {
+      resolveSearch(ONE_MATCH_RESULT);
+    });
+    // The superseded result must not replace the validation message.
+    expect(bodyText()).toContain("search.invalidRegex");
+    expect(bodyText()).not.toContain("search.summary");
   });
 });

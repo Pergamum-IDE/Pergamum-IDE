@@ -711,8 +711,10 @@ export const jaTranslations = {
   "search.truncated": "結果が多いため、一部の一致のみ表示しています。",
   "search.skipped": "{count}件のファイルを読み込めなかったため、検索から除外しました。",
   "search.error": "検索中にエラーが発生しました。",
+  "search.invalidRegex": "正規表現が無効です",
+  "search.wholeWordUnavailableWithRegex":
+    "正規表現検索中は単語単位検索を使用できません",
   "search.notImplemented.glossary": "語彙検索はまだ実装されていません。",
-  "search.notImplemented.regex": "正規表現検索はまだ実装されていません。",
   "documentMap.title": "文書マップ",
   "documentMap.empty": "表示できる文書マップはありません",
   "documentMap.renderTags.label": "描画タグ",

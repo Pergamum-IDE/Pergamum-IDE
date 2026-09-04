@@ -123,4 +123,26 @@ describe("runProjectTextSearch (#384 Phase 2)", () => {
     expect(result.totalMatches).toBe(PROJECT_TEXT_SEARCH_MAX_TOTAL_MATCHES);
     expect(result.truncated).toBe(true);
   });
+
+  it("threads the regex option through to every file (#384)", async () => {
+    const texts: Record<string, string> = {
+      "a.md": "メイドさん",
+      "b.md": "ジャンヌ・ヴァルジャン",
+      "c.md": "handmade goods"
+    };
+
+    const result = await runProjectTextSearch({
+      documents: [doc("a.md"), doc("b.md"), doc("c.md")],
+      readText: async (relativePath) => texts[relativePath] ?? null,
+      query: "メイド|ジャンヌ",
+      options: { caseSensitive: false, wholeWord: false, useRegex: true }
+    });
+
+    expect(
+      result.files.flatMap((file) =>
+        file.matches.map((match) => match.matchedText)
+      )
+    ).toEqual(["メイド", "ジャンヌ"]);
+    expect(result.fileCount).toBe(2);
+  });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compileSearchRegex,
   findTextSearchMatches,
   type FindTextSearchMatchesOptions
 } from "../../src/shared/textSearch";
@@ -85,33 +86,40 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
     });
   });
 
-  describe("Japanese-aware whole-word (preceding boundary only)", () => {
+  describe("Japanese-aware whole-word: katakana query (#384)", () => {
     // Katakana "maid" = U+30E1 U+30A4 U+30C9.
     const MAID = "メイド";
 
-    it("matches the bare word and words that only EXTEND it forward", () => {
-      // "maid", "maid-fuku", "maid-san", "maid-kissa", "<maid>" (bracketed).
+    it("hits the bare word, forward compounds, and non-katakana prefixes", () => {
       const hits = [
-        MAID,
-        `${MAID}服`,
-        `${MAID}さん`,
-        `${MAID}喃茶`,
-        `「${MAID}」`
+        MAID, // bare
+        `${MAID}服`, // + kanji  (maid-fuku)
+        `${MAID}さん`, // + hiragana (maid-san)
+        `${MAID}喫茶`, // + kanji  (maid-kissa)
+        `${MAID}長`, // + kanji  (maid-chou)
+        `超${MAID}`, // kanji prefix
+        `鬼${MAID}`, // kanji prefix
+        `新人${MAID}`, // kanji prefix
+        `すごい${MAID}`, // hiragana prefix
+        `「${MAID}」`, // quote bracket
+        `（${MAID}）`, // fullwidth paren
+        `　${MAID}`, // ideographic space
+        `、${MAID}`, // ideographic comma
+        `。${MAID}`, // ideographic full stop
+        `A${MAID}`, // latin letter (v1: hit)
+        `1${MAID}` // digit (v1: hit)
       ];
       for (const text of hits) {
-        expect(
-          findTextSearchMatches(text, MAID, WHOLE_WORD).length
-        ).toBeGreaterThan(0);
+        expect(findTextSearchMatches(text, MAID, WHOLE_WORD)).toHaveLength(1);
       }
     });
 
-    it("rejects a match preceded by a word-continuation character", () => {
-      // "order-maid" (preceded by prolonged sound mark U+30FC),
-      // "hand-maid" (preceded by katakana), "custom-maid" (preceded by katakana).
+    it("rejects a match sitting inside a katakana loanword compound", () => {
       const misses = [
-        `オーダー${MAID}`,
-        `ハンド${MAID}`,
-        `カスタム${MAID}`
+        `オーダー${MAID}`, // preceded by prolonged sound mark U+30FC
+        `ハンド${MAID}`, // preceded by katakana
+        `カスタム${MAID}`, // preceded by katakana
+        `プリンセス${MAID}` // preceded by katakana
       ];
       for (const text of misses) {
         expect(findTextSearchMatches(text, MAID, WHOLE_WORD)).toEqual([]);
@@ -120,14 +128,150 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
 
     it("treats the katakana middle dot (U+30FB) as a separator", () => {
       expect(
-        findTextSearchMatches(`あ・${MAID}`, MAID, WHOLE_WORD).length
-      ).toBe(1);
+        findTextSearchMatches(`あ・${MAID}`, MAID, WHOLE_WORD)
+      ).toHaveLength(1);
     });
 
     it("plain (non-whole-word) search still finds the substring anywhere", () => {
       expect(
-        findTextSearchMatches(`ハンド${MAID}`, MAID, PLAIN).length
-      ).toBe(1);
+        findTextSearchMatches(`ハンド${MAID}`, MAID, PLAIN)
+      ).toHaveLength(1);
+    });
+  });
+
+  describe("Japanese-aware whole-word: kanji query stays permissive in v1 (#384)", () => {
+    const WARD = "管区";
+
+    it("hits regardless of an adjacent kanji (no morphological analysis)", () => {
+      const hits = [
+        WARD,
+        `${WARD}長`,
+        `第七${WARD}`,
+        `北部${WARD}`,
+        `「${WARD}」`
+      ];
+      for (const text of hits) {
+        expect(findTextSearchMatches(text, WARD, WHOLE_WORD)).toHaveLength(1);
+      }
+    });
+
+    it("still rejects a match directly after a katakana run", () => {
+      // Contrived, but the rule is uniform: katakana prefix suppresses.
+      expect(
+        findTextSearchMatches(`カン${WARD}`, WARD, WHOLE_WORD)
+      ).toEqual([]);
+    });
+  });
+
+  describe("whole-word + Match Case combination (#384)", () => {
+    const TEXT = ["maid", "Maid", "handmaid", "Handmade"].join("\n");
+
+    it("Aa OFF + Ab ON: both cases of the standalone word, no compounds", () => {
+      expect(
+        findTextSearchMatches(TEXT, "maid", {
+          caseSensitive: false,
+          wholeWord: true
+        }).map((match) => match.matchedText)
+      ).toEqual(["maid", "Maid"]);
+    });
+
+    it("Aa ON + Ab ON: only the exact-case standalone word", () => {
+      expect(
+        findTextSearchMatches(TEXT, "maid", {
+          caseSensitive: true,
+          wholeWord: true
+        }).map((match) => match.matchedText)
+      ).toEqual(["maid"]);
+    });
+  });
+
+  describe("regular expression search (#384)", () => {
+    const REGEX: FindTextSearchMatchesOptions = {
+      caseSensitive: false,
+      wholeWord: false,
+      useRegex: true
+    };
+
+    it("matches an alternation across Japanese text", () => {
+      const text = "メイドさん\nジャンヌ・ヴァルジャン";
+      expect(
+        findTextSearchMatches(text, "メイド|ジャンヌ", REGEX).map(
+          (match) => match.matchedText
+        )
+      ).toEqual(["メイド", "ジャンヌ"]);
+    });
+
+    it("honours a character class + quantifier", () => {
+      const text = "第一章\n第三章\n第X章";
+      expect(
+        findTextSearchMatches(text, "第[一二三四五六七八九十]+章", REGEX).map(
+          (match) => match.matchedText
+        )
+      ).toEqual(["第一章", "第三章"]);
+    });
+
+    it("applies Match Case to the regex flags", () => {
+      const text = "maid\nMaid\nMAID";
+      expect(
+        findTextSearchMatches(text, "maid", REGEX)
+      ).toHaveLength(3);
+      expect(
+        findTextSearchMatches(text, "maid", { ...REGEX, caseSensitive: true })
+      ).toHaveLength(1);
+    });
+
+    it("keeps offsets and matchedText on the original text under case folding", () => {
+      const [match] = findTextSearchMatches("xxMAIDxx", "ma.d", REGEX);
+      expect(match.startOffset).toBe(2);
+      expect(match.endOffset).toBe(6);
+      expect(match.matchedText).toBe("MAID");
+    });
+
+    it("ignores the whole-word option in regex mode", () => {
+      expect(
+        findTextSearchMatches("ハンドメイド", "メイド", {
+          ...REGEX,
+          wholeWord: true
+        })
+      ).toHaveLength(1);
+    });
+
+    it("drops zero-length matches without hanging", () => {
+      expect(findTextSearchMatches("メイド\nメイド\nメイド", "^", REGEX)).toEqual(
+        []
+      );
+      expect(
+        findTextSearchMatches("メイドさん", "(?=メイド)", REGEX)
+      ).toEqual([]);
+      expect(findTextSearchMatches("aaaa", "a*", REGEX)).toEqual([
+        expect.objectContaining({ matchedText: "aaaa" })
+      ]);
+    });
+
+    it("returns nothing for an invalid pattern instead of throwing", () => {
+      expect(() =>
+        findTextSearchMatches("anything", "(", REGEX)
+      ).not.toThrow();
+      expect(findTextSearchMatches("anything", "[", REGEX)).toEqual([]);
+    });
+  });
+
+  describe("compileSearchRegex (#384)", () => {
+    it("compiles a valid pattern with the expected flags", () => {
+      const insensitive = compileSearchRegex("メイド|ジャンヌ", false);
+      expect(insensitive.regex).toBeInstanceOf(RegExp);
+      expect(insensitive.error).toBeNull();
+      expect(insensitive.regex?.flags).toBe("gim");
+
+      const sensitive = compileSearchRegex("メイド", true);
+      expect(sensitive.regex?.flags).toBe("gm");
+    });
+
+    it("reports an invalid pattern without throwing", () => {
+      const result = compileSearchRegex("(?<", false);
+      expect(result.regex).toBeNull();
+      expect(typeof result.error).toBe("string");
+      expect(result.error?.length ?? 0).toBeGreaterThan(0);
     });
   });
 });
