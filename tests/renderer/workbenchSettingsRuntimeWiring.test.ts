@@ -187,21 +187,21 @@ describe("status bar character count runtime wiring (#259)", () => {
     expect(appSource).toContain("!isEditorAreaSpecialTabActive");
   });
 
-  it("App.tsx computes ONE Markdown character count shared by the Status Bar and Document Navigation (#360)", () => {
+  it("App.tsx computes ONE Markdown character count shared by the Status Bar and Document Metrics (#360)", () => {
     const appSource = readFileSync("src/renderer/App.tsx", "utf8");
 
     // A single debounced computation, fired when either surface needs it.
     expect(appSource).toContain("shouldComputeMarkdownCharacterCount");
     expect(appSource).toContain(
-      "statusBarWantsCharacterCount || documentNavigationWantsCharacterCount"
+      "statusBarWantsCharacterCount || documentMetricsWantsCharacterCount"
     );
     // Exactly one call site for the count helper.
     expect(
       appSource.match(/countMarkdownDocumentCharacters\(/g) ?? []
     ).toHaveLength(1);
-    // The Document Navigation pane is handed that same resolved value.
+    // The Document Metrics pane is handed that same resolved value.
     expect(appSource).toContain(
-      "documentNavigationCharacterCount={"
+      "documentMetricsCharacterCount={"
     );
   });
 

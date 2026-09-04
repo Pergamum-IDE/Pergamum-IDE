@@ -3,14 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Translate } from "../../src/shared/i18n";
 import {
-  DocumentNavigationPanel,
-  type DocumentNavigationFileInfo
-} from "../../src/renderer/DocumentNavigationPanel";
-import type { DocumentNavigationAnalysis } from "../../src/renderer/documentNavigationAnalysis";
+  DocumentMetricsPanel,
+  type DocumentMetricsFileInfo
+} from "../../src/renderer/DocumentMetricsPanel";
+import type { DocumentMetricsAnalysis } from "../../src/renderer/documentMetricsAnalysis";
 
 const translate: Translate = (key) => key;
 
-const emptyAnalysis: DocumentNavigationAnalysis = {
+const emptyAnalysis: DocumentMetricsAnalysis = {
   glossaryCounts: [],
   tagCounts: [],
   dialogueRatio: {
@@ -23,10 +23,10 @@ const emptyAnalysis: DocumentNavigationAnalysis = {
 };
 
 function render(
-  props: Partial<React.ComponentProps<typeof DocumentNavigationPanel>>
+  props: Partial<React.ComponentProps<typeof DocumentMetricsPanel>>
 ): string {
   return renderToStaticMarkup(
-    React.createElement(DocumentNavigationPanel, {
+    React.createElement(DocumentMetricsPanel, {
       translate,
       hasActiveDocument: true,
       activeEditorIsMarkdown: true,
@@ -38,7 +38,7 @@ function render(
   );
 }
 
-describe("DocumentNavigationPanel (#360 Phase 1 polish)", () => {
+describe("DocumentMetricsPanel (#360 Phase 1 polish)", () => {
   it("shows the no-active-document empty state", () => {
     const markup = render({
       hasActiveDocument: false,
@@ -46,8 +46,8 @@ describe("DocumentNavigationPanel (#360 Phase 1 polish)", () => {
       characterCount: null
     });
 
-    expect(markup).toContain("documentNavigation.empty.noActiveDocument");
-    expect(markup).not.toContain("documentNavigation.sections.statistics");
+    expect(markup).toContain("documentMetrics.empty.noActiveDocument");
+    expect(markup).not.toContain("documentMetrics.sections.statistics");
   });
 
   it("shows the unsupported-document empty state for a non-Markdown editor", () => {
@@ -57,8 +57,8 @@ describe("DocumentNavigationPanel (#360 Phase 1 polish)", () => {
       characterCount: null
     });
 
-    expect(markup).toContain("documentNavigation.empty.unsupportedDocument");
-    expect(markup).not.toContain("documentNavigation.sections.statistics");
+    expect(markup).toContain("documentMetrics.empty.unsupportedDocument");
+    expect(markup).not.toContain("documentMetrics.sections.statistics");
   });
 
   it("renders the host-provided character count verbatim (unified with the status bar)", () => {
@@ -67,38 +67,38 @@ describe("DocumentNavigationPanel (#360 Phase 1 polish)", () => {
       fileInfo: { kind: "unsaved" }
     });
 
-    expect(markup).toContain("documentNavigation.sections.statistics");
-    expect(markup).toContain("documentNavigation.metrics.characters");
+    expect(markup).toContain("documentMetrics.sections.statistics");
+    expect(markup).toContain("documentMetrics.metrics.characters");
     expect(markup).toContain("976");
     // ceil(976 / 400) = 3
-    expect(markup).toContain("documentNavigation.metrics.aboutPages");
+    expect(markup).toContain("documentMetrics.metrics.aboutPages");
   });
 
   it("shows 0 (not an 'about N pages' phrase) when the count is 0", () => {
     const markup = render({ characterCount: 0 });
 
-    expect(markup).toContain("documentNavigation.metrics.characters");
-    expect(markup).not.toContain("documentNavigation.metrics.aboutPages");
-    expect(markup).toMatch(/documentNavigationMetricValue">0</);
+    expect(markup).toContain("documentMetrics.metrics.characters");
+    expect(markup).not.toContain("documentMetrics.metrics.aboutPages");
+    expect(markup).toMatch(/documentMetricsMetricValue">0</);
   });
 
   it("shows dashes while the shared count has not resolved yet", () => {
     const markup = render({ characterCount: null });
 
-    expect(markup).toContain("documentNavigation.sections.statistics");
-    expect(markup).not.toContain("documentNavigation.metrics.aboutPages");
-    expect(markup).toContain("documentNavigationMetricValue\">-<");
+    expect(markup).toContain("documentMetrics.sections.statistics");
+    expect(markup).not.toContain("documentMetrics.metrics.aboutPages");
+    expect(markup).toContain("documentMetricsMetricValue\">-<");
   });
 
   it("shows only a last-modified row in the file-info section — never a created row", () => {
-    const fileInfo: DocumentNavigationFileInfo = {
+    const fileInfo: DocumentMetricsFileInfo = {
       kind: "timestamps",
       modifiedAtIso: "2026-05-30T00:04:17.000Z"
     };
     const markup = render({ characterCount: 10, fileInfo });
 
-    expect(markup).toContain("documentNavigation.fileInfo.lastModified");
-    expect(markup).not.toContain("documentNavigation.fileInfo.created");
+    expect(markup).toContain("documentMetrics.fileInfo.lastModified");
+    expect(markup).not.toContain("documentMetrics.fileInfo.created");
     const modifiedValue = new Date(
       "2026-05-30T00:04:17.000Z"
     ).toLocaleString();
@@ -111,8 +111,8 @@ describe("DocumentNavigationPanel (#360 Phase 1 polish)", () => {
       fileInfo: { kind: "unsaved" }
     });
 
-    expect(markup).toContain("documentNavigation.fileInfo.unsavedDocument");
-    expect(markup).not.toContain("documentNavigation.fileInfo.lastModified");
+    expect(markup).toContain("documentMetrics.fileInfo.unsavedDocument");
+    expect(markup).not.toContain("documentMetrics.fileInfo.lastModified");
   });
 
   it("dashes the last-modified value and notes the failure when file info is unavailable", () => {
@@ -121,9 +121,9 @@ describe("DocumentNavigationPanel (#360 Phase 1 polish)", () => {
       fileInfo: { kind: "unavailable" }
     });
 
-    expect(markup).toContain("documentNavigation.fileInfo.lastModified");
-    expect(markup).toContain("documentNavigation.fileInfo.unavailable");
-    expect(markup).toContain("documentNavigationMetricValue\">-<");
+    expect(markup).toContain("documentMetrics.fileInfo.lastModified");
+    expect(markup).toContain("documentMetrics.fileInfo.unavailable");
+    expect(markup).toContain("documentMetricsMetricValue\">-<");
   });
 
   it("renders a null modified timestamp as a dash", () => {
@@ -132,31 +132,31 @@ describe("DocumentNavigationPanel (#360 Phase 1 polish)", () => {
       fileInfo: { kind: "timestamps", modifiedAtIso: null }
     });
 
-    expect(markup).toContain("documentNavigation.fileInfo.lastModified");
-    expect(markup).toContain("documentNavigationMetricValue\">-<");
+    expect(markup).toContain("documentMetrics.fileInfo.lastModified");
+    expect(markup).toContain("documentMetricsMetricValue\">-<");
   });
 });
 
-describe("DocumentNavigationPanel Phase 2 sections (#360)", () => {
+describe("DocumentMetricsPanel Phase 2 sections (#360)", () => {
   it("renders section headers but no rows while the analysis is still pending", () => {
     const markup = render({ characterCount: 10, analysis: null });
 
-    expect(markup).toContain("documentNavigation.sections.glossaryCounts");
-    expect(markup).toContain("documentNavigation.sections.tagCounts");
-    expect(markup).toContain("documentNavigation.sections.dialogueRatio");
+    expect(markup).toContain("documentMetrics.sections.glossaryCounts");
+    expect(markup).toContain("documentMetrics.sections.tagCounts");
+    expect(markup).toContain("documentMetrics.sections.dialogueRatio");
     // No empty-state text (that would misleadingly say "no terms" during the
     // debounce), no table, no dialogue rows.
-    expect(markup).not.toContain("documentNavigation.empty.noGlossaryTerms");
-    expect(markup).not.toContain("documentNavigationCountsTable");
-    expect(markup).not.toContain("documentNavigation.dialogue.narration");
+    expect(markup).not.toContain("documentMetrics.empty.noGlossaryTerms");
+    expect(markup).not.toContain("documentMetricsCountsTable");
+    expect(markup).not.toContain("documentMetrics.dialogue.narration");
   });
 
   it("shows the glossary / tag empty states when the analysis resolved with no hits", () => {
     const markup = render({ characterCount: 10, analysis: emptyAnalysis });
 
-    expect(markup).toContain("documentNavigation.empty.noGlossaryTerms");
-    expect(markup).toContain("documentNavigation.empty.noTaggedTerms");
-    expect(markup).not.toContain("documentNavigationCountsTable");
+    expect(markup).toContain("documentMetrics.empty.noGlossaryTerms");
+    expect(markup).toContain("documentMetrics.empty.noTaggedTerms");
+    expect(markup).not.toContain("documentMetricsCountsTable");
   });
 
   it("renders the glossary counts table with count and an ellipsised, title-tooltipped label", () => {
@@ -171,17 +171,17 @@ describe("DocumentNavigationPanel Phase 2 sections (#360)", () => {
       }
     });
 
-    expect(markup).toContain("documentNavigation.tables.term");
-    expect(markup).toContain("documentNavigation.tables.count");
-    expect(markup).toContain("documentNavigationCountsTable");
-    expect(markup).toContain("documentNavigationCountsLabelText");
+    expect(markup).toContain("documentMetrics.tables.term");
+    expect(markup).toContain("documentMetrics.tables.count");
+    expect(markup).toContain("documentMetricsCountsTable");
+    expect(markup).toContain("documentMetricsCountsLabelText");
     expect(markup).toContain('title="山田太郎"');
     expect(markup).toContain("山田太郎");
     expect(markup).toContain("8");
-    expect(markup).not.toContain("documentNavigation.empty.noGlossaryTerms");
+    expect(markup).not.toContain("documentMetrics.empty.noGlossaryTerms");
     // #360 polish: glossary rows stay plain text — no tag chip here.
     expect(markup).not.toMatch(
-      /documentNavigationCountsLabel[^>]*>\s*<span class="glossaryTagChip"/
+      /documentMetricsCountsLabel[^>]*>\s*<span class="glossaryTagChip"/
     );
   });
 
@@ -202,8 +202,8 @@ describe("DocumentNavigationPanel Phase 2 sections (#360)", () => {
       }
     });
 
-    expect(markup).toContain("documentNavigation.tagCounts.description");
-    expect(markup).toContain("documentNavigation.tables.tag");
+    expect(markup).toContain("documentMetrics.tagCounts.description");
+    expect(markup).toContain("documentMetrics.tables.tag");
     expect(markup).toContain("glossaryTagChip");
     expect(markup).toContain('data-compact="true"');
     expect(markup).toContain("background-color:#8e44ad");
@@ -251,17 +251,17 @@ describe("DocumentNavigationPanel Phase 2 sections (#360)", () => {
       }
     });
 
-    expect(markup).toContain("documentNavigation.dialogue.narration");
-    expect(markup).toContain("documentNavigation.dialogue.dialogue");
-    expect(markup).toContain("documentNavigation.dialogue.charsWithPercent");
-    expect(markup).toContain("documentNavigation.dialogue.approximate");
+    expect(markup).toContain("documentMetrics.dialogue.narration");
+    expect(markup).toContain("documentMetrics.dialogue.dialogue");
+    expect(markup).toContain("documentMetrics.dialogue.charsWithPercent");
+    expect(markup).toContain("documentMetrics.dialogue.approximate");
     // #360 polish: value cell is a dedicated right-aligned / tabular-nums cell.
-    expect(markup).toContain("documentNavigationDialogueRatioRow");
-    expect(markup).toContain("documentNavigationDialogueRatioValue");
+    expect(markup).toContain("documentMetricsDialogueRatioRow");
+    expect(markup).toContain("documentMetricsDialogueRatioValue");
     // #360 polish: the horizontal ratio bar is replaced by an SVG donut.
-    expect(markup).not.toContain("documentNavigationRatioBar");
-    expect(markup).toContain("documentNavigationDialoguePie");
-    expect(markup).toContain("documentNavigationDialoguePieNarration");
+    expect(markup).not.toContain("documentMetricsRatioBar");
+    expect(markup).toContain("documentMetricsDialoguePie");
+    expect(markup).toContain("documentMetricsDialoguePieNarration");
     expect(markup).toContain('stroke-dasharray="62 38"');
     // Row swatches key each row to a pie slice.
     expect(markup).toContain('data-series="narration"');
@@ -271,11 +271,11 @@ describe("DocumentNavigationPanel Phase 2 sections (#360)", () => {
   it("still shows a 0 / 0% dialogue split (empty outline donut) for an empty analysis", () => {
     const markup = render({ characterCount: 0, analysis: emptyAnalysis });
 
-    expect(markup).toContain("documentNavigation.dialogue.narration");
-    expect(markup).toContain("documentNavigation.dialogue.charsWithPercent");
+    expect(markup).toContain("documentMetrics.dialogue.narration");
+    expect(markup).toContain("documentMetrics.dialogue.charsWithPercent");
     expect(markup).toContain('data-empty="true"');
     // The coloured slices are not drawn for an empty document.
-    expect(markup).not.toContain("documentNavigationDialoguePieNarration");
+    expect(markup).not.toContain("documentMetricsDialoguePieNarration");
   });
 
   it("renders a full narration donut when there is no dialogue", () => {
@@ -293,7 +293,7 @@ describe("DocumentNavigationPanel Phase 2 sections (#360)", () => {
       }
     });
 
-    expect(markup).toContain("documentNavigationDialoguePieNarration");
+    expect(markup).toContain("documentMetricsDialoguePieNarration");
     expect(markup).toContain('stroke-dasharray="100 0"');
     expect(markup).not.toContain('data-empty="true"');
   });
@@ -313,7 +313,7 @@ describe("DocumentNavigationPanel Phase 2 sections (#360)", () => {
       }
     });
 
-    expect(markup).toContain("documentNavigationDialoguePieDialogue");
+    expect(markup).toContain("documentMetricsDialoguePieDialogue");
     expect(markup).toContain('stroke-dasharray="0 100"');
     expect(markup).not.toContain('data-empty="true"');
   });

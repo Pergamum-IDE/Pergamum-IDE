@@ -1,8 +1,8 @@
 /**
- * #360 UI polish — a tiny SVG donut chart for the Document Navigation pane's
+ * #360 UI polish — a tiny SVG donut chart for the Document Metrics pane's
  * narration / dialogue split. Pure display: it takes the SAME
  * `narrationPercent` / `dialoguePercent` the numbers below it show (produced
- * by `analyzeDocumentNavigationDialogueRatio`) and never recomputes the
+ * by `analyzeDocumentMetricsDialogueRatio`) and never recomputes the
  * split. Colours come from theme tokens (see styles.css) so light / dark
  * both stay legible; no new settings.
  *
@@ -82,14 +82,14 @@ export function DocumentDialogueRatioPieChart({
 
   return (
     <svg
-      className="documentNavigationDialoguePie"
+      className="documentMetricsDialoguePie"
       viewBox="0 0 36 36"
       role="img"
       aria-label={ariaLabel}
       data-empty={model.isEmpty ? "true" : undefined}
     >
       <circle
-        className="documentNavigationDialoguePieTrack"
+        className="documentMetricsDialoguePieTrack"
         cx="18"
         cy="18"
         r={RING_RADIUS}
@@ -98,14 +98,14 @@ export function DocumentDialogueRatioPieChart({
       {model.isEmpty ? null : (
         <>
           <circle
-            className="documentNavigationDialoguePieDialogue"
+            className="documentMetricsDialoguePieDialogue"
             cx="18"
             cy="18"
             r={RING_RADIUS}
             fill="none"
           />
           <circle
-            className="documentNavigationDialoguePieNarration"
+            className="documentMetricsDialoguePieNarration"
             cx="18"
             cy="18"
             r={RING_RADIUS}

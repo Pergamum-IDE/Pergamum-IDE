@@ -6,7 +6,7 @@ interface GlossaryTagChipProps {
   /** Render dimmed (e.g. an available-but-not-attached tag in the picker). */
   muted?: boolean;
   /**
-   * #360: a tighter chip for dense left-pane tables (Document Navigation tag
+   * #360: a tighter chip for dense left-pane tables (Document Metrics tag
    * counts) — smaller padding / font, otherwise identical. Colours and the
    * `title` tooltip are unchanged.
    */

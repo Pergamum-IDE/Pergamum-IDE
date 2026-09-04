@@ -538,7 +538,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
     }
   );
 
-  // #360: Document Navigation "ファイル情報" — last-modified time (mtime) for
+  // #360: Document Metrics "ファイル情報" — last-modified time (mtime) for
   // one file by absolute path. No content read. A failed stat rejects with a
   // sanitized error; the renderer then shows its "unavailable" state, so a
   // missing / unreadable file never disrupts the editor. Creation time is

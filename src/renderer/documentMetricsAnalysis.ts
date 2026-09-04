@@ -1,5 +1,5 @@
 /**
- * #360 Phase 2 — pure analysis helpers for the Document Navigation (文書ナビ)
+ * #360 Phase 2 — pure analysis helpers for the Document Metrics (文書統計)
  * left pane's "in numbers" sections:
  *
  *   - Glossary Entry occurrence counts (per Entry, all its Atoms summed)
@@ -26,24 +26,24 @@ import {
 } from "../shared/glossarySurfaceMatching";
 import { collectDocumentMapDialogueRanges } from "./glossaryTextMap";
 
-export interface DocumentNavigationGlossaryCount {
+export interface DocumentMetricsGlossaryCount {
   readonly entryId: string;
   /** The Entry's representative (`sortOrder = 0`) atom value. */
   readonly label: string;
   readonly count: number;
 }
 
-export interface DocumentNavigationTagCount {
+export interface DocumentMetricsTagCount {
   readonly tagId: string;
   readonly label: string;
   /** The tag's STORED `#rrggbb` colours (no Document Map visibility
-   *  correction) — the Document Navigation tag chip renders them verbatim. */
+   *  correction) — the Document Metrics tag chip renders them verbatim. */
   readonly backgroundRgb: string;
   readonly foregroundRgb: string;
   readonly count: number;
 }
 
-export interface DocumentNavigationDialogueRatio {
+export interface DocumentMetricsDialogueRatio {
   readonly narrationCharacters: number;
   readonly dialogueCharacters: number;
   /** `narrationCharacters + dialogueCharacters` (never off by rounding). */
@@ -53,13 +53,13 @@ export interface DocumentNavigationDialogueRatio {
   readonly dialoguePercent: number;
 }
 
-export interface DocumentNavigationAnalysis {
-  readonly glossaryCounts: readonly DocumentNavigationGlossaryCount[];
-  readonly tagCounts: readonly DocumentNavigationTagCount[];
-  readonly dialogueRatio: DocumentNavigationDialogueRatio;
+export interface DocumentMetricsAnalysis {
+  readonly glossaryCounts: readonly DocumentMetricsGlossaryCount[];
+  readonly tagCounts: readonly DocumentMetricsTagCount[];
+  readonly dialogueRatio: DocumentMetricsDialogueRatio;
 }
 
-const EMPTY_DIALOGUE_RATIO: DocumentNavigationDialogueRatio = {
+const EMPTY_DIALOGUE_RATIO: DocumentMetricsDialogueRatio = {
   narrationCharacters: 0,
   dialogueCharacters: 0,
   totalCharacters: 0,
@@ -100,11 +100,11 @@ export function tallyGlossaryEntryHits(
 function glossaryCountRowsFromTally(
   entryHitCounts: ReadonlyMap<string, number>,
   entries: readonly GlossaryEntry[]
-): DocumentNavigationGlossaryCount[] {
+): DocumentMetricsGlossaryCount[] {
   const entryOrder = new Map(entries.map((entry, order) => [entry.id, order]));
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
 
-  const rows: DocumentNavigationGlossaryCount[] = [];
+  const rows: DocumentMetricsGlossaryCount[] = [];
   for (const [entryId, count] of entryHitCounts) {
     if (count <= 0) {
       continue;
@@ -137,7 +137,7 @@ function glossaryCountRowsFromTally(
 function tagCountRowsFromTally(
   entryHitCounts: ReadonlyMap<string, number>,
   entries: readonly GlossaryEntry[]
-): DocumentNavigationTagCount[] {
+): DocumentMetricsTagCount[] {
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
   const tagCounts = new Map<
     string,
@@ -199,20 +199,20 @@ function tagCountRowsFromTally(
     });
 }
 
-export function collectDocumentNavigationGlossaryCounts(
+export function collectDocumentMetricsGlossaryCounts(
   text: string,
   entries: readonly GlossaryEntry[]
-): DocumentNavigationGlossaryCount[] {
+): DocumentMetricsGlossaryCount[] {
   return glossaryCountRowsFromTally(
     tallyGlossaryEntryHits(text, entries),
     entries
   );
 }
 
-export function collectDocumentNavigationTagCounts(
+export function collectDocumentMetricsTagCounts(
   text: string,
   entries: readonly GlossaryEntry[]
-): DocumentNavigationTagCount[] {
+): DocumentMetricsTagCount[] {
   return tagCountRowsFromTally(tallyGlossaryEntryHits(text, entries), entries);
 }
 
@@ -247,10 +247,10 @@ function mergeOffsetRanges(
  * code points, and `narration + dialogue === total` always holds. An empty
  * document, an unclosed delimiter and multiple pairs are all safe.
  */
-export function analyzeDocumentNavigationDialogueRatio(
+export function analyzeDocumentMetricsDialogueRatio(
   text: string,
   dialoguePairs: readonly DocumentMapDialogueDelimiterPair[]
-): DocumentNavigationDialogueRatio {
+): DocumentMetricsDialogueRatio {
   if (text.length === 0) {
     return EMPTY_DIALOGUE_RATIO;
   }
@@ -305,20 +305,20 @@ export function analyzeDocumentNavigationDialogueRatio(
 }
 
 /**
- * The full Document Navigation Phase 2 analysis in one pass over the glossary
+ * The full Document Metrics Phase 2 analysis in one pass over the glossary
  * matcher (glossary + tag counts share the single scan) plus one pass for the
  * dialogue split. Never throws — a malformed input yields empty sections.
  */
-export function analyzeDocumentNavigationDocument(
+export function analyzeDocumentMetricsDocument(
   text: string,
   entries: readonly GlossaryEntry[],
   dialoguePairs: readonly DocumentMapDialogueDelimiterPair[]
-): DocumentNavigationAnalysis {
+): DocumentMetricsAnalysis {
   const entryHitCounts = tallyGlossaryEntryHits(text, entries);
 
   return {
     glossaryCounts: glossaryCountRowsFromTally(entryHitCounts, entries),
     tagCounts: tagCountRowsFromTally(entryHitCounts, entries),
-    dialogueRatio: analyzeDocumentNavigationDialogueRatio(text, dialoguePairs)
+    dialogueRatio: analyzeDocumentMetricsDialogueRatio(text, dialoguePairs)
   };
 }

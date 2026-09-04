@@ -355,11 +355,11 @@ export interface MarkdownFile {
 }
 
 /**
- * #360: last-modified time for one file, for the Document Navigation pane's
+ * #360: last-modified time for one file, for the Document Metrics pane's
  * "ファイル情報" section. ISO 8601 string, or `null` when the filesystem
  * does not report a usable value. A failed stat rejects the call rather than
  * returning this. (Creation time / birthtime is deliberately not surfaced —
- * see DocumentNavigationPanel.)
+ * see DocumentMetricsPanel.)
  */
 export interface MarkdownFileStat {
   /** mtime — last content modification time. */
@@ -875,7 +875,7 @@ export interface PergamumApi {
     readMarkdownFile: (filePath: string) => Promise<MarkdownFile>;
     /** #360: filesystem timestamps for one file by absolute path (no
      *  content read, no dialog). Rejects with a sanitized error on failure;
-     *  the Document Navigation pane then shows its "unavailable" state. */
+     *  the Document Metrics pane then shows its "unavailable" state. */
     statMarkdownFile: (filePath: string) => Promise<MarkdownFileStat>;
     saveMarkdown: (
       path: string | null,

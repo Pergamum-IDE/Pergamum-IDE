@@ -415,11 +415,11 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
-import type { DocumentNavigationFileInfo } from "./DocumentNavigationPanel";
+import type { DocumentMetricsFileInfo } from "./DocumentMetricsPanel";
 import {
-  analyzeDocumentNavigationDocument,
-  type DocumentNavigationAnalysis
-} from "./documentNavigationAnalysis";
+  analyzeDocumentMetricsDocument,
+  type DocumentMetricsAnalysis
+} from "./documentMetricsAnalysis";
 import { projectDocumentAbsolutePath } from "../shared/tabPathDisplay";
 import {
   documentWorkspaceTabId,
@@ -678,7 +678,7 @@ export function App(): JSX.Element {
   const dialogController = dialogControllerRef.current;
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
   // #360: the shared Markdown character count (#259 algorithm + settings,
-  // debounced). Rendered by both the Status Bar and the Document Navigation
+  // debounced). Rendered by both the Status Bar and the Document Metrics
   // pane so the two always agree.
   const [markdownCharacterCount, setMarkdownCharacterCount] = useState<{
     readonly documentKey: string;
@@ -1414,10 +1414,10 @@ export function App(): JSX.Element {
   const activeEditorIsMarkdown =
     !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
 
-  // #360: Document Navigation "ファイル情報" — the active Markdown document's
+  // #360: Document Metrics "ファイル情報" — the active Markdown document's
   // backing-file absolute path (a stable string, so this does not churn on
   // typing), or `null` for an Untitled document / no Markdown editor.
-  const documentNavigationAbsolutePath = useMemo(() => {
+  const documentMetricsAbsolutePath = useMemo(() => {
     if (!activeEditorIsMarkdown || !activeMarkdownDocument) {
       return null;
     }
@@ -1434,40 +1434,40 @@ export function App(): JSX.Element {
     }
     return null;
   }, [activeEditorIsMarkdown, activeMarkdownDocument, project]);
-  const documentNavigationIsUntitled =
+  const documentMetricsIsUntitled =
     activeEditorIsMarkdown && activeMarkdownDocument?.kind === "untitled";
   // Last successfully saved content — changes on open / save but NOT on
   // typing, so it is a safe "re-stat after save" trigger for the effect
   // below without re-running it on every keystroke.
-  const documentNavigationSavedContent =
+  const documentMetricsSavedContent =
     activeEditorIsMarkdown && activeMarkdownDocument
       ? activeMarkdownDocument.savedContent
       : null;
-  // Perf policy (#360): only stat the file while the Document Navigation pane
+  // Perf policy (#360): only stat the file while the Document Metrics pane
   // is actually on screen — no IPC round trips for a hidden pane.
-  const isDocumentNavigationPaneVisible =
-    sidebarMode === "documentNavigation" && !layout.sidebar.collapsed;
-  const [documentNavigationFileInfo, setDocumentNavigationFileInfo] =
-    useState<DocumentNavigationFileInfo | null>(null);
+  const isDocumentMetricsPaneVisible =
+    sidebarMode === "documentMetrics" && !layout.sidebar.collapsed;
+  const [documentMetricsFileInfo, setDocumentMetricsFileInfo] =
+    useState<DocumentMetricsFileInfo | null>(null);
   useEffect(() => {
-    if (!isDocumentNavigationPaneVisible) {
+    if (!isDocumentMetricsPaneVisible) {
       return;
     }
-    if (documentNavigationIsUntitled) {
-      setDocumentNavigationFileInfo({ kind: "unsaved" });
+    if (documentMetricsIsUntitled) {
+      setDocumentMetricsFileInfo({ kind: "unsaved" });
       return;
     }
-    if (!documentNavigationAbsolutePath) {
-      setDocumentNavigationFileInfo(null);
+    if (!documentMetricsAbsolutePath) {
+      setDocumentMetricsFileInfo(null);
       return;
     }
 
     let cancelled = false;
     void window.pergamum.files
-      .statMarkdownFile(documentNavigationAbsolutePath)
+      .statMarkdownFile(documentMetricsAbsolutePath)
       .then((stat) => {
         if (!cancelled) {
-          setDocumentNavigationFileInfo({
+          setDocumentMetricsFileInfo({
             kind: "timestamps",
             modifiedAtIso: stat.modifiedAtIso
           });
@@ -1477,21 +1477,21 @@ export function App(): JSX.Element {
         // A stat failure only downgrades the pane to its "unavailable"
         // state — it never surfaces a toast / dialog or blocks the editor.
         if (!cancelled) {
-          setDocumentNavigationFileInfo({ kind: "unavailable" });
+          setDocumentMetricsFileInfo({ kind: "unavailable" });
         }
       });
 
     return () => {
       cancelled = true;
     };
-    // `documentNavigationSavedContent` is a re-fetch trigger only (post-save
+    // `documentMetricsSavedContent` is a re-fetch trigger only (post-save
     // mtime refresh) and is intentionally not read in the effect body.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    isDocumentNavigationPaneVisible,
-    documentNavigationIsUntitled,
-    documentNavigationAbsolutePath,
-    documentNavigationSavedContent
+    isDocumentMetricsPaneVisible,
+    documentMetricsIsUntitled,
+    documentMetricsAbsolutePath,
+    documentMetricsSavedContent
   ]);
 
   // #352: jump the active Markdown editor to a clicked outline heading. Reuses
@@ -1851,7 +1851,7 @@ export function App(): JSX.Element {
     applyEditorFontFamily(effectiveSettings.editor.fontFamily);
   }, [effectiveSettings.editor.fontFamily]);
   // #360: ONE Markdown character count, shared by the Status Bar (#259) and
-  // the Document Navigation pane, so the two never disagree. It is computed
+  // the Document Metrics pane, so the two never disagree. It is computed
   // with the #259 algorithm + `editor.characterCount.exclude` settings and
   // the same 250ms debounce; it runs whenever EITHER surface needs it. Each
   // surface still applies its own visibility gate when rendering.
@@ -1863,10 +1863,10 @@ export function App(): JSX.Element {
     effectiveSettings.workbench.statusBar.visible &&
     effectiveSettings.workbench.statusBar.characterCount.visible &&
     markdownCharacterCountEditorIsActive;
-  const documentNavigationWantsCharacterCount =
-    isDocumentNavigationPaneVisible && markdownCharacterCountEditorIsActive;
+  const documentMetricsWantsCharacterCount =
+    isDocumentMetricsPaneVisible && markdownCharacterCountEditorIsActive;
   const shouldComputeMarkdownCharacterCount =
-    statusBarWantsCharacterCount || documentNavigationWantsCharacterCount;
+    statusBarWantsCharacterCount || documentMetricsWantsCharacterCount;
   const markdownCharacterCountDocumentKey =
     shouldComputeMarkdownCharacterCount && activeDocument
       ? serializeEditorId(activeDocument.id)
@@ -1911,7 +1911,7 @@ export function App(): JSX.Element {
     markdownCharacterCount?.documentKey === markdownCharacterCountDocumentKey
       ? markdownCharacterCount.count
       : null;
-  const documentNavigationCharacterCount = documentNavigationWantsCharacterCount
+  const documentMetricsCharacterCount = documentMetricsWantsCharacterCount
     ? activeMarkdownCharacterCount
     : null;
 
@@ -1919,42 +1919,42 @@ export function App(): JSX.Element {
   // document. Debounced (same 250ms as the #259 count) and computed ONLY
   // while the pane is on screen — the glossary scan is heavier than Phase 1.
   // A parse failure just clears the sections; it never blocks the editor.
-  const documentNavigationAnalysisContent =
-    isDocumentNavigationPaneVisible &&
+  const documentMetricsAnalysisContent =
+    isDocumentMetricsPaneVisible &&
     activeEditorIsMarkdown &&
     activeMarkdownDocument
       ? currentDocumentContent(activeMarkdownDocument)
       : null;
-  const documentNavigationDialoguePairs =
+  const documentMetricsDialoguePairs =
     effectiveSettings.documentMap.dialogueDelimiterPairs;
-  const [documentNavigationAnalysis, setDocumentNavigationAnalysis] =
-    useState<DocumentNavigationAnalysis | null>(null);
+  const [documentMetricsAnalysis, setDocumentMetricsAnalysis] =
+    useState<DocumentMetricsAnalysis | null>(null);
   useEffect(() => {
-    if (documentNavigationAnalysisContent === null) {
-      setDocumentNavigationAnalysis(null);
+    if (documentMetricsAnalysisContent === null) {
+      setDocumentMetricsAnalysis(null);
       return;
     }
 
-    const content = documentNavigationAnalysisContent;
+    const content = documentMetricsAnalysisContent;
     const timeoutId = window.setTimeout(() => {
       try {
-        setDocumentNavigationAnalysis(
-          analyzeDocumentNavigationDocument(
+        setDocumentMetricsAnalysis(
+          analyzeDocumentMetricsDocument(
             content,
             glossaryEntries,
-            documentNavigationDialoguePairs
+            documentMetricsDialoguePairs
           )
         );
       } catch {
-        setDocumentNavigationAnalysis(null);
+        setDocumentMetricsAnalysis(null);
       }
     }, CHARACTER_COUNT_UPDATE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeoutId);
   }, [
-    documentNavigationAnalysisContent,
+    documentMetricsAnalysisContent,
     glossaryEntries,
-    documentNavigationDialoguePairs
+    documentMetricsDialoguePairs
   ]);
 
   const isDirty = currentEditor ? isCurrentEditorDirty(currentEditor) : false;
@@ -7583,11 +7583,11 @@ export function App(): JSX.Element {
                       activeOutlineDocumentKey={activeDocumentKey}
                       onOutlineHeadingClick={handleOutlineHeadingClick}
                       hasActiveDocument={activeDocument !== null}
-                      documentNavigationCharacterCount={
-                        documentNavigationCharacterCount
+                      documentMetricsCharacterCount={
+                        documentMetricsCharacterCount
                       }
-                      documentNavigationAnalysis={documentNavigationAnalysis}
-                      documentNavigationFileInfo={documentNavigationFileInfo}
+                      documentMetricsAnalysis={documentMetricsAnalysis}
+                      documentMetricsFileInfo={documentMetricsFileInfo}
                     />
                   </div>
                   <div

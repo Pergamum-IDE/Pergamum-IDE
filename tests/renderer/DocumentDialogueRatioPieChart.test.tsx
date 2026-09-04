@@ -93,8 +93,8 @@ describe("DocumentDialogueRatioPieChart (#360 polish)", () => {
     const html = markup({});
     expect(html).toContain('role="img"');
     expect(html).toContain('aria-label="narration 62% / dialogue 38%"');
-    expect(html).toContain("documentNavigationDialoguePieDialogue");
-    expect(html).toContain("documentNavigationDialoguePieNarration");
+    expect(html).toContain("documentMetricsDialoguePieDialogue");
+    expect(html).toContain("documentMetricsDialoguePieNarration");
     expect(html).toContain('stroke-dasharray="62 38"');
     expect(html).not.toContain('data-empty="true"');
   });
@@ -106,8 +106,8 @@ describe("DocumentDialogueRatioPieChart (#360 polish)", () => {
       totalCharacters: 0
     });
     expect(html).toContain('data-empty="true"');
-    expect(html).toContain("documentNavigationDialoguePieTrack");
-    expect(html).not.toContain("documentNavigationDialoguePieNarration");
-    expect(html).not.toContain("documentNavigationDialoguePieDialogue");
+    expect(html).toContain("documentMetricsDialoguePieTrack");
+    expect(html).not.toContain("documentMetricsDialoguePieNarration");
+    expect(html).not.toContain("documentMetricsDialoguePieDialogue");
   });
 });

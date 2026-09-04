@@ -21,9 +21,9 @@ describe("workspace commands", () => {
     focusGlossaryDescription: "Show the Glossary panel.",
     focusTextMap: "Focus Text Map",
     focusTextMapDescription: "Show the Text Map panel in the left pane.",
-    focusDocumentNavigation: "Focus Document Navigation",
-    focusDocumentNavigationDescription:
-      "Show the Document Navigation panel in the left pane.",
+    focusDocumentMetrics: "Focus Document Metrics",
+    focusDocumentMetricsDescription:
+      "Show the Document Metrics panel in the left pane.",
     openApplicationSettings: "Open Application Settings",
     openApplicationSettingsDescription: "Open application-wide settings."
   };
@@ -45,7 +45,7 @@ describe("workspace commands", () => {
       workspaceCommandIds.focusSearch,
       workspaceCommandIds.focusGlossary,
       workspaceCommandIds.focusTextMap,
-      workspaceCommandIds.focusDocumentNavigation,
+      workspaceCommandIds.focusDocumentMetrics,
       workspaceCommandIds.openApplicationSettings
     ]);
   });
@@ -70,7 +70,7 @@ describe("workspace commands", () => {
     await registry.execute(workspaceCommandIds.focusGlossary, executionOptions);
     await registry.execute(workspaceCommandIds.focusTextMap, executionOptions);
     await registry.execute(
-      workspaceCommandIds.focusDocumentNavigation,
+      workspaceCommandIds.focusDocumentMetrics,
       executionOptions
     );
 
@@ -79,7 +79,7 @@ describe("workspace commands", () => {
       "search",
       "glossary",
       "textMap",
-      "documentNavigation"
+      "documentMetrics"
     ]);
   });
 
@@ -117,8 +117,8 @@ describe("workspace commands", () => {
     expect(workspaceFocusCommandIdForMode("textMap")).toBe(
       workspaceCommandIds.focusTextMap
     );
-    expect(workspaceFocusCommandIdForMode("documentNavigation")).toBe(
-      workspaceCommandIds.focusDocumentNavigation
+    expect(workspaceFocusCommandIdForMode("documentMetrics")).toBe(
+      workspaceCommandIds.focusDocumentMetrics
     );
   });
 
@@ -138,10 +138,10 @@ describe("workspace commands", () => {
       focusTextMap: "translated:command.workspace.textMap.focus",
       focusTextMapDescription:
         "translated:command.workspace.textMap.focus.description",
-      focusDocumentNavigation:
-        "translated:command.workspace.documentNavigation.focus",
-      focusDocumentNavigationDescription:
-        "translated:command.workspace.documentNavigation.focus.description",
+      focusDocumentMetrics:
+        "translated:command.workspace.documentMetrics.focus",
+      focusDocumentMetricsDescription:
+        "translated:command.workspace.documentMetrics.focus.description",
       openApplicationSettings:
         "translated:command.workspace.applicationSettings.open",
       openApplicationSettingsDescription:

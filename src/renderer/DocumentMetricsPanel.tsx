@@ -1,17 +1,17 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { Translate } from "../shared/i18n";
-import { estimateManuscriptPages } from "../shared/documentNavigationMetrics";
+import { estimateManuscriptPages } from "../shared/manuscriptPages";
 import type {
-  DocumentNavigationAnalysis,
-  DocumentNavigationGlossaryCount,
-  DocumentNavigationTagCount
-} from "./documentNavigationAnalysis";
+  DocumentMetricsAnalysis,
+  DocumentMetricsGlossaryCount,
+  DocumentMetricsTagCount
+} from "./documentMetricsAnalysis";
 import { CollapsibleSidebarSection } from "./CollapsibleSidebarSection";
 import { GlossaryTagChip } from "./GlossaryTagChip";
 import { DocumentDialogueRatioPieChart } from "./DocumentDialogueRatioPieChart";
 
 /**
- * #360 — the Document Navigation (文書ナビ) left pane. Shows the ACTIVE
+ * #360 — the Document Metrics (文書統計) left pane. Shows the ACTIVE
  * Markdown document "in numbers":
  *
  *   - Phase 1: character count (the SAME value the status bar shows — the
@@ -21,15 +21,15 @@ import { DocumentDialogueRatioPieChart } from "./DocumentDialogueRatioPieChart";
  *     is misleading for a manuscript — copy / restore / checkout / unzip).
  *   - Phase 2: per-Entry glossary occurrence counts, first-tag occurrence
  *     counts, and an approximate narration / dialogue character split. These
- *     come from a single debounced `DocumentNavigationAnalysis` the host runs
+ *     come from a single debounced `DocumentMetricsAnalysis` the host runs
  *     only while this pane is visible.
  */
-export type DocumentNavigationFileInfo =
+export type DocumentMetricsFileInfo =
   | { readonly kind: "unsaved" }
   | { readonly kind: "unavailable" }
   | { readonly kind: "timestamps"; readonly modifiedAtIso: string | null };
 
-interface DocumentNavigationPanelProps {
+interface DocumentMetricsPanelProps {
   readonly translate: Translate;
   /** Whether any document tab is active (Markdown or not). */
   readonly hasActiveDocument: boolean;
@@ -46,9 +46,9 @@ interface DocumentNavigationPanelProps {
    * Phase 2 glossary / tag / dialogue analysis of the active document, or
    * `null` while the debounced analysis has not resolved yet.
    */
-  readonly analysis: DocumentNavigationAnalysis | null;
+  readonly analysis: DocumentMetricsAnalysis | null;
   /** Backing-file last-modified time / unsaved / error state; `null` when N/A. */
-  readonly fileInfo: DocumentNavigationFileInfo | null;
+  readonly fileInfo: DocumentMetricsFileInfo | null;
 }
 
 const EMPTY_VALUE = "-";
@@ -70,9 +70,9 @@ function MetricRow({
   value: string;
 }): JSX.Element {
   return (
-    <div className="documentNavigationMetric">
-      <dt className="documentNavigationMetricLabel">{label}</dt>
-      <dd className="documentNavigationMetricValue">{value}</dd>
+    <div className="documentMetricsMetric">
+      <dt className="documentMetricsMetricLabel">{label}</dt>
+      <dd className="documentMetricsMetricValue">{value}</dd>
     </div>
   );
 }
@@ -99,11 +99,11 @@ function CountsTable({
   rows: readonly CountsTableRow[];
 }): JSX.Element {
   return (
-    <table className="documentNavigationCountsTable">
+    <table className="documentMetricsCountsTable">
       <thead>
         <tr>
           <th scope="col">{headLabel}</th>
-          <th scope="col" className="documentNavigationCountsCount">
+          <th scope="col" className="documentMetricsCountsCount">
             {headCount}
           </th>
         </tr>
@@ -111,17 +111,17 @@ function CountsTable({
       <tbody>
         {rows.map((row) => (
           <tr key={row.key}>
-            <td className="documentNavigationCountsLabel">
+            <td className="documentMetricsCountsLabel">
               {row.labelNode ?? (
                 <span
-                  className="documentNavigationCountsLabelText"
+                  className="documentMetricsCountsLabelText"
                   title={row.label}
                 >
                   {row.label}
                 </span>
               )}
             </td>
-            <td className="documentNavigationCountsCount">
+            <td className="documentMetricsCountsCount">
               {row.count.toLocaleString()}
             </td>
           </tr>
@@ -143,28 +143,28 @@ function DialogueRatioRow({
   value: string;
 }): JSX.Element {
   return (
-    <div className="documentNavigationDialogueRatioRow">
-      <dt className="documentNavigationDialogueRatioLabel">
+    <div className="documentMetricsDialogueRatioRow">
+      <dt className="documentMetricsDialogueRatioLabel">
         <span
-          className="documentNavigationDialogueSwatch"
+          className="documentMetricsDialogueSwatch"
           data-series={series}
           aria-hidden="true"
         />
         {label}
       </dt>
-      <dd className="documentNavigationDialogueRatioValue">{value}</dd>
+      <dd className="documentMetricsDialogueRatioValue">{value}</dd>
     </div>
   );
 }
 
-export function DocumentNavigationPanel({
+export function DocumentMetricsPanel({
   translate,
   hasActiveDocument,
   activeEditorIsMarkdown,
   characterCount,
   analysis,
   fileInfo
-}: DocumentNavigationPanelProps): JSX.Element {
+}: DocumentMetricsPanelProps): JSX.Element {
   const [statisticsCollapsed, setStatisticsCollapsed] = useState(false);
   const [glossaryCountsCollapsed, setGlossaryCountsCollapsed] = useState(false);
   const [tagCountsCollapsed, setTagCountsCollapsed] = useState(false);
@@ -177,14 +177,14 @@ export function DocumentNavigationPanel({
     [characterCount]
   );
 
-  const title = translate("documentNavigation.title");
+  const title = translate("documentMetrics.title");
 
   let body: JSX.Element;
   if (!hasActiveDocument) {
     body = (
       <div className="workspacePlaceholderList">
         <p className="workspacePlaceholder" role="status">
-          {translate("documentNavigation.empty.noActiveDocument")}
+          {translate("documentMetrics.empty.noActiveDocument")}
         </p>
       </div>
     );
@@ -192,7 +192,7 @@ export function DocumentNavigationPanel({
     body = (
       <div className="workspacePlaceholderList">
         <p className="workspacePlaceholder" role="status">
-          {translate("documentNavigation.empty.unsupportedDocument")}
+          {translate("documentMetrics.empty.unsupportedDocument")}
         </p>
       </div>
     );
@@ -204,40 +204,40 @@ export function DocumentNavigationPanel({
         ? EMPTY_VALUE
         : manuscriptPages === 0
           ? String(0)
-          : translate("documentNavigation.metrics.aboutPages", {
+          : translate("documentMetrics.metrics.aboutPages", {
               count: manuscriptPages
             });
 
-    const glossaryRows: readonly DocumentNavigationGlossaryCount[] =
+    const glossaryRows: readonly DocumentMetricsGlossaryCount[] =
       analysis?.glossaryCounts ?? [];
-    const tagRows: readonly DocumentNavigationTagCount[] =
+    const tagRows: readonly DocumentMetricsTagCount[] =
       analysis?.tagCounts ?? [];
     const dialogueRatio = analysis?.dialogueRatio ?? null;
 
     const dialogueValue = (chars: number, percent: number): string =>
-      translate("documentNavigation.dialogue.charsWithPercent", {
+      translate("documentMetrics.dialogue.charsWithPercent", {
         count: chars.toLocaleString(),
         percent
       });
 
     body = (
-      <div className="documentNavigationSections">
+      <div className="documentMetricsSections">
         <CollapsibleSidebarSection
-          title={translate("documentNavigation.sections.statistics")}
-          toggleLabel={translate("documentNavigation.sections.statistics")}
+          title={translate("documentMetrics.sections.statistics")}
+          toggleLabel={translate("documentMetrics.sections.statistics")}
           collapsed={statisticsCollapsed}
           onToggleCollapsed={() =>
             setStatisticsCollapsed((current) => !current)
           }
         >
-          <dl className="documentNavigationMetricList">
+          <dl className="documentMetricsMetricList">
             <MetricRow
-              label={translate("documentNavigation.metrics.characters")}
+              label={translate("documentMetrics.metrics.characters")}
               value={charactersText}
             />
             <MetricRow
               label={translate(
-                "documentNavigation.metrics.manuscriptPagesEstimate"
+                "documentMetrics.metrics.manuscriptPagesEstimate"
               )}
               value={manuscriptPagesText}
             />
@@ -245,21 +245,21 @@ export function DocumentNavigationPanel({
         </CollapsibleSidebarSection>
 
         <CollapsibleSidebarSection
-          title={translate("documentNavigation.sections.glossaryCounts")}
-          toggleLabel={translate("documentNavigation.sections.glossaryCounts")}
+          title={translate("documentMetrics.sections.glossaryCounts")}
+          toggleLabel={translate("documentMetrics.sections.glossaryCounts")}
           collapsed={glossaryCountsCollapsed}
           onToggleCollapsed={() =>
             setGlossaryCountsCollapsed((current) => !current)
           }
         >
           {analysis === null ? null : glossaryRows.length === 0 ? (
-            <p className="documentNavigationNote">
-              {translate("documentNavigation.empty.noGlossaryTerms")}
+            <p className="documentMetricsNote">
+              {translate("documentMetrics.empty.noGlossaryTerms")}
             </p>
           ) : (
             <CountsTable
-              headLabel={translate("documentNavigation.tables.term")}
-              headCount={translate("documentNavigation.tables.count")}
+              headLabel={translate("documentMetrics.tables.term")}
+              headCount={translate("documentMetrics.tables.count")}
               rows={glossaryRows.map((row) => ({
                 key: row.entryId,
                 label: row.label,
@@ -270,25 +270,25 @@ export function DocumentNavigationPanel({
         </CollapsibleSidebarSection>
 
         <CollapsibleSidebarSection
-          title={translate("documentNavigation.sections.tagCounts")}
-          toggleLabel={translate("documentNavigation.sections.tagCounts")}
+          title={translate("documentMetrics.sections.tagCounts")}
+          toggleLabel={translate("documentMetrics.sections.tagCounts")}
           collapsed={tagCountsCollapsed}
           onToggleCollapsed={() =>
             setTagCountsCollapsed((current) => !current)
           }
         >
           {analysis === null ? null : tagRows.length === 0 ? (
-            <p className="documentNavigationNote">
-              {translate("documentNavigation.empty.noTaggedTerms")}
+            <p className="documentMetricsNote">
+              {translate("documentMetrics.empty.noTaggedTerms")}
             </p>
           ) : (
             <>
-              <p className="documentNavigationNote">
-                {translate("documentNavigation.tagCounts.description")}
+              <p className="documentMetricsNote">
+                {translate("documentMetrics.tagCounts.description")}
               </p>
               <CountsTable
-                headLabel={translate("documentNavigation.tables.tag")}
-                headCount={translate("documentNavigation.tables.count")}
+                headLabel={translate("documentMetrics.tables.tag")}
+                headCount={translate("documentMetrics.tables.count")}
                 rows={tagRows.map((row) => ({
                   key: row.tagId,
                   label: row.label,
@@ -310,8 +310,8 @@ export function DocumentNavigationPanel({
         </CollapsibleSidebarSection>
 
         <CollapsibleSidebarSection
-          title={translate("documentNavigation.sections.dialogueRatio")}
-          toggleLabel={translate("documentNavigation.sections.dialogueRatio")}
+          title={translate("documentMetrics.sections.dialogueRatio")}
+          toggleLabel={translate("documentMetrics.sections.dialogueRatio")}
           collapsed={dialogueRatioCollapsed}
           onToggleCollapsed={() =>
             setDialogueRatioCollapsed((current) => !current)
@@ -319,22 +319,22 @@ export function DocumentNavigationPanel({
         >
           {dialogueRatio === null ? null : (
             <>
-              <div className="documentNavigationDialoguePieWrap">
+              <div className="documentMetricsDialoguePieWrap">
                 <DocumentDialogueRatioPieChart
                   narrationPercent={dialogueRatio.narrationPercent}
                   dialoguePercent={dialogueRatio.dialoguePercent}
                   totalCharacters={dialogueRatio.totalCharacters}
                   ariaLabel={`${translate(
-                    "documentNavigation.dialogue.narration"
+                    "documentMetrics.dialogue.narration"
                   )} ${dialogueRatio.narrationPercent}% / ${translate(
-                    "documentNavigation.dialogue.dialogue"
+                    "documentMetrics.dialogue.dialogue"
                   )} ${dialogueRatio.dialoguePercent}%`}
                 />
               </div>
-              <dl className="documentNavigationMetricList">
+              <dl className="documentMetricsMetricList">
                 <DialogueRatioRow
                   series="narration"
-                  label={translate("documentNavigation.dialogue.narration")}
+                  label={translate("documentMetrics.dialogue.narration")}
                   value={dialogueValue(
                     dialogueRatio.narrationCharacters,
                     dialogueRatio.narrationPercent
@@ -342,35 +342,35 @@ export function DocumentNavigationPanel({
                 />
                 <DialogueRatioRow
                   series="dialogue"
-                  label={translate("documentNavigation.dialogue.dialogue")}
+                  label={translate("documentMetrics.dialogue.dialogue")}
                   value={dialogueValue(
                     dialogueRatio.dialogueCharacters,
                     dialogueRatio.dialoguePercent
                   )}
                 />
               </dl>
-              <p className="documentNavigationNote">
-                {translate("documentNavigation.dialogue.approximate")}
+              <p className="documentMetricsNote">
+                {translate("documentMetrics.dialogue.approximate")}
               </p>
             </>
           )}
         </CollapsibleSidebarSection>
 
         <CollapsibleSidebarSection
-          title={translate("documentNavigation.sections.fileInfo")}
-          toggleLabel={translate("documentNavigation.sections.fileInfo")}
+          title={translate("documentMetrics.sections.fileInfo")}
+          toggleLabel={translate("documentMetrics.sections.fileInfo")}
           collapsed={fileInfoCollapsed}
           onToggleCollapsed={() => setFileInfoCollapsed((current) => !current)}
         >
           {fileInfo?.kind === "unsaved" ? (
-            <p className="documentNavigationNote">
-              {translate("documentNavigation.fileInfo.unsavedDocument")}
+            <p className="documentMetricsNote">
+              {translate("documentMetrics.fileInfo.unsavedDocument")}
             </p>
           ) : (
             <>
-              <dl className="documentNavigationMetricList">
+              <dl className="documentMetricsMetricList">
                 <MetricRow
-                  label={translate("documentNavigation.fileInfo.lastModified")}
+                  label={translate("documentMetrics.fileInfo.lastModified")}
                   value={
                     fileInfo?.kind === "timestamps"
                       ? formatFileTimestamp(fileInfo.modifiedAtIso)
@@ -379,8 +379,8 @@ export function DocumentNavigationPanel({
                 />
               </dl>
               {fileInfo?.kind === "unavailable" ? (
-                <p className="documentNavigationNote">
-                  {translate("documentNavigation.fileInfo.unavailable")}
+                <p className="documentMetricsNote">
+                  {translate("documentMetrics.fileInfo.unavailable")}
                 </p>
               ) : null}
             </>
@@ -392,7 +392,7 @@ export function DocumentNavigationPanel({
 
   return (
     <aside
-      className="workspaceSidebarPanel documentNavigationPanel"
+      className="workspaceSidebarPanel documentMetricsPanel"
       aria-label={title}
     >
       <div className="sidebarHeader">{title}</div>
