@@ -1,8 +1,8 @@
 /**
- * #375 Text Map viewport overlay: the ACTIVE Markdown editor's currently
+ * #375 Document Map viewport overlay: the ACTIVE Markdown editor's currently
  * on-screen document range, in the same UTF-16 offset unit as everything else
- * (selection, glossary occurrences, the Text Map). Pushed from the editor on
- * viewport / geometry change and consumed by the Text Map to draw a 1px
+ * (selection, glossary occurrences, the Document Map). Pushed from the editor on
+ * viewport / geometry change and consumed by the Document Map to draw a 1px
  * "you are here" rectangle. `null` means "no active Markdown editor" or "the
  * range can't be read yet".
  */

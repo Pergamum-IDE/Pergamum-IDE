@@ -17,7 +17,7 @@ import {
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
-import { TextMapPanel } from "./TextMapPanel";
+import { DocumentMapPanel } from "./DocumentMapPanel";
 import {
   DocumentMetricsPanel,
   type DocumentMetricsFileInfo
@@ -81,23 +81,23 @@ interface WorkspaceSidebarProps {
   ) => Promise<boolean>;
   /** #375: active Markdown document body for glossary occurrence counts. */
   glossaryActiveDocumentContent: string | null;
-  /** #375 Text Map: every project glossary entry (occurrence scan). */
-  textMapGlossaryEntries?: readonly GlossaryEntry[];
-  /** #375 Text Map: project-wide tags (sort_order order) for the "Render
+  /** #375 Document Map: every project glossary entry (occurrence scan). */
+  documentMapGlossaryEntries?: readonly GlossaryEntry[];
+  /** #375 Document Map: project-wide tags (sort_order order) for the "Render
    *  tags" multi-select. */
-  textMapGlossaryTags?: readonly GlossaryTag[];
-  /** #375 Text Map: the ACTIVE EDITOR's rendered width in CSS pixels (the
+  documentMapGlossaryTags?: readonly GlossaryTag[];
+  /** #375 Document Map: the ACTIVE EDITOR's rendered width in CSS pixels (the
    *  logical wrap width), or `null` when it cannot be measured. */
-  textMapEditorWidth?: number | null;
-  /** #375 Text Map: the active Markdown editor's on-screen document range,
+  documentMapEditorWidth?: number | null;
+  /** #375 Document Map: the active Markdown editor's on-screen document range,
    *  drawn as a "you are here" rectangle. `null` = no overlay. */
-  textMapEditorVisibleRange?: EditorVisibleTextRange | null;
-  /** #375 Text Map: `documentMap` settings — draw colours + dialogue pairs. */
-  textMapDocumentMapSettings?: DocumentMapSettings;
-  /** #375 Text Map: navigation — a resolved 0-based source line to scroll the
+  documentMapEditorVisibleRange?: EditorVisibleTextRange | null;
+  /** #375 Document Map: `documentMap` settings — draw colours + dialogue pairs. */
+  documentMapSettings?: DocumentMapSettings;
+  /** #375 Document Map: navigation — a resolved 0-based source line to scroll the
    *  active Markdown editor to (navigation only). `options.align` is `"center"`
    *  for click-to-scroll, `"start"` for viewport-lens drag. */
-  onTextMapNavigateToLine?: (
+  onDocumentMapNavigateToLine?: (
     lineIndex: number,
     options?: { align?: EditorScrollAlign }
   ) => void;
@@ -158,12 +158,12 @@ export function WorkspaceSidebar({
   onActivateGlossaryEntry,
   onCreateGlossaryEntry,
   glossaryActiveDocumentContent,
-  textMapGlossaryEntries = [],
-  textMapGlossaryTags = [],
-  textMapEditorWidth = null,
-  textMapEditorVisibleRange = null,
-  textMapDocumentMapSettings,
-  onTextMapNavigateToLine,
+  documentMapGlossaryEntries = [],
+  documentMapGlossaryTags = [],
+  documentMapEditorWidth = null,
+  documentMapEditorVisibleRange = null,
+  documentMapSettings,
+  onDocumentMapNavigateToLine,
   onNavigateGlossaryOccurrence,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
@@ -224,17 +224,17 @@ export function WorkspaceSidebar({
       );
     case "search":
       return <SearchSidebar translate={translate} />;
-    case "textMap":
+    case "documentMap":
       return (
-        <TextMapPanel
+        <DocumentMapPanel
           translate={translate}
           activeDocumentContent={glossaryActiveDocumentContent}
-          glossaryEntries={textMapGlossaryEntries}
-          glossaryTags={textMapGlossaryTags}
-          editorWidth={textMapEditorWidth}
-          editorVisibleRange={textMapEditorVisibleRange}
-          documentMapSettings={textMapDocumentMapSettings}
-          onNavigateToLine={onTextMapNavigateToLine}
+          glossaryEntries={documentMapGlossaryEntries}
+          glossaryTags={documentMapGlossaryTags}
+          editorWidth={documentMapEditorWidth}
+          editorVisibleRange={documentMapEditorVisibleRange}
+          documentMapSettings={documentMapSettings}
+          onNavigateToLine={onDocumentMapNavigateToLine}
         />
       );
     case "documentMetrics":

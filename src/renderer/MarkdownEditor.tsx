@@ -148,8 +148,8 @@ interface MarkdownEditorProps {
    */
   onViewStateDirty?: () => void;
   /**
-   * #375 Text Map: the editor's on-screen document range, pushed on viewport /
-   * geometry change (rAF-coalesced) so the Text Map can draw a "you are here"
+   * #375 Document Map: the editor's on-screen document range, pushed on viewport /
+   * geometry change (rAF-coalesced) so the Document Map can draw a "you are here"
    * rectangle. `null` on unmount. Never captures / serializes anything.
    */
   onVisibleRangeChange?: (range: EditorVisibleTextRange | null) => void;
@@ -324,10 +324,10 @@ export function MarkdownEditor({
   // #272: read by the (mount-only) CodeMirror updateListener; kept fresh so
   // the current coordinator's cheap dirty-signal is always the one called.
   const onViewStateDirtyRef = useRef(onViewStateDirty);
-  // #375 Text Map: read by the mount-only updateListener; kept fresh so the
-  // current Text Map coordinator receives the viewport pushes.
+  // #375 Document Map: read by the mount-only updateListener; kept fresh so the
+  // current Document Map coordinator receives the viewport pushes.
   const onVisibleRangeChangeRef = useRef(onVisibleRangeChange);
-  // #375 Text Map: rAF handle coalescing viewport pushes on fast scroll.
+  // #375 Document Map: rAF handle coalescing viewport pushes on fast scroll.
   const visibleRangeFrameRef = useRef<number | null>(null);
   const soundFeedbackRef = useRef(soundFeedback);
   const soundSettingsRef = useRef(soundSettings);
@@ -502,7 +502,7 @@ export function MarkdownEditor({
               onViewStateDirtyRef.current?.();
             }
 
-            // #375 Text Map: push the on-screen document range whenever the
+            // #375 Document Map: push the on-screen document range whenever the
             // viewport / geometry / document changed, rAF-coalesced so a fast
             // scroll doesn't spam the parent's setState.
             if (
@@ -558,7 +558,7 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
-      // #375 Text Map: stop the coalesced viewport push and clear the overlay.
+      // #375 Document Map: stop the coalesced viewport push and clear the overlay.
       if (
         visibleRangeFrameRef.current !== null &&
         typeof cancelAnimationFrame !== "undefined"

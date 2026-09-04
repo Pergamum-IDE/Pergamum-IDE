@@ -2,7 +2,7 @@ export type SidebarMode =
   | "files"
   | "search"
   | "glossary"
-  | "textMap"
+  | "documentMap"
   | "documentMetrics";
 
 export const defaultSidebarMode: SidebarMode = "files";
@@ -10,7 +10,7 @@ export const sidebarModes: readonly SidebarMode[] = [
   "files",
   "search",
   "glossary",
-  "textMap",
+  "documentMap",
   "documentMetrics"
 ];
 

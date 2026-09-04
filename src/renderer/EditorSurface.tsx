@@ -376,7 +376,7 @@ interface EditorSurfaceProps {
     viewState: EditorViewState | null
   ) => void;
   onViewStateDirty: () => void;
-  /** #375 Text Map: the active Markdown editor's on-screen document range. */
+  /** #375 Document Map: the active Markdown editor's on-screen document range. */
   onMarkdownVisibleRangeChange?: (
     range: EditorVisibleTextRange | null
   ) => void;

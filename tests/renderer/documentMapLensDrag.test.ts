@@ -12,7 +12,7 @@ import {
   shouldRequestDocumentMapLensDragScroll,
   type DocumentMapLensDragState
 } from "../../src/renderer/documentMapLensDrag";
-import { resolveTextMapVisualRowToLineIndex } from "../../src/renderer/glossaryTextMap";
+import { resolveDocumentMapVisualRowToLineIndex } from "../../src/renderer/glossaryDocumentMap";
 
 const rect = { x: 0, y: 10, width: 40, height: 20 }; // y in [10, 30]
 
@@ -381,7 +381,7 @@ describe("resolveDocumentMapLensDragTarget (#375, Phase 2)", () => {
     });
     expect(target).toEqual({ nextLensY: 3, targetVisualRow: 1 });
     expect(
-      resolveTextMapVisualRowToLineIndex(target!.targetVisualRow, lines)
+      resolveDocumentMapVisualRowToLineIndex(target!.targetVisualRow, lines)
     ).toBe(1);
   });
 
@@ -399,7 +399,7 @@ describe("resolveDocumentMapLensDragTarget (#375, Phase 2)", () => {
     });
     expect(target).toEqual({ nextLensY: 2, targetVisualRow: 1 });
     expect(
-      resolveTextMapVisualRowToLineIndex(target!.targetVisualRow, lines)
+      resolveDocumentMapVisualRowToLineIndex(target!.targetVisualRow, lines)
     ).toBe(1);
   });
 });
@@ -563,7 +563,7 @@ describe("lens drag top / bottom edge → source line (#375, Phase 5)", () => {
     });
     expect(target).toEqual({ nextLensY: 0, targetVisualRow: 0 });
     expect(
-      resolveTextMapVisualRowToLineIndex(target!.targetVisualRow, lines)
+      resolveDocumentMapVisualRowToLineIndex(target!.targetVisualRow, lines)
     ).toBe(0);
   });
 
@@ -582,7 +582,7 @@ describe("lens drag top / bottom edge → source line (#375, Phase 5)", () => {
     });
     // row 7 → line 7; the last three rows (7,8,9) stay on-screen below it.
     expect(
-      resolveTextMapVisualRowToLineIndex(target!.targetVisualRow, lines)
+      resolveDocumentMapVisualRowToLineIndex(target!.targetVisualRow, lines)
     ).toBe(7);
   });
 
@@ -596,7 +596,7 @@ describe("lens drag top / bottom edge → source line (#375, Phase 5)", () => {
     });
     expect(target).toEqual({ nextLensY: 0, targetVisualRow: 0 });
     expect(
-      resolveTextMapVisualRowToLineIndex(target!.targetVisualRow, lines)
+      resolveDocumentMapVisualRowToLineIndex(target!.targetVisualRow, lines)
     ).toBe(0);
   });
 

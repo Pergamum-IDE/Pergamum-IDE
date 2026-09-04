@@ -3,34 +3,34 @@ import { describe, expect, it } from "vitest";
 import type { GlossaryAtom, GlossaryEntry } from "../../src/shared/glossary";
 import { GlossaryAtomFlags } from "../../src/shared/glossaryAtomFlags";
 import {
-  GLOSSARY_TEXT_MAP_CELL_SIZE,
-  GLOSSARY_TEXT_MAP_DIALOGUE_COLOR,
-  GLOSSARY_TEXT_MAP_ESTIMATED_CHAR_WIDTH_PX,
-  GLOSSARY_TEXT_MAP_FALLBACK_WRAP_COLUMNS,
-  GLOSSARY_TEXT_MAP_HIT_COLOR,
-  GLOSSARY_TEXT_MAP_NORMAL_COLOR,
-  buildGlossaryTextMapPlan,
-  buildTextMapLineLayout,
-  buildTextMapViewportRect,
+  GLOSSARY_DOCUMENT_MAP_CELL_SIZE,
+  GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR,
+  GLOSSARY_DOCUMENT_MAP_ESTIMATED_CHAR_WIDTH_PX,
+  GLOSSARY_DOCUMENT_MAP_FALLBACK_WRAP_COLUMNS,
+  GLOSSARY_DOCUMENT_MAP_HIT_COLOR,
+  GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR,
+  buildGlossaryDocumentMapPlan,
+  buildDocumentMapLineLayout,
+  buildDocumentMapViewportRect,
   collectDocumentMapDialogueRanges,
-  collectGlossaryTextMapGlossaryOccurrences,
-  collectGlossaryTextMapOccurrences,
+  collectGlossaryDocumentMapGlossaryOccurrences,
+  collectGlossaryDocumentMapOccurrences,
   collectJapaneseDialogueRanges,
   documentMapDialogueColorAtOffset,
-  drawGlossaryTextMap,
-  glossaryTextMapHitColorAtOffset,
-  isOffsetInGlossaryTextMapOccurrence,
-  isOffsetInTextMapRange,
+  drawGlossaryDocumentMap,
+  glossaryDocumentMapHitColorAtOffset,
+  isOffsetInGlossaryDocumentMapOccurrence,
+  isOffsetInDocumentMapRange,
   mapTextOffsetToVisualPosition,
-  resolveGlossaryTextMapHitColor,
-  resolveTextMapCellRect,
-  resolveTextMapClickToLineIndex,
-  resolveTextMapVisualRowToLineIndex,
-  resolveTextMapWrapColumns,
+  resolveGlossaryDocumentMapHitColor,
+  resolveDocumentMapCellRect,
+  resolveDocumentMapClickToLineIndex,
+  resolveDocumentMapVisualRowToLineIndex,
+  resolveDocumentMapWrapColumns,
   splitTextIntoLineSpans,
   visualRowForOffset,
-  type GlossaryTextMapDrawContext
-} from "../../src/renderer/glossaryTextMap";
+  type GlossaryDocumentMapDrawContext
+} from "../../src/renderer/glossaryDocumentMap";
 import { adjustDocumentMapTagColorForVisibility } from "../../src/shared/documentMapTagColor";
 import type { GlossaryTag } from "../../src/shared/glossary";
 
@@ -77,23 +77,23 @@ function entry(
   };
 }
 
-describe("resolveTextMapWrapColumns (#375)", () => {
+describe("resolveDocumentMapWrapColumns (#375)", () => {
   it("estimates columns from the editor width, not the pixel width itself", () => {
     // 800px / 8px per char = 100 columns.
-    expect(resolveTextMapWrapColumns({ editorRect: { width: 800 } })).toBe(100);
-    expect(resolveTextMapWrapColumns({ editorRect: { width: 645 } })).toBe(80);
-    expect(GLOSSARY_TEXT_MAP_ESTIMATED_CHAR_WIDTH_PX).toBe(8);
+    expect(resolveDocumentMapWrapColumns({ editorRect: { width: 800 } })).toBe(100);
+    expect(resolveDocumentMapWrapColumns({ editorRect: { width: 645 } })).toBe(80);
+    expect(GLOSSARY_DOCUMENT_MAP_ESTIMATED_CHAR_WIDTH_PX).toBe(8);
   });
 
   it("falls back when the editor rect is missing or too small", () => {
-    expect(resolveTextMapWrapColumns({ editorRect: null })).toBe(
-      GLOSSARY_TEXT_MAP_FALLBACK_WRAP_COLUMNS
+    expect(resolveDocumentMapWrapColumns({ editorRect: null })).toBe(
+      GLOSSARY_DOCUMENT_MAP_FALLBACK_WRAP_COLUMNS
     );
-    expect(resolveTextMapWrapColumns({ editorRect: { width: 0 } })).toBe(
-      GLOSSARY_TEXT_MAP_FALLBACK_WRAP_COLUMNS
+    expect(resolveDocumentMapWrapColumns({ editorRect: { width: 0 } })).toBe(
+      GLOSSARY_DOCUMENT_MAP_FALLBACK_WRAP_COLUMNS
     );
     expect(
-      resolveTextMapWrapColumns({
+      resolveDocumentMapWrapColumns({
         editorRect: { width: Number.NaN },
         fallbackWrapColumns: 60
       })
@@ -102,7 +102,7 @@ describe("resolveTextMapWrapColumns (#375)", () => {
 
   it("honours a custom estimated character width", () => {
     expect(
-      resolveTextMapWrapColumns({
+      resolveDocumentMapWrapColumns({
         editorRect: { width: 800 },
         estimatedCharWidthPx: 10
       })
@@ -134,9 +134,9 @@ describe("splitTextIntoLineSpans (#375)", () => {
   });
 });
 
-describe("buildTextMapLineLayout (#375)", () => {
+describe("buildDocumentMapLineLayout (#375)", () => {
   it("keeps real line structure: short lines are one visual row", () => {
-    const { lines, totalVisualRows } = buildTextMapLineLayout(
+    const { lines, totalVisualRows } = buildDocumentMapLineLayout(
       "abc\n\ndefghijk",
       4
     );
@@ -168,7 +168,7 @@ describe("buildTextMapLineLayout (#375)", () => {
   });
 
   it("wraps a long line into ceil(length / wrapColumns) visual rows", () => {
-    const { lines, totalVisualRows } = buildTextMapLineLayout(
+    const { lines, totalVisualRows } = buildDocumentMapLineLayout(
       "x".repeat(23),
       5
     );
@@ -177,7 +177,7 @@ describe("buildTextMapLineLayout (#375)", () => {
   });
 
   it("an empty document is a single visual row and does not throw", () => {
-    expect(buildTextMapLineLayout("", 80)).toEqual({
+    expect(buildDocumentMapLineLayout("", 80)).toEqual({
       lines: [
         {
           lineIndex: 0,
@@ -193,7 +193,7 @@ describe("buildTextMapLineLayout (#375)", () => {
 });
 
 describe("mapTextOffsetToVisualPosition (#375)", () => {
-  const { lines } = buildTextMapLineLayout("abc\n\ndefghijk", 4);
+  const { lines } = buildDocumentMapLineLayout("abc\n\ndefghijk", 4);
 
   it("visualColumn = columnIndex % wrapColumns", () => {
     // offset 5 → line 2, columnIndex 0.
@@ -231,9 +231,9 @@ describe("mapTextOffsetToVisualPosition (#375)", () => {
   });
 });
 
-describe("collectGlossaryTextMapOccurrences (#375)", () => {
+describe("collectGlossaryDocumentMapOccurrences (#375)", () => {
   it("returns every atom occurrence range, sorted by start (end exclusive)", () => {
-    const occ = collectGlossaryTextMapOccurrences("abc Foo def Foo", [
+    const occ = collectGlossaryDocumentMapOccurrences("abc Foo def Foo", [
       entry("e1", [atom("Foo")])
     ]);
 
@@ -245,17 +245,17 @@ describe("collectGlossaryTextMapOccurrences (#375)", () => {
 
   it("is empty for empty text or no entries", () => {
     expect(
-      collectGlossaryTextMapOccurrences("", [entry("e1", [atom("Foo")])])
+      collectGlossaryDocumentMapOccurrences("", [entry("e1", [atom("Foo")])])
     ).toEqual([]);
-    expect(collectGlossaryTextMapOccurrences("Foo Foo", [])).toEqual([]);
+    expect(collectGlossaryDocumentMapOccurrences("Foo Foo", [])).toEqual([]);
   });
 
   it("goes through the shared matcher — matchFlags are honoured", () => {
     expect(
-      collectGlossaryTextMapOccurrences("z z z", [entry("e1", [atom("z")])])
+      collectGlossaryDocumentMapOccurrences("z z z", [entry("e1", [atom("z")])])
     ).toEqual([]);
 
-    const optedIn = collectGlossaryTextMapOccurrences("z z z", [
+    const optedIn = collectGlossaryDocumentMapOccurrences("z z z", [
       entry("e1", [atom("z", GlossaryAtomFlags.AllowSingleCharacterMatch)])
     ]);
     expect(optedIn).toEqual([
@@ -266,47 +266,47 @@ describe("collectGlossaryTextMapOccurrences (#375)", () => {
   });
 });
 
-describe("resolveGlossaryTextMapHitColor (#375, primary-tag colour)", () => {
+describe("resolveGlossaryDocumentMapHitColor (#375, primary-tag colour)", () => {
   it("uses the PRIMARY (first-assigned) tag's backgroundRgb", () => {
     const e = entry("e1", [atom("Foo")], [
       tag("t-primary", "#00ff00"),
       tag("t-second", "#0000aa")
     ]);
-    expect(resolveGlossaryTextMapHitColor(e)).toBe("#00ff00");
+    expect(resolveGlossaryDocumentMapHitColor(e)).toBe("#00ff00");
   });
 
   it("falls back to the fixed hit colour for a tagless entry", () => {
     expect(
-      resolveGlossaryTextMapHitColor(entry("e1", [atom("Foo")]))
-    ).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR);
+      resolveGlossaryDocumentMapHitColor(entry("e1", [atom("Foo")]))
+    ).toBe(GLOSSARY_DOCUMENT_MAP_HIT_COLOR);
   });
 
   it("falls back when the tag colour is not a #rrggbb hex", () => {
     for (const bad of ["red", "#12", "#1234567", "rgb(1,2,3)", ""]) {
       expect(
-        resolveGlossaryTextMapHitColor(
+        resolveGlossaryDocumentMapHitColor(
           entry("e1", [atom("Foo")], [tag("t", bad)])
         )
-      ).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR);
+      ).toBe(GLOSSARY_DOCUMENT_MAP_HIT_COLOR);
     }
   });
 
   it("prefers a tagColorCache entry for the primary tag id over its raw backgroundRgb", () => {
     const e = entry("e1", [atom("Foo")], [tag("t-primary", "#00ff00")]);
     const cache = new Map([["t-primary", "#123456"]]);
-    expect(resolveGlossaryTextMapHitColor(e, GLOSSARY_TEXT_MAP_HIT_COLOR, cache)).toBe(
+    expect(resolveGlossaryDocumentMapHitColor(e, GLOSSARY_DOCUMENT_MAP_HIT_COLOR, cache)).toBe(
       "#123456"
     );
     // A cache miss falls through to the tag's own colour.
     expect(
-      resolveGlossaryTextMapHitColor(e, GLOSSARY_TEXT_MAP_HIT_COLOR, new Map())
+      resolveGlossaryDocumentMapHitColor(e, GLOSSARY_DOCUMENT_MAP_HIT_COLOR, new Map())
     ).toBe("#00ff00");
   });
 });
 
-describe("collectGlossaryTextMapGlossaryOccurrences (#375)", () => {
+describe("collectGlossaryDocumentMapGlossaryOccurrences (#375)", () => {
   it("tags each occurrence with its owning entry id and primary-tag colour", () => {
-    const occ = collectGlossaryTextMapGlossaryOccurrences("x Foo y Foo", [
+    const occ = collectGlossaryDocumentMapGlossaryOccurrences("x Foo y Foo", [
       entry("e1", [atom("Foo")], [tag("t", "#123456")])
     ]);
     expect(occ).toEqual([
@@ -316,7 +316,7 @@ describe("collectGlossaryTextMapGlossaryOccurrences (#375)", () => {
   });
 
   it("colours per ENTRY, not per atom — every atom of an entry shares the colour", () => {
-    const occ = collectGlossaryTextMapGlossaryOccurrences("Foo Bar", [
+    const occ = collectGlossaryDocumentMapGlossaryOccurrences("Foo Bar", [
       entry(
         "e1",
         [atom("Foo"), atom("Bar")],
@@ -328,7 +328,7 @@ describe("collectGlossaryTextMapGlossaryOccurrences (#375)", () => {
   });
 
   it("uses the fallback colour for a tagless entry's hits", () => {
-    const occ = collectGlossaryTextMapGlossaryOccurrences("Foo", [
+    const occ = collectGlossaryDocumentMapGlossaryOccurrences("Foo", [
       entry("e1", [atom("Foo")])
     ]);
     expect(occ).toEqual([
@@ -336,45 +336,45 @@ describe("collectGlossaryTextMapGlossaryOccurrences (#375)", () => {
         entryId: "e1",
         startOffset: 0,
         endOffset: 3,
-        color: GLOSSARY_TEXT_MAP_HIT_COLOR
+        color: GLOSSARY_DOCUMENT_MAP_HIT_COLOR
       }
     ]);
   });
 
   it("is empty for empty text or no entries, and honours matchFlags", () => {
     expect(
-      collectGlossaryTextMapGlossaryOccurrences("", [entry("e1", [atom("Foo")])])
+      collectGlossaryDocumentMapGlossaryOccurrences("", [entry("e1", [atom("Foo")])])
     ).toEqual([]);
-    expect(collectGlossaryTextMapGlossaryOccurrences("Foo", [])).toEqual([]);
+    expect(collectGlossaryDocumentMapGlossaryOccurrences("Foo", [])).toEqual([]);
     // single-char atom without opt-in → no occurrence.
     expect(
-      collectGlossaryTextMapGlossaryOccurrences("z z", [
+      collectGlossaryDocumentMapGlossaryOccurrences("z z", [
         entry("e1", [atom("z")], [tag("t", "#00ff00")])
       ])
     ).toEqual([]);
   });
 });
 
-describe("glossaryTextMapHitColorAtOffset (#375)", () => {
+describe("glossaryDocumentMapHitColorAtOffset (#375)", () => {
   const occ = [
     { entryId: "e1", startOffset: 4, endOffset: 7, color: "#00ff00" }
   ];
 
   it("returns the occurrence colour for start <= offset < end, else null", () => {
-    expect(glossaryTextMapHitColorAtOffset(3, occ)).toBeNull();
-    expect(glossaryTextMapHitColorAtOffset(4, occ)).toBe("#00ff00");
-    expect(glossaryTextMapHitColorAtOffset(6, occ)).toBe("#00ff00");
-    expect(glossaryTextMapHitColorAtOffset(7, occ)).toBeNull();
+    expect(glossaryDocumentMapHitColorAtOffset(3, occ)).toBeNull();
+    expect(glossaryDocumentMapHitColorAtOffset(4, occ)).toBe("#00ff00");
+    expect(glossaryDocumentMapHitColorAtOffset(6, occ)).toBe("#00ff00");
+    expect(glossaryDocumentMapHitColorAtOffset(7, occ)).toBeNull();
   });
 });
 
-describe("isOffsetInGlossaryTextMapOccurrence (#375)", () => {
+describe("isOffsetInGlossaryDocumentMapOccurrence (#375)", () => {
   it("treats the range as start <= offset < end", () => {
     const ranges = [{ start: 4, end: 7 }];
-    expect(isOffsetInGlossaryTextMapOccurrence(3, ranges)).toBe(false);
-    expect(isOffsetInGlossaryTextMapOccurrence(4, ranges)).toBe(true);
-    expect(isOffsetInGlossaryTextMapOccurrence(6, ranges)).toBe(true);
-    expect(isOffsetInGlossaryTextMapOccurrence(7, ranges)).toBe(false);
+    expect(isOffsetInGlossaryDocumentMapOccurrence(3, ranges)).toBe(false);
+    expect(isOffsetInGlossaryDocumentMapOccurrence(4, ranges)).toBe(true);
+    expect(isOffsetInGlossaryDocumentMapOccurrence(6, ranges)).toBe(true);
+    expect(isOffsetInGlossaryDocumentMapOccurrence(7, ranges)).toBe(false);
   });
 
   it("stays correct when ranges overlap", () => {
@@ -382,9 +382,9 @@ describe("isOffsetInGlossaryTextMapOccurrence (#375)", () => {
       { start: 0, end: 6 },
       { start: 3, end: 9 }
     ];
-    expect(isOffsetInGlossaryTextMapOccurrence(4, overlapping)).toBe(true);
-    expect(isOffsetInGlossaryTextMapOccurrence(8, overlapping)).toBe(true);
-    expect(isOffsetInGlossaryTextMapOccurrence(9, overlapping)).toBe(false);
+    expect(isOffsetInGlossaryDocumentMapOccurrence(4, overlapping)).toBe(true);
+    expect(isOffsetInGlossaryDocumentMapOccurrence(8, overlapping)).toBe(true);
+    expect(isOffsetInGlossaryDocumentMapOccurrence(9, overlapping)).toBe(false);
   });
 });
 
@@ -428,29 +428,29 @@ describe("collectJapaneseDialogueRanges (#375, PoC)", () => {
   });
 });
 
-describe("isOffsetInTextMapRange (#375)", () => {
+describe("isOffsetInDocumentMapRange (#375)", () => {
   it("treats the range as start <= offset < end", () => {
     const ranges = [{ startOffset: 2, endOffset: 5 }];
-    expect(isOffsetInTextMapRange(1, ranges)).toBe(false);
-    expect(isOffsetInTextMapRange(2, ranges)).toBe(true);
-    expect(isOffsetInTextMapRange(4, ranges)).toBe(true);
-    expect(isOffsetInTextMapRange(5, ranges)).toBe(false);
+    expect(isOffsetInDocumentMapRange(1, ranges)).toBe(false);
+    expect(isOffsetInDocumentMapRange(2, ranges)).toBe(true);
+    expect(isOffsetInDocumentMapRange(4, ranges)).toBe(true);
+    expect(isOffsetInDocumentMapRange(5, ranges)).toBe(false);
   });
 });
 
-describe("resolveTextMapCellRect (#375, 2x2 cells)", () => {
+describe("resolveDocumentMapCellRect (#375, 2x2 cells)", () => {
   it("the cell size constant is 2", () => {
-    expect(GLOSSARY_TEXT_MAP_CELL_SIZE).toBe(2);
+    expect(GLOSSARY_DOCUMENT_MAP_CELL_SIZE).toBe(2);
   });
 
   it("maps a logical (visualColumn, visualRow) to a 2x2 rect at * cellSize", () => {
-    expect(resolveTextMapCellRect(0, 0)).toEqual({
+    expect(resolveDocumentMapCellRect(0, 0)).toEqual({
       x: 0,
       y: 0,
       width: 2,
       height: 2
     });
-    expect(resolveTextMapCellRect(3, 5)).toEqual({
+    expect(resolveDocumentMapCellRect(3, 5)).toEqual({
       x: 6,
       y: 10,
       width: 2,
@@ -459,7 +459,7 @@ describe("resolveTextMapCellRect (#375, 2x2 cells)", () => {
   });
 
   it("honours an explicit cell size", () => {
-    expect(resolveTextMapCellRect(4, 2, 3)).toEqual({
+    expect(resolveDocumentMapCellRect(4, 2, 3)).toEqual({
       x: 12,
       y: 6,
       width: 3,
@@ -468,9 +468,9 @@ describe("resolveTextMapCellRect (#375, 2x2 cells)", () => {
   });
 });
 
-describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
+describe("buildGlossaryDocumentMapPlan (#375, line-aware, 2x2 cells)", () => {
   it("does not throw on empty text and produces no pixels", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "",
       entries: [entry("e1", [atom("Foo")])],
       wrapColumns: 80
@@ -485,7 +485,7 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
   });
 
   it("draws each character as a 2x2 cell at (visualColumn*2, visualRow*2)", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "Foo\nbar",
       entries: [entry("e1", [atom("Foo")])],
       wrapColumns: 80
@@ -504,7 +504,7 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
       width: 2,
       height: 2,
       hit: true,
-      color: GLOSSARY_TEXT_MAP_HIT_COLOR
+      color: GLOSSARY_DOCUMENT_MAP_HIT_COLOR
     });
 
     // "b" is on the second source line → visualRow 1 → y = 2.
@@ -517,12 +517,12 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
       width: 2,
       height: 2,
       hit: false,
-      color: GLOSSARY_TEXT_MAP_NORMAL_COLOR
+      color: GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR
     });
   });
 
   it("virtually wraps a long line at wrapColumns, then applies the cell size", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "x".repeat(20),
       entries: [],
       wrapColumns: 5
@@ -539,7 +539,7 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
   });
 
   it("does not break on overlapping occurrences (all covered chars are hits)", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "Foobar",
       entries: [entry("e1", [atom("Foobar"), atom("bar")])],
       wrapColumns: 80
@@ -550,7 +550,7 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
   });
 
   it("empty lines occupy a visual row without producing pixels", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "a\n\n\nb",
       entries: [],
       wrapColumns: 80
@@ -565,7 +565,7 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
 
   it("marks 「…」 cells as dialogue (blue), with Glossary hit taking precedence", () => {
     // 地(0) 「(1) 犬(2) 」(3)  — "犬" is a glossary atom.
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地「犬」",
       entries: [
         entry("e1", [atom("犬", GlossaryAtomFlags.AllowSingleCharacterMatch)])
@@ -578,7 +578,7 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
       {
         startOffset: 1,
         endOffset: 4,
-        color: GLOSSARY_TEXT_MAP_DIALOGUE_COLOR,
+        color: GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR,
         pairIndex: 0
       }
     ]);
@@ -587,30 +587,30 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
     expect(byOffset.get(0)).toMatchObject({
       dialogue: false,
       hit: false,
-      color: GLOSSARY_TEXT_MAP_NORMAL_COLOR
+      color: GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR
     });
     // 「 — inside the dialogue range, not a hit → blue.
     expect(byOffset.get(1)).toMatchObject({
       dialogue: true,
       hit: false,
-      color: GLOSSARY_TEXT_MAP_DIALOGUE_COLOR
+      color: GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR
     });
     // 犬 — dialogue AND glossary hit → hit colour wins.
     expect(byOffset.get(2)).toMatchObject({
       dialogue: true,
       hit: true,
-      color: GLOSSARY_TEXT_MAP_HIT_COLOR
+      color: GLOSSARY_DOCUMENT_MAP_HIT_COLOR
     });
     // 」 — still dialogue, blue.
     expect(byOffset.get(3)).toMatchObject({
       dialogue: true,
       hit: false,
-      color: GLOSSARY_TEXT_MAP_DIALOGUE_COLOR
+      color: GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR
     });
   });
 
   it("#375: a Glossary hit's pixels take the Entry's PRIMARY tag colour", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "x Foo y",
       entries: [
         entry("e1", [atom("Foo")], [
@@ -626,7 +626,7 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
     expect(foo.every((p) => p.hit && p.color === "#00ff00")).toBe(true);
     // Non-hit cells are unaffected.
     expect(plan.pixels.find((p) => p.offset === 0)?.color).toBe(
-      GLOSSARY_TEXT_MAP_NORMAL_COLOR
+      GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR
     );
     // The plan's occurrences carry the entry + colour.
     expect(plan.occurrences).toEqual([
@@ -635,18 +635,18 @@ describe("buildGlossaryTextMapPlan (#375, line-aware, 2x2 cells)", () => {
   });
 
   it("#375: a tagless Entry's hits use the fallback colour", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "Foo",
       entries: [entry("e1", [atom("Foo")])],
       wrapColumns: 80
     });
-    expect(plan.pixels.every((p) => p.color === GLOSSARY_TEXT_MAP_HIT_COLOR)).toBe(
+    expect(plan.pixels.every((p) => p.color === GLOSSARY_DOCUMENT_MAP_HIT_COLOR)).toBe(
       true
     );
   });
 });
 
-describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
+describe("drawGlossaryDocumentMap (#375, 2x2 cells)", () => {
   interface Call {
     type: "clearRect" | "fillRect";
     x: number;
@@ -657,11 +657,11 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
   }
 
   function fakeContext(): {
-    context: GlossaryTextMapDrawContext;
+    context: GlossaryDocumentMapDrawContext;
     calls: Call[];
   } {
     const calls: Call[] = [];
-    const context: GlossaryTextMapDrawContext = {
+    const context: GlossaryDocumentMapDrawContext = {
       fillStyle: "",
       imageSmoothingEnabled: true,
       clearRect(x, y, w, h) {
@@ -689,14 +689,14 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
   }
 
   it("disables smoothing, clears the logical canvas, then black then white", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "Foo bar",
       entries: [entry("e1", [atom("Foo")])],
       wrapColumns: 80
     });
     const { context, calls } = fakeContext();
 
-    drawGlossaryTextMap(context, plan);
+    drawGlossaryDocumentMap(context, plan);
 
     expect(context.imageSmoothingEnabled).toBe(false);
     expect(calls[0]).toMatchObject({
@@ -713,24 +713,24 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
 
     const lastBlack = fills
       .map((c, i) => ({ c, i }))
-      .filter(({ c }) => c.fillStyle === GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+      .filter(({ c }) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR)
       .at(-1)!.i;
     const firstHit = fills.findIndex(
-      (c) => c.fillStyle === GLOSSARY_TEXT_MAP_HIT_COLOR
+      (c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_HIT_COLOR
     );
 
     expect(firstHit).toBeGreaterThan(lastBlack);
     expect(
-      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_HIT_COLOR)
+      fills.filter((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_HIT_COLOR)
     ).toHaveLength(3);
     expect(
-      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+      fills.filter((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR)
     ).toHaveLength(4);
   });
 
   it("paints in the order black -> blue (dialogue) -> glossary hit", () => {
     // 地(0) 「(1) 犬(2) 」(3) 地(4)  — dialogue [1,4), "犬" is a glossary hit.
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地「犬」地",
       entries: [
         entry("e1", [atom("犬", GlossaryAtomFlags.AllowSingleCharacterMatch)])
@@ -739,7 +739,7 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
     });
     const { context, calls } = fakeContext();
 
-    drawGlossaryTextMap(context, plan);
+    drawGlossaryDocumentMap(context, plan);
 
     const fills = calls.filter((c) => c.type === "fillRect");
     expect(fills.every((c) => c.w === 2 && c.h === 2)).toBe(true);
@@ -751,26 +751,26 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
 
     // black (地×2) then blue (「 」) then red (犬).
     expect(
-      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+      fills.filter((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR)
     ).toHaveLength(2);
     expect(
-      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_DIALOGUE_COLOR)
+      fills.filter((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR)
     ).toHaveLength(2);
     expect(
-      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_HIT_COLOR)
+      fills.filter((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_HIT_COLOR)
     ).toHaveLength(1);
 
-    expect(lastOf(GLOSSARY_TEXT_MAP_NORMAL_COLOR)).toBeLessThan(
-      firstOf(GLOSSARY_TEXT_MAP_DIALOGUE_COLOR)
+    expect(lastOf(GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR)).toBeLessThan(
+      firstOf(GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR)
     );
-    expect(lastOf(GLOSSARY_TEXT_MAP_DIALOGUE_COLOR)).toBeLessThan(
-      firstOf(GLOSSARY_TEXT_MAP_HIT_COLOR)
+    expect(lastOf(GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR)).toBeLessThan(
+      firstOf(GLOSSARY_DOCUMENT_MAP_HIT_COLOR)
     );
   });
 
   it("#375: fills each Entry's hits in its own primary-tag colour, after black & blue", () => {
     // "Aa Bb" — "Aa" = green entry, "Bb" = a tagless (fallback red) entry.
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "Aa Bb",
       entries: [
         entry("green", [atom("Aa")], [tag("t", "#00ff00")]),
@@ -780,7 +780,7 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
     });
     const { context, calls } = fakeContext();
 
-    drawGlossaryTextMap(context, plan);
+    drawGlossaryDocumentMap(context, plan);
 
     const fills = calls.filter((c) => c.type === "fillRect");
     const firstOf = (color: string): number =>
@@ -793,34 +793,34 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
       fills.filter((c) => c.fillStyle === "#00ff00")
     ).toHaveLength(2);
     expect(
-      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_HIT_COLOR)
+      fills.filter((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_HIT_COLOR)
     ).toHaveLength(2);
     expect(
-      fills.filter((c) => c.fillStyle === GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+      fills.filter((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR)
     ).toHaveLength(1);
 
     // Both hit colours are drawn AFTER the black pass.
     expect(firstOf("#00ff00")).toBeGreaterThan(
-      lastOf(GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+      lastOf(GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR)
     );
-    expect(firstOf(GLOSSARY_TEXT_MAP_HIT_COLOR)).toBeGreaterThan(
-      lastOf(GLOSSARY_TEXT_MAP_NORMAL_COLOR)
+    expect(firstOf(GLOSSARY_DOCUMENT_MAP_HIT_COLOR)).toBeGreaterThan(
+      lastOf(GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR)
     );
   });
 
   it("#375: an unusable tag colour falls back without throwing", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "Foo",
       entries: [entry("e1", [atom("Foo")], [tag("t", "not-a-color")])],
       wrapColumns: 80
     });
     const { context, calls } = fakeContext();
 
-    expect(() => drawGlossaryTextMap(context, plan)).not.toThrow();
+    expect(() => drawGlossaryDocumentMap(context, plan)).not.toThrow();
     expect(
       calls
         .filter((c) => c.type === "fillRect")
-        .every((c) => c.fillStyle === GLOSSARY_TEXT_MAP_HIT_COLOR)
+        .every((c) => c.fillStyle === GLOSSARY_DOCUMENT_MAP_HIT_COLOR)
     ).toBe(true);
   });
 });
@@ -828,7 +828,7 @@ describe("drawGlossaryTextMap (#375, 2x2 cells)", () => {
 describe("visualRowForOffset (#375, viewport overlay)", () => {
   // "abc\n\ndefghijk" @ wrap 4 → line0 rows[0], line1(empty) rows[1],
   // line2 rows[2..3].
-  const { lines } = buildTextMapLineLayout("abc\n\ndefghijk", 4);
+  const { lines } = buildDocumentMapLineLayout("abc\n\ndefghijk", 4);
 
   it("resolves an in-line offset to its (possibly wrapped) visual row", () => {
     expect(visualRowForOffset(0, lines, 4)).toBe(0);
@@ -847,12 +847,12 @@ describe("visualRowForOffset (#375, viewport overlay)", () => {
   });
 });
 
-describe("resolveTextMapVisualRowToLineIndex (#375, click navigation)", () => {
+describe("resolveDocumentMapVisualRowToLineIndex (#375, click navigation)", () => {
   // "L0\nL1 is long enough to wrap once\nL2" @ wrap 8:
   //   line0 → rows [0]        (baseVisualRow 0, count 1)
   //   line1 → rows [1..5]     (baseVisualRow 1, count 5 — "L1 is long enough to wrap once" is 29 chars → ceil(29/8)=4? -> check)
   //   line2 → rows [...]      after that
-  const layout = buildTextMapLineLayout(
+  const layout = buildDocumentMapLineLayout(
     "L0\nL1 is long enough to wrap once\nL2",
     8
   );
@@ -860,7 +860,7 @@ describe("resolveTextMapVisualRowToLineIndex (#375, click navigation)", () => {
 
   it("maps every visual row of a wrapped source line back to that same line", () => {
     // Row 0 → source line 0.
-    expect(resolveTextMapVisualRowToLineIndex(0, lines)).toBe(0);
+    expect(resolveDocumentMapVisualRowToLineIndex(0, lines)).toBe(0);
     // Any row inside line 1's block → source line 1.
     const line1 = lines[1]!;
     for (
@@ -868,100 +868,100 @@ describe("resolveTextMapVisualRowToLineIndex (#375, click navigation)", () => {
       row < line1.baseVisualRow + line1.visualRowCount;
       row += 1
     ) {
-      expect(resolveTextMapVisualRowToLineIndex(row, lines)).toBe(1);
+      expect(resolveDocumentMapVisualRowToLineIndex(row, lines)).toBe(1);
     }
     // The first row of the last line.
     const last = lines[lines.length - 1]!;
-    expect(resolveTextMapVisualRowToLineIndex(last.baseVisualRow, lines)).toBe(
+    expect(resolveDocumentMapVisualRowToLineIndex(last.baseVisualRow, lines)).toBe(
       last.lineIndex
     );
   });
 
   it("floors a fractional row and clamps a row past the end to the last line", () => {
-    expect(resolveTextMapVisualRowToLineIndex(0.9, lines)).toBe(0);
-    expect(resolveTextMapVisualRowToLineIndex(9999, lines)).toBe(
+    expect(resolveDocumentMapVisualRowToLineIndex(0.9, lines)).toBe(0);
+    expect(resolveDocumentMapVisualRowToLineIndex(9999, lines)).toBe(
       lines[lines.length - 1]!.lineIndex
     );
   });
 
   it("returns null for a negative row, a non-finite row, or an empty layout", () => {
-    expect(resolveTextMapVisualRowToLineIndex(-1, lines)).toBeNull();
-    expect(resolveTextMapVisualRowToLineIndex(Number.NaN, lines)).toBeNull();
-    expect(resolveTextMapVisualRowToLineIndex(0, [])).toBeNull();
+    expect(resolveDocumentMapVisualRowToLineIndex(-1, lines)).toBeNull();
+    expect(resolveDocumentMapVisualRowToLineIndex(Number.NaN, lines)).toBeNull();
+    expect(resolveDocumentMapVisualRowToLineIndex(0, [])).toBeNull();
   });
 
   it("handles an empty document (single empty visual row → line 0)", () => {
-    const { lines: emptyLines } = buildTextMapLineLayout("", 8);
-    expect(resolveTextMapVisualRowToLineIndex(0, emptyLines)).toBe(0);
-    expect(resolveTextMapVisualRowToLineIndex(5, emptyLines)).toBe(0); // clamp
+    const { lines: emptyLines } = buildDocumentMapLineLayout("", 8);
+    expect(resolveDocumentMapVisualRowToLineIndex(0, emptyLines)).toBe(0);
+    expect(resolveDocumentMapVisualRowToLineIndex(5, emptyLines)).toBe(0); // clamp
   });
 });
 
-describe("resolveTextMapClickToLineIndex (#375, click navigation)", () => {
-  const { lines } = buildTextMapLineLayout("a\nb\nc\nd\ne", 8);
-  const cellSize = GLOSSARY_TEXT_MAP_CELL_SIZE; // 2
+describe("resolveDocumentMapClickToLineIndex (#375, click navigation)", () => {
+  const { lines } = buildDocumentMapLineLayout("a\nb\nc\nd\ne", 8);
+  const cellSize = GLOSSARY_DOCUMENT_MAP_CELL_SIZE; // 2
 
   it("mapY = 0 resolves to the first source line", () => {
     expect(
-      resolveTextMapClickToLineIndex({ mapY: 0, cellSize, lines })
+      resolveDocumentMapClickToLineIndex({ mapY: 0, cellSize, lines })
     ).toBe(0);
   });
 
   it("converts mapY to a visual row with floor(mapY / cellSize)", () => {
     // Row 3 spans mapY [6, 8) at cellSize 2 → source line 3.
     expect(
-      resolveTextMapClickToLineIndex({ mapY: 6, cellSize, lines })
+      resolveDocumentMapClickToLineIndex({ mapY: 6, cellSize, lines })
     ).toBe(3);
     expect(
-      resolveTextMapClickToLineIndex({ mapY: 7.5, cellSize, lines })
+      resolveDocumentMapClickToLineIndex({ mapY: 7.5, cellSize, lines })
     ).toBe(3);
   });
 
   it("a click below the last row clamps to the last source line", () => {
     expect(
-      resolveTextMapClickToLineIndex({ mapY: 10_000, cellSize, lines })
+      resolveDocumentMapClickToLineIndex({ mapY: 10_000, cellSize, lines })
     ).toBe(4);
   });
 
   it("a click above the map (negative / non-finite mapY) is a no-op (null)", () => {
     expect(
-      resolveTextMapClickToLineIndex({ mapY: -1, cellSize, lines })
+      resolveDocumentMapClickToLineIndex({ mapY: -1, cellSize, lines })
     ).toBeNull();
     expect(
-      resolveTextMapClickToLineIndex({ mapY: Number.NaN, cellSize, lines })
+      resolveDocumentMapClickToLineIndex({ mapY: Number.NaN, cellSize, lines })
     ).toBeNull();
   });
 
   it("does not throw on an empty layout", () => {
     expect(
-      resolveTextMapClickToLineIndex({ mapY: 4, cellSize, lines: [] })
+      resolveDocumentMapClickToLineIndex({ mapY: 4, cellSize, lines: [] })
     ).toBeNull();
   });
 });
 
-describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
-  const plan = buildGlossaryTextMapPlan({
+describe("buildDocumentMapViewportRect (#375, viewport overlay)", () => {
+  const plan = buildGlossaryDocumentMapPlan({
     text: Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n"),
     entries: [],
     wrapColumns: 40
   });
 
   it("returns null when there is no visible range", () => {
-    expect(buildTextMapViewportRect(plan, null, 200)).toBeNull();
+    expect(buildDocumentMapViewportRect(plan, null, 200)).toBeNull();
   });
 
   it("returns null for an empty / inverted range (to <= from)", () => {
     expect(
-      buildTextMapViewportRect(plan, { from: 10, to: 10 }, 200)
+      buildDocumentMapViewportRect(plan, { from: 10, to: 10 }, 200)
     ).toBeNull();
     expect(
-      buildTextMapViewportRect(plan, { from: 30, to: 10 }, 200)
+      buildDocumentMapViewportRect(plan, { from: 30, to: 10 }, 200)
     ).toBeNull();
   });
 
   it("spans the visual rows of from..to, full width, 1px-stroke ready", () => {
     // Lines are "line 0".."line 19", each 6-7 chars, one visual row each.
-    const rect = buildTextMapViewportRect(plan, { from: 0, to: 7 }, plan.lines.at(-1)!.startOffset + 7)!;
+    const rect = buildDocumentMapViewportRect(plan, { from: 0, to: 7 }, plan.lines.at(-1)!.startOffset + 7)!;
     expect(rect).not.toBeNull();
     expect(rect.x).toBe(0);
     expect(rect.width).toBe(plan.logicalPixelWidth);
@@ -972,7 +972,7 @@ describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
 
   it("clamps out-of-range endpoints into the document", () => {
     const textLength = plan.lines.at(-1)!.startOffset + 7;
-    const rect = buildTextMapViewportRect(
+    const rect = buildDocumentMapViewportRect(
       plan,
       { from: -100, to: textLength + 9999 },
       textLength
@@ -984,13 +984,13 @@ describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
   });
 
   it("never produces a zero-height rectangle", () => {
-    const rect = buildTextMapViewportRect(plan, { from: 3, to: 4 }, 200)!;
+    const rect = buildDocumentMapViewportRect(plan, { from: 3, to: 4 }, 200)!;
     expect(rect.height).toBeGreaterThanOrEqual(plan.cellSize);
   });
 
   it("#375 lens: clamps a viewport bigger than the whole map to the map bounds", () => {
     const textLength = plan.lines.at(-1)!.startOffset + 7;
-    const rect = buildTextMapViewportRect(
+    const rect = buildDocumentMapViewportRect(
       plan,
       { from: 0, to: textLength },
       textLength
@@ -1005,7 +1005,7 @@ describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
 
   it("#375 lens: never draws past the bottom edge even for the final line", () => {
     const textLength = plan.lines.at(-1)!.startOffset + 7;
-    const rect = buildTextMapViewportRect(
+    const rect = buildDocumentMapViewportRect(
       plan,
       { from: textLength - 1, to: textLength },
       textLength
@@ -1015,8 +1015,8 @@ describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
   });
 
   it("#375 lens: a very short single-line document still yields a valid clamped rect", () => {
-    const tiny = buildGlossaryTextMapPlan({ text: "hi", entries: [], wrapColumns: 40 });
-    const rect = buildTextMapViewportRect(tiny, { from: 0, to: 2 }, 2)!;
+    const tiny = buildGlossaryDocumentMapPlan({ text: "hi", entries: [], wrapColumns: 40 });
+    const rect = buildDocumentMapViewportRect(tiny, { from: 0, to: 2 }, 2)!;
     expect(rect).not.toBeNull();
     expect(rect.y).toBe(0);
     expect(rect.height).toBe(tiny.cellSize);
@@ -1025,13 +1025,13 @@ describe("buildTextMapViewportRect (#375, viewport overlay)", () => {
 
   it("#375 lens: returns null (no throw) for a NaN / inverted / out-of-order visible range", () => {
     expect(
-      buildTextMapViewportRect(plan, { from: Number.NaN, to: 5 }, 200)
+      buildDocumentMapViewportRect(plan, { from: Number.NaN, to: 5 }, 200)
     ).toBeNull();
     expect(
-      buildTextMapViewportRect(plan, { from: 5, to: Number.NaN }, 200)
+      buildDocumentMapViewportRect(plan, { from: 5, to: Number.NaN }, 200)
     ).toBeNull();
     expect(
-      buildTextMapViewportRect(plan, { from: 40, to: 10 }, 200)
+      buildDocumentMapViewportRect(plan, { from: 40, to: 10 }, 200)
     ).toBeNull();
   });
 });
@@ -1096,9 +1096,9 @@ describe("documentMapDialogueColorAtOffset (#375, later pair wins)", () => {
   });
 });
 
-describe("buildGlossaryTextMapPlan (#375, documentMap settings)", () => {
+describe("buildGlossaryDocumentMapPlan (#375, documentMap settings)", () => {
   it("uses narrationColor / glossaryFallbackColor / dialogueDelimiterPairs from settings", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地『Foo』",
       entries: [entry("e1", [atom("Foo")])], // tagless → fallback colour
       wrapColumns: 80,
@@ -1120,7 +1120,7 @@ describe("buildGlossaryTextMapPlan (#375, documentMap settings)", () => {
 
   it("later dialogue pair wins on overlap; a Glossary hit still overrides both", () => {
     // "「a『x』b」c" — pair0 「」 spans the whole quote, pair1 『』 nested; "x" = hit.
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "「a『x』b」c",
       entries: [
         entry("e1", [atom("x", GlossaryAtomFlags.AllowSingleCharacterMatch)])
@@ -1136,13 +1136,13 @@ describe("buildGlossaryTextMapPlan (#375, documentMap settings)", () => {
     expect(byOffset.get(1)?.color).toBe("#0000ff"); // only pair0
     expect(byOffset.get(2)?.color).toBe("#7c3aed"); // pair1 (later) wins
     expect(byOffset.get(3)).toMatchObject({ hit: true }); // glossary hit
-    expect(byOffset.get(3)?.color).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR); // hit > dialogue
+    expect(byOffset.get(3)?.color).toBe(GLOSSARY_DOCUMENT_MAP_HIT_COLOR); // hit > dialogue
     expect(byOffset.get(5)?.color).toBe("#0000ff"); // back to pair0
-    expect(byOffset.get(7)?.color).toBe(GLOSSARY_TEXT_MAP_NORMAL_COLOR); // narration
+    expect(byOffset.get(7)?.color).toBe(GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR); // narration
   });
 
   it("without documentMap input it keeps the built-in grey narration / grey dialogue / red hit defaults", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地「x」",
       entries: [
         entry("e1", [atom("x", GlossaryAtomFlags.AllowSingleCharacterMatch)])
@@ -1150,17 +1150,17 @@ describe("buildGlossaryTextMapPlan (#375, documentMap settings)", () => {
       wrapColumns: 80
     });
     const byOffset = new Map(plan.pixels.map((p) => [p.offset, p]));
-    expect(byOffset.get(0)?.color).toBe(GLOSSARY_TEXT_MAP_NORMAL_COLOR);
-    expect(byOffset.get(1)?.color).toBe(GLOSSARY_TEXT_MAP_DIALOGUE_COLOR);
-    expect(byOffset.get(2)?.color).toBe(GLOSSARY_TEXT_MAP_HIT_COLOR);
+    expect(byOffset.get(0)?.color).toBe(GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR);
+    expect(byOffset.get(1)?.color).toBe(GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR);
+    expect(byOffset.get(2)?.color).toBe(GLOSSARY_DOCUMENT_MAP_HIT_COLOR);
   });
 });
 
-describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", () => {
+describe("buildGlossaryDocumentMapPlan (#375, tag-colour visibility adjustment)", () => {
   const RAW_TAG_COLOR = "#3a7bd5";
 
   function planWith(adjust: boolean | undefined) {
-    return buildGlossaryTextMapPlan({
+    return buildGlossaryDocumentMapPlan({
       text: "x Foo Foo Foo y",
       entries: [
         entry("e1", [atom("Foo")], [tag("primary", RAW_TAG_COLOR)])
@@ -1204,7 +1204,7 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
     const fallback = "#909090";
     expect(adjustDocumentMapTagColorForVisibility(fallback)).not.toBe(fallback);
 
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "x Bar y",
       entries: [entry("e1", [atom("Bar")])], // no tags
       wrapColumns: 80,
@@ -1220,7 +1220,7 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
 
   it("with adjustment ON, narration and dialogue-pair colours are used AS-IS (only the tag colour shifts)", () => {
     // 地(0) 「(1) x(2) 」(3) と(4) 『(5) y(6) 』(7)
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地「x」と『y』",
       entries: [
         entry(
@@ -1264,7 +1264,7 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
   it("with adjustment ON, the later dialogue pair still wins an overlap, and a hit still overrides dialogue", () => {
     // 「(0) a(1) 『(2) x(3) 』(4) b(5) 」(6) c(7) — pair0 spans the whole quote,
     // pair1 『』 is nested; "x" is a Glossary hit.
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "「a『x』b」c",
       entries: [
         entry(
@@ -1293,7 +1293,7 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
   });
 
   it("with adjustment OFF, the first-tag colour is used raw alongside untouched narration / dialogue", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地「x」",
       entries: [
         entry(
@@ -1314,7 +1314,7 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
   });
 
   it("adjusts each distinct tag once even across many entries", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "Foo Bar Foo Bar",
       entries: [
         entry("e1", [atom("Foo")], [tag("a", "#3a7bd5")]),
@@ -1331,7 +1331,7 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
   });
 
   it("a Glossary hit still overrides narration and dialogue with the adjusted colour", () => {
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地「Foo」",
       entries: [
         entry(
@@ -1351,7 +1351,7 @@ describe("buildGlossaryTextMapPlan (#375, tag-colour visibility adjustment)", ()
   });
 });
 
-describe("buildGlossaryTextMapPlan (#375, render-tag filter / selectedTagIds)", () => {
+describe("buildGlossaryDocumentMapPlan (#375, render-tag filter / selectedTagIds)", () => {
   const PERSON = "#11aa11"; // 人名
   const PLACE = "#1111aa"; // 地名
   const CORE = "#aa11aa"; // コアメンバー
@@ -1377,7 +1377,7 @@ describe("buildGlossaryTextMapPlan (#375, render-tag filter / selectedTagIds)", 
   const text = "Aoi Kyoto Ren Edo Zzz";
 
   function plan(selectedTagIds?: readonly string[]) {
-    return buildGlossaryTextMapPlan({
+    return buildGlossaryDocumentMapPlan({
       text,
       entries,
       wrapColumns: 80,
@@ -1459,7 +1459,7 @@ describe("buildGlossaryTextMapPlan (#375, render-tag filter / selectedTagIds)", 
   });
 
   it("applies the visibility adjustment to the selected render tag's colour when ON", () => {
-    const built = buildGlossaryTextMapPlan({
+    const built = buildGlossaryDocumentMapPlan({
       text,
       entries,
       wrapColumns: 80,
@@ -1475,7 +1475,7 @@ describe("buildGlossaryTextMapPlan (#375, render-tag filter / selectedTagIds)", 
   });
 
   it("uses the raw tag colour for the selected render tag when adjustment is OFF", () => {
-    const built = buildGlossaryTextMapPlan({
+    const built = buildGlossaryDocumentMapPlan({
       text,
       entries,
       wrapColumns: 80,
@@ -1489,7 +1489,7 @@ describe("buildGlossaryTextMapPlan (#375, render-tag filter / selectedTagIds)", 
   });
 
   it("keeps narration / dialogue colours untouched under a tag filter", () => {
-    const built = buildGlossaryTextMapPlan({
+    const built = buildGlossaryDocumentMapPlan({
       text: "地「Kyoto」",
       entries,
       wrapColumns: 80,
@@ -1506,13 +1506,13 @@ describe("buildGlossaryTextMapPlan (#375, render-tag filter / selectedTagIds)", 
   });
 });
 
-describe("drawGlossaryTextMap (#375, settings colours, narration -> dialogue -> hit)", () => {
+describe("drawGlossaryDocumentMap (#375, settings colours, narration -> dialogue -> hit)", () => {
   function fakeContext(): {
-    context: GlossaryTextMapDrawContext;
+    context: GlossaryDocumentMapDrawContext;
     fills: { fillStyle: string }[];
   } {
     const fills: { fillStyle: string }[] = [];
-    const context: GlossaryTextMapDrawContext = {
+    const context: GlossaryDocumentMapDrawContext = {
       fillStyle: "",
       imageSmoothingEnabled: true,
       clearRect() {},
@@ -1525,7 +1525,7 @@ describe("drawGlossaryTextMap (#375, settings colours, narration -> dialogue -> 
 
   it("draws narration, then every dialogue colour, then every hit colour", () => {
     // "地『g』n" : g = green-tagged glossary hit; narration #101010; dialogue #abcdef.
-    const plan = buildGlossaryTextMapPlan({
+    const plan = buildGlossaryDocumentMapPlan({
       text: "地『g』n",
       entries: [
         entry(
@@ -1539,7 +1539,7 @@ describe("drawGlossaryTextMap (#375, settings colours, narration -> dialogue -> 
       dialogueDelimiterPairs: [{ open: "『", close: "』", color: "#abcdef" }]
     });
     const { context, fills } = fakeContext();
-    drawGlossaryTextMap(context, plan);
+    drawGlossaryDocumentMap(context, plan);
 
     const styles = fills.map((f) => f.fillStyle);
     const lastOf = (c: string) => styles.lastIndexOf(c);
@@ -1554,9 +1554,9 @@ describe("drawGlossaryTextMap (#375, settings colours, narration -> dialogue -> 
   });
 });
 
-describe("glossaryTextMap source (#375)", () => {
+describe("glossaryDocumentMap source (#375)", () => {
   it("no longer uses one-dimensional offset-modulo-width rasterisation", () => {
-    const source = readFileSync("src/renderer/glossaryTextMap.ts", "utf8");
+    const source = readFileSync("src/renderer/glossaryDocumentMap.ts", "utf8");
     // Drop comments so the retired-pattern checks see code only.
     const code = source
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -1565,12 +1565,12 @@ describe("glossaryTextMap source (#375)", () => {
     // The retired 1-D raster keyed pixels off the raw offset / a pixel width.
     expect(code).not.toMatch(/offset\s*%/);
     expect(code).not.toMatch(/%\s*(logical|display|editor|pixel)Width/i);
-    expect(code).not.toContain("resolveTextMapLogicalRect");
-    expect(code).not.toContain("mapTextOffsetToTextMapPixel");
+    expect(code).not.toContain("resolveDocumentMapLogicalRect");
+    expect(code).not.toContain("mapTextOffsetToDocumentMapPixel");
 
     // The new model is line + column based.
     expect(code).toContain("columnIndex % wrapColumns");
-    expect(code).toContain("buildTextMapLineLayout");
+    expect(code).toContain("buildDocumentMapLineLayout");
     expect(code).toContain("splitTextIntoLineSpans");
   });
 });

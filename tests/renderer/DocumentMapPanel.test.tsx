@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryEntry, GlossaryTag } from "../../src/shared/glossary";
 import { defaultDocumentMapSettings } from "../../src/shared/documentMapSettings";
 import type { Translate } from "../../src/shared/i18n";
-import { TextMapPanel } from "../../src/renderer/TextMapPanel";
+import { DocumentMapPanel } from "../../src/renderer/DocumentMapPanel";
 
 const translate: Translate = (key) => key;
 
@@ -60,11 +60,11 @@ afterEach(() => {
 });
 
 function render(
-  props: Partial<React.ComponentProps<typeof TextMapPanel>>
+  props: Partial<React.ComponentProps<typeof DocumentMapPanel>>
 ): void {
   act(() => {
     root.render(
-      React.createElement(TextMapPanel, {
+      React.createElement(DocumentMapPanel, {
         activeDocumentContent: null,
         glossaryEntries: [],
         editorWidth: 800,
@@ -75,31 +75,31 @@ function render(
   });
 }
 
-describe("TextMapPanel (#375, Phase 1)", () => {
+describe("DocumentMapPanel (#375, Phase 1)", () => {
   it("renders a Canvas panel for an active Markdown document", () => {
     render({
       activeDocumentContent: "Foo bar baz",
       glossaryEntries: [entry("e1", "Foo")]
     });
 
-    expect(container.querySelector(".textMapPanel")).not.toBeNull();
+    expect(container.querySelector(".documentMapPanel")).not.toBeNull();
     expect(
-      container.querySelector("canvas.glossaryTextMapCanvas")
+      container.querySelector("canvas.glossaryDocumentMapCanvas")
     ).not.toBeNull();
-    expect(container.textContent).not.toContain("textMap.empty");
+    expect(container.textContent).not.toContain("documentMap.empty");
   });
 
   it("shows the empty state when there is no active Markdown document", () => {
     render({ activeDocumentContent: null, glossaryEntries: [] });
-    expect(container.textContent).toContain("textMap.empty");
+    expect(container.textContent).toContain("documentMap.empty");
     expect(
-      container.querySelector("canvas.glossaryTextMapCanvas")
+      container.querySelector("canvas.glossaryDocumentMapCanvas")
     ).toBeNull();
   });
 
   it("shows the empty state for a whitespace-only document", () => {
     render({ activeDocumentContent: "   \n  \t" });
-    expect(container.textContent).toContain("textMap.empty");
+    expect(container.textContent).toContain("documentMap.empty");
   });
 
   it("does not crash with no glossary entries or a null editor width", () => {
@@ -111,19 +111,19 @@ describe("TextMapPanel (#375, Phase 1)", () => {
       })
     ).not.toThrow();
     expect(
-      container.querySelector("canvas.glossaryTextMapCanvas")
+      container.querySelector("canvas.glossaryDocumentMapCanvas")
     ).not.toBeNull();
   });
 
   it("always renders the panel header", () => {
     render({ activeDocumentContent: null });
     expect(container.querySelector(".sidebarHeader")?.textContent).toBe(
-      "textMap.title"
+      "documentMap.title"
     );
   });
 });
 
-describe("TextMapPanel (#375) — Render tags multi-select", () => {
+describe("DocumentMapPanel (#375) — Render tags multi-select", () => {
   it("renders the Render tags control above the scrolling map body", () => {
     render({
       activeDocumentContent: "Foo bar",
@@ -131,12 +131,12 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
       glossaryTags: [tag("t1", "人名"), tag("t2", "地名")]
     });
 
-    const controls = container.querySelector(".textMapControls");
+    const controls = container.querySelector(".documentMapControls");
     expect(controls).not.toBeNull();
     expect(
-      controls!.querySelector(".textMapTagFilterLabel")?.textContent
-    ).toBe("textMap.renderTags.label");
-    const body = container.querySelector(".textMapBody");
+      controls!.querySelector(".documentMapTagFilterLabel")?.textContent
+    ).toBe("documentMap.renderTags.label");
+    const body = container.querySelector(".documentMapBody");
     // The control is not inside the scroll body.
     expect(body?.contains(controls)).toBe(false);
   });
@@ -150,17 +150,17 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
       glossaryTags: [person, place]
     });
 
-    const trigger = container.querySelector(".textMapTagFilterTrigger")!;
+    const trigger = container.querySelector(".documentMapTagFilterTrigger")!;
     // Not the empty "No render tags" placeholder — every tag is selected.
-    expect(trigger.querySelector(".textMapTagFilterNoSelection")).toBeNull();
+    expect(trigger.querySelector(".documentMapTagFilterNoSelection")).toBeNull();
     expect(
-      trigger.querySelector(".textMapTagFilterAllSelected")?.textContent
-    ).toBe("textMap.renderTags.showAll");
+      trigger.querySelector(".documentMapTagFilterAllSelected")?.textContent
+    ).toBe("documentMap.renderTags.showAll");
     // Every option is pressed.
     act(() => (trigger as HTMLButtonElement).click());
     expect(
       Array.from(
-        container.querySelectorAll(".textMapTagFilterOption")
+        container.querySelectorAll(".documentMapTagFilterOption")
       ).map((el) => el.getAttribute("aria-pressed"))
     ).toEqual(["true", "true"]);
   });
@@ -168,10 +168,10 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
   it("disables the trigger and shows 'No tags available' when the project has no tags", () => {
     render({ activeDocumentContent: "Foo", glossaryEntries: [], glossaryTags: [] });
     const trigger = container.querySelector<HTMLButtonElement>(
-      ".textMapTagFilterTrigger"
+      ".documentMapTagFilterTrigger"
     )!;
     expect(trigger.disabled).toBe(true);
-    expect(trigger.textContent).toContain("textMap.renderTags.noTags");
+    expect(trigger.textContent).toContain("documentMap.renderTags.noTags");
   });
 
   it("de-selecting a tag narrows the trigger's selected chips", () => {
@@ -189,29 +189,29 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
     });
 
     // Both tags on by default → "Show all" status.
-    let trigger = container.querySelector(".textMapTagFilterTrigger")!;
+    let trigger = container.querySelector(".documentMapTagFilterTrigger")!;
     expect(
-      trigger.querySelector(".textMapTagFilterAllSelected")
+      trigger.querySelector(".documentMapTagFilterAllSelected")
     ).not.toBeNull();
 
     // Open the dropdown and click the 人名 option row to turn it OFF.
     act(() =>
       container
-        .querySelector<HTMLButtonElement>(".textMapTagFilterTrigger")!
+        .querySelector<HTMLButtonElement>(".documentMapTagFilterTrigger")!
         .click()
     );
     act(() =>
       container.querySelectorAll<HTMLButtonElement>(
-        ".textMapTagFilterOption"
+        ".documentMapTagFilterOption"
       )[0].click()
     );
 
     // Now a partial selection → the single remaining chip is shown.
-    trigger = container.querySelector(".textMapTagFilterTrigger")!;
-    expect(trigger.querySelector(".textMapTagFilterAllSelected")).toBeNull();
+    trigger = container.querySelector(".documentMapTagFilterTrigger")!;
+    expect(trigger.querySelector(".documentMapTagFilterAllSelected")).toBeNull();
     expect(
       Array.from(
-        trigger.querySelectorAll(".textMapTagFilterChips .glossaryTagChip")
+        trigger.querySelectorAll(".documentMapTagFilterChips .glossaryTagChip")
       ).map((el) => el.textContent)
     ).toEqual(["地名"]);
   });
@@ -230,12 +230,12 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
     // Turn 地名 OFF (a tag that will SURVIVE the refresh).
     act(() =>
       container
-        .querySelector<HTMLButtonElement>(".textMapTagFilterTrigger")!
+        .querySelector<HTMLButtonElement>(".documentMapTagFilterTrigger")!
         .click()
     );
     act(() =>
       container.querySelectorAll<HTMLButtonElement>(
-        ".textMapTagFilterOption"
+        ".documentMapTagFilterOption"
       )[1].click()
     );
 
@@ -248,7 +248,7 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
     });
 
     const state = Array.from(
-      container.querySelectorAll(".textMapTagFilterOption")
+      container.querySelectorAll(".documentMapTagFilterOption")
     ).map((el) => [
       el.querySelector(".glossaryTagChip")?.textContent,
       el.getAttribute("aria-pressed")
@@ -261,10 +261,10 @@ describe("TextMapPanel (#375) — Render tags multi-select", () => {
   });
 });
 
-describe("TextMapPanel (#375) — click-to-scroll navigation", () => {
+describe("DocumentMapPanel (#375) — click-to-scroll navigation", () => {
   function clickHostAt(clientY: number): void {
     const host = container.querySelector<HTMLElement>(
-      ".glossaryTextMapCanvasHost"
+      ".glossaryDocumentMapCanvasHost"
     )!;
     act(() => {
       host.dispatchEvent(
@@ -302,7 +302,7 @@ describe("TextMapPanel (#375) — click-to-scroll navigation", () => {
 
     expect(
       container
-        .querySelector(".glossaryTextMapCanvasHost")
+        .querySelector(".glossaryDocumentMapCanvasHost")
         ?.getAttribute("data-navigable")
     ).toBe("true");
 
@@ -312,7 +312,7 @@ describe("TextMapPanel (#375) — click-to-scroll navigation", () => {
 
   it("is not clickable when onNavigateToLine is omitted", () => {
     render({ activeDocumentContent: "a\nb", glossaryEntries: [] });
-    const host = container.querySelector(".glossaryTextMapCanvasHost")!;
+    const host = container.querySelector(".glossaryDocumentMapCanvasHost")!;
     expect(host.getAttribute("data-navigable")).toBeNull();
     // No throw when clicked.
     expect(() =>
@@ -321,23 +321,23 @@ describe("TextMapPanel (#375) — click-to-scroll navigation", () => {
   });
 });
 
-describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
+describe("DocumentMapPanel (#375) — vertical scroll + viewport overlay", () => {
   it("wraps the tall canvas in a scroll body separate from the header", () => {
     render({
       activeDocumentContent: "Foo\nbar\nbaz",
       glossaryEntries: []
     });
 
-    const panel = container.querySelector(".textMapPanel")!;
+    const panel = container.querySelector(".documentMapPanel")!;
     const header = panel.querySelector(".sidebarHeader");
-    const body = panel.querySelector(".textMapBody");
+    const body = panel.querySelector(".documentMapBody");
     expect(header).not.toBeNull();
     expect(body).not.toBeNull();
     // Header is NOT inside the scroll body.
     expect(body!.contains(header!)).toBe(false);
     // The content host is sized to the map content (explicit px), not 100%.
     const host = body!.querySelector<HTMLElement>(
-      ".glossaryTextMapCanvasHost"
+      ".glossaryDocumentMapCanvasHost"
     )!;
     expect(host.style.height).toMatch(/^\d+px$/);
     expect(host.style.width).toMatch(/^\d+px$/);
@@ -346,13 +346,13 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
   it("uses exactly one canvas (single tall canvas, not virtualized)", () => {
     render({ activeDocumentContent: "a\nb\nc\nd\ne", glossaryEntries: [] });
     expect(
-      container.querySelectorAll("canvas.glossaryTextMapCanvas")
+      container.querySelectorAll("canvas.glossaryDocumentMapCanvas")
     ).toHaveLength(1);
   });
 
   it("draws no viewport overlay without a visible range", () => {
     render({ activeDocumentContent: "Foo\nbar", glossaryEntries: [] });
-    expect(container.querySelector(".textMapViewport")).toBeNull();
+    expect(container.querySelector(".documentMapViewport")).toBeNull();
   });
 
   it("draws a viewport overlay band positioned in content coordinates", () => {
@@ -362,14 +362,14 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
       editorVisibleRange: { from: 0, to: 7 }
     });
 
-    const overlay = container.querySelector<HTMLElement>(".textMapViewport");
+    const overlay = container.querySelector<HTMLElement>(".documentMapViewport");
     expect(overlay).not.toBeNull();
     // Positioned by inline top / height in the scroll-content coordinate space
-    // (pointer-events / border come from the .textMapViewport CSS rule).
+    // (pointer-events / border come from the .documentMapViewport CSS rule).
     expect(overlay!.style.top).toMatch(/^\d+px$/);
     expect(overlay!.style.height).toMatch(/^\d+px$/);
     expect(overlay!.parentElement?.classList.contains(
-      "glossaryTextMapCanvasHost"
+      "glossaryDocumentMapCanvasHost"
     )).toBe(true);
   });
 
@@ -383,9 +383,9 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
         viewportLensOpacity: 0.6
       }
     });
-    const overlay = container.querySelector<HTMLElement>(".textMapViewport")!;
+    const overlay = container.querySelector<HTMLElement>(".documentMapViewport")!;
     expect(
-      overlay.style.getPropertyValue("--text-map-viewport-fill")
+      overlay.style.getPropertyValue("--document-map-viewport-fill")
     ).toBe("rgba(255, 255, 255, 0.6)");
   });
 
@@ -395,9 +395,9 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
       glossaryEntries: [],
       editorVisibleRange: { from: 0, to: 3 }
     });
-    const overlay = container.querySelector<HTMLElement>(".textMapViewport")!;
+    const overlay = container.querySelector<HTMLElement>(".documentMapViewport")!;
     expect(
-      overlay.style.getPropertyValue("--text-map-viewport-fill")
+      overlay.style.getPropertyValue("--document-map-viewport-fill")
     ).toBe("rgba(255, 255, 255, 0.28)");
   });
 
@@ -411,10 +411,10 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
         viewportLensOpacity: 5 as number
       }
     });
-    const overlay = container.querySelector<HTMLElement>(".textMapViewport")!;
+    const overlay = container.querySelector<HTMLElement>(".documentMapViewport")!;
     // 5 is not a valid lens opacity → the canvas uses the built-in default.
     expect(
-      overlay.style.getPropertyValue("--text-map-viewport-fill")
+      overlay.style.getPropertyValue("--document-map-viewport-fill")
     ).toBe("rgba(255, 255, 255, 0.28)");
   });
 
@@ -427,7 +427,7 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
       editorVisibleRange: { from: 0, to: 3 }
     });
     const firstTop = container.querySelector<HTMLElement>(
-      ".textMapViewport"
+      ".documentMapViewport"
     )!.style.top;
 
     render({
@@ -438,7 +438,7 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
       editorVisibleRange: { from: 90, to: 110 }
     });
     const secondTop = container.querySelector<HTMLElement>(
-      ".textMapViewport"
+      ".documentMapViewport"
     )!.style.top;
 
     expect(firstTop).not.toBe(secondTop);
@@ -450,24 +450,24 @@ describe("TextMapPanel (#375) — vertical scroll + viewport overlay", () => {
       glossaryEntries: [],
       editorVisibleRange: { from: 0, to: 3 }
     });
-    expect(container.querySelector(".textMapViewport")).not.toBeNull();
+    expect(container.querySelector(".documentMapViewport")).not.toBeNull();
 
     render({
       activeDocumentContent: "Foo\nbar",
       glossaryEntries: [],
       editorVisibleRange: null
     });
-    expect(container.querySelector(".textMapViewport")).toBeNull();
+    expect(container.querySelector(".documentMapViewport")).toBeNull();
   });
 });
 
-describe("Text Map layout (#375) — CSS", () => {
+describe("Document Map layout (#375) — CSS", () => {
   const css = readFileSync("src/renderer/styles.css", "utf8");
 
-  it("makes only the Text Map body scroll, vertically", () => {
+  it("makes only the Document Map body scroll, vertically", () => {
     const block = css.slice(
-      css.indexOf(".textMapBody {"),
-      css.indexOf("}", css.indexOf(".textMapBody {"))
+      css.indexOf(".documentMapBody {"),
+      css.indexOf("}", css.indexOf(".documentMapBody {"))
     );
     expect(block).toContain("overflow-y: auto");
     expect(block).toContain("overflow-x: hidden");
@@ -475,29 +475,29 @@ describe("Text Map layout (#375) — CSS", () => {
     expect(block).toContain("min-height: 0");
   });
 
-  // Everything from `.textMapViewport {` up to the end of the dark-scheme
+  // Everything from `.documentMapViewport {` up to the end of the dark-scheme
   // override block — covers the base rule, the ::before/::after edges and the
   // @media (prefers-color-scheme: dark) fallbacks.
   const lensCss = css.slice(
-    css.indexOf(".textMapViewport {"),
+    css.indexOf(".documentMapViewport {"),
     css.indexOf("@media (forced-colors: active)")
   );
 
   it("anchors the viewport lens, keeps it non-interactive, and gives it a translucent ACHROMATIC fill + border", () => {
     const block = css.slice(
-      css.indexOf(".textMapViewport {"),
-      css.indexOf("}", css.indexOf(".textMapViewport {"))
+      css.indexOf(".documentMapViewport {"),
+      css.indexOf("}", css.indexOf(".documentMapViewport {"))
     );
     expect(block).toContain("position: absolute");
     expect(block).toContain("pointer-events: none");
     expect(block).toContain("border: 1px solid");
     // #375: translucent fill (not `transparent`), white glass.
-    expect(block).toMatch(/background:\s*var\(--text-map-viewport-fill/);
+    expect(block).toMatch(/background:\s*var\(--document-map-viewport-fill/);
     expect(block).not.toMatch(/background:\s*transparent/);
     expect(block).toMatch(
-      /--text-map-viewport-fill,\s*rgba\(255,\s*255,\s*255,/
+      /--document-map-viewport-fill,\s*rgba\(255,\s*255,\s*255,/
     );
-    expect(block).toMatch(/--text-map-viewport-border,\s*rgba\(0,\s*0,\s*0,/);
+    expect(block).toMatch(/--document-map-viewport-border,\s*rgba\(0,\s*0,\s*0,/);
   });
 
   it("uses NO blue / accent / selection colour anywhere in the lens (light or dark)", () => {
@@ -524,25 +524,25 @@ describe("Text Map layout (#375) — CSS", () => {
   });
 
   it("draws stronger top / bottom edges on the viewport lens", () => {
-    expect(css).toContain(".textMapViewport::before,");
-    expect(css).toContain(".textMapViewport::after");
+    expect(css).toContain(".documentMapViewport::before,");
+    expect(css).toContain(".documentMapViewport::after");
     const edgeBlock = css.slice(
-      css.indexOf(".textMapViewport::before,"),
+      css.indexOf(".documentMapViewport::before,"),
       css.indexOf(
         "}",
-        css.indexOf(".textMapViewport::after")
+        css.indexOf(".documentMapViewport::after")
       )
     );
-    expect(edgeBlock).toMatch(/background:\s*var\(--text-map-viewport-edge/);
+    expect(edgeBlock).toMatch(/background:\s*var\(--document-map-viewport-edge/);
     expect(edgeBlock).toContain("pointer-events: none");
   });
 
   it("keeps a viewport-lens fallback for dark colour schemes and forced colours", () => {
     expect(css).toMatch(
-      /@media \(prefers-color-scheme: dark\)[\s\S]*\.textMapViewport/
+      /@media \(prefers-color-scheme: dark\)[\s\S]*\.documentMapViewport/
     );
     expect(css).toMatch(
-      /@media \(forced-colors: active\)[\s\S]*\.textMapViewport/
+      /@media \(forced-colors: active\)[\s\S]*\.documentMapViewport/
     );
   });
 });

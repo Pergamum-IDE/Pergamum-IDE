@@ -265,7 +265,7 @@ describe("workspace navigation", () => {
     expect(markup).toContain("activity.files");
     expect(markup).toContain("activity.searchReplace");
     expect(markup).toContain("activity.glossary");
-    expect(markup).toContain("activity.textMap");
+    expect(markup).toContain("activity.documentMap");
     expect(markup).toContain("activity.documentMetrics");
     expect(markup).toContain("activity.applicationSettings");
     expect(markup).toContain("aria-pressed=\"true\"");
@@ -306,7 +306,7 @@ describe("workspace navigation", () => {
       ["activity.files", "files"],
       ["activity.searchReplace", "search"],
       ["activity.glossary", "glossary"],
-      ["activity.textMap", "textMap"],
+      ["activity.documentMap", "documentMap"],
       ["activity.documentMetrics", "documentMetrics"]
     ] as const;
 

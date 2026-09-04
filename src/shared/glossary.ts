@@ -65,7 +65,7 @@ export interface GlossaryEntry {
   /**
    * `0..n` assigned tags in ENTRY ASSIGNMENT order
    * (`glossary_entry_tags.sort_order`, unique within the entry). `tags[0]` is
-   * the entry's PRIMARY tag (its default Text Map colour); `[]` = no primary
+   * the entry's PRIMARY tag (its default Document Map colour); `[]` = no primary
    * tag. NOT ordered by the tag's own project-wide `sortOrder`.
    */
   tags: GlossaryTag[];
@@ -679,7 +679,7 @@ export function representativeGlossaryAtom(
 
 /**
  * #375: the entry's PRIMARY (first-assigned) tag — `tags[0]` — or `null` when
- * the entry has no assigned tags. Used as the entry's default Text Map colour
+ * the entry has no assigned tags. Used as the entry's default Document Map colour
  * (a tagless entry falls back to the fixed hit colour).
  */
 export function primaryGlossaryTag(
