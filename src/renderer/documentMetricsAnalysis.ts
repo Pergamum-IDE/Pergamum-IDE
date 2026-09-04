@@ -7,11 +7,11 @@
  *   - narration / dialogue character split + ratio
  *
  * Everything here is pure and Canvas-free so it can be unit-tested directly.
- * It deliberately reuses the SAME shared building blocks as the Text Map /
+ * It deliberately reuses the SAME shared building blocks as the Document Map /
  * Sidebar occurrence jump — `matchGlossarySurfacesInText` for hit detection
  * (so `matchFlags`, boundary policy and the single-character opt-in all
  * behave identically) and `collectDocumentMapDialogueRanges` for dialogue
- * spans — without pulling in the Text Map RENDERER. The counts always cover
+ * spans — without pulling in the Document Map RENDERER. The counts always cover
  * the WHOLE active document; there is no tag-selector / render-tag filter.
  */
 import {
@@ -24,7 +24,7 @@ import {
   buildGlossarySurfaceIndex,
   matchGlossarySurfacesInText
 } from "../shared/glossarySurfaceMatching";
-import { collectDocumentMapDialogueRanges } from "./glossaryTextMap";
+import { collectDocumentMapDialogueRanges } from "./glossaryDocumentMap";
 
 export interface DocumentMetricsGlossaryCount {
   readonly entryId: string;
@@ -70,7 +70,7 @@ const EMPTY_DIALOGUE_RATIO: DocumentMetricsDialogueRatio = {
 /**
  * Per-Entry hit tally for `text`: every non-overlapping glossary surface
  * match, attributed to `candidates[0].entryId` (the shared matcher's
- * deterministic primary candidate — the same choice the Text Map makes).
+ * deterministic primary candidate — the same choice the Document Map makes).
  * Atoms are not distinguished; a hit on any of an Entry's Atoms adds 1 to
  * that Entry.
  */

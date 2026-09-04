@@ -860,13 +860,13 @@ export function App(): JSX.Element {
   const [glossaryTagEntryCounts, setGlossaryTagEntryCounts] = useState<
     Record<string, number>
   >({});
-  // #375 Text Map (Phase 1): every project glossary entry, for the left-pane
-  // Text Map panel's occurrence scan. Reloaded alongside `glossaryTags`.
+  // #375 Document Map (Phase 1): every project glossary entry, for the left-pane
+  // Document Map panel's occurrence scan. Reloaded alongside `glossaryTags`.
   const [glossaryEntries, setGlossaryEntries] = useState<GlossaryEntry[]>([]);
-  // #375 Text Map (Phase 1): the editor area's rendered width in CSS pixels,
-  // used as the Text Map's LOGICAL wrap width (never the left pane width).
+  // #375 Document Map (Phase 1): the editor area's rendered width in CSS pixels,
+  // used as the Document Map's LOGICAL wrap width (never the left pane width).
   const [editorAreaWidth, setEditorAreaWidth] = useState<number | null>(null);
-  // #375 Text Map: the active Markdown editor's on-screen document range,
+  // #375 Document Map: the active Markdown editor's on-screen document range,
   // drawn as a "you are here" rectangle on the map. `null` unless a Markdown
   // editor is active and has pushed a range.
   const [markdownVisibleRange, setMarkdownVisibleRange] =
@@ -3079,8 +3079,8 @@ export function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.rootPath ?? null, glossaryRefreshToken]);
 
-  // #375 Text Map (Phase 1): track the editor area's rendered width so the
-  // Text Map panel (in the LEFT pane) can use the ACTIVE EDITOR width as its
+  // #375 Document Map (Phase 1): track the editor area's rendered width so the
+  // Document Map panel (in the LEFT pane) can use the ACTIVE EDITOR width as its
   // logical wrap width. Re-attached when the editor area mounts / unmounts
   // (full-screen Welcome).
   useEffect(() => {
@@ -3106,7 +3106,7 @@ export function App(): JSX.Element {
     return () => observer.disconnect();
   }, [shouldShowFullScreenWelcome]);
 
-  // #375 Text Map: drop the "you are here" rectangle whenever the active
+  // #375 Document Map: drop the "you are here" rectangle whenever the active
   // surface is not a Markdown editor (the editor also pushes `null` on
   // unmount; this covers the rest).
   useEffect(() => {
@@ -7569,12 +7569,12 @@ export function App(): JSX.Element {
                           ? currentDocumentContent(activeMarkdownDocument)
                           : null
                       }
-                      textMapGlossaryEntries={glossaryEntries}
-                      textMapGlossaryTags={glossaryTags}
-                      textMapEditorWidth={editorAreaWidth}
-                      textMapEditorVisibleRange={markdownVisibleRange}
-                      textMapDocumentMapSettings={effectiveSettings.documentMap}
-                      onTextMapNavigateToLine={scrollActiveMarkdownEditorToLine}
+                      documentMapGlossaryEntries={glossaryEntries}
+                      documentMapGlossaryTags={glossaryTags}
+                      documentMapEditorWidth={editorAreaWidth}
+                      documentMapEditorVisibleRange={markdownVisibleRange}
+                      documentMapSettings={effectiveSettings.documentMap}
+                      onDocumentMapNavigateToLine={scrollActiveMarkdownEditorToLine}
                       onNavigateGlossaryOccurrence={
                         navigateGlossaryOccurrenceFromSidebar
                       }

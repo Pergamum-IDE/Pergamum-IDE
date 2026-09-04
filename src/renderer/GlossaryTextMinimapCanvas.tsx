@@ -27,14 +27,14 @@ import {
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { EditorScrollAlign } from "./editorScrollAlign";
 import {
-  buildGlossaryTextMapPlan,
-  buildTextMapViewportRect,
-  drawGlossaryTextMap,
-  resolveTextMapClickToLineIndex,
-  resolveTextMapVisualRowToLineIndex,
-  resolveTextMapWrapColumns,
-  type GlossaryTextMapRenderMode
-} from "./glossaryTextMap";
+  buildGlossaryDocumentMapPlan,
+  buildDocumentMapViewportRect,
+  drawGlossaryDocumentMap,
+  resolveDocumentMapClickToLineIndex,
+  resolveDocumentMapVisualRowToLineIndex,
+  resolveDocumentMapWrapColumns,
+  type GlossaryDocumentMapRenderMode
+} from "./glossaryDocumentMap";
 
 /**
  * Upper bound on the Canvas BACKING STORE side (px). Real prose stays well
@@ -67,7 +67,7 @@ interface GlossaryTextMinimapCanvasProps {
   /**
    * #375 render-tag filter (the panel's "Render tags" multi-select). Empty /
    * omitted = draw every Glossary hit ("All"); non-empty = draw only Entries
-   * carrying a selected tag. See {@link buildGlossaryTextMapPlan}.
+   * carrying a selected tag. See {@link buildGlossaryDocumentMapPlan}.
    */
   selectedTagIds?: readonly string[];
   /**
@@ -82,13 +82,13 @@ interface GlossaryTextMinimapCanvasProps {
     options?: { align?: EditorScrollAlign }
   ) => void;
   /** Phase 2 hook — accepted, unused in Phase 1. */
-  renderMode?: GlossaryTextMapRenderMode;
+  renderMode?: GlossaryDocumentMapRenderMode;
 }
 
 /**
- * #375 Text Map — line-aware / wrap-aware Canvas. ONE tall canvas whose size is
+ * #375 Document Map — line-aware / wrap-aware Canvas. ONE tall canvas whose size is
  * the content size (`logicalPixelWidth` × `totalVisualRows * cellSize`); the
- * parent `.textMapBody` scrolls it vertically (no virtualization, no partial
+ * parent `.documentMapBody` scrolls it vertically (no virtualization, no partial
  * redraw). A `pointer-events: none` overlay div marks the editor's current
  * viewport; it lives in the scroll content, so it scrolls with the map and
  * only its `top` / `height` change as the editor scrolls.
@@ -130,7 +130,7 @@ export function GlossaryTextMinimapCanvas({
 
   const wrapColumns = useMemo(
     () =>
-      resolveTextMapWrapColumns({
+      resolveDocumentMapWrapColumns({
         editorRect: editorWidth === null ? null : { width: editorWidth }
       }),
     [editorWidth]
@@ -140,7 +140,7 @@ export function GlossaryTextMinimapCanvas({
   // (`wrapColumns * cellSize` × `totalVisualRows * cellSize`).
   const plan = useMemo(
     () =>
-      buildGlossaryTextMapPlan({
+      buildGlossaryDocumentMapPlan({
         text,
         entries,
         wrapColumns,
@@ -165,7 +165,7 @@ export function GlossaryTextMinimapCanvas({
   // Editor-viewport rectangle over the map. Recomputed on scroll WITHOUT
   // touching the canvas (the plan is unchanged).
   const viewportRect = useMemo(
-    () => buildTextMapViewportRect(plan, visibleRange, text.length),
+    () => buildDocumentMapViewportRect(plan, visibleRange, text.length),
     [plan, visibleRange, text.length]
   );
 
@@ -218,7 +218,7 @@ export function GlossaryTextMinimapCanvas({
       return;
     }
 
-    const lineIndex = resolveTextMapClickToLineIndex({
+    const lineIndex = resolveDocumentMapClickToLineIndex({
       mapY: point.mapY,
       cellSize: plan.cellSize,
       lines: plan.lines
@@ -333,7 +333,7 @@ export function GlossaryTextMinimapCanvas({
       return;
     }
 
-    const lineIndex = resolveTextMapVisualRowToLineIndex(
+    const lineIndex = resolveDocumentMapVisualRowToLineIndex(
       target.targetVisualRow,
       plan.lines
     );
@@ -530,12 +530,12 @@ export function GlossaryTextMinimapCanvas({
 
     context.imageSmoothingEnabled = false;
     context.setTransform(scale, 0, 0, scale, 0, 0);
-    drawGlossaryTextMap(context, plan);
+    drawGlossaryDocumentMap(context, plan);
   }, [plan, contentWidth, contentHeight]);
 
   return (
     <div
-      className="glossaryTextMapCanvasHost"
+      className="glossaryDocumentMapCanvasHost"
       ref={hostRef}
       style={{ width: `${contentWidth}px`, height: `${contentHeight}px` }}
       data-navigable={onNavigateToLine ? true : undefined}
@@ -555,13 +555,13 @@ export function GlossaryTextMinimapCanvas({
       onPointerLeave={handlePointerLeave}
     >
       <canvas
-        className="glossaryTextMapCanvas"
+        className="glossaryDocumentMapCanvas"
         ref={canvasRef}
         aria-hidden="true"
       />
       {viewportRect ? (
         <div
-          className="textMapViewport"
+          className="documentMapViewport"
           aria-hidden="true"
           style={
             {
@@ -569,7 +569,7 @@ export function GlossaryTextMinimapCanvas({
               height: `${viewportRect.height}px`,
               // #375: the lens FILL alpha is settings-driven
               // (`documentMap.viewportLensOpacity`). Border / edge stay CSS.
-              "--text-map-viewport-fill": `rgba(255, 255, 255, ${lensFillOpacity})`
+              "--document-map-viewport-fill": `rgba(255, 255, 255, ${lensFillOpacity})`
             } as CSSProperties
           }
         />

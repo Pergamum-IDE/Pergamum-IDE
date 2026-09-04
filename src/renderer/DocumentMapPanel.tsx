@@ -5,9 +5,9 @@ import type { Translate } from "../shared/i18n";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { EditorScrollAlign } from "./editorScrollAlign";
 import { GlossaryTextMinimapCanvas } from "./GlossaryTextMinimapCanvas";
-import { TextMapTagFilter } from "./TextMapTagFilter";
+import { DocumentMapTagFilter } from "./DocumentMapTagFilter";
 
-interface TextMapPanelProps {
+interface DocumentMapPanelProps {
   /**
    * The active Markdown document's working text, or `null` when the active
    * surface is not a Markdown editor. An empty / whitespace-only string is
@@ -22,7 +22,7 @@ interface TextMapPanelProps {
    */
   glossaryTags?: readonly GlossaryTag[];
   /**
-   * The ACTIVE EDITOR's rendered width in CSS pixels. Drives the Text Map's
+   * The ACTIVE EDITOR's rendered width in CSS pixels. Drives the Document Map's
    * logical wrap width — NOT the left pane width. `null` uses a safe fallback.
    */
   editorWidth: number | null;
@@ -47,7 +47,7 @@ interface TextMapPanelProps {
 }
 
 /**
- * #375 Text Map / 文書マップ — the left-pane panel. Header (fixed) + a
+ * #375 Document Map / 文書マップ — the left-pane panel. Header (fixed) + a
  * "Render tags" multi-select + a vertically scrolling body holding ONE tall
  * {@link GlossaryTextMinimapCanvas}.
  *
@@ -57,7 +57,7 @@ interface TextMapPanelProps {
  * (it is NOT read as "All"). Tagless Entries are never drawn while the filter
  * is active.
  */
-export function TextMapPanel({
+export function DocumentMapPanel({
   activeDocumentContent,
   glossaryEntries,
   glossaryTags = [],
@@ -66,7 +66,7 @@ export function TextMapPanel({
   documentMapSettings,
   onNavigateToLine,
   translate
-}: TextMapPanelProps): JSX.Element {
+}: DocumentMapPanelProps): JSX.Element {
   const hasContent =
     activeDocumentContent !== null && activeDocumentContent.trim().length > 0;
 
@@ -114,13 +114,13 @@ export function TextMapPanel({
 
   return (
     <aside
-      className="workspaceSidebarPanel textMapPanel"
-      aria-label={translate("textMap.title")}
+      className="workspaceSidebarPanel documentMapPanel"
+      aria-label={translate("documentMap.title")}
     >
-      <div className="sidebarHeader">{translate("textMap.title")}</div>
+      <div className="sidebarHeader">{translate("documentMap.title")}</div>
 
-      <div className="textMapControls">
-        <TextMapTagFilter
+      <div className="documentMapControls">
+        <DocumentMapTagFilter
           tags={glossaryTags}
           selectedTagIds={validSelectedTagIds}
           translate={translate}
@@ -129,7 +129,7 @@ export function TextMapPanel({
       </div>
 
       {hasContent ? (
-        <div className="textMapBody">
+        <div className="documentMapBody">
           <GlossaryTextMinimapCanvas
             text={activeDocumentContent as string}
             entries={glossaryEntries}
@@ -143,7 +143,7 @@ export function TextMapPanel({
       ) : (
         <div className="workspacePlaceholderList">
           <div className="workspacePlaceholder">
-            {translate("textMap.empty")}
+            {translate("documentMap.empty")}
           </div>
         </div>
       )}

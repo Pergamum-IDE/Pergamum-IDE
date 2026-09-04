@@ -5,7 +5,7 @@ import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryTag } from "../../src/shared/glossary";
 import type { Translate } from "../../src/shared/i18n";
-import { TextMapTagFilter } from "../../src/renderer/TextMapTagFilter";
+import { DocumentMapTagFilter } from "../../src/renderer/DocumentMapTagFilter";
 
 const translate: Translate = (key, values) =>
   values && "count" in values ? `${key}:${values.count}` : key;
@@ -48,12 +48,12 @@ afterEach(() => {
 });
 
 function render(
-  props: Partial<React.ComponentProps<typeof TextMapTagFilter>> = {}
+  props: Partial<React.ComponentProps<typeof DocumentMapTagFilter>> = {}
 ) {
   const onChange = vi.fn();
   act(() => {
     root.render(
-      React.createElement(TextMapTagFilter, {
+      React.createElement(DocumentMapTagFilter, {
         tags: allTags,
         // The panel defaults to every tag selected.
         selectedTagIds: allTags.map((t) => t.id),
@@ -68,7 +68,7 @@ function render(
 
 function trigger(): HTMLButtonElement {
   return container.querySelector<HTMLButtonElement>(
-    ".textMapTagFilterTrigger"
+    ".documentMapTagFilterTrigger"
   )!;
 }
 
@@ -78,22 +78,22 @@ function openPopup(): void {
 
 function options(): HTMLButtonElement[] {
   return Array.from(
-    container.querySelectorAll<HTMLButtonElement>(".textMapTagFilterOption")
+    container.querySelectorAll<HTMLButtonElement>(".documentMapTagFilterOption")
   );
 }
 
-describe("TextMapTagFilter (#375)", () => {
+describe("DocumentMapTagFilter (#375)", () => {
   it("shows the label and, with EVERY tag selected, the 'Show all' status (no chip list)", () => {
     render();
     expect(
-      container.querySelector(".textMapTagFilterLabel")?.textContent
-    ).toBe("textMap.renderTags.label");
+      container.querySelector(".documentMapTagFilterLabel")?.textContent
+    ).toBe("documentMap.renderTags.label");
     expect(
-      trigger().querySelector(".textMapTagFilterAllSelected")?.textContent
-    ).toBe("textMap.renderTags.showAll");
+      trigger().querySelector(".documentMapTagFilterAllSelected")?.textContent
+    ).toBe("documentMap.renderTags.showAll");
     // No chip list / "+n" pill while everything is selected.
-    expect(trigger().querySelector(".textMapTagFilterChips")).toBeNull();
-    expect(trigger().querySelector(".textMapTagFilterMore")).toBeNull();
+    expect(trigger().querySelector(".documentMapTagFilterChips")).toBeNull();
+    expect(trigger().querySelector(".documentMapTagFilterMore")).toBeNull();
   });
 
   it("shows first chips + a '+n' pill when SOME (not all) tags are selected", () => {
@@ -102,28 +102,28 @@ describe("TextMapTagFilter (#375)", () => {
       selectedTagIds: ["t-person", "t-place", "t-core"]
     });
     const chips = Array.from(
-      trigger().querySelectorAll(".textMapTagFilterChips .glossaryTagChip")
+      trigger().querySelectorAll(".documentMapTagFilterChips .glossaryTagChip")
     ).map((el) => el.textContent);
     // MAX_VISIBLE_CHIPS = 2 → 人名 / 地名 chips + "+1".
     expect(chips).toEqual(["人名", "地名"]);
     expect(
-      trigger().querySelector(".textMapTagFilterMore")?.textContent
-    ).toBe("textMap.renderTags.moreSelected:1");
+      trigger().querySelector(".documentMapTagFilterMore")?.textContent
+    ).toBe("documentMap.renderTags.moreSelected:1");
   });
 
   it("shows the muted 'No render tags' text when the selection is empty (NOT 'All')", () => {
     render({ selectedTagIds: [] });
     expect(
-      trigger().querySelector(".textMapTagFilterNoSelection")?.textContent
-    ).toBe("textMap.renderTags.noSelection");
-    expect(trigger().textContent).not.toContain("textMap.renderTags.all");
+      trigger().querySelector(".documentMapTagFilterNoSelection")?.textContent
+    ).toBe("documentMap.renderTags.noSelection");
+    expect(trigger().textContent).not.toContain("documentMap.renderTags.all");
   });
 
   it("lists every tag as an option, in the given (sort_order) order, as chips", () => {
     render();
     openPopup();
     const labels = Array.from(
-      container.querySelectorAll(".textMapTagFilterOption .glossaryTagChip")
+      container.querySelectorAll(".documentMapTagFilterOption .glossaryTagChip")
     ).map((el) => el.textContent);
     expect(labels).toEqual(["人名", "地名", "コアメンバー"]);
   });
@@ -157,7 +157,7 @@ describe("TextMapTagFilter (#375)", () => {
     expect(placeOpt.getAttribute("aria-pressed")).toBe("true");
     expect(coreOpt.getAttribute("aria-pressed")).toBe("false");
     expect(
-      placeOpt.querySelector(".textMapTagFilterCheck")?.getAttribute(
+      placeOpt.querySelector(".documentMapTagFilterCheck")?.getAttribute(
         "data-checked"
       )
     ).toBe("true");
@@ -166,12 +166,12 @@ describe("TextMapTagFilter (#375)", () => {
   it("renders selected values as chips in project order and a selected-count title", () => {
     render({ selectedTagIds: ["t-core", "t-person"] });
     const chips = Array.from(
-      trigger().querySelectorAll(".textMapTagFilterChips .glossaryTagChip")
+      trigger().querySelectorAll(".documentMapTagFilterChips .glossaryTagChip")
     ).map((el) => el.textContent);
     // Project order (人名 before コアメンバー), not the selection order.
     expect(chips).toEqual(["人名", "コアメンバー"]);
     expect(trigger().getAttribute("title")).toBe(
-      "textMap.renderTags.selectedCount:2"
+      "documentMap.renderTags.selectedCount:2"
     );
   });
 
@@ -182,21 +182,21 @@ describe("TextMapTagFilter (#375)", () => {
       selectedTagIds: ["t-core", "t-person", "t-a", "t-place"]
     });
     const chips = Array.from(
-      trigger().querySelectorAll(".textMapTagFilterChips .glossaryTagChip")
+      trigger().querySelectorAll(".documentMapTagFilterChips .glossaryTagChip")
     ).map((el) => el.textContent);
     expect(chips).toEqual(["人名", "地名"]); // first 2 in project order
     expect(
-      trigger().querySelector(".textMapTagFilterMore")?.textContent
-    ).toBe("textMap.renderTags.moreSelected:2");
+      trigger().querySelector(".documentMapTagFilterMore")?.textContent
+    ).toBe("documentMap.renderTags.moreSelected:2");
   });
 
   it("'Show all' re-selects every tag (it does NOT clear), and is hidden when all are selected", () => {
     const { onChange } = render({ selectedTagIds: ["t-place"] });
     openPopup();
     const showAll = container.querySelector<HTMLButtonElement>(
-      ".textMapTagFilterShowAll"
+      ".documentMapTagFilterShowAll"
     )!;
-    expect(showAll.textContent).toBe("textMap.renderTags.showAll");
+    expect(showAll.textContent).toBe("documentMap.renderTags.showAll");
     act(() => showAll.click());
     expect(onChange).toHaveBeenCalledWith(["t-person", "t-place", "t-core"]);
 
@@ -204,7 +204,7 @@ describe("TextMapTagFilter (#375)", () => {
     render();
     openPopup();
     expect(
-      container.querySelector(".textMapTagFilterShowAll")
+      container.querySelector(".documentMapTagFilterShowAll")
     ).toBeNull();
   });
 
@@ -212,23 +212,23 @@ describe("TextMapTagFilter (#375)", () => {
     render({ selectedTagIds: [] });
     openPopup();
     expect(
-      container.querySelector(".textMapTagFilterShowAll")
+      container.querySelector(".documentMapTagFilterShowAll")
     ).not.toBeNull();
   });
 
   it("is disabled and shows 'No tags available' when there are no tags", () => {
     render({ tags: [], selectedTagIds: [] });
     expect(trigger().disabled).toBe(true);
-    expect(trigger().textContent).toContain("textMap.renderTags.noTags");
+    expect(trigger().textContent).toContain("documentMap.renderTags.noTags");
     openPopup();
-    expect(container.querySelector(".textMapTagFilterPopup")).toBeNull();
+    expect(container.querySelector(".documentMapTagFilterPopup")).toBeNull();
   });
 
   it("closes the popup on focus-out", () => {
     render();
     openPopup();
     expect(
-      container.querySelector(".textMapTagFilterPopup")
+      container.querySelector(".documentMapTagFilterPopup")
     ).not.toBeNull();
 
     act(() => {
@@ -239,6 +239,6 @@ describe("TextMapTagFilter (#375)", () => {
         })
       );
     });
-    expect(container.querySelector(".textMapTagFilterPopup")).toBeNull();
+    expect(container.querySelector(".documentMapTagFilterPopup")).toBeNull();
   });
 });

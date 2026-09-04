@@ -19,8 +19,8 @@ describe("workspace commands", () => {
     focusSearchDescription: "Not implemented.",
     focusGlossary: "Focus Glossary",
     focusGlossaryDescription: "Show the Glossary panel.",
-    focusTextMap: "Focus Text Map",
-    focusTextMapDescription: "Show the Text Map panel in the left pane.",
+    focusDocumentMap: "Focus Document Map",
+    focusDocumentMapDescription: "Show the Document Map panel in the left pane.",
     focusDocumentMetrics: "Focus Document Metrics",
     focusDocumentMetricsDescription:
       "Show the Document Metrics panel in the left pane.",
@@ -44,7 +44,7 @@ describe("workspace commands", () => {
       workspaceCommandIds.toggleFiles,
       workspaceCommandIds.focusSearch,
       workspaceCommandIds.focusGlossary,
-      workspaceCommandIds.focusTextMap,
+      workspaceCommandIds.focusDocumentMap,
       workspaceCommandIds.focusDocumentMetrics,
       workspaceCommandIds.openApplicationSettings
     ]);
@@ -68,7 +68,7 @@ describe("workspace commands", () => {
     await registry.execute(workspaceCommandIds.toggleFiles, executionOptions);
     await registry.execute(workspaceCommandIds.focusSearch, executionOptions);
     await registry.execute(workspaceCommandIds.focusGlossary, executionOptions);
-    await registry.execute(workspaceCommandIds.focusTextMap, executionOptions);
+    await registry.execute(workspaceCommandIds.focusDocumentMap, executionOptions);
     await registry.execute(
       workspaceCommandIds.focusDocumentMetrics,
       executionOptions
@@ -78,7 +78,7 @@ describe("workspace commands", () => {
       "files",
       "search",
       "glossary",
-      "textMap",
+      "documentMap",
       "documentMetrics"
     ]);
   });
@@ -114,8 +114,8 @@ describe("workspace commands", () => {
     expect(workspaceFocusCommandIdForMode("glossary")).toBe(
       workspaceCommandIds.focusGlossary
     );
-    expect(workspaceFocusCommandIdForMode("textMap")).toBe(
-      workspaceCommandIds.focusTextMap
+    expect(workspaceFocusCommandIdForMode("documentMap")).toBe(
+      workspaceCommandIds.focusDocumentMap
     );
     expect(workspaceFocusCommandIdForMode("documentMetrics")).toBe(
       workspaceCommandIds.focusDocumentMetrics
@@ -135,9 +135,9 @@ describe("workspace commands", () => {
       focusGlossary: "translated:command.workspace.glossary.focus",
       focusGlossaryDescription:
         "translated:command.workspace.glossary.focus.description",
-      focusTextMap: "translated:command.workspace.textMap.focus",
-      focusTextMapDescription:
-        "translated:command.workspace.textMap.focus.description",
+      focusDocumentMap: "translated:command.workspace.documentMap.focus",
+      focusDocumentMapDescription:
+        "translated:command.workspace.documentMap.focus.description",
       focusDocumentMetrics:
         "translated:command.workspace.documentMetrics.focus",
       focusDocumentMetricsDescription:

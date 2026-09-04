@@ -11,7 +11,7 @@ export const workspaceCommandIds = {
   toggleFiles: defineCommandId("workspace.files.toggle"),
   focusSearch: defineCommandId("workspace.search.focus"),
   focusGlossary: defineCommandId("workspace.glossary.focus"),
-  focusTextMap: defineCommandId("workspace.textMap.focus"),
+  focusDocumentMap: defineCommandId("workspace.documentMap.focus"),
   focusDocumentMetrics: defineCommandId("workspace.documentMetrics.focus"),
   openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
 } as const;
@@ -20,7 +20,7 @@ export type WorkspaceFocusCommandId =
   | typeof workspaceCommandIds.toggleFiles
   | typeof workspaceCommandIds.focusSearch
   | typeof workspaceCommandIds.focusGlossary
-  | typeof workspaceCommandIds.focusTextMap
+  | typeof workspaceCommandIds.focusDocumentMap
   | typeof workspaceCommandIds.focusDocumentMetrics;
 
 export interface WorkspaceCommandController {
@@ -35,8 +35,8 @@ export interface WorkspaceCommandTitles {
   focusSearchDescription: string;
   focusGlossary: string;
   focusGlossaryDescription: string;
-  focusTextMap: string;
-  focusTextMapDescription: string;
+  focusDocumentMap: string;
+  focusDocumentMapDescription: string;
   focusDocumentMetrics: string;
   focusDocumentMetricsDescription: string;
   openApplicationSettings: string;
@@ -59,9 +59,9 @@ export function createWorkspaceCommandTitles(
     focusGlossaryDescription: translate(
       "command.workspace.glossary.focus.description"
     ),
-    focusTextMap: translate("command.workspace.textMap.focus"),
-    focusTextMapDescription: translate(
-      "command.workspace.textMap.focus.description"
+    focusDocumentMap: translate("command.workspace.documentMap.focus"),
+    focusDocumentMapDescription: translate(
+      "command.workspace.documentMap.focus.description"
     ),
     focusDocumentMetrics: translate(
       "command.workspace.documentMetrics.focus"
@@ -88,8 +88,8 @@ export function workspaceFocusCommandIdForMode(
       return workspaceCommandIds.focusSearch;
     case "glossary":
       return workspaceCommandIds.focusGlossary;
-    case "textMap":
-      return workspaceCommandIds.focusTextMap;
+    case "documentMap":
+      return workspaceCommandIds.focusDocumentMap;
     case "documentMetrics":
       return workspaceCommandIds.focusDocumentMetrics;
   }
@@ -125,11 +125,11 @@ export function createWorkspaceCommands(
       }
     },
     {
-      id: workspaceCommandIds.focusTextMap,
-      title: titles.focusTextMap,
-      description: titles.focusTextMapDescription,
+      id: workspaceCommandIds.focusDocumentMap,
+      title: titles.focusDocumentMap,
+      description: titles.focusDocumentMapDescription,
       execute: () => {
-        controller.focusSidebarMode("textMap");
+        controller.focusSidebarMode("documentMap");
       }
     },
     {

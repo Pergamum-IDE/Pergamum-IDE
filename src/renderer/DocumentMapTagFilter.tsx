@@ -3,7 +3,7 @@ import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { GlossaryTagChip } from "./GlossaryTagChip";
 
-interface TextMapTagFilterProps {
+interface DocumentMapTagFilterProps {
   /**
    * Project-wide tags, ALREADY in `glossary_tags.sort_order` order (the store's
    * `listTags` order). Options and the selected-value chips follow this order —
@@ -24,19 +24,19 @@ interface TextMapTagFilterProps {
 const MAX_VISIBLE_CHIPS = 2;
 
 /**
- * #375: the Document Map / Text Map "Render tags" multi-select. A trigger
+ * #375: the Document Map "Render tags" multi-select. A trigger
  * button opens a list of every project tag ({@link GlossaryTagChip}); each row
  * is a full-width toggle button (the whole row is the hit target, not just a
  * checkbox square). The selection is local, never persisted, and defaults to
  * every tag; an EMPTY selection draws no Glossary hits. Disabled when the
  * project has no tags. Closes on focus-out; no global key listeners.
  */
-export function TextMapTagFilter({
+export function DocumentMapTagFilter({
   tags,
   selectedTagIds,
   translate,
   onChange
-}: TextMapTagFilterProps): JSX.Element {
+}: DocumentMapTagFilterProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const labelId = useId();
 
@@ -65,46 +65,46 @@ export function TextMapTagFilter({
   }
 
   return (
-    <div className="textMapTagFilter" onBlur={handleBlur}>
-      <span className="textMapTagFilterLabel" id={labelId}>
-        {translate("textMap.renderTags.label")}
+    <div className="documentMapTagFilter" onBlur={handleBlur}>
+      <span className="documentMapTagFilterLabel" id={labelId}>
+        {translate("documentMap.renderTags.label")}
       </span>
       <button
         type="button"
-        className="textMapTagFilterTrigger"
+        className="documentMapTagFilterTrigger"
         aria-haspopup="true"
         aria-expanded={open}
         aria-labelledby={labelId}
         disabled={!hasTags}
         title={
           selectedCount > 0
-            ? translate("textMap.renderTags.selectedCount", {
+            ? translate("documentMap.renderTags.selectedCount", {
                 count: selectedCount
               })
             : undefined
         }
         onClick={() => setOpen((current) => !current)}
       >
-        <span className="textMapTagFilterValue">
+        <span className="documentMapTagFilterValue">
           {!hasTags ? (
-            translate("textMap.renderTags.noTags")
+            translate("documentMap.renderTags.noTags")
           ) : selectedCount === 0 ? (
-            <span className="textMapTagFilterNoSelection">
-              {translate("textMap.renderTags.noSelection")}
+            <span className="documentMapTagFilterNoSelection">
+              {translate("documentMap.renderTags.noSelection")}
             </span>
           ) : allSelected ? (
             // Every tag selected — say so instead of listing every chip.
-            <span className="textMapTagFilterAllSelected">
-              {translate("textMap.renderTags.showAll")}
+            <span className="documentMapTagFilterAllSelected">
+              {translate("documentMap.renderTags.showAll")}
             </span>
           ) : (
-            <span className="textMapTagFilterChips">
+            <span className="documentMapTagFilterChips">
               {visibleChips.map((tag) => (
                 <GlossaryTagChip key={tag.id} tag={tag} />
               ))}
               {overflowCount > 0 ? (
-                <span className="textMapTagFilterMore">
-                  {translate("textMap.renderTags.moreSelected", {
+                <span className="documentMapTagFilterMore">
+                  {translate("documentMap.renderTags.moreSelected", {
                     count: overflowCount
                   })}
                 </span>
@@ -112,25 +112,25 @@ export function TextMapTagFilter({
             </span>
           )}
         </span>
-        <span className="textMapTagFilterCaret" aria-hidden="true">
+        <span className="documentMapTagFilterCaret" aria-hidden="true">
           ▾
         </span>
       </button>
 
       {open && hasTags ? (
-        <div className="textMapTagFilterPopup">
+        <div className="documentMapTagFilterPopup">
           {tags.map((tag) => {
             const checked = selectedSet.has(tag.id);
             return (
               <button
                 key={tag.id}
                 type="button"
-                className="textMapTagFilterOption"
+                className="documentMapTagFilterOption"
                 aria-pressed={checked}
                 onClick={() => toggle(tag.id)}
               >
                 <span
-                  className="textMapTagFilterCheck"
+                  className="documentMapTagFilterCheck"
                   data-checked={checked || undefined}
                   aria-hidden="true"
                 />
@@ -141,10 +141,10 @@ export function TextMapTagFilter({
           {!allSelected ? (
             <button
               type="button"
-              className="textMapTagFilterShowAll"
+              className="documentMapTagFilterShowAll"
               onClick={() => onChange(tags.map((tag) => tag.id))}
             >
-              {translate("textMap.renderTags.showAll")}
+              {translate("documentMap.renderTags.showAll")}
             </button>
           ) : null}
         </div>

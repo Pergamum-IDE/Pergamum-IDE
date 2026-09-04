@@ -4,7 +4,7 @@ import fileIcon from "../../assets/icons/feather/activity-bar/file.svg?raw";
 import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?raw";
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
 import settingsIcon from "../../assets/icons/feather/activity-bar/settings.svg?raw";
-import textMapIcon from "../../assets/icons/ionicons/activity-bar/map-outline.svg?raw";
+import documentMapIcon from "../../assets/icons/ionicons/activity-bar/map-outline.svg?raw";
 import documentMetricsIcon from "../../assets/icons/ionicons/activity-bar/bar-chart-outline.svg?raw";
 import bugIcon from "../../assets/icons/ionicons/activity-bar/bug-outline.svg?raw";
 
@@ -54,7 +54,7 @@ export function ActivityBar({
   const filesLabel = translate("activity.files");
   const searchLabel = translate("activity.searchReplace");
   const glossaryLabel = translate("activity.glossary");
-  const textMapLabel = translate("activity.textMap");
+  const documentMapLabel = translate("activity.documentMap");
   const documentMetricsLabel = translate("activity.documentMetrics");
   const applicationSettingsLabel = translate("activity.applicationSettings");
   const debugLogLabel = translate("activity.debugLog");
@@ -107,16 +107,16 @@ export function ActivityBar({
         <button
           type="button"
           className={
-            activeMode === "textMap"
+            activeMode === "documentMap"
               ? "activityBarItem isActive"
               : "activityBarItem"
           }
-          aria-label={textMapLabel}
-          aria-pressed={activeMode === "textMap"}
-          title={textMapLabel}
-          onClick={() => onSelectMode("textMap")}
+          aria-label={documentMapLabel}
+          aria-pressed={activeMode === "documentMap"}
+          title={documentMapLabel}
+          onClick={() => onSelectMode("documentMap")}
         >
-          <ActivityBarIcon label={textMapLabel} svg={textMapIcon} />
+          <ActivityBarIcon label={documentMapLabel} svg={documentMapIcon} />
         </button>
         <button
           type="button"

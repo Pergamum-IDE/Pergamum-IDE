@@ -1,7 +1,7 @@
 /**
- * #375 Text Map / 文書マップ — Phase 1, line-aware / wrap-aware mapping.
+ * #375 Document Map / 文書マップ — Phase 1, line-aware / wrap-aware mapping.
  *
- * The Text Map is a left-pane panel that rasterises the ACTIVE Markdown
+ * The Document Map is a left-pane panel that rasterises the ACTIVE Markdown
  * document onto a Canvas: normal text BLACK (`#000000`), Glossary Atom
  * occurrences WHITE (`#ffffff`), transparent background, white painted last so
  * an occurrence always overwrites the plain text underneath.
@@ -56,25 +56,25 @@ import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
 
 /**
- * Built-in narration colour — used when `buildGlossaryTextMapPlan` is called
+ * Built-in narration colour — used when `buildGlossaryDocumentMapPlan` is called
  * without a `documentMap.narrationColor`. Kept in sync with
  * `DOCUMENT_MAP_DEFAULT_NARRATION_COLOR` (#375 Task Q): a dark grey, not pure
  * black.
  */
-export const GLOSSARY_TEXT_MAP_NORMAL_COLOR = "#3c3c3c";
+export const GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR = "#3c3c3c";
 /**
  * FALLBACK colour for a Glossary hit whose Entry has no assigned tag. A hit
  * whose Entry HAS a primary tag is drawn in that tag's `backgroundRgb`
- * instead (see {@link resolveGlossaryTextMapHitColor}).
+ * instead (see {@link resolveGlossaryDocumentMapHitColor}).
  */
-export const GLOSSARY_TEXT_MAP_HIT_COLOR = "#ff0000";
+export const GLOSSARY_DOCUMENT_MAP_HIT_COLOR = "#ff0000";
 /**
  * Built-in colour for the default `「…」` dialogue pair — used when
- * `buildGlossaryTextMapPlan` is called without `documentMap.dialogueDelimiterPairs`.
+ * `buildGlossaryDocumentMapPlan` is called without `documentMap.dialogueDelimiterPairs`.
  * Kept in sync with `DOCUMENT_MAP_DEFAULT_DIALOGUE_COLOR` (#375 Task Q): a mid
  * grey. A Glossary hit is still drawn on top of it.
  */
-export const GLOSSARY_TEXT_MAP_DIALOGUE_COLOR = "#909090";
+export const GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR = "#909090";
 
 /**
  * Side length, in logical pixels, of ONE character cell. `1x1` was too fine to
@@ -84,28 +84,28 @@ export const GLOSSARY_TEXT_MAP_DIALOGUE_COLOR = "#909090";
  * cellSize`. (Cell sizes other than 2 are out of scope — this is a single knob,
  * not a setting.)
  */
-export const GLOSSARY_TEXT_MAP_CELL_SIZE = 2;
+export const GLOSSARY_DOCUMENT_MAP_CELL_SIZE = 2;
 
 /** Rough average glyph advance used to turn an editor pixel width into a
  *  column count. A deliberate approximation — no font metrics, no full-width
  *  handling, no CodeMirror wrap reproduction. */
-export const GLOSSARY_TEXT_MAP_ESTIMATED_CHAR_WIDTH_PX = 8;
+export const GLOSSARY_DOCUMENT_MAP_ESTIMATED_CHAR_WIDTH_PX = 8;
 
 /** Used when the active editor rectangle cannot be measured yet. */
-export const GLOSSARY_TEXT_MAP_FALLBACK_WRAP_COLUMNS = 80;
+export const GLOSSARY_DOCUMENT_MAP_FALLBACK_WRAP_COLUMNS = 80;
 
 /** Phase 2 hook — Phase 1 always behaves as `"black-white"`. */
-export type GlossaryTextMapRenderMode = "black-white" | "tag-color";
+export type GlossaryDocumentMapRenderMode = "black-white" | "tag-color";
 
-export interface ResolveTextMapWrapColumnsInput {
+export interface ResolveDocumentMapWrapColumnsInput {
   /**
    * The active editor's rendered rectangle (e.g. from `getBoundingClientRect`)
    * or `null` when it cannot be measured yet.
    */
   editorRect: { width: number } | null;
-  /** Defaults to {@link GLOSSARY_TEXT_MAP_ESTIMATED_CHAR_WIDTH_PX}. */
+  /** Defaults to {@link GLOSSARY_DOCUMENT_MAP_ESTIMATED_CHAR_WIDTH_PX}. */
   estimatedCharWidthPx?: number;
-  /** Defaults to {@link GLOSSARY_TEXT_MAP_FALLBACK_WRAP_COLUMNS}. */
+  /** Defaults to {@link GLOSSARY_DOCUMENT_MAP_FALLBACK_WRAP_COLUMNS}. */
   fallbackWrapColumns?: number;
 }
 
@@ -115,18 +115,18 @@ export interface ResolveTextMapWrapColumnsInput {
  * straight through as a raster width. Falls back when the rect is missing or
  * unusable.
  */
-export function resolveTextMapWrapColumns(
-  input: ResolveTextMapWrapColumnsInput
+export function resolveDocumentMapWrapColumns(
+  input: ResolveDocumentMapWrapColumnsInput
 ): number {
   const fallback = Math.max(
     1,
     Math.floor(
-      input.fallbackWrapColumns ?? GLOSSARY_TEXT_MAP_FALLBACK_WRAP_COLUMNS
+      input.fallbackWrapColumns ?? GLOSSARY_DOCUMENT_MAP_FALLBACK_WRAP_COLUMNS
     )
   );
   const charWidth = Math.max(
     1,
-    input.estimatedCharWidthPx ?? GLOSSARY_TEXT_MAP_ESTIMATED_CHAR_WIDTH_PX
+    input.estimatedCharWidthPx ?? GLOSSARY_DOCUMENT_MAP_ESTIMATED_CHAR_WIDTH_PX
   );
   const width = input.editorRect ? input.editorRect.width : Number.NaN;
 
@@ -137,7 +137,7 @@ export function resolveTextMapWrapColumns(
   return Math.max(1, Math.floor(width / charWidth));
 }
 
-export interface TextMapLine {
+export interface DocumentMapLine {
   lineIndex: number;
   /** UTF-16 offset of the line's first character in the FULL text. */
   startOffset: number;
@@ -149,13 +149,13 @@ export interface TextMapLine {
   baseVisualRow: number;
 }
 
-export interface TextMapLineLayout {
-  lines: TextMapLine[];
+export interface DocumentMapLineLayout {
+  lines: DocumentMapLine[];
   /** Sum of every line's `visualRowCount`. */
   totalVisualRows: number;
 }
 
-export interface TextMapVisualPosition {
+export interface DocumentMapVisualPosition {
   offset: number;
   lineIndex: number;
   /** 0-based column within the (unwrapped) line. */
@@ -164,7 +164,7 @@ export interface TextMapVisualPosition {
   visualColumn: number;
 }
 
-export interface TextMapCellRect {
+export interface DocumentMapCellRect {
   /** Top-left, in LOGICAL pixels (cell grid, `cellSize` applied). */
   x: number;
   y: number;
@@ -178,11 +178,11 @@ export interface TextMapCellRect {
  * `cellSize x cellSize`. The logical `(visualColumn, visualRow)` meaning is
  * unchanged — only the pixel footprint of each cell.
  */
-export function resolveTextMapCellRect(
+export function resolveDocumentMapCellRect(
   visualColumn: number,
   visualRow: number,
-  cellSize: number = GLOSSARY_TEXT_MAP_CELL_SIZE
-): TextMapCellRect {
+  cellSize: number = GLOSSARY_DOCUMENT_MAP_CELL_SIZE
+): DocumentMapCellRect {
   const size = Math.max(1, Math.floor(cellSize));
 
   return {
@@ -194,7 +194,7 @@ export function resolveTextMapCellRect(
 }
 
 /** A half-open `[startOffset, endOffset)` span in the FULL text. */
-export interface TextMapRange {
+export interface DocumentMapRange {
   startOffset: number;
   endOffset: number;
 }
@@ -218,7 +218,7 @@ export interface DocumentMapDialogueRange {
  * fixed fallback when the Entry has no assigned tag / an unusable colour. The
  * colour is decided per ENTRY, never per Atom.
  */
-export interface GlossaryTextMapOccurrence {
+export interface GlossaryDocumentMapOccurrence {
   entryId: string;
   startOffset: number;
   endOffset: number;
@@ -247,7 +247,7 @@ function hitColorForTag(
   }
   return HIT_COLOR_HEX_PATTERN.test(fallbackColor)
     ? fallbackColor
-    : GLOSSARY_TEXT_MAP_HIT_COLOR;
+    : GLOSSARY_DOCUMENT_MAP_HIT_COLOR;
 }
 
 /**
@@ -255,15 +255,15 @@ function hitColorForTag(
  * filter is active — the Entry's PRIMARY tag colour (`entry.tags[0]`), else
  * `fallbackColor`. See {@link hitColorForTag} for the cache / fallback rules.
  */
-export function resolveGlossaryTextMapHitColor(
+export function resolveGlossaryDocumentMapHitColor(
   entry: Pick<GlossaryEntry, "tags">,
-  fallbackColor: string = GLOSSARY_TEXT_MAP_HIT_COLOR,
+  fallbackColor: string = GLOSSARY_DOCUMENT_MAP_HIT_COLOR,
   tagColorCache?: ReadonlyMap<string, string>
 ): string {
   return hitColorForTag(primaryGlossaryTag(entry), fallbackColor, tagColorCache);
 }
 
-export interface GlossaryTextMapPixel {
+export interface GlossaryDocumentMapPixel {
   /** UTF-16 offset of the source character — the editor / occurrence unit. */
   offset: number;
   visualRow: number;
@@ -282,7 +282,7 @@ export interface GlossaryTextMapPixel {
   color: string;
 }
 
-export interface GlossaryTextMapPlan {
+export interface GlossaryDocumentMapPlan {
   /** Logical width = editor-derived wrap columns. */
   wrapColumns: number;
   /** Logical height = total visual rows after wrap. */
@@ -293,14 +293,14 @@ export interface GlossaryTextMapPlan {
   logicalPixelWidth: number;
   /** `max(1, totalVisualRows) * cellSize` — the logical canvas height. */
   logicalPixelHeight: number;
-  lines: TextMapLine[];
+  lines: DocumentMapLine[];
   /** One entry per drawn character, in source-offset order (newlines skipped). */
-  pixels: GlossaryTextMapPixel[];
+  pixels: GlossaryDocumentMapPixel[];
   /**
    * The Glossary occurrences the plan was built from — each with its owning
    * `entryId` and resolved primary-tag colour, sorted by `startOffset`.
    */
-  occurrences: GlossaryTextMapOccurrence[];
+  occurrences: GlossaryDocumentMapOccurrence[];
   /**
    * The dialogue ranges the plan was built from — one per pair per `open`..
    * `close` span, carrying the pair's `color` and `pairIndex`.
@@ -319,7 +319,7 @@ export interface GlossaryTextMapPlan {
  * The editor-viewport "you are here" rectangle, in LOGICAL pixel space (the
  * same space as `plan.pixels`). Drawn AFTER the text / dialogue / hit cells.
  */
-export interface TextMapViewportRect {
+export interface DocumentMapViewportRect {
   /** Always `0` for now — a full-width band. */
   x: number;
   y: number;
@@ -329,21 +329,21 @@ export interface TextMapViewportRect {
   height: number;
 }
 
-export interface BuildGlossaryTextMapPlanInput {
+export interface BuildGlossaryDocumentMapPlanInput {
   text: string;
   entries: readonly GlossaryEntry[];
-  /** Editor-derived — see {@link resolveTextMapWrapColumns}. */
+  /** Editor-derived — see {@link resolveDocumentMapWrapColumns}. */
   wrapColumns: number;
-  /** Defaults to {@link GLOSSARY_TEXT_MAP_CELL_SIZE}. */
+  /** Defaults to {@link GLOSSARY_DOCUMENT_MAP_CELL_SIZE}. */
   cellSize?: number;
   /**
    * #375 `documentMap.narrationColor` — plain-text / narration colour.
-   * Defaults to {@link GLOSSARY_TEXT_MAP_NORMAL_COLOR}.
+   * Defaults to {@link GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR}.
    */
   narrationColor?: string;
   /**
    * #375 `documentMap.glossaryFallbackColor` — the Glossary-hit colour for an
-   * Entry with no primary tag. Defaults to {@link GLOSSARY_TEXT_MAP_HIT_COLOR}.
+   * Entry with no primary tag. Defaults to {@link GLOSSARY_DOCUMENT_MAP_HIT_COLOR}.
    */
   glossaryFallbackColor?: string;
   /**
@@ -368,7 +368,7 @@ export interface BuildGlossaryTextMapPlanInput {
    */
   selectedTagIds?: readonly string[];
   /** Phase 2 hook — accepted, unused in Phase 1. */
-  renderMode?: GlossaryTextMapRenderMode;
+  renderMode?: GlossaryDocumentMapRenderMode;
   /** Optional pre-built surface index, to skip rebuilding it per render. */
   surfaceIndex?: GlossarySurfaceIndex;
 }
@@ -414,20 +414,20 @@ export function splitTextIntoLineSpans(text: string): LineSpan[] {
  * `max(1, ceil(length / wrapColumns))` visual rows, accumulated into
  * `baseVisualRow` / `totalVisualRows`.
  */
-export function buildTextMapLineLayout(
+export function buildDocumentMapLineLayout(
   text: string,
   wrapColumns: number
-): TextMapLineLayout {
+): DocumentMapLineLayout {
   const safeWrap = Math.max(1, Math.floor(wrapColumns));
   const spans = splitTextIntoLineSpans(text);
 
   let baseVisualRow = 0;
-  const lines: TextMapLine[] = spans.map((span, lineIndex) => {
+  const lines: DocumentMapLine[] = spans.map((span, lineIndex) => {
     const visualRowCount = Math.max(
       1,
       Math.ceil(span.length / safeWrap)
     );
-    const line: TextMapLine = {
+    const line: DocumentMapLine = {
       lineIndex,
       startOffset: span.startOffset,
       length: span.length,
@@ -448,9 +448,9 @@ export function buildTextMapLineLayout(
  */
 export function mapTextOffsetToVisualPosition(
   offset: number,
-  lines: readonly TextMapLine[],
+  lines: readonly DocumentMapLine[],
   wrapColumns: number
-): TextMapVisualPosition | null {
+): DocumentMapVisualPosition | null {
   const safeWrap = Math.max(1, Math.floor(wrapColumns));
 
   for (const line of lines) {
@@ -480,7 +480,7 @@ export function mapTextOffsetToVisualPosition(
  */
 export function visualRowForOffset(
   offset: number,
-  lines: readonly TextMapLine[],
+  lines: readonly DocumentMapLine[],
   wrapColumns: number
 ): number {
   if (lines.length === 0) {
@@ -511,7 +511,7 @@ export function visualRowForOffset(
 }
 
 /**
- * #375 Text Map viewport LENS: turn the editor's on-screen document range into
+ * #375 Document Map viewport LENS: turn the editor's on-screen document range into
  * a logical-pixel rectangle over the map (the renderer paints it as a
  * translucent lens with a border). Full width for now (`x = 0`,
  * `width = logicalPixelWidth`); the y-band spans the visual rows of `from`..
@@ -521,9 +521,9 @@ export function visualRowForOffset(
  * larger than the whole document just covers the whole map. Returns `null` for
  * no range or an empty / inverted range (`to <= from`).
  */
-export function buildTextMapViewportRect(
+export function buildDocumentMapViewportRect(
   plan: Pick<
-    GlossaryTextMapPlan,
+    GlossaryDocumentMapPlan,
     | "lines"
     | "wrapColumns"
     | "cellSize"
@@ -532,7 +532,7 @@ export function buildTextMapViewportRect(
   >,
   visibleRange: EditorVisibleTextRange | null,
   textLength: number
-): TextMapViewportRect | null {
+): DocumentMapViewportRect | null {
   if (
     !visibleRange ||
     !Number.isFinite(visibleRange.from) ||
@@ -580,9 +580,9 @@ export function buildTextMapViewportRect(
  *     sliver below the final wrapped row still navigates somewhere sensible).
  *   - A negative row, or an empty layout, returns `null` (the caller no-ops).
  */
-export function resolveTextMapVisualRowToLineIndex(
+export function resolveDocumentMapVisualRowToLineIndex(
   visualRow: number,
-  lines: readonly TextMapLine[]
+  lines: readonly DocumentMapLine[]
 ): number | null {
   if (lines.length === 0 || !Number.isFinite(visualRow)) {
     return null;
@@ -606,13 +606,13 @@ export function resolveTextMapVisualRowToLineIndex(
  * #375 Document Map click navigation — turn a click's Y (in LOGICAL map pixels,
  * i.e. relative to the content-sized canvas host) into a 0-based source line.
  * `mapY / cellSize` is the visual row; `cellSize` MUST be the plan's cell size
- * ({@link GLOSSARY_TEXT_MAP_CELL_SIZE}), not a magic number. Returns `null` for
+ * ({@link GLOSSARY_DOCUMENT_MAP_CELL_SIZE}), not a magic number. Returns `null` for
  * a click above the map / an empty layout / a non-finite input.
  */
-export function resolveTextMapClickToLineIndex(params: {
+export function resolveDocumentMapClickToLineIndex(params: {
   mapY: number;
   cellSize: number;
-  lines: readonly TextMapLine[];
+  lines: readonly DocumentMapLine[];
 }): number | null {
   const cell = Math.max(1, Math.floor(params.cellSize));
 
@@ -620,7 +620,7 @@ export function resolveTextMapClickToLineIndex(params: {
     return null;
   }
 
-  return resolveTextMapVisualRowToLineIndex(
+  return resolveDocumentMapVisualRowToLineIndex(
     Math.floor(params.mapY / cell),
     params.lines
   );
@@ -645,7 +645,7 @@ function occurrencesFromSurfaceIndex(
  * boundary policy / single-character opt-in behave exactly as for the Sidebar
  * jump. No ad-hoc `includes()`.
  */
-export function collectGlossaryTextMapOccurrences(
+export function collectGlossaryDocumentMapOccurrences(
   text: string,
   entries: readonly GlossaryEntry[]
 ): GlossaryOccurrenceRange[] {
@@ -669,14 +669,14 @@ export function collectGlossaryTextMapOccurrences(
  *     selected tag, and (when the Set is empty) EVERY Entry is dropped. The
  *     `fallbackColor` is not used in this mode.
  */
-export function collectGlossaryTextMapGlossaryOccurrences(
+export function collectGlossaryDocumentMapGlossaryOccurrences(
   text: string,
   entries: readonly GlossaryEntry[],
   surfaceIndex?: GlossarySurfaceIndex,
-  fallbackColor: string = GLOSSARY_TEXT_MAP_HIT_COLOR,
+  fallbackColor: string = GLOSSARY_DOCUMENT_MAP_HIT_COLOR,
   tagColorCache?: ReadonlyMap<string, string>,
   selectedTagIds?: ReadonlySet<string>
-): GlossaryTextMapOccurrence[] {
+): GlossaryDocumentMapOccurrence[] {
   if (text.length === 0) {
     return [];
   }
@@ -718,7 +718,7 @@ export function collectGlossaryTextMapGlossaryOccurrences(
       return [
         {
           ...base,
-          color: resolveGlossaryTextMapHitColor(
+          color: resolveGlossaryDocumentMapHitColor(
             entry,
             fallbackColor,
             tagColorCache
@@ -730,7 +730,7 @@ export function collectGlossaryTextMapGlossaryOccurrences(
 }
 
 /** `true` when `offset` sits inside one of `occurrences` (`start <= o < end`). */
-export function isOffsetInGlossaryTextMapOccurrence(
+export function isOffsetInGlossaryDocumentMapOccurrence(
   offset: number,
   occurrences: readonly GlossaryOccurrenceRange[]
 ): boolean {
@@ -745,9 +745,9 @@ export function isOffsetInGlossaryTextMapOccurrence(
  * is not a Glossary hit. The shared matcher produces non-overlapping ranges,
  * so "first" is unambiguous.
  */
-export function glossaryTextMapHitColorAtOffset(
+export function glossaryDocumentMapHitColorAtOffset(
   offset: number,
-  occurrences: readonly GlossaryTextMapOccurrence[]
+  occurrences: readonly GlossaryDocumentMapOccurrence[]
 ): string | null {
   const hit = occurrences.find(
     (range) => offset >= range.startOffset && offset < range.endOffset
@@ -757,7 +757,7 @@ export function glossaryTextMapHitColorAtOffset(
 }
 
 /**
- * #375 Text Map dialogue highlight: every `open`..`close` span for ONE
+ * #375 Document Map dialogue highlight: every `open`..`close` span for ONE
  * delimiter pair, the delimiters INCLUDED. `open` opens a range, the next
  * `close` closes it (inclusive). No nesting; an unclosed `open` runs to the
  * end of the text. `open` / `close` may be multi-character (matched with
@@ -855,7 +855,7 @@ export function documentMapDialogueColorAtOffset(
  * Back-compat: the default single `「…」` pair's ranges as bare
  * `{ startOffset, endOffset }` spans.
  */
-export function collectJapaneseDialogueRanges(text: string): TextMapRange[] {
+export function collectJapaneseDialogueRanges(text: string): DocumentMapRange[] {
   return collectDocumentMapDialogueRanges(
     text,
     defaultDocumentMapDialogueDelimiterPairs()
@@ -866,9 +866,9 @@ export function collectJapaneseDialogueRanges(text: string): TextMapRange[] {
 }
 
 /** `true` when `offset` sits inside one of `ranges` (`start <= o < end`). */
-export function isOffsetInTextMapRange(
+export function isOffsetInDocumentMapRange(
   offset: number,
-  ranges: readonly TextMapRange[]
+  ranges: readonly DocumentMapRange[]
 ): boolean {
   return ranges.some(
     (range) => offset >= range.startOffset && offset < range.endOffset
@@ -884,13 +884,13 @@ export function isOffsetInTextMapRange(
  * `totalVisualRows * cellSize`); the renderer scales that logical canvas into
  * the left pane.
  */
-export function buildGlossaryTextMapPlan(
-  input: BuildGlossaryTextMapPlanInput
-): GlossaryTextMapPlan {
+export function buildGlossaryDocumentMapPlan(
+  input: BuildGlossaryDocumentMapPlanInput
+): GlossaryDocumentMapPlan {
   const wrapColumns = Math.max(1, Math.floor(input.wrapColumns));
   const cellSize = Math.max(
     1,
-    Math.floor(input.cellSize ?? GLOSSARY_TEXT_MAP_CELL_SIZE)
+    Math.floor(input.cellSize ?? GLOSSARY_DOCUMENT_MAP_CELL_SIZE)
   );
   const { text } = input;
 
@@ -899,9 +899,9 @@ export function buildGlossaryTextMapPlan(
   // Only the Glossary tag colour (the "meaning" layer) is saturation-adjusted,
   // via `tagColorCache` below.
   const narrationColor =
-    input.narrationColor ?? GLOSSARY_TEXT_MAP_NORMAL_COLOR;
+    input.narrationColor ?? GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR;
   const glossaryFallbackColor =
-    input.glossaryFallbackColor ?? GLOSSARY_TEXT_MAP_HIT_COLOR;
+    input.glossaryFallbackColor ?? GLOSSARY_DOCUMENT_MAP_HIT_COLOR;
   const dialoguePairs =
     input.dialogueDelimiterPairs ??
     defaultDocumentMapDialogueDelimiterPairs();
@@ -932,8 +932,8 @@ export function buildGlossaryTextMapPlan(
       ? undefined
       : new Set(input.selectedTagIds);
 
-  const { lines, totalVisualRows } = buildTextMapLineLayout(text, wrapColumns);
-  const occurrences = collectGlossaryTextMapGlossaryOccurrences(
+  const { lines, totalVisualRows } = buildDocumentMapLineLayout(text, wrapColumns);
+  const occurrences = collectGlossaryDocumentMapGlossaryOccurrences(
     text,
     input.entries,
     input.surfaceIndex,
@@ -943,7 +943,7 @@ export function buildGlossaryTextMapPlan(
   );
   const dialogues = collectDocumentMapDialogueRanges(text, dialoguePairs);
 
-  const pixels: GlossaryTextMapPixel[] = [];
+  const pixels: GlossaryDocumentMapPixel[] = [];
 
   for (const line of lines) {
     for (let columnIndex = 0; columnIndex < line.length; columnIndex += 1) {
@@ -951,11 +951,11 @@ export function buildGlossaryTextMapPlan(
       const visualColumn = columnIndex % wrapColumns;
       const visualRow =
         line.baseVisualRow + Math.floor(columnIndex / wrapColumns);
-      const hitColor = glossaryTextMapHitColorAtOffset(offset, occurrences);
+      const hitColor = glossaryDocumentMapHitColorAtOffset(offset, occurrences);
       const hit = hitColor !== null;
       const dialogueColor = documentMapDialogueColorAtOffset(offset, dialogues);
       const dialogue = dialogueColor !== null;
-      const rect = resolveTextMapCellRect(visualColumn, visualRow, cellSize);
+      const rect = resolveDocumentMapCellRect(visualColumn, visualRow, cellSize);
 
       pixels.push({
         offset,
@@ -993,19 +993,19 @@ export function buildGlossaryTextMapPlan(
 }
 
 /** Minimal 2D-context surface the renderer needs — keeps drawing testable. */
-export interface GlossaryTextMapDrawContext {
+export interface GlossaryDocumentMapDrawContext {
   clearRect(x: number, y: number, w: number, h: number): void;
   fillRect(x: number, y: number, w: number, h: number): void;
   fillStyle: string | CanvasGradient | CanvasPattern;
-  /** Disabled by {@link drawGlossaryTextMap} so scaled cells stay crisp. */
+  /** Disabled by {@link drawGlossaryDocumentMap} so scaled cells stay crisp. */
   imageSmoothingEnabled?: boolean;
 }
 
 function fillPixelsGroupedByColor(
-  context: GlossaryTextMapDrawContext,
-  pixels: readonly GlossaryTextMapPixel[]
+  context: GlossaryDocumentMapDrawContext,
+  pixels: readonly GlossaryDocumentMapPixel[]
 ): void {
-  const byColor = new Map<string, GlossaryTextMapPixel[]>();
+  const byColor = new Map<string, GlossaryDocumentMapPixel[]>();
   for (const pixel of pixels) {
     const bucket = byColor.get(pixel.color);
     if (bucket) {
@@ -1038,9 +1038,9 @@ function fillPixelsGroupedByColor(
  * The editor-viewport rectangle is a separate DOM overlay the renderer stacks
  * ON TOP of this canvas, so it always reads last.
  */
-export function drawGlossaryTextMap(
-  context: GlossaryTextMapDrawContext,
-  plan: GlossaryTextMapPlan
+export function drawGlossaryDocumentMap(
+  context: GlossaryDocumentMapDrawContext,
+  plan: GlossaryDocumentMapPlan
 ): void {
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, plan.logicalPixelWidth, plan.logicalPixelHeight);
