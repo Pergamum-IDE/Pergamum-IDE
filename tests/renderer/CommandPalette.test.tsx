@@ -1280,11 +1280,11 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
   });
 
   it("recognizes '@' as a reserved prefix and '#' as heading-jump mode, not as file queries", () => {
-    // Unknown leading characters (e.g. "%") fall back to file mode per #139;
+    // Unknown leading characters (e.g. "/") fall back to file mode per #139;
     // '@' stays a reserved prefix with its own message; ':' is line jump
     // (#140) and '#' is heading jump (#141), each distinct from the plain
     // no-prefix file message.
-    const fileMarkup = renderPalette({ initialInputValue: "%abc" });
+    const fileMarkup = renderPalette({ initialInputValue: "/abc" });
     const glossaryMarkup = renderPalette({ initialInputValue: "@abc" });
     const headingMarkup = renderPalette({ initialInputValue: "#abc" });
 

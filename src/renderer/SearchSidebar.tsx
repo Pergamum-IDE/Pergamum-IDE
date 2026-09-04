@@ -570,6 +570,17 @@ interface SearchSidebarProps {
     startOffset: number,
     endOffset: number
   ) => void;
+  /**
+   * #384: an incoming Command Palette `%` request. A new `token` applies it:
+   * a non-empty `query` forces text search mode, resets the options, sets the
+   * query (the existing debounced effect then runs the search) and focuses the
+   * query input. An empty `query` only focuses the input - no state change,
+   * no search.
+   */
+  readonly queryRequest?: {
+    readonly token: number;
+    readonly query: string;
+  } | null;
 }
 
 export function SearchSidebar({
@@ -578,7 +589,8 @@ export function SearchSidebar({
   runSearch,
   glossaryEntries = NO_GLOSSARY_ENTRIES,
   runGlossarySearch,
-  onOpenMatch
+  onOpenMatch,
+  queryRequest = null
 }: SearchSidebarProps): JSX.Element {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("text");
@@ -596,6 +608,8 @@ export function SearchSidebar({
   runGlossaryRef.current = runGlossarySearch;
   const generationRef = useRef(0);
   const skeletonTimerRef = useRef<number | undefined>(undefined);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const appliedQueryRequestTokenRef = useRef<number | null>(null);
 
   const clearSkeletonTimer = (): void => {
     if (skeletonTimerRef.current !== undefined) {
@@ -611,6 +625,33 @@ export function SearchSidebar({
     },
     []
   );
+
+  // #384: apply an incoming Command Palette `%` request exactly once per token.
+  useEffect(() => {
+    if (
+      !queryRequest ||
+      queryRequest.token === appliedQueryRequestTokenRef.current
+    ) {
+      return;
+    }
+    appliedQueryRequestTokenRef.current = queryRequest.token;
+
+    const requestedQuery = queryRequest.query.trim();
+    if (requestedQuery.length > 0) {
+      setMode("text");
+      setOptions(DEFAULT_SEARCH_OPTIONS);
+      setGlossaryRelationMode("any");
+      setSelectedAtomIds([]);
+      setQuery(queryRequest.query);
+    }
+
+    // Focus after the mode switch has had a chance to render the input.
+    const focusHandle = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(focusHandle);
+  }, [queryRequest]);
 
   const trimmedQuery = query.trim();
   const glossaryMode = mode === "glossary";
@@ -869,6 +910,7 @@ export function SearchSidebar({
             />
           ) : (
             <input
+              ref={searchInputRef}
               type="search"
               className="searchPaneInput"
               value={query}

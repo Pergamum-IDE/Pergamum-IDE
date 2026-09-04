@@ -68,6 +68,7 @@ interface RenderOptions {
     startOffset: number,
     endOffset: number
   ) => void;
+  readonly queryRequest?: { readonly token: number; readonly query: string } | null;
 }
 
 function renderWith(props: RenderOptions): void {
@@ -930,5 +931,133 @@ describe("SearchSidebar (#384 — delayed loading skeleton)", () => {
     expect(runSearch).not.toHaveBeenCalled();
     expect(skeleton()).toBeNull();
     expect(bodyText()).toContain("search.searching");
+  });
+});
+
+describe("SearchSidebar (#384 — Command Palette `%` query request)", () => {
+  function searchInput(): HTMLInputElement | null {
+    return container.querySelector<HTMLInputElement>(".searchPaneInput");
+  }
+
+  it("applies a non-empty request: sets the query, forces text mode, runs the search, focuses the input", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => ONE_MATCH_RESULT);
+    renderWith({
+      projectAvailable: true,
+      runSearch,
+      queryRequest: { token: 1, query: "メイド" }
+    });
+
+    await advance(0); // focus setTimeout
+    expect(searchInput()?.value).toBe("メイド");
+    expect(document.activeElement).toBe(searchInput());
+
+    await advance(300); // debounce → search runs
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    expect(runSearch.mock.calls[0][0]).toBe("メイド");
+    expect(runSearch.mock.calls[0][1]).toEqual({
+      caseSensitive: false,
+      wholeWord: false,
+      useRegex: false
+    });
+  });
+
+  it("switches back from glossary mode and clears its options on a non-empty request", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    const runGlossarySearch = vi.fn<RunGlossarySearchFn>(async () =>
+      makeResult()
+    );
+    renderWith({
+      projectAvailable: true,
+      runSearch,
+      runGlossarySearch,
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
+    // Enter glossary mode + pick a whole-word/regex toggle via the text UI is
+    // not possible in glossary mode, so just confirm the mode flip + query.
+    act(() => optionToggle(0).click());
+    expect(container.querySelector(".glossaryAtomSelect")).not.toBeNull();
+
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch,
+          runGlossarySearch,
+          glossaryEntries: GLOSSARY_ENTRIES,
+          queryRequest: { token: 5, query: "ジャンヌ" }
+        })
+      );
+    });
+    await advance(0);
+
+    expect(container.querySelector(".glossaryAtomSelect")).toBeNull();
+    expect(searchInput()?.value).toBe("ジャンヌ");
+  });
+
+  it("an empty request only focuses the input — no query change, no search", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("existing");
+    await advance(300);
+    runSearch.mockClear();
+
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch,
+          queryRequest: { token: 2, query: "   " }
+        })
+      );
+    });
+    await advance(300);
+
+    expect(searchInput()?.value).toBe("existing");
+    expect(document.activeElement).toBe(searchInput());
+    expect(runSearch).not.toHaveBeenCalled();
+  });
+
+  it("re-applies a request only on a new token", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({
+      projectAvailable: true,
+      runSearch,
+      queryRequest: { token: 1, query: "first" }
+    });
+    await advance(300);
+    expect(searchInput()?.value).toBe("first");
+
+    // Same token, different query object identity — must NOT re-apply.
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch,
+          queryRequest: { token: 1, query: "ignored" }
+        })
+      );
+    });
+    typeQuery("edited");
+    await advance(300);
+    expect(searchInput()?.value).toBe("edited");
+
+    // New token applies.
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch,
+          queryRequest: { token: 2, query: "second" }
+        })
+      );
+    });
+    await advance(0);
+    expect(searchInput()?.value).toBe("second");
   });
 });

@@ -157,6 +157,11 @@ interface WorkspaceSidebarProps {
     relationMode: GlossarySearchRelationMode,
     isCancelled: () => boolean
   ) => Promise<ProjectTextSearchResult>;
+  /** #384: Command Palette `%` project-search request handed to the Search pane. */
+  searchQueryRequest?: {
+    readonly token: number;
+    readonly query: string;
+  } | null;
 }
 
 export function WorkspaceSidebar({
@@ -203,7 +208,8 @@ export function WorkspaceSidebar({
   searchProjectAvailable = false,
   runProjectSearch,
   onOpenSearchMatch,
-  runProjectGlossarySearch
+  runProjectGlossarySearch,
+  searchQueryRequest = null
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -262,6 +268,7 @@ export function WorkspaceSidebar({
           glossaryEntries={documentMapGlossaryEntries}
           runGlossarySearch={runProjectGlossarySearch}
           onOpenMatch={onOpenSearchMatch}
+          queryRequest={searchQueryRequest}
         />
       );
     case "documentMap":

@@ -121,6 +121,11 @@ export const jaTranslations = {
   "commandPalette.noResults": "一致するコマンドがありません",
   "commandPalette.projectFileQuickOpen.inputPlaceholder": "フォルダ名・ファイル名を入力してください",
   "commandPalette.projectFileQuickOpen.noResults": "有効なファイル名を入力してください",
+  "commandPalette.projectSearch.candidate": "{query} をプロジェクト内全文検索",
+  "commandPalette.projectSearch.category": "検索",
+  "commandPalette.projectSearch.footer":
+    "％以降の語句でプロジェクト内全文検索します",
+  "commandPalette.projectSearch.open": "プロジェクト検索を開く",
   "commandPalette.reserved.glossary": "語彙検索はまだ使用できません",
   "commandPalette.searchLabel": "コマンドを検索",
   "commandPalette.title": "コマンドパレット",

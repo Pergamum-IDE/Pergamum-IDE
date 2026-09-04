@@ -906,6 +906,13 @@ export function App(): JSX.Element {
   const fileExplorerRevealRequestSeqRef = useRef(0);
   const [fileExplorerRevealRequest, setFileExplorerRevealRequest] =
     useState<FileExplorerRevealRequest | null>(null);
+  // #384: Command Palette `%` project-search request handed to the Search pane.
+  // `token` is a session-monotonic counter so a repeat `%` re-applies.
+  const searchQueryRequestSeqRef = useRef(0);
+  const [searchQueryRequest, setSearchQueryRequest] = useState<{
+    token: number;
+    query: string;
+  } | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<PendingMarkdownSelection | null>(null);
   /**
@@ -7406,6 +7413,33 @@ export function App(): JSX.Element {
     });
   }
 
+  // #384: Command Palette `%` / `％` shortcut. Unconditionally opens the Search
+  // pane (never a toggle) and hands `query` to it: a non-empty query lands in
+  // the text search box and runs; an empty query just opens + focuses. The
+  // Search pane owns the reset-to-text-mode and the actual search.
+  function openProjectSearch(query: string): void {
+    setSidebarMode("search");
+    setLayout((current) =>
+      current.sidebar.collapsed
+        ? {
+            ...current,
+            sidebar: {
+              collapsed: false,
+              width: clampSidebarWidth(
+                current.sidebar.width,
+                mainAreaRef.current?.clientWidth
+              )
+            }
+          }
+        : current
+    );
+    searchQueryRequestSeqRef.current += 1;
+    setSearchQueryRequest({
+      token: searchQueryRequestSeqRef.current,
+      query
+    });
+  }
+
   // #384 Phase 2: open (or activate) the file behind a Search pane result row
   // and select the matched range. `editorNavigation.openEditor` both activates
   // an already-open tab and reads an unopened project document from disk, so
@@ -7730,6 +7764,7 @@ export function App(): JSX.Element {
                       searchProjectAvailable={project !== null}
                       runProjectSearch={runProjectSearch}
                       runProjectGlossarySearch={runProjectGlossarySearch}
+                      searchQueryRequest={searchQueryRequest}
                       onOpenSearchMatch={(
                         relativePath,
                         startOffset,
@@ -8064,6 +8099,10 @@ export function App(): JSX.Element {
           onExecuteHeadingJumpCandidate={(candidate) => {
             void activateHeadingJumpTarget(candidate);
             closeCommandPaletteAndRestoreMarkdownFocus();
+          }}
+          onExecuteProjectSearch={(searchQuery) => {
+            openProjectSearch(searchQuery);
+            setIsCommandPaletteOpen(false);
           }}
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);

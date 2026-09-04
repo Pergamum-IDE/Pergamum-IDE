@@ -123,6 +123,11 @@ export const enTranslations = {
   "commandPalette.noResults": "No matching commands",
   "commandPalette.projectFileQuickOpen.inputPlaceholder": "Type a folder or file name",
   "commandPalette.projectFileQuickOpen.noResults": "Type a valid file name",
+  "commandPalette.projectSearch.candidate": "Search project text for {query}",
+  "commandPalette.projectSearch.category": "Search",
+  "commandPalette.projectSearch.footer":
+    "Search the project for the text after %",
+  "commandPalette.projectSearch.open": "Open project search",
   "commandPalette.reserved.glossary": "Glossary search is not available yet",
   "commandPalette.searchLabel": "Search commands",
   "commandPalette.title": "Command Palette",

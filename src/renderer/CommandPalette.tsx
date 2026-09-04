@@ -127,6 +127,13 @@ export interface CommandPaletteProps {
   onExecuteHeadingJumpCandidate?: (
     candidate: CommandPaletteHeadingJumpCandidate
   ) => void;
+  /**
+   * #384: `%` / `％` project full-text search shortcut. `query` is the text
+   * after the prefix, already trimmed. Empty means "just open the Search pane
+   * and focus its input" (no query change, no search). The Palette never runs
+   * the search itself — it hands the query to the Search pane.
+   */
+  onExecuteProjectSearch?: (query: string) => void;
   footerDetailSettings?: CommandPaletteFooterDetailSettings;
 }
 
@@ -223,6 +230,10 @@ function reservedPlaceholderKey(mode: QuickAccessMode): TranslationKey | null {
       return null;
     case "glossary":
       return "commandPalette.reserved.glossary";
+    case "search":
+      // Project search shortcut (`%` / `％`, #384): renders its own single
+      // action row instead of this reserved-placeholder text.
+      return null;
     case "command":
       return null;
   }
@@ -556,6 +567,14 @@ export function CommandPaletteHighlightedText({
   return <>{nodes}</>;
 }
 
+/** #384: footer for the `%` / `％` project-search shortcut mode. */
+export function resolveProjectSearchFooterModel(): CommandPaletteFooterModel {
+  return {
+    statusKey: "commandPalette.projectSearch.footer",
+    canRunSelected: true
+  };
+}
+
 function commandPaletteInputPlaceholderKey(
   mode: QuickAccessMode
 ): TranslationKey {
@@ -641,6 +660,7 @@ export function CommandPalette({
   onRequestProjectFileQuickOpenPreview,
   headingJumpCandidates = [],
   onExecuteHeadingJumpCandidate = () => undefined,
+  onExecuteProjectSearch = () => undefined,
   footerDetailSettings = defaultFooterDetailSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
@@ -674,6 +694,11 @@ export function CommandPalette({
           query: initialParsed.query
         })
       );
+    }
+
+    if (initialParsed.mode === "search") {
+      // Always the single project-search action row.
+      return 0;
     }
 
     if (initialParsed.mode !== "command") {
@@ -746,8 +771,10 @@ export function CommandPalette({
         ? fileQuickOpenCandidates.length
         : mode === "heading"
           ? headingJumpFilteredCandidates.length
-          : (lineJumpCandidates?.length ??
-            (lineJumpState?.kind === "disabled" ? 1 : 0));
+          : mode === "search"
+            ? 1
+            : (lineJumpCandidates?.length ??
+              (lineJumpState?.kind === "disabled" ? 1 : 0));
 
   useEffect(() => {
     scrollCommandPaletteSelectionIntoView(selectedItemRef.current);
@@ -858,6 +885,11 @@ export function CommandPalette({
       return;
     }
 
+    if (resolved.mode === "search") {
+      setSelectedIndex(0);
+      return;
+    }
+
     setSelectedIndex(null);
   }
 
@@ -961,7 +993,9 @@ export function CommandPalette({
             activeHeadingJumpCandidate !== null &&
             selectedIndex !== null
           ? optionId(selectedIndex)
-          : undefined;
+          : mode === "search"
+            ? optionId(0)
+            : undefined;
 
   function executeEntryAt(index: number): void {
     const entry = entries[index];
@@ -1006,6 +1040,11 @@ export function CommandPalette({
     }
 
     onExecuteHeadingJumpCandidate(candidate);
+  }
+
+  /** #384: hand the parsed `%` query to the Search pane (trimmed both sides). */
+  function executeProjectSearch(): void {
+    onExecuteProjectSearch(query.trim());
   }
 
   /** Handles Enter for line mode: the disabled row, or the selected candidate. */
@@ -1124,6 +1163,11 @@ export function CommandPalette({
           return;
         }
 
+        if (mode === "search") {
+          executeProjectSearch();
+          return;
+        }
+
         const entry = activeEntry;
 
         if (!entry) {
@@ -1157,6 +1201,8 @@ export function CommandPalette({
           activeCandidate: activeHeadingJumpCandidate,
           detailEnabled: footerDetailSettings.enable
         })
+    : mode === "search"
+      ? resolveProjectSearchFooterModel()
     : resolveCommandPaletteFooterModel({
         mode,
         query,
@@ -1305,6 +1351,45 @@ export function CommandPalette({
           >
             {translate(reservedKey)}
           </CommandPaletteReservedPlaceholder>
+        ) : mode === "search" ? (
+          <ul
+            id={listboxId}
+            className="commandPaletteList"
+            role="listbox"
+            aria-label={translate("commandPalette.searchLabel")}
+          >
+            <li
+              id={optionId(0)}
+              role="option"
+              aria-selected="true"
+              aria-disabled="false"
+              aria-label={
+                query.trim().length > 0
+                  ? translate("commandPalette.projectSearch.candidate", {
+                      query: query.trim()
+                    })
+                  : translate("commandPalette.projectSearch.open")
+              }
+              ref={selectedItemRef}
+              className={commandPaletteItemClassName(true, true)}
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={() => executeProjectSearch()}
+            >
+              <CommandPaletteItemContent
+                indicator={null}
+                primary={
+                  query.trim().length > 0
+                    ? translate("commandPalette.projectSearch.candidate", {
+                        query: query.trim()
+                      })
+                    : translate("commandPalette.projectSearch.open")
+                }
+                secondary={translate("commandPalette.projectSearch.category")}
+              />
+            </li>
+          </ul>
         ) : (
           <ul
             id={listboxId}
