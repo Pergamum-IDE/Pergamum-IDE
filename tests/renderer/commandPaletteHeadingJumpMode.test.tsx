@@ -410,13 +410,15 @@ describe("Command Palette `#` heading-jump mode (#141)", () => {
     expect(container.querySelector('ul[role="listbox"]')).not.toBeNull();
     expect(container.textContent).toContain("Save");
 
-    // `:` line jump keeps its own message; `@` stays a reserved placeholder.
+    // `:` line jump keeps its own message; `@` is glossary-jump (#142), not
+    // a reserved placeholder.
     type(":abc");
     expect(container.textContent).toContain("commandPalette.lineJump.invalid");
     type("@alice");
     expect(
-      container.querySelector(".commandPaletteReservedPlaceholder")!.textContent
-    ).toContain("commandPalette.reserved.glossary");
+      container.querySelector(".commandPaletteReservedPlaceholder")
+    ).toBeNull();
+    expect(container.querySelector('ul[role="listbox"]')).not.toBeNull();
 
     expect(onExecuteHeadingJumpCandidate).not.toHaveBeenCalled();
   });

@@ -6,10 +6,10 @@
  * became the sole interpretation path — see #145 for the resolver/parser
  * behavior comparison that justified the removal.
  *
- * `command` (`>`), `file` (no prefix), `line` (`:`), `heading` (`#`) and
- * `search` (`%` / `％`, #384) are implemented; `glossary` (`@`) is still
- * reserved (UI shows a "not available yet" state). Mode is derived from
- * `rawInput` on every parse.
+ * `command` (`>`), `file` (no prefix), `line` (`:`), `heading` (`#`),
+ * `search` (`%` / `％`, #384) and `glossary` (`@` / `＠`, #142) are all
+ * implemented - every `QuickAccessPrefix` has a working mode. Mode is derived
+ * from `rawInput` on every parse.
  *
  * `rawInput` is the source of truth: mode is derived from it on every parse
  * rather than tracked as separate state, so deleting/replacing a prefix

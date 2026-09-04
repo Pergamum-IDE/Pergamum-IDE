@@ -42,10 +42,16 @@ import {
   type CommandPalettePagedTarget
 } from "./commandPaletteEntries";
 import {
-  commandPaletteNotImplementedStatusIndicator,
   resolveDisabledCommandPaletteStatusIndicator,
   type CommandPaletteStatusIndicator
 } from "./commandPaletteStatusIndicators";
+import {
+  collectGlossaryJumpAtoms,
+  filterCommandPaletteGlossaryJumpCandidates,
+  resolveGlossaryJumpSelection
+} from "./commandPaletteGlossaryJump";
+import { glossaryCommandIds } from "./glossaryCommands";
+import type { GlossaryEntry } from "../shared/glossary";
 import {
   lineJumpMessageKey,
   resolveLineJumpFooterModel,
@@ -134,6 +140,20 @@ export interface CommandPaletteProps {
    * the search itself — it hands the query to the Search pane.
    */
   onExecuteProjectSearch?: (query: string) => void;
+  /**
+   * #142/#142.1: `@` / `＠` Glossary Jump mode candidate SOURCE - every
+   * project Glossary entry, the same array App.tsx already hands the Search
+   * pane's atom picker (#384). The Palette never fetches Glossary data
+   * itself: it flattens this via `collectGlossaryJumpAtoms` (project Entry
+   * order, then atom `sortOrder`; own flattening from the Search pane's
+   * label-sorted `collectSelectableGlossaryAtoms` - #142.1 needs the
+   * project's own order for browsing) and, for a non-empty query,
+   * prefix-filters the result. Selecting a candidate, or the "open Glossary
+   * Manager" row (row 0, empty query only), executes the existing
+   * `glossary.entry.open` / `glossary.entry.manage` commands through
+   * `onExecuteCommand` - no dedicated execute callback needed.
+   */
+  glossaryEntries?: readonly GlossaryEntry[];
   footerDetailSettings?: CommandPaletteFooterDetailSettings;
 }
 
@@ -214,29 +234,6 @@ export function resolveCommandPaletteFooterDetailMarquee(
 
 export interface CommandPaletteScrollTarget {
   scrollIntoView(options?: ScrollIntoViewOptions): void;
-}
-
-function reservedPlaceholderKey(mode: QuickAccessMode): TranslationKey | null {
-  switch (mode) {
-    case "file":
-      return null;
-    case "line":
-      // Line mode is implemented (#140); it renders its own body instead of
-      // this reserved-placeholder text.
-      return null;
-    case "heading":
-      // Heading jump mode is implemented (#141); it renders its own candidate
-      // list instead of this reserved-placeholder text.
-      return null;
-    case "glossary":
-      return "commandPalette.reserved.glossary";
-    case "search":
-      // Project search shortcut (`%` / `％`, #384): renders its own single
-      // action row instead of this reserved-placeholder text.
-      return null;
-    case "command":
-      return null;
-  }
 }
 
 export function commandPaletteItemClassName(
@@ -575,6 +572,22 @@ export function resolveProjectSearchFooterModel(): CommandPaletteFooterModel {
   };
 }
 
+/**
+ * #142: footer for the `@` / `＠` Glossary Jump mode - always the fixed help
+ * text (never a per-candidate detail preview; a matching form's own row
+ * already shows its parent entry). `canRunSelected` reflects whether ENTER
+ * has something to do: the empty-query "open Glossary Manager" row always
+ * does, a query only once it has a matching candidate.
+ */
+export function resolveGlossaryJumpFooterModel(input: {
+  readonly hasActiveCandidate: boolean;
+}): CommandPaletteFooterModel {
+  return {
+    statusKey: "commandPalette.glossaryJump.footer",
+    canRunSelected: input.hasActiveCandidate
+  };
+}
+
 function commandPaletteInputPlaceholderKey(
   mode: QuickAccessMode
 ): TranslationKey {
@@ -661,6 +674,7 @@ export function CommandPalette({
   headingJumpCandidates = [],
   onExecuteHeadingJumpCandidate = () => undefined,
   onExecuteProjectSearch = () => undefined,
+  glossaryEntries = [],
   footerDetailSettings = defaultFooterDetailSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
@@ -693,6 +707,21 @@ export function CommandPalette({
           candidates: headingJumpCandidates,
           query: initialParsed.query
         })
+      );
+    }
+
+    if (initialParsed.mode === "glossary") {
+      // #142.1: row 0 is the "open Glossary Manager" action only for an
+      // empty query; browsing candidates follow it. A non-empty query drops
+      // that row entirely, so the candidate list alone fills row 0+.
+      const showManagerRow = initialParsed.query.trim().length === 0;
+      const candidates = filterCommandPaletteGlossaryJumpCandidates({
+        atoms: collectGlossaryJumpAtoms(glossaryEntries),
+        query: initialParsed.query
+      });
+
+      return resolveGlossaryJumpSelection(
+        (showManagerRow ? 1 : 0) + candidates.length
       );
     }
 
@@ -748,6 +777,23 @@ export function CommandPalette({
           query
         })
       : [];
+  // #142/#142.1: the flattened, project-Entry-ordered, empty-value-filtered
+  // atom list, prefix-narrowed by `query` (or left unfiltered for browsing,
+  // for an empty query) - re-derived from `glossaryEntries` only in glossary
+  // mode.
+  const glossaryJumpFilteredCandidates =
+    mode === "glossary"
+      ? filterCommandPaletteGlossaryJumpCandidates({
+          atoms: collectGlossaryJumpAtoms(glossaryEntries),
+          query
+        })
+      : [];
+  // #142.1: the "open Glossary Manager" row only precedes the candidate list
+  // for an empty query - a non-empty query narrows straight to matches.
+  const glossaryJumpShowManagerRow =
+    mode === "glossary" && query.trim().length === 0;
+  const glossaryJumpTotalRowCount =
+    (glossaryJumpShowManagerRow ? 1 : 0) + glossaryJumpFilteredCandidates.length;
   const entries =
     mode === "command"
       ? filterCommandPaletteEntries(
@@ -773,8 +819,10 @@ export function CommandPalette({
           ? headingJumpFilteredCandidates.length
           : mode === "search"
             ? 1
-            : (lineJumpCandidates?.length ??
-              (lineJumpState?.kind === "disabled" ? 1 : 0));
+            : mode === "glossary"
+              ? glossaryJumpTotalRowCount
+              : (lineJumpCandidates?.length ??
+                (lineJumpState?.kind === "disabled" ? 1 : 0));
 
   useEffect(() => {
     scrollCommandPaletteSelectionIntoView(selectedItemRef.current);
@@ -825,6 +873,17 @@ export function CommandPalette({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, query, headingJumpCandidates]);
+
+  useCommandPaletteLayoutEffect(() => {
+    if (mode !== "glossary") {
+      return;
+    }
+
+    setSelectedIndex((current) =>
+      resolveGlossaryJumpSelection(glossaryJumpTotalRowCount, current)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, query, glossaryEntries]);
 
   function updateInput(value: string): void {
     setInputValue(value);
@@ -885,6 +944,22 @@ export function CommandPalette({
       return;
     }
 
+    if (resolved.mode === "glossary") {
+      const showManagerRow = resolved.query.trim().length === 0;
+      const nextCandidates = filterCommandPaletteGlossaryJumpCandidates({
+        atoms: collectGlossaryJumpAtoms(glossaryEntries),
+        query: resolved.query
+      });
+
+      setSelectedIndex((current) =>
+        resolveGlossaryJumpSelection(
+          (showManagerRow ? 1 : 0) + nextCandidates.length,
+          current
+        )
+      );
+      return;
+    }
+
     if (resolved.mode === "search") {
       setSelectedIndex(0);
       return;
@@ -917,7 +992,6 @@ export function CommandPalette({
           selectedIndex
         )
       : null;
-
   // #372: footer detail preview line for the selected file quick open
   // candidate. Only the selected candidate is ever read; a stale async result
   // (input / selection moved on) is dropped via a monotonic request id, so
@@ -995,7 +1069,9 @@ export function CommandPalette({
           ? optionId(selectedIndex)
           : mode === "search"
             ? optionId(0)
-            : undefined;
+            : mode === "glossary" && selectedIndex !== null
+              ? optionId(selectedIndex)
+              : undefined;
 
   function executeEntryAt(index: number): void {
     const entry = entries[index];
@@ -1045,6 +1121,27 @@ export function CommandPalette({
   /** #384: hand the parsed `%` query to the Search pane (trimmed both sides). */
   function executeProjectSearch(): void {
     onExecuteProjectSearch(query.trim());
+  }
+
+  /**
+   * #142: opens the matching form's parent Glossary Entry editor - reuses the
+   * existing `glossary.entry.open` command (activate-if-open is already that
+   * command's behaviour) exactly like `:` line jump reuses
+   * `editorCommandIds.goToLine`. No dedicated execute callback needed.
+   */
+  function executeGlossaryJumpCandidateAt(index: number): void {
+    const candidate = glossaryJumpFilteredCandidates[index];
+
+    if (!candidate) {
+      return;
+    }
+
+    onExecuteCommand(glossaryCommandIds.openEntry, candidate.entryId);
+  }
+
+  /** #142: the empty-query row - opens the Glossary Manager tab. */
+  function executeGlossaryJumpManager(): void {
+    onExecuteCommand(glossaryCommandIds.manageEntries);
   }
 
   /** Handles Enter for line mode: the disabled row, or the selected candidate. */
@@ -1163,6 +1260,19 @@ export function CommandPalette({
           return;
         }
 
+        if (mode === "glossary") {
+          const rowIndex = selectedIndex ?? 0;
+
+          if (glossaryJumpShowManagerRow && rowIndex === 0) {
+            executeGlossaryJumpManager();
+          } else {
+            executeGlossaryJumpCandidateAt(
+              glossaryJumpShowManagerRow ? rowIndex - 1 : rowIndex
+            );
+          }
+          return;
+        }
+
         if (mode === "search") {
           executeProjectSearch();
           return;
@@ -1187,7 +1297,6 @@ export function CommandPalette({
     }
   }
 
-  const reservedKey = reservedPlaceholderKey(mode);
   const footer = lineJumpState
     ? resolveLineJumpFooterModel(lineJumpState)
     : mode === "file"
@@ -1203,6 +1312,13 @@ export function CommandPalette({
         })
     : mode === "search"
       ? resolveProjectSearchFooterModel()
+    : mode === "glossary"
+      ? resolveGlossaryJumpFooterModel({
+          // #142.1: row 0 (manager, empty query) or any resolved candidate
+          // row is always executable; `null` only when a non-empty query has
+          // zero matches (`resolveGlossaryJumpSelection` returns null then).
+          hasActiveCandidate: selectedIndex !== null
+        })
     : resolveCommandPaletteFooterModel({
         mode,
         query,
@@ -1237,12 +1353,13 @@ export function CommandPalette({
         "--command-palette-footer-detail-marquee-distance": `${footerDetailMarquee.state.distancePx}px`
       } as CSSProperties)
     : undefined;
-  // #316: a `role="listbox"` popup is on screen (command mode always renders
-  // one — empty state included — plus the two line-jump list states). Used to
-  // drive the input's combobox ARIA.
+  // #316: a `role="listbox"` popup is on screen (every mode renders one now
+  // that #142 implements the last reserved prefix — empty state included —
+  // plus the two line-jump list states). Used to drive the input's combobox
+  // ARIA.
   const hasListbox = lineJumpState
     ? lineJumpState.kind === "executable" || lineJumpState.kind === "disabled"
-    : !reservedKey;
+    : true;
 
   return (
     <div className="commandPaletteBackdrop" onClick={onClose}>
@@ -1345,12 +1462,97 @@ export function CommandPalette({
               )}
             </CommandPaletteReservedPlaceholder>
           )
-        ) : reservedKey ? (
-          <CommandPaletteReservedPlaceholder
-            indicator={commandPaletteNotImplementedStatusIndicator()}
+        ) : mode === "glossary" ? (
+          <ul
+            id={listboxId}
+            className="commandPaletteList"
+            role="listbox"
+            aria-label={translate("commandPalette.searchLabel")}
           >
-            {translate(reservedKey)}
-          </CommandPaletteReservedPlaceholder>
+            {glossaryJumpShowManagerRow ? (
+              <li
+                id={optionId(0)}
+                role="option"
+                aria-selected={selectedIndex === 0}
+                aria-disabled="false"
+                aria-label={translate("commandPalette.glossaryJump.openManager")}
+                ref={selectedIndex === 0 ? selectedItemRef : null}
+                className={commandPaletteItemClassName(selectedIndex === 0, true)}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                onMouseMove={() => {
+                  if (selectedIndex !== 0) {
+                    setSelectedIndex(0);
+                  }
+                }}
+                onClick={() => executeGlossaryJumpManager()}
+              >
+                <CommandPaletteItemContent
+                  indicator={null}
+                  primary={translate("commandPalette.glossaryJump.openManager")}
+                />
+              </li>
+            ) : null}
+            {!glossaryJumpShowManagerRow &&
+            glossaryJumpFilteredCandidates.length === 0 ? (
+              <li role="presentation" className="commandPaletteEmpty">
+                {translate("commandPalette.glossaryJump.noResults")}
+              </li>
+            ) : (
+              glossaryJumpFilteredCandidates.map((candidate, index) => {
+                // #142.1: the manager row (when shown) occupies row 0, so a
+                // candidate's ROW index (selection / aria-activedescendant)
+                // trails its own array index by one; `executeGlossaryJump-
+                // CandidateAt` still takes the plain candidate-array index.
+                const rowIndex = glossaryJumpShowManagerRow
+                  ? index + 1
+                  : index;
+
+                return (
+                  <li
+                    key={candidate.id}
+                    id={optionId(rowIndex)}
+                    role="option"
+                    aria-selected={rowIndex === selectedIndex}
+                    aria-disabled="false"
+                    aria-label={`${candidate.value} ${translate(
+                      "commandPalette.glossaryJump.entryLabel",
+                      { entryLabel: candidate.entryLabel }
+                    )}`}
+                    ref={rowIndex === selectedIndex ? selectedItemRef : null}
+                    className={commandPaletteItemClassName(
+                      rowIndex === selectedIndex,
+                      true
+                    )}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                    }}
+                    onMouseMove={() => {
+                      if (selectedIndex !== rowIndex) {
+                        setSelectedIndex(rowIndex);
+                      }
+                    }}
+                    onClick={() => executeGlossaryJumpCandidateAt(index)}
+                  >
+                    <CommandPaletteItemContent
+                      indicator={null}
+                      primary={
+                        <CommandPaletteHighlightedText
+                          text={candidate.value}
+                          ranges={candidate.matchRanges}
+                        />
+                      }
+                      secondary={translate(
+                        "commandPalette.glossaryJump.entryLabel",
+                        { entryLabel: candidate.entryLabel }
+                      )}
+                    />
+                  </li>
+                );
+              })
+            )}
+          </ul>
         ) : mode === "search" ? (
           <ul
             id={listboxId}

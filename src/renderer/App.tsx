@@ -8954,6 +8954,7 @@ export function App(): JSX.Element {
             openProjectSearch(searchQuery);
             setIsCommandPaletteOpen(false);
           }}
+          glossaryEntries={glossaryEntries}
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);
             closeCommandPaletteAndRestoreMarkdownFocus();
