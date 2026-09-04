@@ -698,9 +698,25 @@ export const jaTranslations = {
   "glossaryTagEditor.validity.invalidBackground": "背景色は #RRGGBB 形式で入力してください。",
   "glossaryTagEditor.validity.invalidForeground": "文字色は #RRGGBB 形式で入力してください。",
   "search.sidebarTitle": "検索",
+  "search.tab.search": "検索",
+  "search.tab.replace": "置換",
   "search.query.placeholder": "検索",
   "search.query.label": "検索文字列",
   "search.options.label": "検索オプション",
+  "search.replace.replaceWith": "置換後の文字列",
+  "search.replace.inOpenDocuments": "開いている文書のみ置換...",
+  "search.replace.inProject": "プロジェクト内文書置換...",
+  "search.replace.invalidRegex":
+    "正規表現が正しくありません。\n置換確認を行う前に検索条件を修正してください。",
+  "search.replace.openDocs.dialog.title": "開いている文書のみ置換",
+  "search.replace.openDocs.dialog.message":
+    "この操作では、将来的に開いている Markdown 文書のみを対象に置換候補を確認します。\n置換結果は編集状態として反映され、保存するまでファイルには書き込まれません。\n\nこの phase では置換処理はまだ実装されていません。",
+  "search.replace.project.dialog.title": "プロジェクト内文書置換",
+  "search.replace.project.dialog.message":
+    "この操作では、将来的にプロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、破壊的変更として5秒遅延ボタンを経由します。\n\nこの phase では置換処理はまだ実装されていません。",
+  "search.replace.unsavedGate.title": "未保存の文書があります",
+  "search.replace.unsavedGate.message":
+    "プロジェクト内文書置換では、プロジェクト内の Markdown 文書を直接書き換えて保存します。\n未保存の文書がある状態では、編集中の内容とディスク上の内容が相違する可能性があるため実行できません。\n\nお手数ですが、開いている文書を保存または破棄してから、もう一度実行してください。",
   "search.option.glossary": "語彙検索",
   "search.option.glossary.hint": "語彙検索: 語彙集から検索",
   "search.option.wholeWord": "単語単位で検索",

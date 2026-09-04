@@ -7440,6 +7440,61 @@ export function App(): JSX.Element {
     });
   }
 
+  // #386: Search pane Replace tab. No replace processing exists yet — these
+  // only open placeholder confirm dialogs so the button flow can be reviewed.
+  // NOTHING here generates candidates, edits buffers, or writes files.
+  function replaceInOpenDocumentsPlaceholder(): void {
+    void confirmDialog({
+      title: translate("search.replace.openDocs.dialog.title"),
+      message: {
+        kind: "plainText",
+        text: translate("search.replace.openDocs.dialog.message")
+      },
+      icon: { kind: "info", tooltip: translate("dialog.icon.info") },
+      clipboardText: null,
+      dismissOnBackdropClick: true,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  function replaceInProjectPlaceholder(): void {
+    const hasUnsavedOpenDocument =
+      openDocumentsStateRef.current.documents.some((openDocument) =>
+        isCurrentEditorDirty(openDocument.editor)
+      );
+
+    if (hasUnsavedOpenDocument) {
+      // Dirty gate: stop before any (future) candidate generation / write.
+      void confirmDialog({
+        title: translate("search.replace.unsavedGate.title"),
+        message: {
+          kind: "plainText",
+          text: translate("search.replace.unsavedGate.message")
+        },
+        icon: { kind: "warning", tooltip: translate("dialog.icon.warning") },
+        clipboardText: null,
+        dismissOnBackdropClick: true,
+        confirmLabel: translate("common.ok"),
+        cancelLabel: null
+      });
+      return;
+    }
+
+    void confirmDialog({
+      title: translate("search.replace.project.dialog.title"),
+      message: {
+        kind: "plainText",
+        text: translate("search.replace.project.dialog.message")
+      },
+      icon: { kind: "info", tooltip: translate("dialog.icon.info") },
+      clipboardText: null,
+      dismissOnBackdropClick: true,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
   // #384 Phase 2: open (or activate) the file behind a Search pane result row
   // and select the matched range. `editorNavigation.openEditor` both activates
   // an already-open tab and reads an unopened project document from disk, so
@@ -7765,6 +7820,8 @@ export function App(): JSX.Element {
                       runProjectSearch={runProjectSearch}
                       runProjectGlossarySearch={runProjectGlossarySearch}
                       searchQueryRequest={searchQueryRequest}
+                      onReplaceInOpenDocuments={replaceInOpenDocumentsPlaceholder}
+                      onReplaceInProject={replaceInProjectPlaceholder}
                       onOpenSearchMatch={(
                         relativePath,
                         startOffset,

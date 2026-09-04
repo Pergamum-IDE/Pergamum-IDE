@@ -700,9 +700,25 @@ export const enTranslations = {
   "glossaryTagEditor.validity.invalidBackground": "Background color must be a #RRGGBB hex value.",
   "glossaryTagEditor.validity.invalidForeground": "Text color must be a #RRGGBB hex value.",
   "search.sidebarTitle": "Search",
+  "search.tab.search": "Search",
+  "search.tab.replace": "Replace",
   "search.query.placeholder": "Search",
   "search.query.label": "Search query",
   "search.options.label": "Search options",
+  "search.replace.replaceWith": "Replace with",
+  "search.replace.inOpenDocuments": "Replace in Open Documents...",
+  "search.replace.inProject": "Replace in Project...",
+  "search.replace.invalidRegex":
+    "Invalid regular expression.\nFix the search pattern before previewing replacements.",
+  "search.replace.openDocs.dialog.title": "Replace in Open Documents",
+  "search.replace.openDocs.dialog.message":
+    "This action will preview replacement candidates only in open Markdown documents.\nReplacement results will be applied as edits and will not be written to files until saved.\n\nReplacement execution is not implemented in this phase.",
+  "search.replace.project.dialog.title": "Replace in Project",
+  "search.replace.project.dialog.message":
+    "This action will directly modify and save Markdown documents in the project.\nBefore execution, replacement candidates will be reviewed and the destructive action will require a 5-second delayed confirmation button.\n\nReplacement execution is not implemented in this phase.",
+  "search.replace.unsavedGate.title": "There are unsaved documents",
+  "search.replace.unsavedGate.message":
+    "Replace in Project directly modifies and saves Markdown documents in the project.\nIt cannot run while unsaved documents are open because edited content may differ from the content on disk.\n\nPlease save or discard open documents, then try again.",
   "search.option.glossary": "Glossary Search",
   "search.option.glossary.hint": "Glossary Search: search the glossary",
   "search.option.wholeWord": "Match Whole Word",

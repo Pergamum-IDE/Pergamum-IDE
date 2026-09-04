@@ -162,6 +162,10 @@ interface WorkspaceSidebarProps {
     readonly token: number;
     readonly query: string;
   } | null;
+  /** #386: Replace tab `[開いている文書のみ置換...]` - placeholder confirm only. */
+  onReplaceInOpenDocuments?: () => void;
+  /** #386: Replace tab `[プロジェクト内文書置換...]` - dirty gate + placeholder. */
+  onReplaceInProject?: () => void;
 }
 
 export function WorkspaceSidebar({
@@ -209,7 +213,9 @@ export function WorkspaceSidebar({
   runProjectSearch,
   onOpenSearchMatch,
   runProjectGlossarySearch,
-  searchQueryRequest = null
+  searchQueryRequest = null,
+  onReplaceInOpenDocuments,
+  onReplaceInProject
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -269,6 +275,8 @@ export function WorkspaceSidebar({
           runGlossarySearch={runProjectGlossarySearch}
           onOpenMatch={onOpenSearchMatch}
           queryRequest={searchQueryRequest}
+          onReplaceInOpenDocuments={onReplaceInOpenDocuments}
+          onReplaceInProject={onReplaceInProject}
         />
       );
     case "documentMap":
