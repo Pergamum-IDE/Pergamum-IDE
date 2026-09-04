@@ -5871,6 +5871,370 @@ label.settingsItemHeader {
   min-width: 0;
 }
 
+/* #386 Replace Preview Dialog — reused for both replace scopes. Preview only:
+   no CSS here implies any write / apply. */
+.appInfoDialog.replacePreviewDialog {
+  width: min(680px, calc(100vw - 32px));
+  max-width: 680px;
+}
+
+/* #386: the dialog body is a flex column capped by the dialog's own
+   max-height; only the candidate list scrolls, so the header / summary /
+   counts / bulk controls stay put and the footer stays fixed even with
+   thousands of candidates. */
+.replacePreviewDialog .appInfoDialogBody {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.replacePreviewContent {
+  /* #386: "無視" is "leave this one alone", not "delete" - the before text
+     stays normal body colour, softly greyed, no strikethrough. Only "適用"
+     (the after text) gets a semantic (green) highlight. */
+  --replace-preview-before: var(--app-dialog-foreground);
+  --replace-preview-before-bg: rgba(15, 23, 32, 0.08);
+  --replace-preview-after: #1f6b3a;
+  --replace-preview-after-bg: #dcefe0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Everything except the candidate list / loading block keeps its natural
+   height; those two fill the remaining space and scroll. */
+.replacePreviewContent
+  > :not(.replacePreviewGroups):not(.replacePreviewLoading) {
+  flex: 0 0 auto;
+}
+
+.replacePreviewLimitNotice {
+  margin: 0;
+  color: var(--app-dialog-icon-warning);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.replacePreviewDescription {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.replacePreviewNotImplemented,
+.replacePreviewEmpty {
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.replacePreviewConditions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 6px;
+  background: var(--app-dialog-header-background);
+  font-size: 12px;
+}
+
+.replacePreviewCondition {
+  display: contents;
+}
+
+.replacePreviewConditionLabel {
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  white-space: nowrap;
+}
+
+.replacePreviewConditionLabel::after {
+  content: ":";
+}
+
+.replacePreviewConditionValue {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--app-monospace-font-family, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replacePreviewConditionValue.replacePreviewConditionMode {
+  font-family: inherit;
+}
+
+.replacePreviewSummary {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* #386: candidate-generation loading state - opens with the dialog so a slow
+   generation never reads as a frozen click. Fills the space the candidate
+   list will take. */
+.replacePreviewLoading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.replacePreviewLoadingMessage {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.replacePreviewSkeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.replacePreviewSkeletonRow {
+  display: block;
+  height: 34px;
+  border-radius: 6px;
+  background: var(--app-dialog-header-background);
+  border: 1px solid var(--app-dialog-border);
+}
+
+.replacePreviewSkeletonRow:nth-child(2) {
+  opacity: 0.85;
+}
+
+.replacePreviewSkeletonRow:nth-child(3) {
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .replacePreviewSkeletonRow {
+    animation: replacePreviewSkeletonPulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes replacePreviewSkeletonPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.replacePreviewListHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.replacePreviewBulkActions,
+.replacePreviewGroupActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* #386: file-group navigation, top-right of the list area. */
+.replacePreviewGroupNav {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.replacePreviewGroupNavButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border: 1px solid var(--app-dialog-button-border);
+  border-radius: 4px;
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.replacePreviewGroupNavButton:hover {
+  filter: brightness(0.97);
+}
+
+.replacePreviewGroupNavButton:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: -1px;
+}
+
+.replacePreviewBulkButton,
+.replacePreviewGroupButton {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--app-dialog-button-border);
+  border-radius: 4px;
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.replacePreviewBulkButton:hover,
+.replacePreviewGroupButton:hover {
+  filter: brightness(0.97);
+}
+
+.replacePreviewBulkButton:focus-visible,
+.replacePreviewGroupButton:focus-visible,
+.replacePreviewRowControl:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: -1px;
+}
+
+.replacePreviewGroups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* #386: the one scroll area. `flex: 1; min-height: 0` lets it take the
+     space left by the fixed summary block and scroll the rest. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.replacePreviewGroup {
+  /* #386: never shrink inside the column-flex scroll area. `overflow: hidden`
+     (below) drops a flex item's automatic minimum size to 0, so with the
+     default `flex-shrink: 1` every group would collapse to just its top border
+     - the "横罫線だけの空行" bug. Groups keep their natural height and the
+     list scrolls instead. */
+  flex: 0 0 auto;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* #386: two-row header so the filename, file-level buttons, count and
+   "適用予定" never crowd each other.
+     row 1:  filename ............... [すべて適用] [すべて無視]
+     row 2:  {count}件 ....................... 適用予定 {selectedCount}件  */
+.replacePreviewGroupHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 10px;
+  padding: 6px 8px;
+  background: var(--app-dialog-header-background);
+}
+
+.replacePreviewGroupName {
+  grid-area: 1 / 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replacePreviewGroupActions {
+  grid-area: 1 / 2;
+  justify-self: end;
+}
+
+.replacePreviewGroupCount {
+  grid-area: 2 / 1;
+  justify-self: start;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+}
+
+.replacePreviewGroupSelected {
+  grid-area: 2 / 2;
+  justify-self: end;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.replacePreviewRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.replacePreviewRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--app-dialog-border);
+  font-size: 12px;
+}
+
+.replacePreviewRowLocation {
+  flex: 0 0 auto;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.replacePreviewRowContext {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replacePreviewMark {
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.replacePreviewMark-before {
+  background: var(--replace-preview-before-bg);
+  color: var(--replace-preview-before);
+}
+
+.replacePreviewMark-after {
+  background: var(--replace-preview-after-bg);
+  color: var(--replace-preview-after);
+}
+
+.replacePreviewRowControl {
+  flex: 0 0 auto;
+  height: 22px;
+  border: 1px solid var(--app-dialog-button-border);
+  border-radius: 4px;
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
+  font: inherit;
+  font-size: 11px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .replacePreviewContent {
+    --replace-preview-before: var(--app-dialog-foreground);
+    --replace-preview-before-bg: rgba(255, 255, 255, 0.14);
+    --replace-preview-after: #a9e0bb;
+    --replace-preview-after-bg: rgba(31, 107, 58, 0.3);
+  }
+}
+
 /* #252 follow-up: the grid lives on the shared `.lineEndingDistributionRows`
    container, not per-row — CSS Grid sizes `max-content` columns from every
    item assigned to that column across the whole container, not per row in

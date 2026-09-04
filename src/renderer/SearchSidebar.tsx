@@ -26,6 +26,7 @@ import {
   newSearchRunId,
   type SearchTelemetryContext
 } from "./searchTelemetry";
+import type { ReplacePreviewOpenRequest } from "./replace/replacePreviewTypes";
 import glossarySearchIconRaw from "../../assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw";
 import wholeWordIconRaw from "../../assets/icons/Pergamum/search/word.svg?raw";
 import caseSensitiveIconRaw from "../../assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw";
@@ -590,8 +591,13 @@ interface SearchSidebarProps {
     readonly token: number;
     readonly query: string;
   } | null;
-  /** #386: `[開いている文書のみ置換...]`. Placeholder confirm only - no replace. */
-  readonly onReplaceInOpenDocuments?: () => void;
+  /** #386: `[開いている文書のみ置換...]`. Hands the host the current find /
+   *  replace / options; the host opens the Replace Preview Dialog immediately
+   *  (loading state) and generates the candidates itself. No replace
+   *  processing. */
+  readonly onReplaceInOpenDocuments?: (
+    request: ReplacePreviewOpenRequest
+  ) => void;
   /** #386: `[プロジェクト内文書置換...]`. The host runs the dirty-document gate,
    *  then a placeholder confirm - no replace, no file write. */
   readonly onReplaceInProject?: () => void;
@@ -912,7 +918,18 @@ export function SearchSidebar({
     if (replaceBlockedByInvalidRegex) {
       return;
     }
-    onReplaceInOpenDocuments?.();
+    // Hand the host the find / replace / options only. It opens the Replace
+    // Preview Dialog immediately in a loading state and generates the
+    // candidates itself, so a slow generation never looks like a dead click.
+    onReplaceInOpenDocuments?.({
+      findText: trimmedQuery,
+      replaceText,
+      searchOptions: {
+        wholeWord: options.wholeWord,
+        caseSensitive: options.caseSensitive,
+        useRegex: options.useRegex
+      }
+    });
   };
 
   const handleReplaceInProject = (): void => {

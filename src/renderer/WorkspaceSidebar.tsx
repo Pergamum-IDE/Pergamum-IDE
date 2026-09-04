@@ -23,6 +23,7 @@ import type {
   GlossarySearchRelationMode
 } from "./glossaryAtomSearch";
 import type { TextSearchOptions } from "../shared/textSearch";
+import type { ReplacePreviewOpenRequest } from "./replace/replacePreviewTypes";
 import { DocumentMapPanel } from "./DocumentMapPanel";
 import {
   DocumentMetricsPanel,
@@ -162,8 +163,10 @@ interface WorkspaceSidebarProps {
     readonly token: number;
     readonly query: string;
   } | null;
-  /** #386: Replace tab `[開いている文書のみ置換...]` - placeholder confirm only. */
-  onReplaceInOpenDocuments?: () => void;
+  /** #386: Replace tab `[開いている文書のみ置換...]` - hands the host the current
+   *  find / replace / options; the host opens the Replace Preview Dialog
+   *  (loading state) and generates candidates itself. No replace processing. */
+  onReplaceInOpenDocuments?: (request: ReplacePreviewOpenRequest) => void;
   /** #386: Replace tab `[プロジェクト内文書置換...]` - dirty gate + placeholder. */
   onReplaceInProject?: () => void;
 }

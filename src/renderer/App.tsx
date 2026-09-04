@@ -225,6 +225,12 @@ import {
 } from "./assistCommands";
 import { LineEndingDistributionDialog } from "./dialog/LineEndingDistributionDialog";
 import {
+  ReplacePreviewDialog,
+  type ReplacePreviewCandidate,
+  type ReplacePreviewOpenRequest,
+  type ReplacePreviewScope
+} from "./replace/ReplacePreviewDialog";
+import {
   computeLineEndingDistribution,
   type LineEndingDistribution
 } from "./lineEndingDistribution";
@@ -421,6 +427,10 @@ import {
   runProjectTextSearch,
   type ProjectTextSearchResult
 } from "./projectTextSearch";
+import {
+  buildReplacePreviewCandidates,
+  REPLACE_PREVIEW_CANDIDATE_LIMIT
+} from "./replace/replacePreviewCandidates";
 import type {
   GlossaryAtomSearchTerm,
   GlossarySearchRelationMode
@@ -724,6 +734,26 @@ export function App(): JSX.Element {
   const isLineEndingDistributionDialogPendingOrOpenRef = useRef(false);
   const [lineEndingDistributionData, setLineEndingDistributionData] =
     useState<LineEndingDistribution | null>(null);
+  // #386: the Replace Preview Dialog. Preview-only — no buffer edits, no writes.
+  // The dialog opens immediately in a loading state; candidates are generated
+  // asynchronously and filled in when ready. `replacePreviewGenerationRef` is
+  // bumped on every open and on close, so a slow generation whose result lands
+  // after Cancel (or after a re-open) is discarded.
+  const replacePreviewDialogOpenerRef = useRef<Element | null>(null);
+  const isReplacePreviewDialogPendingOrOpenRef = useRef(false);
+  const replacePreviewGenerationRef = useRef(0);
+  const [replacePreviewDialogState, setReplacePreviewDialogState] = useState<
+    | {
+        readonly scope: ReplacePreviewScope;
+        readonly findText: string;
+        readonly replaceText: string;
+        readonly searchOptions: ReplacePreviewOpenRequest["searchOptions"];
+        readonly loading: boolean;
+        readonly candidates: readonly ReplacePreviewCandidate[];
+        readonly limitReached: boolean;
+      }
+    | null
+  >(null);
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
       dialogController.getPendingRequest()
@@ -1550,6 +1580,8 @@ export function App(): JSX.Element {
     aboutDialogAppInfo !== null ||
     isLineEndingDistributionDialogPendingOrOpenRef.current ||
     lineEndingDistributionData !== null ||
+    isReplacePreviewDialogPendingOrOpenRef.current ||
+    replacePreviewDialogState !== null ||
     isRecoveryCandidateDialogPendingOrOpenRef.current ||
     recoveryCandidateDialogData !== null;
   const isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose =
@@ -1558,6 +1590,8 @@ export function App(): JSX.Element {
     aboutDialogAppInfo !== null ||
     isLineEndingDistributionDialogPendingOrOpenRef.current ||
     lineEndingDistributionData !== null ||
+    isReplacePreviewDialogPendingOrOpenRef.current ||
+    replacePreviewDialogState !== null ||
     isRecoveryCandidateDialogPendingOrOpenRef.current ||
     recoveryCandidateDialogData !== null;
 
@@ -2471,6 +2505,7 @@ export function App(): JSX.Element {
       dialogController.getPendingRequest() ||
       isAboutDialogPendingOrOpenRef.current ||
       isLineEndingDistributionDialogPendingOrOpenRef.current ||
+      isReplacePreviewDialogPendingOrOpenRef.current ||
       isRecoveryCandidateDialogPendingOrOpenRef.current
         ? "app_modal_open"
         : null
@@ -7388,6 +7423,35 @@ export function App(): JSX.Element {
     });
   }
 
+  // #386: the Replace Preview Dialog's own project search. Same reader /
+  // dirty-buffer policy as runProjectSearch, but deliberately NOT bounded by
+  // the Search pane's 1000-result display cap — a replace must not silently
+  // stop at 1000. Bounded instead by REPLACE_PREVIEW_CANDIDATE_LIMIT; the
+  // dialog shows a "narrow the search" notice when that is hit. Preview only:
+  // no buffer edits, no dirty flip, no file writes.
+  async function runReplacePreviewSearch(
+    query: string,
+    options: TextSearchOptions,
+    isCancelled: () => boolean
+  ): Promise<ProjectTextSearchResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return emptyProjectTextSearchResult(query);
+    }
+
+    return await runProjectTextSearch({
+      documents: activeProject.documents,
+      readText: createProjectSearchReadText(activeContext),
+      query,
+      options,
+      isCancelled,
+      maxTotalMatches: REPLACE_PREVIEW_CANDIDATE_LIMIT,
+      maxMatchesPerFile: REPLACE_PREVIEW_CANDIDATE_LIMIT
+    });
+  }
+
   // #384 Glossary Search: search the picked atoms across the project's Markdown
   // files under the chosen relation mode (any / all / nearby). Same file
   // discovery / dirty-buffer policy as the text search; each result match
@@ -7440,22 +7504,90 @@ export function App(): JSX.Element {
     });
   }
 
-  // #386: Search pane Replace tab. No replace processing exists yet — these
-  // only open placeholder confirm dialogs so the button flow can be reviewed.
-  // NOTHING here generates candidates, edits buffers, or writes files.
-  function replaceInOpenDocumentsPlaceholder(): void {
-    void confirmDialog({
-      title: translate("search.replace.openDocs.dialog.title"),
-      message: {
-        kind: "plainText",
-        text: translate("search.replace.openDocs.dialog.message")
-      },
-      icon: { kind: "info", tooltip: translate("dialog.icon.info") },
-      clipboardText: null,
-      dismissOnBackdropClick: true,
-      confirmLabel: translate("common.ok"),
-      cancelLabel: null
+  // #386: Search pane Replace tab. No replace processing exists yet. The
+  // Open Documents button opens the (preview-only) Replace Preview Dialog; the
+  // Project button keeps its dirty gate + placeholder confirm. NOTHING here
+  // edits buffers, marks anything dirty, or writes files.
+  //
+  // The dialog opens IMMEDIATELY in a loading state, then candidates are
+  // generated asynchronously (a frequent term can take a few seconds) and
+  // filled in. A generation whose result arrives after Cancel — or after the
+  // dialog was re-opened — is discarded via `replacePreviewGenerationRef`.
+  async function generateReplacePreviewCandidates(
+    generation: number,
+    request: ReplacePreviewOpenRequest
+  ): Promise<void> {
+    const settle = (
+      candidates: readonly ReplacePreviewCandidate[],
+      limitReached: boolean
+    ): void => {
+      if (replacePreviewGenerationRef.current !== generation) {
+        return;
+      }
+      setReplacePreviewDialogState((current) =>
+        current && replacePreviewGenerationRef.current === generation
+          ? { ...current, loading: false, candidates, limitReached }
+          : current
+      );
+    };
+
+    try {
+      const result = await runReplacePreviewSearch(
+        request.findText,
+        request.searchOptions,
+        () => replacePreviewGenerationRef.current !== generation
+      );
+      if (replacePreviewGenerationRef.current !== generation) {
+        return;
+      }
+      const build = buildReplacePreviewCandidates(result, request.replaceText);
+      settle(build.candidates, build.limitReached);
+    } catch {
+      // Generation failed: land in the ready state with an empty list rather
+      // than a stuck spinner. No error surface for this preview-only phase.
+      settle([], false);
+    }
+  }
+
+  function openReplacePreviewForOpenDocuments(
+    request: ReplacePreviewOpenRequest
+  ): void {
+    if (isReplacePreviewDialogPendingOrOpenRef.current) {
+      return;
+    }
+    if (typeof document !== "undefined") {
+      replacePreviewDialogOpenerRef.current = document.activeElement;
+    }
+    isReplacePreviewDialogPendingOrOpenRef.current = true;
+
+    const generation = replacePreviewGenerationRef.current + 1;
+    replacePreviewGenerationRef.current = generation;
+
+    setReplacePreviewDialogState({
+      scope: "openDocuments",
+      findText: request.findText,
+      replaceText: request.replaceText,
+      searchOptions: request.searchOptions,
+      loading: true,
+      candidates: [],
+      limitReached: false
     });
+
+    void generateReplacePreviewCandidates(generation, request);
+  }
+
+  function closeReplacePreviewDialog(): void {
+    // Invalidate any in-flight generation so a late result is dropped and the
+    // project scan (which polls this) stops at the next file boundary.
+    replacePreviewGenerationRef.current += 1;
+    isReplacePreviewDialogPendingOrOpenRef.current = false;
+    setReplacePreviewDialogState(null);
+  }
+
+  function applyReplacePreviewSelectionPlaceholder(): void {
+    // PoC: preview only. No buffer edits, no dirty flip, no file write —
+    // just close the dialog. A later phase replaces this with the real apply.
+    closeReplacePreviewDialog();
   }
 
   function replaceInProjectPlaceholder(): void {
@@ -7820,7 +7952,9 @@ export function App(): JSX.Element {
                       runProjectSearch={runProjectSearch}
                       runProjectGlossarySearch={runProjectGlossarySearch}
                       searchQueryRequest={searchQueryRequest}
-                      onReplaceInOpenDocuments={replaceInOpenDocumentsPlaceholder}
+                      onReplaceInOpenDocuments={
+                        openReplacePreviewForOpenDocuments
+                      }
                       onReplaceInProject={replaceInProjectPlaceholder}
                       onOpenSearchMatch={(
                         relativePath,
@@ -8200,6 +8334,22 @@ export function App(): JSX.Element {
           translate={translate}
           opener={lineEndingDistributionDialogOpenerRef.current}
           onClose={closeLineEndingDistributionDialog}
+        />
+      ) : null}
+
+      {replacePreviewDialogState ? (
+        <ReplacePreviewDialog
+          scope={replacePreviewDialogState.scope}
+          findText={replacePreviewDialogState.findText}
+          replaceText={replacePreviewDialogState.replaceText}
+          searchOptions={replacePreviewDialogState.searchOptions}
+          loading={replacePreviewDialogState.loading}
+          candidates={replacePreviewDialogState.candidates}
+          limitReached={replacePreviewDialogState.limitReached}
+          translate={translate}
+          opener={replacePreviewDialogOpenerRef.current}
+          onCancel={closeReplacePreviewDialog}
+          onApplySelected={applyReplacePreviewSelectionPlaceholder}
         />
       ) : null}
 

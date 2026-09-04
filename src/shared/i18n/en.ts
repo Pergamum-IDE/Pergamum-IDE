@@ -710,9 +710,42 @@ export const enTranslations = {
   "search.replace.inProject": "Replace in Project...",
   "search.replace.invalidRegex":
     "Invalid regular expression.\nFix the search pattern before previewing replacements.",
-  "search.replace.openDocs.dialog.title": "Replace in Open Documents",
-  "search.replace.openDocs.dialog.message":
-    "This action will preview replacement candidates only in open Markdown documents.\nReplacement results will be applied as edits and will not be written to files until saved.\n\nReplacement execution is not implemented in this phase.",
+  "search.replace.preview.openDocs.title": "Replace in Open Documents",
+  "search.replace.preview.openDocs.description":
+    "Preview replacement candidates only in open Markdown documents.\nSelected replacements will be applied as edits and will not be written to files until saved.",
+  "search.replace.preview.project.title": "Replace in Project",
+  "search.replace.preview.project.description":
+    "This directly modifies and saves Markdown documents in the project.\nBefore execution, replacement candidates are reviewed and the destructive action requires a 5-second delayed confirmation button.",
+  "search.replace.preview.notImplemented":
+    "Replacement execution is not implemented in this phase.",
+  "search.replace.preview.findLabel": "Find",
+  "search.replace.preview.replaceLabel": "Replace with",
+  "search.replace.preview.modeLabel": "Mode",
+  "search.replace.preview.mode.plain": "Plain text",
+  "search.replace.preview.mode.wholeWord": "Whole word",
+  "search.replace.preview.mode.caseSensitive": "Match case",
+  "search.replace.preview.mode.regex": "Regular expression",
+  "search.replace.preview.summary":
+    "{candidateCount} candidates / {selectedCount} selected / {fileCount} files",
+  "search.replace.preview.empty":
+    "No replacement candidates. Run a search first.",
+  "search.replace.preview.preparing": "Preparing replacement candidates...",
+  "search.replace.preview.limitReached":
+    "Replacement candidates reached the preview limit. Narrow the search condition.",
+  "search.replace.preview.applyAll": "Apply all {count}",
+  "search.replace.preview.ignoreAll": "Ignore all {count}",
+  "search.replace.preview.applyInFile": "Apply {count} in this file",
+  "search.replace.preview.ignoreInFile": "Ignore {count} in this file",
+  "search.replace.preview.fileGroupCount": "{count} matches",
+  "search.replace.preview.fileGroupSelected": "{selectedCount} selected",
+  "search.replace.preview.groupNavLabel": "Jump between files",
+  "search.replace.preview.groupNavPrev": "Previous file",
+  "search.replace.preview.groupNavNext": "Next file",
+  "search.replace.preview.rowApply": "Apply",
+  "search.replace.preview.rowIgnore": "Ignore",
+  "search.replace.preview.rowControlLabel": "Apply or ignore this candidate",
+  "search.replace.preview.applyAsEdits": "Apply selected as edits",
+  "search.replace.preview.applyAndSave": "Apply selected and save",
   "search.replace.project.dialog.title": "Replace in Project",
   "search.replace.project.dialog.message":
     "This action will directly modify and save Markdown documents in the project.\nBefore execution, replacement candidates will be reviewed and the destructive action will require a 5-second delayed confirmation button.\n\nReplacement execution is not implemented in this phase.",

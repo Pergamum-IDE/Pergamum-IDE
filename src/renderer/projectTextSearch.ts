@@ -79,6 +79,14 @@ interface ScanProjectDocumentsInput {
     perFileLimit: number
   ) => readonly TextSearchMatch[];
   readonly isCancelled?: () => boolean;
+  /** Whole-project match cap. Defaults to
+   *  {@link PROJECT_TEXT_SEARCH_MAX_TOTAL_MATCHES}; the Replace Preview passes a
+   *  much higher one so a replace is not silently stopped at the Search pane's
+   *  display cap. */
+  readonly maxTotalMatches?: number;
+  /** Per-file match cap. Defaults to
+   *  {@link PROJECT_TEXT_SEARCH_MAX_MATCHES_PER_FILE}. */
+  readonly maxMatchesPerFile?: number;
 }
 
 /**
@@ -94,6 +102,11 @@ async function scanProjectDocuments(
     left.relativePath.localeCompare(right.relativePath)
   );
 
+  const maxTotalMatches =
+    input.maxTotalMatches ?? PROJECT_TEXT_SEARCH_MAX_TOTAL_MATCHES;
+  const maxMatchesPerFile =
+    input.maxMatchesPerFile ?? PROJECT_TEXT_SEARCH_MAX_MATCHES_PER_FILE;
+
   const files: ProjectTextSearchFileResult[] = [];
   let totalMatches = 0;
   let skippedFileCount = 0;
@@ -104,7 +117,7 @@ async function scanProjectDocuments(
     if (input.isCancelled?.()) {
       break;
     }
-    if (totalMatches >= PROJECT_TEXT_SEARCH_MAX_TOTAL_MATCHES) {
+    if (totalMatches >= maxTotalMatches) {
       truncated = true;
       break;
     }
@@ -122,8 +135,8 @@ async function scanProjectDocuments(
     searchedCharacterCount += text.length;
 
     const perFileLimit = Math.min(
-      PROJECT_TEXT_SEARCH_MAX_MATCHES_PER_FILE,
-      PROJECT_TEXT_SEARCH_MAX_TOTAL_MATCHES - totalMatches
+      maxMatchesPerFile,
+      maxTotalMatches - totalMatches
     );
     // Ask for one extra so "there were more" is detectable.
     const found = input.findMatches(text, perFileLimit + 1);
@@ -167,6 +180,12 @@ export interface RunProjectTextSearchInput {
   readonly options: TextSearchOptions;
   /** Polled between files; when it returns `true` the run stops. */
   readonly isCancelled?: () => boolean;
+  /** Override the whole-project match cap (see
+   *  {@link ScanProjectDocumentsInput.maxTotalMatches}). */
+  readonly maxTotalMatches?: number;
+  /** Override the per-file match cap (see
+   *  {@link ScanProjectDocumentsInput.maxMatchesPerFile}). */
+  readonly maxMatchesPerFile?: number;
 }
 
 export async function runProjectTextSearch(
@@ -182,6 +201,8 @@ export async function runProjectTextSearch(
     documents: input.documents,
     readText: input.readText,
     isCancelled: input.isCancelled,
+    maxTotalMatches: input.maxTotalMatches,
+    maxMatchesPerFile: input.maxMatchesPerFile,
     findMatches: (text, perFileLimit) =>
       findTextSearchMatches(text, query, {
         ...input.options,

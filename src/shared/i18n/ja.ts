@@ -708,9 +708,42 @@ export const jaTranslations = {
   "search.replace.inProject": "プロジェクト内文書置換...",
   "search.replace.invalidRegex":
     "正規表現が正しくありません。\n置換確認を行う前に検索条件を修正してください。",
-  "search.replace.openDocs.dialog.title": "開いている文書のみ置換",
-  "search.replace.openDocs.dialog.message":
-    "この操作では、将来的に開いている Markdown 文書のみを対象に置換候補を確認します。\n置換結果は編集状態として反映され、保存するまでファイルには書き込まれません。\n\nこの phase では置換処理はまだ実装されていません。",
+  "search.replace.preview.openDocs.title": "開いている文書のみ置換",
+  "search.replace.preview.openDocs.description":
+    "開いている Markdown 文書のみを対象に置換候補を確認します。\n選択した置換は編集状態として反映され、保存するまでファイルには書き込まれません。",
+  "search.replace.preview.project.title": "プロジェクト内文書置換",
+  "search.replace.preview.project.description":
+    "プロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、破壊的変更として5秒遅延ボタンを経由します。",
+  "search.replace.preview.notImplemented":
+    "この phase では置換処理はまだ実装されていません。",
+  "search.replace.preview.findLabel": "置換前",
+  "search.replace.preview.replaceLabel": "置換後",
+  "search.replace.preview.modeLabel": "モード",
+  "search.replace.preview.mode.plain": "通常全文検索",
+  "search.replace.preview.mode.wholeWord": "単語単位",
+  "search.replace.preview.mode.caseSensitive": "大文字小文字別",
+  "search.replace.preview.mode.regex": "正規表現",
+  "search.replace.preview.summary":
+    "置換候補 {candidateCount} 件 / 適用予定 {selectedCount} 件 / 対象ファイル {fileCount} 件",
+  "search.replace.preview.empty":
+    "置換候補がありません。先に検索を実行してください。",
+  "search.replace.preview.preparing": "置換候補を作成中です...",
+  "search.replace.preview.limitReached":
+    "置換候補が表示上限に達しました。条件を絞り込んでください。",
+  "search.replace.preview.applyAll": "全体{count}件を適用",
+  "search.replace.preview.ignoreAll": "全体{count}件を無視",
+  "search.replace.preview.applyInFile": "このファイル{count}件を適用",
+  "search.replace.preview.ignoreInFile": "このファイル{count}件を無視",
+  "search.replace.preview.fileGroupCount": "{count}件",
+  "search.replace.preview.fileGroupSelected": "適用予定 {selectedCount}件",
+  "search.replace.preview.groupNavLabel": "ファイル単位で移動",
+  "search.replace.preview.groupNavPrev": "前のファイルへ",
+  "search.replace.preview.groupNavNext": "次のファイルへ",
+  "search.replace.preview.rowApply": "適用",
+  "search.replace.preview.rowIgnore": "無視",
+  "search.replace.preview.rowControlLabel": "この候補の適用・無視",
+  "search.replace.preview.applyAsEdits": "選択した置換を編集状態にする",
+  "search.replace.preview.applyAndSave": "選択した置換を適用して保存",
   "search.replace.project.dialog.title": "プロジェクト内文書置換",
   "search.replace.project.dialog.message":
     "この操作では、将来的にプロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、破壊的変更として5秒遅延ボタンを経由します。\n\nこの phase では置換処理はまだ実装されていません。",
