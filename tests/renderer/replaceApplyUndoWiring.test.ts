@@ -31,7 +31,7 @@ describe("Open Documents Replace apply path (#386)", () => {
 
   it("keeps every document's replacements in one change list (no per-edit offset correction)", () => {
     const applyIndex = appSource.indexOf(
-      "function applyReplacePreviewSelection("
+      "function applyOpenDocumentsReplaceSelection("
     );
     expect(applyIndex).toBeGreaterThan(-1);
     const applyBlock = appSource.slice(applyIndex, applyIndex + 4000);
@@ -43,13 +43,13 @@ describe("Open Documents Replace apply path (#386)", () => {
     expect(applyBlock).toContain(".lineEndingBreaks.map(");
   });
 
-  it("still never writes a file from the apply path", () => {
+  it("the Open Documents apply path never writes a file", () => {
     const applyIndex = appSource.indexOf(
-      "function applyReplacePreviewSelection("
+      "function applyOpenDocumentsReplaceSelection("
     );
     const applyBlock = appSource.slice(applyIndex, applyIndex + 4000);
     expect(applyBlock).not.toContain("writeMarkdown");
-    expect(applyBlock).not.toContain("saveFile(");
+    expect(applyBlock).not.toContain("saveProjectDocument");
     expect(applyBlock).not.toContain("markCurrentDocumentSaved");
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyReplacementEditsToText,
   generateOpenDocumentsReplaceCandidates,
+  REPLACE_PREVIEW_CANDIDATE_LIMIT,
   type OpenDocumentReplaceTarget
 } from "../../src/renderer/replace/openDocumentsReplace";
 
@@ -111,6 +112,10 @@ describe("generateOpenDocumentsReplaceCandidates - plain text (#386)", () => {
       PLAIN
     );
     expect(result.status === "ok" && result.candidates.length).toBe(3000);
+  });
+
+  it("exposes a preview safety ceiling far above the display cap (project scope caps to it)", () => {
+    expect(REPLACE_PREVIEW_CANDIDATE_LIMIT).toBeGreaterThanOrEqual(50_000);
   });
 
   it("gives every candidate a unique id and enabled = true", () => {

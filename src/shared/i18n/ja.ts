@@ -717,6 +717,18 @@ export const jaTranslations = {
     "置換後文字列が存在しないキャプチャグループを参照しています。",
   "search.replace.appliedAsEdits":
     "{count} 件の置換を編集状態にしました。保存するまでファイルには書き込まれません。",
+  "search.replace.project.emptyCandidates":
+    "プロジェクト内の Markdown 文書に置換候補がありません。",
+  "search.replace.project.savedSummary":
+    "{replacementCount} 件の置換を {fileCount} 件のファイルに保存しました。",
+  "search.replace.project.partialFailure.title":
+    "一部のファイルを保存できませんでした",
+  "search.replace.project.partialFailure.message":
+    "一部のファイルを保存できませんでした。\n成功: {successFileCount} 件 / 失敗: {failureFileCount} 件",
+  "search.replace.project.allFailure.title": "置換を保存できませんでした",
+  "search.replace.project.allFailure.message": "置換を保存できませんでした。",
+  "search.replace.project.fileChanged":
+    "置換候補の作成後にファイルが変更されたため、保存しませんでした。",
   "search.replace.preview.openDocs.title": "開いている文書のみ置換",
   "search.replace.preview.openDocs.description":
     "開いている Markdown 文書のみを対象に置換候補を確認します。\n選択した置換は編集状態として反映され、保存するまでファイルには書き込まれません。",
@@ -724,9 +736,13 @@ export const jaTranslations = {
     "開いている文書に置換候補がありません。",
   "search.replace.preview.project.title": "プロジェクト内文書置換",
   "search.replace.preview.project.description":
-    "プロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、破壊的変更として5秒遅延ボタンを経由します。",
-  "search.replace.preview.notImplemented":
-    "この phase では置換処理はまだ実装されていません。",
+    "プロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、適用する候補だけを選択してください。",
+  "search.replace.preview.project.destructiveWarning":
+    "この操作は選択した置換をファイルに直接保存します。保存後は Pergamum の Undo では戻せません。",
+  "search.replace.preview.project.replaceLabel": "置換する",
+  "search.replace.preview.project.applying": "置換中...",
+  "search.replace.preview.project.delayTooltip":
+    "安全確認のため、しばらく待つと置換できるようになります。",
   "search.replace.preview.findLabel": "置換前",
   "search.replace.preview.replaceLabel": "置換後",
   "search.replace.preview.modeLabel": "モード",
@@ -736,8 +752,6 @@ export const jaTranslations = {
   "search.replace.preview.mode.regex": "正規表現",
   "search.replace.preview.summary":
     "置換候補 {candidateCount} 件 / 適用予定 {selectedCount} 件 / 対象ファイル {fileCount} 件",
-  "search.replace.preview.empty":
-    "置換候補がありません。先に検索を実行してください。",
   "search.replace.preview.preparing": "置換候補を作成中です...",
   "search.replace.preview.limitReached":
     "置換候補が表示上限に達しました。条件を絞り込んでください。",
@@ -755,9 +769,6 @@ export const jaTranslations = {
   "search.replace.preview.rowControlLabel": "この候補の適用・無視",
   "search.replace.preview.applyAsEdits": "選択した置換を編集状態にする",
   "search.replace.preview.applyAndSave": "選択した置換を適用して保存",
-  "search.replace.project.dialog.title": "プロジェクト内文書置換",
-  "search.replace.project.dialog.message":
-    "この操作では、将来的にプロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、破壊的変更として5秒遅延ボタンを経由します。\n\nこの phase では置換処理はまだ実装されていません。",
   "search.replace.unsavedGate.title": "未保存の文書があります",
   "search.replace.unsavedGate.message":
     "プロジェクト内文書置換では、プロジェクト内の Markdown 文書を直接書き換えて保存します。\n未保存の文書がある状態では、編集中の内容とディスク上の内容が相違する可能性があるため実行できません。\n\nお手数ですが、開いている文書を保存または破棄してから、もう一度実行してください。",

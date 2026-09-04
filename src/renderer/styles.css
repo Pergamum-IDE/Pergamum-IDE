@@ -5918,6 +5918,58 @@ label.settingsItemHeader {
   font-weight: 600;
 }
 
+/* #386: project-scope "cannot be undone" warning. Clear but not alarmist. */
+.replacePreviewDestructiveWarning {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--app-dialog-warning-header-background);
+  color: var(--app-dialog-warning-header-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+/* #386: the destructive apply's settled outcome, shown in place of the
+   warning above once the dialog leaves the "applying" state. */
+.replacePreviewApplyResult {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.replacePreviewApplyResult-success {
+  background: var(--replace-preview-after-bg);
+  color: var(--replace-preview-after);
+}
+
+.replacePreviewApplyResult-partialFailure {
+  background: var(--app-dialog-warning-header-background);
+  color: var(--app-dialog-warning-header-foreground);
+}
+
+.replacePreviewApplyResult-allFailure {
+  background: var(--app-dialog-destructive-header-background);
+  color: var(--app-dialog-destructive-header-foreground);
+}
+
+/* #386: hourglass shown on the destructive apply button during its 5s safety
+   delay - painted in the button's own foreground so it stays legible against
+   the confirm fill in both themes (see FileExplorerDeleteDialog's identical
+   pattern). */
+.replacePreviewApplyIcon {
+  inline-size: 14px;
+  block-size: 14px;
+  flex-shrink: 0;
+  pointer-events: none;
+  background-color: currentColor;
+  mask: var(--replace-preview-apply-icon) center / contain no-repeat;
+  -webkit-mask: var(--replace-preview-apply-icon) center / contain no-repeat;
+}
+
 .replacePreviewDescription {
   margin: 0;
   white-space: pre-wrap;

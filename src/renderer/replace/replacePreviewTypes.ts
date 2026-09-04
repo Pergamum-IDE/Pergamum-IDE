@@ -38,6 +38,30 @@ export interface ReplacePreviewOpenRequest {
   readonly searchOptions: ReplacePreviewSearchOptions;
 }
 
+/**
+ * #386: the destructive (project) apply's outcome, once it settles. The
+ * dialog renders this in place of the "cannot be undone" warning and keeps
+ * the Close button disabled until it arrives - `null` means still running
+ * (or not started).
+ */
+export type ReplaceApplyResult =
+  | {
+      readonly kind: "success";
+      readonly replacementCount: number;
+      readonly fileCount: number;
+    }
+  | {
+      readonly kind: "partialFailure";
+      readonly successFileCount: number;
+      readonly failureFileCount: number;
+    }
+  | {
+      readonly kind: "allFailure";
+      /** `fileChanged` when every failure was a base-text mismatch (the file
+       *  changed after the preview was built); `generic` otherwise. */
+      readonly reason: "generic" | "fileChanged";
+    };
+
 /** One previewed replacement site. Self-contained for rendering. */
 export interface ReplacePreviewCandidate {
   /** Stable unique id (used by bulk / row toggles and `onApplySelected`). */

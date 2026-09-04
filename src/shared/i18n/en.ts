@@ -719,6 +719,17 @@ export const enTranslations = {
     "The replacement text references a capture group that does not exist.",
   "search.replace.appliedAsEdits":
     "Applied {count} replacements as edits. Files will not be updated until saved.",
+  "search.replace.project.emptyCandidates":
+    "No replacement candidates were found in the project's Markdown documents.",
+  "search.replace.project.savedSummary":
+    "Saved {replacementCount} replacements in {fileCount} files.",
+  "search.replace.project.partialFailure.title": "Some files could not be saved",
+  "search.replace.project.partialFailure.message":
+    "Some files could not be saved.\nSucceeded: {successFileCount} / Failed: {failureFileCount}",
+  "search.replace.project.allFailure.title": "Could not save replacements",
+  "search.replace.project.allFailure.message": "Could not save replacements.",
+  "search.replace.project.fileChanged":
+    "The file changed after replacement candidates were prepared, so it was not saved.",
   "search.replace.preview.openDocs.title": "Replace in Open Documents",
   "search.replace.preview.openDocs.description":
     "Preview replacement candidates only in open Markdown documents.\nSelected replacements will be applied as edits and will not be written to files until saved.",
@@ -726,9 +737,13 @@ export const enTranslations = {
     "No replacement candidates were found in open documents.",
   "search.replace.preview.project.title": "Replace in Project",
   "search.replace.preview.project.description":
-    "This directly modifies and saves Markdown documents in the project.\nBefore execution, replacement candidates are reviewed and the destructive action requires a 5-second delayed confirmation button.",
-  "search.replace.preview.notImplemented":
-    "Replacement execution is not implemented in this phase.",
+    "Directly modifies and saves Markdown documents in the project.\nReview replacement candidates and choose which ones to apply before continuing.",
+  "search.replace.preview.project.destructiveWarning":
+    "This operation saves selected replacements directly to files. It cannot be undone with Pergamum Undo after saving.",
+  "search.replace.preview.project.replaceLabel": "Replace",
+  "search.replace.preview.project.applying": "Replacing...",
+  "search.replace.preview.project.delayTooltip":
+    "Replacement will become available after a short safety delay.",
   "search.replace.preview.findLabel": "Find",
   "search.replace.preview.replaceLabel": "Replace with",
   "search.replace.preview.modeLabel": "Mode",
@@ -738,8 +753,6 @@ export const enTranslations = {
   "search.replace.preview.mode.regex": "Regular expression",
   "search.replace.preview.summary":
     "{candidateCount} candidates / {selectedCount} selected / {fileCount} files",
-  "search.replace.preview.empty":
-    "No replacement candidates. Run a search first.",
   "search.replace.preview.preparing": "Preparing replacement candidates...",
   "search.replace.preview.limitReached":
     "Replacement candidates reached the preview limit. Narrow the search condition.",
@@ -757,9 +770,6 @@ export const enTranslations = {
   "search.replace.preview.rowControlLabel": "Apply or ignore this candidate",
   "search.replace.preview.applyAsEdits": "Apply selected as edits",
   "search.replace.preview.applyAndSave": "Apply selected and save",
-  "search.replace.project.dialog.title": "Replace in Project",
-  "search.replace.project.dialog.message":
-    "This action will directly modify and save Markdown documents in the project.\nBefore execution, replacement candidates will be reviewed and the destructive action will require a 5-second delayed confirmation button.\n\nReplacement execution is not implemented in this phase.",
   "search.replace.unsavedGate.title": "There are unsaved documents",
   "search.replace.unsavedGate.message":
     "Replace in Project directly modifies and saves Markdown documents in the project.\nIt cannot run while unsaved documents are open because edited content may differ from the content on disk.\n\nPlease save or discard open documents, then try again.",

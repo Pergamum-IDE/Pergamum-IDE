@@ -188,6 +188,17 @@ export interface MarkdownEditorParagraphIndentController {
   applyReplaceInBufferChanges(
     changes: readonly ParagraphIndentChange[]
   ): boolean;
+  /**
+   * #386 Project Documents Replace: after the file was saved to disk, refresh
+   * the live view to the saved content. This is a disk SYNC, not an edit -
+   * dispatched exactly like a document switch (whole-document replace, tracking
+   * field reset, `addToHistory: false`), so it never lands on the undo stack.
+   * Returns `false` when no view is mounted.
+   */
+  syncBufferToDiskContent(
+    fullText: string,
+    breaks: LineEndingBreakSet
+  ): boolean;
 }
 
 export interface MarkdownEditorViewStateController {
@@ -629,7 +640,19 @@ export function MarkdownEditor({
       applyParagraphIndentChanges: (changes) =>
         dispatchBufferChanges(changes, undefined),
       applyReplaceInBufferChanges: (changes) =>
-        dispatchBufferChanges(changes, "input.replace")
+        dispatchBufferChanges(changes, "input.replace"),
+      syncBufferToDiskContent: (fullText, breaks) => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        // Same spec as a tab switch: whole-doc replace + tracking-field reset,
+        // excluded from undo history.
+        view.dispatch(
+          documentSwitchTransactionSpec(view.state.doc.length, fullText, breaks)
+        );
+        return true;
+      }
     };
 
     onParagraphIndentControllerChange(controller);

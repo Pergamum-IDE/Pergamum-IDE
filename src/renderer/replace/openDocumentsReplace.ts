@@ -31,6 +31,14 @@ import type { ReplacePreviewCandidate } from "./replacePreviewTypes";
 /** Context characters kept on each side of a match for the preview row. */
 const CONTEXT_CHARS = 20;
 
+/**
+ * Safety ceiling for how many candidates a single Replace Preview will hold -
+ * deliberately separate from the Search pane's 1000-result *display* cap. The
+ * project scope disables its (destructive) apply button and shows a
+ * "narrow the search" notice when this is reached.
+ */
+export const REPLACE_PREVIEW_CANDIDATE_LIMIT = 50_000;
+
 export interface OpenDocumentReplaceTarget {
   /** Stable per-open-document key (a serialized EditorId in the app). */
   readonly documentId: string;

@@ -604,9 +604,10 @@ interface SearchSidebarProps {
   readonly onReplaceInOpenDocuments?: (
     request: ReplacePreviewOpenRequest
   ) => void;
-  /** #386: `[プロジェクト内文書置換...]`. The host runs the dirty-document gate,
-   *  then a placeholder confirm - no replace, no file write. */
-  readonly onReplaceInProject?: () => void;
+  /** #386: `[プロジェクト内文書置換...]`. Hands the host the current find /
+   *  replace / options; the host runs the dirty-document gate, scans project
+   *  files, and opens the Replace Preview Dialog (project scope). */
+  readonly onReplaceInProject?: (request: ReplacePreviewOpenRequest) => void;
 }
 
 export function SearchSidebar({
@@ -945,7 +946,17 @@ export function SearchSidebar({
     if (replaceBlockedByInvalidRegex) {
       return;
     }
-    onReplaceInProject?.();
+    // Same payload as the open-documents button; the host runs the dirty gate,
+    // scans project files, and opens the Replace Preview Dialog (project scope).
+    onReplaceInProject?.({
+      findText: trimmedQuery,
+      replaceText,
+      searchOptions: {
+        wholeWord: options.wholeWord,
+        caseSensitive: options.caseSensitive,
+        useRegex: options.useRegex
+      }
+    });
   };
 
   const toggleOption = (key: keyof SearchOptions): void => {

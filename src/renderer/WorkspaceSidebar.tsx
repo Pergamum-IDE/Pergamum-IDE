@@ -170,8 +170,9 @@ interface WorkspaceSidebarProps {
    *  find / replace / options; the host opens the Replace Preview Dialog
    *  (loading state) and generates candidates itself. */
   onReplaceInOpenDocuments?: (request: ReplacePreviewOpenRequest) => void;
-  /** #386: Replace tab `[プロジェクト内文書置換...]` - dirty gate + placeholder. */
-  onReplaceInProject?: () => void;
+  /** #386: Replace tab `[プロジェクト内文書置換...]` - dirty gate, project file
+   *  scan, then the Replace Preview Dialog (project scope). */
+  onReplaceInProject?: (request: ReplacePreviewOpenRequest) => void;
 }
 
 export function WorkspaceSidebar({

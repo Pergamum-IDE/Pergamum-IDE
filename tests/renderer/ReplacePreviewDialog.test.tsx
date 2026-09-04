@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Translate } from "../../src/shared/i18n";
 import {
   ReplacePreviewDialog,
+  type ReplaceApplyResult,
   type ReplacePreviewCandidate,
   type ReplacePreviewScope,
   type ReplacePreviewSearchOptions
@@ -71,6 +72,8 @@ function renderDialog(
     loading: boolean;
     candidates: readonly ReplacePreviewCandidate[];
     limitReached: boolean;
+    applying: boolean;
+    applyResult: ReplaceApplyResult | null;
     onCancel: () => void;
     onApplySelected: (ids: readonly string[]) => void;
   }> = {}
@@ -85,6 +88,8 @@ function renderDialog(
         loading: props.loading ?? false,
         candidates: props.candidates ?? CANDIDATES,
         limitReached: props.limitReached ?? false,
+        applying: props.applying ?? false,
+        applyResult: props.applyResult ?? null,
         translate,
         opener: null,
         onCancel: props.onCancel ?? vi.fn(),
@@ -141,6 +146,27 @@ function clickButton(text: string): void {
   act(() => button.click());
 }
 
+function confirmButton(): HTMLButtonElement {
+  return container.querySelector<HTMLButtonElement>(
+    ".appDialogActions .appDialogButton-confirm"
+  )!;
+}
+
+function secondaryButton(): HTMLButtonElement {
+  return container.querySelector<HTMLButtonElement>(
+    ".appDialogActions .appDialogButton:not(.appDialogButton-confirm)"
+  )!;
+}
+
+function pressEscape(): void {
+  const dialogEl = container.querySelector('[role="dialog"]') as HTMLElement;
+  act(() => {
+    dialogEl.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    );
+  });
+}
+
 describe("ReplacePreviewDialog (#386)", () => {
   it("renders the Open Documents scope header and description (replace IS implemented for this scope, so no not-implemented note)", () => {
     renderDialog();
@@ -155,11 +181,16 @@ describe("ReplacePreviewDialog (#386)", () => {
     ).toBeNull();
   });
 
-  it("still shows the not-implemented note for the projectDocuments scope", () => {
+  it("shows the destructive 'cannot be undone' warning for the projectDocuments scope only", () => {
+    renderDialog({ scope: "openDocuments" });
+    expect(
+      container.querySelector(".replacePreviewDestructiveWarning")
+    ).toBeNull();
+
     renderDialog({ scope: "projectDocuments" });
     expect(
-      container.querySelector(".replacePreviewNotImplemented")?.textContent
-    ).toBe("search.replace.preview.notImplemented");
+      container.querySelector(".replacePreviewDestructiveWarning")?.textContent
+    ).toBe("search.replace.preview.project.destructiveWarning");
   });
 
   it("loading: shows the preparing message + skeleton rows, and no candidate list / summary", () => {
@@ -388,10 +419,10 @@ describe("ReplacePreviewDialog (#386)", () => {
     renderDialog({ scope: "projectDocuments", candidates: [] });
     expect(
       container.querySelector(".replacePreviewEmpty")?.textContent
-    ).toBe("search.replace.preview.empty");
+    ).toBe("search.replace.project.emptyCandidates");
   });
 
-  it("is prepared for the projectDocuments scope (title, apply label, destructive class)", () => {
+  it("projectDocuments scope: destructive class, project title, and an hourglass + 置換する (no countdown digits) while waiting", () => {
     renderDialog({ scope: "projectDocuments" });
     expect(
       container.querySelector(".appDialogTitle")?.textContent
@@ -399,12 +430,193 @@ describe("ReplacePreviewDialog (#386)", () => {
     expect(
       container.querySelector(".replacePreviewDialog.appDialog-destructive")
     ).not.toBeNull();
+
+    const applyButton = confirmButton();
+    expect(applyButton.textContent).toBe(
+      "search.replace.preview.project.replaceLabel"
+    );
+    expect(applyButton.disabled).toBe(true);
     expect(
-      Array.from(container.querySelectorAll("button")).some(
-        (b) => b.textContent === "search.replace.preview.applyAndSave"
-      )
-    ).toBe(true);
+      applyButton.querySelector(".replacePreviewApplyIcon")
+    ).not.toBeNull();
+    expect(applyButton.getAttribute("title")).toBe(
+      "search.replace.preview.project.delayTooltip"
+    );
+    // No seconds countdown anywhere in the button.
+    expect(applyButton.textContent).not.toMatch(/\d/);
   });
+
+  it("projectDocuments scope: apply arms after 5s (hourglass gone, ready tooltip), stays disabled with nothing selected or at the candidate ceiling", () => {
+    vi.useFakeTimers();
+    try {
+      renderDialog({ scope: "projectDocuments" });
+      const applyButton = () => confirmButton();
+      expect(applyButton().disabled).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(applyButton().textContent).toBe(
+        "search.replace.preview.project.replaceLabel"
+      );
+      expect(
+        applyButton().querySelector(".replacePreviewApplyIcon")
+      ).toBeNull();
+      expect(applyButton().getAttribute("title")).toBe(
+        "search.replace.preview.applyAndSave"
+      );
+      expect(applyButton().disabled).toBe(false);
+
+      // Nothing selected -> disabled even after the countdown.
+      clickButton('search.replace.preview.ignoreAll:{"count":3}');
+      expect(applyButton().disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("projectDocuments scope: apply stays disabled when the candidate ceiling was hit", () => {
+    vi.useFakeTimers();
+    try {
+      renderDialog({ scope: "projectDocuments", limitReached: true });
+      act(() => {
+        vi.advanceTimersByTime(6000);
+      });
+      expect(confirmButton().disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("openDocuments scope: no countdown - apply is enabled immediately", () => {
+    renderDialog({ scope: "openDocuments" });
+    const applyButton = confirmButton();
+    expect(applyButton.textContent).toBe("search.replace.preview.applyAsEdits");
+    expect(applyButton.disabled).toBe(false);
+  });
+
+  it("guards a double-click: onApplySelected fires once even if the button is clicked twice before the host reacts", () => {
+    const onApplySelected = vi.fn();
+    renderDialog({ scope: "openDocuments", onApplySelected });
+    const button = confirmButton();
+    act(() => {
+      button.click();
+      button.click();
+    });
+    expect(onApplySelected).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ReplacePreviewDialog project-scope applying / completed lifecycle (#386)", () => {
+  it("applying: primary shows 置換中... disabled+busy, secondary becomes 閉じる disabled and does not close", () => {
+    const onCancel = vi.fn();
+    renderDialog({ scope: "projectDocuments", applying: true, onCancel });
+
+    const primary = confirmButton();
+    expect(primary.textContent).toBe("search.replace.preview.project.applying");
+    expect(primary.disabled).toBe(true);
+    expect(primary.getAttribute("aria-busy")).toBe("true");
+
+    const secondary = secondaryButton();
+    expect(secondary.textContent).toBe("common.close");
+    expect(secondary.disabled).toBe(true);
+
+    act(() => secondary.click());
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("completed: hides the primary button entirely (no re-apply from the same dialog)", () => {
+    renderDialog({
+      scope: "projectDocuments",
+      applyResult: { kind: "success", replacementCount: 1, fileCount: 1 }
+    });
+    expect(container.querySelector(".appDialogButton-confirm")).toBeNull();
+  });
+
+  it("applying: Escape does not close the dialog", () => {
+    const onCancel = vi.fn();
+    renderDialog({ scope: "projectDocuments", applying: true, onCancel });
+    pressEscape();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("ready (not yet applying): Escape and Cancel still work normally", () => {
+    const onCancel = vi.fn();
+    renderDialog({ scope: "projectDocuments", onCancel });
+    pressEscape();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("completed (success): hides the destructive warning, shows the saved summary, enables 閉じる, and never re-shows Apply", () => {
+    const onCancel = vi.fn();
+    const result: ReplaceApplyResult = {
+      kind: "success",
+      replacementCount: 12,
+      fileCount: 3
+    };
+    renderDialog({ scope: "projectDocuments", applyResult: result, onCancel });
+
+    expect(
+      container.querySelector(".replacePreviewDestructiveWarning")
+    ).toBeNull();
+    expect(container.querySelector(".appDialogButton-confirm")).toBeNull();
+    expect(
+      container.querySelector(".replacePreviewApplyResult-success")?.textContent
+    ).toBe(
+      'search.replace.project.savedSummary:{"replacementCount":12,"fileCount":3}'
+    );
+
+    const closeButton = secondaryButton();
+    expect(closeButton.textContent).toBe("common.close");
+    expect(closeButton.disabled).toBe(false);
+    act(() => closeButton.click());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    // Escape also closes now that it is no longer "applying".
+    const onCancel2 = vi.fn();
+    renderDialog({ scope: "projectDocuments", applyResult: result, onCancel: onCancel2 });
+    pressEscape();
+    expect(onCancel2).toHaveBeenCalledTimes(1);
+  });
+
+  it("completed (partial failure): shows the success/failure counts", () => {
+    const result: ReplaceApplyResult = {
+      kind: "partialFailure",
+      successFileCount: 2,
+      failureFileCount: 1
+    };
+    renderDialog({ scope: "projectDocuments", applyResult: result });
+    expect(
+      container.querySelector(".replacePreviewApplyResult-partialFailure")
+        ?.textContent
+    ).toBe(
+      'search.replace.project.partialFailure.message:{"successFileCount":2,"failureFileCount":1}'
+    );
+  });
+
+  it("completed (all failure, generic): shows the generic failure message", () => {
+    const result: ReplaceApplyResult = { kind: "allFailure", reason: "generic" };
+    renderDialog({ scope: "projectDocuments", applyResult: result });
+    expect(
+      container.querySelector(".replacePreviewApplyResult-allFailure")
+        ?.textContent
+    ).toBe("search.replace.project.allFailure.message");
+  });
+
+  it("completed (all failure, file changed): shows the file-changed message", () => {
+    const result: ReplaceApplyResult = {
+      kind: "allFailure",
+      reason: "fileChanged"
+    };
+    renderDialog({ scope: "projectDocuments", applyResult: result });
+    expect(
+      container.querySelector(".replacePreviewApplyResult-allFailure")
+        ?.textContent
+    ).toBe("search.replace.project.fileChanged");
+  });
+});
+
+describe("ReplacePreviewDialog (#386) continued", () => {
 
   it("renders a readable header + rows for every file group across many files (no bare-line placeholders)", () => {
     const many: ReplacePreviewCandidate[] = [];

@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import hourglassIconUrl from "../../../assets/icons/ionicons/dialog/hourglass-outline.svg?url";
 import type { Translate, TranslationKey } from "../../shared/i18n";
 import { InfoDialog } from "../dialog/InfoDialog";
 import { buildReplacePreviewModeLabel } from "./replacePreviewMode";
 import type {
+  ReplaceApplyResult,
   ReplacePreviewCandidate,
   ReplacePreviewScope,
   ReplacePreviewSearchOptions
 } from "./replacePreviewTypes";
 
 export type {
+  ReplaceApplyResult,
   ReplacePreviewCandidate,
   ReplacePreviewScope,
   ReplacePreviewSearchOptions,
@@ -18,21 +21,34 @@ export type {
 /**
  * #386 - the reusable Replace Preview Dialog.
  *
- * One component, two scopes. `openDocuments` is the only one wired up in this
- * phase; `projectDocuments` has its copy / footer prepared so a later phase
- * can pass `scope="projectDocuments"` without touching the component. It is a
- * pure preview: `onApplySelected` is called with the still-applied candidate
- * ids and the host decides what to do (in this phase: nothing but close). The
- * dialog never edits a buffer, marks a document dirty, or writes a file.
+ * One component, two scopes:
+ *  - `openDocuments` applies the selection to open editor buffers (dirty, not
+ *    saved) - footer button is immediately enabled, and applying is
+ *    synchronous (the host closes the dialog right away).
+ *  - `projectDocuments` saves the selection straight to disk - a DESTRUCTIVE
+ *    operation: an extra warning, the footer button is armed only after a 5s
+ *    safety delay (hourglass icon, no countdown digits), is disabled when
+ *    nothing is selected or the candidate ceiling was hit, and - once
+ *    pressed - the dialog enters an `applying` state that CANNOT be
+ *    dismissed (no Cancel, no Escape) until the host reports `applyResult`,
+ *    at which point Close becomes available and the result is shown in place
+ *    of the warning. The same dialog is never re-armed for a second apply.
+ *
+ * The dialog itself never touches a buffer or a file; `onApplySelected` hands
+ * the still-applied ids to the host, which does the work for its scope.
  */
+
+/** Delay (ms) before the destructive (project) apply button arms. Mirrors the
+ *  File Explorer direct-delete confirmation's 5s friction. */
+export const REPLACE_PREVIEW_PROJECT_APPLY_DELAY_MS = 5000;
 
 interface ReplacePreviewScopeConfig {
   readonly titleKey: TranslationKey;
   readonly descriptionKey: TranslationKey;
   readonly applyButtonKey: TranslationKey;
   readonly emptyKey: TranslationKey;
-  /** Shown only for a scope whose replace execution is not implemented yet. */
-  readonly notImplementedKey?: TranslationKey;
+  /** Extra "cannot be undone" warning, shown for the destructive scope. */
+  readonly destructiveWarningKey?: TranslationKey;
   readonly destructive: boolean;
 }
 
@@ -48,8 +64,8 @@ const SCOPE_CONFIG: Record<ReplacePreviewScope, ReplacePreviewScopeConfig> = {
     titleKey: "search.replace.preview.project.title",
     descriptionKey: "search.replace.preview.project.description",
     applyButtonKey: "search.replace.preview.applyAndSave",
-    emptyKey: "search.replace.preview.empty",
-    notImplementedKey: "search.replace.preview.notImplemented",
+    emptyKey: "search.replace.project.emptyCandidates",
+    destructiveWarningKey: "search.replace.preview.project.destructiveWarning",
     destructive: true
   }
 };
@@ -73,11 +89,27 @@ export interface ReplacePreviewDialogProps {
   /** `true` when the preview search hit its candidate ceiling and not every
    *  replacement site is shown. Renders a "narrow the search" notice. */
   readonly limitReached?: boolean;
+  /**
+   * #386 destructive (project) scope only: `true` while the host is saving
+   * the selection to disk. The dialog blocks every close affordance (Cancel /
+   * Escape) while this is `true`. Ignored for `openDocuments`, whose apply is
+   * synchronous - the host just closes the dialog.
+   */
+  readonly applying?: boolean;
+  /**
+   * #386 destructive (project) scope only: the settled outcome of the apply,
+   * or `null` while it has not finished (or has not started). Once set, the
+   * dialog shows it in place of the destructive warning, disables Apply for
+   * good, and enables Close.
+   */
+  readonly applyResult?: ReplaceApplyResult | null;
   readonly translate: Translate;
   readonly opener: Element | null;
   readonly onCancel: () => void;
-  /** Called with the ids still marked "apply". The host does not replace
-   *  anything in this phase - it just closes the dialog. */
+  /** Called with the ids still marked "apply" when the user presses the
+   *  primary action. For `openDocuments` the host applies synchronously and
+   *  closes the dialog; for `projectDocuments` the host starts the async save
+   *  and reports back through `applying` / `applyResult`. */
   readonly onApplySelected: (candidateIds: readonly string[]) => void;
 }
 
@@ -175,6 +207,8 @@ export function ReplacePreviewDialog({
   loading = false,
   candidates,
   limitReached = false,
+  applying = false,
+  applyResult = null,
   translate,
   opener,
   onCancel,
@@ -187,6 +221,35 @@ export function ReplacePreviewDialog({
   const [ignoredIds, setIgnoredIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
+
+  // #386: destructive (project) scope only - the apply button arms after a
+  // flat 5s safety delay (hourglass -> ready; no countdown digits, matching
+  // the File Explorer direct-delete confirmation).
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!config.destructive || loading) {
+      setArmed(false);
+      return;
+    }
+    setArmed(false);
+    const timer = setTimeout(
+      () => setArmed(true),
+      REPLACE_PREVIEW_PROJECT_APPLY_DELAY_MS
+    );
+    return () => clearTimeout(timer);
+  }, [config.destructive, loading]);
+
+  // #386: guards a double-click between the user's press and the host's next
+  // prop update (which is what actually disables the button). Once pressed,
+  // this dialog instance is spent - no re-apply, even if the host never sets
+  // `applying` (e.g. openDocuments, which applies synchronously and closes).
+  // A ref (not just the mirrored `submitted` state) because two synchronous
+  // clicks in the same tick both run before React commits the state update -
+  // the ref is what actually blocks the second one.
+  const submittedRef = useRef(false);
+  const [submitted, setSubmitted] = useState(false);
+  const completed = applyResult !== null;
 
   const groups = useMemo(() => groupByFile(candidates), [candidates]);
 
@@ -241,6 +304,45 @@ export function ReplacePreviewDialog({
 
   const allIds = candidates.map((candidate) => candidate.id);
 
+  // Not armed yet = still inside the 5s delay (destructive scope only).
+  const showHourglass = config.destructive && !armed && !applying && !completed;
+  const applyDisabled =
+    loading ||
+    submitted ||
+    applying ||
+    completed ||
+    (config.destructive && (!armed || selectedCount === 0 || limitReached));
+  const applyLabel = applying
+    ? translate("search.replace.preview.project.applying")
+    : config.destructive
+      ? translate("search.replace.preview.project.replaceLabel")
+      : translate(config.applyButtonKey);
+  // The short destructive label loses the "what does this do" context the
+  // old long label carried - restore it as a tooltip instead (armed) or
+  // explain the wait (not yet armed).
+  const applyTitle = !config.destructive
+    ? undefined
+    : showHourglass
+      ? translate("search.replace.preview.project.delayTooltip")
+      : translate("search.replace.preview.applyAndSave");
+
+  // While applying, no close affordance works: no Cancel/Close click, no
+  // Escape. Once settled (applyResult arrives), Close is available again.
+  const closeBlocked = applying;
+  const handleRequestClose = (): void => {
+    if (!closeBlocked) {
+      onCancel();
+    }
+  };
+  const secondaryIsClose = applying || completed;
+  const secondaryLabel = secondaryIsClose
+    ? translate("common.close")
+    : translate("common.cancel");
+
+  const hourglassIconStyle = {
+    "--replace-preview-apply-icon": `url("${hourglassIconUrl}")`
+  } as CSSProperties & { "--replace-preview-apply-icon": string };
+
   return (
     <InfoDialog
       title={translate(config.titleKey)}
@@ -250,28 +352,46 @@ export function ReplacePreviewDialog({
           ? "replacePreviewDialog appDialog-destructive"
           : "replacePreviewDialog"
       }
-      onClose={onCancel}
+      onClose={handleRequestClose}
       footer={
         <div className="appDialogActions">
           <button
             type="button"
             className="appDialogButton"
-            onClick={onCancel}
+            autoFocus={config.destructive && !completed}
+            disabled={closeBlocked}
+            aria-disabled={closeBlocked}
+            onClick={handleRequestClose}
           >
-            {translate("common.cancel")}
+            {secondaryLabel}
           </button>
-          {loading ? null : (
+          {loading || completed ? null : (
             <button
               type="button"
               className="appDialogButton appDialogButton-confirm"
-              autoFocus
-              onClick={() =>
-                onApplySelected(
-                  allIds.filter((id) => !ignoredIds.has(id))
-                )
-              }
+              autoFocus={!config.destructive}
+              disabled={applyDisabled}
+              aria-disabled={applyDisabled}
+              aria-busy={applying || undefined}
+              title={applyTitle}
+              aria-label={applyTitle}
+              onClick={() => {
+                if (submittedRef.current) {
+                  return;
+                }
+                submittedRef.current = true;
+                setSubmitted(true);
+                onApplySelected(allIds.filter((id) => !ignoredIds.has(id)));
+              }}
             >
-              {translate(config.applyButtonKey)}
+              {showHourglass ? (
+                <span
+                  className="replacePreviewApplyIcon"
+                  style={hourglassIconStyle}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <span>{applyLabel}</span>
             </button>
           )}
         </div>
@@ -281,9 +401,31 @@ export function ReplacePreviewDialog({
         <p className="replacePreviewDescription">
           {translate(config.descriptionKey)}
         </p>
-        {config.notImplementedKey ? (
-          <p className="replacePreviewNotImplemented">
-            {translate(config.notImplementedKey)}
+        {config.destructiveWarningKey && !applying && !completed ? (
+          <p className="replacePreviewDestructiveWarning" role="alert">
+            {translate(config.destructiveWarningKey)}
+          </p>
+        ) : null}
+        {applyResult ? (
+          <p
+            className={`replacePreviewApplyResult replacePreviewApplyResult-${applyResult.kind}`}
+            role="status"
+          >
+            {applyResult.kind === "success"
+              ? translate("search.replace.project.savedSummary", {
+                  replacementCount: applyResult.replacementCount,
+                  fileCount: applyResult.fileCount
+                })
+              : applyResult.kind === "partialFailure"
+                ? translate("search.replace.project.partialFailure.message", {
+                    successFileCount: applyResult.successFileCount,
+                    failureFileCount: applyResult.failureFileCount
+                  })
+                : translate(
+                    applyResult.reason === "fileChanged"
+                      ? "search.replace.project.fileChanged"
+                      : "search.replace.project.allFailure.message"
+                  )}
           </p>
         ) : null}
 
