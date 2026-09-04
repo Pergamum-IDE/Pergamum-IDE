@@ -18,6 +18,7 @@ import {
 import { GlossarySidebar } from "./GlossarySidebar";
 import { SearchSidebar } from "./SearchSidebar";
 import type { ProjectTextSearchResult } from "./projectTextSearch";
+import type { GlossaryAtomSearchTerm } from "./glossaryAtomSearch";
 import type { TextSearchOptions } from "../shared/textSearch";
 import { DocumentMapPanel } from "./DocumentMapPanel";
 import {
@@ -146,6 +147,11 @@ interface WorkspaceSidebarProps {
     startOffset: number,
     endOffset: number
   ) => void;
+  /** #384 Glossary Atom Search: OR-search the selected atoms across the project. */
+  runProjectGlossarySearch?: (
+    terms: readonly GlossaryAtomSearchTerm[],
+    isCancelled: () => boolean
+  ) => Promise<ProjectTextSearchResult>;
 }
 
 export function WorkspaceSidebar({
@@ -191,7 +197,8 @@ export function WorkspaceSidebar({
   documentMetricsFileInfo = null,
   searchProjectAvailable = false,
   runProjectSearch,
-  onOpenSearchMatch
+  onOpenSearchMatch,
+  runProjectGlossarySearch
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -247,6 +254,8 @@ export function WorkspaceSidebar({
           translate={translate}
           projectAvailable={searchProjectAvailable}
           runSearch={runProjectSearch}
+          glossaryEntries={documentMapGlossaryEntries}
+          runGlossarySearch={runProjectGlossarySearch}
           onOpenMatch={onOpenSearchMatch}
         />
       );

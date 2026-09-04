@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Translate } from "../../src/shared/i18n";
 import { SearchSidebar } from "../../src/renderer/SearchSidebar";
 import type { ProjectTextSearchResult } from "../../src/renderer/projectTextSearch";
+import type {
+  GlossaryAtomSearchTerm,
+  GlossarySearchMatch
+} from "../../src/renderer/glossaryAtomSearch";
+import type { GlossaryAtom, GlossaryEntry } from "../../src/shared/glossary";
 import type { TextSearchOptions } from "../../src/shared/textSearch";
 
 const translate: Translate = (key, values) =>
@@ -38,9 +43,16 @@ type RunSearchFn = (
   isCancelled: () => boolean
 ) => Promise<ProjectTextSearchResult>;
 
+type RunGlossarySearchFn = (
+  terms: readonly GlossaryAtomSearchTerm[],
+  isCancelled: () => boolean
+) => Promise<ProjectTextSearchResult>;
+
 interface RenderOptions {
   readonly projectAvailable?: boolean;
   readonly runSearch?: RunSearchFn;
+  readonly glossaryEntries?: readonly GlossaryEntry[];
+  readonly runGlossarySearch?: RunGlossarySearchFn;
   readonly onOpenMatch?: (
     relativePath: string,
     startOffset: number,
@@ -52,6 +64,49 @@ function renderWith(props: RenderOptions): void {
   act(() => {
     root.render(React.createElement(SearchSidebar, { translate, ...props }));
   });
+}
+
+const ATOM_TIMESTAMP = "2026-09-04T00:00:00.000Z";
+
+function glossaryAtom(
+  entryId: string,
+  id: string,
+  value: string
+): GlossaryAtom {
+  return {
+    id,
+    entryId,
+    sortOrder: 0,
+    value,
+    matchFlags: 0,
+    createdAt: ATOM_TIMESTAMP,
+    updatedAt: ATOM_TIMESTAMP
+  };
+}
+
+function glossaryEntry(id: string, atoms: GlossaryAtom[]): GlossaryEntry {
+  return {
+    id,
+    description: "",
+    atoms: atoms.map((atom, index) => ({ ...atom, sortOrder: index })),
+    tags: [],
+    createdAt: ATOM_TIMESTAMP,
+    updatedAt: ATOM_TIMESTAMP
+  };
+}
+
+const GLOSSARY_ENTRIES: GlossaryEntry[] = [
+  glossaryEntry("e1", [
+    glossaryAtom("e1", "a-janne", "ジャンヌ"),
+    glossaryAtom("e1", "a-valjean", "ヴァルジャン")
+  ]),
+  glossaryEntry("e2", [glossaryAtom("e2", "a-maid", "メイド")])
+];
+
+function optionToggle(index: number): HTMLButtonElement {
+  return container.querySelectorAll<HTMLButtonElement>(".searchOptionToggle")[
+    index
+  ];
 }
 
 function typeQuery(text: string): void {
@@ -386,20 +441,23 @@ describe("SearchSidebar (#384 Phase 2 — project-wide text search)", () => {
     expect(bodyText()).toContain("search.error");
   });
 
-  it("does not run a text search while the glossary toggle is on", async () => {
+  it("does not run a text search while glossary mode is on", async () => {
     const runSearch = vi.fn(async () => makeResult());
-    renderWith({ projectAvailable: true, runSearch });
+    renderWith({
+      projectAvailable: true,
+      runSearch,
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
 
-    const glossaryToggle = container.querySelectorAll<HTMLButtonElement>(
-      ".searchOptionToggle"
-    )[0];
-    act(() => glossaryToggle.click());
+    act(() => optionToggle(0).click());
 
-    typeQuery("maid");
+    // The text query box is replaced by the atom picker.
+    expect(container.querySelector(".searchPaneInput")).toBeNull();
+    expect(container.querySelector(".glossaryAtomSelect")).not.toBeNull();
+
     await advance(400);
-
     expect(runSearch).not.toHaveBeenCalled();
-    expect(bodyText()).toContain("search.notImplemented.glossary");
+    expect(bodyText()).toContain("search.glossary.emptySelection");
   });
 
   it("runs a regular expression search when the regex toggle is on", async () => {
@@ -491,5 +549,168 @@ describe("SearchSidebar (#384 Phase 2 — project-wide text search)", () => {
     // The superseded result must not replace the validation message.
     expect(bodyText()).toContain("search.invalidRegex");
     expect(bodyText()).not.toContain("search.summary");
+  });
+});
+
+describe("SearchSidebar (#384 — Glossary Atom Search mode)", () => {
+  function enterGlossaryMode(): void {
+    act(() => optionToggle(0).click());
+  }
+
+  function openAtomPicker(): void {
+    const trigger = container.querySelector<HTMLButtonElement>(
+      ".glossaryAtomSelectTrigger"
+    )!;
+    act(() => trigger.click());
+  }
+
+  function pickAtom(value: string): void {
+    const option = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".glossaryAtomSelectOption")
+    ).find((button) => button.textContent?.includes(value))!;
+    act(() => option.click());
+  }
+
+  it("resets and disables Ab / Aa / .* when entering glossary mode", () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
+    const [, wholeWord, matchCase, useRegex] = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".searchOptionToggle")
+    );
+    act(() => wholeWord.click());
+    act(() => matchCase.click());
+    expect(wholeWord.getAttribute("aria-pressed")).toBe("true");
+
+    enterGlossaryMode();
+
+    for (const toggle of [wholeWord, matchCase, useRegex]) {
+      expect(toggle.disabled).toBe(true);
+      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    }
+
+    // Leaving glossary mode re-enables them but does not restore prior state.
+    enterGlossaryMode();
+    for (const toggle of [wholeWord, matchCase, useRegex]) {
+      expect(toggle.disabled).toBe(false);
+      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    }
+  });
+
+  it("shows the no-glossary state when the project has no atoms", () => {
+    renderWith({
+      projectAvailable: true,
+      runGlossarySearch: vi.fn<RunGlossarySearchFn>(async () => makeResult()),
+      glossaryEntries: []
+    });
+
+    enterGlossaryMode();
+    expect(bodyText()).toContain("search.glossary.noGlossary");
+  });
+
+  it("OR-searches the picked atoms and shows results with an atom badge", async () => {
+    const glossaryMatch: GlossarySearchMatch = {
+      startOffset: 5,
+      endOffset: 9,
+      line: 1,
+      column: 6,
+      previewText: "その ジャンヌ は",
+      previewMatchStart: 3,
+      previewMatchEnd: 7,
+      matchedText: "ジャンヌ",
+      glossaryAtomId: "a-janne",
+      glossaryAtomValue: "ジャンヌ",
+      glossaryEntryId: "e1",
+      glossaryEntryLabel: "ジャンヌ・ヴァルジャン"
+    };
+    const runGlossarySearch = vi.fn<RunGlossarySearchFn>(async () =>
+      makeResult({
+        totalMatches: 1,
+        fileCount: 1,
+        files: [
+          {
+            relativePath: "chapters/01.md",
+            name: "01.md",
+            truncated: false,
+            matches: [glossaryMatch]
+          }
+        ]
+      })
+    );
+
+    renderWith({
+      projectAvailable: true,
+      runGlossarySearch,
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
+    enterGlossaryMode();
+    openAtomPicker();
+    pickAtom("ジャンヌ");
+    pickAtom("ヴァルジャン");
+
+    await advance(300);
+
+    expect(runGlossarySearch).toHaveBeenCalledTimes(1);
+    expect(
+      runGlossarySearch.mock.calls[0][0].map((term) => term.value)
+    ).toEqual(["ジャンヌ", "ヴァルジャン"]);
+
+    expect(bodyText()).toContain("search.summary");
+    expect(
+      container.querySelector(".searchResultRowAtom")?.textContent
+    ).toBe("ジャンヌ");
+    expect(container.querySelector(".searchResultMatch")?.textContent).toBe(
+      "ジャンヌ"
+    );
+  });
+
+  it("does not search until at least one atom is picked", async () => {
+    const runGlossarySearch = vi.fn<RunGlossarySearchFn>(async () =>
+      makeResult()
+    );
+    renderWith({
+      projectAvailable: true,
+      runGlossarySearch,
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
+    enterGlossaryMode();
+    await advance(400);
+    expect(runGlossarySearch).not.toHaveBeenCalled();
+    expect(bodyText()).toContain("search.glossary.emptySelection");
+
+    openAtomPicker();
+    pickAtom("メイド");
+    await advance(300);
+    expect(runGlossarySearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a picked atom via its chip and re-searches", async () => {
+    const runGlossarySearch = vi.fn<RunGlossarySearchFn>(async () =>
+      makeResult()
+    );
+    renderWith({
+      projectAvailable: true,
+      runGlossarySearch,
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+
+    enterGlossaryMode();
+    openAtomPicker();
+    pickAtom("ジャンヌ");
+    await advance(300);
+    expect(runGlossarySearch).toHaveBeenCalledTimes(1);
+
+    const removeChip = container.querySelector<HTMLButtonElement>(
+      ".glossaryAtomChipRemove"
+    )!;
+    act(() => removeChip.click());
+    await advance(400);
+
+    expect(bodyText()).toContain("search.glossary.emptySelection");
   });
 });

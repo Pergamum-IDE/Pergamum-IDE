@@ -4,6 +4,10 @@ import {
   type TextSearchMatch,
   type TextSearchOptions
 } from "../shared/textSearch";
+import {
+  findGlossaryAtomMatches,
+  type GlossaryAtomSearchTerm
+} from "./glossaryAtomSearch";
 
 /**
  * #384 Phase 2 - orchestrates a plain-text search across the current
@@ -51,25 +55,33 @@ export function emptyProjectTextSearchResult(
   };
 }
 
-export interface RunProjectTextSearchInput {
+/** Reader shared by both search modes: dirty editor buffer first, disk file
+ *  otherwise, `null` for an unreadable file (counted as skipped). */
+export type ProjectDocumentReader = (
+  relativePath: string
+) => Promise<string | null>;
+
+interface ScanProjectDocumentsInput {
   readonly documents: readonly ProjectDocument[];
-  /** Text to search for a project doc, or `null` to skip it (unreadable). */
-  readonly readText: (relativePath: string) => Promise<string | null>;
-  readonly query: string;
-  readonly options: TextSearchOptions;
-  /** Polled between files; when it returns `true` the run stops. */
+  readonly readText: ProjectDocumentReader;
+  /** Per-file matcher. `perFileLimit` already includes the +1 probe used to
+   *  detect "there were more matches than kept". */
+  readonly findMatches: (
+    text: string,
+    perFileLimit: number
+  ) => readonly TextSearchMatch[];
   readonly isCancelled?: () => boolean;
 }
 
-export async function runProjectTextSearch(
-  input: RunProjectTextSearchInput
+/**
+ * The file walk shared by text search and glossary atom search: documents in
+ * `relativePath` order, per-file and whole-project match caps, unreadable
+ * files skipped (not fatal), truncation flagged.
+ */
+async function scanProjectDocuments(
+  query: string,
+  input: ScanProjectDocumentsInput
 ): Promise<ProjectTextSearchResult> {
-  const { query } = input;
-
-  if (query.trim().length === 0) {
-    return emptyProjectTextSearchResult(query);
-  }
-
   const ordered = [...input.documents].sort((left, right) =>
     left.relativePath.localeCompare(right.relativePath)
   );
@@ -104,16 +116,15 @@ export async function runProjectTextSearch(
       PROJECT_TEXT_SEARCH_MAX_TOTAL_MATCHES - totalMatches
     );
     // Ask for one extra so "there were more" is detectable.
-    const found = findTextSearchMatches(text, query, {
-      ...input.options,
-      limit: perFileLimit + 1
-    });
+    const found = input.findMatches(text, perFileLimit + 1);
     if (found.length === 0) {
       continue;
     }
 
     const fileTruncated = found.length > perFileLimit;
-    const kept = fileTruncated ? found.slice(0, perFileLimit) : found;
+    const kept = fileTruncated
+      ? found.slice(0, perFileLimit)
+      : [...found];
     if (fileTruncated) {
       truncated = true;
     }
@@ -134,4 +145,69 @@ export async function runProjectTextSearch(
     truncated,
     skippedFileCount
   };
+}
+
+export interface RunProjectTextSearchInput {
+  readonly documents: readonly ProjectDocument[];
+  /** Text to search for a project doc, or `null` to skip it (unreadable). */
+  readonly readText: ProjectDocumentReader;
+  readonly query: string;
+  readonly options: TextSearchOptions;
+  /** Polled between files; when it returns `true` the run stops. */
+  readonly isCancelled?: () => boolean;
+}
+
+export async function runProjectTextSearch(
+  input: RunProjectTextSearchInput
+): Promise<ProjectTextSearchResult> {
+  const { query } = input;
+
+  if (query.trim().length === 0) {
+    return emptyProjectTextSearchResult(query);
+  }
+
+  return scanProjectDocuments(query, {
+    documents: input.documents,
+    readText: input.readText,
+    isCancelled: input.isCancelled,
+    findMatches: (text, perFileLimit) =>
+      findTextSearchMatches(text, query, {
+        ...input.options,
+        limit: perFileLimit
+      })
+  });
+}
+
+export interface RunProjectGlossaryAtomSearchInput {
+  readonly documents: readonly ProjectDocument[];
+  readonly readText: ProjectDocumentReader;
+  /** The selected atoms' OR terms. An empty list yields an empty result. */
+  readonly terms: readonly GlossaryAtomSearchTerm[];
+  readonly isCancelled?: () => boolean;
+}
+
+/**
+ * #384 Glossary Atom Search: OR-search the selected atoms' values across the
+ * project. Shares the file walk, caps, skip handling and result shape with
+ * {@link runProjectTextSearch}; each match additionally carries its glossary
+ * atom / entry identity (see {@link import("./glossaryAtomSearch")}).
+ */
+export async function runProjectGlossaryAtomSearch(
+  input: RunProjectGlossaryAtomSearchInput
+): Promise<ProjectTextSearchResult> {
+  const terms = input.terms.filter(
+    (term) => term.value.trim().length > 0
+  );
+
+  if (terms.length === 0) {
+    return emptyProjectTextSearchResult("");
+  }
+
+  return scanProjectDocuments("", {
+    documents: input.documents,
+    readText: input.readText,
+    isCancelled: input.isCancelled,
+    findMatches: (text, perFileLimit) =>
+      findGlossaryAtomMatches(text, terms, { limit: perFileLimit })
+  });
 }

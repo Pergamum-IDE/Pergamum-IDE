@@ -3,8 +3,10 @@ import {
   PROJECT_TEXT_SEARCH_MAX_MATCHES_PER_FILE,
   PROJECT_TEXT_SEARCH_MAX_TOTAL_MATCHES,
   emptyProjectTextSearchResult,
+  runProjectGlossaryAtomSearch,
   runProjectTextSearch
 } from "../../src/renderer/projectTextSearch";
+import { isGlossarySearchMatch } from "../../src/renderer/glossaryAtomSearch";
 import type { ProjectDocument } from "../../src/shared/api";
 
 const PLAIN = { caseSensitive: false, wholeWord: false } as const;
@@ -144,5 +146,63 @@ describe("runProjectTextSearch (#384 Phase 2)", () => {
       )
     ).toEqual(["メイド", "ジャンヌ"]);
     expect(result.fileCount).toBe(2);
+  });
+});
+
+describe("runProjectGlossaryAtomSearch (#384)", () => {
+  const term = (value: string) => ({
+    value,
+    matchFlags: 0,
+    atomId: `atom-${value}`,
+    entryId: `entry-${value}`,
+    entryLabel: value
+  });
+
+  it("returns an empty result when no atoms are selected", async () => {
+    const readText = vi.fn(async () => "ジャンヌ");
+
+    const result = await runProjectGlossaryAtomSearch({
+      documents: [doc("a.md")],
+      readText,
+      terms: []
+    });
+
+    expect(result.totalMatches).toBe(0);
+    expect(readText).not.toHaveBeenCalled();
+  });
+
+  it("OR-searches the atoms across files and tags each match", async () => {
+    const texts: Record<string, string> = {
+      "a.md": "ジャンヌは歩いた。",
+      "b.md": "メイドは沈黙した。",
+      "c.md": "関係のない文。"
+    };
+
+    const result = await runProjectGlossaryAtomSearch({
+      documents: [doc("a.md"), doc("b.md"), doc("c.md")],
+      readText: async (relativePath) => texts[relativePath] ?? null,
+      terms: [term("ジャンヌ"), term("メイド")]
+    });
+
+    expect(result.fileCount).toBe(2);
+    expect(result.totalMatches).toBe(2);
+    const matches = result.files.flatMap((file) => file.matches);
+    expect(matches.every(isGlossarySearchMatch)).toBe(true);
+    expect(matches.map((match) => match.matchedText)).toEqual([
+      "ジャンヌ",
+      "メイド"
+    ]);
+  });
+
+  it("skips unreadable files and counts them", async () => {
+    const result = await runProjectGlossaryAtomSearch({
+      documents: [doc("ok.md"), doc("bad.md")],
+      readText: async (relativePath) =>
+        relativePath === "ok.md" ? "メイド喫茶" : null,
+      terms: [term("メイド")]
+    });
+
+    expect(result.totalMatches).toBe(1);
+    expect(result.skippedFileCount).toBe(1);
   });
 });

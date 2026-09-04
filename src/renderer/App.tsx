@@ -417,9 +417,11 @@ import type {
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import {
   emptyProjectTextSearchResult,
+  runProjectGlossaryAtomSearch,
   runProjectTextSearch,
   type ProjectTextSearchResult
 } from "./projectTextSearch";
+import type { GlossaryAtomSearchTerm } from "./glossaryAtomSearch";
 import type { TextSearchOptions } from "../shared/textSearch";
 import type { DocumentMetricsFileInfo } from "./DocumentMetricsPanel";
 import {
@@ -7313,26 +7315,14 @@ export function App(): JSX.Element {
     }
   }
 
-  // #384 Phase 2: project-wide text search executed for the Search pane.
-  // Returns an empty result when there is no project. `readText` applies the
-  // dirty-buffer priority (an open Markdown editor's live text wins over the
-  // disk file); an unreadable file resolves to `null` so the orchestrator
-  // skips it and bumps `skippedFileCount` instead of crashing the search.
-  async function runProjectSearch(
-    query: string,
-    options: TextSearchOptions,
-    isCancelled: () => boolean
-  ): Promise<ProjectTextSearchResult> {
-    const activeProject = project;
-    const activeContext = activeProjectContext;
-
-    if (!activeProject || !activeContext) {
-      return emptyProjectTextSearchResult(query);
-    }
-
-    const readText = async (
-      relativePath: string
-    ): Promise<string | null> => {
+  // #384: the per-file reader shared by both Search pane modes. Dirty-buffer
+  // priority — an open Markdown editor's live text wins over the disk file;
+  // an unreadable file resolves to `null` so the orchestrator skips it and
+  // bumps `skippedFileCount` instead of crashing the search.
+  function createProjectSearchReadText(
+    activeContext: ActiveProjectContext
+  ): (relativePath: string) => Promise<string | null> {
+    return async (relativePath: string): Promise<string | null> => {
       const editorId = createProjectDocumentEditorId(
         relativePath,
         activeContext
@@ -7356,19 +7346,56 @@ export function App(): JSX.Element {
         // console breadcrumb; the orchestrator counts it toward
         // `skippedFileCount`, shown as a footer notice in the pane.
         console.warn(
-          `Project text search skipped unreadable file: ${relativePath}`,
+          `Project search skipped unreadable file: ${relativePath}`,
           error
         );
 
         return null;
       }
     };
+  }
+
+  // #384 Phase 2: project-wide text search executed for the Search pane.
+  // Returns an empty result when there is no project.
+  async function runProjectSearch(
+    query: string,
+    options: TextSearchOptions,
+    isCancelled: () => boolean
+  ): Promise<ProjectTextSearchResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return emptyProjectTextSearchResult(query);
+    }
 
     return await runProjectTextSearch({
       documents: activeProject.documents,
-      readText,
+      readText: createProjectSearchReadText(activeContext),
       query,
       options,
+      isCancelled
+    });
+  }
+
+  // #384 Glossary Atom Search: OR-search the picked atoms' values across the
+  // project's Markdown files. Same file discovery / dirty-buffer policy as the
+  // text search; each result match carries its glossary atom / entry identity.
+  async function runProjectGlossarySearch(
+    terms: readonly GlossaryAtomSearchTerm[],
+    isCancelled: () => boolean
+  ): Promise<ProjectTextSearchResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return emptyProjectTextSearchResult("");
+    }
+
+    return await runProjectGlossaryAtomSearch({
+      documents: activeProject.documents,
+      readText: createProjectSearchReadText(activeContext),
+      terms,
       isCancelled
     });
   }
@@ -7696,6 +7723,7 @@ export function App(): JSX.Element {
                       documentMetricsFileInfo={documentMetricsFileInfo}
                       searchProjectAvailable={project !== null}
                       runProjectSearch={runProjectSearch}
+                      runProjectGlossarySearch={runProjectGlossarySearch}
                       onOpenSearchMatch={(
                         relativePath,
                         startOffset,

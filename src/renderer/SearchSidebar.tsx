@@ -1,7 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent
+} from "react";
+import type { GlossaryEntry } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { compileSearchRegex, type TextSearchOptions } from "../shared/textSearch";
 import type { ProjectTextSearchResult } from "./projectTextSearch";
+import {
+  buildGlossaryAtomSearchTerms,
+  collectSelectableGlossaryAtoms,
+  isGlossarySearchMatch,
+  type GlossaryAtomSearchTerm,
+  type SelectableGlossaryAtom
+} from "./glossaryAtomSearch";
 import glossarySearchIconRaw from "../../assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw";
 import wholeWordIconRaw from "../../assets/icons/Pergamum/search/word.svg?raw";
 import caseSensitiveIconRaw from "../../assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw";
@@ -10,23 +24,25 @@ import useRegexIconRaw from "../../assets/icons/svgrepo/search/regex-svgrepo-com
 /**
  * #384 — the Search pane.
  *
- * Phase 1 built the input row + the four option toggles (glossary next to the
- * box, then whole-word, match-case, and the advanced regex toggle last).
+ * Two search MODES, chosen by the `語彙検索` toggle:
  *
- * Phase 2 wires a debounced project-wide search: the host supplies `runSearch`
- * (which reads a dirty editor buffer first, the disk file otherwise) and
- * `onOpenMatch` (open the file + select the match). Stale results are
- * discarded by a generation counter.
+ * - `text`: the query box drives a debounced project-wide search — plain
+ *   substring, whole-word (`Ab`), match-case (`Aa`), or regular expression
+ *   (`.*`). Regex and whole-word are mutually exclusive; an invalid pattern
+ *   shows a validation message and runs nothing.
  *
- * The `.*` toggle switches the query to a JavaScript regular expression.
- * Regex and whole-word are mutually exclusive: turning `.*` on forces the
- * whole-word toggle off and disables it (turning `.*` back off does not
- * restore it). An invalid pattern shows a validation message and runs no
- * search. The glossary toggle is still inert — turning it on shows a "not
- * implemented" notice and runs nothing.
+ * - `glossary`: the query box becomes a GlossaryAtom multi-select; the picked
+ *   atoms' exact values are OR-searched. `Ab` / `Aa` / `.*` do not apply and
+ *   are forced off + disabled while this mode is active (turning the mode off
+ *   does not restore them). No search runs until at least one atom is picked.
+ *
+ * The host supplies `runSearch` (text) / `runGlossarySearch` (glossary) — both
+ * read a dirty editor buffer first, the disk file otherwise — and `onOpenMatch`
+ * (open the file + select the match). Stale results are discarded by a
+ * generation counter.
  */
 
-/** `'text'` = ordinary query; `'glossary'` = search the glossary (later phase). */
+/** `'text'` = query-box search; `'glossary'` = GlossaryAtom OR search. */
 export type SearchMode = "text" | "glossary";
 
 export interface SearchOptions {
@@ -41,7 +57,10 @@ const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   useRegex: false
 };
 
-/** Debounce between the last keystroke and running the project search. */
+/** Stable identity for the omitted-prop case, so the atom memo does not churn. */
+const NO_GLOSSARY_ENTRIES: readonly GlossaryEntry[] = [];
+
+/** Debounce between the last change and running the project search. */
 const SEARCH_DEBOUNCE_MS = 250;
 
 type SearchState =
@@ -50,6 +69,9 @@ type SearchState =
   | { readonly kind: "results"; readonly result: ProjectTextSearchResult }
   | { readonly kind: "invalidRegex" }
   | { readonly kind: "error" };
+
+/** Shared idle instance so an effect that "stays idle" causes no re-render. */
+const IDLE_STATE: SearchState = { kind: "idle" };
 
 /**
  * The bundled svgrepo / Pergamum search glyphs ship as standalone documents
@@ -135,17 +157,277 @@ function SearchResultPreview({
   );
 }
 
+/** The grouped result list, shared by text and glossary search. */
+function SearchResults({
+  translate,
+  result,
+  onRowClick
+}: {
+  translate: Translate;
+  result: ProjectTextSearchResult;
+  onRowClick: (
+    relativePath: string,
+    startOffset: number,
+    endOffset: number
+  ) => void;
+}): JSX.Element {
+  return (
+    <>
+      <p className="searchResultsSummary" role="status">
+        {translate("search.summary", {
+          matchCount: result.totalMatches,
+          fileCount: result.fileCount
+        })}
+      </p>
+      {result.truncated ? (
+        <p className="searchResultsNote">{translate("search.truncated")}</p>
+      ) : null}
+      {result.skippedFileCount > 0 ? (
+        <p className="searchResultsNote">
+          {translate("search.skipped", { count: result.skippedFileCount })}
+        </p>
+      ) : null}
+      <ul className="searchResultGroups">
+        {result.files.map((file) => (
+          <li key={file.relativePath} className="searchResultGroup">
+            <div className="searchResultGroupHeader">
+              <span
+                className="searchResultGroupName"
+                title={file.relativePath}
+              >
+                {file.name}
+              </span>
+              {file.relativePath !== file.name ? (
+                <span className="searchResultGroupPath">
+                  {file.relativePath}
+                </span>
+              ) : null}
+            </div>
+            <ul className="searchResultRows">
+              {file.matches.map((match) => (
+                <li key={`${file.relativePath}:${match.startOffset}`}>
+                  <button
+                    type="button"
+                    className="searchResultRow"
+                    onClick={() =>
+                      onRowClick(
+                        file.relativePath,
+                        match.startOffset,
+                        match.endOffset
+                      )
+                    }
+                  >
+                    <span className="searchResultRowLocation">
+                      {match.line}:{match.column}
+                    </span>
+                    {isGlossarySearchMatch(match) ? (
+                      <span
+                        className="searchResultRowAtom"
+                        title={`${match.glossaryAtomValue}\n${match.glossaryEntryLabel}`}
+                      >
+                        {match.glossaryAtomValue}
+                      </span>
+                    ) : null}
+                    <SearchResultPreview
+                      previewText={match.previewText}
+                      matchStart={match.previewMatchStart}
+                      matchEnd={match.previewMatchEnd}
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * The `語彙検索` mode's atom picker: a trigger + focus-out-dismissed popup with
+ * a filter box and a two-line row per atom (value / parent entry). Selected
+ * atoms show as removable chips. Mirrors the Document Map "Render tags"
+ * multi-select interaction (no global key listeners).
+ */
+function GlossaryAtomSelect({
+  translate,
+  atoms,
+  selectedAtomIds,
+  onChange
+}: {
+  translate: Translate;
+  atoms: readonly SelectableGlossaryAtom[];
+  selectedAtomIds: readonly string[];
+  onChange: (selectedAtomIds: string[]) => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const selectedSet = new Set(selectedAtomIds);
+  const byId = new Map(atoms.map((atom) => [atom.atomId, atom]));
+  const selectedAtoms = selectedAtomIds
+    .map((atomId) => byId.get(atomId))
+    .filter((atom): atom is SelectableGlossaryAtom => atom !== undefined);
+
+  const normalizedFilter = filter.trim().toLowerCase();
+  const visibleAtoms =
+    normalizedFilter.length === 0
+      ? atoms
+      : atoms.filter(
+          (atom) =>
+            atom.value.toLowerCase().includes(normalizedFilter) ||
+            atom.entryLabel.toLowerCase().includes(normalizedFilter)
+        );
+
+  function toggle(atomId: string): void {
+    onChange(
+      selectedSet.has(atomId)
+        ? selectedAtomIds.filter((id) => id !== atomId)
+        : [...selectedAtomIds, atomId]
+    );
+  }
+
+  function handleBlur(event: FocusEvent<HTMLDivElement>): void {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div className="glossaryAtomSelect" onBlur={handleBlur}>
+      <div className="glossaryAtomSelectRow">
+        <button
+          type="button"
+          className="glossaryAtomSelectTrigger"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={translate("search.glossary.placeholder")}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span className="glossaryAtomSelectValue">
+            {selectedAtoms.length === 0 ? (
+              <span className="glossaryAtomSelectPlaceholder">
+                {translate("search.glossary.placeholder")}
+              </span>
+            ) : (
+              translate("search.glossary.selectedCount", {
+                count: selectedAtoms.length
+              })
+            )}
+          </span>
+          <span className="glossaryAtomSelectCaret" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+
+        {open ? (
+          <div
+            className="glossaryAtomSelectPopup"
+            role="listbox"
+            aria-multiselectable="true"
+          >
+            <input
+              type="search"
+              className="glossaryAtomSelectFilter"
+              value={filter}
+              placeholder={translate("search.glossary.filterPlaceholder")}
+              aria-label={translate("search.glossary.filterPlaceholder")}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setFilter(event.currentTarget.value)}
+            />
+            <div className="glossaryAtomSelectOptions">
+              {visibleAtoms.length === 0 ? (
+                <p className="glossaryAtomSelectNoMatch">
+                  {translate("search.glossary.noFilterMatch")}
+                </p>
+              ) : (
+                visibleAtoms.map((atom) => {
+                  const checked = selectedSet.has(atom.atomId);
+                  return (
+                    <button
+                      key={atom.atomId}
+                      type="button"
+                      role="option"
+                      aria-selected={checked}
+                      className="glossaryAtomSelectOption"
+                      onClick={() => toggle(atom.atomId)}
+                    >
+                      <span
+                        className="glossaryAtomSelectCheck"
+                        data-checked={checked || undefined}
+                        aria-hidden="true"
+                      />
+                      <span className="glossaryAtomSelectOptionText">
+                        <span className="glossaryAtomSelectOptionValue">
+                          {atom.value}
+                        </span>
+                        <span className="glossaryAtomSelectOptionEntry">
+                          {atom.entryLabel}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {selectedAtoms.length > 0 ? (
+        <div className="glossaryAtomSelectChips">
+          {selectedAtoms.map((atom) => (
+            <span
+              key={atom.atomId}
+              className="glossaryAtomChip"
+              title={`${atom.value}\n${atom.entryLabel}`}
+            >
+              <span className="glossaryAtomChipValue">{atom.value}</span>
+              <button
+                type="button"
+                className="glossaryAtomChipRemove"
+                aria-label={translate("search.glossary.removeAtom", {
+                  value: atom.value
+                })}
+                onClick={() => toggle(atom.atomId)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <button
+            type="button"
+            className="glossaryAtomSelectClear"
+            onClick={() => onChange([])}
+          >
+            {translate("search.glossary.clear")}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 interface SearchSidebarProps {
   readonly translate: Translate;
   /** Whether a project is open (nothing to search without one). */
   readonly projectAvailable?: boolean;
   /**
-   * Runs the project-wide plain-text search. `isCancelled` flips `true` once
-   * a newer search has started; the implementation should stop early.
+   * Runs the project-wide text search. `isCancelled` flips `true` once a newer
+   * search has started; the implementation should stop early.
    */
   readonly runSearch?: (
     query: string,
     options: TextSearchOptions,
+    isCancelled: () => boolean
+  ) => Promise<ProjectTextSearchResult>;
+  /** #384 Glossary Atom Search: every project glossary entry, for the picker. */
+  readonly glossaryEntries?: readonly GlossaryEntry[];
+  /** #384 Glossary Atom Search: OR-search the selected atoms' values. */
+  readonly runGlossarySearch?: (
+    terms: readonly GlossaryAtomSearchTerm[],
     isCancelled: () => boolean
   ) => Promise<ProjectTextSearchResult>;
   /** Open the file and select the match range. */
@@ -160,15 +442,20 @@ export function SearchSidebar({
   translate,
   projectAvailable = false,
   runSearch,
+  glossaryEntries = NO_GLOSSARY_ENTRIES,
+  runGlossarySearch,
   onOpenMatch
 }: SearchSidebarProps): JSX.Element {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("text");
   const [options, setOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS);
-  const [searchState, setSearchState] = useState<SearchState>({ kind: "idle" });
+  const [selectedAtomIds, setSelectedAtomIds] = useState<string[]>([]);
+  const [searchState, setSearchState] = useState<SearchState>(IDLE_STATE);
 
   const runSearchRef = useRef(runSearch);
   runSearchRef.current = runSearch;
+  const runGlossaryRef = useRef(runGlossarySearch);
+  runGlossaryRef.current = runGlossarySearch;
   const generationRef = useRef(0);
 
   // Any in-flight search that resolves after unmount must not set state.
@@ -180,16 +467,67 @@ export function SearchSidebar({
   );
 
   const trimmedQuery = query.trim();
-  const glossaryPending = mode === "glossary";
-  const searchEnabled =
-    trimmedQuery.length > 0 &&
-    projectAvailable &&
-    !glossaryPending &&
-    runSearch !== undefined;
+  const glossaryMode = mode === "glossary";
+  const textSearchAvailable = runSearch !== undefined;
+  const glossarySearchAvailable = runGlossarySearch !== undefined;
+
+  const selectableAtoms = useMemo(
+    () => collectSelectableGlossaryAtoms(glossaryEntries),
+    [glossaryEntries]
+  );
+  const hasGlossaryAtoms = selectableAtoms.length > 0;
+  const glossaryTerms = useMemo(
+    () => buildGlossaryAtomSearchTerms(selectableAtoms, selectedAtomIds),
+    [selectableAtoms, selectedAtomIds]
+  );
 
   useEffect(() => {
-    if (!searchEnabled) {
-      setSearchState({ kind: "idle" });
+    if (!projectAvailable) {
+      setSearchState((current) => (current === IDLE_STATE ? current : IDLE_STATE));
+      return;
+    }
+
+    if (glossaryMode) {
+      if (
+        !glossarySearchAvailable ||
+        !hasGlossaryAtoms ||
+        glossaryTerms.length === 0
+      ) {
+        setSearchState((current) => (current === IDLE_STATE ? current : IDLE_STATE));
+        return;
+      }
+
+      const generation = generationRef.current + 1;
+      generationRef.current = generation;
+      setSearchState({ kind: "searching" });
+
+      const handle = window.setTimeout(() => {
+        const run = runGlossaryRef.current;
+        if (!run) {
+          return;
+        }
+        void run(
+          glossaryTerms,
+          () => generationRef.current !== generation
+        )
+          .then((result) => {
+            if (generationRef.current === generation) {
+              setSearchState({ kind: "results", result });
+            }
+          })
+          .catch(() => {
+            if (generationRef.current === generation) {
+              setSearchState({ kind: "error" });
+            }
+          });
+      }, SEARCH_DEBOUNCE_MS);
+
+      return () => window.clearTimeout(handle);
+    }
+
+    // Text mode.
+    if (trimmedQuery.length === 0 || !textSearchAvailable) {
+      setSearchState((current) => (current === IDLE_STATE ? current : IDLE_STATE));
       return;
     }
 
@@ -236,12 +574,24 @@ export function SearchSidebar({
 
     return () => window.clearTimeout(handle);
   }, [
-    searchEnabled,
+    glossaryMode,
+    projectAvailable,
+    textSearchAvailable,
+    glossarySearchAvailable,
+    hasGlossaryAtoms,
+    glossaryTerms,
     trimmedQuery,
     options.caseSensitive,
     options.wholeWord,
     options.useRegex
   ]);
+
+  const toggleGlossaryMode = (): void => {
+    // Glossary search is a distinct mode, not an add-on option: entering or
+    // leaving it clears the text-mode options (no auto-restore).
+    setOptions(DEFAULT_SEARCH_OPTIONS);
+    setMode((current) => (current === "glossary" ? "text" : "glossary"));
+  };
 
   const toggleOption = (key: keyof SearchOptions): void => {
     setOptions((current) => {
@@ -267,6 +617,8 @@ export function SearchSidebar({
     onOpenMatch?.(relativePath, startOffset, endOffset);
   };
 
+  const optionDisabledHint = translate("search.optionUnavailableWithGlossary");
+
   return (
     <aside
       className="workspaceSidebarPanel searchPane"
@@ -276,16 +628,25 @@ export function SearchSidebar({
 
       <div className="searchPaneControls">
         <div className="searchPaneInputRow">
-          <input
-            type="search"
-            className="searchPaneInput"
-            value={query}
-            placeholder={translate("search.query.placeholder")}
-            aria-label={translate("search.query.label")}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
+          {glossaryMode ? (
+            <GlossaryAtomSelect
+              translate={translate}
+              atoms={selectableAtoms}
+              selectedAtomIds={selectedAtomIds}
+              onChange={setSelectedAtomIds}
+            />
+          ) : (
+            <input
+              type="search"
+              className="searchPaneInput"
+              value={query}
+              placeholder={translate("search.query.placeholder")}
+              aria-label={translate("search.query.label")}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setQuery(event.currentTarget.value)}
+            />
+          )}
           <div
             className="searchPaneOptions"
             role="group"
@@ -293,39 +654,47 @@ export function SearchSidebar({
           >
             <SearchOptionToggle
               icon={GLOSSARY_SEARCH_ICON}
-              pressed={mode === "glossary"}
+              pressed={glossaryMode}
               label={translate("search.option.glossary")}
               hint={translate("search.option.glossary.hint")}
-              onToggle={() =>
-                setMode((current) =>
-                  current === "glossary" ? "text" : "glossary"
-                )
-              }
+              onToggle={toggleGlossaryMode}
             />
             <SearchOptionToggle
               icon={WHOLE_WORD_ICON}
               pressed={options.wholeWord}
-              disabled={options.useRegex}
+              disabled={glossaryMode || options.useRegex}
               label={translate("search.option.wholeWord")}
               hint={
-                options.useRegex
-                  ? translate("search.wholeWordUnavailableWithRegex")
-                  : translate("search.option.wholeWord.hint")
+                glossaryMode
+                  ? optionDisabledHint
+                  : options.useRegex
+                    ? translate("search.wholeWordUnavailableWithRegex")
+                    : translate("search.option.wholeWord.hint")
               }
               onToggle={() => toggleOption("wholeWord")}
             />
             <SearchOptionToggle
               icon={CASE_SENSITIVE_ICON}
               pressed={options.caseSensitive}
+              disabled={glossaryMode}
               label={translate("search.option.caseSensitive")}
-              hint={translate("search.option.caseSensitive.hint")}
+              hint={
+                glossaryMode
+                  ? optionDisabledHint
+                  : translate("search.option.caseSensitive.hint")
+              }
               onToggle={() => toggleOption("caseSensitive")}
             />
             <SearchOptionToggle
               icon={USE_REGEX_ICON}
               pressed={options.useRegex}
+              disabled={glossaryMode}
               label={translate("search.option.useRegex")}
-              hint={translate("search.option.useRegex.hint")}
+              hint={
+                glossaryMode
+                  ? optionDisabledHint
+                  : translate("search.option.useRegex.hint")
+              }
               onToggle={() => toggleOption("useRegex")}
             />
           </div>
@@ -333,12 +702,35 @@ export function SearchSidebar({
       </div>
 
       <div className="searchPaneBody">
-        {glossaryPending ? (
-          <div className="searchPaneNotices">
+        {glossaryMode ? (
+          !hasGlossaryAtoms ? (
             <p className="workspacePlaceholder" role="status">
-              {translate("search.notImplemented.glossary")}
+              {translate("search.glossary.noGlossary")}
             </p>
-          </div>
+          ) : glossaryTerms.length === 0 ? (
+            <p className="workspacePlaceholder" role="status">
+              {translate("search.glossary.emptySelection")}
+            </p>
+          ) : searchState.kind === "results" &&
+            searchState.result.totalMatches === 0 ? (
+            <p className="workspacePlaceholder" role="status">
+              {translate("search.noResults")}
+            </p>
+          ) : searchState.kind === "results" ? (
+            <SearchResults
+              translate={translate}
+              result={searchState.result}
+              onRowClick={handleRowClick}
+            />
+          ) : searchState.kind === "error" ? (
+            <p className="workspacePlaceholder" role="status">
+              {translate("search.error")}
+            </p>
+          ) : (
+            <p className="workspacePlaceholder" role="status">
+              {translate("search.searching")}
+            </p>
+          )
         ) : searchState.kind === "invalidRegex" ? (
           <p className="workspacePlaceholder searchInvalidRegex" role="alert">
             {translate("search.invalidRegex")}
@@ -360,71 +752,11 @@ export function SearchSidebar({
             {translate("search.noResults")}
           </p>
         ) : (
-          <>
-            <p className="searchResultsSummary" role="status">
-              {translate("search.summary", {
-                matchCount: searchState.result.totalMatches,
-                fileCount: searchState.result.fileCount
-              })}
-            </p>
-            {searchState.result.truncated ? (
-              <p className="searchResultsNote">
-                {translate("search.truncated")}
-              </p>
-            ) : null}
-            {searchState.result.skippedFileCount > 0 ? (
-              <p className="searchResultsNote">
-                {translate("search.skipped", {
-                  count: searchState.result.skippedFileCount
-                })}
-              </p>
-            ) : null}
-            <ul className="searchResultGroups">
-              {searchState.result.files.map((file) => (
-                <li key={file.relativePath} className="searchResultGroup">
-                  <div className="searchResultGroupHeader">
-                    <span
-                      className="searchResultGroupName"
-                      title={file.relativePath}
-                    >
-                      {file.name}
-                    </span>
-                    {file.relativePath !== file.name ? (
-                      <span className="searchResultGroupPath">
-                        {file.relativePath}
-                      </span>
-                    ) : null}
-                  </div>
-                  <ul className="searchResultRows">
-                    {file.matches.map((match) => (
-                      <li key={`${file.relativePath}:${match.startOffset}`}>
-                        <button
-                          type="button"
-                          className="searchResultRow"
-                          onClick={() =>
-                            handleRowClick(
-                              file.relativePath,
-                              match.startOffset,
-                              match.endOffset
-                            )
-                          }
-                        >
-                          <span className="searchResultRowLocation">
-                            {match.line}:{match.column}
-                          </span>
-                          <SearchResultPreview
-                            previewText={match.previewText}
-                            matchStart={match.previewMatchStart}
-                            matchEnd={match.previewMatchEnd}
-                          />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          </>
+          <SearchResults
+            translate={translate}
+            result={searchState.result}
+            onRowClick={handleRowClick}
+          />
         )}
       </div>
     </aside>

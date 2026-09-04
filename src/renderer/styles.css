@@ -2008,6 +2008,228 @@ label.settingsItemHeader {
   border-radius: 2px;
 }
 
+/* #384 Glossary Atom Search: matched-atom badge on a result row. */
+.searchResultRowAtom {
+  flex: 0 0 auto;
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
+  font-size: 11px;
+}
+
+/* #384 Glossary Atom Search: the atom multi-select in the query row. */
+.glossaryAtomSelect {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.glossaryAtomSelectRow {
+  position: relative;
+  display: flex;
+}
+
+.glossaryAtomSelectTrigger {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.glossaryAtomSelectTrigger:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -1px;
+}
+
+.glossaryAtomSelectValue {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.glossaryAtomSelectPlaceholder {
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryAtomSelectCaret {
+  flex: 0 0 auto;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryAtomSelectPopup {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+
+.glossaryAtomSelectFilter {
+  margin: 6px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  font-size: 12px;
+  appearance: none;
+}
+
+.glossaryAtomSelectFilter:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -1px;
+}
+
+.glossaryAtomSelectOptions {
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.glossaryAtomSelectNoMatch {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.glossaryAtomSelectOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--workspace-sidebar-item-foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.glossaryAtomSelectOption:hover {
+  background: var(--workspace-sidebar-hover);
+}
+
+.glossaryAtomSelectOption:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -2px;
+}
+
+.glossaryAtomSelectCheck {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 2px;
+}
+
+.glossaryAtomSelectCheck[data-checked] {
+  background: var(--workspace-sidebar-focus-ring);
+  border-color: var(--workspace-sidebar-focus-ring);
+}
+
+.glossaryAtomSelectOptionText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.glossaryAtomSelectOptionValue {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryAtomSelectOptionEntry {
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryAtomSelectChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.glossaryAtomChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 1px 2px 1px 6px;
+  border-radius: 10px;
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
+  font-size: 11px;
+}
+
+.glossaryAtomChipValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryAtomChipRemove {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.glossaryAtomChipRemove:hover {
+  background: var(--workspace-sidebar-hover);
+}
+
+.glossaryAtomSelectClear {
+  border: 0;
+  background: transparent;
+  color: var(--workspace-sidebar-muted-foreground);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* #360 Document Metrics / 文書統計 panel (left pane). */
 .documentMetricsPanel {
   min-height: 0;

@@ -158,8 +158,10 @@ function isWordBoundaryAccepted(
   return !beforeIsWord && !afterIsWord;
 }
 
-/** Line-start offsets for `text`, index 0 = offset 0. */
-function lineStartOffsets(text: string): number[] {
+/** Line-start offsets for `text`, index 0 = offset 0. Exported so another
+ *  matcher (e.g. glossary atom search) can reuse the line/column/preview
+ *  machinery via {@link createTextSearchMatch}. */
+export function lineStartOffsets(text: string): number[] {
   const offsets = [0];
   for (let index = 0; index < text.length; index += 1) {
     if (text[index] === "\n") {
@@ -219,8 +221,13 @@ function buildPreview(
   return { previewText, previewMatchStart, previewMatchEnd };
 }
 
-/** Assemble a `TextSearchMatch` for the `[start, end)` range of `text`. */
-function createMatch(
+/**
+ * Assemble a `TextSearchMatch` (line / column / windowed preview) for the
+ * `[start, end)` range of `text`. `lineStarts` comes from
+ * {@link lineStartOffsets}. Exported so a non-substring matcher can produce
+ * the same result shape as `findTextSearchMatches`.
+ */
+export function createTextSearchMatch(
   text: string,
   lineStarts: readonly number[],
   start: number,
@@ -327,7 +334,7 @@ export function findTextSearchMatches(
     const end = start + needle.length;
 
     if (isWordBoundaryAccepted(text, start, end, query, options.wholeWord)) {
-      matches.push(createMatch(text, lineStarts, start, end));
+      matches.push(createTextSearchMatch(text, lineStarts, start, end));
       searchFrom = end;
     } else {
       // Rejected: step one past this occurrence so an overlapping candidate
@@ -371,7 +378,7 @@ function findRegexSearchMatches(
     }
     const start = execResult.index;
     matches.push(
-      createMatch(text, lineStarts, start, start + matchedText.length)
+      createTextSearchMatch(text, lineStarts, start, start + matchedText.length)
     );
     // A non-empty match already moved `lastIndex` to its end.
   }
