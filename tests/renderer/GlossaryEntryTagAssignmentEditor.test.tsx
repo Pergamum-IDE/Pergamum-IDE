@@ -38,7 +38,7 @@ function handlers() {
 }
 
 describe("GlossaryEntryTagAssignmentEditor (#375) — markup", () => {
-  it("renders assigned (assignment order) left, available (project order) right, Primary badge on the head", () => {
+  it("renders assigned (assignment order) left, available (project order) right, flag + shadow on the head chip (#400)", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryEntryTagAssignmentEditor, {
         assignedTagIds: [org.id, person.id],
@@ -53,10 +53,17 @@ describe("GlossaryEntryTagAssignmentEditor (#375) — markup", () => {
     // Assigned order = [組織, 登場人物]; available = [地名].
     expect(markup.indexOf("組織")).toBeLessThan(markup.indexOf("登場人物"));
     expect(markup).toContain("地名");
-    expect(
-      markup.match(/glossaryEntryTagAssignmentPrimaryBadge/g)
-    ).toHaveLength(1);
+
+    // #400: the old separate "Primary" badge is gone — the head chip gets
+    // the flag glyph + shadow hook instead, and only one chip has them.
+    expect(markup).not.toContain("glossaryEntryTagAssignmentPrimaryBadge");
+    expect(markup.match(/data-primary="true"/g)).toHaveLength(1);
+    expect(markup.match(/feather-flag/g)).toHaveLength(1);
+    // The primary wording survives as the head chip's accessible name.
     expect(markup).toContain("glossaryEditor.tags.primary");
+    expect(markup).toContain(
+      'aria-label="glossaryEditor.tags.primary: 組織"'
+    );
   });
 
   it("shows the assigned empty state and the available empty state", () => {
@@ -261,5 +268,41 @@ describe("GlossaryEntryTagAssignmentEditor (#375) — interaction", () => {
     fire(firstRow, "drop", dt, 0);
 
     expect(h.onReorderAssignedTag).toHaveBeenCalledWith(org.id, 0);
+  });
+
+  function assignedChips(): HTMLElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(
+        ".glossaryEntryTagAssignmentList-assigned .glossaryTagChip"
+      )
+    );
+  }
+
+  it("#400: after a reorder, the flag/shadow move to the new first tag and leave the old one", () => {
+    const h = render([person.id, place.id, org.id]);
+    let chips = assignedChips();
+    expect(chips[0].textContent).toBe("登場人物");
+    expect(chips[0].getAttribute("data-primary")).toBe("true");
+
+    const dt = fakeDataTransfer();
+    fire(assignedHandles()[2], "dragstart", dt); // 組織 (index 2)
+    const firstRow = container.querySelectorAll(
+      ".glossaryEntryTagAssignmentList-assigned .glossaryEntryTagAssignmentRow"
+    )[0];
+    fire(firstRow, "dragover", dt, 0);
+    fire(firstRow, "drop", dt, 0);
+    expect(h.onReorderAssignedTag).toHaveBeenCalledWith(org.id, 0);
+
+    // The component is a controlled presentation over `assignedTagIds` — it
+    // has no order state of its own, so the parent re-renders with the new
+    // order (exactly what onReorderAssignedTag's caller would do).
+    render([org.id, person.id, place.id], h);
+    chips = assignedChips();
+    expect(chips[0].textContent).toBe("組織");
+    expect(chips[0].getAttribute("data-primary")).toBe("true");
+    expect(chips[0].querySelector(".glossaryTagChipFlag")).not.toBeNull();
+    expect(chips[1].textContent).toBe("登場人物");
+    expect(chips[1].hasAttribute("data-primary")).toBe(false);
+    expect(chips[1].querySelector(".glossaryTagChipFlag")).toBeNull();
   });
 });

@@ -34,7 +34,8 @@ interface GlossaryEntryTagAssignmentEditorProps {
 /**
  * #375: the Glossary Entry editor's ORDERED tag assignment editor — two lists.
  * Left = assigned tags in entry assignment order (`⣿` D&D reorder; `tags[0]`
- * carries the "Primary" badge). Right = the remaining project tags in
+ * gets the #400 primary flag/shadow treatment via `GlossaryTagChip`). Right
+ * = the remaining project tags in
  * project-wide `sortOrder`. Right → left assigns (at the drop slot), left →
  * right unassigns, left-list D&D reorders. The right list is NOT reorderable
  * here — project-wide order is the Tag Manager's job. Nothing is persisted
@@ -114,6 +115,7 @@ export function GlossaryEntryTagAssignmentEditor({
   }
 
   const dragHandleLabel = translate("glossaryEditor.tags.dragHandle");
+  const primaryLabel = translate("glossaryEditor.tags.primary");
 
   return (
     <div className="glossaryEntryTagAssignment">
@@ -208,12 +210,11 @@ export function GlossaryEntryTagAssignmentEditor({
                 >
                   <span aria-hidden="true">{TAG_DRAG_HANDLE_GLYPH}</span>
                 </button>
-                <GlossaryTagChip tag={tag} />
-                {index === 0 ? (
-                  <span className="glossaryEntryTagAssignmentPrimaryBadge">
-                    {translate("glossaryEditor.tags.primary")}
-                  </span>
-                ) : null}
+                <GlossaryTagChip
+                  tag={tag}
+                  isPrimary={index === 0}
+                  primaryLabel={index === 0 ? primaryLabel : undefined}
+                />
               </li>
             ))
           )}
