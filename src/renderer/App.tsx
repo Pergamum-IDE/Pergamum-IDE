@@ -459,8 +459,11 @@ import {
 } from "./documentMetricsAnalysis";
 import { projectDocumentAbsolutePath } from "../shared/tabPathDisplay";
 import {
+  documentRelativeIndexInOrder,
   documentWorkspaceTabId,
+  reorderWorkspaceTabOrder,
   specialWorkspaceTabId,
+  syncWorkspaceTabOrder,
   type SpecialTabId,
   type SpecialWorkspaceTab,
   type WorkspaceTabId
@@ -913,6 +916,14 @@ export function App(): JSX.Element {
   const [isDebugLogTabOpen, setIsDebugLogTabOpen] = useState(false);
   const [activeSpecialTabId, setActiveSpecialTabId] =
     useState<SpecialTabId | null>(null);
+  // #398: the full mixed document/special Document Tab Bar order — the
+  // generalization of the previous "every document tab, then every special
+  // tab" fixed layout. Kept in sync with which tabs actually exist by the
+  // effect below (never mutated ad hoc at each open/close call site), and
+  // moved only by an explicit D&D reorder (`handleReorderWorkspaceTabs`).
+  const [workspaceTabOrder, setWorkspaceTabOrder] = useState<
+    readonly WorkspaceTabId[]
+  >([]);
   // #377: mirrors the main process's `--pergamum-debug` state, read once from
   // the debug log snapshot (`snapshot.enabled` is exactly `pergamumDebugMode`).
   // Reused rather than introducing a new debug flag or IPC channel.
@@ -2729,6 +2740,17 @@ export function App(): JSX.Element {
     isDebugLogTabOpen,
     translate
   ]);
+  // #398: derives `workspaceTabOrder` from which tabs actually exist —
+  // drops ids for tabs that closed, appends ids for newly-opened tabs at
+  // the end (a plain open, not a reorder, never inserts elsewhere). Returns
+  // the SAME array reference when nothing opened/closed, so this is a no-op
+  // (no re-render) on every renderer update that isn't itself a tab
+  // open/close (e.g. typing, dirty-flag changes).
+  useEffect(() => {
+    setWorkspaceTabOrder((current) =>
+      syncWorkspaceTabOrder(current, tabs, specialTabs)
+    );
+  }, [tabs, specialTabs]);
   const activeWorkspaceTabId: WorkspaceTabId | undefined =
     isGlossaryTagManagerTabActive
       ? specialWorkspaceTabId("glossaryTagManager")
@@ -4187,12 +4209,42 @@ export function App(): JSX.Element {
     });
   }
 
-  function handleReorderDocuments(
-    movedEditorId: EditorId,
+  // #398: generalizes #354's document-only `handleReorderDocuments` to every
+  // workspace tab. `workspaceTabOrder` is always the single source of truth
+  // for the rendered order; when the moved tab is a document, `documents`'
+  // own array order (which existing per-document concerns — Session order,
+  // "Close Others/Left/Right" — read) is kept in sync with the document
+  // tabs' new relative order, so those stay consistent with what the user
+  // now sees. Moving a special tab never touches `documents` at all —
+  // special tabs are not stored there.
+  function handleReorderWorkspaceTabs(
+    movedTabId: WorkspaceTabId,
     targetIndex: number
   ): void {
+    const nextOrder = reorderWorkspaceTabOrder(
+      workspaceTabOrder,
+      movedTabId,
+      targetIndex
+    );
+
+    if (nextOrder === workspaceTabOrder) {
+      return;
+    }
+
+    setWorkspaceTabOrder(nextOrder);
+
+    if (movedTabId.kind !== "document") {
+      return;
+    }
+
+    const documentIndex = documentRelativeIndexInOrder(nextOrder, movedTabId);
+
+    if (documentIndex === null) {
+      return;
+    }
+
     setOpenDocumentsState((state) =>
-      reorderOpenDocuments(state, movedEditorId, targetIndex)
+      reorderOpenDocuments(state, movedTabId.editorId, documentIndex)
     );
   }
 
@@ -8855,6 +8907,7 @@ export function App(): JSX.Element {
                   projectAccessMode={project?.accessMode ?? null}
                   activeWorkspaceTabId={activeWorkspaceTabId}
                   specialTabs={specialTabs}
+                  order={workspaceTabOrder}
                   translate={translate}
                   onSelectDocument={activateDocument}
                   onCloseDocument={(documentId) =>
@@ -8868,7 +8921,7 @@ export function App(): JSX.Element {
                   onCloseSpecialTab={closeSpecialTab}
                   onTabAction={handleTabAction}
                   describeTabContextMenu={describeTabContextMenuForTab}
-                  onReorderDocuments={handleReorderDocuments}
+                  onReorderWorkspaceTabs={handleReorderWorkspaceTabs}
                   isUtilityWindowOpen={layout.utilityWindow.open}
                   onToggleUtilityWindow={() =>
                     executeUiCommand(utilityWindowCommandIds.toggle, {

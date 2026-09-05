@@ -17,13 +17,15 @@ import {
   createFileEditorIdForPath,
   createProjectDocumentEditorId,
   createUntitledEditorId,
-  serializeEditorId,
   type ActiveProjectContext,
   type EditorId
 } from "../../src/shared/editorId";
 import {
+  documentWorkspaceTabId,
   specialWorkspaceTabId,
-  type SpecialWorkspaceTab
+  workspaceTabKey,
+  type SpecialWorkspaceTab,
+  type WorkspaceTabId
 } from "../../src/renderer/workspaceTabs";
 
 const translate: Translate = (key, values) => t("ja", key, values);
@@ -72,9 +74,13 @@ afterEach(() => {
 interface RenderOverrides {
   tabs?: DocumentTab[];
   specialTabs?: SpecialWorkspaceTab[];
+  order?: WorkspaceTabId[];
   activeDocumentId?: EditorId | null;
   onTabAction?: (action: TabContextMenuAction, tab: DocumentTab) => void;
-  onReorderDocuments?: (movedEditorId: EditorId, targetIndex: number) => void;
+  onReorderWorkspaceTabs?: (
+    movedTabId: WorkspaceTabId,
+    targetIndex: number
+  ) => void;
   onSelectDocument?: (id: EditorId) => void;
   onCloseDocument?: (id: EditorId) => void;
   withMenu?: boolean;
@@ -88,7 +94,7 @@ function render(overrides: RenderOverrides = {}) {
     projectTab("c.md")
   ];
   const onTabAction = overrides.onTabAction ?? vi.fn();
-  const onReorderDocuments = overrides.onReorderDocuments ?? vi.fn();
+  const onReorderWorkspaceTabs = overrides.onReorderWorkspaceTabs ?? vi.fn();
   const onSelectDocument = overrides.onSelectDocument ?? vi.fn();
   const onCloseDocument = overrides.onCloseDocument ?? vi.fn();
 
@@ -101,6 +107,7 @@ function render(overrides: RenderOverrides = {}) {
             ? (tabs[0]?.id ?? null)
             : overrides.activeDocumentId,
         specialTabs: overrides.specialTabs ?? [],
+        order: overrides.order,
         translate,
         onSelectDocument,
         onCloseDocument,
@@ -112,8 +119,8 @@ function render(overrides: RenderOverrides = {}) {
                 projectAccess: { kind: "readWrite" }
               })
           : undefined,
-        onReorderDocuments: (overrides.withReorder ?? true)
-          ? onReorderDocuments
+        onReorderWorkspaceTabs: (overrides.withReorder ?? true)
+          ? onReorderWorkspaceTabs
           : undefined,
         isUtilityWindowOpen: false,
         onToggleUtilityWindow: vi.fn()
@@ -121,7 +128,13 @@ function render(overrides: RenderOverrides = {}) {
     );
   });
 
-  return { tabs, onTabAction, onReorderDocuments, onSelectDocument, onCloseDocument };
+  return {
+    tabs,
+    onTabAction,
+    onReorderWorkspaceTabs,
+    onSelectDocument,
+    onCloseDocument
+  };
 }
 
 function documentTabEls(): HTMLElement[] {
@@ -131,6 +144,20 @@ function documentTabEls(): HTMLElement[] {
 }
 function allTabEls(): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>('[role="tab"]')];
+}
+/** #398: every rendered workspace tab (document AND special), in DOM order —
+ *  the same combined sequence the D&D geometry operates over. */
+function workspaceTabEls(): HTMLElement[] {
+  return [
+    ...container.querySelectorAll<HTMLElement>('[data-workspace-tab="true"]')
+  ];
+}
+/** #398: special tabs only — everything with the generic workspace-tab
+ *  marker but without the document-only one. */
+function specialTabEls(): HTMLElement[] {
+  return workspaceTabEls().filter(
+    (el) => el.dataset.documentTab !== "true"
+  );
 }
 function rightClick(el: Element, clientX = 0): void {
   act(() => {
@@ -307,10 +334,12 @@ describe("DocumentTabBar context menu (#354)", () => {
   });
 });
 
-describe("DocumentTabBar horizontal reorder (#354)", () => {
+describe("DocumentTabBar horizontal reorder (#354, generalized to every workspace tab by #398)", () => {
   function stubRects(): void {
-    // Each document tab is 100px wide at x = index * 100 — derived from its
-    // own `data-tab-index` so repeated getBoundingClientRect sweeps are stable.
+    // Every workspace tab (document OR special) is 100px wide at
+    // x = index * 100 — derived from its own `data-tab-index`, over the
+    // COMBINED sequence, so repeated getBoundingClientRect sweeps are
+    // stable regardless of tab kind.
     vi.spyOn(
       window.HTMLElement.prototype,
       "getBoundingClientRect"
@@ -326,7 +355,7 @@ describe("DocumentTabBar horizontal reorder (#354)", () => {
         height: 0,
         toJSON: () => ({})
       };
-      if (this.dataset.documentTab === "true") {
+      if (this.dataset.workspaceTab === "true") {
         const index = Number(this.dataset.tabIndex ?? "0");
         rect.left = index * 100;
         rect.x = index * 100;
@@ -339,9 +368,9 @@ describe("DocumentTabBar horizontal reorder (#354)", () => {
     });
   }
 
-  it("dragstart on a tab body, drop past a later tab emits onReorderDocuments", () => {
-    const onReorderDocuments = vi.fn();
-    const { tabs } = render({ onReorderDocuments });
+  it("dragstart on a tab body, drop past a later tab emits onReorderWorkspaceTabs (document -> document, #354 regression)", () => {
+    const onReorderWorkspaceTabs = vi.fn();
+    const { tabs } = render({ onReorderWorkspaceTabs });
     stubRects();
     const dt = makeDataTransfer();
 
@@ -350,8 +379,11 @@ describe("DocumentTabBar horizontal reorder (#354)", () => {
     fireDrag("dragover", documentTabEls()[2], dt, 260);
     fireDrag("drop", documentTabEls()[2], dt, 260);
 
-    expect(onReorderDocuments).toHaveBeenCalledTimes(1);
-    expect(onReorderDocuments).toHaveBeenCalledWith(tabs[0].id, 2);
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledTimes(1);
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledWith(
+      documentWorkspaceTabId(tabs[0].id),
+      2
+    );
   });
 
   it("carries the dedicated tab reorder MIME, not the File Explorer one", () => {
@@ -361,13 +393,13 @@ describe("DocumentTabBar horizontal reorder (#354)", () => {
     fireDrag("dragstart", documentTabEls()[0], dt);
     expect(Array.from(dt.types)).toContain(TAB_REORDER_DND_MIME);
     expect(dt.getData(TAB_REORDER_DND_MIME)).toBe(
-      serializeEditorId(projectTab("a.md").id)
+      workspaceTabKey(documentWorkspaceTabId(projectTab("a.md").id))
     );
   });
 
   it("ignores a drag whose DataTransfer lacks the tab reorder MIME (File Explorer drag)", () => {
-    const onReorderDocuments = vi.fn();
-    render({ onReorderDocuments });
+    const onReorderWorkspaceTabs = vi.fn();
+    render({ onReorderWorkspaceTabs });
     stubRects();
     const foreignDt = makeDataTransfer();
     foreignDt.setData("application/x-pergamum-file-explorer-move", "x");
@@ -377,27 +409,43 @@ describe("DocumentTabBar horizontal reorder (#354)", () => {
     fireDrag("drop", documentTabEls()[1], foreignDt, 150);
 
     expect(over.defaultPrevented).toBe(false);
-    expect(onReorderDocuments).not.toHaveBeenCalled();
+    expect(onReorderWorkspaceTabs).not.toHaveBeenCalled();
   });
 
   it("a drop outside any tab (dragend only) does not reorder", () => {
-    const onReorderDocuments = vi.fn();
-    render({ onReorderDocuments });
+    const onReorderWorkspaceTabs = vi.fn();
+    render({ onReorderWorkspaceTabs });
     stubRects();
     const dt = makeDataTransfer();
     fireDrag("dragstart", documentTabEls()[0], dt);
     fireDrag("dragend", documentTabEls()[0], dt);
-    expect(onReorderDocuments).not.toHaveBeenCalled();
+    expect(onReorderWorkspaceTabs).not.toHaveBeenCalled();
   });
 
-  it("the close button is not a drag handle", () => {
-    const onReorderDocuments = vi.fn();
+  it("the close button is not a drag handle (document tab)", () => {
+    const onReorderWorkspaceTabs = vi.fn();
     render({
-      onReorderDocuments,
+      onReorderWorkspaceTabs,
       activeDocumentId: projectTab("a.md").id // makes tab 0 show its close button
     });
     stubRects();
     const closeButton = documentTabEls()[0].querySelector(
+      ".documentTabCloseButton"
+    )!;
+    const dt = makeDataTransfer();
+    const started = fireDrag("dragstart", closeButton, dt);
+    expect(started.defaultPrevented).toBe(true);
+    expect(Array.from(dt.types)).not.toContain(TAB_REORDER_DND_MIME);
+  });
+
+  it("the close button is not a drag handle (special tab)", () => {
+    const onReorderWorkspaceTabs = vi.fn();
+    render({
+      onReorderWorkspaceTabs,
+      specialTabs: [settingsSpecialTab]
+    });
+    stubRects();
+    const closeButton = specialTabEls()[0].querySelector(
       ".documentTabCloseButton"
     )!;
     const dt = makeDataTransfer();
@@ -420,8 +468,114 @@ describe("DocumentTabBar horizontal reorder (#354)", () => {
     expect(onCloseDocument).toHaveBeenCalledWith(tabs[2].id);
   });
 
-  it("tabs are not draggable when onReorderDocuments is omitted", () => {
-    render({ withReorder: false });
+  it("tabs are not draggable when onReorderWorkspaceTabs is omitted (document AND special)", () => {
+    render({ withReorder: false, specialTabs: [settingsSpecialTab] });
     expect(documentTabEls()[0].getAttribute("draggable")).toBeNull();
+    expect(specialTabEls()[0]?.getAttribute("draggable")).toBeNull();
+  });
+
+  // ----- #398: special <-> special, and mixed document/special D&D -------
+
+  it("special -> special: dragging one special tab past another emits onReorderWorkspaceTabs", () => {
+    const debugLogTab: SpecialWorkspaceTab = {
+      kind: "special",
+      id: "debugLog",
+      title: "Debug Log"
+    };
+    const onReorderWorkspaceTabs = vi.fn();
+    render({
+      tabs: [],
+      specialTabs: [settingsSpecialTab, debugLogTab],
+      onReorderWorkspaceTabs
+    });
+    stubRects();
+    const dt = makeDataTransfer();
+
+    fireDrag("dragstart", specialTabEls()[0], dt);
+    fireDrag("dragover", specialTabEls()[1], dt, 160);
+    fireDrag("drop", specialTabEls()[1], dt, 160);
+
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledTimes(1);
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledWith(
+      specialWorkspaceTabId("settings"),
+      1
+    );
+  });
+
+  it("document -> special boundary: a document tab can be dragged past a special tab", () => {
+    const onReorderWorkspaceTabs = vi.fn();
+    const { tabs } = render({
+      tabs: [projectTab("a.md"), projectTab("b.md")],
+      specialTabs: [settingsSpecialTab],
+      onReorderWorkspaceTabs
+    });
+    stubRects();
+    // Rendered order: [a.md, b.md, Settings] (documents, then specials).
+    const dt = makeDataTransfer();
+
+    fireDrag("dragstart", documentTabEls()[0], dt); // a.md at index 0
+    fireDrag("dragover", specialTabEls()[0], dt, 260); // past Settings at index 2
+    fireDrag("drop", specialTabEls()[0], dt, 260);
+
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledTimes(1);
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledWith(
+      documentWorkspaceTabId(tabs[0].id),
+      2
+    );
+  });
+
+  it("special -> document boundary: a special tab can be dragged in front of the document tabs", () => {
+    const onReorderWorkspaceTabs = vi.fn();
+    render({
+      tabs: [projectTab("a.md"), projectTab("b.md")],
+      specialTabs: [settingsSpecialTab],
+      onReorderWorkspaceTabs
+    });
+    stubRects();
+    // Rendered order: [a.md, b.md, Settings] — drag Settings (index 2) to
+    // the front (drop on a.md's left half).
+    const dt = makeDataTransfer();
+
+    fireDrag("dragstart", specialTabEls()[0], dt);
+    fireDrag("dragover", documentTabEls()[0], dt, 10);
+    fireDrag("drop", documentTabEls()[0], dt, 10);
+
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledTimes(1);
+    expect(onReorderWorkspaceTabs).toHaveBeenCalledWith(
+      specialWorkspaceTabId("settings"),
+      0
+    );
+  });
+
+  it("renders a caller-supplied mixed document/special order and drags within it (arbitrary interleaving)", () => {
+    const debugLogTab: SpecialWorkspaceTab = {
+      kind: "special",
+      id: "debugLog",
+      title: "Debug Log"
+    };
+    const tabs = [projectTab("a.md"), projectTab("b.md")];
+    const onReorderWorkspaceTabs = vi.fn();
+    render({
+      tabs,
+      specialTabs: [settingsSpecialTab, debugLogTab],
+      // [Settings, a.md, Debug Log, b.md]
+      order: [
+        specialWorkspaceTabId("settings"),
+        documentWorkspaceTabId(tabs[0].id),
+        specialWorkspaceTabId("debugLog"),
+        documentWorkspaceTabId(tabs[1].id)
+      ],
+      onReorderWorkspaceTabs
+    });
+
+    const renderedTitles = workspaceTabEls().map((el) =>
+      el.querySelector(".documentTabTitle")!.textContent
+    );
+    expect(renderedTitles).toEqual([
+      settingsSpecialTab.title,
+      "a.md",
+      "Debug Log",
+      "b.md"
+    ]);
   });
 });

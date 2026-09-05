@@ -9,11 +9,7 @@ import {
 } from "react";
 import type { ProjectAccessMode } from "../shared/api";
 import type { Translate } from "../shared/i18n";
-import {
-  editorIdEquals,
-  serializeEditorId,
-  type EditorId
-} from "../shared/editorId";
+import { editorIdEquals, type EditorId } from "../shared/editorId";
 import type { DocumentTab } from "./openDocuments";
 import {
   resolveTabReorderTargetIndex,
@@ -27,10 +23,10 @@ import {
 } from "./documentTabHandlers";
 import {
   documentWorkspaceTabId,
+  orderedWorkspaceTabs,
   specialWorkspaceTabId,
   workspaceTabIdEquals,
   workspaceTabKey,
-  workspaceTabs,
   type SpecialTabId,
   type SpecialWorkspaceTab,
   type WorkspaceTab,
@@ -58,6 +54,12 @@ interface DocumentTabBarProps {
   projectAccessMode?: ProjectAccessMode | null;
   activeWorkspaceTabId?: WorkspaceTabId;
   specialTabs?: SpecialWorkspaceTab[];
+  /**
+   * #398: the full mixed document/special workspace tab order, freely
+   * interleaved. Omit (or pass `[]`) for the plain "every document tab,
+   * then every special tab" order `workspaceTabs()` produces.
+   */
+  order?: readonly WorkspaceTabId[];
   translate: Translate;
   onSelectDocument: (documentId: EditorId) => void;
   onCloseDocument: (documentId: EditorId) => void;
@@ -71,11 +73,17 @@ interface DocumentTabBarProps {
   /** #354: the menu contents / enablement for the right-clicked tab. */
   describeTabContextMenu?: (tab: DocumentTab) => TabContextMenuDescriptor;
   /**
-   * #354: a horizontal drag-and-drop reorder finished — move the document tab
-   * `movedEditorId` to `targetIndex` in the document-tab list. When omitted,
-   * tabs are not draggable.
+   * #398: a horizontal drag-and-drop reorder finished — move the workspace
+   * tab `movedTabId` (document OR special) to `targetIndex` in the
+   * currently-rendered tab sequence. Generalizes #354's document-only
+   * `onReorderDocuments`: every tab kind shares this one reorder path, never
+   * a separate one per special tab kind. When omitted, tabs are not
+   * draggable.
    */
-  onReorderDocuments?: (movedEditorId: EditorId, targetIndex: number) => void;
+  onReorderWorkspaceTabs?: (
+    movedTabId: WorkspaceTabId,
+    targetIndex: number
+  ) => void;
   isUtilityWindowOpen: boolean;
   onToggleUtilityWindow: () => void;
 }
@@ -102,7 +110,7 @@ function dataTransferHasTabReorderPayload(dataTransfer: DataTransfer): boolean {
 }
 
 interface TabDragState {
-  readonly movedEditorId: EditorId;
+  readonly movedTabId: WorkspaceTabId;
   readonly movedIndex: number;
   /** insertion index the drop indicator is drawn at, or `null`. */
   readonly overIndex: number | null;
@@ -116,6 +124,7 @@ export function DocumentTabBar({
     ? documentWorkspaceTabId(activeDocumentId)
     : undefined,
   specialTabs = [],
+  order = [],
   translate,
   onSelectDocument,
   onCloseDocument,
@@ -123,12 +132,16 @@ export function DocumentTabBar({
   onCloseSpecialTab = () => undefined,
   onTabAction,
   describeTabContextMenu,
-  onReorderDocuments,
+  onReorderWorkspaceTabs,
   isUtilityWindowOpen,
   onToggleUtilityWindow
 }: DocumentTabBarProps): JSX.Element {
   const contextMenuEnabled = Boolean(onTabAction && describeTabContextMenu);
-  const reorderEnabled = Boolean(onReorderDocuments);
+  const reorderEnabled = Boolean(onReorderWorkspaceTabs);
+  // #398: the single rendered tab sequence — document and special tabs
+  // freely interleaved per `order` (falls back to `workspaceTabs()`'s plain
+  // "documents, then specials" order when `order` is empty/omitted).
+  const orderedTabs = orderedWorkspaceTabs(tabs, specialTabs, order);
 
   const [tabContextMenu, setTabContextMenu] = useState<{
     tab: DocumentTab;
@@ -239,15 +252,16 @@ export function DocumentTabBar({
     onCloseSpecialTab(tabId);
   }
 
-  // --- #354 horizontal drag-and-drop reorder -----------------------------
+  // --- #398 horizontal drag-and-drop reorder (generalized from #354's
+  // document-only reorder to every workspace tab, document or special) -----
 
-  function documentTabRects(): { left: number; right: number }[] {
+  function workspaceTabRects(): { left: number; right: number }[] {
     const nav = tabsNavRef.current;
     if (!nav) {
       return [];
     }
     return Array.from(
-      nav.querySelectorAll<HTMLElement>('[data-document-tab="true"]')
+      nav.querySelectorAll<HTMLElement>('[data-workspace-tab="true"]')
     ).map((element) => {
       const rect = element.getBoundingClientRect();
       return { left: rect.left, right: rect.right };
@@ -256,13 +270,14 @@ export function DocumentTabBar({
 
   function handleTabDragStart(
     event: ReactDragEvent<HTMLDivElement>,
-    tab: DocumentTab,
+    tabId: WorkspaceTabId,
     index: number
   ): void {
     if (!reorderEnabled) {
       return;
     }
-    // The close button is not a drag handle.
+    // The close button is not a drag handle — shared by document and
+    // special tabs alike.
     if (
       event.target instanceof HTMLElement &&
       event.target.closest(".documentTabCloseButton")
@@ -270,12 +285,9 @@ export function DocumentTabBar({
       event.preventDefault();
       return;
     }
-    event.dataTransfer.setData(
-      TAB_REORDER_DND_MIME,
-      serializeEditorId(tab.id)
-    );
+    event.dataTransfer.setData(TAB_REORDER_DND_MIME, workspaceTabKey(tabId));
     event.dataTransfer.effectAllowed = "move";
-    setTabDrag({ movedEditorId: tab.id, movedIndex: index, overIndex: index });
+    setTabDrag({ movedTabId: tabId, movedIndex: index, overIndex: index });
   }
 
   function handleTabDragOver(event: ReactDragEvent<HTMLDivElement>): void {
@@ -289,7 +301,7 @@ export function DocumentTabBar({
 
     const overIndex = resolveTabReorderTargetIndex(
       event.clientX,
-      documentTabRects(),
+      workspaceTabRects(),
       tabDrag.movedIndex
     );
     if (overIndex !== tabDrag.overIndex) {
@@ -307,15 +319,15 @@ export function DocumentTabBar({
 
     const targetIndex = resolveTabReorderTargetIndex(
       event.clientX,
-      documentTabRects(),
+      workspaceTabRects(),
       tabDrag.movedIndex
     );
-    const movedEditorId = tabDrag.movedEditorId;
+    const movedTabId = tabDrag.movedTabId;
     const movedIndex = tabDrag.movedIndex;
     setTabDrag(null);
 
     if (targetIndex !== movedIndex) {
-      onReorderDocuments?.(movedEditorId, targetIndex);
+      onReorderWorkspaceTabs?.(movedTabId, targetIndex);
     }
   }
 
@@ -325,20 +337,26 @@ export function DocumentTabBar({
     setTabDrag(null);
   }
 
-  function dropIndicatorFor(index: number): "before" | "after" | undefined {
+  function dropIndicatorFor(
+    index: number,
+    tabCount: number
+  ): "before" | "after" | undefined {
     if (tabDrag?.overIndex == null) {
       return undefined;
     }
     if (tabDrag.overIndex === index) {
       return "before";
     }
-    if (
-      index === tabs.length - 1 &&
-      tabDrag.overIndex >= tabs.length
-    ) {
+    if (index === tabCount - 1 && tabDrag.overIndex >= tabCount) {
       return "after";
     }
     return undefined;
+  }
+
+  function dropIndicatorForTab(
+    index: number
+  ): "before" | "after" | undefined {
+    return dropIndicatorFor(index, orderedTabs.length);
   }
 
   function renderDocumentTab(tab: DocumentTab, index: number): JSX.Element {
@@ -351,7 +369,7 @@ export function DocumentTabBar({
       ? translate("tabs.externalMarkdownFile")
       : null;
     const isDragging =
-      tabDrag !== null && editorIdEquals(tabDrag.movedEditorId, tab.id);
+      tabDrag !== null && workspaceTabIdEquals(tabDrag.movedTabId, tabId);
     // Nested-element tooltip behavior varies by browser, so the
     // external warning is exposed both on the icon itself and on the
     // tab's own title/accessible name — not only on the icon. The
@@ -380,9 +398,10 @@ export function DocumentTabBar({
         aria-selected={isActive}
         title={tabTitle}
         data-document-tab="true"
+        data-workspace-tab="true"
         data-tab-index={index}
         data-tab-dragging={isDragging ? "true" : undefined}
-        data-tab-drop-indicator={dropIndicatorFor(index)}
+        data-tab-drop-indicator={dropIndicatorForTab(index)}
         draggable={reorderEnabled || undefined}
         onClick={() => onSelectDocument(tab.id)}
         onContextMenu={(event) => handleDocumentTabContextMenu(event, tab)}
@@ -396,7 +415,7 @@ export function DocumentTabBar({
             current && editorIdEquals(current, tab.id) ? null : current
           )
         }
-        onDragStart={(event) => handleTabDragStart(event, tab, index)}
+        onDragStart={(event) => handleTabDragStart(event, tabId, index)}
         onDragOver={handleTabDragOver}
         onDrop={handleTabDrop}
         onDragEnd={handleTabDragEnd}
@@ -434,9 +453,11 @@ export function DocumentTabBar({
     );
   }
 
-  function renderSpecialTab(tab: SpecialWorkspaceTab): JSX.Element {
+  function renderSpecialTab(tab: SpecialWorkspaceTab, index: number): JSX.Element {
     const tabId = specialWorkspaceTabId(tab.id);
     const isActive = isWorkspaceTabActive(tabId);
+    const isDragging =
+      tabDrag !== null && workspaceTabIdEquals(tabDrag.movedTabId, tabId);
 
     return (
       <div
@@ -446,12 +467,21 @@ export function DocumentTabBar({
         tabIndex={0}
         aria-selected={isActive}
         title={tab.title}
+        data-workspace-tab="true"
+        data-tab-index={index}
+        data-tab-dragging={isDragging ? "true" : undefined}
+        data-tab-drop-indicator={dropIndicatorForTab(index)}
+        draggable={reorderEnabled || undefined}
         onClick={() => onSelectSpecialTab(tab.id)}
         onContextMenu={(event) => event.preventDefault()}
         onKeyDown={(event) => handleSpecialTabKeyDown(event, tab.id)}
         onMouseDown={(event) => {
           handleSpecialTabMiddleClick(event, tab.id);
         }}
+        onDragStart={(event) => handleTabDragStart(event, tabId, index)}
+        onDragOver={handleTabDragOver}
+        onDrop={handleTabDrop}
+        onDragEnd={handleTabDragEnd}
       >
         <span className="documentTabTitle">{tab.title}</span>
         <span className="documentTabTrailing">
@@ -460,6 +490,7 @@ export function DocumentTabBar({
             className="documentTabCloseButton"
             aria-label={closeTabLabel}
             title={closeTabLabel}
+            draggable={false}
             onClick={(event) =>
               handleSpecialTabCloseButtonClick(event, tab.id)
             }
@@ -470,19 +501,20 @@ export function DocumentTabBar({
     );
   }
 
-  let documentTabIndex = -1;
-  function renderWorkspaceTab(tab: WorkspaceTab): JSX.Element {
+  // #398: resolves a rendered "document" workspace tab back to the exact
+  // `DocumentTab` object from the `tabs` prop (by stable EditorId, not by
+  // position) — `orderedWorkspaceTabs()` returns `{ ...tab, kind: "document" }`
+  // shallow copies, and `onTabAction` / `describeTabContextMenu` are
+  // documented to receive exactly the caller's own object.
+  function resolveDocumentTab(tab: DocumentTab): DocumentTab {
+    return tabs.find((candidate) => editorIdEquals(candidate.id, tab.id)) ?? tab;
+  }
+
+  function renderWorkspaceTab(tab: WorkspaceTab, index: number): JSX.Element {
     if (tab.kind === "document") {
-      documentTabIndex += 1;
-      // Pass the plain `DocumentTab` from `tabs` (same order), not the
-      // `{ ...tab, kind: "document" }` workspace shape, so `onTabAction` /
-      // `describeTabContextMenu` receive exactly the caller's object.
-      return renderDocumentTab(
-        tabs[documentTabIndex] ?? tab,
-        documentTabIndex
-      );
+      return renderDocumentTab(resolveDocumentTab(tab), index);
     }
-    return renderSpecialTab(tab);
+    return renderSpecialTab(tab, index);
   }
 
   const menuDescriptor: TabContextMenuDescriptor | null =
@@ -509,7 +541,7 @@ export function DocumentTabBar({
         onDragOver={reorderEnabled ? handleTabDragOver : undefined}
         onDrop={reorderEnabled ? handleTabDrop : undefined}
       >
-        {workspaceTabs(tabs, specialTabs).map(renderWorkspaceTab)}
+        {orderedTabs.map(renderWorkspaceTab)}
       </nav>
 
       <button
