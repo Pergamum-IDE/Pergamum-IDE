@@ -496,7 +496,8 @@ export const settingsCatalog = defineSettingsCatalog({
     labelKey: "settings.workbench.language.label",
     descriptionKey: "settings.workbench.language.description",
     deprecatedAliases: [],
-    migrationNotes: []
+    migrationNotes: [],
+    requiresRestart: true
   }),
   // #174: moved from the legacy top-level ApplicationSettings.showStatusBar
   // field. No deprecated alias for the old top-level key.

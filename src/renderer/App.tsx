@@ -6325,7 +6325,21 @@ export function App(): JSX.Element {
     }
   }
 
-  async function quitApplication(): Promise<void> {
+  // #394 Step 3: the shared "explicitApplicationQuit" flow, parameterized by
+  // whether main should relaunch once quit is actually authorized.
+  // `quitApplication`/`restartApplication` below are thin wrappers — this is
+  // the ONE place that runs the dirty-document preflight (Save/Discard/
+  // Cancel, reusing #271's existing lifecycle machinery unchanged) and only
+  // reaches the main-process IPC call when that preflight resolves
+  // ("resolved": nothing dirty, or "discarded"). A Cancel or a save failure
+  // ("aborted") returns here, before the IPC call — main's
+  // requestApplicationQuit (and therefore app.relaunch()) is never reached,
+  // so a restart request that gets cancelled or fails to save leaves no
+  // latent relaunch: the current process keeps running exactly as an
+  // ordinary cancelled quit does today, and Settings themselves stay saved
+  // (already persisted earlier by the normal Settings autosave) for the next
+  // ordinary launch to pick up.
+  async function runQuitOrRestartFlow(restartAfterQuit: boolean): Promise<void> {
     if (lifecycleOperationInProgressRef.current) {
       return;
     }
@@ -6356,7 +6370,8 @@ export function App(): JSX.Element {
       try {
         await window.pergamum.lifecycle.quitApplication({
           requestId: createRendererLifecycleRequestId("explicitApplicationQuit"),
-          intent: "explicitApplicationQuit"
+          intent: "explicitApplicationQuit",
+          restartAfterQuit
         });
       } catch (error) {
         exitLifecycleCommitBarrier(commitBarrierToken);
@@ -6364,12 +6379,28 @@ export function App(): JSX.Element {
       }
     } catch (error) {
       setStatus({
-        key: "status.quitFailed",
+        key: restartAfterQuit ? "status.restartFailed" : "status.quitFailed",
         values: { message: errorMessage(error, translate) }
       });
     } finally {
       lifecycleOperationInProgressRef.current = false;
     }
+  }
+
+  async function quitApplication(): Promise<void> {
+    await runQuitOrRestartFlow(false);
+  }
+
+  // #394 Step 3: connects the Step 2 restart-request intent to a real,
+  // safe application restart — reusing the exact same dirty-document
+  // preflight and `app.quit()` path as an ordinary Quit, with main
+  // additionally calling `app.relaunch()` right before that `app.quit()`
+  // (see windowLifecycle.ts's requestApplicationQuit). Never calls an
+  // Electron API directly from the renderer (contextIsolation/sandbox stay
+  // intact) — this only sends a `restartAfterQuit: true` flag over the
+  // existing lifecycle IPC channel.
+  async function restartApplication(): Promise<void> {
+    await runQuitOrRestartFlow(true);
   }
 
   async function reloadSettingsAfterProjectOpen(): Promise<StatusMessage | null> {
@@ -8533,14 +8564,14 @@ export function App(): JSX.Element {
     }
   }
 
-  // #394 Step 2: the generic "the user asked to restart now" intent — this
-  // is as far as Step 2 goes. Deliberately does NOT call app.relaunch() /
-  // app.quit() / app.exit(), does not touch the quit preflight or dirty-
-  // document flow, and does not show any "restarted" notification (there is
-  // nothing to report yet). Step 3 wires this to a real, safe
-  // application-restart pipeline (renderer -> main IPC + app.relaunch()).
+  // #394 Step 3: the generic "the user asked to restart now" intent, now
+  // connected to the real (safe) application restart flow — see
+  // restartApplication above. Still never calls app.relaunch() / app.quit()
+  // / app.exit() directly from the renderer: it only starts the same
+  // dirty-document preflight an ordinary Quit runs, and main is the only
+  // place that ever touches the Electron `app` API.
   function requestApplicationRestart(): void {
-    // Intentionally a no-op beyond receiving the intent — see #394 Step 3.
+    void restartApplication();
   }
 
   // #262 Welcome content. Rendered full-screen (replacing the workbench) only

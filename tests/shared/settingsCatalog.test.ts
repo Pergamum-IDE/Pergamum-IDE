@@ -880,13 +880,19 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
-    it("marks editor.undoHistoryMinDepth requiresRestart, and no other entry (#394 Step 2)", () => {
-      const entry = getCatalogEntry("editor.undoHistoryMinDepth");
+    it("marks editor.undoHistoryMinDepth and workbench.language requiresRestart, and no other entry (#394 Step 2)", () => {
+      const restartRequiredKeys = new Set([
+        "editor.undoHistoryMinDepth",
+        "workbench.language"
+      ]);
 
-      expect(entry.requiresRestart).toBe(true);
+      expect(getCatalogEntry("editor.undoHistoryMinDepth").requiresRestart).toBe(
+        true
+      );
+      expect(getCatalogEntry("workbench.language").requiresRestart).toBe(true);
 
       const otherEntries = getCatalogEntries().filter(
-        (candidate) => candidate.key !== "editor.undoHistoryMinDepth"
+        (candidate) => !restartRequiredKeys.has(candidate.key)
       );
       expect(otherEntries.length).toBeGreaterThan(0);
       for (const candidate of otherEntries) {

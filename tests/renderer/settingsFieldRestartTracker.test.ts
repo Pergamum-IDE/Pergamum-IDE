@@ -165,7 +165,10 @@ describe("createSettingsFieldRestartTracker (#394 Step 2 follow-up)", () => {
         baseApplicationSettings({
           workbench: {
             ...baseline.workbench,
-            language: baseline.workbench.language === "ja" ? "en" : "ja"
+            statusBar: {
+              ...baseline.workbench.statusBar,
+              visible: !baseline.workbench.statusBar.visible
+            }
           }
         })
       ),
@@ -176,6 +179,31 @@ describe("createSettingsFieldRestartTracker (#394 Step 2 follow-up)", () => {
 
     expect(confirmRestart).not.toHaveBeenCalled();
     expect(onRestartRequested).not.toHaveBeenCalled();
+  });
+
+  it("offers the restart dialog when workbench.language changes (#394 Step 3 follow-up: also requiresRestart)", async () => {
+    const tracker = createSettingsFieldRestartTracker();
+    const baseline = baseApplicationSettings();
+    const confirmRestart = vi.fn().mockResolvedValue("confirm");
+    const onRestartRequested = vi.fn();
+
+    tracker.handleFocus(baseline);
+    tracker.handleChangeRequest(
+      toSaveRequest(
+        baseApplicationSettings({
+          workbench: {
+            ...baseline.workbench,
+            language: baseline.workbench.language === "ja" ? "en" : "ja"
+          }
+        })
+      ),
+      () => Promise.resolve(true)
+    );
+
+    await tracker.handleBlur(confirmRestart, onRestartRequested);
+
+    expect(confirmRestart).toHaveBeenCalledTimes(1);
+    expect(onRestartRequested).toHaveBeenCalledTimes(1);
   });
 
   it("never offers the restart dialog when the save failed, even if the value changed", async () => {
@@ -294,12 +322,18 @@ describe("createSettingsFieldRestartTracker (#394 Step 2 follow-up)", () => {
       // overwrites the tracker's "latest request"/"latest save" state.
       // undoHistoryMinDepth is left at the baseline value here on purpose:
       // if A's blur ends up diffing against THIS request instead of its
-      // own, it would find no requiresRestart change at all.
+      // own, it would find no requiresRestart change at all. (Must be a
+      // setting that is NOT itself requiresRestart — workbench.language no
+      // longer qualifies since #394 Step 3, so this uses statusBar
+      // visibility instead.)
       const nextB = toSaveRequest(
         baseApplicationSettings({
           workbench: {
             ...baseline.workbench,
-            language: baseline.workbench.language === "ja" ? "en" : "ja"
+            statusBar: {
+              ...baseline.workbench.statusBar,
+              visible: !baseline.workbench.statusBar.visible
+            }
           }
         })
       );

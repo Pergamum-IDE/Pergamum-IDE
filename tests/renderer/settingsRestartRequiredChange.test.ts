@@ -159,7 +159,10 @@ describe("settingsRestartRequiredChange (#394 Step 2)", () => {
         baseApplicationSettings({
           workbench: {
             ...previous.workbench,
-            language: previous.workbench.language === "ja" ? "en" : "ja"
+            statusBar: {
+              ...previous.workbench.statusBar,
+              visible: !previous.workbench.statusBar.visible
+            }
           }
         })
       );
@@ -175,7 +178,10 @@ describe("settingsRestartRequiredChange (#394 Step 2)", () => {
           editor: { ...previous.editor, undoHistoryMinDepth: 250 },
           workbench: {
             ...previous.workbench,
-            language: previous.workbench.language === "ja" ? "en" : "ja"
+            statusBar: {
+              ...previous.workbench.statusBar,
+              visible: !previous.workbench.statusBar.visible
+            }
           }
         })
       );
@@ -183,6 +189,41 @@ describe("settingsRestartRequiredChange (#394 Step 2)", () => {
       expect(changedRestartRequiredSettingKeys(previous, next)).toEqual([
         "editor.undoHistoryMinDepth"
       ]);
+      expect(hasRestartRequiredSettingChange(previous, next)).toBe(true);
+    });
+
+    it("detects workbench.language alone as a requiresRestart change (#394 Step 3 follow-up)", () => {
+      const previous = baseApplicationSettings();
+      const next = toSaveRequest(
+        baseApplicationSettings({
+          workbench: {
+            ...previous.workbench,
+            language: previous.workbench.language === "ja" ? "en" : "ja"
+          }
+        })
+      );
+
+      expect(changedRestartRequiredSettingKeys(previous, next)).toEqual([
+        "workbench.language"
+      ]);
+      expect(hasRestartRequiredSettingChange(previous, next)).toBe(true);
+    });
+
+    it("lists BOTH keys, still as a single true signal, when two requiresRestart settings change together (#394 Step 3 follow-up)", () => {
+      const previous = baseApplicationSettings();
+      const next = toSaveRequest(
+        baseApplicationSettings({
+          editor: { ...previous.editor, undoHistoryMinDepth: 1000 },
+          workbench: {
+            ...previous.workbench,
+            language: previous.workbench.language === "ja" ? "en" : "ja"
+          }
+        })
+      );
+
+      expect(changedRestartRequiredSettingKeys(previous, next).sort()).toEqual(
+        ["editor.undoHistoryMinDepth", "workbench.language"].sort()
+      );
       expect(hasRestartRequiredSettingChange(previous, next)).toBe(true);
     });
   });

@@ -1039,6 +1039,7 @@ export const enTranslations = {
   "status.projectCloseFailed": "Could not close project: {message}",
   "status.projectOpenFailed": "Project open failed: {message}",
   "status.quitFailed": "Could not quit Pergamum: {message}",
+  "status.restartFailed": "Could not restart Pergamum: {message}",
   "status.recentProjectOpenFailed": "Recent project open failed",
   "status.recoveryBackupSaved": "Saved recovery backup.",
   "status.recoveryDiscarded": "Discarded {count} Recovery item(s)",
