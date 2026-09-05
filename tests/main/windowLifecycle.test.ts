@@ -1,4 +1,9 @@
-import type { App, BrowserWindow, IpcMain } from "electron";
+import type {
+  App,
+  BrowserWindow,
+  IpcMain,
+  IpcMainInvokeEvent
+} from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createWindowLifecycleController,
@@ -12,12 +17,18 @@ import {
 } from "../../src/shared/api";
 
 type IpcMainMock = Pick<IpcMain, "handle"> & {
-  handle: ReturnType<typeof vi.fn>;
+  handle: ReturnType<typeof vi.fn<IpcMain["handle"]>>;
 };
 
-type AppMock = Pick<App, "quit"> & {
-  quit: ReturnType<typeof vi.fn>;
+type AppMock = Pick<App, "quit" | "relaunch"> & {
+  quit: ReturnType<typeof vi.fn<App["quit"]>>;
+  relaunch: ReturnType<typeof vi.fn<App["relaunch"]>>;
 };
+
+// A stub satisfying IpcMainInvokeEvent's shape — these tests invoke a
+// registered ipcMain.handle callback directly, and none of them read any
+// property off the event, so an empty stub asserted to the type is enough.
+const fakeIpcMainInvokeEvent = {} as IpcMainInvokeEvent;
 
 type WindowEventName =
   | "close"
@@ -73,7 +84,8 @@ function createHarness(options: {
   systemTerminationSource?: WindowLifecycleSystemTerminationSource;
 } = {}) {
   const app: AppMock = {
-    quit: vi.fn()
+    quit: vi.fn(),
+    relaunch: vi.fn()
   };
   const ipcMain: IpcMainMock = {
     handle: vi.fn()
@@ -113,11 +125,12 @@ function respondWindowClose(
     throw new Error("respondWindowCloseRequest handler was not registered.");
   }
 
-  registration[1]({}, decision);
+  registration[1](fakeIpcMainInvokeEvent, decision);
 }
 
 function requestQuitThroughIpc(
-  ipcMain: IpcMainMock
+  ipcMain: IpcMainMock,
+  options: { requestId?: string; restartAfterQuit?: boolean } = {}
 ): QuitApplicationResult {
   const registration = ipcMain.handle.mock.calls.find(
     ([channel]) => channel === LIFECYCLE_CHANNELS.quitApplication
@@ -128,10 +141,13 @@ function requestQuitThroughIpc(
   }
 
   return registration[1](
-    {},
+    fakeIpcMainInvokeEvent,
     {
-      requestId: "quit:renderer:1",
-      intent: "explicitApplicationQuit"
+      requestId: options.requestId ?? "quit:renderer:1",
+      intent: "explicitApplicationQuit",
+      ...(options.restartAfterQuit !== undefined
+        ? { restartAfterQuit: options.restartAfterQuit }
+        : {})
     }
   ) as QuitApplicationResult;
 }
@@ -314,6 +330,127 @@ describe("windowLifecycle explicit application quit (#271)", () => {
   });
 });
 
+describe("windowLifecycle restart-after-quit (#394 Step 3)", () => {
+  it("relaunches then quits exactly once for a restartAfterQuit request (clean restart)", () => {
+    const { app, ipcMain } = createHarness();
+
+    expect(
+      requestQuitThroughIpc(ipcMain, { restartAfterQuit: true })
+    ).toEqual({ status: "quitting" });
+
+    expect(app.relaunch).toHaveBeenCalledTimes(1);
+    expect(app.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls app.relaunch() strictly BEFORE app.quit() — never after quit is invoked", () => {
+    const { app, ipcMain } = createHarness();
+
+    requestQuitThroughIpc(ipcMain, { restartAfterQuit: true });
+
+    const relaunchOrder = app.relaunch.mock.invocationCallOrder[0];
+    const quitOrder = app.quit.mock.invocationCallOrder[0];
+
+    expect(relaunchOrder).toBeLessThan(quitOrder);
+  });
+
+  it("never relaunches for an ordinary quit request (restartAfterQuit absent)", () => {
+    const { app, ipcMain } = createHarness();
+
+    requestQuitThroughIpc(ipcMain);
+
+    expect(app.relaunch).not.toHaveBeenCalled();
+    expect(app.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("never relaunches for an ordinary quit request (restartAfterQuit explicitly false)", () => {
+    const { app, ipcMain } = createHarness();
+
+    requestQuitThroughIpc(ipcMain, { restartAfterQuit: false });
+
+    expect(app.relaunch).not.toHaveBeenCalled();
+    expect(app.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("never relaunches when quit is requested through the (non-IPC) controller API used by the application menu", () => {
+    const { app, controller } = createHarness();
+
+    expect(controller.requestApplicationQuit()).toEqual({
+      status: "quitting"
+    });
+
+    expect(app.relaunch).not.toHaveBeenCalled();
+    expect(app.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not schedule a second relaunch for a duplicate restart request (quit already approved)", () => {
+    const { app, ipcMain } = createHarness();
+
+    expect(
+      requestQuitThroughIpc(ipcMain, {
+        requestId: "restart:1",
+        restartAfterQuit: true
+      })
+    ).toEqual({ status: "quitting" });
+    expect(
+      requestQuitThroughIpc(ipcMain, {
+        requestId: "restart:2",
+        restartAfterQuit: true
+      })
+    ).toEqual({ status: "ignored", reason: "quitAlreadyApproved" });
+
+    expect(app.relaunch).toHaveBeenCalledTimes(1);
+    expect(app.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("a restart request arriving after a plain quit was already approved is ignored — no relaunch is retroactively scheduled", () => {
+    const { app, ipcMain } = createHarness();
+
+    expect(requestQuitThroughIpc(ipcMain, { requestId: "quit:1" })).toEqual({
+      status: "quitting"
+    });
+    expect(
+      requestQuitThroughIpc(ipcMain, {
+        requestId: "restart:1",
+        restartAfterQuit: true
+      })
+    ).toEqual({ status: "ignored", reason: "quitAlreadyApproved" });
+
+    expect(app.relaunch).not.toHaveBeenCalled();
+    expect(app.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a quit request whose restartAfterQuit is present but not a boolean", () => {
+    const { ipcMain } = createHarness();
+    const registration = ipcMain.handle.mock.calls.find(
+      ([channel]) => channel === LIFECYCLE_CHANNELS.quitApplication
+    );
+
+    expect(registration).toBeTruthy();
+    expect(() =>
+      registration?.[1](
+        fakeIpcMainInvokeEvent,
+        {
+          requestId: "quit:renderer:1",
+          intent: "explicitApplicationQuit",
+          restartAfterQuit: "yes"
+        }
+      )
+    ).toThrow("Invalid application quit request.");
+  });
+
+  it("lets a window close through without the renderer dirty-check round trip once a restart quit is approved (reuses the normal quit path)", () => {
+    const { ipcMain, controller } = createHarness();
+    const window = new BrowserWindowMock();
+    controller.registerWindow(asBrowserWindow(window));
+
+    requestQuitThroughIpc(ipcMain, { restartAfterQuit: true });
+    const event = window.emitClose();
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(sentCloseRequests(window)).toHaveLength(0);
+  });
+});
+
 describe("windowLifecycle system termination (#271)", () => {
   it("keeps markSystemTermination as a one-way transition that allows close events through", () => {
     const { controller } = createHarness();
@@ -330,16 +467,16 @@ describe("windowLifecycle system termination (#271)", () => {
   });
 
   it("treats powerMonitor shutdown as system termination", () => {
-    let shutdownListener: (() => void) | null = null;
+    const on =
+      vi.fn<WindowLifecycleSystemTerminationSource["on"]>();
     const systemTerminationSource: WindowLifecycleSystemTerminationSource = {
-      on: vi.fn((_eventName, listener) => {
-        shutdownListener = listener;
-      })
+      on
     };
     const { controller } = createHarness({ systemTerminationSource });
     const window = new BrowserWindowMock();
     controller.registerWindow(asBrowserWindow(window));
 
+    const shutdownListener = on.mock.calls[0]?.[1];
     shutdownListener?.();
     const event = window.emitClose();
 

@@ -33,6 +33,7 @@ import {
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import type { EditorViewState } from "./editorViewState";
+import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
@@ -327,6 +328,15 @@ interface EditorSurfaceProps {
    * the switch. Not used for anything else.
    */
   activeDocumentKey: string;
+  /**
+   * #392: the runtime-only per-document `EditorState` cache, OWNED above
+   * this component (App.tsx) so it survives EditorSurface's own
+   * unmount/remount (navigating to Settings / a Manager tab / a Glossary
+   * Entry editor and back all unmount EditorSurface). Forwarded straight
+   * through to MarkdownEditor — see that component's `documentStates` prop
+   * doc comment. `undefined` for the `glossaryEntry` editor kind.
+   */
+  documentStates?: Map<string, MarkdownEditorDocumentState>;
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
   /**
@@ -347,6 +357,14 @@ interface EditorSurfaceProps {
    * tracked line break.
    */
   markerGlyph: LineEndingMarkerGlyph;
+  /**
+   * `editor.undoHistoryMinDepth` (#394 Step 1) — CodeMirror `history()`'s
+   * `minDepth` for a Markdown document's EditorState. Passed straight
+   * through to MarkdownEditor; read only at EditorState construction time
+   * (never reconfigures an existing document's history — see
+   * markdownEditorCodeMirrorSetup.ts).
+   */
+  undoHistoryMinDepth: number;
   /**
    * `editor.whitespace.*` (#256) — display-only whitespace marker
    * toggles, passed straight through to the Markdown editor. Never
@@ -473,10 +491,12 @@ interface EditorSurfaceProps {
 export function EditorSurface({
   editor,
   activeDocumentKey,
+  documentStates,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  undoHistoryMinDepth,
   whitespaceSettings,
   projectRootPath,
   glossaryRefreshToken,
@@ -526,10 +546,12 @@ export function EditorSurface({
         <MarkdownEditorSurface
           document={editor.document}
           documentKey={activeDocumentKey}
+          documentStates={documentStates}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
+          undoHistoryMinDepth={undoHistoryMinDepth}
           whitespaceSettings={whitespaceSettings}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
@@ -596,10 +618,14 @@ export function EditorSurface({
 interface MarkdownEditorSurfaceProps {
   document: CurrentDocument;
   documentKey: string;
+  /** #392: see EditorSurfaceProps's own doc comment. */
+  documentStates?: Map<string, MarkdownEditorDocumentState>;
   previewUpdateDelayMs: number;
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
   markerGlyph: LineEndingMarkerGlyph;
+  /** #394 Step 1: see EditorSurfaceProps's own doc comment. */
+  undoHistoryMinDepth: number;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
@@ -667,10 +693,12 @@ interface MarkdownEditorSurfaceProps {
 function MarkdownEditorSurface({
   document,
   documentKey,
+  documentStates,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  undoHistoryMinDepth,
   whitespaceSettings,
   projectRootPath,
   glossaryRefreshToken,
@@ -870,10 +898,12 @@ function MarkdownEditorSurface({
           focusRequest={focusRequest}
           onFocusRequestApplied={onFocusRequestApplied}
           documentKey={documentKey}
+          documentStates={documentStates}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
+          undoHistoryMinDepth={undoHistoryMinDepth}
           whitespaceSettings={whitespaceSettings}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}

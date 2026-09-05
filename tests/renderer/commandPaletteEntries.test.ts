@@ -333,17 +333,15 @@ describe("firstEnabledCommandPaletteIndex", () => {
   it("returns the index of the first enabled entry", () => {
     expect(
       firstEnabledCommandPaletteIndex([
-        { id: defineCommandId("test.a"), title: "a", enabled: false },
-        { id: defineCommandId("test.b"), title: "b", enabled: true }
+        { enabled: false },
+        { enabled: true }
       ])
     ).toBe(1);
   });
 
   it("returns null when no entry is enabled", () => {
     expect(
-      firstEnabledCommandPaletteIndex([
-        { id: defineCommandId("test.a"), title: "a", enabled: false }
-      ])
+      firstEnabledCommandPaletteIndex([{ enabled: false }])
     ).toBeNull();
   });
 

@@ -176,6 +176,10 @@ import type {
 import { resolveColdStartMarkdownFocusPolicy } from "./coldStartMarkdownFocusPolicy";
 import { resolveCommandPaletteFocusRestorePolicy } from "./commandPaletteFocusRestorePolicy";
 import type { EditorViewState } from "./editorViewState";
+import {
+  applyChangesToCachedMarkdownEditorDocumentState,
+  type MarkdownEditorDocumentState
+} from "./markdownEditorDocumentState";
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
 import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
@@ -384,6 +388,7 @@ import {
   type SoundFeedbackPlayer
 } from "./soundFeedback";
 import { useApplicationSettings } from "./useApplicationSettings";
+import { createSettingsFieldRestartTracker } from "./settingsFieldRestartTracker";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import { useVerticalDrag } from "./useVerticalDrag";
 import {
@@ -1432,6 +1437,40 @@ export function App(): JSX.Element {
   const activeDocumentKey = activeDocument
     ? serializeEditorId(activeDocument.id)
     : null;
+  // #387/#392: every currently open document's stable key — used below to
+  // prune the runtime-only per-document Markdown EditorState / undo-history
+  // cache when a tab closes. Never touches Session / Recovery / project DB;
+  // it is a plain string array recomputed from documents that are already
+  // open.
+  const openDocumentKeys = useMemo(
+    () =>
+      openDocumentsState.documents.map((document) =>
+        serializeEditorId(document.id)
+      ),
+    [openDocumentsState.documents]
+  );
+  // #392: the runtime-only per-document Markdown `EditorState` cache — OWNED
+  // here (rather than inside MarkdownEditor, as #387 originally had it) so
+  // it survives EditorSurface's own unmount/remount: navigating to Settings /
+  // Debug Log / a Glossary Manager or Tag Manager tab / a Glossary Entry
+  // editor tab and back all unmount EditorSurface (and MarkdownEditor with
+  // it), which previously reset this cache at exactly that boundary. A
+  // plain `useRef` — never Session / Recovery / project DB / pergamum.json;
+  // MarkdownEditor still keeps `content` as the one string every
+  // persistence / save / search path already uses, completely unaffected by
+  // this cache's existence or its owner. Pruned to `openDocumentKeys` below
+  // so a closed tab's EditorState doesn't linger forever.
+  const markdownEditorDocumentStatesRef = useRef<
+    Map<string, MarkdownEditorDocumentState>
+  >(new Map());
+  useEffect(() => {
+    const openKeys = new Set<string>(openDocumentKeys);
+    for (const cachedKey of markdownEditorDocumentStatesRef.current.keys()) {
+      if (!openKeys.has(cachedKey)) {
+        markdownEditorDocumentStatesRef.current.delete(cachedKey);
+      }
+    }
+  }, [openDocumentKeys]);
   // #274: the pending restore View State for the currently active editor,
   // handed to EditorSurface → MarkdownEditor for a one-shot #273 apply.
   const restoreActiveEditorViewState = useMemo(() => {
@@ -6286,7 +6325,21 @@ export function App(): JSX.Element {
     }
   }
 
-  async function quitApplication(): Promise<void> {
+  // #394 Step 3: the shared "explicitApplicationQuit" flow, parameterized by
+  // whether main should relaunch once quit is actually authorized.
+  // `quitApplication`/`restartApplication` below are thin wrappers — this is
+  // the ONE place that runs the dirty-document preflight (Save/Discard/
+  // Cancel, reusing #271's existing lifecycle machinery unchanged) and only
+  // reaches the main-process IPC call when that preflight resolves
+  // ("resolved": nothing dirty, or "discarded"). A Cancel or a save failure
+  // ("aborted") returns here, before the IPC call — main's
+  // requestApplicationQuit (and therefore app.relaunch()) is never reached,
+  // so a restart request that gets cancelled or fails to save leaves no
+  // latent relaunch: the current process keeps running exactly as an
+  // ordinary cancelled quit does today, and Settings themselves stay saved
+  // (already persisted earlier by the normal Settings autosave) for the next
+  // ordinary launch to pick up.
+  async function runQuitOrRestartFlow(restartAfterQuit: boolean): Promise<void> {
     if (lifecycleOperationInProgressRef.current) {
       return;
     }
@@ -6317,7 +6370,8 @@ export function App(): JSX.Element {
       try {
         await window.pergamum.lifecycle.quitApplication({
           requestId: createRendererLifecycleRequestId("explicitApplicationQuit"),
-          intent: "explicitApplicationQuit"
+          intent: "explicitApplicationQuit",
+          restartAfterQuit
         });
       } catch (error) {
         exitLifecycleCommitBarrier(commitBarrierToken);
@@ -6325,12 +6379,28 @@ export function App(): JSX.Element {
       }
     } catch (error) {
       setStatus({
-        key: "status.quitFailed",
+        key: restartAfterQuit ? "status.restartFailed" : "status.quitFailed",
         values: { message: errorMessage(error, translate) }
       });
     } finally {
       lifecycleOperationInProgressRef.current = false;
     }
+  }
+
+  async function quitApplication(): Promise<void> {
+    await runQuitOrRestartFlow(false);
+  }
+
+  // #394 Step 3: connects the Step 2 restart-request intent to a real,
+  // safe application restart — reusing the exact same dirty-document
+  // preflight and `app.quit()` path as an ordinary Quit, with main
+  // additionally calling `app.relaunch()` right before that `app.quit()`
+  // (see windowLifecycle.ts's requestApplicationQuit). Never calls an
+  // Electron API directly from the renderer (contextIsolation/sandbox stay
+  // intact) — this only sends a `restartAfterQuit: true` flag over the
+  // existing lifecycle IPC channel.
+  async function restartApplication(): Promise<void> {
+    await runQuitOrRestartFlow(true);
   }
 
   async function reloadSettingsAfterProjectOpen(): Promise<StatusMessage | null> {
@@ -7490,11 +7560,15 @@ export function App(): JSX.Element {
   //  - per document, edits are applied as ONE transaction / change set, in
   //    original-document coordinates (no manual offset correction)
   //  - the active Markdown editor goes through a CodeMirror `input.replace`
-  //    transaction on the live shared view, so it is one undo step. Other open
-  //    buffers hold only a text string (Pergamum reuses a single EditorView
-  //    across all tabs — #250), so they cannot receive a transaction and their
-  //    replace is not on any undo stack. Per-tab EditorState/history would be
-  //    an editor-architecture change beyond #386 — tracked as a follow-up.
+  //    transaction on the live shared view, so it is one undo step.
+  //  - #393: an inactive document with a #387/#392 cached EditorState whose
+  //    doc still matches the current content ALSO receives a real
+  //    `input.replace` transaction — via `EditorState.update(...)` directly
+  //    on the cached state, no EditorView needed — landing on that
+  //    document's own undo history alongside whatever it already held. Only
+  //    a document with no (or a stale) cached state falls back to the plain
+  //    content-splice update below, which carries no undo history for that
+  //    document — see the branch itself for exactly when that applies.
   function applyOpenDocumentsReplaceSelection(
     state: NonNullable<typeof replacePreviewDialogState>,
     enabledIds: readonly string[]
@@ -7577,9 +7651,9 @@ export function App(): JSX.Element {
       if (isActiveMarkdownBuffer) {
         // Active editor: one CodeMirror transaction on the live view — its
         // update listener syncs content + dirty + line-ending tracking, and
-        // it lands as a single `input.replace` undo step (undoable until the
-        // user switches tabs, which — by #250/#253 design — resets the shared
-        // view's history for every editing feature, not just replace).
+        // it lands as a single `input.replace` undo step, on top of whatever
+        // undo history this document already has (#387/#392 per-document
+        // EditorState — no longer reset by a tab switch).
         const applied =
           paragraphIndentControllerRef.current?.applyReplaceInBufferChanges(
             changeSpecs
@@ -7588,30 +7662,74 @@ export function App(): JSX.Element {
           continue;
         }
       } else {
-        const changeSet = ChangeSet.of(
-          changeSpecs,
-          markdownDocument.content.length
-        );
-        const nextContent = changeSet
-          .apply(CodeMirrorText.of(markdownDocument.content.split("\n")))
-          .toString();
-        const nextLineEndingBreaks = markdownDocument.lineEndingBreaks.map(
-          changeSet
-        ) as LineEndingBreakSet;
-        setOpenDocumentsState((current) =>
-          updateOpenEditor(current, openDocument.id, (editor) =>
-            editor.kind === "markdown"
-              ? {
-                  ...editor,
-                  document: updateCurrentDocumentContent(
-                    editor.document,
-                    nextContent,
-                    nextLineEndingBreaks
-                  )
-                }
-              : editor
-          )
-        );
+        // #393: an INACTIVE document with a cached #387/#392 EditorState can
+        // still receive a real CodeMirror transaction — `EditorState.update`
+        // runs every StateField (line-ending tracking included) and the
+        // `history()` extension exactly as `view.dispatch` would, with no
+        // EditorView required. `applyChangesToCachedMarkdownEditorDocumentState`
+        // gates this on the cached state's own doc still matching the
+        // current application-side content: candidate offsets were computed
+        // against that same content, and a mismatch means either this
+        // document was never shown yet in this session (no cache entry at
+        // all) or something else changed it since — in both cases the SAFE
+        // choice is the plain content-splice fallback below, which never
+        // risks applying stale offsets to the wrong text. This document's
+        // own undo history is only lost in that fallback case.
+        const cached = markdownEditorDocumentStatesRef.current.get(documentId);
+        const transactionResult = cached
+          ? applyChangesToCachedMarkdownEditorDocumentState(
+              cached,
+              markdownDocument.content,
+              changeSpecs,
+              "input.replace"
+            )
+          : null;
+
+        if (transactionResult) {
+          markdownEditorDocumentStatesRef.current.set(
+            documentId,
+            transactionResult.nextDocumentState
+          );
+          setOpenDocumentsState((current) =>
+            updateOpenEditor(current, openDocument.id, (editor) =>
+              editor.kind === "markdown"
+                ? {
+                    ...editor,
+                    document: updateCurrentDocumentContent(
+                      editor.document,
+                      transactionResult.content,
+                      transactionResult.lineEndingBreaks
+                    )
+                  }
+                : editor
+            )
+          );
+        } else {
+          const changeSet = ChangeSet.of(
+            changeSpecs,
+            markdownDocument.content.length
+          );
+          const nextContent = changeSet
+            .apply(CodeMirrorText.of(markdownDocument.content.split("\n")))
+            .toString();
+          const nextLineEndingBreaks = markdownDocument.lineEndingBreaks.map(
+            changeSet
+          ) as LineEndingBreakSet;
+          setOpenDocumentsState((current) =>
+            updateOpenEditor(current, openDocument.id, (editor) =>
+              editor.kind === "markdown"
+                ? {
+                    ...editor,
+                    document: updateCurrentDocumentContent(
+                      editor.document,
+                      nextContent,
+                      nextLineEndingBreaks
+                    )
+                  }
+                : editor
+            )
+          );
+        }
       }
 
       appliedCount += changeSpecs.length;
@@ -8353,18 +8471,107 @@ export function App(): JSX.Element {
     });
   }
 
+  // #394 Step 2 follow-up: Settings fields autosave on every keystroke (see
+  // the `onChangeSettings` wiring below), so a naive "check for a restart-
+  // required change after every save" fires the restart dialog repeatedly
+  // while the user is still typing a number (e.g. 100 -> 1 -> 10 -> 100 ->
+  // 1000 as each digit lands). The restart check is deliberately moved OUT
+  // of `changeSettings` and instead runs once, when focus actually leaves a
+  // Settings field — see `handleSettingsFieldFocus`/`handleSettingsFieldBlur`
+  // below. `changeSettings` itself keeps its original, simpler job: save,
+  // and report success/failure — it returns whether the save succeeded so
+  // the blur handler can skip the restart check after a failed save.
   async function changeSettings(
     nextSettings: SaveApplicationSettingsRequest
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await saveSettings(nextSettings);
       setStatus({ key: "status.settingsSaved" });
+      return true;
     } catch (error) {
       setStatus({
         key: "status.settingsSaveFailed",
         values: { message: errorMessage(error, translate) }
       });
+      return false;
     }
+  }
+
+  // #394 Step 2 follow-up: owns the focus-baseline / in-flight-save race
+  // guarding described in settingsFieldRestartTracker.ts's own doc comment.
+  // Created once (a plain closure, not React state) so its internal state
+  // survives across renders without being reset.
+  const settingsFieldRestartTracker = useRef(
+    createSettingsFieldRestartTracker()
+  ).current;
+
+  // #394 Step 2 follow-up: called on every settings-save request (i.e. every
+  // keystroke/toggle in the Settings panel) — this is the ONLY thing that
+  // still happens per-change; no restart check runs here.
+  function handleSettingsChangeRequest(
+    nextSettings: SaveApplicationSettingsRequest
+  ): void {
+    settingsFieldRestartTracker.handleChangeRequest(
+      nextSettings,
+      changeSettings
+    );
+  }
+
+  // A Settings field gained focus: snapshot the settings as they stood at
+  // that moment, to diff against once the field loses focus.
+  function handleSettingsFieldFocus(): void {
+    settingsFieldRestartTracker.handleFocus(settings);
+  }
+
+  // A Settings field lost focus: this is the ONE point where a
+  // requiresRestart change is checked and, if found, the shared restart
+  // dialog is offered — never on intermediate per-keystroke saves.
+  async function handleSettingsFieldBlur(): Promise<void> {
+    await settingsFieldRestartTracker.handleBlur(
+      showSettingsRestartRequiredDialog,
+      requestApplicationRestart
+    );
+  }
+
+  // #394 Step 2: the ONE shared restart-confirmation dialog for every
+  // requiresRestart setting (never a per-setting dialog) — reuses the
+  // existing generic ConfirmDialog / DialogController infrastructure (#182),
+  // no new dialog component. A concurrent dialog already being open is
+  // treated as "the user didn't confirm" rather than surfacing as an error:
+  // Settings save already succeeded, so silently skipping the (rare, racy)
+  // restart offer is safer than throwing out of `changeSettings`.
+  async function showSettingsRestartRequiredDialog(): Promise<
+    "confirm" | "cancel"
+  > {
+    try {
+      return await confirmDialog({
+        title: translate("dialog.settingsRestartRequired.title"),
+        message: {
+          kind: "plainText",
+          text: translate("dialog.settingsRestartRequired.message")
+        },
+        icon: { kind: "question", tooltip: translate("dialog.icon.question") },
+        clipboardText: null,
+        dismissOnBackdropClick: false,
+        confirmLabel: translate("dialog.settingsRestartRequired.confirm"),
+        cancelLabel: translate("dialog.settingsRestartRequired.cancel")
+      });
+    } catch (error) {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return "cancel";
+      }
+      throw error;
+    }
+  }
+
+  // #394 Step 3: the generic "the user asked to restart now" intent, now
+  // connected to the real (safe) application restart flow — see
+  // restartApplication above. Still never calls app.relaunch() / app.quit()
+  // / app.exit() directly from the renderer: it only starts the same
+  // dirty-document preflight an ordinary Quit runs, and main is the only
+  // place that ever touches the Electron `app` API.
+  function requestApplicationRestart(): void {
+    void restartApplication();
   }
 
   // #262 Welcome content. Rendered full-screen (replacing the workbench) only
@@ -8708,8 +8915,10 @@ export function App(): JSX.Element {
                       isLoading={isSettingsLoading}
                       error={settingsError}
                       translate={translate}
-                      onChangeSettings={(nextSettings) => {
-                        void changeSettings(nextSettings);
+                      onChangeSettings={handleSettingsChangeRequest}
+                      onSettingFieldFocus={handleSettingsFieldFocus}
+                      onSettingFieldBlur={() => {
+                        void handleSettingsFieldBlur();
                       }}
                     />
                   ) : isDebugLogTabActive ? (
@@ -8723,6 +8932,7 @@ export function App(): JSX.Element {
                         activeDocumentKey={serializeEditorId(
                           activeDocument.id
                         )}
+                        documentStates={markdownEditorDocumentStatesRef.current}
                         previewUpdateDelayMs={
                           effectiveSettings.preview.updateDelayMs
                         }
@@ -8734,6 +8944,9 @@ export function App(): JSX.Element {
                         }
                         markerGlyph={
                           effectiveSettings.editor.lineEnding.markerGlyph
+                        }
+                        undoHistoryMinDepth={
+                          effectiveSettings.editor.undoHistoryMinDepth
                         }
                         whitespaceSettings={
                           effectiveSettings.editor.whitespace

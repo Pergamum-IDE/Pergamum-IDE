@@ -4,10 +4,14 @@ import {
   createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
-  type ActiveProjectContext
+  type ActiveProjectContext,
+  type EditorId
 } from "../../src/shared/editorId";
 import type { GlossaryEntry } from "../../src/shared/glossary";
-import { createProjectDocument } from "../../src/renderer/currentDocument";
+import {
+  createProjectDocument,
+  type ProjectCurrentDocument
+} from "../../src/renderer/currentDocument";
 import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
 import {
   createOpenDocumentsStateWithDocument,
@@ -155,7 +159,7 @@ describe("project activation state", () => {
       () => projectBLoad.promise
     ).then((document) => {
       if (document) {
-        state = applyLoadedFirstDocument(state, document, {
+        state = applyLoadedFirstDocument(state, document as ProjectCurrentDocument, {
           rootPath: "C:\\ProjectB"
         });
       }
@@ -170,7 +174,7 @@ describe("project activation state", () => {
       () => projectCLoad.promise
     ).then((document) => {
       if (document) {
-        state = applyLoadedFirstDocument(state, document, newProjectContext);
+        state = applyLoadedFirstDocument(state, document as ProjectCurrentDocument, newProjectContext);
       }
     });
 
@@ -194,7 +198,7 @@ describe("project activation state", () => {
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createProjectDocumentEditorId(newDocument.relativePath, newProjectContext)
       )
     ).toBe(true);
@@ -213,7 +217,7 @@ describe("project activation state", () => {
       () => pendingLoad.promise
     ).then((document) => {
       if (document) {
-        state = applyLoadedFirstDocument(state, document, newProjectContext);
+        state = applyLoadedFirstDocument(state, document as ProjectCurrentDocument, newProjectContext);
       }
     });
 
@@ -230,7 +234,7 @@ describe("project activation state", () => {
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createGlossaryEntryEditorId(oldGlossaryEntry.id, newProjectContext)
       )
     ).toBe(true);
@@ -249,7 +253,7 @@ describe("project activation state", () => {
       () => pendingLoad.promise
     ).then((document) => {
       if (document) {
-        state = applyLoadedFirstDocument(state, document, newProjectContext);
+        state = applyLoadedFirstDocument(state, document as ProjectCurrentDocument, newProjectContext);
       }
     });
 
@@ -259,13 +263,14 @@ describe("project activation state", () => {
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createProjectDocumentEditorId(newDocument.relativePath, newProjectContext)
       )
     ).toBe(true);
     expect(state.documents[0].editor.kind).toBe("markdown");
     expect(
       state.documents[0].editor.kind === "markdown" &&
+        state.documents[0].editor.document.kind === "project" &&
         state.documents[0].editor.document.relativePath
     ).toBe(newDocument.relativePath);
     expect(
@@ -339,7 +344,7 @@ describe("project activation state", () => {
       () => pendingFirstDocument.promise
     ).then((document) => {
       if (document) {
-        state = applyLoadedFirstDocument(state, document, newProjectContext);
+        state = applyLoadedFirstDocument(state, document as ProjectCurrentDocument, newProjectContext);
       }
     });
 
@@ -364,7 +369,7 @@ describe("project activation state", () => {
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createProjectDocumentEditorId(
           newDocument.relativePath,
           newProjectContext

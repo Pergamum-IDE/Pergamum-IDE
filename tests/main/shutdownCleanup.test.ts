@@ -6,10 +6,12 @@ import {
 } from "../../src/main/shutdownCleanup";
 
 function createQuitEvent(): AppShutdownCleanupEvent & {
-  preventDefault: ReturnType<typeof vi.fn>;
+  preventDefault: ReturnType<
+    typeof vi.fn<AppShutdownCleanupEvent["preventDefault"]>
+  >;
 } {
   return {
-    preventDefault: vi.fn()
+    preventDefault: vi.fn<AppShutdownCleanupEvent["preventDefault"]>()
   };
 }
 

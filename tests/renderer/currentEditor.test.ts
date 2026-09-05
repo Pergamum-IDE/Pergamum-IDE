@@ -78,7 +78,14 @@ describe("CurrentEditor for glossary entries", () => {
   it("keeps Markdown dirty behavior unchanged", () => {
     const document = createFileDocument({
       path: "C:\\Novel\\chapter.md",
-      content: "saved"
+      content: "saved",
+      metadata: {
+        encoding: "utf8",
+        lineEnding: "lf",
+        byteLength: 5,
+        characterLength: 5,
+        hadBom: false
+      }
     });
 
     expect(isCurrentEditorDirty(createMarkdownCurrentEditor(document))).toBe(

@@ -7,7 +7,8 @@ import {
   invokeApplicationMenuCommand,
   subscribeApplicationMenuCommands,
   type ApplicationMenuCommandExecutor,
-  type ApplicationMenuAllowedCommandExecutor
+  type ApplicationMenuAllowedCommandExecutor,
+  type ApplicationMenuCommandSubscription
 } from "../../src/renderer/applicationMenuBridge";
 
 describe("application menu renderer bridge", () => {
@@ -41,40 +42,34 @@ describe("application menu renderer bridge", () => {
   });
 
   it("uses the latest executor and avoids stale closures", () => {
-    let listener: ((commandId: string) => void) | null = null;
     const firstExecute = vi.fn<ApplicationMenuCommandExecutor>();
     const secondExecute = vi.fn<ApplicationMenuCommandExecutor>();
     let currentExecute = firstExecute;
-
-    subscribeApplicationMenuCommands(
-      (callback) => {
-        listener = callback;
-        return () => undefined;
-      },
-      () => currentExecute
+    const onCommand = vi.fn<ApplicationMenuCommandSubscription>(
+      () => () => undefined
     );
 
-    listener?.(editorCommandIds.saveDocument);
+    subscribeApplicationMenuCommands(onCommand, () => currentExecute);
+    const listener = onCommand.mock.calls[0][0];
+
+    listener(editorCommandIds.saveDocument);
     currentExecute = secondExecute;
-    listener?.(applicationCommandIds.openProject);
+    listener(applicationCommandIds.openProject);
 
     expect(firstExecute).toHaveBeenCalledWith(editorCommandIds.saveDocument);
     expect(secondExecute).toHaveBeenCalledWith(applicationCommandIds.openProject);
   });
 
   it("passes raw command IDs through to the app-level guard", () => {
-    let listener: ((commandId: string) => void) | null = null;
     const execute = vi.fn<ApplicationMenuCommandExecutor>();
-
-    subscribeApplicationMenuCommands(
-      (callback) => {
-        listener = callback;
-        return () => undefined;
-      },
-      () => execute
+    const onCommand = vi.fn<ApplicationMenuCommandSubscription>(
+      () => () => undefined
     );
 
-    listener?.("workspace.files.toggle");
+    subscribeApplicationMenuCommands(onCommand, () => execute);
+    const listener = onCommand.mock.calls[0][0];
+
+    listener("workspace.files.toggle");
 
     expect(execute).toHaveBeenCalledWith("workspace.files.toggle");
   });

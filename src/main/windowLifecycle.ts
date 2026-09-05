@@ -31,7 +31,7 @@ export interface WindowLifecycleController {
 }
 
 export interface WindowLifecycleOptions {
-  readonly app: Pick<App, "quit">;
+  readonly app: Pick<App, "quit" | "relaunch">;
   readonly ipcMain: Pick<IpcMain, "handle">;
   readonly getOpenWindowCount: () => number;
   readonly systemTerminationSource?: WindowLifecycleSystemTerminationSource;
@@ -92,14 +92,17 @@ function parseQuitApplicationRequest(
     !isRequestObject(value) ||
     typeof value.requestId !== "string" ||
     value.requestId.length === 0 ||
-    value.intent !== "explicitApplicationQuit"
+    value.intent !== "explicitApplicationQuit" ||
+    (value.restartAfterQuit !== undefined &&
+      typeof value.restartAfterQuit !== "boolean")
   ) {
     throw new Error("Invalid application quit request.");
   }
 
   return {
     requestId: value.requestId,
-    intent: value.intent
+    intent: value.intent,
+    restartAfterQuit: value.restartAfterQuit === true
   };
 }
 
@@ -232,6 +235,18 @@ export function createWindowLifecycleController(
     }
 
     quitApproved = true;
+
+    // #394 Step 3: this is the ONE point where quit is actually being
+    // authorized for this request (dirty-document preflight, if any, has
+    // already resolved by the time a renderer reaches this IPC call — see
+    // App.tsx's runQuitOrRestartFlow). Relaunch is scheduled here, strictly
+    // BEFORE the quit it rides on, and never for a request that didn't ask
+    // for it. `quitApproved` above already guarantees at most one relaunch
+    // per process, no matter how many requests arrive.
+    if (request.restartAfterQuit) {
+      options.app.relaunch();
+    }
+
     options.app.quit();
 
     return { status: "quitting" };

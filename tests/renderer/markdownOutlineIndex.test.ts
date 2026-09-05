@@ -71,7 +71,17 @@ describe("buildMarkdownOutlineDocument (#352)", () => {
   it("indexes an external file document with an absolute displayPath", () => {
     const state = openOrActivateDocument(
       createInitialOpenDocumentsState(),
-      createFileDocument({ path: "C:\\Outside\\notes.md", content: "# Ext" }),
+      createFileDocument({
+        path: "C:\\Outside\\notes.md",
+        content: "# Ext",
+        metadata: {
+          encoding: "utf8",
+          lineEnding: "lf",
+          byteLength: 5,
+          characterLength: 5,
+          hadBom: false
+        }
+      }),
       projectContext
     );
     const doc = buildMarkdownOutlineDocument(state.documents[0]);

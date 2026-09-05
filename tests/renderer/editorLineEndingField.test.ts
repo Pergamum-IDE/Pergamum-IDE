@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, type TransactionSpec } from "@codemirror/state";
 import { history, redo, undo, undoDepth } from "@codemirror/commands";
 import { describe, expect, it } from "vitest";
 import {
@@ -41,7 +41,7 @@ function stateWithField(
 
 function dispatch(
   state: EditorState,
-  spec: Parameters<EditorState["update"]>[0]
+  spec: TransactionSpec
 ): EditorState {
   return state.update(spec).state;
 }
@@ -386,7 +386,7 @@ describe("createLineEndingTrackingField (#253)", () => {
         get state() {
           return state;
         },
-        dispatch: (spec: Parameters<EditorState["update"]>[0]) => {
+        dispatch: (spec: TransactionSpec) => {
           state = state.update(spec).state;
         }
       };
@@ -483,7 +483,7 @@ function mountViewLike(
       return state;
     },
     field,
-    dispatch: (spec: Parameters<EditorState["update"]>[0]) => {
+    dispatch: (spec: TransactionSpec) => {
       state = state.update(spec).state;
     }
   };

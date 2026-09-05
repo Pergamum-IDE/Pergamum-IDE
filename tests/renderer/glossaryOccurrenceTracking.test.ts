@@ -14,6 +14,8 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
+import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
 import {
   createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor
@@ -76,7 +78,8 @@ function markdownOpenDocumentsState(
 ): OpenDocumentsState {
   const document = updateCurrentDocumentContent(
     createUntitledDocument(),
-    content
+    content,
+    buildLineEndingBreakSet(analyzeLineEndings(content))
   );
 
   return {

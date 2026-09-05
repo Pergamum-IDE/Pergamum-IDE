@@ -652,7 +652,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("uses number settings in production for Command Palette footer detail marquee controls, the Preview update delay, and the Notification display time in ms (#266)", () => {
+    it("uses number settings in production for Command Palette footer detail marquee controls, the Preview update delay, the Notification display time in ms (#266), and the Undo history depth (#394 Step 1)", () => {
       const productionTypes = new Set(
         getCatalogEntries().map((entry) => entry.type)
       );
@@ -665,6 +665,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqual([
         "commandPalette.footerDetail.marquee.delay",
         "commandPalette.footerDetail.marquee.speed",
+        "editor.undoHistoryMinDepth",
         "preview.updateDelayMs",
         "workbench.notification.durationMs"
       ]);
@@ -818,6 +819,85 @@ describe("Settings Catalog Foundation (#150)", () => {
         ok: false,
         failure: "typeMismatch"
       });
+    });
+
+    it("validates editor.undoHistoryMinDepth as a finite integer from 100 to 10000, defaulting to 100 (#394 Step 1)", () => {
+      const entry = getCatalogEntry("editor.undoHistoryMinDepth");
+
+      expect(entry.type).toBe("number");
+      if (entry.type !== "number") {
+        throw new Error("Expected number setting.");
+      }
+
+      expect(entry.defaultValue).toBe(100);
+      expect(entry.scope).toBe("applicationOnly");
+      expect(entry.numericRange).toEqual({
+        min: 100,
+        max: 10000,
+        integer: true
+      });
+
+      expect(validateCatalogValue("editor.undoHistoryMinDepth", 100)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("editor.undoHistoryMinDepth", 101)).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("editor.undoHistoryMinDepth", 1000)).toEqual({
+        ok: true
+      });
+      expect(
+        validateCatalogValue("editor.undoHistoryMinDepth", 10000)
+      ).toEqual({ ok: true });
+      expect(validateCatalogValue("editor.undoHistoryMinDepth", 99)).toEqual({
+        ok: false,
+        failure: "numericRange"
+      });
+      expect(
+        validateCatalogValue("editor.undoHistoryMinDepth", 10001)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(validateCatalogValue("editor.undoHistoryMinDepth", 0)).toEqual({
+        ok: false,
+        failure: "numericRange"
+      });
+      expect(validateCatalogValue("editor.undoHistoryMinDepth", -100)).toEqual(
+        { ok: false, failure: "numericRange" }
+      );
+      expect(
+        validateCatalogValue("editor.undoHistoryMinDepth", 100.5)
+      ).toEqual({ ok: false, failure: "integer" });
+      expect(
+        validateCatalogValue("editor.undoHistoryMinDepth", "1000")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+      expect(
+        validateCatalogValue(
+          "editor.undoHistoryMinDepth",
+          Number.POSITIVE_INFINITY
+        )
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+      expect(
+        validateCatalogValue("editor.undoHistoryMinDepth", Number.NaN)
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("marks editor.undoHistoryMinDepth and workbench.language requiresRestart, and no other entry (#394 Step 2)", () => {
+      const restartRequiredKeys = new Set([
+        "editor.undoHistoryMinDepth",
+        "workbench.language"
+      ]);
+
+      expect(getCatalogEntry("editor.undoHistoryMinDepth").requiresRestart).toBe(
+        true
+      );
+      expect(getCatalogEntry("workbench.language").requiresRestart).toBe(true);
+
+      const otherEntries = getCatalogEntries().filter(
+        (candidate) => !restartRequiredKeys.has(candidate.key)
+      );
+      expect(otherEntries.length).toBeGreaterThan(0);
+      for (const candidate of otherEntries) {
+        expect(candidate.requiresRestart).not.toBe(true);
+      }
     });
 
     it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), command palette footer details (#370), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
@@ -1025,6 +1105,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.lineEnding.expected",
         "editor.lineEnding.markerGlyph",
         "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.undoHistoryMinDepth",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderOtherUnicodeSpace",
@@ -1061,7 +1142,7 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #370 command palette footer detail settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, #259 character count settings, #266 workbench.notification.durationMs, and #298 notification.output.enabled (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("registers exactly the #150 entries, #174 entries, #200 sound feedback entries, #370 command palette footer detail settings, #250 preview.updateDelayMs, #252 editor.lineEnding.*, #259 character count settings, #266 workbench.notification.durationMs, #298 notification.output.enabled, and #394 Step 1 editor.undoHistoryMinDepth (#232: workbench.advancedSettings.enabled removed)", () => {
       const keys = Object.keys(settingsCatalog);
 
       expect(keys.sort()).toEqual(
@@ -1080,6 +1161,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.undoHistoryMinDepth",
           "editor.whitespace.renderAsciiSpace",
           "editor.whitespace.renderIdeographicSpace",
           "editor.whitespace.renderOtherUnicodeSpace",

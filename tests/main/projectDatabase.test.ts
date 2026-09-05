@@ -14,6 +14,7 @@ import {
   resolveProjectRoot,
   type ProjectDatabase
 } from "../../src/main/projectDatabase";
+import type { DebugLogger } from "../../src/main/debugLogger";
 
 const entryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
 const otherEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
@@ -986,9 +987,9 @@ async function insertTag(
   );
 }
 
-function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
+function debugLoggerMock(): { log: ReturnType<typeof vi.fn<DebugLogger["log"]>> } {
   return {
-    log: vi.fn()
+    log: vi.fn<DebugLogger["log"]>()
   };
 }
 

@@ -13,6 +13,7 @@ import type {
 import {
   SESSION_SCHEMA_VERSION,
   type SessionEditor,
+  type SessionEditorViewState,
   type SessionRecord
 } from "../../src/shared/session";
 import type { GlossaryEntry } from "../../src/shared/glossary";
@@ -490,7 +491,7 @@ describe("runColdStartRestore (#274)", () => {
   });
 
   it("carries persisted #273 View State into pendingViewStates", async () => {
-    const viewState = {
+    const viewState: SessionEditorViewState = {
       contentDigest: { algorithm: "sha256", digest: "a".repeat(64) },
       selection: { anchor: 3, head: 7 },
       scroll: { top: 10, left: 0 }

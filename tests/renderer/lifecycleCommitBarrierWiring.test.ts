@@ -178,17 +178,20 @@ describe("renderer lifecycle commit barrier wiring (#271)", () => {
     expect(failureDialogIndex).toBeGreaterThan(operationResetIndex);
   });
 
-  it("keeps Window Close and Quit barriers after successful commit requests and exits on IPC failure", () => {
+  it("keeps Window Close and Quit/Restart barriers after successful commit requests and exits on IPC failure", () => {
     const source = appSource();
     const windowCloseBlock = sourceBlock(
       source,
       "async function handleLifecycleWindowCloseRequest(",
-      "async function quitApplication()"
+      "async function runQuitOrRestartFlow("
     );
+    // #394 Step 3: quitApplication and restartApplication are both thin
+    // wrappers around runQuitOrRestartFlow — the barrier-token handling
+    // pinned below lives in the shared function, exercised by both.
     const quitBlock = sourceBlock(
       source,
-      "async function quitApplication()",
-      "async function reloadSettingsAfterProjectOpen()"
+      "async function runQuitOrRestartFlow(",
+      "async function quitApplication()"
     );
     const windowTokenIndex = windowCloseBlock.indexOf(
       "commitBarrierToken = dirtyResolution.commitBarrierToken"

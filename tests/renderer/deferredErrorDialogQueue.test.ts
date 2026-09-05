@@ -183,7 +183,7 @@ describe("DeferredErrorDialogQueue (#274 — guaranteed-recognition Error dialog
 
   it("tolerates a `present` that returns void (not a promise)", async () => {
     const q = make();
-    const present = vi.fn<[], void>(() => undefined);
+    const present = vi.fn<(id: string) => void>(() => undefined);
     q.arm("a");
     q.markReady();
     q.pump({ isDialogPending: () => false, present });

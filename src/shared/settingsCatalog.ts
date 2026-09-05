@@ -91,6 +91,16 @@ interface CommonSettingFields<TKey extends string> {
   readonly descriptionKey: string;
   readonly deprecatedAliases: readonly string[];
   readonly migrationNotes: readonly string[];
+  /**
+   * #394 Step 2: generic metadata for "a CHANGE to this setting cannot be
+   * fully applied to every runtime state until Pergamum restarts" — never a
+   * hardcoded per-key check at any call site. `undefined` and `false` are
+   * equivalent ("no restart requirement"); only `true` marks a setting as
+   * restart-required. Step 2 only detects a requiresRestart CHANGE and
+   * offers a restart; it never performs the restart itself (see
+   * settingsRestartRequiredChange.ts).
+   */
+  readonly requiresRestart?: boolean;
 }
 
 export interface StringSettingEntry<TKey extends string = string>
@@ -298,6 +308,8 @@ interface CommonDefineInput<TKey extends string> {
   descriptionKey: string;
   deprecatedAliases: readonly string[];
   migrationNotes: readonly string[];
+  /** #394 Step 2: see CommonSettingFields's own doc comment. */
+  requiresRestart?: boolean;
 }
 
 /**
@@ -484,7 +496,8 @@ export const settingsCatalog = defineSettingsCatalog({
     labelKey: "settings.workbench.language.label",
     descriptionKey: "settings.workbench.language.description",
     deprecatedAliases: [],
-    migrationNotes: []
+    migrationNotes: [],
+    requiresRestart: true
   }),
   // #174: moved from the legacy top-level ApplicationSettings.showStatusBar
   // field. No deprecated alias for the old top-level key.
@@ -715,6 +728,27 @@ export const settingsCatalog = defineSettingsCatalog({
       "settings.editor.characterCount.exclude.markdownComments.description",
     deprecatedAliases: [],
     migrationNotes: []
+  }),
+  // #394 Step 1: how many history events CodeMirror's `history()` extension
+  // keeps for a Markdown document's own EditorState (#387's per-document
+  // cache). applicationOnly, like preview.updateDelayMs above — a tuning
+  // knob, not a project policy. Default 100 matches `history()`'s own
+  // built-in default exactly, so leaving this untouched changes nothing.
+  // #394 Step 2: `requiresRestart: true` — a document's own EditorState (and
+  // its `history()` extension) is only ever built once, at first open; a
+  // changed value is honored for any document opened AFTER a restart, but
+  // Step 1/2 deliberately never reconfigures an already-built document's
+  // history mid-session (see markdownEditorCodeMirrorSetup.ts).
+  "editor.undoHistoryMinDepth": defineNumberSetting({
+    key: "editor.undoHistoryMinDepth",
+    scope: "applicationOnly",
+    defaultValue: 100,
+    labelKey: "settings.editor.undoHistoryMinDepth.label",
+    descriptionKey: "settings.editor.undoHistoryMinDepth.description",
+    numericRange: { min: 100, max: 10000, integer: true },
+    deprecatedAliases: [],
+    migrationNotes: [],
+    requiresRestart: true
   }),
   "files.newFile.lineEnding": defineEnumSetting({
     key: "files.newFile.lineEnding",

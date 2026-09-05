@@ -84,11 +84,11 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
 
   it("a normal release lets the next contender acquire and continue", async () => {
     const holder = lock();
-    let release: (() => void) | null = null;
+    const releaseBox: { current: (() => void) | null } = { current: null };
     const holding = holder.run(
-      () => new Promise<void>((resolve) => (release = resolve))
+      () => new Promise<void>((resolve) => (releaseBox.current = resolve))
     );
-    for (let i = 0; i < 50 && release === null; i += 1) {
+    for (let i = 0; i < 50 && releaseBox.current === null; i += 1) {
       await new Promise((r) => setTimeout(r, 3));
     }
 
@@ -101,7 +101,7 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
     await new Promise((r) => setTimeout(r, 15));
     expect(acquired).toBe(false);
 
-    release?.();
+    releaseBox.current?.();
     await holding;
     await contender;
     expect(acquired).toBe(true);
@@ -190,11 +190,11 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
 
   it("a fresh, actively held lock → contender times out (does not steal it)", async () => {
     const holder = lock();
-    let release: (() => void) | null = null;
+    const releaseBox: { current: (() => void) | null } = { current: null };
     const holding = holder.run(
-      () => new Promise<void>((resolve) => (release = resolve))
+      () => new Promise<void>((resolve) => (releaseBox.current = resolve))
     );
-    for (let i = 0; i < 50 && release === null; i += 1) {
+    for (let i = 0; i < 50 && releaseBox.current === null; i += 1) {
       await new Promise((r) => setTimeout(r, 3));
     }
 
@@ -202,7 +202,7 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
       lock({ acquireTimeoutMs: 25 }).run(async () => undefined)
     ).rejects.toBeInstanceOf(SessionManifestLockUnavailableError);
 
-    release?.();
+    releaseBox.current?.();
     await holding;
   });
 

@@ -36,6 +36,12 @@ interface SettingsPanelViewOptions {
   isLoading?: boolean;
   error?: string | null;
   onChangeSettings?: Parameters<typeof SettingsPanelView>[0]["onChangeSettings"];
+  onSettingFieldFocus?: Parameters<
+    typeof SettingsPanelView
+  >[0]["onSettingFieldFocus"];
+  onSettingFieldBlur?: Parameters<
+    typeof SettingsPanelView
+  >[0]["onSettingFieldBlur"];
   selectedCategoryId?: SettingCategory;
   onSelectCategory?: (id: SettingCategory) => void;
   searchQuery?: string;
@@ -52,6 +58,8 @@ function settingsPanelViewElement(
     error: options.error ?? null,
     translate: translateFor(currentUiLanguage),
     onChangeSettings: options.onChangeSettings ?? (() => undefined),
+    onSettingFieldFocus: options.onSettingFieldFocus,
+    onSettingFieldBlur: options.onSettingFieldBlur,
     selectedCategoryId: options.selectedCategoryId ?? "application",
     onSelectCategory: options.onSelectCategory ?? (() => undefined),
     searchQuery: options.searchQuery ?? "",
@@ -130,6 +138,30 @@ function controlElement(
   key: string
 ): React.ReactElement<ElementProps> {
   return elementById(node, `settingControl-${key}`);
+}
+
+// #394 Step 2 follow-up: the "settingsItemControl" wrapper div carries the
+// onFocus/onBlur restart-required tracking (see SettingItemRow) rather than
+// each control kind's own <input>/<select> — this finds that wrapper.
+// Intended for use with an `isolate(key)` search query so exactly one item
+// (and thus exactly one wrapper) is rendered.
+function itemControlWrapperElement(
+  node: React.ReactNode
+): React.ReactElement<ElementProps> {
+  const elements = collectElements(
+    node,
+    (child) =>
+      typeof child.props.className === "string" &&
+      child.props.className === "settingsItemControl"
+  );
+
+  if (elements.length !== 1) {
+    throw new Error(
+      `Expected exactly one settingsItemControl wrapper, found ${elements.length}`
+    );
+  }
+
+  return elements[0];
 }
 
 describe("SettingsPanelView catalog-driven rendering (#230)", () => {
@@ -373,6 +405,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "editor.fontFamily",
+      "editor.undoHistoryMinDepth",
       "editor.paragraphIndent.excludeLeadingCharacters",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
@@ -993,7 +1026,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         lineEnding: settings.editor.lineEnding,
         whitespace: settings.editor.whitespace,
         paragraphIndent: settings.editor.paragraphIndent,
-        characterCount: settings.editor.characterCount
+        characterCount: settings.editor.characterCount,
+        undoHistoryMinDepth: settings.editor.undoHistoryMinDepth
       },
       files: settings.files
     });
@@ -1124,6 +1158,54 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(source).not.toContain("Apply");
     expect(source).not.toContain("onApply");
     expect(source).not.toContain("onCancel");
+  });
+});
+
+describe("SettingsPanelView restart-required focus/blur wiring (#394 Step 2 follow-up)", () => {
+  it("passes onSettingFieldFocus/onSettingFieldBlur straight through to every item's control wrapper, generically (not per-key)", () => {
+    const onSettingFieldFocus = vi.fn();
+    const onSettingFieldBlur = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("editor.undoHistoryMinDepth"),
+      onSettingFieldFocus,
+      onSettingFieldBlur
+    });
+    const wrapper = itemControlWrapperElement(element);
+
+    expect(wrapper.props.onFocus).toBe(onSettingFieldFocus);
+    expect(wrapper.props.onBlur).toBe(onSettingFieldBlur);
+  });
+
+  it("wires the same onFocus/onBlur props for a non-number control too (switch), proving this isn't hardcoded to undoHistoryMinDepth", () => {
+    const onSettingFieldFocus = vi.fn();
+    const onSettingFieldBlur = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.statusBar.visible"),
+      onSettingFieldFocus,
+      onSettingFieldBlur
+    });
+    const wrapper = itemControlWrapperElement(element);
+
+    expect(wrapper.props.onFocus).toBe(onSettingFieldFocus);
+    expect(wrapper.props.onBlur).toBe(onSettingFieldBlur);
+  });
+
+  it("leaves onFocus/onBlur undefined when the caller doesn't pass them, rather than throwing", () => {
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("editor.undoHistoryMinDepth")
+    });
+    const wrapper = itemControlWrapperElement(element);
+
+    expect(wrapper.props.onFocus).toBeUndefined();
+    expect(wrapper.props.onBlur).toBeUndefined();
+  });
+
+  it("does not check for a restart requirement inside SettingsPanel itself — that stays App.tsx's job", () => {
+    const source = settingsPanelSource();
+
+    expect(source).not.toContain("promptRestartIfRequired");
+    expect(source).not.toContain('import { getCatalogEntries');
+    expect(source).not.toMatch(/\.requiresRestart\b/);
   });
 });
 
@@ -1616,6 +1698,7 @@ describe("Settings number control right-alignment (common style)", () => {
       [
         "commandPalette.footerDetail.marquee.delay",
         "commandPalette.footerDetail.marquee.speed",
+        "editor.undoHistoryMinDepth",
         "preview.updateDelayMs",
         "workbench.notification.durationMs"
       ].sort()

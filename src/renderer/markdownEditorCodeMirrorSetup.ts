@@ -48,29 +48,47 @@ import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
 
-export const markdownEditorBaseSetup: Extension[] = [
-  lineNumbers(),
-  highlightActiveLineGutter(),
-  highlightSpecialChars(),
-  history(),
-  foldGutter(),
-  drawSelection(),
-  dropCursor(),
-  EditorState.allowMultipleSelections.of(true),
-  indentOnInput(),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-  bracketMatching(),
-  closeBrackets(),
-  rectangularSelection(),
-  crosshairCursor(),
-  highlightActiveLine(),
-  highlightSelectionMatches(),
-  keymap.of([
-    ...closeBracketsKeymap,
-    ...defaultKeymap,
-    ...searchKeymap,
-    ...historyKeymap,
-    ...foldKeymap,
-    ...lintKeymap
-  ])
-];
+export interface MarkdownEditorBaseSetupOptions {
+  /**
+   * #394 Step 1: `editor.undoHistoryMinDepth` (Settings Catalog default /
+   * `history()`'s own built-in default: 100). Applied only at `EditorState`
+   * construction time (mount, or a document's first-ever build) — Step 1
+   * deliberately does NOT reconfigure an existing document's already-built
+   * history extension when the setting changes later in the same process
+   * (no compartment wraps `history()` for that purpose). See
+   * markdownEditorDocumentState.ts's own doc comment for what this means in
+   * practice for a document already open when the setting changes.
+   */
+  readonly undoHistoryMinDepth: number;
+}
+
+export function createMarkdownEditorBaseSetup(
+  options: MarkdownEditorBaseSetupOptions
+): Extension[] {
+  return [
+    lineNumbers(),
+    highlightActiveLineGutter(),
+    highlightSpecialChars(),
+    history({ minDepth: options.undoHistoryMinDepth }),
+    foldGutter(),
+    drawSelection(),
+    dropCursor(),
+    EditorState.allowMultipleSelections.of(true),
+    indentOnInput(),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    bracketMatching(),
+    closeBrackets(),
+    rectangularSelection(),
+    crosshairCursor(),
+    highlightActiveLine(),
+    highlightSelectionMatches(),
+    keymap.of([
+      ...closeBracketsKeymap,
+      ...defaultKeymap,
+      ...searchKeymap,
+      ...historyKeymap,
+      ...foldKeymap,
+      ...lintKeymap
+    ])
+  ];
+}

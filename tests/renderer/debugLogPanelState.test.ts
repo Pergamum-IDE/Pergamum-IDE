@@ -10,6 +10,7 @@ import {
   formatDebugLogEventTime,
   mergeDebugLogSnapshotWithSubscribedEvents,
   resolveDebugLogSubscribedEventGap,
+  type DebugLogApi,
   type DebugLogBatchScheduler
 } from "../../src/renderer/debugLogPanelState";
 
@@ -157,15 +158,12 @@ describe("debug log panel state", () => {
 
   it("subscribes before snapshot and merges events received during the race", async () => {
     const initialSnapshot = deferred<DebugLogSnapshot>();
-    let subscriber: ((event: SanitizedDebugLogEvent) => void) | null = null;
+    const onEvent = vi.fn<DebugLogApi["onEvent"]>(() => vi.fn());
     const states: DebugLogSnapshot["events"][] = [];
     const controller = createDebugLogPanelSessionController({
       api: {
         getSnapshot: vi.fn(() => initialSnapshot.promise),
-        onEvent: vi.fn((callback) => {
-          subscriber = callback;
-          return vi.fn();
-        })
+        onEvent
       },
       onStateChange: (state) => {
         states.push(state.events);
@@ -174,8 +172,9 @@ describe("debug log panel state", () => {
     });
 
     controller.start();
-    subscriber?.(event(2));
-    subscriber?.(event(3));
+    const subscriber = onEvent.mock.calls[0][0];
+    subscriber(event(2));
+    subscriber(event(3));
     initialSnapshot.resolve(snapshot([event(1), event(2)]));
     await Promise.resolve();
 
@@ -188,15 +187,12 @@ describe("debug log panel state", () => {
 
   it("batches subscribed event state updates", async () => {
     const scheduler = createManualScheduler();
-    let subscriber: ((event: SanitizedDebugLogEvent) => void) | null = null;
+    const onEvent = vi.fn<DebugLogApi["onEvent"]>(() => vi.fn());
     const states: DebugLogSnapshot["events"][] = [];
     const controller = createDebugLogPanelSessionController({
       api: {
         getSnapshot: vi.fn(() => Promise.resolve(snapshot([]))),
-        onEvent: vi.fn((callback) => {
-          subscriber = callback;
-          return vi.fn();
-        })
+        onEvent
       },
       onStateChange: (state) => {
         states.push(state.events);
@@ -206,8 +202,9 @@ describe("debug log panel state", () => {
 
     controller.start();
     await Promise.resolve();
-    subscriber?.(event(1));
-    subscriber?.(event(2));
+    const subscriber = onEvent.mock.calls[0][0];
+    subscriber(event(1));
+    subscriber(event(2));
 
     expect(states.at(-1)).toEqual([]);
     expect(scheduler.pendingCount()).toBe(1);
@@ -222,7 +219,7 @@ describe("debug log panel state", () => {
 
   it("recovers from subscribed seq gaps up to three times", async () => {
     const scheduler = createManualScheduler();
-    let subscriber: ((event: SanitizedDebugLogEvent) => void) | null = null;
+    const onEvent = vi.fn<DebugLogApi["onEvent"]>(() => vi.fn());
     const getSnapshot = vi
       .fn()
       .mockResolvedValueOnce(snapshot([]))
@@ -233,10 +230,7 @@ describe("debug log panel state", () => {
     const controller = createDebugLogPanelSessionController({
       api: {
         getSnapshot,
-        onEvent: vi.fn((callback) => {
-          subscriber = callback;
-          return vi.fn();
-        })
+        onEvent
       },
       onStateChange: (state) => {
         states.push({
@@ -249,14 +243,15 @@ describe("debug log panel state", () => {
 
     controller.start();
     await Promise.resolve();
-    subscriber?.(event(10));
-    subscriber?.(event(12));
+    const subscriber = onEvent.mock.calls[0][0];
+    subscriber(event(10));
+    subscriber(event(12));
     await Promise.resolve();
-    subscriber?.(event(14));
+    subscriber(event(14));
     await Promise.resolve();
-    subscriber?.(event(16));
+    subscriber(event(16));
     await Promise.resolve();
-    subscriber?.(event(18));
+    subscriber(event(18));
     await Promise.resolve();
     scheduler.flush();
 
@@ -267,15 +262,12 @@ describe("debug log panel state", () => {
   it("cleans up the subscription and pending batch on dispose", async () => {
     const scheduler = createManualScheduler();
     const unsubscribe = vi.fn();
-    let subscriber: ((event: SanitizedDebugLogEvent) => void) | null = null;
+    const onEvent = vi.fn<DebugLogApi["onEvent"]>(() => unsubscribe);
     const states: DebugLogSnapshot["events"][] = [];
     const controller = createDebugLogPanelSessionController({
       api: {
         getSnapshot: vi.fn(() => Promise.resolve(snapshot([]))),
-        onEvent: vi.fn((callback) => {
-          subscriber = callback;
-          return unsubscribe;
-        })
+        onEvent
       },
       onStateChange: (state) => {
         states.push(state.events);
@@ -285,10 +277,11 @@ describe("debug log panel state", () => {
 
     controller.start();
     await Promise.resolve();
-    subscriber?.(event(1));
+    const subscriber = onEvent.mock.calls[0][0];
+    subscriber(event(1));
     controller.dispose();
     scheduler.flush();
-    subscriber?.(event(2));
+    subscriber(event(2));
 
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect(states.at(-1)).toEqual([]);

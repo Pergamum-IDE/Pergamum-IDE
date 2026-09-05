@@ -422,13 +422,26 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   const characterCount = readCharacterCountSettings(
     editorValue?.characterCount
   );
+  // #394 Step 1: applicationOnly, always concrete (like lineEnding/
+  // whitespace above) — an invalid or missing on-disk value falls back to
+  // the catalog default (100) rather than rejecting the whole editor block.
+  const undoHistoryMinDepth = resolveCatalogValue(
+    "editor.undoHistoryMinDepth",
+    editorValue?.undoHistoryMinDepth
+  ).value;
 
   if (
     editorValue === undefined ||
     typeof editorValue.fontFamily !== "string" ||
     !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
   ) {
-    return { lineEnding, whitespace, paragraphIndent, characterCount };
+    return {
+      lineEnding,
+      whitespace,
+      paragraphIndent,
+      characterCount,
+      undoHistoryMinDepth
+    };
   }
 
   return {
@@ -436,7 +449,8 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     lineEnding,
     whitespace,
     paragraphIndent,
-    characterCount
+    characterCount,
+    undoHistoryMinDepth
   };
 }
 
@@ -1177,13 +1191,15 @@ function parseEditorSettingsForWrite(
   const hasWhitespace = keys.includes("whitespace");
   const hasParagraphIndent = keys.includes("paragraphIndent");
   const hasCharacterCount = keys.includes("characterCount");
+  const hasUndoHistoryMinDepth = keys.includes("undoHistoryMinDepth");
 
   if (
     !hasLineEnding ||
     !hasWhitespace ||
     !hasParagraphIndent ||
     !hasCharacterCount ||
-    keys.length !== (hasFontFamily ? 5 : 4)
+    !hasUndoHistoryMinDepth ||
+    keys.length !== (hasFontFamily ? 6 : 5)
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -1196,13 +1212,27 @@ function parseEditorSettingsForWrite(
   const characterCount = parseCharacterCountSettingsForWrite(
     value.characterCount
   );
+  // #394 Step 1: applicationOnly, always concrete (like lineEnding/
+  // whitespace above) — an out-of-range/non-integer value rejects the whole
+  // Save, same as every other non-sparse editor field here.
+  const undoHistoryMinDepthResolution = resolveCatalogValue(
+    "editor.undoHistoryMinDepth",
+    value.undoHistoryMinDepth
+  );
+
+  if (!undoHistoryMinDepthResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const undoHistoryMinDepth = undoHistoryMinDepthResolution.value;
 
   if (!hasFontFamily) {
     return {
       lineEnding,
       whitespace,
       paragraphIndent,
-      characterCount
+      characterCount,
+      undoHistoryMinDepth
     };
   }
 
@@ -1218,7 +1248,8 @@ function parseEditorSettingsForWrite(
     lineEnding,
     whitespace,
     paragraphIndent,
-    characterCount
+    characterCount,
+    undoHistoryMinDepth
   };
 }
 

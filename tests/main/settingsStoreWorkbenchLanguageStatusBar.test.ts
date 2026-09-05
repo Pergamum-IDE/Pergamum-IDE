@@ -77,6 +77,9 @@ const defaultCharacterCountSettings = {
     )
   }
 };
+const defaultUndoHistoryMinDepth = getCatalogDefaultValue(
+  "editor.undoHistoryMinDepth"
+);
 function statusBarSettings(
   visible: boolean,
   characterCountVisible = getCatalogDefaultValue(
@@ -130,7 +133,8 @@ function saveRequest(
       lineEnding: defaultLineEndingSettings,
       whitespace: defaultWhitespaceSettings,
       paragraphIndent: defaultParagraphIndentSettings,
-      characterCount: defaultCharacterCountSettings
+      characterCount: defaultCharacterCountSettings,
+      undoHistoryMinDepth: defaultUndoHistoryMinDepth
     },
     files: {
       newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -461,7 +465,8 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         lineEnding: defaultLineEndingSettings,
         whitespace: defaultWhitespaceSettings,
         paragraphIndent: defaultParagraphIndentSettings,
-        characterCount: defaultCharacterCountSettings
+        characterCount: defaultCharacterCountSettings,
+        undoHistoryMinDepth: defaultUndoHistoryMinDepth
       },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -493,7 +498,8 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         lineEnding: defaultLineEndingSettings,
         whitespace: defaultWhitespaceSettings,
         paragraphIndent: defaultParagraphIndentSettings,
-        characterCount: defaultCharacterCountSettings
+        characterCount: defaultCharacterCountSettings,
+        undoHistoryMinDepth: defaultUndoHistoryMinDepth
       },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }

@@ -344,6 +344,9 @@ const commandPaletteFooterDetailMarqueeSpeedRange = getCatalogEntry(
 const previewUpdateDelayRange = getCatalogEntry(
   "preview.updateDelayMs"
 ).numericRange;
+const undoHistoryMinDepthRange = getCatalogEntry(
+  "editor.undoHistoryMinDepth"
+).numericRange;
 const notificationDurationRange = getCatalogEntry(
   "workbench.notification.durationMs"
 ).numericRange;
@@ -378,6 +381,20 @@ export const settingCatalogItems = defineSettingCatalog([
     descriptionKey: "settings.editor.fontFamily.description",
     control: { kind: "text" },
     defaultValue: getCatalogDefaultValue("editor.fontFamily")
+  },
+  {
+    key: "editor.undoHistoryMinDepth",
+    category: "editor",
+    order: 120,
+    labelKey: "settings.editor.undoHistoryMinDepth.label",
+    descriptionKey: "settings.editor.undoHistoryMinDepth.description",
+    control: {
+      kind: "number",
+      min: undoHistoryMinDepthRange.min,
+      max: undoHistoryMinDepthRange.max,
+      step: 100
+    },
+    defaultValue: getCatalogDefaultValue("editor.undoHistoryMinDepth")
   },
   {
     key: "editor.paragraphIndent.excludeLeadingCharacters",

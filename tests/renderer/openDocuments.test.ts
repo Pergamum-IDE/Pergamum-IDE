@@ -5,9 +5,13 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
+import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
 import {
   createGlossaryEntryCurrentEditor,
-  createMarkdownCurrentEditor
+  createMarkdownCurrentEditor,
+  type GlossaryEntryCurrentEditor,
+  type MarkdownCurrentEditor
 } from "../../src/renderer/currentEditor";
 import {
   currentDocumentForOpenedFile,
@@ -44,8 +48,26 @@ import {
   type ActiveProjectContext,
   type EditorId
 } from "../../src/shared/editorId";
-import type { PergamumProject, ProjectDocument } from "../../src/shared/api";
+import type {
+  MarkdownFile,
+  PergamumProject,
+  ProjectDocument
+} from "../../src/shared/api";
 import type { GlossaryEntry } from "../../src/shared/glossary";
+
+function markdownFile(path: string, content: string): MarkdownFile {
+  return {
+    path,
+    content,
+    metadata: {
+      encoding: "utf8",
+      lineEnding: "lf",
+      byteLength: Buffer.byteLength(content, "utf8"),
+      characterLength: content.length,
+      hadBom: false
+    }
+  };
+}
 
 const projectContext: ActiveProjectContext = {
   rootPath: "C:\\Novel"
@@ -116,33 +138,34 @@ describe("OpenDocumentsState", () => {
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createProjectDocumentEditorId("chapter-01.md", projectContext)
       )
     ).toBe(true);
     expect(state.documents[0].editor.kind).toBe("markdown");
-    expect(state.documents[0].editor.document.content).toBe("project content");
+    expect(
+      (state.documents[0].editor as MarkdownCurrentEditor).document.content
+    ).toBe("project content");
   });
 
   it("keeps a file CurrentDocument inside the project root as a standalone file editor", () => {
     const state = openOrActivateDocument(
       createInitialOpenDocumentsState(),
-      createFileDocument({
-        path: "C:\\Novel\\chapter-01.md",
-        content: "content"
-      }),
+      createFileDocument(markdownFile("C:\\Novel\\chapter-01.md", "content")),
       projectContext
     );
 
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createFileEditorIdForPath("C:\\Novel\\chapter-01.md")
       )
     ).toBe(true);
     expect(state.documents[0].editor.kind).toBe("markdown");
-    expect(state.documents[0].editor.document.kind).toBe("file");
+    expect(
+      (state.documents[0].editor as MarkdownCurrentEditor).document.kind
+    ).toBe("file");
   });
 
   it("keeps a file CurrentDocument distinct from an already-open projectDocument at the same path", () => {
@@ -153,10 +176,7 @@ describe("OpenDocumentsState", () => {
 
     const nextState = openOrActivateDocument(
       state,
-      createFileDocument({
-        path: "C:\\Novel\\chapter-01.md",
-        content: "content"
-      }),
+      createFileDocument(markdownFile("C:\\Novel\\chapter-01.md", "content")),
       projectContext
     );
 
@@ -180,10 +200,7 @@ describe("OpenDocumentsState", () => {
       ]
     };
     const document = currentDocumentForOpenedFile(
-      {
-        path: "C:\\novel\\chapter-01.md",
-        content: "content"
-      },
+      markdownFile("C:\\novel\\chapter-01.md", "content"),
       projectWithMixedCaseListing,
       projectContext
     );
@@ -207,10 +224,7 @@ describe("OpenDocumentsState", () => {
 
   it("creates a project CurrentDocument for a listed project file path", () => {
     const document = currentDocumentForOpenedFile(
-      {
-        path: "C:\\novel\\Chapter-01.md",
-        content: "content"
-      },
+      markdownFile("C:\\novel\\Chapter-01.md", "content"),
       project,
       projectContext
     );
@@ -224,10 +238,7 @@ describe("OpenDocumentsState", () => {
   it("does not fall back to a file CurrentDocument for an unlisted project path", () => {
     expect(() =>
       currentDocumentForOpenedFile(
-        {
-          path: "C:\\Novel\\missing.md",
-          content: "content"
-        },
+        markdownFile("C:\\Novel\\missing.md", "content"),
         project,
         projectContext
       )
@@ -235,21 +246,15 @@ describe("OpenDocumentsState", () => {
   });
 
   it("keeps the existing multi-tab behavior for standalone files", () => {
-    const firstDocument = createFileDocument({
-      path: "D:\\Outside\\first.md",
-      content: "first"
-    });
-    const secondDocument = createFileDocument({
-      path: "D:\\Outside\\second.md",
-      content: "second"
-    });
+    const firstDocument = createFileDocument(markdownFile("D:\\Outside\\first.md", "first"));
+    const secondDocument = createFileDocument(markdownFile("D:\\Outside\\second.md", "second"));
     let state = createInitialOpenDocumentsState();
 
     state = openOrActivateDocument(state, firstDocument, projectContext);
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createEditorIdForPath("D:\\Outside\\first.md", projectContext)
       )
     ).toBe(true);
@@ -258,7 +263,7 @@ describe("OpenDocumentsState", () => {
     expect(state.documents).toHaveLength(2);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createEditorIdForPath("D:\\Outside\\second.md", projectContext)
       )
     ).toBe(true);
@@ -267,7 +272,7 @@ describe("OpenDocumentsState", () => {
     expect(state.documents).toHaveLength(2);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createEditorIdForPath("D:\\Outside\\first.md", projectContext)
       )
     ).toBe(true);
@@ -345,22 +350,19 @@ describe("OpenDocumentsState", () => {
       projectContext
     );
 
-    const untitledEditorId = state.activeDocumentId;
+    const untitledEditorId = state.activeDocumentId as EditorId;
 
     const result = replaceOpenDocument(
       state,
       untitledEditorId,
-      createFileDocument({
-        path: "C:\\Novel\\chapter-01.md",
-        content: "saved"
-      }),
+      createFileDocument(markdownFile("C:\\Novel\\chapter-01.md", "saved")),
       projectContext
     );
 
     expect(result.didCollide).toBe(false);
     expect(
       editorIdEquals(
-        result.state.activeDocumentId,
+        result.state.activeDocumentId as EditorId,
         createFileEditorIdForPath("C:\\Novel\\chapter-01.md")
       )
     ).toBe(true);
@@ -387,7 +389,7 @@ describe("OpenDocumentsState", () => {
     expect(result.didCollide).toBe(false);
     expect(
       editorIdEquals(
-        result.state.activeDocumentId,
+        result.state.activeDocumentId as EditorId,
         createProjectDocumentEditorId("chapter-renamed.md", projectContext)
       )
     ).toBe(true);
@@ -417,7 +419,7 @@ describe("OpenDocumentsState", () => {
     // project-relative path; the old identity no longer resolves.
     expect(
       editorIdEquals(
-        result.state.activeDocumentId,
+        result.state.activeDocumentId as EditorId,
         createProjectDocumentEditorId(
           "Archive/chapter-01.md",
           projectContext
@@ -443,7 +445,7 @@ describe("OpenDocumentsState", () => {
     expect(documentTabs(state)).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createProjectDocumentEditorId("chapter-02.md", projectContext)
       )
     ).toBe(true);
@@ -494,10 +496,7 @@ describe("OpenDocumentsState", () => {
 
     state = openOrActivateDocument(
       state,
-      createFileDocument({
-        path: "C:\\Outside\\notes.md",
-        content: "external content"
-      }),
+      createFileDocument(markdownFile("C:\\Outside\\notes.md", "external content")),
       projectContext
     );
     state = openOrActivateEditor(
@@ -520,10 +519,7 @@ describe("OpenDocumentsState", () => {
 
     state = openOrActivateDocument(
       state,
-      createFileDocument({
-        path: "C:\\Outside\\notes.md",
-        content: "external content"
-      }),
+      createFileDocument(markdownFile("C:\\Outside\\notes.md", "external content")),
       projectContext
     );
 
@@ -542,10 +538,9 @@ describe("OpenDocumentsState", () => {
     // routing, a separate concern) with a path string that is textually
     // "inside" the project root, to prove documentTabs reads
     // CurrentDocument.kind rather than comparing paths itself.
-    const fileDocument = createFileDocument({
-      path: `${projectContext.rootPath}\\chapter-01.md`,
-      content: "content"
-    });
+    const fileDocument = createFileDocument(
+      markdownFile(`${projectContext.rootPath}\\chapter-01.md`, "content")
+    );
     const editorId = createUntitledEditorId(1);
     const state = {
       documents: [
@@ -575,14 +570,15 @@ describe("OpenDocumentsState", () => {
     expect(state.documents).toHaveLength(1);
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
       )
     ).toBe(true);
     expect(state.documents[0].editor.kind).toBe("glossaryEntry");
-    expect(state.documents[0].editor.draft.entry.description).toBe(
-      "王国の首都"
-    );
+    expect(
+      (state.documents[0].editor as GlossaryEntryCurrentEditor).draft.entry
+        .description
+    ).toBe("王国の首都");
   });
 
   it("updates only the active editor's draft, leaving other open editors untouched", () => {
@@ -609,10 +605,14 @@ describe("OpenDocumentsState", () => {
         : editor
     );
 
-    expect(updatedState.documents[1].editor.draft.description).toBe("編集後");
-    expect(updatedState.documents[0].editor.document.content).toBe(
-      "project content"
-    );
+    expect(
+      (updatedState.documents[1].editor as GlossaryEntryCurrentEditor).draft
+        .description
+    ).toBe("編集後");
+    expect(
+      (updatedState.documents[0].editor as MarkdownCurrentEditor).document
+        .content
+    ).toBe("project content");
   });
 
   it("does nothing when closing an EditorId that is not open", () => {
@@ -657,7 +657,7 @@ describe("OpenDocumentsState", () => {
     const nextState = closeOpenEditor(state, glossaryEditorId);
 
     expect(nextState.documents).toHaveLength(1);
-    expect(editorIdEquals(nextState.activeDocumentId, projectDocumentEditorId)).toBe(
+    expect(editorIdEquals(nextState.activeDocumentId as EditorId, projectDocumentEditorId)).toBe(
       true
     );
   });
@@ -684,7 +684,7 @@ describe("OpenDocumentsState", () => {
 
     expect(
       editorIdEquals(
-        state.activeDocumentId,
+        state.activeDocumentId as EditorId,
         createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
       )
     ).toBe(true);
@@ -695,7 +695,7 @@ describe("OpenDocumentsState", () => {
     );
 
     expect(nextState.documents).toHaveLength(1);
-    expect(editorIdEquals(nextState.activeDocumentId, projectDocumentEditorId)).toBe(
+    expect(editorIdEquals(nextState.activeDocumentId as EditorId, projectDocumentEditorId)).toBe(
       true
     );
   });
@@ -733,10 +733,7 @@ describe("OpenDocumentsState", () => {
     );
     state = openOrActivateDocument(
       state,
-      createFileDocument({
-        path: standalonePath,
-        content: "standalone content"
-      }),
+      createFileDocument(markdownFile(standalonePath, "standalone content")),
       projectContext
     );
     state = openOrActivateDocument(
@@ -759,7 +756,7 @@ describe("OpenDocumentsState", () => {
       )
     ).toEqual(["file", "untitled"]);
     expect(
-      editorIdEquals(nextState.activeDocumentId, createUntitledEditorId(1))
+      editorIdEquals(nextState.activeDocumentId as EditorId, createUntitledEditorId(1))
     ).toBe(true);
     expect(nextState.nextUntitledId).toBe(2);
   });
@@ -773,10 +770,7 @@ describe("OpenDocumentsState", () => {
     );
     state = openOrActivateDocument(
       state,
-      createFileDocument({
-        path: standalonePath,
-        content: "standalone content"
-      }),
+      createFileDocument(markdownFile(standalonePath, "standalone content")),
       projectContext
     );
     state = openOrActivateEditor(
@@ -791,7 +785,7 @@ describe("OpenDocumentsState", () => {
     expect(documentTabs(nextState).map((tab) => tab.title)).toEqual([
       "memo.md"
     ]);
-    expect(editorIdEquals(nextState.activeDocumentId, standaloneEditorId)).toBe(
+    expect(editorIdEquals(nextState.activeDocumentId as EditorId, standaloneEditorId)).toBe(
       true
     );
   });
@@ -814,10 +808,7 @@ describe("OpenDocumentsState", () => {
     );
     state = openOrActivateDocument(
       state,
-      createFileDocument({
-        path: standalonePath,
-        content: "standalone content"
-      }),
+      createFileDocument(markdownFile(standalonePath, "standalone content")),
       projectContext
     );
     state = activateOpenDocument(state, projectDocumentEditorId);
@@ -827,7 +818,7 @@ describe("OpenDocumentsState", () => {
     expect(documentTabs(nextState).map((tab) => tab.title)).toEqual([
       "memo.md"
     ]);
-    expect(editorIdEquals(nextState.activeDocumentId, standaloneEditorId)).toBe(
+    expect(editorIdEquals(nextState.activeDocumentId as EditorId, standaloneEditorId)).toBe(
       true
     );
   });
@@ -889,7 +880,9 @@ describe("OpenDocumentsState zero-tab invariant (#262)", () => {
         createUntitledEditorId(1)
       )
     ).toBe(true);
-    expect(state.documents[0].editor.document.kind).toBe("untitled");
+    expect(
+      (state.documents[0].editor as MarkdownCurrentEditor).document.kind
+    ).toBe("untitled");
     expect(state.nextUntitledId).toBe(2);
     expectConsistent(state);
   });
@@ -1006,7 +999,7 @@ describe("resolveCloseTargetEditorId (#184)", () => {
       projectContext
     );
 
-    expect(editorIdEquals(state.activeDocumentId, firstEditorId)).toBe(false);
+    expect(editorIdEquals(state.activeDocumentId as EditorId, firstEditorId)).toBe(false);
     expect(
       editorIdEquals(
         resolveCloseTargetEditorId(state, firstEditorId) as EditorId,
@@ -1046,7 +1039,11 @@ describe("isOpenDocumentDirty (#184)", () => {
       projectContext
     );
     const dirtyState = updateActiveOpenDocument(initialState, (document) =>
-      updateCurrentDocumentContent(document, "changed")
+      updateCurrentDocumentContent(
+        document,
+        "changed",
+        buildLineEndingBreakSet(analyzeLineEndings("changed"))
+      )
     );
 
     expect(
@@ -1092,10 +1089,7 @@ describe("activeProjectDocumentRelativePath (#318)", () => {
 
   it("is null for an external / standalone Markdown file editor", () => {
     const state = createOpenDocumentsStateWithDocument(
-      createFileDocument({
-        path: "C:\\Elsewhere\\notes.md",
-        content: "content"
-      }),
+      createFileDocument(markdownFile("C:\\Elsewhere\\notes.md", "content")),
       projectContext
     );
 
@@ -1179,14 +1173,18 @@ describe("reorderOpenDocuments / editorIdsForBatchTabClose (#354)", () => {
   it("preserves activeDocumentId, identity, dirty and view state", () => {
     let state = fourTabState();
     state = updateActiveOpenDocument(state, (document) =>
-      updateCurrentDocumentContent(document, "dirty edit")
+      updateCurrentDocumentContent(
+        document,
+        "dirty edit",
+        buildLineEndingBreakSet(analyzeLineEndings("dirty edit"))
+      )
     );
-    const activeBefore = state.activeDocumentId;
+    const activeBefore = state.activeDocumentId as EditorId;
     const dirtyBefore = documentTabs(state).map((t) => t.isDirty);
 
     const next = reorderOpenDocuments(state, idFor("a.md"), 3);
 
-    expect(editorIdEquals(next.activeDocumentId, activeBefore)).toBe(true);
+    expect(editorIdEquals(next.activeDocumentId as EditorId, activeBefore)).toBe(true);
     expect(next.nextUntitledId).toBe(state.nextUntitledId);
     // same OpenDocument objects, just reordered
     expect(new Set(next.documents)).toEqual(new Set(state.documents));

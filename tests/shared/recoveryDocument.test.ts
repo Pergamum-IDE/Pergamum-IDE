@@ -12,7 +12,7 @@ import {
 const SHA = "a".repeat(64);
 
 function filePayload(
-  overrides: Partial<RecoveryDocumentPayload> = {}
+  overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
     documentKey: "file:C:/Novel/chapter.md",

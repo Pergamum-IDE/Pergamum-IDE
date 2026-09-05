@@ -59,6 +59,15 @@ export type LifecycleCloseDecision =
 export interface QuitApplicationRequest {
   readonly requestId: string;
   readonly intent: "explicitApplicationQuit";
+  /**
+   * #394 Step 3: when true, main relaunches the app (`app.relaunch()`)
+   * BEFORE calling `app.quit()` for this request — i.e. only once quit
+   * itself is being authorized here, never earlier (see
+   * requestApplicationQuit in windowLifecycle.ts). Absent/false is an
+   * ordinary quit with no relaunch. This is generic restart-request
+   * plumbing, not specific to any one Settings key.
+   */
+  readonly restartAfterQuit?: boolean;
 }
 
 export type QuitApplicationResult =

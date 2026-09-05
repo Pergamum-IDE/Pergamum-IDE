@@ -11,6 +11,8 @@ import {
   markCurrentDocumentSaved,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
+import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
 
 describe("editor state vocabulary", () => {
   it("derives conflict only from dirty + stale", () => {
@@ -55,11 +57,19 @@ describe("editor state vocabulary", () => {
   it("preserves existing Markdown dirty and mark-saved behavior", () => {
     const document = createFileDocument({
       path: "C:\\Novel\\chapter.md",
-      content: "saved"
+      content: "saved",
+      metadata: {
+        encoding: "utf8",
+        lineEnding: "lf",
+        byteLength: 5,
+        characterLength: 5,
+        hadBom: false
+      }
     });
     const updatedDocument = updateCurrentDocumentContent(
       document,
-      "changed"
+      "changed",
+      buildLineEndingBreakSet(analyzeLineEndings("changed"))
     );
     const savedDocument = markCurrentDocumentSaved(updatedDocument);
 

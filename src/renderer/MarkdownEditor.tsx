@@ -1,4 +1,3 @@
-import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import {
@@ -29,11 +28,7 @@ import type {
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
 import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
-import {
-  buildLineEndingBreakSet,
-  createLineEndingTrackingExtension,
-  documentSwitchTransactionSpec
-} from "./editorLineEndingField";
+import { documentSwitchTransactionSpec } from "./editorLineEndingField";
 import type { LineEndingBreakSet } from "./editorLineEndingField";
 import type { LineEndingBreak, LineEndingKind } from "./lineEndingTracking";
 import {
@@ -47,11 +42,11 @@ import {
   captureEditorViewState,
   type EditorViewState
 } from "./editorViewState";
+import type { MarkdownEditorGlossaryCompletionConfig } from "./glossaryCompletionExtension";
 import {
-  createGlossaryCompletionExtension,
-  type MarkdownEditorGlossaryCompletionConfig
-} from "./glossaryCompletionExtension";
-import { markdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
+  createMarkdownEditorDocumentState,
+  type MarkdownEditorDocumentState
+} from "./markdownEditorDocumentState";
 
 export type { MarkdownEditorGlossaryCompletionConfig };
 
@@ -102,6 +97,17 @@ interface MarkdownEditorProps {
    * shown via marker variant/styling, not by choosing a different glyph.
    */
   markerGlyph?: LineEndingMarkerGlyph;
+  /**
+   * `editor.undoHistoryMinDepth` (#394 Step 1) — the `history()` extension's
+   * `minDepth` for a Markdown document's `EditorState`. Read only at
+   * `EditorState` construction time (mount, or a document's first-ever
+   * build) — Step 1 deliberately never reconfigures an already-built
+   * document's history when this changes later in the same process (see
+   * markdownEditorCodeMirrorSetup.ts). Defaults to 100, matching both the
+   * Settings Catalog default and `history()`'s own built-in default, so an
+   * unset value is behaviorally a no-op.
+   */
+  undoHistoryMinDepth?: number;
   /**
    * `editor.whitespace.*` (#256) — which whitespace categories to paint
    * display-only markers for (ideographic space, ASCII space, tab, other
@@ -184,6 +190,22 @@ interface MarkdownEditorProps {
    * supplies it.
    */
   glossaryCompletion?: MarkdownEditorGlossaryCompletionConfig | null;
+  /**
+   * #392: the runtime-only per-document `EditorState` cache itself, OWNED
+   * above this component (App.tsx) so it survives this component's own
+   * unmount/remount — e.g. visiting Settings / Debug Log / a Glossary
+   * Manager or Tag Manager tab / a Glossary Entry editor tab and back all
+   * unmount EditorSurface (and this component with it), which previously
+   * (#387) meant a component-local cache was lost at exactly that boundary.
+   * `undefined` (GlossaryEditor's description field, which never switches
+   * documents and has no need to survive an unmount it IS the field of)
+   * falls back to a local, component-lifetime-only cache — behaviorally
+   * identical to #387's original design for that one case. Pruning a
+   * closed document's entry is the OWNER's job (App.tsx, keyed off its own
+   * open-document list) — this component never prunes the Map itself, only
+   * reads / writes individual entries.
+   */
+  documentStates?: Map<string, MarkdownEditorDocumentState>;
 }
 
 /**
@@ -328,6 +350,7 @@ export function MarkdownEditor({
   newFileLineEndingFallback = "lf",
   expectedLineEnding = "lf",
   markerGlyph = "⏎",
+  undoHistoryMinDepth = 100,
   whitespaceSettings,
   pendingSelection,
   onPendingSelectionApplied,
@@ -344,7 +367,8 @@ export function MarkdownEditor({
   onRestoreViewStateApplied,
   focusRequest,
   onFocusRequestApplied,
-  glossaryCompletion
+  glossaryCompletion,
+  documentStates: documentStatesProp
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -401,13 +425,39 @@ export function MarkdownEditor({
   const whitespaceSettingsRef = useRef<ApplicationEditorWhitespaceSettings>(
     whitespaceSettings ?? noWhitespaceRendering
   );
-  // Set once, at mount, so the settings-reconfigure effect below can build
-  // a fresh marker feature against the SAME tracking field instance — the
-  // field itself is never recreated (see the mount effect for why).
+  // #387: points at whichever document is CURRENTLY active's own
+  // `lineEndingField` instance (each document gets its own — see
+  // markdownEditorDocumentState.ts), kept fresh here so the
+  // settings-reconfigure effects below can build a marker feature against
+  // the right field without needing to know about document switching
+  // themselves. Swapped, never mutated in place, on every genuine switch.
   const lineEndingFieldRef = useRef<StateField<LineEndingBreakSet> | null>(
     null
   );
   const appliedFocusRequestIdRef = useRef<number | null>(null);
+  // #392: component-local fallback cache, used only when no `documentStates`
+  // prop is supplied (GlossaryEditor's description field — see that prop's
+  // doc comment). Never read directly elsewhere in this file; always go
+  // through the `documentStates` constant below.
+  const fallbackDocumentStatesRef = useRef<
+    Map<string, MarkdownEditorDocumentState>
+  >(new Map());
+  // #387 PoC / #392: runtime-only per-document EditorState cache, keyed by
+  // `documentKey` — never Session / Recovery / project DB / pergamum.json
+  // (nothing outside App.tsx's own owning ref and this component ever reads
+  // it; `content` remains the one string every persistence / save / search
+  // path already uses, completely unchanged by this cache's existence).
+  // Populated lazily, right before switching away from a document AND on
+  // unmount (see the document-switch effect and the mount effect's cleanup
+  // below). As of #392 this Map itself is OWNED by App.tsx (passed in as the
+  // `documentStates` prop) precisely so it is NOT lost when this component
+  // unmounts — e.g. navigating to Settings / Debug Log / a Glossary Manager
+  // or Tag Manager tab / a Glossary Entry editor tab and back all unmount
+  // the single shared EditorSurface (and this component with it); before
+  // #392 that was a known, accepted PoC boundary where the cache reset.
+  // Pruning a closed document's entry is App.tsx's job, not this
+  // component's — see the `documentStates` prop's own doc comment.
+  const documentStates = documentStatesProp ?? fallbackDocumentStatesRef.current;
 
   if (!readOnlyCompartmentRef.current) {
     readOnlyCompartmentRef.current = new Compartment();
@@ -423,6 +473,193 @@ export function MarkdownEditor({
     whitespaceCompartmentRef.current = new Compartment();
   }
   const whitespaceCompartment = whitespaceCompartmentRef.current;
+
+  // #375 Document Map: hoisted out of the mount effect (rather than defined
+  // inline there, as before #387) so the document-switch effect below can
+  // build a fresh document's updateListener identically via
+  // createUpdateListenerExtension, without duplicating this logic. Reads
+  // only editor-instance-level refs — never anything per-document.
+  function scheduleVisibleRangePush(): void {
+    if (
+      !onVisibleRangeChangeRef.current ||
+      visibleRangeFrameRef.current !== null ||
+      typeof requestAnimationFrame === "undefined"
+    ) {
+      if (onVisibleRangeChangeRef.current && !visibleRangeFrameRef.current) {
+        pushVisibleRange();
+      }
+      return;
+    }
+
+    visibleRangeFrameRef.current = requestAnimationFrame(() => {
+      visibleRangeFrameRef.current = null;
+      pushVisibleRange();
+    });
+  }
+
+  function pushVisibleRange(): void {
+    const currentView = viewRef.current;
+    if (!currentView || !onVisibleRangeChangeRef.current) {
+      return;
+    }
+
+    const { from, to } = currentView.viewport;
+    onVisibleRangeChangeRef.current({ from, to });
+  }
+
+  // #387: the update listener BODY is editor-instance-level (sound feedback,
+  // onChange, View State dirty signal, Document Map push) and identical for
+  // every document — only `lineEndingField` differs per document (each has
+  // its own — see markdownEditorDocumentState.ts). Built once per document's
+  // OWN EditorState (mount, or a later first-time switch to it), closing
+  // over whichever field that document's state was created with, so
+  // `update.state.field(lineEndingField)` below always reads the right one.
+  function createUpdateListenerExtension(
+    lineEndingField: StateField<LineEndingBreakSet>
+  ) {
+    return EditorView.updateListener.of((update) => {
+      const soundEvent = readOnlyRef.current
+        ? null
+        : markdownEditorInputSoundEventFromTransactions(update.transactions);
+
+      if (soundEvent && soundFeedbackRef.current && soundSettingsRef.current) {
+        playMarkdownEditorInputSound(
+          soundEvent,
+          soundFeedbackRef.current,
+          soundSettingsRef.current
+        );
+      }
+
+      if (update.docChanged && !readOnlyRef.current) {
+        onChangeRef.current(
+          update.state.doc.toString(),
+          update.state.field(lineEndingField)
+        );
+      }
+
+      // #272 (PO decision): a View-State-only change (caret / selection
+      // moved, or the viewport scrolled) with NO document edit still needs a
+      // coalesced Session flush. A doc edit is already covered by the React
+      // state update above, so it is excluded here. This is a bare, cheap
+      // signal — no capture / hash / serialization.
+      if (
+        !update.docChanged &&
+        (update.selectionSet || update.viewportChanged)
+      ) {
+        onViewStateDirtyRef.current?.();
+      }
+
+      // #375 Document Map: push the on-screen document range whenever the
+      // viewport / geometry / document changed, rAF-coalesced so a fast
+      // scroll doesn't spam the parent's setState.
+      if (
+        update.viewportChanged ||
+        update.geometryChanged ||
+        update.docChanged
+      ) {
+        scheduleVisibleRangePush();
+      }
+    });
+  }
+
+  // #387: builds one document's fresh EditorState — used for the very first
+  // document this editor instance shows, and for any later document with no
+  // cached state yet (see documentStates's doc comment / the
+  // document-switch effect below). `markerGlyph` (the prop, not a ref) is
+  // only the feature's construction-time value, exactly as before #387 —
+  // `markerGlyphRef`/`expectedLineEndingRef` are what stay live afterward.
+  // `undoHistoryMinDepth` (#394 Step 1) is the same kind of construction-time
+  // value — read once per document build, never made live via a ref, since
+  // Step 1 does not reconfigure an existing document's history extension.
+  function buildDocumentState(
+    docContent: string,
+    docInitialBreaks: readonly LineEndingBreak[]
+  ): MarkdownEditorDocumentState {
+    return createMarkdownEditorDocumentState({
+      doc: docContent,
+      initialLineEndingBreaks: docInitialBreaks,
+      undoHistoryMinDepth,
+      newFileLineEndingFallbackRef,
+      readOnlyCompartment,
+      readOnlyRef,
+      visibilityCompartment,
+      markerGlyph,
+      expectedLineEndingRef,
+      markerGlyphRef,
+      whitespaceCompartment,
+      whitespaceSettingsRef,
+      glossaryCompletionRef,
+      createUpdateListenerExtension
+    });
+  }
+
+  // #392: the Settings-driven compartments (readOnly / line-ending marker
+  // visibility / whitespace) are shared editor-instance-wide slots — a
+  // document restored from `documentStates` may still reflect whatever
+  // those settings were the last time IT was active (possibly a previous
+  // MOUNT lifetime of this very component, now that the cache survives
+  // unmount), so this is dispatched right after every cache restore
+  // (mount OR switch) to bring it up to date. Mirrors the three
+  // settings-reconfigure effects below exactly; effects only, so this is
+  // never a document edit (no dirty, no undo entry, no selection/caret
+  // move).
+  function reconcileSettingsEffects(
+    lineEndingField: StateField<LineEndingBreakSet>
+  ) {
+    return [
+      readOnlyCompartment.reconfigure([
+        EditorState.readOnly.of(readOnlyRef.current),
+        EditorView.editable.of(!readOnlyRef.current)
+      ]),
+      visibilityCompartment.reconfigure(
+        createVisibilityExtension(
+          createLineEndingVisibilityFeatures(
+            markerGlyphRef.current,
+            lineEndingField,
+            () => expectedLineEndingRef.current,
+            () => markerGlyphRef.current
+          )
+        )
+      ),
+      whitespaceCompartment.reconfigure(
+        whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
+      )
+    ];
+  }
+
+  // #392 (originally #387, generalized here since the cache can now survive
+  // this component's own unmount — see the `documentStates` prop's doc
+  // comment): resolves which EditorState a document identified by `key`
+  // should show right now. Prefers a cached entry, but ONLY when its
+  // document content still matches `docContent` — see #387 plan item 6
+  // ("external content update"): an INACTIVE document's `content` can be
+  // changed from outside CodeMirror entirely (e.g. Open Documents Replace
+  // applies its edit directly to `openDocumentsState` for any buffer that
+  // isn't the active editor, with no transaction and no EditorState
+  // involved). A cached EditorState whose doc no longer matches the
+  // incoming content is stale relative to that external edit; restoring it
+  // verbatim would silently revert the edit. Falling back to a fresh build
+  // (that document's own undo history is lost, but the external edit is
+  // never reverted) is the same documented tradeoff `syncBufferToDiskContent`
+  // already accepts for the active document's own disk-sync case below.
+  function resolveDocumentState(
+    key: string,
+    docContent: string,
+    docInitialBreaks: readonly LineEndingBreak[]
+  ): { documentState: MarkdownEditorDocumentState; wasRestoredFromCache: boolean } {
+    const cachedEntry = documentStates.get(key);
+    const cached =
+      cachedEntry && cachedEntry.state.doc.toString() === docContent
+        ? cachedEntry
+        : null;
+
+    return cached
+      ? { documentState: cached, wasRestoredFromCache: true }
+      : {
+          documentState: buildDocumentState(docContent, docInitialBreaks),
+          wasRestoredFromCache: false
+        };
+  }
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -470,135 +707,33 @@ export function MarkdownEditor({
       return undefined;
     }
 
-    // #253: the tracking field is created once and lives for this
-    // EditorView's whole lifetime — a document switch resets its *value*
-    // (via resetLineEndingBreaksEffect, dispatched in the document-switch
-    // effect below) rather than swapping in a different field instance.
-    // (A StateField's own `create()` cannot be reused for re-seeding: were
-    // this field re-created via a Compartment reconfigure bundled with a
-    // content-replacing change, CodeMirror advances the freshly-`create()`d
-    // value through that very same transaction, double-applying its
-    // changes to the just-seeded breaks — confirmed directly against
-    // `@codemirror/state`, not assumed.)
-    const { field: lineEndingField, extension: lineEndingExtension } =
-      createLineEndingTrackingExtension(
-        initialLineEndingBreaks,
-        () => newFileLineEndingFallbackRef.current
-      );
-    lineEndingFieldRef.current = lineEndingField;
+    // #392: this first document may already have a cached EditorState from
+    // a PREVIOUS mount lifetime of this very component (the `documentStates`
+    // Map now typically outlives this component — see that prop's doc
+    // comment) — e.g. the user was editing this document, switched to
+    // Settings (unmounting this component), and has now come back to it.
+    // `resolveDocumentState` picks that cache up exactly like the
+    // document-switch effect below does for an in-session switch.
+    const resolved = resolveDocumentState(
+      documentKeyRef.current,
+      value,
+      initialLineEndingBreaks
+    );
+    lineEndingFieldRef.current = resolved.documentState.lineEndingField;
+    documentStates.set(documentKeyRef.current, resolved.documentState);
 
     const view = new EditorView({
       parent: hostRef.current,
-      state: EditorState.create({
-        doc: value,
-        extensions: [
-          ...markdownEditorBaseSetup,
-          markdown(),
-          EditorView.lineWrapping,
-          readOnlyCompartment.of([
-            EditorState.readOnly.of(readOnly),
-            EditorView.editable.of(!readOnly)
-          ]),
-          visibilityCompartment.of(
-            createVisibilityExtension(
-              createLineEndingVisibilityFeatures(
-                markerGlyph,
-                lineEndingField,
-                () => expectedLineEndingRef.current,
-                () => markerGlyphRef.current
-              )
-            )
-          ),
-          lineEndingExtension,
-          whitespaceCompartment.of(
-            whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
-          ),
-          createGlossaryCompletionExtension({
-            getConfig: () => glossaryCompletionRef.current,
-            isReadOnly: () => readOnlyRef.current
-          }),
-          EditorView.updateListener.of((update) => {
-            const soundEvent = readOnlyRef.current
-              ? null
-              : markdownEditorInputSoundEventFromTransactions(
-                  update.transactions
-                );
-
-            if (
-              soundEvent &&
-              soundFeedbackRef.current &&
-              soundSettingsRef.current
-            ) {
-              playMarkdownEditorInputSound(
-                soundEvent,
-                soundFeedbackRef.current,
-                soundSettingsRef.current
-              );
-            }
-
-            if (update.docChanged && !readOnlyRef.current) {
-              onChangeRef.current(
-                update.state.doc.toString(),
-                update.state.field(lineEndingField)
-              );
-            }
-
-            // #272 (PO decision): a View-State-only change (caret / selection
-            // moved, or the viewport scrolled) with NO document edit still
-            // needs a coalesced Session flush. A doc edit is already covered
-            // by the React state update above, so it is excluded here. This
-            // is a bare, cheap signal — no capture / hash / serialization.
-            if (
-              !update.docChanged &&
-              (update.selectionSet || update.viewportChanged)
-            ) {
-              onViewStateDirtyRef.current?.();
-            }
-
-            // #375 Document Map: push the on-screen document range whenever the
-            // viewport / geometry / document changed, rAF-coalesced so a fast
-            // scroll doesn't spam the parent's setState.
-            if (
-              update.viewportChanged ||
-              update.geometryChanged ||
-              update.docChanged
-            ) {
-              scheduleVisibleRangePush();
-            }
-          })
-        ]
-      })
+      state: resolved.documentState.state
     });
 
-    viewRef.current = view;
-
-    function scheduleVisibleRangePush(): void {
-      if (
-        !onVisibleRangeChangeRef.current ||
-        visibleRangeFrameRef.current !== null ||
-        typeof requestAnimationFrame === "undefined"
-      ) {
-        if (onVisibleRangeChangeRef.current && !visibleRangeFrameRef.current) {
-          pushVisibleRange();
-        }
-        return;
-      }
-
-      visibleRangeFrameRef.current = requestAnimationFrame(() => {
-        visibleRangeFrameRef.current = null;
-        pushVisibleRange();
+    if (resolved.wasRestoredFromCache) {
+      view.dispatch({
+        effects: reconcileSettingsEffects(resolved.documentState.lineEndingField)
       });
     }
 
-    function pushVisibleRange(): void {
-      const currentView = viewRef.current;
-      if (!currentView || !onVisibleRangeChangeRef.current) {
-        return;
-      }
-
-      const { from, to } = currentView.viewport;
-      onVisibleRangeChangeRef.current({ from, to });
-    }
+    viewRef.current = view;
 
     // First push once the initial layout has settled.
     scheduleVisibleRangePush();
@@ -611,6 +746,18 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
+      // #392: capture this document's final live EditorState (undo history
+      // included) into `documentStates` before tearing down — this is what
+      // lets a cache OWNED above this component (App.tsx) survive this
+      // component's own unmount (Settings / Debug Log / a Glossary Manager
+      // or Tag Manager tab / a Glossary Entry editor tab). Without this, any
+      // edits made since the last switch-away would never make it into the
+      // cache, since the switch effect below only captures on a SWITCH, not
+      // on a plain unmount.
+      documentStates.set(documentKeyRef.current, {
+        state: view.state,
+        lineEndingField: lineEndingFieldRef.current!
+      });
       // #375 Document Map: stop the coalesced viewport push and clear the overlay.
       if (
         visibleRangeFrameRef.current !== null &&
@@ -625,8 +772,9 @@ export function MarkdownEditor({
     };
     // Deliberately mount-only: initialLineEndingBreaks/newFileLineEndingFallback
     // are only meant to seed the field once per document — the
-    // document-switch effect below (keyed on documentKey) is what re-seeds
-    // it for a genuinely different document, not a re-run of this effect.
+    // document-switch effect below (keyed on documentKey) is what builds /
+    // restores state for a genuinely different document, not a re-run of
+    // this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -817,18 +965,24 @@ export function MarkdownEditor({
       return;
     }
 
-    // #253: a genuine document switch (not an echo of this editor's own
-    // typing) must reset the line-ending tracking field to the new
-    // document's `initialLineEndingBreaks`, bundled into the SAME
-    // transaction as the content replace — never as two separate
-    // dispatches, which would let the tracking field briefly map its
-    // *previous* document's breaks against the *new* document's content.
-    // That same transaction is also excluded from Undo history (see
-    // documentSwitchTransactionSpec) since this EditorView is reused
-    // across every open document (#250) — without the exclusion, Undo
-    // right after a switch would revert the text to the previous
-    // document while leaving the tracking field at the new document's
-    // breaks.
+    // #387: a genuine document switch (not an echo of this editor's own
+    // typing) now swaps in that OTHER document's own EditorState wholesale
+    // via `view.setState(...)` — a cached one (full undo/redo history
+    // intact) when this document has been visited before in this
+    // MarkdownEditor instance's lifetime, otherwise a freshly built one. The
+    // OUTGOING document's live `view.state` (with whatever edits/history it
+    // now holds) is captured into the cache first, so switching back to it
+    // later restores exactly where it was left — this is the #387 fix for
+    // #253's very own `documentSwitchTransactionSpec`, which this path no
+    // longer uses: that helper always excluded the switch from Undo history
+    // BECAUSE every document shared one continuous EditorState (#250) — a
+    // whole-document replace transaction on a per-document EditorState would
+    // instead show up as (and be undoable as) an edit to the WRONG document
+    // the next time its own history is replayed. `documentSwitchTransactionSpec`
+    // remains in use by `syncBufferToDiskContent` below, which intentionally
+    // resets a document's own history after an external disk sync — a
+    // different, still-valid case of #6 in #387's own plan ("external
+    // content update").
     if (documentKeyRef.current !== documentKey) {
       // #272: capture the OUTGOING document's final View State (still shown
       // by the shared view at this instant) before it is replaced. This is
@@ -837,15 +991,31 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
+      // #387/#392: cache the OUTGOING document's live EditorState (its full
+      // undo history included) under the key it is STILL showing, before
+      // that key ref advances below.
+      documentStates.set(documentKeyRef.current, {
+        state: view.state,
+        lineEndingField: lineEndingFieldRef.current!
+      });
       documentKeyRef.current = documentKey;
 
-      view.dispatch(
-        documentSwitchTransactionSpec(
-          view.state.doc.length,
-          value,
-          buildLineEndingBreakSet(initialLineEndingBreaks)
-        )
+      const resolved = resolveDocumentState(
+        documentKey,
+        value,
+        initialLineEndingBreaks
       );
+      view.setState(resolved.documentState.state);
+      lineEndingFieldRef.current = resolved.documentState.lineEndingField;
+
+      if (resolved.wasRestoredFromCache) {
+        view.dispatch({
+          effects: reconcileSettingsEffects(
+            resolved.documentState.lineEndingField
+          )
+        });
+      }
+
       return;
     }
 

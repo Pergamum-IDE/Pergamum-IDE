@@ -173,11 +173,15 @@ describe("glossary commands", () => {
     }));
 
     expect(
-      registry.enablementForContext(glossaryCommandIds.createEntry, {
-        "project.isOpen": true,
-        "project.access.readWrite": false,
-        "project.access.readOnly": true
-      })
+      registry.enablementForContext(
+        glossaryCommandIds.createEntry,
+        {
+          "project.isOpen": true,
+          "project.access.readWrite": false,
+          "project.access.readOnly": true
+        },
+        input
+      )
     ).toEqual({
       enabled: false,
       disabledReason: "readOnlyProject"

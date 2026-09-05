@@ -21,6 +21,8 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
+import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
 import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
 import { t, type Translate } from "../../src/shared/i18n";
 import { createProjectDocumentEditorId } from "../../src/shared/editorId";
@@ -63,7 +65,11 @@ function cleanState() {
 
 function dirtyState() {
   return updateActiveOpenDocument(cleanState(), (document) =>
-    updateCurrentDocumentContent(document, "changed")
+    updateCurrentDocumentContent(
+      document,
+      "changed",
+      buildLineEndingBreakSet(analyzeLineEndings("changed"))
+    )
   );
 }
 

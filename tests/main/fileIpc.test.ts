@@ -57,10 +57,10 @@ vi.mock("../../src/main/projectIpc", () => ({
 import { registerFileIpc } from "../../src/main/fileIpc";
 
 function buildLoggerMock(): Pick<DebugLogger, "log" | "documentRefForKey"> & {
-  log: ReturnType<typeof vi.fn>;
+  log: ReturnType<typeof vi.fn<DebugLogger["log"]>>;
 } {
   return {
-    log: vi.fn(),
+    log: vi.fn<DebugLogger["log"]>(),
     documentRefForKey: vi.fn(() => "document:session:001")
   };
 }
@@ -477,6 +477,11 @@ describe("file IPC", () => {
       expect(call).toBeTruthy();
       const details = call?.[0].details;
 
+      expect(details).toBeTruthy();
+      if (!details) {
+        throw new Error("expected logged details");
+      }
+
       expect(details.documentOpenId).toBe("documentOpen.1");
       expect(typeof details.durationMs).toBe("number");
       expect(details.fileSizeBytes).toBe(
@@ -572,7 +577,7 @@ describe("file IPC", () => {
         ([entry]) => entry.event === "document.open.fileRead.completed"
       );
 
-      expect(call?.[0].details.documentOpenId).toBeUndefined();
+      expect(call?.[0].details?.documentOpenId).toBeUndefined();
     });
 
     it.each([
@@ -663,8 +668,8 @@ describe("file IPC", () => {
         ([entry]) => entry.event === "document.open.failed"
       );
 
-      expect(call?.[0].details.documentOpenId).toBe("documentOpen.7");
-      expect(call?.[0].details.result).toBe("failed");
+      expect(call?.[0].details?.documentOpenId).toBe("documentOpen.7");
+      expect(call?.[0].details?.result).toBe("failed");
     });
 
     it("does not log a fileRead.completed event when the user cancels the dialog", async () => {
