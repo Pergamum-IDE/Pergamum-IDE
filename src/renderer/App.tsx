@@ -176,7 +176,10 @@ import type {
 import { resolveColdStartMarkdownFocusPolicy } from "./coldStartMarkdownFocusPolicy";
 import { resolveCommandPaletteFocusRestorePolicy } from "./commandPaletteFocusRestorePolicy";
 import type { EditorViewState } from "./editorViewState";
-import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
+import {
+  applyChangesToCachedMarkdownEditorDocumentState,
+  type MarkdownEditorDocumentState
+} from "./markdownEditorDocumentState";
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
 import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
@@ -7525,11 +7528,15 @@ export function App(): JSX.Element {
   //  - per document, edits are applied as ONE transaction / change set, in
   //    original-document coordinates (no manual offset correction)
   //  - the active Markdown editor goes through a CodeMirror `input.replace`
-  //    transaction on the live shared view, so it is one undo step. Other open
-  //    buffers hold only a text string (Pergamum reuses a single EditorView
-  //    across all tabs — #250), so they cannot receive a transaction and their
-  //    replace is not on any undo stack. Per-tab EditorState/history would be
-  //    an editor-architecture change beyond #386 — tracked as a follow-up.
+  //    transaction on the live shared view, so it is one undo step.
+  //  - #393: an inactive document with a #387/#392 cached EditorState whose
+  //    doc still matches the current content ALSO receives a real
+  //    `input.replace` transaction — via `EditorState.update(...)` directly
+  //    on the cached state, no EditorView needed — landing on that
+  //    document's own undo history alongside whatever it already held. Only
+  //    a document with no (or a stale) cached state falls back to the plain
+  //    content-splice update below, which carries no undo history for that
+  //    document — see the branch itself for exactly when that applies.
   function applyOpenDocumentsReplaceSelection(
     state: NonNullable<typeof replacePreviewDialogState>,
     enabledIds: readonly string[]
@@ -7612,9 +7619,9 @@ export function App(): JSX.Element {
       if (isActiveMarkdownBuffer) {
         // Active editor: one CodeMirror transaction on the live view — its
         // update listener syncs content + dirty + line-ending tracking, and
-        // it lands as a single `input.replace` undo step (undoable until the
-        // user switches tabs, which — by #250/#253 design — resets the shared
-        // view's history for every editing feature, not just replace).
+        // it lands as a single `input.replace` undo step, on top of whatever
+        // undo history this document already has (#387/#392 per-document
+        // EditorState — no longer reset by a tab switch).
         const applied =
           paragraphIndentControllerRef.current?.applyReplaceInBufferChanges(
             changeSpecs
@@ -7623,30 +7630,74 @@ export function App(): JSX.Element {
           continue;
         }
       } else {
-        const changeSet = ChangeSet.of(
-          changeSpecs,
-          markdownDocument.content.length
-        );
-        const nextContent = changeSet
-          .apply(CodeMirrorText.of(markdownDocument.content.split("\n")))
-          .toString();
-        const nextLineEndingBreaks = markdownDocument.lineEndingBreaks.map(
-          changeSet
-        ) as LineEndingBreakSet;
-        setOpenDocumentsState((current) =>
-          updateOpenEditor(current, openDocument.id, (editor) =>
-            editor.kind === "markdown"
-              ? {
-                  ...editor,
-                  document: updateCurrentDocumentContent(
-                    editor.document,
-                    nextContent,
-                    nextLineEndingBreaks
-                  )
-                }
-              : editor
-          )
-        );
+        // #393: an INACTIVE document with a cached #387/#392 EditorState can
+        // still receive a real CodeMirror transaction — `EditorState.update`
+        // runs every StateField (line-ending tracking included) and the
+        // `history()` extension exactly as `view.dispatch` would, with no
+        // EditorView required. `applyChangesToCachedMarkdownEditorDocumentState`
+        // gates this on the cached state's own doc still matching the
+        // current application-side content: candidate offsets were computed
+        // against that same content, and a mismatch means either this
+        // document was never shown yet in this session (no cache entry at
+        // all) or something else changed it since — in both cases the SAFE
+        // choice is the plain content-splice fallback below, which never
+        // risks applying stale offsets to the wrong text. This document's
+        // own undo history is only lost in that fallback case.
+        const cached = markdownEditorDocumentStatesRef.current.get(documentId);
+        const transactionResult = cached
+          ? applyChangesToCachedMarkdownEditorDocumentState(
+              cached,
+              markdownDocument.content,
+              changeSpecs,
+              "input.replace"
+            )
+          : null;
+
+        if (transactionResult) {
+          markdownEditorDocumentStatesRef.current.set(
+            documentId,
+            transactionResult.nextDocumentState
+          );
+          setOpenDocumentsState((current) =>
+            updateOpenEditor(current, openDocument.id, (editor) =>
+              editor.kind === "markdown"
+                ? {
+                    ...editor,
+                    document: updateCurrentDocumentContent(
+                      editor.document,
+                      transactionResult.content,
+                      transactionResult.lineEndingBreaks
+                    )
+                  }
+                : editor
+            )
+          );
+        } else {
+          const changeSet = ChangeSet.of(
+            changeSpecs,
+            markdownDocument.content.length
+          );
+          const nextContent = changeSet
+            .apply(CodeMirrorText.of(markdownDocument.content.split("\n")))
+            .toString();
+          const nextLineEndingBreaks = markdownDocument.lineEndingBreaks.map(
+            changeSet
+          ) as LineEndingBreakSet;
+          setOpenDocumentsState((current) =>
+            updateOpenEditor(current, openDocument.id, (editor) =>
+              editor.kind === "markdown"
+                ? {
+                    ...editor,
+                    document: updateCurrentDocumentContent(
+                      editor.document,
+                      nextContent,
+                      nextLineEndingBreaks
+                    )
+                  }
+                : editor
+            )
+          );
+        }
       }
 
       appliedCount += changeSpecs.length;

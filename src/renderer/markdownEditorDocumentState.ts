@@ -28,6 +28,7 @@
 import { markdown } from "@codemirror/lang-markdown";
 import {
   EditorState,
+  type ChangeSpec,
   type Compartment,
   type Extension,
   type StateField
@@ -151,4 +152,60 @@ export function createMarkdownEditorDocumentState(
   });
 
   return { state, lineEndingField };
+}
+
+/** Result of successfully applying changes to a cached document's
+ *  `EditorState` — see {@link applyChangesToCachedMarkdownEditorDocumentState}. */
+export interface MarkdownEditorDocumentTransactionResult {
+  /** The advanced `MarkdownEditorDocumentState` — write this back into
+   *  whatever cache Map the caller owns, under the same document key. */
+  readonly nextDocumentState: MarkdownEditorDocumentState;
+  /** `nextDocumentState.state.doc.toString()` — the caller's
+   *  application-side `content` string MUST be updated to exactly this, so
+   *  `EditorState.doc` and application content never diverge (#387/#393). */
+  readonly content: string;
+  /** `nextDocumentState.state.field(cached.lineEndingField)` — the caller's
+   *  application-side tracked breaks MUST be updated to exactly this, for
+   *  the same reason as `content`. */
+  readonly lineEndingBreaks: LineEndingBreakSet;
+}
+
+/**
+ * #393: applies `changes` to a document's CACHED `EditorState` (no
+ * `EditorView` required — see this module's own doc comment on why a bare
+ * `EditorState.update()` still runs every StateField, `history()` included,
+ * exactly as a live `view.dispatch()` would) as ONE transaction, i.e. one
+ * undo step on top of whatever undo history that document already had.
+ *
+ * Content-integrity gate (Issue #393's top priority, higher than history
+ * preservation): `currentContent` MUST be the caller's authoritative
+ * application-side content for this document RIGHT NOW. If it does not
+ * match `cached.state.doc.toString()`, `changes`' offsets (computed against
+ * `currentContent` by the caller, e.g. Open Documents Replace candidate
+ * generation) cannot be trusted against the cached state's own document —
+ * applying them anyway could corrupt content or throw. Returns `null` in
+ * that case; the caller's documented, safe fallback is a plain
+ * content-string update with no undo history for this document (exactly
+ * #386's pre-#393 behavior) — never forcing the stale state through.
+ */
+export function applyChangesToCachedMarkdownEditorDocumentState(
+  cached: MarkdownEditorDocumentState,
+  currentContent: string,
+  changes: readonly ChangeSpec[],
+  userEvent: string
+): MarkdownEditorDocumentTransactionResult | null {
+  if (cached.state.doc.toString() !== currentContent) {
+    return null;
+  }
+
+  const nextState = cached.state.update({ changes, userEvent }).state;
+
+  return {
+    nextDocumentState: {
+      state: nextState,
+      lineEndingField: cached.lineEndingField
+    },
+    content: nextState.doc.toString(),
+    lineEndingBreaks: nextState.field(cached.lineEndingField)
+  };
 }
