@@ -188,11 +188,12 @@ describe("GlossaryEditor (#375)", () => {
     // tagA is assigned (fixture entry.tags = [tagA]); tagB is available.
     expect(markup).toContain("武将");
     expect(markup).toContain("地名");
-    // The first assigned tag carries the Primary badge.
+    // #400: the first assigned tag's chip gets the flag + shadow instead of
+    // a separate "Primary" badge — the old badge element is gone.
+    expect(markup).not.toContain("glossaryEntryTagAssignmentPrimaryBadge");
+    expect(markup.match(/data-primary="true"/g)).toHaveLength(1);
+    expect(markup.match(/feather-flag/g)).toHaveLength(1);
     expect(markup).toContain("glossaryEditor.tags.primary");
-    expect(
-      markup.match(/glossaryEntryTagAssignmentPrimaryBadge/g)
-    ).toHaveLength(1);
   });
 
   it("shows the assigned empty state when no tag is assigned", () => {

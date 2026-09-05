@@ -302,22 +302,14 @@ export function GlossaryEntryManager({
                       <span
                         key={tag.id}
                         className="glossaryEntryManagerTagItem"
-                        data-primary={tagIndex === 0 || undefined}
-                        title={
-                          tagIndex === 0
-                            ? `${primaryTagLabel}: ${tag.label}`
-                            : tag.label
-                        }
                       >
-                        <GlossaryTagChip tag={tag} />
-                        {tagIndex === 0 ? (
-                          <span
-                            className="glossaryEntryManagerPrimaryBadge"
-                            aria-hidden="true"
-                          >
-                            {primaryTagLabel}
-                          </span>
-                        ) : null}
+                        <GlossaryTagChip
+                          tag={tag}
+                          isPrimary={tagIndex === 0}
+                          primaryLabel={
+                            tagIndex === 0 ? primaryTagLabel : undefined
+                          }
+                        />
                       </span>
                     ))
                   )}

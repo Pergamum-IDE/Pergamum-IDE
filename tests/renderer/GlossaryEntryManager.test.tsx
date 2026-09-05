@@ -165,7 +165,7 @@ describe("GlossaryEntryManager (#375)", () => {
     expect(onAddEntry).toHaveBeenCalledTimes(1);
   });
 
-  it("shows every assigned tag in assignment order, the first flagged as primary", () => {
+  it("shows every assigned tag in assignment order, the first flagged as primary (#400: flag + shadow, not a separate text label)", () => {
     render({ entries: [entryA, entryB, entryC] });
     const [rowA, rowB, rowC] = dataRows();
 
@@ -173,22 +173,37 @@ describe("GlossaryEntryManager (#375)", () => {
       rowA.querySelector(".glossaryEntryManagerSurfaceCell")?.textContent
     ).toBe("織田信長");
 
-    // Entry A: two chips in assignment order (武将 then 勢力).
-    const chipsA = Array.from(
-      rowA.querySelectorAll(".glossaryEntryManagerTagsCell .glossaryTagChip")
-    ).map((el) => el.textContent);
-    expect(chipsA).toEqual(["武将", "勢力"]);
-
-    // The first tag item is marked primary and carries a badge.
-    const tagItemsA = rowA.querySelectorAll(
-      ".glossaryEntryManagerTagsCell .glossaryEntryManagerTagItem"
+    // Entry A: two chips in assignment order (武将 then 勢力). The flag
+    // glyph (inline SVG, no text content) never shows up in textContent.
+    const chipsElA = Array.from(
+      rowA.querySelectorAll<HTMLElement>(
+        ".glossaryEntryManagerTagsCell .glossaryTagChip"
+      )
     );
-    expect(tagItemsA[0].getAttribute("data-primary")).toBe("true");
-    expect(tagItemsA[1].hasAttribute("data-primary")).toBe(false);
+    expect(chipsElA.map((el) => el.textContent)).toEqual(["武将", "勢力"]);
+
+    // #400: the first tag's CHIP (not a separate wrapper element) carries
+    // the primary flag/shadow hook; the rest do not.
+    expect(chipsElA[0].getAttribute("data-primary")).toBe("true");
+    expect(chipsElA[0].querySelector(".glossaryTagChipFlag")).not.toBeNull();
+    expect(chipsElA[1].hasAttribute("data-primary")).toBe(false);
+    expect(chipsElA[1].querySelector(".glossaryTagChipFlag")).toBeNull();
+
+    // The old separate "第一タグ / Primary Tag" text badge is gone — the
+    // primary tag's translated wording now lives only in the chip's
+    // accessible name / tooltip, not as visible row text.
     expect(
-      tagItemsA[0].querySelector(".glossaryEntryManagerPrimaryBadge")
-        ?.textContent
-    ).toBe("glossary.entryManager.primaryTag");
+      rowA.querySelector(".glossaryEntryManagerPrimaryBadge")
+    ).toBeNull();
+    expect(rowA.textContent).not.toContain(
+      "glossary.entryManager.primaryTag"
+    );
+    expect(chipsElA[0].getAttribute("aria-label")).toBe(
+      "glossary.entryManager.primaryTag: 武将"
+    );
+    expect(chipsElA[0].getAttribute("title")).toBe(
+      "glossary.entryManager.primaryTag: 武将"
+    );
 
     // Counts: tag count then atom count.
     const countsA = Array.from(
@@ -211,13 +226,13 @@ describe("GlossaryEntryManager (#375)", () => {
     ).toEqual(["0", "1"]);
 
     // Entry C has a single tag → one chip, marked primary.
-    expect(
-      Array.from(
-        rowC.querySelectorAll(
-          ".glossaryEntryManagerTagsCell .glossaryTagChip"
-        )
-      ).map((el) => el.textContent)
-    ).toEqual(["武将"]);
+    const chipsElC = Array.from(
+      rowC.querySelectorAll<HTMLElement>(
+        ".glossaryEntryManagerTagsCell .glossaryTagChip"
+      )
+    );
+    expect(chipsElC.map((el) => el.textContent)).toEqual(["武将"]);
+    expect(chipsElC[0].getAttribute("data-primary")).toBe("true");
   });
 
   it("opens the entry editor when the row itself is clicked", () => {
