@@ -1,6 +1,5 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
-import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
 import {
   Compartment,
@@ -48,6 +47,13 @@ import {
   captureEditorViewState,
   type EditorViewState
 } from "./editorViewState";
+import {
+  createGlossaryCompletionExtension,
+  type MarkdownEditorGlossaryCompletionConfig
+} from "./glossaryCompletionExtension";
+import { markdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
+
+export type { MarkdownEditorGlossaryCompletionConfig };
 
 interface MarkdownEditorPendingSelection {
   start: number;
@@ -170,6 +176,14 @@ interface MarkdownEditorProps {
    */
   focusRequest?: MarkdownEditorFocusRequest | null;
   onFocusRequestApplied?: (requestId: number) => void;
+  /**
+   * #390 PoC: Ctrl+Space Glossary Completion. `undefined`/`null` (the
+   * default) leaves Ctrl+Space inert - GlossaryEditor's own description
+   * field, which reuses this component, never passes this prop. Only the
+   * active Markdown document editor (EditorSurface's MarkdownEditorSurface)
+   * supplies it.
+   */
+  glossaryCompletion?: MarkdownEditorGlossaryCompletionConfig | null;
 }
 
 /**
@@ -329,7 +343,8 @@ export function MarkdownEditor({
   restoreViewState,
   onRestoreViewStateApplied,
   focusRequest,
-  onFocusRequestApplied
+  onFocusRequestApplied,
+  glossaryCompletion
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -355,6 +370,13 @@ export function MarkdownEditor({
   const soundFeedbackRef = useRef(soundFeedback);
   const soundSettingsRef = useRef(soundSettings);
   const readOnlyRef = useRef(readOnly);
+  // #390: read fresh by the glossary-completion source / trigger on every
+  // invocation, so a live entries reload (or the feature being enabled at
+  // all - see MarkdownEditorGlossaryCompletionConfig's doc comment) is
+  // honored without recreating the EditorView.
+  const glossaryCompletionRef = useRef<MarkdownEditorGlossaryCompletionConfig | null>(
+    glossaryCompletion ?? null
+  );
   // Only ever set at mount, from that first render's documentKey (see the
   // document-switch effect below for why this must not reset on every
   // render).
@@ -428,6 +450,10 @@ export function MarkdownEditor({
   }, [readOnly]);
 
   useEffect(() => {
+    glossaryCompletionRef.current = glossaryCompletion ?? null;
+  }, [glossaryCompletion]);
+
+  useEffect(() => {
     newFileLineEndingFallbackRef.current = newFileLineEndingFallback;
   }, [newFileLineEndingFallback]);
 
@@ -466,7 +492,7 @@ export function MarkdownEditor({
       state: EditorState.create({
         doc: value,
         extensions: [
-          basicSetup,
+          ...markdownEditorBaseSetup,
           markdown(),
           EditorView.lineWrapping,
           readOnlyCompartment.of([
@@ -487,6 +513,10 @@ export function MarkdownEditor({
           whitespaceCompartment.of(
             whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
           ),
+          createGlossaryCompletionExtension({
+            getConfig: () => glossaryCompletionRef.current,
+            isReadOnly: () => readOnlyRef.current
+          }),
           EditorView.updateListener.of((update) => {
             const soundEvent = readOnlyRef.current
               ? null
