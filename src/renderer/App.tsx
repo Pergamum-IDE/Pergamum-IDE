@@ -176,6 +176,7 @@ import type {
 import { resolveColdStartMarkdownFocusPolicy } from "./coldStartMarkdownFocusPolicy";
 import { resolveCommandPaletteFocusRestorePolicy } from "./commandPaletteFocusRestorePolicy";
 import type { EditorViewState } from "./editorViewState";
+import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
 import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
@@ -1432,11 +1433,11 @@ export function App(): JSX.Element {
   const activeDocumentKey = activeDocument
     ? serializeEditorId(activeDocument.id)
     : null;
-  // #387 PoC: every currently open document's stable key — MarkdownEditor
-  // uses this only to prune its runtime-only per-document EditorState /
-  // undo-history cache when a tab closes. Never touches Session / Recovery /
-  // project DB; it is a plain string array recomputed from documents that
-  // are already open.
+  // #387/#392: every currently open document's stable key — used below to
+  // prune the runtime-only per-document Markdown EditorState / undo-history
+  // cache when a tab closes. Never touches Session / Recovery / project DB;
+  // it is a plain string array recomputed from documents that are already
+  // open.
   const openDocumentKeys = useMemo(
     () =>
       openDocumentsState.documents.map((document) =>
@@ -1444,6 +1445,28 @@ export function App(): JSX.Element {
       ),
     [openDocumentsState.documents]
   );
+  // #392: the runtime-only per-document Markdown `EditorState` cache — OWNED
+  // here (rather than inside MarkdownEditor, as #387 originally had it) so
+  // it survives EditorSurface's own unmount/remount: navigating to Settings /
+  // Debug Log / a Glossary Manager or Tag Manager tab / a Glossary Entry
+  // editor tab and back all unmount EditorSurface (and MarkdownEditor with
+  // it), which previously reset this cache at exactly that boundary. A
+  // plain `useRef` — never Session / Recovery / project DB / pergamum.json;
+  // MarkdownEditor still keeps `content` as the one string every
+  // persistence / save / search path already uses, completely unaffected by
+  // this cache's existence or its owner. Pruned to `openDocumentKeys` below
+  // so a closed tab's EditorState doesn't linger forever.
+  const markdownEditorDocumentStatesRef = useRef<
+    Map<string, MarkdownEditorDocumentState>
+  >(new Map());
+  useEffect(() => {
+    const openKeys = new Set<string>(openDocumentKeys);
+    for (const cachedKey of markdownEditorDocumentStatesRef.current.keys()) {
+      if (!openKeys.has(cachedKey)) {
+        markdownEditorDocumentStatesRef.current.delete(cachedKey);
+      }
+    }
+  }, [openDocumentKeys]);
   // #274: the pending restore View State for the currently active editor,
   // handed to EditorSurface → MarkdownEditor for a one-shot #273 apply.
   const restoreActiveEditorViewState = useMemo(() => {
@@ -8735,7 +8758,7 @@ export function App(): JSX.Element {
                         activeDocumentKey={serializeEditorId(
                           activeDocument.id
                         )}
-                        openDocumentKeys={openDocumentKeys}
+                        documentStates={markdownEditorDocumentStatesRef.current}
                         previewUpdateDelayMs={
                           effectiveSettings.preview.updateDelayMs
                         }

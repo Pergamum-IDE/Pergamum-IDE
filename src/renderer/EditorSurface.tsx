@@ -33,6 +33,7 @@ import {
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import type { EditorViewState } from "./editorViewState";
+import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
@@ -328,12 +329,14 @@ interface EditorSurfaceProps {
    */
   activeDocumentKey: string;
   /**
-   * #387 PoC: every currently open document's stable key — forwarded to
-   * MarkdownEditor only so it can prune its runtime-only per-document
-   * EditorState / undo-history cache when a tab closes. `undefined` for the
-   * `glossaryEntry` editor kind (not applicable there).
+   * #392: the runtime-only per-document `EditorState` cache, OWNED above
+   * this component (App.tsx) so it survives EditorSurface's own
+   * unmount/remount (navigating to Settings / a Manager tab / a Glossary
+   * Entry editor and back all unmount EditorSurface). Forwarded straight
+   * through to MarkdownEditor — see that component's `documentStates` prop
+   * doc comment. `undefined` for the `glossaryEntry` editor kind.
    */
-  openDocumentKeys?: readonly string[];
+  documentStates?: Map<string, MarkdownEditorDocumentState>;
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
   /**
@@ -480,7 +483,7 @@ interface EditorSurfaceProps {
 export function EditorSurface({
   editor,
   activeDocumentKey,
-  openDocumentKeys,
+  documentStates,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -534,7 +537,7 @@ export function EditorSurface({
         <MarkdownEditorSurface
           document={editor.document}
           documentKey={activeDocumentKey}
-          openDocumentKeys={openDocumentKeys}
+          documentStates={documentStates}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
@@ -605,8 +608,8 @@ export function EditorSurface({
 interface MarkdownEditorSurfaceProps {
   document: CurrentDocument;
   documentKey: string;
-  /** #387 PoC: see EditorSurfaceProps's own doc comment. */
-  openDocumentKeys?: readonly string[];
+  /** #392: see EditorSurfaceProps's own doc comment. */
+  documentStates?: Map<string, MarkdownEditorDocumentState>;
   previewUpdateDelayMs: number;
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
@@ -678,7 +681,7 @@ interface MarkdownEditorSurfaceProps {
 function MarkdownEditorSurface({
   document,
   documentKey,
-  openDocumentKeys,
+  documentStates,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -882,7 +885,7 @@ function MarkdownEditorSurface({
           focusRequest={focusRequest}
           onFocusRequestApplied={onFocusRequestApplied}
           documentKey={documentKey}
-          openDocumentKeys={openDocumentKeys}
+          documentStates={documentStates}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}

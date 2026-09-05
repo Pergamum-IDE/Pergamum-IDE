@@ -180,13 +180,21 @@ interface MarkdownEditorProps {
    */
   glossaryCompletion?: MarkdownEditorGlossaryCompletionConfig | null;
   /**
-   * #387 PoC: every currently OPEN document's stable key (tab-bar order
-   * doesn't matter here). Used only to prune the runtime-only per-document
-   * `EditorState` / undo-history cache (see `documentStatesRef` below) when
-   * a tab closes — never read for anything else. `undefined` (GlossaryEditor's
-   * description field, which never switches documents) simply skips pruning.
+   * #392: the runtime-only per-document `EditorState` cache itself, OWNED
+   * above this component (App.tsx) so it survives this component's own
+   * unmount/remount — e.g. visiting Settings / Debug Log / a Glossary
+   * Manager or Tag Manager tab / a Glossary Entry editor tab and back all
+   * unmount EditorSurface (and this component with it), which previously
+   * (#387) meant a component-local cache was lost at exactly that boundary.
+   * `undefined` (GlossaryEditor's description field, which never switches
+   * documents and has no need to survive an unmount it IS the field of)
+   * falls back to a local, component-lifetime-only cache — behaviorally
+   * identical to #387's original design for that one case. Pruning a
+   * closed document's entry is the OWNER's job (App.tsx, keyed off its own
+   * open-document list) — this component never prunes the Map itself, only
+   * reads / writes individual entries.
    */
-  openDocumentKeys?: readonly string[];
+  documentStates?: Map<string, MarkdownEditorDocumentState>;
 }
 
 /**
@@ -348,7 +356,7 @@ export function MarkdownEditor({
   focusRequest,
   onFocusRequestApplied,
   glossaryCompletion,
-  openDocumentKeys
+  documentStates: documentStatesProp
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -415,23 +423,29 @@ export function MarkdownEditor({
     null
   );
   const appliedFocusRequestIdRef = useRef<number | null>(null);
-  // #387 PoC: runtime-only per-document EditorState cache, keyed by
+  // #392: component-local fallback cache, used only when no `documentStates`
+  // prop is supplied (GlossaryEditor's description field — see that prop's
+  // doc comment). Never read directly elsewhere in this file; always go
+  // through the `documentStates` constant below.
+  const fallbackDocumentStatesRef = useRef<
+    Map<string, MarkdownEditorDocumentState>
+  >(new Map());
+  // #387 PoC / #392: runtime-only per-document EditorState cache, keyed by
   // `documentKey` — never Session / Recovery / project DB / pergamum.json
-  // (nothing outside this component ever reads this ref; `content` remains
-  // the one string every persistence / save / search path already uses,
-  // completely unchanged by this cache's existence). Populated lazily, right
-  // before switching away from a document (see the document-switch effect),
-  // and pruned to `openDocumentKeys` by the effect below. Lost whenever this
-  // MarkdownEditor instance itself unmounts — e.g. navigating to Settings /
-  // Debug Log / a Glossary Manager or Tag Manager tab / a Glossary Entry
-  // editor tab and back all unmount the single shared EditorSurface, which
-  // is a known, accepted PoC boundary (see markdownEditorDocumentState.ts's
-  // module doc comment): ordinary Markdown-tab-to-Markdown-tab switching
-  // never unmounts it, so that — the acceptance-critical case — is
-  // unaffected.
-  const documentStatesRef = useRef<Map<string, MarkdownEditorDocumentState>>(
-    new Map()
-  );
+  // (nothing outside App.tsx's own owning ref and this component ever reads
+  // it; `content` remains the one string every persistence / save / search
+  // path already uses, completely unchanged by this cache's existence).
+  // Populated lazily, right before switching away from a document AND on
+  // unmount (see the document-switch effect and the mount effect's cleanup
+  // below). As of #392 this Map itself is OWNED by App.tsx (passed in as the
+  // `documentStates` prop) precisely so it is NOT lost when this component
+  // unmounts — e.g. navigating to Settings / Debug Log / a Glossary Manager
+  // or Tag Manager tab / a Glossary Entry editor tab and back all unmount
+  // the single shared EditorSurface (and this component with it); before
+  // #392 that was a known, accepted PoC boundary where the cache reset.
+  // Pruning a closed document's entry is App.tsx's job, not this
+  // component's — see the `documentStates` prop's own doc comment.
+  const documentStates = documentStatesProp ?? fallbackDocumentStatesRef.current;
 
   if (!readOnlyCompartmentRef.current) {
     readOnlyCompartmentRef.current = new Compartment();
@@ -538,7 +552,7 @@ export function MarkdownEditor({
 
   // #387: builds one document's fresh EditorState — used for the very first
   // document this editor instance shows, and for any later document with no
-  // cached state yet (see documentStatesRef's doc comment / the
+  // cached state yet (see documentStates's doc comment / the
   // document-switch effect below). `markerGlyph` (the prop, not a ref) is
   // only the feature's construction-time value, exactly as before #387 —
   // `markerGlyphRef`/`expectedLineEndingRef` are what stay live afterward.
@@ -561,6 +575,74 @@ export function MarkdownEditor({
       glossaryCompletionRef,
       createUpdateListenerExtension
     });
+  }
+
+  // #392: the Settings-driven compartments (readOnly / line-ending marker
+  // visibility / whitespace) are shared editor-instance-wide slots — a
+  // document restored from `documentStates` may still reflect whatever
+  // those settings were the last time IT was active (possibly a previous
+  // MOUNT lifetime of this very component, now that the cache survives
+  // unmount), so this is dispatched right after every cache restore
+  // (mount OR switch) to bring it up to date. Mirrors the three
+  // settings-reconfigure effects below exactly; effects only, so this is
+  // never a document edit (no dirty, no undo entry, no selection/caret
+  // move).
+  function reconcileSettingsEffects(
+    lineEndingField: StateField<LineEndingBreakSet>
+  ) {
+    return [
+      readOnlyCompartment.reconfigure([
+        EditorState.readOnly.of(readOnlyRef.current),
+        EditorView.editable.of(!readOnlyRef.current)
+      ]),
+      visibilityCompartment.reconfigure(
+        createVisibilityExtension(
+          createLineEndingVisibilityFeatures(
+            markerGlyphRef.current,
+            lineEndingField,
+            () => expectedLineEndingRef.current,
+            () => markerGlyphRef.current
+          )
+        )
+      ),
+      whitespaceCompartment.reconfigure(
+        whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
+      )
+    ];
+  }
+
+  // #392 (originally #387, generalized here since the cache can now survive
+  // this component's own unmount — see the `documentStates` prop's doc
+  // comment): resolves which EditorState a document identified by `key`
+  // should show right now. Prefers a cached entry, but ONLY when its
+  // document content still matches `docContent` — see #387 plan item 6
+  // ("external content update"): an INACTIVE document's `content` can be
+  // changed from outside CodeMirror entirely (e.g. Open Documents Replace
+  // applies its edit directly to `openDocumentsState` for any buffer that
+  // isn't the active editor, with no transaction and no EditorState
+  // involved). A cached EditorState whose doc no longer matches the
+  // incoming content is stale relative to that external edit; restoring it
+  // verbatim would silently revert the edit. Falling back to a fresh build
+  // (that document's own undo history is lost, but the external edit is
+  // never reverted) is the same documented tradeoff `syncBufferToDiskContent`
+  // already accepts for the active document's own disk-sync case below.
+  function resolveDocumentState(
+    key: string,
+    docContent: string,
+    docInitialBreaks: readonly LineEndingBreak[]
+  ): { documentState: MarkdownEditorDocumentState; wasRestoredFromCache: boolean } {
+    const cachedEntry = documentStates.get(key);
+    const cached =
+      cachedEntry && cachedEntry.state.doc.toString() === docContent
+        ? cachedEntry
+        : null;
+
+    return cached
+      ? { documentState: cached, wasRestoredFromCache: true }
+      : {
+          documentState: buildDocumentState(docContent, docInitialBreaks),
+          wasRestoredFromCache: false
+        };
   }
 
   useEffect(() => {
@@ -609,20 +691,31 @@ export function MarkdownEditor({
       return undefined;
     }
 
-    // #387: this first document's own EditorState — cached under its key
-    // right away (rather than waiting for the first switch-away) so the
-    // pruning effect below sees it consistently from the start.
-    const initialDocumentState = buildDocumentState(
+    // #392: this first document may already have a cached EditorState from
+    // a PREVIOUS mount lifetime of this very component (the `documentStates`
+    // Map now typically outlives this component — see that prop's doc
+    // comment) — e.g. the user was editing this document, switched to
+    // Settings (unmounting this component), and has now come back to it.
+    // `resolveDocumentState` picks that cache up exactly like the
+    // document-switch effect below does for an in-session switch.
+    const resolved = resolveDocumentState(
+      documentKeyRef.current,
       value,
       initialLineEndingBreaks
     );
-    lineEndingFieldRef.current = initialDocumentState.lineEndingField;
-    documentStatesRef.current.set(documentKeyRef.current, initialDocumentState);
+    lineEndingFieldRef.current = resolved.documentState.lineEndingField;
+    documentStates.set(documentKeyRef.current, resolved.documentState);
 
     const view = new EditorView({
       parent: hostRef.current,
-      state: initialDocumentState.state
+      state: resolved.documentState.state
     });
+
+    if (resolved.wasRestoredFromCache) {
+      view.dispatch({
+        effects: reconcileSettingsEffects(resolved.documentState.lineEndingField)
+      });
+    }
 
     viewRef.current = view;
 
@@ -637,9 +730,18 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
-      // #387: the per-document EditorState cache lives only in this ref, so
-      // it is discarded along with everything else on unmount — see
-      // documentStatesRef's doc comment for what that means in practice.
+      // #392: capture this document's final live EditorState (undo history
+      // included) into `documentStates` before tearing down — this is what
+      // lets a cache OWNED above this component (App.tsx) survive this
+      // component's own unmount (Settings / Debug Log / a Glossary Manager
+      // or Tag Manager tab / a Glossary Entry editor tab). Without this, any
+      // edits made since the last switch-away would never make it into the
+      // cache, since the switch effect below only captures on a SWITCH, not
+      // on a plain unmount.
+      documentStates.set(documentKeyRef.current, {
+        state: view.state,
+        lineEndingField: lineEndingFieldRef.current!
+      });
       // #375 Document Map: stop the coalesced viewport push and clear the overlay.
       if (
         visibleRangeFrameRef.current !== null &&
@@ -873,74 +975,29 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
-      // #387: cache the OUTGOING document's live EditorState (its full undo
-      // history included) under the key it is STILL showing, before that key
-      // ref advances below.
-      documentStatesRef.current.set(documentKeyRef.current, {
+      // #387/#392: cache the OUTGOING document's live EditorState (its full
+      // undo history included) under the key it is STILL showing, before
+      // that key ref advances below.
+      documentStates.set(documentKeyRef.current, {
         state: view.state,
         lineEndingField: lineEndingFieldRef.current!
       });
       documentKeyRef.current = documentKey;
 
-      const cachedEntry = documentStatesRef.current.get(documentKey);
-      // #387 plan item 6 (external content update): an INACTIVE document's
-      // `content` can be changed from outside CodeMirror entirely — e.g.
-      // Open Documents Replace applies its edit directly to
-      // `openDocumentsState` for any buffer that isn't the active editor
-      // (see App.tsx's Replace-apply loop), with no transaction and no
-      // EditorState involved. A cached EditorState whose doc no longer
-      // matches the incoming `value` prop is stale relative to that external
-      // edit; restoring it verbatim would silently revert the edit. Falling
-      // back to a fresh build (案A: that document's own undo history is
-      // lost, but the external edit is never reverted) is the same
-      // documented tradeoff `syncBufferToDiskContent` already accepts for
-      // the active document's own disk-sync case below.
-      const cached =
-        cachedEntry && cachedEntry.state.doc.toString() === value
-          ? cachedEntry
-          : null;
+      const resolved = resolveDocumentState(
+        documentKey,
+        value,
+        initialLineEndingBreaks
+      );
+      view.setState(resolved.documentState.state);
+      lineEndingFieldRef.current = resolved.documentState.lineEndingField;
 
-      if (cached) {
-        view.setState(cached.state);
-        lineEndingFieldRef.current = cached.lineEndingField;
-        // #387: Settings-driven compartments (readOnly / line-ending marker
-        // visibility / whitespace) are shared editor-instance-wide slots,
-        // reconfigured only on whichever EditorState is CURRENTLY attached
-        // to `view` — a cached, previously-inactive state may still reflect
-        // whatever those settings were the last time IT was active, so
-        // reconcile them to the current live values right after restoring
-        // it. Mirrors the three settings-reconfigure effects below exactly;
-        // effects only, so this is not a document edit (no dirty, no undo
-        // entry, no selection/caret move).
+      if (resolved.wasRestoredFromCache) {
         view.dispatch({
-          effects: [
-            readOnlyCompartment.reconfigure([
-              EditorState.readOnly.of(readOnlyRef.current),
-              EditorView.editable.of(!readOnlyRef.current)
-            ]),
-            visibilityCompartment.reconfigure(
-              createVisibilityExtension(
-                createLineEndingVisibilityFeatures(
-                  markerGlyphRef.current,
-                  cached.lineEndingField,
-                  () => expectedLineEndingRef.current,
-                  () => markerGlyphRef.current
-                )
-              )
-            ),
-            whitespaceCompartment.reconfigure(
-              whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
-            )
-          ]
+          effects: reconcileSettingsEffects(
+            resolved.documentState.lineEndingField
+          )
         });
-      } else {
-        // Either a first-ever switch to this document (no cached state), or
-        // a stale cache discarded above — either way, build fresh from the
-        // current `value` (already reflects current settings, so no
-        // reconcile dispatch is needed here).
-        const built = buildDocumentState(value, initialLineEndingBreaks);
-        view.setState(built.state);
-        lineEndingFieldRef.current = built.lineEndingField;
       }
 
       return;
@@ -963,28 +1020,6 @@ export function MarkdownEditor({
     // never by this document-switch/content-sync effect itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, documentKey, initialLineEndingBreaks]);
-
-  // #387: drops any cached per-document EditorState whose key is no longer
-  // in `openDocumentKeys` (i.e. that tab was closed) — otherwise every
-  // document ever visited in this MarkdownEditor instance's lifetime would
-  // keep its full EditorState (undo history included) forever. `undefined`
-  // (GlossaryEditor's description field never passes this prop) skips
-  // pruning entirely rather than treating "no list given" as "no documents
-  // open". The currently active `documentKey` is never pruned by
-  // construction — it is always a member of `openDocumentKeys` while open.
-  useEffect(() => {
-    if (!openDocumentKeys) {
-      return;
-    }
-
-    const openKeys = new Set(openDocumentKeys);
-
-    for (const cachedKey of documentStatesRef.current.keys()) {
-      if (!openKeys.has(cachedKey)) {
-        documentStatesRef.current.delete(cachedKey);
-      }
-    }
-  }, [openDocumentKeys]);
 
   useEffect(() => {
     const view = viewRef.current;
