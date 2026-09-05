@@ -8822,6 +8822,9 @@ export function App(): JSX.Element {
                         markerGlyph={
                           effectiveSettings.editor.lineEnding.markerGlyph
                         }
+                        undoHistoryMinDepth={
+                          effectiveSettings.editor.undoHistoryMinDepth
+                        }
                         whitespaceSettings={
                           effectiveSettings.editor.whitespace
                         }

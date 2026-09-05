@@ -716,6 +716,24 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  // #394 Step 1: how many history events CodeMirror's `history()` extension
+  // keeps for a Markdown document's own EditorState (#387's per-document
+  // cache). applicationOnly, like preview.updateDelayMs above — a tuning
+  // knob, not a project policy. Default 100 matches `history()`'s own
+  // built-in default exactly, so leaving this untouched changes nothing.
+  // Step 1 does not reconfigure an already-built document's history when
+  // this changes mid-session (see markdownEditorCodeMirrorSetup.ts) — a
+  // later #394 step is expected to make this setting requiresRestart.
+  "editor.undoHistoryMinDepth": defineNumberSetting({
+    key: "editor.undoHistoryMinDepth",
+    scope: "applicationOnly",
+    defaultValue: 100,
+    labelKey: "settings.editor.undoHistoryMinDepth.label",
+    descriptionKey: "settings.editor.undoHistoryMinDepth.description",
+    numericRange: { min: 100, max: 10000, integer: true },
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "files.newFile.lineEnding": defineEnumSetting({
     key: "files.newFile.lineEnding",
     scope: "applicationOnly",

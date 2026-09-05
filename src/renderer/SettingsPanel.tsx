@@ -157,6 +157,8 @@ function readSettingValue(key: SettingKey, settings: ApplicationSettings): unkno
       return settings.editor.characterCount.exclude.markdownSyntax;
     case "editor.characterCount.exclude.markdownComments":
       return settings.editor.characterCount.exclude.markdownComments;
+    case "editor.undoHistoryMinDepth":
+      return settings.editor.undoHistoryMinDepth;
     case "files.newFile.lineEnding":
       return settings.files.newFile.lineEnding;
     case "files.newFile.encoding":
@@ -491,6 +493,14 @@ function buildNextSettings(
             }
           }
         }
+      });
+    case "editor.undoHistoryMinDepth":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
+
+      return saveRequest(settings, {
+        editor: { ...settings.editor, undoHistoryMinDepth: rawValue }
       });
     case "files.newFile.lineEnding":
       return saveRequest(settings, {

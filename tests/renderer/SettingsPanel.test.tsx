@@ -373,6 +373,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "editor.fontFamily",
+      "editor.undoHistoryMinDepth",
       "editor.paragraphIndent.excludeLeadingCharacters",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
@@ -993,7 +994,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         lineEnding: settings.editor.lineEnding,
         whitespace: settings.editor.whitespace,
         paragraphIndent: settings.editor.paragraphIndent,
-        characterCount: settings.editor.characterCount
+        characterCount: settings.editor.characterCount,
+        undoHistoryMinDepth: settings.editor.undoHistoryMinDepth
       },
       files: settings.files
     });
@@ -1616,6 +1618,7 @@ describe("Settings number control right-alignment (common style)", () => {
       [
         "commandPalette.footerDetail.marquee.delay",
         "commandPalette.footerDetail.marquee.speed",
+        "editor.undoHistoryMinDepth",
         "preview.updateDelayMs",
         "workbench.notification.durationMs"
       ].sort()

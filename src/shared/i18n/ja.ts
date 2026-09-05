@@ -950,6 +950,8 @@ export const jaTranslations = {
   "settings.editor.characterCount.exclude.markdownSyntax.label": "Markdown記法を除外",
   "settings.editor.characterCount.exclude.whitespace.description": "半角スペース、全角スペース、Tabを文字数カウントから除外します。",
   "settings.editor.characterCount.exclude.whitespace.label": "空白を除外",
+  "settings.editor.undoHistoryMinDepth.description": "文書ごとに保持するUndo履歴の深さを指定します。値はUndo可能回数そのものではなく履歴イベント数の基準です。大きくすると、より古い編集へ戻りやすくなる代わりにメモリ使用量が増える場合があります。Undo履歴深度設定は再起動後に反映されます。",
+  "settings.editor.undoHistoryMinDepth.label": "Undo履歴深度",
   "settings.files.newFile.encoding.description": "新しく作成するファイルの既定の文字エンコーディングです。現在はUTF-8のみです。",
   "settings.files.newFile.encoding.label": "新規ファイルの文字エンコーディング",
   "settings.files.newFile.lineEnding.description": "新しく作成するファイルの既定の改行コードです。",

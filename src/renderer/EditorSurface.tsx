@@ -358,6 +358,14 @@ interface EditorSurfaceProps {
    */
   markerGlyph: LineEndingMarkerGlyph;
   /**
+   * `editor.undoHistoryMinDepth` (#394 Step 1) — CodeMirror `history()`'s
+   * `minDepth` for a Markdown document's EditorState. Passed straight
+   * through to MarkdownEditor; read only at EditorState construction time
+   * (never reconfigures an existing document's history — see
+   * markdownEditorCodeMirrorSetup.ts).
+   */
+  undoHistoryMinDepth: number;
+  /**
    * `editor.whitespace.*` (#256) — display-only whitespace marker
    * toggles, passed straight through to the Markdown editor. Never
    * affects Save, dirty state, or selection.
@@ -488,6 +496,7 @@ export function EditorSurface({
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  undoHistoryMinDepth,
   whitespaceSettings,
   projectRootPath,
   glossaryRefreshToken,
@@ -542,6 +551,7 @@ export function EditorSurface({
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
+          undoHistoryMinDepth={undoHistoryMinDepth}
           whitespaceSettings={whitespaceSettings}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
@@ -614,6 +624,8 @@ interface MarkdownEditorSurfaceProps {
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
   markerGlyph: LineEndingMarkerGlyph;
+  /** #394 Step 1: see EditorSurfaceProps's own doc comment. */
+  undoHistoryMinDepth: number;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
@@ -686,6 +698,7 @@ function MarkdownEditorSurface({
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  undoHistoryMinDepth,
   whitespaceSettings,
   projectRootPath,
   glossaryRefreshToken,
@@ -890,6 +903,7 @@ function MarkdownEditorSurface({
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
+          undoHistoryMinDepth={undoHistoryMinDepth}
           whitespaceSettings={whitespaceSettings}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}

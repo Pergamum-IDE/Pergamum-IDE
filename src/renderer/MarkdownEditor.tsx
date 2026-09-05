@@ -98,6 +98,17 @@ interface MarkdownEditorProps {
    */
   markerGlyph?: LineEndingMarkerGlyph;
   /**
+   * `editor.undoHistoryMinDepth` (#394 Step 1) — the `history()` extension's
+   * `minDepth` for a Markdown document's `EditorState`. Read only at
+   * `EditorState` construction time (mount, or a document's first-ever
+   * build) — Step 1 deliberately never reconfigures an already-built
+   * document's history when this changes later in the same process (see
+   * markdownEditorCodeMirrorSetup.ts). Defaults to 100, matching both the
+   * Settings Catalog default and `history()`'s own built-in default, so an
+   * unset value is behaviorally a no-op.
+   */
+  undoHistoryMinDepth?: number;
+  /**
    * `editor.whitespace.*` (#256) — which whitespace categories to paint
    * display-only markers for (ideographic space, ASCII space, tab, other
    * Unicode `Zs`). Independent of #252's line-ending marker. Toggling any
@@ -339,6 +350,7 @@ export function MarkdownEditor({
   newFileLineEndingFallback = "lf",
   expectedLineEnding = "lf",
   markerGlyph = "⏎",
+  undoHistoryMinDepth = 100,
   whitespaceSettings,
   pendingSelection,
   onPendingSelectionApplied,
@@ -556,6 +568,9 @@ export function MarkdownEditor({
   // document-switch effect below). `markerGlyph` (the prop, not a ref) is
   // only the feature's construction-time value, exactly as before #387 —
   // `markerGlyphRef`/`expectedLineEndingRef` are what stay live afterward.
+  // `undoHistoryMinDepth` (#394 Step 1) is the same kind of construction-time
+  // value — read once per document build, never made live via a ref, since
+  // Step 1 does not reconfigure an existing document's history extension.
   function buildDocumentState(
     docContent: string,
     docInitialBreaks: readonly LineEndingBreak[]
@@ -563,6 +578,7 @@ export function MarkdownEditor({
     return createMarkdownEditorDocumentState({
       doc: docContent,
       initialLineEndingBreaks: docInitialBreaks,
+      undoHistoryMinDepth,
       newFileLineEndingFallbackRef,
       readOnlyCompartment,
       readOnlyRef,

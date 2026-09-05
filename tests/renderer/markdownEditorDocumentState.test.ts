@@ -1,5 +1,11 @@
 import { Compartment } from "@codemirror/state";
-import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
+import {
+  isolateHistory,
+  redo,
+  redoDepth,
+  undo,
+  undoDepth
+} from "@codemirror/commands";
 import { describe, expect, it } from "vitest";
 import {
   applyChangesToCachedMarkdownEditorDocumentState,
@@ -15,6 +21,7 @@ function baseOptions(overrides: Partial<Parameters<typeof createMarkdownEditorDo
   return {
     doc: "hello",
     initialLineEndingBreaks: [],
+    undoHistoryMinDepth: 100,
     newFileLineEndingFallbackRef: ref<"lf" | "crlf" | "cr">("lf"),
     readOnlyCompartment: new Compartment(),
     readOnlyRef: ref(false),
@@ -51,6 +58,41 @@ describe("createMarkdownEditorDocumentState (#387)", () => {
       baseOptions({ readOnlyRef: ref(false) })
     );
     expect(editable.state.readOnly).toBe(false);
+  });
+
+  it("#394 Step 1: undoHistoryMinDepth actually reaches CodeMirror's history() extension and changes its trimming behavior", () => {
+    // @codemirror/commands' history() only trims a branch once it exceeds
+    // `minDepth + 20` entries (see updateBranch in
+    // node_modules/@codemirror/commands/dist/index.js) - so a small
+    // minDepth trims well before 30 isolated edits, while a much larger one
+    // does not trim at all yet. This is a direct, deterministic behavioral
+    // check that the configured value really reaches `history()`, not just
+    // that it is stored somewhere.
+    const small = createMarkdownEditorDocumentState(
+      baseOptions({ doc: "", undoHistoryMinDepth: 5 })
+    );
+    const large = createMarkdownEditorDocumentState(
+      baseOptions({ doc: "", undoHistoryMinDepth: 1000 })
+    );
+
+    let smallState = small.state;
+    let largeState = large.state;
+
+    for (let i = 0; i < 30; i += 1) {
+      smallState = smallState.update({
+        changes: { from: smallState.doc.length, insert: "x" },
+        userEvent: "input.type",
+        annotations: isolateHistory.of("full")
+      }).state;
+      largeState = largeState.update({
+        changes: { from: largeState.doc.length, insert: "x" },
+        userEvent: "input.type",
+        annotations: isolateHistory.of("full")
+      }).state;
+    }
+
+    expect(undoDepth(smallState)).toBeLessThan(30);
+    expect(undoDepth(largeState)).toBe(30);
   });
 
   it("gives each call its own fresh lineEndingField, seeded from initialLineEndingBreaks", () => {

@@ -131,6 +131,12 @@ export type LineEndingMarkerGlyph = SettingValueOf<
 export type ParagraphIndentExcludeLeadingCharacters = SettingValueOf<
   "editor.paragraphIndent.excludeLeadingCharacters"
 >;
+// #394 Step 1: CodeMirror `history()`'s `minDepth` for a Markdown document's
+// EditorState — see settingsCatalog.ts's own comment on this key for scope
+// and rationale.
+export type UndoHistoryMinDepth = SettingValueOf<
+  "editor.undoHistoryMinDepth"
+>;
 
 export interface ApplicationEditorLineEndingSettings {
   expected: ExpectedLineEnding;
@@ -166,6 +172,7 @@ export interface ApplicationEditorSettings {
   whitespace: ApplicationEditorWhitespaceSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
+  undoHistoryMinDepth: UndoHistoryMinDepth;
 }
 
 export interface ApplicationNewFileSettings {
@@ -256,6 +263,7 @@ export interface EffectiveEditorSettings {
   whitespace: ApplicationEditorWhitespaceSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
+  undoHistoryMinDepth: UndoHistoryMinDepth;
 }
 
 export interface EffectiveFilesSettings {
@@ -394,7 +402,10 @@ export const builtInDefaultSettings: EffectiveSettings = {
           "editor.characterCount.exclude.markdownComments"
         )
       }
-    }
+    },
+    undoHistoryMinDepth: getCatalogDefaultValue(
+      "editor.undoHistoryMinDepth"
+    )
   },
   files: {
     newFile: {
@@ -481,7 +492,8 @@ export const defaultApplicationSettings: ApplicationSettings = {
         markdownComments:
           builtInDefaultSettings.editor.characterCount.exclude.markdownComments
       }
-    }
+    },
+    undoHistoryMinDepth: builtInDefaultSettings.editor.undoHistoryMinDepth
   },
   files: {
     newFile: {
@@ -566,7 +578,9 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
             defaultApplicationSettings.editor.characterCount.exclude
               .markdownComments
         }
-      }
+      },
+      undoHistoryMinDepth:
+        defaultApplicationSettings.editor.undoHistoryMinDepth
     },
     files: {
       newFile: {
@@ -667,7 +681,10 @@ export function resolveEffectiveSettings(
       lineEnding: applicationSettings.editor.lineEnding,
       whitespace: applicationSettings.editor.whitespace,
       paragraphIndent: applicationSettings.editor.paragraphIndent,
-      characterCount: applicationSettings.editor.characterCount
+      characterCount: applicationSettings.editor.characterCount,
+      // #394 Step 1: applicationOnly, always concrete already — same
+      // fallback-free pass-through as lineEnding/whitespace above.
+      undoHistoryMinDepth: applicationSettings.editor.undoHistoryMinDepth
     },
     files: {
       newFile: {

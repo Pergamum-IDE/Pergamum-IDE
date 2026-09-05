@@ -950,6 +950,8 @@ export const enTranslations = {
   "settings.editor.characterCount.exclude.markdownSyntax.label": "Exclude Markdown syntax",
   "settings.editor.characterCount.exclude.whitespace.description": "Exclude half-width spaces, full-width spaces, and tabs from the character count.",
   "settings.editor.characterCount.exclude.whitespace.label": "Exclude whitespace",
+  "settings.editor.undoHistoryMinDepth.description": "Specifies the depth of Undo history kept for each document. This value is a guideline for the number of history events, not the exact number of times Undo can be performed. Larger values make it more likely that older edits can be undone, at the cost of potentially higher memory usage. This setting takes effect after restart.",
+  "settings.editor.undoHistoryMinDepth.label": "Undo History Depth",
   "settings.files.newFile.encoding.description": "Default character encoding for newly created files. Currently only UTF-8 is available.",
   "settings.files.newFile.encoding.label": "New file encoding",
   "settings.files.newFile.lineEnding.description": "Default line ending for newly created files.",

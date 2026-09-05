@@ -55,6 +55,12 @@ const defaultParagraphIndentSettings = {
   )
 };
 
+// #394 Step 1: always-resolved (non-sparse), like the other editor.* fields
+// above — every save request's `editor` must carry it too.
+const defaultUndoHistoryMinDepth = getCatalogDefaultValue(
+  "editor.undoHistoryMinDepth"
+);
+
 const defaultCharacterCountSettings = {
   exclude: {
     whitespace: getCatalogDefaultValue(
@@ -145,7 +151,8 @@ function validSaveRequest(
       lineEnding: defaultLineEndingSettings,
       whitespace: defaultWhitespaceSettings,
       paragraphIndent: defaultParagraphIndentSettings,
-      characterCount: defaultCharacterCountSettings
+      characterCount: defaultCharacterCountSettings,
+      undoHistoryMinDepth: defaultUndoHistoryMinDepth
     },
     files: {
       newFile: {
@@ -376,7 +383,10 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
             renderTab: "yes",
             renderOtherUnicodeSpace: "yes"
           },
-          paragraphIndent: { excludeLeadingCharacters: 42 }
+          paragraphIndent: { excludeLeadingCharacters: 42 },
+          // #394 Step 1: below the numericRange minimum (100) — must fall
+          // back to the catalog default, not fail startup.
+          undoHistoryMinDepth: 50
         },
         files: {
           newFile: {
@@ -401,6 +411,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.editor.whitespace).toEqual(defaultWhitespaceSettings);
     expect(settings.editor.paragraphIndent).toEqual(
       defaultParagraphIndentSettings
+    );
+    expect(settings.editor.undoHistoryMinDepth).toBe(
+      defaultUndoHistoryMinDepth
     );
     expect(settings.files.newFile).toEqual({
       lineEnding: "lf",
@@ -526,7 +539,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
               ...defaultCharacterCountSettings.exclude,
               headings: true
             }
-          }
+          },
+          undoHistoryMinDepth: 1000
         },
         commandPalette: {
           footerDetail: {
@@ -589,7 +603,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           ...defaultCharacterCountSettings.exclude,
           headings: true
         }
-      }
+      },
+      undoHistoryMinDepth: 1000
     });
     expect(written.files).toEqual({
       newFile: {
@@ -620,6 +635,36 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       renderer: "markdown",
       updateDelayMs: 10000
     });
+  });
+
+  it("#394 Step 1: a changed editor.undoHistoryMinDepth round-trips through save then load", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    await saveApplicationSettings(
+      validSaveRequest({
+        editor: {
+          lineEnding: defaultLineEndingSettings,
+          whitespace: defaultWhitespaceSettings,
+          paragraphIndent: defaultParagraphIndentSettings,
+          characterCount: defaultCharacterCountSettings,
+          undoHistoryMinDepth: 1000
+        }
+      })
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+
+    expect(written.editor.undoHistoryMinDepth).toBe(1000);
+
+    // Load again from exactly what was just written.
+    fsMock.readFile.mockResolvedValue(writtenContent);
+    const reloaded = await loadSettings();
+
+    expect(reloaded.editor.undoHistoryMinDepth).toBe(1000);
   });
 
   it("writes preview.updateDelayMs of 0 (explicit 'don't wait') to settings.json", async () => {
@@ -739,7 +784,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           lineEnding: defaultLineEndingSettings,
           whitespace: defaultWhitespaceSettings,
           paragraphIndent: defaultParagraphIndentSettings,
-          characterCount: defaultCharacterCountSettings
+          characterCount: defaultCharacterCountSettings,
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth
         }
       }),
       validSaveRequest({
@@ -759,7 +805,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           paragraphIndent: {
             excludeLeadingCharacters: 42 as unknown as string
           },
-          characterCount: defaultCharacterCountSettings
+          characterCount: defaultCharacterCountSettings,
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth
         }
       }),
       validSaveRequest({
@@ -772,7 +819,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
               ...defaultCharacterCountSettings.exclude,
               markdownSyntax: "yes" as unknown as boolean
             }
-          }
+          },
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth
         }
       }),
       validSaveRequest({
@@ -783,7 +831,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
             renderAsciiSpace: "yes" as unknown as boolean
           },
           paragraphIndent: defaultParagraphIndentSettings,
-          characterCount: defaultCharacterCountSettings
+          characterCount: defaultCharacterCountSettings,
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth
         }
       }),
       validSaveRequest({

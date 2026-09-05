@@ -78,6 +78,9 @@ const defaultCharacterCountSettings = {
     )
   }
 };
+const defaultUndoHistoryMinDepth = getCatalogDefaultValue(
+  "editor.undoHistoryMinDepth"
+);
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
@@ -104,7 +107,8 @@ function saveRequest(
       lineEnding: defaultLineEndingSettings,
       whitespace: defaultWhitespaceSettings,
       paragraphIndent: defaultParagraphIndentSettings,
-      characterCount: defaultCharacterCountSettings
+      characterCount: defaultCharacterCountSettings,
+      undoHistoryMinDepth: defaultUndoHistoryMinDepth
     },
     files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
     ...overrides

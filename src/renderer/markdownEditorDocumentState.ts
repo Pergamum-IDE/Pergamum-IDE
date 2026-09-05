@@ -51,7 +51,7 @@ import {
   createGlossaryCompletionExtension,
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
-import { markdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
+import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
 
 /**
  * One open Markdown document's own `EditorState`, kept alongside the exact
@@ -79,6 +79,14 @@ interface LiveRef<T> {
 export interface MarkdownEditorDocumentStateOptions {
   readonly doc: string;
   readonly initialLineEndingBreaks: readonly LineEndingBreak[];
+  /**
+   * #394 Step 1: `editor.undoHistoryMinDepth` — read once, here, at
+   * construction time only. Never a `LiveRef`: Step 1 intentionally does
+   * not make an already-built document's history extension reconfigurable,
+   * so there is nothing for a "read fresh every time" ref to accomplish for
+   * this specific value (see createMarkdownEditorBaseSetup's doc comment).
+   */
+  readonly undoHistoryMinDepth: number;
   readonly newFileLineEndingFallbackRef: LiveRef<LineEndingKind>;
   readonly readOnlyCompartment: Compartment;
   readonly readOnlyRef: LiveRef<boolean>;
@@ -122,7 +130,9 @@ export function createMarkdownEditorDocumentState(
   const state = EditorState.create({
     doc: options.doc,
     extensions: [
-      ...markdownEditorBaseSetup,
+      ...createMarkdownEditorBaseSetup({
+        undoHistoryMinDepth: options.undoHistoryMinDepth
+      }),
       markdown(),
       EditorView.lineWrapping,
       options.readOnlyCompartment.of([
