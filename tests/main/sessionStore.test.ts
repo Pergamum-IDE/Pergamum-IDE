@@ -711,14 +711,14 @@ describe("SessionStore — cross-process manifest coordination (#272 review Bloc
       retryDelayMs: 5
     });
 
-    let releaseHeld: (() => void) | null = null;
+    const releaseHeldBox: { current: (() => void) | null } = { current: null };
     const holding = held.run(
       () =>
         new Promise<void>((resolve) => {
-          releaseHeld = resolve;
+          releaseHeldBox.current = resolve;
         })
     );
-    for (let i = 0; i < 50 && releaseHeld === null; i += 1) {
+    for (let i = 0; i < 50 && releaseHeldBox.current === null; i += 1) {
       await new Promise((r) => setTimeout(r, 5));
     }
     await fs.stat(lockDir);
@@ -735,7 +735,7 @@ describe("SessionStore — cross-process manifest coordination (#272 review Bloc
       contender.persistSession(record(sid("s1")))
     ).rejects.toMatchObject({ code: "PERGAMUM_SESSION_STORAGE_FAILURE" });
 
-    releaseHeld?.();
+    releaseHeldBox.current?.();
     await holding;
   });
 });

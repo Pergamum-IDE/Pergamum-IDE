@@ -19,6 +19,8 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
+import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
 import { t, type Translate } from "../../src/shared/i18n";
 
 const translateJa: Translate = (key, values) => t("ja", key, values);
@@ -36,7 +38,12 @@ function dirtyState(): OpenDocumentsState {
       createUntitledDocument(() => "0198d95f-97d8-7000-8000-000000000001"),
       null
     ),
-    (document) => updateCurrentDocumentContent(document, "changed")
+    (document) =>
+      updateCurrentDocumentContent(
+        document,
+        "changed",
+        buildLineEndingBreakSet(analyzeLineEndings("changed"))
+      )
   );
 }
 

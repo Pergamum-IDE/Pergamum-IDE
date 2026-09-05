@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { MenuItemConstructorOptions } from "electron";
+import type { DebugLogger } from "../../src/main/debugLogger";
 import { APPLICATION_MENU_CHANNELS } from "../../src/shared/api";
 import {
   applicationCommandIds,
@@ -658,9 +659,9 @@ function emptyMenuOptions(): ApplicationMenuOptions {
   };
 }
 
-function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
+function debugLoggerMock(): { log: ReturnType<typeof vi.fn<DebugLogger["log"]>> } {
   return {
-    log: vi.fn()
+    log: vi.fn<DebugLogger["log"]>()
   };
 }
 

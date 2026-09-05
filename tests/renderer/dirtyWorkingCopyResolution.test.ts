@@ -110,7 +110,14 @@ function addDirtyStandaloneMarkdown(
     state,
     createFileDocument({
       path,
-      content: `saved ${path}`
+      content: `saved ${path}`,
+      metadata: {
+        encoding: "utf8",
+        lineEnding: "lf",
+        byteLength: Buffer.byteLength(`saved ${path}`, "utf8"),
+        characterLength: `saved ${path}`.length,
+        hadBom: false
+      }
     }),
     projectContext
   );

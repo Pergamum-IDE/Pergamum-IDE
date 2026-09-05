@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { IpcMainInvokeEvent } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RECOVERY_CHANNELS } from "../../src/shared/api";
 import { openRecoveryStoreDatabase } from "../../src/main/recoveryStoreDatabase";
@@ -11,6 +12,15 @@ import type { RecoveryDocumentPayload } from "../../src/shared/recoveryDocument"
 let workDir = "";
 let handle: Awaited<ReturnType<typeof openRecoveryStoreDatabase>> | null = null;
 
+// A stub satisfying IpcMainInvokeEvent's shape for handlers invoked directly
+// in these tests — none of them read any property off the event.
+const fakeIpcMainInvokeEvent = {} as IpcMainInvokeEvent;
+
+type RegisteredIpcHandler = (
+  event: IpcMainInvokeEvent,
+  arg: unknown
+) => unknown;
+
 interface Harness {
   invoke: (channel: string, arg: unknown) => unknown;
   logEvents: Array<{ event: string; level: string; details?: Record<string, unknown> }>;
@@ -20,7 +30,7 @@ function buildHarness(options: {
   status: RecoveryStoreStatus | null;
   withDatabase: boolean;
 }): Harness {
-  const handlers = new Map<string, (event: unknown, arg: unknown) => unknown>();
+  const handlers = new Map<string, RegisteredIpcHandler>();
   const logEvents: Harness["logEvents"] = [];
   let docRefSeq = 0;
 
@@ -52,7 +62,7 @@ function buildHarness(options: {
     invoke: (channel, arg) => {
       const listener = handlers.get(channel);
       if (!listener) throw new Error(`no handler for ${channel}`);
-      return listener({}, arg);
+      return listener(fakeIpcMainInvokeEvent, arg);
     },
     logEvents
   };

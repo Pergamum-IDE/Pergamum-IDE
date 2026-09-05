@@ -261,23 +261,23 @@ function undoOnce(state: MarkdownEditorDocumentState["state"]) {
   // pair), but this module works on bare `EditorState` - this tiny adapter
   // lets the tests drive Undo/Redo the same way `@codemirror/commands`
   // expects without constructing a real EditorView.
-  let next: typeof state | null = null;
+  const nextBox: { current: typeof state | null } = { current: null };
   undo({
     state,
     dispatch: (tr) => {
-      next = tr.state;
+      nextBox.current = tr.state;
     }
   });
-  return next;
+  return nextBox.current;
 }
 
 function redoOnce(state: MarkdownEditorDocumentState["state"]) {
-  let next: typeof state | null = null;
+  const nextBox: { current: typeof state | null } = { current: null };
   redo({
     state,
     dispatch: (tr) => {
-      next = tr.state;
+      nextBox.current = tr.state;
     }
   });
-  return next;
+  return nextBox.current;
 }

@@ -12,5 +12,5 @@
     "noEmit": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["tests/**/*.tsx"]
+  "include": ["tests/**/*.ts", "tests/**/*.tsx"]
 }

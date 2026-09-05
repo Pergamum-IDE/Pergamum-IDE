@@ -132,8 +132,11 @@ describe("#262 document-dependent commands in the zero-tab state", () => {
     editorKindMarkdown: false,
     editorKindGlossary: false,
     editorDocumentProjectOwned: false,
+    editorDocumentProjectFile: false,
     activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
-    occurrenceTrackingActive: false
+    occurrenceTrackingActive: false,
+    recoveryOwner: false,
+    recoveryHasRecoverableCandidates: false
   });
 
   const markdownTabContext = buildCommandContextSnapshot({
@@ -145,8 +148,11 @@ describe("#262 document-dependent commands in the zero-tab state", () => {
     editorKindMarkdown: true,
     editorKindGlossary: false,
     editorDocumentProjectOwned: false,
+    editorDocumentProjectFile: false,
     activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
-    occurrenceTrackingActive: false
+    occurrenceTrackingActive: false,
+    recoveryOwner: false,
+    recoveryHasRecoverableCandidates: false
   });
 
   it("leaves Save and Save As disabled", () => {

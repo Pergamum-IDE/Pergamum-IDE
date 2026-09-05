@@ -71,7 +71,11 @@ function buildCoreCommandRegistry(): CommandRegistry {
     {
       openMarkdownDocument: () => undefined,
       saveCurrentDocument: () => undefined,
+      saveCurrentDocumentAs: () => undefined,
+      saveAllDocuments: () => undefined,
       canSaveCurrentDocument: () => true,
+      canSaveCurrentDocumentAs: () => true,
+      canSaveAllDocuments: () => true,
       closeEditor: () => undefined,
       canCloseEditor: () => true,
       delegateNativeEditCommand: () => undefined,
@@ -79,12 +83,23 @@ function buildCoreCommandRegistry(): CommandRegistry {
     },
     {
       openMarkdownDocument: "Open Markdown File",
+      openMarkdownDocumentDescription: "Open Markdown File",
       saveDocument: "Save",
+      saveDocumentDescription: "Save",
+      saveAll: "Save All",
+      saveAllDescription: "Save All",
+      saveAs: "Save As",
+      saveAsDescription: "Save As",
       closeEditor: "Close Current Document",
+      closeEditorDescription: "Close Current Document",
       cutSelection: "Cut",
+      cutSelectionDescription: "Cut",
       copySelection: "Copy",
+      copySelectionDescription: "Copy",
       pasteSelection: "Paste",
-      selectAllSelection: "Select All"
+      pasteSelectionDescription: "Paste",
+      selectAllSelection: "Select All",
+      selectAllSelectionDescription: "Select All"
     }
   );
   registerLineJumpCommands(
@@ -105,9 +120,17 @@ function buildCoreCommandRegistry(): CommandRegistry {
     },
     {
       toggleFiles: "Toggle File Explorer",
+      toggleFilesDescription: "Toggle File Explorer",
       focusSearch: "Focus Search",
+      focusSearchDescription: "Focus Search",
       focusGlossary: "Focus Glossary",
-      openApplicationSettings: "Open Application Settings"
+      focusGlossaryDescription: "Focus Glossary",
+      focusDocumentMap: "Focus Document Map",
+      focusDocumentMapDescription: "Focus Document Map",
+      focusDocumentMetrics: "Focus Document Metrics",
+      focusDocumentMetricsDescription: "Focus Document Metrics",
+      openApplicationSettings: "Open Application Settings",
+      openApplicationSettingsDescription: "Open Application Settings"
     }
   );
   registerFileExplorerCommands(
@@ -137,8 +160,11 @@ function buildCoreCommandRegistry(): CommandRegistry {
     },
     {
       open: "Open Utility Window",
+      openDescription: "Open Utility Window",
       close: "Close Utility Window",
-      toggle: "Toggle Utility Window"
+      closeDescription: "Close Utility Window",
+      toggle: "Toggle Utility Window",
+      toggleDescription: "Toggle Utility Window"
     }
   );
   // #377: the Debug Log command is registered only in `--pergamum-debug`
@@ -159,13 +185,19 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openGlossaryEntry: () => true,
       createGlossaryEntry: () => true,
       navigateToPreviousGlossaryOccurrence: () => true,
-      navigateToNextGlossaryOccurrence: () => true
+      navigateToNextGlossaryOccurrence: () => true,
+      openGlossaryTagManager: () => true,
+      openGlossaryEntryManager: () => true
     },
     {
       openEntry: "Open glossary entry",
       createEntry: "Create glossary entry",
       previousOccurrence: "Previous occurrence",
-      nextOccurrence: "Next occurrence"
+      nextOccurrence: "Next occurrence",
+      manageTags: "Manage glossary tags",
+      manageTagsDescription: "Manage glossary tags",
+      manageEntries: "Manage glossary entries",
+      manageEntriesDescription: "Manage glossary entries"
     }
   );
   registerGlossaryOccurrencesCommands(
@@ -178,9 +210,13 @@ function buildCoreCommandRegistry(): CommandRegistry {
     },
     {
       previous: "Previous occurrence",
+      previousDescription: "Previous occurrence",
       next: "Next occurrence",
+      nextDescription: "Next occurrence",
       openEntry: "Open entry",
-      closeTracking: "Close tracking"
+      openEntryDescription: "Open entry",
+      closeTracking: "Close tracking",
+      closeTrackingDescription: "Close tracking"
     }
   );
   registerCommandPaletteCommands(

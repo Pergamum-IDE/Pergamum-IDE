@@ -21,21 +21,23 @@ function manualScheduler(): SessionPersistenceScheduler & {
   flush: () => void;
   pendingDelay: () => number | null;
 } {
-  let pending: { callback: () => void; delay: number } | null = null;
+  const pendingBox: {
+    current: { callback: () => void; delay: number } | null;
+  } = { current: null };
   return {
     schedule: (callback, delayMs) => {
-      pending = { callback, delay: delayMs };
-      return pending;
+      pendingBox.current = { callback, delay: delayMs };
+      return pendingBox.current;
     },
     cancel: () => {
-      pending = null;
+      pendingBox.current = null;
     },
     flush: () => {
-      const current = pending;
-      pending = null;
+      const current = pendingBox.current;
+      pendingBox.current = null;
       current?.callback();
     },
-    pendingDelay: () => pending?.delay ?? null
+    pendingDelay: () => pendingBox.current?.delay ?? null
   };
 }
 
@@ -237,9 +239,9 @@ describe("SessionPersistenceCoordinator — slow I/O detection (#272 PO decision
   });
 
   it("a persist that never settles → SUSPENDED after the threshold; in-flight write not assumed gone; no stacked automatic write", async () => {
-    let resolveSlow: (() => void) | null = null;
+    const resolveSlowBox: { current: (() => void) | null } = { current: null };
     const slow = new Promise<void>((resolve) => {
-      resolveSlow = resolve;
+      resolveSlowBox.current = resolve;
     });
     let persistCount = 0;
     const scheduler = manualScheduler();
@@ -279,16 +281,16 @@ describe("SessionPersistenceCoordinator — slow I/O detection (#272 PO decision
     await tick();
     expect(persistCount).toBe(1); // never stacked a second write
 
-    resolveSlow?.();
+    resolveSlowBox.current?.();
     await tick();
     expect(coordinator.getState()).toBe("suspended");
     expect(persistCount).toBe(1);
   });
 
   it("commitNow does not run concurrently with a slow in-flight write; it waits, then reflects the outcome", async () => {
-    let resolveSlow: (() => void) | null = null;
+    const resolveSlowBox: { current: (() => void) | null } = { current: null };
     const slow = new Promise<void>((resolve) => {
-      resolveSlow = resolve;
+      resolveSlowBox.current = resolve;
     });
     const persistArgs: string[] = [];
     const scheduler = manualScheduler();
@@ -328,7 +330,7 @@ describe("SessionPersistenceCoordinator — slow I/O detection (#272 PO decision
     // commitNow never issued its own concurrent write.
     expect(persistArgs).toEqual(["/slow.md"]);
 
-    resolveSlow?.();
+    resolveSlowBox.current?.();
     await tick();
   });
 });

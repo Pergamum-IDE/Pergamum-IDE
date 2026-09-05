@@ -411,13 +411,21 @@ describe("project IPC debug logging", () => {
 });
 
 function createLoggerMock(): DebugLogger & {
-  log: ReturnType<typeof vi.fn>;
+  log: ReturnType<typeof vi.fn<DebugLogger["log"]>>;
 } {
   return {
     enabled: true,
     sessionId: "session",
     currentFilePath: null,
-    log: vi.fn(),
+    log: vi.fn<DebugLogger["log"]>(),
+    getSnapshot: vi.fn(() => ({
+      enabled: true,
+      sessionId: "session",
+      events: [],
+      uiDroppedEventCount: 0,
+      uiBufferLimit: 1000
+    })),
+    subscribe: vi.fn(() => () => undefined),
     logRendererRequest: vi.fn(),
     openFileSink: vi.fn(),
     flushAndClose: vi.fn(),

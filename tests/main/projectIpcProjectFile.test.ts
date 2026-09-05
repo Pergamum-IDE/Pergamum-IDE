@@ -1,4 +1,5 @@
 import { promises as fs, readFileSync, type Dirent } from "node:fs";
+import type { NonSharedBuffer } from "node:buffer";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -74,6 +75,7 @@ import {
   type RecoveryPathRekeyHook,
   registerProjectIpc
 } from "../../src/main/projectIpc";
+import type { ProjectWindowTitleTarget } from "../../src/main/projectWindowTitle";
 import {
   createProjectLockOwnerMetadata,
   parseProjectLockOwnerMetadata,
@@ -664,7 +666,7 @@ describe("project file IPC foundation", () => {
         writtenMetadata = data;
       }),
       open: vi.fn(async () => ownerHandle),
-      unlink: vi.fn(async () => undefined),
+      unlink: vi.fn<ProjectWriteLockFileSystem["unlink"]>(async () => undefined),
       rmdir: vi.fn(async () => undefined),
       readFile: vi.fn(async () => writtenMetadata),
       rename: vi.fn(async () => undefined),
@@ -722,7 +724,7 @@ describe("project file IPC foundation", () => {
       open: vi.fn(async () => {
         throw new Error("owner handle should not be opened");
       }),
-      unlink: vi.fn(async () => undefined),
+      unlink: vi.fn<ProjectWriteLockFileSystem["unlink"]>(async () => undefined),
       rmdir: vi.fn(async () => undefined),
       readFile: vi.fn(async () => ""),
       rename: vi.fn(async () => undefined),
@@ -764,7 +766,7 @@ describe("project file IPC foundation", () => {
       open: vi.fn(async () => {
         throw new Error("owner handle open failed");
       }),
-      unlink: vi.fn(async () => undefined),
+      unlink: vi.fn<ProjectWriteLockFileSystem["unlink"]>(async () => undefined),
       rmdir: vi.fn(async () => undefined),
       readFile: vi.fn(async () => ""),
       rename: vi.fn(async () => undefined),
@@ -813,7 +815,7 @@ describe("project file IPC foundation", () => {
         writtenMetadata = data;
       }),
       open: vi.fn(async () => ownerHandle),
-      unlink: vi.fn(async () => {
+      unlink: vi.fn<ProjectWriteLockFileSystem["unlink"]>(async () => {
         throw new Error("unlink failed");
       }),
       rmdir: vi.fn(async () => {
@@ -3395,7 +3397,7 @@ describe("project file IPC foundation", () => {
       fakeDirent("Visible", "directory"),
       fakeDirent("visible.md", "file"),
       fakeDirent("Linked", "symlink")
-    ] as Dirent[]);
+    ]);
 
     const listFileExplorerChildrenHandler = registeredHandler(
       PROJECT_CHANNELS.listFileExplorerChildren
@@ -4707,7 +4709,7 @@ function expectFileExplorerOk(
 function fakeDirent(
   name: string,
   kind: "directory" | "file" | "symlink"
-): Dirent {
+): Dirent<NonSharedBuffer> {
   return {
     name,
     isBlockDevice: () => false,
@@ -4717,7 +4719,7 @@ function fakeDirent(
     isFile: () => kind === "file",
     isSocket: () => false,
     isSymbolicLink: () => kind === "symlink"
-  } as Dirent;
+  } as unknown as Dirent<NonSharedBuffer>;
 }
 
 function fakeStats(
@@ -4785,9 +4787,11 @@ async function listProjectWriteLockArchives(
   return entries.filter((name) => name.startsWith(".pergamum.lock.stale-"));
 }
 
-function createTitleWindowMock(): { setTitle: ReturnType<typeof vi.fn> } {
+function createTitleWindowMock(): ProjectWindowTitleTarget & {
+  setTitle: ReturnType<typeof vi.fn<ProjectWindowTitleTarget["setTitle"]>>;
+} {
   return {
-    setTitle: vi.fn()
+    setTitle: vi.fn<ProjectWindowTitleTarget["setTitle"]>()
   };
 }
 

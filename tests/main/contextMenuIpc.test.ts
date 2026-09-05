@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MenuItemConstructorOptions } from "electron";
+import type { MenuItemConstructorOptions, WebContents } from "electron";
 import { CONTEXT_MENU_CHANNELS, EDIT_CHANNELS } from "../../src/shared/api";
 import { editorCommandIds } from "../../src/shared/commandIds";
 import type { EditContextMenuPopupRequest } from "../../src/shared/editContextMenu";
@@ -33,12 +33,12 @@ import {
 } from "../../src/main/contextMenuIpc";
 
 type NativeEditWebContentsMock = {
-  isDestroyed: ReturnType<typeof vi.fn>;
-  send: ReturnType<typeof vi.fn>;
-  cut: ReturnType<typeof vi.fn>;
-  copy: ReturnType<typeof vi.fn>;
-  paste: ReturnType<typeof vi.fn>;
-  selectAll: ReturnType<typeof vi.fn>;
+  isDestroyed: ReturnType<typeof vi.fn<WebContents["isDestroyed"]>>;
+  send: ReturnType<typeof vi.fn<WebContents["send"]>>;
+  cut: ReturnType<typeof vi.fn<WebContents["cut"]>>;
+  copy: ReturnType<typeof vi.fn<WebContents["copy"]>>;
+  paste: ReturnType<typeof vi.fn<WebContents["paste"]>>;
+  selectAll: ReturnType<typeof vi.fn<WebContents["selectAll"]>>;
 };
 
 const request: EditContextMenuPopupRequest = {

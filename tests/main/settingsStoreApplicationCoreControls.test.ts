@@ -27,6 +27,7 @@ import {
 } from "../../src/main/settingsStore";
 import type { SaveApplicationSettingsRequest } from "../../src/shared/settings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
+import { defaultDocumentMapSettings } from "../../src/shared/documentMapSettings";
 
 // #252/#257: editor.lineEnding.* and editor.paragraphIndent.* are
 // always-resolved (non-sparse), unlike fontFamily — every save request's
@@ -160,6 +161,7 @@ function validSaveRequest(
         encoding: "utf8"
       }
     },
+    documentMap: defaultDocumentMapSettings(),
     ...overrides
   };
 }
@@ -266,7 +268,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           documentMap: {
             narrationColor: "#111111",
             glossaryFallbackColor: "#222222",
-            dialogueDelimiterPairs: []
+            dialogueDelimiterPairs: [],
+            adjustTagColorsForVisibility: true,
+            viewportLensOpacity: 0.28
           }
         })
       )
@@ -288,7 +292,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
             glossaryFallbackColor: "#ff0000",
             dialogueDelimiterPairs: [
               { open: "「", close: "」", color: "nope" }
-            ]
+            ],
+            adjustTagColorsForVisibility: true,
+            viewportLensOpacity: 0.28
           }
         })
       )
@@ -731,7 +737,15 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       })
     );
 
-    await saveApplicationSettings(validSaveRequest());
+    // This exercises a save request that is missing documentMap at RUNTIME
+    // (as an untyped IPC payload legitimately could be) despite
+    // SaveApplicationSettingsRequest declaring it required at the type
+    // level — mirrors the "Missing documentMap -> rejected" fixture above.
+    const requestWithoutDocumentMap = validSaveRequest();
+    delete (requestWithoutDocumentMap as { documentMap?: unknown })
+      .documentMap;
+
+    await saveApplicationSettings(requestWithoutDocumentMap);
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
       string,

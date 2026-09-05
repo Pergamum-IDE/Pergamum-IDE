@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, type TransactionSpec } from "@codemirror/state";
 import { history, redo, undo } from "@codemirror/commands";
 import { describe, expect, it } from "vitest";
 import {
@@ -237,7 +237,7 @@ describe("createLineEndingMarkerFeature (#252)", () => {
         get state() {
           return state;
         },
-        dispatch: (spec: Parameters<EditorState["update"]>[0]) => {
+        dispatch: (spec: TransactionSpec) => {
           state = state.update(spec).state;
         }
       };

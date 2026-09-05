@@ -841,7 +841,10 @@ describe("parseSessionManifestStrict — mutation path (#272 review Blocker 3)",
       updatedAt: "2026-08-28T00:00:00.000Z"
     });
     expect(isSessionManifestParseFailure(result)).toBe(false);
-    expect((result as { sessions: string[] }).sessions).toEqual([a, b]);
+    if (isSessionManifestParseFailure(result)) {
+      throw new Error("expected a successfully parsed manifest");
+    }
+    expect(result.sessions).toEqual([a, b]);
   });
 
   it("is STRICT: a single non-UUIDv7 membership entry ⇒ `malformed` (never silently filtered, review follow-up 6)", () => {

@@ -78,7 +78,9 @@ describe("CommandRegistry", () => {
 
   it("awaits a sync command", async () => {
     const registry = new CommandRegistry();
-    const commandId = defineCommandId("test.command.sync");
+    const commandId = defineCommandId<readonly [], string>(
+      "test.command.sync"
+    );
     const execute = vi.fn(() => "sync-result");
 
     registry.register({
@@ -95,7 +97,9 @@ describe("CommandRegistry", () => {
 
   it("awaits an async command", async () => {
     const registry = new CommandRegistry();
-    const commandId = defineCommandId("test.command.async");
+    const commandId = defineCommandId<readonly [], string>(
+      "test.command.async"
+    );
 
     registry.register({
       id: commandId,
@@ -384,7 +388,9 @@ describe("CommandRegistry", () => {
 
   it("swallows onCommandInvoked handler failures and still invokes the command body", async () => {
     const registry = new CommandRegistry();
-    const commandId = defineCommandId("test.command.invokedHandlerFailure");
+    const commandId = defineCommandId<readonly [], string>(
+      "test.command.invokedHandlerFailure"
+    );
     const error = new Error("invoked handler failed");
     const execute = vi.fn(() => "body result");
     const onCommandInvoked = vi.fn(() => {

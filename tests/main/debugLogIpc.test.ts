@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEBUG_LOG_CHANNELS } from "../../src/shared/api";
 import type { DebugLogger } from "../../src/main/debugLogger";
+import type { SanitizedDebugLogEvent } from "../../src/shared/debugLog";
 
 const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -71,16 +72,16 @@ describe("debug log IPC", () => {
   });
 
   it("subscribes, sends sanitized events, and cleans up on unsubscribe", () => {
-    let subscriber:
-      | ((event: { seq: number; event: string; sessionId?: string }) => void)
-      | null = null;
+    const subscriberBox: {
+      current: ((event: SanitizedDebugLogEvent) => void) | null;
+    } = { current: null };
     const unsubscribeFromLogger = vi.fn();
     const logger = {
       logRendererRequest: vi.fn(),
       getSnapshot: vi.fn(),
       subscribe: vi.fn((callback) => {
         let active = true;
-        subscriber = (event) => {
+        subscriberBox.current = (event) => {
           if (active) {
             callback(event);
           }
@@ -95,7 +96,7 @@ describe("debug log IPC", () => {
     registerDebugLogIpc(logger);
 
     registeredListener(DEBUG_LOG_CHANNELS.subscribe)({ sender });
-    subscriber?.({
+    subscriberBox.current?.({
       seq: 2,
       timestamp: "2026-08-14T22:00:22.000+09:00",
       level: "debug",
@@ -103,7 +104,7 @@ describe("debug log IPC", () => {
       details: { commandId: "workspace.files.toggle" }
     });
     registeredListener(DEBUG_LOG_CHANNELS.unsubscribe)({ sender });
-    subscriber?.({
+    subscriberBox.current?.({
       seq: 3,
       timestamp: "2026-08-14T22:00:23.000+09:00",
       level: "debug",

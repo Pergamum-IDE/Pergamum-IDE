@@ -52,6 +52,12 @@ function fakeSessionStore(
         sessions: [],
         skipped: []
       }),
+    readRestoreSetForColdStart: () =>
+      Promise.resolve({
+        manifestOutcome: { kind: "empty" },
+        sessions: [],
+        skipped: []
+      }),
     persistSession: (record) => {
       persisted.push(record);
       return Promise.resolve();
@@ -529,6 +535,12 @@ describe("SessionStoreController — storage failure → SUSPENDED (#272 PO deci
         readRestoreSet: () =>
           Promise.resolve({
             manifest: { schemaVersion: 1, sessions: [], updatedAt: "" },
+            sessions: [],
+            skipped: []
+          }),
+        readRestoreSetForColdStart: () =>
+          Promise.resolve({
+            manifestOutcome: { kind: "empty" },
             sessions: [],
             skipped: []
           }),

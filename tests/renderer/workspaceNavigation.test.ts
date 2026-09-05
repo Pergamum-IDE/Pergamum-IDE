@@ -11,7 +11,8 @@ import { CommandRegistry } from "../../src/shared/commandRegistry";
 import {
   createProjectDocumentEditorId,
   editorIdEquals,
-  type ActiveProjectContext
+  type ActiveProjectContext,
+  type EditorId
 } from "../../src/shared/editorId";
 import { t, type Translate } from "../../src/shared/i18n";
 import { ActivityBar } from "../../src/renderer/ActivityBar";
@@ -56,6 +57,18 @@ const project: PergamumProject = {
 
 const projectContext: ActiveProjectContext = {
   rootPath: project.rootPath
+};
+
+// The required WorkspaceSidebarProps fields these tests don't otherwise
+// vary — kept as one shared default so a future required prop only needs
+// updating here, not at every render call site below.
+const workspaceSidebarRequiredDefaults = {
+  glossaryRefreshToken: 0,
+  fileExplorerCreateEntryRequest: null,
+  onFileExplorerCreateEntryRequestHandled: () => undefined,
+  onCreateGlossaryEntry: () => Promise.resolve(true),
+  glossaryActiveDocumentContent: null,
+  onNavigateGlossaryOccurrence: () => undefined
 };
 
 const rootFileExplorerEntries: FileExplorerEntry[] = [
@@ -105,6 +118,7 @@ function fileExplorerViewProps(
     loadingDirectoryPaths: new Set(),
     unavailableDirectoryPaths: new Set(),
     isRootSelected: false,
+    canCreate: false,
     selectedRelativePath: null,
     highlightedRelativePath: null,
     translate,
@@ -113,6 +127,8 @@ function fileExplorerViewProps(
     onSelectRoot: () => undefined,
     onSelectEntry: () => undefined,
     onActivateDocument: () => undefined,
+    onNewFile: () => undefined,
+    onNewFolder: () => undefined,
     ...overrides
   };
 
@@ -341,9 +357,17 @@ describe("workspace navigation", () => {
       },
       {
         toggleFiles: "Focus File Explorer",
+        toggleFilesDescription: "Focus File Explorer",
         focusSearch: "Focus Search",
+        focusSearchDescription: "Focus Search",
         focusGlossary: "Focus Glossary",
-        openApplicationSettings: "Open Application Settings"
+        focusGlossaryDescription: "Focus Glossary",
+        focusDocumentMap: "Focus Document Map",
+        focusDocumentMapDescription: "Focus Document Map",
+        focusDocumentMetrics: "Focus Document Metrics",
+        focusDocumentMetricsDescription: "Focus Document Metrics",
+        openApplicationSettings: "Open Application Settings",
+        openApplicationSettingsDescription: "Open Application Settings"
       }
     );
 
@@ -430,6 +454,7 @@ describe("workspace navigation", () => {
   it("renders the File Explorer root and toolbar in Files mode", () => {
     const markup = renderToStaticMarkup(
       React.createElement(WorkspaceSidebar, {
+        ...workspaceSidebarRequiredDefaults,
         mode: "files",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
@@ -483,10 +508,13 @@ describe("workspace navigation", () => {
 
     expect(reloadButton?.props.disabled).toBe(false);
     expect(typeof reloadButton?.props.onClick).toBe("function");
+    // onNewFile/onNewFolder are always wired (a real handler is a required
+    // prop) — disabling creation is entirely the `disabled` attribute's job
+    // (a disabled DOM button never fires onClick), not omitting the handler.
     expect(newFileButton?.props.disabled).toBe(true);
-    expect(newFileButton?.props.onClick).toBeUndefined();
+    expect(typeof newFileButton?.props.onClick).toBe("function");
     expect(newFolderButton?.props.disabled).toBe(true);
-    expect(newFolderButton?.props.onClick).toBeUndefined();
+    expect(typeof newFolderButton?.props.onClick).toBe("function");
   });
 
   it("uses bundled File Explorer icon assets without raw SVG strings", () => {
@@ -728,6 +756,7 @@ describe("workspace navigation", () => {
     };
 
     const sidebarForProjectA = WorkspaceSidebar({
+      ...workspaceSidebarRequiredDefaults,
       mode: "files",
       project: projectA,
       highlightedProjectDocumentRelativePath: null,
@@ -737,6 +766,7 @@ describe("workspace navigation", () => {
       onActivateGlossaryEntry: () => undefined
     });
     const sidebarForProjectB = WorkspaceSidebar({
+      ...workspaceSidebarRequiredDefaults,
       mode: "files",
       project: projectB,
       highlightedProjectDocumentRelativePath: null,
@@ -758,6 +788,7 @@ describe("workspace navigation", () => {
 
     renderToStaticMarkup(
       React.createElement(WorkspaceSidebar, {
+        ...workspaceSidebarRequiredDefaults,
         mode: "files",
         project,
         highlightedProjectDocumentRelativePath: "chapter-01.md",
@@ -769,6 +800,7 @@ describe("workspace navigation", () => {
     );
     renderToStaticMarkup(
       React.createElement(WorkspaceSidebar, {
+        ...workspaceSidebarRequiredDefaults,
         mode: "files",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
@@ -807,6 +839,7 @@ describe("workspace navigation", () => {
   it("switches Sidebar content to the Search pane (#384 Phase 1 foundation)", () => {
     const markup = renderToStaticMarkup(
       React.createElement(WorkspaceSidebar, {
+        ...workspaceSidebarRequiredDefaults,
         mode: "search",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
@@ -826,6 +859,7 @@ describe("workspace navigation", () => {
   it("switches Sidebar content to the Glossary loading state", () => {
     const markup = renderToStaticMarkup(
       React.createElement(WorkspaceSidebar, {
+        ...workspaceSidebarRequiredDefaults,
         mode: "glossary",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
@@ -851,6 +885,7 @@ describe("workspace navigation", () => {
       }
     };
     const sidebar = WorkspaceSidebar({
+      ...workspaceSidebarRequiredDefaults,
       mode: "glossary",
       project: readOnlyProject,
       highlightedProjectDocumentRelativePath: null,
@@ -874,8 +909,12 @@ describe("workspace navigation", () => {
       React.createElement(GlossarySidebar, {
         projectRootPath: null,
         highlightedEntryId: null,
+        refreshToken: 0,
+        activeDocumentContent: null,
         translate,
-        onActivateEntry: () => undefined
+        onActivateEntry: () => undefined,
+        onCreateEntry: () => Promise.resolve(true),
+        onNavigateOccurrence: () => undefined
       })
     );
 
@@ -900,7 +939,7 @@ describe("workspace navigation", () => {
     expect(tabsAfterSwitch).toEqual(tabsBeforeSwitch);
     expect(
       editorIdEquals(
-        openDocumentsState.activeDocumentId,
+        openDocumentsState.activeDocumentId as EditorId,
         createProjectDocumentEditorId("chapter-01.md", projectContext)
       )
     ).toBe(true);

@@ -20,6 +20,7 @@ import {
   openProjectDatabase,
   type ProjectDatabase
 } from "../../src/main/projectDatabase";
+import type { DebugLogger } from "../../src/main/debugLogger";
 import {
   GlossaryBoundaryPolicy,
   setGlossaryAtomBoundaryEndPolicy,
@@ -42,11 +43,13 @@ const BOUNDARY_END_AUTO = setGlossaryAtomBoundaryEndPolicy(
 const missingEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
 const missingTagId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
 
-function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
-  return { log: vi.fn() };
+function debugLoggerMock(): { log: ReturnType<typeof vi.fn<DebugLogger["log"]>> } {
+  return { log: vi.fn<DebugLogger["log"]>() };
 }
 
-function dbLogEvents(logger: { log: ReturnType<typeof vi.fn> }) {
+function dbLogEvents(logger: {
+  log: ReturnType<typeof vi.fn<DebugLogger["log"]>>;
+}) {
   return logger.log.mock.calls.map((call) => call[0]);
 }
 

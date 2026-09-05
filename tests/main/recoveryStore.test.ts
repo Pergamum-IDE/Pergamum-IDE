@@ -23,14 +23,15 @@ import { createRecoveryStoreLock } from "../../src/main/recoveryStoreLock";
 import { upsertRecoveryDocument } from "../../src/main/recoveryDocumentStore";
 import { listRecoveryCandidates } from "../../src/main/recoveryCandidateStore";
 import type { RecoveryDocumentPayload } from "../../src/shared/recoveryDocument";
+import type { DebugLogger } from "../../src/main/debugLogger";
 
 let userDataPath = "";
 let projectRootPath = "";
 
-type LoggerMock = { log: ReturnType<typeof vi.fn> };
+type LoggerMock = { log: ReturnType<typeof vi.fn<DebugLogger["log"]>> };
 
 function createLoggerMock(): LoggerMock {
-  return { log: vi.fn() };
+  return { log: vi.fn<DebugLogger["log"]>() };
 }
 
 function loggedEventNames(logger: LoggerMock): string[] {

@@ -10,7 +10,9 @@ function movedEntry(source: string, destination: string) {
     sourceRelativePath: source,
     destinationRelativePath: destination,
     sourceAbsolutePath: `C:/Project/${source}`,
-    destinationAbsolutePath: `C:/Project/${destination}`
+    destinationAbsolutePath: `C:/Project/${destination}`,
+    isDirectory: false,
+    movedProjectDocuments: []
   };
 }
 

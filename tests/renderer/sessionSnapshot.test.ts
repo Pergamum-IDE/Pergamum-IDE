@@ -66,7 +66,17 @@ const SESSION_ID = "018f0000-0000-7000-8000-000000000000";
 
 function markdownFileEditor(filePath: string) {
   return createMarkdownCurrentEditor(
-    createFileDocument({ path: filePath, content: "x" })
+    createFileDocument({
+      path: filePath,
+      content: "x",
+      metadata: {
+        encoding: "utf8",
+        lineEnding: "lf",
+        byteLength: 1,
+        characterLength: 1,
+        hadBom: false
+      }
+    })
   );
 }
 

@@ -21,22 +21,24 @@ function manualScheduler(): SessionPersistenceScheduler & {
   flush: () => void;
   pendingDelay: () => number | null;
 } {
-  let pending: { callback: () => void; delay: number } | null = null;
+  const pendingBox: {
+    current: { callback: () => void; delay: number } | null;
+  } = { current: null };
 
   return {
     schedule: (callback, delayMs) => {
-      pending = { callback, delay: delayMs };
-      return pending;
+      pendingBox.current = { callback, delay: delayMs };
+      return pendingBox.current;
     },
     cancel: () => {
-      pending = null;
+      pendingBox.current = null;
     },
     flush: () => {
-      const current = pending;
-      pending = null;
+      const current = pendingBox.current;
+      pendingBox.current = null;
       current?.callback();
     },
-    pendingDelay: () => pending?.delay ?? null
+    pendingDelay: () => pendingBox.current?.delay ?? null
   };
 }
 
@@ -102,7 +104,7 @@ function setup(options?: {
 }) {
   const scheduler = manualScheduler();
   const transport = recordingTransport();
-  const capture = vi.fn<[], ReturnType<CaptureActiveEditorViewState>>(
+  const capture = vi.fn<CaptureActiveEditorViewState>(
     options?.capture ?? (() => null)
   );
 
@@ -708,16 +710,22 @@ describe("SessionPersistenceCoordinator — ordinary vs durableCommit modes (#27
   it("an ordinary flush QUEUED on the in-flight chain before a SUSPEND does NOT call transport.persist", async () => {
     const scheduler = manualScheduler();
     const persistCalls: string[] = [];
-    let rejectA: ((error: unknown) => void) | null = null;
+    const rejectABox: { current: ((error: unknown) => void) | null } = {
+      current: null
+    };
     const coordinator = new SessionPersistenceCoordinator({
       sessionId: SESSION_ID,
       transport: {
         persist: (snapshot) => {
-          const label = snapshot.editors[0]?.filePath ?? "?";
+          const firstEditor = snapshot.editors[0];
+          const label =
+            firstEditor?.kind === "standaloneMarkdown"
+              ? firstEditor.filePath
+              : "?";
           persistCalls.push(label);
           if (label === "/a.md") {
             return new Promise<void>((_resolve, reject) => {
-              rejectA = reject;
+              rejectABox.current = reject;
             });
           }
           return Promise.resolve();
@@ -740,7 +748,7 @@ describe("SessionPersistenceCoordinator — ordinary vs durableCommit modes (#27
     await tick();
 
     // A now fails with a storage-class error → SUSPEND.
-    rejectA?.(new SessionStorageFailureError("diskFull"));
+    rejectABox.current?.(new SessionStorageFailureError("diskFull"));
     await tick();
     await tick();
 

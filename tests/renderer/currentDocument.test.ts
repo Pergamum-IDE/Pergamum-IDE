@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, type TransactionSpec } from "@codemirror/state";
 import { history, redo, undo } from "@codemirror/commands";
 import { describe, expect, it } from "vitest";
 import {
@@ -21,6 +21,21 @@ import {
   serializeLineEndings
 } from "../../src/renderer/lineEndingTracking";
 import { computeLineEndingDistribution } from "../../src/renderer/lineEndingDistribution";
+import type { MarkdownFile } from "../../src/shared/api";
+
+function markdownFile(path: string, content: string): MarkdownFile {
+  return {
+    path,
+    content,
+    metadata: {
+      encoding: "utf8",
+      lineEnding: "lf",
+      byteLength: Buffer.byteLength(content, "utf8"),
+      characterLength: content.length,
+      hadBom: false
+    }
+  };
+}
 
 /**
  * Drives the real production tracking field (StateField + history +
@@ -43,7 +58,7 @@ function driveLineEndingField(doc: string) {
     get state() {
       return state;
     },
-    dispatch: (spec: Parameters<EditorState["update"]>[0]) => {
+    dispatch: (spec: TransactionSpec) => {
       state = state.update(spec).state;
     },
     snapshot(): { content: string; breaks: LineEndingBreakSet } {
@@ -63,7 +78,7 @@ describe("currentDocument line-ending tracking wiring (#253)", () => {
 
   it("seeds a file document's tracked breaks by analyzing the raw file content", () => {
     const raw = "a\r\nb\nc\rd";
-    const document = createFileDocument({ path: "C:/notes.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/notes.md", raw));
 
     expect(lineEndingBreakSetToArray(document.lineEndingBreaks)).toEqual(
       analyzeLineEndings(raw)
@@ -86,10 +101,7 @@ describe("currentDocument line-ending tracking wiring (#253)", () => {
     const document = createUntitledDocument();
     const nextContent = "x\ny\nz";
     const nextBreaks = analyzeLineEndings("x\r\ny\r\nz");
-    const nextSet = createFileDocument({
-      path: "C:/tmp.md",
-      content: "x\r\ny\r\nz"
-    }).lineEndingBreaks;
+    const nextSet = createFileDocument(markdownFile("C:/tmp.md", "x\r\ny\r\nz")).lineEndingBreaks;
 
     const updated = updateCurrentDocumentContent(document, nextContent, nextSet);
 
@@ -103,7 +115,7 @@ describe("currentDocument line-ending tracking wiring (#253)", () => {
 
   it("carries the current tracking state forward unchanged across a standalone save-target change", () => {
     const raw = "a\r\nb\r\nc";
-    const document = createFileDocument({ path: "C:/old.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/old.md", raw));
 
     const saved = applyStandaloneSaveResult(document, {
       kind: "saved",
@@ -127,7 +139,7 @@ describe("currentDocument line-ending tracking wiring (#253)", () => {
 describe("canonical content is normalized from the moment a document is opened (#253 review blocker 1)", () => {
   it("stores CodeMirror-normalized (\\n-only) content for a CRLF file, not the raw bytes", () => {
     const raw = "a\r\nb\r\nc";
-    const document = createFileDocument({ path: "C:/crlf.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/crlf.md", raw));
 
     expect(document.content).toBe("a\nb\nc");
     expect(document.savedContent).toBe("a\nb\nc");
@@ -135,7 +147,7 @@ describe("canonical content is normalized from the moment a document is opened (
 
   it("stores normalized content for a mixed-line-ending file", () => {
     const raw = "one\r\ntwo\nthree\rfour";
-    const document = createFileDocument({ path: "C:/mixed.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/mixed.md", raw));
 
     expect(document.content).toBe("one\ntwo\nthree\nfour");
     expect(document.savedContent).toBe("one\ntwo\nthree\nfour");
@@ -143,7 +155,7 @@ describe("canonical content is normalized from the moment a document is opened (
 
   it("stores content identical to what CodeMirror's own Text would produce for the same raw input", () => {
     const raw = "a\r\nb\rc\nd";
-    const document = createFileDocument({ path: "C:/x.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/x.md", raw));
 
     expect(document.content).toBe(EditorState.create({ doc: raw }).doc.toString());
   });
@@ -151,15 +163,12 @@ describe("canonical content is normalized from the moment a document is opened (
   it("does not report an untouched CRLF/mixed file as dirty immediately after opening", () => {
     expect(
       isCurrentDocumentDirty(
-        createFileDocument({ path: "C:/crlf.md", content: "a\r\nb\r\nc" })
+        createFileDocument(markdownFile("C:/crlf.md", "a\r\nb\r\nc"))
       )
     ).toBe(false);
     expect(
       isCurrentDocumentDirty(
-        createFileDocument({
-          path: "C:/mixed.md",
-          content: "one\r\ntwo\nthree\rfour"
-        })
+        createFileDocument(markdownFile("C:/mixed.md", "one\r\ntwo\nthree\rfour"))
       )
     ).toBe(false);
     expect(
@@ -174,7 +183,7 @@ describe("canonical content is normalized from the moment a document is opened (
 
   it("round-trips an untouched pure CRLF file through Save As without ever having been edited", () => {
     const raw = "line one\r\nline two\r\nline three";
-    const document = createFileDocument({ path: "C:/crlf.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/crlf.md", raw));
 
     const serialized = serializeLineEndings(
       document.content,
@@ -186,7 +195,7 @@ describe("canonical content is normalized from the moment a document is opened (
 
   it("round-trips an untouched mixed-line-ending file through Save As, preserving the distribution", () => {
     const raw = "one\r\ntwo\nthree\rfour\r\nfive";
-    const document = createFileDocument({ path: "C:/mixed.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/mixed.md", raw));
 
     const serialized = serializeLineEndings(
       document.content,
@@ -207,7 +216,7 @@ describe("canonical content is normalized from the moment a document is opened (
     // would be false for any CRLF/CR/mixed file, firing a bogus onChange
     // with different content than savedContent immediately on open/switch.
     const raw = "a\r\nb\r\nc\r\nd";
-    const document = createFileDocument({ path: "C:/crlf.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/crlf.md", raw));
 
     const state = EditorState.create({ doc: document.content });
 
@@ -225,7 +234,7 @@ describe("dirty detection considers line-ending tracking state, not just content
       "one\r\ntwo\nthree\rfour"
     ]) {
       expect(
-        isCurrentDocumentDirty(createFileDocument({ path: "C:/x.md", content: raw }))
+        isCurrentDocumentDirty(createFileDocument(markdownFile("C:/x.md", raw)))
       ).toBe(false);
       expect(
         isCurrentDocumentDirty(
@@ -239,7 +248,7 @@ describe("dirty detection considers line-ending tracking state, not just content
   it("is dirty when canonical content round-trips back to savedContent but the tracked break kinds no longer match", () => {
     // A<CRLF> B<LF> C
     const raw = "A\r\nB\nC";
-    const document = createFileDocument({ path: "C:/x.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/x.md", raw));
     expect(isCurrentDocumentDirty(document)).toBe(false);
 
     const editor = driveLineEndingField(raw);
@@ -285,7 +294,7 @@ describe("dirty detection considers line-ending tracking state, not just content
 
   it("becomes clean again after a successful save captures the new tracking state as the saved snapshot", () => {
     const raw = "A\r\nB\nC";
-    const document = createFileDocument({ path: "C:/x.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/x.md", raw));
     const editor = driveLineEndingField(raw);
 
     editor.dispatch({ changes: { from: 0, to: 2 } });
@@ -307,7 +316,7 @@ describe("dirty detection considers line-ending tracking state, not just content
 
   it("Save As also captures the current tracking state as the saved snapshot", () => {
     const raw = "A\r\nB\nC";
-    const document = createFileDocument({ path: "C:/old.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/old.md", raw));
     const editor = driveLineEndingField(raw);
 
     editor.dispatch({ changes: { from: 0, to: 2 } });
@@ -336,7 +345,7 @@ describe("dirty detection considers line-ending tracking state, not just content
 
   it("stays dirty across Undo/Redo unless both content and tracked breaks match the saved snapshot", () => {
     const raw = "A\r\nB\r\nC";
-    const document = createFileDocument({ path: "C:/x.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/x.md", raw));
     const editor = driveLineEndingField(raw);
 
     // Edit: delete the first (crlf) break.
@@ -374,7 +383,7 @@ describe("dirty detection considers line-ending tracking state, not just content
 
   it("is dirty when content exactly matches the saved snapshot but the tracked break kinds are structurally different", () => {
     const raw = "A\r\nB\nC";
-    const document = createFileDocument({ path: "C:/x.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/x.md", raw));
 
     const contentOnlyMatch = updateCurrentDocumentContent(
       document,
@@ -393,7 +402,7 @@ describe("dirty detection considers line-ending tracking state, not just content
 describe("editor.lineEnding.expected never affects dirty state or document content (#252)", () => {
   it("leaves content, savedContent, and the tracked/saved break sets byte- and reference-identical across every possible expected kind", () => {
     const raw = "A\r\nB\nC";
-    const document = createFileDocument({ path: "C:/x.md", content: raw });
+    const document = createFileDocument(markdownFile("C:/x.md", raw));
     expect(isCurrentDocumentDirty(document)).toBe(false);
 
     const contentBefore = document.content;

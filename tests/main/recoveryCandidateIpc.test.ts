@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { IpcMainInvokeEvent } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RECOVERY_CHANNELS } from "../../src/shared/api";
 import { openRecoveryStoreDatabase } from "../../src/main/recoveryStoreDatabase";
@@ -17,6 +18,15 @@ let handle: Awaited<ReturnType<typeof openRecoveryStoreDatabase>> | null = null;
 let rowSeq = 0;
 
 const BODY_MARKER = "SECRET_MANUSCRIPT_BODY_IPC_287";
+
+// A stub satisfying IpcMainInvokeEvent's shape for handlers invoked
+// directly in these tests — none of them read any property off the event.
+const fakeIpcMainInvokeEvent = {} as IpcMainInvokeEvent;
+
+type RegisteredIpcHandler = (
+  event: IpcMainInvokeEvent,
+  arg: unknown
+) => unknown;
 
 interface Harness {
   invoke: (channel: string, arg?: unknown) => unknown;
@@ -40,7 +50,7 @@ function buildHarness(options: {
   existing?: Set<string>;
   registerRestoredProjectDocument?: (absolutePath: string) => string | null;
 }): Harness {
-  const handlers = new Map<string, (event: unknown, arg: unknown) => unknown>();
+  const handlers = new Map<string, RegisteredIpcHandler>();
   const logEvents: Harness["logEvents"] = [];
   const writes: Harness["writes"] = [];
   let docRefSeq = 0;
@@ -88,7 +98,7 @@ function buildHarness(options: {
     invoke: (channel, arg) => {
       const listener = handlers.get(channel);
       if (!listener) throw new Error(`no handler for ${channel}`);
-      return listener({}, arg);
+      return listener(fakeIpcMainInvokeEvent, arg);
     },
     logEvents,
     writes
@@ -355,7 +365,7 @@ describe("recovery candidate IPC — owner", () => {
 
   it("restoreCandidates reports 'failed' when the write throws, keeping the row", () => {
     seedTwoRows();
-    const handlers = new Map<string, (e: unknown, a: unknown) => unknown>();
+    const handlers = new Map<string, RegisteredIpcHandler>();
     const logEvents: Array<{ event: string }> = [];
     registerRecoveryCandidateIpc(
       { handle: (c, l) => handlers.set(c, l) },
@@ -377,9 +387,12 @@ describe("recovery candidate IPC — owner", () => {
     );
 
     return (
-      handlers.get(RECOVERY_CHANNELS.restoreCandidates)!({}, {
-        items: [{ recoveryId: "row-1" }]
-      }) as Promise<{ results: Array<{ status: string }> }>
+      handlers.get(RECOVERY_CHANNELS.restoreCandidates)!(
+        fakeIpcMainInvokeEvent,
+        {
+          items: [{ recoveryId: "row-1" }]
+        }
+      ) as Promise<{ results: Array<{ status: string }> }>
     ).then((result) => {
       expect(result.results[0].status).toBe("failed");
       expect(logEvents.some((e) => e.event === "recovery.document.restore.failed")).toBe(

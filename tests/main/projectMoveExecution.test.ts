@@ -46,7 +46,7 @@ async function exists(relativePath: string): Promise<boolean> {
 
 describe("moveEntries (#325) — validation gate", () => {
   it("returns validation errors and never calls fs.rename on a validation failure", async () => {
-    const rename = vi.fn<Parameters<NonNullable<MoveEntriesDeps["rename"]>>, Promise<void>>(
+    const rename = vi.fn<NonNullable<MoveEntriesDeps["rename"]>>(
       () => Promise.resolve()
     );
 
@@ -85,10 +85,9 @@ describe("moveEntries (#325) — validation gate", () => {
     const aBefore = (await fs.readdir(path.join(projectRoot, "A"))).sort();
     const bBefore = (await fs.readdir(path.join(projectRoot, "B"))).sort();
     const destBefore = (await fs.readdir(path.join(projectRoot, "Dest"))).sort();
-    const rename = vi.fn<
-      Parameters<NonNullable<MoveEntriesDeps["rename"]>>,
-      Promise<void>
-    >(() => Promise.resolve());
+    const rename = vi.fn<NonNullable<MoveEntriesDeps["rename"]>>(() =>
+      Promise.resolve()
+    );
 
     const result = await moveEntries(
       input({
@@ -629,7 +628,9 @@ describe("moveEntries (#326) — Recovery re-key integration", () => {
   }
 
   it("does not call Recovery re-key on a validation failure", async () => {
-    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+    const rekeyRecoveryPaths = vi.fn<
+      NonNullable<MoveEntriesDeps["rekeyRecoveryPaths"]>
+    >(() => okRekey());
 
     const result = await moveEntries(
       input({ sourceRelativePaths: ["missing.md"] }),
@@ -642,7 +643,9 @@ describe("moveEntries (#326) — Recovery re-key integration", () => {
   });
 
   it("does not call Recovery re-key when every rename failed", async () => {
-    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+    const rekeyRecoveryPaths = vi.fn<
+      NonNullable<MoveEntriesDeps["rekeyRecoveryPaths"]>
+    >(() => okRekey());
 
     const result = await moveEntries(
       input({ sourceRelativePaths: ["a.md", "b.md"] }),
@@ -665,7 +668,9 @@ describe("moveEntries (#326) — Recovery re-key integration", () => {
   });
 
   it("calls Recovery re-key with ALL successful path pairs on a full success", async () => {
-    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+    const rekeyRecoveryPaths = vi.fn<
+      NonNullable<MoveEntriesDeps["rekeyRecoveryPaths"]>
+    >(() => okRekey());
 
     const result = await moveEntries(
       input({ sourceRelativePaths: ["a.md", "b.md", "c.md"] }),
@@ -695,7 +700,9 @@ describe("moveEntries (#326) — Recovery re-key integration", () => {
   });
 
   it("calls Recovery re-key with the moved entries only on a partial failure", async () => {
-    const rekeyRecoveryPaths = vi.fn(() => okRekey());
+    const rekeyRecoveryPaths = vi.fn<
+      NonNullable<MoveEntriesDeps["rekeyRecoveryPaths"]>
+    >(() => okRekey());
     const rename: NonNullable<MoveEntriesDeps["rename"]> = async (
       oldPath,
       newPath
