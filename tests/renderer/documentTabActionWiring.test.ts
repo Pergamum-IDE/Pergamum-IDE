@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 const appSource = readFileSync("src/renderer/App.tsx", "utf8");
 
 describe("editor tab context menu wiring (#354)", () => {
-  it("passes onTabAction / describeTabContextMenu / onReorderDocuments to DocumentTabBar and drops the #355 select props", () => {
+  it("passes onTabAction / describeTabContextMenu / onReorderWorkspaceTabs to DocumentTabBar and drops the #355 select props", () => {
     const block = appSource.slice(
       appSource.indexOf("<DocumentTabBar"),
       appSource.indexOf("</section>", appSource.indexOf("<DocumentTabBar"))
@@ -18,7 +18,10 @@ describe("editor tab context menu wiring (#354)", () => {
     expect(block).toContain(
       "describeTabContextMenu={describeTabContextMenuForTab}"
     );
-    expect(block).toContain("onReorderDocuments={handleReorderDocuments}");
+    expect(block).toContain("order={workspaceTabOrder}");
+    expect(block).toContain(
+      "onReorderWorkspaceTabs={handleReorderWorkspaceTabs}"
+    );
     expect(block).not.toContain("onSelectInFileExplorer=");
     expect(block).not.toContain("canSelectInFileExplorer=");
   });
@@ -102,13 +105,39 @@ describe("editor tab context menu wiring (#354)", () => {
     expect(fn).toContain("cancelLabel: null");
   });
 
-  it("reorder applies the pure reorderOpenDocuments to openDocumentsState", () => {
+  it("#398: reorder generalizes to every workspace tab via the pure reorderWorkspaceTabOrder, keeping documents' own order in sync only when a document tab moved", () => {
     expect(appSource).toContain(
-      "function handleReorderDocuments(\n    movedEditorId: EditorId,\n    targetIndex: number\n  ): void"
+      "function handleReorderWorkspaceTabs(\n    movedTabId: WorkspaceTabId,\n    targetIndex: number\n  ): void"
     );
     expect(appSource).toContain(
-      "reorderOpenDocuments(state, movedEditorId, targetIndex)"
+      "reorderWorkspaceTabOrder(\n      workspaceTabOrder,\n      movedTabId,\n      targetIndex\n    )"
     );
+    expect(appSource).toContain('if (movedTabId.kind !== "document") {');
+    expect(appSource).toContain(
+      "documentRelativeIndexInOrder(nextOrder, movedTabId)"
+    );
+    expect(appSource).toContain(
+      "reorderOpenDocuments(state, movedTabId.editorId, documentIndex)"
+    );
+    // no per-special-kind branch — see App source generally, and no
+    // "settings"/"debugLog"/etc string literal appears in the handler body.
+    const fn = appSource.slice(
+      appSource.indexOf("function handleReorderWorkspaceTabs("),
+      appSource.indexOf("function handleActivityBarModeClick(")
+    );
+    expect(fn).not.toMatch(/["']settings["']|["']debugLog["']|["']glossaryTagManager["']|["']glossaryEntryManager["']/);
+  });
+
+  it("#398: reordering never changes which tab is active — handleReorderWorkspaceTabs touches only order state (workspaceTabOrder / documents' array order), never activeDocumentId or activeSpecialTabId", () => {
+    const fn = appSource.slice(
+      appSource.indexOf("function handleReorderWorkspaceTabs("),
+      appSource.indexOf("function handleActivityBarModeClick(")
+    );
+    expect(fn).not.toContain("setActiveDocumentId");
+    expect(fn).not.toContain("setActiveSpecialTabId");
+    expect(fn).not.toContain("activateDocument");
+    expect(fn).not.toContain("activateSpecialTab");
+    expect(fn).not.toContain("activeDocumentId:");
   });
 
   it("Select in File Explorer keeps the #355 reveal request wiring, acting on the right-clicked tab", () => {
@@ -152,7 +181,7 @@ describe("editor tab context menu wiring (#354)", () => {
 
     // reorder handler must not touch reveal / sidebar
     const reorder = appSource.slice(
-      appSource.indexOf("function handleReorderDocuments("),
+      appSource.indexOf("function handleReorderWorkspaceTabs("),
       appSource.indexOf("function handleActivityBarModeClick(")
     );
     expect(reorder).not.toContain("revealFileExplorerSidebar");

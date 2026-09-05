@@ -260,11 +260,12 @@ export function resolveTabCopyText(
 }
 
 /**
- * #354: the post-drop index for a horizontal tab reorder. `tabRects` is one
- * `{ left, right }` per document tab in current order (the moved tab
- * included). Returns the index the moved tab should occupy in the array
- * AFTER it is spliced out and re-inserted, clamped to
- * `[0, tabRects.length - 1]`.
+ * #354 (generalized to every workspace tab by #398): the post-drop index for
+ * a horizontal tab reorder. `tabRects` is one `{ left, right }` per rendered
+ * workspace tab in current order (document or special, the moved tab
+ * included) — this geometry is identical regardless of tab kind. Returns
+ * the index the moved tab should occupy in the array AFTER it is spliced
+ * out and re-inserted, clamped to `[0, tabRects.length - 1]`.
  */
 export function resolveTabReorderTargetIndex(
   pointerClientX: number,
