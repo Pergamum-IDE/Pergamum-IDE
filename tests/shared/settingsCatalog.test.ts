@@ -880,6 +880,20 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
+    it("marks editor.undoHistoryMinDepth requiresRestart, and no other entry (#394 Step 2)", () => {
+      const entry = getCatalogEntry("editor.undoHistoryMinDepth");
+
+      expect(entry.requiresRestart).toBe(true);
+
+      const otherEntries = getCatalogEntries().filter(
+        (candidate) => candidate.key !== "editor.undoHistoryMinDepth"
+      );
+      expect(otherEntries.length).toBeGreaterThan(0);
+      for (const candidate of otherEntries) {
+        expect(candidate.requiresRestart).not.toBe(true);
+      }
+    });
+
     it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), command palette footer details (#370), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"

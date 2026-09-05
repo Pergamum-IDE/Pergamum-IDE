@@ -201,8 +201,13 @@ export const jaTranslations = {
   "dialog.sessionRestoreUnavailable.title": "作業情報を復元できませんでした",
   "dialog.sessionPersistenceSuspended.message": "Pergamumの作業情報を保存できないため、自動保存を一時停止しました。\n\nインストールドライブの空き容量やディスクの状態を確認してください。\nこのエラーは文書の編集・保存とは別の機能で発生していますが、次回起動時に現在のタブやウィンドウ状態を復元できない場合があります。",
   "dialog.sessionPersistenceSuspended.title": "作業情報の自動保存を停止しました",
+  "dialog.settingsRestartRequired.title": "再起動が必要です",
+  "dialog.settingsRestartRequired.message": "この変更を適用するにはPergamumの再起動が必要です。今すぐPergamumを再起動しますか？",
+  "dialog.settingsRestartRequired.confirm": "再起動する",
+  "dialog.settingsRestartRequired.cancel": "後で",
   "dialog.icon.error": "エラー",
   "dialog.icon.info": "情報",
+  "dialog.icon.question": "確認",
   "dialog.icon.warning": "警告",
   "dialog.clipboardCopyFailed.title": "コピーできませんでした",
   "dialog.clipboardCopyFailed.message":

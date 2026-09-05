@@ -388,6 +388,7 @@ import {
   type SoundFeedbackPlayer
 } from "./soundFeedback";
 import { useApplicationSettings } from "./useApplicationSettings";
+import { createSettingsFieldRestartTracker } from "./settingsFieldRestartTracker";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import { useVerticalDrag } from "./useVerticalDrag";
 import {
@@ -8439,18 +8440,107 @@ export function App(): JSX.Element {
     });
   }
 
+  // #394 Step 2 follow-up: Settings fields autosave on every keystroke (see
+  // the `onChangeSettings` wiring below), so a naive "check for a restart-
+  // required change after every save" fires the restart dialog repeatedly
+  // while the user is still typing a number (e.g. 100 -> 1 -> 10 -> 100 ->
+  // 1000 as each digit lands). The restart check is deliberately moved OUT
+  // of `changeSettings` and instead runs once, when focus actually leaves a
+  // Settings field — see `handleSettingsFieldFocus`/`handleSettingsFieldBlur`
+  // below. `changeSettings` itself keeps its original, simpler job: save,
+  // and report success/failure — it returns whether the save succeeded so
+  // the blur handler can skip the restart check after a failed save.
   async function changeSettings(
     nextSettings: SaveApplicationSettingsRequest
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await saveSettings(nextSettings);
       setStatus({ key: "status.settingsSaved" });
+      return true;
     } catch (error) {
       setStatus({
         key: "status.settingsSaveFailed",
         values: { message: errorMessage(error, translate) }
       });
+      return false;
     }
+  }
+
+  // #394 Step 2 follow-up: owns the focus-baseline / in-flight-save race
+  // guarding described in settingsFieldRestartTracker.ts's own doc comment.
+  // Created once (a plain closure, not React state) so its internal state
+  // survives across renders without being reset.
+  const settingsFieldRestartTracker = useRef(
+    createSettingsFieldRestartTracker()
+  ).current;
+
+  // #394 Step 2 follow-up: called on every settings-save request (i.e. every
+  // keystroke/toggle in the Settings panel) — this is the ONLY thing that
+  // still happens per-change; no restart check runs here.
+  function handleSettingsChangeRequest(
+    nextSettings: SaveApplicationSettingsRequest
+  ): void {
+    settingsFieldRestartTracker.handleChangeRequest(
+      nextSettings,
+      changeSettings
+    );
+  }
+
+  // A Settings field gained focus: snapshot the settings as they stood at
+  // that moment, to diff against once the field loses focus.
+  function handleSettingsFieldFocus(): void {
+    settingsFieldRestartTracker.handleFocus(settings);
+  }
+
+  // A Settings field lost focus: this is the ONE point where a
+  // requiresRestart change is checked and, if found, the shared restart
+  // dialog is offered — never on intermediate per-keystroke saves.
+  async function handleSettingsFieldBlur(): Promise<void> {
+    await settingsFieldRestartTracker.handleBlur(
+      showSettingsRestartRequiredDialog,
+      requestApplicationRestart
+    );
+  }
+
+  // #394 Step 2: the ONE shared restart-confirmation dialog for every
+  // requiresRestart setting (never a per-setting dialog) — reuses the
+  // existing generic ConfirmDialog / DialogController infrastructure (#182),
+  // no new dialog component. A concurrent dialog already being open is
+  // treated as "the user didn't confirm" rather than surfacing as an error:
+  // Settings save already succeeded, so silently skipping the (rare, racy)
+  // restart offer is safer than throwing out of `changeSettings`.
+  async function showSettingsRestartRequiredDialog(): Promise<
+    "confirm" | "cancel"
+  > {
+    try {
+      return await confirmDialog({
+        title: translate("dialog.settingsRestartRequired.title"),
+        message: {
+          kind: "plainText",
+          text: translate("dialog.settingsRestartRequired.message")
+        },
+        icon: { kind: "question", tooltip: translate("dialog.icon.question") },
+        clipboardText: null,
+        dismissOnBackdropClick: false,
+        confirmLabel: translate("dialog.settingsRestartRequired.confirm"),
+        cancelLabel: translate("dialog.settingsRestartRequired.cancel")
+      });
+    } catch (error) {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return "cancel";
+      }
+      throw error;
+    }
+  }
+
+  // #394 Step 2: the generic "the user asked to restart now" intent — this
+  // is as far as Step 2 goes. Deliberately does NOT call app.relaunch() /
+  // app.quit() / app.exit(), does not touch the quit preflight or dirty-
+  // document flow, and does not show any "restarted" notification (there is
+  // nothing to report yet). Step 3 wires this to a real, safe
+  // application-restart pipeline (renderer -> main IPC + app.relaunch()).
+  function requestApplicationRestart(): void {
+    // Intentionally a no-op beyond receiving the intent — see #394 Step 3.
   }
 
   // #262 Welcome content. Rendered full-screen (replacing the workbench) only
@@ -8794,8 +8884,10 @@ export function App(): JSX.Element {
                       isLoading={isSettingsLoading}
                       error={settingsError}
                       translate={translate}
-                      onChangeSettings={(nextSettings) => {
-                        void changeSettings(nextSettings);
+                      onChangeSettings={handleSettingsChangeRequest}
+                      onSettingFieldFocus={handleSettingsFieldFocus}
+                      onSettingFieldBlur={() => {
+                        void handleSettingsFieldBlur();
                       }}
                     />
                   ) : isDebugLogTabActive ? (

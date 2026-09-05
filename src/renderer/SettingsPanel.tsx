@@ -8,7 +8,7 @@ import type {
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import type { Language, Translate, TranslationKey } from "../shared/i18n";
-import { getCatalogDefaultValue, type SettingKey } from "../shared/settingsCatalog";
+import type { SettingKey } from "../shared/settingsCatalog";
 import {
   buildSettingSearchText,
   settingCategoryCatalog,
@@ -23,6 +23,7 @@ import {
 } from "../shared/settingsUiCatalog";
 import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
 import { DocumentMapSettingsSection } from "./DocumentMapSettingsSection";
+import { readSettingValue } from "./settingsValueByKey";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
@@ -30,6 +31,23 @@ interface SettingsPanelProps {
   error: string | null;
   translate: Translate;
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
+  /**
+   * #394 Step 2 follow-up: fires when any settings-item control gains focus.
+   * The caller uses this to snapshot settings for a later restart-required
+   * diff — it must never itself trigger the restart dialog (see
+   * onSettingFieldBlur). Optional so tests/usages that don't care about the
+   * restart flow can omit it.
+   */
+  onSettingFieldFocus?: () => void;
+  /**
+   * #394 Step 2 follow-up: fires when a settings-item control loses focus —
+   * the ONE point where the caller should check for a requiresRestart change
+   * and, if found, offer the shared restart dialog. Deliberately decoupled
+   * from `onChangeSettings`, which fires on every keystroke: checking on
+   * every change would show the dialog repeatedly while the user is still
+   * typing (e.g. a number field's digits landing one at a time).
+   */
+  onSettingFieldBlur?: () => void;
 }
 
 // The catalog's i18n keys are typed as the bare, decoupled `I18nKey` (see
@@ -89,89 +107,6 @@ const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
   "preview.updateDelayMs": "settings.unit.ms",
   "workbench.notification.durationMs": "settings.unit.ms"
 };
-
-function readSettingValue(key: SettingKey, settings: ApplicationSettings): unknown {
-  switch (key) {
-    case "workbench.colorTheme":
-      return getCatalogDefaultValue("workbench.colorTheme");
-    case "workbench.fontFamily":
-      return (
-        settings.workbench.fontFamily ??
-        getCatalogDefaultValue("workbench.fontFamily")
-      );
-    case "workbench.language":
-      return settings.workbench.language;
-    case "workbench.statusBar.visible":
-      return settings.workbench.statusBar.visible;
-    case "workbench.statusBar.characterCount.visible":
-      return settings.workbench.statusBar.characterCount.visible;
-    case "notification.output.enabled":
-      return (
-        settings.notification?.output.enabled ??
-        getCatalogDefaultValue("notification.output.enabled")
-      );
-    case "workbench.notification.durationMs":
-      return (
-        settings.workbench.notification?.durationMs ??
-        getCatalogDefaultValue("workbench.notification.durationMs")
-      );
-    case "workbench.sound.enabled":
-      return settings.workbench.sound.enabled;
-    case "workbench.sound.dialog.enabled":
-      return settings.workbench.sound.dialog.enabled;
-    case "workbench.sound.newline.enabled":
-      return settings.workbench.sound.newline.enabled;
-    case "workbench.sound.keypress.enabled":
-      return settings.workbench.sound.keypress.enabled;
-    case "commandPalette.footerDetail.enable":
-      return settings.commandPalette.footerDetail.enable;
-    case "commandPalette.footerDetail.marquee.delay":
-      return settings.commandPalette.footerDetail.marquee.delay;
-    case "commandPalette.footerDetail.marquee.speed":
-      return settings.commandPalette.footerDetail.marquee.speed;
-    case "editor.fontFamily":
-      return (
-        settings.editor.fontFamily ?? getCatalogDefaultValue("editor.fontFamily")
-      );
-    case "editor.paragraphIndent.excludeLeadingCharacters":
-      return settings.editor.paragraphIndent.excludeLeadingCharacters;
-    case "editor.lineEnding.expected":
-      return settings.editor.lineEnding.expected;
-    case "editor.lineEnding.markerGlyph":
-      return settings.editor.lineEnding.markerGlyph;
-    case "editor.whitespace.renderIdeographicSpace":
-      return settings.editor.whitespace.renderIdeographicSpace;
-    case "editor.whitespace.renderAsciiSpace":
-      return settings.editor.whitespace.renderAsciiSpace;
-    case "editor.whitespace.renderTab":
-      return settings.editor.whitespace.renderTab;
-    case "editor.whitespace.renderOtherUnicodeSpace":
-      return settings.editor.whitespace.renderOtherUnicodeSpace;
-    case "editor.characterCount.exclude.whitespace":
-      return settings.editor.characterCount.exclude.whitespace;
-    case "editor.characterCount.exclude.lineBreaks":
-      return settings.editor.characterCount.exclude.lineBreaks;
-    case "editor.characterCount.exclude.headings":
-      return settings.editor.characterCount.exclude.headings;
-    case "editor.characterCount.exclude.markdownSyntax":
-      return settings.editor.characterCount.exclude.markdownSyntax;
-    case "editor.characterCount.exclude.markdownComments":
-      return settings.editor.characterCount.exclude.markdownComments;
-    case "editor.undoHistoryMinDepth":
-      return settings.editor.undoHistoryMinDepth;
-    case "files.newFile.lineEnding":
-      return settings.files.newFile.lineEnding;
-    case "files.newFile.encoding":
-      return settings.files.newFile.encoding;
-    case "preview.renderer":
-      return settings.preview.renderer;
-    case "preview.updateDelayMs":
-      return settings.preview.updateDelayMs;
-  }
-
-  const exhaustiveCheck: never = key;
-  throw new Error(`Unhandled setting key: ${String(exhaustiveCheck)}`);
-}
 
 function fontFamilyValue(value: string): string | undefined {
   const trimmed = value.trim();
@@ -719,6 +654,8 @@ interface SettingItemRowProps {
   isLoading: boolean;
   translate: Translate;
   onChange: (item: SettingCatalogItem, rawValue: unknown) => void;
+  onFieldFocus?: () => void;
+  onFieldBlur?: () => void;
 }
 
 function SettingItemRow({
@@ -726,7 +663,9 @@ function SettingItemRow({
   settings,
   isLoading,
   translate,
-  onChange
+  onChange,
+  onFieldFocus,
+  onFieldBlur
 }: SettingItemRowProps): JSX.Element {
   const value = readSettingValue(item.key, settings);
   const disabled = isSettingDisabled(item, settings, isLoading);
@@ -743,7 +682,15 @@ function SettingItemRow({
         <span id={labelId} className="settingsItemLabel">
           {translateI18nKey(translate, item.labelKey)}
         </span>
-        <div className="settingsItemControl">
+        {/* #394 Step 2 follow-up: onFocus/onBlur bubble up from the actual
+            <input>/<select> rendered by SettingControlInput below, so every
+            control kind gets restart-required focus tracking for free,
+            without SettingControlInput needing to know about it. */}
+        <div
+          className="settingsItemControl"
+          onFocus={onFieldFocus}
+          onBlur={onFieldBlur}
+        >
           <SettingControlInput
             item={item}
             value={value}
@@ -789,6 +736,8 @@ export function SettingsPanelView({
   error,
   translate,
   onChangeSettings,
+  onSettingFieldFocus,
+  onSettingFieldBlur,
   selectedCategoryId,
   onSelectCategory,
   searchQuery,
@@ -906,6 +855,8 @@ export function SettingsPanelView({
                   isLoading={isLoading}
                   translate={translate}
                   onChange={handleChange}
+                  onFieldFocus={onSettingFieldFocus}
+                  onFieldBlur={onSettingFieldBlur}
                 />
               ))}
             </div>
