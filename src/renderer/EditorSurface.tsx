@@ -327,6 +327,13 @@ interface EditorSurfaceProps {
    * the switch. Not used for anything else.
    */
   activeDocumentKey: string;
+  /**
+   * #387 PoC: every currently open document's stable key — forwarded to
+   * MarkdownEditor only so it can prune its runtime-only per-document
+   * EditorState / undo-history cache when a tab closes. `undefined` for the
+   * `glossaryEntry` editor kind (not applicable there).
+   */
+  openDocumentKeys?: readonly string[];
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
   /**
@@ -473,6 +480,7 @@ interface EditorSurfaceProps {
 export function EditorSurface({
   editor,
   activeDocumentKey,
+  openDocumentKeys,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -526,6 +534,7 @@ export function EditorSurface({
         <MarkdownEditorSurface
           document={editor.document}
           documentKey={activeDocumentKey}
+          openDocumentKeys={openDocumentKeys}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
@@ -596,6 +605,8 @@ export function EditorSurface({
 interface MarkdownEditorSurfaceProps {
   document: CurrentDocument;
   documentKey: string;
+  /** #387 PoC: see EditorSurfaceProps's own doc comment. */
+  openDocumentKeys?: readonly string[];
   previewUpdateDelayMs: number;
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
@@ -667,6 +678,7 @@ interface MarkdownEditorSurfaceProps {
 function MarkdownEditorSurface({
   document,
   documentKey,
+  openDocumentKeys,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -870,6 +882,7 @@ function MarkdownEditorSurface({
           focusRequest={focusRequest}
           onFocusRequestApplied={onFocusRequestApplied}
           documentKey={documentKey}
+          openDocumentKeys={openDocumentKeys}
           initialLineEndingBreaks={initialLineEndingBreaks}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}

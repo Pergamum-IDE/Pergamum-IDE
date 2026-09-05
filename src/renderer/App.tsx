@@ -1432,6 +1432,18 @@ export function App(): JSX.Element {
   const activeDocumentKey = activeDocument
     ? serializeEditorId(activeDocument.id)
     : null;
+  // #387 PoC: every currently open document's stable key — MarkdownEditor
+  // uses this only to prune its runtime-only per-document EditorState /
+  // undo-history cache when a tab closes. Never touches Session / Recovery /
+  // project DB; it is a plain string array recomputed from documents that
+  // are already open.
+  const openDocumentKeys = useMemo(
+    () =>
+      openDocumentsState.documents.map((document) =>
+        serializeEditorId(document.id)
+      ),
+    [openDocumentsState.documents]
+  );
   // #274: the pending restore View State for the currently active editor,
   // handed to EditorSurface → MarkdownEditor for a one-shot #273 apply.
   const restoreActiveEditorViewState = useMemo(() => {
@@ -8723,6 +8735,7 @@ export function App(): JSX.Element {
                         activeDocumentKey={serializeEditorId(
                           activeDocument.id
                         )}
+                        openDocumentKeys={openDocumentKeys}
                         previewUpdateDelayMs={
                           effectiveSettings.preview.updateDelayMs
                         }
