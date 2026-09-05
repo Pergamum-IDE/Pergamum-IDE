@@ -728,9 +728,13 @@ function MarkdownEditorSurface({
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
   const previewRenderDurationMs = previewRender.durationMs;
-  const { surfaceIndex } = useGlossaryEntriesForMatching(
-    projectRootPath,
-    glossaryRefreshToken
+  const { entries: glossaryEntries, surfaceIndex } =
+    useGlossaryEntriesForMatching(projectRootPath, glossaryRefreshToken);
+  // #390 PoC: stable identity per `entries` value so MarkdownEditor's
+  // effect-driven ref refresh doesn't fire on every unrelated re-render.
+  const glossaryCompletion = useMemo(
+    () => ({ entries: glossaryEntries }),
+    [glossaryEntries]
   );
   const reportedDocumentOpenIdRef = useRef<string | null>(null);
   const editorPaneRef = useRef<HTMLElement | null>(null);
@@ -877,6 +881,7 @@ function MarkdownEditorSurface({
           soundFeedback={soundFeedback}
           soundSettings={soundSettings}
           readOnly={readOnly}
+          glossaryCompletion={glossaryCompletion}
         />
       </section>
 

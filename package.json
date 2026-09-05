@@ -1,7 +1,7 @@
 {
   "name": "pergamum",
   "productName": "Pergamum",
-  "version": "0.70.0",
+  "version": "0.75.0",
   "private": true,
   "license": "MIT",
   "engines": {
@@ -44,7 +44,12 @@
     }
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.1",
     "better-sqlite3": "^13.0.3",
     "codemirror": "^6.0.2",
     "electron-squirrel-startup": "^1.0.1",
