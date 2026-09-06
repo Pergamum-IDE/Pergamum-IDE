@@ -213,6 +213,10 @@ export type SettingControl =
       readonly min?: number;
       readonly max?: number;
       readonly step?: number;
+    }
+  | {
+      readonly kind: "custom";
+      readonly customKind?: string;
     };
 
 // ---------------------------------------------------------------------------
@@ -845,3 +849,24 @@ export function buildSettingSearchText(
     ...settingControlSearchText(item.control, translate)
   ].join(" ");
 }
+
+/**
+ * Setting catalog items that are specific to Project Settings UI discovery
+ * (e.g. composite/bespoke editors that are managed directly by bespoke sections
+ * in Application Settings and must not be duplicated into Application Settings'
+ * generic setting rows).
+ */
+export const projectSpecificSettingCatalogItems: readonly SettingCatalogItem[] = [
+  {
+    key: "documentMap.dialogueDelimiterPairs",
+    category: "documentMap",
+    order: 100,
+    labelKey: "settings.documentMap.dialogueDelimiterPairs.label",
+    descriptionKey: "settings.documentMap.dialogueDelimiterPairs.description",
+    control: {
+      kind: "custom",
+      customKind: "documentMap.dialogueDelimiterPairs"
+    },
+    defaultValue: getCatalogDefaultValue("documentMap.dialogueDelimiterPairs")
+  }
+];

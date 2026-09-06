@@ -6,10 +6,13 @@ import type {
 } from "../shared/api";
 import {
   isPreviewRendererId,
+  type ProjectDocumentMapSettings,
   type ProjectEditorSettings,
+  type ProjectFilesSettings,
   type ProjectPreviewSettings,
   type ProjectSettings
 } from "../shared/settings";
+import type { DocumentMapDialogueDelimiterPair } from "../shared/documentMapSettings";
 import {
   getCatalogEntry,
   isSettingKey,
@@ -64,6 +67,8 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
 
   let preview: ProjectPreviewSettings | undefined;
   let editor: ProjectEditorSettings | undefined;
+  let files: ProjectFilesSettings | undefined;
+  let documentMap: ProjectDocumentMapSettings | undefined;
 
   const rawRenderer = value["preview.renderer"];
   if (rawRenderer !== undefined && isPreviewRendererId(rawRenderer)) {
@@ -74,14 +79,97 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
   if (rawFontFamily !== undefined) {
     const validation = validateCatalogValue("editor.fontFamily", rawFontFamily);
     if (validation.ok && typeof rawFontFamily === "string") {
-      editor = { fontFamily: rawFontFamily };
+      editor = { ...(editor ?? {}), fontFamily: rawFontFamily };
     }
   }
 
-  if (preview || editor) {
+  const rawParagraphIndent =
+    value["editor.paragraphIndent.excludeLeadingCharacters"];
+  if (rawParagraphIndent !== undefined) {
+    const validation = validateCatalogValue(
+      "editor.paragraphIndent.excludeLeadingCharacters",
+      rawParagraphIndent
+    );
+    if (validation.ok && typeof rawParagraphIndent === "string") {
+      editor = {
+        ...(editor ?? {}),
+        paragraphIndent: { excludeLeadingCharacters: rawParagraphIndent }
+      };
+    }
+  }
+
+  const rawExpectedLineEnding = value["editor.lineEnding.expected"];
+  if (rawExpectedLineEnding !== undefined) {
+    const validation = validateCatalogValue(
+      "editor.lineEnding.expected",
+      rawExpectedLineEnding
+    );
+    if (validation.ok && typeof rawExpectedLineEnding === "string") {
+      editor = {
+        ...(editor ?? {}),
+        lineEnding: { expected: rawExpectedLineEnding as any }
+      };
+    }
+  }
+
+  const charCountKeys = [
+    ["whitespace", "editor.characterCount.exclude.whitespace"],
+    ["lineBreaks", "editor.characterCount.exclude.lineBreaks"],
+    ["headings", "editor.characterCount.exclude.headings"],
+    ["markdownSyntax", "editor.characterCount.exclude.markdownSyntax"],
+    ["markdownComments", "editor.characterCount.exclude.markdownComments"]
+  ] as const;
+
+  let characterCountExclude: Record<string, boolean> | undefined;
+  for (const [subKey, fullKey] of charCountKeys) {
+    const rawVal = value[fullKey];
+    if (rawVal !== undefined) {
+      const validation = validateCatalogValue(fullKey, rawVal);
+      if (validation.ok && typeof rawVal === "boolean") {
+        characterCountExclude = {
+          ...(characterCountExclude ?? {}),
+          [subKey]: rawVal
+        };
+      }
+    }
+  }
+  if (characterCountExclude !== undefined) {
+    editor = {
+      ...(editor ?? {}),
+      characterCount: { exclude: characterCountExclude }
+    };
+  }
+
+  const rawNewFileLineEnding = value["files.newFile.lineEnding"];
+  if (rawNewFileLineEnding !== undefined) {
+    const validation = validateCatalogValue(
+      "files.newFile.lineEnding",
+      rawNewFileLineEnding
+    );
+    if (validation.ok && typeof rawNewFileLineEnding === "string") {
+      files = { newFile: { lineEnding: rawNewFileLineEnding as any } };
+    }
+  }
+
+  const rawDialogueDelimiterPairs = value["documentMap.dialogueDelimiterPairs"];
+  if (rawDialogueDelimiterPairs !== undefined) {
+    const validation = validateCatalogValue(
+      "documentMap.dialogueDelimiterPairs",
+      rawDialogueDelimiterPairs
+    );
+    if (validation.ok && validation.value !== undefined) {
+      documentMap = {
+        dialogueDelimiterPairs: validation.value as DocumentMapDialogueDelimiterPair[]
+      };
+    }
+  }
+
+  if (preview || editor || files || documentMap) {
     return {
       ...(preview ? { preview } : {}),
-      ...(editor ? { editor } : {})
+      ...(editor ? { editor } : {}),
+      ...(files ? { files } : {}),
+      ...(documentMap ? { documentMap } : {})
     };
   }
 
@@ -196,6 +284,7 @@ export async function saveProjectSettings(
   }
 
   // Validate request.set entries
+  const validatedSet: Record<string, unknown> = {};
   if (request.set !== undefined) {
     if (!isConfigObject(request.set)) {
       throw new Error('Expected "set" to be an object.');
@@ -208,6 +297,8 @@ export async function saveProjectSettings(
           `Invalid value for setting "${key}": ${validation.failure}.`
         );
       }
+      validatedSet[key] =
+        validation.value !== undefined ? validation.value : value;
     }
   }
 
@@ -253,7 +344,7 @@ export async function saveProjectSettings(
   }
 
   if (request.set !== undefined) {
-    for (const [key, value] of Object.entries(request.set)) {
+    for (const [key, value] of Object.entries(validatedSet)) {
       currentSettings[key] = value;
     }
   }

@@ -15,7 +15,13 @@ import {
   type SettingScope
 } from "../shared/settingsCatalog";
 import {
+  areDialogueDelimiterPairsEqual,
+  defaultDocumentMapDialogueDelimiterPairs,
+  type DocumentMapDialogueDelimiterPair
+} from "../shared/documentMapSettings";
+import {
   buildSettingSearchText,
+  projectSpecificSettingCatalogItems,
   settingCatalogItems,
   settingCategoryCatalog,
   settingCategoryLabelKey,
@@ -29,6 +35,7 @@ import {
 } from "../shared/settingsUiCatalog";
 import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
 import { readSettingValue } from "./settingsValueByKey";
+import { DialogueDelimiterPairsEditor } from "./DialogueDelimiterPairsEditor";
 
 export function isProjectSettingsScope(scope: SettingScope): boolean {
   return scope === "applicationWithProjectOverride" || scope === "projectOnly";
@@ -41,11 +48,21 @@ export function isProjectOverrideEligibleScope(scope: SettingScope): boolean {
 export function isSupportedProjectSettingControl(
   control: SettingControl
 ): boolean {
-  return control.kind === "text" || control.kind === "select";
+  return (
+    control.kind === "text" ||
+    control.kind === "select" ||
+    control.kind === "switch" ||
+    control.kind === "custom"
+  );
 }
 
+export const allProjectSettingCatalogItems: readonly SettingCatalogItem[] = [
+  ...settingCatalogItems,
+  ...projectSpecificSettingCatalogItems
+];
+
 export function getProjectSettingsUiItems(
-  items: readonly SettingCatalogItem[] = settingCatalogItems,
+  items: readonly SettingCatalogItem[] = allProjectSettingCatalogItems,
   categories: readonly SettingCategoryCatalogItem[] = settingCategoryCatalog
 ): readonly SettingCatalogItem[] {
   const eligible = items.filter((item) => {
@@ -150,6 +167,24 @@ export function readProjectSettingValue(
       return settings.editor?.fontFamily;
     case "preview.renderer":
       return settings.preview?.renderer;
+    case "editor.paragraphIndent.excludeLeadingCharacters":
+      return settings.editor?.paragraphIndent?.excludeLeadingCharacters;
+    case "editor.characterCount.exclude.whitespace":
+      return settings.editor?.characterCount?.exclude?.whitespace;
+    case "editor.characterCount.exclude.lineBreaks":
+      return settings.editor?.characterCount?.exclude?.lineBreaks;
+    case "editor.characterCount.exclude.headings":
+      return settings.editor?.characterCount?.exclude?.headings;
+    case "editor.characterCount.exclude.markdownSyntax":
+      return settings.editor?.characterCount?.exclude?.markdownSyntax;
+    case "editor.characterCount.exclude.markdownComments":
+      return settings.editor?.characterCount?.exclude?.markdownComments;
+    case "editor.lineEnding.expected":
+      return settings.editor?.lineEnding?.expected;
+    case "files.newFile.lineEnding":
+      return settings.files?.newFile?.lineEnding;
+    case "documentMap.dialogueDelimiterPairs":
+      return settings.documentMap?.dialogueDelimiterPairs;
     default:
       return undefined;
   }
@@ -175,6 +210,11 @@ export function readInheritedSettingValue(
     if (applicationSettings?.preview?.renderer !== undefined) {
       return applicationSettings.preview.renderer;
     }
+  } else if (key === "documentMap.dialogueDelimiterPairs") {
+    if (applicationSettings?.documentMap?.dialogueDelimiterPairs !== undefined) {
+      return applicationSettings.documentMap.dialogueDelimiterPairs;
+    }
+    return defaultDocumentMapDialogueDelimiterPairs();
   } else if (applicationSettings) {
     try {
       return readSettingValue(
@@ -216,6 +256,12 @@ export function isProjectSettingModified(
     applicationSettings,
     legacyFontFallback
   );
+  if (key === "documentMap.dialogueDelimiterPairs") {
+    return !areDialogueDelimiterPairsEqual(
+      projectVal as readonly DocumentMapDialogueDelimiterPair[] | undefined,
+      inheritedVal as readonly DocumentMapDialogueDelimiterPair[] | undefined
+    );
+  }
   // If the persisted override equals the inherited value, normalize presentation as unchanged.
   return projectVal !== inheritedVal;
 }
@@ -225,6 +271,17 @@ export function createDifferentialProjectSettingRequest(
   newValue: unknown,
   inheritedValue: unknown
 ): UpdateProjectSettingsRequest {
+  if (key === "documentMap.dialogueDelimiterPairs") {
+    if (
+      areDialogueDelimiterPairsEqual(
+        newValue as readonly DocumentMapDialogueDelimiterPair[] | undefined,
+        inheritedValue as readonly DocumentMapDialogueDelimiterPair[] | undefined
+      )
+    ) {
+      return { remove: [key] };
+    }
+    return { set: { [key]: newValue } };
+  }
   if (newValue === inheritedValue) {
     return { remove: [key] };
   }
@@ -266,18 +323,38 @@ export function validateProjectSettingValue(
   value: unknown,
   committedValue: unknown
 ): { ok: true; value: unknown | undefined } | { ok: false; failure: string } {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    const committedStr =
-      typeof committedValue === "string" ? committedValue.trim() : "";
-    if (trimmed === committedStr) {
-      return { ok: true, value: undefined };
-    }
-    const validation = validateCatalogValue(key, trimmed);
+  if (key === "documentMap.dialogueDelimiterPairs") {
+    const validation = validateCatalogValue(key, value);
     if (!validation.ok) {
       return { ok: false, failure: validation.failure };
     }
-    return { ok: true, value: trimmed };
+    const normalizedValue =
+      validation.value !== undefined ? validation.value : value;
+    if (
+      areDialogueDelimiterPairsEqual(
+        normalizedValue as readonly DocumentMapDialogueDelimiterPair[] | undefined,
+        committedValue as readonly DocumentMapDialogueDelimiterPair[] | undefined
+      )
+    ) {
+      return { ok: true, value: undefined };
+    }
+    return { ok: true, value: normalizedValue };
+  }
+
+  if (typeof value === "string") {
+    const processedValue = key === "editor.fontFamily" ? value.trim() : value;
+    const committedStr =
+      typeof committedValue === "string"
+        ? (key === "editor.fontFamily" ? committedValue.trim() : committedValue)
+        : undefined;
+    if (committedStr !== undefined && processedValue === committedStr) {
+      return { ok: true, value: undefined };
+    }
+    const validation = validateCatalogValue(key, processedValue);
+    if (!validation.ok) {
+      return { ok: false, failure: validation.failure };
+    }
+    return { ok: true, value: processedValue };
   }
 
   if (value === committedValue) {
@@ -369,6 +446,7 @@ export interface ProjectSettingItemViewState {
   item: SettingCatalogItem;
   isModified: boolean;
   displayValue: string;
+  effectiveValue: unknown;
 }
 
 export interface ProjectSettingsCategoryGroup {
@@ -412,6 +490,11 @@ export interface ProjectSettingsPanelViewProps {
   onTextFocus?: (key: SettingKey) => void;
   onTextBlur?: (key: SettingKey) => void;
   onSelectChange?: (key: SettingKey, value: string) => void;
+  onSwitchChange?: (key: SettingKey, checked: boolean) => void;
+  onDialoguePairsCommit?: (
+    key: SettingKey,
+    value: DocumentMapDialogueDelimiterPair[]
+  ) => void;
 }
 
 function translateI18nKey(translate: Translate, key: string): string {
@@ -433,7 +516,9 @@ export function ProjectSettingsPanelView({
   onTextChange,
   onTextFocus,
   onTextBlur,
-  onSelectChange
+  onSelectChange,
+  onSwitchChange,
+  onDialoguePairsCommit
 }: ProjectSettingsPanelViewProps): JSX.Element {
   const categoryGroups = groupProjectSettingItemsByCategory(items);
 
@@ -519,52 +604,92 @@ export function ProjectSettingsPanelView({
                   {translateI18nKey(translate, group.categoryLabelKey)}
                 </h2>
                 <div className="settingsItemList">
-                  {group.items.map(({ item, isModified, displayValue }) => {
-                    const labelId = `${item.key.replace(/\./g, "-")}-label`;
+                  {group.items.map(
+                    ({ item, isModified, displayValue, effectiveValue }) => {
+                      const labelId = `${item.key.replace(/\./g, "-")}-label`;
 
-                    let controlElement: JSX.Element | null = null;
-                    if (item.control.kind === "text") {
-                      controlElement = (
-                        <input
-                          type="text"
-                          className="settingsTextInput"
-                          value={displayValue}
-                          disabled={isReadOnly || isSaving}
-                          onChange={(e) => {
-                            onTextChange?.(item.key, e.target.value);
-                          }}
-                          onFocus={() => {
-                            onTextFocus?.(item.key);
-                          }}
-                          onBlur={() => {
-                            onTextBlur?.(item.key);
-                          }}
-                          aria-labelledby={labelId}
-                        />
-                      );
-                    } else if (item.control.kind === "select") {
-                      controlElement = (
-                        <select
-                          className="settingsSelect"
-                          value={displayValue}
-                          disabled={isReadOnly || isSaving}
-                          onChange={(e) => {
-                            onSelectChange?.(item.key, e.target.value);
-                          }}
-                          aria-labelledby={labelId}
-                        >
-                          {item.control.options.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {translateI18nKey(translate, option.labelKey)}
-                            </option>
-                          ))}
-                        </select>
-                      );
-                    } else {
-                      throw new Error(
-                        `Unsupported Project Settings control kind: "${(item.control as SettingControl).kind}" for key "${item.key}".`
-                      );
-                    }
+                      let controlElement: JSX.Element | null = null;
+                      if (item.control.kind === "text") {
+                        controlElement = (
+                          <input
+                            type="text"
+                            className="settingsTextInput"
+                            value={displayValue}
+                            disabled={isReadOnly || isSaving}
+                            onChange={(e) => {
+                              onTextChange?.(item.key, e.target.value);
+                            }}
+                            onFocus={() => {
+                              onTextFocus?.(item.key);
+                            }}
+                            onBlur={() => {
+                              onTextBlur?.(item.key);
+                            }}
+                            aria-labelledby={labelId}
+                          />
+                        );
+                      } else if (item.control.kind === "select") {
+                        controlElement = (
+                          <select
+                            className="settingsSelect"
+                            value={displayValue}
+                            disabled={isReadOnly || isSaving}
+                            onChange={(e) => {
+                              onSelectChange?.(item.key, e.target.value);
+                            }}
+                            aria-labelledby={labelId}
+                          >
+                            {item.control.options.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {translateI18nKey(translate, option.labelKey)}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      } else if (item.control.kind === "switch") {
+                        controlElement = (
+                          <div className="settingsItemControl">
+                            <input
+                              id={`settingControl-${item.key}`}
+                              type="checkbox"
+                              className="settingsSwitchInput"
+                              checked={displayValue === "true"}
+                              disabled={isReadOnly || isSaving}
+                              onChange={(e) => {
+                                onSwitchChange?.(item.key, e.target.checked);
+                              }}
+                              aria-labelledby={labelId}
+                            />
+                          </div>
+                        );
+                      } else if (item.control.kind === "custom") {
+                        if (
+                          item.control.customKind ===
+                          "documentMap.dialogueDelimiterPairs"
+                        ) {
+                          const pairs = Array.isArray(effectiveValue)
+                            ? (effectiveValue as DocumentMapDialogueDelimiterPair[])
+                            : defaultDocumentMapDialogueDelimiterPairs();
+                          controlElement = (
+                            <DialogueDelimiterPairsEditor
+                              pairs={pairs}
+                              disabled={isReadOnly || isSaving}
+                              translate={translate}
+                              onChange={(nextPairs) => {
+                                onDialoguePairsCommit?.(item.key, nextPairs);
+                              }}
+                            />
+                          );
+                        } else {
+                          throw new Error(
+                            `Unsupported custom Project Settings control kind: "${item.control.customKind}" for key "${item.key}".`
+                          );
+                        }
+                      } else {
+                        throw new Error(
+                          `Unsupported Project Settings control kind: "${(item.control as SettingControl).kind}" for key "${item.key}".`
+                        );
+                      }
 
                     return (
                       <ProjectSettingField
@@ -809,6 +934,114 @@ export function ProjectSettingsPanel({
     }
   };
 
+  const handleSwitchChange = async (
+    key: SettingKey,
+    checked: boolean
+  ): Promise<void> => {
+    if (isReadOnly || isSaving) {
+      return;
+    }
+
+    const currentEffective = readEffectiveProjectSettingValue(
+      key,
+      projectSettings,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const validation = validateProjectSettingValue(
+      key,
+      checked,
+      currentEffective
+    );
+
+    if (!validation.ok || validation.value === undefined) {
+      return;
+    }
+
+    const inheritedValue = readInheritedSettingValue(
+      key,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const request = createDifferentialProjectSettingRequest(
+      key,
+      validation.value,
+      inheritedValue
+    );
+
+    const committedProjectValue = readProjectSettingValue(key, projectSettings);
+    if (committedProjectValue === undefined && "remove" in request) {
+      return;
+    }
+
+    setError(null);
+    setIsSaving(true);
+    try {
+      await onSaveSettings(request);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDialoguePairsCommit = async (
+    key: SettingKey,
+    nextPairs: DocumentMapDialogueDelimiterPair[]
+  ): Promise<void> => {
+    if (isReadOnly || isSaving) {
+      return;
+    }
+
+    const currentEffective = readEffectiveProjectSettingValue(
+      key,
+      projectSettings,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const validation = validateProjectSettingValue(
+      key,
+      nextPairs,
+      currentEffective
+    );
+
+    if (!validation.ok) {
+      setError("Invalid dialogue delimiter pairs.");
+      return;
+    }
+
+    setError(null);
+
+    if (validation.value === undefined) {
+      return;
+    }
+
+    const inheritedValue = readInheritedSettingValue(
+      key,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const request = createDifferentialProjectSettingRequest(
+      key,
+      validation.value,
+      inheritedValue
+    );
+
+    const committedProjectValue = readProjectSettingValue(key, projectSettings);
+    if (committedProjectValue === undefined && "remove" in request) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSaveSettings(request);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const eligibleItems = catalogItems.filter((item) => {
     const entry = getCatalogEntry(item.key);
     return isProjectOverrideEligibleScope(entry.scope);
@@ -841,12 +1074,16 @@ export function ProjectSettingsPanel({
     );
 
     let displayValue: string;
+    let resolvedEffectiveValue: unknown = effectiveValue;
+
     if (item.control.kind === "text") {
       if (item.key === activeEditingKey && textDrafts[item.key] !== undefined) {
         displayValue = textDrafts[item.key];
       } else {
         displayValue = String(effectiveValue ?? "");
       }
+    } else if (item.control.kind === "custom") {
+      displayValue = String(effectiveValue ?? "");
     } else {
       displayValue = String(effectiveValue ?? "");
     }
@@ -854,7 +1091,8 @@ export function ProjectSettingsPanel({
     return {
       item,
       isModified,
-      displayValue
+      displayValue,
+      effectiveValue: resolvedEffectiveValue
     };
   });
 
@@ -880,6 +1118,12 @@ export function ProjectSettingsPanel({
       }}
       onSelectChange={(key, value) => {
         void handleSelectChange(key, value);
+      }}
+      onSwitchChange={(key, checked) => {
+        void handleSwitchChange(key, checked);
+      }}
+      onDialoguePairsCommit={(key, value) => {
+        void handleDialoguePairsCommit(key, value);
       }}
     />
   );

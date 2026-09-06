@@ -144,6 +144,106 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       expect(loaded).not.toBeNull();
       expect(loaded?.config.settings).toBeUndefined();
     });
+
+    it("loads falsy overrides (empty string and boolean false) and enum values from pergamum.json without dropping them", async () => {
+      const configPath = path.join(workDir, projectConfigFileName);
+      const raw = {
+        name: "Falsy Test Novel",
+        settings: {
+          "editor.paragraphIndent.excludeLeadingCharacters": "",
+          "editor.characterCount.exclude.whitespace": false,
+          "editor.characterCount.exclude.lineBreaks": false,
+          "editor.characterCount.exclude.headings": false,
+          "editor.characterCount.exclude.markdownSyntax": false,
+          "editor.characterCount.exclude.markdownComments": false,
+          "editor.lineEnding.expected": "crlf",
+          "files.newFile.lineEnding": "lf"
+        }
+      };
+      await fs.writeFile(configPath, JSON.stringify(raw, null, 2), "utf8");
+
+      const loaded = await loadProjectConfig(workDir);
+      expect(loaded).not.toBeNull();
+      expect(
+        loaded?.config.settings?.editor?.paragraphIndent
+          ?.excludeLeadingCharacters
+      ).toBe("");
+      expect(
+        loaded?.config.settings?.editor?.characterCount?.exclude?.whitespace
+      ).toBe(false);
+      expect(
+        loaded?.config.settings?.editor?.characterCount?.exclude?.lineBreaks
+      ).toBe(false);
+      expect(
+        loaded?.config.settings?.editor?.characterCount?.exclude?.headings
+      ).toBe(false);
+      expect(
+        loaded?.config.settings?.editor?.characterCount?.exclude?.markdownSyntax
+      ).toBe(false);
+      expect(
+        loaded?.config.settings?.editor?.characterCount?.exclude
+          ?.markdownComments
+      ).toBe(false);
+      expect(loaded?.config.settings?.editor?.lineEnding?.expected).toBe(
+        "crlf"
+      );
+      expect(loaded?.config.settings?.files?.newFile?.lineEnding).toBe("lf");
+    });
+
+    it("loads documentMap.dialogueDelimiterPairs (including empty array []) from pergamum.json", async () => {
+      const configPath = path.join(workDir, projectConfigFileName);
+      const raw = {
+        name: "Dialogue Pairs Test",
+        settings: {
+          "documentMap.dialogueDelimiterPairs": [
+            { open: "“", close: "”", color: "#61afef" }
+          ]
+        }
+      };
+      await fs.writeFile(configPath, JSON.stringify(raw, null, 2), "utf8");
+
+      const loaded = await loadProjectConfig(workDir);
+      expect(loaded).not.toBeNull();
+      expect(
+        loaded?.config.settings?.documentMap?.dialogueDelimiterPairs
+      ).toEqual([{ open: "“", close: "”", color: "#61afef" }]);
+
+      // Test empty array []
+      const rawEmpty = {
+        name: "Empty Pairs Test",
+        settings: {
+          "documentMap.dialogueDelimiterPairs": []
+        }
+      };
+      await fs.writeFile(configPath, JSON.stringify(rawEmpty, null, 2), "utf8");
+
+      const loadedEmpty = await loadProjectConfig(workDir);
+      expect(loadedEmpty).not.toBeNull();
+      expect(
+        loadedEmpty?.config.settings?.documentMap?.dialogueDelimiterPairs
+      ).toEqual([]);
+    });
+
+    it("ignores invalid documentMap.dialogueDelimiterPairs (ADR-0006 S-23) without failing project load", async () => {
+      const configPath = path.join(workDir, projectConfigFileName);
+      const raw = {
+        name: "Corrupt Dialogue Pairs",
+        settings: {
+          "editor.fontFamily": "Valid Font",
+          "documentMap.dialogueDelimiterPairs": "not an array"
+        }
+      };
+      await fs.writeFile(configPath, JSON.stringify(raw, null, 2), "utf8");
+
+      const loaded = await loadProjectConfig(workDir);
+      expect(loaded).not.toBeNull();
+      // Valid setting is loaded:
+      expect(loaded?.config.settings?.editor?.fontFamily).toBe("Valid Font");
+      // Corrupted setting is ignored:
+      expect(
+        loaded?.config.settings?.documentMap?.dialogueDelimiterPairs
+      ).toBeUndefined();
+    });
   });
 
   describe("projectConfigStore saveProjectSettings", () => {
@@ -177,6 +277,107 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       expect(removeResult.updatedSettings).toBeUndefined();
       expect(removeResult.config.settings).toBeUndefined();
 
+      const removedDisk = JSON.parse(await fs.readFile(configPath, "utf8"));
+      expect(removedDisk.settings).toBeUndefined();
+    });
+
+    it("saves and updates falsy overrides (false, empty string) and enum settings, preserving other overrides", async () => {
+      const initialSave = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: null,
+        request: {
+          set: {
+            "editor.paragraphIndent.excludeLeadingCharacters": "",
+            "editor.characterCount.exclude.whitespace": false,
+            "editor.lineEnding.expected": "crlf",
+            "files.newFile.lineEnding": "lf"
+          }
+        }
+      });
+
+      expect(
+        initialSave.updatedSettings?.editor?.paragraphIndent
+          ?.excludeLeadingCharacters
+      ).toBe("");
+      expect(
+        initialSave.updatedSettings?.editor?.characterCount?.exclude?.whitespace
+      ).toBe(false);
+      expect(initialSave.updatedSettings?.editor?.lineEnding?.expected).toBe(
+        "crlf"
+      );
+      expect(initialSave.updatedSettings?.files?.newFile?.lineEnding).toBe("lf");
+
+      const configPath = path.join(workDir, projectConfigFileName);
+      const onDisk = JSON.parse(await fs.readFile(configPath, "utf8"));
+      expect(onDisk.settings).toEqual({
+        "editor.paragraphIndent.excludeLeadingCharacters": "",
+        "editor.characterCount.exclude.whitespace": false,
+        "editor.lineEnding.expected": "crlf",
+        "files.newFile.lineEnding": "lf"
+      });
+
+      // Now remove one key, update another
+      const secondSave = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: initialSave.rawSnapshot,
+        request: {
+          set: {
+            "editor.characterCount.exclude.whitespace": true
+          },
+          remove: ["editor.lineEnding.expected"]
+        }
+      });
+
+      expect(
+        secondSave.updatedSettings?.editor?.paragraphIndent
+          ?.excludeLeadingCharacters
+      ).toBe("");
+      expect(
+        secondSave.updatedSettings?.editor?.characterCount?.exclude?.whitespace
+      ).toBe(true);
+      expect(
+        secondSave.updatedSettings?.editor?.lineEnding?.expected
+      ).toBeUndefined();
+      expect(secondSave.updatedSettings?.files?.newFile?.lineEnding).toBe("lf");
+
+      const onDiskAfter = JSON.parse(await fs.readFile(configPath, "utf8"));
+      expect(onDiskAfter.settings).toEqual({
+        "editor.paragraphIndent.excludeLeadingCharacters": "",
+        "editor.characterCount.exclude.whitespace": true,
+        "files.newFile.lineEnding": "lf"
+      });
+    });
+
+    it("saves and removes documentMap.dialogueDelimiterPairs array override", async () => {
+      const pairs = [{ open: "「", close: "」", color: "#e06c75" }];
+      const saveResult = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: null,
+        request: {
+          set: { "documentMap.dialogueDelimiterPairs": pairs }
+        }
+      });
+
+      expect(
+        saveResult.updatedSettings?.documentMap?.dialogueDelimiterPairs
+      ).toEqual(pairs);
+
+      const configPath = path.join(workDir, projectConfigFileName);
+      const savedDisk = JSON.parse(await fs.readFile(configPath, "utf8"));
+      expect(savedDisk.settings).toEqual({
+        "documentMap.dialogueDelimiterPairs": pairs
+      });
+
+      // Remove override
+      const removeResult = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: saveResult.rawSnapshot,
+        request: {
+          remove: ["documentMap.dialogueDelimiterPairs"]
+        }
+      });
+
+      expect(removeResult.updatedSettings).toBeUndefined();
       const removedDisk = JSON.parse(await fs.readFile(configPath, "utf8"));
       expect(removedDisk.settings).toBeUndefined();
     });
@@ -276,6 +477,53 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       const configPath = path.join(workDir, projectConfigFileName);
       const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
       expect(Object.keys(parsed.settings)).toEqual(["preview.renderer"]);
+    });
+
+    it("persists documentMap.dialogueDelimiterPairs with normalized lowercase #rrggbb hex colors", async () => {
+      const saveResult = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: null,
+        request: {
+          set: {
+            "documentMap.dialogueDelimiterPairs": [
+              { open: "「", close: "」", color: "#FFF" },
+              { open: "『", close: "』", color: "#ABCDEF" }
+            ]
+          }
+        }
+      });
+
+      expect(saveResult.updatedSettings?.documentMap?.dialogueDelimiterPairs).toEqual([
+        { open: "「", close: "」", color: "#ffffff" },
+        { open: "『", close: "』", color: "#abcdef" }
+      ]);
+
+      const configPath = path.join(workDir, projectConfigFileName);
+      const content = await fs.readFile(configPath, "utf8");
+      const parsed = JSON.parse(content);
+      expect(parsed.settings["documentMap.dialogueDelimiterPairs"]).toEqual([
+        { open: "「", close: "」", color: "#ffffff" },
+        { open: "『", close: "』", color: "#abcdef" }
+      ]);
+    });
+
+    it("persists empty array [] for documentMap.dialogueDelimiterPairs", async () => {
+      const saveResult = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: null,
+        request: {
+          set: {
+            "documentMap.dialogueDelimiterPairs": []
+          }
+        }
+      });
+
+      expect(saveResult.updatedSettings?.documentMap?.dialogueDelimiterPairs).toEqual([]);
+
+      const configPath = path.join(workDir, projectConfigFileName);
+      const content = await fs.readFile(configPath, "utf8");
+      const parsed = JSON.parse(content);
+      expect(parsed.settings["documentMap.dialogueDelimiterPairs"]).toEqual([]);
     });
 
     it("rejects unknown setting key in set", async () => {

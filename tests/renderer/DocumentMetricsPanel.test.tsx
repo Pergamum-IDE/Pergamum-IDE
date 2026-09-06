@@ -15,9 +15,10 @@ const emptyAnalysis: DocumentMetricsAnalysis = {
   tagCounts: [],
   dialogueRatio: {
     narrationCharacters: 0,
-    dialogueCharacters: 0,
+    pairs: [],
     totalCharacters: 0,
     narrationPercent: 0,
+    dialogueCharacters: 0,
     dialoguePercent: 0
   }
 };
@@ -236,13 +237,31 @@ describe("DocumentMetricsPanel Phase 2 sections (#360)", () => {
     expect(markup).toContain("glossaryTagChip");
   });
 
-  it("renders the narration / dialogue split right-aligned, with a donut chart and approximate note", () => {
+  it("renders the narration / dialogue pair breakdown with pie chart and no aggregate dialogue row", () => {
     const markup = render({
       characterCount: 12_500,
       analysis: {
         ...emptyAnalysis,
         dialogueRatio: {
           narrationCharacters: 7800,
+          pairs: [
+            {
+              pairIndex: 0,
+              open: "「",
+              close: "」",
+              color: "#61afef",
+              characters: 3700,
+              percent: 30
+            },
+            {
+              pairIndex: 1,
+              open: "『",
+              close: "』",
+              color: "#c678dd",
+              characters: 1000,
+              percent: 8
+            }
+          ],
           dialogueCharacters: 4700,
           totalCharacters: 12_500,
           narrationPercent: 62,
@@ -252,39 +271,52 @@ describe("DocumentMetricsPanel Phase 2 sections (#360)", () => {
     });
 
     expect(markup).toContain("documentMetrics.dialogue.narration");
-    expect(markup).toContain("documentMetrics.dialogue.dialogue");
+    // Pair label is used, NOT generic "documentMetrics.dialogue.dialogue" aggregate row
+    expect(markup).toContain("documentMetrics.dialogue.pairLabel");
     expect(markup).toContain("documentMetrics.dialogue.charsWithPercent");
     expect(markup).toContain("documentMetrics.dialogue.approximate");
-    // #360 polish: value cell is a dedicated right-aligned / tabular-nums cell.
+    // Value cells
     expect(markup).toContain("documentMetricsDialogueRatioRow");
     expect(markup).toContain("documentMetricsDialogueRatioValue");
-    // #360 polish: the horizontal ratio bar is replaced by an SVG donut.
-    expect(markup).not.toContain("documentMetricsRatioBar");
+    // Chart selector with pie and bar buttons
+    expect(markup).toContain("documentMetricsChartSelector");
+    expect(markup).toContain("feather-pie-chart");
+    expect(markup).toContain("feather-bar-chart");
+    expect(markup).toContain('title="documentMetrics.chart.pieChart"');
+    expect(markup).toContain('title="documentMetrics.chart.barChart"');
+    // Pie chart
     expect(markup).toContain("documentMetricsDialoguePie");
     expect(markup).toContain("documentMetricsDialoguePieNarration");
-    expect(markup).toContain('stroke-dasharray="62 38"');
-    // Row swatches key each row to a pie slice.
+    // Pair slices rendered with pair colors
+    expect(markup).toContain('fill="#61afef"');
+    expect(markup).toContain('fill="#c678dd"');
+    // Row swatches key each row to a pie slice, with pair colors
     expect(markup).toContain('data-series="narration"');
     expect(markup).toContain('data-series="dialogue"');
+    expect(markup).toContain("background-color:#61afef");
+    expect(markup).toContain("background-color:#c678dd");
+    // Text colored in pair color
+    expect(markup).toContain("color:#61afef");
+    expect(markup).toContain("color:#c678dd");
   });
 
-  it("still shows a 0 / 0% dialogue split (empty outline donut) for an empty analysis", () => {
-    const markup = render({ characterCount: 0, analysis: emptyAnalysis });
-
-    expect(markup).toContain("documentMetrics.dialogue.narration");
-    expect(markup).toContain("documentMetrics.dialogue.charsWithPercent");
-    expect(markup).toContain('data-empty="true"');
-    // The coloured slices are not drawn for an empty document.
-    expect(markup).not.toContain("documentMetricsDialoguePieNarration");
-  });
-
-  it("renders a full narration donut when there is no dialogue", () => {
+  it("renders a 0-count pair with 0 characters / 0% in the table", () => {
     const markup = render({
       characterCount: 1000,
       analysis: {
         ...emptyAnalysis,
         dialogueRatio: {
           narrationCharacters: 1000,
+          pairs: [
+            {
+              pairIndex: 0,
+              open: "「",
+              close: "」",
+              color: "#61afef",
+              characters: 0,
+              percent: 0
+            }
+          ],
           dialogueCharacters: 0,
           totalCharacters: 1000,
           narrationPercent: 100,
@@ -293,28 +325,38 @@ describe("DocumentMetricsPanel Phase 2 sections (#360)", () => {
       }
     });
 
-    expect(markup).toContain("documentMetricsDialoguePieNarration");
-    expect(markup).toContain('stroke-dasharray="100 0"');
-    expect(markup).not.toContain('data-empty="true"');
+    expect(markup).toContain("documentMetrics.dialogue.pairLabel");
+    expect(markup).toContain("documentMetrics.dialogue.charsWithPercent");
   });
 
-  it("renders a full dialogue donut (narration arc of 0) when it is all dialogue", () => {
+  it("renders only narration row (100%) when pairs is empty array []", () => {
     const markup = render({
       characterCount: 1000,
       analysis: {
         ...emptyAnalysis,
         dialogueRatio: {
-          narrationCharacters: 0,
-          dialogueCharacters: 1000,
+          narrationCharacters: 1000,
+          pairs: [],
+          dialogueCharacters: 0,
           totalCharacters: 1000,
-          narrationPercent: 0,
-          dialoguePercent: 100
+          narrationPercent: 100,
+          dialoguePercent: 0
         }
       }
     });
 
-    expect(markup).toContain("documentMetricsDialoguePieDialogue");
-    expect(markup).toContain('stroke-dasharray="0 100"');
-    expect(markup).not.toContain('data-empty="true"');
+    expect(markup).toContain("documentMetrics.dialogue.narration");
+    expect(markup).not.toContain("documentMetrics.dialogue.pairLabel");
+    expect(markup).not.toContain("documentMetricsDialoguePiePair");
+  });
+
+  it("still shows an empty outline donut for an empty analysis", () => {
+    const markup = render({ characterCount: 0, analysis: emptyAnalysis });
+
+    expect(markup).toContain("documentMetrics.dialogue.narration");
+    expect(markup).toContain("documentMetrics.dialogue.charsWithPercent");
+    expect(markup).toContain('data-empty="true"');
+    // The coloured slices are not drawn for an empty document.
+    expect(markup).not.toContain("documentMetricsDialoguePieNarration");
   });
 });

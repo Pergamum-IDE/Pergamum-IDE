@@ -9099,6 +9099,7 @@ export function App(): JSX.Element {
                     />
                   ) : isProjectSettingsTabActive ? (
                     <ProjectSettingsPanel
+                      key={project?.activeProjectFilePath ?? "no-project"}
                       translate={translate}
                       projectSettings={project?.config?.settings}
                       applicationSettings={settings}

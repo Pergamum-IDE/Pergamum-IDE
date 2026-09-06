@@ -523,9 +523,9 @@ button:active {
 
 .documentMapSettingsDialoguePairRow {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
-  padding: 6px;
+  padding: 6px 10px;
   border: 1px solid #e6ebf1;
   border-radius: 8px;
 }
@@ -542,30 +542,59 @@ button:active {
   align-self: center;
 }
 
-.documentMapSettingsDialogueDelimiter input {
-  width: 5ch;
+.documentMapSettingsDialoguePairPreview {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentMapSettingsDialoguePairActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.documentMapSettingsDialoguePairEdit {
+  padding: 4px 10px;
   border: 1px solid #cbd5df;
   border-radius: 4px;
-  padding: 4px 6px;
+  background: #fff;
+  color: #24292f;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.documentMapSettingsDialoguePairEdit:hover:not(:disabled) {
+  background: #f6f8fa;
+  border-color: #bcc6d2;
+}
+
+.documentMapSettingsDialoguePairEdit:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .documentMapSettingsDialoguePairDelete {
-  align-self: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  padding: 4px 10px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: #b4232a;
-  font-size: 16px;
-  line-height: 1;
+  font-size: 12px;
   cursor: pointer;
 }
 
 .documentMapSettingsDialoguePairDelete:hover:not(:disabled) {
   background: #fbeaea;
   border-color: #e3b3b3;
+}
+
+.documentMapSettingsDialoguePairDelete:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .documentMapSettingsAddPair {
@@ -2635,8 +2664,60 @@ label.settingsItemHeader {
   background: var(--workspace-sidebar-focus-ring);
 }
 
-/* #360 UI polish: narration / dialogue donut chart (replaces the old ratio
-   bar). SVG, `r = 100 / 2π` so a percent maps 1:1 to arc length. */
+/* #360 & #396 Document Metrics: chart selector & controls */
+.documentMetricsDialogueHeader {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 12px 0;
+}
+
+.documentMetricsChartSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--workspace-sidebar-background);
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 4px;
+  padding: 1px;
+}
+
+.documentMetricsChartTypeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--workspace-sidebar-muted-foreground);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.documentMetricsChartTypeButton:hover {
+  background: var(--workspace-sidebar-hover-background, rgba(255, 255, 255, 0.05));
+  color: var(--workspace-sidebar-foreground);
+}
+
+.documentMetricsChartTypeButton[data-selected="true"] {
+  background: var(--workspace-sidebar-selected-background, rgba(255, 255, 255, 0.12));
+  color: var(--workspace-sidebar-foreground);
+}
+
+.documentMetricsChartTypeIcon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.documentMetricsChartTypeIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* #396 Document Metrics Pie chart (SVG sector paths, raw count geometry) */
 .documentMetricsDialoguePieWrap {
   display: flex;
   justify-content: center;
@@ -2648,21 +2729,114 @@ label.settingsItemHeader {
   height: 84px;
 }
 
-.documentMetricsDialoguePie circle {
-  stroke-width: 4;
+.documentMetricsDialoguePieSector {
+  stroke: none;
+}
+
+.documentMetricsDialoguePieNarration {
+  fill: var(--workspace-sidebar-muted-foreground);
 }
 
 .documentMetricsDialoguePieTrack {
   stroke: var(--workspace-sidebar-border);
+  stroke-width: 1;
 }
 
-.documentMetricsDialoguePieDialogue {
-  stroke: var(--workspace-sidebar-focus-ring);
+/* Derivation: PIE_RADIUS = 15; mask circle r = PIE_RADIUS / 2 = 7.5; strokeWidth = PIE_RADIUS = 15.
+   Circumference = 2π × r = 2π × 7.5 ≈ 47.12389 ≈ 47.124.
+   Used for stroke-dasharray and stroke-dashoffset reveal animation. */
+.documentMetricsDialoguePieMaskCircle {
+  stroke-dasharray: 47.124 47.124;
+  stroke-dashoffset: 0;
 }
 
-.documentMetricsDialoguePieNarration {
-  stroke: var(--workspace-sidebar-muted-foreground);
-  stroke-linecap: butt;
+.documentMetricsDialoguePie[data-revealing="true"] .documentMetricsDialoguePieMaskCircle {
+  animation: documentMetricsPieReveal 400ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+@keyframes documentMetricsPieReveal {
+  from {
+    stroke-dashoffset: 47.124;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* #396 Document Metrics Horizontal Bar chart (absolute counts) */
+.documentMetricsDialogueBarWrap {
+  padding: 6px 12px 10px;
+}
+
+.documentMetricsDialogueBar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.documentMetricsBarRow {
+  display: grid;
+  grid-template-columns: minmax(48px, 72px) 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.documentMetricsBarLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--workspace-sidebar-foreground);
+}
+
+.documentMetricsBarTrack {
+  height: 8px;
+  background: var(--workspace-sidebar-border);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.documentMetricsBarFill {
+  height: 100%;
+  border-radius: 2px;
+  width: var(--bar-width, 0%);
+}
+
+.documentMetricsBarFill--narration {
+  background-color: var(--workspace-sidebar-muted-foreground);
+}
+
+.documentMetricsBarValue {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--workspace-sidebar-muted-foreground);
+  min-width: 36px;
+}
+
+.documentMetricsDialogueBar[data-revealing="true"] .documentMetricsBarFill {
+  animation: documentMetricsBarReveal 400ms cubic-bezier(0, 0, 0.2, 1) both;
+  animation-delay: var(--bar-delay, 0ms);
+}
+
+@keyframes documentMetricsBarReveal {
+  from {
+    width: 0%;
+  }
+  to {
+    width: var(--bar-width, 0%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .documentMetricsDialoguePie[data-revealing="true"] .documentMetricsDialoguePieMaskCircle {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .documentMetricsDialogueBar[data-revealing="true"] .documentMetricsBarFill {
+    animation: none !important;
+    width: var(--bar-width, 0%) !important;
+  }
 }
 
 /* #375 Document Map / 文書マップ panel (left pane). */
@@ -4780,6 +4954,71 @@ label.settingsItemHeader {
   margin: 0;
   color: #b4232a;
   font-size: 13px;
+}
+
+/* Dialogue delimiter pair dialog (rendered inside InfoDialog). */
+.appDialog.dialogueDelimiterPairDialog {
+  width: min(28rem, calc(100vw - 32px));
+}
+
+.dialogueDelimiterPairDialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialogueDelimiterPairDialogField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.dialogueDelimiterPairDialogInput {
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: #fff;
+  color: #25313d;
+}
+
+.dialogueDelimiterPairDialogInput:focus {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: 1px;
+}
+
+.dialogueDelimiterPairDialogColorInputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialogueDelimiterPairDialogColorSwatch {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.dialogueDelimiterPairDialogColorText {
+  width: 12ch;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  background: #fff;
+  color: #25313d;
+}
+
+.dialogueDelimiterPairDialogColorText:focus {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: 1px;
 }
 
 .statusBar {

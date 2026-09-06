@@ -47,7 +47,8 @@ export const settingAreas = [
   "commandPalette",
   "quickAccess",
   "files",
-  "debug"
+  "debug",
+  "documentMap"
 ] as const;
 
 export type SettingArea = (typeof settingAreas)[number];
@@ -56,7 +57,12 @@ export type SettingArea = (typeof settingAreas)[number];
 // Validation metadata types
 // ---------------------------------------------------------------------------
 
-export type SettingValueType = "boolean" | "string" | "number" | "enum";
+export type SettingValueType =
+  | "boolean"
+  | "string"
+  | "number"
+  | "enum"
+  | "dialogueDelimiterPairs";
 
 /**
  * `fontFamilyName` / `themeName` are allowlist policies (see the character
@@ -76,8 +82,8 @@ export type SettingValidationFailure =
   | "disallowedCharacters"
   | "emptyString";
 
-export type SettingValidationResult =
-  | { ok: true }
+export type SettingValidationResult<T = unknown> =
+  | { ok: true; value?: T }
   | { ok: false; failure: SettingValidationFailure };
 
 // ---------------------------------------------------------------------------
@@ -143,15 +149,29 @@ export interface BooleanSettingEntry<TKey extends string = string>
   readonly defaultValue: boolean;
 }
 
+export interface DialogueDelimiterPairsSettingEntry<
+  TKey extends string = string
+> extends CommonSettingFields<TKey> {
+  readonly type: "dialogueDelimiterPairs";
+  readonly defaultValue: readonly DocumentMapDialogueDelimiterPair[];
+}
+
 export type SettingCatalogEntry =
   | StringSettingEntry
   | EnumSettingEntry
   | NumberSettingEntry
-  | BooleanSettingEntry;
+  | BooleanSettingEntry
+  | DialogueDelimiterPairsSettingEntry;
 
 // ---------------------------------------------------------------------------
 // Cross-module type imports
 // ---------------------------------------------------------------------------
+
+import {
+  defaultDocumentMapDialogueDelimiterPairs,
+  parseDocumentMapDialogueDelimiterPair,
+  type DocumentMapDialogueDelimiterPair
+} from "./documentMapSettings";
 
 // #186: workbench.language's selectable values are owned by i18n, while the
 // catalog remains the owner of the setting's default and metadata.
@@ -281,6 +301,28 @@ function validateBooleanValue(value: unknown): SettingValidationResult {
     : { ok: false, failure: "typeMismatch" };
 }
 
+function validateDialogueDelimiterPairsValue(
+  value: unknown
+): SettingValidationResult<DocumentMapDialogueDelimiterPair[]> {
+  if (!Array.isArray(value)) {
+    return { ok: false, failure: "typeMismatch" };
+  }
+  const normalized: DocumentMapDialogueDelimiterPair[] = [];
+  for (let i = 0; i < value.length; i++) {
+    try {
+      normalized.push(
+        parseDocumentMapDialogueDelimiterPair(
+          value[i],
+          `dialogueDelimiterPairs[${i}]`
+        )
+      );
+    } catch {
+      return { ok: false, failure: "typeMismatch" };
+    }
+  }
+  return { ok: true, value: normalized };
+}
+
 function validateEntryValue(
   entry: SettingCatalogEntry,
   value: unknown
@@ -294,6 +336,8 @@ function validateEntryValue(
       return validateNumberValue(entry, value);
     case "boolean":
       return validateBooleanValue(value);
+    case "dialogueDelimiterPairs":
+      return validateDialogueDelimiterPairsValue(value);
   }
 }
 
@@ -400,6 +444,17 @@ export function defineBooleanSetting<TKey extends string>(
   input: DefineBooleanSettingInput<TKey>
 ): BooleanSettingEntry<TKey> {
   return finalizeEntry({ type: "boolean", ...input });
+}
+
+export interface DefineDialogueDelimiterPairsSettingInput<TKey extends string>
+  extends CommonDefineInput<TKey> {
+  defaultValue: readonly DocumentMapDialogueDelimiterPair[];
+}
+
+export function defineDialogueDelimiterPairsSetting<TKey extends string>(
+  input: DefineDialogueDelimiterPairsSettingInput<TKey>
+): DialogueDelimiterPairsSettingEntry<TKey> {
+  return finalizeEntry({ type: "dialogueDelimiterPairs", ...input });
 }
 
 /**
@@ -600,7 +655,7 @@ export const settingsCatalog = defineSettingsCatalog({
   }),
   "editor.paragraphIndent.excludeLeadingCharacters": defineStringSetting({
     key: "editor.paragraphIndent.excludeLeadingCharacters",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     defaultValue: "",
     labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
     descriptionKey:
@@ -617,7 +672,7 @@ export const settingsCatalog = defineSettingsCatalog({
   // files.newFile.lineEnding below (#253's new-break fallback).
   "editor.lineEnding.expected": defineEnumSetting({
     key: "editor.lineEnding.expected",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     enumValues: ["lf", "crlf", "cr"],
     defaultValue: "lf",
     labelKey: "settings.editor.lineEnding.expected.label",
@@ -681,7 +736,7 @@ export const settingsCatalog = defineSettingsCatalog({
   }),
   "editor.characterCount.exclude.whitespace": defineBooleanSetting({
     key: "editor.characterCount.exclude.whitespace",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     defaultValue: true,
     labelKey: "settings.editor.characterCount.exclude.whitespace.label",
     descriptionKey:
@@ -691,7 +746,7 @@ export const settingsCatalog = defineSettingsCatalog({
   }),
   "editor.characterCount.exclude.lineBreaks": defineBooleanSetting({
     key: "editor.characterCount.exclude.lineBreaks",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     defaultValue: true,
     labelKey: "settings.editor.characterCount.exclude.lineBreaks.label",
     descriptionKey:
@@ -701,7 +756,7 @@ export const settingsCatalog = defineSettingsCatalog({
   }),
   "editor.characterCount.exclude.headings": defineBooleanSetting({
     key: "editor.characterCount.exclude.headings",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     defaultValue: false,
     labelKey: "settings.editor.characterCount.exclude.headings.label",
     descriptionKey:
@@ -711,7 +766,7 @@ export const settingsCatalog = defineSettingsCatalog({
   }),
   "editor.characterCount.exclude.markdownSyntax": defineBooleanSetting({
     key: "editor.characterCount.exclude.markdownSyntax",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     defaultValue: true,
     labelKey: "settings.editor.characterCount.exclude.markdownSyntax.label",
     descriptionKey:
@@ -721,7 +776,7 @@ export const settingsCatalog = defineSettingsCatalog({
   }),
   "editor.characterCount.exclude.markdownComments": defineBooleanSetting({
     key: "editor.characterCount.exclude.markdownComments",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     defaultValue: true,
     labelKey: "settings.editor.characterCount.exclude.markdownComments.label",
     descriptionKey:
@@ -752,7 +807,7 @@ export const settingsCatalog = defineSettingsCatalog({
   }),
   "files.newFile.lineEnding": defineEnumSetting({
     key: "files.newFile.lineEnding",
-    scope: "applicationOnly",
+    scope: "applicationWithProjectOverride",
     enumValues: ["lf", "crlf"],
     defaultValue: "lf",
     labelKey: "settings.files.newFile.lineEnding.label",
@@ -823,6 +878,15 @@ export const settingsCatalog = defineSettingsCatalog({
     descriptionKey: "settings.notification.output.enabled.description",
     deprecatedAliases: [],
     migrationNotes: []
+  }),
+  "documentMap.dialogueDelimiterPairs": defineDialogueDelimiterPairsSetting({
+    key: "documentMap.dialogueDelimiterPairs",
+    scope: "applicationWithProjectOverride",
+    defaultValue: defaultDocumentMapDialogueDelimiterPairs(),
+    labelKey: "settings.documentMap.dialogueDelimiterPairs.label",
+    descriptionKey: "settings.documentMap.dialogueDelimiterPairs.description",
+    deprecatedAliases: [],
+    migrationNotes: []
   })
 });
 
@@ -842,7 +906,9 @@ export type SettingValueOf<K extends SettingKey> =
         ? number
         : (typeof settingsCatalog)[K] extends BooleanSettingEntry
           ? boolean
-          : never;
+          : (typeof settingsCatalog)[K] extends DialogueDelimiterPairsSettingEntry
+            ? readonly DocumentMapDialogueDelimiterPair[]
+            : never;
 
 // #186: compile-time guard that workbench.language's catalog enum values
 // stay exactly in sync with the Language type. The catalog enum values now
@@ -993,7 +1059,9 @@ export function resolveCatalogValue<K extends SettingKey>(
   const validation = validateCatalogValue(key, rawValue);
 
   if (validation.ok) {
-    return { ok: true, value: rawValue as SettingValueOf<K>, source: "raw" };
+    const value =
+      validation.value !== undefined ? validation.value : rawValue;
+    return { ok: true, value: value as SettingValueOf<K>, source: "raw" };
   }
 
   return {

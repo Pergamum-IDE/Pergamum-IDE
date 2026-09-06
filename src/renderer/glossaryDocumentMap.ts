@@ -830,14 +830,14 @@ export function collectDocumentMapDialogueRanges(
 }
 
 /**
- * The colour for `offset` among `ranges` — the `color` of the containing range
- * with the HIGHEST `pairIndex` (a later dialogue pair wins), or `null` when
- * `offset` is not inside any dialogue range.
+ * The containing dialogue range for `offset` among `ranges` with the HIGHEST
+ * `pairIndex` (a later dialogue pair wins), or `null` when `offset` is not
+ * inside any dialogue range.
  */
-export function documentMapDialogueColorAtOffset(
+export function documentMapWinningDialogueRangeAtOffset(
   offset: number,
   ranges: readonly DocumentMapDialogueRange[]
-): string | null {
+): DocumentMapDialogueRange | null {
   let winner: DocumentMapDialogueRange | null = null;
   for (const range of ranges) {
     if (
@@ -848,7 +848,19 @@ export function documentMapDialogueColorAtOffset(
       winner = range;
     }
   }
-  return winner ? winner.color : null;
+  return winner;
+}
+
+/**
+ * The colour for `offset` among `ranges` — the `color` of the containing range
+ * with the HIGHEST `pairIndex` (a later dialogue pair wins), or `null` when
+ * `offset` is not inside any dialogue range.
+ */
+export function documentMapDialogueColorAtOffset(
+  offset: number,
+  ranges: readonly DocumentMapDialogueRange[]
+): string | null {
+  return documentMapWinningDialogueRangeAtOffset(offset, ranges)?.color ?? null;
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   buildSettingSearchText,
   getSettingCategoryCatalogItem,
   getSettingCatalogItem,
+  projectSpecificSettingCatalogItems,
   settingCategoryCatalog,
   settingCategoryLabelKey,
   settingCatalogItems,
@@ -201,10 +202,12 @@ describe("Settings UI Catalog Schema (#226)", () => {
       );
     });
 
-    it("covers every key registered in settingsCatalog.ts (#228: no existing Settings UI item is dropped)", () => {
-      expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
-        Object.keys(settingsCatalog).sort()
-      );
+    it("covers every key registered in settingsCatalog.ts across generic and project-specific UI catalogs (#228: no existing Settings UI item is dropped)", () => {
+      const allUiKeys = [
+        ...settingCatalogItems.map((item) => item.key),
+        ...projectSpecificSettingCatalogItems.map((item) => item.key)
+      ];
+      expect(allUiKeys.sort()).toEqual(Object.keys(settingsCatalog).sort());
     });
 
     it("uses the actual existing settingsCatalog.ts key for the UI font (workbench.fontFamily), not an invented ui.fontFamily key", () => {

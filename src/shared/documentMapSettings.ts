@@ -328,3 +328,36 @@ export function reorderDocumentMapDialoguePairs(
   next.splice(target, 0, moved);
   return next;
 }
+
+/**
+ * Structural equality for dialogue delimiter pairs.
+ * Considers array length, exact element ordering, and semantic fields (open, close,
+ * normalized color). Does NOT introduce new trim or normalization for open/close.
+ */
+export function areDialogueDelimiterPairsEqual(
+  a: readonly DocumentMapDialogueDelimiterPair[] | undefined,
+  b: readonly DocumentMapDialogueDelimiterPair[] | undefined
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a === undefined || b === undefined) {
+    return false;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    const pairA = a[i];
+    const pairB = b[i];
+    if (
+      pairA.open !== pairB.open ||
+      pairA.close !== pairB.close ||
+      (normalizeDocumentMapColor(pairA.color) ?? pairA.color.toLowerCase()) !==
+        (normalizeDocumentMapColor(pairB.color) ?? pairB.color.toLowerCase())
+    ) {
+      return false;
+    }
+  }
+  return true;
+}

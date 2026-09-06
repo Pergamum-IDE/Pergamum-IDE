@@ -1,6 +1,8 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Translate } from "../shared/i18n";
 import { estimateManuscriptPages } from "../shared/manuscriptPages";
+import barChartIcon from "../../assets/icons/feather/metrics/bar-chart.svg?raw";
+import pieChartIcon from "../../assets/icons/feather/metrics/pie-chart.svg?raw";
 import type {
   DocumentMetricsAnalysis,
   DocumentMetricsGlossaryCount,
@@ -9,6 +11,7 @@ import type {
 import { CollapsibleSidebarSection } from "./CollapsibleSidebarSection";
 import { GlossaryTagChip } from "./GlossaryTagChip";
 import { DocumentDialogueRatioPieChart } from "./DocumentDialogueRatioPieChart";
+import { DocumentDialogueRatioBarChart } from "./DocumentDialogueRatioBarChart";
 
 /**
  * #360 — the Document Metrics (文書統計) left pane. Shows the ACTIVE
@@ -49,6 +52,8 @@ interface DocumentMetricsPanelProps {
   readonly analysis: DocumentMetricsAnalysis | null;
   /** Backing-file last-modified time / unsaved / error state; `null` when N/A. */
   readonly fileInfo: DocumentMetricsFileInfo | null;
+  /** Whether the Document Metrics pane is visible (drives reveal animation on re-show). */
+  readonly isVisible?: boolean;
 }
 
 const EMPTY_VALUE = "-";
@@ -131,16 +136,16 @@ function CountsTable({
   );
 }
 
-/** One narration / dialogue row — a colour swatch keyed to the pie chart,
- *  the label (left), and the right-aligned / tabular-nums value. */
 function DialogueRatioRow({
   series,
   label,
-  value
+  value,
+  color
 }: {
   series: "narration" | "dialogue";
   label: string;
   value: string;
+  color?: string;
 }): JSX.Element {
   return (
     <div className="documentMetricsDialogueRatioRow">
@@ -148,9 +153,10 @@ function DialogueRatioRow({
         <span
           className="documentMetricsDialogueSwatch"
           data-series={series}
+          style={color ? { backgroundColor: color } : undefined}
           aria-hidden="true"
         />
-        {label}
+        <span style={color ? { color } : undefined}>{label}</span>
       </dt>
       <dd className="documentMetricsDialogueRatioValue">{value}</dd>
     </div>
@@ -163,13 +169,33 @@ export function DocumentMetricsPanel({
   activeEditorIsMarkdown,
   characterCount,
   analysis,
-  fileInfo
+  fileInfo,
+  isVisible
 }: DocumentMetricsPanelProps): JSX.Element {
   const [statisticsCollapsed, setStatisticsCollapsed] = useState(false);
   const [glossaryCountsCollapsed, setGlossaryCountsCollapsed] = useState(false);
   const [tagCountsCollapsed, setTagCountsCollapsed] = useState(false);
   const [dialogueRatioCollapsed, setDialogueRatioCollapsed] = useState(false);
   const [fileInfoCollapsed, setFileInfoCollapsed] = useState(false);
+
+  const [chartType, setChartType] = useState<"pie" | "bar">("pie");
+  const [animationGeneration, setAnimationGeneration] = useState(1);
+  const prevVisibleRef = useRef(isVisible ?? true);
+
+  useEffect(() => {
+    const visible = isVisible ?? true;
+    if (visible && !prevVisibleRef.current) {
+      setAnimationGeneration((gen) => gen + 1);
+    }
+    prevVisibleRef.current = visible;
+  }, [isVisible]);
+
+  const handleSelectChartType = (type: "pie" | "bar"): void => {
+    if (type !== chartType) {
+      setChartType(type);
+      setAnimationGeneration((gen) => gen + 1);
+    }
+  };
 
   const manuscriptPages = useMemo(
     () =>
@@ -317,43 +343,115 @@ export function DocumentMetricsPanel({
             setDialogueRatioCollapsed((current) => !current)
           }
         >
-          {dialogueRatio === null ? null : (
-            <>
-              <div className="documentMetricsDialoguePieWrap">
-                <DocumentDialogueRatioPieChart
-                  narrationPercent={dialogueRatio.narrationPercent}
-                  dialoguePercent={dialogueRatio.dialoguePercent}
-                  totalCharacters={dialogueRatio.totalCharacters}
-                  ariaLabel={`${translate(
-                    "documentMetrics.dialogue.narration"
-                  )} ${dialogueRatio.narrationPercent}% / ${translate(
-                    "documentMetrics.dialogue.dialogue"
-                  )} ${dialogueRatio.dialoguePercent}%`}
-                />
-              </div>
-              <dl className="documentMetricsMetricList">
-                <DialogueRatioRow
-                  series="narration"
-                  label={translate("documentMetrics.dialogue.narration")}
-                  value={dialogueValue(
-                    dialogueRatio.narrationCharacters,
-                    dialogueRatio.narrationPercent
-                  )}
-                />
-                <DialogueRatioRow
-                  series="dialogue"
-                  label={translate("documentMetrics.dialogue.dialogue")}
-                  value={dialogueValue(
-                    dialogueRatio.dialogueCharacters,
-                    dialogueRatio.dialoguePercent
-                  )}
-                />
-              </dl>
-              <p className="documentMetricsNote">
-                {translate("documentMetrics.dialogue.approximate")}
-              </p>
-            </>
-          )}
+          {dialogueRatio === null ? null : (() => {
+            const ariaLabelParts = [
+              `${translate("documentMetrics.dialogue.narration")} ${dialogueRatio.narrationPercent}%`
+            ];
+            for (const pair of dialogueRatio.pairs) {
+              ariaLabelParts.push(
+                `${translate("documentMetrics.dialogue.pairLabel", {
+                  open: pair.open,
+                  close: pair.close
+                })} ${pair.percent}%`
+              );
+            }
+            const ariaLabel = ariaLabelParts.join(" / ");
+
+            return (
+              <>
+                <div className="documentMetricsDialogueHeader">
+                  <div
+                    className="documentMetricsChartSelector"
+                    role="group"
+                    aria-label={translate("documentMetrics.chart.typeSelector")}
+                  >
+                    <button
+                      type="button"
+                      className="documentMetricsChartTypeButton"
+                      data-selected={chartType === "pie" ? "true" : undefined}
+                      aria-pressed={chartType === "pie"}
+                      title={translate("documentMetrics.chart.pieChart")}
+                      aria-label={translate("documentMetrics.chart.pieChart")}
+                      onClick={() => handleSelectChartType("pie")}
+                    >
+                      <span
+                        className="documentMetricsChartTypeIcon"
+                        aria-hidden="true"
+                        dangerouslySetInnerHTML={{ __html: pieChartIcon }}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      className="documentMetricsChartTypeButton"
+                      data-selected={chartType === "bar" ? "true" : undefined}
+                      aria-pressed={chartType === "bar"}
+                      title={translate("documentMetrics.chart.barChart")}
+                      aria-label={translate("documentMetrics.chart.barChart")}
+                      onClick={() => handleSelectChartType("bar")}
+                    >
+                      <span
+                        className="documentMetricsChartTypeIcon"
+                        aria-hidden="true"
+                        dangerouslySetInnerHTML={{ __html: barChartIcon }}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {chartType === "pie" ? (
+                  <div className="documentMetricsDialoguePieWrap">
+                    <DocumentDialogueRatioPieChart
+                      narrationPercent={dialogueRatio.narrationPercent}
+                      narrationCharacters={dialogueRatio.narrationCharacters}
+                      totalCharacters={dialogueRatio.totalCharacters}
+                      pairs={dialogueRatio.pairs}
+                      ariaLabel={ariaLabel}
+                      animationKey={animationGeneration}
+                    />
+                  </div>
+                ) : (
+                  <DocumentDialogueRatioBarChart
+                    narrationCharacters={dialogueRatio.narrationCharacters}
+                    narrationLabel={translate("documentMetrics.dialogue.narration")}
+                    pairs={dialogueRatio.pairs.map((pair) => ({
+                      ...pair,
+                      label: translate("documentMetrics.dialogue.pairLabel", {
+                        open: pair.open,
+                        close: pair.close
+                      })
+                    }))}
+                    ariaLabel={ariaLabel}
+                    animationKey={animationGeneration}
+                  />
+                )}
+                <dl className="documentMetricsMetricList">
+                  <DialogueRatioRow
+                    series="narration"
+                    label={translate("documentMetrics.dialogue.narration")}
+                    value={dialogueValue(
+                      dialogueRatio.narrationCharacters,
+                      dialogueRatio.narrationPercent
+                    )}
+                  />
+                  {dialogueRatio.pairs.map((pair) => (
+                    <DialogueRatioRow
+                      key={pair.pairIndex}
+                      series="dialogue"
+                      label={translate("documentMetrics.dialogue.pairLabel", {
+                        open: pair.open,
+                        close: pair.close
+                      })}
+                      value={dialogueValue(pair.characters, pair.percent)}
+                      color={pair.color}
+                    />
+                  ))}
+                </dl>
+                <p className="documentMetricsNote">
+                  {translate("documentMetrics.dialogue.approximate")}
+                </p>
+              </>
+            );
+          })()}
         </CollapsibleSidebarSection>
 
         <CollapsibleSidebarSection

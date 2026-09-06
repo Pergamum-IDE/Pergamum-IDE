@@ -8,8 +8,13 @@ import {
   defaultPreviewRenderer,
   isPreviewRendererId,
   resolveEffectiveSettings,
-  type ApplicationSettings
+  type ApplicationSettings,
+  type ProjectSettings
 } from "../../src/shared/settings";
+import {
+  areDialogueDelimiterPairsEqual,
+  type DocumentMapDialogueDelimiterPair
+} from "../../src/shared/documentMapSettings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
 describe("existing implementation alignment: preview.renderer (#150)", () => {
@@ -667,6 +672,284 @@ describe("editor.fontFamily resolution precedence (#396 Slice 3)", () => {
 
     const afterCompleteRemoval = resolveEffectiveSettings(appSettings, undefined);
     expect(afterCompleteRemoval.editor.fontFamily).toBe("Application Font");
+  });
+});
+
+describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () => {
+  it("resolves falsy Project overrides correctly: Application=true / Project=false and Application=non-empty / Project=''", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        paragraphIndent: {
+          excludeLeadingCharacters: "「『（【"
+        },
+        characterCount: {
+          exclude: {
+            whitespace: true,
+            lineBreaks: true,
+            headings: true,
+            markdownSyntax: true,
+            markdownComments: true
+          }
+        }
+      }
+    };
+
+    const projectSettings: ProjectSettings = {
+      editor: {
+        paragraphIndent: {
+          excludeLeadingCharacters: ""
+        },
+        characterCount: {
+          exclude: {
+            whitespace: false,
+            lineBreaks: false,
+            headings: false,
+            markdownSyntax: false,
+            markdownComments: false
+          }
+        }
+      }
+    };
+
+    const effective = resolveEffectiveSettings(appSettings, projectSettings);
+
+    // Falsy overrides must not fall back to Application Settings!
+    expect(effective.editor.paragraphIndent.excludeLeadingCharacters).toBe("");
+    expect(effective.editor.characterCount.exclude.whitespace).toBe(false);
+    expect(effective.editor.characterCount.exclude.lineBreaks).toBe(false);
+    expect(effective.editor.characterCount.exclude.headings).toBe(false);
+    expect(effective.editor.characterCount.exclude.markdownSyntax).toBe(false);
+    expect(effective.editor.characterCount.exclude.markdownComments).toBe(false);
+  });
+
+  it("resolves Project > Application > Default precedence for all new Slice 7 settings", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        paragraphIndent: { excludeLeadingCharacters: " " },
+        characterCount: {
+          exclude: {
+            whitespace: false,
+            lineBreaks: false,
+            headings: false,
+            markdownSyntax: false,
+            markdownComments: false
+          }
+        },
+        lineEnding: {
+          ...defaultApplicationSettings.editor.lineEnding,
+          expected: "lf"
+        }
+      },
+      files: {
+        newFile: {
+          lineEnding: "lf",
+          encoding: "utf8"
+        }
+      }
+    };
+
+    // When Project has overrides
+    const projectWithOverrides: ProjectSettings = {
+      editor: {
+        paragraphIndent: { excludeLeadingCharacters: "　" },
+        characterCount: {
+          exclude: {
+            whitespace: true,
+            lineBreaks: true,
+            headings: true,
+            markdownSyntax: true,
+            markdownComments: true
+          }
+        },
+        lineEnding: { expected: "crlf" }
+      },
+      files: {
+        newFile: {
+          lineEnding: "crlf"
+        }
+      }
+    };
+
+    const effectiveWithProj = resolveEffectiveSettings(
+      appSettings,
+      projectWithOverrides
+    );
+    expect(effectiveWithProj.editor.paragraphIndent.excludeLeadingCharacters).toBe("　");
+    expect(effectiveWithProj.editor.characterCount.exclude.whitespace).toBe(true);
+    expect(effectiveWithProj.editor.characterCount.exclude.lineBreaks).toBe(true);
+    expect(effectiveWithProj.editor.characterCount.exclude.headings).toBe(true);
+    expect(effectiveWithProj.editor.characterCount.exclude.markdownSyntax).toBe(true);
+    expect(effectiveWithProj.editor.characterCount.exclude.markdownComments).toBe(true);
+    expect(effectiveWithProj.editor.lineEnding.expected).toBe("crlf");
+    expect(effectiveWithProj.files.newFile.lineEnding).toBe("crlf");
+
+    // When Project overrides are removed (undefined), falls back to Application Settings
+    const effectiveWithoutProj = resolveEffectiveSettings(appSettings, undefined);
+    expect(
+      effectiveWithoutProj.editor.paragraphIndent.excludeLeadingCharacters
+    ).toBe(" ");
+    expect(effectiveWithoutProj.editor.characterCount.exclude.whitespace).toBe(
+      false
+    );
+    expect(effectiveWithoutProj.editor.characterCount.exclude.lineBreaks).toBe(
+      false
+    );
+    expect(effectiveWithoutProj.editor.characterCount.exclude.headings).toBe(
+      false
+    );
+    expect(
+      effectiveWithoutProj.editor.characterCount.exclude.markdownSyntax
+    ).toBe(false);
+    expect(
+      effectiveWithoutProj.editor.characterCount.exclude.markdownComments
+    ).toBe(false);
+    expect(effectiveWithoutProj.editor.lineEnding.expected).toBe("lf");
+    expect(effectiveWithoutProj.files.newFile.lineEnding).toBe("lf");
+  });
+});
+
+describe("areDialogueDelimiterPairsEqual (#396 Slice 7 Addendum)", () => {
+  it("treats both undefined as equal, and undefined vs defined as not equal", () => {
+    expect(areDialogueDelimiterPairsEqual(undefined, undefined)).toBe(true);
+    expect(
+      areDialogueDelimiterPairsEqual(undefined, [
+        { open: "「", close: "」", color: "#e06c75" }
+      ])
+    ).toBe(false);
+    expect(
+      areDialogueDelimiterPairsEqual(
+        [{ open: "「", close: "」", color: "#e06c75" }],
+        undefined
+      )
+    ).toBe(false);
+  });
+
+  it("checks array length and element ordering strictly", () => {
+    const pairA: DocumentMapDialogueDelimiterPair = {
+      open: "「",
+      close: "」",
+      color: "#e06c75"
+    };
+    const pairB: DocumentMapDialogueDelimiterPair = {
+      open: "『",
+      close: "』",
+      color: "#98c379"
+    };
+
+    expect(areDialogueDelimiterPairsEqual([pairA], [pairA, pairB])).toBe(false);
+    // Order matters:
+    expect(areDialogueDelimiterPairsEqual([pairA, pairB], [pairB, pairA])).toBe(
+      false
+    );
+    // Same elements in same order:
+    expect(
+      areDialogueDelimiterPairsEqual(
+        [pairA, pairB],
+        [
+          { open: "「", close: "」", color: "#e06c75" },
+          { open: "『", close: "』", color: "#98c379" }
+        ]
+      )
+    ).toBe(true);
+  });
+
+  it("does not trim open/close delimiters (preserves exact characters)", () => {
+    expect(
+      areDialogueDelimiterPairsEqual(
+        [{ open: "「", close: "」", color: "#e06c75" }],
+        [{ open: "「 ", close: "」", color: "#e06c75" }]
+      )
+    ).toBe(false);
+  });
+
+  it("normalizes hex color case and short hex formats", () => {
+    expect(
+      areDialogueDelimiterPairsEqual(
+        [{ open: "「", close: "」", color: "#FFFFFF" }],
+        [{ open: "「", close: "」", color: "#ffffff" }]
+      )
+    ).toBe(true);
+    expect(
+      areDialogueDelimiterPairsEqual(
+        [{ open: "「", close: "」", color: "#FFF" }],
+        [{ open: "「", close: "」", color: "#ffffff" }]
+      )
+    ).toBe(true);
+  });
+});
+
+describe("documentMap.dialogueDelimiterPairs override resolution (#396 Slice 7 Addendum)", () => {
+  it("resolves Project whole-array override over Application Settings without element merging", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      documentMap: {
+        ...defaultApplicationSettings.documentMap,
+        narrationColor: "#111111",
+        dialogueDelimiterPairs: [
+          { open: "「", close: "」", color: "#e06c75" },
+          { open: "『", close: "』", color: "#98c379" }
+        ]
+      }
+    };
+
+    const projectSettings: ProjectSettings = {
+      documentMap: {
+        dialogueDelimiterPairs: [
+          { open: "“", close: "”", color: "#61afef" }
+        ]
+      }
+    };
+
+    const effective = resolveEffectiveSettings(appSettings, projectSettings);
+
+    // Completely replaced by Project array; not merged with Application pairs:
+    expect(effective.documentMap.dialogueDelimiterPairs).toEqual([
+      { open: "“", close: "”", color: "#61afef" }
+    ]);
+    // Other 4 documentMap settings remain from Application Settings:
+    expect(effective.documentMap.narrationColor).toBe("#111111");
+  });
+
+  it("resolves empty array [] as a valid Project override without falling back to Application Settings", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      documentMap: {
+        ...defaultApplicationSettings.documentMap,
+        dialogueDelimiterPairs: [
+          { open: "「", close: "」", color: "#e06c75" }
+        ]
+      }
+    };
+
+    const projectSettings: ProjectSettings = {
+      documentMap: {
+        dialogueDelimiterPairs: []
+      }
+    };
+
+    const effective = resolveEffectiveSettings(appSettings, projectSettings);
+    expect(effective.documentMap.dialogueDelimiterPairs).toEqual([]);
+  });
+
+  it("falls back to Application Settings when Project override is undefined", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      documentMap: {
+        ...defaultApplicationSettings.documentMap,
+        dialogueDelimiterPairs: [
+          { open: "「", close: "」", color: "#e06c75" }
+        ]
+      }
+    };
+
+    const effective = resolveEffectiveSettings(appSettings, undefined);
+    expect(effective.documentMap.dialogueDelimiterPairs).toEqual([
+      { open: "「", close: "」", color: "#e06c75" }
+    ]);
   });
 });
 

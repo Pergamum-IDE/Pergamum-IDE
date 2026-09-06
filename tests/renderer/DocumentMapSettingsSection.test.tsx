@@ -83,11 +83,12 @@ describe("DocumentMapSettingsSection (#375)", () => {
     expect(container.textContent).toContain(
       "settings.documentMap.glossaryFallbackColor.label"
     );
-    // narration + fallback + one dialogue pair → 3 colour text + 3 colour pickers.
+    // narration + fallback → 2 colour text + 2 colour pickers.
+    // (Dialogue pairs colour is managed in the edit dialog)
     expect(
       container.querySelectorAll(".documentMapSettingsColorText")
-    ).toHaveLength(3);
-    expect(container.querySelectorAll('input[type="color"]')).toHaveLength(3);
+    ).toHaveLength(2);
+    expect(container.querySelectorAll('input[type="color"]')).toHaveLength(2);
   });
 
   it("renders the viewport-lens opacity control at the TOP, with a range + text input showing 0.28", () => {
@@ -165,9 +166,27 @@ describe("DocumentMapSettingsSection (#375)", () => {
   it("adds a dialogue pair at the end", () => {
     const { onChangeSettings } = render();
     act(() => q<HTMLButtonElement>(".documentMapSettingsAddPair").click());
+    const inputs = container.querySelectorAll<HTMLInputElement>(
+      ".dialogueDelimiterPairDialogInput"
+    );
+    expect(inputs).toHaveLength(2);
+    setInput(inputs[0], "（");
+    setInput(inputs[1], "）");
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          ".dialogueDelimiterPairDialog .appDialogButton-confirm"
+        )
+        ?.click();
+    });
     expect(lastDocumentMap(onChangeSettings).dialogueDelimiterPairs).toHaveLength(
       2
     );
+    expect(lastDocumentMap(onChangeSettings).dialogueDelimiterPairs[1]).toEqual({
+      open: "（",
+      close: "）",
+      color: "#909090"
+    });
     // Re-render with the saved settings and confirm the new row appears.
     render({
       settings: {
@@ -327,20 +346,35 @@ describe("DocumentMapSettingsSection (#375)", () => {
 
   it("edits a pair's open / close / colour", () => {
     const { onChangeSettings } = render();
-    const row = q(".documentMapSettingsDialoguePairRow");
-    const [openInput, closeInput] = Array.from(
-      row.querySelectorAll<HTMLInputElement>(
-        ".documentMapSettingsDialogueDelimiter input"
-      )
+    act(() => {
+      q<HTMLButtonElement>(".documentMapSettingsDialoguePairEdit").click();
+    });
+    const inputs = container.querySelectorAll<HTMLInputElement>(
+      ".dialogueDelimiterPairDialogInput"
     );
-    setInput(openInput, "<");
+    expect(inputs).toHaveLength(2);
+    setInput(inputs[0], "<");
+    setInput(inputs[1], ">");
+    const colorInput = container.querySelector<HTMLInputElement>(
+      ".dialogueDelimiterPairDialogColorText"
+    );
+    if (colorInput) {
+      setInput(colorInput, "#ff0000");
+    }
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          ".dialogueDelimiterPairDialog .appDialogButton-confirm"
+        )
+        ?.click();
+    });
     expect(
-      lastDocumentMap(onChangeSettings).dialogueDelimiterPairs[0].open
-    ).toBe("<");
-    setInput(closeInput, ">");
-    expect(
-      lastDocumentMap(onChangeSettings).dialogueDelimiterPairs[0].close
-    ).toBe(">");
+      lastDocumentMap(onChangeSettings).dialogueDelimiterPairs[0]
+    ).toEqual({
+      open: "<",
+      close: ">",
+      color: "#ff0000"
+    });
   });
 });
 

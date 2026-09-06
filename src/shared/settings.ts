@@ -1,5 +1,6 @@
 import {
   defaultDocumentMapSettings,
+  type DocumentMapDialogueDelimiterPair,
   type DocumentMapSettings
 } from "./documentMapSettings";
 import type { Language } from "./i18n";
@@ -232,13 +233,50 @@ export interface ProjectPreviewSettings {
   renderer?: PreviewRendererId;
 }
 
+export interface ProjectEditorParagraphIndentSettings {
+  excludeLeadingCharacters?: ParagraphIndentExcludeLeadingCharacters;
+}
+
+export interface ProjectEditorCharacterCountExcludeSettings {
+  whitespace?: boolean;
+  lineBreaks?: boolean;
+  headings?: boolean;
+  markdownSyntax?: boolean;
+  markdownComments?: boolean;
+}
+
+export interface ProjectEditorCharacterCountSettings {
+  exclude?: ProjectEditorCharacterCountExcludeSettings;
+}
+
+export interface ProjectEditorLineEndingSettings {
+  expected?: ExpectedLineEnding;
+}
+
 export interface ProjectEditorSettings {
   fontFamily?: string;
+  paragraphIndent?: ProjectEditorParagraphIndentSettings;
+  characterCount?: ProjectEditorCharacterCountSettings;
+  lineEnding?: ProjectEditorLineEndingSettings;
+}
+
+export interface ProjectFilesNewFileSettings {
+  lineEnding?: NewFileLineEnding;
+}
+
+export interface ProjectFilesSettings {
+  newFile?: ProjectFilesNewFileSettings;
+}
+
+export interface ProjectDocumentMapSettings {
+  dialogueDelimiterPairs?: readonly DocumentMapDialogueDelimiterPair[];
 }
 
 export interface ProjectSettings {
   editor?: ProjectEditorSettings;
   preview?: ProjectPreviewSettings;
+  files?: ProjectFilesSettings;
+  documentMap?: ProjectDocumentMapSettings;
 }
 
 export interface EffectivePreviewSettings {
@@ -681,25 +719,66 @@ export function resolveEffectiveSettings(
         projectSettings?.editor?.fontFamily ??
         applicationSettings.editor.fontFamily ??
         builtInDefaultSettings.editor.fontFamily,
-      // applicationOnly (#252), like files.newFile.lineEnding: always a
-      // concrete value already (resolved through the catalog at
-      // settings.json read time), so no fallback needed here.
-      lineEnding: applicationSettings.editor.lineEnding,
+      lineEnding: {
+        expected:
+          projectSettings?.editor?.lineEnding?.expected ??
+          applicationSettings.editor.lineEnding.expected ??
+          builtInDefaultSettings.editor.lineEnding.expected,
+        markerGlyph: applicationSettings.editor.lineEnding.markerGlyph
+      },
       whitespace: applicationSettings.editor.whitespace,
-      paragraphIndent: applicationSettings.editor.paragraphIndent,
-      characterCount: applicationSettings.editor.characterCount,
+      paragraphIndent: {
+        excludeLeadingCharacters:
+          projectSettings?.editor?.paragraphIndent?.excludeLeadingCharacters ??
+          applicationSettings.editor.paragraphIndent.excludeLeadingCharacters ??
+          builtInDefaultSettings.editor.paragraphIndent.excludeLeadingCharacters
+      },
+      characterCount: {
+        exclude: {
+          whitespace:
+            projectSettings?.editor?.characterCount?.exclude?.whitespace ??
+            applicationSettings.editor.characterCount.exclude.whitespace ??
+            builtInDefaultSettings.editor.characterCount.exclude.whitespace,
+          lineBreaks:
+            projectSettings?.editor?.characterCount?.exclude?.lineBreaks ??
+            applicationSettings.editor.characterCount.exclude.lineBreaks ??
+            builtInDefaultSettings.editor.characterCount.exclude.lineBreaks,
+          headings:
+            projectSettings?.editor?.characterCount?.exclude?.headings ??
+            applicationSettings.editor.characterCount.exclude.headings ??
+            builtInDefaultSettings.editor.characterCount.exclude.headings,
+          markdownSyntax:
+            projectSettings?.editor?.characterCount?.exclude?.markdownSyntax ??
+            applicationSettings.editor.characterCount.exclude.markdownSyntax ??
+            builtInDefaultSettings.editor.characterCount.exclude.markdownSyntax,
+          markdownComments:
+            projectSettings?.editor?.characterCount?.exclude?.markdownComments ??
+            applicationSettings.editor.characterCount.exclude.markdownComments ??
+            builtInDefaultSettings.editor.characterCount.exclude.markdownComments
+        }
+      },
       // #394 Step 1: applicationOnly, always concrete already — same
       // fallback-free pass-through as lineEnding/whitespace above.
       undoHistoryMinDepth: applicationSettings.editor.undoHistoryMinDepth
     },
     files: {
       newFile: {
-        lineEnding: applicationSettings.files.newFile.lineEnding,
+        lineEnding:
+          projectSettings?.files?.newFile?.lineEnding ??
+          applicationSettings.files.newFile.lineEnding ??
+          builtInDefaultSettings.files.newFile.lineEnding,
         encoding: applicationSettings.files.newFile.encoding
       }
     },
-    // #375: applicationOnly, no project override — passes straight through
-    // (already concrete, resolved at settings.json read time).
-    documentMap: applicationSettings.documentMap
+    // #375 / #396: dialogueDelimiterPairs supports whole-array Project override
+    // (no element-level merge; Project array > Application array > default).
+    // The other 4 documentMap settings remain applicationOnly.
+    documentMap: {
+      ...applicationSettings.documentMap,
+      dialogueDelimiterPairs:
+        projectSettings?.documentMap?.dialogueDelimiterPairs !== undefined
+          ? [...projectSettings.documentMap.dialogueDelimiterPairs]
+          : applicationSettings.documentMap.dialogueDelimiterPairs
+    }
   };
 }

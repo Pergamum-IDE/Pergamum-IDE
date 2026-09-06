@@ -85,7 +85,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           entry.defaultValue
         );
 
-        expect(result).toEqual({ ok: true });
+        expect(result.ok).toBe(true);
       }
     });
 
@@ -1012,13 +1012,22 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("editor.fontFamily").scope).toBe(
         "applicationWithProjectOverride"
       );
+      expect(
+        getCatalogEntry("editor.paragraphIndent.excludeLeadingCharacters").scope
+      ).toBe("applicationWithProjectOverride");
+      expect(getCatalogEntry("editor.lineEnding.expected").scope).toBe(
+        "applicationWithProjectOverride"
+      );
       expect(getCatalogEntry("files.newFile.lineEnding").scope).toBe(
-        "applicationOnly"
+        "applicationWithProjectOverride"
       );
       expect(getCatalogEntry("files.newFile.encoding").scope).toBe(
         "applicationOnly"
       );
       expect(getCatalogEntry("preview.renderer").scope).toBe(
+        "applicationWithProjectOverride"
+      );
+      expect(getCatalogEntry("documentMap.dialogueDelimiterPairs").scope).toBe(
         "applicationWithProjectOverride"
       );
       expect(getCatalogEntry("workbench.language").scope).toBe(
@@ -1049,14 +1058,20 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderTab",
-        "editor.whitespace.renderOtherUnicodeSpace",
+        "editor.whitespace.renderOtherUnicodeSpace"
+      ] as const) {
+        expect(getCatalogEntry(key).scope).toBe("applicationOnly");
+      }
+      for (const key of [
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments"
       ] as const) {
-        expect(getCatalogEntry(key).scope).toBe("applicationOnly");
+        expect(getCatalogEntry(key).scope).toBe(
+          "applicationWithProjectOverride"
+        );
       }
     });
 
@@ -1070,7 +1085,7 @@ describe("Settings Catalog Foundation (#150)", () => {
 
     it("gets scope from catalog metadata, not from a key-prefix heuristic (applicationOnly keys under different areas)", () => {
       expect(getCatalogEntry("workbench.fontFamily").scope).toBe(
-        getCatalogEntry("files.newFile.lineEnding").scope
+        getCatalogEntry("files.newFile.encoding").scope
       );
       expect(getCatalogEntry("notification.output.enabled").scope).toBe(
         getCatalogEntry("workbench.fontFamily").scope
@@ -1152,6 +1167,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "commandPalette.footerDetail.enable",
           "commandPalette.footerDetail.marquee.delay",
           "commandPalette.footerDetail.marquee.speed",
+          "documentMap.dialogueDelimiterPairs",
           "editor.characterCount.exclude.headings",
           "editor.characterCount.exclude.lineBreaks",
           "editor.characterCount.exclude.markdownComments",
@@ -1216,14 +1232,14 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("editor.paragraphIndent.excludeLeadingCharacters is an applicationOnly free-form string with an empty default", () => {
+    it("editor.paragraphIndent.excludeLeadingCharacters is an applicationWithProjectOverride free-form string with an empty default", () => {
       const entry = getCatalogEntry(
         "editor.paragraphIndent.excludeLeadingCharacters"
       );
 
       expect(entry).toMatchObject({
         type: "string",
-        scope: "applicationOnly",
+        scope: "applicationWithProjectOverride",
         defaultValue: "",
         allowedCharacters: "none",
         allowEmptyString: true
@@ -1665,25 +1681,34 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
 
       for (const applicationSettingsOnlyKey of [
-        "editor.paragraphIndent.excludeLeadingCharacters",
-        "files.newFile.lineEnding",
         "files.newFile.encoding",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
         "workbench.sound.keypress.enabled",
         "workbench.statusBar.characterCount.visible",
-        "editor.characterCount.exclude.whitespace",
-        "editor.characterCount.exclude.lineBreaks",
-        "editor.characterCount.exclude.headings",
-        "editor.characterCount.exclude.markdownSyntax",
-        "editor.characterCount.exclude.markdownComments",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderTab",
         "editor.whitespace.renderOtherUnicodeSpace"
       ]) {
         expect(projectConfigStoreSource).not.toContain(applicationSettingsOnlyKey);
+      }
+
+      for (const overrideKey of [
+        "editor.fontFamily",
+        "preview.renderer",
+        "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.characterCount.exclude.whitespace",
+        "editor.characterCount.exclude.lineBreaks",
+        "editor.characterCount.exclude.headings",
+        "editor.characterCount.exclude.markdownSyntax",
+        "editor.characterCount.exclude.markdownComments",
+        "editor.lineEnding.expected",
+        "files.newFile.lineEnding",
+        "documentMap.dialogueDelimiterPairs"
+      ]) {
+        expect(projectConfigStoreSource).toContain(overrideKey);
       }
     });
 
@@ -1697,6 +1722,62 @@ describe("Settings Catalog Foundation (#150)", () => {
 
         expect(source).not.toContain("resolvePrimarySettingKey");
       }
+    });
+    it("validates and normalizes documentMap.dialogueDelimiterPairs with canonical lowercase #rrggbb hex", () => {
+      const result = validateCatalogValue(
+        "documentMap.dialogueDelimiterPairs",
+        [
+          { open: "「", close: "」", color: "#FFF" },
+          { open: "『", close: "』", color: "#ABCDEF" }
+        ]
+      );
+      expect(result).toEqual({
+        ok: true,
+        value: [
+          { open: "「", close: "」", color: "#ffffff" },
+          { open: "『", close: "』", color: "#abcdef" }
+        ]
+      });
+    });
+
+    it("preserves untrimmed whitespace in delimiters for documentMap.dialogueDelimiterPairs", () => {
+      const result = validateCatalogValue(
+        "documentMap.dialogueDelimiterPairs",
+        [{ open: " 「 ", close: " 」 ", color: "#61afef" }]
+      );
+      expect(result).toEqual({
+        ok: true,
+        value: [{ open: " 「 ", close: " 」 ", color: "#61afef" }]
+      });
+    });
+
+    it("validates empty array for documentMap.dialogueDelimiterPairs", () => {
+      const result = validateCatalogValue(
+        "documentMap.dialogueDelimiterPairs",
+        []
+      );
+      expect(result).toEqual({
+        ok: true,
+        value: []
+      });
+    });
+
+    it("rejects invalid values for documentMap.dialogueDelimiterPairs", () => {
+      expect(
+        validateCatalogValue("documentMap.dialogueDelimiterPairs", "not an array")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+
+      expect(
+        validateCatalogValue("documentMap.dialogueDelimiterPairs", [
+          { open: "", close: "」", color: "#61afef" }
+        ])
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+
+      expect(
+        validateCatalogValue("documentMap.dialogueDelimiterPairs", [
+          { open: "「", close: "」", color: "invalid-color" }
+        ])
+      ).toEqual({ ok: false, failure: "typeMismatch" });
     });
   });
 });

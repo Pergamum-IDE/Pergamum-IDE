@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type {
   GlossaryAtom,
@@ -11,6 +12,10 @@ import {
   collectDocumentMetricsGlossaryCounts,
   collectDocumentMetricsTagCounts
 } from "../../src/renderer/documentMetricsAnalysis";
+import {
+  collectDocumentMapDialogueRanges,
+  documentMapWinningDialogueRangeAtOffset
+} from "../../src/renderer/glossaryDocumentMap";
 
 let seq = 0;
 
@@ -188,12 +193,22 @@ describe("collectDocumentMetricsTagCounts (#360 Phase 2)", () => {
 });
 
 describe("analyzeDocumentMetricsDialogueRatio (#360 Phase 2)", () => {
-  it("returns an all-zero split for empty text", () => {
+  it("returns an all-zero split for empty text with configured pairs", () => {
     expect(analyzeDocumentMetricsDialogueRatio("", defaultPairs)).toEqual({
       narrationCharacters: 0,
-      dialogueCharacters: 0,
+      pairs: [
+        {
+          pairIndex: 0,
+          open: "「",
+          close: "」",
+          color: "#909090",
+          characters: 0,
+          percent: 0
+        }
+      ],
       totalCharacters: 0,
       narrationPercent: 0,
+      dialogueCharacters: 0,
       dialoguePercent: 0
     });
   });
@@ -205,6 +220,16 @@ describe("analyzeDocumentMetricsDialogueRatio (#360 Phase 2)", () => {
     expect(result.narrationCharacters).toBe(1);
     expect(result.totalCharacters).toBe(4);
     expect(result.dialoguePercent + result.narrationPercent).toBe(100);
+    expect(result.pairs).toEqual([
+      {
+        pairIndex: 0,
+        open: "「",
+        close: "」",
+        color: "#909090",
+        characters: 3,
+        percent: 75
+      }
+    ]);
   });
 
   it("keeps total = narration + dialogue and percents summing to 100", () => {
@@ -225,12 +250,13 @@ describe("analyzeDocumentMetricsDialogueRatio (#360 Phase 2)", () => {
     expect(result.narrationCharacters).toBe(3);
     expect(result.dialogueCharacters).toBe(8);
     expect(result.totalCharacters).toBe(11);
+    expect(result.pairs[0].characters).toBe(8);
   });
 
-  it("handles multiple delimiter pairs without double-counting overlaps", () => {
+  it("handles multiple delimiter pairs and attributes counts per pair", () => {
     const pairs: DocumentMapDialogueDelimiterPair[] = [
-      { open: "「", close: "」", color: "#909090" },
-      { open: "『", close: "』", color: "#707070" }
+      { open: "「", close: "」", color: "#61afef" },
+      { open: "『", close: "』", color: "#c678dd" }
     ];
     const text = "地『二重』の文「会話」おわり";
     const result = analyzeDocumentMetricsDialogueRatio(text, pairs);
@@ -238,14 +264,69 @@ describe("analyzeDocumentMetricsDialogueRatio (#360 Phase 2)", () => {
       result.totalCharacters
     );
     expect(result.totalCharacters).toBe([...text].length);
-    // 『二重』 = 4, 「会話」 = 4.
-    expect(result.dialogueCharacters).toBe(8);
+    // 『二重』 = 4 (pairIndex 1), 「会話」 = 4 (pairIndex 0).
+    expect(result.pairs[0]).toEqual({
+      pairIndex: 0,
+      open: "「",
+      close: "」",
+      color: "#61afef",
+      characters: 4,
+      percent: Math.round((4 / text.length) * 100)
+    });
+    expect(result.pairs[1]).toEqual({
+      pairIndex: 1,
+      open: "『",
+      close: "』",
+      color: "#c678dd",
+      characters: 4,
+      percent: Math.round((4 / text.length) * 100)
+    });
+    expect(result.narrationCharacters + result.pairs[0].characters + result.pairs[1].characters).toBe(
+      result.totalCharacters
+    );
   });
 
-  it("does not throw when there are no delimiter pairs configured", () => {
+  it("retains zero-count pairs in breakdown when configured but unused in text", () => {
+    const pairs: DocumentMapDialogueDelimiterPair[] = [
+      { open: "「", close: "」", color: "#61afef" },
+      { open: "『", close: "』", color: "#c678dd" }
+    ];
+    const text = "「使用された会話」のみ。";
+    const result = analyzeDocumentMetricsDialogueRatio(text, pairs);
+    expect(result.pairs[0].characters).toBe(9);
+    expect(result.pairs[1].characters).toBe(0);
+    expect(result.pairs[1].percent).toBe(0);
+    expect(result.pairs[1].color).toBe("#c678dd");
+  });
+
+  it("resolves overlapping dialogue pairs with later pairIndex winning without double-counting", () => {
+    // Overlap: pair 0 is 「...」, pair 1 is 『...』.
+    // If text has 「外『中」後』
+    // Range 0: 0..4 (「外『中」)
+    // Range 1: 2..7 (『中」後』)
+    // At offsets 0..1: pair 0 (「外)
+    // At offsets 2..3: overlap! pair 1 has higher pairIndex (1 >= 0), so pair 1 wins ('『中')
+    // At offsets 4..6: pair 1 ('」後』')
+    const pairs: DocumentMapDialogueDelimiterPair[] = [
+      { open: "「", close: "」", color: "#61afef" },
+      { open: "『", close: "』", color: "#c678dd" }
+    ];
+    const text = "「外『中」後』";
+    const result = analyzeDocumentMetricsDialogueRatio(text, pairs);
+    expect(result.narrationCharacters).toBe(0);
+    expect(result.pairs[0].characters).toBe(2); // "「外"
+    expect(result.pairs[1].characters).toBe(5); // "『中」後』"
+    expect(result.pairs[0].characters + result.pairs[1].characters).toBe(result.totalCharacters);
+    expect(result.totalCharacters).toBe(7);
+  });
+
+  it("returns narration 100% and empty pairs when dialogueDelimiterPairs is []", () => {
     const result = analyzeDocumentMetricsDialogueRatio("「あ」。", []);
     expect(result.dialogueCharacters).toBe(0);
     expect(result.narrationCharacters).toBe(result.totalCharacters);
+    expect(result.narrationPercent).toBe(100);
+    expect(result.dialoguePercent).toBe(0);
+    expect(result.pairs).toEqual([]);
   });
 });
 
@@ -277,5 +358,160 @@ describe("analyzeDocumentMetricsDocument (#360 Phase 2)", () => {
     expect(analysis.glossaryCounts).toEqual([]);
     expect(analysis.tagCounts).toEqual([]);
     expect(analysis.dialogueRatio.totalCharacters).toBe(0);
+  });
+});
+
+describe("analyzeDocumentMetricsDialogueRatio sweep correctness vs point-query oracle", () => {
+  const multiPairs: DocumentMapDialogueDelimiterPair[] = [
+    { open: "「", close: "」", color: "#61afef" },
+    { open: "『", close: "』", color: "#c678dd" },
+    { open: "“", close: "”", color: "#98c379" }
+  ];
+
+  function verifySweepMatchesOracle(
+    text: string,
+    pairs: readonly DocumentMapDialogueDelimiterPair[]
+  ): void {
+    const ranges = collectDocumentMapDialogueRanges(text, pairs);
+    const expectedPairCounts = pairs.map(() => 0);
+    let expectedNarration = 0;
+
+    for (let offset = 0; offset < text.length; ) {
+      const codePoint = text.codePointAt(offset) ?? 0;
+      const winner = documentMapWinningDialogueRangeAtOffset(offset, ranges);
+      if (winner === null) {
+        expectedNarration += 1;
+      } else {
+        expectedPairCounts[winner.pairIndex] += 1;
+      }
+      offset += codePoint > 0xffff ? 2 : 1;
+    }
+
+    const result = analyzeDocumentMetricsDialogueRatio(text, pairs);
+    expect(result.narrationCharacters).toBe(expectedNarration);
+    for (let i = 0; i < pairs.length; i++) {
+      expect(result.pairs[i].characters).toBe(expectedPairCounts[i]);
+    }
+    const expectedDialogue = expectedPairCounts.reduce((s, c) => s + c, 0);
+    expect(result.dialogueCharacters).toBe(expectedDialogue);
+    expect(result.totalCharacters).toBe(expectedNarration + expectedDialogue);
+  }
+
+  it("matches point-query oracle for text without dialogue", () => {
+    verifySweepMatchesOracle("これは純粋な地の文です。会話文は一切ありません。", multiPairs);
+  });
+
+  it("matches point-query oracle for simple sequential dialogue spans", () => {
+    verifySweepMatchesOracle(
+      "地の文「一つ目の会話文」地の文『二つ目の会話文』地の文“三つ目の会話文”終わり。",
+      multiPairs
+    );
+  });
+
+  it("matches point-query oracle for nested dialogue spans (higher pairIndex wins)", () => {
+    verifySweepMatchesOracle(
+      "外側「会話の中で『二重カッコ』を使う例」です。",
+      multiPairs
+    );
+  });
+
+  it("matches point-query oracle for reversed nesting (lower pairIndex inside higher)", () => {
+    verifySweepMatchesOracle(
+      "外側『会話の中で「一重カッコ」を使う例』です。",
+      multiPairs
+    );
+  });
+
+  it("matches point-query oracle for overlapping dialogue delimiters", () => {
+    const overlapPairs: DocumentMapDialogueDelimiterPair[] = [
+      { open: "<<", close: ">>", color: "#61afef" },
+      { open: "<|", close: "|>", color: "#c678dd" }
+    ];
+    verifySweepMatchesOracle(
+      "Start << span 1 <| span 2 >> end 1 |> end 2 after",
+      overlapPairs
+    );
+  });
+
+  it("matches point-query oracle for unclosed open delimiter to EOF", () => {
+    verifySweepMatchesOracle("ここは地の文「ここから末尾まで閉じない会話文", multiPairs);
+  });
+
+  it("matches point-query oracle for multiple unclosed open delimiters", () => {
+    verifySweepMatchesOracle(
+      "地の文「未閉じ1『未閉じ2“未閉じ3末尾",
+      multiPairs
+    );
+  });
+
+  it("matches point-query oracle for multi-byte surrogate pair characters", () => {
+    verifySweepMatchesOracle(
+      "「𠮷野家でお昼」を食べて『🍺ビール』を飲む“🎉祝杯”！",
+      multiPairs
+    );
+  });
+
+  it("matches point-query oracle for synthetic stress fixture with many overlapping ranges", () => {
+    // Generate a long text with repeated overlapping and nested ranges
+    const segments: string[] = [];
+    for (let i = 0; i < 200; i++) {
+      segments.push(`地の文${i}番目「会話1-${i}『会話2-${i}」一部重複』“単独3-${i}”`);
+    }
+    const syntheticText = segments.join("\n");
+    verifySweepMatchesOracle(syntheticText, multiPairs);
+  });
+
+  it("preserves counting invariant across all edge cases", () => {
+    const testCases = [
+      "",
+      "   ",
+      "「」",
+      "『』",
+      "「あ」",
+      "「『」』",
+      "地の文のみ",
+      "「会話のみ」",
+      "「未閉じ"
+    ];
+    for (const text of testCases) {
+      const result = analyzeDocumentMetricsDialogueRatio(text, multiPairs);
+      const sumPairChars = result.pairs.reduce((s, p) => s + p.characters, 0);
+      expect(result.narrationCharacters + sumPairChars).toBe(result.totalCharacters);
+      expect(result.dialogueCharacters).toBe(sumPairChars);
+    }
+  });
+});
+
+/**
+ * Architecture guard: Ensures analyzeDocumentMetricsDialogueRatio does not
+ * regress to per-character point queries via documentMapWinningDialogueRangeAtOffset.
+ *
+ * Background:
+ *   During #396 development, an O(N × R) regression was introduced where
+ *   every document character offset was checked against all dialogue ranges
+ *   using the point-query helper. This guard makes such a regression
+ *   immediately visible without relying on wall-clock benchmarks.
+ *
+ * Scope:
+ *   - Checks only the production function body in documentMetricsAnalysis.ts.
+ *   - The oracle (test) usage of documentMapWinningDialogueRangeAtOffset in this
+ *     test file and its presence in glossaryDocumentMap.ts are NOT banned.
+ *   - Only the Metrics hot-loop production path is protected.
+ */
+describe("analyzeDocumentMetricsDialogueRatio O(N×R) regression guard (architecture)", () => {
+  it("does not call documentMapWinningDialogueRangeAtOffset in the production implementation", () => {
+    const source = readFileSync("src/renderer/documentMetricsAnalysis.ts", "utf8");
+
+    // Extract the function body starting from the export function declaration.
+    // We match from the function header to the closing brace of the function body.
+    const fnStart = source.indexOf("export function analyzeDocumentMetricsDialogueRatio(");
+    expect(fnStart).toBeGreaterThan(-1);
+
+    // We consider the entire file from that point onward as the relevant scope.
+    // Since the file has no other exported functions after this one that would
+    // call the point-query, checking the entire tail is sufficient and simpler.
+    const functionTail = source.slice(fnStart);
+
+    expect(functionTail).not.toContain("documentMapWinningDialogueRangeAtOffset");
   });
 });
