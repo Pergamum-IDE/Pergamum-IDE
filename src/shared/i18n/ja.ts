@@ -1023,6 +1023,7 @@ export const jaTranslations = {
   "settings.category.project.label": "プロジェクト",
   "settings.category.commands.label": "コマンドパレット",
   "settings.category.sound.label": "サウンド",
+  "settings.category.all.label": "すべて",
   "settings.category.paneLabel": "設定カテゴリ",
   "settings.search.label": "設定を検索",
   "settings.search.placeholder": "検索語句を入力（例：エディタ、sound）",

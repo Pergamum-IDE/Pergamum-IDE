@@ -1023,6 +1023,7 @@ export const enTranslations = {
   "settings.category.project.label": "Project",
   "settings.category.commands.label": "Command Palette",
   "settings.category.sound.label": "Sound",
+  "settings.category.all.label": "All",
   "settings.category.paneLabel": "Settings categories",
   "settings.search.label": "Search settings",
   "settings.search.placeholder": "Enter search terms (e.g. editor, sound)",

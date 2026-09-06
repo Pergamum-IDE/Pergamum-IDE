@@ -22,7 +22,14 @@ import {
   ProjectSettingOverrideField,
   ProjectSettingsPanel,
   ProjectSettingsPanelView,
-  type ProjectSettingsPanelViewProps
+  type ProjectSettingsPanelViewProps,
+  normalizeProjectSettingsSearchQuery,
+  matchesProjectSettingSearch,
+  matchesProjectSettingCategory,
+  filterProjectSettingItems,
+  getEligibleProjectSettingCategories,
+  type ProjectSettingCategoryFilter,
+  type ProjectSettingCategoryItem
 } from "../../src/renderer/ProjectSettingsPanel";
 import type { Translate } from "../../src/shared/i18n";
 import { enTranslations } from "../../src/shared/i18n/en";
@@ -942,5 +949,655 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       { tag: "p", className: "settingsDescription" },
       { tag: "code", className: "settingsItemKey" }
     ]);
+  });
+});
+
+describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  describe("pure helpers", () => {
+    describe("getEligibleProjectSettingCategories", () => {
+      it("returns 'all' first followed by categories of eligible items in catalog sort order", () => {
+        const eligibleItems = getProjectSettingsUiItems();
+        const categories = getEligibleProjectSettingCategories(
+          eligibleItems,
+          translateJa
+        );
+        expect(categories).toEqual([
+          { id: "all", labelKey: "settings.category.all.label" },
+          { id: "editor", labelKey: "settings.category.editor.label" },
+          { id: "preview", labelKey: "settings.category.preview.label" }
+        ]);
+      });
+
+      it("returns only 'all' when eligible items list is empty", () => {
+        const categories = getEligibleProjectSettingCategories([], translateJa);
+        expect(categories).toEqual([
+          { id: "all", labelKey: "settings.category.all.label" }
+        ]);
+      });
+
+      it("preserves stable category order even if input items are reversed", () => {
+        const eligibleItems = [...getProjectSettingsUiItems()].reverse();
+        const categories = getEligibleProjectSettingCategories(
+          eligibleItems,
+          translateJa
+        );
+        expect(categories.map((c) => c.id)).toEqual(["all", "editor", "preview"]);
+      });
+    });
+
+    describe("normalizeProjectSettingsSearchQuery", () => {
+      it("trims whitespace and converts to lower case", () => {
+        expect(normalizeProjectSettingsSearchQuery("   Editor.FontFamily   ")).toBe(
+          "editor.fontfamily"
+        );
+        expect(normalizeProjectSettingsSearchQuery("  フォント  ")).toBe(
+          "フォント"
+        );
+        expect(normalizeProjectSettingsSearchQuery("   ")).toBe("");
+      });
+    });
+
+    describe("matchesProjectSettingSearch", () => {
+      const eligibleItems = getProjectSettingsUiItems();
+      const editorItem = eligibleItems.find((i) => i.key === "editor.fontFamily")!;
+      const previewItem = eligibleItems.find((i) => i.key === "preview.renderer")!;
+
+      it("matches empty query for any item", () => {
+        expect(matchesProjectSettingSearch(editorItem, "", translateJa)).toBe(true);
+        expect(matchesProjectSettingSearch(previewItem, "", translateJa)).toBe(true);
+      });
+
+      it("matches by key substring (case-insensitive)", () => {
+        expect(
+          matchesProjectSettingSearch(editorItem, "fontfamily", translateJa)
+        ).toBe(true);
+        expect(
+          matchesProjectSettingSearch(editorItem, "editor.", translateJa)
+        ).toBe(true);
+        expect(
+          matchesProjectSettingSearch(previewItem, "renderer", translateJa)
+        ).toBe(true);
+        expect(
+          matchesProjectSettingSearch(previewItem, "fontfamily", translateJa)
+        ).toBe(false);
+      });
+
+      it("matches by translated label", () => {
+        expect(
+          matchesProjectSettingSearch(editorItem, "エディタフォント", translateJa)
+        ).toBe(true);
+        expect(
+          matchesProjectSettingSearch(previewItem, "レンダラー", translateJa)
+        ).toBe(true);
+      });
+
+      it("matches by translated description", () => {
+        expect(
+          matchesProjectSettingSearch(editorItem, "フォントファミリー", translateJa)
+        ).toBe(true);
+      });
+
+      it("matches by category name", () => {
+        expect(
+          matchesProjectSettingSearch(editorItem, "エディタ", translateJa)
+        ).toBe(true);
+        expect(
+          matchesProjectSettingSearch(previewItem, "プレビュー", translateJa)
+        ).toBe(true);
+      });
+
+      it("matches by select control option value and label", () => {
+        expect(
+          matchesProjectSettingSearch(previewItem, "markdown", translateJa)
+        ).toBe(true);
+        expect(
+          matchesProjectSettingSearch(editorItem, "レンダラー", translateJa)
+        ).toBe(false);
+      });
+    });
+
+    describe("matchesProjectSettingCategory", () => {
+      const eligibleItems = getProjectSettingsUiItems();
+      const editorItem = eligibleItems.find((i) => i.key === "editor.fontFamily")!;
+      const previewItem = eligibleItems.find((i) => i.key === "preview.renderer")!;
+
+      it("matches 'all' for any item", () => {
+        expect(matchesProjectSettingCategory(editorItem, "all")).toBe(true);
+        expect(matchesProjectSettingCategory(previewItem, "all")).toBe(true);
+      });
+
+      it("matches specific category filter correctly", () => {
+        expect(matchesProjectSettingCategory(editorItem, "editor")).toBe(true);
+        expect(matchesProjectSettingCategory(editorItem, "preview")).toBe(false);
+        expect(matchesProjectSettingCategory(previewItem, "preview")).toBe(true);
+        expect(matchesProjectSettingCategory(previewItem, "editor")).toBe(false);
+      });
+    });
+
+    describe("filterProjectSettingItems", () => {
+      const eligibleItems = getProjectSettingsUiItems();
+
+      it("returns all eligible items when filter is 'all' and query is empty", () => {
+        const result = filterProjectSettingItems(
+          eligibleItems,
+          "all",
+          "",
+          translateJa
+        );
+        expect(result.map((i) => i.key)).toEqual([
+          "editor.fontFamily",
+          "preview.renderer"
+        ]);
+      });
+
+      it("filters by category alone", () => {
+        const editorOnly = filterProjectSettingItems(
+          eligibleItems,
+          "editor",
+          "",
+          translateJa
+        );
+        expect(editorOnly.map((i) => i.key)).toEqual(["editor.fontFamily"]);
+
+        const previewOnly = filterProjectSettingItems(
+          eligibleItems,
+          "preview",
+          "",
+          translateJa
+        );
+        expect(previewOnly.map((i) => i.key)).toEqual(["preview.renderer"]);
+      });
+
+      it("filters by search query alone when category is 'all'", () => {
+        const fontMatches = filterProjectSettingItems(
+          eligibleItems,
+          "all",
+          "font",
+          translateJa
+        );
+        expect(fontMatches.map((i) => i.key)).toEqual(["editor.fontFamily"]);
+      });
+
+      it("combines category and query using AND logic", () => {
+        expect(
+          filterProjectSettingItems(
+            eligibleItems,
+            "editor",
+            "font",
+            translateJa
+          ).map((i) => i.key)
+        ).toEqual(["editor.fontFamily"]);
+
+        expect(
+          filterProjectSettingItems(
+            eligibleItems,
+            "preview",
+            "font",
+            translateJa
+          )
+        ).toEqual([]);
+      });
+    });
+
+    describe("scope boundaries preservation", () => {
+      it("preserves applicationWithProjectOverride and projectOnly in isProjectSettingsScope", () => {
+        expect(isProjectSettingsScope("applicationWithProjectOverride")).toBe(true);
+        expect(isProjectSettingsScope("projectOnly")).toBe(true);
+        expect(isProjectSettingsScope("applicationOnly")).toBe(false);
+      });
+
+      it("limits isProjectOverrideEligibleScope strictly to applicationWithProjectOverride", () => {
+        expect(
+          isProjectOverrideEligibleScope("applicationWithProjectOverride")
+        ).toBe(true);
+        expect(isProjectOverrideEligibleScope("projectOnly")).toBe(false);
+        expect(isProjectOverrideEligibleScope("applicationOnly")).toBe(false);
+      });
+    });
+  });
+
+  function changeInputValue(input: HTMLInputElement, value: string): void {
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    nativeSetter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  describe("UI integration and interactions", () => {
+    it("renders search box and category list in initial state", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={false}
+            onSaveSettings={vi.fn()}
+          />
+        );
+      });
+
+      const searchInput = container.querySelector<HTMLInputElement>(
+        "input.settingsSearchInput"
+      );
+      expect(searchInput).not.toBeNull();
+      expect(searchInput?.placeholder).toBe(
+        translateJa("settings.search.placeholder")
+      );
+      expect(searchInput?.getAttribute("aria-label")).toBe(
+        translateJa("settings.search.label")
+      );
+
+      const searchIconEl = container.querySelector(".settingsSearchIcon");
+      expect(searchIconEl).not.toBeNull();
+
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+      expect(categoryButtons).toHaveLength(3);
+      expect(categoryButtons[0].textContent).toBe("すべて");
+      expect(categoryButtons[1].textContent).toBe("エディタ");
+      expect(categoryButtons[2].textContent).toBe("プレビュー");
+
+      expect(
+        categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(true);
+      expect(categoryButtons[0].getAttribute("aria-current")).toBe("true");
+      expect(
+        categoryButtons[1].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(false);
+
+      const headings = Array.from(
+        container.querySelectorAll(".settingsItemPaneHeading")
+      ).map((h) => h.textContent);
+      expect(headings).toEqual(["エディタ", "プレビュー"]);
+
+      const itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["editor.fontFamily", "preview.renderer"]);
+    });
+
+    it("filters items when clicking a category button", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={false}
+            onSaveSettings={vi.fn()}
+          />
+        );
+      });
+
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+
+      // Click "エディタ"
+      act(() => {
+        categoryButtons[1].click();
+      });
+
+      expect(
+        categoryButtons[1].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(true);
+      expect(
+        categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(false);
+
+      let itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["editor.fontFamily"]);
+
+      // Click "プレビュー"
+      act(() => {
+        categoryButtons[2].click();
+      });
+
+      expect(
+        categoryButtons[2].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(true);
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["preview.renderer"]);
+
+      // Click "すべて"
+      act(() => {
+        categoryButtons[0].click();
+      });
+
+      expect(
+        categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(true);
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["editor.fontFamily", "preview.renderer"]);
+    });
+
+    it("filters items when typing in the search input", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={false}
+            onSaveSettings={vi.fn()}
+          />
+        );
+      });
+
+      const searchInput = container.querySelector<HTMLInputElement>(
+        "input.settingsSearchInput"
+      )!;
+
+      // Type "font"
+      act(() => {
+        changeInputValue(searchInput, "font");
+      });
+
+      let itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["editor.fontFamily"]);
+
+      // Type "renderer"
+      act(() => {
+        changeInputValue(searchInput, "renderer");
+      });
+
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["preview.renderer"]);
+
+      // Type nonexistent query
+      act(() => {
+        changeInputValue(searchInput, "nonexistent_query");
+      });
+
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual([]);
+
+      const emptyNotice = container.querySelector(".settingsSearchEmpty");
+      expect(emptyNotice).not.toBeNull();
+      expect(emptyNotice?.textContent).toBe(
+        translateJa("settings.search.empty")
+      );
+
+      // Clear search input
+      act(() => {
+        changeInputValue(searchInput, "");
+      });
+
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["editor.fontFamily", "preview.renderer"]);
+    });
+
+    it("combines category selection and search query with AND logic", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={false}
+            onSaveSettings={vi.fn()}
+          />
+        );
+      });
+
+      const searchInput = container.querySelector<HTMLInputElement>(
+        "input.settingsSearchInput"
+      )!;
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+
+      // Select "プレビュー" category
+      act(() => {
+        categoryButtons[2].click();
+      });
+
+      // Type "font" into search
+      act(() => {
+        changeInputValue(searchInput, "font");
+      });
+
+      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(0);
+      expect(container.querySelector(".settingsSearchEmpty")?.textContent).toBe(
+        translateJa("settings.search.empty")
+      );
+
+      // Switch to "エディタ" category while search remains "font"
+      act(() => {
+        categoryButtons[1].click();
+      });
+
+      const itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["editor.fontFamily"]);
+      expect(container.querySelector(".settingsSearchEmpty")).toBeNull();
+    });
+
+    it("keeps search input and category buttons enabled in read-only mode", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={true}
+            onSaveSettings={vi.fn()}
+          />
+        );
+      });
+
+      const searchInput = container.querySelector<HTMLInputElement>(
+        "input.settingsSearchInput"
+      )!;
+      expect(searchInput.disabled).toBe(false);
+
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+      categoryButtons.forEach((btn) => {
+        expect(btn.disabled).toBe(false);
+      });
+
+      act(() => {
+        categoryButtons[1].click();
+      });
+      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(1);
+
+      const settingInput = container.querySelector<HTMLInputElement>(
+        "input.settingsTextInput"
+      )!;
+      expect(settingInput.disabled).toBe(true);
+    });
+
+    it("disables search input and category buttons when isSaving is true", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanelView
+            translate={translateJa}
+            items={[]}
+            categories={getEligibleProjectSettingCategories([], translateJa)}
+            selectedCategoryId="all"
+            onSelectCategory={vi.fn()}
+            searchQuery=""
+            onSearchQueryChange={vi.fn()}
+            isReadOnly={false}
+            isSaving={true}
+            error={null}
+            onReset={vi.fn()}
+          />
+        );
+      });
+
+      const searchInput = container.querySelector<HTMLInputElement>(
+        "input.settingsSearchInput"
+      )!;
+      expect(searchInput.disabled).toBe(true);
+
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+      categoryButtons.forEach((btn) => {
+        expect(btn.disabled).toBe(true);
+      });
+    });
+
+    it("preserves modified badge and reset capability across filtering operations", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={{ editor: { fontFamily: "Yu Mincho" } }}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={false}
+            onSaveSettings={vi.fn()}
+          />
+        );
+      });
+
+      expect(
+        container.querySelector(".projectSettingModifiedBadge")?.textContent
+      ).toBe("変更中");
+
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+
+      // Switch to "プレビュー" category (hiding editor setting)
+      act(() => {
+        categoryButtons[2].click();
+      });
+      expect(container.querySelectorAll(".projectSettingModifiedBadge")).toHaveLength(0);
+
+      // Switch back to "エディタ" category
+      act(() => {
+        categoryButtons[1].click();
+      });
+      expect(
+        container.querySelector(".projectSettingModifiedBadge")?.textContent
+      ).toBe("変更中");
+      expect(container.querySelector(".projectSettingResetButton")).not.toBeNull();
+    });
+
+    it("does not invoke onSaveSettings when searching or switching categories", () => {
+      const onSaveSettings = vi.fn();
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={false}
+            onSaveSettings={onSaveSettings}
+          />
+        );
+      });
+
+      const searchInput = container.querySelector<HTMLInputElement>(
+        "input.settingsSearchInput"
+      )!;
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+
+      act(() => {
+        changeInputValue(searchInput, "test");
+      });
+
+      act(() => {
+        categoryButtons[1].click();
+      });
+
+      expect(onSaveSettings).not.toHaveBeenCalled();
+    });
+
+    it("saves draft via blur-save when filtering out the edited item (M1 regression)", async () => {
+      const onSaveSettings = vi.fn(async () => undefined);
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            isReadOnly={false}
+            onSaveSettings={onSaveSettings}
+          />
+        );
+      });
+
+      const textInput = container.querySelector<HTMLInputElement>(
+        'input[type="text"]'
+      )!;
+
+      // 1. Focus input
+      act(() => {
+        textInput.focus();
+      });
+
+      // 2. Change draft value
+      act(() => {
+        changeInputValue(textInput, "Yu Mincho");
+      });
+
+      expect(onSaveSettings).not.toHaveBeenCalled();
+
+      // 3. User clicks Preview category: focus leaves input (blur) and Editor item is filtered out
+      const categoryButtons = Array.from(
+        container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
+      );
+      const previewButton = categoryButtons[2];
+
+      await act(async () => {
+        textInput.blur();
+        previewButton.click();
+      });
+
+      // 4. Blur-save successfully triggers and persists the draft value
+      expect(onSaveSettings).toHaveBeenCalledTimes(1);
+      expect(onSaveSettings).toHaveBeenCalledWith({
+        set: { "editor.fontFamily": "Yu Mincho" }
+      });
+
+      // Confirm the editor item is filtered out and only preview item is visible
+      const itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["preview.renderer"]);
+    });
   });
 });

@@ -752,10 +752,13 @@ label.settingsItemHeader {
   font-size: 13px;
 }
 
-.projectSettingsBody {
+.projectSettingsContent {
   display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
   gap: 28px;
+  max-width: 720px;
 }
 
 .projectSettingField {

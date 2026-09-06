@@ -15,16 +15,19 @@ import {
   type SettingScope
 } from "../shared/settingsCatalog";
 import {
+  buildSettingSearchText,
   settingCatalogItems,
   settingCategoryCatalog,
   settingCategoryLabelKey,
   sortSettingCatalogItems,
+  sortSettingCategoryCatalog,
   type I18nKey,
   type SettingCatalogItem,
   type SettingCategory,
   type SettingCategoryCatalogItem,
   type SettingControl
 } from "../shared/settingsUiCatalog";
+import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
 import { readSettingValue } from "./settingsValueByKey";
 
 export function isProjectSettingsScope(scope: SettingScope): boolean {
@@ -52,6 +55,87 @@ export function getProjectSettingsUiItems(
     return isProjectOverrideEligibleScope(entry.scope);
   });
   return sortSettingCatalogItems(eligible, categories);
+}
+
+export type ProjectSettingCategoryFilter = "all" | SettingCategory;
+
+export interface ProjectSettingCategoryItem {
+  readonly id: ProjectSettingCategoryFilter;
+  readonly labelKey: string;
+}
+
+export function normalizeProjectSettingsSearchQuery(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+export function matchesProjectSettingSearch(
+  item: SettingCatalogItem,
+  normalizedQuery: string,
+  translate: Translate,
+  categories: readonly SettingCategoryCatalogItem[] = settingCategoryCatalog
+): boolean {
+  if (normalizedQuery.length === 0) {
+    return true;
+  }
+  const searchText = buildSettingSearchText(
+    item,
+    (key) => translate(key as any),
+    categories
+  ).toLowerCase();
+  return searchText.includes(normalizedQuery);
+}
+
+export function matchesProjectSettingCategory(
+  item: SettingCatalogItem,
+  categoryFilter: ProjectSettingCategoryFilter
+): boolean {
+  if (categoryFilter === "all") {
+    return true;
+  }
+  return item.category === categoryFilter;
+}
+
+export function filterProjectSettingItems(
+  items: readonly SettingCatalogItem[],
+  categoryFilter: ProjectSettingCategoryFilter,
+  searchQuery: string,
+  translate: Translate,
+  categories: readonly SettingCategoryCatalogItem[] = settingCategoryCatalog
+): readonly SettingCatalogItem[] {
+  const normalizedQuery = normalizeProjectSettingsSearchQuery(searchQuery);
+  return items.filter((item) => {
+    return (
+      matchesProjectSettingCategory(item, categoryFilter) &&
+      matchesProjectSettingSearch(item, normalizedQuery, translate, categories)
+    );
+  });
+}
+
+export function getEligibleProjectSettingCategories(
+  eligibleItems: readonly SettingCatalogItem[],
+  translate: Translate,
+  categories: readonly SettingCategoryCatalogItem[] = settingCategoryCatalog
+): readonly ProjectSettingCategoryItem[] {
+  const categoryIds = new Set<SettingCategory>(
+    eligibleItems.map((item) => item.category)
+  );
+
+  const sortedCategories = sortSettingCategoryCatalog(
+    (key) => translate(key as any),
+    categories
+  );
+
+  const matchingCategories: ProjectSettingCategoryItem[] = sortedCategories
+    .filter((cat) => categoryIds.has(cat.id))
+    .map((cat) => ({
+      id: cat.id,
+      labelKey: cat.labelKey
+    }));
+
+  return [
+    { id: "all", labelKey: "settings.category.all.label" },
+    ...matchingCategories
+  ];
 }
 
 export function readProjectSettingValue(
@@ -315,6 +399,11 @@ export function groupProjectSettingItemsByCategory(
 export interface ProjectSettingsPanelViewProps {
   translate: Translate;
   items: readonly ProjectSettingItemViewState[];
+  categories: readonly ProjectSettingCategoryItem[];
+  selectedCategoryId: ProjectSettingCategoryFilter;
+  onSelectCategory: (category: ProjectSettingCategoryFilter) => void;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
   isReadOnly: boolean;
   isSaving: boolean;
   error: string | null;
@@ -332,6 +421,11 @@ function translateI18nKey(translate: Translate, key: string): string {
 export function ProjectSettingsPanelView({
   translate,
   items,
+  categories,
+  selectedCategoryId,
+  onSelectCategory,
+  searchQuery,
+  onSearchQueryChange,
   isReadOnly,
   isSaving,
   error,
@@ -365,80 +459,135 @@ export function ProjectSettingsPanelView({
         ) : null}
       </header>
 
-      <div className="projectSettingsBody">
-        {categoryGroups.map((group) => (
-          <div key={group.category} className="settingsItemPane">
-            <h2 className="settingsItemPaneHeading">
-              {translateI18nKey(translate, group.categoryLabelKey)}
-            </h2>
-            <div className="settingsItemList">
-              {group.items.map(({ item, isModified, displayValue }) => {
-                const labelId = `${item.key.replace(/\./g, "-")}-label`;
+      <div className="settingsSearch">
+        <span
+          className="settingsSearchIcon"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: searchIcon }}
+        />
+        <input
+          id="projectSettingsSearchInput"
+          className="settingsSearchInput"
+          type="search"
+          value={searchQuery}
+          disabled={isSaving}
+          placeholder={translate("settings.search.placeholder")}
+          aria-label={translate("settings.search.label")}
+          onChange={(event) => onSearchQueryChange(event.target.value)}
+        />
+      </div>
 
-                let controlElement: JSX.Element | null = null;
-                if (item.control.kind === "text") {
-                  controlElement = (
-                    <input
-                      type="text"
-                      className="settingsTextInput"
-                      value={displayValue}
-                      disabled={isReadOnly || isSaving}
-                      onChange={(e) => {
-                        onTextChange?.(item.key, e.target.value);
-                      }}
-                      onFocus={() => {
-                        onTextFocus?.(item.key);
-                      }}
-                      onBlur={() => {
-                        onTextBlur?.(item.key);
-                      }}
-                      aria-labelledby={labelId}
-                    />
-                  );
-                } else if (item.control.kind === "select") {
-                  controlElement = (
-                    <select
-                      className="settingsSelect"
-                      value={displayValue}
-                      disabled={isReadOnly || isSaving}
-                      onChange={(e) => {
-                        onSelectChange?.(item.key, e.target.value);
-                      }}
-                      aria-labelledby={labelId}
-                    >
-                      {item.control.options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {translateI18nKey(translate, option.labelKey)}
-                        </option>
-                      ))}
-                    </select>
-                  );
-                } else {
-                  throw new Error(
-                    `Unsupported Project Settings control kind: "${(item.control as SettingControl).kind}" for key "${item.key}".`
-                  );
-                }
+      <div className="settingsBody">
+        <nav
+          className="settingsCategoryPane"
+          aria-label={translate("settings.category.paneLabel")}
+        >
+          <ul className="settingsCategoryList">
+            {categories.map((category) => {
+              const isSelected = category.id === selectedCategoryId;
 
-                return (
-                  <ProjectSettingField
-                    key={item.key}
-                    label={translateI18nKey(translate, item.labelKey)}
-                    description={translateI18nKey(translate, item.descriptionKey)}
-                    settingKey={item.key}
-                    isModified={isModified}
-                    isReadOnly={isReadOnly}
-                    isSaving={isSaving}
-                    resetLabel={translate("settings.project.matchApplicationSettings")}
-                    modifiedLabel={translate("settings.project.modified")}
-                    onReset={() => onReset(item.key)}
+              return (
+                <li key={category.id}>
+                  <button
+                    type="button"
+                    className={
+                      isSelected
+                        ? "settingsCategoryButton settingsCategoryButtonSelected"
+                        : "settingsCategoryButton"
+                    }
+                    aria-current={isSelected ? "true" : undefined}
+                    disabled={isSaving}
+                    onClick={() => onSelectCategory(category.id)}
                   >
-                    {controlElement}
-                  </ProjectSettingField>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+                    {translateI18nKey(translate, category.labelKey)}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="projectSettingsContent">
+          {items.length === 0 ? (
+            <p className="settingsSearchEmpty">
+              {translate("settings.search.empty")}
+            </p>
+          ) : (
+            categoryGroups.map((group) => (
+              <div key={group.category} className="settingsItemPane">
+                <h2 className="settingsItemPaneHeading">
+                  {translateI18nKey(translate, group.categoryLabelKey)}
+                </h2>
+                <div className="settingsItemList">
+                  {group.items.map(({ item, isModified, displayValue }) => {
+                    const labelId = `${item.key.replace(/\./g, "-")}-label`;
+
+                    let controlElement: JSX.Element | null = null;
+                    if (item.control.kind === "text") {
+                      controlElement = (
+                        <input
+                          type="text"
+                          className="settingsTextInput"
+                          value={displayValue}
+                          disabled={isReadOnly || isSaving}
+                          onChange={(e) => {
+                            onTextChange?.(item.key, e.target.value);
+                          }}
+                          onFocus={() => {
+                            onTextFocus?.(item.key);
+                          }}
+                          onBlur={() => {
+                            onTextBlur?.(item.key);
+                          }}
+                          aria-labelledby={labelId}
+                        />
+                      );
+                    } else if (item.control.kind === "select") {
+                      controlElement = (
+                        <select
+                          className="settingsSelect"
+                          value={displayValue}
+                          disabled={isReadOnly || isSaving}
+                          onChange={(e) => {
+                            onSelectChange?.(item.key, e.target.value);
+                          }}
+                          aria-labelledby={labelId}
+                        >
+                          {item.control.options.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {translateI18nKey(translate, option.labelKey)}
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    } else {
+                      throw new Error(
+                        `Unsupported Project Settings control kind: "${(item.control as SettingControl).kind}" for key "${item.key}".`
+                      );
+                    }
+
+                    return (
+                      <ProjectSettingField
+                        key={item.key}
+                        label={translateI18nKey(translate, item.labelKey)}
+                        description={translateI18nKey(translate, item.descriptionKey)}
+                        settingKey={item.key}
+                        isModified={isModified}
+                        isReadOnly={isReadOnly}
+                        isSaving={isSaving}
+                        resetLabel={translate("settings.project.matchApplicationSettings")}
+                        modifiedLabel={translate("settings.project.modified")}
+                        onReset={() => onReset(item.key)}
+                      >
+                        {controlElement}
+                      </ProjectSettingField>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </section>
   );
@@ -475,6 +624,9 @@ export function ProjectSettingsPanel({
   const [activeEditingKey, setActiveEditingKey] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCategoryId, setSelectedCategoryId] =
+    useState<ProjectSettingCategoryFilter>("all");
 
   // Clear drafts for keys that are not actively being edited when external props change
   useEffect(() => {
@@ -657,47 +809,64 @@ export function ProjectSettingsPanel({
     }
   };
 
-  const viewItems: ProjectSettingItemViewState[] = catalogItems
-    .filter((item) => {
-      const entry = getCatalogEntry(item.key);
-      return isProjectOverrideEligibleScope(entry.scope);
-    })
-    .map((item) => {
-      const isModified = isProjectSettingModified(
-        item.key,
-        projectSettings,
-        applicationSettings,
-        inheritedFontFamily
-      );
-      const effectiveValue = readEffectiveProjectSettingValue(
-        item.key,
-        projectSettings,
-        applicationSettings,
-        inheritedFontFamily
-      );
+  const eligibleItems = catalogItems.filter((item) => {
+    const entry = getCatalogEntry(item.key);
+    return isProjectOverrideEligibleScope(entry.scope);
+  });
 
-      let displayValue: string;
-      if (item.control.kind === "text") {
-        if (item.key === activeEditingKey && textDrafts[item.key] !== undefined) {
-          displayValue = textDrafts[item.key];
-        } else {
-          displayValue = String(effectiveValue ?? "");
-        }
+  const categories = getEligibleProjectSettingCategories(
+    eligibleItems,
+    translate
+  );
+
+  const filteredItems = filterProjectSettingItems(
+    eligibleItems,
+    selectedCategoryId,
+    searchQuery,
+    translate
+  );
+
+  const viewItems: ProjectSettingItemViewState[] = filteredItems.map((item) => {
+    const isModified = isProjectSettingModified(
+      item.key,
+      projectSettings,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const effectiveValue = readEffectiveProjectSettingValue(
+      item.key,
+      projectSettings,
+      applicationSettings,
+      inheritedFontFamily
+    );
+
+    let displayValue: string;
+    if (item.control.kind === "text") {
+      if (item.key === activeEditingKey && textDrafts[item.key] !== undefined) {
+        displayValue = textDrafts[item.key];
       } else {
         displayValue = String(effectiveValue ?? "");
       }
+    } else {
+      displayValue = String(effectiveValue ?? "");
+    }
 
-      return {
-        item,
-        isModified,
-        displayValue
-      };
-    });
+    return {
+      item,
+      isModified,
+      displayValue
+    };
+  });
 
   return (
     <ProjectSettingsPanelView
       translate={translate}
       items={viewItems}
+      categories={categories}
+      selectedCategoryId={selectedCategoryId}
+      onSelectCategory={setSelectedCategoryId}
+      searchQuery={searchQuery}
+      onSearchQueryChange={setSearchQuery}
       isReadOnly={isReadOnly}
       isSaving={isSaving}
       error={error}
