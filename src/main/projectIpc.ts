@@ -55,7 +55,9 @@ import {
   type RenameFileExplorerEntryResult,
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult,
-  type StartupProjectOpenResult
+  type StartupProjectOpenResult,
+  type UpdateProjectSettingsRequest,
+  type ProjectSettings
 } from "../shared/api";
 import { moveEntries } from "./projectMoveExecution";
 import {
@@ -113,7 +115,12 @@ import {
   sanitizedFileIoError,
   type SanitizedFileIoError
 } from "./markdownFileIo";
-import { projectConfigFileName, readProjectConfig } from "./projectConfigStore";
+import {
+  loadProjectConfig,
+  projectConfigFileName,
+  readProjectConfig,
+  saveProjectSettings
+} from "./projectConfigStore";
 import {
   createProjectDatabase,
   openProjectDatabase,
@@ -160,6 +167,8 @@ interface CurrentProjectState {
   writeOwnership: ProjectWriteOwnership;
   writeOwnershipManager: ProjectWriteOwnershipManager;
   documentRelativePaths: Set<string>;
+  config: PergamumProjectConfig | null;
+  rawConfigSnapshot: Record<string, unknown> | null;
 }
 
 interface ProjectFileOpenResult {
@@ -169,6 +178,7 @@ interface ProjectFileOpenResult {
   projectRootPath: string;
   writeOwnership: ProjectWriteOwnership;
   writeOwnershipManager: ProjectWriteOwnershipManager;
+  rawConfigSnapshot: Record<string, unknown> | null;
 }
 
 type ProjectOpenOperation = "create" | "open";
@@ -726,6 +736,67 @@ export function currentProjectAccessMode(): ProjectAccessMode | null {
   return currentProjectState?.accessMode ?? null;
 }
 
+export function currentProjectConfig(): PergamumProjectConfig | null {
+  return currentProjectState?.config ?? null;
+}
+
+export function currentProjectRawConfigSnapshot(): Record<
+  string,
+  unknown
+> | null {
+  return currentProjectState?.rawConfigSnapshot ?? null;
+}
+
+let projectSettingsSaveQueue: Promise<void> = Promise.resolve();
+
+export async function saveCurrentProjectSettings(
+  request: UpdateProjectSettingsRequest
+): Promise<ProjectSettings | undefined> {
+  if (!currentProjectState) {
+    throw new Error("No project is currently open.");
+  }
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    throw new Error("Cannot save settings for a read-only project.");
+  }
+
+  // Serialize saves so each update applies to the latest committed in-memory snapshot
+  const activeState = currentProjectState;
+  const previousSave = projectSettingsSaveQueue;
+
+  let releaseQueue!: () => void;
+  projectSettingsSaveQueue = new Promise<void>((resolve) => {
+    releaseQueue = resolve;
+  });
+
+  try {
+    try {
+      await previousSave;
+    } catch {
+      // Prior save failure must not poison the queue for subsequent saves.
+    }
+
+    // Verify project was not closed or switched while waiting in queue
+    if (currentProjectState !== activeState) {
+      throw new Error(
+        "Project was closed or switched before settings could be saved."
+      );
+    }
+
+    const result = await saveProjectSettings({
+      rootPath: activeState.rootPath,
+      rawSnapshot: activeState.rawConfigSnapshot,
+      request
+    });
+
+    activeState.config = result.config;
+    activeState.rawConfigSnapshot = result.rawSnapshot;
+
+    return result.updatedSettings;
+  } finally {
+    releaseQueue!();
+  }
+}
+
 export function requireCurrentProjectRootPath(): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
@@ -1051,6 +1122,16 @@ function parseCloseCurrentProjectRequest(
     requestId: value.requestId,
     intent: value.intent
   };
+}
+
+function parseUpdateProjectSettingsRequest(
+  value: unknown
+): UpdateProjectSettingsRequest {
+  if (!isRequestObject(value)) {
+    throw new Error("Invalid project settings update request: expected an object.");
+  }
+
+  return value as UpdateProjectSettingsRequest;
 }
 
 function parseListFileExplorerChildrenRequest(
@@ -2873,7 +2954,8 @@ async function activateProject(
   project: PergamumProject,
   projectId: string,
   writeOwnershipManager: ProjectWriteOwnershipManager,
-  writeOwnership: ProjectWriteOwnership
+  writeOwnership: ProjectWriteOwnership,
+  rawConfigSnapshot: Record<string, unknown> | null
 ): Promise<void> {
   const previousState = currentProjectState;
 
@@ -2887,7 +2969,9 @@ async function activateProject(
     writeOwnershipManager,
     documentRelativePaths: new Set(
       project.documents.map((document) => document.relativePath)
-    )
+    ),
+    config: project.config,
+    rawConfigSnapshot
   };
 
   if (
@@ -3127,7 +3211,8 @@ async function finalizeProjectFileOpen(
     openedProject.project,
     openedProject.metadata.projectId,
     openedProject.writeOwnershipManager,
-    openedProject.writeOwnership
+    openedProject.writeOwnership,
+    openedProject.rawConfigSnapshot
   );
   await recordProjectFileOpenRecently(openedProject);
 
@@ -3395,12 +3480,13 @@ async function createProjectFromProjectFile(
   let shouldReleaseOwnership = true;
 
   try {
+    const configResult = await loadProjectConfig(projectRootPath);
     const project = await createProjectFromParts(
       projectRootPath,
       projectFilePath,
       accessMode,
       metadata.projectName,
-      await readProjectConfig(projectRootPath)
+      configResult?.config ?? config
     );
 
     shouldReleaseOwnership = false;
@@ -3411,7 +3497,8 @@ async function createProjectFromProjectFile(
       projectFilePath,
       projectRootPath,
       writeOwnership: ownership,
-      writeOwnershipManager
+      writeOwnershipManager,
+      rawConfigSnapshot: configResult?.rawSnapshot ?? null
     };
   } finally {
     if (shouldReleaseOwnership) {
@@ -3434,7 +3521,9 @@ async function openProjectFromProjectFile(
   const database = await openProjectDatabase(projectFilePath, logger);
   const metadata = await readProjectMetadataAndClose(database);
 
-  const config = await readProjectConfig(projectRootPath);
+  const configResult = await loadProjectConfig(projectRootPath);
+  const config = configResult?.config ?? null;
+  const rawConfigSnapshot = configResult?.rawSnapshot ?? null;
   const lockStartedAt = Date.now();
   const ownership = await writeOwnershipManager.acquire(projectFilePath, {
     projectId: metadata.projectId,
@@ -3467,7 +3556,8 @@ async function openProjectFromProjectFile(
       projectFilePath,
       projectRootPath,
       writeOwnership: ownership,
-      writeOwnershipManager
+      writeOwnershipManager,
+      rawConfigSnapshot
     };
   } finally {
     if (shouldReleaseOwnership) {
@@ -3771,6 +3861,17 @@ export function registerProjectIpc(
     async (_event, rawRequest: unknown): Promise<CloseCurrentProjectResult> => {
       parseCloseCurrentProjectRequest(rawRequest);
       return closeCurrentProject();
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.saveProjectSettings,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<ProjectSettings | undefined> => {
+      const request = parseUpdateProjectSettingsRequest(rawRequest);
+      return saveCurrentProjectSettings(request);
     }
   );
 

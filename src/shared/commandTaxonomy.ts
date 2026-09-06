@@ -5,6 +5,7 @@ export const CORE_COMMAND_DOMAINS = [
   "workspace",
   "glossary",
   "settings",
+  "project",
   "search",
   "import",
   "export",

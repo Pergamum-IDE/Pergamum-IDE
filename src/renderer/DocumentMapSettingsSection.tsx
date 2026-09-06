@@ -1,24 +1,18 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ApplicationSettings,
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import {
-  DOCUMENT_MAP_DEFAULT_DIALOGUE_COLOR,
   DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MAX,
   DOCUMENT_MAP_VIEWPORT_LENS_OPACITY_MIN,
   defaultDocumentMapSettings,
   isValidViewportLensOpacity,
   normalizeDocumentMapColor,
-  reorderDocumentMapDialoguePairs,
-  type DocumentMapDialogueDelimiterPair,
   type DocumentMapSettings
 } from "../shared/documentMapSettings";
 import type { Translate } from "../shared/i18n";
-
-/** Private DataTransfer type for the dialogue-pair reorder drag. */
-const DIALOGUE_PAIR_MIME = "application/x-pergamum-document-map-dialogue-pair";
-const DRAG_HANDLE_GLYPH = "⣿";
+import { DialogueDelimiterPairsEditor } from "./DialogueDelimiterPairsEditor";
 
 interface DocumentMapSettingsSectionProps {
   settings: ApplicationSettings;
@@ -83,9 +77,6 @@ export function DocumentMapSettingsSection({
     setOpacityText(String(settings.documentMap.viewportLensOpacity));
   }, [settingsKey]);
 
-  const [drag, setDrag] = useState<number | null>(null);
-  const [dropIndex, setDropIndex] = useState<number | null>(null);
-
   function commit(next: DocumentMapSettings): void {
     setDraft(next);
     // Only persist when every colour is a valid #rrggbb and the lens opacity
@@ -143,67 +134,6 @@ export function DocumentMapSettingsSection({
   }
 
   const opacityInvalid = !isValidViewportLensOpacity(Number(opacityText));
-
-  function updatePair(
-    index: number,
-    patch: Partial<DocumentMapDialogueDelimiterPair>
-  ): void {
-    commit({
-      ...draft,
-      dialogueDelimiterPairs: draft.dialogueDelimiterPairs.map((pair, i) =>
-        i === index ? { ...pair, ...patch } : pair
-      )
-    });
-  }
-
-  function addPair(): void {
-    commit({
-      ...draft,
-      dialogueDelimiterPairs: [
-        ...draft.dialogueDelimiterPairs,
-        { open: "「", close: "」", color: DOCUMENT_MAP_DEFAULT_DIALOGUE_COLOR }
-      ]
-    });
-  }
-
-  function deletePair(index: number): void {
-    commit({
-      ...draft,
-      dialogueDelimiterPairs: draft.dialogueDelimiterPairs.filter(
-        (_pair, i) => i !== index
-      )
-    });
-  }
-
-  function movePair(fromIndex: number, toIndex: number): void {
-    const pairs = reorderDocumentMapDialoguePairs(
-      draft.dialogueDelimiterPairs,
-      fromIndex,
-      toIndex
-    );
-    if (
-      pairs.some(
-        (pair, i) =>
-          pair.open !== draft.dialogueDelimiterPairs[i]?.open ||
-          pair.close !== draft.dialogueDelimiterPairs[i]?.close ||
-          pair.color !== draft.dialogueDelimiterPairs[i]?.color
-      )
-    ) {
-      commit({ ...draft, dialogueDelimiterPairs: pairs });
-    }
-  }
-
-  function dropGapFor(
-    event: { clientY: number; currentTarget: HTMLElement },
-    index: number
-  ): number {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return event.clientY > rect.top + rect.height / 2 ? index + 1 : index;
-  }
-
-  const dragHandleLabel = translate(
-    "settings.documentMap.dialogueDelimiterPairs.reorder"
-  );
 
   const colorField = (
     label: string,
@@ -374,174 +304,14 @@ export function DocumentMapSettingsSection({
           documentMap.dialogueDelimiterPairs
         </code>
 
-        <ul
-          className="documentMapSettingsDialoguePairList"
-          aria-label={translate(
-            "settings.documentMap.dialogueDelimiterPairs.label"
-          )}
-        >
-          {draft.dialogueDelimiterPairs.map((pair, index) => {
-            const invalidColor = normalizeDocumentMapColor(pair.color) === null;
-            const onDragOver = (event: DragEvent<HTMLElement>): void => {
-              if (
-                drag === null ||
-                !Array.from(event.dataTransfer.types).includes(
-                  DIALOGUE_PAIR_MIME
-                )
-              ) {
-                return;
-              }
-              event.preventDefault();
-              const gap = dropGapFor(event, index);
-              if (gap !== dropIndex) {
-                setDropIndex(gap);
-              }
-            };
-            const onDrop = (event: DragEvent<HTMLElement>): void => {
-              if (drag === null) {
-                return;
-              }
-              event.preventDefault();
-              const gap = dropGapFor(event, index);
-              movePair(drag, gap > drag ? gap - 1 : gap);
-              setDrag(null);
-              setDropIndex(null);
-            };
-
-            return (
-              <li
-                key={index}
-                className="documentMapSettingsDialoguePairRow"
-                data-dragging={drag === index || undefined}
-                data-drop-before={dropIndex === index || undefined}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-              >
-                <button
-                  type="button"
-                  className="glossaryEntryTagAssignmentDragHandle"
-                  aria-label={dragHandleLabel}
-                  title={dragHandleLabel}
-                  draggable={!isLoading}
-                  disabled={isLoading}
-                  onDragStart={(event) => {
-                    setDrag(index);
-                    setDropIndex(null);
-                    event.dataTransfer.setData(DIALOGUE_PAIR_MIME, String(index));
-                    event.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragEnd={() => {
-                    setDrag(null);
-                    setDropIndex(null);
-                  }}
-                  onKeyDown={(event) => {
-                    if (isLoading) {
-                      return;
-                    }
-                    if (event.key === "ArrowUp" && index > 0) {
-                      event.preventDefault();
-                      movePair(index, index - 1);
-                    } else if (
-                      event.key === "ArrowDown" &&
-                      index < draft.dialogueDelimiterPairs.length - 1
-                    ) {
-                      event.preventDefault();
-                      movePair(index, index + 1);
-                    }
-                  }}
-                >
-                  <span aria-hidden="true">{DRAG_HANDLE_GLYPH}</span>
-                </button>
-
-                <label className="documentMapSettingsDialogueDelimiter">
-                  <span>
-                    {translate(
-                      "settings.documentMap.dialogueDelimiterPairs.open"
-                    )}
-                  </span>
-                  <input
-                    type="text"
-                    value={pair.open}
-                    disabled={isLoading}
-                    aria-invalid={pair.open.length === 0 || undefined}
-                    onChange={(event) =>
-                      updatePair(index, { open: event.target.value })
-                    }
-                  />
-                </label>
-                <label className="documentMapSettingsDialogueDelimiter">
-                  <span>
-                    {translate(
-                      "settings.documentMap.dialogueDelimiterPairs.close"
-                    )}
-                  </span>
-                  <input
-                    type="text"
-                    value={pair.close}
-                    disabled={isLoading}
-                    aria-invalid={pair.close.length === 0 || undefined}
-                    onChange={(event) =>
-                      updatePair(index, { close: event.target.value })
-                    }
-                  />
-                </label>
-
-                <label className="documentMapSettingsDialogueColor">
-                  <span>
-                    {translate(
-                      "settings.documentMap.dialogueDelimiterPairs.color"
-                    )}
-                  </span>
-                  <span className="documentMapSettingsColorInputs">
-                    <input
-                      type="color"
-                      className="documentMapSettingsColorSwatch"
-                      value={colorPickerValue(pair.color)}
-                      disabled={isLoading}
-                      onChange={(event) =>
-                        updatePair(index, { color: event.target.value })
-                      }
-                    />
-                    <input
-                      type="text"
-                      className="documentMapSettingsColorText"
-                      value={pair.color}
-                      disabled={isLoading}
-                      aria-invalid={invalidColor || undefined}
-                      onChange={(event) =>
-                        updatePair(index, { color: event.target.value })
-                      }
-                    />
-                  </span>
-                </label>
-
-                <button
-                  type="button"
-                  className="documentMapSettingsDialoguePairDelete"
-                  aria-label={translate(
-                    "settings.documentMap.dialogueDelimiterPairs.delete"
-                  )}
-                  title={translate(
-                    "settings.documentMap.dialogueDelimiterPairs.delete"
-                  )}
-                  disabled={isLoading}
-                  onClick={() => deletePair(index)}
-                >
-                  ×
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
-        <button
-          type="button"
-          className="documentMapSettingsAddPair"
+        <DialogueDelimiterPairsEditor
+          pairs={draft.dialogueDelimiterPairs}
           disabled={isLoading}
-          onClick={addPair}
-        >
-          {translate("settings.documentMap.dialogueDelimiterPairs.add")}
-        </button>
+          translate={translate}
+          onChange={(pairs) =>
+            commit({ ...draft, dialogueDelimiterPairs: pairs })
+          }
+        />
       </div>
     </section>
   );

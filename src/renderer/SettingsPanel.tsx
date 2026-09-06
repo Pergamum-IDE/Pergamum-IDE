@@ -465,6 +465,17 @@ function buildNextSettings(
       return saveRequest(settings, {
         preview: { ...settings.preview, updateDelayMs: rawValue }
       });
+    case "documentMap.dialogueDelimiterPairs":
+      if (!Array.isArray(rawValue)) {
+        return null;
+      }
+
+      return saveRequest(settings, {
+        documentMap: {
+          ...settings.documentMap,
+          dialogueDelimiterPairs: rawValue as any
+        }
+      });
   }
 
   const exhaustiveCheck: never = key;
@@ -645,6 +656,8 @@ function SettingControlInput({
         </div>
       );
     }
+    case "custom":
+      return <></>;
   }
 }
 

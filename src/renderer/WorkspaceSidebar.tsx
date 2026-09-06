@@ -310,6 +310,7 @@ export function WorkspaceSidebar({
           characterCount={documentMetricsCharacterCount}
           analysis={documentMetricsAnalysis}
           fileInfo={documentMetricsFileInfo}
+          isVisible={mode === "documentMetrics"}
         />
       );
     case "glossary":

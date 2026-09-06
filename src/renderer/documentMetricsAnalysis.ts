@@ -43,13 +43,25 @@ export interface DocumentMetricsTagCount {
   readonly count: number;
 }
 
+export interface DocumentMetricsDialoguePairCount {
+  readonly pairIndex: number;
+  readonly open: string;
+  readonly close: string;
+  readonly color: string;
+  readonly characters: number;
+  readonly percent: number;
+}
+
 export interface DocumentMetricsDialogueRatio {
   readonly narrationCharacters: number;
-  readonly dialogueCharacters: number;
-  /** `narrationCharacters + dialogueCharacters` (never off by rounding). */
+  readonly pairs: readonly DocumentMetricsDialoguePairCount[];
+  /** `narrationCharacters + sum(pairs.characters)` (never off by rounding). */
   readonly totalCharacters: number;
-  /** 0..100, integer. `narrationPercent + dialoguePercent === 100` unless total is 0. */
+  /** 0..100, integer. */
   readonly narrationPercent: number;
+  /** Aggregate dialogue characters across all pairs. */
+  readonly dialogueCharacters: number;
+  /** Aggregate dialogue percentage across all pairs. */
   readonly dialoguePercent: number;
 }
 
@@ -59,13 +71,25 @@ export interface DocumentMetricsAnalysis {
   readonly dialogueRatio: DocumentMetricsDialogueRatio;
 }
 
-const EMPTY_DIALOGUE_RATIO: DocumentMetricsDialogueRatio = {
-  narrationCharacters: 0,
-  dialogueCharacters: 0,
-  totalCharacters: 0,
-  narrationPercent: 0,
-  dialoguePercent: 0
-};
+export function emptyDocumentMetricsDialogueRatio(
+  dialoguePairs: readonly DocumentMapDialogueDelimiterPair[] = []
+): DocumentMetricsDialogueRatio {
+  return {
+    narrationCharacters: 0,
+    pairs: dialoguePairs.map((pair, pairIndex) => ({
+      pairIndex,
+      open: pair.open,
+      close: pair.close,
+      color: pair.color,
+      characters: 0,
+      percent: 0
+    })),
+    totalCharacters: 0,
+    narrationPercent: 0,
+    dialogueCharacters: 0,
+    dialoguePercent: 0
+  };
+}
 
 /**
  * Per-Entry hit tally for `text`: every non-overlapping glossary surface
@@ -216,78 +240,115 @@ export function collectDocumentMetricsTagCounts(
   return tagCountRowsFromTally(tallyGlossaryEntryHits(text, entries), entries);
 }
 
-/** Sorted, non-overlapping `[start, end)` spans from possibly-overlapping ranges. */
-function mergeOffsetRanges(
-  ranges: readonly { startOffset: number; endOffset: number }[]
-): { startOffset: number; endOffset: number }[] {
-  const sorted = [...ranges]
-    .filter((range) => range.endOffset > range.startOffset)
-    .sort((a, b) => a.startOffset - b.startOffset || a.endOffset - b.endOffset);
-  const merged: { startOffset: number; endOffset: number }[] = [];
-
-  for (const range of sorted) {
-    const previous = merged[merged.length - 1];
-    if (previous && range.startOffset <= previous.endOffset) {
-      previous.endOffset = Math.max(previous.endOffset, range.endOffset);
-      continue;
-    }
-    merged.push({ startOffset: range.startOffset, endOffset: range.endOffset });
-  }
-
-  return merged;
+interface DialogueSweepEvent {
+  readonly offset: number;
+  readonly type: 1 | -1; // 1 = start, -1 = end
+  readonly pairIndex: number;
 }
 
 /**
  * Narration / dialogue character split for `text`, using the same
  * `documentMap.dialogueDelimiterPairs` policy as the Document Map (delimiters
  * INCLUDED in the dialogue span; an unclosed `open` runs to end-of-text;
- * overlapping pairs are unioned, never double-counted).
+ * later pair wins on overlap, never double-counted).
  *
  * Approximate by design — no Markdown AST. Characters are counted as Unicode
- * code points, and `narration + dialogue === total` always holds. An empty
+ * code points, and `narration + sum(pairs.characters) === total` always holds. An empty
  * document, an unclosed delimiter and multiple pairs are all safe.
+ *
+ * Complexity breakdown:
+ *   - Range collection: O(P · N) via collectDocumentMapDialogueRanges
+ *   - Event sorting: O(R log R)
+ *   - Forward sweep: O(N + R · P)
+ * where N = document length, R = dialogue range count, P = configured dialogue-pair count.
+ * Winner lookup walks down activePairCounts at most P steps on deactivation.
+ * Since P is typically very small, this avoids the prior O(N × R) regression
+ * of per-character point queries across all ranges.
  */
 export function analyzeDocumentMetricsDialogueRatio(
   text: string,
   dialoguePairs: readonly DocumentMapDialogueDelimiterPair[]
 ): DocumentMetricsDialogueRatio {
   if (text.length === 0) {
-    return EMPTY_DIALOGUE_RATIO;
+    return emptyDocumentMetricsDialogueRatio(dialoguePairs);
   }
 
-  const ranges = mergeOffsetRanges(
-    collectDocumentMapDialogueRanges(text, dialoguePairs)
-  );
-
-  let dialogueCharacters = 0;
+  const ranges = collectDocumentMapDialogueRanges(text, dialoguePairs);
+  const pairCounts = dialoguePairs.map(() => 0);
   let narrationCharacters = 0;
-  let rangeIndex = 0;
 
-  for (let offset = 0; offset < text.length; ) {
-    const codePoint = text.codePointAt(offset) ?? 0;
-    const charLength = codePoint > 0xffff ? 2 : 1;
-
-    while (
-      rangeIndex < ranges.length &&
-      ranges[rangeIndex].endOffset <= offset
-    ) {
-      rangeIndex += 1;
-    }
-    const current = ranges[rangeIndex];
-    const inDialogue =
-      current !== undefined &&
-      offset >= current.startOffset &&
-      offset < current.endOffset;
-
-    if (inDialogue) {
-      dialogueCharacters += 1;
-    } else {
+  if (ranges.length === 0) {
+    for (let offset = 0; offset < text.length; ) {
+      const codePoint = text.codePointAt(offset) ?? 0;
       narrationCharacters += 1;
+      offset += codePoint > 0xffff ? 2 : 1;
+    }
+  } else {
+    const events: DialogueSweepEvent[] = [];
+    for (const range of ranges) {
+      events.push({
+        offset: range.startOffset,
+        type: 1,
+        pairIndex: range.pairIndex
+      });
+      events.push({
+        offset: range.endOffset,
+        type: -1,
+        pairIndex: range.pairIndex
+      });
     }
 
-    offset += charLength;
+    events.sort((a, b) => {
+      if (a.offset !== b.offset) {
+        return a.offset - b.offset;
+      }
+      return a.type - b.type; // end (-1) before start (1)
+    });
+
+    const activePairCounts = new Int32Array(dialoguePairs.length);
+    let currentMaxPairIndex = -1;
+    let eventIndex = 0;
+
+    for (let offset = 0; offset < text.length; ) {
+      while (
+        eventIndex < events.length &&
+        events[eventIndex].offset <= offset
+      ) {
+        const ev = events[eventIndex];
+        if (ev.type === 1) {
+          activePairCounts[ev.pairIndex] += 1;
+          if (ev.pairIndex > currentMaxPairIndex) {
+            currentMaxPairIndex = ev.pairIndex;
+          }
+        } else {
+          activePairCounts[ev.pairIndex] -= 1;
+          if (
+            activePairCounts[ev.pairIndex] === 0 &&
+            ev.pairIndex === currentMaxPairIndex
+          ) {
+            while (
+              currentMaxPairIndex >= 0 &&
+              activePairCounts[currentMaxPairIndex] === 0
+            ) {
+              currentMaxPairIndex -= 1;
+            }
+          }
+        }
+        eventIndex += 1;
+      }
+
+      if (currentMaxPairIndex === -1) {
+        narrationCharacters += 1;
+      } else {
+        pairCounts[currentMaxPairIndex] += 1;
+      }
+
+      const codePoint = text.codePointAt(offset) ?? 0;
+      offset += codePoint > 0xffff ? 2 : 1;
+    }
   }
 
+  const dialogueCharacters = pairCounts.reduce((sum, count) => sum + count, 0);
   const totalCharacters = narrationCharacters + dialogueCharacters;
   const dialoguePercent =
     totalCharacters === 0
@@ -295,11 +356,30 @@ export function analyzeDocumentMetricsDialogueRatio(
       : Math.round((dialogueCharacters / totalCharacters) * 100);
   const narrationPercent = totalCharacters === 0 ? 0 : 100 - dialoguePercent;
 
+  const pairs: DocumentMetricsDialoguePairCount[] = dialoguePairs.map(
+    (pair, pairIndex) => {
+      const characters = pairCounts[pairIndex] ?? 0;
+      const percent =
+        totalCharacters === 0
+          ? 0
+          : Math.round((characters / totalCharacters) * 100);
+      return {
+        pairIndex,
+        open: pair.open,
+        close: pair.close,
+        color: pair.color,
+        characters,
+        percent
+      };
+    }
+  );
+
   return {
     narrationCharacters,
-    dialogueCharacters,
+    pairs,
     totalCharacters,
     narrationPercent,
+    dialogueCharacters,
     dialoguePercent
   };
 }

@@ -81,6 +81,11 @@ function allSourceText(): string {
  * entry drag handle's `onKeyDown` implements Arrow Up / Down reorder for its
  * own `<button>` while focused — the keyboard fallback for the
  * `glossary_entries.sort_order` D&D reorder, not a global shortcut listener.
+ *
+ * DialogueDelimiterPairsEditor.tsx (#396 Slice 7 Addendum) is the same category:
+ * the dialogue-pair drag handle's `onKeyDown` is the Arrow Up / Down keyboard
+ * fallback for reordering `documentMap.dialogueDelimiterPairs`, extracted from
+ * DocumentMapSettingsSection.tsx, scoped to that handle `<button>`.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -93,6 +98,7 @@ const onKeyDownExemptFileNames = new Set([
   "GlossaryTagManager.tsx",
   "GlossaryEntryTagAssignmentEditor.tsx",
   "DocumentMapSettingsSection.tsx",
+  "DialogueDelimiterPairsEditor.tsx",
   "GlossaryEntryManager.tsx"
 ]);
 

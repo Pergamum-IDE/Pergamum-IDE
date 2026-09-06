@@ -7,6 +7,7 @@ import type { DocumentTab } from "./openDocuments";
 
 export type SpecialTabId =
   | "settings"
+  | "projectSettings"
   | "glossaryTagManager"
   | "glossaryEntryManager"
   | "debugLog";

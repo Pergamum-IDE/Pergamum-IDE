@@ -100,6 +100,8 @@ export function readSettingValue(
       return settings.preview.renderer;
     case "preview.updateDelayMs":
       return settings.preview.updateDelayMs;
+    case "documentMap.dialogueDelimiterPairs":
+      return settings.documentMap.dialogueDelimiterPairs;
   }
 
   const exhaustiveCheck: never = key;

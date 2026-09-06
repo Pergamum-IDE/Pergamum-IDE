@@ -154,6 +154,8 @@ const pergamumApi: PergamumApi = {
         relativePath,
         content
       }),
+    saveProjectSettings: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectSettings, request),
     closeCurrentProject: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.closeCurrentProject, request)
   },
