@@ -841,3 +841,28 @@ describe("Project create conflict translations", () => {
     );
   });
 });
+
+describe("Document Map pagination translations (#403 Phase 2)", () => {
+  it("defines pagination keys for Japanese and English", () => {
+    expect(t("ja", "documentMap.page.paginationLabel")).toBe("文書マップのページ切り替え");
+    expect(t("en", "documentMap.page.paginationLabel")).toBe("Document Map page navigation");
+
+    expect(t("ja", "documentMap.page.previous")).toBe("前のページ");
+    expect(t("en", "documentMap.page.previous")).toBe("Previous page");
+
+    expect(t("ja", "documentMap.page.next")).toBe("次のページ");
+    expect(t("en", "documentMap.page.next")).toBe("Next page");
+
+    expect(t("ja", "documentMap.page.selectLabel")).toBe("表示ページを選択");
+    expect(t("en", "documentMap.page.selectLabel")).toBe("Select displayed page");
+
+    expect(t("ja", "documentMap.page.currentOfTotal", { current: 3, total: 7 })).toBe("ページ 3 / 7");
+    expect(t("en", "documentMap.page.currentOfTotal", { current: 3, total: 7 })).toBe("Page 3 / 7");
+
+    expect(t("ja", "documentMap.page.option", { page: 3 })).toBe("ページ 3");
+    expect(t("en", "documentMap.page.option", { page: 3 })).toBe("Page 3");
+
+    expect(t("ja", "documentMap.rendering")).toBe("描画中…");
+    expect(t("en", "documentMap.rendering")).toBe("Rendering…");
+  });
+});

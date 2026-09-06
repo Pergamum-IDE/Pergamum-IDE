@@ -6,6 +6,12 @@ import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { EditorScrollAlign } from "./editorScrollAlign";
 import { GlossaryTextMinimapCanvas } from "./GlossaryTextMinimapCanvas";
 import { DocumentMapTagFilter } from "./DocumentMapTagFilter";
+import { DocumentMapPaginator } from "./DocumentMapPaginator";
+import {
+  buildDocumentMapLineLayout,
+  computeDocumentMapPages,
+  resolveDocumentMapWrapColumns
+} from "./glossaryDocumentMap";
 
 interface DocumentMapPanelProps {
   /**
@@ -47,15 +53,18 @@ interface DocumentMapPanelProps {
 }
 
 /**
- * #375 Document Map / 文書マップ — the left-pane panel. Header (fixed) + a
- * "Render tags" multi-select + a vertically scrolling body holding ONE tall
- * {@link GlossaryTextMinimapCanvas}.
+ * #375 / #403 Document Map / 文書マップ — the left-pane panel. Header (fixed) +
+ * an optional physical Document Map paginator (#403 Phase 2) + "Render tags"
+ * multi-select + a vertically scrolling body holding ONE physical-page Canvas.
  *
  * The tag selection is LOCAL state (never persisted) and DEFAULTS to every
  * project tag. On a tag refresh: deleted tags are dropped, brand-new tags are
  * added to the selection. An empty selection means "draw no Glossary hits"
  * (it is NOT read as "All"). Tagless Entries are never drawn while the filter
  * is active.
+ *
+ * Page selection is also transient UI state. The paginator only renders when
+ * `pageCount >= 2`. Normal documents look exactly as before without pagination.
  */
 export function DocumentMapPanel({
   activeDocumentContent,
@@ -67,8 +76,65 @@ export function DocumentMapPanel({
   onNavigateToLine,
   translate
 }: DocumentMapPanelProps): JSX.Element {
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [selectedPageIndex, setSelectedPageIndex] = useState(0);
+
   const hasContent =
     activeDocumentContent !== null && activeDocumentContent.trim().length > 0;
+
+  const wrapColumns = useMemo(
+    () =>
+      resolveDocumentMapWrapColumns({
+        editorRect: editorWidth === null ? null : { width: editorWidth }
+      }),
+    [editorWidth]
+  );
+
+  const totalVisualRows = useMemo(() => {
+    if (!hasContent) {
+      return 0;
+    }
+    return buildDocumentMapLineLayout(
+      activeDocumentContent as string,
+      wrapColumns
+    ).totalVisualRows;
+  }, [hasContent, activeDocumentContent, wrapColumns]);
+
+  const pixelRatio =
+    typeof window !== "undefined" && window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1;
+
+  const pages = useMemo(
+    () =>
+      computeDocumentMapPages({
+        totalVisualRows,
+        pixelRatio
+      }),
+    [totalVisualRows, pixelRatio]
+  );
+
+  const pageCount = pages.length;
+  const effectivePageIndex = Math.max(
+    0,
+    Math.min(selectedPageIndex, pageCount - 1)
+  );
+  const currentPage = pages[effectivePageIndex];
+
+  // Keep page index within valid bounds on document changes.
+  useEffect(() => {
+    if (selectedPageIndex >= pageCount) {
+      setSelectedPageIndex(Math.max(0, pageCount - 1));
+    }
+  }, [pageCount, selectedPageIndex]);
+
+  const handleSelectPage = (nextIndex: number): void => {
+    const clamped = Math.max(0, Math.min(nextIndex, pageCount - 1));
+    setSelectedPageIndex(clamped);
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = 0;
+    }
+  };
 
   const allTagIds = useMemo(
     () => glossaryTags.map((tag) => tag.id),
@@ -119,6 +185,15 @@ export function DocumentMapPanel({
     >
       <div className="sidebarHeader">{translate("documentMap.title")}</div>
 
+      {hasContent && pageCount >= 2 ? (
+        <DocumentMapPaginator
+          currentPage={effectivePageIndex}
+          pageCount={pageCount}
+          translate={translate}
+          onSelectPage={handleSelectPage}
+        />
+      ) : null}
+
       <div className="documentMapControls">
         <DocumentMapTagFilter
           tags={glossaryTags}
@@ -129,7 +204,7 @@ export function DocumentMapPanel({
       </div>
 
       {hasContent ? (
-        <div className="documentMapBody">
+        <div className="documentMapBody" ref={bodyRef}>
           <GlossaryTextMinimapCanvas
             text={activeDocumentContent as string}
             entries={glossaryEntries}
@@ -138,6 +213,8 @@ export function DocumentMapPanel({
             documentMapSettings={documentMapSettings}
             selectedTagIds={validSelectedTagIds}
             onNavigateToLine={onNavigateToLine}
+            page={currentPage}
+            translate={translate}
           />
         </div>
       ) : (

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   GlossaryAtomFlags,
@@ -10,6 +11,7 @@ import {
   buildGlossarySurfaceIndex,
   isAmbiguousGlossarySurfaceTextMatch,
   matchGlossarySurfacesInText,
+  matchGlossarySurfacesPerEntry,
   type GlossarySurfaceTextMatch
 } from "../../src/shared/glossarySurfaceMatching";
 
@@ -225,6 +227,150 @@ describe("glossary surface matching (#375)", () => {
       expect(matchText("蝕蝕の刻", [opted])).toHaveLength(2);
       expect(matchText("蝕々の刻", [opted])).toHaveLength(1);
       expect(matchText("（蝕）の刻", [opted])).toHaveLength(1);
+    });
+  });
+
+  describe("start-indexed longest match resolver (O(N+H))", () => {
+    it("resolves the longest matching atom at the same start offset", () => {
+      const entryLong = entry("e-nobu", [
+        atom("e-nobu", "織田信長", 0, "e-nobu-atom-1"),
+        atom("e-nobu", "織田", 0, "e-nobu-atom-2")
+      ]);
+      const matches = matchText("織田信長公記", [entryLong]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].matchedText).toBe("織田信長");
+      expect(matches[0].range).toEqual({ start: 0, end: 4 });
+      expect(matches[0].candidates).toHaveLength(1);
+      expect(matches[0].candidates[0].atomId).toBe("e-nobu-atom-1");
+    });
+
+    it("groups multiple candidate entries for the exact same surface span without duplication", () => {
+      const entry1 = entry("e-1", [atom("e-1", "魔法")]);
+      const entry2 = entry("e-2", [atom("e-2", "魔法")]);
+      const matches = matchText("古代魔法の書", [entry1, entry2]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].matchedText).toBe("魔法");
+      expect(matches[0].range).toEqual({ start: 2, end: 4 });
+      expect(matches[0].candidates).toHaveLength(2);
+      expect(matches[0].candidates.map((c) => c.entryId).sort()).toEqual([
+        "e-1",
+        "e-2"
+      ]);
+    });
+
+    it("resolves successive non-overlapping matches greedily across document offsets", () => {
+      const entry1 = entry("e-1", [atom("e-1", "アオイ")]);
+      const entry2 = entry("e-2", [atom("e-2", "レン")]);
+      const matches = matchText("アオイとレンが歩いた。アオイが呼んだ。", [
+        entry1,
+        entry2
+      ]);
+      expect(matches).toHaveLength(3);
+      expect(matches[0]).toMatchObject({
+        matchedText: "アオイ",
+        range: { start: 0, end: 3 }
+      });
+      expect(matches[1]).toMatchObject({
+        matchedText: "レン",
+        range: { start: 4, end: 6 }
+      });
+      expect(matches[2]).toMatchObject({
+        matchedText: "アオイ",
+        range: { start: 11, end: 14 }
+      });
+    });
+
+    it("verifies source code uses start-offset indexing and eliminates O(N*H) linear scan of all range values", () => {
+      const source = readFileSync(
+        "src/shared/glossarySurfaceMatching.ts",
+        "utf8"
+      );
+      // Confirms matches are indexed by start offset
+      expect(source).toContain("matchesByStart");
+      expect(source).toContain("matchesByStart.get(cursor)");
+      // Confirms the old O(N*H) pattern is removed
+      expect(source).not.toContain("matchesByRange.values()");
+    });
+  });
+
+  describe("matchGlossarySurfacesPerEntry (#403 MEDIUM-1)", () => {
+    it("returns an empty map for empty text or empty index", () => {
+      const emptyIndex = buildGlossarySurfaceIndex([]);
+      expect(matchGlossarySurfacesPerEntry("", emptyIndex).size).toBe(0);
+      expect(matchGlossarySurfacesPerEntry("織田信長", emptyIndex).size).toBe(0);
+
+      const entry1 = entry(entryAId, [atom(entryAId, "織田信長")]);
+      const validIndex = buildGlossarySurfaceIndex([entry1]);
+      expect(matchGlossarySurfacesPerEntry("", validIndex).size).toBe(0);
+    });
+
+    it("matches per-entry occurrences without cross-entry shadowing", () => {
+      const entryShort = entry(entryAId, [atom(entryAId, "信長")]);
+      const entryLong = entry(entryBId, [atom(entryBId, "織田信長")]);
+      const index = buildGlossarySurfaceIndex([entryShort, entryLong]);
+
+      const text = "信長と織田信長が並んだ。";
+      const result = matchGlossarySurfacesPerEntry(text, index);
+
+      // 信長 matches at [0, 2] and [5, 7]
+      const shortOccurrences = result.get(entryAId) ?? [];
+      expect(shortOccurrences).toEqual([
+        { start: 0, end: 2 },
+        { start: 5, end: 7 }
+      ]);
+
+      // 織田信長 matches at [3, 7]
+      const longOccurrences = result.get(entryBId) ?? [];
+      expect(longOccurrences).toEqual([{ start: 3, end: 7 }]);
+    });
+
+    it("applies greedy longest-match forward progression within the same entry", () => {
+      // Entry with multiple atoms where one is a prefix of another
+      const entryMulti = entry(entryAId, [
+        atom(entryAId, "東京"),
+        atom(entryAId, "東京都")
+      ]);
+      const index = buildGlossarySurfaceIndex([entryMulti]);
+
+      const text = "東京都と東京";
+      const result = matchGlossarySurfacesPerEntry(text, index);
+
+      // At index 0, "東京都" is chosen over "東京" because it is longer
+      // At index 4, "東京" matches
+      const occurrences = result.get(entryAId) ?? [];
+      expect(occurrences).toEqual([
+        { start: 0, end: 3 },
+        { start: 4, end: 6 }
+      ]);
+    });
+
+    it("deduplicates multiple atoms of the same entry matching the identical span", () => {
+      const entryDup = entry(entryAId, [
+        atom(entryAId, "白猫", 0, "atom-1"),
+        atom(entryAId, "白猫", 0, "atom-2")
+      ]);
+      const index = buildGlossarySurfaceIndex([entryDup]);
+
+      const text = "白猫がいる。";
+      const result = matchGlossarySurfacesPerEntry(text, index);
+
+      const occurrences = result.get(entryAId) ?? [];
+      expect(occurrences).toEqual([{ start: 0, end: 2 }]);
+    });
+
+    it("respects single-character kanji opt-in and compound guards per entry", () => {
+      const optedInSingle = entry(entryAId, [
+        atom(entryAId, "蝕", GlossaryAtomFlags.AllowSingleCharacterMatch)
+      ]);
+      const index = buildGlossarySurfaceIndex([optedInSingle]);
+
+      // "蝕の時が来た。腐蝕した銅板。"
+      // The isolated "蝕" matches; "腐蝕" is rejected by kanji compound guard
+      const text = "蝕の時が来た。腐蝕した銅板。";
+      const result = matchGlossarySurfacesPerEntry(text, index);
+
+      const occurrences = result.get(entryAId) ?? [];
+      expect(occurrences).toEqual([{ start: 0, end: 1 }]);
     });
   });
 });

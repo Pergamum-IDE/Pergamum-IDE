@@ -329,6 +329,85 @@ export interface DocumentMapViewportRect {
   height: number;
 }
 
+/**
+ * Safe upper bound for the physical Canvas backing store height (px).
+ *
+ * Chromium/Electron limit is measured at 65,535px (65,536px fails silently).
+ * 32,768px (2^15) provides a 50% safety margin while comfortably holding
+ * ~8k–16k visual rows per page across standard DPRs (1.0–2.0).
+ */
+export const DOCUMENT_MAP_PAGE_MAX_BACKING_HEIGHT = 32768;
+
+export interface DocumentMapPage {
+  /** 0-based page index */
+  index: number;
+  /** 0-based start visual row (inclusive) */
+  startVisualRow: number;
+  /** 0-based end visual row (exclusive) */
+  endVisualRow: number;
+  /** Start logical Y coordinate in CSS pixels (= startVisualRow * cellSize) */
+  startLogicalY: number;
+  /** Page height in logical CSS pixels (= (endVisualRow - startVisualRow) * cellSize) */
+  height: number;
+}
+
+export interface ComputeDocumentMapPagesInput {
+  totalVisualRows: number;
+  cellSize?: number;
+  pixelRatio?: number;
+  maxBackingHeight?: number;
+}
+
+/**
+ * Split a Document Map's visual rows into safe physical pages (#403 Phase 2).
+ *
+ * Each page is aligned to complete visual rows (never splits a row) and its
+ * physical backing height (`Math.round(page.height * dpr)`) is guaranteed to
+ * stay <= `maxBackingHeight` (default 32,768px).
+ *
+ * The final page uses only its natural remaining visual rows/height.
+ */
+export function computeDocumentMapPages(
+  input: ComputeDocumentMapPagesInput
+): DocumentMapPage[] {
+  const cellSize = Math.max(
+    1,
+    input.cellSize ?? GLOSSARY_DOCUMENT_MAP_CELL_SIZE
+  );
+  const totalRows = Math.max(1, input.totalVisualRows);
+  const dpr = Math.max(0.1, input.pixelRatio ?? 1);
+  const maxBacking = Math.max(
+    100,
+    input.maxBackingHeight ?? DOCUMENT_MAP_PAGE_MAX_BACKING_HEIGHT
+  );
+
+  const maxCssHeight = maxBacking / dpr;
+  const maxRowsPerPage = Math.max(1, Math.floor(maxCssHeight / cellSize));
+
+  const pages: DocumentMapPage[] = [];
+  let startRow = 0;
+  let pageIndex = 0;
+
+  while (startRow < totalRows) {
+    const endRow = Math.min(totalRows, startRow + maxRowsPerPage);
+    const startLogicalY = startRow * cellSize;
+    const height = (endRow - startRow) * cellSize;
+
+    pages.push({
+      index: pageIndex,
+      startVisualRow: startRow,
+      endVisualRow: endRow,
+      startLogicalY,
+      height
+    });
+
+    startRow = endRow;
+    pageIndex += 1;
+  }
+
+  return pages;
+}
+
 export interface BuildGlossaryDocumentMapPlanInput {
   text: string;
   entries: readonly GlossaryEntry[];
@@ -888,6 +967,181 @@ export function isOffsetInDocumentMapRange(
 }
 
 /**
+ * Event for forward-sweeping dialogue delimiter ranges (#403).
+ */
+export interface DocumentMapDialogueSweepEvent {
+  offset: number;
+  type: 1 | -1; // 1 = start, -1 = end
+  pairIndex: number;
+}
+
+export function buildDocumentMapDialogueSweepEvents(
+  ranges: readonly DocumentMapDialogueRange[]
+): DocumentMapDialogueSweepEvent[] {
+  const events: DocumentMapDialogueSweepEvent[] = [];
+  for (const range of ranges) {
+    events.push({
+      offset: range.startOffset,
+      type: 1,
+      pairIndex: range.pairIndex
+    });
+    events.push({
+      offset: range.endOffset,
+      type: -1,
+      pairIndex: range.pairIndex
+    });
+  }
+  events.sort((a, b) => {
+    if (a.offset !== b.offset) {
+      return a.offset - b.offset;
+    }
+    return a.type - b.type; // end (-1) before start (1)
+  });
+  return events;
+}
+
+/**
+ * Forward-sweep cursor for dialogue ranges (#403).
+ * Tracks active pair counts and resolves the highest active pairIndex in O(1) amortised time.
+ */
+export class DocumentMapDialogueSweepCursor {
+  private readonly events: readonly DocumentMapDialogueSweepEvent[];
+  private readonly pairColors: readonly string[];
+  private readonly activePairCounts: Int32Array;
+  private currentMaxPairIndex: number = -1;
+  private eventIndex: number = 0;
+
+  constructor(
+    dialogues: readonly DocumentMapDialogueRange[],
+    dialoguePairs: readonly DocumentMapDialogueDelimiterPair[]
+  ) {
+    this.events = buildDocumentMapDialogueSweepEvents(dialogues);
+    this.pairColors = dialoguePairs.map((p) => p.color);
+    this.activePairCounts = new Int32Array(dialoguePairs.length);
+  }
+
+  advanceTo(offset: number): string | null {
+    while (
+      this.eventIndex < this.events.length &&
+      this.events[this.eventIndex].offset <= offset
+    ) {
+      const ev = this.events[this.eventIndex];
+      if (ev.type === 1) {
+        this.activePairCounts[ev.pairIndex] += 1;
+        if (ev.pairIndex > this.currentMaxPairIndex) {
+          this.currentMaxPairIndex = ev.pairIndex;
+        }
+      } else {
+        this.activePairCounts[ev.pairIndex] -= 1;
+        if (
+          this.activePairCounts[ev.pairIndex] === 0 &&
+          ev.pairIndex === this.currentMaxPairIndex
+        ) {
+          while (
+            this.currentMaxPairIndex >= 0 &&
+            this.activePairCounts[this.currentMaxPairIndex] === 0
+          ) {
+            this.currentMaxPairIndex -= 1;
+          }
+        }
+      }
+      this.eventIndex += 1;
+    }
+    return this.currentMaxPairIndex >= 0
+      ? this.pairColors[this.currentMaxPairIndex] ?? null
+      : null;
+  }
+}
+
+/**
+ * Event for forward-sweeping glossary occurrences (#403).
+ */
+export interface DocumentMapGlossarySweepEvent {
+  offset: number;
+  type: 1 | -1; // 1 = start, -1 = end
+  occurrenceIndex: number;
+  color: string;
+}
+
+export function buildDocumentMapGlossarySweepEvents(
+  occurrences: readonly GlossaryDocumentMapOccurrence[]
+): DocumentMapGlossarySweepEvent[] {
+  const events: DocumentMapGlossarySweepEvent[] = [];
+  for (let i = 0; i < occurrences.length; i += 1) {
+    const occ = occurrences[i];
+    events.push({
+      offset: occ.startOffset,
+      type: 1,
+      occurrenceIndex: i,
+      color: occ.color
+    });
+    events.push({
+      offset: occ.endOffset,
+      type: -1,
+      occurrenceIndex: i,
+      color: occ.color
+    });
+  }
+  events.sort((a, b) => {
+    if (a.offset !== b.offset) {
+      return a.offset - b.offset;
+    }
+    if (a.type !== b.type) {
+      return a.type - b.type; // end (-1) before start (1)
+    }
+    return a.occurrenceIndex - b.occurrenceIndex;
+  });
+  return events;
+}
+
+/**
+ * Forward-sweep cursor for glossary occurrences (#403).
+ * Preserves the exact winner semantics of occurrences.find (lowest occurrenceIndex wins).
+ */
+export class DocumentMapGlossarySweepCursor {
+  private readonly events: readonly DocumentMapGlossarySweepEvent[];
+  private readonly activeOccurrences: { occurrenceIndex: number; color: string }[] = [];
+  private eventIndex: number = 0;
+
+  constructor(occurrences: readonly GlossaryDocumentMapOccurrence[]) {
+    this.events = buildDocumentMapGlossarySweepEvents(occurrences);
+  }
+
+  advanceTo(offset: number): string | null {
+    while (
+      this.eventIndex < this.events.length &&
+      this.events[this.eventIndex].offset <= offset
+    ) {
+      const ev = this.events[this.eventIndex];
+      if (ev.type === 1) {
+        let insertIdx = 0;
+        while (
+          insertIdx < this.activeOccurrences.length &&
+          this.activeOccurrences[insertIdx].occurrenceIndex < ev.occurrenceIndex
+        ) {
+          insertIdx += 1;
+        }
+        this.activeOccurrences.splice(insertIdx, 0, {
+          occurrenceIndex: ev.occurrenceIndex,
+          color: ev.color
+        });
+      } else {
+        const removeIdx = this.activeOccurrences.findIndex(
+          (o) => o.occurrenceIndex === ev.occurrenceIndex
+        );
+        if (removeIdx !== -1) {
+          this.activeOccurrences.splice(removeIdx, 1);
+        }
+      }
+      this.eventIndex += 1;
+    }
+    return this.activeOccurrences.length > 0
+      ? this.activeOccurrences[0].color
+      : null;
+  }
+}
+
+/**
  * Build the full draw plan. Walks every line, then every column of that line
  * (line terminators are skipped, so `offset` stays aligned with the editor /
  * occurrence unit), placing each character in the wrapped visual grid. Each
@@ -955,6 +1209,9 @@ export function buildGlossaryDocumentMapPlan(
   );
   const dialogues = collectDocumentMapDialogueRanges(text, dialoguePairs);
 
+  const dialogueCursor = new DocumentMapDialogueSweepCursor(dialogues, dialoguePairs);
+  const glossaryCursor = new DocumentMapGlossarySweepCursor(occurrences);
+
   const pixels: GlossaryDocumentMapPixel[] = [];
 
   for (const line of lines) {
@@ -963,10 +1220,13 @@ export function buildGlossaryDocumentMapPlan(
       const visualColumn = columnIndex % wrapColumns;
       const visualRow =
         line.baseVisualRow + Math.floor(columnIndex / wrapColumns);
-      const hitColor = glossaryDocumentMapHitColorAtOffset(offset, occurrences);
-      const hit = hitColor !== null;
-      const dialogueColor = documentMapDialogueColorAtOffset(offset, dialogues);
+
+      const dialogueColor = dialogueCursor.advanceTo(offset);
       const dialogue = dialogueColor !== null;
+
+      const hitColor = glossaryCursor.advanceTo(offset);
+      const hit = hitColor !== null;
+
       const rect = resolveDocumentMapCellRect(visualColumn, visualRow, cellSize);
 
       pixels.push({
@@ -1015,7 +1275,8 @@ export interface GlossaryDocumentMapDrawContext {
 
 function fillPixelsGroupedByColor(
   context: GlossaryDocumentMapDrawContext,
-  pixels: readonly GlossaryDocumentMapPixel[]
+  pixels: readonly GlossaryDocumentMapPixel[],
+  offsetY = 0
 ): void {
   const byColor = new Map<string, GlossaryDocumentMapPixel[]>();
   for (const pixel of pixels) {
@@ -1029,44 +1290,79 @@ function fillPixelsGroupedByColor(
   for (const [color, group] of byColor) {
     context.fillStyle = color;
     for (const pixel of group) {
-      context.fillRect(pixel.x, pixel.y, pixel.width, pixel.height);
+      context.fillRect(pixel.x, pixel.y - offsetY, pixel.width, pixel.height);
     }
   }
 }
 
 /**
- * Paint `plan` onto `context` in LOGICAL pixel space
- * (`plan.logicalPixelWidth` × `plan.logicalPixelHeight`). After disabling image
- * smoothing and clearing to transparent, cells are drawn in three passes so the
- * later ones overwrite the earlier ones:
- *   1. NARRATION characters — `documentMap.narrationColor`,
- *   2. DIALOGUE characters (not a Glossary hit) — the winning pair's colour
- *      (a later `dialogueDelimiterPairs` entry wins an overlap),
- *   3. Glossary HIT characters — each in its Entry's primary-tag colour (or
- *      `documentMap.glossaryFallbackColor`), frontmost.
- * Each pass groups its pixels by colour to minimise `fillStyle` churn (dialogue
- * / hit overlaps are already resolved per pixel in `pixel.color`). Every cell
- * is a `cellSize x cellSize` square. Precedence is hit > dialogue > narration.
- * The editor-viewport rectangle is a separate DOM overlay the renderer stacks
- * ON TOP of this canvas, so it always reads last.
+ * Paint `plan` onto `context` in LOGICAL pixel space.
+ *
+ * When `page` is provided (#403 Phase 2), only pixels within `page`
+ * are drawn, with logical Y shifted by `-page.startLogicalY`.
+ * When `page` is omitted, the entire plan is drawn into a full-height context.
  */
 export function drawGlossaryDocumentMap(
   context: GlossaryDocumentMapDrawContext,
-  plan: GlossaryDocumentMapPlan
+  plan: GlossaryDocumentMapPlan,
+  page?: DocumentMapPage
 ): void {
+  const targetHeight = page ? page.height : plan.logicalPixelHeight;
+  const offsetY = page ? page.startLogicalY : 0;
+
   context.imageSmoothingEnabled = false;
-  context.clearRect(0, 0, plan.logicalPixelWidth, plan.logicalPixelHeight);
+  context.clearRect(0, 0, plan.logicalPixelWidth, targetHeight);
+
+  const pixels = page
+    ? plan.pixels.filter(
+        (pixel) =>
+          pixel.visualRow >= page.startVisualRow &&
+          pixel.visualRow < page.endVisualRow
+      )
+    : plan.pixels;
 
   fillPixelsGroupedByColor(
     context,
-    plan.pixels.filter((pixel) => !pixel.hit && !pixel.dialogue)
+    pixels.filter((pixel) => !pixel.hit && !pixel.dialogue),
+    offsetY
   );
   fillPixelsGroupedByColor(
     context,
-    plan.pixels.filter((pixel) => pixel.dialogue && !pixel.hit)
+    pixels.filter((pixel) => pixel.dialogue && !pixel.hit),
+    offsetY
   );
   fillPixelsGroupedByColor(
     context,
-    plan.pixels.filter((pixel) => pixel.hit)
+    pixels.filter((pixel) => pixel.hit),
+    offsetY
   );
+}
+
+/**
+ * Yield execution long enough for the browser to paint committed DOM updates (#403).
+ *
+ * A single requestAnimationFrame callback runs BEFORE the frame is styled,
+ * laid out, and painted. Scheduling a second requestAnimationFrame (or
+ * falling back to setTimeout) ensures that the first frame (containing the
+ * skeleton placeholder) has finished its paint and composite lifecycle
+ * before heavy synchronous work starts.
+ */
+export function waitForBrowserPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => resolve());
+        } else if (typeof setTimeout === "function") {
+          setTimeout(resolve, 0);
+        } else {
+          resolve();
+        }
+      });
+    } else if (typeof setTimeout === "function") {
+      setTimeout(resolve, 0);
+    } else {
+      resolve();
+    }
+  });
 }
