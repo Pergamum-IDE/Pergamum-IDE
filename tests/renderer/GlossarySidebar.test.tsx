@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryEntry, GlossaryTag } from "../../src/shared/glossary";
 import type { Translate } from "../../src/shared/i18n";
 import { GlossarySidebar } from "../../src/renderer/GlossarySidebar";
+import * as occNav from "../../src/renderer/glossaryOccurrenceNavigation";
 
 const translate: Translate = (key, values) =>
   values ? `${key}:${JSON.stringify(values)}` : key;
@@ -141,7 +142,11 @@ describe("GlossarySidebar (#375)", () => {
       activeDocumentContent: "織田信長は第六天魔王と呼ばれた。第六天魔王。"
     });
 
-    act(() => button("＞").click());
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>(".glossarySidebarExpandButton")!
+        .click()
+    );
     const row = rows()[0];
     // #375: the non-representative atom chips were removed from the sidebar.
     expect(row.querySelector(".glossarySidebarAtomChip")).toBeNull();
@@ -321,5 +326,159 @@ describe("GlossarySidebar (#375)", () => {
     await render({ projectRootPath: null });
     expect(container.textContent).toContain("glossary.noProject");
     expect(listMock).not.toHaveBeenCalled();
+  });
+
+  it("renders SVG chevron icons for the expand/collapse button", async () => {
+    await render();
+    const expandButton = rows()[0].querySelector<HTMLButtonElement>(
+      ".glossarySidebarExpandButton"
+    )!;
+    const iconSpan = expandButton.querySelector<HTMLSpanElement>(
+      ".glossarySidebarExpandIcon"
+    );
+    expect(iconSpan).not.toBeNull();
+    expect(iconSpan?.getAttribute("aria-hidden")).toBe("true");
+    expect(iconSpan?.innerHTML).toContain("feather-chevrons-right");
+
+    act(() => expandButton.click());
+    expect(iconSpan?.innerHTML).toContain("feather-chevrons-down");
+  });
+
+  it("displays accurate occurrence counts from unified scan for all visible entries including 0-hit entries", async () => {
+    await render({
+      activeDocumentContent: "織田信長は第六天魔王と呼ばれた。"
+    });
+    // expand row 0 (nobunaga: 織田信長 x1 + 第六天魔王 x1 = 2)
+    const row0 = rows()[0];
+    act(() =>
+      row0
+        .querySelector<HTMLButtonElement>(".glossarySidebarExpandButton")!
+        .click()
+    );
+    expect(row0.textContent).toContain('glossary.hitCount:{"count":2}');
+
+    // expand row 1 (sakuradamon: 0 hits)
+    const row1 = rows()[1];
+    act(() =>
+      row1
+        .querySelector<HTMLButtonElement>(".glossarySidebarExpandButton")!
+        .click()
+    );
+    expect(row1.textContent).toContain('glossary.hitCount:{"count":0}');
+  });
+
+  it("displays occurrence counts preserving per-entry independence when surfaces nest (e.g. 信長 within 織田信長) (#403 MEDIUM-1)", async () => {
+    const nobunagaShort = entry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000004",
+      ["信長"],
+      [tagWarrior]
+    );
+    listMock.mockResolvedValue([nobunaga, nobunagaShort]);
+
+    await render({
+      activeDocumentContent: "織田信長は第六天魔王と呼ばれた。"
+    });
+
+    const entryRows = rows();
+    expect(entryRows).toHaveLength(2);
+
+    // Expand row 0 (nobunaga: "織田信長" x1 + "第六天魔王" x1 = 2)
+    act(() =>
+      entryRows[0]
+        .querySelector<HTMLButtonElement>(".glossarySidebarExpandButton")!
+        .click()
+    );
+    expect(entryRows[0].textContent).toContain('glossary.hitCount:{"count":2}');
+
+    // Expand row 1 (nobunagaShort: "信長" x1 = 1, never shadowed by 織田信長)
+    act(() =>
+      entryRows[1]
+        .querySelector<HTMLButtonElement>(".glossarySidebarExpandButton")!
+        .click()
+    );
+    expect(entryRows[1].textContent).toContain('glossary.hitCount:{"count":1}');
+  });
+
+  it("does not recompute occurrence hits on chevron toggle, search query, or tag filter, but does recompute when document content changes", async () => {
+    const spy = vi.spyOn(occNav, "tallyGlossaryEntryHits");
+    const props = await render({
+      activeDocumentContent: "織田信長は第六天魔王と呼ばれた。桜田門。"
+    });
+
+    const initialCallCount = spy.mock.calls.length;
+    expect(initialCallCount).toBeGreaterThan(0);
+
+    // Chevron expand: 0 additional recomputations
+    const expandButton = rows()[0].querySelector<HTMLButtonElement>(
+      ".glossarySidebarExpandButton"
+    )!;
+    act(() => expandButton.click());
+    expect(spy.mock.calls.length).toBe(initialCallCount);
+
+    // Chevron collapse: 0 additional recomputations
+    act(() => expandButton.click());
+    expect(spy.mock.calls.length).toBe(initialCallCount);
+
+    // Search query change: 0 additional recomputations
+    const search = container.querySelector<HTMLInputElement>(
+      ".glossarySidebarSearch"
+    )!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(search, "織田");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(spy.mock.calls.length).toBe(initialCallCount);
+
+    // Tag filter change: 0 additional recomputations
+    const select = container.querySelector<HTMLSelectElement>(
+      ".glossarySidebarTagFilter select"
+    )!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLSelectElement.prototype,
+        "value"
+      )!.set!;
+      setter.call(select, tagWarrior.id);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(spy.mock.calls.length).toBe(initialCallCount);
+
+    // Occurrence navigation button click: 0 additional recomputations
+    const [prevBtn, nextBtn] = Array.from(
+      rows()[0].querySelectorAll<HTMLButtonElement>(
+        ".glossarySidebarOccurrenceButton"
+      )
+    );
+    act(() => prevBtn.click());
+    act(() => nextBtn.click());
+    expect(spy.mock.calls.length).toBe(initialCallCount);
+
+    // highlightedEntryId change: 0 additional recomputations
+    await act(async () => {
+      root.render(
+        React.createElement(GlossarySidebar, {
+          ...props,
+          highlightedEntryId: nobunaga.id
+        })
+      );
+      await Promise.resolve();
+    });
+    expect(spy.mock.calls.length).toBe(initialCallCount);
+
+    // Document content change: recomputes once
+    await act(async () => {
+      root.render(
+        React.createElement(GlossarySidebar, {
+          ...props,
+          activeDocumentContent: "新しく編集された文書。織田信長。"
+        })
+      );
+      await Promise.resolve();
+    });
+    expect(spy.mock.calls.length).toBe(initialCallCount + 1);
   });
 });

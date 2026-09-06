@@ -349,6 +349,25 @@ describe("resolveDocumentMapLensDragTarget (#375, Phase 2)", () => {
     }
   });
 
+  it("resolves targetVisualRow correctly when pointer is on page 2+ in global coordinates (#403 Phase 2)", () => {
+    // Page 1 startLogicalY = 32768
+    // Pointer local map Y = 200 -> globalPointerMapY = 32768 + 200 = 32968
+    // Grab offset = 10, lensHeight = 40, mapHeight = 70000, cellSize = 2
+    const result = resolveDocumentMapLensDragTarget({
+      pointerMapY: 32968,
+      grabOffsetY: 10,
+      lensHeight: 40,
+      mapHeight: 70000,
+      cellSize: 2
+    });
+    // nextLensY = 32968 - 10 = 32958
+    // targetVisualRow = floor(32958 / 2) = 16479
+    expect(result).toEqual({
+      nextLensY: 32958,
+      targetVisualRow: 16479
+    });
+  });
+
   it("is null when the layout is not ready (mapHeight <= 0) or cellSize <= 0", () => {
     expect(
       resolveDocumentMapLensDragTarget({ ...base, pointerMapY: 10, mapHeight: 0 })

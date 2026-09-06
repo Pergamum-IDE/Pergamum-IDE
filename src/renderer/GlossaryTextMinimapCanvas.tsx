@@ -7,6 +7,7 @@ import {
   type MouseEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
+import type { Translate } from "../shared/i18n";
 import {
   DOCUMENT_MAP_DEFAULT_VIEWPORT_LENS_OPACITY,
   isValidViewportLensOpacity,
@@ -27,21 +28,40 @@ import {
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { EditorScrollAlign } from "./editorScrollAlign";
 import {
-  buildGlossaryDocumentMapPlan,
+  GLOSSARY_DOCUMENT_MAP_CELL_SIZE,
+  buildDocumentMapLineLayout,
   buildDocumentMapViewportRect,
+  buildGlossaryDocumentMapPlan,
   drawGlossaryDocumentMap,
   resolveDocumentMapClickToLineIndex,
   resolveDocumentMapVisualRowToLineIndex,
   resolveDocumentMapWrapColumns,
+  waitForBrowserPaint,
+  type DocumentMapPage,
+  type GlossaryDocumentMapPlan,
   type GlossaryDocumentMapRenderMode
 } from "./glossaryDocumentMap";
 
+function arePlanKeysEqual(
+  a: readonly unknown[],
+  b: readonly unknown[]
+): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (!Object.is(a[i], b[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
- * Upper bound on the Canvas BACKING STORE side (px). Real prose stays well
- * under this; only a pathologically long document trips it, and only then is
- * the map uniformly shrunk to fit (still scrollable).
+ * Issue #403 Phase 1 & 2: single-canvas / paged rendering.
+ * Natural height is preserved without vertical scale reduction or fit-to-cap.
+ * The scroll container (.documentMapBody) handles height overflow.
  */
-const MAX_CANVAS_BACKING_SIDE = 16384;
 
 interface GlossaryTextMinimapCanvasProps {
   /** The active Markdown document's working text (already known non-empty). */
@@ -81,8 +101,14 @@ interface GlossaryTextMinimapCanvasProps {
     lineIndex: number,
     options?: { align?: EditorScrollAlign }
   ) => void;
+  /**
+   * #403 Phase 2: the currently displayed physical Document Map page.
+   * Omitted -> single-page mode (page 0 with full plan height).
+   */
+  page?: DocumentMapPage;
   /** Phase 2 hook — accepted, unused in Phase 1. */
   renderMode?: GlossaryDocumentMapRenderMode;
+  translate: Translate;
 }
 
 /**
@@ -101,7 +127,9 @@ export function GlossaryTextMinimapCanvas({
   documentMapSettings,
   selectedTagIds,
   onNavigateToLine,
-  renderMode
+  page,
+  renderMode,
+  translate
 }: GlossaryTextMinimapCanvasProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -136,41 +164,116 @@ export function GlossaryTextMinimapCanvas({
     [editorWidth]
   );
 
-  // Line-aware / wrap-aware plan in LOGICAL pixel space
-  // (`wrapColumns * cellSize` × `totalVisualRows * cellSize`).
-  const plan = useMemo(
+  // Fast line model: calculates total visual rows and line spans without rasterization.
+  const lineLayout = useMemo(
+    () => buildDocumentMapLineLayout(text, wrapColumns),
+    [text, wrapColumns]
+  );
+
+  const contentWidth = wrapColumns * GLOSSARY_DOCUMENT_MAP_CELL_SIZE;
+  const contentHeight =
+    Math.max(1, lineLayout.totalVisualRows) * GLOSSARY_DOCUMENT_MAP_CELL_SIZE;
+
+  // #403 Phase 2: active physical page (or single full-document page if omitted)
+  const activePage: DocumentMapPage = page ?? {
+    index: 0,
+    startVisualRow: 0,
+    endVisualRow: lineLayout.totalVisualRows,
+    startLogicalY: 0,
+    height: contentHeight
+  };
+
+  // Immediate layout-based plan for navigation and viewport lens.
+  const layoutPlan = useMemo(
+    () => ({
+      lines: lineLayout.lines,
+      wrapColumns,
+      cellSize: GLOSSARY_DOCUMENT_MAP_CELL_SIZE,
+      logicalPixelWidth: contentWidth,
+      logicalPixelHeight: contentHeight
+    }),
+    [lineLayout.lines, wrapColumns, contentWidth, contentHeight]
+  );
+
+  // Editor-viewport rectangle over the map in canonical global space.
+  // Recomputed on scroll WITHOUT touching the canvas (the plan is unchanged).
+  const viewportRect = useMemo(
+    () => buildDocumentMapViewportRect(layoutPlan, visibleRange, text.length),
+    [layoutPlan, visibleRange, text.length]
+  );
+
+  // #403 Phase 2: page-local viewport lens rectangle.
+  // When the global viewport intersects the active page, compute the local
+  // intersection; if the lens is entirely on another page, return null.
+  const pageLocalViewportRect = useMemo(() => {
+    if (!viewportRect) {
+      return null;
+    }
+    const pageTop = activePage.startLogicalY;
+    const pageBottom = activePage.startLogicalY + activePage.height;
+    const lensTop = Math.max(viewportRect.y, pageTop);
+    const lensBottom = Math.min(
+      viewportRect.y + viewportRect.height,
+      pageBottom
+    );
+
+    if (lensBottom <= lensTop) {
+      return null;
+    }
+    return {
+      x: 0,
+      y: lensTop - pageTop,
+      width: layoutPlan.logicalPixelWidth,
+      height: lensBottom - lensTop
+    };
+  }, [
+    viewportRect,
+    activePage.startLogicalY,
+    activePage.height,
+    layoutPlan.logicalPixelWidth
+  ]);
+
+  const currentRenderKey = useMemo(
     () =>
-      buildGlossaryDocumentMapPlan({
+      [
         text,
-        entries,
         wrapColumns,
-        narrationColor: documentMapSettings?.narrationColor,
-        glossaryFallbackColor: documentMapSettings?.glossaryFallbackColor,
-        dialogueDelimiterPairs: documentMapSettings?.dialogueDelimiterPairs,
-        adjustTagColorsForVisibility:
-          documentMapSettings?.adjustTagColorsForVisibility,
-        selectedTagIds,
-        renderMode
-      }),
+        activePage.index,
+        activePage.startVisualRow,
+        activePage.endVisualRow,
+        activePage.startLogicalY,
+        activePage.height,
+        documentMapSettings?.narrationColor ?? "",
+        documentMapSettings?.glossaryFallbackColor ?? "",
+        documentMapSettings?.adjustTagColorsForVisibility ?? false,
+        (selectedTagIds ?? []).join(","),
+        renderMode ?? "",
+        entries
+      ] as const,
     [
       text,
-      entries,
       wrapColumns,
+      activePage.index,
+      activePage.startVisualRow,
+      activePage.endVisualRow,
+      activePage.startLogicalY,
+      activePage.height,
       documentMapSettings,
       selectedTagIds,
-      renderMode
+      renderMode,
+      entries
     ]
   );
 
-  // Editor-viewport rectangle over the map. Recomputed on scroll WITHOUT
-  // touching the canvas (the plan is unchanged).
-  const viewportRect = useMemo(
-    () => buildDocumentMapViewportRect(plan, visibleRange, text.length),
-    [plan, visibleRange, text.length]
-  );
+  const [renderedKey, setRenderedKey] = useState<readonly unknown[] | null>(null);
+  const isPending = !renderedKey || !arePlanKeysEqual(renderedKey, currentRenderKey);
 
-  const contentWidth = plan.logicalPixelWidth;
-  const contentHeight = plan.logicalPixelHeight;
+  const planCacheRef = useRef<{
+    planKey: readonly unknown[];
+    plan: GlossaryDocumentMapPlan;
+  } | null>(null);
+
+  const renderGenerationRef = useRef(0);
 
   // #375: viewport-lens FILL alpha from settings (`0.1`..`0.9`); an
   // absent / out-of-range value falls back to the built-in default.
@@ -199,10 +302,8 @@ export function GlossaryTextMinimapCanvas({
     });
   };
 
-  // #375: click-to-navigate. Resolve the click's map Y to a source line and
-  // hand it to the editor — no caret / selection / doc change. An unresolvable
-  // click (above the map, empty layout) is a no-op. A click that the browser
-  // fires right after a lens DRAG is swallowed (see the pointer handlers).
+  // #375 / #403: click-to-navigate. Resolve the page-local click's map Y +
+  // activePage.startLogicalY into canonical global map Y, then map to source line.
   const handleClick = (event: MouseEvent<HTMLDivElement>): void => {
     if (suppressNextClickRef.current) {
       suppressNextClickRef.current = false;
@@ -218,10 +319,11 @@ export function GlossaryTextMinimapCanvas({
       return;
     }
 
+    const globalMapY = point.mapY + activePage.startLogicalY;
     const lineIndex = resolveDocumentMapClickToLineIndex({
-      mapY: point.mapY,
-      cellSize: plan.cellSize,
-      lines: plan.lines
+      mapY: globalMapY,
+      cellSize: GLOSSARY_DOCUMENT_MAP_CELL_SIZE,
+      lines: layoutPlan.lines
     });
 
     if (lineIndex !== null) {
@@ -230,24 +332,17 @@ export function GlossaryTextMinimapCanvas({
     }
   };
 
-  // #375 viewport-lens drag. `pointerdown` inside the lens begins a drag
-  // `candidate` and captures the pointer; `pointermove` past the threshold
-  // promotes it to `dragging`; `pointerup` / `pointercancel` release it. While
-  // `dragging`, each move maps the pointer's map Y (minus `grabOffsetY`) to a
-  // target visual row → source line and scrolls the active Markdown editor
-  // there, reusing the click-to-scroll path (`onNavigateToLine`). The editor's
-  // own scroll then feeds a fresh `visibleRange`, so the lens follows. The
-  // click-suppression keeps a drag from also firing click-to-scroll.
+  // #375 / #403: hover detection for the page-local lens.
   const pointerOverLens = (event: {
     clientX: number;
     clientY: number;
   }): boolean => {
-    if (!viewportRect) {
+    if (!pageLocalViewportRect) {
       return false;
     }
     const point = mapPointFor(event);
     return point
-      ? hitTestViewportLens({ ...point, rect: viewportRect })
+      ? hitTestViewportLens({ ...point, rect: pageLocalViewportRect })
       : false;
   };
 
@@ -322,12 +417,13 @@ export function GlossaryTextMinimapCanvas({
       return;
     }
 
+    const globalPointerMapY = point.mapY + activePage.startLogicalY;
     const target = resolveDocumentMapLensDragTarget({
-      pointerMapY: point.mapY,
+      pointerMapY: globalPointerMapY,
       grabOffsetY,
       lensHeight: viewportRect.height,
-      mapHeight: contentHeight,
-      cellSize: plan.cellSize
+      mapHeight: layoutPlan.logicalPixelHeight,
+      cellSize: layoutPlan.cellSize
     });
     if (!target) {
       return;
@@ -335,7 +431,7 @@ export function GlossaryTextMinimapCanvas({
 
     const lineIndex = resolveDocumentMapVisualRowToLineIndex(
       target.targetVisualRow,
-      plan.lines
+      layoutPlan.lines
     );
     if (
       lineIndex === null ||
@@ -374,14 +470,14 @@ export function GlossaryTextMinimapCanvas({
     // A fresh press starts a fresh interaction — drop any stale suppression.
     suppressNextClickRef.current = false;
 
-    if (event.button !== 0 || !viewportRect) {
+    if (event.button !== 0 || !pageLocalViewportRect) {
       return;
     }
 
     const point = mapPointFor(event);
     if (
       !point ||
-      !hitTestViewportLens({ ...point, rect: viewportRect })
+      !hitTestViewportLens({ ...point, rect: pageLocalViewportRect })
     ) {
       return;
     }
@@ -391,7 +487,7 @@ export function GlossaryTextMinimapCanvas({
       clientX: event.clientX,
       clientY: event.clientY,
       mapY: point.mapY,
-      lensRectY: viewportRect.y
+      lensRectY: pageLocalViewportRect.y
     });
     // Fresh gesture: forget the previous drag's target line and any frame that
     // somehow outlived it.
@@ -499,45 +595,116 @@ export function GlossaryTextMinimapCanvas({
       setLensCursor("none");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, contentHeight]);
+  }, [text, activePage.startLogicalY, activePage.height]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
+    let isCancelled = false;
+    renderGenerationRef.current += 1;
+    const myGeneration = renderGenerationRef.current;
+
+    async function runRender(): Promise<void> {
+      // 1. Yield execution to ensure the committed skeleton placeholder is painted to display
+      await waitForBrowserPaint();
+
+      if (isCancelled || myGeneration !== renderGenerationRef.current) {
+        return;
+      }
+
+      // 2. Obtain full plan (reusing cached plan across pages if plan-level inputs are identical)
+      const currentPlanKey = [
+        text,
+        wrapColumns,
+        documentMapSettings?.narrationColor ?? "",
+        documentMapSettings?.glossaryFallbackColor ?? "",
+        documentMapSettings?.dialogueDelimiterPairs,
+        documentMapSettings?.adjustTagColorsForVisibility ?? false,
+        (selectedTagIds ?? []).join(","),
+        renderMode,
+        entries
+      ] as const;
+
+      let plan: GlossaryDocumentMapPlan;
+      if (
+        planCacheRef.current &&
+        arePlanKeysEqual(planCacheRef.current.planKey, currentPlanKey)
+      ) {
+        plan = planCacheRef.current.plan;
+      } else {
+        plan = buildGlossaryDocumentMapPlan({
+          text,
+          entries,
+          wrapColumns,
+          narrationColor: documentMapSettings?.narrationColor,
+          glossaryFallbackColor: documentMapSettings?.glossaryFallbackColor,
+          dialogueDelimiterPairs: documentMapSettings?.dialogueDelimiterPairs,
+          adjustTagColorsForVisibility:
+            documentMapSettings?.adjustTagColorsForVisibility,
+          selectedTagIds,
+          renderMode
+        });
+        planCacheRef.current = { planKey: currentPlanKey, plan };
+      }
+
+      if (isCancelled || myGeneration !== renderGenerationRef.current) {
+        return;
+      }
+
+      // 3. Draw page pixels to Canvas
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const pixelRatio =
+          typeof window !== "undefined" && window.devicePixelRatio > 0
+            ? window.devicePixelRatio
+            : 1;
+        const scale = pixelRatio;
+
+        canvas.width = Math.max(1, Math.round(contentWidth * scale));
+        canvas.height = Math.max(1, Math.round(activePage.height * scale));
+
+        const context = canvas.getContext("2d");
+        if (context) {
+          context.imageSmoothingEnabled = false;
+          context.setTransform(scale, 0, 0, scale, 0, 0);
+          drawGlossaryDocumentMap(context, plan, activePage);
+        }
+      }
+
+      if (isCancelled || myGeneration !== renderGenerationRef.current) {
+        return;
+      }
+
+      // 4. Mark active page as rendered, replacing skeleton with Canvas
+      setRenderedKey(currentRenderKey);
     }
 
-    const pixelRatio =
-      typeof window !== "undefined" && window.devicePixelRatio > 0
-        ? window.devicePixelRatio
-        : 1;
-    // Content height is preserved (the scroll container handles overflow); only
-    // a pathologically tall document is uniformly downscaled to fit the cap.
-    const fit = Math.min(
-      1,
-      MAX_CANVAS_BACKING_SIDE / Math.max(1, contentWidth * pixelRatio),
-      MAX_CANVAS_BACKING_SIDE / Math.max(1, contentHeight * pixelRatio)
-    );
-    const scale = pixelRatio * fit;
+    runRender();
 
-    canvas.width = Math.max(1, Math.round(contentWidth * scale));
-    canvas.height = Math.max(1, Math.round(contentHeight * scale));
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    currentRenderKey,
+    contentWidth,
+    activePage,
+    text,
+    entries,
+    wrapColumns,
+    documentMapSettings,
+    selectedTagIds,
+    renderMode
+  ]);
 
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return;
-    }
-
-    context.imageSmoothingEnabled = false;
-    context.setTransform(scale, 0, 0, scale, 0, 0);
-    drawGlossaryDocumentMap(context, plan);
-  }, [plan, contentWidth, contentHeight]);
+  const pixelRatio =
+    typeof window !== "undefined" && window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1;
+  const scale = pixelRatio;
 
   return (
     <div
       className="glossaryDocumentMapCanvasHost"
       ref={hostRef}
-      style={{ width: `${contentWidth}px`, height: `${contentHeight}px` }}
+      style={{ width: `${contentWidth}px`, height: `${activePage.height}px` }}
       data-navigable={onNavigateToLine ? true : undefined}
       data-lens-drag={
         lensCursor === "grabbing"
@@ -557,16 +724,35 @@ export function GlossaryTextMinimapCanvas({
       <canvas
         className="glossaryDocumentMapCanvas"
         ref={canvasRef}
+        width={Math.max(1, Math.round(contentWidth * scale))}
+        height={Math.max(1, Math.round(activePage.height * scale))}
         aria-hidden="true"
       />
-      {viewportRect ? (
+      {isPending ? (
+        <div className="documentMapSkeleton" aria-busy="true">
+          <div className="documentMapSkeletonLines" aria-hidden="true">
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "60%" }} />
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "85%" }} />
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "45%" }} />
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "70%" }} />
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "55%" }} />
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "90%" }} />
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "35%" }} />
+            <span className="documentMapSkeletonLine" style={{ inlineSize: "80%" }} />
+          </div>
+          <div className="documentMapSkeletonText">
+            {translate("documentMap.rendering")}
+          </div>
+        </div>
+      ) : null}
+      {pageLocalViewportRect ? (
         <div
           className="documentMapViewport"
           aria-hidden="true"
           style={
             {
-              top: `${viewportRect.y}px`,
-              height: `${viewportRect.height}px`,
+              top: `${pageLocalViewportRect.y}px`,
+              height: `${pageLocalViewportRect.height}px`,
               // #375: the lens FILL alpha is settings-driven
               // (`documentMap.viewportLensOpacity`). Border / edge stay CSS.
               "--document-map-viewport-fill": `rgba(255, 255, 255, ${lensFillOpacity})`

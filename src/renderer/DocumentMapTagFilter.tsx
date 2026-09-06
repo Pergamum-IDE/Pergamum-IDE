@@ -113,7 +113,7 @@ export function DocumentMapTagFilter({
           )}
         </span>
         <span className="documentMapTagFilterCaret" aria-hidden="true">
-          ▾
+          ▼
         </span>
       </button>
 

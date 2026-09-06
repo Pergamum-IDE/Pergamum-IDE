@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import chevronsDownIcon from "../../assets/icons/feather/glossary/chevrons-down.svg?raw";
+import chevronsRightIcon from "../../assets/icons/feather/glossary/chevrons-right.svg?raw";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
@@ -6,7 +8,7 @@ import type {
   GlossaryTagId
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
-import { findGlossaryEntryOccurrences } from "./glossaryOccurrenceNavigation";
+import { tallyGlossaryEntryHits } from "./glossaryOccurrenceNavigation";
 import {
   GLOSSARY_TAG_FILTER_ALL,
   GLOSSARY_TAG_FILTER_NONE,
@@ -59,17 +61,6 @@ const INITIAL_CREATE_FORM: GlossaryCreateFormState = {
   isSubmitting: false,
   error: null
 };
-
-function entryHitCount(
-  entry: GlossaryEntry,
-  activeDocumentContent: string | null
-): number {
-  if (activeDocumentContent === null) {
-    return 0;
-  }
-
-  return findGlossaryEntryOccurrences(activeDocumentContent, entry).length;
-}
 
 /** `<option>` value for the "no tags" pseudo-filter (never a real tag id). */
 const TAG_FILTER_NONE_OPTION = "__none__";
@@ -221,6 +212,14 @@ export function GlossarySidebar({
     }
   }
 
+  const entryHitCounts = useMemo(
+    () =>
+      state.status === "loaded"
+        ? tallyGlossaryEntryHits(activeDocumentContent, state.entries)
+        : new Map<string, number>(),
+    [activeDocumentContent, state.entries, state.status]
+  );
+
   const visibleEntries =
     state.status === "loaded"
       ? filterGlossaryEntriesForNavigator(
@@ -297,7 +296,7 @@ export function GlossarySidebar({
             {visibleEntries.map((entry) => {
               const label = representativeGlossarySurface(entry);
               const expanded = expandedEntryIds.has(entry.id);
-              const hitCount = entryHitCount(entry, activeDocumentContent);
+              const hitCount = entryHitCounts.get(entry.id) ?? 0;
               // #375: occurrence jump targets the ACTIVE Markdown document
               // only. No active Markdown body, or no hits for this entry ⇒
               // the ◀ / ▶ buttons are disabled.
@@ -351,7 +350,13 @@ export function GlossarySidebar({
                         })
                       }
                     >
-                      {expanded ? "∨" : "＞"}
+                      <span
+                        className="glossarySidebarExpandIcon"
+                        aria-hidden="true"
+                        dangerouslySetInnerHTML={{
+                          __html: expanded ? chevronsDownIcon : chevronsRightIcon
+                        }}
+                      />
                     </button>
                     <span
                       className="glossarySidebarEntryLabel"

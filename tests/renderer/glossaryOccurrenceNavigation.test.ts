@@ -12,8 +12,10 @@ import {
   type EditorId
 } from "../../src/shared/editorId";
 import {
+  buildGlossaryEntryOccurrenceMap,
   findGlossaryEntryOccurrences,
   planGlossaryOccurrenceNavigation,
+  tallyGlossaryEntryHits,
   type GlossaryOccurrenceCursor
 } from "../../src/renderer/glossaryOccurrenceNavigation";
 
@@ -376,5 +378,227 @@ describe("glossary occurrence navigation naming", () => {
     expect(source.toLowerCase()).not.toMatch(/\bright\b/);
     expect(source).not.toContain("goLeft");
     expect(source).not.toContain("goRight");
+  });
+});
+
+describe("tallyGlossaryEntryHits", () => {
+  const heroEntry = glossaryEntry("018f4b8c-7a2b-7c3d-8e4f-100000000002", [
+    "勇者",
+    "英雄"
+  ]);
+  const mageEntry = glossaryEntry("018f4b8c-7a2b-7c3d-8e4f-100000000003", [
+    "魔法使い"
+  ]);
+  const unusedEntry = glossaryEntry("018f4b8c-7a2b-7c3d-8e4f-100000000004", [
+    "騎士"
+  ]);
+
+  it("returns empty map when text is null or empty", () => {
+    expect(tallyGlossaryEntryHits(null, [maidEntry, heroEntry]).size).toBe(0);
+    expect(tallyGlossaryEntryHits("", [maidEntry, heroEntry]).size).toBe(0);
+  });
+
+  it("returns empty map when entries list is empty", () => {
+    expect(tallyGlossaryEntryHits("メイドと勇者", []).size).toBe(0);
+  });
+
+  it("tallies occurrences for multiple entries in a single pass", () => {
+    const text = "メイドが来た。勇者が現れ、別のメイドと英雄を呼んだ。魔法使いも来た。";
+    const counts = tallyGlossaryEntryHits(text, [
+      maidEntry,
+      heroEntry,
+      mageEntry,
+      unusedEntry
+    ]);
+
+    expect(counts.get(maidEntry.id)).toBe(2);
+    // heroEntry has two matches: "勇者" and "英雄"
+    expect(counts.get(heroEntry.id)).toBe(2);
+    expect(counts.get(mageEntry.id)).toBe(1);
+    expect(counts.get(unusedEntry.id)).toBeUndefined();
+  });
+
+  it("counts each occurrence span once even if multiple candidates belong to the same entry", () => {
+    const duplicateAtomEntry = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000005",
+      ["白猫", "白猫"]
+    );
+    const counts = tallyGlossaryEntryHits("白猫がいる。", [duplicateAtomEntry]);
+    expect(counts.get(duplicateAtomEntry.id)).toBe(1);
+  });
+
+  it("does not shadow nested occurrences across entries (e.g. 信長 within 織田信長) (#403 MEDIUM-1)", () => {
+    const entryNobunagaShort = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000010",
+      ["信長"]
+    );
+    const entryOdaNobunaga = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000011",
+      ["織田信長"]
+    );
+
+    // Case 1: "織田信長" -> 信長=1, 織田信長=1
+    const counts1 = tallyGlossaryEntryHits("織田信長", [
+      entryNobunagaShort,
+      entryOdaNobunaga
+    ]);
+    expect(counts1.get(entryNobunagaShort.id)).toBe(1);
+    expect(counts1.get(entryOdaNobunaga.id)).toBe(1);
+
+    // Case 2: "信長、織田信長" -> 信長=2, 織田信長=1
+    const counts2 = tallyGlossaryEntryHits("信長、織田信長", [
+      entryNobunagaShort,
+      entryOdaNobunaga
+    ]);
+    expect(counts2.get(entryNobunagaShort.id)).toBe(2);
+    expect(counts2.get(entryOdaNobunaga.id)).toBe(1);
+
+    // Case 3: "東京都と東京" -> 東京=2, 東京都=1
+    const entryTokyo = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000012",
+      ["東京"]
+    );
+    const entryTokyoMet = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000013",
+      ["東京都"]
+    );
+    const counts3 = tallyGlossaryEntryHits("東京都と東京", [
+      entryTokyo,
+      entryTokyoMet
+    ]);
+    expect(counts3.get(entryTokyo.id)).toBe(2);
+    expect(counts3.get(entryTokyoMet.id)).toBe(1);
+  });
+});
+
+describe("buildGlossaryEntryOccurrenceMap (#403 MEDIUM-1)", () => {
+  const entryNobunagaShort = glossaryEntry(
+    "018f4b8c-7a2b-7c3d-8e4f-100000000010",
+    ["信長"]
+  );
+  const entryOdaNobunaga = glossaryEntry(
+    "018f4b8c-7a2b-7c3d-8e4f-100000000011",
+    ["織田信長"]
+  );
+  const entryTokyo = glossaryEntry(
+    "018f4b8c-7a2b-7c3d-8e4f-100000000012",
+    ["東京"]
+  );
+  const entryTokyoMet = glossaryEntry(
+    "018f4b8c-7a2b-7c3d-8e4f-100000000013",
+    ["東京都"]
+  );
+
+  it("returns empty map or zero occurrences when text is null, empty, or entries empty", () => {
+    const mapNull = buildGlossaryEntryOccurrenceMap(null, [entryNobunagaShort]);
+    expect(mapNull.get(entryNobunagaShort.id)).toEqual([]);
+
+    const mapEmpty = buildGlossaryEntryOccurrenceMap("", [entryNobunagaShort]);
+    expect(mapEmpty.get(entryNobunagaShort.id)).toEqual([]);
+
+    const mapNoEntries = buildGlossaryEntryOccurrenceMap("織田信長", []);
+    expect(mapNoEntries.size).toBe(0);
+  });
+
+  it("finds occurrences preserving per-entry independence when surfaces nest", () => {
+    // "織田信長" -> 信長: [2, 4], 織田信長: [0, 4]
+    const map1 = buildGlossaryEntryOccurrenceMap("織田信長", [
+      entryNobunagaShort,
+      entryOdaNobunaga
+    ]);
+    expect(map1.get(entryNobunagaShort.id)).toEqual([{ start: 2, end: 4 }]);
+    expect(map1.get(entryOdaNobunaga.id)).toEqual([{ start: 0, end: 4 }]);
+
+    // "信長、織田信長" -> 信長: [0, 2], [5, 7]; 織田信長: [3, 7]
+    const map2 = buildGlossaryEntryOccurrenceMap("信長、織田信長", [
+      entryNobunagaShort,
+      entryOdaNobunaga
+    ]);
+    expect(map2.get(entryNobunagaShort.id)).toEqual([
+      { start: 0, end: 2 },
+      { start: 5, end: 7 }
+    ]);
+    expect(map2.get(entryOdaNobunaga.id)).toEqual([{ start: 3, end: 7 }]);
+
+    // "東京都と東京" -> 東京: [0, 2], [4, 6]; 東京都: [0, 3]
+    const map3 = buildGlossaryEntryOccurrenceMap("東京都と東京", [
+      entryTokyo,
+      entryTokyoMet
+    ]);
+    expect(map3.get(entryTokyo.id)).toEqual([
+      { start: 0, end: 2 },
+      { start: 4, end: 6 }
+    ]);
+    expect(map3.get(entryTokyoMet.id)).toEqual([{ start: 0, end: 3 }]);
+  });
+
+  it("is 100% equivalent to findGlossaryEntryOccurrences for every entry", () => {
+    const text =
+      "織田信長と信長が会話した。東京都と東京を訪れ、メイドとオーダーメイドの話題が出た。";
+    const entries = [
+      entryNobunagaShort,
+      entryOdaNobunaga,
+      entryTokyo,
+      entryTokyoMet,
+      maidEntry
+    ];
+
+    const batchMap = buildGlossaryEntryOccurrenceMap(text, entries);
+
+    for (const entry of entries) {
+      const batchOccurrences = batchMap.get(entry.id) ?? [];
+      const individualOccurrences = findGlossaryEntryOccurrences(text, entry);
+
+      expect(batchOccurrences).toEqual(individualOccurrences);
+    }
+  });
+
+  it("ensures count structurally matches navigationTargets length across all entries", () => {
+    const text =
+      "織田信長と信長が会話した。東京都と東京を訪れ、メイドとオーダーメイドの話題が出た。";
+    const entries = [
+      entryNobunagaShort,
+      entryOdaNobunaga,
+      entryTokyo,
+      entryTokyoMet,
+      maidEntry
+    ];
+
+    const counts = tallyGlossaryEntryHits(text, entries);
+    const occurrenceMap = buildGlossaryEntryOccurrenceMap(text, entries);
+
+    for (const entry of entries) {
+      const occurrences = occurrenceMap.get(entry.id) ?? [];
+      const count = counts.get(entry.id) ?? 0;
+      expect(count).toBe(occurrences.length);
+    }
+  });
+
+  it("allows planGlossaryOccurrenceNavigation to receive precomputed occurrences", () => {
+    const text = "信長、織田信長、信長公記";
+    const occurrences = findGlossaryEntryOccurrences(text, entryNobunagaShort);
+
+    const outcomeDefault = planGlossaryOccurrenceNavigation({
+      entry: entryNobunagaShort,
+      targetDocument: {
+        editorId: documentEditorId,
+        content: text
+      },
+      direction: "next",
+      currentCursor: null
+    });
+
+    const outcomePrecomputed = planGlossaryOccurrenceNavigation({
+      entry: entryNobunagaShort,
+      targetDocument: {
+        editorId: documentEditorId,
+        content: text
+      },
+      direction: "next",
+      currentCursor: null,
+      occurrences
+    });
+
+    expect(outcomePrecomputed).toEqual(outcomeDefault);
   });
 });

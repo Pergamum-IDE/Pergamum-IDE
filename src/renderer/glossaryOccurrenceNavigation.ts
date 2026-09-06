@@ -2,7 +2,7 @@ import { editorIdEquals, type EditorId } from "../shared/editorId";
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import {
   buildGlossarySurfaceIndex,
-  matchGlossarySurfacesInText
+  matchGlossarySurfacesPerEntry
 } from "../shared/glossarySurfaceMatching";
 
 export interface GlossaryOccurrenceRange {
@@ -10,13 +10,62 @@ export interface GlossaryOccurrenceRange {
   end: number;
 }
 
+/**
+ * Build occurrence ranges for all entries in a single pass over text (#403).
+ *
+ * Each entry's occurrences are resolved independently using greedy longest match,
+ * so shorter entries contained within longer entries (e.g. 信長 inside 織田信長)
+ * are never shadowed, strictly preserving per-entry occurrence semantics.
+ */
+export function buildGlossaryEntryOccurrenceMap(
+  text: string | null,
+  entries: readonly GlossaryEntry[]
+): Map<GlossaryEntryId, GlossaryOccurrenceRange[]> {
+  const result = new Map<GlossaryEntryId, GlossaryOccurrenceRange[]>();
+  for (const entry of entries) {
+    result.set(entry.id, []);
+  }
+
+  if (text === null || text.length === 0 || entries.length === 0) {
+    return result;
+  }
+
+  const index = buildGlossarySurfaceIndex(entries);
+  const perEntryMatches = matchGlossarySurfacesPerEntry(text, index);
+
+  for (const entry of entries) {
+    const occurrences = perEntryMatches.get(entry.id);
+    if (occurrences) {
+      result.set(entry.id, occurrences);
+    }
+  }
+
+  return result;
+}
+
 export function findGlossaryEntryOccurrences(
   text: string,
   entry: GlossaryEntry
 ): GlossaryOccurrenceRange[] {
-  const index = buildGlossarySurfaceIndex([entry]);
+  return buildGlossaryEntryOccurrenceMap(text, [entry]).get(entry.id) ?? [];
+}
 
-  return matchGlossarySurfacesInText(text, index).map((match) => match.range);
+export function tallyGlossaryEntryHits(
+  text: string | null,
+  entries: readonly GlossaryEntry[]
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (text === null || text.length === 0 || entries.length === 0) {
+    return counts;
+  }
+
+  const occurrenceMap = buildGlossaryEntryOccurrenceMap(text, entries);
+  for (const [entryId, occurrences] of occurrenceMap) {
+    if (occurrences.length > 0) {
+      counts.set(entryId, occurrences.length);
+    }
+  }
+  return counts;
 }
 
 export type GlossaryOccurrenceDirection = "previous" | "next";
@@ -46,6 +95,7 @@ export interface PlanGlossaryOccurrenceNavigationInput {
   targetDocument: GlossaryOccurrenceTargetDocument | null;
   direction: GlossaryOccurrenceDirection;
   currentCursor: GlossaryOccurrenceCursor | null;
+  occurrences?: readonly GlossaryOccurrenceRange[];
 }
 
 function anchorIndex(
@@ -90,10 +140,9 @@ export function planGlossaryOccurrenceNavigation(
     return { kind: "noTargetDocument" };
   }
 
-  const occurrences = findGlossaryEntryOccurrences(
-    targetDocument.content,
-    entry
-  );
+  const occurrences =
+    input.occurrences ??
+    findGlossaryEntryOccurrences(targetDocument.content, entry);
 
   if (occurrences.length === 0) {
     return { kind: "noOccurrences" };

@@ -546,3 +546,430 @@ describe("Document Map layout (#375) — CSS", () => {
     );
   });
 });
+
+describe("Document Map large-document single-canvas natural height (#403 Phase 1)", () => {
+  it("renders a natural-height Canvas host taller than the sidebar pane without clamping to pane height", () => {
+    // Generate a synthetic document of 1,000 lines.
+    // In Document Map, cellSize = 2px, so 1,000 lines -> at least 2,000px natural height.
+    const longText = Array.from({ length: 1000 }, (_, i) => `Line ${i}: some Japanese novel prose.`).join("\n");
+    render({
+      activeDocumentContent: longText,
+      glossaryEntries: []
+    });
+
+    const body = container.querySelector(".documentMapBody");
+    expect(body).not.toBeNull();
+
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    expect(host).not.toBeNull();
+
+    // Natural height: 1,000 visual rows * 2px = 2,000px.
+    // The host element must receive the full natural height in inline style, not clamped to pane height (e.g. 800px).
+    expect(host?.style.height).toBe("2000px");
+
+    // The canvas element inside must be present.
+    const canvas = container.querySelector<HTMLCanvasElement>("canvas.glossaryDocumentMapCanvas");
+    expect(canvas).not.toBeNull();
+    // Backing height must be natural height * pixelRatio (in happy-dom, window.devicePixelRatio is 1).
+    expect(canvas?.height).toBe(2000);
+  });
+
+  it("preserves natural scale without fit-to-cap scale reduction for multi-thousand line documents", () => {
+    // 2,500 lines -> 5,000px natural height
+    const longText = Array.from({ length: 2500 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: longText,
+      glossaryEntries: []
+    });
+
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    const canvas = container.querySelector<HTMLCanvasElement>("canvas.glossaryDocumentMapCanvas");
+
+    expect(host?.style.height).toBe("5000px");
+    expect(canvas?.height).toBe(5000);
+  });
+
+  it("verifies scroll container CSS preserves vertical scrolling without height clamping", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    const bodyBlock = css.slice(
+      css.indexOf(".documentMapBody {"),
+      css.indexOf("}", css.indexOf(".documentMapBody {"))
+    );
+
+    // .documentMapBody is the vertically scrollable container
+    expect(bodyBlock).toContain("overflow-y: auto");
+    expect(bodyBlock).toContain("overflow-x: hidden");
+    expect(bodyBlock).toContain("flex: 1");
+    // min-height: 0 allows flex child to shrink below content size so overflow-y activates
+    expect(bodyBlock).toContain("min-height: 0");
+    // Does not clamp max-height
+    expect(bodyBlock).not.toContain("max-height");
+  });
+});
+
+describe("Document Map paged physical Canvas rendering (#403 Phase 2)", () => {
+  function clickHostAt(clientY: number): void {
+    const host = container.querySelector<HTMLElement>(
+      ".glossaryDocumentMapCanvasHost"
+    )!;
+    act(() => {
+      host.dispatchEvent(
+        new window.MouseEvent("click", { bubbles: true, clientY })
+      );
+    });
+  }
+
+  it("does not render paginator when document fits in a single page", () => {
+    // 500 lines * 2px = 1,000px < 32,768px safe backing limit
+    const text = Array.from({ length: 500 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: []
+    });
+
+    expect(container.querySelector(".documentMapPaginator")).toBeNull();
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    expect(host?.style.height).toBe("1000px");
+    const canvas = container.querySelector<HTMLCanvasElement>("canvas.glossaryDocumentMapCanvas");
+    expect(canvas?.height).toBe(1000);
+  });
+
+  it("renders paginator and partitions into pages when document exceeds safe backing height", () => {
+    // 17,000 lines > 16,384 rows per page -> 2 pages
+    const text = Array.from({ length: 17000 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: []
+    });
+
+    const paginator = container.querySelector(".documentMapPaginator");
+    expect(paginator).not.toBeNull();
+
+    // On initial render: Page 1 of 2 (index 0)
+    const prevButton = paginator?.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.previous']"
+    );
+    const nextButton = paginator?.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.next']"
+    );
+    const select = paginator?.querySelector<HTMLSelectElement>(
+      "select.documentMapPageSelect"
+    );
+
+    expect(prevButton).not.toBeNull();
+    expect(nextButton).not.toBeNull();
+    expect(select).not.toBeNull();
+
+    // Previous is disabled on first page; Next is enabled
+    expect(prevButton?.disabled).toBe(true);
+    expect(nextButton?.disabled).toBe(false);
+    expect(select?.value).toBe("0");
+
+    // Check options count
+    const options = select?.querySelectorAll("option");
+    expect(options).toHaveLength(2);
+
+    // Initial page 0 height = 16,384 * 2 = 32,768px
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    const canvas = container.querySelector<HTMLCanvasElement>("canvas.glossaryDocumentMapCanvas");
+    expect(host?.style.height).toBe("32768px");
+    expect(canvas?.height).toBe(32768);
+  });
+
+  it("navigates pages via Next / Previous buttons and does not scroll editor", () => {
+    const onNavigateToLine = vi.fn();
+    const text = Array.from({ length: 17000 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: [],
+      onNavigateToLine
+    });
+
+    const paginator = container.querySelector(".documentMapPaginator")!;
+    const prevButton = paginator.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.previous']"
+    )!;
+    const nextButton = paginator.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.next']"
+    )!;
+    const select = paginator.querySelector<HTMLSelectElement>(
+      "select.documentMapPageSelect"
+    )!;
+
+    // Click next -> advances to page 1
+    act(() => {
+      nextButton.click();
+    });
+
+    // Editor navigation must NOT be triggered
+    expect(onNavigateToLine).not.toHaveBeenCalled();
+
+    // Paginator state on page 2 (index 1)
+    expect(prevButton.disabled).toBe(false);
+    expect(nextButton.disabled).toBe(true);
+    expect(select.value).toBe("1");
+
+    // Page 1 has natural remainder: (17000 - 16384) * 2 = 616 * 2 = 1232px
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    const canvas = container.querySelector<HTMLCanvasElement>("canvas.glossaryDocumentMapCanvas");
+    expect(host?.style.height).toBe("1232px");
+    expect(canvas?.height).toBe(1232);
+
+    // Click previous -> returns to page 0
+    act(() => {
+      prevButton.click();
+    });
+
+    expect(onNavigateToLine).not.toHaveBeenCalled();
+    expect(prevButton.disabled).toBe(true);
+    expect(nextButton.disabled).toBe(false);
+    expect(select.value).toBe("0");
+    expect(host?.style.height).toBe("32768px");
+    expect(canvas?.height).toBe(32768);
+  });
+
+  it("navigates pages via dropdown select and resets documentMapBody scrollTop to 0", () => {
+    const onNavigateToLine = vi.fn();
+    const text = Array.from({ length: 35000 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: [],
+      onNavigateToLine
+    });
+
+    const body = container.querySelector<HTMLDivElement>(".documentMapBody")!;
+    body.scrollTop = 500;
+
+    const select = container.querySelector<HTMLSelectElement>(
+      "select.documentMapPageSelect"
+    )!;
+    expect(select.options).toHaveLength(3);
+
+    act(() => {
+      select.value = "2";
+      select.dispatchEvent(new window.Event("change", { bubbles: true }));
+    });
+
+    expect(onNavigateToLine).not.toHaveBeenCalled();
+    expect(select.value).toBe("2");
+    expect(body.scrollTop).toBe(0);
+  });
+
+  it("resolves click navigation in global coordinates across multiple pages", () => {
+    const onNavigateToLine = vi.fn();
+    const text = Array.from({ length: 17000 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: [],
+      onNavigateToLine
+    });
+
+    // On Page 0: click at clientY = 200 (row 100) -> Line 100
+    clickHostAt(200);
+    expect(onNavigateToLine).toHaveBeenLastCalledWith(100, { align: "center" });
+
+    // Advance to Page 1 (startLogicalY = 32768)
+    const nextButton = container.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.next']"
+    )!;
+    act(() => {
+      nextButton.click();
+    });
+
+    // On Page 1: click at clientY = 200
+    // Global map Y = 200 + 32768 = 32968 -> row 16484 -> Line 16484
+    clickHostAt(200);
+    expect(onNavigateToLine).toHaveBeenLastCalledWith(16484, { align: "center" });
+  });
+
+  it("shows viewport lens only when editor visible range intersects the active page", () => {
+    // 17,000 lines. Page 0 covers lines 0..16383, Page 1 covers lines 16384..16999
+    // In our lines layout, each line is "Line X", offset ranges can be targeted.
+    const lines = Array.from({ length: 17000 }, (_, i) => `Line ${i}`);
+    const text = lines.join("\n");
+
+    let line10Offset = 0;
+    for (let i = 0; i < 10; i++) {
+      line10Offset += lines[i].length + 1;
+    }
+
+    let line16500Offset = 0;
+    for (let i = 0; i < 16500; i++) {
+      line16500Offset += lines[i].length + 1;
+    }
+
+    // Viewport on line 10 (Page 0)
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: [],
+      editorVisibleRange: { from: line10Offset, to: line10Offset + 50 }
+    });
+
+    // On Page 0: lens should be present
+    expect(container.querySelector(".documentMapViewport")).not.toBeNull();
+
+    // Switch to Page 1
+    const nextButton = container.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.next']"
+    )!;
+    act(() => {
+      nextButton.click();
+    });
+
+    // On Page 1: lens should be absent (since line 10 is on Page 0)
+    expect(container.querySelector(".documentMapViewport")).toBeNull();
+
+    // Now update editorVisibleRange to line 16500 (Page 1)
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: [],
+      editorVisibleRange: { from: line16500Offset, to: line16500Offset + 50 }
+    });
+
+    // On Page 1: lens should now be present
+    expect(container.querySelector(".documentMapViewport")).not.toBeNull();
+  });
+});
+
+describe("Document Map render skeleton / paint-before-blocking (#403 Dogfood remediation)", () => {
+  it("renders visible skeleton immediately on initial open while render is pending", () => {
+    const text = Array.from({ length: 100 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: []
+    });
+
+    const skeleton = container.querySelector(".documentMapSkeleton");
+    expect(skeleton).not.toBeNull();
+    expect(skeleton?.getAttribute("aria-busy")).toBe("true");
+
+    const lines = skeleton?.querySelectorAll(".documentMapSkeletonLine");
+    expect(lines?.length).toBeGreaterThan(0);
+
+    const textEl = skeleton?.querySelector(".documentMapSkeletonText");
+    expect(textEl?.textContent).toContain("documentMap.rendering");
+
+    // Canvas host immediately sized to exact page content height (100 * 2 = 200px)
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    expect(host?.style.height).toBe("200px");
+  });
+
+  it("removes skeleton once deferred rendering settles without changing host dimensions", async () => {
+    const text = Array.from({ length: 50 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: []
+    });
+
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    expect(host?.style.height).toBe("100px");
+    expect(container.querySelector(".documentMapSkeleton")).not.toBeNull();
+
+    // Wait for deferred paint and render execution
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(container.querySelector(".documentMapSkeleton")).toBeNull();
+    expect(host?.style.height).toBe("100px");
+    expect(container.querySelector("canvas.glossaryDocumentMapCanvas")).not.toBeNull();
+  });
+
+  it("shows paginator immediately for multi-page documents while skeleton is displayed", () => {
+    const text = Array.from({ length: 17000 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: []
+    });
+
+    // Paginator must be visible immediately
+    const paginator = container.querySelector(".documentMapPaginator");
+    expect(paginator).not.toBeNull();
+
+    const select = paginator?.querySelector<HTMLSelectElement>("select.documentMapPageSelect");
+    expect(select?.value).toBe("0");
+    expect(select?.options).toHaveLength(2);
+
+    // Skeleton is active
+    expect(container.querySelector(".documentMapSkeleton")).not.toBeNull();
+
+    // Host has initial page 0 height (16,384 * 2 = 32,768px)
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    expect(host?.style.height).toBe("32768px");
+  });
+
+  it("shows skeleton when switching pages and maintains new page dimensions", async () => {
+    const text = Array.from({ length: 17000 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: []
+    });
+
+    // Wait for page 0 to finish rendering
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(container.querySelector(".documentMapSkeleton")).toBeNull();
+
+    // Switch to page 1
+    const nextButton = container.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.next']"
+    )!;
+    act(() => {
+      nextButton.click();
+    });
+
+    // Skeleton should appear for page 1 while pending
+    expect(container.querySelector(".documentMapSkeleton")).not.toBeNull();
+
+    // Host is immediately sized to page 1 remainder height: (17000 - 16384) * 2 = 1232px
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    expect(host?.style.height).toBe("1232px");
+
+    // Wait for page 1 to finish rendering
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(container.querySelector(".documentMapSkeleton")).toBeNull();
+    expect(host?.style.height).toBe("1232px");
+  });
+
+  it("cancels stale deferred page renders when switching pages rapidly", async () => {
+    const text = Array.from({ length: 35000 }, (_, i) => `Line ${i}`).join("\n");
+    render({
+      activeDocumentContent: text,
+      glossaryEntries: []
+    });
+
+    const nextButton = container.querySelector<HTMLButtonElement>(
+      "button[aria-label='documentMap.page.next']"
+    )!;
+
+    // Rapid page switching: page 0 -> page 1 -> page 2 before page 1 deferred render settles
+    act(() => {
+      nextButton.click();
+    });
+    act(() => {
+      nextButton.click();
+    });
+
+    const select = container.querySelector<HTMLSelectElement>(
+      "select.documentMapPageSelect"
+    )!;
+    expect(select.value).toBe("2");
+
+    // Host size is page 2 height: (35000 - 32768) * 2 = 4464px
+    const host = container.querySelector<HTMLDivElement>(".glossaryDocumentMapCanvasHost");
+    expect(host?.style.height).toBe("4464px");
+
+    // Settle all deferred work
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(container.querySelector(".documentMapSkeleton")).toBeNull();
+    expect(select.value).toBe("2");
+    expect(host?.style.height).toBe("4464px");
+  });
+});

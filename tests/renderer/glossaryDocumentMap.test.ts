@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { GlossaryAtom, GlossaryEntry } from "../../src/shared/glossary";
 import { GlossaryAtomFlags } from "../../src/shared/glossaryAtomFlags";
 import {
+  DOCUMENT_MAP_PAGE_MAX_BACKING_HEIGHT,
   GLOSSARY_DOCUMENT_MAP_CELL_SIZE,
   GLOSSARY_DOCUMENT_MAP_DIALOGUE_COLOR,
   GLOSSARY_DOCUMENT_MAP_ESTIMATED_CHAR_WIDTH_PX,
@@ -16,7 +17,9 @@ import {
   collectGlossaryDocumentMapGlossaryOccurrences,
   collectGlossaryDocumentMapOccurrences,
   collectJapaneseDialogueRanges,
+  computeDocumentMapPages,
   documentMapDialogueColorAtOffset,
+  documentMapWinningDialogueRangeAtOffset,
   drawGlossaryDocumentMap,
   glossaryDocumentMapHitColorAtOffset,
   isOffsetInGlossaryDocumentMapOccurrence,
@@ -29,6 +32,12 @@ import {
   resolveDocumentMapWrapColumns,
   splitTextIntoLineSpans,
   visualRowForOffset,
+  waitForBrowserPaint,
+  buildDocumentMapDialogueSweepEvents,
+  DocumentMapDialogueSweepCursor,
+  buildDocumentMapGlossarySweepEvents,
+  DocumentMapGlossarySweepCursor,
+  type DocumentMapPage,
   type GlossaryDocumentMapDrawContext
 } from "../../src/renderer/glossaryDocumentMap";
 import { adjustDocumentMapTagColorForVisibility } from "../../src/shared/documentMapTagColor";
@@ -1572,5 +1581,623 @@ describe("glossaryDocumentMap source (#375)", () => {
     expect(code).toContain("columnIndex % wrapColumns");
     expect(code).toContain("buildDocumentMapLineLayout");
     expect(code).toContain("splitTextIntoLineSpans");
+  });
+});
+
+describe("computeDocumentMapPages (#403 Phase 2)", () => {
+  it("fits exactly in one page when rows reach page capacity", () => {
+    // 16,384 visual rows * 2px cellSize * 1 dpr = 32,768px = maxBackingHeight
+    const pages = computeDocumentMapPages({
+      totalVisualRows: 16384,
+      cellSize: 2,
+      pixelRatio: 1,
+      maxBackingHeight: 32768
+    });
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toEqual({
+      index: 0,
+      startVisualRow: 0,
+      endVisualRow: 16384,
+      startLogicalY: 0,
+      height: 32768
+    });
+  });
+
+  it("creates a second page when rows exceed one page by one row", () => {
+    const pages = computeDocumentMapPages({
+      totalVisualRows: 16385,
+      cellSize: 2,
+      pixelRatio: 1,
+      maxBackingHeight: 32768
+    });
+    expect(pages).toHaveLength(2);
+    expect(pages[0]).toEqual({
+      index: 0,
+      startVisualRow: 0,
+      endVisualRow: 16384,
+      startLogicalY: 0,
+      height: 32768
+    });
+    expect(pages[1]).toEqual({
+      index: 1,
+      startVisualRow: 16384,
+      endVisualRow: 16385,
+      startLogicalY: 32768,
+      height: 2
+    });
+  });
+
+  it("handles multiple full pages and a final partial page", () => {
+    // 35,000 visual rows: 16,384 + 16,384 + 2,232
+    const pages = computeDocumentMapPages({
+      totalVisualRows: 35000,
+      cellSize: 2,
+      pixelRatio: 1,
+      maxBackingHeight: 32768
+    });
+    expect(pages).toHaveLength(3);
+    expect(pages[0]).toEqual({
+      index: 0,
+      startVisualRow: 0,
+      endVisualRow: 16384,
+      startLogicalY: 0,
+      height: 32768
+    });
+    expect(pages[1]).toEqual({
+      index: 1,
+      startVisualRow: 16384,
+      endVisualRow: 32768,
+      startLogicalY: 32768,
+      height: 32768
+    });
+    expect(pages[2]).toEqual({
+      index: 2,
+      startVisualRow: 32768,
+      endVisualRow: 35000,
+      startLogicalY: 65536,
+      height: 2232 * 2 // 4464
+    });
+  });
+
+  it("respects fractional and higher devicePixelRatios without exceeding maxBackingHeight", () => {
+    // DPR 1.25: maxCssHeight = 32768 / 1.25 = 26214.4 -> 13,107 rows -> height = 26,214px
+    const pages125 = computeDocumentMapPages({
+      totalVisualRows: 20000,
+      cellSize: 2,
+      pixelRatio: 1.25,
+      maxBackingHeight: 32768
+    });
+    expect(pages125[0].endVisualRow).toBe(13107);
+    expect(pages125[0].height).toBe(26214);
+    expect(Math.round(pages125[0].height * 1.25)).toBeLessThanOrEqual(32768);
+
+    // DPR 1.5: maxCssHeight = 32768 / 1.5 = 21845.33 -> 10,922 rows -> height = 21,844px
+    const pages150 = computeDocumentMapPages({
+      totalVisualRows: 20000,
+      cellSize: 2,
+      pixelRatio: 1.5,
+      maxBackingHeight: 32768
+    });
+    expect(pages150[0].endVisualRow).toBe(10922);
+    expect(pages150[0].height).toBe(21844);
+    expect(Math.round(pages150[0].height * 1.5)).toBeLessThanOrEqual(32768);
+
+    // DPR 2.0: maxCssHeight = 32768 / 2 = 16384 -> 8,192 rows -> height = 16,384px
+    const pages200 = computeDocumentMapPages({
+      totalVisualRows: 20000,
+      cellSize: 2,
+      pixelRatio: 2.0,
+      maxBackingHeight: 32768
+    });
+    expect(pages200[0].endVisualRow).toBe(8192);
+    expect(pages200[0].height).toBe(16384);
+    expect(Math.round(pages200[0].height * 2.0)).toBeLessThanOrEqual(32768);
+  });
+
+  it("guarantees boundary continuity: no skipped rows, no duplicate rows, and continuous Y", () => {
+    const totalRows = 50000;
+    const cellSize = 2;
+    const pages = computeDocumentMapPages({
+      totalVisualRows: totalRows,
+      cellSize,
+      pixelRatio: 1.5,
+      maxBackingHeight: 32768
+    });
+
+    expect(pages.length).toBeGreaterThan(1);
+    expect(pages[0].startVisualRow).toBe(0);
+    expect(pages[0].startLogicalY).toBe(0);
+
+    for (let i = 0; i < pages.length; i++) {
+      expect(pages[i].index).toBe(i);
+      expect(pages[i].height).toBe(
+        (pages[i].endVisualRow - pages[i].startVisualRow) * cellSize
+      );
+      if (i > 0) {
+        expect(pages[i].startVisualRow).toBe(pages[i - 1].endVisualRow);
+        expect(pages[i].startLogicalY).toBe(
+          pages[i - 1].startLogicalY + pages[i - 1].height
+        );
+      }
+    }
+
+    const last = pages[pages.length - 1];
+    expect(last.endVisualRow).toBe(totalRows);
+    expect(last.startLogicalY + last.height).toBe(totalRows * cellSize);
+  });
+});
+
+describe("drawGlossaryDocumentMap with page (#403 Phase 2)", () => {
+  interface RecordedFill {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
+  }
+
+  function recordingContext(): {
+    context: GlossaryDocumentMapDrawContext;
+    fills: RecordedFill[];
+    clears: { x: number; y: number; width: number; height: number }[];
+  } {
+    const fills: RecordedFill[] = [];
+    const clears: { x: number; y: number; width: number; height: number }[] = [];
+    const context: GlossaryDocumentMapDrawContext = {
+      fillStyle: "",
+      imageSmoothingEnabled: true,
+      clearRect(x, y, width, height) {
+        clears.push({ x, y, width, height });
+      },
+      fillRect(x, y, width, height) {
+        fills.push({ x, y, width, height, color: String(this.fillStyle) });
+      }
+    };
+    return { context, fills, clears };
+  }
+
+  it("draws full map when page is omitted (backwards compatibility)", () => {
+    const plan = buildGlossaryDocumentMapPlan({
+      text: "Line 0\nLine 1\nLine 2",
+      entries: [],
+      wrapColumns: 80
+    });
+    const { context, fills, clears } = recordingContext();
+    drawGlossaryDocumentMap(context, plan);
+
+    expect(clears).toEqual([
+      { x: 0, y: 0, width: plan.logicalPixelWidth, height: plan.logicalPixelHeight }
+    ]);
+    expect(fills.length).toBe(plan.pixels.length);
+  });
+
+  it("draws page-local coordinates and partitions pixels across pages without drops, duplicates, or shifts", () => {
+    // 4 lines of 5 chars each -> 4 visual rows at wrapColumns=80, cellSize=2
+    const text = "AAAAA\nBBBBB\nCCCCC\nDDDDD";
+    const plan = buildGlossaryDocumentMapPlan({
+      text,
+      entries: [],
+      wrapColumns: 80,
+      cellSize: 2
+    });
+    expect(plan.totalVisualRows).toBe(4);
+
+    const page0: DocumentMapPage = {
+      index: 0,
+      startVisualRow: 0,
+      endVisualRow: 2,
+      startLogicalY: 0,
+      height: 4 // 2 rows * 2px
+    };
+    const page1: DocumentMapPage = {
+      index: 1,
+      startVisualRow: 2,
+      endVisualRow: 4,
+      startLogicalY: 4, // 2 rows * 2px
+      height: 4
+    };
+
+    // Draw page 0
+    const rec0 = recordingContext();
+    drawGlossaryDocumentMap(rec0.context, plan, page0);
+
+    // Clears only page 0 height
+    expect(rec0.clears).toEqual([
+      { x: 0, y: 0, width: plan.logicalPixelWidth, height: 4 }
+    ]);
+    // Draws only rows 0 and 1
+    expect(rec0.fills.length).toBe(10); // 5 chars row 0 + 5 chars row 1
+    for (const fill of rec0.fills) {
+      expect(fill.y).toBeLessThan(4);
+      expect(fill.y).toBeGreaterThanOrEqual(0);
+    }
+
+    // Draw page 1
+    const rec1 = recordingContext();
+    drawGlossaryDocumentMap(rec1.context, plan, page1);
+
+    // Clears only page 1 height
+    expect(rec1.clears).toEqual([
+      { x: 0, y: 0, width: plan.logicalPixelWidth, height: 4 }
+    ]);
+    // Draws only rows 2 and 3
+    expect(rec1.fills.length).toBe(10); // 5 chars row 2 + 5 chars row 3
+    for (const fill of rec1.fills) {
+      // Row 2 original Y was 4 -> in page 1 it is 4 - 4 = 0
+      // Row 3 original Y was 6 -> in page 1 it is 6 - 4 = 2
+      expect(fill.y).toBeLessThan(4);
+      expect(fill.y).toBeGreaterThanOrEqual(0);
+    }
+
+    // Verify union of pixels across pages equals total pixels (no dropped, no duplicated)
+    expect(rec0.fills.length + rec1.fills.length).toBe(plan.pixels.length);
+
+    // Verify Y shift is exactly page.startLogicalY
+    const fullRec = recordingContext();
+    drawGlossaryDocumentMap(fullRec.context, plan);
+
+    for (let i = 0; i < rec0.fills.length; i++) {
+      expect(rec0.fills[i].x).toBe(fullRec.fills[i].x);
+      expect(rec0.fills[i].y).toBe(fullRec.fills[i].y);
+    }
+    for (let i = 0; i < rec1.fills.length; i++) {
+      const fullIndex = rec0.fills.length + i;
+      expect(rec1.fills[i].x).toBe(fullRec.fills[fullIndex].x);
+      // Shifted by page1.startLogicalY (= 4)
+      expect(rec1.fills[i].y).toBe(fullRec.fills[fullIndex].y - page1.startLogicalY);
+    }
+  });
+});
+
+describe("waitForBrowserPaint (#403 Dogfood remediation)", () => {
+  it("returns a promise that resolves asynchronously with requestAnimationFrame", async () => {
+    let resolved = false;
+    const promise = waitForBrowserPaint().then(() => {
+      resolved = true;
+    });
+    expect(resolved).toBe(false);
+    await promise;
+    expect(resolved).toBe(true);
+  });
+
+  it("falls back to setTimeout when requestAnimationFrame is undefined", async () => {
+    const originalRaf = globalThis.requestAnimationFrame;
+    // @ts-expect-error test environment override
+    delete globalThis.requestAnimationFrame;
+    try {
+      let resolved = false;
+      const promise = waitForBrowserPaint().then(() => {
+        resolved = true;
+      });
+      expect(resolved).toBe(false);
+      await promise;
+      expect(resolved).toBe(true);
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+    }
+  });
+
+  it("resolves immediately when neither requestAnimationFrame nor setTimeout is available", async () => {
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalTimeout = globalThis.setTimeout;
+    // @ts-expect-error test environment override
+    delete globalThis.requestAnimationFrame;
+    // @ts-expect-error test environment override
+    delete globalThis.setTimeout;
+    try {
+      await expect(waitForBrowserPaint()).resolves.toBeUndefined();
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+      globalThis.setTimeout = originalTimeout;
+    }
+  });
+});
+
+describe("DocumentMapDialogueSweepCursor (#403)", () => {
+  const pairs = [
+    { open: "「", close: "」", color: "#0000ff" },
+    { open: "『", close: "』", color: "#ff00ff" }
+  ];
+
+  it("handles a simple single dialogue range with half-open [start, end) semantics", () => {
+    const cursor = new DocumentMapDialogueSweepCursor(
+      [{ startOffset: 2, endOffset: 6, color: "#0000ff", pairIndex: 0 }],
+      pairs
+    );
+
+    expect(cursor.advanceTo(1)).toBeNull();
+    expect(cursor.advanceTo(2)).toBe("#0000ff");
+    expect(cursor.advanceTo(5)).toBe("#0000ff");
+    expect(cursor.advanceTo(6)).toBeNull();
+    expect(cursor.advanceTo(7)).toBeNull();
+  });
+
+  it("resolves overlaps where higher pairIndex wins", () => {
+    const cursor = new DocumentMapDialogueSweepCursor(
+      [
+        { startOffset: 0, endOffset: 10, color: "#0000ff", pairIndex: 0 },
+        { startOffset: 5, endOffset: 15, color: "#ff00ff", pairIndex: 1 }
+      ],
+      pairs
+    );
+
+    expect(cursor.advanceTo(0)).toBe("#0000ff");
+    expect(cursor.advanceTo(4)).toBe("#0000ff");
+    expect(cursor.advanceTo(5)).toBe("#ff00ff"); // higher pairIndex 1 wins
+    expect(cursor.advanceTo(9)).toBe("#ff00ff");
+    expect(cursor.advanceTo(10)).toBe("#ff00ff");
+    expect(cursor.advanceTo(14)).toBe("#ff00ff");
+    expect(cursor.advanceTo(15)).toBeNull();
+  });
+
+  it("resolves higher pairIndex regardless of order in the ranges array", () => {
+    const cursor = new DocumentMapDialogueSweepCursor(
+      [
+        { startOffset: 5, endOffset: 15, color: "#ff00ff", pairIndex: 1 },
+        { startOffset: 0, endOffset: 10, color: "#0000ff", pairIndex: 0 }
+      ],
+      pairs
+    );
+
+    expect(cursor.advanceTo(3)).toBe("#0000ff");
+    expect(cursor.advanceTo(7)).toBe("#ff00ff");
+    expect(cursor.advanceTo(12)).toBe("#ff00ff");
+  });
+
+  it("handles same-pair overlapping ranges safely with active count multiset", () => {
+    const cursor = new DocumentMapDialogueSweepCursor(
+      [
+        { startOffset: 0, endOffset: 8, color: "#0000ff", pairIndex: 0 },
+        { startOffset: 4, endOffset: 12, color: "#0000ff", pairIndex: 0 }
+      ],
+      pairs
+    );
+
+    expect(cursor.advanceTo(0)).toBe("#0000ff");
+    expect(cursor.advanceTo(6)).toBe("#0000ff");
+    // At offset 8, first range ends, but second range is still active
+    expect(cursor.advanceTo(8)).toBe("#0000ff");
+    expect(cursor.advanceTo(11)).toBe("#0000ff");
+    expect(cursor.advanceTo(12)).toBeNull();
+  });
+
+  it("handles boundaries where one range ends and another starts at the same offset", () => {
+    const cursor = new DocumentMapDialogueSweepCursor(
+      [
+        { startOffset: 0, endOffset: 5, color: "#0000ff", pairIndex: 0 },
+        { startOffset: 5, endOffset: 10, color: "#ff00ff", pairIndex: 1 }
+      ],
+      pairs
+    );
+
+    expect(cursor.advanceTo(4)).toBe("#0000ff");
+    // At offset 5, range 0 has ended, range 1 starts
+    expect(cursor.advanceTo(5)).toBe("#ff00ff");
+    expect(cursor.advanceTo(9)).toBe("#ff00ff");
+    expect(cursor.advanceTo(10)).toBeNull();
+  });
+
+  it("handles unclosed dialogue running to the end", () => {
+    const cursor = new DocumentMapDialogueSweepCursor(
+      [{ startOffset: 3, endOffset: 100, color: "#0000ff", pairIndex: 0 }],
+      pairs
+    );
+
+    expect(cursor.advanceTo(2)).toBeNull();
+    expect(cursor.advanceTo(3)).toBe("#0000ff");
+    expect(cursor.advanceTo(99)).toBe("#0000ff");
+    expect(cursor.advanceTo(100)).toBeNull();
+  });
+
+  it("correctly tracks UTF-16 code unit offsets across surrogate pairs", () => {
+    // "😀"(offset 0, 1) + "「"(offset 2) + "𠮷"(offset 3, 4) + "」"(offset 5)
+    const cursor = new DocumentMapDialogueSweepCursor(
+      [{ startOffset: 2, endOffset: 6, color: "#0000ff", pairIndex: 0 }],
+      pairs
+    );
+
+    expect(cursor.advanceTo(0)).toBeNull(); // 😀 high
+    expect(cursor.advanceTo(1)).toBeNull(); // 😀 low
+    expect(cursor.advanceTo(2)).toBe("#0000ff"); // 「
+    expect(cursor.advanceTo(3)).toBe("#0000ff"); // 𠮷 high
+    expect(cursor.advanceTo(4)).toBe("#0000ff"); // 𠮷 low
+    expect(cursor.advanceTo(5)).toBe("#0000ff"); // 」
+    expect(cursor.advanceTo(6)).toBeNull();
+  });
+});
+
+describe("DocumentMapGlossarySweepCursor (#403)", () => {
+  it("returns null at all offsets when there are no occurrences", () => {
+    const cursor = new DocumentMapGlossarySweepCursor([]);
+    expect(cursor.advanceTo(0)).toBeNull();
+    expect(cursor.advanceTo(10)).toBeNull();
+  });
+
+  it("returns occurrence color within [start, end) and null elsewhere", () => {
+    const cursor = new DocumentMapGlossarySweepCursor([
+      { entryId: "e1", startOffset: 3, endOffset: 6, color: "#123456" }
+    ]);
+
+    expect(cursor.advanceTo(2)).toBeNull();
+    expect(cursor.advanceTo(3)).toBe("#123456");
+    expect(cursor.advanceTo(5)).toBe("#123456");
+    expect(cursor.advanceTo(6)).toBeNull();
+  });
+
+  it("handles multiple disjoint occurrences in document order", () => {
+    const cursor = new DocumentMapGlossarySweepCursor([
+      { entryId: "e1", startOffset: 2, endOffset: 5, color: "#111111" },
+      { entryId: "e2", startOffset: 8, endOffset: 12, color: "#222222" }
+    ]);
+
+    expect(cursor.advanceTo(1)).toBeNull();
+    expect(cursor.advanceTo(2)).toBe("#111111");
+    expect(cursor.advanceTo(4)).toBe("#111111");
+    expect(cursor.advanceTo(5)).toBeNull();
+    expect(cursor.advanceTo(7)).toBeNull();
+    expect(cursor.advanceTo(8)).toBe("#222222");
+    expect(cursor.advanceTo(11)).toBe("#222222");
+    expect(cursor.advanceTo(12)).toBeNull();
+  });
+
+  it("preserves exact winner semantics (lowest occurrenceIndex wins) on overlapping hits", () => {
+    // occ0: [0, 10, #aaaaaa], occ1: [5, 15, #bbbbbb]
+    const cursor = new DocumentMapGlossarySweepCursor([
+      { entryId: "e1", startOffset: 0, endOffset: 10, color: "#aaaaaa" },
+      { entryId: "e2", startOffset: 5, endOffset: 15, color: "#bbbbbb" }
+    ]);
+
+    expect(cursor.advanceTo(0)).toBe("#aaaaaa");
+    expect(cursor.advanceTo(4)).toBe("#aaaaaa");
+    // At offset 5, both are active, but occ0 (index 0) has priority over occ1 (index 1)
+    expect(cursor.advanceTo(5)).toBe("#aaaaaa");
+    expect(cursor.advanceTo(9)).toBe("#aaaaaa");
+    // At offset 10, occ0 expires, occ1 is now active
+    expect(cursor.advanceTo(10)).toBe("#bbbbbb");
+    expect(cursor.advanceTo(14)).toBe("#bbbbbb");
+    expect(cursor.advanceTo(15)).toBeNull();
+  });
+
+  it("handles UTF-16 surrogate pair code unit offsets", () => {
+    // Surrogate pair at offset 2..4 (length 2)
+    const cursor = new DocumentMapGlossarySweepCursor([
+      { entryId: "e1", startOffset: 2, endOffset: 4, color: "#abcdef" }
+    ]);
+
+    expect(cursor.advanceTo(1)).toBeNull();
+    expect(cursor.advanceTo(2)).toBe("#abcdef");
+    expect(cursor.advanceTo(3)).toBe("#abcdef");
+    expect(cursor.advanceTo(4)).toBeNull();
+  });
+});
+
+describe("buildGlossaryDocumentMapPlan forward sweep equivalence (#403)", () => {
+  const warriorTag = tag("t-warrior", "#112233");
+  const placeTag = tag("t-place", "#445566");
+  const nobunaga = entry("e-nobu", [atom("信長"), atom("織田信長")], [warriorTag]);
+  const kyoto = entry("e-kyoto", [atom("京都")], [placeTag]);
+  const dog = entry("e-dog", [atom("犬", GlossaryAtomFlags.AllowSingleCharacterMatch)]);
+
+  function verifyPlanMatchesOracle(
+    text: string,
+    entries: GlossaryEntry[],
+    wrapColumns: number = 40
+  ) {
+    const plan = buildGlossaryDocumentMapPlan({
+      text,
+      entries,
+      wrapColumns
+    });
+
+    const occurrences = plan.occurrences;
+    const dialogues = plan.dialogues;
+
+    // Verify every pixel matches the point-query oracle functions
+    for (const pixel of plan.pixels) {
+      const oracleHitColor = glossaryDocumentMapHitColorAtOffset(
+        pixel.offset,
+        occurrences
+      );
+      const expectedHit = oracleHitColor !== null;
+      const oracleDialogueColor = documentMapDialogueColorAtOffset(
+        pixel.offset,
+        dialogues
+      );
+      const expectedDialogue = oracleDialogueColor !== null;
+      const expectedColor = expectedHit
+        ? oracleHitColor
+        : expectedDialogue
+          ? oracleDialogueColor
+          : GLOSSARY_DOCUMENT_MAP_NORMAL_COLOR;
+
+      expect(pixel.hit).toBe(expectedHit);
+      expect(pixel.dialogue).toBe(expectedDialogue);
+      expect(pixel.color).toBe(expectedColor);
+    }
+  }
+
+  it("matches oracle for plain narration", () => {
+    verifyPlanMatchesOracle("これは普通の地の文です。静かな夜。", [nobunaga, kyoto]);
+  });
+
+  it("matches oracle for single dialogue", () => {
+    verifyPlanMatchesOracle("「こんにちは、旅の人」地の文。", [nobunaga]);
+  });
+
+  it("matches oracle for nested dialogue", () => {
+    verifyPlanMatchesOracle("「信長が『京都へ向かう』と言った」続き。", [nobunaga, kyoto]);
+  });
+
+  it("matches oracle for overlapping dialogue pairs and higher pairIndex winning", () => {
+    // Default pairs: 0 = 「」 (#909090), if multiple pairs overlap, higher pairIndex wins
+    verifyPlanMatchesOracle("「台詞A」と『台詞B「内側」』。", [nobunaga]);
+  });
+
+  it("matches oracle for same-offset boundary", () => {
+    verifyPlanMatchesOracle("「A」「B」地の文", []);
+  });
+
+  it("matches oracle for unclosed dialogue", () => {
+    verifyPlanMatchesOracle("地の文「閉じられていない台詞。信長が歩く。", [nobunaga]);
+  });
+
+  it("matches oracle for multiple glossary hits", () => {
+    verifyPlanMatchesOracle("信長は京都に行った。信長公記。", [nobunaga, kyoto]);
+  });
+
+  it("matches oracle for dialogue + glossary overlap with glossary taking precedence", () => {
+    verifyPlanMatchesOracle("「信長が京都に来たぞ！」と町人が叫んだ。", [nobunaga, kyoto]);
+  });
+
+  it("matches oracle for surrogate pairs and multi-character delimiters", () => {
+    verifyPlanMatchesOracle("😀𠮷野家で信長が食事。「おいしい」と言った。", [nobunaga]);
+  });
+
+  it("matches oracle for long wrapped line", () => {
+    verifyPlanMatchesOracle("信長".repeat(30) + "\n「京都」".repeat(10), [nobunaga, kyoto], 20);
+  });
+});
+
+describe("buildGlossaryDocumentMapPlan wrap and layout (#403)", () => {
+  it("preserves visual row count, width, and height across wrapped lines and page boundaries", () => {
+    const plan = buildGlossaryDocumentMapPlan({
+      text: "line1\n\n" + "x".repeat(100) + "\nline3",
+      entries: [],
+      wrapColumns: 20
+    });
+
+    expect(plan.wrapColumns).toBe(20);
+    expect(plan.cellSize).toBe(GLOSSARY_DOCUMENT_MAP_CELL_SIZE);
+    expect(plan.logicalPixelWidth).toBe(20 * 2);
+    // line1: 1 row, empty: 1 row, 100 'x' with wrap 20: 5 rows, line3: 1 row = 8 visual rows
+    expect(plan.totalVisualRows).toBe(8);
+    expect(plan.logicalPixelHeight).toBe(8 * 2);
+
+    const pages = computeDocumentMapPages({
+      totalVisualRows: plan.totalVisualRows,
+      cellSize: plan.cellSize,
+      pixelRatio: 1
+    });
+    expect(pages.length).toBe(1);
+    expect(pages[0].height).toBe(plan.logicalPixelHeight);
+  });
+});
+
+describe("buildGlossaryDocumentMapPlan performance regression guard (architecture)", () => {
+  it("does not call point-query helpers in buildGlossaryDocumentMapPlan production implementation", () => {
+    const source = readFileSync("src/renderer/glossaryDocumentMap.ts", "utf8");
+
+    const fnStart = source.indexOf("export function buildGlossaryDocumentMapPlan(");
+    expect(fnStart).toBeGreaterThan(-1);
+
+    const fnEnd = source.indexOf("export interface GlossaryDocumentMapDrawContext", fnStart);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+
+    const functionBody = source.slice(fnStart, fnEnd);
+
+    // Assert that the hot-loop point queries are not called in the plan builder
+    expect(functionBody).not.toContain("glossaryDocumentMapHitColorAtOffset");
+    expect(functionBody).not.toContain("documentMapDialogueColorAtOffset");
+    expect(functionBody).not.toContain("documentMapWinningDialogueRangeAtOffset");
   });
 });

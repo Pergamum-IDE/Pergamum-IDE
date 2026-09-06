@@ -284,23 +284,30 @@ function isSingleCharacterKanjiAdjacencyAccepted(
   );
 }
 
-function groupAcceptedRawMatches(
+function groupAcceptedRawMatchesByStart(
   rawMatches: readonly RawGlossarySurfaceMatch[]
-): Map<string, RawGlossarySurfaceMatch[]> {
-  const matchesByRange = new Map<string, RawGlossarySurfaceMatch[]>();
+): Map<number, Map<number, RawGlossarySurfaceMatch[]>> {
+  const matchesByStart = new Map<
+    number,
+    Map<number, RawGlossarySurfaceMatch[]>
+  >();
 
   for (const rawMatch of rawMatches) {
-    const rangeKey = `${rawMatch.start}:${rawMatch.end}`;
-    const rangeMatches = matchesByRange.get(rangeKey);
+    let matchesAtStart = matchesByStart.get(rawMatch.start);
+    if (!matchesAtStart) {
+      matchesAtStart = new Map<number, RawGlossarySurfaceMatch[]>();
+      matchesByStart.set(rawMatch.start, matchesAtStart);
+    }
 
-    if (rangeMatches) {
-      rangeMatches.push(rawMatch);
+    const matchesAtRange = matchesAtStart.get(rawMatch.end);
+    if (matchesAtRange) {
+      matchesAtRange.push(rawMatch);
     } else {
-      matchesByRange.set(rangeKey, [rawMatch]);
+      matchesAtStart.set(rawMatch.end, [rawMatch]);
     }
   }
 
-  return matchesByRange;
+  return matchesByStart;
 }
 
 export function matchGlossarySurfacesInText(
@@ -308,7 +315,7 @@ export function matchGlossarySurfacesInText(
   index: GlossarySurfaceIndex
 ): GlossarySurfaceTextMatch[] {
   const matches: GlossarySurfaceTextMatch[] = [];
-  const matchesByRange = groupAcceptedRawMatches(
+  const matchesByStart = groupAcceptedRawMatchesByStart(
     collectRawGlossarySurfaceMatches(text, index)
       .filter((rawMatch) => isBoundaryAcceptedRawMatch(text, rawMatch))
       .filter((rawMatch) =>
@@ -318,43 +325,34 @@ export function matchGlossarySurfacesInText(
   let cursor = 0;
 
   while (cursor < text.length) {
-    let longestSurfaceLength = 0;
-    let matchingEntries: GlossarySurfaceIndexEntry[] = [];
-
-    for (const rangeMatches of matchesByRange.values()) {
-      const [firstMatch] = rangeMatches;
-
-      if (!firstMatch || firstMatch.start !== cursor) {
-        continue;
-      }
-
-      const surfaceLength = firstMatch.end - firstMatch.start;
-
-      if (surfaceLength > longestSurfaceLength) {
-        longestSurfaceLength = surfaceLength;
-        matchingEntries = rangeMatches.map((rawMatch) => rawMatch.entry);
-      }
-    }
-
-    if (matchingEntries.length === 0) {
+    const matchesAtStart = matchesByStart.get(cursor);
+    if (!matchesAtStart) {
       cursor += 1;
       continue;
     }
 
-    const end = cursor + longestSurfaceLength;
+    let longestEnd = 0;
+    let matchingEntries: RawGlossarySurfaceMatch[] = [];
+
+    for (const [end, rangeMatches] of matchesAtStart) {
+      if (end > longestEnd) {
+        longestEnd = end;
+        matchingEntries = rangeMatches;
+      }
+    }
 
     matches.push({
-      matchedText: text.slice(cursor, end),
+      matchedText: text.slice(cursor, longestEnd),
       range: {
         start: cursor,
-        end
+        end: longestEnd
       },
       candidates: matchingEntries
-        .map(candidateFromIndexEntry)
+        .map((rawMatch) => candidateFromIndexEntry(rawMatch.entry))
         .sort(compareCandidates)
     });
 
-    cursor = end;
+    cursor = longestEnd;
   }
 
   return matches;
@@ -364,4 +362,77 @@ export function isAmbiguousGlossarySurfaceTextMatch(
   match: GlossarySurfaceTextMatch
 ): boolean {
   return match.candidates.length > 1;
+}
+
+/**
+ * Match glossary surfaces across text in a single pass, then resolve occurrences
+ * independently per Entry (#403).
+ *
+ * This preserves per-entry occurrence semantics (an entry's occurrences are never
+ * shadowed by another entry's longer surface), matching findGlossaryEntryOccurrences
+ * without running a separate full-document scan per Entry.
+ */
+export function matchGlossarySurfacesPerEntry(
+  text: string,
+  index: GlossarySurfaceIndex
+): Map<GlossaryEntryId, Array<{ start: number; end: number }>> {
+  const result = new Map<GlossaryEntryId, Array<{ start: number; end: number }>>();
+
+  if (text.length === 0 || index.entries.length === 0) {
+    return result;
+  }
+
+  const acceptedRawMatches = collectRawGlossarySurfaceMatches(text, index)
+    .filter((rawMatch) => isBoundaryAcceptedRawMatch(text, rawMatch))
+    .filter((rawMatch) =>
+      isSingleCharacterKanjiAdjacencyAccepted(text, rawMatch)
+    );
+
+  const matchesByEntry = new Map<GlossaryEntryId, RawGlossarySurfaceMatch[]>();
+  for (const rawMatch of acceptedRawMatches) {
+    const entryId = rawMatch.entry.entryId;
+    const list = matchesByEntry.get(entryId);
+    if (list) {
+      list.push(rawMatch);
+    } else {
+      matchesByEntry.set(entryId, [rawMatch]);
+    }
+  }
+
+  for (const [entryId, entryRawMatches] of matchesByEntry) {
+    const endsByStart = new Map<number, number[]>();
+    for (const match of entryRawMatches) {
+      const ends = endsByStart.get(match.start);
+      if (ends) {
+        ends.push(match.end);
+      } else {
+        endsByStart.set(match.start, [match.end]);
+      }
+    }
+
+    const startOffsets = Array.from(endsByStart.keys()).sort((a, b) => a - b);
+    const occurrences: Array<{ start: number; end: number }> = [];
+    let cursor = 0;
+
+    for (const start of startOffsets) {
+      if (start < cursor) {
+        continue;
+      }
+
+      const ends = endsByStart.get(start)!;
+      let longestEnd = 0;
+      for (const end of ends) {
+        if (end > longestEnd) {
+          longestEnd = end;
+        }
+      }
+
+      occurrences.push({ start, end: longestEnd });
+      cursor = longestEnd;
+    }
+
+    result.set(entryId, occurrences);
+  }
+
+  return result;
 }
