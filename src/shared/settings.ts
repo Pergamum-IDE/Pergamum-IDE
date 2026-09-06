@@ -232,7 +232,12 @@ export interface ProjectPreviewSettings {
   renderer?: PreviewRendererId;
 }
 
+export interface ProjectEditorSettings {
+  fontFamily?: string;
+}
+
 export interface ProjectSettings {
+  editor?: ProjectEditorSettings;
   preview?: ProjectPreviewSettings;
 }
 
@@ -669,10 +674,11 @@ export function resolveEffectiveSettings(
         }
       }
     },
-    // Project-level editor settings remain out of scope for #195; the
-    // project config type intentionally does not carry editor settings yet.
+    // #396 Slice 3: editor.fontFamily resolution precedence:
+    // Project override > Application Settings > Built-in default
     editor: {
       fontFamily:
+        projectSettings?.editor?.fontFamily ??
         applicationSettings.editor.fontFamily ??
         builtInDefaultSettings.editor.fontFamily,
       // applicationOnly (#252), like files.newFile.lineEnding: always a

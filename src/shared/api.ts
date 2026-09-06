@@ -207,6 +207,7 @@ export const PROJECT_CHANNELS = {
    *  Command Palette file quick open footer detail preview. */
   readProjectDocumentPreviewLine: "projects:readProjectDocumentPreviewLine",
   saveProjectDocument: "projects:saveProjectDocument",
+  saveProjectSettings: "projects:saveProjectSettings",
   closeCurrentProject: "projects:closeCurrentProject"
 } as const;
 
@@ -416,6 +417,11 @@ export type WriteMarkdownResult =
 export interface PergamumProjectConfig {
   name?: string;
   settings?: ProjectSettings;
+}
+
+export interface UpdateProjectSettingsRequest {
+  readonly set?: Record<string, unknown>;
+  readonly remove?: readonly string[];
 }
 
 export interface ProjectDocument {
@@ -959,6 +965,9 @@ export interface PergamumApi {
       relativePath: string,
       content: string
     ) => Promise<SaveProjectDocumentResult>;
+    saveProjectSettings: (
+      request: UpdateProjectSettingsRequest
+    ) => Promise<ProjectSettings | undefined>;
     closeCurrentProject: (
       request: CloseCurrentProjectRequest
     ) => Promise<CloseCurrentProjectResult>;

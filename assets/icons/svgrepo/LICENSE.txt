@@ -4,6 +4,7 @@ Original pages:
 https://www.svgrepo.com/svg/361060/case-sensitive
 https://www.svgrepo.com/svg/361284/regex
 https://www.svgrepo.com/svg/245661/vocabulary
+https://www.svgrepo.com/svg/412480/scroll
 
 License: CC0 License
 Downloaded: 2026-09-04

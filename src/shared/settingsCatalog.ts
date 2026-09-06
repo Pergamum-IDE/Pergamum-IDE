@@ -888,7 +888,7 @@ const deprecatedAliasIndex: ReadonlyMap<string, SettingKey> = (() => {
   return index;
 })();
 
-function isSettingKey(value: string): value is SettingKey {
+export function isSettingKey(value: string): value is SettingKey {
   return Object.prototype.hasOwnProperty.call(settingsCatalog, value);
 }
 

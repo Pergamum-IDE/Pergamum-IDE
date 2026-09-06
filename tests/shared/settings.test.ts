@@ -602,3 +602,71 @@ describe("notification.output.enabled wiring (#298)", () => {
     ).toBe(false);
   });
 });
+
+describe("editor.fontFamily resolution precedence (#396 Slice 3)", () => {
+  const defaultFont = builtInDefaultSettings.editor.fontFamily;
+
+  it("falls back to built-in default when both application and project are unset", () => {
+    const effective = resolveEffectiveSettings(defaultApplicationSettings, undefined);
+    expect(effective.editor.fontFamily).toBe(defaultFont);
+  });
+
+  it("uses application settings value when project override is absent", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        fontFamily: "Application Font"
+      }
+    };
+    const effective = resolveEffectiveSettings(appSettings, undefined);
+    expect(effective.editor.fontFamily).toBe("Application Font");
+
+    // Also with empty project settings object
+    const effectiveEmptyProj = resolveEffectiveSettings(appSettings, {});
+    expect(effectiveEmptyProj.editor.fontFamily).toBe("Application Font");
+
+    // Also with project settings having only other settings
+    const effectiveOtherProj = resolveEffectiveSettings(appSettings, {
+      preview: { renderer: "markdown" }
+    });
+    expect(effectiveOtherProj.editor.fontFamily).toBe("Application Font");
+  });
+
+  it("uses project override value when project override is present (Project > Application > Default)", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        fontFamily: "Application Font"
+      }
+    };
+    const effective = resolveEffectiveSettings(appSettings, {
+      editor: { fontFamily: "Project Override Font" }
+    });
+    expect(effective.editor.fontFamily).toBe("Project Override Font");
+  });
+
+  it("immediately returns to application settings value when project override is removed (undefined)", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        fontFamily: "Application Font"
+      }
+    };
+    const withOverride = resolveEffectiveSettings(appSettings, {
+      editor: { fontFamily: "Project Override Font" }
+    });
+    expect(withOverride.editor.fontFamily).toBe("Project Override Font");
+
+    const afterRemoval = resolveEffectiveSettings(appSettings, {
+      editor: {}
+    });
+    expect(afterRemoval.editor.fontFamily).toBe("Application Font");
+
+    const afterCompleteRemoval = resolveEffectiveSettings(appSettings, undefined);
+    expect(afterCompleteRemoval.editor.fontFamily).toBe("Application Font");
+  });
+});
+

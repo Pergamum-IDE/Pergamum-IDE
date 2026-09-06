@@ -19,7 +19,8 @@ import type {
   DirtyWorkingCopy,
   LifecycleCloseDecision,
   LifecycleWindowCloseRequest,
-  SaveWorkingCopyOutcome
+  SaveWorkingCopyOutcome,
+  UpdateProjectSettingsRequest
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import {
@@ -66,7 +67,11 @@ import {
   type TranslationKey,
   type TranslationValues
 } from "../shared/i18n";
-import { resolveEffectiveSettings } from "../shared/settings";
+import {
+  builtInDefaultSettings,
+  resolveEffectiveSettings,
+  type ProjectSettings
+} from "../shared/settings";
 import { isPathEqualOrInsideDirectory } from "../shared/saveTargetPolicy";
 import { ActivityBar } from "./ActivityBar";
 import {
@@ -375,6 +380,7 @@ import type {
   NotificationToastPlacement
 } from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
+import { ProjectSettingsPanel } from "./ProjectSettingsPanel";
 import { GlossaryTagManager } from "./GlossaryTagManager";
 import { GlossaryEntryManager } from "./GlossaryEntryManager";
 import { countGlossaryEntriesByTag } from "./glossaryTagEntryCount";
@@ -401,6 +407,11 @@ import {
   debugLogCommandIds,
   registerDebugLogCommands
 } from "./debugLogCommands";
+import {
+  createProjectSettingsCommandTitles,
+  projectSettingsCommandIds,
+  registerProjectSettingsCommands
+} from "./projectSettingsCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
 import {
   shouldShowFullScreenWelcomeSurface,
@@ -914,6 +925,11 @@ export function App(): JSX.Element {
   // debug-only bug icon / `debugLog.open` command, both gated on
   // `isDebugModeEnabled`.
   const [isDebugLogTabOpen, setIsDebugLogTabOpen] = useState(false);
+  // #396: the Project Settings special tab. Project-scoped (settings are
+  // project-owned) — closed on project close / switch. Opening / activating it
+  // never creates an unsaved draft.
+  const [isProjectSettingsTabOpen, setIsProjectSettingsTabOpen] =
+    useState(false);
   const [activeSpecialTabId, setActiveSpecialTabId] =
     useState<SpecialTabId | null>(null);
   // #398: the full mixed document/special Document Tab Bar order — the
@@ -1512,22 +1528,28 @@ export function App(): JSX.Element {
   // Glossary management tabs (no "default to it" fallback).
   const isDebugLogTabActive =
     isDebugLogTabOpen && activeSpecialTabId === "debugLog";
+  // #396: the Project Settings special tab — same "explicitly selected" rule as the
+  // Glossary management tabs (no "default to it" fallback).
+  const isProjectSettingsTabActive =
+    isProjectSettingsTabOpen && activeSpecialTabId === "projectSettings";
   // When the Settings tab is the only open tab (zero document tabs), it is the
   // active surface even though `activeSpecialTabId` may not have been set —
-  // but never while a Glossary management tab or the Debug Log tab is the
-  // selected special tab.
+  // but never while a Glossary management tab, the Project Settings tab, or the
+  // Debug Log tab is the selected special tab.
   const isSettingsTabActive =
     isSettingsTabOpen &&
     !isGlossaryTagManagerTabActive &&
     !isGlossaryEntryManagerTabActive &&
     !isDebugLogTabActive &&
+    !isProjectSettingsTabActive &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
-  // A full-editor-area special tab (Settings, a Glossary management tab, or
-  // the Debug Log tab) is showing instead of an editor. Command gates that
-  // mean "an editor is active" check this rather than isSettingsTabActive
-  // alone.
+  // A full-editor-area special tab (Settings, Project Settings, a Glossary
+  // management tab, or the Debug Log tab) is showing instead of an editor.
+  // Command gates that mean "an editor is active" check this rather than
+  // isSettingsTabActive alone.
   const isEditorAreaSpecialTabActive =
     isSettingsTabActive ||
+    isProjectSettingsTabActive ||
     isGlossaryTagManagerTabActive ||
     isGlossaryEntryManagerTabActive ||
     isDebugLogTabActive;
@@ -2484,6 +2506,15 @@ export function App(): JSX.Element {
         createDebugLogCommandTitles(translate)
       );
     }
+    registerProjectSettingsCommands(
+      registry,
+      {
+        openProjectSettings: () => {
+          openProjectSettingsTab();
+        }
+      },
+      createProjectSettingsCommandTitles(translate)
+    );
     registerGlossaryCommands(
       registry,
       {
@@ -2708,6 +2739,14 @@ export function App(): JSX.Element {
       });
     }
 
+    if (isProjectSettingsTabOpen) {
+      list.push({
+        kind: "special",
+        id: "projectSettings",
+        title: translate("settings.project.title")
+      });
+    }
+
     if (isGlossaryTagManagerTabOpen) {
       list.push({
         kind: "special",
@@ -2735,6 +2774,7 @@ export function App(): JSX.Element {
     return list;
   }, [
     isSettingsTabOpen,
+    isProjectSettingsTabOpen,
     isGlossaryTagManagerTabOpen,
     isGlossaryEntryManagerTabOpen,
     isDebugLogTabOpen,
@@ -2756,13 +2796,15 @@ export function App(): JSX.Element {
       ? specialWorkspaceTabId("glossaryTagManager")
       : isGlossaryEntryManagerTabActive
         ? specialWorkspaceTabId("glossaryEntryManager")
-        : isDebugLogTabActive
-          ? specialWorkspaceTabId("debugLog")
-          : isSettingsTabActive
-            ? specialWorkspaceTabId("settings")
-            : openDocumentsState.activeDocumentId
-              ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
-              : undefined;
+        : isProjectSettingsTabActive
+          ? specialWorkspaceTabId("projectSettings")
+          : isDebugLogTabActive
+            ? specialWorkspaceTabId("debugLog")
+            : isSettingsTabActive
+              ? specialWorkspaceTabId("settings")
+              : openDocumentsState.activeDocumentId
+                ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+                : undefined;
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
@@ -3266,6 +3308,18 @@ export function App(): JSX.Element {
     setActiveSpecialTabId("settings");
   }
 
+  // #396: open (or re-activate) the Project Settings special tab. Opening it
+  // again just activates the existing one — never a duplicate tab. Project-scoped,
+  // so no-op if no project is open.
+  function openProjectSettingsTab(): void {
+    if (!project) {
+      return;
+    }
+
+    setIsProjectSettingsTabOpen(true);
+    setActiveSpecialTabId("projectSettings");
+  }
+
   // #375: open (or re-activate) the Glossary Tag Manager special tab. Opening
   // it again just activates the existing one — never a duplicate tab, and
   // never the "new tag" dialog (that is the "Add tag" button's job only).
@@ -3299,6 +3353,10 @@ export function App(): JSX.Element {
       setActiveSpecialTabId(tabId);
     }
 
+    if (tabId === "projectSettings" && isProjectSettingsTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+
     if (tabId === "glossaryTagManager" && isGlossaryTagManagerTabOpen) {
       setActiveSpecialTabId(tabId);
     }
@@ -3315,6 +3373,14 @@ export function App(): JSX.Element {
   function closeSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings") {
       setIsSettingsTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+      return;
+    }
+
+    if (tabId === "projectSettings") {
+      setIsProjectSettingsTabOpen(false);
       setActiveSpecialTabId((current) =>
         current === tabId ? null : current
       );
@@ -3956,6 +4022,11 @@ export function App(): JSX.Element {
 
     if (!editorId && isSettingsTabActive) {
       closeSpecialTab("settings");
+      return;
+    }
+
+    if (!editorId && isProjectSettingsTabActive) {
+      closeSpecialTab("projectSettings");
       return;
     }
 
@@ -6089,8 +6160,12 @@ export function App(): JSX.Element {
     // project-owned) — it never survives a project switch / close.
     setIsGlossaryTagManagerTabOpen(false);
     setIsGlossaryEntryManagerTabOpen(false);
+    // #396: Project Settings is project-scoped — closed on project switch / close.
+    setIsProjectSettingsTabOpen(false);
     setActiveSpecialTabId((current) =>
-      current === "glossaryTagManager" || current === "glossaryEntryManager"
+      current === "glossaryTagManager" ||
+      current === "glossaryEntryManager" ||
+      current === "projectSettings"
         ? null
         : current
     );
@@ -6173,8 +6248,12 @@ export function App(): JSX.Element {
     // project-owned) — it never survives a project switch / close.
     setIsGlossaryTagManagerTabOpen(false);
     setIsGlossaryEntryManagerTabOpen(false);
+    // #396: Project Settings is project-scoped — closed on project switch / close.
+    setIsProjectSettingsTabOpen(false);
     setActiveSpecialTabId((current) =>
-      current === "glossaryTagManager" || current === "glossaryEntryManager"
+      current === "glossaryTagManager" ||
+      current === "glossaryEntryManager" ||
+      current === "projectSettings"
         ? null
         : current
     );
@@ -6753,8 +6832,12 @@ export function App(): JSX.Element {
     // project-owned) — it never survives a project switch / close.
     setIsGlossaryTagManagerTabOpen(false);
     setIsGlossaryEntryManagerTabOpen(false);
+    // #396: Project Settings is project-scoped — closed on project switch / close.
+    setIsProjectSettingsTabOpen(false);
     setActiveSpecialTabId((current) =>
-      current === "glossaryTagManager" || current === "glossaryEntryManager"
+      current === "glossaryTagManager" ||
+      current === "glossaryEntryManager" ||
+      current === "projectSettings"
         ? null
         : current
     );
@@ -8557,7 +8640,38 @@ export function App(): JSX.Element {
     createSettingsFieldRestartTracker()
   ).current;
 
-  // #394 Step 2 follow-up: called on every settings-save request (i.e. every
+  async function handleSaveProjectSettings(
+    request: UpdateProjectSettingsRequest
+  ): Promise<ProjectSettings | undefined> {
+    if (!window.pergamum?.projects?.saveProjectSettings) {
+      return undefined;
+    }
+
+    const targetProjectFilePath = project?.activeProjectFilePath;
+    if (!targetProjectFilePath) {
+      return undefined;
+    }
+
+    const updatedSettings =
+      await window.pergamum.projects.saveProjectSettings(request);
+
+    setProject((prev) => {
+      if (!prev || prev.activeProjectFilePath !== targetProjectFilePath) {
+        return prev;
+      }
+      return {
+        ...prev,
+        config: {
+          ...prev.config,
+          settings: updatedSettings
+        }
+      };
+    });
+
+    return updatedSettings;
+  }
+
+  // Pergamum persists Settings on every interaction (on every
   // keystroke/toggle in the Settings panel) — this is the ONLY thing that
   // still happens per-change; no restart check runs here.
   function handleSettingsChangeRequest(
@@ -8661,13 +8775,15 @@ export function App(): JSX.Element {
               ? translate("glossary.tagManager.title")
               : isGlossaryEntryManagerTabActive
                 ? translate("glossary.entryManager.title")
-                : isDebugLogTabActive
-                  ? translate("debugLog.title")
-                  : isSettingsTabActive
-                    ? translate("settings.application.title")
-                    : currentEditor
-                      ? currentEditorTitle(currentEditor)
-                      : ""}
+                : isProjectSettingsTabActive
+                  ? translate("settings.project.title")
+                  : isDebugLogTabActive
+                    ? translate("debugLog.title")
+                    : isSettingsTabActive
+                      ? translate("settings.application.title")
+                      : currentEditor
+                        ? currentEditorTitle(currentEditor)
+                        : ""}
           </span>
           {!isEditorAreaSpecialTabActive && isDirty ? (
             <span className="dirtyIndicator">
@@ -8732,10 +8848,17 @@ export function App(): JSX.Element {
         <ActivityBar
           activeMode={activeActivityMode}
           isApplicationSettingsActive={isSettingsTabActive}
+          isProjectOpen={project !== null}
+          isProjectSettingsActive={isProjectSettingsTabActive}
           isDebugModeEnabled={isDebugModeEnabled}
           isDebugLogActive={isDebugLogTabActive}
           translate={translate}
           onSelectMode={handleActivityBarModeClick}
+          onOpenProjectSettings={() =>
+            executeUiCommand(projectSettingsCommandIds.open, {
+              source: "activityBar"
+            })
+          }
           onOpenApplicationSettings={() =>
             executeUiCommand(workspaceCommandIds.openApplicationSettings, {
               source: "activityBar"
@@ -8973,6 +9096,14 @@ export function App(): JSX.Element {
                       onSettingFieldBlur={() => {
                         void handleSettingsFieldBlur();
                       }}
+                    />
+                  ) : isProjectSettingsTabActive ? (
+                    <ProjectSettingsPanel
+                      translate={translate}
+                      projectSettings={project?.config?.settings}
+                      applicationSettings={settings}
+                      isReadOnly={project?.accessMode?.kind === "readOnly"}
+                      onSaveSettings={handleSaveProjectSettings}
                     />
                   ) : isDebugLogTabActive ? (
                     <section className="debugLogTab">

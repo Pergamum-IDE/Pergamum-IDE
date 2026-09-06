@@ -14,6 +14,7 @@ import { registerFileExplorerCommands } from "../../src/renderer/fileExplorerCom
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
+import { registerProjectSettingsCommands } from "../../src/renderer/projectSettingsCommands";
 import { registerRecoveryCommands } from "../../src/renderer/recovery/recoveryCommands";
 import { registerUtilityWindowCommands } from "../../src/renderer/utilityWindowCommands";
 import { registerWorkspaceCommands } from "../../src/renderer/workspaceCommands";
@@ -247,6 +248,14 @@ function buildCoreCommandRegistry(): CommandRegistry {
     {
       showRecoveryDocuments: "Recover Unsaved Changes",
       showRecoveryDocumentsDescription: "Recover Unsaved Changes"
+    }
+  );
+  registerProjectSettingsCommands(
+    registry,
+    { openProjectSettings: () => undefined },
+    {
+      open: "Open Project Settings",
+      openDescription: "Open Project Settings"
     }
   );
 

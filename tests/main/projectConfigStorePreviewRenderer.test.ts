@@ -113,7 +113,7 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     expect(config?.settings).toBeUndefined();
   });
 
-  it("opens with no preview override when settings.preview is missing", async () => {
+  it("opens with no preview override when settings is empty object", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
@@ -127,39 +127,11 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     expect(config?.settings).toBeUndefined();
   });
 
-  it("opens with no preview override when settings.preview is not an object", async () => {
+  it("accepts settings[\"preview.renderer\"] = \"markdown\" as a project override", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
-        settings: { preview: "markdown" }
-      })
-    );
-
-    const config = await readProjectConfig("C:\\fake-project");
-
-    expect(config?.settings?.preview).toBeUndefined();
-    expect(config?.settings).toBeUndefined();
-  });
-
-  it("opens with no preview override when settings.preview = {}", async () => {
-    fsMock.readFile.mockResolvedValue(
-      JSON.stringify({
-        name: "My Project",
-        settings: { preview: {} }
-      })
-    );
-
-    const config = await readProjectConfig("C:\\fake-project");
-
-    expect(config?.settings?.preview).toBeUndefined();
-    expect(config?.settings).toBeUndefined();
-  });
-
-  it("accepts settings.preview.renderer = \"markdown\" as a project override", async () => {
-    fsMock.readFile.mockResolvedValue(
-      JSON.stringify({
-        name: "My Project",
-        settings: { preview: { renderer: "markdown" } }
+        settings: { "preview.renderer": "markdown" }
       })
     );
 
@@ -168,11 +140,11 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     expect(config?.settings?.preview?.renderer).toBe("markdown");
   });
 
-  it("rejects settings.preview.renderer = \"html\" without failing project open, and it does not appear as an accepted project override", async () => {
+  it("rejects settings[\"preview.renderer\"] = \"html\" without failing project open, and it does not appear as an accepted project override", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
-        settings: { preview: { renderer: "html" } }
+        settings: { "preview.renderer": "html" }
       })
     );
 
@@ -183,11 +155,11 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     expect(config?.settings).toBeUndefined();
   });
 
-  it("rejects settings.preview.renderer = 1 without failing project open, and it does not appear as an accepted project override", async () => {
+  it("rejects settings[\"preview.renderer\"] = 1 without failing project open, and it does not appear as an accepted project override", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
-        settings: { preview: { renderer: 1 } }
+        settings: { "preview.renderer": 1 }
       })
     );
 
@@ -202,7 +174,10 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
-        settings: { language: "en", preview: { renderer: "markdown" } }
+        settings: {
+          "workbench.language": "en",
+          "preview.renderer": "markdown"
+        }
       })
     );
 
@@ -210,14 +185,16 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
 
     expect(config).not.toBeNull();
     expect(config?.settings?.preview?.renderer).toBe("markdown");
-    expect((config?.settings as Record<string, unknown>).language).toBeUndefined();
+    expect(
+      (config?.settings as Record<string, unknown>)["workbench.language"]
+    ).toBeUndefined();
   });
 
-  it("missing and rejected settings.preview.renderer produce the same effective value under the same application/default inputs", async () => {
+  it("missing and rejected settings[\"preview.renderer\"] produce the same effective value under the same application/default inputs", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "Missing renderer project",
-        settings: { preview: {} }
+        settings: {}
       })
     );
     const missingConfig = await readProjectConfig("C:\\fake-project");
@@ -225,7 +202,7 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "Rejected renderer project",
-        settings: { preview: { renderer: "html" } }
+        settings: { "preview.renderer": "html" }
       })
     );
     const rejectedConfig = await readProjectConfig("C:\\fake-project");
@@ -245,18 +222,18 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
   });
 });
 
-describe("projectConfigStore: pergamum.json settings.workbench.fontFamily has no effect (#173)", () => {
+describe("projectConfigStore: pergamum.json settings[\"workbench.fontFamily\"] has no effect (#173)", () => {
   beforeEach(() => {
     fsMock.readFile.mockReset();
   });
 
-  it("does not read settings.workbench.fontFamily from pergamum.json — ProjectSettings is not typed with a workbench field", async () => {
+  it("does not read settings[\"workbench.fontFamily\"] from pergamum.json — ProjectSettings is not typed with a workbench field", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
         settings: {
-          preview: { renderer: "markdown" },
-          workbench: { fontFamily: "Fira Code" }
+          "preview.renderer": "markdown",
+          "workbench.fontFamily": "Fira Code"
         }
       })
     );
@@ -267,13 +244,16 @@ describe("projectConfigStore: pergamum.json settings.workbench.fontFamily has no
     expect(
       (config?.settings as Record<string, unknown>).workbench
     ).toBeUndefined();
+    expect(
+      (config?.settings as Record<string, unknown>)["workbench.fontFamily"]
+    ).toBeUndefined();
   });
 
   it("workbench.fontFamily is applicationOnly, so it never affects resolveEffectiveSettings via a project override — an application-scope value passes through unchanged regardless of pergamum.json content", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
-        settings: { workbench: { fontFamily: "Fira Code" } }
+        settings: { "workbench.fontFamily": "Fira Code" }
       })
     );
     const projectConfig = await readProjectConfig("C:\\fake-project");

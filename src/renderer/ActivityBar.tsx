@@ -4,6 +4,7 @@ import fileIcon from "../../assets/icons/feather/activity-bar/file.svg?raw";
 import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?raw";
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
 import settingsIcon from "../../assets/icons/feather/activity-bar/settings.svg?raw";
+import projectSettingsIcon from "../../assets/icons/svgrepo/activity-bar/scroll-svgrepo-com.svg?raw";
 import documentMapIcon from "../../assets/icons/ionicons/activity-bar/map-outline.svg?raw";
 import documentMetricsIcon from "../../assets/icons/ionicons/activity-bar/bar-chart-outline.svg?raw";
 import bugIcon from "../../assets/icons/ionicons/activity-bar/bug-outline.svg?raw";
@@ -11,6 +12,8 @@ import bugIcon from "../../assets/icons/ionicons/activity-bar/bug-outline.svg?ra
 interface ActivityBarProps {
   activeMode: SidebarMode | null;
   isApplicationSettingsActive: boolean;
+  isProjectOpen?: boolean;
+  isProjectSettingsActive?: boolean;
   // #377: the Debug Log entry point exists only while `--pergamum-debug`
   // mode is active. Normal startup never renders the bug icon, so these
   // default to the "no debug entry point" state when omitted.
@@ -18,6 +21,7 @@ interface ActivityBarProps {
   isDebugLogActive?: boolean;
   translate: Translate;
   onSelectMode: (mode: SidebarMode) => void;
+  onOpenProjectSettings?: () => void;
   onOpenApplicationSettings: () => void;
   onOpenDebugLog?: () => void;
 }
@@ -44,10 +48,13 @@ function ActivityBarIcon({
 export function ActivityBar({
   activeMode,
   isApplicationSettingsActive,
+  isProjectOpen = false,
+  isProjectSettingsActive = false,
   isDebugModeEnabled = false,
   isDebugLogActive = false,
   translate,
   onSelectMode,
+  onOpenProjectSettings,
   onOpenApplicationSettings,
   onOpenDebugLog
 }: ActivityBarProps): JSX.Element {
@@ -56,6 +63,7 @@ export function ActivityBar({
   const glossaryLabel = translate("activity.glossary");
   const documentMapLabel = translate("activity.documentMap");
   const documentMetricsLabel = translate("activity.documentMetrics");
+  const projectSettingsLabel = translate("activity.projectSettings");
   const applicationSettingsLabel = translate("activity.applicationSettings");
   const debugLogLabel = translate("activity.debugLog");
 
@@ -152,6 +160,25 @@ export function ActivityBar({
             onClick={() => onOpenDebugLog?.()}
           >
             <ActivityBarIcon label={debugLogLabel} svg={bugIcon} />
+          </button>
+        ) : null}
+        {isProjectOpen ? (
+          <button
+            type="button"
+            className={
+              isProjectSettingsActive
+                ? "activityBarItem isActive"
+                : "activityBarItem"
+            }
+            aria-label={projectSettingsLabel}
+            aria-pressed={isProjectSettingsActive}
+            title={projectSettingsLabel}
+            onClick={() => onOpenProjectSettings?.()}
+          >
+            <ActivityBarIcon
+              label={projectSettingsLabel}
+              svg={projectSettingsIcon}
+            />
           </button>
         ) : null}
         <button

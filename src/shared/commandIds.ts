@@ -35,6 +35,10 @@ export const glossaryTabCommandIds = {
   manageEntries: defineCommandId("glossary.entry.manage")
 } as const;
 
+export const projectSettingsCommandIds = {
+  open: defineCommandId("project.settings.open")
+} as const;
+
 export const editorCommandIds = {
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),

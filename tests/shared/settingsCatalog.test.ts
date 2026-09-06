@@ -1665,7 +1665,6 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
 
       for (const applicationSettingsOnlyKey of [
-        "editor.fontFamily",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "files.newFile.lineEnding",
         "files.newFile.encoding",
