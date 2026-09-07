@@ -9,6 +9,7 @@ import {
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
   IMAGE_ATTACHMENT_CHANNELS,
+  MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS,
   LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
   RECOVERY_CHANNELS,
@@ -349,6 +350,13 @@ const pergamumApi: PergamumApi = {
   imageAttachment: {
     save: (payload) =>
       ipcRenderer.invoke(IMAGE_ATTACHMENT_CHANNELS.save, payload)
+  },
+  markdownImageLinkDiagnostics: {
+    validate: (request) =>
+      ipcRenderer.invoke(
+        MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS.validate,
+        request
+      )
   }
 };
 

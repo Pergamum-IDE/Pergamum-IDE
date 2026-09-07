@@ -22,6 +22,7 @@ import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
 import { registerImageAttachmentIpc } from "./imageAttachmentIpc";
+import { registerMarkdownImageLinkDiagnosticsIpc } from "./markdownImageLinkDiagnosticsIpc";
 import { registerPergamumAssetProtocol } from "./pergamumAssetProtocol";
 import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
@@ -349,6 +350,10 @@ app.whenReady().then(async () => {
   );
   registerSettingsIpc();
   registerImageAttachmentIpc();
+  // #411: read-only diagnostics for broken project-local image links in the
+  // active Markdown editor (renderer extracts links + offsets; main resolves
+  // the project root and validates the files).
+  registerMarkdownImageLinkDiagnosticsIpc();
   // #409: serve project-local images to the Markdown Preview via
   // `pergamum-asset://`. The scheme was declared privileged at module load
   // (above); this attaches the handler now that `app` is ready.

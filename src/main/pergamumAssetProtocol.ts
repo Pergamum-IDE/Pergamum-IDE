@@ -9,48 +9,37 @@
  *   2. the URL is parsed strictly ({@link parsePergamumAssetUrl}) - `..`,
  *      `..\`, a leading `/`, backslashes, percent-encoded separators and
  *      control characters are rejected, not normalized,
- *   3. `path.resolve` + lexical containment in the project root,
- *   4. the target is not a Pergamum-owned / protected location,
- *   5. the filename extension names a supported format (PNG/JPEG/GIF/WebP),
- *   6. realpath containment of the project root AND the resolved file
- *      (symlink / junction escape),
- *   7. the target is a regular file (not a directory), under the size cap,
- *   8. the file's magic bytes actually identify that supported format.
+ *   3. everything filesystem-touching — lexical containment, protected
+ *      locations, supported extension, realpath containment, regular-file /
+ *      size / magic-byte checks — is delegated to the shared
+ *      {@link validateProjectLocalImageFile} helper (also used by #411's
+ *      image-link diagnostics), so the two paths cannot diverge.
  *
  * Only then are the bytes returned. Any failure yields a bare `404` (or a
  * more specific 4xx) with no body, so nothing about the filesystem leaks.
  */
 
-import path from "node:path";
-import { promises as nodeFs } from "node:fs";
 import { protocol as electronProtocol } from "electron";
 
-import {
-  isPathEqualOrInsideDirectory,
-  isProjectWriteLockDirectoryTarget,
-  isProtectedPergamumDataFilePath
-} from "../shared/saveTargetPolicy";
 import type { AppPlatform } from "../shared/platform";
 import {
-  IMAGE_ATTACHMENT_MAGIC_PREFIX_LENGTH,
   IMAGE_ATTACHMENT_MAX_BYTES,
-  imageAttachmentMimeType,
-  resolveImageAttachmentFormat,
-  supportedImageAttachmentFormatForFileName
+  imageAttachmentMimeType
 } from "../shared/imageAttachmentFormat";
 import {
   PERGAMUM_ASSET_SCHEME,
   parsePergamumAssetUrl
 } from "../shared/pergamumAssetUrl";
 import { currentProjectRootPath as defaultCurrentProjectRootPath } from "./projectIpc";
+import {
+  defaultProjectLocalImageFileSystem,
+  validateProjectLocalImageFile,
+  type ProjectLocalImageFileRejectionReason,
+  type ProjectLocalImageFileSystem
+} from "./projectLocalImageFileValidation";
 
-export interface PergamumAssetProtocolFileSystem {
-  realpath(target: string): Promise<string>;
-  stat(
-    target: string
-  ): Promise<{ isFile(): boolean; isDirectory(): boolean; size: number }>;
-  readFile(target: string): Promise<Uint8Array>;
-}
+/** @deprecated kept as an alias for existing importers; see the shared helper. */
+export type PergamumAssetProtocolFileSystem = ProjectLocalImageFileSystem;
 
 export interface RegisterPergamumAssetProtocolDeps {
   readonly protocol?: {
@@ -60,17 +49,11 @@ export interface RegisterPergamumAssetProtocolDeps {
     ): void;
   };
   readonly currentProjectRootPath?: () => string | null;
-  readonly fileSystem?: PergamumAssetProtocolFileSystem;
+  readonly fileSystem?: ProjectLocalImageFileSystem;
   readonly platform?: AppPlatform;
   /** Upper bound on a served file, bytes. Defaults to the #407 128 MiB cap. */
   readonly maxBytes?: number;
 }
-
-const defaultFileSystem: PergamumAssetProtocolFileSystem = {
-  realpath: (target) => nodeFs.realpath(target),
-  stat: (target) => nodeFs.stat(target),
-  readFile: (target) => nodeFs.readFile(target)
-};
 
 function nodePlatformToAppPlatform(platform: NodeJS.Platform): AppPlatform {
   switch (platform) {
@@ -92,6 +75,16 @@ function errorResponse(status: number): Response {
   });
 }
 
+const REJECTION_STATUS: Record<ProjectLocalImageFileRejectionReason, number> = {
+  outsideProject: 403,
+  protectedLocation: 403,
+  unsupportedFormat: 415,
+  missing: 404,
+  directory: 404,
+  tooLarge: 413,
+  formatMismatch: 415
+};
+
 export async function handlePergamumAssetRequest(
   request: { url: string },
   deps: Required<
@@ -112,121 +105,26 @@ export async function handlePergamumAssetRequest(
       return errorResponse(400);
     }
 
-    const projectRootAbsolute = path.resolve(projectRootPath);
-    const resolved = path.resolve(projectRootAbsolute, ...parsed.segments);
-
-    // 3. Lexical containment.
-    try {
-      if (
-        !isPathEqualOrInsideDirectory(
-          resolved,
-          projectRootAbsolute,
-          deps.platform
-        )
-      ) {
-        return errorResponse(403);
-      }
-    } catch {
-      return errorResponse(403);
-    }
-
-    // 4. Pergamum-owned / protected locations. `isProtectedPergamumDataFilePath`
-    //    only inspects the trailing name, so it also has to be applied per
-    //    path segment - otherwise `.pergamum/secret.png` or
-    //    `.pergamum-wal/secret.png` would slip through (a `.pergamum*` dir is
-    //    just as off-limits as a `.pergamum*` file). This mirrors the
-    //    segment-wise protected checks in projectIpc.ts /
-    //    fileExplorerDeleteCollect.ts / projectFileQuickOpen.ts.
-    try {
-      if (
-        isProjectWriteLockDirectoryTarget(
-          resolved,
-          projectRootAbsolute,
-          deps.platform
-        ) ||
-        isProtectedPergamumDataFilePath(resolved) ||
-        parsed.segments.some((segment) =>
-          isProtectedPergamumDataFilePath(segment)
-        )
-      ) {
-        return errorResponse(403);
-      }
-    } catch {
-      return errorResponse(403);
-    }
-
-    // 5. Supported extension.
-    const extensionFormat = supportedImageAttachmentFormatForFileName(resolved);
-    if (extensionFormat === null) {
-      return errorResponse(415);
-    }
-
-    // 6. Realpath containment (symlink / junction escape).
-    let projectRootReal: string;
-    try {
-      projectRootReal = await deps.fileSystem.realpath(projectRootAbsolute);
-    } catch {
-      return errorResponse(404);
-    }
-
-    let resolvedReal: string;
-    try {
-      resolvedReal = await deps.fileSystem.realpath(resolved);
-    } catch {
-      return errorResponse(404);
-    }
-
-    try {
-      if (
-        !isPathEqualOrInsideDirectory(
-          resolvedReal,
-          projectRootReal,
-          deps.platform
-        )
-      ) {
-        return errorResponse(403);
-      }
-    } catch {
-      return errorResponse(403);
-    }
-
-    // 7. Regular file, under the size cap.
-    let stats: { isFile(): boolean; isDirectory(): boolean; size: number };
-    try {
-      stats = await deps.fileSystem.stat(resolvedReal);
-    } catch {
-      return errorResponse(404);
-    }
-    if (stats.isDirectory() || !stats.isFile()) {
-      return errorResponse(404);
-    }
-    if (stats.size > deps.maxBytes) {
-      return errorResponse(413);
-    }
-
-    // 8. Magic bytes must confirm the supported format the extension claimed.
-    let bytes: Uint8Array;
-    try {
-      bytes = await deps.fileSystem.readFile(resolvedReal);
-    } catch {
-      return errorResponse(404);
-    }
-
-    // Copy into a fresh, non-shared-backed buffer for the response body.
-    const body = Uint8Array.from(bytes);
-
-    const magic = resolveImageAttachmentFormat({
-      bytes: body.subarray(0, IMAGE_ATTACHMENT_MAGIC_PREFIX_LENGTH),
-      reportedMimeType: ""
+    const validation = await validateProjectLocalImageFile({
+      projectRootPath,
+      projectRelativeSegments: parsed.segments,
+      fileSystem: deps.fileSystem,
+      platform: deps.platform,
+      maxBytes: deps.maxBytes
     });
-    if (!magic.ok || magic.format !== extensionFormat) {
-      return errorResponse(415);
+
+    if (!validation.ok) {
+      return errorResponse(REJECTION_STATUS[validation.reason]);
     }
 
+    // Re-wrap into a fresh, definitely-`ArrayBuffer`-backed typed array: the
+    // shared helper's return type widens `bytes` to `Uint8Array<ArrayBufferLike>`,
+    // which this TS lib's `BodyInit` rejects (see #409).
+    const body = Uint8Array.from(validation.bytes);
     return new Response(body, {
       status: 200,
       headers: {
-        "Content-Type": imageAttachmentMimeType(magic.format),
+        "Content-Type": imageAttachmentMimeType(validation.format),
         "Content-Length": String(body.byteLength),
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
@@ -245,7 +143,7 @@ export function registerPergamumAssetProtocol(
   const resolvedDeps = {
     currentProjectRootPath:
       deps.currentProjectRootPath ?? defaultCurrentProjectRootPath,
-    fileSystem: deps.fileSystem ?? defaultFileSystem,
+    fileSystem: deps.fileSystem ?? defaultProjectLocalImageFileSystem,
     platform:
       deps.platform ?? nodePlatformToAppPlatform(process.platform),
     maxBytes: deps.maxBytes ?? IMAGE_ATTACHMENT_MAX_BYTES

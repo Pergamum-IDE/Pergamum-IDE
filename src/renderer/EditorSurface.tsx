@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject
+} from "react";
 import type { DebugLogViewportChangeSource } from "../shared/debugLog";
 import {
   documentCharCount,
@@ -35,6 +42,8 @@ import {
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
+import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
+import { formatMarkdownImageLinkDiagnosticMessage } from "./markdownImageLinkDiagnosticMessage";
 import type { EditorViewState } from "./editorViewState";
 import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
@@ -798,6 +807,17 @@ function MarkdownEditorSurface({
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
   const previewRenderDurationMs = previewRender.durationMs;
+  // #411: broken-image-link diagnostics run only for a project Markdown
+  // document that is editable — a standalone / read-only document is a safe
+  // no-op (the lint extension is not added to its editor at all).
+  const imageLinkDiagnosticsSourceProjectRelativePath = readOnly
+    ? null
+    : previewSourceProjectRelativePath;
+  const formatImageLinkDiagnosticMessage = useCallback(
+    (reason: MarkdownImageLinkDiagnosticReason, src: string) =>
+      formatMarkdownImageLinkDiagnosticMessage(translate, reason, src),
+    [translate]
+  );
   const { entries: glossaryEntries, surfaceIndex } =
     useGlossaryEntriesForMatching(projectRootPath, glossaryRefreshToken);
   // #390 PoC: stable identity per `entries` value so MarkdownEditor's
@@ -938,6 +958,10 @@ function MarkdownEditorSurface({
           }
           imageAttachmentSourceDocumentId={imageAttachmentSourceDocumentId}
           imageAttachmentSourceEditorId={imageAttachmentSourceEditorId}
+          imageLinkDiagnosticsSourceProjectRelativePath={
+            imageLinkDiagnosticsSourceProjectRelativePath
+          }
+          formatImageLinkDiagnosticMessage={formatImageLinkDiagnosticMessage}
           onViewStateSnapshot={onViewStateSnapshot}
           onViewStateDirty={onViewStateDirty}
           onVisibleRangeChange={onMarkdownVisibleRangeChange}

@@ -58,6 +58,12 @@ import {
   type MarkdownImageAttachmentPasteExtensionOptions,
   type MarkdownImageAttachmentPasteHandler
 } from "./markdownImageAttachmentPasteExtension";
+import {
+  registerEditorViewImageLinkDiagnosticsOptions,
+  unregisterEditorViewImageLinkDiagnosticsOptions,
+  type MarkdownImageLinkDiagnosticsExtensionOptions
+} from "./markdownImageLinkDiagnosticsExtension";
+import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
 
 export type { MarkdownEditorGlossaryCompletionConfig };
 
@@ -214,6 +220,20 @@ interface MarkdownEditorProps {
   imageAttachmentSourceDocumentId?: string;
   imageAttachmentSourceEditorId?: string;
   createImageAttachmentPendingId?: () => string;
+  /**
+   * #411: project-root-relative path of the document being edited, when it is
+   * a project Markdown document that is NOT read-only — enables the
+   * broken-image-link lint extension (gutter + inline warning). `null` /
+   * omitted for a standalone / non-project / read-only document: the lint
+   * extension is then not added to the EditorState at all. Only
+   * EditorSurface's MarkdownEditorSurface supplies it.
+   */
+  imageLinkDiagnosticsSourceProjectRelativePath?: string | null;
+  /** #411: localized hover message for a diagnostic reason + offending src. */
+  formatImageLinkDiagnosticMessage?: (
+    reason: MarkdownImageLinkDiagnosticReason,
+    src: string
+  ) => string;
   /**
    * #392: the runtime-only per-document `EditorState` cache itself, OWNED
    * above this component (App.tsx) so it survives this component's own
@@ -404,6 +424,8 @@ export function MarkdownEditor({
   imageAttachmentSourceDocumentId,
   imageAttachmentSourceEditorId,
   createImageAttachmentPendingId,
+  imageLinkDiagnosticsSourceProjectRelativePath,
+  formatImageLinkDiagnosticMessage,
   documentStates: documentStatesProp
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -459,6 +481,27 @@ export function MarkdownEditor({
       getSourceEditorId: () => imageAttachmentSourceEditorIdRef.current,
       isReadOnly: () => readOnlyRef.current,
       createPendingId: createImageAttachmentPendingId
+    });
+  // #411: kept fresh so the lint extension baked into a cached EditorState
+  // (which can outlive this component's mount — see #392) always resolves the
+  // CURRENT active document's path / message formatter, exactly like the
+  // paste options above. The extension is only PRESENT in the state at all
+  // when this prop was non-null at that document's build time.
+  const imageLinkDiagnosticsSourceProjectRelativePathRef = useRef<string | null>(
+    imageLinkDiagnosticsSourceProjectRelativePath ?? null
+  );
+  const formatImageLinkDiagnosticMessageRef = useRef<
+    MarkdownEditorProps["formatImageLinkDiagnosticMessage"]
+  >(formatImageLinkDiagnosticMessage);
+  const currentImageLinkDiagnosticsOptionsRef =
+    useRef<MarkdownImageLinkDiagnosticsExtensionOptions>({
+      getSourceProjectRelativePath: () =>
+        imageLinkDiagnosticsSourceProjectRelativePathRef.current,
+      validate: (request) =>
+        window.pergamum.markdownImageLinkDiagnostics.validate(request),
+      formatMessage: (reason, src) =>
+        formatImageLinkDiagnosticMessageRef.current?.(reason, src) ??
+        `${reason}: ${src}`
     });
   // #253: read fresh by the tracking field's `update()` on every
   // transaction (see createLineEndingTrackingField), so a runtime change
@@ -646,6 +689,15 @@ export function MarkdownEditor({
       glossaryCompletionRef,
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
+      // #411: only add the broken-image-link lint extension for a project
+      // Markdown document that is not read-only. A given documentKey's
+      // project-relativeness is stable for its lifetime, so deciding this at
+      // build time (mount OR first switch to it) is safe; the actual path is
+      // then read live from the ref by the linter.
+      imageLinkDiagnosticsOptions:
+        (imageLinkDiagnosticsSourceProjectRelativePath ?? null) !== null
+          ? currentImageLinkDiagnosticsOptionsRef.current
+          : undefined,
       createUpdateListenerExtension
     });
   }
@@ -770,6 +822,22 @@ export function MarkdownEditor({
   }, [imageAttachmentSourceDocumentId, imageAttachmentSourceEditorId]);
 
   useEffect(() => {
+    imageLinkDiagnosticsSourceProjectRelativePathRef.current =
+      imageLinkDiagnosticsSourceProjectRelativePath ?? null;
+    formatImageLinkDiagnosticMessageRef.current =
+      formatImageLinkDiagnosticMessage;
+    if (viewRef.current) {
+      registerEditorViewImageLinkDiagnosticsOptions(
+        viewRef.current,
+        currentImageLinkDiagnosticsOptionsRef.current
+      );
+    }
+  }, [
+    imageLinkDiagnosticsSourceProjectRelativePath,
+    formatImageLinkDiagnosticMessage
+  ]);
+
+  useEffect(() => {
     newFileLineEndingFallbackRef.current = newFileLineEndingFallback;
   }, [newFileLineEndingFallback]);
 
@@ -809,6 +877,10 @@ export function MarkdownEditor({
       view,
       currentImageAttachmentPasteOptionsRef.current
     );
+    registerEditorViewImageLinkDiagnosticsOptions(
+      view,
+      currentImageLinkDiagnosticsOptionsRef.current
+    );
 
     if (resolved.wasRestoredFromCache) {
       view.dispatch({
@@ -823,6 +895,7 @@ export function MarkdownEditor({
 
     return () => {
       unregisterEditorViewImageAttachmentPasteOptions(view);
+      unregisterEditorViewImageLinkDiagnosticsOptions(view);
       // #272: report this editor's final View State (keyed by whatever
       // document it is currently showing) before the view is torn down, so
       // an unmount that races the persistence debounce still preserves it.

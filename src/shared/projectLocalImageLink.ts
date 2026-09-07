@@ -119,3 +119,97 @@ export function resolveProjectLocalImageSrc(
     projectRelativePath: shape.normalized
   };
 }
+
+/**
+ * #411: classification of a Markdown image `src` for the broken-image-link
+ * diagnostics, resolved against the source Markdown file's location exactly
+ * like {@link resolveProjectLocalImageSrc} (same #409 policy: source-relative,
+ * must stay inside the project root, settings are NEVER consulted).
+ *
+ * Unlike the Preview resolver this keeps the "locally-referenced but the
+ * extension is not a supported image" case distinct (`unsupportedFormat`)
+ * rather than folding it into `passThrough`, and it splits the Preview's
+ * single `blocked` outcome into `invalidPath` (bad path shape) vs
+ * `outsideProject` (a `..` climbs above the root) so each can carry its own
+ * diagnostic message.
+ *
+ * `candidate` means the path shape is fine and names a supported image
+ * extension — whether the file actually exists / is really that format is a
+ * filesystem question answered in the main process
+ * ({@link ../main/projectLocalImageFileValidation}).
+ */
+export type ProjectLocalImageLinkClassification =
+  | { readonly kind: "external" }
+  | { readonly kind: "empty" }
+  | { readonly kind: "invalidPath" }
+  | { readonly kind: "outsideProject" }
+  | {
+      readonly kind: "unsupportedFormat";
+      readonly projectRelativePath: string;
+    }
+  | { readonly kind: "candidate"; readonly projectRelativePath: string };
+
+/**
+ * #411 follow-up: percent-decode a Markdown image destination for *path
+ * resolution only*, matching what markdown-it does before the Preview resolves
+ * it — so the Preview and the diagnostics agree on which file a link points at
+ * (`![](assets/figure%20image.png)` → `assets/figure image.png`). A malformed
+ * escape (`%zz`) is left exactly as authored, again matching markdown-it, which
+ * does not throw either; no new diagnostic reason is introduced for it.
+ *
+ * This is used ONLY to decide resolution / classification. The diagnostic's
+ * underline range and the `{src}` in its message keep the author's original,
+ * still-encoded text so the reader can find it in the document.
+ *
+ * `decodeURIComponent` (not `decodeURI`) is deliberate: it also decodes the
+ * path separators an attacker might hide traversal behind (`%2e%2e%2f` →
+ * `../`), so the downstream containment check cannot be bypassed.
+ */
+export function decodeImageLinkSrcForResolution(rawSrc: string): string {
+  try {
+    return decodeURIComponent(rawSrc);
+  } catch {
+    return rawSrc;
+  }
+}
+
+export function classifyProjectLocalImageLink(
+  rawSrc: string,
+  sourceMarkdownProjectRelativePath: string
+): ProjectLocalImageLinkClassification {
+  const src = rawSrc.trim();
+
+  if (src.length === 0) {
+    return { kind: "empty" };
+  }
+  if (isExternalImageSrc(src)) {
+    return { kind: "external" };
+  }
+
+  if (
+    src.includes("\\") ||
+    src.startsWith("/") ||
+    WINDOWS_DRIVE_RELATIVE_PATTERN.test(src)
+  ) {
+    return { kind: "invalidPath" };
+  }
+
+  const sourceDir = projectRelativeDirname(sourceMarkdownProjectRelativePath);
+  const combined = sourceDir.length === 0 ? src : `${sourceDir}/${src}`;
+
+  const shape = validateAttachedImageSaveDestination(combined);
+  if (!shape.ok) {
+    return shape.reason === "escapesProjectRoot"
+      ? { kind: "outsideProject" }
+      : { kind: "invalidPath" };
+  }
+
+  if (supportedImageAttachmentFormatForFileName(shape.normalized) === null) {
+    return {
+      kind: "unsupportedFormat",
+      projectRelativePath: shape.normalized
+    };
+  }
+
+  return { kind: "candidate", projectRelativePath: shape.normalized };
+}
