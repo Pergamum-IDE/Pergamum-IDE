@@ -98,9 +98,6 @@ import {
   createCommandPaletteCommandTitles,
   registerCommandPaletteCommands
 } from "./commandPaletteCommands";
-import {
-  recentProjectFileQuickOpenDocuments as resolveRecentProjectFileQuickOpenDocuments
-} from "./projectFileQuickOpen";
 import { buildCommandContextSnapshot } from "./commandContextSnapshot";
 import {
   applyStandaloneSaveResult,
@@ -2821,12 +2818,6 @@ export function App(): JSX.Element {
     applyEditor
   });
   const projectFileQuickOpenDocuments = project?.documents ?? [];
-  const recentProjectFileQuickOpenDocuments =
-    resolveRecentProjectFileQuickOpenDocuments({
-      documents: projectFileQuickOpenDocuments,
-      history: editorNavigation.snapshot(),
-      activeProjectContext
-    });
 
   async function confirmProjectSwitch(): Promise<boolean> {
     return confirmProjectSwitchWithUnsavedDocuments({
@@ -9331,9 +9322,6 @@ export function App(): JSX.Element {
           commandContext={commandContext}
           footerDetailSettings={effectiveSettings.commandPalette.footerDetail}
           projectFileQuickOpenDocuments={projectFileQuickOpenDocuments}
-          recentProjectFileQuickOpenDocuments={
-            recentProjectFileQuickOpenDocuments
-          }
           onOpenProjectFileQuickOpenCandidate={(relativePath) => {
             void activateProjectDocument(relativePath);
             closeCommandPaletteAndRestoreMarkdownFocus();

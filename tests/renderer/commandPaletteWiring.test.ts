@@ -53,9 +53,6 @@ describe("command palette wiring", () => {
     expect(propsBlock).toContain(
       "projectFileQuickOpenDocuments={projectFileQuickOpenDocuments}"
     );
-    expect(propsBlock).toContain(
-      "recentProjectFileQuickOpenDocuments={"
-    );
     expect(handlerStart).toBeGreaterThan(-1);
     expect(handlerBlock).toContain("void activateProjectDocument(relativePath);");
     expect(handlerBlock).toContain(

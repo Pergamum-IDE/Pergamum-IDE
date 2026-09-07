@@ -128,7 +128,7 @@ export const jaTranslations = {
   "commandPalette.lineJump.outOfRange": "行番号が範囲外です",
   "commandPalette.noResults": "一致するコマンドがありません",
   "commandPalette.projectFileQuickOpen.inputPlaceholder": "フォルダ名・ファイル名を入力してください",
-  "commandPalette.projectFileQuickOpen.noResults": "有効なファイル名を入力してください",
+  "commandPalette.projectFileQuickOpen.noResults": "一致するファイルがありません",
   "commandPalette.projectSearch.candidate": "{query} をプロジェクト内全文検索",
   "commandPalette.projectSearch.category": "検索",
   "commandPalette.projectSearch.footer":

@@ -1,20 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectDocument } from "../../src/shared/api";
 import {
-  createFileEditorIdForPath,
-  createProjectDocumentEditorId,
-  createUntitledEditorId
-} from "../../src/shared/editorId";
-import {
   filterProjectFileQuickOpenCandidates,
   isProjectFileQuickOpenDocument,
-  PROJECT_FILE_QUICK_OPEN_RECENT_LIMIT,
   projectFileQuickOpenCandidates,
-  recentProjectFileQuickOpenDocuments,
   resolveProjectFileQuickOpenSelection
 } from "../../src/renderer/projectFileQuickOpen";
-
-const projectContext = { rootPath: "C:/Novel" };
 
 function document(relativePath: string): ProjectDocument {
   return {
@@ -28,7 +19,6 @@ describe("project file quick open candidates (#143)", () => {
     expect(
       projectFileQuickOpenCandidates({
         documents: [],
-        recentDocuments: [],
         query: "chapter"
       })
     ).toEqual([]);
@@ -190,30 +180,29 @@ describe("project file quick open candidates (#143)", () => {
     expect(pathMatch?.relativePath.ranges).toEqual([{ start: 0, end: 6 }]);
   });
 
-  it("uses only the recent Project documents for an empty query", () => {
+  it("includes all Project documents for an empty query (#405)", () => {
     const candidates = projectFileQuickOpenCandidates({
-      documents: [document("a.md"), document("b.md")],
-      recentDocuments: [document("b.md")],
+      documents: [document("b.md"), document("a.md")],
       query: ""
     });
 
     expect(candidates.map((candidate) => candidate.document.relativePath)).toEqual([
+      "a.md",
       "b.md"
     ]);
   });
 
-  it("returns no empty-query candidates when there is no recent information", () => {
+  it("returns no empty-query candidates when the Project has no documents (#405)", () => {
     expect(
       projectFileQuickOpenCandidates({
-        documents: [document("a.md")],
-        recentDocuments: [],
+        documents: [],
         query: ""
       })
     ).toEqual([]);
   });
 
-  it("limits empty-query recent candidates to five Project documents", () => {
-    const recentDocuments = [
+  it("returns all Project documents without limiting to five candidates (#405)", () => {
+    const documents = [
       "01.md",
       "02.md",
       "03.md",
@@ -224,90 +213,33 @@ describe("project file quick open candidates (#143)", () => {
 
     expect(
       projectFileQuickOpenCandidates({
-        documents: recentDocuments,
-        recentDocuments,
+        documents,
         query: ""
       }).map((candidate) => candidate.document.relativePath)
-    ).toEqual(recentDocuments.slice(0, PROJECT_FILE_QUICK_OPEN_RECENT_LIMIT).map(
-      (recent) => recent.relativePath
-    ));
+    ).toEqual(documents.map((doc) => doc.relativePath));
   });
 
-  it("derives recent Project documents from current navigation history", () => {
-    const documents = [
-      "01.md",
-      "02.md",
-      "03.md",
-      "04.md",
-      "05.md",
-      "06.md",
-      "outside.txt"
-    ].map(document);
-    const recent = recentProjectFileQuickOpenDocuments({
-      documents,
-      activeProjectContext: projectContext,
-      history: {
-        entries: [
-          createProjectDocumentEditorId("01.md", projectContext),
-          createFileEditorIdForPath("C:/Outside.md"),
-          createProjectDocumentEditorId("02.md", projectContext),
-          createProjectDocumentEditorId("03.md", projectContext),
-          createProjectDocumentEditorId("04.md", projectContext),
-          createProjectDocumentEditorId("05.md", projectContext),
-          createProjectDocumentEditorId("06.md", projectContext),
-          createProjectDocumentEditorId("future.md", projectContext)
-        ],
-        currentIndex: 6
-      }
+  it("provides empty match ranges for empty or whitespace query (#405)", () => {
+    const candidates = projectFileQuickOpenCandidates({
+      documents: [document("folder/chapter.md")],
+      query: ""
     });
 
-    expect(recent.map((candidate) => candidate.relativePath)).toEqual([
-      "06.md",
-      "05.md",
-      "04.md",
-      "03.md",
-      "02.md"
-    ]);
-  });
+    expect(candidates[0]?.filename.ranges).toEqual([]);
+    expect(candidates[0]?.relativePath.ranges).toEqual([]);
 
-  it("deduplicates recent Project documents and ignores non-Project editors", () => {
-    const recent = recentProjectFileQuickOpenDocuments({
-      documents: [document("01.md"), document("02.md")],
-      activeProjectContext: projectContext,
-      history: {
-        entries: [
-          createProjectDocumentEditorId("01.md", projectContext),
-          createUntitledEditorId(1),
-          createProjectDocumentEditorId("02.md", projectContext),
-          createProjectDocumentEditorId("01.md", projectContext)
-        ],
-        currentIndex: 3
-      }
+    const whitespaceCandidates = projectFileQuickOpenCandidates({
+      documents: [document("folder/chapter.md")],
+      query: "   "
     });
 
-    expect(recent.map((candidate) => candidate.relativePath)).toEqual([
-      "01.md",
-      "02.md"
-    ]);
-  });
-
-  it("returns no recent Project documents without an active Project context", () => {
-    expect(
-      recentProjectFileQuickOpenDocuments({
-        documents: [document("01.md")],
-        activeProjectContext: null,
-        history: {
-          entries: [createProjectDocumentEditorId("01.md", projectContext)],
-          currentIndex: 0
-        }
-      })
-    ).toEqual([]);
+    expect(whitespaceCandidates[0]?.filename.ranges).toEqual([]);
+    expect(whitespaceCandidates[0]?.relativePath.ranges).toEqual([]);
   });
 
   it("normalizes the quick-open selected index for executable file candidates", () => {
     const candidates = projectFileQuickOpenCandidates({
       documents: [document("a.md"), document("b.md")],
-      recentDocuments: [],
       query: "a"
     });
 

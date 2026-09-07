@@ -566,10 +566,10 @@ describe("Application Settings core control translations (#195)", () => {
     );
 
     expect(t("ja", "commandPalette.projectFileQuickOpen.noResults")).toBe(
-      "有効なファイル名を入力してください"
+      "一致するファイルがありません"
     );
     expect(t("en", "commandPalette.projectFileQuickOpen.noResults")).toBe(
-      "Type a valid file name"
+      "No matching files"
     );
   });
 

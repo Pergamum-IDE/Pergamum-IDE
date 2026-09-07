@@ -108,7 +108,6 @@ export interface CommandPaletteProps {
    */
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
   projectFileQuickOpenDocuments?: readonly ProjectDocument[];
-  recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
   onOpenProjectFileQuickOpenCandidate?: (relativePath: string) => void;
   /**
    * #372: fetch the footer detail preview line (first non-empty Markdown line)
@@ -668,7 +667,6 @@ export function CommandPalette({
   initialInputValue = defaultInputValue,
   lineJumpEditorSnapshot = null,
   projectFileQuickOpenDocuments = [],
-  recentProjectFileQuickOpenDocuments = [],
   onOpenProjectFileQuickOpenCandidate = () => undefined,
   onRequestProjectFileQuickOpenPreview,
   headingJumpCandidates = [],
@@ -686,7 +684,6 @@ export function CommandPalette({
       return resolveProjectFileQuickOpenSelection(
         projectFileQuickOpenCandidates({
           documents: projectFileQuickOpenDocuments,
-          recentDocuments: recentProjectFileQuickOpenDocuments,
           query: initialParsed.query
         })
       );
@@ -766,7 +763,6 @@ export function CommandPalette({
     mode === "file"
       ? projectFileQuickOpenCandidates({
           documents: projectFileQuickOpenDocuments,
-          recentDocuments: recentProjectFileQuickOpenDocuments,
           query
         })
       : [];
@@ -859,8 +855,7 @@ export function CommandPalette({
   }, [
     mode,
     query,
-    projectFileQuickOpenDocuments,
-    recentProjectFileQuickOpenDocuments
+    projectFileQuickOpenDocuments
   ]);
 
   useCommandPaletteLayoutEffect(() => {
@@ -922,7 +917,6 @@ export function CommandPalette({
     if (resolved.mode === "file") {
       const nextCandidates = projectFileQuickOpenCandidates({
         documents: projectFileQuickOpenDocuments,
-        recentDocuments: recentProjectFileQuickOpenDocuments,
         query: resolved.query
       });
 
