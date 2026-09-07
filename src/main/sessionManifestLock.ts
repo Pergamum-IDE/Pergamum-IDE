@@ -24,11 +24,17 @@
  * reclaims what looks like a dead lock, acquires a fresh one; owner C,
  * having made the same stale judgment a moment earlier, then deletes B's
  * fresh lock) can silently corrupt the restore set. So if the lock dir
- * exists we simply wait a bounded time: if the current owner releases
- * normally we take it and continue; if the wait times out we FAIL with
- * `SessionManifestLockUnavailableError` and the caller degrades Session
- * persistence to SUSPENDED. Pergamum is the flat-tyre warning light, not
- * the tyre-repair shop.
+ * exists (`mkdir` → `EEXIST`), or Windows reports it as transiently
+ * contended (`mkdir` → `EPERM`: another instance mid-`mkdir`/`rmdir` on the
+ * same path, or an AV / indexer holding a handle), we simply wait a bounded
+ * time: if the current owner releases normally we take it and continue; if
+ * the wait times out we FAIL — `SessionManifestLockUnavailableError` when
+ * the lock was genuinely held (`EEXIST`), or the raw permission error when a
+ * lock location we could never even create keeps failing (`EPERM`,
+ * classified `permissionDenied` upstream) — and the caller degrades Session
+ * persistence to SUSPENDED. Every other `mkdir` error (ENOSPC, EIO, EACCES,
+ * EROFS, ...) is a real fault and fails fast. Pergamum is the flat-tyre
+ * warning light, not the tyre-repair shop.
  *
  * The acquire-failing side deletes NOTHING belonging to the existing
  * owner — a marker-less dir, a broken marker, an old-looking marker and a
@@ -156,16 +162,31 @@ export function createFsSessionManifestLock(
       try {
         await fileSystem.mkdir(lockDirPath);
       } catch (error) {
-        if (nodeErrorCode(error) !== "EEXIST") {
+        const code = nodeErrorCode(error);
+        // `EEXIST` — the lock dir exists, someone holds it.
+        // `EPERM`  — Windows returns this (NOT `EEXIST`) when the lock dir is
+        //   in a transient state: another instance is mid-`mkdir` / `rmdir`
+        //   on the SAME path, or an AV / indexer momentarily holds a handle
+        //   on it. That is "cannot acquire right now, retry within the
+        //   bounded window", never a hard stop.
+        // Everything else (ENOSPC, EIO, EACCES, EROFS, ...) is a real fault
+        //   and still fails fast.
+        if (code !== "EEXIST" && code !== "EPERM") {
           throw error;
         }
 
-        // Held by someone else. We NEVER inspect, judge, or break it:
-        // no PID probe, no hostname check, no marker-age check, no rm. We
-        // wait a bounded time for a normal release, then FAIL so the caller
-        // SUSPENDS Session persistence.
+        // Held / contended. We NEVER inspect, judge, or break it: no PID
+        // probe, no hostname check, no marker-age check, no rm. We wait a
+        // bounded time for a normal release, then FAIL so the caller
+        // SUSPENDS Session persistence — surfacing whichever condition was
+        // still blocking us at the deadline: `EEXIST` → lock unavailable;
+        // a lingering `EPERM` → the raw permission error (a genuinely
+        // unwritable lock location, classified `permissionDenied` upstream).
         if (now() >= deadline) {
-          throw new SessionManifestLockUnavailableError();
+          if (code === "EEXIST") {
+            throw new SessionManifestLockUnavailableError();
+          }
+          throw error;
         }
 
         await sleep(retryDelayMs);

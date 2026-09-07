@@ -52,6 +52,67 @@ export interface AtomicWriteOptions {
   readonly fileSystem?: AtomicWriteFileSystem;
   /** Injectable suffix source so tests get deterministic temp names. */
   readonly tempSuffix?: () => string;
+  /**
+   * How many times the final `rename` is attempted before giving up.
+   * Defaults to {@link RENAME_RETRY_ATTEMPTS}. Only a *transient* Windows
+   * failure (`EPERM` / `EBUSY`) is retried — see {@link renameWithRetry}.
+   */
+  readonly renameRetryAttempts?: number;
+  /** Injectable delay between `rename` retries (tests pass a no-op). */
+  readonly sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * `rename`-over-an-existing-target is atomic, but on Windows it is not always
+ * *immediately* possible: when another process is renaming onto the same
+ * target at the same instant, or an AV / search indexer briefly holds a
+ * handle on the just-created target (scan-on-close), `MoveFileEx` fails with
+ * `EPERM` (occasionally `EBUSY`). That is "retry in a moment", not a real
+ * fault — mirrors Node's own `fs.rm({ maxRetries, retryDelay })`.
+ */
+const RENAME_RETRY_TRANSIENT_CODES: ReadonlySet<string> = new Set([
+  "EPERM",
+  "EBUSY"
+]);
+const RENAME_RETRY_ATTEMPTS = 10;
+const RENAME_RETRY_BASE_DELAY_MS = 10;
+
+function nodeErrorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code: unknown }).code)
+    : undefined;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function renameWithRetry(
+  fileSystem: AtomicWriteFileSystem,
+  sourcePath: string,
+  targetPath: string,
+  attempts: number,
+  sleep: (ms: number) => Promise<void>
+): Promise<void> {
+  const maxAttempts = Math.max(1, attempts);
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await fileSystem.rename(sourcePath, targetPath);
+      return;
+    } catch (error) {
+      const transient = RENAME_RETRY_TRANSIENT_CODES.has(
+        nodeErrorCode(error) ?? ""
+      );
+      if (!transient || attempt >= maxAttempts) {
+        // A non-transient error, or we are out of attempts — the original
+        // error propagates unchanged (a lingering `EPERM` still classifies
+        // as `permissionDenied` upstream).
+        throw error;
+      }
+      await sleep(RENAME_RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
 }
 
 /** Marks Pergamum's in-progress temp files. A file matching this is never a
@@ -114,6 +175,10 @@ async function bestEffortSyncDirectory(
  *   - the containing DIRECTORY `fsync` is a best-effort durability
  *     enhancement (not permitted on every platform) — its failure does not
  *     fail an otherwise successful write
+ *
+ * The final `rename` is retried a bounded number of times on a transient
+ * Windows `EPERM` / `EBUSY` (concurrent rename onto the same target, or an
+ * AV / indexer holding a handle) — see {@link renameWithRetry}.
  */
 export async function writeFileAtomic(
   targetPath: string,
@@ -122,6 +187,9 @@ export async function writeFileAtomic(
 ): Promise<void> {
   const fileSystem = options.fileSystem ?? defaultAtomicWriteFileSystem;
   const tempSuffix = options.tempSuffix ?? defaultTempSuffix;
+  const renameRetryAttempts =
+    options.renameRetryAttempts ?? RENAME_RETRY_ATTEMPTS;
+  const sleep = options.sleep ?? defaultSleep;
   const directory = path.dirname(targetPath);
   const baseName = path.basename(targetPath);
   const tempPath = path.join(
@@ -146,7 +214,13 @@ export async function writeFileAtomic(
       await handle.close();
     }
 
-    await fileSystem.rename(tempPath, targetPath);
+    await renameWithRetry(
+      fileSystem,
+      tempPath,
+      targetPath,
+      renameRetryAttempts,
+      sleep
+    );
   } catch (error) {
     await bestEffortRemove(fileSystem, tempPath);
     throw error;

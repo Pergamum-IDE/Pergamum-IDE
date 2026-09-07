@@ -234,10 +234,12 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
     await expect(fs.stat(lockDir)).resolves.toBeDefined();
   });
 
-  it("propagates a non-EEXIST filesystem error from acquire", async () => {
+  it("propagates a non-EEXIST/EPERM filesystem error from acquire (EACCES is NOT retried)", async () => {
+    let mkdirCalls = 0;
     const brokenFs: ManifestLockFileSystem = {
       mkdir: (_p, opts) => {
         if (opts?.recursive) return Promise.resolve(undefined);
+        mkdirCalls += 1;
         return Promise.reject(
           Object.assign(new Error("EACCES"), { code: "EACCES" })
         );
@@ -253,5 +255,65 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
         fileSystem: brokenFs
       }).run(async () => undefined)
     ).rejects.toThrow("EACCES");
+    // Failed fast on the first attempt — no bounded-wait retry loop.
+    expect(mkdirCalls).toBe(1);
+  });
+
+  it("retries a transient EPERM from mkdir (Windows contention) and then acquires", async () => {
+    let mkdirCalls = 0;
+    const flakyFs: ManifestLockFileSystem = {
+      mkdir: (_p, opts) => {
+        if (opts?.recursive) return Promise.resolve(undefined);
+        mkdirCalls += 1;
+        if (mkdirCalls <= 2) {
+          return Promise.reject(
+            Object.assign(new Error("EPERM"), { code: "EPERM" })
+          );
+        }
+        return Promise.resolve(undefined);
+      },
+      writeFile: () => Promise.resolve(),
+      rm: () => Promise.resolve(),
+      rmdir: () => Promise.resolve()
+    };
+
+    await expect(
+      createFsSessionManifestLock({
+        lockFilePath: lockDir,
+        fileSystem: flakyFs,
+        retryDelayMs: 1,
+        acquireTimeoutMs: 300
+      }).run(async () => "ok")
+    ).resolves.toBe("ok");
+    expect(mkdirCalls).toBe(3);
+  });
+
+  it("a lingering EPERM that outlasts the acquire window is thrown raw (→ permissionDenied upstream)", async () => {
+    const stuckFs: ManifestLockFileSystem = {
+      mkdir: (_p, opts) =>
+        opts?.recursive
+          ? Promise.resolve(undefined)
+          : Promise.reject(
+              Object.assign(new Error("EPERM"), { code: "EPERM" })
+            ),
+      writeFile: () => Promise.resolve(),
+      rm: () => Promise.resolve(),
+      rmdir: () => Promise.resolve()
+    };
+
+    const error = await createFsSessionManifestLock({
+      lockFilePath: lockDir,
+      fileSystem: stuckFs,
+      retryDelayMs: 1,
+      acquireTimeoutMs: 20
+    })
+      .run(async () => undefined)
+      .catch((caught: unknown) => caught);
+
+    // NOT collapsed to SessionManifestLockUnavailableError — the raw error
+    // carries the permission code so it classifies as `permissionDenied`.
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(SessionManifestLockUnavailableError);
+    expect((error as Error).message).toContain("EPERM");
   });
 });

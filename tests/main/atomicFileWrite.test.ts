@@ -73,6 +73,112 @@ describe("writeFileAtomic (#272)", () => {
     expect(remaining).toEqual(["file.json"]);
   });
 
+  it("retries a transient EPERM/EBUSY rename and then succeeds", async () => {
+    const target = path.join(workDir, "file.json");
+    await fs.writeFile(target, "OLD", "utf8");
+
+    const realFs = (await import("node:fs")).promises;
+    const sleeps: number[] = [];
+    let renameCalls = 0;
+    const flakyRenameFs: AtomicWriteFileSystem = {
+      mkdir: (dir, opts) => realFs.mkdir(dir, opts),
+      writeFile: (file, data, opts) => realFs.writeFile(file, data, opts),
+      rename: (from, to) => {
+        renameCalls += 1;
+        if (renameCalls === 1) {
+          return Promise.reject(
+            Object.assign(new Error("EPERM"), { code: "EPERM" })
+          );
+        }
+        if (renameCalls === 2) {
+          return Promise.reject(
+            Object.assign(new Error("EBUSY"), { code: "EBUSY" })
+          );
+        }
+        return realFs.rename(from, to);
+      },
+      rm: (file, opts) => realFs.rm(file, opts),
+      open: (file, flags) => realFs.open(file, flags)
+    };
+
+    await writeFileAtomic(target, "NEW", {
+      fileSystem: flakyRenameFs,
+      sleep: (ms) => {
+        sleeps.push(ms);
+        return Promise.resolve();
+      }
+    });
+
+    expect(renameCalls).toBe(3);
+    expect(sleeps).toEqual([10, 20]); // linear backoff: base * attempt
+    expect(await fs.readFile(target, "utf8")).toBe("NEW");
+    expect(await fs.readdir(workDir)).toEqual(["file.json"]);
+  });
+
+  it("does NOT retry a non-transient rename error (fails fast, temp cleaned)", async () => {
+    const target = path.join(workDir, "file.json");
+    await fs.writeFile(target, "GOOD", "utf8");
+
+    const realFs = (await import("node:fs")).promises;
+    let renameCalls = 0;
+    const eioFs: AtomicWriteFileSystem = {
+      mkdir: (dir, opts) => realFs.mkdir(dir, opts),
+      writeFile: (file, data, opts) => realFs.writeFile(file, data, opts),
+      rename: () => {
+        renameCalls += 1;
+        return Promise.reject(
+          Object.assign(new Error("EIO"), { code: "EIO" })
+        );
+      },
+      rm: (file, opts) => realFs.rm(file, opts),
+      open: (file, flags) => realFs.open(file, flags)
+    };
+
+    await expect(
+      writeFileAtomic(target, "BAD", {
+        fileSystem: eioFs,
+        sleep: () => Promise.resolve()
+      })
+    ).rejects.toMatchObject({ code: "EIO" });
+
+    expect(renameCalls).toBe(1);
+    expect(await fs.readFile(target, "utf8")).toBe("GOOD");
+    expect(await fs.readdir(workDir)).toEqual(["file.json"]);
+  });
+
+  it("rethrows a persistent EPERM after exhausting the bounded retries", async () => {
+    const target = path.join(workDir, "file.json");
+    await fs.writeFile(target, "GOOD", "utf8");
+
+    const realFs = (await import("node:fs")).promises;
+    let renameCalls = 0;
+    const stuckFs: AtomicWriteFileSystem = {
+      mkdir: (dir, opts) => realFs.mkdir(dir, opts),
+      writeFile: (file, data, opts) => realFs.writeFile(file, data, opts),
+      rename: () => {
+        renameCalls += 1;
+        return Promise.reject(
+          Object.assign(new Error("EPERM"), { code: "EPERM" })
+        );
+      },
+      rm: (file, opts) => realFs.rm(file, opts),
+      open: (file, flags) => realFs.open(file, flags)
+    };
+
+    await expect(
+      writeFileAtomic(target, "BAD", {
+        fileSystem: stuckFs,
+        renameRetryAttempts: 3,
+        sleep: () => Promise.resolve()
+      })
+    ).rejects.toMatchObject({ code: "EPERM" });
+
+    expect(renameCalls).toBe(3);
+    // Previous target preserved, failed temp cleaned up.
+    expect(await fs.readFile(target, "utf8")).toBe("GOOD");
+    expect(await fs.readdir(workDir)).toEqual(["file.json"]);
+  });
+
   it("writes through a distinct temp file name before the rename", async () => {
     const target = path.join(workDir, "file.json");
     const seenTempNames: string[] = [];

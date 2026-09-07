@@ -29,7 +29,16 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await fs.rm(base, { recursive: true, force: true });
+  // `maxRetries` / `retryDelay`: on Windows, `rm -r` of a just-used tree
+  // (a `manifest.lock` dir the AV / indexer still has a handle on, a temp
+  // file mid-scan) intermittently throws `EPERM` / `EBUSY` — `force` only
+  // suppresses `ENOENT`. Node's built-in retry covers exactly this.
+  await fs.rm(base, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 50
+  });
 });
 
 function record(
@@ -511,38 +520,24 @@ describe("SessionStore — cross-process manifest coordination (#272 review Bloc
     // real-lock case). `parties` callers each get a promise that resolves
     // only once every party has entered.
     //
-    // The deadline is a fail-fast guard for a BROKEN test seam (e.g. the
-    // store stops reading the manifest through this filesystem) — it is
-    // NOT a timing control: the race is made deterministic by the
-    // rendezvous itself; the deadline only turns a never-arriving party
-    // into a fast, legible failure instead of a multi-second hang.
-    function makeReadRendezvous(
-      purpose: string,
-      parties: number,
-      deadlineMs = 2000
-    ): () => Promise<void> {
+    // There is deliberately NO internal wall-clock deadline: the race is
+    // made deterministic by the rendezvous itself, and vitest's own
+    // `testTimeout` is the single safety net for a genuinely broken seam
+    // (e.g. the store stops reading the manifest through this filesystem).
+    // An inner `setTimeout` shorter than `testTimeout` only ever added a
+    // load-sensitive flake — under a saturated full-suite run the two
+    // writers could fail to both reach this point inside the deadline even
+    // though the reads themselves completed fine.
+    function makeReadRendezvous(parties: number): () => Promise<void> {
       let arrived = 0;
       let release!: () => void;
-      let fail!: (error: Error) => void;
-      const gate = new Promise<void>((resolve, reject) => {
+      const gate = new Promise<void>((resolve) => {
         release = resolve;
-        fail = reject;
       });
-      // Not unref'd: on the happy path `clearTimeout` below cancels it; on
-      // a broken seam it must be able to fire and reject even if nothing
-      // else is keeping the loop alive.
-      const timer = setTimeout(() => {
-        fail(
-          new Error(
-            `${purpose} timed out: expected ${parties} arrivals, got ${arrived}`
-          )
-        );
-      }, deadlineMs);
 
       return () => {
         arrived += 1;
         if (arrived >= parties) {
-          clearTimeout(timer);
           release();
         }
         return gate;
@@ -603,10 +598,7 @@ describe("SessionStore — cross-process manifest coordination (#272 review Bloc
     // COUNT only; it must never assert which of X / Y survives, or the
     // flake returns.
     const noLock = { run: <T,>(op: () => Promise<T>) => op() };
-    const bothWritersHaveRead = makeReadRendezvous(
-      "session manifest read rendezvous",
-      2
-    );
+    const bothWritersHaveRead = makeReadRendezvous(2);
     const rawA = createSessionStore({
       baseDirectory: sessionsDir,
       fileSystem: rendezvousReadFs(bothWritersHaveRead),
@@ -712,15 +704,22 @@ describe("SessionStore — cross-process manifest coordination (#272 review Bloc
     });
 
     const releaseHeldBox: { current: (() => void) | null } = { current: null };
+    // Resolves the instant `held` has actually acquired the lock and entered
+    // its critical section — no wall-clock polling (a saturated run could
+    // exhaust a fixed poll budget before the callback ran, then `fs.stat`
+    // below would spuriously ENOENT).
+    let signalHeldEntered!: () => void;
+    const heldEntered = new Promise<void>((resolve) => {
+      signalHeldEntered = resolve;
+    });
     const holding = held.run(
       () =>
         new Promise<void>((resolve) => {
           releaseHeldBox.current = resolve;
+          signalHeldEntered();
         })
     );
-    for (let i = 0; i < 50 && releaseHeldBox.current === null; i += 1) {
-      await new Promise((r) => setTimeout(r, 5));
-    }
+    await heldEntered;
     await fs.stat(lockDir);
 
     const contender = createSessionStore({
