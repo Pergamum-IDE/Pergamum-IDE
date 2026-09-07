@@ -30,6 +30,10 @@ import type {
   SaveImageAttachmentResult
 } from "./imageAttachmentSaveResult";
 import type {
+  MarkdownImageLinkDiagnosticsRequest,
+  MarkdownImageLinkDiagnosticsResult
+} from "./markdownImageLinkDiagnostics";
+import type {
   EditContextMenuCommandSelection,
   EditContextMenuPopupRequest,
   NativeEditDelegationRequest
@@ -127,6 +131,13 @@ export type {
   SaveImageAttachmentStorageFailureReason,
   SaveImageAttachmentStorageResult
 } from "./imageAttachmentSaveResult";
+export type {
+  MarkdownImageLinkDiagnostic,
+  MarkdownImageLinkDiagnosticReason,
+  MarkdownImageLinkDiagnosticRequestLink,
+  MarkdownImageLinkDiagnosticsRequest,
+  MarkdownImageLinkDiagnosticsResult
+} from "./markdownImageLinkDiagnostics";
 
 export type {
   ApplicationSettings,
@@ -239,6 +250,12 @@ export const SETTINGS_CHANNELS = {
 
 export const IMAGE_ATTACHMENT_CHANNELS = {
   save: "imageAttachment:save"
+} as const;
+
+export const MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS = {
+  /** #411: renderer → main, debounced — validate the active document's
+   *  project-local image links and report which are broken. Read-only. */
+  validate: "markdownImageLinkDiagnostics:validate"
 } as const;
 
 export const SESSION_CHANNELS = {
@@ -1120,5 +1137,10 @@ export interface PergamumApi {
     save: (
       payload: SaveImageAttachmentPayload
     ) => Promise<SaveImageAttachmentResult>;
+  };
+  markdownImageLinkDiagnostics: {
+    validate: (
+      request: MarkdownImageLinkDiagnosticsRequest
+    ) => Promise<MarkdownImageLinkDiagnosticsResult>;
   };
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyProjectLocalImageLink,
+  decodeImageLinkSrcForResolution,
   isExternalImageSrc,
   resolveProjectLocalImageSrc
 } from "../../src/shared/projectLocalImageLink";
@@ -154,5 +156,112 @@ describe("projectLocalImageLink (#409)", () => {
         resolveProjectLocalImageSrc("photo.bmp", "doc.md")
       ).toEqual({ kind: "passThrough" });
     });
+  });
+});
+
+describe("classifyProjectLocalImageLink (#411)", () => {
+  it.each([
+    "http://example.com/a.png",
+    "https://example.com/a.png",
+    "data:image/png;base64,AAAA",
+    "blob:abcd",
+    "mailto:x@example.com",
+    "//cdn/a.png",
+    "#anchor"
+  ])("classifies %s as external", (src) => {
+    expect(classifyProjectLocalImageLink(src, "chapters/chapter01.md")).toEqual({
+      kind: "external"
+    });
+  });
+
+  it("classifies an empty / whitespace src as empty", () => {
+    expect(classifyProjectLocalImageLink("", "doc.md")).toEqual({ kind: "empty" });
+    expect(classifyProjectLocalImageLink("   ", "doc.md")).toEqual({
+      kind: "empty"
+    });
+  });
+
+  it("classifies a shape-valid, supported-extension link as a candidate resolved against the source dir", () => {
+    expect(
+      classifyProjectLocalImageLink("images/foo.png", "chapters/chapter01.md")
+    ).toEqual({ kind: "candidate", projectRelativePath: "chapters/images/foo.png" });
+    expect(
+      classifyProjectLocalImageLink(
+        "../assets/images/foo.png",
+        "chapters/chapter01.md"
+      )
+    ).toEqual({ kind: "candidate", projectRelativePath: "assets/images/foo.png" });
+  });
+
+  it("keeps angle-bracket / non-ASCII destinations as candidates (caller strips the <>)", () => {
+    expect(
+      classifyProjectLocalImageLink("../素材/挿絵 01.png", "chapters/chapter01.md")
+    ).toEqual({ kind: "candidate", projectRelativePath: "素材/挿絵 01.png" });
+  });
+
+  it("classifies a ../ that escapes the project root as outsideProject", () => {
+    expect(
+      classifyProjectLocalImageLink(
+        "../../../outside.png",
+        "chapters/chapter01.md"
+      )
+    ).toEqual({ kind: "outsideProject" });
+  });
+
+  it.each([
+    "images\\foo.png",
+    "..\\secret.png",
+    "/etc/passwd.png",
+    "C:\\Windows\\a.png",
+    "images/a:b.png",
+    "nul.png"
+  ])("classifies %s as invalidPath", (src) => {
+    expect(classifyProjectLocalImageLink(src, "chapter01.md")).toEqual({
+      kind: "invalidPath"
+    });
+  });
+
+  it("classifies a shape-valid but unsupported-extension link as unsupportedFormat", () => {
+    expect(
+      classifyProjectLocalImageLink("assets/images/foo.svg", "chapter01.md")
+    ).toEqual({
+      kind: "unsupportedFormat",
+      projectRelativePath: "assets/images/foo.svg"
+    });
+  });
+});
+
+describe("decodeImageLinkSrcForResolution (#411 follow-up)", () => {
+  it("decodes a percent-encoded space", () => {
+    expect(decodeImageLinkSrcForResolution("assets/figure%20image.png")).toBe(
+      "assets/figure image.png"
+    );
+  });
+
+  it("decodes non-ASCII percent escapes", () => {
+    expect(decodeImageLinkSrcForResolution("assets/%E6%8C%BF%E7%B5%B5.png")).toBe(
+      "assets/挿絵.png"
+    );
+  });
+
+  it("decodes percent-encoded path separators (so traversal is not hidden)", () => {
+    expect(
+      decodeImageLinkSrcForResolution("%2e%2e%2f%2e%2e%2foutside.png")
+    ).toBe("../../outside.png");
+  });
+
+  it("returns a malformed sequence unchanged instead of throwing", () => {
+    expect(decodeImageLinkSrcForResolution("assets/%zz.png")).toBe(
+      "assets/%zz.png"
+    );
+    expect(decodeImageLinkSrcForResolution("100% done.png")).toBe(
+      "100% done.png"
+    );
+  });
+
+  it("is a no-op for a plain path", () => {
+    expect(decodeImageLinkSrcForResolution("assets/images/foo.png")).toBe(
+      "assets/images/foo.png"
+    );
   });
 });

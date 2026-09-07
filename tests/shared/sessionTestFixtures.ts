@@ -2,6 +2,16 @@
  * Shared #272 test helpers. Session identities MUST be UUIDv7 now (review
  * Blocker 1), so tests can no longer use `"session-1"` — `sid(label)` maps a
  * readable label to a deterministic valid UUIDv7 for the current test file.
+ *
+ * KNOWN RISK if the vitest run mode ever changes: `assigned` / `counter`
+ * below are MODULE-scoped. This is safe only because the default
+ * `isolate: true` re-evaluates this module per test file, so `counter`
+ * restarts at 0 for each file and `sid("s1")` is stable within a file.
+ * Under `isolate: false` (or `pool: 'threads'` + `singleThread`) the module
+ * would be shared across files, `sid("s1")` would become
+ * execution-order-dependent and differ run-to-run, and any test that maps a
+ * label to an on-disk path / manifest entry would flake. Reset per file, or
+ * derive the id purely from `label`, before switching run modes.
  */
 
 const assigned = new Map<string, string>();

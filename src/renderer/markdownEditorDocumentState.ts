@@ -57,6 +57,10 @@ import {
   createMarkdownImageAttachmentPasteExtension,
   type MarkdownImageAttachmentPasteExtensionOptions
 } from "./markdownImageAttachmentPasteExtension";
+import {
+  createMarkdownImageLinkDiagnosticsExtension,
+  type MarkdownImageLinkDiagnosticsExtensionOptions
+} from "./markdownImageLinkDiagnosticsExtension";
 
 /**
  * One open Markdown document's own `EditorState`, kept alongside the exact
@@ -103,6 +107,14 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly whitespaceSettingsRef: LiveRef<ApplicationEditorWhitespaceSettings>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
+  /**
+   * #411: when present, adds the broken-image-link lint extension (gutter +
+   * inline warning). Only supplied for a project Markdown document that is
+   * not read-only (see MarkdownEditor.tsx); omitted entirely otherwise, so a
+   * standalone / non-project document's editor is byte-for-byte unchanged
+   * (no lint gutter reserved).
+   */
+  readonly imageLinkDiagnosticsOptions?: MarkdownImageLinkDiagnosticsExtensionOptions;
   /** Built last, over the document's OWN `lineEndingField` — the caller
    *  owns the actual listener body (sound feedback, onChange, Document Map
    *  push, ...), all of which is editor-instance-level, not per-document. */
@@ -171,6 +183,13 @@ export function createMarkdownEditorDocumentState(
       }),
       createMarkdownImageAttachmentPositionTrackingExtension(),
       createMarkdownImageAttachmentPasteExtension(imageAttachmentPasteOptions),
+      ...(options.imageLinkDiagnosticsOptions
+        ? [
+            createMarkdownImageLinkDiagnosticsExtension(
+              options.imageLinkDiagnosticsOptions
+            )
+          ]
+        : []),
       options.createUpdateListenerExtension(lineEndingField)
     ]
   });
