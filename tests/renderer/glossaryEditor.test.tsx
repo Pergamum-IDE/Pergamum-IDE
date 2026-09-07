@@ -74,8 +74,23 @@ function entry(): GlossaryEntry {
   };
 }
 
+/** #412 Blocker 1: the global editor settings GlossaryEditor now requires. */
+const editorSettingsProps = {
+  markerGlyph: "↓" as const,
+  expectedLineEnding: "lf" as const,
+  newFileLineEndingFallback: "lf" as const,
+  whitespaceSettings: {
+    renderIdeographicSpace: false,
+    renderAsciiSpace: false,
+    renderTab: false,
+    renderOtherUnicodeSpace: false
+  },
+  undoHistoryMinDepth: 100
+};
+
 function noopHandlers() {
   return {
+    ...editorSettingsProps,
     onChangeDescription: vi.fn(),
     onAddAtom: vi.fn(),
     onChangeAtomValue: vi.fn(),
@@ -435,5 +450,133 @@ describe("GlossaryEditor (#375) — atom drag-reorder", () => {
     fire(rows()[1], "drop", 5);
 
     expect(onReorderAtom).toHaveBeenCalledWith("a1", 1);
+  });
+});
+
+describe("GlossaryEditor — Preview project-local image links (#412)", () => {
+  function draftWithDescription(description: string): GlossaryEntryDraft {
+    return { ...createGlossaryEntryDraft(entry()), description };
+  }
+
+  it("rewrites a project-root-relative image link to pergamum-asset:// in the Preview", () => {
+    const markup = render(
+      draftWithDescription("![](assets/images/foo.png)")
+    );
+    expect(markup).toContain(
+      "pergamum-asset://project/assets/images/foo.png"
+    );
+  });
+
+  it("rewrites a leading ./ link against the project root", () => {
+    const markup = render(
+      draftWithDescription("![](./assets/characters/shizuku.png)")
+    );
+    expect(markup).toContain(
+      "pergamum-asset://project/assets/characters/shizuku.png"
+    );
+  });
+
+  it("neutralizes a ../ link — the Glossary has no source folder, so it escapes the root", () => {
+    const markup = render(
+      draftWithDescription("![](../assets/images/foo.png)")
+    );
+    expect(markup).toContain('src="data:,"');
+    expect(markup).not.toContain("pergamum-asset:");
+  });
+
+  it("leaves external http(s) / data / blob images untouched", () => {
+    for (const src of [
+      "http://example.com/a.png",
+      "https://example.com/a.png",
+      "data:image/png;base64,iVBORw0KGgo=",
+      "blob:https://x/abcd"
+    ]) {
+      const markup = render(draftWithDescription(`![](${src})`));
+      expect(markup).not.toContain("pergamum-asset:");
+      expect(markup).not.toContain('src="data:,"');
+    }
+  });
+
+  it("leaves .svg / .bmp / .avif links untouched (unsupported formats)", () => {
+    for (const ext of ["svg", "bmp", "avif"]) {
+      const markup = render(draftWithDescription(`![](assets/pic.${ext})`));
+      expect(markup).toContain(`src="assets/pic.${ext}"`);
+      expect(markup).not.toContain("pergamum-asset:");
+    }
+  });
+
+  it("does not mutate the draft's description string (render-only, no DB normalization)", () => {
+    const original = "![](assets/images/foo.png) and ![](../up.png)";
+    const draft = draftWithDescription(original);
+    render(draft);
+    expect(draft.description).toBe(original);
+  });
+});
+
+describe("GlossaryEditor — description editor line-break marker (#412 Blocker 1)", () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  function mount(markerGlyph: "none" | "⏎" | "↵" | "↓"): void {
+    act(() => {
+      root.render(
+        React.createElement(GlossaryEditor, {
+          draft: draftWithMultilineDescription(),
+          availableTags: [tagA, tagB],
+          translate,
+          ...noopHandlers(),
+          markerGlyph
+        })
+      );
+    });
+  }
+
+  function draftWithMultilineDescription(): GlossaryEntryDraft {
+    return {
+      ...createGlossaryEntryDraft(entry()),
+      description: "first line\nsecond line\nthird line\n"
+    };
+  }
+
+  function markerGlyphs(): string[] {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(".pergamum-line-end-marker")
+    ).map((el) => el.textContent ?? "");
+  }
+
+  it("renders the CONFIGURED glyph (↓), not MarkdownEditor's built-in ⏎ default", () => {
+    mount("↓");
+    const glyphs = markerGlyphs();
+    expect(glyphs.length).toBeGreaterThan(0);
+    expect(new Set(glyphs)).toEqual(new Set(["↓"]));
+  });
+
+  it("draws no marker when the setting is 'none'", () => {
+    mount("none");
+    expect(markerGlyphs()).toEqual([]);
+  });
+
+  it("keeps the marker after an unmount + remount (tab switch away and back)", () => {
+    mount("↓");
+    expect(markerGlyphs().length).toBeGreaterThan(0);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    mount("↓");
+
+    const glyphs = markerGlyphs();
+    expect(glyphs.length).toBeGreaterThan(0);
+    expect(new Set(glyphs)).toEqual(new Set(["↓"]));
   });
 });

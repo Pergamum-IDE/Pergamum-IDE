@@ -1,16 +1,24 @@
 /**
- * #411: IPC contract for broken project-local image-link diagnostics in the
- * active Markdown editor.
+ * #411 / #412: IPC contract for broken project-local image-link diagnostics.
  *
  * The renderer extracts every project-local image link (destination + document
- * offsets) from the active document and asks the main process which of them
- * are broken and why. The renderer NEVER sends the project root and NEVER
- * decides file existence / realpath / magic bytes — main resolves the current
- * project root itself and performs all filesystem validation
+ * offsets) from the edited text and asks the main process which of them are
+ * broken and why. The renderer NEVER sends the project root and NEVER decides
+ * file existence / realpath / magic bytes — main resolves the current project
+ * root itself and performs all filesystem validation
  * ({@link ../main/projectLocalImageFileValidation}).
  *
- * Read-only: no request or response here ever rewrites the Markdown body.
+ * #412: the request carries an explicit
+ * {@link ProjectLocalImageResolutionContext} so the Markdown document editor
+ * (`sourceFile`) and the Glossary editor (`projectRoot`) share this one path
+ * without a Glossary-specific validator.
+ *
+ * Read-only: no request or response here ever rewrites the edited text.
  */
+
+import type { ProjectLocalImageResolutionContext } from "./projectLocalImageLink";
+
+export type { ProjectLocalImageResolutionContext };
 
 /** One image link the renderer found, with its destination-text range. */
 export interface MarkdownImageLinkDiagnosticRequestLink {
@@ -24,11 +32,16 @@ export interface MarkdownImageLinkDiagnosticRequestLink {
 
 export interface MarkdownImageLinkDiagnosticsRequest {
   /**
-   * Project-root-relative path of the Markdown file being edited (e.g.
-   * `chapters/chapter01.md`). Image links are resolved against this file's
-   * directory — the same #409 policy the Preview uses.
+   * How the edited surface anchors project-local links:
+   *   - `{ kind: "sourceFile"; sourceMarkdownProjectRelativePath }` — a
+   *     Markdown document editor; links resolve against that file's folder.
+   *   - `{ kind: "projectRoot" }` — the Glossary editor; links resolve
+   *     against the project root.
+   *   - `{ kind: "none" }` — diagnostics disabled; main returns
+   *     `{ ok: false, diagnostics: [] }`. (The renderer normally does not
+   *     send a request at all in this case.)
    */
-  readonly sourceMarkdownProjectRelativePath: string;
+  readonly resolutionContext: ProjectLocalImageResolutionContext;
   readonly links: readonly MarkdownImageLinkDiagnosticRequestLink[];
 }
 

@@ -12,16 +12,17 @@
  * owns the project root and every filesystem check), and maps the answer back
  * onto CodeMirror `Diagnostic`s. It never edits the document.
  *
- * Only wired for a project Markdown document that is not read-only — see
- * MarkdownEditor.tsx. When `getSourceProjectRelativePath()` returns `null`
- * (defensive: a standalone / non-project / read-only document) the linter is a
- * no-op and produces zero diagnostics.
+ * Wired for a project Markdown document editor (`sourceFile` context) and the
+ * Glossary editor (`projectRoot` context) — see MarkdownEditor.tsx. When
+ * `getResolutionContext()` returns `{ kind: "none" }` (a standalone /
+ * non-project / read-only surface) the linter is a no-op and produces zero
+ * diagnostics.
  *
  * Staleness: the linter re-runs on document change (debounced). An in-flight
  * IPC response is discarded unless BOTH the document is byte-for-byte
- * unchanged since the request AND the source path is still the same — so a
- * tab switch / close / external edit can never leave a stale marker. Offsets
- * from main are clamped to the current document length before use.
+ * unchanged since the request AND the resolution context is still the same —
+ * so a tab switch / close / external edit can never leave a stale marker.
+ * Offsets from main are clamped to the current document length before use.
  *
  * The per-`EditorView` options map mirrors #407's paste extension: the #392
  * per-tab EditorState cache bakes this extension into a cached state, so the
@@ -38,16 +39,27 @@ import { extractProjectLocalImageLinks } from "../shared/markdownImageLinkExtrac
 import type {
   MarkdownImageLinkDiagnosticReason,
   MarkdownImageLinkDiagnosticsRequest,
-  MarkdownImageLinkDiagnosticsResult
+  MarkdownImageLinkDiagnosticsResult,
+  ProjectLocalImageResolutionContext
 } from "../shared/api";
+
+/** Stable identity key for a resolution context (for the staleness guard). */
+function resolutionContextKey(
+  context: ProjectLocalImageResolutionContext
+): string {
+  return context.kind === "sourceFile"
+    ? `sourceFile:${context.sourceMarkdownProjectRelativePath}`
+    : context.kind;
+}
 
 export interface MarkdownImageLinkDiagnosticsExtensionOptions {
   /**
-   * Project-root-relative path of the document being edited, or `null` when
-   * diagnostics must not run (standalone / non-project / read-only). Read
-   * fresh on every lint pass.
+   * How the edited surface anchors project-local links, or `{ kind: "none" }`
+   * when diagnostics must not run (standalone / non-project / read-only).
+   * `sourceFile` for a Markdown document editor, `projectRoot` for the
+   * Glossary editor. Read fresh on every lint pass.
    */
-  readonly getSourceProjectRelativePath: () => string | null;
+  readonly getResolutionContext: () => ProjectLocalImageResolutionContext;
   /** Bridge to the main-process validator (usually the preload IPC method). */
   readonly validate: (
     request: MarkdownImageLinkDiagnosticsRequest
@@ -96,10 +108,11 @@ export async function runMarkdownImageLinkDiagnostics(
   },
   options: MarkdownImageLinkDiagnosticsExtensionOptions
 ): Promise<Diagnostic[]> {
-  const sourceProjectRelativePath = options.getSourceProjectRelativePath();
-  if (sourceProjectRelativePath === null) {
+  const context = options.getResolutionContext();
+  if (context.kind === "none") {
     return [];
   }
+  const contextKey = resolutionContextKey(context);
 
   const docText = view.state.doc.toString();
   const links = extractProjectLocalImageLinks(docText);
@@ -110,7 +123,7 @@ export async function runMarkdownImageLinkDiagnostics(
   let result: MarkdownImageLinkDiagnosticsResult;
   try {
     result = await options.validate({
-      sourceMarkdownProjectRelativePath: sourceProjectRelativePath,
+      resolutionContext: context,
       links: links.map((link) => ({
         src: link.src,
         from: link.from,
@@ -126,7 +139,7 @@ export async function runMarkdownImageLinkDiagnostics(
   if (
     !result.ok ||
     view.state.doc.toString() !== docText ||
-    options.getSourceProjectRelativePath() !== sourceProjectRelativePath
+    resolutionContextKey(options.getResolutionContext()) !== contextKey
   ) {
     return [];
   }

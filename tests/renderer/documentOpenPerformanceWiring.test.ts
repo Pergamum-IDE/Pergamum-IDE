@@ -392,10 +392,11 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       const hookBody = editorSurfaceSource.slice(hookStart, hookEnd);
 
       expect(hookBody).toContain("useMemo(() => {");
-      // #409: memoization now also keys on the previewed document's
-      // project-relative path.
+      // #409 / #412: memoization also keys on the project-local image
+      // resolution context — the discriminant kind plus (for `sourceFile`)
+      // the previewed document's project-relative path.
       expect(hookBody).toContain(
-        "}, [previewSourceContent, sourceMarkdownProjectRelativePath]);"
+        "}, [previewSourceContent, resolutionKind, resolutionSourcePath]);"
       );
     });
 

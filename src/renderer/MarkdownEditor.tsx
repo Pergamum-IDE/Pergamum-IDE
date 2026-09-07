@@ -63,7 +63,10 @@ import {
   unregisterEditorViewImageLinkDiagnosticsOptions,
   type MarkdownImageLinkDiagnosticsExtensionOptions
 } from "./markdownImageLinkDiagnosticsExtension";
-import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
+import type {
+  MarkdownImageLinkDiagnosticReason,
+  ProjectLocalImageResolutionContext
+} from "../shared/api";
 
 export type { MarkdownEditorGlossaryCompletionConfig };
 
@@ -221,14 +224,14 @@ interface MarkdownEditorProps {
   imageAttachmentSourceEditorId?: string;
   createImageAttachmentPendingId?: () => string;
   /**
-   * #411: project-root-relative path of the document being edited, when it is
-   * a project Markdown document that is NOT read-only — enables the
-   * broken-image-link lint extension (gutter + inline warning). `null` /
-   * omitted for a standalone / non-project / read-only document: the lint
-   * extension is then not added to the EditorState at all. Only
-   * EditorSurface's MarkdownEditorSurface supplies it.
+   * #411 / #412: how the edited surface anchors project-local image links for
+   * the broken-image-link lint extension (gutter + inline warning).
+   * `{ kind: "sourceFile", ... }` for a project Markdown document editor,
+   * `{ kind: "projectRoot" }` for the Glossary description editor. `{ kind:
+   * "none" }` / omitted (standalone / non-project / read-only) — the lint
+   * extension is not added to the EditorState at all.
    */
-  imageLinkDiagnosticsSourceProjectRelativePath?: string | null;
+  imageLinkDiagnosticsResolutionContext?: ProjectLocalImageResolutionContext;
   /** #411: localized hover message for a diagnostic reason + offending src. */
   formatImageLinkDiagnosticMessage?: (
     reason: MarkdownImageLinkDiagnosticReason,
@@ -424,7 +427,7 @@ export function MarkdownEditor({
   imageAttachmentSourceDocumentId,
   imageAttachmentSourceEditorId,
   createImageAttachmentPendingId,
-  imageLinkDiagnosticsSourceProjectRelativePath,
+  imageLinkDiagnosticsResolutionContext = { kind: "none" },
   formatImageLinkDiagnosticMessage,
   documentStates: documentStatesProp
 }: MarkdownEditorProps): JSX.Element {
@@ -487,16 +490,17 @@ export function MarkdownEditor({
   // CURRENT active document's path / message formatter, exactly like the
   // paste options above. The extension is only PRESENT in the state at all
   // when this prop was non-null at that document's build time.
-  const imageLinkDiagnosticsSourceProjectRelativePathRef = useRef<string | null>(
-    imageLinkDiagnosticsSourceProjectRelativePath ?? null
-  );
+  const imageLinkDiagnosticsResolutionContextRef =
+    useRef<ProjectLocalImageResolutionContext>(
+      imageLinkDiagnosticsResolutionContext
+    );
   const formatImageLinkDiagnosticMessageRef = useRef<
     MarkdownEditorProps["formatImageLinkDiagnosticMessage"]
   >(formatImageLinkDiagnosticMessage);
   const currentImageLinkDiagnosticsOptionsRef =
     useRef<MarkdownImageLinkDiagnosticsExtensionOptions>({
-      getSourceProjectRelativePath: () =>
-        imageLinkDiagnosticsSourceProjectRelativePathRef.current,
+      getResolutionContext: () =>
+        imageLinkDiagnosticsResolutionContextRef.current,
       validate: (request) =>
         window.pergamum.markdownImageLinkDiagnostics.validate(request),
       formatMessage: (reason, src) =>
@@ -689,13 +693,14 @@ export function MarkdownEditor({
       glossaryCompletionRef,
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
-      // #411: only add the broken-image-link lint extension for a project
-      // Markdown document that is not read-only. A given documentKey's
-      // project-relativeness is stable for its lifetime, so deciding this at
-      // build time (mount OR first switch to it) is safe; the actual path is
-      // then read live from the ref by the linter.
+      // #411 / #412: only add the broken-image-link lint extension when the
+      // surface has a real resolution context (`sourceFile` for a project
+      // Markdown document editor, `projectRoot` for the Glossary editor). A
+      // given documentKey's context KIND is stable for its lifetime, so
+      // deciding at build time is safe; the exact context is read live from
+      // the ref by the linter.
       imageLinkDiagnosticsOptions:
-        (imageLinkDiagnosticsSourceProjectRelativePath ?? null) !== null
+        imageLinkDiagnosticsResolutionContext.kind !== "none"
           ? currentImageLinkDiagnosticsOptionsRef.current
           : undefined,
       createUpdateListenerExtension
@@ -822,8 +827,8 @@ export function MarkdownEditor({
   }, [imageAttachmentSourceDocumentId, imageAttachmentSourceEditorId]);
 
   useEffect(() => {
-    imageLinkDiagnosticsSourceProjectRelativePathRef.current =
-      imageLinkDiagnosticsSourceProjectRelativePath ?? null;
+    imageLinkDiagnosticsResolutionContextRef.current =
+      imageLinkDiagnosticsResolutionContext;
     formatImageLinkDiagnosticMessageRef.current =
       formatImageLinkDiagnosticMessage;
     if (viewRef.current) {
@@ -833,7 +838,7 @@ export function MarkdownEditor({
       );
     }
   }, [
-    imageLinkDiagnosticsSourceProjectRelativePath,
+    imageLinkDiagnosticsResolutionContext,
     formatImageLinkDiagnosticMessage
   ]);
 

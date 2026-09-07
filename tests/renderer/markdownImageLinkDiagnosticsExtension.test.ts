@@ -31,7 +31,10 @@ function makeOptions(
   overrides: Partial<MarkdownImageLinkDiagnosticsExtensionOptions>
 ): MarkdownImageLinkDiagnosticsExtensionOptions {
   return {
-    getSourceProjectRelativePath: () => "chapters/chapter01.md",
+    getResolutionContext: () => ({
+      kind: "sourceFile",
+      sourceMarkdownProjectRelativePath: "chapters/chapter01.md"
+    }),
     validate: async () => ({ ok: true, diagnostics: [] }),
     formatMessage: (reason: MarkdownImageLinkDiagnosticReason, src: string) =>
       `${reason}:${src}`,
@@ -39,15 +42,29 @@ function makeOptions(
   };
 }
 
-describe("runMarkdownImageLinkDiagnostics (#411)", () => {
-  it("is a no-op for a non-project / read-only document (null source path)", async () => {
+describe("runMarkdownImageLinkDiagnostics (#411 / #412)", () => {
+  it("is a no-op for a `none` context (non-project / read-only surface)", async () => {
     const validate = vi.fn();
     const result = await runMarkdownImageLinkDiagnostics(
       fakeView({ text: "![](assets/missing.png)" }),
-      makeOptions({ getSourceProjectRelativePath: () => null, validate })
+      makeOptions({ getResolutionContext: () => ({ kind: "none" }), validate })
     );
     expect(result).toEqual([]);
     expect(validate).not.toHaveBeenCalled();
+  });
+
+  it("sends the projectRoot context for the Glossary editor", async () => {
+    const validate = vi.fn(async () => ({ ok: true, diagnostics: [] }));
+    await runMarkdownImageLinkDiagnostics(
+      fakeView({ text: "![](assets/missing.png)" }),
+      makeOptions({
+        getResolutionContext: () => ({ kind: "projectRoot" }),
+        validate
+      })
+    );
+    expect(validate).toHaveBeenCalledWith(
+      expect.objectContaining({ resolutionContext: { kind: "projectRoot" } })
+    );
   });
 
   it("does not call the validator when the document has no project-local image links", async () => {
@@ -76,9 +93,10 @@ describe("runMarkdownImageLinkDiagnostics (#411)", () => {
       fakeView({ text }),
       makeOptions({
         validate: async (request) => {
-          expect(request.sourceMarkdownProjectRelativePath).toBe(
-            "chapters/chapter01.md"
-          );
+          expect(request.resolutionContext).toEqual({
+            kind: "sourceFile",
+            sourceMarkdownProjectRelativePath: "chapters/chapter01.md"
+          });
           expect(request.links).toEqual([
             { src: "assets/images/missing.png", from, to }
           ]);
@@ -155,14 +173,43 @@ describe("runMarkdownImageLinkDiagnostics (#411)", () => {
     expect(result).toEqual([]);
   });
 
-  it("discards a stale async result after a tab switch changed the source path", async () => {
-    let sourcePath: string | null = "chapters/chapter01.md";
+  it("discards a stale async result after a tab switch changed the resolution context", async () => {
+    let sourcePath = "chapters/chapter01.md";
     const result = await runMarkdownImageLinkDiagnostics(
       fakeView({ text: "![](assets/missing.png)" }),
       makeOptions({
-        getSourceProjectRelativePath: () => sourcePath,
+        getResolutionContext: () => ({
+          kind: "sourceFile",
+          sourceMarkdownProjectRelativePath: sourcePath
+        }),
         validate: async () => {
           sourcePath = "chapters/chapter02.md";
+          return {
+            ok: true,
+            diagnostics: [
+              { from: 4, to: 21, src: "assets/missing.png", reason: "missing" }
+            ]
+          };
+        }
+      })
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("discards a stale async result when the context KIND changed (doc → glossary)", async () => {
+    let kind: "sourceFile" | "projectRoot" = "sourceFile";
+    const result = await runMarkdownImageLinkDiagnostics(
+      fakeView({ text: "![](assets/missing.png)" }),
+      makeOptions({
+        getResolutionContext: () =>
+          kind === "sourceFile"
+            ? {
+                kind: "sourceFile",
+                sourceMarkdownProjectRelativePath: "chapters/chapter01.md"
+              }
+            : { kind: "projectRoot" },
+        validate: async () => {
+          kind = "projectRoot";
           return {
             ok: true,
             diagnostics: [

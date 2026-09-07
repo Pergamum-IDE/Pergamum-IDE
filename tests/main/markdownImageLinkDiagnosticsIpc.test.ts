@@ -3,10 +3,23 @@ import {
   computeMarkdownImageLinkDiagnostics,
   registerMarkdownImageLinkDiagnosticsIpc
 } from "../../src/main/markdownImageLinkDiagnosticsIpc";
-import { MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS } from "../../src/shared/api";
+import {
+  MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS,
+  type ProjectLocalImageResolutionContext
+} from "../../src/shared/api";
 import type { ProjectLocalImageFileValidationResult } from "../../src/main/projectLocalImageFileValidation";
 
 const PROJECT_ROOT = "/projects/novel";
+
+/** #412: a Markdown document editor context anchored at `path`'s folder. */
+function srcCtx(
+  sourceMarkdownProjectRelativePath: string
+): ProjectLocalImageResolutionContext {
+  return { kind: "sourceFile", sourceMarkdownProjectRelativePath };
+}
+const PROJECT_ROOT_CTX: ProjectLocalImageResolutionContext = {
+  kind: "projectRoot"
+};
 
 function link(src: string, from = 0, to = src.length) {
   return { src, from, to };
@@ -34,7 +47,7 @@ const OK: ProjectLocalImageFileValidationResult = {
 describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
   it("returns ok:false when no project is open", async () => {
     const result = await computeMarkdownImageLinkDiagnostics(
-      { sourceMarkdownProjectRelativePath: "doc.md", links: [link("a.png")] },
+      { resolutionContext: srcCtx("doc.md"), links: [link("a.png")] },
       { currentProjectRootPath: () => null, validateFile: fakeValidateFile({}) }
     );
     expect(result).toEqual({ ok: false, diagnostics: [] });
@@ -57,7 +70,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
   it("returns ok:false when the source path escapes the project root", async () => {
     const result = await computeMarkdownImageLinkDiagnostics(
       {
-        sourceMarkdownProjectRelativePath: "../evil.md",
+        resolutionContext: srcCtx("../evil.md"),
         links: [link("a.png")]
       },
       {
@@ -75,7 +88,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
     });
     const result = await computeMarkdownImageLinkDiagnostics(
       {
-        sourceMarkdownProjectRelativePath: "chapters/chapter01.md",
+        resolutionContext: srcCtx("chapters/chapter01.md"),
         links: [link("images/a.png"), link("../assets/b.png")]
       },
       { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
@@ -86,7 +99,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
   it("reports a missing candidate file with its request offsets echoed back", async () => {
     const result = await computeMarkdownImageLinkDiagnostics(
       {
-        sourceMarkdownProjectRelativePath: "chapter01.md",
+        resolutionContext: srcCtx("chapter01.md"),
         links: [{ src: "assets/images/missing.png", from: 10, to: 33 }]
       },
       {
@@ -111,7 +124,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
     const validateFile = fakeValidateFile({});
     const result = await computeMarkdownImageLinkDiagnostics(
       {
-        sourceMarkdownProjectRelativePath: "chapters/chapter01.md",
+        resolutionContext: srcCtx("chapters/chapter01.md"),
         links: [
           link("images\\foo.png"),
           link("../../../outside.png"),
@@ -131,7 +144,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
   it("skips external / data / blob links entirely", async () => {
     const result = await computeMarkdownImageLinkDiagnostics(
       {
-        sourceMarkdownProjectRelativePath: "doc.md",
+        resolutionContext: srcCtx("doc.md"),
         links: [
           link("https://example.com/a.png"),
           link("data:image/png;base64,AAAA"),
@@ -150,7 +163,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
     const validateFile = fakeValidateFile({});
     const result = await computeMarkdownImageLinkDiagnostics(
       {
-        sourceMarkdownProjectRelativePath: "doc.md",
+        resolutionContext: srcCtx("doc.md"),
         links: [
           { src: "a.png", from: 0, to: 5 },
           { src: "a.png", from: 40, to: 45 }
@@ -172,7 +185,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
     ] as const) {
       const result = await computeMarkdownImageLinkDiagnostics(
         {
-          sourceMarkdownProjectRelativePath: "doc.md",
+          resolutionContext: srcCtx("doc.md"),
           links: [link("a.png")]
         },
         {
@@ -191,7 +204,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
       });
       const result = await computeMarkdownImageLinkDiagnostics(
         {
-          sourceMarkdownProjectRelativePath: "chapter01.md",
+          resolutionContext: srcCtx("chapter01.md"),
           links: [link("assets/figure%20image.png")]
         },
         { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
@@ -206,7 +219,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
     it("flags a missing %20 link and keeps the ENCODED src in the diagnostic", async () => {
       const result = await computeMarkdownImageLinkDiagnostics(
         {
-          sourceMarkdownProjectRelativePath: "chapter01.md",
+          resolutionContext: srcCtx("chapter01.md"),
           links: [{ src: "assets/figure%20image.png", from: 4, to: 33 }]
         },
         {
@@ -228,7 +241,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
       const validateFile = fakeValidateFile({ "assets/挿絵.png": OK });
       const result = await computeMarkdownImageLinkDiagnostics(
         {
-          sourceMarkdownProjectRelativePath: "chapter01.md",
+          resolutionContext: srcCtx("chapter01.md"),
           links: [link("assets/%E6%8C%BF%E7%B5%B5.png")]
         },
         { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
@@ -240,7 +253,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
       const validateFile = fakeValidateFile({});
       const result = await computeMarkdownImageLinkDiagnostics(
         {
-          sourceMarkdownProjectRelativePath: "chapter01.md",
+          resolutionContext: srcCtx("chapter01.md"),
           links: [link("assets/%zz.png")]
         },
         { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
@@ -258,7 +271,7 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
       const validateFile = fakeValidateFile({});
       const result = await computeMarkdownImageLinkDiagnostics(
         {
-          sourceMarkdownProjectRelativePath: "chapter01.md",
+          resolutionContext: srcCtx("chapter01.md"),
           links: [link("%2e%2e%2f%2e%2e%2foutside.png")]
         },
         { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
@@ -266,6 +279,102 @@ describe("computeMarkdownImageLinkDiagnostics (#411)", () => {
       expect(result.diagnostics[0]?.reason).toBe("outsideProject");
       expect(validateFile).not.toHaveBeenCalled();
     });
+  });
+
+  describe("projectRoot context — Glossary editor (#412)", () => {
+    it("resolves candidates against the project ROOT, not a source folder", async () => {
+      const validateFile = fakeValidateFile({ "assets/existing.png": OK });
+      const result = await computeMarkdownImageLinkDiagnostics(
+        {
+          resolutionContext: PROJECT_ROOT_CTX,
+          links: [link("assets/existing.png"), link("images/missing.png")]
+        },
+        { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
+      );
+      expect(
+        validateFile.mock.calls.map((c) =>
+          c[0].projectRelativeSegments.join("/")
+        )
+      ).toEqual(["assets/existing.png", "images/missing.png"]);
+      expect(result.diagnostics.map((d) => [d.src, d.reason])).toEqual([
+        ["images/missing.png", "missing"]
+      ]);
+    });
+
+    it("flags a ../ link as outsideProject (Glossary has no folder to climb from)", async () => {
+      const validateFile = fakeValidateFile({});
+      const result = await computeMarkdownImageLinkDiagnostics(
+        {
+          resolutionContext: PROJECT_ROOT_CTX,
+          links: [link("../assets/foo.png")]
+        },
+        { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
+      );
+      expect(result.diagnostics[0]?.reason).toBe("outsideProject");
+      expect(validateFile).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [".pergamum/secret.png", "protectedLocation"],
+      ["assets/foo.svg", "unsupportedFormat"],
+      ["images\\foo.png", "invalidPath"]
+    ])("flags %s as %s", async (src, reason) => {
+      const validateFile = fakeValidateFile({
+        ".pergamum/secret.png": { ok: false, reason: "protectedLocation" }
+      });
+      const result = await computeMarkdownImageLinkDiagnostics(
+        { resolutionContext: PROJECT_ROOT_CTX, links: [link(src)] },
+        { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
+      );
+      expect(result.diagnostics[0]?.reason).toBe(reason);
+    });
+
+    it("does not flag external / data / blob links", async () => {
+      const result = await computeMarkdownImageLinkDiagnostics(
+        {
+          resolutionContext: PROJECT_ROOT_CTX,
+          links: [
+            link("https://example.com/foo.png"),
+            link("data:image/png;base64,AAAA"),
+            link("blob:abcd")
+          ]
+        },
+        {
+          currentProjectRootPath: () => PROJECT_ROOT,
+          validateFile: fakeValidateFile({})
+        }
+      );
+      expect(result).toEqual({ ok: true, diagnostics: [] });
+    });
+
+    it("handles %20 / balanced parens the same as a document context", async () => {
+      const validateFile = fakeValidateFile({
+        "assets/my images/existing.png": OK,
+        "assets/figure(1).png": OK
+      });
+      const result = await computeMarkdownImageLinkDiagnostics(
+        {
+          resolutionContext: PROJECT_ROOT_CTX,
+          links: [
+            link("assets/my%20images/existing.png"),
+            link("assets/figure(1).png")
+          ]
+        },
+        { currentProjectRootPath: () => PROJECT_ROOT, validateFile }
+      );
+      expect(result).toEqual({ ok: true, diagnostics: [] });
+    });
+  });
+
+  it("returns ok:false for a { kind: 'none' } context", async () => {
+    const result = await computeMarkdownImageLinkDiagnostics(
+      { resolutionContext: { kind: "none" }, links: [link("a.png")] },
+      {
+        currentProjectRootPath: () => PROJECT_ROOT,
+        validateFile: fakeValidateFile({})
+      }
+    );
+    expect(result).toEqual({ ok: false, diagnostics: [] });
   });
 });
 
@@ -302,7 +411,7 @@ describe("registerMarkdownImageLinkDiagnosticsIpc (#411)", () => {
     const result = await handler(
       {},
       {
-        sourceMarkdownProjectRelativePath: "doc.md",
+        resolutionContext: srcCtx("doc.md"),
         links: [{ src: "gone.png", from: 3, to: 11 }]
       }
     );

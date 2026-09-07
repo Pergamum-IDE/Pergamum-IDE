@@ -1,7 +1,14 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import deleteIcon from "../../assets/icons/feather/glossary/delete.svg?raw";
 import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
+import type {
+  ApplicationEditorWhitespaceSettings,
+  ExpectedLineEnding,
+  LineEndingMarkerGlyph,
+  NewFileLineEnding
+} from "../shared/settings";
+import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
 import { pergamumContextSurfaceAttribute } from "../shared/editContextMenu";
 import { GlossaryAtomMatchFlagsEditor } from "./GlossaryAtomMatchFlagsEditor";
 import { GlossaryEntryTagAssignmentEditor } from "./GlossaryEntryTagAssignmentEditor";
@@ -11,8 +18,23 @@ import {
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
 import { representativeGlossarySurface } from "./glossaryPresentation";
+import { analyzeLineEndings } from "./lineEndingTracking";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { formatMarkdownImageLinkDiagnosticMessage } from "./markdownImageLinkDiagnosticMessage";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
+import type { ProjectLocalImageResolutionContext } from "../shared/projectLocalImageLink";
+
+// #412: Glossary vocabulary text has no source-file location, so both its
+// Preview AND its broken-image-link diagnostics resolve project-local image
+// links against the PROJECT ROOT. Module-level constant → stable identity, no
+// fallback to any other base. The main-process `pergamum-asset://` handler /
+// diagnostics IPC own the real project root + validation.
+const GLOSSARY_PREVIEW_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext = {
+  kind: "projectRoot"
+};
+const DIAGNOSTICS_DISABLED: ProjectLocalImageResolutionContext = {
+  kind: "none"
+};
 
 /** Private DataTransfer type — keeps atom reorder drags from mixing with
  *  File Explorer / tab reorder drags. */
@@ -56,6 +78,17 @@ interface GlossaryEditorProps {
   onNavigateToPreviousOccurrence: () => void;
   onNavigateToNextOccurrence: () => void;
   readOnly?: boolean;
+  /**
+   * #412 Blocker 1: the SAME global editor settings the main Markdown editor
+   * uses, so the description field's line-break marker / whitespace rendering
+   * follows Application Settings instead of MarkdownEditor's built-in
+   * defaults. Passed through from EditorSurface.
+   */
+  markerGlyph: LineEndingMarkerGlyph;
+  expectedLineEnding: ExpectedLineEnding;
+  newFileLineEndingFallback: NewFileLineEnding;
+  whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  undoHistoryMinDepth: number;
 }
 
 export function GlossaryEditor({
@@ -75,7 +108,12 @@ export function GlossaryEditor({
   onDeleteEntry,
   onNavigateToPreviousOccurrence,
   onNavigateToNextOccurrence,
-  readOnly = false
+  readOnly = false,
+  markerGlyph,
+  expectedLineEnding,
+  newFileLineEndingFallback,
+  whitespaceSettings,
+  undoHistoryMinDepth
 }: GlossaryEditorProps): JSX.Element {
   // #375: transient drag state for atom reorder (D&D). `dropGap` is a slot
   // index in `[0, atoms.length]` — the position the dragged atom would land.
@@ -98,8 +136,32 @@ export function GlossaryEditor({
   const title =
     representativeGlossaryAtomDraft(draft)?.value.trim() ||
     representativeGlossarySurface(draft.entry);
-  const descriptionHtml = markdownPreviewRenderer.render(draft.description);
+  const descriptionHtml = markdownPreviewRenderer.render(draft.description, {
+    projectLocalImageResolution: GLOSSARY_PREVIEW_IMAGE_RESOLUTION
+  });
   const validity = glossaryEntryDraftValidity(draft);
+
+  // #412 Blocker 1: a stable per-entry key so switching entries rebuilds the
+  // editor state (and its settings-driven compartments) while typing does
+  // not. #412 Blocker 2: `projectRoot` diagnostics unless the entry is
+  // read-only.
+  const descriptionEditorKey = `glossary-description:${draft.entry.id}`;
+  // Seed the line-ending tracking field from the loaded description so the
+  // marker feature has breaks to decorate immediately — recomputed only on
+  // an entry switch, never per keystroke (mirrors MarkdownEditorSurface).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initialDescriptionLineEndingBreaks = useMemo(
+    () => analyzeLineEndings(draft.description),
+    [descriptionEditorKey]
+  );
+  const imageLinkDiagnosticsResolutionContext = readOnly
+    ? DIAGNOSTICS_DISABLED
+    : GLOSSARY_PREVIEW_IMAGE_RESOLUTION;
+  const formatImageLinkDiagnosticMessage = useCallback(
+    (reason: MarkdownImageLinkDiagnosticReason, src: string) =>
+      formatMarkdownImageLinkDiagnosticMessage(translate, reason, src),
+    [translate]
+  );
 
   return (
     <section
@@ -334,6 +396,19 @@ export function GlossaryEditor({
               onChange={readOnly ? () => undefined : onChangeDescription}
               contextSurface="glossaryDescription"
               readOnly={readOnly}
+              documentKey={descriptionEditorKey}
+              initialLineEndingBreaks={initialDescriptionLineEndingBreaks}
+              markerGlyph={markerGlyph}
+              expectedLineEnding={expectedLineEnding}
+              newFileLineEndingFallback={newFileLineEndingFallback}
+              whitespaceSettings={whitespaceSettings}
+              undoHistoryMinDepth={undoHistoryMinDepth}
+              imageLinkDiagnosticsResolutionContext={
+                imageLinkDiagnosticsResolutionContext
+              }
+              formatImageLinkDiagnosticMessage={
+                formatImageLinkDiagnosticMessage
+              }
             />
           </section>
 
