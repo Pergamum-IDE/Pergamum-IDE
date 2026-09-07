@@ -136,7 +136,8 @@ export type {
   MarkdownImageLinkDiagnosticReason,
   MarkdownImageLinkDiagnosticRequestLink,
   MarkdownImageLinkDiagnosticsRequest,
-  MarkdownImageLinkDiagnosticsResult
+  MarkdownImageLinkDiagnosticsResult,
+  ProjectLocalImageResolutionContext
 } from "./markdownImageLinkDiagnostics";
 
 export type {

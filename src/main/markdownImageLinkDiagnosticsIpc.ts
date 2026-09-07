@@ -3,16 +3,19 @@
  *
  * Channel: `markdownImageLinkDiagnostics:validate`.
  *
- * The renderer sends `{ sourceMarkdownProjectRelativePath, links }`. The
- * project root is NEVER accepted from the renderer — it is resolved
- * authoritatively here (`currentProjectRootPath()`); if no project is open the
- * result is `{ ok: false, diagnostics: [] }` and the renderer shows nothing.
+ * The renderer sends `{ resolutionContext, links }`. The project root is NEVER
+ * accepted from the renderer — it is resolved authoritatively here
+ * (`currentProjectRootPath()`); if no project is open the result is
+ * `{ ok: false, diagnostics: [] }` and the renderer shows nothing. #412: the
+ * `resolutionContext` is `sourceFile` for a Markdown document editor and
+ * `projectRoot` for the Glossary editor — the same
+ * {@link ProjectLocalImageResolutionContext} the Preview uses; there is no
+ * Glossary-specific validator.
  *
  * Read-only: this never writes, repairs, converts, or rewrites anything. It
- * classifies each link's path shape ({@link classifyProjectLocalImageLink},
- * the same #409 source-relative policy the Preview uses — settings are never
- * consulted) and, for shape-valid candidates, runs the shared filesystem
- * validation ({@link validateProjectLocalImageFile}) once per distinct `src`.
+ * classifies each link's path shape ({@link classifyProjectLocalImageLink})
+ * and, for shape-valid candidates, runs the shared filesystem validation
+ * ({@link validateProjectLocalImageFile}) once per distinct `src`.
  */
 
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
@@ -21,7 +24,8 @@ import {
   type MarkdownImageLinkDiagnostic,
   type MarkdownImageLinkDiagnosticReason,
   type MarkdownImageLinkDiagnosticsRequest,
-  type MarkdownImageLinkDiagnosticsResult
+  type MarkdownImageLinkDiagnosticsResult,
+  type ProjectLocalImageResolutionContext
 } from "../shared/api";
 import { validateAttachedImageSaveDestination } from "../shared/attachedImageSaveDestination";
 import {
@@ -61,6 +65,23 @@ function nodePlatformToAppPlatform(platform: NodeJS.Platform): AppPlatform {
   }
 }
 
+function isResolutionContext(
+  value: unknown
+): value is ProjectLocalImageResolutionContext {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as { kind?: unknown };
+  if (candidate.kind === "none" || candidate.kind === "projectRoot") {
+    return true;
+  }
+  return (
+    candidate.kind === "sourceFile" &&
+    typeof (candidate as { sourceMarkdownProjectRelativePath?: unknown })
+      .sourceMarkdownProjectRelativePath === "string"
+  );
+}
+
 function isValidRequest(
   value: unknown
 ): value is MarkdownImageLinkDiagnosticsRequest {
@@ -69,15 +90,35 @@ function isValidRequest(
   }
   const candidate = value as Partial<MarkdownImageLinkDiagnosticsRequest>;
   return (
-    typeof candidate.sourceMarkdownProjectRelativePath === "string" &&
+    isResolutionContext(candidate.resolutionContext) &&
     Array.isArray(candidate.links)
   );
+}
+
+/**
+ * A `sourceFile` context must name a sane, in-project relative path — a `..`
+ * climbing above the root or an absolute path is not something we resolve
+ * links against, so diagnostics are refused. `projectRoot` and `none` need no
+ * path check.
+ */
+function isUsableResolutionContext(
+  context: ProjectLocalImageResolutionContext
+): context is Exclude<ProjectLocalImageResolutionContext, { kind: "none" }> {
+  if (context.kind === "none") {
+    return false;
+  }
+  if (context.kind === "projectRoot") {
+    return true;
+  }
+  return validateAttachedImageSaveDestination(
+    context.sourceMarkdownProjectRelativePath
+  ).ok;
 }
 
 async function reasonForSrc(
   /** Already percent-decoded for resolution — see the caller. */
   resolutionSrc: string,
-  sourceMarkdownProjectRelativePath: string,
+  context: ProjectLocalImageResolutionContext,
   projectRootPath: string,
   deps: Required<
     Pick<
@@ -86,10 +127,7 @@ async function reasonForSrc(
     >
   > & { readonly maxBytes?: number }
 ): Promise<MarkdownImageLinkDiagnosticReason | null> {
-  const classification = classifyProjectLocalImageLink(
-    resolutionSrc,
-    sourceMarkdownProjectRelativePath
-  );
+  const classification = classifyProjectLocalImageLink(resolutionSrc, context);
 
   switch (classification.kind) {
     case "external":
@@ -134,12 +172,8 @@ export async function computeMarkdownImageLinkDiagnostics(
     return { ok: false, diagnostics: [] };
   }
 
-  const sourceMarkdownProjectRelativePath =
-    request.sourceMarkdownProjectRelativePath;
-  // The source path itself must be a sane, in-project relative path — a `..`
-  // climbing above the root or an absolute path is not something we resolve
-  // links against.
-  if (!validateAttachedImageSaveDestination(sourceMarkdownProjectRelativePath).ok) {
+  const context = request.resolutionContext;
+  if (!isUsableResolutionContext(context)) {
     return { ok: false, diagnostics: [] };
   }
 
@@ -175,7 +209,7 @@ export async function computeMarkdownImageLinkDiagnostics(
     if (reason === undefined) {
       reason = await reasonForSrc(
         resolutionSrc,
-        sourceMarkdownProjectRelativePath,
+        context,
         projectRootPath,
         resolvedDeps
       );

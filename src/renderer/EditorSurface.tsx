@@ -44,6 +44,7 @@ import {
 import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
 import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
 import { formatMarkdownImageLinkDiagnosticMessage } from "./markdownImageLinkDiagnosticMessage";
+import type { ProjectLocalImageResolutionContext } from "../shared/projectLocalImageLink";
 import type { EditorViewState } from "./editorViewState";
 import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
@@ -322,18 +323,30 @@ export interface PreviewRenderResult {
  */
 export function useMemoizedPreviewRender(
   previewSourceContent: string,
-  // #409: project-root-relative path of the previewed Markdown file, or
-  // `null` for a standalone / non-project document (no image-link rewrite).
-  sourceMarkdownProjectRelativePath: string | null = null
+  // #409 / #412: how project-local image links are anchored for this Preview
+  // surface. Defaults to `{ kind: "none" }` (no rewrite). Callers may pass a
+  // fresh object literal each render — the memo keys on the discriminant
+  // primitives below, not the object identity.
+  projectLocalImageResolution: ProjectLocalImageResolutionContext = {
+    kind: "none"
+  }
 ): PreviewRenderResult {
+  const resolutionKind = projectLocalImageResolution.kind;
+  const resolutionSourcePath =
+    projectLocalImageResolution.kind === "sourceFile"
+      ? projectLocalImageResolution.sourceMarkdownProjectRelativePath
+      : "";
   return useMemo(() => {
     const startedAt = performance.now();
     const html = markdownPreviewRenderer.render(previewSourceContent, {
-      sourceMarkdownProjectRelativePath
+      projectLocalImageResolution
     });
 
     return { html, startedAt, durationMs: performance.now() - startedAt };
-  }, [previewSourceContent, sourceMarkdownProjectRelativePath]);
+    // projectLocalImageResolution is reconstructed from the two primitives
+    // it keys on; adding it as a dep would re-run on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewSourceContent, resolutionKind, resolutionSourcePath]);
 }
 
 interface EditorSurfaceProps {
@@ -643,6 +656,11 @@ export function EditorSurface({
           }
           onNavigateToNextOccurrence={onNavigateToNextGlossaryOccurrence}
           readOnly={isProjectOwnedReadOnly}
+          markerGlyph={markerGlyph}
+          expectedLineEnding={expectedLineEnding}
+          newFileLineEndingFallback={newFileLineEndingFallback}
+          whitespaceSettings={whitespaceSettings}
+          undoHistoryMinDepth={undoHistoryMinDepth}
         />
       );
   }
@@ -797,22 +815,40 @@ function MarkdownEditorSurface({
   // renders image links verbatim, as before.
   const previewSourceProjectRelativePath =
     currentProjectRelativePath(document);
+  // #412: a Markdown document Preview anchors links at the document's own
+  // folder (`sourceFile`); a standalone / non-project document does not
+  // rewrite at all (`none`). The Glossary vocabulary Preview uses
+  // `projectRoot` instead — see GlossaryEditor.tsx. Memoized so it is a
+  // stable prop identity for MarkdownEditor's effect deps.
+  const previewImageResolution = useMemo<ProjectLocalImageResolutionContext>(
+    () =>
+      previewSourceProjectRelativePath !== null
+        ? {
+            kind: "sourceFile",
+            sourceMarkdownProjectRelativePath: previewSourceProjectRelativePath
+          }
+        : { kind: "none" },
+    [previewSourceProjectRelativePath]
+  );
   // #250 follow-up: see useMemoizedPreviewRender above — markdown-it only
   // re-runs when previewSourceContent changes, not on every keystroke
   // rerender of this component.
   const previewRender = useMemoizedPreviewRender(
     previewSourceContent,
-    previewSourceProjectRelativePath
+    previewImageResolution
   );
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
   const previewRenderDurationMs = previewRender.durationMs;
-  // #411: broken-image-link diagnostics run only for a project Markdown
-  // document that is editable — a standalone / read-only document is a safe
-  // no-op (the lint extension is not added to its editor at all).
-  const imageLinkDiagnosticsSourceProjectRelativePath = readOnly
-    ? null
-    : previewSourceProjectRelativePath;
+  // #411 / #412: broken-image-link diagnostics use the SAME resolution
+  // context as the Preview (`sourceFile` for a project document), but are
+  // disabled (`none`) for a read-only document.
+  const imageLinkDiagnosticsResolutionContext = useMemo<
+    ProjectLocalImageResolutionContext
+  >(
+    () => (readOnly ? { kind: "none" } : previewImageResolution),
+    [readOnly, previewImageResolution]
+  );
   const formatImageLinkDiagnosticMessage = useCallback(
     (reason: MarkdownImageLinkDiagnosticReason, src: string) =>
       formatMarkdownImageLinkDiagnosticMessage(translate, reason, src),
@@ -958,8 +994,8 @@ function MarkdownEditorSurface({
           }
           imageAttachmentSourceDocumentId={imageAttachmentSourceDocumentId}
           imageAttachmentSourceEditorId={imageAttachmentSourceEditorId}
-          imageLinkDiagnosticsSourceProjectRelativePath={
-            imageLinkDiagnosticsSourceProjectRelativePath
+          imageLinkDiagnosticsResolutionContext={
+            imageLinkDiagnosticsResolutionContext
           }
           formatImageLinkDiagnosticMessage={formatImageLinkDiagnosticMessage}
           onViewStateSnapshot={onViewStateSnapshot}
