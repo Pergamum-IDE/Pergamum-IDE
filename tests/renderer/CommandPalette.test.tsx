@@ -130,7 +130,6 @@ function renderPalette(overrides: {
   onBlockedCommand?: (commandId: unknown) => void;
   onOpenProjectFileQuickOpenCandidate?: (relativePath: string) => void;
   projectFileQuickOpenDocuments?: readonly ProjectDocument[];
-  recentProjectFileQuickOpenDocuments?: readonly ProjectDocument[];
   lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
   footerDetailSettings?: CommandPaletteFooterDetailSettings;
   glossaryEntries?: readonly GlossaryEntry[];
@@ -147,8 +146,6 @@ function renderPalette(overrides: {
       onOpenProjectFileQuickOpenCandidate:
         overrides.onOpenProjectFileQuickOpenCandidate ?? noop,
       projectFileQuickOpenDocuments: overrides.projectFileQuickOpenDocuments,
-      recentProjectFileQuickOpenDocuments:
-        overrides.recentProjectFileQuickOpenDocuments,
       onClose: noop,
       lineJumpEditorSnapshot: overrides.lineJumpEditorSnapshot,
       footerDetailSettings: overrides.footerDetailSettings,
@@ -1152,10 +1149,10 @@ describe("CommandPalette Quick Access mode dispatch (#145)", () => {
       initialInputValue: "missing"
     });
 
-    expect(englishMarkup).toContain("Type a valid file name");
+    expect(englishMarkup).toContain("No matching files");
     expect(englishMarkup).not.toContain("No results found");
     expect(englishMarkup).not.toContain("No matching commands");
-    expect(japaneseMarkup).toContain("有効なファイル名を入力してください");
+    expect(japaneseMarkup).toContain("一致するファイルがありません");
     expect(japaneseMarkup).not.toContain("検索結果がありません");
     expect(japaneseMarkup).not.toContain("一致するコマンドがありません");
   });
@@ -1217,20 +1214,18 @@ describe("CommandPalette Quick Access mode dispatch (#145)", () => {
     );
   });
 
-  it("renders recent Project files for an empty no-prefix query only", () => {
+  it("renders all Project files for an empty no-prefix query (#405)", () => {
     const markup = renderPalette({
       initialInputValue: "",
       projectFileQuickOpenDocuments: [
-        projectDocument("all-files-are-not-listed.md")
-      ],
-      recentProjectFileQuickOpenDocuments: [
+        projectDocument("all-files-are-listed.md"),
         projectDocument("recent/chapter05.md")
       ]
     });
 
     expect(markup).toContain("chapter05.md");
     expect(markup).toContain("recent/chapter05.md");
-    expect(markup).not.toContain("all-files-are-not-listed.md");
+    expect(markup).toContain("all-files-are-listed.md");
   });
 
   it("computes empty `entries` outside command mode, so Enter/click can never execute or block a command through the generic command list (#145)", () => {
@@ -1951,5 +1946,88 @@ describe("CommandPalette line jump prefix candidates (#148)", () => {
   it("does not put candidate generation directly in CommandPalette.tsx: it calls the pure resolveLineJumpPaletteState/resolveLineJumpCandidates helpers", () => {
     expect(source).not.toContain("startsWith(");
     expect(source).toContain("resolveLineJumpPaletteState(");
+  });
+});
+
+describe("CommandPalette empty query project file quick open (#405)", () => {
+  it("shows all project files for empty query without error or input-required message", () => {
+    const markup = renderPalette({
+      initialInputValue: "",
+      projectFileQuickOpenDocuments: [
+        projectDocument("chapter01.md"),
+        projectDocument("chapter02.md")
+      ]
+    });
+
+    expect(markup).toContain("chapter01.md");
+    expect(markup).toContain("chapter02.md");
+    expect(markup).not.toContain("commandPaletteEmpty");
+    expect(markup).not.toContain("commandPalette.projectFileQuickOpen.noResults");
+  });
+
+  it("does not highlight matches on empty or whitespace-only query", () => {
+    const emptyMarkup = renderPalette({
+      initialInputValue: "",
+      projectFileQuickOpenDocuments: [projectDocument("chapter01.md")]
+    });
+    expect(emptyMarkup).not.toContain("commandPaletteMatch");
+
+    const whitespaceMarkup = renderPalette({
+      initialInputValue: "   ",
+      projectFileQuickOpenDocuments: [projectDocument("chapter01.md")]
+    });
+    expect(whitespaceMarkup).not.toContain("commandPaletteMatch");
+  });
+
+  it("preserves prefix search and highlights matching segments for non-empty query", () => {
+    const markup = renderPalette({
+      initialInputValue: "chap",
+      projectFileQuickOpenDocuments: [
+        projectDocument("chapter01.md"),
+        projectDocument("other.md")
+      ]
+    });
+
+    expect(markup).toContain('<mark class="commandPaletteMatch">chap</mark>ter01.md');
+    expect(markup).not.toContain("other.md");
+  });
+
+  it("shows no-results copy when query matches no files", () => {
+    const markup = renderPalette({
+      initialInputValue: "missing",
+      projectFileQuickOpenDocuments: [projectDocument("chapter01.md")]
+    });
+
+    expect(markup).toContain("commandPaletteEmpty");
+    expect(markup).toContain("commandPalette.projectFileQuickOpen.noResults");
+  });
+
+  it("shows no-results copy without crashing when project has zero files", () => {
+    const markup = renderPalette({
+      initialInputValue: "",
+      projectFileQuickOpenDocuments: []
+    });
+
+    expect(markup).toContain("commandPaletteEmpty");
+    expect(markup).toContain("commandPalette.projectFileQuickOpen.noResults");
+  });
+
+  it("does not regress # mode (heading jump) on empty query", () => {
+    const markup = renderPalette({
+      initialInputValue: "#"
+    });
+
+    expect(markup).toContain("commandPalette.headingJump.noOpenHeadings");
+    expect(markup).not.toContain("commandPalette.projectFileQuickOpen.noResults");
+  });
+
+  it("does not regress @ mode (glossary jump) on empty query", () => {
+    const markup = renderPalette({
+      initialInputValue: "@",
+      glossaryEntries: []
+    });
+
+    expect(markup).toContain("commandPalette.glossaryJump.openManager");
+    expect(markup).not.toContain("commandPalette.projectFileQuickOpen.noResults");
   });
 });

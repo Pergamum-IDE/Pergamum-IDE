@@ -129,7 +129,7 @@ export const enTranslations = {
   "commandPalette.lineJump.outOfRange": "Line number is out of range",
   "commandPalette.noResults": "No matching commands",
   "commandPalette.projectFileQuickOpen.inputPlaceholder": "Type a folder or file name",
-  "commandPalette.projectFileQuickOpen.noResults": "Type a valid file name",
+  "commandPalette.projectFileQuickOpen.noResults": "No matching files",
   "commandPalette.projectSearch.candidate": "Search project text for {query}",
   "commandPalette.projectSearch.category": "Search",
   "commandPalette.projectSearch.footer":

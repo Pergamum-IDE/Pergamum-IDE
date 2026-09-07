@@ -682,26 +682,25 @@ describe("Command Palette project file quick open (#143)", () => {
     expect(onOpenProjectFileQuickOpenCandidate).not.toHaveBeenCalled();
   });
 
-  it("uses recent Project file candidates for an empty no-prefix input", () => {
+  it("uses Project file candidates for an empty no-prefix input and opens on Enter (#405)", () => {
     const onOpenProjectFileQuickOpenCandidate = vi.fn();
     render(
       baseProps({
         initialInputValue: "",
-        projectFileQuickOpenDocuments: [projectDocument("all.md")],
-        recentProjectFileQuickOpenDocuments: [
-          projectDocument("recent-01.md"),
-          projectDocument("recent-02.md")
+        projectFileQuickOpenDocuments: [
+          projectDocument("b-chapter.md"),
+          projectDocument("a-chapter.md")
         ],
         onOpenProjectFileQuickOpenCandidate
       })
     );
 
     expect(optionEls()).toHaveLength(2);
-    expect(selectedOptionEl()!.textContent).toContain("recent-01.md");
+    expect(selectedOptionEl()!.textContent).toContain("a-chapter.md");
 
     pressKey("Enter");
     expect(onOpenProjectFileQuickOpenCandidate).toHaveBeenCalledWith(
-      "recent-01.md"
+      "a-chapter.md"
     );
   });
 });

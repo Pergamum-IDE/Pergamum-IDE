@@ -1,20 +1,9 @@
 import type { ProjectDocument } from "../shared/api";
-import type {
-  ActiveProjectContext,
-  EditorId
-} from "../shared/editorId";
-import {
-  createProjectDocumentEditorId,
-  editorIdEquals
-} from "../shared/editorId";
 import {
   pathHasReservedFileExplorerSegment,
   SUPPORTED_MARKDOWN_FILE_EXTENSIONS
 } from "../shared/fileExplorerCreate";
 import { isProtectedPergamumDataFilePath } from "../shared/saveTargetPolicy";
-import type { NavigationHistorySnapshot } from "./navigationHistory";
-
-export const PROJECT_FILE_QUICK_OPEN_RECENT_LIMIT = 5;
 
 export type ProjectFileQuickOpenMatchKind = "filename" | "relativePath";
 
@@ -208,13 +197,15 @@ export function filterProjectFileQuickOpenCandidates(input: {
 }): ProjectFileQuickOpenCandidate[] {
   const normalizedNeedle = normalizeProjectFileQuickOpenNeedle(input.query);
 
-  if (normalizedNeedle.length === 0) {
-    return [];
-  }
-
   return uniqueProjectFileQuickOpenDocuments(input.documents)
     .filter(isProjectFileQuickOpenDocument)
     .flatMap((document) => {
+      if (normalizedNeedle.length === 0) {
+        return [
+          createProjectFileQuickOpenCandidate(document, "filename", [])
+        ];
+      }
+
       const filenameRanges = prefixMatchRange(
         document.name,
         normalizedNeedle
@@ -248,90 +239,14 @@ export function filterProjectFileQuickOpenCandidates(input: {
     .sort(compareProjectFileQuickOpenCandidates);
 }
 
-function findProjectDocumentForEditorId(input: {
-  readonly documents: readonly ProjectDocument[];
-  readonly editorId: EditorId;
-  readonly activeProjectContext: ActiveProjectContext;
-}): ProjectDocument | null {
-  if (input.editorId.kind !== "projectDocument") {
-    return null;
-  }
-
-  return (
-    input.documents.find((document) =>
-      editorIdEquals(
-        createProjectDocumentEditorId(
-          document.relativePath,
-          input.activeProjectContext
-        ),
-        input.editorId
-      )
-    ) ?? null
-  );
-}
-
-export function recentProjectFileQuickOpenDocuments(input: {
-  readonly documents: readonly ProjectDocument[];
-  readonly history: NavigationHistorySnapshot;
-  readonly activeProjectContext: ActiveProjectContext | null;
-  readonly limit?: number;
-}): ProjectDocument[] {
-  if (!input.activeProjectContext || input.history.currentIndex < 0) {
-    return [];
-  }
-
-  const result: ProjectDocument[] = [];
-  const seen = new Set<string>();
-  const limit = input.limit ?? PROJECT_FILE_QUICK_OPEN_RECENT_LIMIT;
-  const historyEntries = input.history.entries.slice(
-    0,
-    input.history.currentIndex + 1
-  );
-
-  for (const editorId of historyEntries.reverse()) {
-    const document = findProjectDocumentForEditorId({
-      documents: input.documents,
-      editorId,
-      activeProjectContext: input.activeProjectContext
-    });
-
-    if (!document || !isProjectFileQuickOpenDocument(document)) {
-      continue;
-    }
-
-    const normalized = projectFileQuickOpenDocument(document);
-
-    if (seen.has(normalized.relativePath)) {
-      continue;
-    }
-
-    seen.add(normalized.relativePath);
-    result.push(normalized);
-
-    if (result.length >= limit) {
-      break;
-    }
-  }
-
-  return result;
-}
-
 export function projectFileQuickOpenCandidates(input: {
   readonly documents: readonly ProjectDocument[];
-  readonly recentDocuments: readonly ProjectDocument[];
   readonly query: string;
 }): ProjectFileQuickOpenCandidate[] {
-  return input.query.trim().length === 0
-    ? uniqueProjectFileQuickOpenDocuments(input.recentDocuments)
-        .filter(isProjectFileQuickOpenDocument)
-        .slice(0, PROJECT_FILE_QUICK_OPEN_RECENT_LIMIT)
-        .map((document) =>
-          createProjectFileQuickOpenCandidate(document, null, [])
-        )
-    : filterProjectFileQuickOpenCandidates({
-        documents: input.documents,
-        query: input.query
-      });
+  return filterProjectFileQuickOpenCandidates({
+    documents: input.documents,
+    query: input.query
+  });
 }
 
 export function resolveProjectFileQuickOpenSelection(

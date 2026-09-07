@@ -82,6 +82,12 @@ describe("DocumentMetricsPanel interactive chart switching and animation trigger
     // Icons present
     expect(pieButton.querySelector("svg.feather-pie-chart")).not.toBeNull();
     expect(barButton.querySelector("svg.feather-bar-chart")).not.toBeNull();
+    expect(
+      barButton.querySelector(".documentMetricsChartTypeIcon--bar")
+    ).not.toBeNull();
+    expect(
+      pieButton.querySelector(".documentMetricsChartTypeIcon--bar")
+    ).toBeNull();
 
     // Pie chart is rendered, Bar chart is not
     expect(container.querySelector(".documentMetricsDialoguePie")).not.toBeNull();
