@@ -118,6 +118,7 @@ function saveRequest(
       undoHistoryMinDepth: defaultUndoHistoryMinDepth
     },
     files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
+    imageAttachment: { saveDirectory: "", insertMarkdownLink: true },
     documentMap: {
       narrationColor: "#000000",
       glossaryFallbackColor: "#ff0000",

@@ -102,6 +102,10 @@ export function readSettingValue(
       return settings.preview.updateDelayMs;
     case "documentMap.dialogueDelimiterPairs":
       return settings.documentMap.dialogueDelimiterPairs;
+    case "imageAttachment.saveDirectory":
+      return settings.imageAttachment.saveDirectory;
+    case "imageAttachment.insertMarkdownLink":
+      return settings.imageAttachment.insertMarkdownLink;
   }
 
   const exhaustiveCheck: never = key;

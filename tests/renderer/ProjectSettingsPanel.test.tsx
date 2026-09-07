@@ -640,7 +640,8 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    expect(rows).toHaveLength(11);
+    // #407: +2 rows for imageAttachment.saveDirectory / .insertMarkdownLink.
+    expect(rows).toHaveLength(13);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -910,15 +911,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const headings = container.querySelectorAll<HTMLHeadingElement>(
       "h2.settingsItemPaneHeading"
     );
-    expect(headings).toHaveLength(4);
+    // #407: the "画像添付" category sits between Editor and Preview.
+    expect(headings).toHaveLength(5);
     expect(headings[0].textContent).toBe("エディタ");
-    expect(headings[1].textContent).toBe("プレビュー");
-    expect(headings[2].textContent).toBe("文書マップ");
-    expect(headings[3].textContent).toBe("ファイル");
+    expect(headings[1].textContent).toBe("画像添付");
+    expect(headings[2].textContent).toBe("プレビュー");
+    expect(headings[3].textContent).toBe("文書マップ");
+    expect(headings[4].textContent).toBe("ファイル");
 
     // Sections use existing .settingsItemPane class
     const panes = container.querySelectorAll(".settingsItemPane");
-    expect(panes).toHaveLength(4);
+    expect(panes).toHaveLength(5);
 
     // Verify exact sequence of elements inside row:
     // 1. header (label + inline actions) -> 2. control -> 3. description -> 4. key
@@ -1005,6 +1008,10 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         expect(categories).toEqual([
           { id: "all", labelKey: "settings.category.all.label" },
           { id: "editor", labelKey: "settings.category.editor.label" },
+          {
+            id: "imageAttachment",
+            labelKey: "settings.category.imageAttachment.label"
+          },
           { id: "preview", labelKey: "settings.category.preview.label" },
           { id: "documentMap", labelKey: "settings.category.documentMap.label" },
           { id: "files", labelKey: "settings.category.files.label" }
@@ -1027,6 +1034,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         expect(categories.map((c) => c.id)).toEqual([
           "all",
           "editor",
+          "imageAttachment",
           "preview",
           "documentMap",
           "files"
@@ -1142,6 +1150,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "editor.characterCount.exclude.headings",
           "editor.characterCount.exclude.markdownSyntax",
           "editor.characterCount.exclude.markdownComments",
+          "imageAttachment.saveDirectory",
+          "imageAttachment.insertMarkdownLink",
           "preview.renderer",
           "documentMap.dialogueDelimiterPairs",
           "files.newFile.lineEnding"
@@ -1272,12 +1282,13 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      expect(categoryButtons).toHaveLength(5);
+      expect(categoryButtons).toHaveLength(6);
       expect(categoryButtons[0].textContent).toBe("すべて");
       expect(categoryButtons[1].textContent).toBe("エディタ");
-      expect(categoryButtons[2].textContent).toBe("プレビュー");
-      expect(categoryButtons[3].textContent).toBe("文書マップ");
-      expect(categoryButtons[4].textContent).toBe("ファイル");
+      expect(categoryButtons[2].textContent).toBe("画像添付");
+      expect(categoryButtons[3].textContent).toBe("プレビュー");
+      expect(categoryButtons[4].textContent).toBe("文書マップ");
+      expect(categoryButtons[5].textContent).toBe("ファイル");
 
       expect(
         categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
@@ -1292,6 +1303,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       ).map((h) => h.textContent);
       expect(headings).toEqual([
         "エディタ",
+        "画像添付",
         "プレビュー",
         "文書マップ",
         "ファイル"
@@ -1309,6 +1321,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
+        "imageAttachment.saveDirectory",
+        "imageAttachment.insertMarkdownLink",
         "preview.renderer",
         "documentMap.dialogueDelimiterPairs",
         "files.newFile.lineEnding"
@@ -1358,7 +1372,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.markdownComments"
       ]);
 
-      // Click "プレビュー"
+      // Click "画像添付" (#407)
       act(() => {
         categoryButtons[2].click();
       });
@@ -1369,9 +1383,12 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["preview.renderer"]);
+      expect(itemKeys).toEqual([
+        "imageAttachment.saveDirectory",
+        "imageAttachment.insertMarkdownLink"
+      ]);
 
-      // Click "文書マップ"
+      // Click "プレビュー"
       act(() => {
         categoryButtons[3].click();
       });
@@ -1382,15 +1399,28 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["documentMap.dialogueDelimiterPairs"]);
+      expect(itemKeys).toEqual(["preview.renderer"]);
 
-      // Click "ファイル"
+      // Click "文書マップ"
       act(() => {
         categoryButtons[4].click();
       });
 
       expect(
         categoryButtons[4].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(true);
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["documentMap.dialogueDelimiterPairs"]);
+
+      // Click "ファイル"
+      act(() => {
+        categoryButtons[5].click();
+      });
+
+      expect(
+        categoryButtons[5].classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
@@ -1417,6 +1447,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
+        "imageAttachment.saveDirectory",
+        "imageAttachment.insertMarkdownLink",
         "preview.renderer",
         "documentMap.dialogueDelimiterPairs",
         "files.newFile.lineEnding"
@@ -1493,6 +1525,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
+        "imageAttachment.saveDirectory",
+        "imageAttachment.insertMarkdownLink",
         "preview.renderer",
         "documentMap.dialogueDelimiterPairs",
         "files.newFile.lineEnding"
@@ -1635,9 +1669,10 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
 
-      // Switch to "プレビュー" category (hiding editor setting)
+      // Switch to "プレビュー" category (hiding editor setting) — index 3
+      // after #407 inserts "画像添付" at index 2.
       act(() => {
-        categoryButtons[2].click();
+        categoryButtons[3].click();
       });
       expect(container.querySelectorAll(".projectSettingModifiedBadge")).toHaveLength(0);
 
@@ -1717,7 +1752,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      const previewButton = categoryButtons[2];
+      // #407: categoryButtons[2] is now "画像添付"; Preview moved to index 3.
+      const previewButton = categoryButtons[3];
 
       await act(async () => {
         textInput.blur();
@@ -3272,6 +3308,414 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
       expect(appTsxContent).toMatch(
         /<ProjectSettingsPanel\s+key=\{project\?\.activeProjectFilePath\s*\?\?\s*["']no-project["']\}/
       );
+    });
+  });
+});
+
+describe("ProjectSettingsPanel image attachment save destination workflow (#407 B2 remediation)", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  function changeInputValue(input: HTMLInputElement, value: string): void {
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    nativeSetter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  it("opens SaveDestinationDialog, edits path, and saves sparse override set", async () => {
+    const onSaveSettings = vi.fn(async () => undefined);
+
+    act(() => {
+      root.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectSettings={undefined}
+          applicationSettings={{
+            imageAttachment: {
+              saveDirectory: "images",
+              insertMarkdownLink: true
+            }
+          }}
+          isReadOnly={false}
+          onSaveSettings={onSaveSettings}
+        />
+      );
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#projectSettingControl-imageAttachment\\.saveDirectory"
+    );
+    expect(editButton).not.toBeNull();
+
+    act(() => {
+      editButton!.click();
+    });
+
+    const dialog = container.querySelector(".saveDestinationDialog");
+    expect(dialog).not.toBeNull();
+
+    const input = container.querySelector<HTMLInputElement>(
+      ".saveDestinationDialogInput"
+    );
+    expect(input).not.toBeNull();
+    expect(input!.value).toBe("images");
+
+    act(() => {
+      changeInputValue(input!, "attachments");
+    });
+
+    const confirmButton = container.querySelector<HTMLButtonElement>(
+      ".saveDestinationDialog .appDialogButton-confirm"
+    );
+    expect(confirmButton).not.toBeNull();
+    expect(confirmButton!.disabled).toBe(false);
+
+    await act(async () => {
+      confirmButton!.click();
+    });
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith({
+      set: {
+        "imageAttachment.saveDirectory": "attachments"
+      }
+    });
+    expect(container.querySelector(".saveDestinationDialog")).toBeNull();
+  });
+
+  it("saves only insertMarkdownLink when the dialog path is unchanged", async () => {
+    const onSaveSettings = vi.fn(async () => undefined);
+
+    act(() => {
+      root.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectSettings={{
+            imageAttachment: {
+              saveDirectory: "custom-dir"
+            }
+          }}
+          applicationSettings={{
+            imageAttachment: {
+              saveDirectory: "images",
+              insertMarkdownLink: true
+            }
+          }}
+          isReadOnly={false}
+          onSaveSettings={onSaveSettings}
+        />
+      );
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#projectSettingControl-imageAttachment\\.saveDirectory"
+    );
+    expect(editButton).not.toBeNull();
+
+    act(() => {
+      editButton!.click();
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      ".saveDestinationDialogInput"
+    );
+    expect(input).not.toBeNull();
+    expect(input!.value).toBe("custom-dir");
+
+    const checkbox = container.querySelector<HTMLInputElement>(
+      ".saveDestinationDialogCheckbox"
+    );
+    expect(checkbox).not.toBeNull();
+    expect(checkbox!.checked).toBe(true);
+
+    act(() => {
+      checkbox!.click();
+    });
+
+    const confirmButton = container.querySelector<HTMLButtonElement>(
+      ".saveDestinationDialog .appDialogButton-confirm"
+    );
+    expect(confirmButton).not.toBeNull();
+
+    await act(async () => {
+      confirmButton!.click();
+    });
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith({
+      set: {
+        "imageAttachment.insertMarkdownLink": false
+      }
+    });
+  });
+
+  it("saves remove request when editing path back to match inherited applicationSettings", async () => {
+    const onSaveSettings = vi.fn(async () => undefined);
+
+    act(() => {
+      root.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectSettings={{
+            imageAttachment: {
+              saveDirectory: "custom-dir"
+            }
+          }}
+          applicationSettings={{
+            imageAttachment: {
+              saveDirectory: "images",
+              insertMarkdownLink: true
+            }
+          }}
+          isReadOnly={false}
+          onSaveSettings={onSaveSettings}
+        />
+      );
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#projectSettingControl-imageAttachment\\.saveDirectory"
+    );
+    act(() => {
+      editButton!.click();
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      ".saveDestinationDialogInput"
+    );
+    expect(input!.value).toBe("custom-dir");
+
+    act(() => {
+      changeInputValue(input!, "images");
+    });
+
+    const confirmButton = container.querySelector<HTMLButtonElement>(
+      ".saveDestinationDialog .appDialogButton-confirm"
+    );
+    await act(async () => {
+      confirmButton!.click();
+    });
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith({
+      remove: ["imageAttachment.saveDirectory"]
+    });
+    expect(container.querySelector(".saveDestinationDialog")).toBeNull();
+  });
+
+  it("saves override set with empty string \"\" when inherited setting is non-empty", async () => {
+    const onSaveSettings = vi.fn(async () => undefined);
+
+    act(() => {
+      root.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectSettings={undefined}
+          applicationSettings={{
+            imageAttachment: {
+              saveDirectory: "images",
+              insertMarkdownLink: true
+            }
+          }}
+          isReadOnly={false}
+          onSaveSettings={onSaveSettings}
+        />
+      );
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#projectSettingControl-imageAttachment\\.saveDirectory"
+    );
+    act(() => {
+      editButton!.click();
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      ".saveDestinationDialogInput"
+    );
+    expect(input!.value).toBe("images");
+
+    act(() => {
+      changeInputValue(input!, "");
+    });
+
+    const confirmButton = container.querySelector<HTMLButtonElement>(
+      ".saveDestinationDialog .appDialogButton-confirm"
+    );
+    expect(confirmButton!.disabled).toBe(false);
+
+    await act(async () => {
+      confirmButton!.click();
+    });
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith({
+      set: {
+        "imageAttachment.saveDirectory": ""
+      }
+    });
+    expect(container.querySelector(".saveDestinationDialog")).toBeNull();
+  });
+
+  it("does not call onSaveSettings when Cancel is clicked", async () => {
+    const onSaveSettings = vi.fn(async () => undefined);
+
+    act(() => {
+      root.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectSettings={undefined}
+          applicationSettings={{
+            imageAttachment: {
+              saveDirectory: "images",
+              insertMarkdownLink: true
+            }
+          }}
+          isReadOnly={false}
+          onSaveSettings={onSaveSettings}
+        />
+      );
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#projectSettingControl-imageAttachment\\.saveDirectory"
+    );
+    act(() => {
+      editButton!.click();
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      ".saveDestinationDialogInput"
+    );
+    act(() => {
+      changeInputValue(input!, "other-dir");
+    });
+
+    const cancelButton = container.querySelector<HTMLButtonElement>(
+      ".saveDestinationDialog .appDialogButton-cancel"
+    );
+    expect(cancelButton).not.toBeNull();
+
+    await act(async () => {
+      cancelButton!.click();
+    });
+
+    expect(onSaveSettings).not.toHaveBeenCalled();
+    expect(container.querySelector(".saveDestinationDialog")).toBeNull();
+  });
+
+  it("resets imageAttachment.saveDirectory override via row reset button", async () => {
+    const onSaveSettings = vi.fn(async () => undefined);
+
+    act(() => {
+      root.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectSettings={{
+            imageAttachment: {
+              saveDirectory: ""
+            }
+          }}
+          applicationSettings={{
+            imageAttachment: {
+              saveDirectory: "images",
+              insertMarkdownLink: true
+            }
+          }}
+          isReadOnly={false}
+          onSaveSettings={onSaveSettings}
+        />
+      );
+    });
+
+    const row = Array.from(
+      container.querySelectorAll(".settingsItemRow")
+    ).find(
+      (r) =>
+        r.querySelector(".settingsItemKey")?.textContent ===
+        "imageAttachment.saveDirectory"
+    );
+    expect(row).toBeDefined();
+
+    const resetBtn = row!.querySelector<HTMLButtonElement>(
+      ".projectSettingResetButton"
+    );
+    expect(resetBtn).not.toBeNull();
+    expect(resetBtn!.disabled).toBe(false);
+
+    await act(async () => {
+      resetBtn!.click();
+    });
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith({
+      remove: ["imageAttachment.saveDirectory"]
+    });
+  });
+
+  it("resets imageAttachment.saveDirectory override from 'assets' when application setting is ''", async () => {
+    const onSaveSettings = vi.fn(async () => undefined);
+
+    act(() => {
+      root.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectSettings={{
+            imageAttachment: {
+              saveDirectory: "assets"
+            }
+          }}
+          applicationSettings={{
+            imageAttachment: {
+              saveDirectory: "",
+              insertMarkdownLink: true
+            }
+          }}
+          isReadOnly={false}
+          onSaveSettings={onSaveSettings}
+        />
+      );
+    });
+
+    const row = Array.from(
+      container.querySelectorAll(".settingsItemRow")
+    ).find(
+      (r) =>
+        r.querySelector(".settingsItemKey")?.textContent ===
+        "imageAttachment.saveDirectory"
+    );
+    expect(row).toBeDefined();
+
+    const resetBtn = row!.querySelector<HTMLButtonElement>(
+      ".projectSettingResetButton"
+    );
+    expect(resetBtn).not.toBeNull();
+    expect(resetBtn!.disabled).toBe(false);
+
+    await act(async () => {
+      resetBtn!.click();
+    });
+
+    expect(onSaveSettings).toHaveBeenCalledTimes(1);
+    expect(onSaveSettings).toHaveBeenCalledWith({
+      remove: ["imageAttachment.saveDirectory"]
     });
   });
 });

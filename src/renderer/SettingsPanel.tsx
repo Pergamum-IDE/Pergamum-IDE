@@ -24,6 +24,10 @@ import {
 import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
 import { DocumentMapSettingsSection } from "./DocumentMapSettingsSection";
 import { readSettingValue } from "./settingsValueByKey";
+import {
+  SaveDestinationDialog,
+  SaveDestinationSettingControl
+} from "./dialog/SaveDestinationDialog";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
@@ -139,6 +143,7 @@ function saveRequest(
     commandPalette: overrides.commandPalette ?? settings.commandPalette,
     editor: overrides.editor ?? settings.editor,
     files: overrides.files ?? settings.files,
+    imageAttachment: overrides.imageAttachment ?? settings.imageAttachment,
     documentMap: overrides.documentMap ?? settings.documentMap
   };
   const notification = overrides.notification ?? settings.notification;
@@ -476,6 +481,39 @@ function buildNextSettings(
           dialogueDelimiterPairs: rawValue as any
         }
       });
+    case "imageAttachment.saveDirectory":
+      if (
+        typeof rawValue === "object" &&
+        rawValue !== null &&
+        "saveDirectory" in rawValue
+      ) {
+        const payload = rawValue as {
+          saveDirectory: string;
+          insertMarkdownLink?: boolean;
+        };
+        return saveRequest(settings, {
+          imageAttachment: {
+            ...settings.imageAttachment,
+            saveDirectory: String(payload.saveDirectory),
+            ...(typeof payload.insertMarkdownLink === "boolean"
+              ? { insertMarkdownLink: payload.insertMarkdownLink }
+              : {})
+          }
+        });
+      }
+      return saveRequest(settings, {
+        imageAttachment: {
+          ...settings.imageAttachment,
+          saveDirectory: String(rawValue)
+        }
+      });
+    case "imageAttachment.insertMarkdownLink":
+      return saveRequest(settings, {
+        imageAttachment: {
+          ...settings.imageAttachment,
+          insertMarkdownLink: Boolean(rawValue)
+        }
+      });
   }
 
   const exhaustiveCheck: never = key;
@@ -571,6 +609,7 @@ interface SettingControlInputProps {
   labelId: string;
   translate: Translate;
   onChange: (rawValue: unknown) => void;
+  onOpenSaveDestinationDialog?: (opener?: Element | null) => void;
 }
 
 function SettingControlInput({
@@ -579,7 +618,8 @@ function SettingControlInput({
   disabled,
   labelId,
   translate,
-  onChange
+  onChange,
+  onOpenSaveDestinationDialog
 }: SettingControlInputProps): JSX.Element {
   const control = item.control;
   const controlId = `settingControl-${item.key}`;
@@ -657,6 +697,17 @@ function SettingControlInput({
       );
     }
     case "custom":
+      if (control.customKind === "imageAttachment.saveDirectory") {
+        return (
+          <SaveDestinationSettingControl
+            id={controlId}
+            value={typeof value === "string" ? value : ""}
+            disabled={disabled}
+            translate={translate}
+            onOpenDialog={onOpenSaveDestinationDialog}
+          />
+        );
+      }
       return <></>;
   }
 }
@@ -669,6 +720,7 @@ interface SettingItemRowProps {
   onChange: (item: SettingCatalogItem, rawValue: unknown) => void;
   onFieldFocus?: () => void;
   onFieldBlur?: () => void;
+  onOpenSaveDestinationDialog?: (opener?: Element | null) => void;
 }
 
 function SettingItemRow({
@@ -678,7 +730,8 @@ function SettingItemRow({
   translate,
   onChange,
   onFieldFocus,
-  onFieldBlur
+  onFieldBlur,
+  onOpenSaveDestinationDialog
 }: SettingItemRowProps): JSX.Element {
   const value = readSettingValue(item.key, settings);
   const disabled = isSettingDisabled(item, settings, isLoading);
@@ -711,6 +764,7 @@ function SettingItemRow({
             labelId={labelId}
             translate={translate}
             onChange={(rawValue) => onChange(item, rawValue)}
+            onOpenSaveDestinationDialog={onOpenSaveDestinationDialog}
           />
         </div>
       </HeaderTag>
@@ -741,6 +795,7 @@ interface SettingsPanelViewProps extends SettingsPanelProps {
   onSelectCategory: (id: SettingCategory) => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
+  onOpenSaveDestinationDialog?: (opener?: Element | null) => void;
 }
 
 export function SettingsPanelView({
@@ -754,7 +809,8 @@ export function SettingsPanelView({
   selectedCategoryId,
   onSelectCategory,
   searchQuery,
-  onSearchQueryChange
+  onSearchQueryChange,
+  onOpenSaveDestinationDialog
 }: SettingsPanelViewProps): JSX.Element {
   // Only categories that currently have at least one registered catalog
   // item are shown in the left pane — settingCategoryCatalog itself keeps
@@ -870,6 +926,7 @@ export function SettingsPanelView({
                   onChange={handleChange}
                   onFieldFocus={onSettingFieldFocus}
                   onFieldBlur={onSettingFieldBlur}
+                  onOpenSaveDestinationDialog={onOpenSaveDestinationDialog}
                 />
               ))}
             </div>
@@ -903,17 +960,47 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
     settingCategoryCatalog[0].id
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDestinationDialogOpen, setIsDestinationDialogOpen] = useState(false);
+  const [dialogOpener, setDialogOpener] = useState<Element | null>(null);
 
   return (
-    <SettingsPanelView
-      {...props}
-      selectedCategoryId={selectedCategoryId}
-      onSelectCategory={(id) => {
-        setSelectedCategoryId(id);
-        setSearchQuery("");
-      }}
-      searchQuery={searchQuery}
-      onSearchQueryChange={setSearchQuery}
-    />
+    <>
+      <SettingsPanelView
+        {...props}
+        selectedCategoryId={selectedCategoryId}
+        onSelectCategory={(id) => {
+          setSelectedCategoryId(id);
+          setSearchQuery("");
+        }}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        onOpenSaveDestinationDialog={(opener) => {
+          setDialogOpener(opener ?? null);
+          setIsDestinationDialogOpen(true);
+        }}
+      />
+      <SaveDestinationDialog
+        isOpen={isDestinationDialogOpen}
+        initialSaveDirectory={props.settings.imageAttachment.saveDirectory}
+        initialInsertMarkdownLink={
+          props.settings.imageAttachment.insertMarkdownLink
+        }
+        mode="settings"
+        translate={props.translate}
+        opener={dialogOpener}
+        onSave={(result) => {
+          setIsDestinationDialogOpen(false);
+          const nextSettings = buildNextSettings(
+            "imageAttachment.saveDirectory",
+            result,
+            props.settings
+          );
+          if (nextSettings) {
+            props.onChangeSettings(nextSettings);
+          }
+        }}
+        onDismiss={() => setIsDestinationDialogOpen(false)}
+      />
+    </>
   );
 }

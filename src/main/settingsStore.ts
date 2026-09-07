@@ -479,6 +479,27 @@ function readFilesSettings(value: unknown): ApplicationSettings["files"] {
   };
 }
 
+// #407: applicationWithProjectOverride, but always concrete on the
+// application side (like paragraphIndent above) — an invalid or missing
+// on-disk value falls back to the catalog default rather than rejecting the
+// whole settings file.
+function readImageAttachmentSettings(
+  value: unknown
+): ApplicationSettings["imageAttachment"] {
+  const imageAttachmentValue = isObject(value) ? value : undefined;
+
+  return {
+    saveDirectory: resolveCatalogValue(
+      "imageAttachment.saveDirectory",
+      imageAttachmentValue?.saveDirectory
+    ).value,
+    insertMarkdownLink: resolveCatalogValue(
+      "imageAttachment.insertMarkdownLink",
+      imageAttachmentValue?.insertMarkdownLink
+    ).value
+  };
+}
+
 function readSettingsValue(value: unknown): ApplicationSettings {
   if (!isObject(value)) {
     return createDefaultApplicationSettings();
@@ -493,6 +514,7 @@ function readSettingsValue(value: unknown): ApplicationSettings {
     commandPalette: readCommandPaletteSettings(value.commandPalette),
     editor: readEditorSettings(value.editor),
     files: readFilesSettings(value.files),
+    imageAttachment: readImageAttachmentSettings(value.imageAttachment),
     documentMap: readDocumentMapSettings(value.documentMap),
     recentProjects: readRecentProjects(value.recentProjects)
   };
@@ -561,7 +583,7 @@ export function parseSaveApplicationSettingsRequest(
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 6 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 7 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -570,6 +592,7 @@ export function parseSaveApplicationSettingsRequest(
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
     !keys.includes("files") ||
+    !keys.includes("imageAttachment") ||
     !keys.includes("documentMap")
   ) {
     throw new Error("Invalid application settings.");
@@ -588,7 +611,46 @@ export function parseSaveApplicationSettingsRequest(
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     files: parseFilesSettingsForWrite(value.files),
+    imageAttachment: parseImageAttachmentSettingsForWrite(
+      value.imageAttachment
+    ),
     documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap)
+  };
+}
+
+function parseImageAttachmentSettingsForWrite(
+  value: unknown
+): ApplicationSettings["imageAttachment"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 2 ||
+    !keys.includes("saveDirectory") ||
+    !keys.includes("insertMarkdownLink")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const saveDirectoryResolution = resolveCatalogValue(
+    "imageAttachment.saveDirectory",
+    value.saveDirectory
+  );
+  const insertMarkdownLinkResolution = resolveCatalogValue(
+    "imageAttachment.insertMarkdownLink",
+    value.insertMarkdownLink
+  );
+
+  if (!saveDirectoryResolution.ok || !insertMarkdownLinkResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    saveDirectory: saveDirectoryResolution.value,
+    insertMarkdownLink: insertMarkdownLinkResolution.value
   };
 }
 
@@ -1314,7 +1376,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 7 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 8 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1323,6 +1385,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
     !keys.includes("files") ||
+    !keys.includes("imageAttachment") ||
     !keys.includes("documentMap") ||
     !keys.includes("recentProjects")
   ) {
@@ -1342,6 +1405,9 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     files: parseFilesSettingsForWrite(value.files),
+    imageAttachment: parseImageAttachmentSettingsForWrite(
+      value.imageAttachment
+    ),
     documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap),
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
   };
@@ -1400,6 +1466,13 @@ export async function saveApplicationSettings(
 
   if (settingsRequest.notification !== undefined) {
     nextSettings.notification = settingsRequest.notification;
+  }
+
+  // #407: write-through like documentMap below — a real save request always
+  // carries `imageAttachment`, but tolerate an omitting request by keeping
+  // the loaded value rather than clobbering it with `undefined`.
+  if (settingsRequest.imageAttachment !== undefined) {
+    nextSettings.imageAttachment = settingsRequest.imageAttachment;
   }
 
   // #375: the Document Map settings are write-through — a save request always

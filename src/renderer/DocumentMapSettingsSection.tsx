@@ -32,6 +32,7 @@ function saveRequestWithDocumentMap(
     commandPalette: settings.commandPalette,
     editor: settings.editor,
     files: settings.files,
+    imageAttachment: settings.imageAttachment,
     documentMap
   };
   if (settings.notification !== undefined) {

@@ -14,6 +14,7 @@ import { registerContextMenuIpc } from "./contextMenuIpc";
 import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
+import { registerImageAttachmentIpc } from "./imageAttachmentIpc";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import {
   currentActiveProjectFilePath,
@@ -318,6 +319,7 @@ app.whenReady().then(async () => {
       )
   );
   registerSettingsIpc();
+  registerImageAttachmentIpc();
   registerAppInfoIpc();
 
   const sessionStore: SessionStore = createSessionStore({

@@ -161,6 +161,12 @@ function validSaveRequest(
         encoding: "utf8"
       }
     },
+    imageAttachment: {
+      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
+      insertMarkdownLink: getCatalogDefaultValue(
+        "imageAttachment.insertMarkdownLink"
+      )
+    },
     documentMap: defaultDocumentMapSettings(),
     ...overrides
   };
@@ -671,6 +677,47 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     const reloaded = await loadSettings();
 
     expect(reloaded.editor.undoHistoryMinDepth).toBe(1000);
+  });
+
+  it("#407 B1: changed imageAttachment.* values round-trip through save then load", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    await saveApplicationSettings(
+      validSaveRequest({
+        imageAttachment: {
+          saveDirectory: "assets/pasted",
+          insertMarkdownLink: false
+        }
+      })
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+    expect(written.imageAttachment).toEqual({
+      saveDirectory: "assets/pasted",
+      insertMarkdownLink: false
+    });
+
+    fsMock.readFile.mockResolvedValue(writtenContent);
+    const reloaded = await loadSettings();
+    expect(reloaded.imageAttachment).toEqual({
+      saveDirectory: "assets/pasted",
+      insertMarkdownLink: false
+    });
+  });
+
+  it("#407 B1: a settings.json without an imageAttachment block loads the catalog defaults", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    const settings = await loadSettings();
+
+    expect(settings.imageAttachment).toEqual({
+      saveDirectory: "",
+      insertMarkdownLink: true
+    });
   });
 
   it("writes preview.updateDelayMs of 0 (explicit 'don't wait') to settings.json", async () => {

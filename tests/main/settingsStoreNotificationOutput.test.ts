@@ -111,6 +111,7 @@ function saveRequest(
       undoHistoryMinDepth: defaultUndoHistoryMinDepth
     },
     files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
+    imageAttachment: { saveDirectory: "", insertMarkdownLink: true },
     ...overrides
   } as SaveApplicationSettingsRequest;
 }

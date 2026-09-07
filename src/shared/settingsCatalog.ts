@@ -48,7 +48,9 @@ export const settingAreas = [
   "quickAccess",
   "files",
   "debug",
-  "documentMap"
+  "documentMap",
+  // #407: clipboard image attachment — save-directory + Markdown-link toggle.
+  "imageAttachment"
 ] as const;
 
 export type SettingArea = (typeof settingAreas)[number];
@@ -885,6 +887,39 @@ export const settingsCatalog = defineSettingsCatalog({
     defaultValue: defaultDocumentMapDialogueDelimiterPairs(),
     labelKey: "settings.documentMap.dialogueDelimiterPairs.label",
     descriptionKey: "settings.documentMap.dialogueDelimiterPairs.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  // #407: project-root-relative directory that pasted clipboard images are
+  // saved into. Empty string = "not configured yet" (the paste flow then
+  // asks for a destination). Free-form path string — the authoritative shape
+  // / containment / protected-location checks live in
+  // validateAttachedImageSaveDestination + the main-process save handler, so
+  // the catalog only enforces a length ceiling and allows the empty value.
+  // applicationWithProjectOverride, matching #396's override model: a project
+  // can point its attachments at its own folder without changing the global
+  // default.
+  "imageAttachment.saveDirectory": defineStringSetting({
+    key: "imageAttachment.saveDirectory",
+    scope: "applicationWithProjectOverride",
+    defaultValue: "",
+    labelKey: "settings.imageAttachment.saveDirectory.label",
+    descriptionKey: "settings.imageAttachment.saveDirectory.description",
+    maxLength: 260,
+    allowedCharacters: "none",
+    allowEmptyString: true,
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  // #407: when ON (default), a successful image save is followed by inserting
+  // a Markdown image link at the paste position; when OFF the image is still
+  // saved but the document is left untouched (a Toast confirms the save).
+  "imageAttachment.insertMarkdownLink": defineBooleanSetting({
+    key: "imageAttachment.insertMarkdownLink",
+    scope: "applicationWithProjectOverride",
+    defaultValue: true,
+    labelKey: "settings.imageAttachment.insertMarkdownLink.label",
+    descriptionKey: "settings.imageAttachment.insertMarkdownLink.description",
     deprecatedAliases: [],
     migrationNotes: []
   })

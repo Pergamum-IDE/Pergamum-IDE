@@ -9,6 +9,7 @@ import {
   type ProjectDocumentMapSettings,
   type ProjectEditorSettings,
   type ProjectFilesSettings,
+  type ProjectImageAttachmentSettings,
   type ProjectPreviewSettings,
   type ProjectSettings
 } from "../shared/settings";
@@ -69,6 +70,7 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
   let editor: ProjectEditorSettings | undefined;
   let files: ProjectFilesSettings | undefined;
   let documentMap: ProjectDocumentMapSettings | undefined;
+  let imageAttachment: ProjectImageAttachmentSettings | undefined;
 
   const rawRenderer = value["preview.renderer"];
   if (rawRenderer !== undefined && isPreviewRendererId(rawRenderer)) {
@@ -164,12 +166,44 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     }
   }
 
-  if (preview || editor || files || documentMap) {
+  // #407: sparse image-attachment overrides — each key is accepted
+  // independently; a rejected value is simply omitted so
+  // resolveEffectiveSettings falls through to Application/Built-in.
+  const rawSaveDirectory = value["imageAttachment.saveDirectory"];
+  if (rawSaveDirectory !== undefined) {
+    const validation = validateCatalogValue(
+      "imageAttachment.saveDirectory",
+      rawSaveDirectory
+    );
+    if (validation.ok && typeof rawSaveDirectory === "string") {
+      imageAttachment = {
+        ...(imageAttachment ?? {}),
+        saveDirectory: rawSaveDirectory
+      };
+    }
+  }
+
+  const rawInsertMarkdownLink = value["imageAttachment.insertMarkdownLink"];
+  if (rawInsertMarkdownLink !== undefined) {
+    const validation = validateCatalogValue(
+      "imageAttachment.insertMarkdownLink",
+      rawInsertMarkdownLink
+    );
+    if (validation.ok && typeof rawInsertMarkdownLink === "boolean") {
+      imageAttachment = {
+        ...(imageAttachment ?? {}),
+        insertMarkdownLink: rawInsertMarkdownLink
+      };
+    }
+  }
+
+  if (preview || editor || files || documentMap || imageAttachment) {
     return {
       ...(preview ? { preview } : {}),
       ...(editor ? { editor } : {}),
       ...(files ? { files } : {}),
-      ...(documentMap ? { documentMap } : {})
+      ...(documentMap ? { documentMap } : {}),
+      ...(imageAttachment ? { imageAttachment } : {})
     };
   }
 
