@@ -8,6 +8,7 @@ import {
   EDIT_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
+  IMAGE_ATTACHMENT_CHANNELS,
   LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
   RECOVERY_CHANNELS,
@@ -344,6 +345,10 @@ const pergamumApi: PergamumApi = {
     openRepository: () => ipcRenderer.invoke(APP_INFO_CHANNELS.openRepository),
     openTypewriterSoundsCredit: () =>
       ipcRenderer.invoke(APP_INFO_CHANNELS.openTypewriterSoundsCredit)
+  },
+  imageAttachment: {
+    save: (payload) =>
+      ipcRenderer.invoke(IMAGE_ATTACHMENT_CHANNELS.save, payload)
   }
 };
 

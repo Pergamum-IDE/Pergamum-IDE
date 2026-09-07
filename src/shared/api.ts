@@ -26,6 +26,10 @@ import type {
   FileExplorerCopyPlan
 } from "./projectCopy";
 import type {
+  SaveImageAttachmentPayload,
+  SaveImageAttachmentResult
+} from "./imageAttachmentSaveResult";
+import type {
   EditContextMenuCommandSelection,
   EditContextMenuPopupRequest,
   NativeEditDelegationRequest
@@ -116,11 +120,21 @@ export type {
   QuitApplicationResult,
   SaveWorkingCopyOutcome
 } from "./lifecycle";
+export type {
+  SaveImageAttachmentFailureReason,
+  SaveImageAttachmentPayload,
+  SaveImageAttachmentResult,
+  SaveImageAttachmentStorageFailureReason,
+  SaveImageAttachmentStorageResult
+} from "./imageAttachmentSaveResult";
 
 export type {
   ApplicationSettings,
+  ApplicationImageAttachmentSettings,
   ApplicationNotificationSettings,
+  EffectiveImageAttachmentSettings,
   EffectiveSettings,
+  ImageAttachmentSaveDirectory,
   NotificationOutputSettings,
   ExpectedLineEnding,
   LineEndingMarkerGlyph,
@@ -129,6 +143,7 @@ export type {
   ParagraphIndentExcludeLeadingCharacters,
   PreviewRendererId,
   RecordRecentProjectInput,
+  ProjectImageAttachmentSettings,
   ProjectSettings,
   RecentProject,
   SaveApplicationSettingsRequest,
@@ -220,6 +235,10 @@ export const LIFECYCLE_CHANNELS = {
 export const SETTINGS_CHANNELS = {
   getSettings: "settings:getSettings",
   saveSettings: "settings:saveSettings"
+} as const;
+
+export const IMAGE_ATTACHMENT_CHANNELS = {
+  save: "imageAttachment:save"
 } as const;
 
 export const SESSION_CHANNELS = {
@@ -1096,5 +1115,10 @@ export interface PergamumApi {
     getAppInfo: () => Promise<PergamumAppInfo>;
     openRepository: () => Promise<void>;
     openTypewriterSoundsCredit: () => Promise<void>;
+  };
+  imageAttachment: {
+    save: (
+      payload: SaveImageAttachmentPayload
+    ) => Promise<SaveImageAttachmentResult>;
   };
 }

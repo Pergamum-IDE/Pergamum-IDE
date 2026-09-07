@@ -36,6 +36,10 @@ import {
 import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
 import { readSettingValue } from "./settingsValueByKey";
 import { DialogueDelimiterPairsEditor } from "./DialogueDelimiterPairsEditor";
+import {
+  SaveDestinationDialog,
+  SaveDestinationSettingControl
+} from "./dialog/SaveDestinationDialog";
 
 export function isProjectSettingsScope(scope: SettingScope): boolean {
   return scope === "applicationWithProjectOverride" || scope === "projectOnly";
@@ -185,6 +189,10 @@ export function readProjectSettingValue(
       return settings.files?.newFile?.lineEnding;
     case "documentMap.dialogueDelimiterPairs":
       return settings.documentMap?.dialogueDelimiterPairs;
+    case "imageAttachment.saveDirectory":
+      return settings.imageAttachment?.saveDirectory;
+    case "imageAttachment.insertMarkdownLink":
+      return settings.imageAttachment?.insertMarkdownLink;
     default:
       return undefined;
   }
@@ -495,6 +503,7 @@ export interface ProjectSettingsPanelViewProps {
     key: SettingKey,
     value: DocumentMapDialogueDelimiterPair[]
   ) => void;
+  onOpenImageAttachmentDialog?: (opener?: Element | null) => void;
 }
 
 function translateI18nKey(translate: Translate, key: string): string {
@@ -518,7 +527,8 @@ export function ProjectSettingsPanelView({
   onTextBlur,
   onSelectChange,
   onSwitchChange,
-  onDialoguePairsCommit
+  onDialoguePairsCommit,
+  onOpenImageAttachmentDialog
 }: ProjectSettingsPanelViewProps): JSX.Element {
   const categoryGroups = groupProjectSettingItemsByCategory(items);
 
@@ -680,6 +690,19 @@ export function ProjectSettingsPanelView({
                               }}
                             />
                           );
+                        } else if (
+                          item.control.customKind ===
+                          "imageAttachment.saveDirectory"
+                        ) {
+                          controlElement = (
+                            <SaveDestinationSettingControl
+                              id={`projectSettingControl-${item.key}`}
+                              value={displayValue}
+                              disabled={isReadOnly || isSaving}
+                              translate={translate}
+                              onOpenDialog={onOpenImageAttachmentDialog}
+                            />
+                          );
                         } else {
                           throw new Error(
                             `Unsupported custom Project Settings control kind: "${item.control.customKind}" for key "${item.key}".`
@@ -752,6 +775,9 @@ export function ProjectSettingsPanel({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategoryId, setSelectedCategoryId] =
     useState<ProjectSettingCategoryFilter>("all");
+  const [isDestinationDialogOpen, setIsDestinationDialogOpen] =
+    useState<boolean>(false);
+  const [dialogOpener, setDialogOpener] = useState<Element | null>(null);
 
   // Clear drafts for keys that are not actively being edited when external props change
   useEffect(() => {
@@ -1042,6 +1068,120 @@ export function ProjectSettingsPanel({
     }
   };
 
+  const handleImageAttachmentSave = async (result: {
+    readonly saveDirectory: string;
+    readonly insertMarkdownLink: boolean;
+  }): Promise<void> => {
+    if (isReadOnly || isSaving) {
+      return;
+    }
+
+    const currentSaveDirEffective = readEffectiveProjectSettingValue(
+      "imageAttachment.saveDirectory",
+      projectSettings,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const currentInsertLinkEffective = readEffectiveProjectSettingValue(
+      "imageAttachment.insertMarkdownLink",
+      projectSettings,
+      applicationSettings,
+      inheritedFontFamily
+    );
+
+    const saveDirValidation = validateProjectSettingValue(
+      "imageAttachment.saveDirectory",
+      result.saveDirectory,
+      currentSaveDirEffective
+    );
+    const insertLinkValidation = validateProjectSettingValue(
+      "imageAttachment.insertMarkdownLink",
+      result.insertMarkdownLink,
+      currentInsertLinkEffective
+    );
+
+    if (!saveDirValidation.ok || !insertLinkValidation.ok) {
+      return;
+    }
+
+    const inheritedSaveDir = readInheritedSettingValue(
+      "imageAttachment.saveDirectory",
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const inheritedInsertLink = readInheritedSettingValue(
+      "imageAttachment.insertMarkdownLink",
+      applicationSettings,
+      inheritedFontFamily
+    );
+
+    const setObj: Record<string, unknown> = {};
+    const removeArr: string[] = [];
+
+    if (saveDirValidation.value === inheritedSaveDir) {
+      removeArr.push("imageAttachment.saveDirectory");
+    } else if (saveDirValidation.value !== undefined) {
+      setObj["imageAttachment.saveDirectory"] = saveDirValidation.value;
+    }
+
+    if (insertLinkValidation.value === inheritedInsertLink) {
+      removeArr.push("imageAttachment.insertMarkdownLink");
+    } else if (insertLinkValidation.value !== undefined) {
+      setObj["imageAttachment.insertMarkdownLink"] = insertLinkValidation.value;
+    }
+
+    const committedSaveDir = readProjectSettingValue(
+      "imageAttachment.saveDirectory",
+      projectSettings
+    );
+    const committedInsertLink = readProjectSettingValue(
+      "imageAttachment.insertMarkdownLink",
+      projectSettings
+    );
+
+    const actualRemoves = removeArr.filter((k) => {
+      if (k === "imageAttachment.saveDirectory")
+        return committedSaveDir !== undefined;
+      if (k === "imageAttachment.insertMarkdownLink")
+        return committedInsertLink !== undefined;
+      return true;
+    });
+
+    const actualSetObj: Record<string, unknown> = {};
+    if (
+      setObj["imageAttachment.saveDirectory"] !== undefined &&
+      setObj["imageAttachment.saveDirectory"] !== committedSaveDir
+    ) {
+      actualSetObj["imageAttachment.saveDirectory"] =
+        setObj["imageAttachment.saveDirectory"];
+    }
+    if (
+      setObj["imageAttachment.insertMarkdownLink"] !== undefined &&
+      setObj["imageAttachment.insertMarkdownLink"] !== committedInsertLink
+    ) {
+      actualSetObj["imageAttachment.insertMarkdownLink"] =
+        setObj["imageAttachment.insertMarkdownLink"];
+    }
+
+    if (Object.keys(actualSetObj).length === 0 && actualRemoves.length === 0) {
+      return;
+    }
+
+    const request: UpdateProjectSettingsRequest = {
+      ...(Object.keys(actualSetObj).length > 0 ? { set: actualSetObj } : {}),
+      ...(actualRemoves.length > 0 ? { remove: actualRemoves } : {})
+    };
+
+    setIsSaving(true);
+    try {
+      await onSaveSettings(request);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const eligibleItems = catalogItems.filter((item) => {
     const entry = getCatalogEntry(item.key);
     return isProjectOverrideEligibleScope(entry.scope);
@@ -1097,34 +1237,71 @@ export function ProjectSettingsPanel({
   });
 
   return (
-    <ProjectSettingsPanelView
-      translate={translate}
-      items={viewItems}
-      categories={categories}
-      selectedCategoryId={selectedCategoryId}
-      onSelectCategory={setSelectedCategoryId}
-      searchQuery={searchQuery}
-      onSearchQueryChange={setSearchQuery}
-      isReadOnly={isReadOnly}
-      isSaving={isSaving}
-      error={error}
-      onReset={(key) => {
-        void handleReset(key);
-      }}
-      onTextChange={handleTextChange}
-      onTextFocus={handleTextFocus}
-      onTextBlur={(key) => {
-        void handleTextBlur(key);
-      }}
-      onSelectChange={(key, value) => {
-        void handleSelectChange(key, value);
-      }}
-      onSwitchChange={(key, checked) => {
-        void handleSwitchChange(key, checked);
-      }}
-      onDialoguePairsCommit={(key, value) => {
-        void handleDialoguePairsCommit(key, value);
-      }}
-    />
+    <>
+      <ProjectSettingsPanelView
+        translate={translate}
+        items={viewItems}
+        categories={categories}
+        selectedCategoryId={selectedCategoryId}
+        onSelectCategory={setSelectedCategoryId}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        isReadOnly={isReadOnly}
+        isSaving={isSaving}
+        error={error}
+        onReset={(key) => {
+          void handleReset(key);
+        }}
+        onTextChange={handleTextChange}
+        onTextFocus={handleTextFocus}
+        onTextBlur={(key) => {
+          void handleTextBlur(key);
+        }}
+        onSelectChange={(key, value) => {
+          void handleSelectChange(key, value);
+        }}
+        onSwitchChange={(key, checked) => {
+          void handleSwitchChange(key, checked);
+        }}
+        onDialoguePairsCommit={(key, value) => {
+          void handleDialoguePairsCommit(key, value);
+        }}
+        onOpenImageAttachmentDialog={(opener) => {
+          setDialogOpener(opener ?? null);
+          setIsDestinationDialogOpen(true);
+        }}
+      />
+      <SaveDestinationDialog
+        isOpen={isDestinationDialogOpen}
+        initialSaveDirectory={
+          String(
+            readEffectiveProjectSettingValue(
+              "imageAttachment.saveDirectory",
+              projectSettings,
+              applicationSettings,
+              inheritedFontFamily
+            ) ?? ""
+          )
+        }
+        initialInsertMarkdownLink={
+          Boolean(
+            readEffectiveProjectSettingValue(
+              "imageAttachment.insertMarkdownLink",
+              projectSettings,
+              applicationSettings,
+              inheritedFontFamily
+            ) ?? true
+          )
+        }
+        mode="settings"
+        translate={translate}
+        opener={dialogOpener}
+        onSave={(result) => {
+          setIsDestinationDialogOpen(false);
+          void handleImageAttachmentSave(result);
+        }}
+        onDismiss={() => setIsDestinationDialogOpen(false)}
+      />
+    </>
   );
 }

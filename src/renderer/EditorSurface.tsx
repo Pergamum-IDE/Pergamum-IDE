@@ -28,10 +28,12 @@ import { GlossaryEditor } from "./GlossaryEditor";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
   MarkdownEditor,
-  type MarkdownEditorParagraphIndentController,
+  type MarkdownImageAttachmentPositionController,
   type MarkdownEditorFocusRequest,
+  type MarkdownEditorParagraphIndentController,
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
+import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
 import type { EditorViewState } from "./editorViewState";
 import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
@@ -389,6 +391,12 @@ interface EditorSurfaceProps {
   onViewStateControllerChange: (
     controller: MarkdownEditorViewStateController | null
   ) => void;
+  onImageAttachmentPaste?: MarkdownImageAttachmentPasteHandler;
+  onImageAttachmentPositionControllerChange?: (
+    controller: MarkdownImageAttachmentPositionController | null
+  ) => void;
+  imageAttachmentSourceDocumentId?: string;
+  imageAttachmentSourceEditorId?: string;
   onViewStateSnapshot: (
     outgoingDocumentKey: string,
     viewState: EditorViewState | null
@@ -509,6 +517,10 @@ export function EditorSurface({
   onChangeMarkdownContent,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
+  onImageAttachmentPaste,
+  onImageAttachmentPositionControllerChange,
+  imageAttachmentSourceDocumentId,
+  imageAttachmentSourceEditorId,
   onViewStateSnapshot,
   onViewStateDirty,
   onMarkdownVisibleRangeChange,
@@ -562,6 +574,12 @@ export function EditorSurface({
           onChangeMarkdownContent={onChangeMarkdownContent}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
+          onImageAttachmentPaste={onImageAttachmentPaste}
+          onImageAttachmentPositionControllerChange={
+            onImageAttachmentPositionControllerChange
+          }
+          imageAttachmentSourceDocumentId={imageAttachmentSourceDocumentId}
+          imageAttachmentSourceEditorId={imageAttachmentSourceEditorId}
           onViewStateSnapshot={onViewStateSnapshot}
           onViewStateDirty={onViewStateDirty}
           onMarkdownVisibleRangeChange={onMarkdownVisibleRangeChange}
@@ -643,6 +661,12 @@ interface MarkdownEditorSurfaceProps {
   onViewStateControllerChange: (
     controller: MarkdownEditorViewStateController | null
   ) => void;
+  onImageAttachmentPaste?: MarkdownImageAttachmentPasteHandler;
+  onImageAttachmentPositionControllerChange?: (
+    controller: MarkdownImageAttachmentPositionController | null
+  ) => void;
+  imageAttachmentSourceDocumentId?: string;
+  imageAttachmentSourceEditorId?: string;
   onViewStateSnapshot: (
     outgoingDocumentKey: string,
     viewState: EditorViewState | null
@@ -709,6 +733,10 @@ function MarkdownEditorSurface({
   onChangeMarkdownContent,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
+  onImageAttachmentPaste,
+  onImageAttachmentPositionControllerChange,
+  imageAttachmentSourceDocumentId,
+  imageAttachmentSourceEditorId,
   onViewStateSnapshot,
   onViewStateDirty,
   onMarkdownVisibleRangeChange,
@@ -890,6 +918,12 @@ function MarkdownEditorSurface({
           onChange={onChangeMarkdownContent}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
+          onImageAttachmentPaste={onImageAttachmentPaste}
+          onImageAttachmentPositionControllerChange={
+            onImageAttachmentPositionControllerChange
+          }
+          imageAttachmentSourceDocumentId={imageAttachmentSourceDocumentId}
+          imageAttachmentSourceEditorId={imageAttachmentSourceEditorId}
           onViewStateSnapshot={onViewStateSnapshot}
           onViewStateDirty={onViewStateDirty}
           onVisibleRangeChange={onMarkdownVisibleRangeChange}

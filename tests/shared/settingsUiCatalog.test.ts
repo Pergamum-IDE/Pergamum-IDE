@@ -72,6 +72,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "application",
         "appearance",
         "editor",
+        "imageAttachment",
         "preview",
         "documentMap",
         "files",
@@ -196,6 +197,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.whitespace.renderTab",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
+          "imageAttachment.saveDirectory",
+          "imageAttachment.insertMarkdownLink",
           "preview.renderer",
           "preview.updateDelayMs"
         ].sort()
@@ -330,6 +333,36 @@ describe("Settings UI Catalog Schema (#226)", () => {
         category: "editor",
         control: { kind: "text" },
         defaultValue: ""
+      });
+    });
+
+    it("registers the #407 imageAttachment settings in their own category, ordered directly after Editor", () => {
+      const category = getSettingCategoryCatalogItem("imageAttachment");
+      const editor = getSettingCategoryCatalogItem("editor");
+      const preview = getSettingCategoryCatalogItem("preview");
+
+      if (!category || !editor || !preview) {
+        throw new Error("Expected editor / imageAttachment / preview categories.");
+      }
+      expect(category.order).toBeGreaterThan(editor.order);
+      expect(category.order).toBeLessThan(preview.order);
+
+      expect(getSettingCatalogItem("imageAttachment.saveDirectory")).toMatchObject(
+        {
+          category: "imageAttachment",
+          control: {
+            kind: "custom",
+            customKind: "imageAttachment.saveDirectory"
+          },
+          defaultValue: ""
+        }
+      );
+      expect(
+        getSettingCatalogItem("imageAttachment.insertMarkdownLink")
+      ).toMatchObject({
+        category: "imageAttachment",
+        control: { kind: "switch" },
+        defaultValue: true
       });
     });
 

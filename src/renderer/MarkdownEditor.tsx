@@ -47,6 +47,17 @@ import {
   createMarkdownEditorDocumentState,
   type MarkdownEditorDocumentState
 } from "./markdownEditorDocumentState";
+import {
+  clearPendingImageAttachmentPosition,
+  resolvePendingImageAttachmentPosition,
+  type PendingImageAttachmentPositionResolution
+} from "./markdownImageAttachmentPositionTracker";
+import {
+  registerEditorViewImageAttachmentPasteOptions,
+  unregisterEditorViewImageAttachmentPasteOptions,
+  type MarkdownImageAttachmentPasteExtensionOptions,
+  type MarkdownImageAttachmentPasteHandler
+} from "./markdownImageAttachmentPasteExtension";
 
 export type { MarkdownEditorGlossaryCompletionConfig };
 
@@ -191,6 +202,19 @@ interface MarkdownEditorProps {
    */
   glossaryCompletion?: MarkdownEditorGlossaryCompletionConfig | null;
   /**
+   * #407 B3: optional foundation for clipboard image paste. When omitted,
+   * the CodeMirror paste handler deliberately returns false before calling
+   * `preventDefault()`, so B4's unimplemented orchestration cannot break
+   * ordinary text/html paste.
+   */
+  onImageAttachmentPaste?: MarkdownImageAttachmentPasteHandler;
+  onImageAttachmentPositionControllerChange?: (
+    controller: MarkdownImageAttachmentPositionController | null
+  ) => void;
+  imageAttachmentSourceDocumentId?: string;
+  imageAttachmentSourceEditorId?: string;
+  createImageAttachmentPendingId?: () => string;
+  /**
    * #392: the runtime-only per-document `EditorState` cache itself, OWNED
    * above this component (App.tsx) so it survives this component's own
    * unmount/remount — e.g. visiting Settings / Debug Log / a Glossary
@@ -255,6 +279,13 @@ export interface MarkdownEditorViewStateController {
     lineIndex: number,
     options?: { align?: EditorScrollAlign }
   ): void;
+}
+
+export interface MarkdownImageAttachmentPositionController {
+  resolvePendingPosition(
+    pendingId: string
+  ): PendingImageAttachmentPositionResolution;
+  clearPendingPosition(pendingId: string): boolean;
 }
 
 export interface MarkdownEditorFocusRequest {
@@ -368,6 +399,11 @@ export function MarkdownEditor({
   focusRequest,
   onFocusRequestApplied,
   glossaryCompletion,
+  onImageAttachmentPaste,
+  onImageAttachmentPositionControllerChange,
+  imageAttachmentSourceDocumentId,
+  imageAttachmentSourceEditorId,
+  createImageAttachmentPendingId,
   documentStates: documentStatesProp
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -401,10 +437,29 @@ export function MarkdownEditor({
   const glossaryCompletionRef = useRef<MarkdownEditorGlossaryCompletionConfig | null>(
     glossaryCompletion ?? null
   );
+  const imageAttachmentPasteHandlerRef =
+    useRef<MarkdownImageAttachmentPasteHandler | null>(
+      onImageAttachmentPaste ?? null
+    );
+  const imageAttachmentSourceDocumentIdRef = useRef<string | null>(
+    imageAttachmentSourceDocumentId ?? null
+  );
+  const imageAttachmentSourceEditorIdRef = useRef<string | undefined>(
+    imageAttachmentSourceEditorId
+  );
   // Only ever set at mount, from that first render's documentKey (see the
   // document-switch effect below for why this must not reset on every
   // render).
   const documentKeyRef = useRef(documentKey);
+  const currentImageAttachmentPasteOptionsRef =
+    useRef<MarkdownImageAttachmentPasteExtensionOptions>({
+      getHandler: () => imageAttachmentPasteHandlerRef.current,
+      getSourceDocumentId: () =>
+        imageAttachmentSourceDocumentIdRef.current ?? documentKeyRef.current,
+      getSourceEditorId: () => imageAttachmentSourceEditorIdRef.current,
+      isReadOnly: () => readOnlyRef.current,
+      createPendingId: createImageAttachmentPendingId
+    });
   // #253: read fresh by the tracking field's `update()` on every
   // transaction (see createLineEndingTrackingField), so a runtime change
   // to the effective `files.newFile.lineEnding` setting takes effect for
@@ -589,6 +644,8 @@ export function MarkdownEditor({
       whitespaceCompartment,
       whitespaceSettingsRef,
       glossaryCompletionRef,
+      imageAttachmentPasteOptions:
+        currentImageAttachmentPasteOptionsRef.current,
       createUpdateListenerExtension
     });
   }
@@ -691,6 +748,28 @@ export function MarkdownEditor({
   }, [glossaryCompletion]);
 
   useEffect(() => {
+    imageAttachmentPasteHandlerRef.current = onImageAttachmentPaste ?? null;
+    if (viewRef.current) {
+      registerEditorViewImageAttachmentPasteOptions(
+        viewRef.current,
+        currentImageAttachmentPasteOptionsRef.current
+      );
+    }
+  }, [onImageAttachmentPaste]);
+
+  useEffect(() => {
+    imageAttachmentSourceDocumentIdRef.current =
+      imageAttachmentSourceDocumentId ?? null;
+    imageAttachmentSourceEditorIdRef.current = imageAttachmentSourceEditorId;
+    if (viewRef.current) {
+      registerEditorViewImageAttachmentPasteOptions(
+        viewRef.current,
+        currentImageAttachmentPasteOptionsRef.current
+      );
+    }
+  }, [imageAttachmentSourceDocumentId, imageAttachmentSourceEditorId]);
+
+  useEffect(() => {
     newFileLineEndingFallbackRef.current = newFileLineEndingFallback;
   }, [newFileLineEndingFallback]);
 
@@ -726,6 +805,10 @@ export function MarkdownEditor({
       parent: hostRef.current,
       state: resolved.documentState.state
     });
+    registerEditorViewImageAttachmentPasteOptions(
+      view,
+      currentImageAttachmentPasteOptionsRef.current
+    );
 
     if (resolved.wasRestoredFromCache) {
       view.dispatch({
@@ -739,6 +822,7 @@ export function MarkdownEditor({
     scheduleVisibleRangePush();
 
     return () => {
+      unregisterEditorViewImageAttachmentPasteOptions(view);
       // #272: report this editor's final View State (keyed by whatever
       // document it is currently showing) before the view is torn down, so
       // an unmount that races the persistence debounce still preserves it.
@@ -880,6 +964,38 @@ export function MarkdownEditor({
 
     return () => onViewStateControllerChange(null);
   }, [onViewStateControllerChange]);
+
+  useEffect(() => {
+    if (!onImageAttachmentPositionControllerChange) {
+      return undefined;
+    }
+
+    const controller: MarkdownImageAttachmentPositionController = {
+      resolvePendingPosition: (pendingId) => {
+        const view = viewRef.current;
+
+        return view
+          ? resolvePendingImageAttachmentPosition(view.state, pendingId)
+          : null;
+      },
+      clearPendingPosition: (pendingId) => {
+        const view = viewRef.current;
+
+        if (!view) {
+          return false;
+        }
+
+        view.dispatch({
+          effects: clearPendingImageAttachmentPosition.of(pendingId)
+        });
+        return true;
+      }
+    };
+
+    onImageAttachmentPositionControllerChange(controller);
+
+    return () => onImageAttachmentPositionControllerChange(null);
+  }, [onImageAttachmentPositionControllerChange]);
 
   useEffect(() => {
     const view = viewRef.current;

@@ -185,6 +185,21 @@ export interface ApplicationFilesSettings {
   newFile: ApplicationNewFileSettings;
 }
 
+export type ImageAttachmentSaveDirectory = SettingValueOf<
+  "imageAttachment.saveDirectory"
+>;
+
+// #407: clipboard image attachment. `saveDirectory` is a project-root-
+// relative path (empty = not configured yet); `insertMarkdownLink` toggles
+// whether a successful save is followed by a Markdown image link at the
+// paste position. applicationWithProjectOverride: both are always concrete
+// here (never sparse), and resolveEffectiveSettings applies the
+// Project > Application > Built-in chain.
+export interface ApplicationImageAttachmentSettings {
+  saveDirectory: ImageAttachmentSaveDirectory;
+  insertMarkdownLink: boolean;
+}
+
 // #174: language and statusBar.visible moved here from legacy top-level
 // ApplicationSettings.language / .showStatusBar — both applicationOnly
 // catalog entries, always resolved to a concrete value at read time (not
@@ -209,6 +224,7 @@ export interface ApplicationSettings {
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   files: ApplicationFilesSettings;
+  imageAttachment: ApplicationImageAttachmentSettings;
   // #375: Document Map draw colours + dialogue delimiter pairs.
   // applicationOnly, always concrete (never sparse).
   documentMap: DocumentMapSettings;
@@ -226,6 +242,7 @@ export interface SaveApplicationSettingsRequest {
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   files: ApplicationFilesSettings;
+  imageAttachment: ApplicationImageAttachmentSettings;
   documentMap: DocumentMapSettings;
 }
 
@@ -272,10 +289,18 @@ export interface ProjectDocumentMapSettings {
   dialogueDelimiterPairs?: readonly DocumentMapDialogueDelimiterPair[];
 }
 
+// #407: sparse project override — only the keys the project actually
+// overrides are present, mirroring ProjectEditorSettings etc.
+export interface ProjectImageAttachmentSettings {
+  saveDirectory?: ImageAttachmentSaveDirectory;
+  insertMarkdownLink?: boolean;
+}
+
 export interface ProjectSettings {
   editor?: ProjectEditorSettings;
   preview?: ProjectPreviewSettings;
   files?: ProjectFilesSettings;
+  imageAttachment?: ProjectImageAttachmentSettings;
   documentMap?: ProjectDocumentMapSettings;
 }
 
@@ -313,6 +338,12 @@ export interface EffectiveFilesSettings {
   newFile: ApplicationNewFileSettings;
 }
 
+// #407: always concrete after the Project > Application > Built-in chain.
+export interface EffectiveImageAttachmentSettings {
+  saveDirectory: ImageAttachmentSaveDirectory;
+  insertMarkdownLink: boolean;
+}
+
 export interface EffectiveSettings {
   preview: EffectivePreviewSettings;
   notification: EffectiveNotificationSettings;
@@ -320,6 +351,7 @@ export interface EffectiveSettings {
   commandPalette: EffectiveCommandPaletteSettings;
   editor: EffectiveEditorSettings;
   files: EffectiveFilesSettings;
+  imageAttachment: EffectiveImageAttachmentSettings;
   /** #375: applicationOnly, passes straight through (always concrete). */
   documentMap: DocumentMapSettings;
 }
@@ -456,6 +488,12 @@ export const builtInDefaultSettings: EffectiveSettings = {
       encoding: getCatalogDefaultValue("files.newFile.encoding")
     }
   },
+  imageAttachment: {
+    saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
+    insertMarkdownLink: getCatalogDefaultValue(
+      "imageAttachment.insertMarkdownLink"
+    )
+  },
   documentMap: defaultDocumentMapSettings()
 };
 
@@ -544,6 +582,11 @@ export const defaultApplicationSettings: ApplicationSettings = {
       encoding: builtInDefaultSettings.files.newFile.encoding
     }
   },
+  imageAttachment: {
+    saveDirectory: builtInDefaultSettings.imageAttachment.saveDirectory,
+    insertMarkdownLink:
+      builtInDefaultSettings.imageAttachment.insertMarkdownLink
+  },
   documentMap: defaultDocumentMapSettings(),
   recentProjects: []
 };
@@ -630,6 +673,12 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
         lineEnding: defaultApplicationSettings.files.newFile.lineEnding,
         encoding: defaultApplicationSettings.files.newFile.encoding
       }
+    },
+    imageAttachment: {
+      saveDirectory:
+        defaultApplicationSettings.imageAttachment.saveDirectory,
+      insertMarkdownLink:
+        defaultApplicationSettings.imageAttachment.insertMarkdownLink
     },
     documentMap: defaultDocumentMapSettings(),
     recentProjects: []
@@ -769,6 +818,20 @@ export function resolveEffectiveSettings(
           builtInDefaultSettings.files.newFile.lineEnding,
         encoding: applicationSettings.files.newFile.encoding
       }
+    },
+    // #407: both keys support the whole Project > Application > Built-in
+    // override chain. `saveDirectory`'s built-in default is the empty string
+    // (nullish-coalescing leaves an explicit "" from a lower layer intact —
+    // an empty override is still "not configured").
+    imageAttachment: {
+      saveDirectory:
+        projectSettings?.imageAttachment?.saveDirectory ??
+        applicationSettings.imageAttachment.saveDirectory ??
+        builtInDefaultSettings.imageAttachment.saveDirectory,
+      insertMarkdownLink:
+        projectSettings?.imageAttachment?.insertMarkdownLink ??
+        applicationSettings.imageAttachment.insertMarkdownLink ??
+        builtInDefaultSettings.imageAttachment.insertMarkdownLink
     },
     // #375 / #396: dialogueDelimiterPairs supports whole-array Project override
     // (no element-level merge; Project array > Application array > default).

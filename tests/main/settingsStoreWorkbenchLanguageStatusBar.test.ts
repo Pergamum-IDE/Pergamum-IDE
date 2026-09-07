@@ -138,7 +138,8 @@ function saveRequest(
     },
     files: {
       newFile: { lineEnding: "lf", encoding: "utf8" }
-    }
+    },
+    imageAttachment: { saveDirectory: "", insertMarkdownLink: true }
   } as SaveApplicationSettingsRequest;
 }
 

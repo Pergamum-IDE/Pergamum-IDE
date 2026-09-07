@@ -52,6 +52,11 @@ import {
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
+import { createMarkdownImageAttachmentPositionTrackingExtension } from "./markdownImageAttachmentPositionTracker";
+import {
+  createMarkdownImageAttachmentPasteExtension,
+  type MarkdownImageAttachmentPasteExtensionOptions
+} from "./markdownImageAttachmentPasteExtension";
 
 /**
  * One open Markdown document's own `EditorState`, kept alongside the exact
@@ -97,6 +102,7 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly whitespaceCompartment: Compartment;
   readonly whitespaceSettingsRef: LiveRef<ApplicationEditorWhitespaceSettings>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
+  readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /** Built last, over the document's OWN `lineEndingField` — the caller
    *  owns the actual listener body (sound feedback, onChange, Document Map
    *  push, ...), all of which is editor-instance-level, not per-document. */
@@ -121,6 +127,12 @@ export interface MarkdownEditorDocumentStateOptions {
 export function createMarkdownEditorDocumentState(
   options: MarkdownEditorDocumentStateOptions
 ): MarkdownEditorDocumentState {
+  const imageAttachmentPasteOptions =
+    options.imageAttachmentPasteOptions ?? {
+      getHandler: () => null,
+      getSourceDocumentId: () => ""
+    };
+
   const { field: lineEndingField, extension: lineEndingExtension } =
     createLineEndingTrackingExtension(
       options.initialLineEndingBreaks,
@@ -157,6 +169,8 @@ export function createMarkdownEditorDocumentState(
         getConfig: () => options.glossaryCompletionRef.current,
         isReadOnly: () => options.readOnlyRef.current
       }),
+      createMarkdownImageAttachmentPositionTrackingExtension(),
+      createMarkdownImageAttachmentPasteExtension(imageAttachmentPasteOptions),
       options.createUpdateListenerExtension(lineEndingField)
     ]
   });

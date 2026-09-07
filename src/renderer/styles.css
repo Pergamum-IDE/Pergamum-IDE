@@ -5901,6 +5901,131 @@ label.settingsItemHeader {
   min-width: 0;
 }
 
+/* #407: Save destination row in Settings panel */
+.settingsSaveDestinationRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsSaveDestinationPath {
+  font-family: var(
+    --app-monospace-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace
+  );
+  font-size: 0.85rem;
+  padding-block: 4px;
+  padding-inline: 8px;
+  border-radius: 4px;
+  background: var(--app-dialog-inset-background, rgba(0, 0, 0, 0.05));
+  color: inherit;
+  word-break: break-all;
+}
+
+.settingsSaveDestinationPath-unconfigured {
+  color: var(--app-dialog-secondary-foreground, #666);
+  font-style: italic;
+  font-family: inherit;
+}
+
+.settingsSaveDestinationEditButton {
+  padding-block: 4px;
+  padding-inline: 10px;
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+  background: var(--app-dialog-button-background, #fff);
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.settingsSaveDestinationEditButton:hover:not(:disabled) {
+  background: var(--app-dialog-button-hover-background, #f6f8fa);
+  border-color: var(--app-dialog-button-border-hover, #bcc6d2);
+}
+
+.settingsSaveDestinationEditButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* #407: SaveDestinationDialog */
+.saveDestinationDialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(440px, 70vw);
+}
+
+.saveDestinationDialogNotice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--app-dialog-inset-background, rgba(37, 99, 168, 0.08));
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+.saveDestinationDialogLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.saveDestinationDialogLabelText {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.saveDestinationDialogInput {
+  border: 1px solid var(--app-dialog-border, #c7ced6);
+  border-radius: 4px;
+  padding-block: 6px;
+  padding-inline: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.saveDestinationDialogInput:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring, #2563a8);
+  outline-offset: 1px;
+}
+
+.saveDestinationDialogError {
+  margin: 0;
+  color: var(--app-dialog-copy-failure-foreground, #a01b2b);
+  font-size: 0.82rem;
+}
+
+.saveDestinationDialogRiskyNotice {
+  margin: 0;
+  color: var(--app-dialog-warning-foreground, #b25e00);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.saveDestinationDialogCheckboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin-block-start: 4px;
+}
+
+.saveDestinationDialogCheckbox {
+  cursor: pointer;
+}
+
 .appDialogActions {
   display: flex;
   gap: 8px;

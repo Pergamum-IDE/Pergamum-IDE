@@ -99,6 +99,12 @@ function baseApplicationSettings(
         encoding: getCatalogDefaultValue("files.newFile.encoding")
       }
     },
+    imageAttachment: {
+      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
+      insertMarkdownLink: getCatalogDefaultValue(
+        "imageAttachment.insertMarkdownLink"
+      )
+    },
     documentMap: defaultDocumentMapSettings(),
     recentProjects: [],
     ...overrides

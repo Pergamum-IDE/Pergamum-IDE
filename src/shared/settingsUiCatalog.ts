@@ -52,6 +52,7 @@ export type SettingCategory =
   | "application"
   | "appearance"
   | "editor"
+  | "imageAttachment"
   | "preview"
   | "documentMap"
   | "files"
@@ -102,6 +103,13 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     id: "editor",
     order: 300,
     labelKey: "settings.category.editor.label"
+  },
+  {
+    // #407: clipboard image attachment settings sit directly after Editor —
+    // the feature is an editor-adjacent authoring convenience.
+    id: "imageAttachment",
+    order: 350,
+    labelKey: "settings.category.imageAttachment.label"
   },
   {
     id: "preview",
@@ -411,6 +419,30 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue(
       "editor.paragraphIndent.excludeLeadingCharacters"
     )
+  },
+  {
+    // #407: a plain path text field for B1 — the "[path] [Edit]" bespoke
+    // control + save-destination dialog is a later slice. applicationWith-
+    // ProjectOverride, so it also appears as a Project Settings override row.
+    key: "imageAttachment.saveDirectory",
+    category: "imageAttachment",
+    order: 100,
+    labelKey: "settings.imageAttachment.saveDirectory.label",
+    descriptionKey: "settings.imageAttachment.saveDirectory.description",
+    control: {
+      kind: "custom",
+      customKind: "imageAttachment.saveDirectory"
+    },
+    defaultValue: getCatalogDefaultValue("imageAttachment.saveDirectory")
+  },
+  {
+    key: "imageAttachment.insertMarkdownLink",
+    category: "imageAttachment",
+    order: 200,
+    labelKey: "settings.imageAttachment.insertMarkdownLink.label",
+    descriptionKey: "settings.imageAttachment.insertMarkdownLink.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("imageAttachment.insertMarkdownLink")
   },
   {
     key: "editor.lineEnding.expected",

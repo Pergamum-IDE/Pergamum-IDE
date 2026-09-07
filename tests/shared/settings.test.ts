@@ -812,6 +812,111 @@ describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () 
   });
 });
 
+describe("imageAttachment settings (#407 B1)", () => {
+  it("defaults derive from the catalog and are concrete application settings", () => {
+    const expected = {
+      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
+      insertMarkdownLink: getCatalogDefaultValue(
+        "imageAttachment.insertMarkdownLink"
+      )
+    };
+
+    expect(expected.saveDirectory).toBe("");
+    expect(expected.insertMarkdownLink).toBe(true);
+    expect(builtInDefaultSettings.imageAttachment).toEqual(expected);
+    expect(defaultApplicationSettings.imageAttachment).toEqual(expected);
+    expect(createDefaultApplicationSettings().imageAttachment).toEqual(expected);
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined)
+        .imageAttachment
+    ).toEqual(expected);
+  });
+
+  it("resolves Project > Application > Built-in for both keys", () => {
+    const appSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      imageAttachment: {
+        saveDirectory: "assets/app",
+        insertMarkdownLink: true
+      }
+    };
+
+    const withProject = resolveEffectiveSettings(appSettings, {
+      imageAttachment: {
+        saveDirectory: "assets/project",
+        insertMarkdownLink: false
+      }
+    });
+    expect(withProject.imageAttachment).toEqual({
+      saveDirectory: "assets/project",
+      insertMarkdownLink: false
+    });
+
+    // A partial project override only replaces the key it carries.
+    const partialProject = resolveEffectiveSettings(appSettings, {
+      imageAttachment: { insertMarkdownLink: false }
+    });
+    expect(partialProject.imageAttachment).toEqual({
+      saveDirectory: "assets/app",
+      insertMarkdownLink: false
+    });
+
+    // No project override -> Application Settings value.
+    const withoutProject = resolveEffectiveSettings(appSettings, undefined);
+    expect(withoutProject.imageAttachment).toEqual({
+      saveDirectory: "assets/app",
+      insertMarkdownLink: true
+    });
+  });
+
+  it("resolves effective imageAttachment saveDirectory for reset and override combinations (dogfood blocker)", () => {
+    const appEmpty: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      imageAttachment: {
+        saveDirectory: "",
+        insertMarkdownLink: true
+      }
+    };
+    const appAssets: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      imageAttachment: {
+        saveDirectory: "assets",
+        insertMarkdownLink: true
+      }
+    };
+
+    // Application "" + Project override absent -> ""
+    expect(
+      resolveEffectiveSettings(appEmpty, undefined).imageAttachment.saveDirectory
+    ).toBe("");
+
+    // Application "" + Project override "" -> ""
+    expect(
+      resolveEffectiveSettings(appEmpty, {
+        imageAttachment: { saveDirectory: "" }
+      }).imageAttachment.saveDirectory
+    ).toBe("");
+
+    // Application "assets" + Project override absent -> "assets"
+    expect(
+      resolveEffectiveSettings(appAssets, undefined).imageAttachment.saveDirectory
+    ).toBe("assets");
+
+    // Application "assets" + Project override "" -> ""
+    expect(
+      resolveEffectiveSettings(appAssets, {
+        imageAttachment: { saveDirectory: "" }
+      }).imageAttachment.saveDirectory
+    ).toBe("");
+
+    // Application "assets" + Project reset (override absent) -> "assets"
+    const projectReset = undefined;
+    expect(
+      resolveEffectiveSettings(appAssets, projectReset).imageAttachment.saveDirectory
+    ).toBe("assets");
+  });
+});
+
 describe("areDialogueDelimiterPairsEqual (#396 Slice 7 Addendum)", () => {
   it("treats both undefined as equal, and undefined vs defined as not equal", () => {
     expect(areDialogueDelimiterPairsEqual(undefined, undefined)).toBe(true);

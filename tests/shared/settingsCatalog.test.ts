@@ -922,7 +922,8 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
-        "notification.output.enabled"
+        "notification.output.enabled",
+        "imageAttachment.insertMarkdownLink"
       ]);
     });
   });
@@ -1184,6 +1185,8 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.whitespace.renderTab",
           "files.newFile.encoding",
           "files.newFile.lineEnding",
+          "imageAttachment.saveDirectory",
+          "imageAttachment.insertMarkdownLink",
           "preview.renderer",
           "preview.updateDelayMs",
           "workbench.colorTheme",
@@ -1244,6 +1247,51 @@ describe("Settings Catalog Foundation (#150)", () => {
         allowedCharacters: "none",
         allowEmptyString: true
       });
+    });
+
+    it("imageAttachment.saveDirectory is an applicationWithProjectOverride free-form string with an empty default (#407)", () => {
+      const entry = getCatalogEntry("imageAttachment.saveDirectory");
+
+      expect(entry).toMatchObject({
+        type: "string",
+        scope: "applicationWithProjectOverride",
+        defaultValue: "",
+        maxLength: 260,
+        allowedCharacters: "none",
+        allowEmptyString: true
+      });
+      // A project-root-relative path passes; over-long is rejected.
+      expect(validateCatalogValue("imageAttachment.saveDirectory", "")).toEqual({
+        ok: true
+      });
+      expect(
+        validateCatalogValue("imageAttachment.saveDirectory", "assets/images")
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue(
+          "imageAttachment.saveDirectory",
+          "x".repeat(261)
+        )
+      ).toEqual({ ok: false, failure: "maxLength" });
+    });
+
+    it("imageAttachment.insertMarkdownLink is an applicationWithProjectOverride boolean defaulting to true (#407)", () => {
+      const entry = getCatalogEntry("imageAttachment.insertMarkdownLink");
+
+      expect(entry).toMatchObject({
+        type: "boolean",
+        scope: "applicationWithProjectOverride",
+        defaultValue: true
+      });
+      expect(
+        getCatalogDefaultValue("imageAttachment.insertMarkdownLink")
+      ).toBe(true);
+      expect(
+        validateCatalogValue("imageAttachment.insertMarkdownLink", false)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("imageAttachment.insertMarkdownLink", "true")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
     it("editor.whitespace.* are applicationOnly boolean settings with the required #256 defaults", () => {

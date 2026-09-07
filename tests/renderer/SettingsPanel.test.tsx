@@ -1,7 +1,22 @@
+// @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
 import React from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
+function changeInputValue(input: HTMLInputElement, value: string): void {
+  const nativeSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    "value"
+  )?.set;
+  nativeSetter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
 import {
   defaultApplicationSettings,
   type ApplicationSettings
@@ -198,7 +213,9 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     expect(labels).not.toContain("詳細設定");
     // "文書マップ" has no scalar catalog items but is force-kept (#375 Task Q).
     expect(labels).toContain("文書マップ");
-    expect(labels).toHaveLength(8);
+    // #407: "画像添付" adds a 9th category with its own scalar catalog items.
+    expect(labels).toContain("画像添付");
+    expect(labels).toHaveLength(9);
   });
 
   it("shows the '文書マップ' heading only once in the pane body (no duplicate section heading) (#375 fix)", () => {
@@ -323,6 +340,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "Application",
       "Appearance",
       "Editor",
+      "Image Attachment",
       "Preview",
       "Document Map",
       "Files",
@@ -828,6 +846,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
@@ -860,6 +879,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
@@ -889,6 +909,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: defaultApplicationSettings.preview,
       notification: { output: { enabled: false } },
       workbench: defaultApplicationSettings.workbench,
@@ -916,6 +937,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: defaultApplicationSettings.preview,
       workbench: defaultApplicationSettings.workbench,
       commandPalette: defaultApplicationSettings.commandPalette,
@@ -953,6 +975,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -984,6 +1007,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1019,6 +1043,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1059,6 +1084,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenLastCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1073,6 +1099,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenLastCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1104,6 +1131,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: {
@@ -1492,6 +1520,7 @@ describe("SettingsPanelView preview.updateDelayMs (#250 follow-up)", () => {
 
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
       preview: { ...settings.preview, updateDelayMs: 10000 },
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1763,5 +1792,215 @@ describe("Settings number control right-alignment (common style)", () => {
     expect(css).not.toMatch(/\.settingsTextInput\s*\{[^}]*text-align/);
     expect(css).not.toMatch(/\.settingsSelect\s*\{[^}]*text-align/);
     expect(css).not.toMatch(/settingControl-[\w.]+/);
+  });
+});
+
+describe("SettingsPanel image attachment save destination workflow (#407 B2 remediation)", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.restoreAllMocks();
+  });
+
+  it("opens SaveDestinationDialog, edits path and checkbox, and saves without recentProjects (P0-1)", () => {
+    const onChangeSettings = vi.fn();
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      recentProjects: [{ path: "/foo/bar", lastOpened: 12345 }] as any,
+      imageAttachment: {
+        saveDirectory: "",
+        insertMarkdownLink: true
+      }
+    };
+
+    act(() => {
+      root.render(
+        <SettingsPanel
+          settings={settings}
+          isLoading={false}
+          error={null}
+          translate={translateFor("ja")}
+          onChangeSettings={onChangeSettings}
+        />
+      );
+    });
+
+    const categoryButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".settingsCategoryButton")
+    ).find(
+      (btn) =>
+        btn.textContent?.trim() ===
+        translateFor("ja")("settings.category.imageAttachment.label")
+    );
+    expect(categoryButton).toBeDefined();
+    act(() => {
+      categoryButton!.click();
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#settingControl-imageAttachment\\.saveDirectory"
+    );
+    expect(editButton).not.toBeNull();
+
+    act(() => {
+      editButton!.click();
+    });
+
+    const dialog = container.querySelector(".saveDestinationDialog");
+    expect(dialog).not.toBeNull();
+
+    const input = container.querySelector<HTMLInputElement>(".saveDestinationDialogInput")!;
+    const checkbox = container.querySelector<HTMLInputElement>(".saveDestinationDialogCheckbox")!;
+    const saveButton = container.querySelector<HTMLButtonElement>(".saveDestinationDialogSaveButton")!;
+
+    act(() => {
+      changeInputValue(input, "assets/images");
+      checkbox.click();
+    });
+
+    act(() => {
+      saveButton.click();
+    });
+
+    expect(onChangeSettings).toHaveBeenCalledTimes(1);
+    const passedPayload = onChangeSettings.mock.calls[0][0];
+
+    // P0-1 assertion: recentProjects must NOT be included in SaveApplicationSettingsRequest
+    expect("recentProjects" in passedPayload).toBe(false);
+    expect(passedPayload.recentProjects).toBeUndefined();
+
+    // Values must be updated
+    expect(passedPayload.imageAttachment).toEqual({
+      saveDirectory: "assets/images",
+      insertMarkdownLink: false
+    });
+
+    // Valid SaveApplicationSettingsRequest shape
+    expect(passedPayload.preview).toBeDefined();
+    expect(passedPayload.workbench).toBeDefined();
+    expect(passedPayload.editor).toBeDefined();
+    expect(passedPayload.files).toBeDefined();
+  });
+
+  it("allows setting path back to empty string to reset to unspecified", () => {
+    const onChangeSettings = vi.fn();
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      imageAttachment: {
+        saveDirectory: "assets/images",
+        insertMarkdownLink: true
+      }
+    };
+
+    act(() => {
+      root.render(
+        <SettingsPanel
+          settings={settings}
+          isLoading={false}
+          error={null}
+          translate={translateFor("ja")}
+          onChangeSettings={onChangeSettings}
+        />
+      );
+    });
+
+    const categoryButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".settingsCategoryButton")
+    ).find(
+      (btn) =>
+        btn.textContent?.trim() ===
+        translateFor("ja")("settings.category.imageAttachment.label")
+    );
+    expect(categoryButton).toBeDefined();
+    act(() => {
+      categoryButton!.click();
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#settingControl-imageAttachment\\.saveDirectory"
+    );
+    act(() => {
+      editButton!.click();
+    });
+
+    const input = container.querySelector<HTMLInputElement>(".saveDestinationDialogInput")!;
+    const saveButton = container.querySelector<HTMLButtonElement>(".saveDestinationDialogSaveButton")!;
+
+    act(() => {
+      changeInputValue(input, "");
+    });
+
+    expect(saveButton.disabled).toBe(false);
+
+    act(() => {
+      saveButton.click();
+    });
+
+    expect(onChangeSettings).toHaveBeenCalledTimes(1);
+    const passedPayload = onChangeSettings.mock.calls[0][0];
+    expect(passedPayload.imageAttachment.saveDirectory).toBe("");
+    expect(passedPayload.imageAttachment.insertMarkdownLink).toBe(true);
+    expect("recentProjects" in passedPayload).toBe(false);
+  });
+
+  it("does not call onChangeSettings when Cancel is clicked", () => {
+    const onChangeSettings = vi.fn();
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      imageAttachment: {
+        saveDirectory: "assets/images",
+        insertMarkdownLink: true
+      }
+    };
+
+    act(() => {
+      root.render(
+        <SettingsPanel
+          settings={settings}
+          isLoading={false}
+          error={null}
+          translate={translateFor("ja")}
+          onChangeSettings={onChangeSettings}
+        />
+      );
+    });
+
+    const categoryButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".settingsCategoryButton")
+    ).find(
+      (btn) =>
+        btn.textContent?.trim() ===
+        translateFor("ja")("settings.category.imageAttachment.label")
+    );
+    expect(categoryButton).toBeDefined();
+    act(() => {
+      categoryButton!.click();
+    });
+
+    const editButton = container.querySelector<HTMLButtonElement>(
+      "#settingControl-imageAttachment\\.saveDirectory"
+    );
+    act(() => {
+      editButton!.click();
+    });
+
+    const cancelButton = container.querySelector<HTMLButtonElement>(
+      ".saveDestinationDialogCancelButton"
+    )!;
+    act(() => {
+      cancelButton.click();
+    });
+
+    expect(onChangeSettings).not.toHaveBeenCalled();
+    expect(container.querySelector(".saveDestinationDialog")).toBeNull();
   });
 });

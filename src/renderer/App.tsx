@@ -70,6 +70,7 @@ import {
 import {
   builtInDefaultSettings,
   resolveEffectiveSettings,
+  type EffectiveImageAttachmentSettings,
   type ProjectSettings
 } from "../shared/settings";
 import { isPathEqualOrInsideDirectory } from "../shared/saveTargetPolicy";
@@ -172,6 +173,7 @@ import {
 } from "./EditorSurface";
 import type {
   MarkdownEditorFocusRequest,
+  MarkdownImageAttachmentPositionController,
   MarkdownEditorParagraphIndentController,
   MarkdownEditorViewStateController
 } from "./MarkdownEditor";
@@ -182,6 +184,21 @@ import {
   applyChangesToCachedMarkdownEditorDocumentState,
   type MarkdownEditorDocumentState
 } from "./markdownEditorDocumentState";
+import type {
+  ImageAttachmentPastePreparationResult,
+  PendingImageAttachment
+} from "./clipboardImageAttachment";
+import {
+  clearPendingImageAttachmentPosition,
+  resolvePendingImageAttachmentPosition
+} from "./markdownImageAttachmentPositionTracker";
+import {
+  runImageAttachmentPasteOrchestration,
+  type ImageAttachmentPastePromptResult,
+  type ImageAttachmentPasteTargetResolution,
+  type InsertMarkdownImageLinkRequest
+} from "./imageAttachmentPasteOrchestration";
+import { buildImageAttachmentPasteProjectSettingsRequest } from "./imageAttachmentProjectSettings";
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
 import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
@@ -378,6 +395,23 @@ import type {
 } from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel";
+import {
+  SaveDestinationDialog,
+  type SaveDestinationDialogResult
+} from "./dialog/SaveDestinationDialog";
+import {
+  buildImageAttachmentSettingsSaveFailedWarningDialogOptions,
+  buildImageAttachmentWarningDialogOptions
+} from "./dialog/imageAttachmentWarningDialog";
+import {
+  clearImageAttachmentPendingPosition as clearImageAttachmentPendingPositionImpl,
+  imageAttachmentSourceEditorId,
+  insertMarkdownImageLinkIntoTarget as insertMarkdownImageLinkIntoTargetImpl,
+  resolveImageAttachmentPasteTarget as resolveImageAttachmentPasteTargetImpl,
+  resolveImageAttachmentPosition as resolveImageAttachmentPositionImpl,
+  saveImageAttachmentProjectSettingsFromPrompt as saveImageAttachmentProjectSettingsFromPromptImpl
+} from "./imageAttachmentPasteAppDeps";
+import type { SaveProjectSettingsFromPromptResult } from "./imageAttachmentPasteOrchestration";
 import { GlossaryTagManager } from "./GlossaryTagManager";
 import { GlossaryEntryManager } from "./GlossaryEntryManager";
 import { countGlossaryEntriesByTag } from "./glossaryTagEntryCount";
@@ -490,6 +524,12 @@ interface SaveFileOptions {
   readonly forceSaveAs?: boolean;
 }
 
+interface ImageAttachmentPastePromptDialogState {
+  readonly pending: PendingImageAttachment;
+  readonly currentSettings: EffectiveImageAttachmentSettings;
+  readonly resolve: (result: ImageAttachmentPastePromptResult) => void;
+}
+
 let lifecycleRequestSequence = 0;
 
 function createRendererLifecycleRequestId(intent: string): string {
@@ -537,6 +577,7 @@ function projectContextForProject(
 ): ActiveProjectContext | null {
   return project ? { rootPath: project.rootPath } : null;
 }
+
 
 function isSupportedProjectMarkdownRelativePath(relativePath: string): boolean {
   const lowerRelativePath = relativePath.toLowerCase();
@@ -1121,6 +1162,21 @@ export function App(): JSX.Element {
     },
     []
   );
+  const imageAttachmentPositionControllerRef =
+    useRef<MarkdownImageAttachmentPositionController | null>(null);
+  const handleImageAttachmentPositionControllerChange = useCallback(
+    (controller: MarkdownImageAttachmentPositionController | null) => {
+      imageAttachmentPositionControllerRef.current = controller;
+    },
+    []
+  );
+  const imageAttachmentPastePromptOpenerRef = useRef<Element | null>(null);
+  const imageAttachmentPastePromptStateRef =
+    useRef<ImageAttachmentPastePromptDialogState | null>(null);
+  const [
+    imageAttachmentPastePromptState,
+    setImageAttachmentPastePromptState
+  ] = useState<ImageAttachmentPastePromptDialogState | null>(null);
   // #272: Session persistence seam. `App` only *observes* already-derived
   // session inputs and forwards them to the coordinator, plus exposes a
   // read-only Editor View State handle (#273). All serialization, debounce,
@@ -1415,6 +1471,8 @@ export function App(): JSX.Element {
     reloadSettings,
     saveSettings
   } = useApplicationSettings();
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const imeCompositionSaveGuard = useMemo(
     () =>
       createImeCompositionSaveGuard({
@@ -2192,6 +2250,229 @@ export function App(): JSX.Element {
     return canMutateWorkingCopy({
       lifecycleCommitBarrierActive: isLifecycleCommitBarrierActiveNow(),
       isReadOnlyProjectOwnedEditor
+    });
+  }
+
+  function imageAttachmentSettingsFromPrompt(
+    result: SaveDestinationDialogResult
+  ): EffectiveImageAttachmentSettings {
+    return {
+      saveDirectory: result.saveDirectory,
+      insertMarkdownLink: result.insertMarkdownLink
+    };
+  }
+
+  function currentImageAttachmentSettings(): EffectiveImageAttachmentSettings {
+    return resolveEffectiveSettings(
+      settingsRef.current,
+      projectRef.current?.config?.settings
+    ).imageAttachment;
+  }
+
+  async function saveImageAttachmentProjectSettingsFromPrompt(
+    nextSettings: EffectiveImageAttachmentSettings,
+    pending: PendingImageAttachment
+  ): Promise<SaveProjectSettingsFromPromptResult> {
+    return saveImageAttachmentProjectSettingsFromPromptImpl({
+      nextSettings,
+      pending,
+      currentProject: projectRef.current,
+      applicationSettings: settingsRef.current,
+      saveProjectSettings: handleSaveProjectSettings
+    });
+  }
+
+  function promptForImageAttachmentSettings(request: {
+    readonly pending: PendingImageAttachment;
+    readonly currentSettings: EffectiveImageAttachmentSettings;
+  }): Promise<ImageAttachmentPastePromptResult> {
+    if (imageAttachmentPastePromptStateRef.current) {
+      return Promise.resolve({ kind: "cancelled" });
+    }
+
+    if (typeof document !== "undefined") {
+      imageAttachmentPastePromptOpenerRef.current = document.activeElement;
+    }
+
+    return new Promise((resolve) => {
+      const state: ImageAttachmentPastePromptDialogState = {
+        pending: request.pending,
+        currentSettings: request.currentSettings,
+        resolve
+      };
+      imageAttachmentPastePromptStateRef.current = state;
+      setImageAttachmentPastePromptState(state);
+      playDialogShownSound(
+        soundFeedback,
+        effectiveSettings.workbench.sound,
+        reportSoundPlaybackFailure
+      );
+    });
+  }
+
+  const cancelImageAttachmentPastePrompt = useCallback(() => {
+    const state = imageAttachmentPastePromptStateRef.current;
+    if (!state) {
+      return;
+    }
+
+    imageAttachmentPastePromptStateRef.current = null;
+    setImageAttachmentPastePromptState(null);
+    state.resolve({ kind: "cancelled" });
+  }, []);
+
+  function closeImageAttachmentPastePrompt(
+    result: ImageAttachmentPastePromptResult
+  ): void {
+    const state = imageAttachmentPastePromptStateRef.current;
+    if (!state) {
+      return;
+    }
+
+    imageAttachmentPastePromptStateRef.current = null;
+    setImageAttachmentPastePromptState(null);
+    state.resolve(result);
+  }
+
+  useEffect(() => {
+    return () => {
+      cancelImageAttachmentPastePrompt();
+    };
+  }, [project?.activeProjectFilePath, cancelImageAttachmentPastePrompt]);
+
+  function resolveImageAttachmentPosition(
+    pending: PendingImageAttachment,
+    useLiveActiveEditor: boolean
+  ) {
+    return resolveImageAttachmentPositionImpl(
+      pending,
+      useLiveActiveEditor,
+      imageAttachmentPositionControllerRef.current,
+      markdownEditorDocumentStatesRef.current
+    );
+  }
+
+  function resolveImageAttachmentPasteTarget(
+    pending: PendingImageAttachment
+  ): ImageAttachmentPasteTargetResolution {
+    return resolveImageAttachmentPasteTargetImpl({
+      pending,
+      openDocumentsState: openDocumentsStateRef.current,
+      isEditorAreaSpecialTabActive,
+      currentProject: projectRef.current,
+      isLifecycleCommitBarrierActive: isLifecycleCommitBarrierActiveNow(),
+      livePositionController: imageAttachmentPositionControllerRef.current,
+      cachedDocumentStates: markdownEditorDocumentStatesRef.current
+    });
+  }
+
+  function clearImageAttachmentPendingPosition(
+    result: ImageAttachmentPastePreparationResult
+  ): void {
+    clearImageAttachmentPendingPositionImpl({
+      result,
+      openDocumentsState: openDocumentsStateRef.current,
+      isEditorAreaSpecialTabActive,
+      livePositionController: imageAttachmentPositionControllerRef.current,
+      cachedDocumentStates: markdownEditorDocumentStatesRef.current
+    });
+  }
+
+  function insertMarkdownImageLinkIntoTarget(
+    request: InsertMarkdownImageLinkRequest
+  ): boolean {
+    return insertMarkdownImageLinkIntoTargetImpl({
+      request,
+      openDocumentsState: openDocumentsStateRef.current,
+      isEditorAreaSpecialTabActive,
+      currentProject: projectRef.current,
+      isLifecycleCommitBarrierActive: isLifecycleCommitBarrierActiveNow(),
+      livePositionController: imageAttachmentPositionControllerRef.current,
+      liveParagraphIndentController: paragraphIndentControllerRef.current,
+      cachedDocumentStates: markdownEditorDocumentStatesRef.current,
+      setOpenDocumentsState: (nextState) => {
+        openDocumentsStateRef.current = nextState;
+        setOpenDocumentsState(nextState);
+      }
+    });
+  }
+
+  async function showImageAttachmentWarningDialog(
+    reason: Parameters<typeof buildImageAttachmentWarningDialogOptions>[0],
+    actualBytes?: number
+  ): Promise<void> {
+    try {
+      await confirmDialog(
+        buildImageAttachmentWarningDialogOptions(
+          reason,
+          translate,
+          actualBytes
+        )
+      );
+    } catch {
+      // A concurrent modal is rare and the marker has already been cleared;
+      // keep the paste flow from throwing back into CodeMirror.
+    }
+  }
+
+  async function showImageAttachmentSettingsSaveFailedWarningDialog(): Promise<void> {
+    try {
+      await confirmDialog(
+        buildImageAttachmentSettingsSaveFailedWarningDialogOptions(translate)
+      );
+    } catch {
+    }
+  }
+
+  function notifyImageAttachmentSuccess(message: string): void {
+    notificationController.notify({
+      lane: "internal",
+      priority: notificationToastPriority.success,
+      message,
+      icon: { kind: "preset", name: "success" }
+    });
+  }
+
+  function notifyImageAttachmentInfo(message: string): void {
+    notificationController.notify({
+      lane: "internal",
+      priority: notificationToastPriority.info,
+      message,
+      icon: { kind: "preset", name: "info" }
+    });
+  }
+
+  function handleImageAttachmentPaste(
+    result: ImageAttachmentPastePreparationResult
+  ): void {
+    void runImageAttachmentPasteOrchestration(result, {
+      translate,
+      getSettings: currentImageAttachmentSettings,
+      resolveTarget: resolveImageAttachmentPasteTarget,
+      clearPosition: clearImageAttachmentPendingPosition,
+      promptForSettings: promptForImageAttachmentSettings,
+      saveProjectSettingsFromPrompt:
+        saveImageAttachmentProjectSettingsFromPrompt,
+      saveImageAttachment: (payload) =>
+        window.pergamum.imageAttachment.save(payload),
+      insertMarkdownLink: insertMarkdownImageLinkIntoTarget,
+      showWarningDialog: showImageAttachmentWarningDialog,
+      showSettingsSaveFailedDialog:
+        showImageAttachmentSettingsSaveFailedWarningDialog,
+      showSuccessToast: notifyImageAttachmentSuccess,
+      showInfoToast: notifyImageAttachmentInfo,
+      logUnexpectedError: (error) => {
+        setStatus({
+          key: "status.commandFailed",
+          values: { message: errorMessage(error, translate) }
+        });
+      }
+    }).catch((error) => {
+      clearImageAttachmentPendingPosition(result);
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
     });
   }
 
@@ -9146,6 +9427,28 @@ export function App(): JSX.Element {
                         onViewStateControllerChange={
                           handleMarkdownEditorViewStateControllerChange
                         }
+                        onImageAttachmentPaste={
+                          currentEditor?.kind === "markdown" &&
+                          activeMarkdownDocument?.kind === "project" &&
+                          project?.accessMode.kind === "readWrite" &&
+                          !isEditorReadOnly
+                            ? handleImageAttachmentPaste
+                            : undefined
+                        }
+                        onImageAttachmentPositionControllerChange={
+                          handleImageAttachmentPositionControllerChange
+                        }
+                        imageAttachmentSourceDocumentId={
+                          activeDocumentKey ?? undefined
+                        }
+                        imageAttachmentSourceEditorId={
+                          project && activeDocumentKey
+                            ? imageAttachmentSourceEditorId(
+                                project.activeProjectFilePath,
+                                activeDocumentKey
+                              )
+                            : undefined
+                        }
                         onViewStateSnapshot={handleMarkdownViewStateSnapshot}
                         onViewStateDirty={handleMarkdownViewStateDirty}
                         onMarkdownVisibleRangeChange={setMarkdownVisibleRange}
@@ -9419,6 +9722,32 @@ export function App(): JSX.Element {
               event: "recovery.report.copied",
               details: { count }
             })
+          }
+        />
+      ) : null}
+
+      {imageAttachmentPastePromptState !== null ? (
+        <SaveDestinationDialog
+          isOpen={true}
+          mode="pastePrompt"
+          allowEmpty={false}
+          initialSaveDirectory={
+            imageAttachmentPastePromptState.currentSettings.saveDirectory
+          }
+          initialInsertMarkdownLink={
+            imageAttachmentPastePromptState.currentSettings.insertMarkdownLink
+          }
+          translate={translate}
+          platform={window.pergamum.platform}
+          opener={imageAttachmentPastePromptOpenerRef.current}
+          onSave={(result) =>
+            closeImageAttachmentPastePrompt({
+              kind: "saved",
+              settings: imageAttachmentSettingsFromPrompt(result)
+            })
+          }
+          onDismiss={() =>
+            closeImageAttachmentPastePrompt({ kind: "cancelled" })
           }
         />
       ) : null}

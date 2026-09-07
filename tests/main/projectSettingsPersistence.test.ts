@@ -224,6 +224,57 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       ).toEqual([]);
     });
 
+    it("loads sparse imageAttachment.* overrides from pergamum.json (#407 B1)", async () => {
+      const configPath = path.join(workDir, projectConfigFileName);
+      await fs.writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            name: "Image Attachment Test",
+            settings: {
+              "imageAttachment.saveDirectory": "assets/pasted",
+              "imageAttachment.insertMarkdownLink": false
+            }
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const loaded = await loadProjectConfig(workDir);
+      expect(loaded?.config.settings?.imageAttachment).toEqual({
+        saveDirectory: "assets/pasted",
+        insertMarkdownLink: false
+      });
+    });
+
+    it("ignores an invalid imageAttachment.saveDirectory value without failing project load (S-23, #407)", async () => {
+      const configPath = path.join(workDir, projectConfigFileName);
+      await fs.writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            settings: {
+              "imageAttachment.saveDirectory": 123,
+              "imageAttachment.insertMarkdownLink": true
+            }
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const loaded = await loadProjectConfig(workDir);
+      expect(
+        loaded?.config.settings?.imageAttachment?.saveDirectory
+      ).toBeUndefined();
+      expect(
+        loaded?.config.settings?.imageAttachment?.insertMarkdownLink
+      ).toBe(true);
+    });
+
     it("ignores invalid documentMap.dialogueDelimiterPairs (ADR-0006 S-23) without failing project load", async () => {
       const configPath = path.join(workDir, projectConfigFileName);
       const raw = {
