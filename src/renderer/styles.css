@@ -2717,6 +2717,11 @@ label.settingsItemHeader {
   height: 14px;
 }
 
+.documentMetricsChartTypeIcon--bar svg {
+  transform: rotate(90deg);
+  transform-origin: center;
+}
+
 /* #396 Document Metrics Pie chart (SVG sector paths, raw count geometry) */
 .documentMetricsDialoguePieWrap {
   display: flex;

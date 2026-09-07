@@ -390,7 +390,7 @@ export function DocumentMetricsPanel({
                       onClick={() => handleSelectChartType("bar")}
                     >
                       <span
-                        className="documentMetricsChartTypeIcon"
+                        className="documentMetricsChartTypeIcon documentMetricsChartTypeIcon--bar"
                         aria-hidden="true"
                         dangerouslySetInnerHTML={{ __html: barChartIcon }}
                       />
