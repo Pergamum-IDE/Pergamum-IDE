@@ -164,6 +164,31 @@ export function supportedFormatForReportedMimeType(
   }
 }
 
+/**
+ * #409: map a filename extension to a supported format, or `null` for an
+ * unsupported / missing extension. Comparison is case-insensitive.
+ * `.jpg` and `.jpeg` both resolve to `"jpeg"`. Only the trailing extension
+ * matters — the caller is responsible for having a real path segment.
+ */
+const FILE_EXTENSION_FORMAT: Record<string, SupportedImageAttachmentFormat> = {
+  ".png": "png",
+  ".jpg": "jpeg",
+  ".jpeg": "jpeg",
+  ".gif": "gif",
+  ".webp": "webp"
+};
+
+export function supportedImageAttachmentFormatForFileName(
+  fileName: string
+): SupportedImageAttachmentFormat | null {
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === fileName.length - 1) {
+    return null;
+  }
+  const extension = fileName.slice(dotIndex).toLowerCase();
+  return FILE_EXTENSION_FORMAT[extension] ?? null;
+}
+
 export type ImageAttachmentFormatRejection =
   | "unsupportedFormat" // magic bytes match no supported format
   | "mimeMagicMismatch"; // a present File.type disagrees with the magic bytes

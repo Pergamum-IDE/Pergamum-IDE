@@ -5,6 +5,8 @@ https://www.svgrepo.com/svg/361060/case-sensitive
 https://www.svgrepo.com/svg/361284/regex
 https://www.svgrepo.com/svg/245661/vocabulary
 https://www.svgrepo.com/svg/412480/scroll
+https://www.svgrepo.com/svg/509890/document
+https://www.svgrepo.com/svg/510065/markdown
 
 License: CC0 License
 Downloaded: 2026-09-04

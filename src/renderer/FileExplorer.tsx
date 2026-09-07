@@ -15,6 +15,12 @@ import pergamumProjectIconUrl from "../../assets/icons/file-associations/pergamu
 import filePlusIconUrl from "../../assets/icons/feather/explorer/file-plus.svg?url";
 import folderPlusIconUrl from "../../assets/icons/feather/explorer/folder-plus.svg?url";
 import moveIconUrl from "../../assets/icons/feather/explorer/move.svg?url";
+// #409: per-file-type icons for Markdown documents, Pergamum-recognized image
+// files, and plain-text files. Every other file keeps the generic document
+// icon below.
+import markdownFileIconUrl from "../../assets/icons/svgrepo/explorer/markdown-svgrepo-com.svg?url";
+import imageFileIconUrl from "../../assets/icons/feather/explorer/image.svg?url";
+import txtFileIconUrl from "../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
 import documentTextIconUrl from "../../assets/icons/ionicons/explorer/document-text-outline.svg?url";
 import folderOpenIconUrl from "../../assets/icons/ionicons/explorer/folder-open-outline.svg?url";
 import folderIconUrl from "../../assets/icons/ionicons/explorer/folder-outline.svg?url";
@@ -32,6 +38,7 @@ import {
   type ProjectDocumentPathRelocation
 } from "../shared/projectMove";
 import { isFileExplorerCreateValidationReason } from "../shared/fileExplorerCreate";
+import { supportedImageAttachmentFormatForFileName } from "../shared/imageAttachmentFormat";
 import {
   isFileExplorerRenameValidationReason,
   type FileExplorerRenameKind
@@ -687,7 +694,15 @@ export function scrollFileExplorerActiveDocumentIntoView(
   target?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
-function iconForEntry(
+/**
+ * #409: is this file name a plain-text `.txt` file? Case-insensitive, trailing
+ * extension only. `.TXT` counts; `foo.txt.bak` does not.
+ */
+function isTxtFileName(name: string): boolean {
+  return name.toLowerCase().endsWith(".txt");
+}
+
+export function iconForEntry(
   entry: FileExplorerEntry,
   expandedDirectoryPaths: ReadonlySet<string>
 ): { url: string; name: string } {
@@ -695,6 +710,22 @@ function iconForEntry(
     return expandedDirectoryPaths.has(entry.relativePath)
       ? { url: folderOpenIconUrl, name: "folder-open" }
       : { url: folderIconUrl, name: "folder" };
+  }
+
+  // #409: Markdown documents (`.md` / `.markdown`, matching the rest of the
+  // File Explorer's own openable-file rule), Pergamum-recognized image files
+  // (PNG/JPEG/GIF/WebP — shared with #407/#409's `supportedImageAttachment*`
+  // helper, so the explorer never drifts from what Pergamum treats as an
+  // image), and plain `.txt` files each get a distinct icon. Everything else
+  // keeps the generic document icon.
+  if (isProjectMarkdownRelativePath(entry.relativePath)) {
+    return { url: markdownFileIconUrl, name: "markdown" };
+  }
+  if (supportedImageAttachmentFormatForFileName(entry.name) !== null) {
+    return { url: imageFileIconUrl, name: "image" };
+  }
+  if (isTxtFileName(entry.name)) {
+    return { url: txtFileIconUrl, name: "txt" };
   }
 
   return { url: documentTextIconUrl, name: "document" };

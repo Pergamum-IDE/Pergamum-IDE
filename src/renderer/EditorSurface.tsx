@@ -16,6 +16,7 @@ import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
   currentDocumentContent,
+  currentProjectRelativePath,
   type CurrentDocument
 } from "./currentDocument";
 import type { CurrentEditor } from "./currentEditor";
@@ -311,14 +312,19 @@ export interface PreviewRenderResult {
  * timing semantics, which read these values from render's closure).
  */
 export function useMemoizedPreviewRender(
-  previewSourceContent: string
+  previewSourceContent: string,
+  // #409: project-root-relative path of the previewed Markdown file, or
+  // `null` for a standalone / non-project document (no image-link rewrite).
+  sourceMarkdownProjectRelativePath: string | null = null
 ): PreviewRenderResult {
   return useMemo(() => {
     const startedAt = performance.now();
-    const html = markdownPreviewRenderer.render(previewSourceContent);
+    const html = markdownPreviewRenderer.render(previewSourceContent, {
+      sourceMarkdownProjectRelativePath
+    });
 
     return { html, startedAt, durationMs: performance.now() - startedAt };
-  }, [previewSourceContent]);
+  }, [previewSourceContent, sourceMarkdownProjectRelativePath]);
 }
 
 interface EditorSurfaceProps {
@@ -777,10 +783,18 @@ function MarkdownEditorSurface({
     content,
     previewUpdateDelayMs
   );
+  // #409: only a project document has a project-root-relative path to
+  // resolve project-local image links against; a standalone `.md` file
+  // renders image links verbatim, as before.
+  const previewSourceProjectRelativePath =
+    currentProjectRelativePath(document);
   // #250 follow-up: see useMemoizedPreviewRender above — markdown-it only
   // re-runs when previewSourceContent changes, not on every keystroke
   // rerender of this component.
-  const previewRender = useMemoizedPreviewRender(previewSourceContent);
+  const previewRender = useMemoizedPreviewRender(
+    previewSourceContent,
+    previewSourceProjectRelativePath
+  );
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
   const previewRenderDurationMs = previewRender.durationMs;

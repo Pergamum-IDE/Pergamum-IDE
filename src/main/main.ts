@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, powerMonitor, screen } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  powerMonitor,
+  protocol,
+  screen
+} from "electron";
 import started from "electron-squirrel-startup";
 import path from "node:path";
 import { parseDebugModeFromArgv } from "./debugMode";
@@ -15,6 +22,8 @@ import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
 import { registerImageAttachmentIpc } from "./imageAttachmentIpc";
+import { registerPergamumAssetProtocol } from "./pergamumAssetProtocol";
+import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import {
   currentActiveProjectFilePath,
@@ -82,6 +91,26 @@ let coldStartWebContentsId: number | null = null;
 const pergamumDebugMode = parseDebugModeFromArgv(process.argv);
 // #272: one process-run identity for the lifetime of this Pergamum process.
 const instanceRunId = createUuidv7();
+
+// #409: the `pergamum-asset://` scheme that serves project-local images to
+// the Markdown Preview must be declared privileged BEFORE `app.ready`. It is
+// `standard` + `secure` so an `<img src="pergamum-asset://...">` on the
+// `file://` (or dev `http://localhost`) renderer page is not treated as an
+// insecure cross-origin load; the actual handler is registered after ready
+// (see `registerPergamumAssetProtocol` below). Every request is fully
+// re-validated in `pergamumAssetProtocol.ts` - this declaration grants no
+// filesystem access on its own.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: PERGAMUM_ASSET_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true
+    }
+  }
+]);
 
 if (started) {
   app.quit();
@@ -320,6 +349,10 @@ app.whenReady().then(async () => {
   );
   registerSettingsIpc();
   registerImageAttachmentIpc();
+  // #409: serve project-local images to the Markdown Preview via
+  // `pergamum-asset://`. The scheme was declared privileged at module load
+  // (above); this attaches the handler now that `app` is ready.
+  registerPergamumAssetProtocol();
   registerAppInfoIpc();
 
   const sessionStore: SessionStore = createSessionStore({

@@ -353,13 +353,15 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
         "const startedAt = performance.now();"
       );
       expect(editorSurfaceSource).toContain(
-        "const html = markdownPreviewRenderer.render(previewSourceContent);"
+        "const html = markdownPreviewRenderer.render(previewSourceContent, {"
       );
       expect(editorSurfaceSource).toContain(
         "durationMs: performance.now() - startedAt"
       );
+      // #409: the hook now also takes the previewed document's
+      // project-relative path (for project-local image link rewriting).
       expect(editorSurfaceSource).toContain(
-        "const previewRender = useMemoizedPreviewRender(previewSourceContent);"
+        "const previewRender = useMemoizedPreviewRender(\n    previewSourceContent,"
       );
       expect(editorSurfaceSource).toContain(
         "const previewHtml = previewRender.html;"
@@ -390,7 +392,11 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       const hookBody = editorSurfaceSource.slice(hookStart, hookEnd);
 
       expect(hookBody).toContain("useMemo(() => {");
-      expect(hookBody).toContain("}, [previewSourceContent]);");
+      // #409: memoization now also keys on the previewed document's
+      // project-relative path.
+      expect(hookBody).toContain(
+        "}, [previewSourceContent, sourceMarkdownProjectRelativePath]);"
+      );
     });
 
     it("fires the one-shot measurement effect only when documentOpenId changes, not on every content edit — works the same regardless of which open path set it", () => {
