@@ -278,21 +278,20 @@ describe("#413 File Explorer / App wiring", () => {
     );
     expect(gateCalls?.length).toBe(3);
     expect(fileExplorerSource).toContain(') === "cancel"');
+    // #414: one combined C1+C2 apply.
     expect(fileExplorerSource).toContain(
-      "onApplyMarkdownDocumentMoveImageLinks?.(relocations)"
+      "onApplyMoveImageRewrites?.({ relocations, completedImageMoves })"
     );
   });
 
-  it("WorkspaceSidebar threads both #413 callbacks to FileExplorer", () => {
+  it("WorkspaceSidebar threads the C1 prepare hook + the combined apply", () => {
     expect(workspaceSidebarSource).toContain(
       "onFileExplorerPrepareMarkdownDocumentMoves"
     );
     expect(workspaceSidebarSource).toContain(
       "onPrepareMarkdownDocumentMoves={"
     );
-    expect(workspaceSidebarSource).toContain(
-      "onApplyMarkdownDocumentMoveImageLinks={"
-    );
+    expect(workspaceSidebarSource).toContain("onApplyMoveImageRewrites={");
   });
 
   it("App plans a batch, shows one dialog, and applies per-document via transaction or file write", () => {
@@ -301,14 +300,14 @@ describe("#413 File Explorer / App wiring", () => {
     );
     expect(appSource).toContain("buildMarkdownDocumentMoveImageLinkUpdateBatch");
     expect(appSource).toContain("handlePrepareMarkdownDocumentMoves");
-    expect(appSource).toContain("applyOneMarkdownMoveImageLinkPlan");
-    expect(appSource).toContain("handleApplyMarkdownDocumentMoveImageLinks");
+    expect(appSource).toContain("applyImageLinkRewritesToProjectDocument");
+    expect(appSource).toContain("function handleApplyMoveImageRewrites");
     expect(appSource).toContain("<MarkdownImageLinkMoveUpdateDialog");
     expect(appSource).toContain("applyReplaceInBufferChanges");
     expect(appSource).toContain(
       "window.pergamum.projects.saveProjectDocument("
     );
-    // Per-document failure is counted, never rolls the Move back.
+    // Per-document failure is tracked, never rolls the Move back.
     expect(appSource).toContain("failedDocuments");
   });
 
@@ -338,11 +337,11 @@ describe("#413 File Explorer / App wiring", () => {
         .includes("pendingMarkdownMoveImageLinkUpdateRef.current = null")
     ).toBe(true);
     const applyIdx = appSource.indexOf(
-      "function handleApplyMarkdownDocumentMoveImageLinks"
+      "function handleApplyMoveImageRewrites"
     );
     expect(
       appSource
-        .slice(applyIdx, applyIdx + 300)
+        .slice(applyIdx, applyIdx + 700)
         .includes("pendingMarkdownMoveImageLinkUpdateRef.current = null")
     ).toBe(true);
   });

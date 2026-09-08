@@ -137,7 +137,9 @@ import { DocumentTabBar } from "./DocumentTabBar";
 import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
 import { MarkdownImageLinkMoveUpdateDialog } from "./dialog/MarkdownImageLinkMoveUpdateDialog";
+import { MarkdownImageReferenceMoveUpdateDialog } from "./dialog/MarkdownImageReferenceMoveUpdateDialog";
 import { planMarkdownImageLinkRewritesForDocumentMove } from "../shared/markdownImageLinkMoveRewrite";
+import { planMarkdownImageReferenceRewritesForImageMove } from "../shared/markdownImageReferenceMoveRewrite";
 import {
   applyMarkdownImageLinkRewritesToText,
   buildMarkdownDocumentMoveImageLinkUpdateBatch,
@@ -147,6 +149,17 @@ import {
   type MarkdownDocumentMoveImageLinkUpdatePlan,
   type MarkdownImageLinkMoveUpdateChoice
 } from "./markdownDocumentMoveImageLinkUpdate";
+import {
+  buildImageReferenceMoveUpdateBatch,
+  documentMayReferenceMovedImage,
+  filterImageReferenceUpdatePlansToCompletedMoves,
+  imageReferenceSearchPlan,
+  resolveImageReferenceMoveUpdateChoice,
+  type CompletedImageMove,
+  type ImageReferenceMoveUpdatePlan,
+  type ImageReferenceMoveUpdateChoice,
+  type MovedImageFile
+} from "./markdownImageReferenceMoveUpdate";
 import {
   navigatorClipboardAdapter,
   performClipboardCopy
@@ -1208,6 +1221,24 @@ export function App(): JSX.Element {
   } | null>(null);
   const pendingMarkdownMoveImageLinkUpdateRef = useRef<{
     readonly plans: readonly MarkdownDocumentMoveImageLinkUpdatePlan[];
+  } | null>(null);
+  // #414 (C2): the sibling flow — pre-move confirmation that updates OTHER
+  // documents' references to a moved image. Same parked-resolver + pending-ref
+  // + 3-way-choice shape as #413.
+  const imageReferenceMoveUpdateOpenerRef = useRef<Element | null>(null);
+  const imageReferenceMoveUpdateResolveRef = useRef<
+    ((choice: ImageReferenceMoveUpdateChoice) => void) | null
+  >(null);
+  const [
+    imageReferenceMoveUpdateDialogState,
+    setImageReferenceMoveUpdateDialogState
+  ] = useState<{
+    readonly referenceCount: number;
+    readonly documentCount: number;
+    readonly imageCount: number;
+  } | null>(null);
+  const pendingImageReferenceMoveUpdateRef = useRef<{
+    readonly plans: readonly ImageReferenceMoveUpdatePlan[];
   } | null>(null);
   // #272: Session persistence seam. `App` only *observes* already-derived
   // session inputs and forwards them to the coordinator, plus exposes a
@@ -7732,6 +7763,30 @@ export function App(): JSX.Element {
   }
 
   /**
+   * #414 P1-1: like {@link readProjectDocumentTextForMove}, but THROWS when a
+   * document can't be read. The C2 reference search shows the user how many
+   * documents a move / rename affects — a silently-skipped unreadable
+   * document would make that count untrustworthy, so a read failure aborts
+   * planning (and the move) instead.
+   */
+  async function readProjectDocumentTextOrThrow(
+    relativePath: string
+  ): Promise<string> {
+    if (activeProjectContext) {
+      const openDocument = findOpenDocument(
+        openDocumentsStateRef.current,
+        createProjectDocumentEditorId(relativePath, activeProjectContext)
+      );
+      if (openDocument && openDocument.editor.kind === "markdown") {
+        return openDocument.editor.document.content;
+      }
+    }
+    const read =
+      await window.pergamum.projects.readProjectDocument(relativePath);
+    return read.content;
+  }
+
+  /**
    * #413: called by the File Explorer BEFORE a Move, with every explicitly
    * selected Markdown file that is changing parent folder (single, multiple,
    * or the Markdown files in a mixed selection). Plans each document's
@@ -7744,9 +7799,16 @@ export function App(): JSX.Element {
    * the Move itself is never blocked by this feature.
    */
   async function handlePrepareMarkdownDocumentMoves(
-    moves: readonly MarkdownDocumentMove[]
+    moves: readonly MarkdownDocumentMove[],
+    imageMovesInSameOperation: readonly MovedImageFile[] = []
   ): Promise<"proceed" | "cancel"> {
     pendingMarkdownMoveImageLinkUpdateRef.current = null;
+
+    // #414 P0-2: a link that points at an image ALSO moving in this operation
+    // is left for the C2 planner — never rewritten by both.
+    const imageOldPathsMovingInSameOperation = imageMovesInSameOperation.map(
+      (image) => image.oldProjectRelativePath
+    );
 
     const perDocumentPlans: MarkdownDocumentMoveImageLinkUpdatePlan[] = [];
     for (const move of moves) {
@@ -7759,7 +7821,8 @@ export function App(): JSX.Element {
       const rewrites = planMarkdownImageLinkRewritesForDocumentMove({
         markdown,
         oldDocumentProjectRelativePath: move.oldProjectRelativePath,
-        newDocumentProjectRelativePath: move.newProjectRelativePath
+        newDocumentProjectRelativePath: move.newProjectRelativePath,
+        imageOldPathsMovingInSameOperation
       });
       perDocumentPlans.push({
         oldProjectRelativePath: move.oldProjectRelativePath,
@@ -7817,16 +7880,24 @@ export function App(): JSX.Element {
   }
 
   /**
-   * #413: apply ONE confirmed image-link rewrite plan to its (now relocated)
+   * #413/#414: apply a list of destination rewrites to ONE project Markdown
    * document — a CodeMirror transaction when the document is open (one undo
    * step, unsaved edits preserved; active OR inactive), a direct write to the
-   * moved file when it is closed. Resolves `"updated"` / `"failed"` /
-   * `"skipped"` (`skipped` = nothing to rewrite, or its move did not land).
+   * file when it is closed. Resolves `"updated"` / `"failed"` / `"skipped"`
+   * (`skipped` = nothing to rewrite, or the rewrite is a no-op). Used by both
+   * the C1 "moved document" flow and the C2 "moved image reference" flow —
+   * the difference is only which document path / rewrites are passed in.
    */
-  async function applyOneMarkdownMoveImageLinkPlan(
-    plan: MarkdownDocumentMoveImageLinkUpdatePlan
+  async function applyImageLinkRewritesToProjectDocument(
+    documentProjectRelativePath: string,
+    rewrites: readonly {
+      readonly from: number;
+      readonly to: number;
+      readonly oldDestination: string;
+      readonly newDestination: string;
+    }[]
   ): Promise<"updated" | "failed" | "skipped"> {
-    if (plan.rewrites.length === 0) {
+    if (rewrites.length === 0) {
       return "skipped";
     }
 
@@ -7834,7 +7905,7 @@ export function App(): JSX.Element {
       ? findOpenDocument(
           openDocumentsStateRef.current,
           createProjectDocumentEditorId(
-            plan.newProjectRelativePath,
+            documentProjectRelativePath,
             activeProjectContext
           )
         )
@@ -7844,7 +7915,7 @@ export function App(): JSX.Element {
       const markdownDocument = openDocument.editor.document;
       const specs = markdownImageLinkRewriteChangeSpecs(
         markdownDocument.content,
-        plan.rewrites
+        rewrites
       );
       if (specs === null) {
         return "failed";
@@ -7867,6 +7938,13 @@ export function App(): JSX.Element {
         return applied ? "updated" : "failed";
       }
 
+      // #414 P1-2: an INACTIVE open document is updated ONLY through a real
+      // CodeMirror transaction on its #392 cached `EditorState` — that keeps
+      // the rewrite on the document's Undo history (the #413/#414 contract:
+      // an open document's update must be Undo-reversible). A missing / stale
+      // cached state ⟹ leave the buffer untouched and report `failed`; NEVER
+      // fall back to a plain content splice (which carries no Undo and could
+      // land stale offsets on the wrong text).
       const documentId = serializeEditorId(openDocument.id);
       const cached = markdownEditorDocumentStatesRef.current.get(documentId);
       const transactionResult = cached
@@ -7878,62 +7956,39 @@ export function App(): JSX.Element {
           )
         : null;
 
-      if (transactionResult) {
-        markdownEditorDocumentStatesRef.current.set(
-          documentId,
-          transactionResult.nextDocumentState
-        );
-        setOpenDocumentsState((current) =>
-          updateOpenEditor(current, openDocument.id, (editor) =>
-            editor.kind === "markdown"
-              ? {
-                  ...editor,
-                  document: updateCurrentDocumentContent(
-                    editor.document,
-                    transactionResult.content,
-                    transactionResult.lineEndingBreaks
-                  )
-                }
-              : editor
-          )
-        );
-      } else {
-        const changeSet = ChangeSet.of(
-          changeSpecs,
-          markdownDocument.content.length
-        );
-        const nextContent = changeSet
-          .apply(CodeMirrorText.of(markdownDocument.content.split("\n")))
-          .toString();
-        const nextLineEndingBreaks = markdownDocument.lineEndingBreaks.map(
-          changeSet
-        ) as LineEndingBreakSet;
-        setOpenDocumentsState((current) =>
-          updateOpenEditor(current, openDocument.id, (editor) =>
-            editor.kind === "markdown"
-              ? {
-                  ...editor,
-                  document: updateCurrentDocumentContent(
-                    editor.document,
-                    nextContent,
-                    nextLineEndingBreaks
-                  )
-                }
-              : editor
-          )
-        );
+      if (!transactionResult) {
+        return "failed";
       }
+
+      markdownEditorDocumentStatesRef.current.set(
+        documentId,
+        transactionResult.nextDocumentState
+      );
+      setOpenDocumentsState((current) =>
+        updateOpenEditor(current, openDocument.id, (editor) =>
+          editor.kind === "markdown"
+            ? {
+                ...editor,
+                document: updateCurrentDocumentContent(
+                  editor.document,
+                  transactionResult.content,
+                  transactionResult.lineEndingBreaks
+                )
+              }
+            : editor
+        )
+      );
       return "updated";
     }
 
-    // Closed document: write the rewritten text straight to the moved file.
+    // Closed document: write the rewritten text straight to the file.
     try {
       const read = await window.pergamum.projects.readProjectDocument(
-        plan.newProjectRelativePath
+        documentProjectRelativePath
       );
       const nextContent = applyMarkdownImageLinkRewritesToText(
         read.content,
-        plan.rewrites
+        rewrites
       );
       if (nextContent === null) {
         return "failed";
@@ -7942,7 +7997,7 @@ export function App(): JSX.Element {
         return "skipped";
       }
       await window.pergamum.projects.saveProjectDocument(
-        plan.newProjectRelativePath,
+        documentProjectRelativePath,
         nextContent
       );
       return "updated";
@@ -7951,74 +8006,282 @@ export function App(): JSX.Element {
     }
   }
 
+  interface MoveImageRewriteEntry {
+    readonly from: number;
+    readonly to: number;
+    readonly oldDestination: string;
+    readonly newDestination: string;
+  }
+
   /**
-   * #413: run right after a successful File Explorer Move. Applies the batch
-   * of rewrite plans confirmed in {@link handlePrepareMarkdownDocumentMoves}
-   * to every plan whose document actually relocated. A stale plan or a write
-   * failure for one document is reported (with the failed-document count) and
-   * never rolls the Move back; the other documents are still updated.
+   * #413/#414: ONE apply pass, run right after a successful File Explorer
+   * move / rename. Merges the C1 batch (a moved document's own links, staged
+   * by {@link handlePrepareMarkdownDocumentMoves}) and the C2 batch (other
+   * documents' references to a moved image, staged by
+   * {@link handlePrepareImageReferenceMoves}) and rewrites each affected
+   * document ONCE — so a link a mixed move touches from both sides is never
+   * applied twice against shifting offsets. C1 already skips links that point
+   * at an image moving in the same operation, so the two batches' ranges do
+   * not overlap.
+   *
+   * A stale plan / write failure for one document is reported BY PATH and
+   * never rolls the move back; every other document is still updated.
    */
-  function handleApplyMarkdownDocumentMoveImageLinks(
-    relocations: readonly ProjectDocumentPathRelocation[]
-  ): void {
-    const pending = pendingMarkdownMoveImageLinkUpdateRef.current;
+  /**
+   * #414 P1-1: drop any staged C1 / C2 rewrite batch. Called by the File
+   * Explorer on EVERY path where a move / rename does not land, so a stale
+   * batch can never be consumed by the next operation.
+   */
+  function handleClearMoveImageRewrites(): void {
     pendingMarkdownMoveImageLinkUpdateRef.current = null;
-    if (!pending) {
-      return;
+    pendingImageReferenceMoveUpdateRef.current = null;
+  }
+
+  function handleApplyMoveImageRewrites(args: {
+    readonly relocations: readonly ProjectDocumentPathRelocation[];
+    readonly completedImageMoves: readonly CompletedImageMove[];
+  }): void {
+    const c1Pending = pendingMarkdownMoveImageLinkUpdateRef.current;
+    pendingMarkdownMoveImageLinkUpdateRef.current = null;
+    const c2Pending = pendingImageReferenceMoveUpdateRef.current;
+    pendingImageReferenceMoveUpdateRef.current = null;
+
+    const byDocument = new Map<
+      string,
+      { rewrites: MoveImageRewriteEntry[]; movedImages: Set<string> }
+    >();
+    const bucket = (
+      documentPath: string
+    ): { rewrites: MoveImageRewriteEntry[]; movedImages: Set<string> } => {
+      let entry = byDocument.get(documentPath);
+      if (!entry) {
+        entry = { rewrites: [], movedImages: new Set() };
+        byDocument.set(documentPath, entry);
+      }
+      return entry;
+    };
+
+    if (c1Pending) {
+      const relocatedNewPaths = new Set(
+        args.relocations.map((relocation) => relocation.newRelativePath)
+      );
+      for (const plan of c1Pending.plans) {
+        if (!relocatedNewPaths.has(plan.newProjectRelativePath)) {
+          continue;
+        }
+        bucket(plan.newProjectRelativePath).rewrites.push(...plan.rewrites);
+      }
     }
 
-    const relocatedNewPaths = new Set(
-      relocations.map((relocation) => relocation.newRelativePath)
-    );
-    const targetPlans = pending.plans.filter((plan) =>
-      relocatedNewPaths.has(plan.newProjectRelativePath)
-    );
-    if (targetPlans.length === 0) {
+    if (c2Pending) {
+      const c2Plans = filterImageReferenceUpdatePlansToCompletedMoves(
+        c2Pending.plans,
+        args.completedImageMoves
+      );
+      for (const plan of c2Plans) {
+        const entry = bucket(plan.markdownDocumentProjectRelativePath);
+        entry.rewrites.push(...plan.rewrites);
+        for (const rewrite of plan.rewrites) {
+          entry.movedImages.add(rewrite.oldImageProjectRelativePath);
+        }
+      }
+    }
+
+    if (byDocument.size === 0) {
       return;
     }
 
     void (async () => {
       let updatedDocuments = 0;
-      let updatedLinks = 0;
-      let failedDocuments = 0;
+      let updatedRewrites = 0;
+      const updatedImages = new Set<string>();
+      let sawImageReferences = false;
+      const failedDocuments: string[] = [];
 
-      for (const plan of targetPlans) {
-        // Sequential on purpose: a closed-document apply is an IPC write, and
-        // successive edits to open editors are easier to reason about serial.
-        const outcome = await applyOneMarkdownMoveImageLinkPlan(plan);
+      for (const [documentPath, entry] of byDocument) {
+        if (entry.movedImages.size > 0) {
+          sawImageReferences = true;
+        }
+        const rewrites = [...entry.rewrites].sort((a, b) => a.from - b.from);
+        const outcome = await applyImageLinkRewritesToProjectDocument(
+          documentPath,
+          rewrites
+        );
         if (outcome === "updated") {
           updatedDocuments += 1;
-          updatedLinks += plan.rewrites.length;
+          updatedRewrites += rewrites.length;
+          for (const image of entry.movedImages) {
+            updatedImages.add(image);
+          }
         } else if (outcome === "failed") {
-          failedDocuments += 1;
+          failedDocuments.push(documentPath);
         }
       }
 
-      if (failedDocuments > 0) {
+      if (failedDocuments.length > 0) {
+        const shown = failedDocuments.slice(0, 5);
+        const documents =
+          shown.join(", ") +
+          (failedDocuments.length > shown.length ? ", …" : "");
         setStatus({
           key: "status.fileExplorerMoveResult",
           values: {
             message: translate(
-              "explorer.move.imageLinkUpdate.status.failed",
-              { count: failedDocuments }
+              "explorer.move.imageReferenceUpdate.status.failed",
+              { count: failedDocuments.length, documents }
             )
           }
         });
         return;
       }
 
-      if (updatedDocuments > 0) {
-        setStatus({
-          key: "status.fileExplorerMoveResult",
-          values: {
-            message: translate(
-              "explorer.move.imageLinkUpdate.status.updated",
-              { count: updatedLinks, documentCount: updatedDocuments }
-            )
-          }
-        });
+      if (updatedDocuments === 0) {
+        return;
       }
+
+      setStatus({
+        key: "status.fileExplorerMoveResult",
+        values: {
+          message: sawImageReferences
+            ? translate("explorer.move.imageReferenceUpdate.status.updated", {
+                count: updatedRewrites,
+                documentCount: updatedDocuments,
+                imageCount: updatedImages.size
+              })
+            : translate("explorer.move.imageLinkUpdate.status.updated", {
+                count: updatedRewrites,
+                documentCount: updatedDocuments
+              })
+        }
+      });
     })();
+  }
+
+  // ----------------------------------------------------------------------
+  // #414 (C2): update OTHER documents' references to a moved image file.
+  // ----------------------------------------------------------------------
+
+  /**
+   * #414: called by the File Explorer BEFORE a move, with every explicitly
+   * selected supported image file whose project-relative path changes.
+   * Searches the project's Markdown documents — filename-string-filtered
+   * first, then only candidate links resolved with the #409 source-file
+   * policy — for references that resolve to a moved image's OLD path, folds
+   * them into one batch, and (when non-empty) shows ONE confirmation dialog.
+   *
+   * Resolves `"cancel"` when the user cancels OR when the reference search
+   * itself fails (an image move must not run against an unknown impact —
+   * Issue #414). Every other outcome resolves `"proceed"`.
+   */
+  async function handlePrepareImageReferenceMoves(
+    movedImages: readonly MovedImageFile[],
+    markdownMovesInSameOperation: readonly MarkdownDocumentMove[] = []
+  ): Promise<"proceed" | "cancel"> {
+    pendingImageReferenceMoveUpdateRef.current = null;
+
+    const projectSnapshot = project;
+    if (!projectSnapshot || !activeProjectContext) {
+      return "proceed";
+    }
+    const effectiveMoves = movedImages.filter(
+      (image) => image.oldProjectRelativePath !== image.newProjectRelativePath
+    );
+    if (effectiveMoves.length === 0) {
+      return "proceed";
+    }
+
+    // #414 P0-2: documents relocated by the SAME operation — a reference in
+    // one of them is generated from its FINAL folder.
+    const movedMarkdownDocuments = markdownMovesInSameOperation.map((move) => ({
+      oldProjectRelativePath: move.oldProjectRelativePath,
+      newProjectRelativePath: move.newProjectRelativePath
+    }));
+
+    // #414 P1-2: a conservative filename pre-filter — over-includes rather
+    // than drops a document that percent-encoded a special char.
+    const searchPlan = imageReferenceSearchPlan(effectiveMoves);
+    const perDocumentPlans: ImageReferenceMoveUpdatePlan[] = [];
+    try {
+      for (const projectDocument of projectSnapshot.documents) {
+        // #414 P1-1: a document we cannot read fails planning — no silent skip.
+        const content = await readProjectDocumentTextOrThrow(
+          projectDocument.relativePath
+        );
+        if (!documentMayReferenceMovedImage(content, searchPlan)) {
+          // Cheap pre-filter — never scan / resolve this document.
+          continue;
+        }
+        const rewrites = planMarkdownImageReferenceRewritesForImageMove({
+          markdown: content,
+          markdownDocumentProjectRelativePath: projectDocument.relativePath,
+          movedImages: effectiveMoves,
+          movedMarkdownDocuments
+        });
+        if (rewrites.length > 0) {
+          perDocumentPlans.push({
+            markdownDocumentProjectRelativePath:
+              rewrites[0].markdownDocumentProjectRelativePath,
+            rewrites
+          });
+        }
+      }
+    } catch {
+      setStatus({
+        key: "status.fileExplorerMoveResult",
+        values: {
+          message: translate(
+            "explorer.move.imageReferenceUpdate.status.planningFailed"
+          )
+        }
+      });
+      return "cancel";
+    }
+
+    // A project switch landed during the scan — don't stage / block.
+    if (projectRef.current !== projectSnapshot) {
+      return "proceed";
+    }
+
+    const batch = buildImageReferenceMoveUpdateBatch(perDocumentPlans);
+    if (batch.plans.length === 0) {
+      return "proceed";
+    }
+
+    imageReferenceMoveUpdateResolveRef.current?.("cancel");
+
+    return await new Promise<"proceed" | "cancel">((resolve) => {
+      imageReferenceMoveUpdateOpenerRef.current =
+        typeof document !== "undefined" ? document.activeElement : null;
+      imageReferenceMoveUpdateResolveRef.current = (choice) => {
+        imageReferenceMoveUpdateResolveRef.current = null;
+        setImageReferenceMoveUpdateDialogState(null);
+        const resolution = resolveImageReferenceMoveUpdateChoice(choice, batch);
+        pendingImageReferenceMoveUpdateRef.current = resolution.stagedBatch
+          ? { plans: resolution.stagedBatch.plans }
+          : null;
+        resolve(resolution.moveDecision);
+      };
+      setImageReferenceMoveUpdateDialogState({
+        referenceCount: batch.totalReferenceCount,
+        documentCount: batch.documentCount,
+        imageCount: batch.imageCount
+      });
+    });
+  }
+
+  /** #414: dialog footer — run the move, then rewrite the references. */
+  function confirmImageReferenceMoveUpdate(): void {
+    imageReferenceMoveUpdateResolveRef.current?.("update");
+  }
+
+  /** #414: dialog footer — run the move only, leave every body untouched. */
+  function skipImageReferenceMoveUpdate(): void {
+    imageReferenceMoveUpdateResolveRef.current?.("skip");
+  }
+
+  /** #414: dialog footer / Escape — abort the move entirely. */
+  function cancelImageReferenceMoveUpdate(): void {
+    imageReferenceMoveUpdateResolveRef.current?.("cancel");
   }
 
   /**
@@ -9566,8 +9829,14 @@ export function App(): JSX.Element {
                       onFileExplorerPrepareMarkdownDocumentMoves={
                         handlePrepareMarkdownDocumentMoves
                       }
-                      onFileExplorerApplyMarkdownDocumentMoveImageLinks={
-                        handleApplyMarkdownDocumentMoveImageLinks
+                      onFileExplorerPrepareImageReferenceMoves={
+                        handlePrepareImageReferenceMoves
+                      }
+                      onFileExplorerApplyMoveImageRewrites={
+                        handleApplyMoveImageRewrites
+                      }
+                      onFileExplorerClearMoveImageRewrites={
+                        handleClearMoveImageRewrites
                       }
                       onFileExplorerEntriesDeleted={
                         handleFileExplorerEntriesDeleted
@@ -10117,6 +10386,19 @@ export function App(): JSX.Element {
           onUpdate={confirmMarkdownMoveImageLinkUpdate}
           onKeep={skipMarkdownMoveImageLinkUpdate}
           onCancel={cancelMarkdownMoveImageLinkUpdate}
+        />
+      ) : null}
+
+      {imageReferenceMoveUpdateDialogState !== null ? (
+        <MarkdownImageReferenceMoveUpdateDialog
+          referenceCount={imageReferenceMoveUpdateDialogState.referenceCount}
+          documentCount={imageReferenceMoveUpdateDialogState.documentCount}
+          imageCount={imageReferenceMoveUpdateDialogState.imageCount}
+          translate={translate}
+          opener={imageReferenceMoveUpdateOpenerRef.current}
+          onUpdate={confirmImageReferenceMoveUpdate}
+          onKeep={skipImageReferenceMoveUpdate}
+          onCancel={cancelImageReferenceMoveUpdate}
         />
       ) : null}
 

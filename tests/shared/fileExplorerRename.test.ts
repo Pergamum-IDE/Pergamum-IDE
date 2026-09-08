@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMarkdownFileRenameExtension,
+  applyRenamableFileRenameExtension,
   fileExplorerRenameFailureReasonFromErrorCode,
   isFileExplorerRenameValidationReason,
   validateFileExplorerRenameName
@@ -63,6 +64,114 @@ describe("File Explorer rename helpers (#313)", () => {
         newName: "drafts"
       })
     ).toEqual({ ok: false, reason: "samePath" });
+  });
+
+  it("#414: renames supported image files (path-only, no conversion)", () => {
+    // No new extension → keep the original image extension.
+    expect(
+      applyRenamableFileRenameExtension("foo.png", "bar")
+    ).toEqual({ ok: true, name: "bar.png" });
+    // A new supported-image extension is allowed (path change only).
+    expect(
+      applyRenamableFileRenameExtension("foo.png", "foo.jpg")
+    ).toEqual({ ok: true, name: "foo.jpg" });
+    expect(
+      applyRenamableFileRenameExtension("shot.JPEG", "shot.webp")
+    ).toEqual({ ok: true, name: "shot.webp" });
+    // Non-image new extension is rejected.
+    expect(
+      applyRenamableFileRenameExtension("foo.png", "foo.svg")
+    ).toEqual({ ok: false, reason: "unsupportedExtension" });
+    // Same name → samePath.
+    expect(
+      applyRenamableFileRenameExtension("foo.png", "foo")
+    ).toEqual({ ok: false, reason: "samePath" });
+    // A non-Markdown non-image original is still unsupported.
+    expect(
+      applyRenamableFileRenameExtension("notes.txt", "renamed")
+    ).toEqual({ ok: false, reason: "unsupportedExtension" });
+    // Markdown still routes through the Markdown rules unchanged.
+    expect(
+      applyRenamableFileRenameExtension("chapter-01.md", "chapter-02")
+    ).toEqual({ ok: true, name: "chapter-02.md" });
+  });
+
+  it("#414: validateFileExplorerRenameName accepts an image file rename", () => {
+    expect(
+      validateFileExplorerRenameName({
+        kind: "file",
+        originalName: "diagram.png",
+        newName: "architecture"
+      })
+    ).toEqual({ ok: true, name: "architecture.png" });
+  });
+
+  it("#414: rejects Windows-invalid filename characters as `invalidCharacter`", () => {
+    for (const bad of [
+      "100<>.png",
+      'a"b.png',
+      "a|b.md",
+      "a?b.png",
+      "a*b.png",
+      "a:b.png"
+    ]) {
+      expect(
+        validateFileExplorerRenameName({
+          kind: "file",
+          originalName: "foo.png",
+          newName: bad
+        })
+      ).toEqual({ ok: false, reason: "invalidCharacter" });
+    }
+    // Also for folders.
+    expect(
+      validateFileExplorerRenameName({
+        kind: "folder",
+        originalName: "Drafts",
+        newName: "Draft<s>"
+      })
+    ).toEqual({ ok: false, reason: "invalidCharacter" });
+  });
+
+  it("#414: invalidCharacter is reported BEFORE the extension / same-name checks", () => {
+    // `.txt` would be `unsupportedExtension`, and `100<>` on its own is
+    // otherwise a valid-shaped rename — the invalid char wins.
+    expect(
+      validateFileExplorerRenameName({
+        kind: "file",
+        originalName: "foo.png",
+        newName: "bar<.txt"
+      })
+    ).toEqual({ ok: false, reason: "invalidCharacter" });
+  });
+
+  it("#414: `samePath` is still reported only for a genuine no-op rename", () => {
+    expect(
+      validateFileExplorerRenameName({
+        kind: "file",
+        originalName: "diagram.png",
+        newName: "diagram"
+      })
+    ).toEqual({ ok: false, reason: "samePath" });
+    expect(
+      validateFileExplorerRenameName({
+        kind: "file",
+        originalName: "diagram.png",
+        newName: "DIAGRAM.PNG"
+      })
+    ).toEqual({ ok: false, reason: "samePath" });
+    // A real rename with a valid name is not `samePath`.
+    expect(
+      validateFileExplorerRenameName({
+        kind: "file",
+        originalName: "diagram.png",
+        newName: "diagram2"
+      })
+    ).toEqual({ ok: true, name: "diagram2.png" });
+  });
+
+  it("#414: isFileExplorerRenameValidationReason treats invalidCharacter as a validation (not filesystem) reason", () => {
+    expect(isFileExplorerRenameValidationReason("invalidCharacter")).toBe(true);
   });
 
   it("classifies validation reasons separately from filesystem reasons", () => {

@@ -474,6 +474,24 @@ export const jaTranslations = {
     "移動後、{documentCount} 件の文書で画像リンク {count} 件を更新しました",
   "explorer.move.imageLinkUpdate.status.failed":
     "移動は完了しましたが、{count} 件の文書で画像リンクの更新に失敗しました",
+  "explorer.move.imageReferenceUpdate.title": "画像参照の更新",
+  "explorer.move.imageReferenceUpdate.description":
+    "この移動により、文書内の画像リンクが移動前の画像を指したままになります。移動後の画像を指すように画像リンクを更新しますか？",
+  "explorer.move.imageReferenceUpdate.imageCount": "対象画像: {count}件",
+  "explorer.move.imageReferenceUpdate.documentCount": "対象文書: {count}件",
+  "explorer.move.imageReferenceUpdate.count": "更新対象: {count}件",
+  "explorer.move.imageReferenceUpdate.glossaryNote":
+    "Glossary の画像参照はこの操作では更新されません。",
+  "explorer.move.imageReferenceUpdate.update": "更新する",
+  "explorer.move.imageReferenceUpdate.update.batch": "一括更新する",
+  "explorer.move.imageReferenceUpdate.keep": "更新しない",
+  "explorer.move.imageReferenceUpdate.keep.batch": "どれも更新しない",
+  "explorer.move.imageReferenceUpdate.status.updated":
+    "移動後、{imageCount} 件の画像について {documentCount} 件の文書で画像参照 {count} 件を更新しました",
+  "explorer.move.imageReferenceUpdate.status.failed":
+    "移動は完了しましたが、次の {count} 件の文書で画像参照の更新に失敗しました: {documents}",
+  "explorer.move.imageReferenceUpdate.status.planningFailed":
+    "画像参照の調査に失敗したため、移動を中止しました",
   "explorer.contextMenu.delete": "削除...",
   "explorer.delete.disabled.noProject": "プロジェクトが開かれていません。",
   "explorer.delete.disabled.readOnlyProject":
@@ -609,6 +627,8 @@ export const jaTranslations = {
   "explorer.rename.error.alreadyExists": "同じ名前のファイルまたはフォルダが既に存在します。",
   "explorer.rename.error.cannotRenameProjectRoot": "プロジェクト自体の名前はここでは変更できません。",
   "explorer.rename.error.folderNotEmpty": "空ではないフォルダはまだ名前変更できません。",
+  "explorer.rename.error.invalidCharacter":
+    "ファイル名に使用できない文字が含まれています。",
   "explorer.rename.error.invalidName": "この名前は使用できません。",
   "explorer.rename.error.nameTooLong": "名前またはパスが長すぎます。",
   "explorer.rename.error.noProject": "プロジェクトが開かれていません。",
@@ -625,8 +645,9 @@ export const jaTranslations = {
   "explorer.rename.error.samePath": "変更前と同じ名前には変更できません。",
   "explorer.rename.error.sourceMissing": "名前変更元が見つかりません。",
   "explorer.rename.error.unknown": "名前変更に失敗しました。時間をおいて再度お試しください。",
-  "explorer.rename.error.unsupportedExtension": "Markdown ファイル名には .md または .markdown を使用してください。",
-  "explorer.rename.file.description": "Markdownファイルの新しい名前を入力してください。拡張子を省略すると現在の拡張子を維持します。",
+  "explorer.rename.error.unsupportedExtension":
+    "このファイルでは、その拡張子は使用できません。拡張子を省略すると現在の拡張子を維持します。",
+  "explorer.rename.file.description": "ファイルの新しい名前を入力してください。拡張子を省略すると現在の拡張子を維持します。",
   "explorer.rename.file.inputLabel": "新しいファイル名",
   "explorer.rename.file.primary": "名前を変更",
   "explorer.rename.file.title": "ファイル名を変更",

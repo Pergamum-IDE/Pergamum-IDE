@@ -53,6 +53,7 @@ import {
   type DeleteFileExplorerEntryResponse,
   type RenameFileExplorerEntryRequest,
   type RenameFileExplorerEntryResult,
+  type PreflightRenameFileExplorerEntryResult,
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult,
   type StartupProjectOpenResult,
@@ -91,6 +92,7 @@ import {
 import {
   fileExplorerRenameFailureReasonFromErrorCode,
   validateFileExplorerRenameName,
+  RENAMABLE_IMAGE_FILE_EXTENSIONS,
   type FileExplorerRenameFailureReason
 } from "../shared/fileExplorerRename";
 import type { AppPlatform } from "../shared/platform";
@@ -1411,6 +1413,19 @@ function isProjectMarkdownDocumentPath(relativePath: string): boolean {
   return extension === ".md" || extension === ".markdown";
 }
 
+/**
+ * #414: a project file the File Explorer may rename — a Markdown document or a
+ * supported image file. Image rename is a path change only (no conversion).
+ */
+function isRenamableProjectFilePath(relativePath: string): boolean {
+  if (isProjectMarkdownDocumentPath(relativePath)) {
+    return true;
+  }
+  return RENAMABLE_IMAGE_FILE_EXTENSIONS.includes(
+    path.extname(relativePath).toLowerCase()
+  );
+}
+
 function normalizedProjectMarkdownDocumentRelativePath(
   rootPath: string,
   absolutePath: string
@@ -1934,7 +1949,7 @@ async function resolveFileExplorerRenameTarget(
 
   if (
     entryKind === "file" &&
-    !isProjectMarkdownDocumentPath(sourceRelativePath)
+    !isRenamableProjectFilePath(sourceRelativePath)
   ) {
     return { kind: "error", reason: "unsupportedExtension" };
   }
@@ -2038,12 +2053,16 @@ async function resolveFileExplorerRenameTarget(
   // (same computation as a #340 folder Move).
   const movedProjectDocuments: ProjectDocumentPathRelocation[] =
     entryKind === "file"
-      ? [
-          {
-            oldRelativePath: sourceRelativePath,
-            newRelativePath: targetRelativePath
-          }
-        ]
+      ? // #414: an image file is not a project *document* — never enrol its
+        // path in the Markdown document registry / Recovery re-key.
+        isProjectMarkdownDocumentPath(sourceRelativePath)
+        ? [
+            {
+              oldRelativePath: sourceRelativePath,
+              newRelativePath: targetRelativePath
+            }
+          ]
+        : []
       : [...parent.projectState.documentRelativePaths]
           .filter((doc) => doc.startsWith(`${sourceRelativePath}/`))
           .map((oldRelativePath) => ({
@@ -2078,6 +2097,38 @@ export type RecoveryPathRekeyHook = (
 ) => RecoveryPathRekeyResult;
 
 let recoveryPathRekeyHook: RecoveryPathRekeyHook | null = null;
+
+/**
+ * #414: dry-run the rename — the SAME resolve + validation as
+ * {@link renameFileExplorerEntry}, but no `fs.rename`. Lets the renderer show
+ * the image-reference update confirmation only for a rename that would
+ * actually land. The real rename re-runs this resolution (TOCTOU-safe).
+ */
+async function renameFileExplorerEntryPreflight(
+  rawRequest: unknown
+): Promise<PreflightRenameFileExplorerEntryResult> {
+  let request: RenameFileExplorerEntryRequest;
+
+  try {
+    request = parseRenameFileExplorerEntryRequest(rawRequest);
+  } catch {
+    return { ok: false, reason: "invalidName" };
+  }
+
+  const target = await resolveFileExplorerRenameTarget(request);
+
+  if (target.kind === "error") {
+    return { ok: false, reason: target.reason };
+  }
+
+  return {
+    ok: true,
+    oldRelativePath: target.oldRelativePath,
+    newRelativePath: target.newRelativePath,
+    newName: target.newName,
+    entryKind: target.entryKind
+  };
+}
 
 async function renameFileExplorerEntry(
   rawRequest: unknown
@@ -4040,6 +4091,15 @@ export function registerProjectIpc(
       rawRequest: unknown
     ): Promise<RenameFileExplorerEntryResult> =>
       renameFileExplorerEntry(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.renameFileExplorerEntryPreflight,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<PreflightRenameFileExplorerEntryResult> =>
+      renameFileExplorerEntryPreflight(rawRequest)
   );
 
   ipcMain.handle(

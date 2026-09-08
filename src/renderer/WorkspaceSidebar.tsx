@@ -3,6 +3,10 @@ import type { DocumentMapSettings } from "../shared/documentMapSettings";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import type { MarkdownDocumentMove } from "./markdownDocumentMoveImageLinkUpdate";
 import type {
+  CompletedImageMove,
+  MovedImageFile
+} from "./markdownImageReferenceMoveUpdate";
+import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
   GlossaryEntryId,
@@ -72,14 +76,29 @@ interface WorkspaceSidebarProps {
   onFileExplorerProjectDocumentsMoved?: (
     relocations: readonly ProjectDocumentPathRelocation[]
   ) => void;
-  /** #413: pre-move confirmation + post-move apply for the project-local
-   *  image links of every explicitly-selected Markdown document in a move. */
+  /** #413: pre-move confirmation for the project-local image links of every
+   *  explicitly-selected Markdown document in a move (C1). #414 P0-2: also
+   *  told which images move in the same operation. */
   onFileExplorerPrepareMarkdownDocumentMoves?: (
-    moves: readonly MarkdownDocumentMove[]
+    moves: readonly MarkdownDocumentMove[],
+    imageMovesInSameOperation: readonly MovedImageFile[]
   ) => Promise<"proceed" | "cancel">;
-  onFileExplorerApplyMarkdownDocumentMoveImageLinks?: (
-    relocations: readonly ProjectDocumentPathRelocation[]
-  ) => void;
+  /** #414 (C2): pre-move confirmation for the image references in OTHER
+   *  Markdown documents when image files move. #414 P0-2: also told which
+   *  documents move in the same operation. */
+  onFileExplorerPrepareImageReferenceMoves?: (
+    movedImages: readonly MovedImageFile[],
+    markdownMovesInSameOperation: readonly MarkdownDocumentMove[]
+  ) => Promise<"proceed" | "cancel">;
+  /** #413/#414: ONE combined post-move apply — C1 batch + C2 batch merged so
+   *  a link touched by both is rewritten once. */
+  onFileExplorerApplyMoveImageRewrites?: (args: {
+    readonly relocations: readonly ProjectDocumentPathRelocation[];
+    readonly completedImageMoves: readonly CompletedImageMove[];
+  }) => void;
+  /** #414 P1-1: drop any staged C1 / C2 rewrite batch (a move / rename that
+   *  did not land). */
+  onFileExplorerClearMoveImageRewrites?: () => void;
   /** #351: after a File Explorer delete run settles, the project-relative
    *  paths that were actually removed. */
   onFileExplorerEntriesDeleted?: (
@@ -204,7 +223,9 @@ export function WorkspaceSidebar({
   onFileExplorerProjectDocumentRenamed,
   onFileExplorerProjectDocumentsMoved,
   onFileExplorerPrepareMarkdownDocumentMoves,
-  onFileExplorerApplyMarkdownDocumentMoveImageLinks,
+  onFileExplorerPrepareImageReferenceMoves,
+  onFileExplorerApplyMoveImageRewrites,
+  onFileExplorerClearMoveImageRewrites,
   onFileExplorerEntriesDeleted,
   onFileExplorerRenameUnavailable,
   fileExplorerDirtyProjectDocumentRelativePaths,
@@ -276,9 +297,11 @@ export function WorkspaceSidebar({
               onPrepareMarkdownDocumentMoves={
                 onFileExplorerPrepareMarkdownDocumentMoves
               }
-              onApplyMarkdownDocumentMoveImageLinks={
-                onFileExplorerApplyMarkdownDocumentMoveImageLinks
+              onPrepareImageReferenceMoves={
+                onFileExplorerPrepareImageReferenceMoves
               }
+              onApplyMoveImageRewrites={onFileExplorerApplyMoveImageRewrites}
+              onClearMoveImageRewrites={onFileExplorerClearMoveImageRewrites}
               onEntriesDeleted={onFileExplorerEntriesDeleted}
               onRenameUnavailable={onFileExplorerRenameUnavailable}
               dirtyProjectDocumentRelativePaths={

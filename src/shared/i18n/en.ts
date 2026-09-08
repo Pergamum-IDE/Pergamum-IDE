@@ -475,6 +475,24 @@ export const enTranslations = {
     "Moved, and updated {count} image link(s) across {documentCount} document(s)",
   "explorer.move.imageLinkUpdate.status.failed":
     "Moved, but updating the image links failed for {count} document(s)",
+  "explorer.move.imageReferenceUpdate.title": "Update image references",
+  "explorer.move.imageReferenceUpdate.description":
+    "After this move, image links in your documents would still point at the images' old location. Update the image links to point at the new location?",
+  "explorer.move.imageReferenceUpdate.imageCount": "Images affected: {count}",
+  "explorer.move.imageReferenceUpdate.documentCount": "Documents affected: {count}",
+  "explorer.move.imageReferenceUpdate.count": "References to update: {count}",
+  "explorer.move.imageReferenceUpdate.glossaryNote":
+    "Glossary image references are not updated by this operation.",
+  "explorer.move.imageReferenceUpdate.update": "Update",
+  "explorer.move.imageReferenceUpdate.update.batch": "Update all",
+  "explorer.move.imageReferenceUpdate.keep": "Don't update",
+  "explorer.move.imageReferenceUpdate.keep.batch": "Don't update any",
+  "explorer.move.imageReferenceUpdate.status.updated":
+    "Moved, and updated {count} image reference(s) for {imageCount} image(s) across {documentCount} document(s)",
+  "explorer.move.imageReferenceUpdate.status.failed":
+    "Moved, but updating image references failed for {count} document(s): {documents}",
+  "explorer.move.imageReferenceUpdate.status.planningFailed":
+    "Move cancelled: could not analyse image references",
   "explorer.contextMenu.delete": "Delete...",
   "explorer.delete.disabled.noProject": "No project is open.",
   "explorer.delete.disabled.readOnlyProject":
@@ -610,6 +628,8 @@ export const enTranslations = {
   "explorer.rename.error.alreadyExists": "A file or folder with this name already exists.",
   "explorer.rename.error.cannotRenameProjectRoot": "The project itself cannot be renamed here.",
   "explorer.rename.error.folderNotEmpty": "Non-empty folders cannot be renamed yet.",
+  "explorer.rename.error.invalidCharacter":
+    "The file name contains characters that cannot be used.",
   "explorer.rename.error.invalidName": "This name cannot be used.",
   "explorer.rename.error.nameTooLong": "The name or path is too long.",
   "explorer.rename.error.noProject": "No project is open.",
@@ -626,8 +646,9 @@ export const enTranslations = {
   "explorer.rename.error.samePath": "Enter a different name.",
   "explorer.rename.error.sourceMissing": "The item to rename was not found.",
   "explorer.rename.error.unknown": "Could not rename the item. Try again later.",
-  "explorer.rename.error.unsupportedExtension": "Use .md or .markdown for Markdown files.",
-  "explorer.rename.file.description": "Enter a new name for this Markdown file. If you omit the extension, the current extension is kept.",
+  "explorer.rename.error.unsupportedExtension":
+    "That extension can't be used for this file. Omit the extension to keep the current extension.",
+  "explorer.rename.file.description": "Enter a new file name. If you omit the extension, the current extension will be kept.",
   "explorer.rename.file.inputLabel": "New file name",
   "explorer.rename.file.primary": "Rename",
   "explorer.rename.file.title": "Rename File",

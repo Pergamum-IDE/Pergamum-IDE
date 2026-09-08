@@ -66,7 +66,7 @@ interface HarnessOptions {
 interface Harness {
   moveFileExplorerEntries: ReturnType<typeof vi.fn>;
   onPrepareMarkdownDocumentMoves: ReturnType<typeof vi.fn>;
-  onApplyMarkdownDocumentMoveImageLinks: ReturnType<typeof vi.fn>;
+  onApplyMoveImageRewrites: ReturnType<typeof vi.fn>;
   onProjectDocumentsMoved: ReturnType<typeof vi.fn>;
 }
 
@@ -130,7 +130,7 @@ async function mount(options: HarnessOptions = {}): Promise<Harness> {
   const onPrepareMarkdownDocumentMoves = vi.fn(
     async () => options.prepareDecision ?? "proceed"
   );
-  const onApplyMarkdownDocumentMoveImageLinks = vi.fn();
+  const onApplyMoveImageRewrites = vi.fn();
   const onProjectDocumentsMoved = vi.fn();
 
   Object.defineProperty(window, "pergamum", {
@@ -159,7 +159,7 @@ async function mount(options: HarnessOptions = {}): Promise<Harness> {
         onMoveResultMessage: vi.fn(),
         onProjectDocumentsMoved,
         onPrepareMarkdownDocumentMoves,
-        onApplyMarkdownDocumentMoveImageLinks
+        onApplyMoveImageRewrites
       })
     );
   });
@@ -168,7 +168,7 @@ async function mount(options: HarnessOptions = {}): Promise<Harness> {
   return {
     moveFileExplorerEntries,
     onPrepareMarkdownDocumentMoves,
-    onApplyMarkdownDocumentMoveImageLinks,
+    onApplyMoveImageRewrites,
     onProjectDocumentsMoved
   };
 }
@@ -229,9 +229,10 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
     click(".fileExplorerDragDropMoveButton");
     await flush();
 
-    expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledWith([
-      { oldProjectRelativePath: "a.md", newProjectRelativePath: "Drafts/a.md" }
-    ]);
+    expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledWith(
+      [{ oldProjectRelativePath: "a.md", newProjectRelativePath: "Drafts/a.md" }],
+      []
+    );
     expect(harness.moveFileExplorerEntries).toHaveBeenCalledWith({
       sourceRelativePaths: ["a.md"],
       destinationFolderRelativePath: "Drafts",
@@ -241,11 +242,10 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
     expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
       { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" }
     ]);
-    expect(
-      harness.onApplyMarkdownDocumentMoveImageLinks
-    ).toHaveBeenCalledWith([
-      { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" }
-    ]);
+    expect(harness.onApplyMoveImageRewrites).toHaveBeenCalledWith({
+      relocations: [{ oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" }],
+      completedImageMoves: []
+    });
   });
 
   it("hands EVERY selected Markdown file of a multi-drop to the batch hook, and tracks all", async () => {
@@ -256,10 +256,13 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
     click(".fileExplorerDragDropMoveButton");
     await flush();
 
-    expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledWith([
-      { oldProjectRelativePath: "a.md", newProjectRelativePath: "Drafts/a.md" },
-      { oldProjectRelativePath: "b.md", newProjectRelativePath: "Drafts/b.md" }
-    ]);
+    expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledWith(
+      [
+        { oldProjectRelativePath: "a.md", newProjectRelativePath: "Drafts/a.md" },
+        { oldProjectRelativePath: "b.md", newProjectRelativePath: "Drafts/b.md" }
+      ],
+      []
+    );
     expect(harness.moveFileExplorerEntries).toHaveBeenCalledWith({
       sourceRelativePaths: ["a.md", "b.md"],
       destinationFolderRelativePath: "Drafts",
@@ -270,12 +273,13 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
       { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" },
       { oldRelativePath: "b.md", newRelativePath: "Drafts/b.md" }
     ]);
-    expect(
-      harness.onApplyMarkdownDocumentMoveImageLinks
-    ).toHaveBeenCalledWith([
-      { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" },
-      { oldRelativePath: "b.md", newRelativePath: "Drafts/b.md" }
-    ]);
+    expect(harness.onApplyMoveImageRewrites).toHaveBeenCalledWith({
+      relocations: [
+        { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" },
+        { oldRelativePath: "b.md", newRelativePath: "Drafts/b.md" }
+      ],
+      completedImageMoves: []
+    });
   });
 
   it("hands only the Markdown file of a mixed-selection drop to the batch hook", async () => {
@@ -286,9 +290,10 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
     click(".fileExplorerDragDropMoveButton");
     await flush();
 
-    expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledWith([
-      { oldProjectRelativePath: "a.md", newProjectRelativePath: "Drafts/a.md" }
-    ]);
+    expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledWith(
+      [{ oldProjectRelativePath: "a.md", newProjectRelativePath: "Drafts/a.md" }],
+      []
+    );
     // The move itself still carries the full selection.
     expect(harness.moveFileExplorerEntries).toHaveBeenCalledWith({
       sourceRelativePaths: ["a.md", "note.txt"],
@@ -310,7 +315,7 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
     expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledTimes(1);
     expect(harness.moveFileExplorerEntries).not.toHaveBeenCalled();
     expect(
-      harness.onApplyMarkdownDocumentMoveImageLinks
+      harness.onApplyMoveImageRewrites
     ).not.toHaveBeenCalled();
   });
 
