@@ -459,6 +459,21 @@ export const jaTranslations = {
   "explorer.move.status.allFailed": "{failed} 個すべての項目の移動に失敗しました",
   "explorer.move.status.validationFailed": "移動できません: {reason}",
   "explorer.move.status.unavailable": "現在、移動はできません",
+  "explorer.move.imageLinkUpdate.title": "画像リンクの更新",
+  "explorer.move.imageLinkUpdate.description":
+    "この移動により、文書内の相対画像リンクの参照先が変わります。移動後も同じ画像を指すように画像リンクを更新しますか？",
+  "explorer.move.imageLinkUpdate.description.batch":
+    "この移動により、選択した文書内の相対画像リンクの参照先が変わります。移動後も同じ画像を指すように、各文書の画像リンクを更新しますか？",
+  "explorer.move.imageLinkUpdate.count": "更新対象: {count}件",
+  "explorer.move.imageLinkUpdate.documentCount": "対象文書: {count}件",
+  "explorer.move.imageLinkUpdate.update": "更新する",
+  "explorer.move.imageLinkUpdate.update.batch": "一括更新する",
+  "explorer.move.imageLinkUpdate.keep": "更新しない",
+  "explorer.move.imageLinkUpdate.keep.batch": "どれも更新しない",
+  "explorer.move.imageLinkUpdate.status.updated":
+    "移動後、{documentCount} 件の文書で画像リンク {count} 件を更新しました",
+  "explorer.move.imageLinkUpdate.status.failed":
+    "移動は完了しましたが、{count} 件の文書で画像リンクの更新に失敗しました",
   "explorer.contextMenu.delete": "削除...",
   "explorer.delete.disabled.noProject": "プロジェクトが開かれていません。",
   "explorer.delete.disabled.readOnlyProject":

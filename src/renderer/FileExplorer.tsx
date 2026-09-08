@@ -53,6 +53,10 @@ import {
   type NameInputDialogSubmitResult
 } from "./dialog/NameInputDialog";
 import { MoveDestinationDialog } from "./dialog/MoveDestinationDialog";
+import {
+  resolveMarkdownDocumentMoves,
+  type MarkdownDocumentMove
+} from "./markdownDocumentMoveImageLinkUpdate";
 import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
 import { FileExplorerDeleteDialog } from "./FileExplorerDeleteDialog";
 import {
@@ -201,6 +205,30 @@ interface FileExplorerProps {
    *  (tab label, save target, active/highlighted path, session snapshot) and
    *  its Recovery bookkeeping along these. A non-open old path is a no-op. */
   onProjectDocumentsMoved?: (
+    relocations: readonly ProjectDocumentPathRelocation[]
+  ) => void;
+  /**
+   * #413: called BEFORE a Move, with every EXPLICITLY-selected Markdown file
+   * that is changing parent folder (single, multiple, or the Markdown files
+   * inside a mixed selection; a folder source is never expanded). The host
+   * plans each document's project-local image-link rewrites and, when the
+   * batch has at least one rewrite, shows one pre-move confirmation dialog.
+   * Resolves `"cancel"` to abort the Move, `"proceed"` otherwise (nothing to
+   * update, "don't update", or "update"). The staged batch is applied via
+   * {@link onApplyMarkdownDocumentMoveImageLinks} after the Move lands.
+   */
+  onPrepareMarkdownDocumentMoves?: (
+    moves: readonly MarkdownDocumentMove[]
+  ) => Promise<"proceed" | "cancel">;
+  /**
+   * #413: called right after a successful Move, with the same relocations
+   * passed to {@link onProjectDocumentsMoved}. The host applies whatever
+   * image-link rewrite batch it staged in
+   * {@link onPrepareMarkdownDocumentMoves} to each relocated document — a
+   * CodeMirror transaction when it is open, a direct write to the moved file
+   * when it is closed.
+   */
+  onApplyMarkdownDocumentMoveImageLinks?: (
     relocations: readonly ProjectDocumentPathRelocation[]
   ) => void;
   onRenameUnavailable?: (message: string) => void;
@@ -748,6 +776,8 @@ export function FileExplorer({
   isProjectDocumentDirty = () => false,
   onProjectDocumentRenamed,
   onProjectDocumentsMoved,
+  onPrepareMarkdownDocumentMoves,
+  onApplyMarkdownDocumentMoveImageLinks,
   onRenameUnavailable,
   dirtyProjectDocumentRelativePaths = EMPTY_STRING_LIST,
   onMoveResultMessage,
@@ -2393,6 +2423,10 @@ export function FileExplorer({
       const relocations = collectMovedProjectDocumentRelocations(result);
       if (relocations.length > 0) {
         onProjectDocumentsMoved?.(relocations);
+        // #413: apply any image-link rewrite staged before this Move. Runs
+        // after `onProjectDocumentsMoved` so an open document's editor
+        // identity is already at its new path.
+        onApplyMarkdownDocumentMoveImageLinks?.(relocations);
       }
       const generation = loadGenerationRef.current + 1;
       loadGenerationRef.current = generation;
@@ -2527,10 +2561,42 @@ export function FileExplorer({
     },
     [
       loadDirectoryForGeneration,
+      onApplyMarkdownDocumentMoveImageLinks,
       onMoveResultMessage,
       onProjectDocumentsMoved,
       translate
     ]
+  );
+
+  // #413: shared pre-move gate for every File Explorer Move route (Move…
+  // menu, Drag & Drop, Cut/Paste). Collects every explicitly-selected
+  // Markdown file that changes parent folder and hands them to the host,
+  // which — only when at least one document has a link to rewrite — shows one
+  // confirmation dialog BEFORE the move runs. Returns `"cancel"` to abort the
+  // move, `"proceed"` otherwise (nothing to update, "don't update", "update",
+  // no host handler, or an analysis error — the move is never blocked by a
+  // failure of this feature). A directory source is never expanded; a
+  // selection with no Markdown files skips the feature entirely.
+  const confirmMarkdownDocumentMoves = useCallback(
+    async (
+      sourceRelativePaths: readonly string[],
+      destinationFolderRelativePath: string
+    ): Promise<"proceed" | "cancel"> => {
+      const markdownMoves = resolveMarkdownDocumentMoves({
+        sourceRelativePaths,
+        destinationFolderRelativePath,
+        entriesByDirectoryPath
+      });
+      if (markdownMoves.length === 0 || !onPrepareMarkdownDocumentMoves) {
+        return "proceed";
+      }
+      try {
+        return await onPrepareMarkdownDocumentMoves(markdownMoves);
+      } catch {
+        return "proceed";
+      }
+    },
+    [entriesByDirectoryPath, onPrepareMarkdownDocumentMoves]
   );
 
   const performMove = useCallback(
@@ -2552,6 +2618,17 @@ export function FileExplorer({
         selectionHasDirtyOpenDocument
       ) {
         onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        return;
+      }
+
+      // #413: offer to keep the selected Markdown documents' project-local
+      // image links pointing at the same images; `"cancel"` aborts the Move.
+      if (
+        (await confirmMarkdownDocumentMoves(
+          sources.relativePaths,
+          destinationFolderRelativePath
+        )) === "cancel"
+      ) {
         return;
       }
 
@@ -2579,6 +2656,7 @@ export function FileExplorer({
     },
     [
       applyMoveResponse,
+      confirmMarkdownDocumentMoves,
       dirtyProjectDocumentRelativePaths,
       entriesByDirectoryPath,
       hasProject,
@@ -2699,6 +2777,17 @@ export function FileExplorer({
       entriesByDirectoryPath
     );
 
+    // #413: same pre-move image-link confirmation as the Move… menu route;
+    // `"cancel"` aborts the Paste before anything moves.
+    if (
+      (await confirmMarkdownDocumentMoves(
+        cutState.sourceRelativePaths,
+        destinationFolderRelativePath
+      )) === "cancel"
+    ) {
+      return;
+    }
+
     setMoveInFlight(true);
     let response: Awaited<
       ReturnType<typeof window.pergamum.projects.moveFileExplorerEntries>
@@ -2727,6 +2816,7 @@ export function FileExplorer({
     }
   }, [
     applyMoveResponse,
+    confirmMarkdownDocumentMoves,
     cutState,
     dirtyProjectDocumentRelativePaths,
     entriesByDirectoryPath,
@@ -2867,6 +2957,18 @@ export function FileExplorer({
         return;
       }
 
+      // #413: same pre-move image-link confirmation as the Move… menu route;
+      // `"cancel"` aborts the drop before anything moves. A directory-only
+      // drag contributes no Markdown documents and skips this entirely.
+      if (
+        (await confirmMarkdownDocumentMoves(
+          sourceRelativePaths,
+          destinationFolderRelativePath
+        )) === "cancel"
+      ) {
+        return;
+      }
+
       setMoveInFlight(true);
       let response: Awaited<
         ReturnType<typeof window.pergamum.projects.moveFileExplorerEntries>
@@ -2891,6 +2993,7 @@ export function FileExplorer({
     },
     [
       applyMoveResponse,
+      confirmMarkdownDocumentMoves,
       dirtyProjectDocumentRelativePaths,
       hasProject,
       moveInFlight,

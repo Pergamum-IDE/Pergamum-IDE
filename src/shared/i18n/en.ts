@@ -460,6 +460,21 @@ export const enTranslations = {
   "explorer.move.status.allFailed": "Move failed for all {failed} item(s)",
   "explorer.move.status.validationFailed": "Move is unavailable: {reason}",
   "explorer.move.status.unavailable": "Move is unavailable right now",
+  "explorer.move.imageLinkUpdate.title": "Update image links",
+  "explorer.move.imageLinkUpdate.description":
+    "This move changes what the document's relative image links resolve to. Update the image links so they still point at the same images after the move?",
+  "explorer.move.imageLinkUpdate.description.batch":
+    "This move changes what the selected documents' relative image links resolve to. Update the image links in every document so they still point at the same images after the move?",
+  "explorer.move.imageLinkUpdate.count": "Links to update: {count}",
+  "explorer.move.imageLinkUpdate.documentCount": "Documents affected: {count}",
+  "explorer.move.imageLinkUpdate.update": "Update",
+  "explorer.move.imageLinkUpdate.update.batch": "Update all",
+  "explorer.move.imageLinkUpdate.keep": "Don't update",
+  "explorer.move.imageLinkUpdate.keep.batch": "Don't update any",
+  "explorer.move.imageLinkUpdate.status.updated":
+    "Moved, and updated {count} image link(s) across {documentCount} document(s)",
+  "explorer.move.imageLinkUpdate.status.failed":
+    "Moved, but updating the image links failed for {count} document(s)",
   "explorer.contextMenu.delete": "Delete...",
   "explorer.delete.disabled.noProject": "No project is open.",
   "explorer.delete.disabled.readOnlyProject":
