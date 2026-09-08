@@ -136,6 +136,17 @@ import {
 import { DocumentTabBar } from "./DocumentTabBar";
 import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
+import { MarkdownImageLinkMoveUpdateDialog } from "./dialog/MarkdownImageLinkMoveUpdateDialog";
+import { planMarkdownImageLinkRewritesForDocumentMove } from "../shared/markdownImageLinkMoveRewrite";
+import {
+  applyMarkdownImageLinkRewritesToText,
+  buildMarkdownDocumentMoveImageLinkUpdateBatch,
+  markdownImageLinkRewriteChangeSpecs,
+  resolveMarkdownImageLinkMoveUpdateChoice,
+  type MarkdownDocumentMove,
+  type MarkdownDocumentMoveImageLinkUpdatePlan,
+  type MarkdownImageLinkMoveUpdateChoice
+} from "./markdownDocumentMoveImageLinkUpdate";
 import {
   navigatorClipboardAdapter,
   performClipboardCopy
@@ -1177,6 +1188,27 @@ export function App(): JSX.Element {
     imageAttachmentPastePromptState,
     setImageAttachmentPastePromptState
   ] = useState<ImageAttachmentPastePromptDialogState | null>(null);
+  // #413: pre-move image-link update confirmation for the Markdown documents
+  // in a File Explorer Move. `handlePrepareMarkdownDocumentMoves` plans every
+  // selected Markdown file, opens ONE dialog, and parks a `resolve` here; the
+  // footer buttons call it and clear the state.
+  // `pendingMarkdownMoveImageLinkUpdateRef` carries the confirmed batch across
+  // to `handleApplyMarkdownDocumentMoveImageLinks`, which runs right after the
+  // Move lands.
+  const markdownMoveImageLinkUpdateOpenerRef = useRef<Element | null>(null);
+  const markdownMoveImageLinkUpdateResolveRef = useRef<
+    ((choice: MarkdownImageLinkMoveUpdateChoice) => void) | null
+  >(null);
+  const [
+    markdownMoveImageLinkUpdateDialogState,
+    setMarkdownMoveImageLinkUpdateDialogState
+  ] = useState<{
+    readonly linkCount: number;
+    readonly documentCount: number;
+  } | null>(null);
+  const pendingMarkdownMoveImageLinkUpdateRef = useRef<{
+    readonly plans: readonly MarkdownDocumentMoveImageLinkUpdatePlan[];
+  } | null>(null);
   // #272: Session persistence seam. `App` only *observes* already-derived
   // session inputs and forwards them to the coordinator, plus exposes a
   // read-only Editor View State handle (#273). All serialization, debounce,
@@ -7672,6 +7704,324 @@ export function App(): JSX.Element {
   }
 
   /**
+   * #413: the in-memory Markdown source of a project document about to be
+   * moved. Uses the live editor buffer when the document is open (so unsaved
+   * edits are respected), otherwise reads the file from disk. `null` when the
+   * text cannot be obtained.
+   */
+  async function readProjectDocumentTextForMove(
+    relativePath: string
+  ): Promise<string | null> {
+    if (activeProjectContext) {
+      const openDocument = findOpenDocument(
+        openDocumentsStateRef.current,
+        createProjectDocumentEditorId(relativePath, activeProjectContext)
+      );
+      if (openDocument && openDocument.editor.kind === "markdown") {
+        return openDocument.editor.document.content;
+      }
+    }
+
+    try {
+      const read =
+        await window.pergamum.projects.readProjectDocument(relativePath);
+      return read.content;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * #413: called by the File Explorer BEFORE a Move, with every explicitly
+   * selected Markdown file that is changing parent folder (single, multiple,
+   * or the Markdown files in a mixed selection). Plans each document's
+   * project-local image-link rewrites, folds them into one batch, and — when
+   * the batch has at least one rewrite — shows ONE confirmation dialog and
+   * parks the user's choice for
+   * {@link handleApplyMarkdownDocumentMoveImageLinks}. Resolves `"cancel"`
+   * only when the user cancels — every other path (`nothing to update`,
+   * `don't update`, `update`, any failure to analyse) resolves `"proceed"` so
+   * the Move itself is never blocked by this feature.
+   */
+  async function handlePrepareMarkdownDocumentMoves(
+    moves: readonly MarkdownDocumentMove[]
+  ): Promise<"proceed" | "cancel"> {
+    pendingMarkdownMoveImageLinkUpdateRef.current = null;
+
+    const perDocumentPlans: MarkdownDocumentMoveImageLinkUpdatePlan[] = [];
+    for (const move of moves) {
+      const markdown = await readProjectDocumentTextForMove(
+        move.oldProjectRelativePath
+      );
+      if (markdown === null) {
+        continue;
+      }
+      const rewrites = planMarkdownImageLinkRewritesForDocumentMove({
+        markdown,
+        oldDocumentProjectRelativePath: move.oldProjectRelativePath,
+        newDocumentProjectRelativePath: move.newProjectRelativePath
+      });
+      perDocumentPlans.push({
+        oldProjectRelativePath: move.oldProjectRelativePath,
+        newProjectRelativePath: move.newProjectRelativePath,
+        rewrites
+      });
+    }
+
+    const batch =
+      buildMarkdownDocumentMoveImageLinkUpdateBatch(perDocumentPlans);
+    if (batch.plans.length === 0) {
+      return "proceed";
+    }
+
+    // Resolve any dialog left dangling from an earlier aborted flow.
+    markdownMoveImageLinkUpdateResolveRef.current?.("cancel");
+
+    return await new Promise<"proceed" | "cancel">((resolve) => {
+      markdownMoveImageLinkUpdateOpenerRef.current =
+        typeof document !== "undefined" ? document.activeElement : null;
+      markdownMoveImageLinkUpdateResolveRef.current = (choice) => {
+        markdownMoveImageLinkUpdateResolveRef.current = null;
+        setMarkdownMoveImageLinkUpdateDialogState(null);
+        // ONE place decides what each choice does. `skip` and `cancel` both
+        // stage nothing — "don't update" must never rewrite a body.
+        const resolution = resolveMarkdownImageLinkMoveUpdateChoice(
+          choice,
+          batch
+        );
+        pendingMarkdownMoveImageLinkUpdateRef.current = resolution.stagedBatch
+          ? { plans: resolution.stagedBatch.plans }
+          : null;
+        resolve(resolution.moveDecision);
+      };
+      setMarkdownMoveImageLinkUpdateDialogState({
+        linkCount: batch.totalRewriteCount,
+        documentCount: batch.plans.length
+      });
+    });
+  }
+
+  /** #413: dialog footer — run the Move, then rewrite the image links. */
+  function confirmMarkdownMoveImageLinkUpdate(): void {
+    markdownMoveImageLinkUpdateResolveRef.current?.("update");
+  }
+
+  /** #413: dialog footer — run the Move only, leave every body untouched. */
+  function skipMarkdownMoveImageLinkUpdate(): void {
+    markdownMoveImageLinkUpdateResolveRef.current?.("skip");
+  }
+
+  /** #413: dialog footer / Escape — abort the Move entirely. */
+  function cancelMarkdownMoveImageLinkUpdate(): void {
+    markdownMoveImageLinkUpdateResolveRef.current?.("cancel");
+  }
+
+  /**
+   * #413: apply ONE confirmed image-link rewrite plan to its (now relocated)
+   * document — a CodeMirror transaction when the document is open (one undo
+   * step, unsaved edits preserved; active OR inactive), a direct write to the
+   * moved file when it is closed. Resolves `"updated"` / `"failed"` /
+   * `"skipped"` (`skipped` = nothing to rewrite, or its move did not land).
+   */
+  async function applyOneMarkdownMoveImageLinkPlan(
+    plan: MarkdownDocumentMoveImageLinkUpdatePlan
+  ): Promise<"updated" | "failed" | "skipped"> {
+    if (plan.rewrites.length === 0) {
+      return "skipped";
+    }
+
+    const openDocument = activeProjectContext
+      ? findOpenDocument(
+          openDocumentsStateRef.current,
+          createProjectDocumentEditorId(
+            plan.newProjectRelativePath,
+            activeProjectContext
+          )
+        )
+      : null;
+
+    if (openDocument && openDocument.editor.kind === "markdown") {
+      const markdownDocument = openDocument.editor.document;
+      const specs = markdownImageLinkRewriteChangeSpecs(
+        markdownDocument.content,
+        plan.rewrites
+      );
+      if (specs === null) {
+        return "failed";
+      }
+      const changeSpecs = specs.map((spec) => ({ ...spec }));
+
+      const activeId = openDocumentsStateRef.current.activeDocumentId;
+      const isActiveMarkdownBuffer =
+        !isEditorAreaSpecialTabActive &&
+        currentEditor?.kind === "markdown" &&
+        paragraphIndentControllerRef.current !== null &&
+        activeId !== null &&
+        editorIdEquals(openDocument.id, activeId);
+
+      if (isActiveMarkdownBuffer) {
+        const applied =
+          paragraphIndentControllerRef.current?.applyReplaceInBufferChanges(
+            changeSpecs
+          ) ?? false;
+        return applied ? "updated" : "failed";
+      }
+
+      const documentId = serializeEditorId(openDocument.id);
+      const cached = markdownEditorDocumentStatesRef.current.get(documentId);
+      const transactionResult = cached
+        ? applyChangesToCachedMarkdownEditorDocumentState(
+            cached,
+            markdownDocument.content,
+            changeSpecs,
+            "input.replace"
+          )
+        : null;
+
+      if (transactionResult) {
+        markdownEditorDocumentStatesRef.current.set(
+          documentId,
+          transactionResult.nextDocumentState
+        );
+        setOpenDocumentsState((current) =>
+          updateOpenEditor(current, openDocument.id, (editor) =>
+            editor.kind === "markdown"
+              ? {
+                  ...editor,
+                  document: updateCurrentDocumentContent(
+                    editor.document,
+                    transactionResult.content,
+                    transactionResult.lineEndingBreaks
+                  )
+                }
+              : editor
+          )
+        );
+      } else {
+        const changeSet = ChangeSet.of(
+          changeSpecs,
+          markdownDocument.content.length
+        );
+        const nextContent = changeSet
+          .apply(CodeMirrorText.of(markdownDocument.content.split("\n")))
+          .toString();
+        const nextLineEndingBreaks = markdownDocument.lineEndingBreaks.map(
+          changeSet
+        ) as LineEndingBreakSet;
+        setOpenDocumentsState((current) =>
+          updateOpenEditor(current, openDocument.id, (editor) =>
+            editor.kind === "markdown"
+              ? {
+                  ...editor,
+                  document: updateCurrentDocumentContent(
+                    editor.document,
+                    nextContent,
+                    nextLineEndingBreaks
+                  )
+                }
+              : editor
+          )
+        );
+      }
+      return "updated";
+    }
+
+    // Closed document: write the rewritten text straight to the moved file.
+    try {
+      const read = await window.pergamum.projects.readProjectDocument(
+        plan.newProjectRelativePath
+      );
+      const nextContent = applyMarkdownImageLinkRewritesToText(
+        read.content,
+        plan.rewrites
+      );
+      if (nextContent === null) {
+        return "failed";
+      }
+      if (nextContent === read.content) {
+        return "skipped";
+      }
+      await window.pergamum.projects.saveProjectDocument(
+        plan.newProjectRelativePath,
+        nextContent
+      );
+      return "updated";
+    } catch {
+      return "failed";
+    }
+  }
+
+  /**
+   * #413: run right after a successful File Explorer Move. Applies the batch
+   * of rewrite plans confirmed in {@link handlePrepareMarkdownDocumentMoves}
+   * to every plan whose document actually relocated. A stale plan or a write
+   * failure for one document is reported (with the failed-document count) and
+   * never rolls the Move back; the other documents are still updated.
+   */
+  function handleApplyMarkdownDocumentMoveImageLinks(
+    relocations: readonly ProjectDocumentPathRelocation[]
+  ): void {
+    const pending = pendingMarkdownMoveImageLinkUpdateRef.current;
+    pendingMarkdownMoveImageLinkUpdateRef.current = null;
+    if (!pending) {
+      return;
+    }
+
+    const relocatedNewPaths = new Set(
+      relocations.map((relocation) => relocation.newRelativePath)
+    );
+    const targetPlans = pending.plans.filter((plan) =>
+      relocatedNewPaths.has(plan.newProjectRelativePath)
+    );
+    if (targetPlans.length === 0) {
+      return;
+    }
+
+    void (async () => {
+      let updatedDocuments = 0;
+      let updatedLinks = 0;
+      let failedDocuments = 0;
+
+      for (const plan of targetPlans) {
+        // Sequential on purpose: a closed-document apply is an IPC write, and
+        // successive edits to open editors are easier to reason about serial.
+        const outcome = await applyOneMarkdownMoveImageLinkPlan(plan);
+        if (outcome === "updated") {
+          updatedDocuments += 1;
+          updatedLinks += plan.rewrites.length;
+        } else if (outcome === "failed") {
+          failedDocuments += 1;
+        }
+      }
+
+      if (failedDocuments > 0) {
+        setStatus({
+          key: "status.fileExplorerMoveResult",
+          values: {
+            message: translate(
+              "explorer.move.imageLinkUpdate.status.failed",
+              { count: failedDocuments }
+            )
+          }
+        });
+        return;
+      }
+
+      if (updatedDocuments > 0) {
+        setStatus({
+          key: "status.fileExplorerMoveResult",
+          values: {
+            message: translate(
+              "explorer.move.imageLinkUpdate.status.updated",
+              { count: updatedLinks, documentCount: updatedDocuments }
+            )
+          }
+        });
+      }
+    })();
+  }
+
+  /**
    * #351: a File Explorer delete run settled. For every open project document
    * whose path was deleted (directly, or inside a deleted folder), close its
    * editor and invalidate navigation — there is no relocation target. Drop
@@ -9213,6 +9563,12 @@ export function App(): JSX.Element {
                       onFileExplorerProjectDocumentsMoved={
                         handleFileExplorerProjectDocumentsMoved
                       }
+                      onFileExplorerPrepareMarkdownDocumentMoves={
+                        handlePrepareMarkdownDocumentMoves
+                      }
+                      onFileExplorerApplyMarkdownDocumentMoveImageLinks={
+                        handleApplyMarkdownDocumentMoveImageLinks
+                      }
                       onFileExplorerEntriesDeleted={
                         handleFileExplorerEntriesDeleted
                       }
@@ -9749,6 +10105,18 @@ export function App(): JSX.Element {
           onDismiss={() =>
             closeImageAttachmentPastePrompt({ kind: "cancelled" })
           }
+        />
+      ) : null}
+
+      {markdownMoveImageLinkUpdateDialogState !== null ? (
+        <MarkdownImageLinkMoveUpdateDialog
+          linkCount={markdownMoveImageLinkUpdateDialogState.linkCount}
+          documentCount={markdownMoveImageLinkUpdateDialogState.documentCount}
+          translate={translate}
+          opener={markdownMoveImageLinkUpdateOpenerRef.current}
+          onUpdate={confirmMarkdownMoveImageLinkUpdate}
+          onKeep={skipMarkdownMoveImageLinkUpdate}
+          onCancel={cancelMarkdownMoveImageLinkUpdate}
         />
       ) : null}
 

@@ -1,6 +1,7 @@
 import type { FileExplorerEntry, PergamumProject } from "../shared/api";
 import type { DocumentMapSettings } from "../shared/documentMapSettings";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
+import type { MarkdownDocumentMove } from "./markdownDocumentMoveImageLinkUpdate";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
@@ -69,6 +70,14 @@ interface WorkspaceSidebarProps {
   /** #338: after a successful File Explorer Move, the old → new relocations
    *  for every moved file. The host follows open editor identity along these. */
   onFileExplorerProjectDocumentsMoved?: (
+    relocations: readonly ProjectDocumentPathRelocation[]
+  ) => void;
+  /** #413: pre-move confirmation + post-move apply for the project-local
+   *  image links of every explicitly-selected Markdown document in a move. */
+  onFileExplorerPrepareMarkdownDocumentMoves?: (
+    moves: readonly MarkdownDocumentMove[]
+  ) => Promise<"proceed" | "cancel">;
+  onFileExplorerApplyMarkdownDocumentMoveImageLinks?: (
     relocations: readonly ProjectDocumentPathRelocation[]
   ) => void;
   /** #351: after a File Explorer delete run settles, the project-relative
@@ -194,6 +203,8 @@ export function WorkspaceSidebar({
   isFileExplorerProjectDocumentDirty,
   onFileExplorerProjectDocumentRenamed,
   onFileExplorerProjectDocumentsMoved,
+  onFileExplorerPrepareMarkdownDocumentMoves,
+  onFileExplorerApplyMarkdownDocumentMoveImageLinks,
   onFileExplorerEntriesDeleted,
   onFileExplorerRenameUnavailable,
   fileExplorerDirtyProjectDocumentRelativePaths,
@@ -262,6 +273,12 @@ export function WorkspaceSidebar({
               isProjectDocumentDirty={isFileExplorerProjectDocumentDirty}
               onProjectDocumentRenamed={onFileExplorerProjectDocumentRenamed}
               onProjectDocumentsMoved={onFileExplorerProjectDocumentsMoved}
+              onPrepareMarkdownDocumentMoves={
+                onFileExplorerPrepareMarkdownDocumentMoves
+              }
+              onApplyMarkdownDocumentMoveImageLinks={
+                onFileExplorerApplyMarkdownDocumentMoveImageLinks
+              }
               onEntriesDeleted={onFileExplorerEntriesDeleted}
               onRenameUnavailable={onFileExplorerRenameUnavailable}
               dirtyProjectDocumentRelativePaths={
