@@ -6233,6 +6233,53 @@ label.settingsItemHeader {
   color: var(--app-dialog-secondary-foreground, #52616f);
 }
 
+.bulkTextImportDialogFileEncoding {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.bulkTextImportDialogFileEncodingLabel {
+  font-weight: 600;
+}
+
+.bulkTextImportDialogFileEncodingSelect {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 1px 4px;
+  max-width: 180px;
+}
+
+.bulkTextImportDialogFileEncodingSelect:disabled {
+  opacity: 0.6;
+}
+
+.bulkTextImportDialogFilePreviewUpdating {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogFilePreviewFailed {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--app-danger-foreground, #a12b2b);
+}
+
+.bulkTextImportDialogFilePreviewFailed p {
+  margin: 0;
+}
+
+.bulkTextImportDialogFilePreviewFailedReason {
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogFileDecodeRecovered {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--app-success-foreground, #2f7d32);
+}
+
 .bulkTextImportDialogFileTarget,
 .bulkTextImportDialogFolderTarget {
   margin-top: 2px;

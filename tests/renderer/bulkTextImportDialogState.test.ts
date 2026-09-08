@@ -1,19 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
   addSourcePaths,
+  applyPreviewFailure,
+  applyPreviewSuccess,
+  applySelectedEncoding,
+  buildFileRowViewStates,
   bulkTextImportDestinationLabel,
   bulkTextImportInputsKey,
   bulkTextImportInputsReady,
+  createFileRowViewState,
   createInitialBulkTextImportDialogState,
   isStaleDryRunResponse,
+  isStalePreviewResponse,
+  isTextImportEncodingEditable,
+  isTextImportPreviewFailureReason,
   removeSourcePath,
   textImportBomKindKey,
   textImportEncodingNameKey,
-  textImportSkipReasonKey
+  textImportPreviewFailureReasonKey,
+  textImportSkipReasonKey,
+  type BulkTextImportFileRowViewState
 } from "../../src/renderer/dialog/bulkTextImportDialogState";
 import {
   TEXT_IMPORT_ENCODINGS,
-  TEXT_IMPORT_SKIP_REASONS
+  TEXT_IMPORT_SKIP_REASONS,
+  type TextImportDryRunResult
 } from "../../src/shared/textImport";
 
 describe("bulkTextImportDialogState", () => {
@@ -25,6 +36,7 @@ describe("bulkTextImportDialogState", () => {
       expect(state.dryRunStatus).toBe("idle");
       expect(state.dryRunResult).toBeUndefined();
       expect(state.dryRunRequestId).toBe(0);
+      expect(state.fileRows).toEqual([]);
     });
 
     it("returns a fresh array each call", () => {
@@ -175,6 +187,247 @@ describe("bulkTextImportDialogState", () => {
 
     it("shows the relative path for a nested folder", () => {
       expect(bulkTextImportDestinationLabel("docs/ch", "ROOT")).toBe("docs/ch");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // #420 Step 4: per-file encoding + preview row state
+  // -------------------------------------------------------------------------
+
+  function dryFile(
+    overrides: Partial<{
+      id: string;
+      sourcePath: string;
+      sourceDisplayPath: string;
+      targetProjectRelativePath: string;
+      selectedEncoding: (typeof TEXT_IMPORT_ENCODINGS)[number];
+      bomKind: "none" | "utf8" | "utf16le" | "utf16be";
+      renamed: boolean;
+      skipped: boolean;
+      skipReason?: (typeof TEXT_IMPORT_SKIP_REASONS)[number];
+      previewHead: string;
+      previewTail: string;
+    }> = {}
+  ) {
+    return {
+      id: overrides.id ?? "f1",
+      sourcePath: overrides.sourcePath ?? "/ext/a.txt",
+      sourceDisplayPath: overrides.sourceDisplayPath ?? "a.txt",
+      targetProjectRelativePath:
+        overrides.targetProjectRelativePath ?? "docs/a.md",
+      originalTargetProjectRelativePath:
+        overrides.targetProjectRelativePath ?? "docs/a.md",
+      selectedEncoding: overrides.selectedEncoding ?? "shiftJis",
+      bomKind: overrides.bomKind ?? "none",
+      renamed: overrides.renamed ?? false,
+      skipped: overrides.skipped ?? false,
+      skipReason: overrides.skipReason,
+      previewHead: overrides.previewHead ?? "head",
+      previewTail: overrides.previewTail ?? "tail"
+    };
+  }
+
+  function row(
+    overrides: Partial<BulkTextImportFileRowViewState> = {}
+  ): BulkTextImportFileRowViewState {
+    return { ...createFileRowViewState(dryFile()), ...overrides };
+  }
+
+  describe("createFileRowViewState", () => {
+    it("carries the dry-run fields and starts preview idle", () => {
+      const r = createFileRowViewState(
+        dryFile({ id: "x", selectedEncoding: "eucJp", previewHead: "H" })
+      );
+      expect(r.id).toBe("x");
+      expect(r.selectedEncoding).toBe("eucJp");
+      expect(r.previewHead).toBe("H");
+      expect(r.previewStatus).toBe("idle");
+      expect(r.previewRequestId).toBeUndefined();
+      expect(r.decodeRecovered).toBe(false);
+    });
+  });
+
+  describe("buildFileRowViewStates", () => {
+    it("returns [] for an undefined or failed dry-run result", () => {
+      expect(buildFileRowViewStates(undefined)).toEqual([]);
+      expect(
+        buildFileRowViewStates({ ok: false, reason: "noProject" })
+      ).toEqual([]);
+    });
+
+    it("builds one row per file from an ok result", () => {
+      const result: TextImportDryRunResult = {
+        ok: true,
+        files: [dryFile({ id: "a" }), dryFile({ id: "b" })],
+        folders: []
+      };
+      const rows = buildFileRowViewStates(result);
+      expect(rows.map((r) => r.id)).toEqual(["a", "b"]);
+      expect(rows.every((r) => r.previewStatus === "idle")).toBe(true);
+      expect(rows.every((r) => r.previewRequestId === undefined)).toBe(true);
+    });
+  });
+
+  describe("isTextImportEncodingEditable", () => {
+    it("is true for a normal (non-skipped) row", () => {
+      expect(isTextImportEncodingEditable(row({ skipped: false }))).toBe(true);
+    });
+
+    it("is true for a decodeFailed row that still has a source path", () => {
+      expect(
+        isTextImportEncodingEditable(
+          row({ skipped: true, skipReason: "decodeFailed" })
+        )
+      ).toBe(true);
+    });
+
+    it("is false for skip reasons an encoding change cannot fix", () => {
+      for (const reason of [
+        "notTextFile",
+        "invalidProjectPath",
+        "targetExists",
+        "sourceMissing",
+        "sourceUnreadable",
+        "unsupportedSource"
+      ] as const) {
+        expect(
+          isTextImportEncodingEditable(row({ skipped: true, skipReason: reason }))
+        ).toBe(false);
+      }
+    });
+
+    it("is false when the row has no source path", () => {
+      expect(
+        isTextImportEncodingEditable(
+          row({ sourcePath: "", skipped: true, skipReason: "decodeFailed" })
+        )
+      ).toBe(false);
+    });
+  });
+
+  describe("applySelectedEncoding", () => {
+    it("updates the encoding and moves the row into loading, tagged with the request id", () => {
+      const rows = [row({ id: "f1", selectedEncoding: "shiftJis" })];
+      const next = applySelectedEncoding(rows, "f1", "eucJp", 7);
+      expect(next).not.toBe(rows);
+      expect(next[0].selectedEncoding).toBe("eucJp");
+      expect(next[0].previewStatus).toBe("loading");
+      expect(next[0].previewRequestId).toBe(7);
+      expect(next[0].previewErrorReason).toBeUndefined();
+    });
+
+    it("returns the same reference when the row is missing / not editable / unchanged", () => {
+      const rows = [
+        row({ id: "f1", selectedEncoding: "shiftJis" }),
+        row({
+          id: "skip",
+          skipped: true,
+          skipReason: "targetExists",
+          selectedEncoding: "shiftJis"
+        })
+      ];
+      expect(applySelectedEncoding(rows, "missing", "eucJp", 1)).toBe(rows);
+      expect(applySelectedEncoding(rows, "skip", "eucJp", 1)).toBe(rows);
+      expect(applySelectedEncoding(rows, "f1", "shiftJis", 1)).toBe(rows);
+    });
+  });
+
+  describe("isStalePreviewResponse", () => {
+    it("is true for a missing row or a mismatched request id", () => {
+      expect(isStalePreviewResponse(undefined, 1)).toBe(true);
+      expect(isStalePreviewResponse({ previewRequestId: 2 }, 1)).toBe(true);
+      expect(isStalePreviewResponse({ previewRequestId: undefined }, 1)).toBe(
+        true
+      );
+    });
+
+    it("is false only for the exact request id the row is waiting on", () => {
+      expect(isStalePreviewResponse({ previewRequestId: 3 }, 3)).toBe(false);
+    });
+  });
+
+  describe("applyPreviewSuccess", () => {
+    it("applies head / tail / bom and marks the row ready for the matching request id", () => {
+      const rows = applySelectedEncoding(
+        [row({ id: "f1" })],
+        "f1",
+        "eucJp",
+        4
+      );
+      const next = applyPreviewSuccess(rows, "f1", 4, {
+        previewHead: "H2",
+        previewTail: "T2",
+        bomKind: "utf16le"
+      });
+      expect(next[0].previewStatus).toBe("ready");
+      expect(next[0].previewHead).toBe("H2");
+      expect(next[0].previewTail).toBe("T2");
+      expect(next[0].bomKind).toBe("utf16le");
+    });
+
+    it("marks a decodeFailed row as decodeRecovered on success", () => {
+      const rows = applySelectedEncoding(
+        [row({ id: "f1", skipped: true, skipReason: "decodeFailed" })],
+        "f1",
+        "eucJp",
+        5
+      );
+      const next = applyPreviewSuccess(rows, "f1", 5, {
+        previewHead: "H",
+        previewTail: "T",
+        bomKind: "none"
+      });
+      expect(next[0].decodeRecovered).toBe(true);
+    });
+
+    it("ignores a stale request id", () => {
+      const rows = applySelectedEncoding([row({ id: "f1" })], "f1", "eucJp", 6);
+      expect(
+        applyPreviewSuccess(rows, "f1", 5, {
+          previewHead: "H",
+          previewTail: "T",
+          bomKind: "none"
+        })
+      ).toBe(rows);
+    });
+  });
+
+  describe("applyPreviewFailure", () => {
+    it("moves the row to failed with the given reason for the matching request id", () => {
+      const rows = applySelectedEncoding([row({ id: "f1" })], "f1", "eucJp", 8);
+      const next = applyPreviewFailure(rows, "f1", 8, "decodeFailed");
+      expect(next[0].previewStatus).toBe("failed");
+      expect(next[0].previewErrorReason).toBe("decodeFailed");
+    });
+
+    it("supports the batch-level updateFailed marker", () => {
+      const rows = applySelectedEncoding([row({ id: "f1" })], "f1", "eucJp", 9);
+      const next = applyPreviewFailure(rows, "f1", 9, "updateFailed");
+      expect(next[0].previewErrorReason).toBe("updateFailed");
+    });
+
+    it("ignores a stale request id", () => {
+      const rows = applySelectedEncoding([row({ id: "f1" })], "f1", "eucJp", 10);
+      expect(applyPreviewFailure(rows, "f1", 9, "decodeFailed")).toBe(rows);
+    });
+  });
+
+  describe("preview failure reason helpers", () => {
+    it("isTextImportPreviewFailureReason accepts only concrete per-file reasons", () => {
+      expect(isTextImportPreviewFailureReason("decodeFailed")).toBe(true);
+      expect(isTextImportPreviewFailureReason("sourceMissing")).toBe(true);
+      expect(isTextImportPreviewFailureReason("sourceUnreadable")).toBe(true);
+      expect(isTextImportPreviewFailureReason("updateFailed")).toBe(false);
+      expect(isTextImportPreviewFailureReason(undefined)).toBe(false);
+    });
+
+    it("textImportPreviewFailureReasonKey maps to the shared skip-reason keys", () => {
+      expect(textImportPreviewFailureReasonKey("decodeFailed")).toBe(
+        "textImport.dialog.skipReason.decodeFailed"
+      );
+      expect(textImportPreviewFailureReasonKey("sourceMissing")).toBe(
+        "textImport.dialog.skipReason.sourceMissing"
+      );
     });
   });
 });

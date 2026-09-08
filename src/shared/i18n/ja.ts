@@ -983,6 +983,16 @@ export const jaTranslations = {
   "textImport.dialog.bom": "BOM",
   "textImport.dialog.previewHead": "先頭",
   "textImport.dialog.previewTail": "末尾",
+  "textImport.dialog.encodingSelectAriaLabel": "{name} の文字コード",
+  "textImport.dialog.previewUpdating": "プレビューを更新しています...",
+  "textImport.dialog.previewFailedWithEncoding":
+    "この文字コードではプレビューできません。",
+  "textImport.dialog.previewUpdateFailed": "プレビューを更新できませんでした。",
+  "textImport.dialog.previewFailureReason": "理由: {reason}",
+  "textImport.dialog.encodingChangeRecoveredDecode":
+    "選択した文字コードで読み取れました。",
+  "textImport.dialog.encodingChangeDecodeStillFailed":
+    "当初の文字コードでは読み取れませんでした。別の文字コードを試してください。",
   "textImport.dialog.skipped": "スキップ: {reason}",
   "textImport.dialog.renamed": "名前の重複を避けるため、取り込み先を「{target}」に変更します。",
   "textImport.dialog.folderHasSkipped": "スキップされるファイルを含みます。",
@@ -992,8 +1002,8 @@ export const jaTranslations = {
   "textImport.dialog.bomKind.utf16le": "UTF-16 LE",
   "textImport.dialog.bomKind.utf16be": "UTF-16 BE",
   "textImport.dialog.encodingName.utf8": "UTF-8",
-  "textImport.dialog.encodingName.utf8Bom": "UTF-8（BOM 付き）",
-  "textImport.dialog.encodingName.shiftJis": "Shift_JIS",
+  "textImport.dialog.encodingName.utf8Bom": "UTF-8 BOM",
+  "textImport.dialog.encodingName.shiftJis": "Shift_JIS / CP932",
   "textImport.dialog.encodingName.eucJp": "EUC-JP",
   "textImport.dialog.encodingName.utf16le": "UTF-16 LE",
   "textImport.dialog.encodingName.utf16be": "UTF-16 BE",

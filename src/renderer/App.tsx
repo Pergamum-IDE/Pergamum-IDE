@@ -61,7 +61,11 @@ import type {
   GlossaryTag,
   UpdateGlossaryTagInput
 } from "../shared/glossary";
-import type { TextImportDryRunResult } from "../shared/textImport";
+import type {
+  PreviewTextImportFilesRequest,
+  PreviewTextImportFilesResult,
+  TextImportDryRunResult
+} from "../shared/textImport";
 import {
   t,
   type Translate,
@@ -1263,6 +1267,16 @@ export function App(): JSX.Element {
       files
         .map((file) => window.pergamum.fileSystem.getPathForFile(file))
         .filter((path): path is string => path.length > 0),
+    []
+  );
+  // #420 Step 4: per-file encoding preview. A thin pass-through — the dialog
+  // decides when to call it (only on an encoding change) and stays free of
+  // `window.pergamum`.
+  const bulkTextImportPreview = useCallback(
+    (
+      request: PreviewTextImportFilesRequest
+    ): Promise<PreviewTextImportFilesResult> =>
+      window.pergamum.projects.previewTextImportFiles(request),
     []
   );
   // #413: pre-move image-link update confirmation for the Markdown documents
@@ -10412,6 +10426,7 @@ export function App(): JSX.Element {
         listFolders={bulkTextImportListFolders}
         onDryRun={bulkTextImportDryRun}
         getDroppedFilePaths={bulkTextImportDroppedFilePaths}
+        onPreview={bulkTextImportPreview}
       />
 
       {replacePreviewDialogState ? (

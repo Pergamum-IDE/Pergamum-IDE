@@ -10,6 +10,9 @@ import {
 } from "../../src/renderer/dialog/BulkTextImportDialog";
 import type { TextImportFolderListing } from "../../src/renderer/dialog/TextImportDestinationPicker";
 import type {
+  PreviewTextImportFilesRequest,
+  PreviewTextImportFilesResult,
+  TextImportBomKind,
   TextImportDryRunFile,
   TextImportDryRunFolder,
   TextImportDryRunResult
@@ -66,7 +69,49 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
-describe("BulkTextImportDialog (#420 Step 3)", () => {
+function previewOk(
+  id: string,
+  overrides: {
+    previewHead?: string;
+    previewTail?: string;
+    bomKind?: TextImportBomKind;
+  } = {}
+): PreviewTextImportFilesResult {
+  return {
+    ok: true,
+    files: [
+      {
+        ok: true,
+        id,
+        sourcePath: `/ext/${id}`,
+        encoding: "utf8",
+        bomKind: overrides.bomKind ?? "none",
+        previewHead: overrides.previewHead ?? "更新後の冒頭",
+        previewTail: overrides.previewTail ?? "更新後の末尾"
+      }
+    ]
+  };
+}
+
+function previewPerFileFailure(
+  id: string,
+  reason: "decodeFailed" | "sourceMissing" | "sourceUnreadable" = "decodeFailed"
+): PreviewTextImportFilesResult {
+  return {
+    ok: true,
+    files: [
+      {
+        ok: false,
+        id,
+        sourcePath: `/ext/${id}`,
+        encoding: "utf8",
+        reason
+      }
+    ]
+  };
+}
+
+describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -109,6 +154,12 @@ describe("BulkTextImportDialog (#420 Step 3)", () => {
       onDryRun: vi.fn(async () => okResult([fileRow()])),
       getDroppedFilePaths: vi.fn((files: readonly File[]) =>
         files.map((file) => file.name)
+      ),
+      onPreview: vi.fn(
+        async (
+          request: PreviewTextImportFilesRequest
+        ): Promise<PreviewTextImportFilesResult> =>
+          previewOk(request.files[0]?.id ?? "f1")
       ),
       ...props
     };
@@ -617,15 +668,442 @@ describe("BulkTextImportDialog (#420 Step 3)", () => {
     expect(container.querySelector(".bulkTextImportDialogFileRow")).toBeNull();
   });
 
-  it("never calls preview or execute IPC-shaped callbacks (none are passed in Step 3)", async () => {
+  it("does not call the preview callback until an encoding is changed", async () => {
     const props = renderDialog();
     await chooseDestination("docs");
     dropFiles(["/ext/a.txt"]);
     await flush();
 
-    // The only backend callback the dialog is given is the dry-run.
-    expect(Object.keys(props)).not.toContain("onPreview");
-    expect(Object.keys(props)).not.toContain("onExecute");
     expect(props.onDryRun).toHaveBeenCalled();
+    expect(props.onPreview).not.toHaveBeenCalled();
+    // No execute-shaped callback is wired in Step 4.
+    expect(Object.keys(props)).not.toContain("onExecute");
+  });
+
+  // ---------------------------------------------------------------------------
+  // #420 Step 4: per-file encoding dropdown + preview refresh
+  // ---------------------------------------------------------------------------
+
+  function encodingSelects(): HTMLSelectElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLSelectElement>(
+        ".bulkTextImportDialogFileEncodingSelect"
+      )
+    );
+  }
+
+  function firstFileRow(): HTMLElement {
+    return container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileRow"
+    )!;
+  }
+
+  async function changeEncoding(
+    select: HTMLSelectElement,
+    value: string
+  ): Promise<void> {
+    act(() => {
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flush();
+  }
+
+  async function readyWithRows(
+    onDryRun: BulkTextImportDialogProps["onDryRun"],
+    onPreview: BulkTextImportDialogProps["onPreview"],
+    sources: readonly string[] = ["/ext/a.txt"]
+  ): Promise<void> {
+    renderDialog({ onDryRun, onPreview });
+    await chooseDestination("docs");
+    dropFiles(sources);
+    await flush();
+  }
+
+  it("renders an encoding dropdown per file row, defaulting to the dry-run encoding", async () => {
+    const onDryRun = vi.fn(async () =>
+      okResult([
+        fileRow({ id: "f1", selectedEncoding: "shiftJis" }),
+        fileRow({ id: "f2", sourceDisplayPath: "b.txt", selectedEncoding: "eucJp" })
+      ])
+    );
+    await readyWithRows(onDryRun, vi.fn());
+
+    const selects = encodingSelects();
+    expect(selects).toHaveLength(2);
+    expect(selects[0].value).toBe("shiftJis");
+    expect(selects[1].value).toBe("eucJp");
+  });
+
+  it("updates the selected encoding and calls previewTextImportFiles, never the dry-run", async () => {
+    const onDryRun = vi.fn(async () => okResult([fileRow({ id: "f1" })]));
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) => previewOk(r.files[0].id)
+    );
+    await readyWithRows(onDryRun, onPreview);
+    expect(onDryRun).toHaveBeenCalledTimes(1);
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    expect(encodingSelects()[0].value).toBe("eucJp");
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    // the preview request carries the dry-run row's own source path + id
+    expect(onPreview).toHaveBeenCalledWith({
+      files: [{ id: "f1", sourcePath: "/ext/notes.txt", encoding: "eucJp" }]
+    });
+    // encoding change must not re-run the dry-run
+    expect(onDryRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a per-row loading note while the preview is in flight", async () => {
+    const gate = deferred<PreviewTextImportFilesResult>();
+    const onPreview = vi.fn(() => gate.promise);
+    await readyWithRows(
+      vi.fn(async () => okResult([fileRow({ id: "f1" })])),
+      onPreview
+    );
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+    expect(firstFileRow().textContent).toContain(
+      "プレビューを更新しています..."
+    );
+    expect(
+      firstFileRow().querySelector("[role='status']")?.textContent
+    ).toContain("プレビューを更新しています...");
+
+    await act(async () => {
+      gate.resolve(previewOk("f1", { previewHead: "OK冒頭", previewTail: "OK末尾" }));
+    });
+    await flush();
+    expect(firstFileRow().textContent).not.toContain(
+      "プレビューを更新しています..."
+    );
+  });
+
+  it("applies previewHead / previewTail / bomKind on preview success", async () => {
+    const onPreview = vi.fn(async (r: PreviewTextImportFilesRequest) =>
+      previewOk(r.files[0].id, {
+        previewHead: "新しい先頭テキスト",
+        previewTail: "新しい末尾テキスト",
+        bomKind: "utf16le"
+      })
+    );
+    await readyWithRows(
+      vi.fn(async () =>
+        okResult([
+          fileRow({
+            id: "f1",
+            previewHead: "古い先頭",
+            previewTail: "古い末尾",
+            bomKind: "none"
+          })
+        ])
+      ),
+      onPreview
+    );
+
+    await changeEncoding(encodingSelects()[0], "utf16le");
+
+    const row = firstFileRow();
+    expect(row.textContent).toContain("新しい先頭テキスト");
+    expect(row.textContent).toContain("新しい末尾テキスト");
+    expect(row.textContent).not.toContain("古い先頭");
+    expect(row.querySelector(".bulkTextImportDialogFileBom")?.textContent).toContain(
+      "UTF-16 LE"
+    );
+  });
+
+  it("shows a per-row failure message on a per-file preview failure", async () => {
+    const onPreview = vi.fn(async (r: PreviewTextImportFilesRequest) =>
+      previewPerFileFailure(r.files[0].id, "decodeFailed")
+    );
+    await readyWithRows(
+      vi.fn(async () => okResult([fileRow({ id: "f1" })])),
+      onPreview
+    );
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    const row = firstFileRow();
+    expect(row.getAttribute("data-preview-status")).toBe("failed");
+    expect(row.textContent).toContain("この文字コードではプレビューできません。");
+    expect(row.textContent).toContain(
+      t("ja", "textImport.dialog.skipReason.decodeFailed")
+    );
+  });
+
+  it("shows a per-row failure message on a top-level preview failure", async () => {
+    const onPreview = vi.fn(
+      async (): Promise<PreviewTextImportFilesResult> => ({
+        ok: false,
+        reason: "invalidRequest"
+      })
+    );
+    await readyWithRows(
+      vi.fn(async () => okResult([fileRow({ id: "f1" })])),
+      onPreview
+    );
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    const row = firstFileRow();
+    expect(row.getAttribute("data-preview-status")).toBe("failed");
+    expect(row.textContent).toContain("プレビューを更新できませんでした。");
+  });
+
+  it("shows a per-row failure message when the preview callback throws", async () => {
+    const onPreview = vi.fn(async () => {
+      throw new Error("ipc down");
+    });
+    await readyWithRows(
+      vi.fn(async () => okResult([fileRow({ id: "f1" })])),
+      onPreview
+    );
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    const row = firstFileRow();
+    expect(row.getAttribute("data-preview-status")).toBe("failed");
+    expect(row.textContent).toContain("プレビューを更新できませんでした。");
+    // the dialog's dry-run result is not discarded
+    expect(container.querySelector(".bulkTextImportDialogFileList")).not.toBeNull();
+  });
+
+  it("enables the dropdown for normal and decodeFailed rows, disables it for other skips", async () => {
+    const onDryRun = vi.fn(async () =>
+      okResult([
+        fileRow({ id: "normal", sourceDisplayPath: "normal.txt" }),
+        fileRow({
+          id: "decode",
+          sourceDisplayPath: "decode.txt",
+          skipped: true,
+          skipReason: "decodeFailed"
+        }),
+        fileRow({
+          id: "exists",
+          sourceDisplayPath: "exists.txt",
+          skipped: true,
+          skipReason: "targetExists"
+        }),
+        fileRow({
+          id: "nottext",
+          sourceDisplayPath: "nottext.bin",
+          skipped: true,
+          skipReason: "notTextFile"
+        }),
+        fileRow({
+          id: "missing",
+          sourceDisplayPath: "missing.txt",
+          skipped: true,
+          skipReason: "sourceMissing"
+        }),
+        fileRow({
+          id: "unreadable",
+          sourceDisplayPath: "unreadable.txt",
+          skipped: true,
+          skipReason: "sourceUnreadable"
+        }),
+        fileRow({
+          id: "unsupported",
+          sourceDisplayPath: "unsupported",
+          skipped: true,
+          skipReason: "unsupportedSource"
+        })
+      ])
+    );
+    await readyWithRows(onDryRun, vi.fn());
+
+    const disabledById = Object.fromEntries(
+      encodingSelects().map((select) => [
+        select
+          .closest(".bulkTextImportDialogFileRow")!
+          .querySelector(".bulkTextImportDialogFileSource")!.textContent,
+        select.disabled
+      ])
+    );
+    expect(disabledById["normal.txt"]).toBe(false);
+    expect(disabledById["decode.txt"]).toBe(false);
+    expect(disabledById["exists.txt"]).toBe(true);
+    expect(disabledById["nottext.bin"]).toBe(true);
+    expect(disabledById["missing.txt"]).toBe(true);
+    expect(disabledById["unreadable.txt"]).toBe(true);
+    expect(disabledById["unsupported"]).toBe(true);
+  });
+
+  it("recovers a decodeFailed row when a new encoding previews successfully", async () => {
+    const onPreview = vi.fn(async (r: PreviewTextImportFilesRequest) =>
+      previewOk(r.files[0].id, { previewHead: "読めた冒頭", previewTail: "読めた末尾" })
+    );
+    await readyWithRows(
+      vi.fn(async () =>
+        okResult([
+          fileRow({
+            id: "f1",
+            skipped: true,
+            skipReason: "decodeFailed",
+            previewHead: "",
+            previewTail: ""
+          })
+        ])
+      ),
+      onPreview
+    );
+
+    // initially shows the decode-failed skip note
+    expect(firstFileRow().textContent).toContain(
+      t("ja", "textImport.dialog.skipReason.decodeFailed")
+    );
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    const row = firstFileRow();
+    expect(row.getAttribute("data-skipped")).toBe("false");
+    expect(row.textContent).toContain("選択した文字コードで読み取れました。");
+    expect(row.textContent).toContain("読めた冒頭");
+  });
+
+  it("keeps a decodeFailed row skipped with a softer note when the new encoding still fails", async () => {
+    const onPreview = vi.fn(async (r: PreviewTextImportFilesRequest) =>
+      previewPerFileFailure(r.files[0].id, "decodeFailed")
+    );
+    await readyWithRows(
+      vi.fn(async () =>
+        okResult([
+          fileRow({ id: "f1", skipped: true, skipReason: "decodeFailed" })
+        ])
+      ),
+      onPreview
+    );
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    const row = firstFileRow();
+    expect(row.getAttribute("data-skipped")).toBe("true");
+    expect(row.textContent).toContain(
+      "当初の文字コードでは読み取れませんでした。"
+    );
+  });
+
+  it("drops a stale preview response when the encoding is changed again", async () => {
+    const first = deferred<PreviewTextImportFilesResult>();
+    const second = deferred<PreviewTextImportFilesResult>();
+    const onPreview = vi
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    await readyWithRows(
+      vi.fn(async () => okResult([fileRow({ id: "f1" })])),
+      onPreview
+    );
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+    await changeEncoding(encodingSelects()[0], "utf16be");
+    expect(onPreview).toHaveBeenCalledTimes(2);
+
+    // newest resolves first
+    await act(async () => {
+      second.resolve(previewOk("f1", { previewHead: "second-head" }));
+    });
+    await flush();
+    expect(firstFileRow().textContent).toContain("second-head");
+
+    // stale (first) response arrives late and must not overwrite
+    await act(async () => {
+      first.resolve(previewOk("f1", { previewHead: "STALE-head" }));
+    });
+    await flush();
+    expect(firstFileRow().textContent).toContain("second-head");
+    expect(firstFileRow().textContent).not.toContain("STALE-head");
+  });
+
+  it("ignores a preview response that lands after the dialog is closed", async () => {
+    const gate = deferred<PreviewTextImportFilesResult>();
+    const onPreview = vi.fn(() => gate.promise);
+
+    function Harness(): JSX.Element {
+      const [isOpen, setIsOpen] = React.useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setIsOpen(true)}>
+            open
+          </button>
+          <BulkTextImportDialog
+            isOpen={isOpen}
+            translate={translate}
+            onClose={() => setIsOpen(false)}
+            listFolders={defaultListFolders()}
+            onDryRun={vi.fn(async () => okResult([fileRow({ id: "f1" })]))}
+            getDroppedFilePaths={(files) => files.map((file) => file.name)}
+            onPreview={onPreview}
+          />
+        </>
+      );
+    }
+
+    act(() => {
+      root.render(<Harness />);
+    });
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(".bulkTextImportDialogCancelButton")
+        ?.click();
+    });
+    expect(container.querySelector(".bulkTextImportDialog")).toBeNull();
+
+    await act(async () => {
+      gate.resolve(previewOk("f1", { previewHead: "late-head" }));
+    });
+    await flush();
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>("button")!.click();
+    });
+    await flush();
+    expect(container.textContent).toContain("取り込み対象はまだありません。");
+    expect(container.textContent).not.toContain("late-head");
+  });
+
+  it("does not let a stale preview response leak into rows rebuilt by a later dry-run", async () => {
+    const firstPreview = deferred<PreviewTextImportFilesResult>();
+    const onPreview = vi.fn(() => firstPreview.promise);
+    const onDryRun = vi
+      .fn()
+      .mockImplementationOnce(async () =>
+        okResult([fileRow({ id: "f1", sourceDisplayPath: "a.txt" })])
+      )
+      .mockImplementationOnce(async () =>
+        okResult([
+          fileRow({ id: "f1", sourceDisplayPath: "a.txt" }),
+          fileRow({ id: "f2", sourceDisplayPath: "b.txt" })
+        ])
+      );
+
+    renderDialog({ onDryRun, onPreview });
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    // second dry-run rebuilds the rows before the first preview resolves
+    dropFiles(["/ext/b.txt"]);
+    await flush();
+    expect(encodingSelects()).toHaveLength(2);
+
+    await act(async () => {
+      firstPreview.resolve(previewOk("f1", { previewHead: "LEAKED-head" }));
+    });
+    await flush();
+
+    expect(container.textContent).not.toContain("LEAKED-head");
+    // rebuilt rows are back on their dry-run encoding, no lingering loading note
+    expect(container.textContent).not.toContain(
+      "プレビューを更新しています..."
+    );
   });
 });

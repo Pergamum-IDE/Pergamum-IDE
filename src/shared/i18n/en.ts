@@ -983,6 +983,16 @@ export const enTranslations = {
   "textImport.dialog.bom": "BOM",
   "textImport.dialog.previewHead": "Start",
   "textImport.dialog.previewTail": "End",
+  "textImport.dialog.encodingSelectAriaLabel": "Character encoding for {name}",
+  "textImport.dialog.previewUpdating": "Updating preview...",
+  "textImport.dialog.previewFailedWithEncoding":
+    "Preview failed with this encoding.",
+  "textImport.dialog.previewUpdateFailed": "Could not update the preview.",
+  "textImport.dialog.previewFailureReason": "Reason: {reason}",
+  "textImport.dialog.encodingChangeRecoveredDecode":
+    "The file could be read with the selected encoding.",
+  "textImport.dialog.encodingChangeDecodeStillFailed":
+    "The file could not be read with the original encoding. Try another encoding.",
   "textImport.dialog.skipped": "Skipped: {reason}",
   "textImport.dialog.renamed": "The target file is renamed to “{target}” to avoid a name collision.",
   "textImport.dialog.folderHasSkipped": "Contains files that will be skipped.",
@@ -992,8 +1002,8 @@ export const enTranslations = {
   "textImport.dialog.bomKind.utf16le": "UTF-16 LE",
   "textImport.dialog.bomKind.utf16be": "UTF-16 BE",
   "textImport.dialog.encodingName.utf8": "UTF-8",
-  "textImport.dialog.encodingName.utf8Bom": "UTF-8 (with BOM)",
-  "textImport.dialog.encodingName.shiftJis": "Shift_JIS",
+  "textImport.dialog.encodingName.utf8Bom": "UTF-8 with BOM",
+  "textImport.dialog.encodingName.shiftJis": "Shift_JIS / CP932",
   "textImport.dialog.encodingName.eucJp": "EUC-JP",
   "textImport.dialog.encodingName.utf16le": "UTF-16 LE",
   "textImport.dialog.encodingName.utf16be": "UTF-16 BE",

@@ -4,13 +4,18 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent as ReactChangeEvent,
   type DragEvent as ReactDragEvent
 } from "react";
 import type { Translate } from "../../shared/i18n";
-import type {
-  TextImportDryRunFile,
-  TextImportDryRunFolder,
-  TextImportDryRunResult
+import {
+  TEXT_IMPORT_ENCODINGS,
+  isTextImportEncoding,
+  type PreviewTextImportFilesRequest,
+  type PreviewTextImportFilesResult,
+  type TextImportDryRunFolder,
+  type TextImportDryRunResult,
+  type TextImportEncoding
 } from "../../shared/textImport";
 import { InfoDialog } from "./InfoDialog";
 import {
@@ -19,16 +24,24 @@ import {
 } from "./TextImportDestinationPicker";
 import {
   addSourcePaths,
+  applyPreviewFailure,
+  applyPreviewSuccess,
+  applySelectedEncoding,
+  buildFileRowViewStates,
   bulkTextImportDestinationLabel,
   bulkTextImportInputsKey,
   bulkTextImportInputsReady,
   createInitialBulkTextImportDialogState,
   isStaleDryRunResponse,
+  isTextImportEncodingEditable,
+  isTextImportPreviewFailureReason,
   removeSourcePath,
   textImportBomKindKey,
   textImportEncodingNameKey,
+  textImportPreviewFailureReasonKey,
   textImportSkipReasonKey,
-  type BulkTextImportDialogState
+  type BulkTextImportDialogState,
+  type BulkTextImportFileRowViewState
 } from "./bulkTextImportDialogState";
 
 export interface BulkTextImportDryRunInput {
@@ -65,6 +78,16 @@ export interface BulkTextImportDialogProps {
   readonly getDroppedFilePaths?: (
     files: readonly File[]
   ) => readonly string[];
+  /**
+   * #420 Step 4: batch preview for the per-file encoding dropdown. The App
+   * wires this to the Step 1 batch-preview project IPC; the main process
+   * reads the external file and decodes it with the chosen encoding. The
+   * renderer never reads the file. Absent ⟹ the encoding dropdown is
+   * read-only.
+   */
+  readonly onPreview?: (
+    request: PreviewTextImportFilesRequest
+  ) => Promise<PreviewTextImportFilesResult>;
 }
 
 export function BulkTextImportDialog({
@@ -74,7 +97,8 @@ export function BulkTextImportDialog({
   onClose,
   listFolders,
   onDryRun,
-  getDroppedFilePaths
+  getDroppedFilePaths,
+  onPreview
 }: BulkTextImportDialogProps): JSX.Element | null {
   const [state, setState] = useState<BulkTextImportDialogState>(
     createInitialBulkTextImportDialogState
@@ -86,6 +110,16 @@ export function BulkTextImportDialog({
   // Monotonic dry-run sequence number. Each run claims the next value; a
   // response whose value is not the latest is stale and dropped.
   const dryRunSeqRef = useRef(0);
+  // Monotonic preview sequence number, shared across rows. Each encoding
+  // change claims the next value; a preview response whose value no longer
+  // matches its row's `previewRequestId` is stale and dropped. A fresh
+  // dry-run rebuilds rows with `previewRequestId: undefined`, so any preview
+  // response from before that rebuild can never match a new row.
+  const previewSeqRef = useRef(0);
+  // Mirror of the latest state for event handlers that need to read a row
+  // without threading it through a functional updater.
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Reset every time the dialog transitions closed → the next open starts clean
   // (no stale sourcePaths / dry-run result).
@@ -118,10 +152,13 @@ export function BulkTextImportDialog({
 
     let cancelled = false;
     const requestId = (dryRunSeqRef.current += 1);
+    // Drop the previous editable rows now: a preview response still in flight
+    // for one of them must not land on a row the incoming dry-run rebuilds.
     setState((current) => ({
       ...current,
       dryRunStatus: "loading",
-      dryRunRequestId: requestId
+      dryRunRequestId: requestId,
+      fileRows: []
     }));
 
     void (async () => {
@@ -145,7 +182,8 @@ export function BulkTextImportDialog({
         return {
           ...current,
           dryRunStatus: result.ok ? "ready" : "failed",
-          dryRunResult: result
+          dryRunResult: result,
+          fileRows: buildFileRowViewStates(result)
         };
       });
     })();
@@ -205,6 +243,98 @@ export function BulkTextImportDialog({
     }
     setIsDestinationPickerOpen(true);
   }, []);
+
+  // #420 Step 4: change one row's encoding and refresh only its preview.
+  // This never re-runs the dry-run — the destination and source set are
+  // unchanged, so target paths / skip planning do not move; only the decoded
+  // preview + BOM for this one file can change.
+  const handleEncodingChange = useCallback(
+    (rowId: string, encoding: TextImportEncoding) => {
+      if (!onPreview) {
+        return;
+      }
+      const row = stateRef.current.fileRows.find((entry) => entry.id === rowId);
+      if (
+        !row ||
+        !isTextImportEncodingEditable(row) ||
+        row.selectedEncoding === encoding ||
+        row.sourcePath.length === 0
+      ) {
+        return;
+      }
+
+      const requestId = (previewSeqRef.current += 1);
+      const { sourcePath } = row;
+      setState((current) => ({
+        ...current,
+        fileRows: applySelectedEncoding(
+          current.fileRows,
+          rowId,
+          encoding,
+          requestId
+        )
+      }));
+
+      void (async () => {
+        let result: PreviewTextImportFilesResult;
+        try {
+          result = await onPreview({
+            files: [{ id: rowId, sourcePath, encoding }]
+          });
+        } catch {
+          setState((current) => ({
+            ...current,
+            fileRows: applyPreviewFailure(
+              current.fileRows,
+              rowId,
+              requestId,
+              "updateFailed"
+            )
+          }));
+          return;
+        }
+
+        setState((current) => {
+          if (!result.ok) {
+            return {
+              ...current,
+              fileRows: applyPreviewFailure(
+                current.fileRows,
+                rowId,
+                requestId,
+                "updateFailed"
+              )
+            };
+          }
+          const fileResult = result.files.find((entry) => entry.id === rowId);
+          if (!fileResult) {
+            return current;
+          }
+          if (fileResult.ok) {
+            return {
+              ...current,
+              fileRows: applyPreviewSuccess(
+                current.fileRows,
+                rowId,
+                requestId,
+                fileResult
+              )
+            };
+          }
+          return {
+            ...current,
+            fileRows: applyPreviewFailure(
+              current.fileRows,
+              rowId,
+              requestId,
+              fileResult.reason
+            )
+          };
+        });
+      })();
+    },
+    [onPreview]
+  );
 
   if (!isOpen) {
     return null;
@@ -362,7 +492,11 @@ export function BulkTextImportDialog({
 
           <section className="bulkTextImportDialogSection bulkTextImportDialogTargets">
             <h3>{translate("textImport.dialog.targetsHeading")}</h3>
-            <BulkTextImportTargets state={state} translate={translate} />
+            <BulkTextImportTargets
+              state={state}
+              translate={translate}
+              onEncodingChange={onPreview ? handleEncodingChange : undefined}
+            />
           </section>
         </div>
       </InfoDialog>
@@ -394,10 +528,15 @@ export function BulkTextImportDialog({
 
 function BulkTextImportTargets({
   state,
-  translate
+  translate,
+  onEncodingChange
 }: {
   readonly state: BulkTextImportDialogState;
   readonly translate: Translate;
+  readonly onEncodingChange?: (
+    rowId: string,
+    encoding: TextImportEncoding
+  ) => void;
 }): JSX.Element {
   if (!bulkTextImportInputsReady(state)) {
     return (
@@ -437,7 +576,8 @@ function BulkTextImportTargets({
     );
   }
 
-  const { files, folders } = state.dryRunResult;
+  const folders = state.dryRunResult.folders;
+  const rows = state.fileRows;
 
   return (
     <div className="bulkTextImportDialogResult">
@@ -462,19 +602,20 @@ function BulkTextImportTargets({
 
       <div className="bulkTextImportDialogFileGroup">
         <h4>
-          {translate("textImport.dialog.filesHeading", { count: files.length })}
+          {translate("textImport.dialog.filesHeading", { count: rows.length })}
         </h4>
-        {files.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="bulkTextImportDialogEmptyTargets">
             {translate("textImport.dialog.emptyTargets")}
           </p>
         ) : (
           <ul className="bulkTextImportDialogFileList">
-            {files.map((file) => (
+            {rows.map((row) => (
               <BulkTextImportFileRow
-                key={file.id}
-                file={file}
+                key={row.id}
+                row={row}
                 translate={translate}
+                onEncodingChange={onEncodingChange}
               />
             ))}
           </ul>
@@ -485,66 +626,144 @@ function BulkTextImportTargets({
 }
 
 function BulkTextImportFileRow({
-  file,
-  translate
+  row,
+  translate,
+  onEncodingChange
 }: {
-  readonly file: TextImportDryRunFile;
+  readonly row: BulkTextImportFileRowViewState;
   readonly translate: Translate;
+  readonly onEncodingChange?: (
+    rowId: string,
+    encoding: TextImportEncoding
+  ) => void;
 }): JSX.Element {
+  const encodingEditable =
+    onEncodingChange !== undefined && isTextImportEncodingEditable(row);
+  // A `decodeFailed` dry-run row whose new encoding decoded fine is no longer
+  // really "skipped" — show the working preview and a softened note.
+  const effectivelySkipped =
+    row.skipped && !(row.skipReason === "decodeFailed" && row.decodeRecovered);
+  const showPreview = !effectivelySkipped;
+
   return (
     <li
       className={
-        file.skipped
+        effectivelySkipped
           ? "bulkTextImportDialogFileRow isSkipped"
           : "bulkTextImportDialogFileRow"
       }
-      data-skipped={file.skipped ? "true" : "false"}
-      data-renamed={file.renamed ? "true" : "false"}
+      data-skipped={effectivelySkipped ? "true" : "false"}
+      data-renamed={row.renamed ? "true" : "false"}
+      data-preview-status={row.previewStatus}
     >
       <div className="bulkTextImportDialogFileRowHead">
         <span className="bulkTextImportDialogFileSource">
-          {file.sourceDisplayPath}
+          {row.sourceDisplayPath}
         </span>
-        <span className="bulkTextImportDialogFileEncoding">
-          {translate(textImportEncodingNameKey(file.selectedEncoding))}
-        </span>
+        <label className="bulkTextImportDialogFileEncoding">
+          <span className="bulkTextImportDialogFileEncodingLabel">
+            {translate("textImport.dialog.encoding")}
+          </span>
+          <select
+            className="bulkTextImportDialogFileEncodingSelect"
+            value={row.selectedEncoding}
+            disabled={!encodingEditable}
+            aria-label={translate("textImport.dialog.encodingSelectAriaLabel", {
+              name: row.sourceDisplayPath
+            })}
+            onChange={(event: ReactChangeEvent<HTMLSelectElement>) => {
+              const next = event.target.value;
+              if (onEncodingChange && isTextImportEncoding(next)) {
+                onEncodingChange(row.id, next);
+              }
+            }}
+          >
+            {TEXT_IMPORT_ENCODINGS.map((encoding) => (
+              <option key={encoding} value={encoding}>
+                {translate(textImportEncodingNameKey(encoding))}
+              </option>
+            ))}
+          </select>
+        </label>
         <span className="bulkTextImportDialogFileBom">
           {translate("textImport.dialog.bom")}:{" "}
-          {translate(textImportBomKindKey(file.bomKind))}
+          {translate(textImportBomKindKey(row.bomKind))}
         </span>
       </div>
       <div className="bulkTextImportDialogFileTarget">
-        {file.targetProjectRelativePath}
+        {row.targetProjectRelativePath}
       </div>
-      {file.renamed ? (
+      {row.renamed ? (
         <p className="bulkTextImportDialogFileRenamed">
           {translate("textImport.dialog.renamed", {
-            target: file.targetProjectRelativePath
+            target: row.targetProjectRelativePath
           })}
         </p>
       ) : null}
-      {file.skipped && file.skipReason ? (
+
+      {row.skipReason === "decodeFailed" ? (
+        row.decodeRecovered ? (
+          <p className="bulkTextImportDialogFileDecodeRecovered" role="note">
+            {translate("textImport.dialog.encodingChangeRecoveredDecode")}
+          </p>
+        ) : row.previewStatus === "failed" ? (
+          <p className="bulkTextImportDialogFileSkipped" role="note">
+            {translate("textImport.dialog.encodingChangeDecodeStillFailed")}
+          </p>
+        ) : (
+          <p className="bulkTextImportDialogFileSkipped" role="note">
+            {translate("textImport.dialog.skipped", {
+              reason: translate(textImportSkipReasonKey("decodeFailed"))
+            })}
+          </p>
+        )
+      ) : effectivelySkipped && row.skipReason ? (
         <p className="bulkTextImportDialogFileSkipped" role="note">
           {translate("textImport.dialog.skipped", {
-            reason: translate(textImportSkipReasonKey(file.skipReason))
+            reason: translate(textImportSkipReasonKey(row.skipReason))
           })}
         </p>
-      ) : (
+      ) : null}
+
+      {row.previewStatus === "loading" ? (
+        <p className="bulkTextImportDialogFilePreviewUpdating" role="status">
+          {translate("textImport.dialog.previewUpdating")}
+        </p>
+      ) : row.previewStatus === "failed" ? (
+        <div className="bulkTextImportDialogFilePreviewFailed" role="note">
+          <p>
+            {translate(
+              row.previewErrorReason === "updateFailed"
+                ? "textImport.dialog.previewUpdateFailed"
+                : "textImport.dialog.previewFailedWithEncoding"
+            )}
+          </p>
+          {isTextImportPreviewFailureReason(row.previewErrorReason) ? (
+            <p className="bulkTextImportDialogFilePreviewFailedReason">
+              {translate("textImport.dialog.previewFailureReason", {
+                reason: translate(
+                  textImportPreviewFailureReasonKey(row.previewErrorReason)
+                )
+              })}
+            </p>
+          ) : null}
+        </div>
+      ) : showPreview ? (
         <>
           <p className="bulkTextImportDialogFilePreview">
             <span className="bulkTextImportDialogFilePreviewLabel">
               {translate("textImport.dialog.previewHead")}:
             </span>{" "}
-            {file.previewHead}
+            {row.previewHead}
           </p>
           <p className="bulkTextImportDialogFilePreview">
             <span className="bulkTextImportDialogFilePreviewLabel">
               {translate("textImport.dialog.previewTail")}:
             </span>{" "}
-            {file.previewTail}
+            {row.previewTail}
           </p>
         </>
-      )}
+      ) : null}
     </li>
   );
 }

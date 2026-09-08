@@ -969,3 +969,54 @@ describe("Bulk text import dialog translations (#420 Step 3)", () => {
     ).toContain("notes/a-1.md");
   });
 });
+
+describe("Bulk text import dialog translations (#420 Step 4)", () => {
+  it("defines encoding-dropdown + preview copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.encodingSelectAriaLabel",
+        "textImport.dialog.previewUpdating",
+        "textImport.dialog.previewFailedWithEncoding",
+        "textImport.dialog.previewUpdateFailed",
+        "textImport.dialog.previewFailureReason",
+        "textImport.dialog.encodingChangeRecoveredDecode",
+        "textImport.dialog.encodingChangeDecodeStillFailed"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("interpolates the encoding aria-label name and the preview failure reason", () => {
+    expect(
+      t("ja", "textImport.dialog.encodingSelectAriaLabel", { name: "手記.txt" })
+    ).toContain("手記.txt");
+    expect(
+      t("en", "textImport.dialog.encodingSelectAriaLabel", { name: "diary.txt" })
+    ).toContain("diary.txt");
+    expect(
+      t("ja", "textImport.dialog.previewFailureReason", { reason: "デコード失敗" })
+    ).toContain("デコード失敗");
+    expect(
+      t("en", "textImport.dialog.previewFailureReason", { reason: "decode error" })
+    ).toContain("decode error");
+  });
+
+  it("keeps the shared encoding display names readable in both languages", () => {
+    for (const language of ["ja", "en"] as const) {
+      expect(t(language, "textImport.dialog.encodingName.shiftJis")).toContain(
+        "Shift_JIS"
+      );
+      expect(t(language, "textImport.dialog.encodingName.utf8Bom")).toContain(
+        "BOM"
+      );
+    }
+  });
+
+  it("keeps the description wording that mentions per-file encoding and preview", () => {
+    expect(t("ja", "textImport.dialog.description")).toContain("ファイル別");
+    expect(t("ja", "textImport.dialog.description")).toContain("プレビュー");
+    expect(t("en", "textImport.dialog.description")).toContain("each file");
+    expect(t("en", "textImport.dialog.description")).toContain("preview");
+  });
+});
