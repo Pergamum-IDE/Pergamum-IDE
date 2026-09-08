@@ -1062,3 +1062,34 @@ describe("Bulk text import dialog translations (#420 Step 5)", () => {
     ).toContain("EACCES");
   });
 });
+
+describe("Bulk text import dialog translations (#420 Step 6)", () => {
+  it("defines the OS picker button + Close label copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.addFiles",
+        "textImport.dialog.addFolders",
+        "textImport.dialog.close"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+    expect(t("ja", "textImport.dialog.close")).toBe("閉じる");
+    expect(t("en", "textImport.dialog.close")).toBe("Close");
+    expect(t("ja", "textImport.dialog.close")).not.toBe(
+      t("ja", "textImport.dialog.cancel")
+    );
+  });
+
+  it("uses the 'Source' heading and the drop-or-buttons wording", () => {
+    expect(t("ja", "textImport.dialog.sourcesHeading")).toBe("取り込み元");
+    expect(t("en", "textImport.dialog.sourcesHeading")).toBe("Source");
+    expect(t("ja", "textImport.dialog.dropAreaReady")).toContain("ボタンから追加");
+    expect(t("en", "textImport.dialog.dropAreaReady")).toContain(
+      "add them using the buttons"
+    );
+    // the result list keeps its own distinct heading
+    expect(t("ja", "textImport.dialog.targetsHeading")).toBe("取り込み対象");
+    expect(t("en", "textImport.dialog.targetsHeading")).toBe("Import targets");
+  });
+});

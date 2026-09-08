@@ -157,6 +157,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       getDroppedFilePaths: vi.fn((files: readonly File[]) =>
         files.map((file) => file.name)
       ),
+      pickSources: vi.fn(async () => []),
       onPreview: vi.fn(
         async (
           request: PreviewTextImportFilesRequest
@@ -1575,5 +1576,209 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     expect(
       container.querySelector(".bulkTextImportDialogExecutionBanner")
     ).toBeNull();
+  });
+
+  // ---------------------------------------------------------------------------
+  // #420 Step 6: OS file / folder picker buttons + post-import Close label
+  // ---------------------------------------------------------------------------
+
+  function addFilesButton(): HTMLButtonElement {
+    return container.querySelector<HTMLButtonElement>(
+      ".bulkTextImportDialogAddFilesButton"
+    )!;
+  }
+  function addFoldersButton(): HTMLButtonElement {
+    return container.querySelector<HTMLButtonElement>(
+      ".bulkTextImportDialogAddFoldersButton"
+    )!;
+  }
+  function sourcePathTexts(): (string | null)[] {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(".bulkTextImportDialogSourcePath")
+    ).map((node) => node.textContent);
+  }
+
+  it("adds paths chosen from the file picker button to the source list", async () => {
+    const pickSources = vi.fn(async (kind: "files" | "folders") =>
+      kind === "files" ? ["/ext/a.txt", "/ext/b.txt"] : []
+    );
+    renderDialog({ pickSources });
+
+    act(() => {
+      addFilesButton().click();
+    });
+    await flush();
+
+    expect(pickSources).toHaveBeenCalledWith("files");
+    expect(sourcePathTexts()).toEqual(["/ext/a.txt", "/ext/b.txt"]);
+    expect(
+      container.querySelector("[data-testid='bulkTextImportSourceCount']")
+        ?.textContent
+    ).toContain("2");
+  });
+
+  it("adds paths chosen from the folder picker button to the source list", async () => {
+    const pickSources = vi.fn(async (kind: "files" | "folders") =>
+      kind === "folders" ? ["/ext/chapters"] : []
+    );
+    renderDialog({ pickSources });
+
+    act(() => {
+      addFoldersButton().click();
+    });
+    await flush();
+
+    expect(pickSources).toHaveBeenCalledWith("folders");
+    expect(sourcePathTexts()).toEqual(["/ext/chapters"]);
+  });
+
+  it("does not add a duplicate path from the picker", async () => {
+    const pickSources = vi
+      .fn()
+      .mockResolvedValueOnce(["/ext/a.txt", "/ext/b.txt"])
+      .mockResolvedValueOnce(["/ext/b.txt", "/ext/c.txt"]);
+    renderDialog({ pickSources });
+
+    act(() => {
+      addFilesButton().click();
+    });
+    await flush();
+    act(() => {
+      addFilesButton().click();
+    });
+    await flush();
+
+    expect(sourcePathTexts()).toEqual(["/ext/a.txt", "/ext/b.txt", "/ext/c.txt"]);
+  });
+
+  it("leaves the source list unchanged when the picker is cancelled", async () => {
+    const pickSources = vi
+      .fn()
+      .mockResolvedValueOnce(["/ext/a.txt"])
+      .mockResolvedValueOnce([]);
+    renderDialog({ pickSources });
+
+    act(() => {
+      addFilesButton().click();
+    });
+    await flush();
+    expect(sourcePathTexts()).toEqual(["/ext/a.txt"]);
+
+    act(() => {
+      addFilesButton().click();
+    });
+    await flush();
+    expect(sourcePathTexts()).toEqual(["/ext/a.txt"]);
+  });
+
+  it("re-runs the dry-run after the picker adds sources", async () => {
+    const onDryRun = vi.fn(async () => okResult([fileRow()]));
+    const pickSources = vi.fn(async () => ["/ext/a.txt"]);
+    renderDialog({ onDryRun, pickSources });
+    await chooseDestination("docs");
+    expect(onDryRun).not.toHaveBeenCalled();
+
+    act(() => {
+      addFilesButton().click();
+    });
+    await flush();
+
+    expect(onDryRun).toHaveBeenCalledTimes(1);
+    expect(onDryRun).toHaveBeenCalledWith({
+      destinationFolderProjectRelativePath: "docs",
+      sourcePaths: ["/ext/a.txt"]
+    });
+  });
+
+  it("disables the picker buttons while an import is running", async () => {
+    const gate = deferred<ExecuteTextImportResult>();
+    renderDialog({
+      onDryRun: vi.fn(async () => okResult([fileRow({ id: "f1" })])),
+      onExecute: vi.fn(() => gate.promise)
+    });
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+
+    expect(addFilesButton().disabled).toBe(false);
+    expect(addFoldersButton().disabled).toBe(false);
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(".bulkTextImportDialogImportButton")!
+        .click();
+    });
+    await flush();
+
+    expect(addFilesButton().disabled).toBe(true);
+    expect(addFoldersButton().disabled).toBe(true);
+
+    await act(async () => {
+      gate.resolve({ ok: true, imported: [], skipped: [], failed: [] });
+    });
+    await flush();
+  });
+
+  it("keeps the Cancel label before an import and switches it to Close once completed", async () => {
+    const onClose = vi.fn();
+    renderDialog({
+      onClose,
+      onDryRun: vi.fn(async () => okResult([fileRow({ id: "f1" })])),
+      onExecute: vi.fn(
+        async (): Promise<ExecuteTextImportResult> => ({
+          ok: true,
+          imported: [
+            {
+              sourcePath: "/ext/notes.txt",
+              targetProjectRelativePath: "docs/notes.md"
+            }
+          ],
+          skipped: [],
+          failed: []
+        })
+      )
+    });
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+
+    const cancel = () =>
+      container.querySelector<HTMLButtonElement>(
+        ".bulkTextImportDialogCancelButton"
+      )!;
+
+    // before import: still "キャンセル"
+    expect(cancel().textContent).toBe("キャンセル");
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(".bulkTextImportDialogImportButton")!
+        .click();
+    });
+    await flush();
+
+    // after a completed import: "閉じる", and it closes the dialog
+    expect(cancel().textContent).toBe("閉じる");
+    act(() => {
+      cancel().click();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the picker buttons when no pickSources callback is given", () => {
+    renderDialog({ pickSources: undefined });
+    expect(
+      container.querySelector(".bulkTextImportDialogAddFilesButton")
+    ).toBeNull();
+    expect(
+      container.querySelector(".bulkTextImportDialogAddFoldersButton")
+    ).toBeNull();
+  });
+
+  it("nests the picker buttons inside the drag & drop target", () => {
+    renderDialog();
+    const dropArea = container.querySelector(".bulkTextImportDialogDropArea")!;
+    expect(dropArea.contains(addFilesButton())).toBe(true);
+    expect(dropArea.contains(addFoldersButton())).toBe(true);
   });
 });

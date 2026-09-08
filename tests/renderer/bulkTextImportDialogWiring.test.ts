@@ -197,3 +197,54 @@ describe("Bulk text import dialog App wiring (#420 Step 5)", () => {
     expect(buttonBlock).toContain("onClick={handleExecute}");
   });
 });
+
+describe("Bulk text import dialog App wiring (#420 Step 6)", () => {
+  it("passes the OS source picker callback to the dialog", () => {
+    const source = appSource();
+    const renderStart = source.indexOf("<BulkTextImportDialog");
+    const renderBlock = source.slice(renderStart, renderStart + 800);
+
+    expect(renderBlock).toContain("pickSources={bulkTextImportPickSources}");
+  });
+
+  it("routes the picker through pickTextImportSources and returns paths only", () => {
+    const source = appSource();
+    const blockIndex = source.indexOf("const bulkTextImportPickSources");
+    const block = source.slice(blockIndex, blockIndex + 500);
+
+    expect(block).toContain("window.pergamum.projects.pickTextImportSources({");
+    expect(block).toContain("return result.paths");
+    // no file reading in the renderer
+    expect(block).not.toContain("readFile");
+    expect(block).not.toContain("FileReader");
+  });
+
+  it("shares one add-paths path between drop and the picker buttons", () => {
+    const source = dialogSource();
+
+    // Both the drop handler and the picker handler call `addPaths`.
+    expect(source).toContain("addPaths(getDroppedFilePaths(files))");
+    expect(source).toContain("addPaths(paths)");
+    // The dialog only ever calls the injected `pickSources` prop.
+    expect(source).not.toContain("pickTextImportSources");
+    expect(source).not.toContain("window.pergamum");
+  });
+
+  it("disables the picker buttons and swaps the Cancel label after import", () => {
+    const source = dialogSource();
+
+    expect(source).toContain("bulkTextImportDialogAddFilesButton");
+    expect(source).toContain("bulkTextImportDialogAddFoldersButton");
+    // picker buttons freeze during import
+    const addFilesIndex = source.indexOf("bulkTextImportDialogAddFilesButton");
+    expect(
+      source.slice(addFilesIndex, addFilesIndex + 200)
+    ).toContain("disabled={isImporting}");
+    // Cancel becomes Close once the run completed
+    const cancelIndex = source.indexOf("bulkTextImportDialogCancelButton");
+    const cancelBlock = source.slice(cancelIndex, cancelIndex + 360);
+    expect(cancelBlock).toContain('state.executionStatus === "completed"');
+    expect(cancelBlock).toContain('"textImport.dialog.close"');
+    expect(cancelBlock).toContain('"textImport.dialog.cancel"');
+  });
+});

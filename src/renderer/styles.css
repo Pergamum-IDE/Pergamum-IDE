@@ -6153,6 +6153,15 @@ label.settingsItemHeader {
   line-height: 1.4;
 }
 
+/* #420 Step 6: OS picker buttons inside the drop area, below its text. */
+.bulkTextImportDialogSourcePickers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .bulkTextImportDialogDropArea {
   min-height: 96px;
   display: flex;

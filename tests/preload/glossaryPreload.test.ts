@@ -88,6 +88,7 @@ describe("glossary preload API", () => {
       normalizeLineEndings: true,
       targetLineEnding: "lf"
     });
+    await api.projects.pickTextImportSources({ kind: "folders" });
 
     expect(api.projects as Record<string, unknown>).not.toHaveProperty(
       "openProjectFile"
@@ -171,7 +172,8 @@ describe("glossary preload API", () => {
           normalizeLineEndings: true,
           targetLineEnding: "lf"
         }
-      ]
+      ],
+      [PROJECT_CHANNELS.pickTextImportSources, { kind: "folders" }]
     ]);
     expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain("openProjectFile");
     expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain(

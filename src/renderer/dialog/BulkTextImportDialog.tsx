@@ -94,6 +94,15 @@ export interface BulkTextImportDialogProps {
     files: readonly File[]
   ) => readonly string[];
   /**
+   * #420 Step 6: open an OS picker for external `.txt` files (`"files"`) or
+   * folders (`"folders"`) and resolve their absolute paths, or `[]` on
+   * cancel. The renderer only appends these strings to the source list —
+   * exactly what a drag & drop does. Absent ⟹ no add buttons are shown.
+   */
+  readonly pickSources?: (
+    kind: "files" | "folders"
+  ) => Promise<readonly string[]>;
+  /**
    * #420 Step 4: batch preview for the per-file encoding dropdown. The App
    * wires this to the Step 1 batch-preview project IPC; the main process
    * reads the external file and decodes it with the chosen encoding. The
@@ -130,6 +139,7 @@ export function BulkTextImportDialog({
   listFolders,
   onDryRun,
   getDroppedFilePaths,
+  pickSources,
   onPreview,
   onExecute,
   onImported
@@ -279,6 +289,32 @@ export function BulkTextImportDialog({
       setIsDragActive(false);
     }
   }, []);
+
+  // #420 Step 6: OS file / folder picker. Its result is only ever a list of
+  // paths, which flows into the same `addPaths` a drag & drop uses — so
+  // dedup, the dry-run re-run and the execution-result reset all behave
+  // identically. `pickBusyRef` swallows re-entrant clicks while the native
+  // picker is up.
+  const pickBusyRef = useRef(false);
+  const handlePickSources = useCallback(
+    (kind: "files" | "folders") => {
+      if (!pickSources || pickBusyRef.current) {
+        return;
+      }
+      pickBusyRef.current = true;
+      void (async () => {
+        try {
+          const paths = await pickSources(kind);
+          addPaths(paths);
+        } catch {
+          // A picker failure is non-fatal: the user can retry or use D&D.
+        } finally {
+          pickBusyRef.current = false;
+        }
+      })();
+    },
+    [addPaths, pickSources]
+  );
 
   const openDestinationPicker = useCallback(() => {
     if (typeof document !== "undefined") {
@@ -492,7 +528,11 @@ export function BulkTextImportDialog({
               disabled={isImporting}
               onClick={handleClose}
             >
-              {translate("textImport.dialog.cancel")}
+              {translate(
+                state.executionStatus === "completed"
+                  ? "textImport.dialog.close"
+                  : "textImport.dialog.cancel"
+              )}
             </button>
             <button
               type="button"
@@ -550,10 +590,10 @@ export function BulkTextImportDialog({
           <section className="bulkTextImportDialogSection">
             <h3>{translate("textImport.dialog.sourcesHeading")}</h3>
             {/*
-              Step 3 has no OS file-picker button yet (Step 4), so this is a
-              pure drop target — no `role="button"` / `tabIndex` / key handler
-              it cannot honour. The renderer only reads the dropped `File`
-              *paths* (`getDroppedFilePaths`), never the file contents.
+              The drop area is the whole D&D target; the OS-picker buttons
+              live inside it as a fallback. Its own children never read file
+              contents — only paths, via `getDroppedFilePaths` or the
+              injected `pickSources`.
             */}
             <div
               className={
@@ -578,6 +618,26 @@ export function BulkTextImportDialog({
               <p className="bulkTextImportDialogDropAreaHint">
                 {translate("textImport.dialog.dropAreaHint")}
               </p>
+              {pickSources ? (
+                <div className="bulkTextImportDialogSourcePickers">
+                  <button
+                    type="button"
+                    className="appDialogButton bulkTextImportDialogAddFilesButton"
+                    disabled={isImporting}
+                    onClick={() => handlePickSources("files")}
+                  >
+                    {translate("textImport.dialog.addFiles")}
+                  </button>
+                  <button
+                    type="button"
+                    className="appDialogButton bulkTextImportDialogAddFoldersButton"
+                    disabled={isImporting}
+                    onClick={() => handlePickSources("folders")}
+                  >
+                    {translate("textImport.dialog.addFolders")}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             {state.sourcePaths.length > 0 ? (

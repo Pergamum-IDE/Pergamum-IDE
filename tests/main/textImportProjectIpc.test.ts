@@ -152,6 +152,55 @@ describe("text import project IPC (#420 Step 1)", () => {
     );
   });
 
+  it("registers the pickTextImportSources IPC channel (#420 Step 6)", () => {
+    expect(electronMock.handle.mock.calls.map(([channel]) => channel)).toEqual(
+      expect.arrayContaining([PROJECT_CHANNELS.pickTextImportSources])
+    );
+  });
+
+  it("pickTextImportSources IPC returns the chosen paths, or [] on cancel (#420 Step 6)", async () => {
+    electronMock.showOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ["C:\\Import\\a.txt", "C:\\Import\\b.txt"]
+    });
+    await expect(
+      registeredHandler(PROJECT_CHANNELS.pickTextImportSources)(
+        { sender: {} },
+        { kind: "files" }
+      )
+    ).resolves.toEqual({ paths: ["C:\\Import\\a.txt", "C:\\Import\\b.txt"] });
+
+    const filesOptions = electronMock.showOpenDialog.mock.calls.at(-1)?.[0];
+    expect(filesOptions.properties).toEqual(["openFile", "multiSelections"]);
+
+    electronMock.showOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ["C:\\Import\\chapters"]
+    });
+    await expect(
+      registeredHandler(PROJECT_CHANNELS.pickTextImportSources)(
+        { sender: {} },
+        { kind: "folders" }
+      )
+    ).resolves.toEqual({ paths: ["C:\\Import\\chapters"] });
+    const folderOptions = electronMock.showOpenDialog.mock.calls.at(-1)?.[0];
+    expect(folderOptions.properties).toEqual([
+      "openDirectory",
+      "multiSelections"
+    ]);
+
+    electronMock.showOpenDialog.mockResolvedValueOnce({
+      canceled: true,
+      filePaths: []
+    });
+    await expect(
+      registeredHandler(PROJECT_CHANNELS.pickTextImportSources)(
+        { sender: {} },
+        { kind: "files" }
+      )
+    ).resolves.toEqual({ paths: [] });
+  });
+
   it("getCurrentProjectId IPC returns null with no project open and the id once opened (#420 Step 3)", async () => {
     await expect(
       registeredHandler(PROJECT_CHANNELS.getCurrentProjectId)({ sender: {} })

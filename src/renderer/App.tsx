@@ -1271,6 +1271,18 @@ export function App(): JSX.Element {
         .filter((path): path is string => path.length > 0),
     []
   );
+  // #420 Step 6: OS file / folder picker for the source list. Returns paths
+  // only (never contents); the dialog appends them the same way it does a
+  // drag & drop.
+  const bulkTextImportPickSources = useCallback(
+    async (kind: "files" | "folders"): Promise<readonly string[]> => {
+      const result = await window.pergamum.projects.pickTextImportSources({
+        kind
+      });
+      return result.paths;
+    },
+    []
+  );
   // #420 Step 4: per-file encoding preview. A thin pass-through — the dialog
   // decides when to call it (only on an encoding change) and stays free of
   // `window.pergamum`.
@@ -10478,6 +10490,7 @@ export function App(): JSX.Element {
         listFolders={bulkTextImportListFolders}
         onDryRun={bulkTextImportDryRun}
         getDroppedFilePaths={bulkTextImportDroppedFilePaths}
+        pickSources={bulkTextImportPickSources}
         onPreview={bulkTextImportPreview}
         onExecute={bulkTextImportExecute}
         onImported={bulkTextImportOnImported}

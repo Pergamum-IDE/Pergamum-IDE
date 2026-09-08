@@ -951,6 +951,9 @@ export const enTranslations = {
   "menu.zoomIn": "Zoom In",
   "menu.zoomOut": "Zoom Out",
   "textImport.dialog.cancel": "Cancel",
+  "textImport.dialog.close": "Close",
+  "textImport.dialog.addFiles": "Add files...",
+  "textImport.dialog.addFolders": "Add folders...",
   "textImport.dialog.description":
     "Import text files as Markdown documents with a selected character encoding. You can choose an encoding for each file. Check the preview before importing.",
   "textImport.dialog.destinationHeading": "Destination folder",
@@ -964,8 +967,9 @@ export const enTranslations = {
   "textImport.dialog.destinationPickerLoadFailed": "Could not load the folder list.",
   "textImport.dialog.destinationPickerExpand": "Expand {name}",
   "textImport.dialog.destinationPickerCollapse": "Collapse {name}",
-  "textImport.dialog.sourcesHeading": "Text files / folders",
-  "textImport.dialog.dropAreaReady": "Drop text files or folders here to add them.",
+  "textImport.dialog.sourcesHeading": "Source",
+  "textImport.dialog.dropAreaReady":
+    "Drop text files or folders here, or add them using the buttons.",
   "textImport.dialog.dropAreaActive": "Drop to add",
   "textImport.dialog.dropAreaHint": "Only .txt files are imported. Adding a folder includes the .txt files inside it.",
   "textImport.dialog.sourceCount": "Added: {count}",

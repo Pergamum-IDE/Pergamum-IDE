@@ -70,9 +70,11 @@ import {
   type ExecuteTextImportResult,
   type PreviewTextImportFileRequest,
   type PreviewTextImportFileResult,
+  type PickTextImportSourcesResult,
   type PreviewTextImportFilesRequest,
   type PreviewTextImportFilesResult,
-  type TextImportDryRunResult
+  type TextImportDryRunResult,
+  type TextImportSourcePickKind
 } from "../shared/textImport";
 import { moveEntries } from "./projectMoveExecution";
 import {
@@ -4412,6 +4414,56 @@ export function registerProjectIpc(
       }
 
       return result;
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.pickTextImportSources,
+    async (
+      event,
+      rawRequest: unknown
+    ): Promise<PickTextImportSourcesResult> => {
+      const kind: TextImportSourcePickKind =
+        rawRequest &&
+        typeof rawRequest === "object" &&
+        (rawRequest as { kind?: unknown }).kind === "folders"
+          ? "folders"
+          : "files";
+
+      const owner = parentWindow(event);
+      const projectRootPath = currentProjectState?.rootPath;
+      const options: OpenDialogOptions = {
+        title:
+          kind === "folders"
+            ? "Add folders to import"
+            : "Add text files to import",
+        properties:
+          kind === "folders"
+            ? ["openDirectory", "multiSelections"]
+            : ["openFile", "multiSelections"],
+        ...(kind === "files"
+          ? {
+              filters: [
+                { name: "Text files", extensions: ["txt"] },
+                { name: "All files", extensions: ["*"] }
+              ]
+            }
+          : {}),
+        ...(projectRootPath ? { defaultPath: projectRootPath } : {})
+      };
+
+      const result = owner
+        ? await dialog.showOpenDialog(owner, options)
+        : await dialog.showOpenDialog(options);
+
+      if (result.canceled) {
+        return { paths: [] };
+      }
+
+      // Paths only — the main process never reads these files here; the
+      // renderer feeds them to the same source list a drag & drop does, and
+      // the actual reads happen in dry-run / preview / execute.
+      return { paths: result.filePaths };
     }
   );
 

@@ -37,6 +37,8 @@ import type {
   DryRunTextImportRequest,
   ExecuteTextImportRequest,
   ExecuteTextImportResult,
+  PickTextImportSourcesRequest,
+  PickTextImportSourcesResult,
   PreviewTextImportFileRequest,
   PreviewTextImportFileResult,
   PreviewTextImportFilesRequest,
@@ -257,6 +259,12 @@ export const PROJECT_CHANNELS = {
   previewTextImportFiles: "projects:previewTextImportFiles",
   /** #420 Step 1: execute the already-reviewed external .txt import plan. */
   executeTextImport: "projects:executeTextImport",
+  /**
+   * #420 Step 6: open an OS picker for external .txt files or folders and
+   * return only their absolute paths (never contents). The renderer adds
+   * these to the same source list a drag & drop feeds.
+   */
+  pickTextImportSources: "projects:pickTextImportSources",
   saveProjectDocument: "projects:saveProjectDocument",
   saveProjectSettings: "projects:saveProjectSettings",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -1063,6 +1071,11 @@ export interface PergamumApi {
     executeTextImport: (
       request: ExecuteTextImportRequest
     ) => Promise<ExecuteTextImportResult>;
+    /** #420 Step 6: OS picker that returns chosen .txt file / folder paths
+     *  only (never contents), for the bulk import source list. */
+    pickTextImportSources: (
+      request: PickTextImportSourcesRequest
+    ) => Promise<PickTextImportSourcesResult>;
     saveProjectDocument: (
       relativePath: string,
       content: string

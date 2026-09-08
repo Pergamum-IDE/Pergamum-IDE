@@ -184,6 +184,26 @@ export type ExecuteTextImportResult =
       readonly message?: string;
     };
 
+/**
+ * #420 Step 6: which kind of external source the OS picker should collect.
+ * `"files"` filters to `.txt`; `"folders"` collects directories whose `.txt`
+ * descendants become import candidates.
+ */
+export type TextImportSourcePickKind = "files" | "folders";
+
+export interface PickTextImportSourcesRequest {
+  readonly kind: TextImportSourcePickKind;
+}
+
+/**
+ * The absolute paths the user chose, or `[]` when the picker was cancelled.
+ * The main process never reads these files — the renderer only appends the
+ * strings to its source list, exactly as it does for a drag & drop.
+ */
+export interface PickTextImportSourcesResult {
+  readonly paths: readonly string[];
+}
+
 export function isTextImportEncoding(
   value: unknown
 ): value is TextImportEncoding {

@@ -951,6 +951,9 @@ export const jaTranslations = {
   "menu.zoomIn": "拡大",
   "menu.zoomOut": "縮小",
   "textImport.dialog.cancel": "キャンセル",
+  "textImport.dialog.close": "閉じる",
+  "textImport.dialog.addFiles": "ファイルを追加...",
+  "textImport.dialog.addFolders": "フォルダを追加...",
   "textImport.dialog.description":
     "文字コードを指定して、テキストファイルを Markdown 文書として取り込みます。ファイル別に指定することも可能です。プレビューで確認してください。",
   "textImport.dialog.destinationHeading": "取り込み先フォルダ",
@@ -964,8 +967,9 @@ export const jaTranslations = {
   "textImport.dialog.destinationPickerLoadFailed": "フォルダ一覧を読み込めませんでした。",
   "textImport.dialog.destinationPickerExpand": "{name} を展開",
   "textImport.dialog.destinationPickerCollapse": "{name} を折りたたむ",
-  "textImport.dialog.sourcesHeading": "テキストファイル / フォルダ",
-  "textImport.dialog.dropAreaReady": "ここにテキストファイルまたはフォルダをドロップして追加します。",
+  "textImport.dialog.sourcesHeading": "取り込み元",
+  "textImport.dialog.dropAreaReady":
+    "テキストファイルまたはフォルダをここにドロップするか、ボタンから追加してください。",
   "textImport.dialog.dropAreaActive": "ドロップして追加",
   "textImport.dialog.dropAreaHint": "取り込むのは .txt ファイルです。フォルダを追加すると中の .txt ファイルが対象になります。",
   "textImport.dialog.sourceCount": "追加済み: {count} 件",
