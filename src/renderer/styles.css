@@ -6045,6 +6045,89 @@ label.settingsItemHeader {
   line-height: 1.5;
 }
 
+/* #420 Step 5: import-execution banner + result summary. */
+.bulkTextImportDialogExecutionBanner {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+  background: var(--app-dialog-inset-background, #f7f8fa);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogExecutionBanner.isCompleted {
+  border-color: var(--app-success-border, #b7d8bb);
+  background: var(--app-success-inset-background, #f1f8f2);
+}
+
+.bulkTextImportDialogExecutionBanner.isPartial {
+  border-color: var(--app-warning-border, #e4d2a8);
+  background: var(--app-warning-inset-background, #fdf8ee);
+}
+
+.bulkTextImportDialogExecutionBanner.isFailed {
+  border-color: var(--app-danger-border, #e4b7b7);
+  background: var(--app-danger-inset-background, #fdf2f2);
+}
+
+.bulkTextImportDialogExecutionSummary {
+  margin: 0;
+  font-weight: 700;
+}
+
+.bulkTextImportDialogExecutionCounts {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bulkTextImportDialogExecutionDetail {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  overflow-wrap: anywhere;
+}
+
+.bulkTextImportDialogExecutionGroup h4 {
+  margin: 4px 0 2px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.bulkTextImportDialogExecutionGroup ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bulkTextImportDialogExecutionGroup li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.82rem;
+  min-width: 0;
+}
+
+.bulkTextImportDialogExecutionSource {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bulkTextImportDialogExecutionTarget,
+.bulkTextImportDialogExecutionReason {
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  overflow-wrap: anywhere;
+}
+
 .bulkTextImportDialogSection {
   display: flex;
   flex-direction: column;

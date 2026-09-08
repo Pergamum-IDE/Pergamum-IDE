@@ -1,18 +1,23 @@
 /**
- * #420 Step 3 + 4: pure state + label helpers for {@link BulkTextImportDialog}.
+ * #420 Step 3 + 4 + 5: pure state + label helpers for
+ * {@link BulkTextImportDialog}.
  *
  * The dialog is a dry-run UI: pick a destination folder, add external
  * `.txt` files / folders, and see the {@link TextImportDryRunResult} main
  * computes. Step 4 adds a per-file **encoding dropdown** whose changes drive
- * `previewTextImportFiles` (preview only — never a fresh dry-run). No import
- * is executed yet.
+ * `previewTextImportFiles` (preview only — never a fresh dry-run). Step 5
+ * adds the actual **import execution** (`executeTextImport`) with an
+ * importable-row filter, an in-flight status, and a result summary.
  *
  * This module holds only serialisable state and pure derivations so the
  * dedup / dry-run-trigger / stale-response / encoding-editability /
- * preview-apply rules are unit-testable without a DOM.
+ * preview-apply / importable-row / execute-request rules are unit-testable
+ * without a DOM.
  */
 
 import type {
+  ExecuteTextImportFileRequest,
+  ExecuteTextImportResult,
   PreviewTextImportFilePreviewResult,
   TextImportBomKind,
   TextImportDryRunResult,
@@ -70,6 +75,13 @@ export interface BulkTextImportFileRowViewState {
   readonly decodeRecovered: boolean;
 }
 
+/** #420 Step 5: lifecycle of the one-shot `executeTextImport` call. */
+export type TextImportExecutionStatus =
+  | "idle"
+  | "importing"
+  | "completed"
+  | "failed";
+
 export interface BulkTextImportDialogState {
   /** `null` = not chosen yet; `""` = the project root. */
   readonly destinationFolderProjectRelativePath: string | null;
@@ -88,6 +100,18 @@ export interface BulkTextImportDialogState {
    * Empty until the first `ok` dry-run result.
    */
   readonly fileRows: readonly BulkTextImportFileRowViewState[];
+  /** #420 Step 5: import execution status. */
+  readonly executionStatus: TextImportExecutionStatus;
+  /**
+   * Monotonic id of the execute request the current `executionResult` /
+   * `executionStatus` belongs to. A response tagged with an older id is
+   * stale (only reachable via close / input change, never a second run).
+   */
+  readonly executionRequestId: number;
+  /** The `executeTextImport` result, once one has come back. */
+  readonly executionResult?: ExecuteTextImportResult;
+  /** Message for a thrown / transport-level execute failure. */
+  readonly executionErrorMessage?: string;
 }
 
 export function createInitialBulkTextImportDialogState(): BulkTextImportDialogState {
@@ -97,7 +121,35 @@ export function createInitialBulkTextImportDialogState(): BulkTextImportDialogSt
     dryRunStatus: "idle",
     dryRunResult: undefined,
     dryRunRequestId: 0,
-    fileRows: []
+    fileRows: [],
+    executionStatus: "idle",
+    executionRequestId: 0,
+    executionResult: undefined,
+    executionErrorMessage: undefined
+  };
+}
+
+/**
+ * Drop any prior import result. Called whenever the destination, the source
+ * set, or a row encoding changes so a stale success / failure summary never
+ * lingers over fresh inputs. `executionRequestId` stays monotonic so a
+ * response from the dropped run is still recognised as stale.
+ */
+export function resetTextImportExecutionState(
+  state: BulkTextImportDialogState
+): BulkTextImportDialogState {
+  if (
+    state.executionStatus === "idle" &&
+    state.executionResult === undefined &&
+    state.executionErrorMessage === undefined
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    executionStatus: "idle",
+    executionResult: undefined,
+    executionErrorMessage: undefined
   };
 }
 
@@ -362,6 +414,161 @@ export function isTextImportPreviewFailureReason(
     reason === "sourceUnreadable" ||
     reason === "decodeFailed"
   );
+}
+
+// ---------------------------------------------------------------------------
+// #420 Step 5: importable-row filter + execute request + result summary
+// ---------------------------------------------------------------------------
+
+/**
+ * `true` when this row should be sent to `executeTextImport`:
+ *
+ * - it has both a source path and a target project-relative path,
+ * - its preview is not mid-update (`loading`) and did not fail (`failed`),
+ * - and it is either a normal (non-skipped) row, **or** a `decodeFailed`
+ *   dry-run row the user rescued by changing the encoding
+ *   (`decodeRecovered` + a `ready` preview).
+ *
+ * Every other skip reason (`targetExists`, `notTextFile`, `sourceMissing`,
+ * …) stays out — an import cannot fix those here.
+ */
+export function isTextImportRowImportable(
+  row: BulkTextImportFileRowViewState
+): boolean {
+  if (
+    row.sourcePath.length === 0 ||
+    row.targetProjectRelativePath.length === 0
+  ) {
+    return false;
+  }
+  if (row.previewStatus === "loading" || row.previewStatus === "failed") {
+    return false;
+  }
+  if (!row.skipped) {
+    return true;
+  }
+  return (
+    row.skipReason === "decodeFailed" &&
+    row.decodeRecovered &&
+    row.previewStatus === "ready"
+  );
+}
+
+/** The importable subset of `rows`, in display order. */
+export function collectImportableTextImportRows(
+  rows: readonly BulkTextImportFileRowViewState[]
+): readonly BulkTextImportFileRowViewState[] {
+  return rows.filter((row) => isTextImportRowImportable(row));
+}
+
+/**
+ * Build the `files` array for an `executeTextImport` request from the current
+ * row view-state. Only importable rows are included, and each carries the
+ * **row-local** `selectedEncoding` (the Step 4 dropdown value, not the
+ * dry-run's original guess). `skipped` / `skipReason` are deliberately left
+ * unset: an included row is meant to be written, and a recovered
+ * `decodeFailed` row must not be treated as skipped by the main process.
+ */
+export function buildExecuteTextImportFileRequests(
+  rows: readonly BulkTextImportFileRowViewState[]
+): readonly ExecuteTextImportFileRequest[] {
+  return collectImportableTextImportRows(rows).map((row) => ({
+    sourcePath: row.sourcePath,
+    targetProjectRelativePath: row.targetProjectRelativePath,
+    encoding: row.selectedEncoding
+  }));
+}
+
+/**
+ * `true` when the Import button may be enabled: a destination is chosen, the
+ * dry-run is `ready`, no preview is mid-update, no import is running and
+ * none has completed on these inputs, and at least one row is importable.
+ * (The component also requires the dialog to be open and an `onExecute`
+ * callback to be present.)
+ */
+export function bulkTextImportCanExecute(
+  state: BulkTextImportDialogState
+): boolean {
+  if (state.destinationFolderProjectRelativePath === null) {
+    return false;
+  }
+  if (state.dryRunStatus !== "ready") {
+    return false;
+  }
+  if (
+    state.executionStatus === "importing" ||
+    state.executionStatus === "completed"
+  ) {
+    return false;
+  }
+  if (state.fileRows.some((row) => row.previewStatus === "loading")) {
+    return false;
+  }
+  return collectImportableTextImportRows(state.fileRows).length > 0;
+}
+
+/** Move state into `importing`, tagged with `executionRequestId`. */
+export function applyTextImportExecutionStart(
+  state: BulkTextImportDialogState,
+  executionRequestId: number
+): BulkTextImportDialogState {
+  return {
+    ...state,
+    executionStatus: "importing",
+    executionRequestId,
+    executionResult: undefined,
+    executionErrorMessage: undefined
+  };
+}
+
+/** `true` when an execute response tagged `responseRequestId` is out of date. */
+export function isStaleTextImportExecutionResponse(
+  state: Pick<BulkTextImportDialogState, "executionRequestId">,
+  responseRequestId: number
+): boolean {
+  return responseRequestId !== state.executionRequestId;
+}
+
+export type TextImportExecutionSummaryKind =
+  | "completed"
+  | "partial"
+  | "failed";
+
+/**
+ * Classify a finished `executeTextImport` result for the summary banner:
+ *
+ * - `failed`  — top-level failure, or `ok` but nothing was imported,
+ * - `partial` — some files imported, some skipped / failed,
+ * - `completed` — every file imported.
+ */
+export function textImportExecutionSummaryKind(
+  result: ExecuteTextImportResult
+): TextImportExecutionSummaryKind {
+  if (!result.ok) {
+    return "failed";
+  }
+  if (result.imported.length === 0) {
+    return "failed";
+  }
+  if (result.failed.length > 0 || result.skipped.length > 0) {
+    return "partial";
+  }
+  return "completed";
+}
+
+const EXECUTION_SUMMARY_KEYS: Record<
+  TextImportExecutionSummaryKind,
+  TranslationKey
+> = {
+  completed: "textImport.dialog.importCompleted",
+  partial: "textImport.dialog.importPartialFailure",
+  failed: "textImport.dialog.importFailed"
+};
+
+export function textImportExecutionSummaryKey(
+  kind: TextImportExecutionSummaryKind
+): TranslationKey {
+  return EXECUTION_SUMMARY_KEYS[kind];
 }
 
 const SKIP_REASON_KEYS: Record<TextImportSkipReason, TranslationKey> = {

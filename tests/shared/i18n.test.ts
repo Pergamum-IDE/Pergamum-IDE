@@ -1020,3 +1020,45 @@ describe("Bulk text import dialog translations (#420 Step 4)", () => {
     expect(t("en", "textImport.dialog.description")).toContain("preview");
   });
 });
+
+describe("Bulk text import dialog translations (#420 Step 5)", () => {
+  it("defines import-execution copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.importReady",
+        "textImport.dialog.importing",
+        "textImport.dialog.importCompleted",
+        "textImport.dialog.importPartialFailure",
+        "textImport.dialog.importFailed",
+        "textImport.dialog.importedCount",
+        "textImport.dialog.skippedCount",
+        "textImport.dialog.failedCount",
+        "textImport.dialog.importedFilesHeading",
+        "textImport.dialog.skippedFilesHeading",
+        "textImport.dialog.failedFilesHeading",
+        "textImport.dialog.noImportableFiles",
+        "textImport.dialog.importBlockedByPreview",
+        "textImport.dialog.importResultReason",
+        "textImport.dialog.importResultMessage"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("interpolates the result counts and the reason / message placeholders", () => {
+    expect(t("ja", "textImport.dialog.importedCount", { count: 4 })).toContain(
+      "4"
+    );
+    expect(t("en", "textImport.dialog.skippedCount", { count: 2 })).toContain(
+      "2"
+    );
+    expect(t("en", "textImport.dialog.failedCount", { count: 1 })).toContain("1");
+    expect(
+      t("ja", "textImport.dialog.importResultReason", { reason: "既に存在" })
+    ).toContain("既に存在");
+    expect(
+      t("en", "textImport.dialog.importResultMessage", { message: "EACCES" })
+    ).toContain("EACCES");
+  });
+});

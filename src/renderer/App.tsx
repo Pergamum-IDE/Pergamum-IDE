@@ -62,6 +62,7 @@ import type {
   UpdateGlossaryTagInput
 } from "../shared/glossary";
 import type {
+  ExecuteTextImportResult,
   PreviewTextImportFilesRequest,
   PreviewTextImportFilesResult,
   TextImportDryRunResult
@@ -87,7 +88,8 @@ import {
 } from "./dialog/AboutDialog";
 import {
   BulkTextImportDialog,
-  type BulkTextImportDryRunInput
+  type BulkTextImportDryRunInput,
+  type BulkTextImportExecuteInput
 } from "./dialog/BulkTextImportDialog";
 import type { TextImportFolderListing } from "./dialog/TextImportDestinationPicker";
 import {
@@ -2179,6 +2181,56 @@ export function App(): JSX.Element {
   const effectiveSettings = useMemo(
     () => resolveEffectiveSettings(settings, project?.config?.settings),
     [settings, project?.config?.settings]
+  );
+  // #420 Step 5: run the bulk text import. The dialog owns *when* (only on an
+  // explicit Import click for the importable rows); App fills in the project
+  // id and the line-ending policy. New imported `.md` documents inherit the
+  // project's "new file" line ending (`files.newFile.lineEnding`, default
+  // LF); normalization is on so the written file matches that policy. A
+  // dedicated line-ending picker is left to a later step.
+  const bulkTextImportNewFileLineEnding =
+    effectiveSettings.files.newFile.lineEnding;
+  const bulkTextImportExecute = useCallback(
+    async (
+      input: BulkTextImportExecuteInput
+    ): Promise<ExecuteTextImportResult> => {
+      const projectId = await window.pergamum.projects.getCurrentProjectId();
+      if (projectId === null) {
+        return { ok: false, reason: "noProject" };
+      }
+      return window.pergamum.projects.executeTextImport({
+        projectId,
+        destinationFolderProjectRelativePath:
+          input.destinationFolderProjectRelativePath,
+        files: input.files,
+        normalizeLineEndings: true,
+        targetLineEnding: bulkTextImportNewFileLineEnding
+      });
+    },
+    [bulkTextImportNewFileLineEnding]
+  );
+  // #420 Step 5: after a successful import, re-list the File Explorer folders
+  // the new `.md` files landed in so the tree shows them without a manual
+  // reload. Never auto-opens a document.
+  const bulkTextImportOnImported = useCallback(
+    (importedTargetProjectRelativePaths: readonly string[]): void => {
+      if (importedTargetProjectRelativePaths.length === 0) {
+        return;
+      }
+      const directoryRelativePaths = new Set<string | null>();
+      for (const targetPath of importedTargetProjectRelativePaths) {
+        const slashIndex = targetPath.lastIndexOf("/");
+        directoryRelativePaths.add(
+          slashIndex === -1 ? null : targetPath.slice(0, slashIndex)
+        );
+      }
+      fileExplorerRefreshDirectoriesRequestSeqRef.current += 1;
+      setFileExplorerRefreshDirectoriesRequest({
+        directoryRelativePaths: [...directoryRelativePaths],
+        token: fileExplorerRefreshDirectoriesRequestSeqRef.current
+      });
+    },
+    []
   );
   // #266: NotificationToast auto-dismiss duration, in milliseconds — the
   // Settings value is already stored in the unit the controller's timer
@@ -10427,6 +10479,8 @@ export function App(): JSX.Element {
         onDryRun={bulkTextImportDryRun}
         getDroppedFilePaths={bulkTextImportDroppedFilePaths}
         onPreview={bulkTextImportPreview}
+        onExecute={bulkTextImportExecute}
+        onImported={bulkTextImportOnImported}
       />
 
       {replacePreviewDialogState ? (

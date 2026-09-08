@@ -11,6 +11,8 @@ import type { Translate } from "../../shared/i18n";
 import {
   TEXT_IMPORT_ENCODINGS,
   isTextImportEncoding,
+  type ExecuteTextImportFileRequest,
+  type ExecuteTextImportResult,
   type PreviewTextImportFilesRequest,
   type PreviewTextImportFilesResult,
   type TextImportDryRunFolder,
@@ -23,21 +25,29 @@ import {
   type TextImportFolderListing
 } from "./TextImportDestinationPicker";
 import {
-  addSourcePaths,
   applyPreviewFailure,
   applyPreviewSuccess,
   applySelectedEncoding,
+  applyTextImportExecutionStart,
+  addSourcePaths,
+  buildExecuteTextImportFileRequests,
   buildFileRowViewStates,
+  bulkTextImportCanExecute,
   bulkTextImportDestinationLabel,
   bulkTextImportInputsKey,
   bulkTextImportInputsReady,
+  collectImportableTextImportRows,
   createInitialBulkTextImportDialogState,
   isStaleDryRunResponse,
+  isStaleTextImportExecutionResponse,
   isTextImportEncodingEditable,
   isTextImportPreviewFailureReason,
   removeSourcePath,
+  resetTextImportExecutionState,
   textImportBomKindKey,
   textImportEncodingNameKey,
+  textImportExecutionSummaryKey,
+  textImportExecutionSummaryKind,
   textImportPreviewFailureReasonKey,
   textImportSkipReasonKey,
   type BulkTextImportDialogState,
@@ -47,6 +57,11 @@ import {
 export interface BulkTextImportDryRunInput {
   readonly destinationFolderProjectRelativePath: string;
   readonly sourcePaths: readonly string[];
+}
+
+export interface BulkTextImportExecuteInput {
+  readonly destinationFolderProjectRelativePath: string;
+  readonly files: readonly ExecuteTextImportFileRequest[];
 }
 
 export interface BulkTextImportDialogProps {
@@ -88,6 +103,23 @@ export interface BulkTextImportDialogProps {
   readonly onPreview?: (
     request: PreviewTextImportFilesRequest
   ) => Promise<PreviewTextImportFilesResult>;
+  /**
+   * #420 Step 5: run the import. The App wires this to the Step 1 execute
+   * project IPC, filling in `projectId` and the line-ending policy. Absent
+   * ⟹ the Import button never enables.
+   */
+  readonly onExecute?: (
+    input: BulkTextImportExecuteInput
+  ) => Promise<ExecuteTextImportResult>;
+  /**
+   * #420 Step 5: called after a successful (`ok`) import with the
+   * project-relative paths of the newly written `.md` files, so the App can
+   * refresh the File Explorer's cached listing for their folders. Never
+   * auto-opens a document.
+   */
+  readonly onImported?: (
+    importedTargetProjectRelativePaths: readonly string[]
+  ) => void;
 }
 
 export function BulkTextImportDialog({
@@ -98,7 +130,9 @@ export function BulkTextImportDialog({
   listFolders,
   onDryRun,
   getDroppedFilePaths,
-  onPreview
+  onPreview,
+  onExecute,
+  onImported
 }: BulkTextImportDialogProps): JSX.Element | null {
   const [state, setState] = useState<BulkTextImportDialogState>(
     createInitialBulkTextImportDialogState
@@ -116,10 +150,17 @@ export function BulkTextImportDialog({
   // dry-run rebuilds rows with `previewRequestId: undefined`, so any preview
   // response from before that rebuild can never match a new row.
   const previewSeqRef = useRef(0);
+  // Monotonic execute sequence number. A response whose value is not the
+  // latest is stale — only reachable via a dialog close or an input change
+  // that reset the execution state, never via a concurrent second run
+  // (the Import button is disabled while `executionStatus === "importing"`).
+  const executionSeqRef = useRef(0);
   // Mirror of the latest state for event handlers that need to read a row
   // without threading it through a functional updater.
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  const isImporting = state.executionStatus === "importing";
 
   // Reset every time the dialog transitions closed → the next open starts clean
   // (no stale sourcePaths / dry-run result).
@@ -154,8 +195,10 @@ export function BulkTextImportDialog({
     const requestId = (dryRunSeqRef.current += 1);
     // Drop the previous editable rows now: a preview response still in flight
     // for one of them must not land on a row the incoming dry-run rebuilds.
+    // A prior import result is cleared too — the inputs it applied to are
+    // gone (#420 Step 5).
     setState((current) => ({
-      ...current,
+      ...resetTextImportExecutionState(current),
       dryRunStatus: "loading",
       dryRunRequestId: requestId,
       fileRows: []
@@ -265,8 +308,9 @@ export function BulkTextImportDialog({
 
       const requestId = (previewSeqRef.current += 1);
       const { sourcePath } = row;
+      // Changing an encoding invalidates any earlier import result (#420 Step 5).
       setState((current) => ({
-        ...current,
+        ...resetTextImportExecutionState(current),
         fileRows: applySelectedEncoding(
           current.fileRows,
           rowId,
@@ -336,6 +380,78 @@ export function BulkTextImportDialog({
     [onPreview]
   );
 
+  // #420 Step 5: while an import is running, Cancel / the close button /
+  // Escape are inert — the main process would keep writing files.
+  const handleClose = useCallback(() => {
+    if (stateRef.current.executionStatus === "importing") {
+      return;
+    }
+    onClose();
+  }, [onClose]);
+
+  // #420 Step 5: run the import for the currently importable rows. Guarded so
+  // repeated clicks (or a click on a briefly-stale button) fire the IPC once.
+  const handleExecute = useCallback(() => {
+    if (!onExecute) {
+      return;
+    }
+    const current = stateRef.current;
+    if (!bulkTextImportCanExecute(current)) {
+      return;
+    }
+    const destination = current.destinationFolderProjectRelativePath;
+    if (destination === null) {
+      return;
+    }
+    const files = buildExecuteTextImportFileRequests(current.fileRows);
+    if (files.length === 0) {
+      return;
+    }
+
+    const requestId = (executionSeqRef.current += 1);
+    setState((state) => applyTextImportExecutionStart(state, requestId));
+
+    void (async () => {
+      let result: ExecuteTextImportResult;
+      try {
+        result = await onExecute({
+          destinationFolderProjectRelativePath: destination,
+          files
+        });
+      } catch (error) {
+        setState((state) =>
+          isStaleTextImportExecutionResponse(state, requestId)
+            ? state
+            : {
+                ...state,
+                executionStatus: "failed",
+                executionResult: undefined,
+                executionErrorMessage:
+                  error instanceof Error ? error.message : String(error)
+              }
+        );
+        return;
+      }
+
+      setState((state) =>
+        isStaleTextImportExecutionResponse(state, requestId)
+          ? state
+          : {
+              ...state,
+              executionStatus: result.ok ? "completed" : "failed",
+              executionResult: result,
+              executionErrorMessage: undefined
+            }
+      );
+
+      if (result.ok && result.imported.length > 0) {
+        onImported?.(
+          result.imported.map((entry) => entry.targetProjectRelativePath)
+        );
+      }
+    })();
+  }, [onExecute, onImported]);
+
   if (!isOpen) {
     return null;
   }
@@ -343,6 +459,15 @@ export function BulkTextImportDialog({
   const destinationChosen =
     state.destinationFolderProjectRelativePath !== null;
   const rootLabel = translate("textImport.dialog.destinationRoot");
+  const canExecute =
+    onExecute !== undefined && bulkTextImportCanExecute(state);
+  const importDisabledHint = isImporting
+    ? translate("textImport.dialog.importing")
+    : state.fileRows.some((row) => row.previewStatus === "loading")
+      ? translate("textImport.dialog.importBlockedByPreview")
+      : collectImportableTextImportRows(state.fileRows).length === 0
+        ? translate("textImport.dialog.noImportableFiles")
+        : translate("textImport.dialog.importReady");
 
   return (
     <>
@@ -357,22 +482,24 @@ export function BulkTextImportDialog({
         opener={opener}
         className="bulkTextImportDialog"
         trapFocus={!isDestinationPickerOpen}
-        onClose={onClose}
+        onClose={handleClose}
         footer={
           <div className="appDialogActions">
             <button
               type="button"
               className="appDialogButton appDialogButton-cancel bulkTextImportDialogCancelButton"
               autoFocus
-              onClick={onClose}
+              disabled={isImporting}
+              onClick={handleClose}
             >
               {translate("textImport.dialog.cancel")}
             </button>
             <button
               type="button"
               className="appDialogButton appDialogButton-confirm bulkTextImportDialogImportButton"
-              disabled
-              title={translate("textImport.dialog.importPending")}
+              disabled={!canExecute}
+              title={importDisabledHint}
+              onClick={handleExecute}
             >
               {translate("textImport.dialog.import")}
             </button>
@@ -383,6 +510,11 @@ export function BulkTextImportDialog({
           <p className="bulkTextImportDialogDescription">
             {translate("textImport.dialog.description")}
           </p>
+
+          <BulkTextImportExecutionReport
+            state={state}
+            translate={translate}
+          />
 
           <section className="bulkTextImportDialogSection">
             <h3>{translate("textImport.dialog.destinationHeading")}</h3>
@@ -402,6 +534,7 @@ export function BulkTextImportDialog({
                 <button
                   type="button"
                   className="appDialogButton bulkTextImportDialogSelectDestinationButton"
+                  disabled={isImporting}
                   onClick={openDestinationPicker}
                 >
                   {translate(
@@ -469,6 +602,7 @@ export function BulkTextImportDialog({
                       <button
                         type="button"
                         className="appDialogButton bulkTextImportDialogRemoveSourceButton"
+                        disabled={isImporting}
                         onClick={() =>
                           setState((current) => {
                             const next = removeSourcePath(
@@ -477,7 +611,10 @@ export function BulkTextImportDialog({
                             );
                             return next === current.sourcePaths
                               ? current
-                              : { ...current, sourcePaths: next };
+                              : {
+                                  ...resetTextImportExecutionState(current),
+                                  sourcePaths: next
+                                };
                           })
                         }
                       >
@@ -496,6 +633,7 @@ export function BulkTextImportDialog({
               state={state}
               translate={translate}
               onEncodingChange={onPreview ? handleEncodingChange : undefined}
+              encodingLocked={isImporting}
             />
           </section>
         </div>
@@ -529,7 +667,8 @@ export function BulkTextImportDialog({
 function BulkTextImportTargets({
   state,
   translate,
-  onEncodingChange
+  onEncodingChange,
+  encodingLocked = false
 }: {
   readonly state: BulkTextImportDialogState;
   readonly translate: Translate;
@@ -537,6 +676,8 @@ function BulkTextImportTargets({
     rowId: string,
     encoding: TextImportEncoding
   ) => void;
+  /** #420 Step 5: freeze every encoding dropdown while an import is running. */
+  readonly encodingLocked?: boolean;
 }): JSX.Element {
   if (!bulkTextImportInputsReady(state)) {
     return (
@@ -616,6 +757,7 @@ function BulkTextImportTargets({
                 row={row}
                 translate={translate}
                 onEncodingChange={onEncodingChange}
+                encodingLocked={encodingLocked}
               />
             ))}
           </ul>
@@ -628,7 +770,8 @@ function BulkTextImportTargets({
 function BulkTextImportFileRow({
   row,
   translate,
-  onEncodingChange
+  onEncodingChange,
+  encodingLocked = false
 }: {
   readonly row: BulkTextImportFileRowViewState;
   readonly translate: Translate;
@@ -636,9 +779,12 @@ function BulkTextImportFileRow({
     rowId: string,
     encoding: TextImportEncoding
   ) => void;
+  readonly encodingLocked?: boolean;
 }): JSX.Element {
   const encodingEditable =
-    onEncodingChange !== undefined && isTextImportEncodingEditable(row);
+    !encodingLocked &&
+    onEncodingChange !== undefined &&
+    isTextImportEncodingEditable(row);
   // A `decodeFailed` dry-run row whose new encoding decoded fine is no longer
   // really "skipped" — show the working preview and a softened note.
   const effectivelySkipped =
@@ -794,5 +940,190 @@ function BulkTextImportFolderRow({
         </span>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * #420 Step 5: the "importing…" banner and, once the run finishes, the
+ * result summary — counts plus per-file imported / skipped / failed lists,
+ * mapped back to the row display paths where possible. The dialog does not
+ * auto-close; the user reads this and closes when ready.
+ */
+function BulkTextImportExecutionReport({
+  state,
+  translate
+}: {
+  readonly state: BulkTextImportDialogState;
+  readonly translate: Translate;
+}): JSX.Element | null {
+  if (state.executionStatus === "idle") {
+    return null;
+  }
+
+  if (state.executionStatus === "importing") {
+    return (
+      <div
+        className="bulkTextImportDialogExecutionBanner isImporting"
+        role="status"
+      >
+        {translate("textImport.dialog.importing")}
+      </div>
+    );
+  }
+
+  const displayPathBySource = new Map(
+    state.fileRows.map((row) => [row.sourcePath, row.sourceDisplayPath])
+  );
+  const displayFor = (sourcePath: string): string =>
+    displayPathBySource.get(sourcePath) ?? sourcePath;
+
+  const result = state.executionResult;
+
+  // Thrown / transport-level failure: no structured result to show.
+  if (!result) {
+    return (
+      <div
+        className="bulkTextImportDialogExecutionBanner isFailed"
+        role="alert"
+      >
+        <p className="bulkTextImportDialogExecutionSummary">
+          {translate("textImport.dialog.importFailed")}
+        </p>
+        {state.executionErrorMessage ? (
+          <p className="bulkTextImportDialogExecutionDetail">
+            {translate("textImport.dialog.importResultMessage", {
+              message: state.executionErrorMessage
+            })}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const summaryKind = textImportExecutionSummaryKind(result);
+
+  if (!result.ok) {
+    return (
+      <div
+        className="bulkTextImportDialogExecutionBanner isFailed"
+        role="alert"
+      >
+        <p className="bulkTextImportDialogExecutionSummary">
+          {translate(textImportExecutionSummaryKey(summaryKind))}
+        </p>
+        <p className="bulkTextImportDialogExecutionDetail">
+          {translate("textImport.dialog.importResultReason", {
+            reason: result.reason
+          })}
+        </p>
+        {result.message ? (
+          <p className="bulkTextImportDialogExecutionDetail">
+            {translate("textImport.dialog.importResultMessage", {
+              message: result.message
+            })}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const bannerClass =
+    summaryKind === "completed"
+      ? "bulkTextImportDialogExecutionBanner isCompleted"
+      : summaryKind === "partial"
+        ? "bulkTextImportDialogExecutionBanner isPartial"
+        : "bulkTextImportDialogExecutionBanner isFailed";
+
+  return (
+    <div
+      className={bannerClass}
+      role={summaryKind === "completed" ? "status" : "alert"}
+    >
+      <p className="bulkTextImportDialogExecutionSummary">
+        {translate(textImportExecutionSummaryKey(summaryKind))}
+      </p>
+      <p className="bulkTextImportDialogExecutionCounts">
+        <span>
+          {translate("textImport.dialog.importedCount", {
+            count: result.imported.length
+          })}
+        </span>{" "}
+        <span>
+          {translate("textImport.dialog.skippedCount", {
+            count: result.skipped.length
+          })}
+        </span>{" "}
+        <span>
+          {translate("textImport.dialog.failedCount", {
+            count: result.failed.length
+          })}
+        </span>
+      </p>
+
+      {result.imported.length > 0 ? (
+        <div className="bulkTextImportDialogExecutionGroup bulkTextImportDialogExecutionImported">
+          <h4>{translate("textImport.dialog.importedFilesHeading")}</h4>
+          <ul>
+            {result.imported.map((entry) => (
+              <li key={entry.targetProjectRelativePath}>
+                <span className="bulkTextImportDialogExecutionSource">
+                  {displayFor(entry.sourcePath)}
+                </span>
+                <span className="bulkTextImportDialogExecutionTarget">
+                  {entry.targetProjectRelativePath}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {result.skipped.length > 0 ? (
+        <div className="bulkTextImportDialogExecutionGroup bulkTextImportDialogExecutionSkipped">
+          <h4>{translate("textImport.dialog.skippedFilesHeading")}</h4>
+          <ul>
+            {result.skipped.map((entry, index) => (
+              <li key={`${entry.sourcePath}:${index}`}>
+                <span className="bulkTextImportDialogExecutionSource">
+                  {displayFor(entry.sourcePath)}
+                </span>
+                <span className="bulkTextImportDialogExecutionReason">
+                  {translate("textImport.dialog.importResultReason", {
+                    reason: translate(textImportSkipReasonKey(entry.reason))
+                  })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {result.failed.length > 0 ? (
+        <div className="bulkTextImportDialogExecutionGroup bulkTextImportDialogExecutionFailed">
+          <h4>{translate("textImport.dialog.failedFilesHeading")}</h4>
+          <ul>
+            {result.failed.map((entry, index) => (
+              <li key={`${entry.sourcePath}:${index}`}>
+                <span className="bulkTextImportDialogExecutionSource">
+                  {displayFor(entry.sourcePath)}
+                </span>
+                <span className="bulkTextImportDialogExecutionReason">
+                  {translate("textImport.dialog.importResultReason", {
+                    reason: translate(textImportSkipReasonKey(entry.reason))
+                  })}
+                </span>
+                {entry.message ? (
+                  <span className="bulkTextImportDialogExecutionDetail">
+                    {translate("textImport.dialog.importResultMessage", {
+                      message: entry.message
+                    })}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }

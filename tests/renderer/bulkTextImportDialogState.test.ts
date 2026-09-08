@@ -4,26 +4,37 @@ import {
   applyPreviewFailure,
   applyPreviewSuccess,
   applySelectedEncoding,
+  applyTextImportExecutionStart,
+  buildExecuteTextImportFileRequests,
   buildFileRowViewStates,
+  bulkTextImportCanExecute,
   bulkTextImportDestinationLabel,
   bulkTextImportInputsKey,
   bulkTextImportInputsReady,
+  collectImportableTextImportRows,
   createFileRowViewState,
   createInitialBulkTextImportDialogState,
   isStaleDryRunResponse,
   isStalePreviewResponse,
+  isStaleTextImportExecutionResponse,
   isTextImportEncodingEditable,
   isTextImportPreviewFailureReason,
+  isTextImportRowImportable,
   removeSourcePath,
+  resetTextImportExecutionState,
   textImportBomKindKey,
   textImportEncodingNameKey,
+  textImportExecutionSummaryKey,
+  textImportExecutionSummaryKind,
   textImportPreviewFailureReasonKey,
   textImportSkipReasonKey,
+  type BulkTextImportDialogState,
   type BulkTextImportFileRowViewState
 } from "../../src/renderer/dialog/bulkTextImportDialogState";
 import {
   TEXT_IMPORT_ENCODINGS,
   TEXT_IMPORT_SKIP_REASONS,
+  type ExecuteTextImportResult,
   type TextImportDryRunResult
 } from "../../src/shared/textImport";
 
@@ -37,6 +48,10 @@ describe("bulkTextImportDialogState", () => {
       expect(state.dryRunResult).toBeUndefined();
       expect(state.dryRunRequestId).toBe(0);
       expect(state.fileRows).toEqual([]);
+      expect(state.executionStatus).toBe("idle");
+      expect(state.executionRequestId).toBe(0);
+      expect(state.executionResult).toBeUndefined();
+      expect(state.executionErrorMessage).toBeUndefined();
     });
 
     it("returns a fresh array each call", () => {
@@ -427,6 +442,301 @@ describe("bulkTextImportDialogState", () => {
       );
       expect(textImportPreviewFailureReasonKey("sourceMissing")).toBe(
         "textImport.dialog.skipReason.sourceMissing"
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // #420 Step 5: importable rows + execute request + result summary
+  // -------------------------------------------------------------------------
+
+  function readyState(
+    overrides: Partial<BulkTextImportDialogState> = {}
+  ): BulkTextImportDialogState {
+    return {
+      ...createInitialBulkTextImportDialogState(),
+      destinationFolderProjectRelativePath: "docs",
+      sourcePaths: ["/ext/a.txt"],
+      dryRunStatus: "ready",
+      fileRows: [row({ id: "f1" })],
+      ...overrides
+    };
+  }
+
+  describe("isTextImportRowImportable", () => {
+    it("accepts a normal row with a source and target, preview idle or ready", () => {
+      expect(isTextImportRowImportable(row({ previewStatus: "idle" }))).toBe(
+        true
+      );
+      expect(isTextImportRowImportable(row({ previewStatus: "ready" }))).toBe(
+        true
+      );
+    });
+
+    it("accepts a decodeFailed row only once recovered with a ready preview", () => {
+      expect(
+        isTextImportRowImportable(
+          row({
+            skipped: true,
+            skipReason: "decodeFailed",
+            decodeRecovered: true,
+            previewStatus: "ready"
+          })
+        )
+      ).toBe(true);
+      expect(
+        isTextImportRowImportable(
+          row({ skipped: true, skipReason: "decodeFailed", decodeRecovered: false })
+        )
+      ).toBe(false);
+    });
+
+    it("rejects preview loading / failed rows", () => {
+      expect(
+        isTextImportRowImportable(row({ previewStatus: "loading" }))
+      ).toBe(false);
+      expect(
+        isTextImportRowImportable(row({ previewStatus: "failed" }))
+      ).toBe(false);
+    });
+
+    it("rejects rows with no source or no target path", () => {
+      expect(isTextImportRowImportable(row({ sourcePath: "" }))).toBe(false);
+      expect(
+        isTextImportRowImportable(row({ targetProjectRelativePath: "" }))
+      ).toBe(false);
+    });
+
+    it("rejects every non-decode skip reason", () => {
+      for (const reason of [
+        "targetExists",
+        "notTextFile",
+        "invalidProjectPath",
+        "sourceMissing",
+        "sourceUnreadable",
+        "unsupportedSource"
+      ] as const) {
+        expect(
+          isTextImportRowImportable(row({ skipped: true, skipReason: reason }))
+        ).toBe(false);
+      }
+    });
+  });
+
+  describe("buildExecuteTextImportFileRequests", () => {
+    it("keeps only importable rows and uses the row-local selected encoding", () => {
+      const rows = [
+        row({
+          id: "ok",
+          sourcePath: "/ext/ok.txt",
+          targetProjectRelativePath: "docs/ok.md",
+          selectedEncoding: "eucJp"
+        }),
+        row({
+          id: "skip",
+          sourcePath: "/ext/skip.txt",
+          targetProjectRelativePath: "docs/skip.md",
+          skipped: true,
+          skipReason: "targetExists"
+        }),
+        row({
+          id: "recovered",
+          sourcePath: "/ext/rec.txt",
+          targetProjectRelativePath: "docs/rec.md",
+          skipped: true,
+          skipReason: "decodeFailed",
+          decodeRecovered: true,
+          previewStatus: "ready",
+          selectedEncoding: "utf16le"
+        })
+      ];
+      expect(buildExecuteTextImportFileRequests(rows)).toEqual([
+        {
+          sourcePath: "/ext/ok.txt",
+          targetProjectRelativePath: "docs/ok.md",
+          encoding: "eucJp"
+        },
+        {
+          sourcePath: "/ext/rec.txt",
+          targetProjectRelativePath: "docs/rec.md",
+          encoding: "utf16le"
+        }
+      ]);
+    });
+
+    it("never sets skipped / skipReason on an included row", () => {
+      const [entry] = buildExecuteTextImportFileRequests([
+        row({
+          skipped: true,
+          skipReason: "decodeFailed",
+          decodeRecovered: true,
+          previewStatus: "ready"
+        })
+      ]);
+      expect(entry).not.toHaveProperty("skipped");
+      expect(entry).not.toHaveProperty("skipReason");
+    });
+  });
+
+  describe("collectImportableTextImportRows", () => {
+    it("preserves display order", () => {
+      const rows = [
+        row({ id: "a" }),
+        row({ id: "b", skipped: true, skipReason: "targetExists" }),
+        row({ id: "c" })
+      ];
+      expect(
+        collectImportableTextImportRows(rows).map((r) => r.id)
+      ).toEqual(["a", "c"]);
+    });
+  });
+
+  describe("bulkTextImportCanExecute", () => {
+    it("is true for a ready dry-run with an importable row and no preview loading", () => {
+      expect(bulkTextImportCanExecute(readyState())).toBe(true);
+    });
+
+    it("is false without a destination / before dry-run ready", () => {
+      expect(
+        bulkTextImportCanExecute(
+          readyState({ destinationFolderProjectRelativePath: null })
+        )
+      ).toBe(false);
+      expect(
+        bulkTextImportCanExecute(readyState({ dryRunStatus: "loading" }))
+      ).toBe(false);
+    });
+
+    it("is false when no row is importable", () => {
+      expect(
+        bulkTextImportCanExecute(
+          readyState({
+            fileRows: [
+              row({ skipped: true, skipReason: "targetExists" })
+            ]
+          })
+        )
+      ).toBe(false);
+    });
+
+    it("is false while any preview is updating", () => {
+      expect(
+        bulkTextImportCanExecute(
+          readyState({
+            fileRows: [row({ id: "a" }), row({ id: "b", previewStatus: "loading" })]
+          })
+        )
+      ).toBe(false);
+    });
+
+    it("is false while importing and after a completed run", () => {
+      expect(
+        bulkTextImportCanExecute(readyState({ executionStatus: "importing" }))
+      ).toBe(false);
+      expect(
+        bulkTextImportCanExecute(readyState({ executionStatus: "completed" }))
+      ).toBe(false);
+    });
+
+    it("is true again after a failed run (retry allowed)", () => {
+      expect(
+        bulkTextImportCanExecute(readyState({ executionStatus: "failed" }))
+      ).toBe(true);
+    });
+  });
+
+  describe("applyTextImportExecutionStart / isStaleTextImportExecutionResponse", () => {
+    it("moves to importing tagged with the request id and clears old results", () => {
+      const started = applyTextImportExecutionStart(
+        readyState({
+          executionStatus: "failed",
+          executionErrorMessage: "old",
+          executionResult: { ok: false, reason: "x" }
+        }),
+        7
+      );
+      expect(started.executionStatus).toBe("importing");
+      expect(started.executionRequestId).toBe(7);
+      expect(started.executionResult).toBeUndefined();
+      expect(started.executionErrorMessage).toBeUndefined();
+    });
+
+    it("flags any response id other than the current one as stale", () => {
+      expect(isStaleTextImportExecutionResponse({ executionRequestId: 7 }, 6)).toBe(
+        true
+      );
+      expect(isStaleTextImportExecutionResponse({ executionRequestId: 7 }, 7)).toBe(
+        false
+      );
+    });
+  });
+
+  describe("resetTextImportExecutionState", () => {
+    it("clears a finished result but keeps the monotonic request id", () => {
+      const reset = resetTextImportExecutionState(
+        readyState({
+          executionStatus: "completed",
+          executionRequestId: 3,
+          executionResult: { ok: true, imported: [], skipped: [], failed: [] }
+        })
+      );
+      expect(reset.executionStatus).toBe("idle");
+      expect(reset.executionResult).toBeUndefined();
+      expect(reset.executionRequestId).toBe(3);
+    });
+
+    it("returns the same reference when already idle", () => {
+      const s = readyState();
+      expect(resetTextImportExecutionState(s)).toBe(s);
+    });
+  });
+
+  describe("textImportExecutionSummaryKind", () => {
+    const okResult = (
+      imported: number,
+      skipped: number,
+      failed: number
+    ): ExecuteTextImportResult => ({
+      ok: true,
+      imported: Array.from({ length: imported }, (_, i) => ({
+        sourcePath: `/ext/i${i}.txt`,
+        targetProjectRelativePath: `docs/i${i}.md`
+      })),
+      skipped: Array.from({ length: skipped }, (_, i) => ({
+        sourcePath: `/ext/s${i}.txt`,
+        reason: "targetExists" as const
+      })),
+      failed: Array.from({ length: failed }, (_, i) => ({
+        sourcePath: `/ext/f${i}.txt`,
+        reason: "sourceUnreadable" as const
+      }))
+    });
+
+    it("is completed only when every file imported", () => {
+      expect(textImportExecutionSummaryKind(okResult(3, 0, 0))).toBe("completed");
+    });
+
+    it("is partial when some imported and some did not", () => {
+      expect(textImportExecutionSummaryKind(okResult(2, 1, 0))).toBe("partial");
+      expect(textImportExecutionSummaryKind(okResult(2, 0, 1))).toBe("partial");
+    });
+
+    it("is failed for a top-level failure or an ok result with nothing imported", () => {
+      expect(
+        textImportExecutionSummaryKind({ ok: false, reason: "noProject" })
+      ).toBe("failed");
+      expect(textImportExecutionSummaryKind(okResult(0, 2, 1))).toBe("failed");
+    });
+
+    it("maps each kind to a translation key", () => {
+      expect(textImportExecutionSummaryKey("completed")).toBe(
+        "textImport.dialog.importCompleted"
+      );
+      expect(textImportExecutionSummaryKey("partial")).toBe(
+        "textImport.dialog.importPartialFailure"
+      );
+      expect(textImportExecutionSummaryKey("failed")).toBe(
+        "textImport.dialog.importFailed"
       );
     });
   });

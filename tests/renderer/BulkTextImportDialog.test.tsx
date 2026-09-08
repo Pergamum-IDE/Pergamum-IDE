@@ -6,10 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t } from "../../src/shared/i18n";
 import {
   BulkTextImportDialog,
-  type BulkTextImportDialogProps
+  type BulkTextImportDialogProps,
+  type BulkTextImportExecuteInput
 } from "../../src/renderer/dialog/BulkTextImportDialog";
 import type { TextImportFolderListing } from "../../src/renderer/dialog/TextImportDestinationPicker";
 import type {
+  ExecuteTextImportResult,
   PreviewTextImportFilesRequest,
   PreviewTextImportFilesResult,
   TextImportBomKind,
@@ -161,6 +163,20 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
         ): Promise<PreviewTextImportFilesResult> =>
           previewOk(request.files[0]?.id ?? "f1")
       ),
+      onExecute: vi.fn(
+        async (
+          input: BulkTextImportExecuteInput
+        ): Promise<ExecuteTextImportResult> => ({
+          ok: true,
+          imported: input.files.map((file) => ({
+            sourcePath: file.sourcePath,
+            targetProjectRelativePath: file.targetProjectRelativePath
+          })),
+          skipped: [],
+          failed: []
+        })
+      ),
+      onImported: vi.fn(),
       ...props
     };
 
@@ -231,7 +247,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     );
   });
 
-  it("keeps Import disabled with a next-step hint and closes with Cancel", () => {
+  it("keeps Import disabled before any importable rows and closes with Cancel", () => {
     const onClose = vi.fn();
     renderDialog({ onClose });
 
@@ -239,9 +255,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       ".bulkTextImportDialogImportButton"
     );
     expect(importButton?.disabled).toBe(true);
-    expect(importButton?.title).toBe(
-      "インポート実行は次のステップで実装します。"
-    );
+    expect(importButton?.title).toBe("取り込めるファイルがありません。");
 
     act(() => {
       container
@@ -668,7 +682,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     expect(container.querySelector(".bulkTextImportDialogFileRow")).toBeNull();
   });
 
-  it("does not call the preview callback until an encoding is changed", async () => {
+  it("does not call the preview or execute callbacks on dry-run alone", async () => {
     const props = renderDialog();
     await chooseDestination("docs");
     dropFiles(["/ext/a.txt"]);
@@ -676,8 +690,8 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
 
     expect(props.onDryRun).toHaveBeenCalled();
     expect(props.onPreview).not.toHaveBeenCalled();
-    // No execute-shaped callback is wired in Step 4.
-    expect(Object.keys(props)).not.toContain("onExecute");
+    // Import runs only from an explicit click (#420 Step 5).
+    expect(props.onExecute).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
@@ -1105,5 +1119,461 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     expect(container.textContent).not.toContain(
       "プレビューを更新しています..."
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // #420 Step 5: import execution
+  // ---------------------------------------------------------------------------
+
+  function importButton(): HTMLButtonElement {
+    return container.querySelector<HTMLButtonElement>(
+      ".bulkTextImportDialogImportButton"
+    )!;
+  }
+  function cancelButton(): HTMLButtonElement {
+    return container.querySelector<HTMLButtonElement>(
+      ".bulkTextImportDialogCancelButton"
+    )!;
+  }
+  function clickImport(): void {
+    act(() => {
+      importButton().click();
+    });
+  }
+
+  async function readyForImport(
+    props: Partial<BulkTextImportDialogProps> = {},
+    files: readonly TextImportDryRunFile[] = [fileRow({ id: "f1" })]
+  ): Promise<BulkTextImportDialogProps> {
+    const resolved = renderDialog({
+      onDryRun: vi.fn(async () => okResult(files)),
+      ...props
+    });
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+    return resolved;
+  }
+
+  it("enables Import once the dry-run is ready with an importable row", async () => {
+    renderDialog();
+    expect(importButton().disabled).toBe(true);
+
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+
+    expect(importButton().disabled).toBe(false);
+  });
+
+  it("keeps Import disabled when every row is skipped for a non-decode reason", async () => {
+    await readyForImport({}, [
+      fileRow({ id: "f1", skipped: true, skipReason: "targetExists" })
+    ]);
+    expect(importButton().disabled).toBe(true);
+    expect(importButton().title).toBe("取り込めるファイルがありません。");
+  });
+
+  it("keeps Import disabled while a preview row is updating", async () => {
+    const gate = deferred<PreviewTextImportFilesResult>();
+    await readyForImport({ onPreview: vi.fn(() => gate.promise) }, [
+      fileRow({ id: "f1" }),
+      fileRow({ id: "f2", sourceDisplayPath: "b.txt" })
+    ]);
+    expect(importButton().disabled).toBe(false);
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+    expect(importButton().disabled).toBe(true);
+    expect(importButton().title).toBe(
+      "プレビューの更新が終わるまで待ってください。"
+    );
+
+    await act(async () => {
+      gate.resolve(previewOk("f1"));
+    });
+    await flush();
+    expect(importButton().disabled).toBe(false);
+  });
+
+  it("includes a decodeRecovered row in the import and uses its selected encoding", async () => {
+    const onExecute = vi.fn(
+      async (
+        input: BulkTextImportExecuteInput
+      ): Promise<ExecuteTextImportResult> => ({
+        ok: true,
+        imported: input.files.map((f) => ({
+          sourcePath: f.sourcePath,
+          targetProjectRelativePath: f.targetProjectRelativePath
+        })),
+        skipped: [],
+        failed: []
+      })
+    );
+    const onPreview = vi.fn(async (r: PreviewTextImportFilesRequest) =>
+      previewOk(r.files[0].id, { previewHead: "読めた" })
+    );
+    await readyForImport({ onExecute, onPreview }, [
+      fileRow({
+        id: "rec",
+        sourcePath: "/ext/rec.txt",
+        targetProjectRelativePath: "docs/rec.md",
+        skipped: true,
+        skipReason: "decodeFailed"
+      })
+    ]);
+    expect(importButton().disabled).toBe(true);
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+    expect(importButton().disabled).toBe(false);
+
+    clickImport();
+    await flush();
+
+    expect(onExecute).toHaveBeenCalledTimes(1);
+    expect(onExecute).toHaveBeenCalledWith({
+      destinationFolderProjectRelativePath: "docs",
+      files: [
+        {
+          sourcePath: "/ext/rec.txt",
+          targetProjectRelativePath: "docs/rec.md",
+          encoding: "eucJp"
+        }
+      ]
+    });
+  });
+
+  it("sends only importable rows, with row-local encodings, and never folders / skips", async () => {
+    const onExecute = vi.fn(
+      async (): Promise<ExecuteTextImportResult> => ({
+        ok: true,
+        imported: [
+          { sourcePath: "/ext/a.txt", targetProjectRelativePath: "docs/a.md" }
+        ],
+        skipped: [],
+        failed: []
+      })
+    );
+    const onDryRun = vi.fn(async () =>
+      okResult(
+        [
+          fileRow({
+            id: "ok",
+            sourcePath: "/ext/a.txt",
+            targetProjectRelativePath: "docs/a.md",
+            selectedEncoding: "shiftJis"
+          }),
+          fileRow({
+            id: "exists",
+            sourcePath: "/ext/b.txt",
+            targetProjectRelativePath: "docs/b.md",
+            skipped: true,
+            skipReason: "targetExists"
+          })
+        ],
+        [folderRow({ sourcePath: "/ext/dir" })]
+      )
+    );
+    renderDialog({ onDryRun, onExecute });
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+
+    await changeEncoding(encodingSelects()[0], "utf8");
+    clickImport();
+    await flush();
+
+    expect(onExecute).toHaveBeenCalledWith({
+      destinationFolderProjectRelativePath: "docs",
+      files: [
+        {
+          sourcePath: "/ext/a.txt",
+          targetProjectRelativePath: "docs/a.md",
+          encoding: "utf8"
+        }
+      ]
+    });
+  });
+
+  it("runs executeTextImport once even on a double click", async () => {
+    const gate = deferred<ExecuteTextImportResult>();
+    const onExecute = vi.fn(() => gate.promise);
+    await readyForImport({ onExecute });
+
+    clickImport();
+    clickImport();
+    clickImport();
+    await flush();
+
+    expect(onExecute).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      gate.resolve({ ok: true, imported: [], skipped: [], failed: [] });
+    });
+  });
+
+  it("shows an importing banner and locks the inputs while the import runs", async () => {
+    const gate = deferred<ExecuteTextImportResult>();
+    const onClose = vi.fn();
+    await readyForImport({ onExecute: vi.fn(() => gate.promise), onClose });
+
+    clickImport();
+    await flush();
+
+    expect(container.textContent).toContain("取り込みを実行しています...");
+    expect(importButton().disabled).toBe(true);
+    expect(cancelButton().disabled).toBe(true);
+    expect(encodingSelects()[0].disabled).toBe(true);
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        ".bulkTextImportDialogSelectDestinationButton"
+      )?.disabled
+    ).toBe(true);
+
+    // Cancel / Escape are inert mid-import.
+    act(() => {
+      cancelButton().click();
+    });
+    act(() => {
+      container
+        .querySelector<HTMLElement>(".bulkTextImportDialog")
+        ?.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+        );
+    });
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => {
+      gate.resolve({
+        ok: true,
+        imported: [
+          { sourcePath: "/ext/notes.txt", targetProjectRelativePath: "docs/notes.md" }
+        ],
+        skipped: [],
+        failed: []
+      });
+    });
+    await flush();
+
+    // closable again once done
+    act(() => {
+      cancelButton().click();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the completed summary and imported paths, and keeps the dialog open", async () => {
+    const onImported = vi.fn();
+    await readyForImport({
+      onImported,
+      onExecute: vi.fn(
+        async (): Promise<ExecuteTextImportResult> => ({
+          ok: true,
+          imported: [
+            {
+              sourcePath: "/ext/notes.txt",
+              targetProjectRelativePath: "docs/notes.md"
+            }
+          ],
+          skipped: [],
+          failed: []
+        })
+      )
+    });
+
+    clickImport();
+    await flush();
+
+    const banner = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogExecutionBanner"
+    );
+    expect(banner?.className).toContain("isCompleted");
+    expect(banner?.textContent).toContain("取り込みが完了しました。");
+    expect(banner?.textContent).toContain("docs/notes.md");
+    // still open, and Import stays disabled (inputs unchanged)
+    expect(container.querySelector(".bulkTextImportDialog")).not.toBeNull();
+    expect(importButton().disabled).toBe(true);
+    expect(onImported).toHaveBeenCalledWith(["docs/notes.md"]);
+  });
+
+  it("shows the partial-failure summary with skipped and failed rows", async () => {
+    await readyForImport(
+      {
+        onExecute: vi.fn(
+          async (): Promise<ExecuteTextImportResult> => ({
+            ok: true,
+            imported: [
+              { sourcePath: "/ext/a.txt", targetProjectRelativePath: "docs/a.md" }
+            ],
+            skipped: [
+              {
+                sourcePath: "/ext/b.txt",
+                targetProjectRelativePath: "docs/b.md",
+                reason: "targetExists"
+              }
+            ],
+            failed: [
+              {
+                sourcePath: "/ext/c.txt",
+                reason: "sourceUnreadable",
+                message: "EACCES"
+              }
+            ]
+          })
+        )
+      },
+      [
+        fileRow({ id: "a", sourcePath: "/ext/a.txt", sourceDisplayPath: "a.txt" }),
+        fileRow({ id: "b", sourcePath: "/ext/b.txt", sourceDisplayPath: "b.txt" }),
+        fileRow({ id: "c", sourcePath: "/ext/c.txt", sourceDisplayPath: "c.txt" })
+      ]
+    );
+
+    clickImport();
+    await flush();
+
+    const banner = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogExecutionBanner"
+    );
+    expect(banner?.className).toContain("isPartial");
+    expect(banner?.textContent).toContain("一部のファイルを取り込めませんでした。");
+    expect(banner?.textContent).toContain(
+      t("ja", "textImport.dialog.skipReason.targetExists")
+    );
+    expect(banner?.textContent).toContain(
+      t("ja", "textImport.dialog.skipReason.sourceUnreadable")
+    );
+    expect(banner?.textContent).toContain("EACCES");
+  });
+
+  it("shows a failure summary for a top-level execute failure", async () => {
+    const onImported = vi.fn();
+    await readyForImport({
+      onImported,
+      onExecute: vi.fn(
+        async (): Promise<ExecuteTextImportResult> => ({
+          ok: false,
+          reason: "noProject",
+          message: "no project open"
+        })
+      )
+    });
+
+    clickImport();
+    await flush();
+
+    const banner = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogExecutionBanner"
+    );
+    expect(banner?.className).toContain("isFailed");
+    expect(banner?.textContent).toContain("取り込みを実行できませんでした。");
+    expect(banner?.textContent).toContain("noProject");
+    expect(onImported).not.toHaveBeenCalled();
+  });
+
+  it("shows a failure summary when the execute callback throws", async () => {
+    await readyForImport({
+      onExecute: vi.fn(async () => {
+        throw new Error("ipc down");
+      })
+    });
+
+    clickImport();
+    await flush();
+
+    const banner = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogExecutionBanner"
+    );
+    expect(banner?.className).toContain("isFailed");
+    expect(banner?.textContent).toContain("取り込みを実行できませんでした。");
+    expect(banner?.textContent).toContain("ipc down");
+    // the dry-run result / file list is not discarded
+    expect(container.querySelector(".bulkTextImportDialogFileList")).not.toBeNull();
+  });
+
+  it("clears the import result when the destination changes", async () => {
+    await readyForImport();
+    clickImport();
+    await flush();
+    expect(container.textContent).toContain("取り込みが完了しました。");
+
+    await chooseDestination("assets");
+    await flush();
+
+    expect(container.textContent).not.toContain("取り込みが完了しました。");
+    expect(
+      container.querySelector(".bulkTextImportDialogExecutionBanner")
+    ).toBeNull();
+  });
+
+  it("clears the import result when a row encoding changes", async () => {
+    await readyForImport();
+    clickImport();
+    await flush();
+    expect(container.textContent).toContain("取り込みが完了しました。");
+
+    await changeEncoding(encodingSelects()[0], "utf8");
+
+    expect(container.textContent).not.toContain("取り込みが完了しました。");
+  });
+
+  it("ignores an execute response that lands after the dialog is closed", async () => {
+    const gate = deferred<ExecuteTextImportResult>();
+
+    function Harness(): JSX.Element {
+      const [isOpen, setIsOpen] = React.useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setIsOpen(true)}>
+            open
+          </button>
+          <BulkTextImportDialog
+            isOpen={isOpen}
+            translate={translate}
+            onClose={() => setIsOpen(false)}
+            listFolders={defaultListFolders()}
+            onDryRun={vi.fn(async () => okResult([fileRow({ id: "f1" })]))}
+            getDroppedFilePaths={(files) => files.map((file) => file.name)}
+            onPreview={vi.fn(
+              async (
+                r: PreviewTextImportFilesRequest
+              ): Promise<PreviewTextImportFilesResult> => previewOk(r.files[0].id)
+            )}
+            onExecute={vi.fn(() => gate.promise)}
+            onImported={vi.fn()}
+          />
+        </>
+      );
+    }
+
+    act(() => {
+      root.render(<Harness />);
+    });
+    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
+
+    clickImport();
+    await flush();
+    expect(container.textContent).toContain("取り込みを実行しています...");
+
+    // Close is inert while importing — end the import first, then close.
+    await act(async () => {
+      gate.resolve({ ok: true, imported: [], skipped: [], failed: [] });
+    });
+    await flush();
+    act(() => {
+      cancelButton().click();
+    });
+    expect(container.querySelector(".bulkTextImportDialog")).toBeNull();
+
+    // Reopen: fully reset, no lingering execution summary.
+    act(() => {
+      container.querySelector<HTMLButtonElement>("button")!.click();
+    });
+    await flush();
+    expect(container.textContent).toContain("取り込み対象はまだありません。");
+    expect(
+      container.querySelector(".bulkTextImportDialogExecutionBanner")
+    ).toBeNull();
   });
 });
