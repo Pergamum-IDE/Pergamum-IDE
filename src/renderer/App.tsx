@@ -61,6 +61,7 @@ import type {
   GlossaryTag,
   UpdateGlossaryTagInput
 } from "../shared/glossary";
+import type { TextImportDryRunResult } from "../shared/textImport";
 import {
   t,
   type Translate,
@@ -80,7 +81,11 @@ import {
   aboutCreditsHeading,
   aboutCreditsRows
 } from "./dialog/AboutDialog";
-import { BulkTextImportDialog } from "./dialog/BulkTextImportDialog";
+import {
+  BulkTextImportDialog,
+  type BulkTextImportDryRunInput
+} from "./dialog/BulkTextImportDialog";
+import type { TextImportFolderListing } from "./dialog/TextImportDestinationPicker";
 import {
   applicationCommandIds,
   createApplicationCommandTitles,
@@ -1209,6 +1214,57 @@ export function App(): JSX.Element {
   const isBulkTextImportDialogPendingOrOpenRef = useRef(false);
   const [isBulkTextImportDialogOpen, setIsBulkTextImportDialogOpen] =
     useState(false);
+  // #420 Step 3: the dialog stays free of `window.pergamum`; App owns the IPC
+  // calls and hands the dialog three stable callbacks. The renderer only ever
+  // collects source *paths* (via `webUtils.getPathForFile` in the preload) and
+  // passes them to the main process — it never reads an external file itself.
+  const bulkTextImportListFolders = useCallback(
+    async (
+      directoryRelativePath: string | null
+    ): Promise<TextImportFolderListing> => {
+      const result =
+        await window.pergamum.projects.listFileExplorerChildren(
+          directoryRelativePath
+        );
+      if (result.kind !== "ok") {
+        return { ok: false };
+      }
+      return {
+        ok: true,
+        folders: result.entries
+          .filter((entry) => entry.kind === "folder")
+          .map((entry) => ({
+            name: entry.name,
+            relativePath: entry.relativePath
+          }))
+      };
+    },
+    []
+  );
+  const bulkTextImportDryRun = useCallback(
+    async (
+      input: BulkTextImportDryRunInput
+    ): Promise<TextImportDryRunResult> => {
+      const projectId = await window.pergamum.projects.getCurrentProjectId();
+      if (projectId === null) {
+        return { ok: false, reason: "noProject" };
+      }
+      return window.pergamum.projects.dryRunTextImport({
+        projectId,
+        destinationFolderProjectRelativePath:
+          input.destinationFolderProjectRelativePath,
+        sourcePaths: input.sourcePaths
+      });
+    },
+    []
+  );
+  const bulkTextImportDroppedFilePaths = useCallback(
+    (files: readonly File[]): readonly string[] =>
+      files
+        .map((file) => window.pergamum.fileSystem.getPathForFile(file))
+        .filter((path): path is string => path.length > 0),
+    []
+  );
   // #413: pre-move image-link update confirmation for the Markdown documents
   // in a File Explorer Move. `handlePrepareMarkdownDocumentMoves` plans every
   // selected Markdown file, opens ONE dialog, and parks a `resolve` here; the
@@ -10353,6 +10409,9 @@ export function App(): JSX.Element {
         translate={translate}
         opener={bulkTextImportDialogOpenerRef.current}
         onClose={closeBulkTextImportDialog}
+        listFolders={bulkTextImportListFolders}
+        onDryRun={bulkTextImportDryRun}
+        getDroppedFilePaths={bulkTextImportDroppedFilePaths}
       />
 
       {replacePreviewDialogState ? (

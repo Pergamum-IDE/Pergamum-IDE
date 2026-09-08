@@ -1,9 +1,13 @@
+// @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
-import React from "react";
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InfoDialog } from "../../../src/renderer/dialog/InfoDialog";
 import { handleInfoDialogKeyDown } from "../../../src/renderer/dialog/infoDialogHandlers";
+
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 function firstAttributeValue(markup: string, attribute: string): string {
   const match = markup.match(new RegExp(`${attribute}="([^"]+)"`));
@@ -131,6 +135,65 @@ describe("InfoDialog foundation (#221)", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
 
     expect(handleInfoDialogKeyDown({ key: "Enter" }, onClose)).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("InfoDialog backdrop dismissal is strictly opt-in", () => {
+  let container: HTMLDivElement;
+  let root: ReturnType<typeof createRoot>;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.restoreAllMocks();
+  });
+
+  function render(props: Partial<React.ComponentProps<typeof InfoDialog>>): void {
+    act(() => {
+      root.render(
+        React.createElement(InfoDialog, {
+          title: "Backdrop test",
+          opener: null,
+          onClose: () => undefined,
+          footer: React.createElement("button", { type: "button" }, "Close"),
+          children: React.createElement("p", null, "Body"),
+          ...props
+        })
+      );
+    });
+  }
+
+  it("does not close on a backdrop click by default", () => {
+    const onClose = vi.fn();
+    render({ onClose });
+
+    act(() => {
+      container.querySelector<HTMLElement>(".appDialogBackdrop")?.click();
+    });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on a backdrop click only when dismissOnBackdropClick is set", () => {
+    const onClose = vi.fn();
+    render({ onClose, dismissOnBackdropClick: true });
+
+    act(() => {
+      container.querySelector<HTMLElement>(".appDialogBackdrop")?.click();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    // A click that originates inside the dialog body still does not close it.
+    act(() => {
+      container.querySelector<HTMLElement>(".appInfoDialog")?.click();
+    });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

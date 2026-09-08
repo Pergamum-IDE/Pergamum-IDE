@@ -6073,8 +6073,10 @@ label.settingsItemHeader {
 .bulkTextImportDialogDropArea {
   min-height: 96px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   padding-block: 16px;
   padding-inline: 12px;
   border: 1px dashed var(--app-dialog-border, #cbd5df);
@@ -6082,11 +6084,258 @@ label.settingsItemHeader {
   background: var(--app-dialog-inset-background, #f7f8fa);
   color: var(--app-dialog-secondary-foreground, #52616f);
   text-align: center;
+  cursor: default;
+}
+
+.bulkTextImportDialogDropArea.isDragActive {
+  border-color: var(--app-accent, #2f6fed);
+  background: var(--app-dialog-accent-inset-background, #eef3ff);
+  color: var(--app-dialog-foreground, #1f2933);
 }
 
 .bulkTextImportDialogDropArea p {
   margin: 0;
   line-height: 1.5;
+}
+
+.bulkTextImportDialogDropAreaHint {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+/* #420 Step 3: destination row, source list, dry-run result. */
+.bulkTextImportDialogDestinationRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulkTextImportDialogDestinationValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-block: 6px;
+  padding-inline: 10px;
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+  background: var(--app-dialog-inset-background, #f7f8fa);
+  word-break: break-all;
+}
+
+.bulkTextImportDialogSourceCount {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogSourceList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.bulkTextImportDialogSourceItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bulkTextImportDialogSourcePath {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+
+.bulkTextImportDialogTargets {
+  min-width: 0;
+}
+
+.bulkTextImportDialogEmptyTargetsHint,
+.bulkTextImportDialogLoading,
+.bulkTextImportDialogCheckFailedDetail {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogCheckFailed {
+  margin: 0;
+  padding-block: 8px;
+  padding-inline: 10px;
+  border: 1px solid var(--app-danger-border, #e4b7b7);
+  border-radius: 4px;
+  background: var(--app-danger-inset-background, #fdf2f2);
+}
+
+.bulkTextImportDialogCheckFailed p {
+  margin: 0;
+}
+
+.bulkTextImportDialogResult {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogResult h4 {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.bulkTextImportDialogFileList,
+.bulkTextImportDialogFolderList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bulkTextImportDialogFileRow,
+.bulkTextImportDialogFolderRow {
+  padding-block: 8px;
+  padding-inline: 10px;
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+  background: var(--app-dialog-inset-background, #f7f8fa);
+  min-width: 0;
+}
+
+.bulkTextImportDialogFileRow.isSkipped {
+  opacity: 0.75;
+}
+
+.bulkTextImportDialogFileRowHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.bulkTextImportDialogFileSource {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bulkTextImportDialogFileEncoding,
+.bulkTextImportDialogFileBom {
+  font-size: 0.78rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogFileTarget,
+.bulkTextImportDialogFolderTarget {
+  margin-top: 2px;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogFilePreview {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bulkTextImportDialogFilePreviewLabel {
+  font-weight: 600;
+}
+
+.bulkTextImportDialogFileRenamed,
+.bulkTextImportDialogFileSkipped,
+.bulkTextImportDialogFolderSkipNote {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--app-warning-foreground, #8a5a00);
+}
+
+.bulkTextImportDialogFolderRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bulkTextImportDialogFolderSource {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* #420 Step 3: lazy folder-tree destination picker. */
+.appDialog.textImportDestinationPickerDialog {
+  width: min(480px, calc(100vw - 32px));
+  max-width: min(480px, calc(100vw - 32px));
+}
+
+.textImportDestinationPickerTree {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+  padding: 6px;
+}
+
+.textImportDestinationPickerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.textImportDestinationPickerRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.textImportDestinationPickerTwisty {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  width: 20px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.textImportDestinationPickerName {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding-block: 4px;
+  padding-inline: 6px;
+  border-radius: 3px;
+  text-align: start;
+  color: inherit;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.textImportDestinationPickerName.isSelected {
+  background: var(--app-accent, #2f6fed);
+  color: #fff;
+}
+
+.textImportDestinationPickerRoot {
+  display: block;
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.textImportDestinationPickerLoading,
+.textImportDestinationPickerFailed {
+  margin: 4px 0;
+  font-size: 0.82rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
 }
 
 .appDialogActions {

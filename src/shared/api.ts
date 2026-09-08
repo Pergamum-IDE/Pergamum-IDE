@@ -246,6 +246,9 @@ export const PROJECT_CHANNELS = {
   /** #372: first non-empty Markdown line of a project-local document, for the
    *  Command Palette file quick open footer detail preview. */
   readProjectDocumentPreviewLine: "projects:readProjectDocumentPreviewLine",
+  /** #420 Step 3: the open project's stable id, or `null` when no project is
+   *  open. The renderer needs it to address the text-import IPCs. */
+  getCurrentProjectId: "projects:getCurrentProjectId",
   /** #420 Step 1: side-effect-free external .txt bulk import planning. */
   dryRunTextImport: "projects:dryRunTextImport",
   /** #420 Step 1: regenerate one external-file preview for a chosen encoding. */
@@ -1045,6 +1048,9 @@ export interface PergamumApi {
     readProjectDocumentPreviewLine: (
       relativePath: string
     ) => Promise<string | null>;
+    /** #420 Step 3: the open project's stable id (`null` when no project is
+     *  open). Used only to address the text-import IPCs from the renderer. */
+    getCurrentProjectId: () => Promise<string | null>;
     dryRunTextImport: (
       request: DryRunTextImportRequest
     ) => Promise<TextImportDryRunResult>;
@@ -1202,5 +1208,16 @@ export interface PergamumApi {
     validate: (
       request: MarkdownImageLinkDiagnosticsRequest
     ) => Promise<MarkdownImageLinkDiagnosticsResult>;
+  };
+  /**
+   * #420 Step 3: renderer-safe filesystem path helpers. `getPathForFile`
+   * resolves the absolute path of a `File` obtained from an external drag &
+   * drop, via Electron `webUtils` in the preload — the renderer NEVER reads
+   * the file itself; it only collects the path and hands it to the
+   * text-import IPCs. Returns `""` when no path is available (e.g. a
+   * synthetic `File`).
+   */
+  fileSystem: {
+    getPathForFile: (file: File) => string;
   };
 }

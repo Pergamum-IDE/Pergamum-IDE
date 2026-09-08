@@ -4304,6 +4304,11 @@ export function registerProjectIpc(
   );
 
   ipcMain.handle(
+    PROJECT_CHANNELS.getCurrentProjectId,
+    async (): Promise<string | null> => currentProjectId()
+  );
+
+  ipcMain.handle(
     PROJECT_CHANNELS.dryRunTextImport,
     async (
       _event,

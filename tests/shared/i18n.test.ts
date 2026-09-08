@@ -885,8 +885,6 @@ describe("Bulk text import dialog translations (#420 Step 2)", () => {
         "textImport.dialog.title",
         "textImport.dialog.description",
         "textImport.dialog.destinationHeading",
-        "textImport.dialog.destinationPlaceholder",
-        "textImport.dialog.dropPlaceholder",
         "textImport.dialog.targetsHeading",
         "textImport.dialog.emptyTargets",
         "textImport.dialog.import",
@@ -895,5 +893,79 @@ describe("Bulk text import dialog translations (#420 Step 2)", () => {
         expect(t(language, key).length).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+describe("Bulk text import dialog translations (#420 Step 3)", () => {
+  it("defines dry-run UI copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.destinationNotSelected",
+        "textImport.dialog.destinationRoot",
+        "textImport.dialog.selectDestination",
+        "textImport.dialog.changeDestination",
+        "textImport.dialog.destinationPickerTitle",
+        "textImport.dialog.destinationPickerRoot",
+        "textImport.dialog.destinationPickerConfirm",
+        "textImport.dialog.destinationPickerLoadFailed",
+        "textImport.dialog.sourcesHeading",
+        "textImport.dialog.dropAreaReady",
+        "textImport.dialog.dropAreaActive",
+        "textImport.dialog.dropAreaHint",
+        "textImport.dialog.removeSource",
+        "textImport.dialog.checkingTargets",
+        "textImport.dialog.checkFailed",
+        "textImport.dialog.emptyTargetsHint",
+        "textImport.dialog.sourcePath",
+        "textImport.dialog.targetPath",
+        "textImport.dialog.encoding",
+        "textImport.dialog.bom",
+        "textImport.dialog.previewHead",
+        "textImport.dialog.previewTail",
+        "textImport.dialog.folderHasSkipped",
+        "textImport.dialog.importPending",
+        "textImport.dialog.bomKind.none",
+        "textImport.dialog.bomKind.utf8",
+        "textImport.dialog.bomKind.utf16le",
+        "textImport.dialog.bomKind.utf16be",
+        "textImport.dialog.encodingName.utf8",
+        "textImport.dialog.encodingName.utf8Bom",
+        "textImport.dialog.encodingName.shiftJis",
+        "textImport.dialog.encodingName.eucJp",
+        "textImport.dialog.encodingName.utf16le",
+        "textImport.dialog.encodingName.utf16be",
+        "textImport.dialog.encodingName.iso2022Jp",
+        "textImport.dialog.skipReason.notTextFile",
+        "textImport.dialog.skipReason.invalidProjectPath",
+        "textImport.dialog.skipReason.targetExists",
+        "textImport.dialog.skipReason.sourceMissing",
+        "textImport.dialog.skipReason.sourceUnreadable",
+        "textImport.dialog.skipReason.decodeFailed",
+        "textImport.dialog.skipReason.unsupportedSource"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("interpolates count and name placeholders", () => {
+    expect(t("ja", "textImport.dialog.sourceCount", { count: 3 })).toContain("3");
+    expect(t("en", "textImport.dialog.sourceCount", { count: 3 })).toContain("3");
+    expect(t("ja", "textImport.dialog.filesHeading", { count: 2 })).toContain("2");
+    expect(t("en", "textImport.dialog.foldersHeading", { count: 5 })).toContain(
+      "5"
+    );
+    expect(
+      t("ja", "textImport.dialog.destinationPickerExpand", { name: "章" })
+    ).toContain("章");
+    expect(
+      t("en", "textImport.dialog.destinationPickerCollapse", { name: "notes" })
+    ).toContain("notes");
+    expect(
+      t("ja", "textImport.dialog.skipped", { reason: "対象外" })
+    ).toContain("対象外");
+    expect(
+      t("en", "textImport.dialog.renamed", { target: "notes/a-1.md" })
+    ).toContain("notes/a-1.md");
   });
 });

@@ -146,6 +146,30 @@ describe("text import project IPC (#420 Step 1)", () => {
     );
   });
 
+  it("registers the getCurrentProjectId IPC channel (#420 Step 3)", () => {
+    expect(electronMock.handle.mock.calls.map(([channel]) => channel)).toEqual(
+      expect.arrayContaining([PROJECT_CHANNELS.getCurrentProjectId])
+    );
+  });
+
+  it("getCurrentProjectId IPC returns null with no project open and the id once opened (#420 Step 3)", async () => {
+    await expect(
+      registeredHandler(PROJECT_CHANNELS.getCurrentProjectId)({ sender: {} })
+    ).resolves.toBeNull();
+
+    const openedProjectId = await openProject("CurrentId");
+
+    await expect(
+      registeredHandler(PROJECT_CHANNELS.getCurrentProjectId)({ sender: {} })
+    ).resolves.toBe(openedProjectId);
+
+    await closeCurrentProject();
+
+    await expect(
+      registeredHandler(PROJECT_CHANNELS.getCurrentProjectId)({ sender: {} })
+    ).resolves.toBeNull();
+  });
+
   it("dryRunTextImport IPC returns a plan without writing project files", async () => {
     const openedProjectId = await openProject("DryRun");
     const sourcePath = path.join(externalRootPath, "foo.txt");

@@ -20,7 +20,8 @@ const electronMock = vi.hoisted(() => ({
   invoke: vi.fn(),
   on: vi.fn(),
   off: vi.fn(),
-  send: vi.fn()
+  send: vi.fn(),
+  getPathForFile: vi.fn((file: File) => `C:\\dropped\\${file.name}`)
 }));
 
 vi.mock("electron", () => ({
@@ -32,6 +33,9 @@ vi.mock("electron", () => ({
     on: electronMock.on,
     off: electronMock.off,
     send: electronMock.send
+  },
+  webUtils: {
+    getPathForFile: electronMock.getPathForFile
   }
 }));
 
@@ -61,6 +65,7 @@ describe("glossary preload API", () => {
       "Drafts/chapter-01.md",
       "chapter-02"
     );
+    await api.projects.getCurrentProjectId();
     await api.projects.dryRunTextImport({
       projectId: "019a0000-0000-7000-8000-000000000420",
       destinationFolderProjectRelativePath: "Drafts",
@@ -135,6 +140,7 @@ describe("glossary preload API", () => {
           dirtyProjectDocumentRelativePaths: []
         }
       ],
+      [PROJECT_CHANNELS.getCurrentProjectId],
       [
         PROJECT_CHANNELS.dryRunTextImport,
         {
@@ -214,6 +220,36 @@ describe("glossary preload API", () => {
         ]
       }
     );
+  });
+
+  it("resolves a dropped File to its absolute path via webUtils, never reading it (#420 Step 3)", () => {
+    electronMock.getPathForFile.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    const file = new File(["ignored body"], "chapter-01.txt");
+    const path = api.fileSystem.getPathForFile(file);
+
+    expect(electronMock.getPathForFile).toHaveBeenCalledWith(file);
+    expect(path).toBe("C:\\dropped\\chapter-01.txt");
+  });
+
+  it("returns an empty string when webUtils cannot resolve a path (#420 Step 3)", () => {
+    electronMock.getPathForFile.mockImplementationOnce(() => {
+      throw new Error("no path for synthetic File");
+    });
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    expect(
+      api.fileSystem.getPathForFile(new File(["x"], "synthetic.txt"))
+    ).toBe("");
   });
 
   it("exposes glossary entry + tag operations through the Pergamum API", () => {

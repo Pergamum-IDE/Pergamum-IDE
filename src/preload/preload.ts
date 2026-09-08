@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { nodePlatformToAppPlatform } from "./platform";
 import {
   APPLICATION_MENU_CHANNELS,
@@ -162,6 +162,8 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocumentPreviewLine, {
         relativePath
       }),
+    getCurrentProjectId: () =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.getCurrentProjectId),
     dryRunTextImport: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.dryRunTextImport, request),
     previewTextImportFile: (request) =>
@@ -376,6 +378,20 @@ const pergamumApi: PergamumApi = {
         MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS.validate,
         request
       )
+  },
+  fileSystem: {
+    // #420 Step 3: Electron `webUtils.getPathForFile` — the modern, sandbox-
+    // safe replacement for the removed `File.path`. The renderer passes a
+    // `File` from an external drop and receives its absolute path; it never
+    // reads the file. A synthetic `File` (or one with no backing path)
+    // yields `""`.
+    getPathForFile: (file) => {
+      try {
+        return webUtils.getPathForFile(file) ?? "";
+      } catch {
+        return "";
+      }
+    }
   }
 };
 
