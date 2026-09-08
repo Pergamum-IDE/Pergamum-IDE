@@ -61,6 +61,28 @@ describe("glossary preload API", () => {
       "Drafts/chapter-01.md",
       "chapter-02"
     );
+    await api.projects.dryRunTextImport({
+      projectId: "019a0000-0000-7000-8000-000000000420",
+      destinationFolderProjectRelativePath: "Drafts",
+      sourcePaths: ["C:\\Import\\chapter-01.txt"]
+    });
+    await api.projects.previewTextImportFile({
+      sourcePath: "C:\\Import\\chapter-01.txt",
+      encoding: "shiftJis"
+    });
+    await api.projects.executeTextImport({
+      projectId: "019a0000-0000-7000-8000-000000000420",
+      destinationFolderProjectRelativePath: "Drafts",
+      files: [
+        {
+          sourcePath: "C:\\Import\\chapter-01.txt",
+          targetProjectRelativePath: "Drafts/chapter-01.md",
+          encoding: "shiftJis"
+        }
+      ],
+      normalizeLineEndings: true,
+      targetLineEnding: "lf"
+    });
 
     expect(api.projects as Record<string, unknown>).not.toHaveProperty(
       "openProjectFile"
@@ -112,11 +134,85 @@ describe("glossary preload API", () => {
           newName: "chapter-02",
           dirtyProjectDocumentRelativePaths: []
         }
+      ],
+      [
+        PROJECT_CHANNELS.dryRunTextImport,
+        {
+          projectId: "019a0000-0000-7000-8000-000000000420",
+          destinationFolderProjectRelativePath: "Drafts",
+          sourcePaths: ["C:\\Import\\chapter-01.txt"]
+        }
+      ],
+      [
+        PROJECT_CHANNELS.previewTextImportFile,
+        {
+          sourcePath: "C:\\Import\\chapter-01.txt",
+          encoding: "shiftJis"
+        }
+      ],
+      [
+        PROJECT_CHANNELS.executeTextImport,
+        {
+          projectId: "019a0000-0000-7000-8000-000000000420",
+          destinationFolderProjectRelativePath: "Drafts",
+          files: [
+            {
+              sourcePath: "C:\\Import\\chapter-01.txt",
+              targetProjectRelativePath: "Drafts/chapter-01.md",
+              encoding: "shiftJis"
+            }
+          ],
+          normalizeLineEndings: true,
+          targetLineEnding: "lf"
+        }
       ]
     ]);
     expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain("openProjectFile");
     expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain(
       "projects:openProjectFile"
+    );
+  });
+
+  it("exposes batch text import preview through one IPC invoke", async () => {
+    electronMock.invoke.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    await api.projects.previewTextImportFiles({
+      files: [
+        {
+          id: "a",
+          sourcePath: "C:\\Import\\a.txt",
+          encoding: "utf8"
+        },
+        {
+          id: "b",
+          sourcePath: "C:\\Import\\b.txt",
+          encoding: "shiftJis"
+        }
+      ]
+    });
+
+    expect(electronMock.invoke).toHaveBeenCalledTimes(1);
+    expect(electronMock.invoke).toHaveBeenCalledWith(
+      PROJECT_CHANNELS.previewTextImportFiles,
+      {
+        files: [
+          {
+            id: "a",
+            sourcePath: "C:\\Import\\a.txt",
+            encoding: "utf8"
+          },
+          {
+            id: "b",
+            sourcePath: "C:\\Import\\b.txt",
+            encoding: "shiftJis"
+          }
+        ]
+      }
     );
   });
 

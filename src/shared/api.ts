@@ -34,6 +34,16 @@ import type {
   MarkdownImageLinkDiagnosticsResult
 } from "./markdownImageLinkDiagnostics";
 import type {
+  DryRunTextImportRequest,
+  ExecuteTextImportRequest,
+  ExecuteTextImportResult,
+  PreviewTextImportFileRequest,
+  PreviewTextImportFileResult,
+  PreviewTextImportFilesRequest,
+  PreviewTextImportFilesResult,
+  TextImportDryRunResult
+} from "./textImport";
+import type {
   EditContextMenuCommandSelection,
   EditContextMenuPopupRequest,
   NativeEditDelegationRequest
@@ -236,6 +246,14 @@ export const PROJECT_CHANNELS = {
   /** #372: first non-empty Markdown line of a project-local document, for the
    *  Command Palette file quick open footer detail preview. */
   readProjectDocumentPreviewLine: "projects:readProjectDocumentPreviewLine",
+  /** #420 Step 1: side-effect-free external .txt bulk import planning. */
+  dryRunTextImport: "projects:dryRunTextImport",
+  /** #420 Step 1: regenerate one external-file preview for a chosen encoding. */
+  previewTextImportFile: "projects:previewTextImportFile",
+  /** #420 Step 1 follow-up: batch preview for encoding changes in the UI. */
+  previewTextImportFiles: "projects:previewTextImportFiles",
+  /** #420 Step 1: execute the already-reviewed external .txt import plan. */
+  executeTextImport: "projects:executeTextImport",
   saveProjectDocument: "projects:saveProjectDocument",
   saveProjectSettings: "projects:saveProjectSettings",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -1027,6 +1045,18 @@ export interface PergamumApi {
     readProjectDocumentPreviewLine: (
       relativePath: string
     ) => Promise<string | null>;
+    dryRunTextImport: (
+      request: DryRunTextImportRequest
+    ) => Promise<TextImportDryRunResult>;
+    previewTextImportFile: (
+      request: PreviewTextImportFileRequest
+    ) => Promise<PreviewTextImportFileResult>;
+    previewTextImportFiles: (
+      request: PreviewTextImportFilesRequest
+    ) => Promise<PreviewTextImportFilesResult>;
+    executeTextImport: (
+      request: ExecuteTextImportRequest
+    ) => Promise<ExecuteTextImportResult>;
     saveProjectDocument: (
       relativePath: string,
       content: string

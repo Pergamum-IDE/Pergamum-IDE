@@ -162,6 +162,14 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocumentPreviewLine, {
         relativePath
       }),
+    dryRunTextImport: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.dryRunTextImport, request),
+    previewTextImportFile: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.previewTextImportFile, request),
+    previewTextImportFiles: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.previewTextImportFiles, request),
+    executeTextImport: (request) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.executeTextImport, request),
     saveProjectDocument: (relativePath, content) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectDocument, {
         relativePath,

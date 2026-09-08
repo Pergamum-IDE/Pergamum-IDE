@@ -60,6 +60,20 @@ import {
   type UpdateProjectSettingsRequest,
   type ProjectSettings
 } from "../shared/api";
+import {
+  isTextImportEncoding,
+  isTextImportLineEnding,
+  isTextImportSkipReason,
+  type DryRunTextImportRequest,
+  type ExecuteTextImportFileRequest,
+  type ExecuteTextImportRequest,
+  type ExecuteTextImportResult,
+  type PreviewTextImportFileRequest,
+  type PreviewTextImportFileResult,
+  type PreviewTextImportFilesRequest,
+  type PreviewTextImportFilesResult,
+  type TextImportDryRunResult
+} from "../shared/textImport";
 import { moveEntries } from "./projectMoveExecution";
 import {
   collectFileExplorerDeleteTargets,
@@ -117,6 +131,12 @@ import {
   sanitizedFileIoError,
   type SanitizedFileIoError
 } from "./markdownFileIo";
+import {
+  dryRunTextImport,
+  executeTextImport,
+  previewTextImportFile,
+  previewTextImportFiles
+} from "./textImport";
 import {
   loadProjectConfig,
   projectConfigFileName,
@@ -1038,6 +1058,127 @@ function parseSaveProjectDocumentRequest(
   return {
     relativePath: value.relativePath,
     content: value.content
+  };
+}
+
+function parseDryRunTextImportRequest(
+  value: unknown
+): DryRunTextImportRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.projectId !== "string" ||
+    value.projectId.length === 0 ||
+    typeof value.destinationFolderProjectRelativePath !== "string" ||
+    !Array.isArray(value.sourcePaths) ||
+    !value.sourcePaths.every((entry) => typeof entry === "string")
+  ) {
+    throw new Error("Invalid text import dry-run request.");
+  }
+
+  return {
+    projectId: value.projectId,
+    destinationFolderProjectRelativePath:
+      value.destinationFolderProjectRelativePath,
+    sourcePaths: value.sourcePaths as string[]
+  };
+}
+
+function parsePreviewTextImportFileRequest(
+  value: unknown
+): PreviewTextImportFileRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.sourcePath !== "string" ||
+    value.sourcePath.length === 0 ||
+    !isTextImportEncoding(value.encoding)
+  ) {
+    throw new Error("Invalid text import preview request.");
+  }
+
+  return {
+    sourcePath: value.sourcePath,
+    encoding: value.encoding
+  };
+}
+
+function parsePreviewTextImportFilesRequest(
+  value: unknown
+): PreviewTextImportFilesRequest {
+  if (!isRequestObject(value) || !Array.isArray(value.files)) {
+    throw new Error("Invalid text import batch preview request.");
+  }
+
+  return {
+    files: value.files.map((entry) => {
+      if (
+        !isRequestObject(entry) ||
+        typeof entry.id !== "string" ||
+        entry.id.length === 0 ||
+        typeof entry.sourcePath !== "string" ||
+        entry.sourcePath.length === 0 ||
+        !isTextImportEncoding(entry.encoding)
+      ) {
+        throw new Error("Invalid text import batch preview file request.");
+      }
+
+      return {
+        id: entry.id,
+        sourcePath: entry.sourcePath,
+        encoding: entry.encoding
+      };
+    })
+  };
+}
+
+function parseExecuteTextImportFileRequest(
+  value: unknown
+): ExecuteTextImportFileRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.sourcePath !== "string" ||
+    value.sourcePath.length === 0 ||
+    typeof value.targetProjectRelativePath !== "string" ||
+    !isTextImportEncoding(value.encoding) ||
+    (value.skipped !== undefined && typeof value.skipped !== "boolean") ||
+    (value.skipReason !== undefined &&
+      !isTextImportSkipReason(value.skipReason))
+  ) {
+    throw new Error("Invalid text import file request.");
+  }
+
+  return {
+    sourcePath: value.sourcePath,
+    targetProjectRelativePath: value.targetProjectRelativePath,
+    encoding: value.encoding,
+    ...(typeof value.skipped === "boolean" ? { skipped: value.skipped } : {}),
+    ...(isTextImportSkipReason(value.skipReason)
+      ? { skipReason: value.skipReason }
+      : {})
+  };
+}
+
+function parseExecuteTextImportRequest(
+  value: unknown
+): ExecuteTextImportRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.projectId !== "string" ||
+    value.projectId.length === 0 ||
+    typeof value.destinationFolderProjectRelativePath !== "string" ||
+    !Array.isArray(value.files) ||
+    typeof value.normalizeLineEndings !== "boolean" ||
+    !isTextImportLineEnding(value.targetLineEnding)
+  ) {
+    throw new Error("Invalid text import execute request.");
+  }
+
+  return {
+    projectId: value.projectId,
+    destinationFolderProjectRelativePath:
+      value.destinationFolderProjectRelativePath,
+    files: value.files.map(parseExecuteTextImportFileRequest),
+    normalizeLineEndings: value.normalizeLineEndings,
+    targetLineEnding: value.targetLineEnding
   };
 }
 
@@ -4160,6 +4301,113 @@ export function registerProjectIpc(
     PROJECT_CHANNELS.readProjectDocumentPreviewLine,
     async (_event, rawRequest: unknown): Promise<string | null> =>
       readProjectDocumentPreviewLine(rawRequest)
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.dryRunTextImport,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<TextImportDryRunResult> => {
+      let request: DryRunTextImportRequest;
+
+      try {
+        request = parseDryRunTextImportRequest(rawRequest);
+      } catch {
+        return { ok: false, reason: "invalidRequest" };
+      }
+
+      if (!currentProjectState) {
+        return { ok: false, reason: "noProject" };
+      }
+
+      if (currentProjectState.accessMode.kind === "readOnly") {
+        return { ok: false, reason: "readOnlyProject" };
+      }
+
+      return dryRunTextImport({
+        currentProjectId: currentProjectState.projectId,
+        projectRootPath: currentProjectState.rootPath,
+        request
+      });
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.previewTextImportFile,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<PreviewTextImportFileResult> => {
+      let request: PreviewTextImportFileRequest;
+
+      try {
+        request = parsePreviewTextImportFileRequest(rawRequest);
+      } catch {
+        return { ok: false, reason: "sourceUnreadable" };
+      }
+
+      return previewTextImportFile(request);
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.previewTextImportFiles,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<PreviewTextImportFilesResult> => {
+      let request: PreviewTextImportFilesRequest;
+
+      try {
+        request = parsePreviewTextImportFilesRequest(rawRequest);
+      } catch {
+        return { ok: false, reason: "invalidRequest" };
+      }
+
+      return previewTextImportFiles(request);
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.executeTextImport,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<ExecuteTextImportResult> => {
+      let request: ExecuteTextImportRequest;
+
+      try {
+        request = parseExecuteTextImportRequest(rawRequest);
+      } catch {
+        return { ok: false, reason: "invalidRequest" };
+      }
+
+      if (!currentProjectState) {
+        return { ok: false, reason: "noProject" };
+      }
+
+      if (currentProjectState.accessMode.kind === "readOnly") {
+        return { ok: false, reason: "readOnlyProject" };
+      }
+
+      const projectState = currentProjectState;
+      const result = await executeTextImport({
+        currentProjectId: projectState.projectId,
+        projectRootPath: projectState.rootPath,
+        request
+      });
+
+      if (currentProjectState === projectState && result.ok) {
+        for (const imported of result.imported) {
+          projectState.documentRelativePaths.add(
+            imported.targetProjectRelativePath
+          );
+        }
+      }
+
+      return result;
+    }
   );
 
   ipcMain.handle(
