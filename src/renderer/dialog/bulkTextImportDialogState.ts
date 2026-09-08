@@ -11,8 +11,8 @@
  *
  * This module holds only serialisable state and pure derivations so the
  * dedup / dry-run-trigger / stale-response / encoding-editability /
- * preview-apply / importable-row / execute-request rules are unit-testable
- * without a DOM.
+ * preview-apply / manual-skip / importable-row / execute-request rules are
+ * unit-testable without a DOM.
  */
 
 import type {
@@ -60,6 +60,11 @@ export interface BulkTextImportFileRowViewState {
   readonly renamed: boolean;
   readonly skipped: boolean;
   readonly skipReason?: TextImportSkipReason;
+  /**
+   * Row-local UI action from the encoding dropdown. Distinct from the dry-run
+   * `skipped` / `skipReason` plan and never stored as a TextImportEncoding.
+   */
+  readonly manualSkipped: boolean;
   readonly selectedEncoding: TextImportEncoding;
   readonly bomKind: TextImportBomKind;
   readonly previewHead: string;
@@ -222,19 +227,23 @@ export function isStaleDryRunResponse(
 
 /**
  * `true` when the user may pick a different encoding for this row: a normal
- * (non-skipped) row, or a `decodeFailed` row that still has a source path to
- * re-read. Every other skip reason (`notTextFile`, `invalidProjectPath`,
- * `targetExists`, `sourceMissing`, `sourceUnreadable`, `unsupportedSource`)
- * is left disabled — an encoding change cannot fix any of them.
+ * (non-skipped) row, a manually skipped row, or a `decodeFailed` row that
+ * still has a source path to re-read. Every other skip reason (`notTextFile`,
+ * `invalidProjectPath`, `targetExists`, `sourceMissing`, `sourceUnreadable`,
+ * `unsupportedSource`) is left disabled — an encoding change cannot fix any
+ * of them.
  */
 export function isTextImportEncodingEditable(
   row: Pick<
     BulkTextImportFileRowViewState,
-    "sourcePath" | "skipped" | "skipReason"
+    "sourcePath" | "skipped" | "skipReason" | "manualSkipped"
   >
 ): boolean {
   if (row.sourcePath.length === 0) {
     return false;
+  }
+  if (row.manualSkipped) {
+    return true;
   }
   if (!row.skipped) {
     return true;
@@ -264,6 +273,7 @@ export function createFileRowViewState(file: {
     renamed: file.renamed,
     skipped: file.skipped,
     skipReason: file.skipReason,
+    manualSkipped: false,
     selectedEncoding: file.selectedEncoding,
     bomKind: file.bomKind,
     previewHead: file.previewHead,
@@ -292,9 +302,10 @@ export function buildFileRowViewStates(
 }
 
 /**
- * Set a row's chosen encoding and move it into `loading`, tagged with
- * `previewRequestId`. Returns the same array reference when nothing changes
- * (row missing, not editable, or already on that encoding).
+ * Set a row's chosen encoding, clear any manual skip, and move it into
+ * `loading`, tagged with `previewRequestId`. Returns the same array reference
+ * when nothing changes (row missing, not editable, or already on that encoding
+ * without a manual skip to clear).
  */
 export function applySelectedEncoding(
   rows: readonly BulkTextImportFileRowViewState[],
@@ -307,16 +318,53 @@ export function applySelectedEncoding(
     if (row.id !== rowId) {
       return row;
     }
-    if (!isTextImportEncodingEditable(row) || row.selectedEncoding === encoding) {
+    if (
+      !isTextImportEncodingEditable(row) ||
+      (row.selectedEncoding === encoding && !row.manualSkipped)
+    ) {
       return row;
     }
     changed = true;
     return {
       ...row,
+      manualSkipped: false,
       selectedEncoding: encoding,
       previewStatus: "loading" as const,
       previewErrorReason: undefined,
       previewRequestId
+    };
+  });
+  return changed ? next : rows;
+}
+
+/**
+ * Mark one row as manually skipped from the dropdown. Any in-flight preview
+ * request for this row is invalidated by clearing `previewRequestId`.
+ */
+export function applyManualSkip(
+  rows: readonly BulkTextImportFileRowViewState[],
+  rowId: string
+): readonly BulkTextImportFileRowViewState[] {
+  let changed = false;
+  const next = rows.map((row) => {
+    if (row.id !== rowId || !isTextImportEncodingEditable(row)) {
+      return row;
+    }
+    if (
+      row.manualSkipped &&
+      row.previewStatus === "idle" &&
+      row.previewErrorReason === undefined &&
+      row.previewRequestId === undefined
+    ) {
+      return row;
+    }
+    changed = true;
+    return {
+      ...row,
+      manualSkipped: true,
+      previewStatus: "idle" as const,
+      previewErrorReason: undefined,
+      previewRequestId: undefined
     };
   });
   return changed ? next : rows;
@@ -352,6 +400,7 @@ export function applyPreviewSuccess(
     changed = true;
     return {
       ...row,
+      manualSkipped: false,
       previewHead: preview.previewHead,
       previewTail: preview.previewTail,
       bomKind: preview.bomKind,
@@ -424,6 +473,7 @@ export function isTextImportPreviewFailureReason(
  * `true` when this row should be sent to `executeTextImport`:
  *
  * - it has both a source path and a target project-relative path,
+ * - it has not been manually skipped from the row dropdown,
  * - its preview is not mid-update (`loading`) and did not fail (`failed`),
  * - and it is either a normal (non-skipped) row, **or** a `decodeFailed`
  *   dry-run row the user rescued by changing the encoding
@@ -439,6 +489,9 @@ export function isTextImportRowImportable(
     row.sourcePath.length === 0 ||
     row.targetProjectRelativePath.length === 0
   ) {
+    return false;
+  }
+  if (row.manualSkipped) {
     return false;
   }
   if (row.previewStatus === "loading" || row.previewStatus === "failed") {

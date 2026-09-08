@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
@@ -111,6 +112,15 @@ function previewPerFileFailure(
       }
     ]
   };
+}
+
+function cssRule(selector: string): string {
+  const styles = readFileSync("src/renderer/styles.css", "utf8");
+  const start = styles.indexOf(`${selector} {`);
+  expect(start).toBeGreaterThan(-1);
+  const end = styles.indexOf("}", start);
+  expect(end).toBeGreaterThan(start);
+  return styles.slice(start, end + 1);
 }
 
 describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
@@ -274,6 +284,88 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     );
   });
 
+  it("starts destination-first with source adding disabled until a destination is selected", async () => {
+    const getDroppedFilePaths = vi.fn((files: readonly File[]) =>
+      files.map((file) => file.name)
+    );
+    const pickSources = vi.fn(async () => ["/ext/picked.txt"]);
+    const onDryRun = vi.fn(async () => okResult([fileRow()]));
+    renderDialog({ getDroppedFilePaths, pickSources, onDryRun });
+
+    expect(
+      container.querySelector("[data-testid='bulkTextImportDestinationValue']")
+        ?.textContent
+    ).toBe("取り込み先フォルダを選択してください。");
+    expect(
+      container.querySelector(".bulkTextImportDialogDropArea")?.getAttribute(
+        "aria-disabled"
+      )
+    ).toBe("true");
+    expect(container.textContent).toContain(
+      "取り込み先フォルダを選択すると、テキストファイルまたはフォルダを追加できます。"
+    );
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        ".bulkTextImportDialogAddFilesButton"
+      )?.disabled
+    ).toBe(true);
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        ".bulkTextImportDialogAddFoldersButton"
+      )?.disabled
+    ).toBe(true);
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        ".bulkTextImportDialogImportButton"
+      )?.disabled
+    ).toBe(true);
+    expect(
+      container.querySelector(".bulkTextImportDialogFileEncodingSelect")
+    ).toBeNull();
+
+    dropFiles(["/ext/ignored.txt"]);
+    await flush();
+    expect(getDroppedFilePaths).not.toHaveBeenCalled();
+    expect(
+      container.querySelector("[data-testid='bulkTextImportSourceCount']")
+    ).toBeNull();
+    expect(onDryRun).not.toHaveBeenCalled();
+
+    const addFiles = container.querySelector<HTMLButtonElement>(
+      ".bulkTextImportDialogAddFilesButton"
+    )!;
+    const addFolders = container.querySelector<HTMLButtonElement>(
+      ".bulkTextImportDialogAddFoldersButton"
+    )!;
+    act(() => {
+      addFiles.disabled = false;
+      addFiles.click();
+      addFolders.disabled = false;
+      addFolders.click();
+    });
+    await flush();
+    expect(pickSources).not.toHaveBeenCalled();
+    expect(onDryRun).not.toHaveBeenCalled();
+
+    await chooseDestination("docs");
+    expect(
+      container.querySelector(".bulkTextImportDialogDropArea")?.getAttribute(
+        "aria-disabled"
+      )
+    ).toBe("false");
+    expect(addFiles.disabled).toBe(false);
+    expect(addFolders.disabled).toBe(false);
+
+    dropFiles(["/ext/accepted.txt"]);
+    await flush();
+    expect(getDroppedFilePaths).toHaveBeenCalledTimes(1);
+    expect(
+      container.querySelector("[data-testid='bulkTextImportSourceCount']")
+        ?.textContent
+    ).toContain("1");
+    expect(onDryRun).toHaveBeenCalledTimes(1);
+  });
+
   it("lists project folders in the destination picker and stores the chosen path", async () => {
     const listFolders = defaultListFolders();
     renderDialog({ listFolders });
@@ -326,6 +418,21 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       container.querySelector("[data-testid='bulkTextImportDestinationValue']")
         ?.textContent
     ).toBe("/（プロジェクト直下）");
+    expect(
+      container.querySelector(".bulkTextImportDialogDropArea")?.getAttribute(
+        "aria-disabled"
+      )
+    ).toBe("false");
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        ".bulkTextImportDialogAddFilesButton"
+      )?.disabled
+    ).toBe(false);
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        ".bulkTextImportDialogAddFoldersButton"
+      )?.disabled
+    ).toBe(false);
   });
 
   it("collects dropped file paths through the injected resolver and dedupes them", async () => {
@@ -333,50 +440,48 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       files.map((file) => file.name)
     );
     renderDialog({ getDroppedFilePaths });
+    await chooseDestination("docs");
 
     dropFiles(["/ext/a.txt", "/ext/b.txt"]);
     dropFiles(["/ext/b.txt", "/ext/c.txt"]);
     await flush();
 
     expect(getDroppedFilePaths).toHaveBeenCalledTimes(2);
-    const items = Array.from(
-      container.querySelectorAll<HTMLElement>(".bulkTextImportDialogSourcePath")
-    ).map((node) => node.textContent);
-    expect(items).toEqual(["/ext/a.txt", "/ext/b.txt", "/ext/c.txt"]);
     expect(
       container.querySelector("[data-testid='bulkTextImportSourceCount']")
         ?.textContent
     ).toContain("3");
+    expect(container.querySelector(".bulkTextImportDialogSourceList")).toBeNull();
+    expect(
+      container.querySelector(".bulkTextImportDialogRemoveSourceButton")
+    ).toBeNull();
   });
 
-  it("removes a source path from the list", async () => {
+  it("does not render the individual source list or per-source remove buttons", async () => {
     renderDialog();
+    await chooseDestination("docs");
     dropFiles(["/ext/a.txt", "/ext/b.txt"]);
     await flush();
 
-    act(() => {
-      container
-        .querySelectorAll<HTMLButtonElement>(
-          ".bulkTextImportDialogRemoveSourceButton"
-        )[0]
-        .click();
-    });
-
-    const items = Array.from(
-      container.querySelectorAll<HTMLElement>(".bulkTextImportDialogSourcePath")
-    ).map((node) => node.textContent);
-    expect(items).toEqual(["/ext/b.txt"]);
+    expect(
+      container.querySelector("[data-testid='bulkTextImportSourceCount']")
+        ?.textContent
+    ).toContain("2");
+    expect(container.querySelector(".bulkTextImportDialogSourcePath")).toBeNull();
+    expect(
+      container.querySelector(".bulkTextImportDialogRemoveSourceButton")
+    ).toBeNull();
   });
 
   it("runs the dry-run only once both inputs are ready, and only dryRunTextImport", async () => {
     const onDryRun = vi.fn(async () => okResult([fileRow()]));
     renderDialog({ onDryRun });
 
-    dropFiles(["/ext/a.txt"]);
-    await flush();
+    await chooseDestination("docs");
     expect(onDryRun).not.toHaveBeenCalled();
 
-    await chooseDestination("docs");
+    dropFiles(["/ext/a.txt"]);
+    await flush();
 
     expect(onDryRun).toHaveBeenCalledTimes(1);
     expect(onDryRun).toHaveBeenCalledWith({
@@ -442,7 +547,13 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     // Newest response lands first.
     await act(async () => {
       second.resolve(
-        okResult([fileRow({ id: "s2", sourceDisplayPath: "b.txt" })])
+        okResult([
+          fileRow({
+            id: "s2",
+            sourcePath: "/ext/b.txt",
+            sourceDisplayPath: "b.txt"
+          })
+        ])
       );
     });
     await flush();
@@ -451,7 +562,13 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     // Stale (older) response arrives late and must be ignored.
     await act(async () => {
       first.resolve(
-        okResult([fileRow({ id: "s1", sourceDisplayPath: "a-stale.txt" })])
+        okResult([
+          fileRow({
+            id: "s1",
+            sourcePath: "/ext/a-stale.txt",
+            sourceDisplayPath: "a-stale.txt"
+          })
+        ])
       );
     });
     await flush();
@@ -459,16 +576,17 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     expect(container.textContent).not.toContain("a-stale.txt");
   });
 
-  it("renders file rows with target, encoding, BOM and preview", async () => {
+  it("renders file rows as a compact two-line path and preview layout", async () => {
     const onDryRun = vi.fn(async () =>
       okResult([
         fileRow({
+          sourcePath: "/very/long/source/path/手記.txt",
           sourceDisplayPath: "手記.txt",
           targetProjectRelativePath: "docs/手記.md",
           selectedEncoding: "shiftJis",
           bomKind: "none",
-          previewHead: "はじまり",
-          previewTail: "おわり"
+          previewHead: "はじまり\r\n二行目",
+          previewTail: "おわり\n終端"
         })
       ])
     );
@@ -482,11 +600,109 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       ".bulkTextImportDialogFileRow"
     );
     expect(row?.getAttribute("data-skipped")).toBe("false");
-    expect(row?.textContent).toContain("手記.txt");
-    expect(row?.textContent).toContain("docs/手記.md");
-    expect(row?.textContent).toContain("Shift_JIS");
-    expect(row?.textContent).toContain("はじまり");
-    expect(row?.textContent).toContain("おわり");
+    expect(row?.getAttribute("data-status-kind")).toBe("readable");
+    expect(row?.querySelector(".bulkTextImportDialogFileStatusSymbol")?.textContent)
+      .toBe("✓");
+    expect(
+      row?.querySelector(".bulkTextImportDialogFileStatusSymbol")?.getAttribute(
+        "aria-label"
+      )
+    ).toBe("読取OK");
+    expect(row?.querySelector(".bulkTextImportDialogFileMain")).not.toBeNull();
+    expect(
+      row?.querySelector(".bulkTextImportDialogFilePathLine")
+    ).not.toBeNull();
+    expect(
+      row?.querySelector(".bulkTextImportDialogFilePreviewLine")
+    ).not.toBeNull();
+    expect(
+      row?.querySelector(".bulkTextImportDialogFileEncoding")
+    ).not.toBeNull();
+    expect(
+      row?.querySelector(".bulkTextImportDialogFileEncodingLabel")
+    ).toBeNull();
+    expect(row?.querySelector(".bulkTextImportDialogFileBom")).toBeNull();
+    expect(row?.textContent).not.toContain("文字コード");
+
+    const source = row?.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileSource"
+    );
+    const target = row?.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileTarget"
+    );
+    expect(source?.textContent).toBe("/very/long/source/path/手記.txt");
+    expect(target?.textContent).toBe("docs/手記.md");
+    expect(source?.className).toContain(
+      "bulkTextImportDialogSourcePathLeftEllipsis"
+    );
+    expect(target?.className).toContain(
+      "bulkTextImportDialogTargetPathEllipsis"
+    );
+    expect(source?.title).toContain("/very/long/source/path/手記.txt");
+    expect(target?.title).toContain("docs/手記.md");
+    expect(row?.querySelector(".bulkTextImportDialogFilePathArrow")?.textContent)
+      .toBe("▶");
+    const select = row?.querySelector<HTMLSelectElement>(
+      ".bulkTextImportDialogFileEncodingSelect"
+    );
+    expect(select?.value).toBe("shiftJis");
+    expect(select?.getAttribute("aria-label")).toContain("手記.txt");
+    expect(Array.from(select?.options ?? []).map((option) => option.text)).toContain(
+      "処理スキップ"
+    );
+    expect(Array.from(select?.options ?? []).map((option) => option.text)).toContain(
+      "Shift_JIS / CP932"
+    );
+    const previewHead = row?.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFilePreviewHead"
+    );
+    const previewTail = row?.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFilePreviewTail"
+    );
+    expect(previewHead?.textContent).toBe("はじまり二行目");
+    expect(previewTail?.textContent).toBe("おわり終端");
+    expect(previewHead?.textContent).not.toContain("\r");
+    expect(previewHead?.textContent).not.toContain("\n");
+    expect(previewTail?.textContent).not.toContain("\r");
+    expect(previewTail?.textContent).not.toContain("\n");
+  });
+
+  it("keeps the compact file-row CSS as a two-row grid with centered side areas", () => {
+    expect(cssRule(".appDialog.bulkTextImportDialog")).toContain(
+      "width: min(92vw, 1200px)"
+    );
+    expect(cssRule(".bulkTextImportDialogFileRow")).toContain("display: grid");
+    expect(cssRule(".bulkTextImportDialogFileRow")).toContain(
+      "grid-template-columns: auto minmax(0, 1fr) auto"
+    );
+    expect(cssRule(".bulkTextImportDialogFileStatusSymbol")).toContain(
+      "grid-row: 1 / span 2"
+    );
+    expect(cssRule(".bulkTextImportDialogFileStatusSymbol")).toContain(
+      "align-self: center"
+    );
+    expect(cssRule(".bulkTextImportDialogFileEncoding")).toContain(
+      "grid-row: 1 / span 2"
+    );
+    expect(cssRule(".bulkTextImportDialogFileEncoding")).toContain(
+      "align-self: center"
+    );
+    expect(cssRule(".bulkTextImportDialogFilePreviewLine")).toContain(
+      "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)"
+    );
+  });
+
+  it("right-aligns source paths with left ellipsis and left-aligns target paths", () => {
+    const sourceRule = cssRule(".bulkTextImportDialogSourcePathLeftEllipsis");
+    expect(sourceRule).toContain("text-align: right");
+    expect(sourceRule).toContain("text-overflow: ellipsis");
+    expect(sourceRule).toContain("direction: rtl");
+    expect(sourceRule).toContain("unicode-bidi: plaintext");
+
+    const targetRule = cssRule(".bulkTextImportDialogTargetPathEllipsis");
+    expect(targetRule).toContain("text-align: left");
+    expect(targetRule).toContain("text-overflow: ellipsis");
+    expect(targetRule).not.toContain("direction: rtl");
   });
 
   it("shows the localized skip reason and hides the preview for a skipped file", async () => {
@@ -510,13 +726,23 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       ".bulkTextImportDialogFileRow"
     );
     expect(row?.getAttribute("data-skipped")).toBe("true");
+    expect(row?.getAttribute("data-status-kind")).toBe("skipped");
+    const symbol = row?.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileStatusSymbol"
+    );
+    expect(symbol?.textContent).toBe("⊘");
+    expect(symbol?.title).toContain("処理スキップ");
+    expect(symbol?.getAttribute("aria-label")).toContain("処理スキップ");
     expect(row?.textContent).toContain(
       t("ja", "textImport.dialog.skipReason.targetExists")
     );
+    expect(
+      row?.querySelector(".bulkTextImportDialogFilePreviewLine")
+    ).not.toBeNull();
     expect(row?.textContent).not.toContain("SHOULD-NOT-SHOW");
   });
 
-  it("shows a conflict-rename note when a file was renamed", async () => {
+  it("shows a renamed status symbol and the actual target path when a file was renamed", async () => {
     const onDryRun = vi.fn(async () =>
       okResult([
         fileRow({
@@ -535,8 +761,62 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       ".bulkTextImportDialogFileRow"
     );
     expect(row?.getAttribute("data-renamed")).toBe("true");
-    expect(row?.querySelector(".bulkTextImportDialogFileRenamed")?.textContent)
-      .toContain("docs/notes-1.md");
+    expect(row?.getAttribute("data-status-kind")).toBe("renamed");
+    const symbol = row?.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileStatusSymbol"
+    );
+    expect(symbol?.textContent).toBe("!");
+    expect(symbol?.title).toContain("名前が変わる");
+    expect(symbol?.title).toContain("docs/notes-1.md");
+    expect(row?.querySelector(".bulkTextImportDialogFileTarget")?.textContent)
+      .toBe("docs/notes-1.md");
+  });
+
+  it("gives skipped status priority over renamed status", async () => {
+    const onDryRun = vi.fn(async () =>
+      okResult([
+        fileRow({
+          renamed: true,
+          skipped: true,
+          skipReason: "invalidProjectPath",
+          targetProjectRelativePath: "docs/renamed.md"
+        })
+      ])
+    );
+    renderDialog({ onDryRun });
+
+    await chooseDestination("docs");
+    dropFiles(["/ext/notes.txt"]);
+    await flush();
+
+    const row = firstFileRow();
+    expect(row.getAttribute("data-status-kind")).toBe("skipped");
+    expect(
+      row.querySelector(".bulkTextImportDialogFileStatusSymbol")?.textContent
+    ).toBe("⊘");
+  });
+
+  it("gives manual skip status priority over renamed status", async () => {
+    const onDryRun = vi.fn(async () =>
+      okResult([
+        fileRow({
+          renamed: true,
+          targetProjectRelativePath: "docs/notes.imported.md"
+        })
+      ])
+    );
+    renderDialog({ onDryRun });
+
+    await chooseDestination("docs");
+    dropFiles(["/ext/notes.txt"]);
+    await flush();
+    await changeEncoding(encodingSelects()[0], "skip");
+
+    const row = firstFileRow();
+    expect(row.getAttribute("data-status-kind")).toBe("skipped");
+    expect(
+      row.querySelector(".bulkTextImportDialogFileStatusSymbol")?.textContent
+    ).toBe("⊘");
   });
 
   it("renders folder rows and flags folders with skipped descendants", async () => {
@@ -679,7 +959,9 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       container.querySelector("[data-testid='bulkTextImportDestinationValue']")
         ?.textContent
     ).toBe("取り込み先フォルダを選択してください。");
-    expect(container.querySelector(".bulkTextImportDialogSourcePath")).toBeNull();
+    expect(
+      container.querySelector("[data-testid='bulkTextImportSourceCount']")
+    ).toBeNull();
     expect(container.querySelector(".bulkTextImportDialogFileRow")).toBeNull();
   });
 
@@ -748,6 +1030,11 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     expect(selects).toHaveLength(2);
     expect(selects[0].value).toBe("shiftJis");
     expect(selects[1].value).toBe("eucJp");
+    expect(
+      Array.from(selects[0].options).map((option) => option.text)
+    ).toContain("処理スキップ");
+    expect(firstFileRow().querySelector(".bulkTextImportDialogFileEncodingLabel"))
+      .toBeNull();
   });
 
   it("updates the selected encoding and calls previewTextImportFiles, never the dry-run", async () => {
@@ -795,7 +1082,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     );
   });
 
-  it("applies previewHead / previewTail / bomKind on preview success", async () => {
+  it("applies previewHead / previewTail on preview success without showing BOM", async () => {
     const onPreview = vi.fn(async (r: PreviewTextImportFilesRequest) =>
       previewOk(r.files[0].id, {
         previewHead: "新しい先頭テキスト",
@@ -823,9 +1110,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     expect(row.textContent).toContain("新しい先頭テキスト");
     expect(row.textContent).toContain("新しい末尾テキスト");
     expect(row.textContent).not.toContain("古い先頭");
-    expect(row.querySelector(".bulkTextImportDialogFileBom")?.textContent).toContain(
-      "UTF-16 LE"
-    );
+    expect(row.querySelector(".bulkTextImportDialogFileBom")).toBeNull();
   });
 
   it("shows a per-row failure message on a per-file preview failure", async () => {
@@ -845,6 +1130,12 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     expect(row.textContent).toContain(
       t("ja", "textImport.dialog.skipReason.decodeFailed")
     );
+    expect(
+      row.querySelector(".bulkTextImportDialogFilePreviewLine")
+    ).not.toBeNull();
+    expect(
+      row.querySelector(".bulkTextImportDialogFileEncoding")
+    ).not.toBeNull();
   });
 
   it("shows a per-row failure message on a top-level preview failure", async () => {
@@ -887,39 +1178,49 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
   it("enables the dropdown for normal and decodeFailed rows, disables it for other skips", async () => {
     const onDryRun = vi.fn(async () =>
       okResult([
-        fileRow({ id: "normal", sourceDisplayPath: "normal.txt" }),
+        fileRow({
+          id: "normal",
+          sourcePath: "/ext/normal.txt",
+          sourceDisplayPath: "normal.txt"
+        }),
         fileRow({
           id: "decode",
+          sourcePath: "/ext/decode.txt",
           sourceDisplayPath: "decode.txt",
           skipped: true,
           skipReason: "decodeFailed"
         }),
         fileRow({
           id: "exists",
+          sourcePath: "/ext/exists.txt",
           sourceDisplayPath: "exists.txt",
           skipped: true,
           skipReason: "targetExists"
         }),
         fileRow({
           id: "nottext",
+          sourcePath: "/ext/nottext.bin",
           sourceDisplayPath: "nottext.bin",
           skipped: true,
           skipReason: "notTextFile"
         }),
         fileRow({
           id: "missing",
+          sourcePath: "/ext/missing.txt",
           sourceDisplayPath: "missing.txt",
           skipped: true,
           skipReason: "sourceMissing"
         }),
         fileRow({
           id: "unreadable",
+          sourcePath: "/ext/unreadable.txt",
           sourceDisplayPath: "unreadable.txt",
           skipped: true,
           skipReason: "sourceUnreadable"
         }),
         fileRow({
           id: "unsupported",
+          sourcePath: "/ext/unsupported",
           sourceDisplayPath: "unsupported",
           skipped: true,
           skipReason: "unsupportedSource"
@@ -936,13 +1237,13 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
         select.disabled
       ])
     );
-    expect(disabledById["normal.txt"]).toBe(false);
-    expect(disabledById["decode.txt"]).toBe(false);
-    expect(disabledById["exists.txt"]).toBe(true);
-    expect(disabledById["nottext.bin"]).toBe(true);
-    expect(disabledById["missing.txt"]).toBe(true);
-    expect(disabledById["unreadable.txt"]).toBe(true);
-    expect(disabledById["unsupported"]).toBe(true);
+    expect(disabledById["/ext/normal.txt"]).toBe(false);
+    expect(disabledById["/ext/decode.txt"]).toBe(false);
+    expect(disabledById["/ext/exists.txt"]).toBe(true);
+    expect(disabledById["/ext/nottext.bin"]).toBe(true);
+    expect(disabledById["/ext/missing.txt"]).toBe(true);
+    expect(disabledById["/ext/unreadable.txt"]).toBe(true);
+    expect(disabledById["/ext/unsupported"]).toBe(true);
   });
 
   it("recovers a decodeFailed row when a new encoding previews successfully", async () => {
@@ -973,7 +1274,15 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
 
     const row = firstFileRow();
     expect(row.getAttribute("data-skipped")).toBe("false");
-    expect(row.textContent).toContain("選択した文字コードで読み取れました。");
+    expect(row.getAttribute("data-status-kind")).toBe("readable");
+    const symbol = row.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileStatusSymbol"
+    );
+    expect(symbol?.textContent).toBe("✓");
+    expect(symbol?.title).toContain("選択した文字コードで読み取れました。");
+    expect(symbol?.getAttribute("aria-label")).toContain(
+      "選択した文字コードで読み取れました。"
+    );
     expect(row.textContent).toContain("読めた冒頭");
   });
 
@@ -1155,6 +1464,115 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     await flush();
     return resolved;
   }
+
+  it("marks a row manually skipped from the encoding dropdown without previewing", async () => {
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) => previewOk(r.files[0].id)
+    );
+    const onExecute = vi.fn(
+      async (): Promise<ExecuteTextImportResult> => ({
+        ok: true,
+        imported: [],
+        skipped: [],
+        failed: []
+      })
+    );
+    await readyForImport({ onPreview, onExecute }, [fileRow({ id: "f1" })]);
+
+    await changeEncoding(encodingSelects()[0], "skip");
+
+    const row = firstFileRow();
+    expect(encodingSelects()[0].value).toBe("skip");
+    expect(row.getAttribute("data-skipped")).toBe("true");
+    expect(row.getAttribute("data-status-kind")).toBe("skipped");
+    expect(
+      row.querySelector(".bulkTextImportDialogFileStatusSymbol")?.textContent
+    ).toBe("⊘");
+    expect(row.textContent).toContain("処理スキップ");
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(importButton().disabled).toBe(true);
+
+    clickImport();
+    await flush();
+    expect(onExecute).not.toHaveBeenCalled();
+  });
+
+  it("clears manual skip by choosing an encoding again and refreshes the preview", async () => {
+    const onPreview = vi.fn(async (r: PreviewTextImportFilesRequest) =>
+      previewOk(r.files[0].id, {
+        previewHead: "復帰した冒頭",
+        previewTail: "復帰した末尾"
+      })
+    );
+    await readyForImport({ onPreview }, [
+      fileRow({ id: "f1", selectedEncoding: "shiftJis" })
+    ]);
+
+    await changeEncoding(encodingSelects()[0], "skip");
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(importButton().disabled).toBe(true);
+
+    await changeEncoding(encodingSelects()[0], "shiftJis");
+
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(onPreview).toHaveBeenCalledWith({
+      files: [
+        { id: "f1", sourcePath: "/ext/notes.txt", encoding: "shiftJis" }
+      ]
+    });
+    expect(encodingSelects()[0].value).toBe("shiftJis");
+    expect(firstFileRow().getAttribute("data-status-kind")).toBe("readable");
+    expect(
+      firstFileRow().querySelector(".bulkTextImportDialogFileStatusSymbol")
+        ?.textContent
+    ).toBe("✓");
+    expect(firstFileRow().textContent).toContain("復帰した冒頭");
+    expect(importButton().disabled).toBe(false);
+  });
+
+  it("excludes a manually skipped row from the execute request while keeping other rows importable", async () => {
+    const onExecute = vi.fn(
+      async (): Promise<ExecuteTextImportResult> => ({
+        ok: true,
+        imported: [
+          { sourcePath: "/ext/a.txt", targetProjectRelativePath: "docs/a.md" }
+        ],
+        skipped: [],
+        failed: []
+      })
+    );
+    await readyForImport({ onExecute }, [
+      fileRow({
+        id: "a",
+        sourcePath: "/ext/a.txt",
+        sourceDisplayPath: "a.txt",
+        targetProjectRelativePath: "docs/a.md"
+      }),
+      fileRow({
+        id: "b",
+        sourcePath: "/ext/b.txt",
+        sourceDisplayPath: "b.txt",
+        targetProjectRelativePath: "docs/b.md"
+      })
+    ]);
+
+    await changeEncoding(encodingSelects()[1], "skip");
+    expect(importButton().disabled).toBe(false);
+
+    clickImport();
+    await flush();
+
+    expect(onExecute).toHaveBeenCalledWith({
+      destinationFolderProjectRelativePath: "docs",
+      files: [
+        {
+          sourcePath: "/ext/a.txt",
+          targetProjectRelativePath: "docs/a.md",
+          encoding: "shiftJis"
+        }
+      ]
+    });
+  });
 
   it("enables Import once the dry-run is ready with an importable row", async () => {
     renderDialog();
@@ -1592,10 +2010,9 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       ".bulkTextImportDialogAddFoldersButton"
     )!;
   }
-  function sourcePathTexts(): (string | null)[] {
-    return Array.from(
-      container.querySelectorAll<HTMLElement>(".bulkTextImportDialogSourcePath")
-    ).map((node) => node.textContent);
+  function sourceCountText(): string | null | undefined {
+    return container.querySelector("[data-testid='bulkTextImportSourceCount']")
+      ?.textContent;
   }
 
   it("adds paths chosen from the file picker button to the source list", async () => {
@@ -1603,6 +2020,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       kind === "files" ? ["/ext/a.txt", "/ext/b.txt"] : []
     );
     renderDialog({ pickSources });
+    await chooseDestination("docs");
 
     act(() => {
       addFilesButton().click();
@@ -1610,11 +2028,8 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     await flush();
 
     expect(pickSources).toHaveBeenCalledWith("files");
-    expect(sourcePathTexts()).toEqual(["/ext/a.txt", "/ext/b.txt"]);
-    expect(
-      container.querySelector("[data-testid='bulkTextImportSourceCount']")
-        ?.textContent
-    ).toContain("2");
+    expect(sourceCountText()).toContain("2");
+    expect(container.querySelector(".bulkTextImportDialogSourcePath")).toBeNull();
   });
 
   it("adds paths chosen from the folder picker button to the source list", async () => {
@@ -1622,6 +2037,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       kind === "folders" ? ["/ext/chapters"] : []
     );
     renderDialog({ pickSources });
+    await chooseDestination("docs");
 
     act(() => {
       addFoldersButton().click();
@@ -1629,7 +2045,8 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     await flush();
 
     expect(pickSources).toHaveBeenCalledWith("folders");
-    expect(sourcePathTexts()).toEqual(["/ext/chapters"]);
+    expect(sourceCountText()).toContain("1");
+    expect(container.querySelector(".bulkTextImportDialogSourcePath")).toBeNull();
   });
 
   it("does not add a duplicate path from the picker", async () => {
@@ -1638,6 +2055,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       .mockResolvedValueOnce(["/ext/a.txt", "/ext/b.txt"])
       .mockResolvedValueOnce(["/ext/b.txt", "/ext/c.txt"]);
     renderDialog({ pickSources });
+    await chooseDestination("docs");
 
     act(() => {
       addFilesButton().click();
@@ -1648,7 +2066,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     });
     await flush();
 
-    expect(sourcePathTexts()).toEqual(["/ext/a.txt", "/ext/b.txt", "/ext/c.txt"]);
+    expect(sourceCountText()).toContain("3");
   });
 
   it("leaves the source list unchanged when the picker is cancelled", async () => {
@@ -1657,18 +2075,19 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
       .mockResolvedValueOnce(["/ext/a.txt"])
       .mockResolvedValueOnce([]);
     renderDialog({ pickSources });
+    await chooseDestination("docs");
 
     act(() => {
       addFilesButton().click();
     });
     await flush();
-    expect(sourcePathTexts()).toEqual(["/ext/a.txt"]);
+    expect(sourceCountText()).toContain("1");
 
     act(() => {
       addFilesButton().click();
     });
     await flush();
-    expect(sourcePathTexts()).toEqual(["/ext/a.txt"]);
+    expect(sourceCountText()).toContain("1");
   });
 
   it("re-runs the dry-run after the picker adds sources", async () => {

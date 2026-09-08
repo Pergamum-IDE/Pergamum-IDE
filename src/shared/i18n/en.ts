@@ -970,6 +970,8 @@ export const enTranslations = {
   "textImport.dialog.sourcesHeading": "Source",
   "textImport.dialog.dropAreaReady":
     "Drop text files or folders here, or add them using the buttons.",
+  "textImport.dialog.sourcesDisabledUntilDestination":
+    "Select a destination folder to add text files or folders.",
   "textImport.dialog.dropAreaActive": "Drop to add",
   "textImport.dialog.dropAreaHint": "Only .txt files are imported. Adding a folder includes the .txt files inside it.",
   "textImport.dialog.sourceCount": "Added: {count}",
@@ -987,6 +989,14 @@ export const enTranslations = {
   "textImport.dialog.bom": "BOM",
   "textImport.dialog.previewHead": "Start",
   "textImport.dialog.previewTail": "End",
+  "textImport.dialog.fileStatus.readable": "Readable",
+  "textImport.dialog.fileStatus.renamed": "Renamed",
+  "textImport.dialog.fileStatus.skipped": "Skipped",
+  "textImport.dialog.previewEmpty": "Preview is empty",
+  "textImport.dialog.previewUnavailable": "Preview unavailable",
+  "textImport.dialog.sourceFile": "Source file",
+  "textImport.dialog.targetFile": "Imported file",
+  "textImport.dialog.skipImport": "Skip import",
   "textImport.dialog.encodingSelectAriaLabel": "Character encoding for {name}",
   "textImport.dialog.previewUpdating": "Updating preview...",
   "textImport.dialog.previewFailedWithEncoding":

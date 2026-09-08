@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addSourcePaths,
+  applyManualSkip,
   applyPreviewFailure,
   applyPreviewSuccess,
   applySelectedEncoding,
@@ -259,6 +260,7 @@ describe("bulkTextImportDialogState", () => {
       expect(r.previewStatus).toBe("idle");
       expect(r.previewRequestId).toBeUndefined();
       expect(r.decodeRecovered).toBe(false);
+      expect(r.manualSkipped).toBe(false);
     });
   });
 
@@ -286,6 +288,14 @@ describe("bulkTextImportDialogState", () => {
   describe("isTextImportEncodingEditable", () => {
     it("is true for a normal (non-skipped) row", () => {
       expect(isTextImportEncodingEditable(row({ skipped: false }))).toBe(true);
+    });
+
+    it("is true for a manually skipped row so it can be restored", () => {
+      expect(
+        isTextImportEncodingEditable(
+          row({ manualSkipped: true, selectedEncoding: "shiftJis" })
+        )
+      ).toBe(true);
     });
 
     it("is true for a decodeFailed row that still has a source path", () => {
@@ -321,14 +331,32 @@ describe("bulkTextImportDialogState", () => {
   });
 
   describe("applySelectedEncoding", () => {
-    it("updates the encoding and moves the row into loading, tagged with the request id", () => {
+    it("updates the encoding, clears manual skip and moves the row into loading", () => {
       const rows = [row({ id: "f1", selectedEncoding: "shiftJis" })];
       const next = applySelectedEncoding(rows, "f1", "eucJp", 7);
       expect(next).not.toBe(rows);
+      expect(next[0].manualSkipped).toBe(false);
       expect(next[0].selectedEncoding).toBe("eucJp");
       expect(next[0].previewStatus).toBe("loading");
       expect(next[0].previewRequestId).toBe(7);
       expect(next[0].previewErrorReason).toBeUndefined();
+    });
+
+    it("clears manual skip and previews even when the encoding value is unchanged", () => {
+      const rows = [
+        row({
+          id: "f1",
+          manualSkipped: true,
+          selectedEncoding: "shiftJis",
+          previewStatus: "idle"
+        })
+      ];
+      const next = applySelectedEncoding(rows, "f1", "shiftJis", 8);
+      expect(next).not.toBe(rows);
+      expect(next[0].manualSkipped).toBe(false);
+      expect(next[0].selectedEncoding).toBe("shiftJis");
+      expect(next[0].previewStatus).toBe("loading");
+      expect(next[0].previewRequestId).toBe(8);
     });
 
     it("returns the same reference when the row is missing / not editable / unchanged", () => {
@@ -344,6 +372,35 @@ describe("bulkTextImportDialogState", () => {
       expect(applySelectedEncoding(rows, "missing", "eucJp", 1)).toBe(rows);
       expect(applySelectedEncoding(rows, "skip", "eucJp", 1)).toBe(rows);
       expect(applySelectedEncoding(rows, "f1", "shiftJis", 1)).toBe(rows);
+    });
+  });
+
+  describe("applyManualSkip", () => {
+    it("marks one row manually skipped and invalidates an in-flight preview", () => {
+      const rows = [
+        row({
+          id: "f1",
+          previewStatus: "loading",
+          previewErrorReason: "decodeFailed",
+          previewRequestId: 12
+        })
+      ];
+      const next = applyManualSkip(rows, "f1");
+      expect(next).not.toBe(rows);
+      expect(next[0].manualSkipped).toBe(true);
+      expect(next[0].previewStatus).toBe("idle");
+      expect(next[0].previewErrorReason).toBeUndefined();
+      expect(next[0].previewRequestId).toBeUndefined();
+    });
+
+    it("returns the same reference when the row is missing, unchanged or not editable", () => {
+      const rows = [
+        row({ id: "manual", manualSkipped: true }),
+        row({ id: "skip", skipped: true, skipReason: "targetExists" })
+      ];
+      expect(applyManualSkip(rows, "missing")).toBe(rows);
+      expect(applyManualSkip(rows, "manual")).toBe(rows);
+      expect(applyManualSkip(rows, "skip")).toBe(rows);
     });
   });
 
@@ -500,6 +557,12 @@ describe("bulkTextImportDialogState", () => {
       ).toBe(false);
     });
 
+    it("rejects a row manually skipped from the dropdown", () => {
+      expect(isTextImportRowImportable(row({ manualSkipped: true }))).toBe(
+        false
+      );
+    });
+
     it("rejects rows with no source or no target path", () => {
       expect(isTextImportRowImportable(row({ sourcePath: "" }))).toBe(false);
       expect(
@@ -536,6 +599,12 @@ describe("bulkTextImportDialogState", () => {
           id: "skip",
           sourcePath: "/ext/skip.txt",
           targetProjectRelativePath: "docs/skip.md",
+          manualSkipped: true
+        }),
+        row({
+          id: "dry-skip",
+          sourcePath: "/ext/dry-skip.txt",
+          targetProjectRelativePath: "docs/dry-skip.md",
           skipped: true,
           skipReason: "targetExists"
         }),
@@ -582,7 +651,7 @@ describe("bulkTextImportDialogState", () => {
     it("preserves display order", () => {
       const rows = [
         row({ id: "a" }),
-        row({ id: "b", skipped: true, skipReason: "targetExists" }),
+        row({ id: "b", manualSkipped: true }),
         row({ id: "c" })
       ];
       expect(
@@ -614,6 +683,16 @@ describe("bulkTextImportDialogState", () => {
             fileRows: [
               row({ skipped: true, skipReason: "targetExists" })
             ]
+          })
+        )
+      ).toBe(false);
+    });
+
+    it("is false when every row is manually skipped", () => {
+      expect(
+        bulkTextImportCanExecute(
+          readyState({
+            fileRows: [row({ manualSkipped: true })]
           })
         )
       ).toBe(false);

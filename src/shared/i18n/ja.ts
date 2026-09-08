@@ -970,6 +970,8 @@ export const jaTranslations = {
   "textImport.dialog.sourcesHeading": "取り込み元",
   "textImport.dialog.dropAreaReady":
     "テキストファイルまたはフォルダをここにドロップするか、ボタンから追加してください。",
+  "textImport.dialog.sourcesDisabledUntilDestination":
+    "取り込み先フォルダを選択すると、テキストファイルまたはフォルダを追加できます。",
   "textImport.dialog.dropAreaActive": "ドロップして追加",
   "textImport.dialog.dropAreaHint": "取り込むのは .txt ファイルです。フォルダを追加すると中の .txt ファイルが対象になります。",
   "textImport.dialog.sourceCount": "追加済み: {count} 件",
@@ -987,6 +989,14 @@ export const jaTranslations = {
   "textImport.dialog.bom": "BOM",
   "textImport.dialog.previewHead": "先頭",
   "textImport.dialog.previewTail": "末尾",
+  "textImport.dialog.fileStatus.readable": "読取OK",
+  "textImport.dialog.fileStatus.renamed": "名前が変わる",
+  "textImport.dialog.fileStatus.skipped": "処理スキップ",
+  "textImport.dialog.previewEmpty": "プレビューは空です",
+  "textImport.dialog.previewUnavailable": "プレビューできません",
+  "textImport.dialog.sourceFile": "ソースファイル",
+  "textImport.dialog.targetFile": "取り込み結果ファイル",
+  "textImport.dialog.skipImport": "処理スキップ",
   "textImport.dialog.encodingSelectAriaLabel": "{name} の文字コード",
   "textImport.dialog.previewUpdating": "プレビューを更新しています...",
   "textImport.dialog.previewFailedWithEncoding":

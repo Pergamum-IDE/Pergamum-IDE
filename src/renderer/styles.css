@@ -6029,8 +6029,8 @@ label.settingsItemHeader {
 /* #420 Step 2: Bulk text import dialog skeleton. Step 3+ will replace the
    placeholders with destination picking, drop handling, and import rows. */
 .appDialog.bulkTextImportDialog {
-  width: min(620px, calc(100vw - 32px));
-  max-width: min(620px, calc(100vw - 32px));
+  width: min(92vw, 1200px);
+  max-width: min(92vw, 1200px);
 }
 
 .bulkTextImportDialogContent {
@@ -6185,6 +6185,10 @@ label.settingsItemHeader {
   color: var(--app-dialog-foreground, #1f2933);
 }
 
+.bulkTextImportDialogDropArea.isDisabled {
+  opacity: 0.68;
+}
+
 .bulkTextImportDialogDropArea p {
   margin: 0;
   line-height: 1.5;
@@ -6216,32 +6220,8 @@ label.settingsItemHeader {
 
 .bulkTextImportDialogSourceCount {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--app-dialog-secondary-foreground, #52616f);
-}
-
-.bulkTextImportDialogSourceList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 160px;
-  overflow-y: auto;
-}
-
-.bulkTextImportDialogSourceItem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.bulkTextImportDialogSourcePath {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 0.85rem;
 }
 
 .bulkTextImportDialogTargets {
@@ -6289,90 +6269,154 @@ label.settingsItemHeader {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .bulkTextImportDialogFileRow,
 .bulkTextImportDialogFolderRow {
-  padding-block: 8px;
-  padding-inline: 10px;
+  padding-block: 4px;
+  padding-inline: 8px;
   border: 1px solid var(--app-dialog-border, #cbd5df);
   border-radius: 4px;
   background: var(--app-dialog-inset-background, #f7f8fa);
   min-width: 0;
 }
 
+.bulkTextImportDialogFileRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  row-gap: 1px;
+  align-items: start;
+}
+
 .bulkTextImportDialogFileRow.isSkipped {
   opacity: 0.75;
 }
 
-.bulkTextImportDialogFileRowHead {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: baseline;
-  font-size: 0.85rem;
+.bulkTextImportDialogFileStatusSymbol {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  justify-self: center;
+  min-inline-size: 1.2em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+.bulkTextImportDialogFileRow[data-status-kind="readable"]
+  .bulkTextImportDialogFileStatusSymbol {
+  color: var(--app-success-foreground, #2f7d32);
+}
+
+.bulkTextImportDialogFileRow[data-status-kind="renamed"]
+  .bulkTextImportDialogFileStatusSymbol {
+  color: var(--app-warning-foreground, #8a5a00);
+}
+
+.bulkTextImportDialogFileRow[data-status-kind="skipped"]
+  .bulkTextImportDialogFileStatusSymbol {
+  color: var(--app-danger-foreground, #a12b2b);
+}
+
+.bulkTextImportDialogFileMain {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: grid;
+  grid-template-rows: auto auto;
+  row-gap: 2px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogFilePathLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 0.8rem;
 }
 
 .bulkTextImportDialogFileSource {
   font-weight: 600;
-  overflow-wrap: anywhere;
 }
 
-.bulkTextImportDialogFileEncoding,
-.bulkTextImportDialogFileBom {
-  font-size: 0.78rem;
+.bulkTextImportDialogFileTarget {
   color: var(--app-dialog-secondary-foreground, #52616f);
 }
 
-.bulkTextImportDialogFileEncoding {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+.bulkTextImportDialogSourcePathLeftEllipsis {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  direction: rtl;
+  unicode-bidi: plaintext;
+  white-space: nowrap;
 }
 
-.bulkTextImportDialogFileEncodingLabel {
-  font-weight: 600;
+.bulkTextImportDialogTargetPathEllipsis {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  unicode-bidi: plaintext;
+  white-space: nowrap;
+}
+
+.bulkTextImportDialogFilePathArrow {
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.bulkTextImportDialogFileEncoding {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  justify-self: end;
+  font-size: 0.76rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogFileEncodingControl {
+  display: block;
+  min-width: 0;
 }
 
 .bulkTextImportDialogFileEncodingSelect {
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   padding: 1px 4px;
-  max-width: 180px;
+  max-width: 150px;
 }
 
 .bulkTextImportDialogFileEncodingSelect:disabled {
   opacity: 0.6;
 }
 
-.bulkTextImportDialogFilePreviewUpdating {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
+.bulkTextImportDialogFilePreviewLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.78rem;
   color: var(--app-dialog-secondary-foreground, #52616f);
 }
 
-.bulkTextImportDialogFilePreviewFailed {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
+.bulkTextImportDialogFilePreviewLine.isFailed {
   color: var(--app-danger-foreground, #a12b2b);
 }
 
-.bulkTextImportDialogFilePreviewFailed p {
-  margin: 0;
+.bulkTextImportDialogFilePreviewLine.isSkipped {
+  color: var(--app-warning-foreground, #8a5a00);
 }
 
-.bulkTextImportDialogFilePreviewFailedReason {
-  color: var(--app-dialog-secondary-foreground, #52616f);
-}
-
-.bulkTextImportDialogFileDecodeRecovered {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
-  color: var(--app-success-foreground, #2f7d32);
-}
-
-.bulkTextImportDialogFileTarget,
 .bulkTextImportDialogFolderTarget {
   margin-top: 2px;
   font-size: 0.82rem;
@@ -6381,28 +6425,23 @@ label.settingsItemHeader {
 }
 
 .bulkTextImportDialogFilePreview {
-  margin: 4px 0 0;
-  font-size: 0.82rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.bulkTextImportDialogFilePreviewLabel {
-  font-weight: 600;
-}
-
-.bulkTextImportDialogFileRenamed,
-.bulkTextImportDialogFileSkipped,
-.bulkTextImportDialogFolderSkipNote {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
-  color: var(--app-warning-foreground, #8a5a00);
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bulkTextImportDialogFolderRow {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.bulkTextImportDialogFolderSkipNote {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--app-warning-foreground, #8a5a00);
 }
 
 .bulkTextImportDialogFolderSource {

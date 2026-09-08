@@ -230,16 +230,19 @@ describe("Bulk text import dialog App wiring (#420 Step 6)", () => {
     expect(source).not.toContain("window.pergamum");
   });
 
-  it("disables the picker buttons and swaps the Cancel label after import", () => {
+  it("gates picker buttons through destination-first / importing state and swaps the Cancel label after import", () => {
     const source = dialogSource();
 
     expect(source).toContain("bulkTextImportDialogAddFilesButton");
     expect(source).toContain("bulkTextImportDialogAddFoldersButton");
-    // picker buttons freeze during import
+    expect(source).toContain(
+      "const canAddSources = destinationChosen && !isImporting"
+    );
+    // picker buttons are disabled before a destination is chosen and during import
     const addFilesIndex = source.indexOf("bulkTextImportDialogAddFilesButton");
     expect(
       source.slice(addFilesIndex, addFilesIndex + 200)
-    ).toContain("disabled={isImporting}");
+    ).toContain("disabled={!canAddSources}");
     // Cancel becomes Close once the run completed
     const cancelIndex = source.indexOf("bulkTextImportDialogCancelButton");
     const cancelBlock = source.slice(cancelIndex, cancelIndex + 360);

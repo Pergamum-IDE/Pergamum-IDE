@@ -1093,3 +1093,39 @@ describe("Bulk text import dialog translations (#420 Step 6)", () => {
     expect(t("en", "textImport.dialog.targetsHeading")).toBe("Import targets");
   });
 });
+
+describe("Bulk text import dialog translations (#420 Step 7)", () => {
+  it("defines compact file-row status and path/preview labels for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.fileStatus.readable",
+        "textImport.dialog.fileStatus.renamed",
+        "textImport.dialog.fileStatus.skipped",
+        "textImport.dialog.previewEmpty",
+        "textImport.dialog.previewUnavailable",
+        "textImport.dialog.sourceFile",
+        "textImport.dialog.targetFile",
+        "textImport.dialog.skipImport",
+        "textImport.dialog.sourcesDisabledUntilDestination"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+    expect(t("ja", "textImport.dialog.fileStatus.readable")).toBe("読取OK");
+    expect(t("en", "textImport.dialog.fileStatus.renamed")).toBe("Renamed");
+    expect(t("ja", "textImport.dialog.skipImport")).toBe("処理スキップ");
+    expect(t("en", "textImport.dialog.skipImport")).toBe("Skip import");
+    expect(
+      t("ja", "textImport.dialog.sourcesDisabledUntilDestination")
+    ).toContain("取り込み先フォルダ");
+    expect(
+      t("en", "textImport.dialog.sourcesDisabledUntilDestination")
+    ).toContain("destination folder");
+    expect(t("ja", "textImport.dialog.sourceFile")).not.toBe(
+      t("ja", "textImport.dialog.targetFile")
+    );
+    expect(t("en", "textImport.dialog.sourceFile")).not.toBe(
+      t("en", "textImport.dialog.targetFile")
+    );
+  });
+});
