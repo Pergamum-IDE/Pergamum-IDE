@@ -49,6 +49,7 @@ function buildCoreCommandRegistry(): CommandRegistry {
       createProject: () => undefined,
       openProject: () => undefined,
       closeProject: () => undefined,
+      openBulkTextImportDialog: () => undefined,
       toggleRecentProjects: () => undefined
     },
     {
@@ -63,6 +64,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openProjectDescription: "Open Project",
       closeProject: "Close Project",
       closeProjectDescription: "Close Project",
+      openBulkTextImportDialog: "Bulk Import Text Files",
+      openBulkTextImportDialogDescription: "Bulk Import Text Files",
       toggleRecentProjects: "Toggle Recent Projects",
       toggleRecentProjectsDescription: "Toggle Recent Projects"
     }

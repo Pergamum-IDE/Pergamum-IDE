@@ -866,3 +866,34 @@ describe("Document Map pagination translations (#403 Phase 2)", () => {
     expect(t("en", "documentMap.rendering")).toBe("Rendering…");
   });
 });
+
+describe("Bulk text import dialog translations (#420 Step 2)", () => {
+  it("defines menu and skeleton dialog copy for ja and en", () => {
+    expect(t("ja", "menu.file.import")).toBe("インポート");
+    expect(t("en", "menu.file.import")).toBe("Import");
+    expect(t("ja", "menu.file.import.bulkTextFiles")).toBe(
+      "テキストファイルをまとめてインポート..."
+    );
+    expect(t("en", "menu.file.import.bulkTextFiles")).toBe(
+      "Bulk Import Text Files..."
+    );
+
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "command.import.text.bulk.openDialog",
+        "command.import.text.bulk.openDialog.description",
+        "textImport.dialog.title",
+        "textImport.dialog.description",
+        "textImport.dialog.destinationHeading",
+        "textImport.dialog.destinationPlaceholder",
+        "textImport.dialog.dropPlaceholder",
+        "textImport.dialog.targetsHeading",
+        "textImport.dialog.emptyTargets",
+        "textImport.dialog.import",
+        "textImport.dialog.cancel"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+});

@@ -10,6 +10,7 @@ export interface ApplicationCommandController {
   createProject(): void | Promise<void>;
   openProject(): void | Promise<void>;
   closeProject(): void | Promise<void>;
+  openBulkTextImportDialog(): void | Promise<void>;
   toggleRecentProjects(): void;
 }
 
@@ -24,6 +25,8 @@ export interface ApplicationCommandTitles {
   openProjectDescription: string;
   closeProject: string;
   closeProjectDescription: string;
+  openBulkTextImportDialog: string;
+  openBulkTextImportDialogDescription: string;
   toggleRecentProjects: string;
   toggleRecentProjectsDescription: string;
 }
@@ -49,6 +52,12 @@ export function createApplicationCommandTitles(
     closeProject: translate("command.workspace.project.close"),
     closeProjectDescription: translate(
       "command.workspace.project.close.description"
+    ),
+    openBulkTextImportDialog: translate(
+      "command.import.text.bulk.openDialog"
+    ),
+    openBulkTextImportDialogDescription: translate(
+      "command.import.text.bulk.openDialog.description"
     ),
     toggleRecentProjects: translate("command.workspace.recentProjects.toggle"),
     toggleRecentProjectsDescription: translate(
@@ -92,6 +101,13 @@ export function createApplicationCommands(
       description: titles.closeProjectDescription,
       when: { key: "project.isOpen" },
       execute: () => controller.closeProject()
+    },
+    {
+      id: applicationCommandIds.openBulkTextImportDialog,
+      title: titles.openBulkTextImportDialog,
+      description: titles.openBulkTextImportDialogDescription,
+      palette: { visible: false },
+      execute: () => controller.openBulkTextImportDialog()
     },
     {
       id: applicationCommandIds.toggleRecentProjects,

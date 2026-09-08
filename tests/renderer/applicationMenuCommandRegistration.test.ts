@@ -18,6 +18,7 @@ describe("application menu command registration", () => {
         createProject: () => undefined,
         openProject: () => undefined,
         closeProject: () => undefined,
+        openBulkTextImportDialog: () => undefined,
         toggleRecentProjects: () => undefined
       },
       {
@@ -32,6 +33,8 @@ describe("application menu command registration", () => {
         openProjectDescription: "Open Project",
         closeProject: "Close Project",
         closeProjectDescription: "Close Project",
+        openBulkTextImportDialog: "Bulk Import Text Files",
+        openBulkTextImportDialogDescription: "Bulk Import Text Files",
         toggleRecentProjects: "Toggle Recent Projects",
         toggleRecentProjectsDescription: "Toggle Recent Projects"
       }

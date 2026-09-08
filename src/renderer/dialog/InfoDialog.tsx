@@ -24,6 +24,12 @@ export interface InfoDialogProps {
    *  `appDialogIcon` span. Ignored when `hideVisualTitle` is set. */
   headerIcon?: ReactNode;
   /**
+   * Enables backdrop dismissal for non-destructive, lightweight dialogs.
+   * Defaults to false so existing confirmation and warning dialogs keep their
+   * current explicit-button dismissal policy.
+   */
+  dismissOnBackdropClick?: boolean;
+  /**
    * Whether this dialog traps Tab focus within itself. Defaults to `true`.
    * Set `false` while a nested modal (e.g. a stacked destructive-confirm
    * dialog) owns focus, so the outer trap does not yank focus back out of
@@ -59,6 +65,7 @@ export function InfoDialog({
   className,
   role = "dialog",
   headerIcon,
+  dismissOnBackdropClick = false,
   trapFocus = true,
   onClose
 }: InfoDialogProps): JSX.Element {
@@ -122,7 +129,10 @@ export function InfoDialog({
   }
 
   return (
-    <div className="appDialogBackdrop">
+    <div
+      className="appDialogBackdrop"
+      onClick={dismissOnBackdropClick ? onClose : undefined}
+    >
       <div
         ref={dialogRef}
         className={

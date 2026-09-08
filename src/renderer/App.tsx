@@ -80,6 +80,7 @@ import {
   aboutCreditsHeading,
   aboutCreditsRows
 } from "./dialog/AboutDialog";
+import { BulkTextImportDialog } from "./dialog/BulkTextImportDialog";
 import {
   applicationCommandIds,
   createApplicationCommandTitles,
@@ -1146,6 +1147,9 @@ export function App(): JSX.Element {
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
+  const openBulkTextImportDialogCommandRef = useRef<() => void>(
+    () => undefined
+  );
   const openMarkdownDocumentCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -1201,6 +1205,10 @@ export function App(): JSX.Element {
     imageAttachmentPastePromptState,
     setImageAttachmentPastePromptState
   ] = useState<ImageAttachmentPastePromptDialogState | null>(null);
+  const bulkTextImportDialogOpenerRef = useRef<Element | null>(null);
+  const isBulkTextImportDialogPendingOrOpenRef = useRef(false);
+  const [isBulkTextImportDialogOpen, setIsBulkTextImportDialogOpen] =
+    useState(false);
   // #413: pre-move image-link update confirmation for the Markdown documents
   // in a File Explorer Move. `handlePrepareMarkdownDocumentMoves` plans every
   // selected Markdown file, opens ONE dialog, and parks a `resolve` here; the
@@ -1795,6 +1803,8 @@ export function App(): JSX.Element {
     lineEndingDistributionData !== null ||
     isReplacePreviewDialogPendingOrOpenRef.current ||
     replacePreviewDialogState !== null ||
+    isBulkTextImportDialogPendingOrOpenRef.current ||
+    isBulkTextImportDialogOpen ||
     isRecoveryCandidateDialogPendingOrOpenRef.current ||
     recoveryCandidateDialogData !== null;
   const isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose =
@@ -2670,6 +2680,8 @@ export function App(): JSX.Element {
         createProject: () => createProjectCommandRef.current(),
         openProject: () => openProjectCommandRef.current(),
         closeProject: () => closeProjectCommandRef.current(),
+        openBulkTextImportDialog: () =>
+          openBulkTextImportDialogCommandRef.current(),
         toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
       },
       createApplicationCommandTitles(translate)
@@ -2951,6 +2963,7 @@ export function App(): JSX.Element {
       isAboutDialogPendingOrOpenRef.current ||
       isLineEndingDistributionDialogPendingOrOpenRef.current ||
       isReplacePreviewDialogPendingOrOpenRef.current ||
+      isBulkTextImportDialogPendingOrOpenRef.current ||
       isRecoveryCandidateDialogPendingOrOpenRef.current
         ? "app_modal_open"
         : null
@@ -3831,6 +3844,29 @@ export function App(): JSX.Element {
   function closeLineEndingDistributionDialog(): void {
     isLineEndingDistributionDialogPendingOrOpenRef.current = false;
     setLineEndingDistributionData(null);
+  }
+
+  function openBulkTextImportDialog(): void {
+    if (isBulkTextImportDialogPendingOrOpenRef.current) {
+      return;
+    }
+
+    if (typeof document !== "undefined") {
+      bulkTextImportDialogOpenerRef.current = document.activeElement;
+    }
+
+    isBulkTextImportDialogPendingOrOpenRef.current = true;
+    setIsBulkTextImportDialogOpen(true);
+    playDialogShownSound(
+      soundFeedback,
+      effectiveSettings.workbench.sound,
+      reportSoundPlaybackFailure
+    );
+  }
+
+  function closeBulkTextImportDialog(): void {
+    isBulkTextImportDialogPendingOrOpenRef.current = false;
+    setIsBulkTextImportDialogOpen(false);
   }
 
   // -------------------------------------------------------------------------
@@ -7474,6 +7510,7 @@ export function App(): JSX.Element {
   closeProjectCommandRef.current = closeProject;
   quitApplicationCommandRef.current = quitApplication;
   openAboutDialogCommandRef.current = openAboutDialog;
+  openBulkTextImportDialogCommandRef.current = openBulkTextImportDialog;
   handleLifecycleWindowCloseRequestRef.current =
     handleLifecycleWindowCloseRequest;
   showLineEndingDistributionCommandRef.current =
@@ -10310,6 +10347,13 @@ export function App(): JSX.Element {
           onClose={closeLineEndingDistributionDialog}
         />
       ) : null}
+
+      <BulkTextImportDialog
+        isOpen={isBulkTextImportDialogOpen}
+        translate={translate}
+        opener={bulkTextImportDialogOpenerRef.current}
+        onClose={closeBulkTextImportDialog}
+      />
 
       {replacePreviewDialogState ? (
         <ReplacePreviewDialog

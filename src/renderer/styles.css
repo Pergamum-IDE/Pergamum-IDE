@@ -6026,6 +6026,69 @@ label.settingsItemHeader {
   cursor: pointer;
 }
 
+/* #420 Step 2: Bulk text import dialog skeleton. Step 3+ will replace the
+   placeholders with destination picking, drop handling, and import rows. */
+.appDialog.bulkTextImportDialog {
+  width: min(620px, calc(100vw - 32px));
+  max-width: min(620px, calc(100vw - 32px));
+}
+
+.bulkTextImportDialogContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogDescription {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.bulkTextImportDialogSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogSection h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.bulkTextImportDialogPlaceholder,
+.bulkTextImportDialogEmptyTargets {
+  margin: 0;
+  padding-block: 8px;
+  padding-inline: 10px;
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+  background: var(--app-dialog-inset-background, #f7f8fa);
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  line-height: 1.4;
+}
+
+.bulkTextImportDialogDropArea {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 16px;
+  padding-inline: 12px;
+  border: 1px dashed var(--app-dialog-border, #cbd5df);
+  border-radius: 6px;
+  background: var(--app-dialog-inset-background, #f7f8fa);
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  text-align: center;
+}
+
+.bulkTextImportDialogDropArea p {
+  margin: 0;
+  line-height: 1.5;
+}
+
 .appDialogActions {
   display: flex;
   gap: 8px;
