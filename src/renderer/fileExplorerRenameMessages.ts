@@ -24,6 +24,7 @@ const RENAME_FAILURE_MESSAGE_KEY: Record<
   TranslationKey
 > = {
   invalidName: "explorer.rename.error.invalidName",
+  invalidCharacter: "explorer.rename.error.invalidCharacter",
   reservedName: "explorer.rename.error.reservedName",
   unsupportedExtension: "explorer.rename.error.unsupportedExtension",
   noProject: "explorer.rename.error.noProject",

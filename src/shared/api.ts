@@ -212,6 +212,9 @@ export const PROJECT_CHANNELS = {
   createFileExplorerFolder: "projects:createFileExplorerFolder",
   /** #313: rename one File Explorer file or empty folder under the project. */
   renameFileExplorerEntry: "projects:renameFileExplorerEntry",
+  /** #414: side-effect-free rename dry-run (resolve + validate, no fs.rename). */
+  renameFileExplorerEntryPreflight:
+    "projects:renameFileExplorerEntryPreflight",
   /** #327: move one or more File Explorer files into an existing folder. */
   moveFileExplorerEntries: "projects:moveFileExplorerEntries",
   /** #356: lightweight lstat of top-level File Explorer entries (name / kind /
@@ -506,6 +509,25 @@ export interface RenameFileExplorerEntryRequest {
    */
   readonly dirtyProjectDocumentRelativePaths?: readonly string[];
 }
+
+/**
+ * #414: a side-effect-free rename dry-run. Runs the SAME resolve + validation
+ * as the real rename ({@link RenameFileExplorerEntryResult}) but never calls
+ * `fs.rename`, so the renderer can decide whether a rename would succeed
+ * BEFORE showing the image-reference update confirmation dialog.
+ */
+export type PreflightRenameFileExplorerEntryResult =
+  | {
+      readonly ok: true;
+      readonly oldRelativePath: string;
+      readonly newRelativePath: string;
+      readonly newName: string;
+      readonly entryKind: FileExplorerEntryKind;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: FileExplorerRenameFailureReason;
+    };
 
 export type RenameFileExplorerEntryResult =
   | {
@@ -967,6 +989,13 @@ export interface PergamumApi {
       newName: string,
       dirtyProjectDocumentRelativePaths?: readonly string[]
     ) => Promise<RenameFileExplorerEntryResult>;
+    /** #414: dry-run the rename (resolve + validate only) so the renderer can
+     *  gate the image-reference confirmation on a rename that would succeed. */
+    renameFileExplorerEntryPreflight: (
+      sourceRelativePath: string,
+      newName: string,
+      dirtyProjectDocumentRelativePaths?: readonly string[]
+    ) => Promise<PreflightRenameFileExplorerEntryResult>;
     moveFileExplorerEntries: (
       request: MoveFileExplorerEntriesRequest
     ) => Promise<MoveFileExplorerEntriesResult>;

@@ -230,6 +230,22 @@ describe("planMarkdownImageLinkRewritesForDocumentMove", () => {
     );
   });
 
+  it("#414 P0-2: leaves a link to a same-operation moved image for the C2 planner", () => {
+    const md = "![](../assets/foo.png)\n![](../assets/other.png)\n";
+    const rewrites = planMarkdownImageLinkRewritesForDocumentMove({
+      markdown: md,
+      oldDocumentProjectRelativePath: "chapters/ch01.md",
+      newDocumentProjectRelativePath: "chapters/part1/ch01.md",
+      imageOldPathsMovingInSameOperation: ["assets/foo.png"]
+    });
+    // `../assets/foo.png` resolves to `assets/foo.png` (a moving image) → left
+    // for C2. `../assets/other.png` (not moving) is still stabilised by C1.
+    expect(rewrites.map((r) => r.oldDestination)).toEqual([
+      "../assets/other.png"
+    ]);
+    expect(rewrites[0].newDestination).toBe("../../assets/other.png");
+  });
+
   it("resolves purely from the two document paths (no save-directory input)", () => {
     // Same inputs -> same output, deterministically; the function has no
     // settings parameter to consult.

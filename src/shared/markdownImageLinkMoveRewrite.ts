@@ -74,6 +74,14 @@ export interface PlanMarkdownImageLinkRewritesForDocumentMoveArgs {
   readonly oldDocumentProjectRelativePath: string;
   /** `/`-separated project-root-relative path of the document AFTER the move. */
   readonly newDocumentProjectRelativePath: string;
+  /**
+   * #414 P0-2: project-root-relative OLD paths of image files that are moving
+   * in the SAME File Explorer operation. A link that resolves to one of these
+   * is left for the C2 image-reference planner (which points it at the
+   * image's NEW path from this document's NEW folder), so the same link is
+   * never rewritten twice. Optional — a document-only move passes nothing.
+   */
+  readonly imageOldPathsMovingInSameOperation?: readonly string[];
 }
 
 /** Split a `/`-separated path into non-empty, non-`.` segments. */
@@ -171,6 +179,9 @@ export function planMarkdownImageLinkRewritesForDocumentMove(
 
   const oldDirSegments = posixSegments(oldDir);
   const newDirSegments = posixSegments(newDir);
+  const imageOldPathsMovingInSameOperation = new Set(
+    args.imageOldPathsMovingInSameOperation ?? []
+  );
 
   const rewrites: MarkdownImageLinkMoveRewrite[] = [];
 
@@ -204,6 +215,19 @@ export function planMarkdownImageLinkRewritesForDocumentMove(
       0,
       oldDirSegments.length - upwardCount
     );
+
+    // #414 P0-2: this link points at an image that is ALSO moving in this
+    // operation — hand it to the C2 planner so it lands on the image's NEW
+    // path from this document's NEW folder, in a single rewrite.
+    if (imageOldPathsMovingInSameOperation.size > 0) {
+      const resolvedTarget = [
+        ...anchorSegments,
+        ...tail.map((segment) => decodeImageLinkSrcForResolution(segment))
+      ].join("/");
+      if (imageOldPathsMovingInSameOperation.has(resolvedTarget)) {
+        continue;
+      }
+    }
 
     // Re-anchor from the NEW directory to that same anchor directory, then
     // re-attach the author's tail verbatim.

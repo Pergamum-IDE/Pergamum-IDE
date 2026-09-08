@@ -31,6 +31,7 @@ import type {
   FileExplorerEntry,
   ListFileExplorerChildrenResult,
   PergamumProject,
+  PreflightRenameFileExplorerEntryResult,
   RenameFileExplorerEntryResult
 } from "../shared/api";
 import {
@@ -41,6 +42,7 @@ import { isFileExplorerCreateValidationReason } from "../shared/fileExplorerCrea
 import { supportedImageAttachmentFormatForFileName } from "../shared/imageAttachmentFormat";
 import {
   isFileExplorerRenameValidationReason,
+  type FileExplorerRenameFailureReason,
   type FileExplorerRenameKind
 } from "../shared/fileExplorerRename";
 import type { Translate, TranslationKey } from "../shared/i18n";
@@ -57,6 +59,12 @@ import {
   resolveMarkdownDocumentMoves,
   type MarkdownDocumentMove
 } from "./markdownDocumentMoveImageLinkUpdate";
+import {
+  resolveMovedImageFiles,
+  type CompletedImageMove,
+  type MovedImageFile
+} from "./markdownImageReferenceMoveUpdate";
+import { isSupportedProjectImageFileName } from "./markdownImageReferenceMoveUpdate";
 import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
 import { FileExplorerDeleteDialog } from "./FileExplorerDeleteDialog";
 import {
@@ -215,22 +223,55 @@ interface FileExplorerProps {
    * batch has at least one rewrite, shows one pre-move confirmation dialog.
    * Resolves `"cancel"` to abort the Move, `"proceed"` otherwise (nothing to
    * update, "don't update", or "update"). The staged batch is applied via
-   * {@link onApplyMarkdownDocumentMoveImageLinks} after the Move lands.
+   * {@link onApplyMoveImageRewrites} after the Move lands.
+   *
+   * #414 P0-2: `imageMovesInSameOperation` lists the image files moving in the
+   * SAME operation, so a link pointing at one of them is left to the C2
+   * planner (single rewrite, final doc + final image path).
    */
   onPrepareMarkdownDocumentMoves?: (
-    moves: readonly MarkdownDocumentMove[]
+    moves: readonly MarkdownDocumentMove[],
+    imageMovesInSameOperation: readonly MovedImageFile[]
   ) => Promise<"proceed" | "cancel">;
   /**
-   * #413: called right after a successful Move, with the same relocations
-   * passed to {@link onProjectDocumentsMoved}. The host applies whatever
-   * image-link rewrite batch it staged in
-   * {@link onPrepareMarkdownDocumentMoves} to each relocated document — a
-   * CodeMirror transaction when it is open, a direct write to the moved file
-   * when it is closed.
+   * #414 (C2): called BEFORE a move, with every EXPLICITLY-selected supported
+   * image file whose project-relative path changes (single, multiple, or the
+   * images in a mixed selection; a folder source is never expanded). The host
+   * searches the project's Markdown documents for references that resolve to
+   * these images' OLD paths and, when the batch has at least one, shows one
+   * pre-move confirmation dialog. Resolves `"cancel"` to abort the move,
+   * `"proceed"` otherwise. The staged batch is applied via
+   * {@link onApplyMoveImageRewrites} after the move lands.
+   *
+   * #414 P0-2: `markdownMovesInSameOperation` lets the C2 planner generate a
+   * reference's new destination from a referencing document's FINAL folder
+   * when that document is itself moving in this operation.
    */
-  onApplyMarkdownDocumentMoveImageLinks?: (
-    relocations: readonly ProjectDocumentPathRelocation[]
-  ) => void;
+  onPrepareImageReferenceMoves?: (
+    movedImages: readonly MovedImageFile[],
+    markdownMovesInSameOperation: readonly MarkdownDocumentMove[]
+  ) => Promise<"proceed" | "cancel">;
+  /**
+   * #413/#414: called ONCE right after a successful move, with the moved
+   * project-document relocations and the completed image-file moves. The host
+   * merges whatever it staged in {@link onPrepareMarkdownDocumentMoves} (C1)
+   * and {@link onPrepareImageReferenceMoves} (C2) and applies, per affected
+   * document, ONE combined set of destination rewrites — so a link touched by
+   * both is never rewritten twice / left stale.
+   */
+  onApplyMoveImageRewrites?: (args: {
+    readonly relocations: readonly ProjectDocumentPathRelocation[];
+    readonly completedImageMoves: readonly CompletedImageMove[];
+  }) => void;
+  /**
+   * #414 P1-1: drop any C1 / C2 rewrite batch staged by
+   * {@link onPrepareMarkdownDocumentMoves} / {@link onPrepareImageReferenceMoves}.
+   * Called on EVERY path where the move / rename does not land (a gate
+   * `"cancel"`, an IPC throw, a validation failure, nothing actually moved, a
+   * rename preflight / execution failure) so a stale batch can never be
+   * consumed by the next operation.
+   */
+  onClearMoveImageRewrites?: () => void;
   onRenameUnavailable?: (message: string) => void;
   /** #327/#338: project-relative paths of documents open with UNSAVED changes.
    *  Passed to the Move backend as `dirtyProjectDocumentRelativePaths`, and the
@@ -593,6 +634,19 @@ function isOpenableFileExplorerEntry(entry: FileExplorerEntry): boolean {
   );
 }
 
+/**
+ * #414: a file the File Explorer can rename — a project Markdown document, or
+ * a supported project image file (`.png` / `.jpg` / `.jpeg` / `.gif` /
+ * `.webp`). Image rename is path-only; format conversion is never done.
+ */
+function isRenamableFileExplorerEntry(entry: FileExplorerEntry): boolean {
+  return (
+    entry.kind === "file" &&
+    (isProjectMarkdownRelativePath(entry.relativePath) ||
+      isSupportedProjectImageFileName(entry.name))
+  );
+}
+
 function renameKindForEntry(entry: FileExplorerEntry): FileExplorerRenameKind {
   return entry.kind === "folder" ? "folder" : "file";
 }
@@ -777,7 +831,9 @@ export function FileExplorer({
   onProjectDocumentRenamed,
   onProjectDocumentsMoved,
   onPrepareMarkdownDocumentMoves,
-  onApplyMarkdownDocumentMoveImageLinks,
+  onPrepareImageReferenceMoves,
+  onApplyMoveImageRewrites,
+  onClearMoveImageRewrites,
   onRenameUnavailable,
   dirtyProjectDocumentRelativePaths = EMPTY_STRING_LIST,
   onMoveResultMessage,
@@ -1597,7 +1653,7 @@ export function FileExplorer({
       }
 
       if (targetEntry.kind === "file") {
-        if (!isOpenableFileExplorerEntry(targetEntry)) {
+        if (!isRenamableFileExplorerEntry(targetEntry)) {
           reportRenameUnavailable("unsupportedExtension");
           return;
         }
@@ -1814,6 +1870,38 @@ export function FileExplorer({
     ]
   );
 
+  // #414 (C2): the rename variant of the C2 gate — a single image file whose
+  // path changes because its NAME changed. No Markdown document moves in a
+  // rename, so `markdownMovesInSameOperation` is empty. `"cancel"` aborts the
+  // rename; any other outcome proceeds.
+  const confirmImageReferenceRename = useCallback(
+    async (
+      oldRelativePath: string,
+      newRelativePath: string
+    ): Promise<"proceed" | "cancel"> => {
+      if (!onPrepareImageReferenceMoves) {
+        return "proceed";
+      }
+      try {
+        return await onPrepareImageReferenceMoves(
+          [
+            {
+              oldProjectRelativePath: oldRelativePath,
+              newProjectRelativePath: newRelativePath
+            }
+          ],
+          []
+        );
+      } catch {
+        onMoveResultMessage?.(
+          translate("explorer.move.imageReferenceUpdate.status.planningFailed")
+        );
+        return "cancel";
+      }
+    },
+    [onMoveResultMessage, onPrepareImageReferenceMoves, translate]
+  );
+
   const submitRename = useCallback(
     async (
       targetEntry: FileExplorerEntry,
@@ -1829,6 +1917,33 @@ export function FileExplorer({
       }
 
       const kind = renameKindForEntry(targetEntry);
+
+      // Turn a rename failure `reason` into the dialog's inline-error result —
+      // a validation reason shows the message alone; anything else carries the
+      // sanitized technical-copy details. Shared by the #414 preflight and the
+      // real rename IPC.
+      const renameFailureResult = (
+        reason: FileExplorerRenameFailureReason
+      ): NameInputDialogSubmitResult => {
+        // #414 P1-1: a rename that did NOT land must not leave a staged
+        // image-reference batch for the next operation to consume.
+        onClearMoveImageRewrites?.();
+        const message = translate(fileExplorerRenameFailureMessageKey(reason));
+        return isFileExplorerRenameValidationReason(reason)
+          ? { ok: false, error: { message } }
+          : {
+              ok: false,
+              error: {
+                message,
+                technicalDetails: fileExplorerRenameTechnicalDetails({
+                  kind,
+                  reason,
+                  sourceRelativePath: targetEntry.relativePath,
+                  requestedName: rawValue
+                })
+              }
+            };
+      };
 
       // #362: re-assert the dirty gate at submit time — a file, or (folder
       // rename) any document inside the subtree, that is open with unsaved
@@ -1850,6 +1965,47 @@ export function FileExplorer({
         };
       }
 
+      // #414 (C2): a supported image-file rename can break references in other
+      // documents. First DRY-RUN the rename (resolve + validate, no
+      // `fs.rename`): a rename that would fail — invalid character,
+      // unsupported extension, `samePath` / no-op, the target already exists,
+      // a protected path, … — shows its inline error and NEVER opens the
+      // image-reference confirmation dialog. Only a would-succeed rename runs
+      // the C2 planning / confirmation; `"cancel"` there aborts the rename.
+      if (
+        targetEntry.kind === "file" &&
+        isSupportedProjectImageFileName(targetEntry.name)
+      ) {
+        let preflight: PreflightRenameFileExplorerEntryResult;
+        try {
+          preflight =
+            await window.pergamum.projects.renameFileExplorerEntryPreflight(
+              targetEntry.relativePath,
+              rawValue,
+              [...dirtyProjectDocumentRelativePaths]
+            );
+        } catch {
+          return renameFailureResult("unknown");
+        }
+
+        if (!preflight.ok) {
+          return renameFailureResult(preflight.reason);
+        }
+
+        if (
+          preflight.newRelativePath !== targetEntry.relativePath &&
+          isSupportedProjectImageFileName(preflight.newName) &&
+          (await confirmImageReferenceRename(
+            targetEntry.relativePath,
+            preflight.newRelativePath
+          )) === "cancel"
+        ) {
+          onClearMoveImageRewrites?.();
+          setRenameDialogTarget(null);
+          return { ok: true };
+        }
+      }
+
       let result: RenameFileExplorerEntryResult;
 
       try {
@@ -1859,41 +2015,11 @@ export function FileExplorer({
           [...dirtyProjectDocumentRelativePaths]
         );
       } catch {
-        return {
-          ok: false,
-          error: {
-            message: translate("explorer.rename.error.unknown"),
-            technicalDetails: fileExplorerRenameTechnicalDetails({
-              kind,
-              reason: "unknown",
-              sourceRelativePath: targetEntry.relativePath,
-              requestedName: rawValue
-            })
-          }
-        };
+        return renameFailureResult("unknown");
       }
 
       if (!result.ok) {
-        const message = translate(
-          fileExplorerRenameFailureMessageKey(result.reason)
-        );
-
-        if (isFileExplorerRenameValidationReason(result.reason)) {
-          return { ok: false, error: { message } };
-        }
-
-        return {
-          ok: false,
-          error: {
-            message,
-            technicalDetails: fileExplorerRenameTechnicalDetails({
-              kind,
-              reason: result.reason,
-              sourceRelativePath: targetEntry.relativePath,
-              requestedName: rawValue
-            })
-          }
-        };
+        return renameFailureResult(result.reason);
       }
 
       const generation = loadGenerationRef.current;
@@ -1952,11 +2078,25 @@ export function FileExplorer({
       selectSingleEntry(result.newEntry.relativePath);
       setRenameDialogTarget(null);
 
-      // #362: relocate open editor identity. A file rename uses the singular
-      // pathway; a folder rename reuses the #338/#340 plural Move relocation
-      // pathway for every registered document inside the subtree.
+      // #362: relocate open editor identity. A Markdown file rename uses the
+      // singular pathway; a folder rename reuses the #338/#340 plural Move
+      // relocation pathway for every registered document inside the subtree.
       if (result.newEntry.kind === "file") {
-        onProjectDocumentRenamed?.(result.oldRelativePath, result.newEntry);
+        if (isProjectMarkdownRelativePath(result.newEntry.relativePath)) {
+          onProjectDocumentRenamed?.(result.oldRelativePath, result.newEntry);
+        } else if (isSupportedProjectImageFileName(result.newEntry.name)) {
+          // #414 (C2): a supported image-file rename — apply any staged
+          // reference-rewrite batch to the documents that point at it.
+          onApplyMoveImageRewrites?.({
+            relocations: [],
+            completedImageMoves: [
+              {
+                oldProjectRelativePath: result.oldRelativePath,
+                newProjectRelativePath: result.newEntry.relativePath
+              }
+            ]
+          });
+        }
       } else if ((result.movedProjectDocuments ?? []).length > 0) {
         onProjectDocumentsMoved?.(result.movedProjectDocuments ?? []);
       }
@@ -1965,9 +2105,12 @@ export function FileExplorer({
     },
     [
       canRename,
+      confirmImageReferenceRename,
       dirtyProjectDocumentRelativePaths,
       isProjectDocumentDirty,
       loadDirectoryForGeneration,
+      onApplyMoveImageRewrites,
+      onClearMoveImageRewrites,
       onProjectDocumentRenamed,
       onProjectDocumentsMoved,
       translate
@@ -2136,7 +2279,7 @@ export function FileExplorer({
     !isProtectedFileExplorerRelativePath(renameSelectionTarget.relativePath) &&
     !(
       renameSelectionTarget.kind === "file" &&
-      (!isOpenableFileExplorerEntry(renameSelectionTarget) ||
+      (!isRenamableFileExplorerEntry(renameSelectionTarget) ||
         isProjectDocumentDirty(renameSelectionTarget.relativePath))
     ) &&
     !(
@@ -2376,6 +2519,7 @@ export function FileExplorer({
     ): "applied" | "not-applied" => {
       if (response.kind === "unavailable") {
         onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        onClearMoveImageRewrites?.();
         return "not-applied";
       }
 
@@ -2404,6 +2548,7 @@ export function FileExplorer({
             reason: firstReason
           })
         );
+        onClearMoveImageRewrites?.();
         return "not-applied";
       }
 
@@ -2423,10 +2568,32 @@ export function FileExplorer({
       const relocations = collectMovedProjectDocumentRelocations(result);
       if (relocations.length > 0) {
         onProjectDocumentsMoved?.(relocations);
-        // #413: apply any image-link rewrite staged before this Move. Runs
-        // after `onProjectDocumentsMoved` so an open document's editor
-        // identity is already at its new path.
-        onApplyMarkdownDocumentMoveImageLinks?.(relocations);
+      }
+
+      // #414 (C2): the image files that ACTUALLY completed their move (a
+      // partial failure must not rewrite a reference to an image that stayed
+      // put).
+      const completedImageMoves = result.results
+        .filter(
+          (entry): entry is Extract<typeof entry, { status: "moved" }> =>
+            entry.status === "moved" &&
+            !entry.isDirectory &&
+            isSupportedProjectImageFileName(entry.destinationRelativePath)
+        )
+        .map((entry) => ({
+          oldProjectRelativePath: entry.sourceRelativePath,
+          newProjectRelativePath: entry.destinationRelativePath
+        }));
+
+      // #413/#414: ONE combined apply so a link touched by both the C1
+      // (moved document) and C2 (moved image) flows is rewritten once, not
+      // twice against shifting offsets. Runs after `onProjectDocumentsMoved`
+      // so an open document's editor identity is already at its new path.
+      // Nothing actually moved ⟹ drop any staged batch (#414 P1-1).
+      if (relocations.length > 0 || completedImageMoves.length > 0) {
+        onApplyMoveImageRewrites?.({ relocations, completedImageMoves });
+      } else {
+        onClearMoveImageRewrites?.();
       }
       const generation = loadGenerationRef.current + 1;
       loadGenerationRef.current = generation;
@@ -2561,7 +2728,8 @@ export function FileExplorer({
     },
     [
       loadDirectoryForGeneration,
-      onApplyMarkdownDocumentMoveImageLinks,
+      onApplyMoveImageRewrites,
+      onClearMoveImageRewrites,
       onMoveResultMessage,
       onProjectDocumentsMoved,
       translate
@@ -2590,13 +2758,74 @@ export function FileExplorer({
       if (markdownMoves.length === 0 || !onPrepareMarkdownDocumentMoves) {
         return "proceed";
       }
+      // #414 P0-2: tell C1 which images move in the SAME operation so it
+      // leaves those references to the C2 planner.
+      const imageMovesInSameOperation = resolveMovedImageFiles({
+        sourceRelativePaths,
+        destinationFolderRelativePath,
+        entriesByDirectoryPath
+      });
       try {
-        return await onPrepareMarkdownDocumentMoves(markdownMoves);
+        return await onPrepareMarkdownDocumentMoves(
+          markdownMoves,
+          imageMovesInSameOperation
+        );
       } catch {
         return "proceed";
       }
     },
     [entriesByDirectoryPath, onPrepareMarkdownDocumentMoves]
+  );
+
+  // #414 (C2): the sibling pre-move gate — for the supported IMAGE files in
+  // the selection, hand their old → new paths to the host, which searches the
+  // project's Markdown documents for references to the images' old paths and
+  // (only when at least one exists) shows one confirmation dialog BEFORE the
+  // move. `"cancel"` aborts; every other outcome (nothing to update, "don't
+  // update", "update") is `"proceed"`. A pre-move planning FAILURE returns
+  // `"cancel"` (the host reports it) — an image move must not run against an
+  // unknown reference-update impact. A directory source is never expanded.
+  const confirmImageReferenceMoves = useCallback(
+    async (
+      sourceRelativePaths: readonly string[],
+      destinationFolderRelativePath: string
+    ): Promise<"proceed" | "cancel"> => {
+      const movedImages = resolveMovedImageFiles({
+        sourceRelativePaths,
+        destinationFolderRelativePath,
+        entriesByDirectoryPath
+      });
+      if (movedImages.length === 0 || !onPrepareImageReferenceMoves) {
+        return "proceed";
+      }
+      // #414 P0-2: tell C2 which documents move in the SAME operation so a
+      // reference in one of them is recomputed from its FINAL folder.
+      const markdownMovesInSameOperation = resolveMarkdownDocumentMoves({
+        sourceRelativePaths,
+        destinationFolderRelativePath,
+        entriesByDirectoryPath
+      });
+      try {
+        return await onPrepareImageReferenceMoves(
+          movedImages,
+          markdownMovesInSameOperation
+        );
+      } catch {
+        // #414: a reference-search failure must NOT let the image move run
+        // against an unknown impact — block it (the host normally reports;
+        // this is the last-resort message if the host handler itself threw).
+        onMoveResultMessage?.(
+          translate("explorer.move.imageReferenceUpdate.status.planningFailed")
+        );
+        return "cancel";
+      }
+    },
+    [
+      entriesByDirectoryPath,
+      onMoveResultMessage,
+      onPrepareImageReferenceMoves,
+      translate
+    ]
   );
 
   const performMove = useCallback(
@@ -2629,6 +2858,18 @@ export function FileExplorer({
           destinationFolderRelativePath
         )) === "cancel"
       ) {
+        onClearMoveImageRewrites?.();
+        return;
+      }
+      // #414: offer to keep OTHER documents' references to the selected image
+      // files pointing at them after the move; `"cancel"` aborts the Move.
+      if (
+        (await confirmImageReferenceMoves(
+          sources.relativePaths,
+          destinationFolderRelativePath
+        )) === "cancel"
+      ) {
+        onClearMoveImageRewrites?.();
         return;
       }
 
@@ -2648,6 +2889,7 @@ export function FileExplorer({
       } catch {
         setMoveInFlight(false);
         onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        onClearMoveImageRewrites?.();
         return;
       }
 
@@ -2657,11 +2899,13 @@ export function FileExplorer({
     [
       applyMoveResponse,
       confirmMarkdownDocumentMoves,
+      confirmImageReferenceMoves,
       dirtyProjectDocumentRelativePaths,
       entriesByDirectoryPath,
       hasProject,
       moveInFlight,
       multiSelection.selected,
+      onClearMoveImageRewrites,
       onMoveResultMessage,
       readOnly,
       selectionHasDirtyOpenDocument,
@@ -2777,14 +3021,24 @@ export function FileExplorer({
       entriesByDirectoryPath
     );
 
-    // #413: same pre-move image-link confirmation as the Move… menu route;
-    // `"cancel"` aborts the Paste before anything moves.
+    // #413/#414: same pre-move image-link + image-reference confirmations as
+    // the Move… menu route; `"cancel"` aborts the Paste before anything moves.
     if (
       (await confirmMarkdownDocumentMoves(
         cutState.sourceRelativePaths,
         destinationFolderRelativePath
       )) === "cancel"
     ) {
+      onClearMoveImageRewrites?.();
+      return;
+    }
+    if (
+      (await confirmImageReferenceMoves(
+        cutState.sourceRelativePaths,
+        destinationFolderRelativePath
+      )) === "cancel"
+    ) {
+      onClearMoveImageRewrites?.();
       return;
     }
 
@@ -2802,6 +3056,7 @@ export function FileExplorer({
     } catch {
       setMoveInFlight(false);
       onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+      onClearMoveImageRewrites?.();
       return;
     }
 
@@ -2817,11 +3072,13 @@ export function FileExplorer({
   }, [
     applyMoveResponse,
     confirmMarkdownDocumentMoves,
+    confirmImageReferenceMoves,
     cutState,
     dirtyProjectDocumentRelativePaths,
     entriesByDirectoryPath,
     hasProject,
     moveInFlight,
+    onClearMoveImageRewrites,
     onMoveResultMessage,
     readOnly,
     selection,
@@ -2957,15 +3214,26 @@ export function FileExplorer({
         return;
       }
 
-      // #413: same pre-move image-link confirmation as the Move… menu route;
-      // `"cancel"` aborts the drop before anything moves. A directory-only
-      // drag contributes no Markdown documents and skips this entirely.
+      // #413/#414: same pre-move image-link + image-reference confirmations as
+      // the Move… menu route; `"cancel"` aborts the drop before anything
+      // moves. A directory-only drag contributes neither Markdown files nor
+      // image files and skips both entirely.
       if (
         (await confirmMarkdownDocumentMoves(
           sourceRelativePaths,
           destinationFolderRelativePath
         )) === "cancel"
       ) {
+        onClearMoveImageRewrites?.();
+        return;
+      }
+      if (
+        (await confirmImageReferenceMoves(
+          sourceRelativePaths,
+          destinationFolderRelativePath
+        )) === "cancel"
+      ) {
+        onClearMoveImageRewrites?.();
         return;
       }
 
@@ -2985,6 +3253,7 @@ export function FileExplorer({
       } catch {
         setMoveInFlight(false);
         onMoveResultMessage?.(translate("explorer.move.status.unavailable"));
+        onClearMoveImageRewrites?.();
         return;
       }
 
@@ -2994,9 +3263,11 @@ export function FileExplorer({
     [
       applyMoveResponse,
       confirmMarkdownDocumentMoves,
+      confirmImageReferenceMoves,
       dirtyProjectDocumentRelativePaths,
       hasProject,
       moveInFlight,
+      onClearMoveImageRewrites,
       onMoveResultMessage,
       readOnly,
       translate

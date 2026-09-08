@@ -128,6 +128,17 @@ const pergamumApi: PergamumApi = {
         dirtyProjectDocumentRelativePaths:
           dirtyProjectDocumentRelativePaths ?? []
       }),
+    renameFileExplorerEntryPreflight: (
+      sourceRelativePath,
+      newName,
+      dirtyProjectDocumentRelativePaths
+    ) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.renameFileExplorerEntryPreflight, {
+        sourceRelativePath,
+        newName,
+        dirtyProjectDocumentRelativePaths:
+          dirtyProjectDocumentRelativePaths ?? []
+      }),
     moveFileExplorerEntries: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.moveFileExplorerEntries, request),
     statFileExplorerEntries: (request) =>

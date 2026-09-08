@@ -3519,6 +3519,12 @@ describe("project file IPC foundation", () => {
     return registeredHandler(PROJECT_CHANNELS.renameFileExplorerEntry);
   }
 
+  function renamePreflightHandler(): (...args: unknown[]) => unknown {
+    return registeredHandler(
+      PROJECT_CHANNELS.renameFileExplorerEntryPreflight
+    );
+  }
+
   it("registers the File Explorer create and rename IPC channels", () => {
     registerProjectIpc(createLoggerMock());
 
@@ -3528,7 +3534,8 @@ describe("project file IPC foundation", () => {
       expect.arrayContaining([
         PROJECT_CHANNELS.createFileExplorerMarkdownFile,
         PROJECT_CHANNELS.createFileExplorerFolder,
-        PROJECT_CHANNELS.renameFileExplorerEntry
+        PROJECT_CHANNELS.renameFileExplorerEntry,
+        PROJECT_CHANNELS.renameFileExplorerEntryPreflight
       ])
     );
   });
@@ -4189,6 +4196,64 @@ describe("project file IPC foundation", () => {
     await expect(
       fs.readFile(path.join(projectRootPath, "notes.txt"), "utf8")
     ).resolves.toBe("NON_MARKDOWN_MARKER");
+  });
+
+  it("#414: rename dry-run resolves old/new paths without touching the file", async () => {
+    await openExplorerProject("Rename Preflight");
+    await fs.writeFile(
+      path.join(projectRootPath, "diagram.png"),
+      "PNG_BYTES",
+      "utf8"
+    );
+
+    const ok = (await renamePreflightHandler()(
+      { sender: {} },
+      { sourceRelativePath: "diagram.png", newName: "architecture" }
+    )) as Record<string, unknown>;
+    expect(ok).toEqual({
+      ok: true,
+      oldRelativePath: "diagram.png",
+      newRelativePath: "architecture.png",
+      newName: "architecture.png",
+      entryKind: "file"
+    });
+    // The source is untouched — no fs.rename happened.
+    await expect(
+      fs.readFile(path.join(projectRootPath, "diagram.png"), "utf8")
+    ).resolves.toBe("PNG_BYTES");
+    await expect(
+      fs.access(path.join(projectRootPath, "architecture.png"))
+    ).rejects.toThrow();
+  });
+
+  it("#414: rename dry-run reports the same failure reasons as the real rename (no side effect)", async () => {
+    await openExplorerProject("Rename Preflight Fail");
+    await fs.writeFile(path.join(projectRootPath, "a.png"), "A", "utf8");
+    await fs.writeFile(path.join(projectRootPath, "b.png"), "B", "utf8");
+
+    await expect(
+      renamePreflightHandler()(
+        { sender: {} },
+        { sourceRelativePath: "a.png", newName: "b" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "alreadyExists" });
+    await expect(
+      renamePreflightHandler()(
+        { sender: {} },
+        { sourceRelativePath: "a.png", newName: "a" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "samePath" });
+    await expect(
+      renamePreflightHandler()(
+        { sender: {} },
+        { sourceRelativePath: "a.png", newName: "100<>.png" }
+      )
+    ).resolves.toEqual({ ok: false, reason: "invalidCharacter" });
+
+    // Both files still present and unchanged.
+    await expect(
+      fs.readFile(path.join(projectRootPath, "a.png"), "utf8")
+    ).resolves.toBe("A");
   });
 
   it("rejects overwrite, reserved targets, outside paths, and same-path rename", async () => {
