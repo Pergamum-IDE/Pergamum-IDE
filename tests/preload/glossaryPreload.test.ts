@@ -20,7 +20,8 @@ const electronMock = vi.hoisted(() => ({
   invoke: vi.fn(),
   on: vi.fn(),
   off: vi.fn(),
-  send: vi.fn()
+  send: vi.fn(),
+  getPathForFile: vi.fn((file: File) => `C:\\dropped\\${file.name}`)
 }));
 
 vi.mock("electron", () => ({
@@ -32,6 +33,9 @@ vi.mock("electron", () => ({
     on: electronMock.on,
     off: electronMock.off,
     send: electronMock.send
+  },
+  webUtils: {
+    getPathForFile: electronMock.getPathForFile
   }
 }));
 
@@ -61,6 +65,30 @@ describe("glossary preload API", () => {
       "Drafts/chapter-01.md",
       "chapter-02"
     );
+    await api.projects.getCurrentProjectId();
+    await api.projects.dryRunTextImport({
+      projectId: "019a0000-0000-7000-8000-000000000420",
+      destinationFolderProjectRelativePath: "Drafts",
+      sourcePaths: ["C:\\Import\\chapter-01.txt"]
+    });
+    await api.projects.previewTextImportFile({
+      sourcePath: "C:\\Import\\chapter-01.txt",
+      encoding: "shiftJis"
+    });
+    await api.projects.executeTextImport({
+      projectId: "019a0000-0000-7000-8000-000000000420",
+      destinationFolderProjectRelativePath: "Drafts",
+      files: [
+        {
+          sourcePath: "C:\\Import\\chapter-01.txt",
+          targetProjectRelativePath: "Drafts/chapter-01.md",
+          encoding: "shiftJis"
+        }
+      ],
+      normalizeLineEndings: true,
+      targetLineEnding: "lf"
+    });
+    await api.projects.pickTextImportSources({ kind: "folders" });
 
     expect(api.projects as Record<string, unknown>).not.toHaveProperty(
       "openProjectFile"
@@ -112,12 +140,118 @@ describe("glossary preload API", () => {
           newName: "chapter-02",
           dirtyProjectDocumentRelativePaths: []
         }
-      ]
+      ],
+      [PROJECT_CHANNELS.getCurrentProjectId],
+      [
+        PROJECT_CHANNELS.dryRunTextImport,
+        {
+          projectId: "019a0000-0000-7000-8000-000000000420",
+          destinationFolderProjectRelativePath: "Drafts",
+          sourcePaths: ["C:\\Import\\chapter-01.txt"]
+        }
+      ],
+      [
+        PROJECT_CHANNELS.previewTextImportFile,
+        {
+          sourcePath: "C:\\Import\\chapter-01.txt",
+          encoding: "shiftJis"
+        }
+      ],
+      [
+        PROJECT_CHANNELS.executeTextImport,
+        {
+          projectId: "019a0000-0000-7000-8000-000000000420",
+          destinationFolderProjectRelativePath: "Drafts",
+          files: [
+            {
+              sourcePath: "C:\\Import\\chapter-01.txt",
+              targetProjectRelativePath: "Drafts/chapter-01.md",
+              encoding: "shiftJis"
+            }
+          ],
+          normalizeLineEndings: true,
+          targetLineEnding: "lf"
+        }
+      ],
+      [PROJECT_CHANNELS.pickTextImportSources, { kind: "folders" }]
     ]);
     expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain("openProjectFile");
     expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain(
       "projects:openProjectFile"
     );
+  });
+
+  it("exposes batch text import preview through one IPC invoke", async () => {
+    electronMock.invoke.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    await api.projects.previewTextImportFiles({
+      files: [
+        {
+          id: "a",
+          sourcePath: "C:\\Import\\a.txt",
+          encoding: "utf8"
+        },
+        {
+          id: "b",
+          sourcePath: "C:\\Import\\b.txt",
+          encoding: "shiftJis"
+        }
+      ]
+    });
+
+    expect(electronMock.invoke).toHaveBeenCalledTimes(1);
+    expect(electronMock.invoke).toHaveBeenCalledWith(
+      PROJECT_CHANNELS.previewTextImportFiles,
+      {
+        files: [
+          {
+            id: "a",
+            sourcePath: "C:\\Import\\a.txt",
+            encoding: "utf8"
+          },
+          {
+            id: "b",
+            sourcePath: "C:\\Import\\b.txt",
+            encoding: "shiftJis"
+          }
+        ]
+      }
+    );
+  });
+
+  it("resolves a dropped File to its absolute path via webUtils, never reading it (#420 Step 3)", () => {
+    electronMock.getPathForFile.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    const file = new File(["ignored body"], "chapter-01.txt");
+    const path = api.fileSystem.getPathForFile(file);
+
+    expect(electronMock.getPathForFile).toHaveBeenCalledWith(file);
+    expect(path).toBe("C:\\dropped\\chapter-01.txt");
+  });
+
+  it("returns an empty string when webUtils cannot resolve a path (#420 Step 3)", () => {
+    electronMock.getPathForFile.mockImplementationOnce(() => {
+      throw new Error("no path for synthetic File");
+    });
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    expect(
+      api.fileSystem.getPathForFile(new File(["x"], "synthetic.txt"))
+    ).toBe("");
   });
 
   it("exposes glossary entry + tag operations through the Pergamum API", () => {

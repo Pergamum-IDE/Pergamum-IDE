@@ -34,6 +34,18 @@ import type {
   MarkdownImageLinkDiagnosticsResult
 } from "./markdownImageLinkDiagnostics";
 import type {
+  DryRunTextImportRequest,
+  ExecuteTextImportRequest,
+  ExecuteTextImportResult,
+  PickTextImportSourcesRequest,
+  PickTextImportSourcesResult,
+  PreviewTextImportFileRequest,
+  PreviewTextImportFileResult,
+  PreviewTextImportFilesRequest,
+  PreviewTextImportFilesResult,
+  TextImportDryRunResult
+} from "./textImport";
+import type {
   EditContextMenuCommandSelection,
   EditContextMenuPopupRequest,
   NativeEditDelegationRequest
@@ -236,6 +248,23 @@ export const PROJECT_CHANNELS = {
   /** #372: first non-empty Markdown line of a project-local document, for the
    *  Command Palette file quick open footer detail preview. */
   readProjectDocumentPreviewLine: "projects:readProjectDocumentPreviewLine",
+  /** #420 Step 3: the open project's stable id, or `null` when no project is
+   *  open. The renderer needs it to address the text-import IPCs. */
+  getCurrentProjectId: "projects:getCurrentProjectId",
+  /** #420 Step 1: side-effect-free external .txt bulk import planning. */
+  dryRunTextImport: "projects:dryRunTextImport",
+  /** #420 Step 1: regenerate one external-file preview for a chosen encoding. */
+  previewTextImportFile: "projects:previewTextImportFile",
+  /** #420 Step 1 follow-up: batch preview for encoding changes in the UI. */
+  previewTextImportFiles: "projects:previewTextImportFiles",
+  /** #420 Step 1: execute the already-reviewed external .txt import plan. */
+  executeTextImport: "projects:executeTextImport",
+  /**
+   * #420 Step 6: open an OS picker for external .txt files or folders and
+   * return only their absolute paths (never contents). The renderer adds
+   * these to the same source list a drag & drop feeds.
+   */
+  pickTextImportSources: "projects:pickTextImportSources",
   saveProjectDocument: "projects:saveProjectDocument",
   saveProjectSettings: "projects:saveProjectSettings",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -1027,6 +1056,26 @@ export interface PergamumApi {
     readProjectDocumentPreviewLine: (
       relativePath: string
     ) => Promise<string | null>;
+    /** #420 Step 3: the open project's stable id (`null` when no project is
+     *  open). Used only to address the text-import IPCs from the renderer. */
+    getCurrentProjectId: () => Promise<string | null>;
+    dryRunTextImport: (
+      request: DryRunTextImportRequest
+    ) => Promise<TextImportDryRunResult>;
+    previewTextImportFile: (
+      request: PreviewTextImportFileRequest
+    ) => Promise<PreviewTextImportFileResult>;
+    previewTextImportFiles: (
+      request: PreviewTextImportFilesRequest
+    ) => Promise<PreviewTextImportFilesResult>;
+    executeTextImport: (
+      request: ExecuteTextImportRequest
+    ) => Promise<ExecuteTextImportResult>;
+    /** #420 Step 6: OS picker that returns chosen .txt file / folder paths
+     *  only (never contents), for the bulk import source list. */
+    pickTextImportSources: (
+      request: PickTextImportSourcesRequest
+    ) => Promise<PickTextImportSourcesResult>;
     saveProjectDocument: (
       relativePath: string,
       content: string
@@ -1172,5 +1221,16 @@ export interface PergamumApi {
     validate: (
       request: MarkdownImageLinkDiagnosticsRequest
     ) => Promise<MarkdownImageLinkDiagnosticsResult>;
+  };
+  /**
+   * #420 Step 3: renderer-safe filesystem path helpers. `getPathForFile`
+   * resolves the absolute path of a `File` obtained from an external drag &
+   * drop, via Electron `webUtils` in the preload — the renderer NEVER reads
+   * the file itself; it only collects the path and hands it to the
+   * text-import IPCs. Returns `""` when no path is available (e.g. a
+   * synthetic `File`).
+   */
+  fileSystem: {
+    getPathForFile: (file: File) => string;
   };
 }

@@ -866,3 +866,266 @@ describe("Document Map pagination translations (#403 Phase 2)", () => {
     expect(t("en", "documentMap.rendering")).toBe("Rendering…");
   });
 });
+
+describe("Bulk text import dialog translations (#420 Step 2)", () => {
+  it("defines menu and skeleton dialog copy for ja and en", () => {
+    expect(t("ja", "menu.file.import")).toBe("インポート");
+    expect(t("en", "menu.file.import")).toBe("Import");
+    expect(t("ja", "menu.file.import.bulkTextFiles")).toBe(
+      "テキストファイルをまとめてインポート..."
+    );
+    expect(t("en", "menu.file.import.bulkTextFiles")).toBe(
+      "Bulk Import Text Files..."
+    );
+
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "command.import.text.bulk.openDialog",
+        "command.import.text.bulk.openDialog.description",
+        "textImport.dialog.title",
+        "textImport.dialog.description",
+        "textImport.dialog.destinationHeading",
+        "textImport.dialog.targetsHeading",
+        "textImport.dialog.emptyTargets",
+        "textImport.dialog.import",
+        "textImport.dialog.cancel"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("Bulk text import dialog translations (#420 Step 3)", () => {
+  it("defines dry-run UI copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.destinationNotSelected",
+        "textImport.dialog.destinationRoot",
+        "textImport.dialog.selectDestination",
+        "textImport.dialog.changeDestination",
+        "textImport.dialog.destinationPickerTitle",
+        "textImport.dialog.destinationPickerRoot",
+        "textImport.dialog.destinationPickerConfirm",
+        "textImport.dialog.destinationPickerLoadFailed",
+        "textImport.dialog.sourcesHeading",
+        "textImport.dialog.dropAreaReady",
+        "textImport.dialog.dropAreaActive",
+        "textImport.dialog.dropAreaHint",
+        "textImport.dialog.removeSource",
+        "textImport.dialog.checkingTargets",
+        "textImport.dialog.checkFailed",
+        "textImport.dialog.emptyTargetsHint",
+        "textImport.dialog.sourcePath",
+        "textImport.dialog.targetPath",
+        "textImport.dialog.encoding",
+        "textImport.dialog.bom",
+        "textImport.dialog.previewHead",
+        "textImport.dialog.previewTail",
+        "textImport.dialog.folderHasSkipped",
+        "textImport.dialog.importPending",
+        "textImport.dialog.bomKind.none",
+        "textImport.dialog.bomKind.utf8",
+        "textImport.dialog.bomKind.utf16le",
+        "textImport.dialog.bomKind.utf16be",
+        "textImport.dialog.encodingName.utf8",
+        "textImport.dialog.encodingName.utf8Bom",
+        "textImport.dialog.encodingName.shiftJis",
+        "textImport.dialog.encodingName.eucJp",
+        "textImport.dialog.encodingName.utf16le",
+        "textImport.dialog.encodingName.utf16be",
+        "textImport.dialog.encodingName.iso2022Jp",
+        "textImport.dialog.skipReason.notTextFile",
+        "textImport.dialog.skipReason.invalidProjectPath",
+        "textImport.dialog.skipReason.targetExists",
+        "textImport.dialog.skipReason.sourceMissing",
+        "textImport.dialog.skipReason.sourceUnreadable",
+        "textImport.dialog.skipReason.decodeFailed",
+        "textImport.dialog.skipReason.unsupportedSource"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("interpolates count and name placeholders", () => {
+    expect(t("ja", "textImport.dialog.sourceCount", { count: 3 })).toContain("3");
+    expect(t("en", "textImport.dialog.sourceCount", { count: 3 })).toContain("3");
+    expect(t("ja", "textImport.dialog.filesHeading", { count: 2 })).toContain("2");
+    expect(t("en", "textImport.dialog.foldersHeading", { count: 5 })).toContain(
+      "5"
+    );
+    expect(
+      t("ja", "textImport.dialog.destinationPickerExpand", { name: "章" })
+    ).toContain("章");
+    expect(
+      t("en", "textImport.dialog.destinationPickerCollapse", { name: "notes" })
+    ).toContain("notes");
+    expect(
+      t("ja", "textImport.dialog.skipped", { reason: "対象外" })
+    ).toContain("対象外");
+    expect(
+      t("en", "textImport.dialog.renamed", { target: "notes/a-1.md" })
+    ).toContain("notes/a-1.md");
+  });
+});
+
+describe("Bulk text import dialog translations (#420 Step 4)", () => {
+  it("defines encoding-dropdown + preview copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.encodingSelectAriaLabel",
+        "textImport.dialog.previewUpdating",
+        "textImport.dialog.previewFailedWithEncoding",
+        "textImport.dialog.previewUpdateFailed",
+        "textImport.dialog.previewFailureReason",
+        "textImport.dialog.encodingChangeRecoveredDecode",
+        "textImport.dialog.encodingChangeDecodeStillFailed"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("interpolates the encoding aria-label name and the preview failure reason", () => {
+    expect(
+      t("ja", "textImport.dialog.encodingSelectAriaLabel", { name: "手記.txt" })
+    ).toContain("手記.txt");
+    expect(
+      t("en", "textImport.dialog.encodingSelectAriaLabel", { name: "diary.txt" })
+    ).toContain("diary.txt");
+    expect(
+      t("ja", "textImport.dialog.previewFailureReason", { reason: "デコード失敗" })
+    ).toContain("デコード失敗");
+    expect(
+      t("en", "textImport.dialog.previewFailureReason", { reason: "decode error" })
+    ).toContain("decode error");
+  });
+
+  it("keeps the shared encoding display names readable in both languages", () => {
+    for (const language of ["ja", "en"] as const) {
+      expect(t(language, "textImport.dialog.encodingName.shiftJis")).toContain(
+        "Shift_JIS"
+      );
+      expect(t(language, "textImport.dialog.encodingName.utf8Bom")).toContain(
+        "BOM"
+      );
+    }
+  });
+
+  it("keeps the description wording that mentions per-file encoding and preview", () => {
+    expect(t("ja", "textImport.dialog.description")).toContain("ファイル別");
+    expect(t("ja", "textImport.dialog.description")).toContain("プレビュー");
+    expect(t("en", "textImport.dialog.description")).toContain("each file");
+    expect(t("en", "textImport.dialog.description")).toContain("preview");
+  });
+});
+
+describe("Bulk text import dialog translations (#420 Step 5)", () => {
+  it("defines import-execution copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.importReady",
+        "textImport.dialog.importing",
+        "textImport.dialog.importCompleted",
+        "textImport.dialog.importPartialFailure",
+        "textImport.dialog.importFailed",
+        "textImport.dialog.importedCount",
+        "textImport.dialog.skippedCount",
+        "textImport.dialog.failedCount",
+        "textImport.dialog.importedFilesHeading",
+        "textImport.dialog.skippedFilesHeading",
+        "textImport.dialog.failedFilesHeading",
+        "textImport.dialog.noImportableFiles",
+        "textImport.dialog.importBlockedByPreview",
+        "textImport.dialog.importResultReason",
+        "textImport.dialog.importResultMessage"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("interpolates the result counts and the reason / message placeholders", () => {
+    expect(t("ja", "textImport.dialog.importedCount", { count: 4 })).toContain(
+      "4"
+    );
+    expect(t("en", "textImport.dialog.skippedCount", { count: 2 })).toContain(
+      "2"
+    );
+    expect(t("en", "textImport.dialog.failedCount", { count: 1 })).toContain("1");
+    expect(
+      t("ja", "textImport.dialog.importResultReason", { reason: "既に存在" })
+    ).toContain("既に存在");
+    expect(
+      t("en", "textImport.dialog.importResultMessage", { message: "EACCES" })
+    ).toContain("EACCES");
+  });
+});
+
+describe("Bulk text import dialog translations (#420 Step 6)", () => {
+  it("defines the OS picker button + Close label copy for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.addFiles",
+        "textImport.dialog.addFolders",
+        "textImport.dialog.close"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+    expect(t("ja", "textImport.dialog.close")).toBe("閉じる");
+    expect(t("en", "textImport.dialog.close")).toBe("Close");
+    expect(t("ja", "textImport.dialog.close")).not.toBe(
+      t("ja", "textImport.dialog.cancel")
+    );
+  });
+
+  it("uses the 'Source' heading and the drop-or-buttons wording", () => {
+    expect(t("ja", "textImport.dialog.sourcesHeading")).toBe("取り込み元");
+    expect(t("en", "textImport.dialog.sourcesHeading")).toBe("Source");
+    expect(t("ja", "textImport.dialog.dropAreaReady")).toContain("ボタンから追加");
+    expect(t("en", "textImport.dialog.dropAreaReady")).toContain(
+      "add them using the buttons"
+    );
+    // the result list keeps its own distinct heading
+    expect(t("ja", "textImport.dialog.targetsHeading")).toBe("取り込み対象");
+    expect(t("en", "textImport.dialog.targetsHeading")).toBe("Import targets");
+  });
+});
+
+describe("Bulk text import dialog translations (#420 Step 7)", () => {
+  it("defines compact file-row status and path/preview labels for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "textImport.dialog.fileStatus.readable",
+        "textImport.dialog.fileStatus.renamed",
+        "textImport.dialog.fileStatus.skipped",
+        "textImport.dialog.previewEmpty",
+        "textImport.dialog.previewUnavailable",
+        "textImport.dialog.sourceFile",
+        "textImport.dialog.targetFile",
+        "textImport.dialog.skipImport",
+        "textImport.dialog.sourcesDisabledUntilDestination"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+    expect(t("ja", "textImport.dialog.fileStatus.readable")).toBe("読取OK");
+    expect(t("en", "textImport.dialog.fileStatus.renamed")).toBe("Renamed");
+    expect(t("ja", "textImport.dialog.skipImport")).toBe("処理スキップ");
+    expect(t("en", "textImport.dialog.skipImport")).toBe("Skip import");
+    expect(
+      t("ja", "textImport.dialog.sourcesDisabledUntilDestination")
+    ).toContain("取り込み先フォルダ");
+    expect(
+      t("en", "textImport.dialog.sourcesDisabledUntilDestination")
+    ).toContain("destination folder");
+    expect(t("ja", "textImport.dialog.sourceFile")).not.toBe(
+      t("ja", "textImport.dialog.targetFile")
+    );
+    expect(t("en", "textImport.dialog.sourceFile")).not.toBe(
+      t("en", "textImport.dialog.targetFile")
+    );
+  });
+});

@@ -61,6 +61,12 @@ import type {
   GlossaryTag,
   UpdateGlossaryTagInput
 } from "../shared/glossary";
+import type {
+  ExecuteTextImportResult,
+  PreviewTextImportFilesRequest,
+  PreviewTextImportFilesResult,
+  TextImportDryRunResult
+} from "../shared/textImport";
 import {
   t,
   type Translate,
@@ -80,6 +86,12 @@ import {
   aboutCreditsHeading,
   aboutCreditsRows
 } from "./dialog/AboutDialog";
+import {
+  BulkTextImportDialog,
+  type BulkTextImportDryRunInput,
+  type BulkTextImportExecuteInput
+} from "./dialog/BulkTextImportDialog";
+import type { TextImportFolderListing } from "./dialog/TextImportDestinationPicker";
 import {
   applicationCommandIds,
   createApplicationCommandTitles,
@@ -1146,6 +1158,9 @@ export function App(): JSX.Element {
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
+  const openBulkTextImportDialogCommandRef = useRef<() => void>(
+    () => undefined
+  );
   const openMarkdownDocumentCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -1201,6 +1216,83 @@ export function App(): JSX.Element {
     imageAttachmentPastePromptState,
     setImageAttachmentPastePromptState
   ] = useState<ImageAttachmentPastePromptDialogState | null>(null);
+  const bulkTextImportDialogOpenerRef = useRef<Element | null>(null);
+  const isBulkTextImportDialogPendingOrOpenRef = useRef(false);
+  const [isBulkTextImportDialogOpen, setIsBulkTextImportDialogOpen] =
+    useState(false);
+  // #420 Step 3: the dialog stays free of `window.pergamum`; App owns the IPC
+  // calls and hands the dialog three stable callbacks. The renderer only ever
+  // collects source *paths* (via `webUtils.getPathForFile` in the preload) and
+  // passes them to the main process — it never reads an external file itself.
+  const bulkTextImportListFolders = useCallback(
+    async (
+      directoryRelativePath: string | null
+    ): Promise<TextImportFolderListing> => {
+      const result =
+        await window.pergamum.projects.listFileExplorerChildren(
+          directoryRelativePath
+        );
+      if (result.kind !== "ok") {
+        return { ok: false };
+      }
+      return {
+        ok: true,
+        folders: result.entries
+          .filter((entry) => entry.kind === "folder")
+          .map((entry) => ({
+            name: entry.name,
+            relativePath: entry.relativePath
+          }))
+      };
+    },
+    []
+  );
+  const bulkTextImportDryRun = useCallback(
+    async (
+      input: BulkTextImportDryRunInput
+    ): Promise<TextImportDryRunResult> => {
+      const projectId = await window.pergamum.projects.getCurrentProjectId();
+      if (projectId === null) {
+        return { ok: false, reason: "noProject" };
+      }
+      return window.pergamum.projects.dryRunTextImport({
+        projectId,
+        destinationFolderProjectRelativePath:
+          input.destinationFolderProjectRelativePath,
+        sourcePaths: input.sourcePaths
+      });
+    },
+    []
+  );
+  const bulkTextImportDroppedFilePaths = useCallback(
+    (files: readonly File[]): readonly string[] =>
+      files
+        .map((file) => window.pergamum.fileSystem.getPathForFile(file))
+        .filter((path): path is string => path.length > 0),
+    []
+  );
+  // #420 Step 6: OS file / folder picker for the source list. Returns paths
+  // only (never contents); the dialog appends them the same way it does a
+  // drag & drop.
+  const bulkTextImportPickSources = useCallback(
+    async (kind: "files" | "folders"): Promise<readonly string[]> => {
+      const result = await window.pergamum.projects.pickTextImportSources({
+        kind
+      });
+      return result.paths;
+    },
+    []
+  );
+  // #420 Step 4: per-file encoding preview. A thin pass-through — the dialog
+  // decides when to call it (only on an encoding change) and stays free of
+  // `window.pergamum`.
+  const bulkTextImportPreview = useCallback(
+    (
+      request: PreviewTextImportFilesRequest
+    ): Promise<PreviewTextImportFilesResult> =>
+      window.pergamum.projects.previewTextImportFiles(request),
+    []
+  );
   // #413: pre-move image-link update confirmation for the Markdown documents
   // in a File Explorer Move. `handlePrepareMarkdownDocumentMoves` plans every
   // selected Markdown file, opens ONE dialog, and parks a `resolve` here; the
@@ -1795,6 +1887,8 @@ export function App(): JSX.Element {
     lineEndingDistributionData !== null ||
     isReplacePreviewDialogPendingOrOpenRef.current ||
     replacePreviewDialogState !== null ||
+    isBulkTextImportDialogPendingOrOpenRef.current ||
+    isBulkTextImportDialogOpen ||
     isRecoveryCandidateDialogPendingOrOpenRef.current ||
     recoveryCandidateDialogData !== null;
   const isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose =
@@ -2099,6 +2193,58 @@ export function App(): JSX.Element {
   const effectiveSettings = useMemo(
     () => resolveEffectiveSettings(settings, project?.config?.settings),
     [settings, project?.config?.settings]
+  );
+  // #420 Step 5: run the bulk text import. The dialog owns *when* (only on an
+  // explicit Import click for the importable rows); App fills in the project
+  // id and the line-ending policy. New imported `.md` documents inherit the
+  // project's "new file" line ending (`files.newFile.lineEnding`, default
+  // LF). #420 Step 8: normalization is now driven by the dialog's
+  // "match line endings to application settings" toggle
+  // (`input.normalizeLineEndings`); `targetLineEnding` is still the app
+  // setting so a normalized write matches that policy.
+  const bulkTextImportNewFileLineEnding =
+    effectiveSettings.files.newFile.lineEnding;
+  const bulkTextImportExecute = useCallback(
+    async (
+      input: BulkTextImportExecuteInput
+    ): Promise<ExecuteTextImportResult> => {
+      const projectId = await window.pergamum.projects.getCurrentProjectId();
+      if (projectId === null) {
+        return { ok: false, reason: "noProject" };
+      }
+      return window.pergamum.projects.executeTextImport({
+        projectId,
+        destinationFolderProjectRelativePath:
+          input.destinationFolderProjectRelativePath,
+        files: input.files,
+        normalizeLineEndings: input.normalizeLineEndings,
+        targetLineEnding: bulkTextImportNewFileLineEnding
+      });
+    },
+    [bulkTextImportNewFileLineEnding]
+  );
+  // #420 Step 5: after a successful import, re-list the File Explorer folders
+  // the new `.md` files landed in so the tree shows them without a manual
+  // reload. Never auto-opens a document.
+  const bulkTextImportOnImported = useCallback(
+    (importedTargetProjectRelativePaths: readonly string[]): void => {
+      if (importedTargetProjectRelativePaths.length === 0) {
+        return;
+      }
+      const directoryRelativePaths = new Set<string | null>();
+      for (const targetPath of importedTargetProjectRelativePaths) {
+        const slashIndex = targetPath.lastIndexOf("/");
+        directoryRelativePaths.add(
+          slashIndex === -1 ? null : targetPath.slice(0, slashIndex)
+        );
+      }
+      fileExplorerRefreshDirectoriesRequestSeqRef.current += 1;
+      setFileExplorerRefreshDirectoriesRequest({
+        directoryRelativePaths: [...directoryRelativePaths],
+        token: fileExplorerRefreshDirectoriesRequestSeqRef.current
+      });
+    },
+    []
   );
   // #266: NotificationToast auto-dismiss duration, in milliseconds — the
   // Settings value is already stored in the unit the controller's timer
@@ -2670,6 +2816,8 @@ export function App(): JSX.Element {
         createProject: () => createProjectCommandRef.current(),
         openProject: () => openProjectCommandRef.current(),
         closeProject: () => closeProjectCommandRef.current(),
+        openBulkTextImportDialog: () =>
+          openBulkTextImportDialogCommandRef.current(),
         toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
       },
       createApplicationCommandTitles(translate)
@@ -2951,6 +3099,7 @@ export function App(): JSX.Element {
       isAboutDialogPendingOrOpenRef.current ||
       isLineEndingDistributionDialogPendingOrOpenRef.current ||
       isReplacePreviewDialogPendingOrOpenRef.current ||
+      isBulkTextImportDialogPendingOrOpenRef.current ||
       isRecoveryCandidateDialogPendingOrOpenRef.current
         ? "app_modal_open"
         : null
@@ -3831,6 +3980,29 @@ export function App(): JSX.Element {
   function closeLineEndingDistributionDialog(): void {
     isLineEndingDistributionDialogPendingOrOpenRef.current = false;
     setLineEndingDistributionData(null);
+  }
+
+  function openBulkTextImportDialog(): void {
+    if (isBulkTextImportDialogPendingOrOpenRef.current) {
+      return;
+    }
+
+    if (typeof document !== "undefined") {
+      bulkTextImportDialogOpenerRef.current = document.activeElement;
+    }
+
+    isBulkTextImportDialogPendingOrOpenRef.current = true;
+    setIsBulkTextImportDialogOpen(true);
+    playDialogShownSound(
+      soundFeedback,
+      effectiveSettings.workbench.sound,
+      reportSoundPlaybackFailure
+    );
+  }
+
+  function closeBulkTextImportDialog(): void {
+    isBulkTextImportDialogPendingOrOpenRef.current = false;
+    setIsBulkTextImportDialogOpen(false);
   }
 
   // -------------------------------------------------------------------------
@@ -7474,6 +7646,7 @@ export function App(): JSX.Element {
   closeProjectCommandRef.current = closeProject;
   quitApplicationCommandRef.current = quitApplication;
   openAboutDialogCommandRef.current = openAboutDialog;
+  openBulkTextImportDialogCommandRef.current = openBulkTextImportDialog;
   handleLifecycleWindowCloseRequestRef.current =
     handleLifecycleWindowCloseRequest;
   showLineEndingDistributionCommandRef.current =
@@ -10310,6 +10483,20 @@ export function App(): JSX.Element {
           onClose={closeLineEndingDistributionDialog}
         />
       ) : null}
+
+      <BulkTextImportDialog
+        isOpen={isBulkTextImportDialogOpen}
+        translate={translate}
+        opener={bulkTextImportDialogOpenerRef.current}
+        onClose={closeBulkTextImportDialog}
+        listFolders={bulkTextImportListFolders}
+        onDryRun={bulkTextImportDryRun}
+        getDroppedFilePaths={bulkTextImportDroppedFilePaths}
+        pickSources={bulkTextImportPickSources}
+        onPreview={bulkTextImportPreview}
+        onExecute={bulkTextImportExecute}
+        onImported={bulkTextImportOnImported}
+      />
 
       {replacePreviewDialogState ? (
         <ReplacePreviewDialog

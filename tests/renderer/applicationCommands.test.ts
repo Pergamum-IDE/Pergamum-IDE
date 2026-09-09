@@ -23,6 +23,9 @@ const titles = {
   closeProject: "Close Project",
   closeProjectDescription:
     "Close the current project. Check for unsaved changes before closing.",
+  openBulkTextImportDialog: "Bulk Import Text Files",
+  openBulkTextImportDialogDescription:
+    "Open the dialog for importing external text files as Markdown documents with a selected character encoding.",
   toggleRecentProjects: "Toggle Recent Projects",
   toggleRecentProjectsDescription:
     "Switch between recently opened projects. Check for unsaved changes before switching projects."
@@ -41,6 +44,7 @@ describe("application commands", () => {
         createProject: () => undefined,
         openProject: () => undefined,
         closeProject: () => undefined,
+        openBulkTextImportDialog: () => undefined,
         toggleRecentProjects: () => undefined
       },
       titles
@@ -52,6 +56,7 @@ describe("application commands", () => {
       "workspace.project.create",
       "workspace.project.open",
       "workspace.project.close",
+      "import.text.bulk.openDialog",
       "workspace.recentProjects.toggle"
     ]);
   });
@@ -63,6 +68,7 @@ describe("application commands", () => {
     const createProject = vi.fn();
     const openProject = vi.fn();
     const closeProject = vi.fn();
+    const openBulkTextImportDialog = vi.fn();
     const toggleRecentProjects = vi.fn();
     registry.setCommandContextProvider(() => ({ "project.isOpen": true }));
 
@@ -74,6 +80,7 @@ describe("application commands", () => {
         createProject,
         openProject,
         closeProject,
+        openBulkTextImportDialog,
         toggleRecentProjects
       },
       titles
@@ -91,6 +98,10 @@ describe("application commands", () => {
     await registry.execute(applicationCommandIds.openProject, executionOptions);
     await registry.execute(applicationCommandIds.closeProject, executionOptions);
     await registry.execute(
+      applicationCommandIds.openBulkTextImportDialog,
+      executionOptions
+    );
+    await registry.execute(
       applicationCommandIds.toggleRecentProjects,
       executionOptions
     );
@@ -100,6 +111,7 @@ describe("application commands", () => {
     expect(createProject).toHaveBeenCalledTimes(1);
     expect(openProject).toHaveBeenCalledTimes(1);
     expect(closeProject).toHaveBeenCalledTimes(1);
+    expect(openBulkTextImportDialog).toHaveBeenCalledTimes(1);
     expect(toggleRecentProjects).toHaveBeenCalledTimes(1);
   });
 
@@ -114,6 +126,7 @@ describe("application commands", () => {
         createProject: () => undefined,
         openProject: () => undefined,
         closeProject: () => undefined,
+        openBulkTextImportDialog: () => undefined,
         toggleRecentProjects: () => undefined
       },
       titles
@@ -126,6 +139,30 @@ describe("application commands", () => {
       enabled: true,
       disabledReason: null
     });
+  });
+
+  it("keeps the bulk text import menu command out of the Command Palette for Step 2", () => {
+    const registry = new CommandRegistry();
+
+    registerApplicationCommands(
+      registry,
+      {
+        openAbout: () => undefined,
+        quitApplication: () => undefined,
+        createProject: () => undefined,
+        openProject: () => undefined,
+        closeProject: () => undefined,
+        openBulkTextImportDialog: () => undefined,
+        toggleRecentProjects: () => undefined
+      },
+      titles
+    );
+
+    expect(
+      listCommandPaletteEntries(registry).some(
+        (entry) => entry.id === applicationCommandIds.openBulkTextImportDialog
+      )
+    ).toBe(false);
   });
 
   it("creates localized command titles from command i18n keys", () => {
@@ -145,6 +182,10 @@ describe("application commands", () => {
       closeProject: "translated:command.workspace.project.close",
       closeProjectDescription:
         "translated:command.workspace.project.close.description",
+      openBulkTextImportDialog:
+        "translated:command.import.text.bulk.openDialog",
+      openBulkTextImportDialogDescription:
+        "translated:command.import.text.bulk.openDialog.description",
       toggleRecentProjects: "translated:command.workspace.recentProjects.toggle",
       toggleRecentProjectsDescription:
         "translated:command.workspace.recentProjects.toggle.description"

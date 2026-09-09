@@ -162,6 +162,23 @@ function editorCloseWindowsLinuxMenuItem(
   };
 }
 
+function importMenu(
+  language: Language,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: label(language, "menu.file.import"),
+    submenu: [
+      commandMenuItem(
+        applicationCommandIds.openBulkTextImportDialog,
+        language,
+        "menu.file.import.bulkTextFiles",
+        options
+      )
+    ]
+  };
+}
+
 function fileMenu(
   language: Language,
   platform: NodeJS.Platform,
@@ -187,6 +204,8 @@ function fileMenu(
       "menu.closeProject",
       options
     ),
+    { type: "separator" },
+    importMenu(language, options),
     { type: "separator" },
     commandMenuItem(
       editorCommandIds.openMarkdownDocument,

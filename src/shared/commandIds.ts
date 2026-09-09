@@ -7,6 +7,9 @@ export const applicationCommandIds = {
   createProject: defineCommandId("workspace.project.create"),
   openProject: defineCommandId("workspace.project.open"),
   closeProject: defineCommandId("workspace.project.close"),
+  openBulkTextImportDialog: defineCommandId(
+    "import.text.bulk.openDialog"
+  ),
   toggleRecentProjects: defineCommandId("workspace.recentProjects.toggle")
 } as const;
 
@@ -78,6 +81,7 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.createProject,
   applicationCommandIds.openProject,
   applicationCommandIds.closeProject,
+  applicationCommandIds.openBulkTextImportDialog,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
   editorCommandIds.saveAll,

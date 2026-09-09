@@ -919,7 +919,16 @@ describe("project file IPC foundation", () => {
   it("does not keep user-facing folder open or openProjectFile IPC routes", () => {
     const source = readFileSync("src/main/projectIpc.ts", "utf8");
 
-    expect(source).not.toContain("openDirectory");
+    // `openDirectory` is allowed only inside the #420 Step 6 bulk-text-import
+    // source picker (choosing folders whose .txt files become import
+    // candidates) — never to open a *project* by folder.
+    for (const match of source.matchAll(/"openDirectory"/g)) {
+      const context = source.slice(
+        Math.max(0, match.index - 1500),
+        match.index + 200
+      );
+      expect(context).toContain("pickTextImportSources");
+    }
     expect(source).not.toContain("openProjectRoot");
     expect(source).not.toContain("PROJECT_CHANNELS.openProjectFile");
     expect(source).not.toContain("isLegacyProjectDatabaseRecentProject");

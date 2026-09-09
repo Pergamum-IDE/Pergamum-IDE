@@ -129,6 +129,53 @@ describe("application menu", () => {
     expect(applicationMenuCommandIds).toContain(commandPaletteCommandIds.open);
   });
 
+  it("adds the Bulk Text Import command under File > Import", () => {
+    const fileItems = fileMenuItems("win32");
+    const importItems = submenuItems(fileItemByLabel(fileItems, "Import"));
+    const bulkImportItem = fileItemByLabel(
+      importItems,
+      "Bulk Import Text Files..."
+    );
+
+    expect(bulkImportItem.id).toBe(
+      applicationCommandIds.openBulkTextImportDialog
+    );
+    expect(bulkImportItem.accelerator).toBeUndefined();
+  });
+
+  it("localizes the File > Import path in Japanese", () => {
+    const fileItems = submenuItems(
+      findTopLevelMenu(
+        buildApplicationMenu("ja", emptyMenuOptions(), "win32"),
+        "ファイル"
+      )
+    );
+    const importItems = submenuItems(fileItemByLabel(fileItems, "インポート"));
+
+    expect(
+      importItems.some(
+        (item) => item.label === "テキストファイルをまとめてインポート..."
+      )
+    ).toBe(true);
+  });
+
+  it("sends the Bulk Text Import command from the File > Import submenu item", () => {
+    const { window, send } = menuWindowMock();
+    const fileItems = fileMenuItems("win32", { getMainWindow: () => window });
+    const importItems = submenuItems(fileItemByLabel(fileItems, "Import"));
+
+    fileItemByLabel(importItems, "Bulk Import Text Files...").click?.(
+      {} as never,
+      null as never,
+      {} as never
+    );
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      applicationCommandIds.openBulkTextImportDialog
+    );
+  });
+
   it("routes About menu items through the custom app.about.open command", () => {
     const { window, send } = menuWindowMock();
     const helpItems = helpMenuItems("win32", { getMainWindow: () => window });
@@ -543,6 +590,12 @@ describe("application menu", () => {
       );
       expect(assistItems[1]?.id).toBe(assistCommandIds.insertParagraphIndent);
       expect(assistItems[2]?.id).toBe(assistCommandIds.removeParagraphIndent);
+      expect(
+        fileItemByLabel(
+          submenuItems(fileItemByLabel(fileItems, "Import")),
+          "Bulk Import Text Files..."
+        ).id
+      ).toBe(applicationCommandIds.openBulkTextImportDialog);
     });
   });
 });
