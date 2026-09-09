@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeDocumentReplacementTemplateError,
+  buildActiveDocumentReplacement,
   clampActiveFindIndex,
   DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
   evaluateActiveDocumentFind,
+  replacementTemplateErrorTranslationKey,
   resolveActiveFindCursor,
+  resolveActiveFindIndexAfterReplacement,
   runActiveDocumentFind,
   toggleActiveDocumentFindOption
 } from "../../src/renderer/find/activeDocumentFind";
@@ -214,5 +218,159 @@ describe("clampActiveFindIndex (#424 Slice 2 review-note fix)", () => {
 
   it("leaves an in-range index untouched", () => {
     expect(clampActiveFindIndex(2, 5)).toBe(2);
+  });
+});
+
+describe("buildActiveDocumentReplacement (#424 Slice 3)", () => {
+  const plain = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS;
+  const regex = { ...DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS, useRegex: true };
+
+  function firstMatch(text: string, query: string, options = plain) {
+    const m = evaluateActiveDocumentFind(text, query, options).matches[0];
+    if (!m) throw new Error("no match");
+    return m;
+  }
+
+  it("plain mode returns the replacement text verbatim", () => {
+    const text = "one two one";
+    const result = buildActiveDocumentReplacement(
+      text,
+      firstMatch(text, "one"),
+      "1",
+      plain,
+      "one"
+    );
+    expect(result).toEqual({ ok: true, replacement: "1" });
+  });
+
+  it("an empty replacement deletes the match", () => {
+    const text = "keep DROP keep";
+    const result = buildActiveDocumentReplacement(
+      text,
+      firstMatch(text, "DROP"),
+      "",
+      plain,
+      "DROP"
+    );
+    expect(result).toEqual({ ok: true, replacement: "" });
+  });
+
+  it("regex $1 expands the capture group", () => {
+    const text = "value: (foo)";
+    const pattern = String.raw`\((\w+)\)`;
+    const result = buildActiveDocumentReplacement(
+      text,
+      firstMatch(text, pattern, regex),
+      "$1bar",
+      regex,
+      pattern
+    );
+    expect(result).toEqual({ ok: true, replacement: "foobar" });
+  });
+
+  it("regex ${1} and $$ behave like project replace", () => {
+    const text = "ab";
+    const m = firstMatch(text, "(a)(b)", regex);
+    expect(
+      buildActiveDocumentReplacement(text, m, "${2}${1}", regex, "(a)(b)")
+    ).toEqual({ ok: true, replacement: "ba" });
+    expect(
+      buildActiveDocumentReplacement(text, m, "$$1", regex, "(a)(b)")
+    ).toEqual({ ok: true, replacement: "$1" });
+  });
+
+  it("#424 Slice 3 dogfood: $${1} is a literal $ then literal {1} (matches project replace)", () => {
+    const text = "ab";
+    const m = firstMatch(text, "(a)(b)", regex);
+    expect(
+      buildActiveDocumentReplacement(text, m, "$${1}", regex, "(a)(b)")
+    ).toEqual({ ok: true, replacement: "${1}" });
+    // and $$$1 is a literal $ then group 1
+    expect(
+      buildActiveDocumentReplacement(text, m, "$$$1", regex, "(a)(b)")
+    ).toEqual({ ok: true, replacement: "$a" });
+  });
+
+  it("rejects an unsupported / missing-group template in regex mode", () => {
+    const text = "foo";
+    const m = firstMatch(text, "(foo)", regex);
+    expect(
+      buildActiveDocumentReplacement(text, m, "$&", regex, "(foo)")
+    ).toEqual({ ok: false, templateError: "unsupportedSequence" });
+    expect(
+      buildActiveDocumentReplacement(text, m, "$2", regex, "(foo)")
+    ).toEqual({ ok: false, templateError: "missingGroup" });
+  });
+
+  it("a $-template is literal in plain mode", () => {
+    const text = "x";
+    const result = buildActiveDocumentReplacement(
+      text,
+      firstMatch(text, "x"),
+      "$1$&",
+      plain,
+      "x"
+    );
+    expect(result).toEqual({ ok: true, replacement: "$1$&" });
+  });
+});
+
+describe("activeDocumentReplacementTemplateError (#424 Slice 3)", () => {
+  it("is null outside regex mode", () => {
+    expect(
+      activeDocumentReplacementTemplateError(
+        "$&",
+        DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+        "q"
+      )
+    ).toBeNull();
+  });
+
+  it("reports the enum for an invalid template in regex mode", () => {
+    const regex = { ...DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS, useRegex: true };
+    expect(
+      activeDocumentReplacementTemplateError("$&", regex, "(a)")
+    ).toBe("unsupportedSequence");
+    expect(
+      activeDocumentReplacementTemplateError("$3", regex, "(a)")
+    ).toBe("missingGroup");
+    expect(
+      activeDocumentReplacementTemplateError("$1", regex, "(a)")
+    ).toBeNull();
+  });
+
+  it("maps error enums to the shared project-replace i18n keys", () => {
+    expect(replacementTemplateErrorTranslationKey("missingGroup")).toBe(
+      "search.replace.template.missingGroup"
+    );
+    expect(replacementTemplateErrorTranslationKey("unsupportedSequence")).toBe(
+      "search.replace.template.unsupported"
+    );
+    expect(replacementTemplateErrorTranslationKey("ambiguousReference")).toBe(
+      "search.replace.template.unsupported"
+    );
+  });
+});
+
+describe("resolveActiveFindIndexAfterReplacement (#424 Slice 3)", () => {
+  const at = (offsets: number[]) => offsets.map((startOffset) => ({ startOffset }));
+
+  it("returns null when no matches remain", () => {
+    expect(resolveActiveFindIndexAfterReplacement([], 10)).toBeNull();
+  });
+
+  it("picks the first match at or after the replacement start", () => {
+    expect(
+      resolveActiveFindIndexAfterReplacement(at([2, 8, 20]), 8)
+    ).toBe(1);
+    expect(
+      resolveActiveFindIndexAfterReplacement(at([2, 8, 20]), 9)
+    ).toBe(2);
+  });
+
+  it("wraps to the first match when nothing is left after that point", () => {
+    expect(
+      resolveActiveFindIndexAfterReplacement(at([2, 8]), 50)
+    ).toBe(0);
   });
 });

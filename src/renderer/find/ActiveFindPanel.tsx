@@ -1,71 +1,106 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 import type { Translate } from "../../shared/i18n";
 import {
   CASE_SENSITIVE_ICON,
   SearchOptionToggle,
   USE_REGEX_ICON,
-  WHOLE_WORD_ICON
+  WHOLE_WORD_ICON,
+  inlineSearchIcon
 } from "../searchOptionToggle";
-import type { ActiveDocumentFindOptions } from "./activeDocumentFind";
+import replaceCurrentIconRaw from "../../../assets/icons/svgrepo/editor/replace-svgrepo-com.svg?raw";
+import {
+  replacementTemplateErrorTranslationKey,
+  type ActiveDocumentFindOptions,
+  type ReplacementTemplateError
+} from "./activeDocumentFind";
+import type { ActiveFindPanelMode } from "./activeFindKeymapExtension";
+
+const REPLACE_CURRENT_ICON = inlineSearchIcon(replaceCurrentIconRaw);
 
 /**
- * #424 — the Pergamum active-document Find panel.
+ * #424 — the Pergamum active-document Find / Replace panel.
  *
  * A presentational component: the owner (`MarkdownEditorSurface`) holds the
- * query / options / match list / active index and drives every action. The
- * layout is a two-row stack (plus an optional regex-error line) so a later
- * slice can add the `語彙` button and a `検索 / 置換` tab strip without
- * restructuring.
+ * query / replace text / options / match list / active index and drives every
+ * action, including the actual CodeMirror replace transaction.
  *
- * Slice 2 adds the `Ab` / `Aa` / `.*` toggles (shared with the project-wide
- * Search pane via `../searchOptionToggle`), the `マークする` toggle, and the
- * regex-error message.
+ * Slice 3 adds the `検索 / 置換` mode tabs, the replace-text input, and the
+ * icon-only "replace current match" button (`assets/icons/svgrepo/editor/
+ * replace-svgrepo-com.svg`). Focus polish: every button `preventDefault`s its
+ * mousedown so clicking it never pulls focus out of the active text input.
  */
 export interface ActiveFindPanelProps {
   readonly translate: Translate;
+  readonly mode: ActiveFindPanelMode;
   readonly query: string;
+  readonly replaceText: string;
   readonly options: ActiveDocumentFindOptions;
   readonly markAll: boolean;
   /** Non-null while `.*` is on and the pattern does not compile. */
   readonly regexError: string | null;
-  /** Total matches for the current query in the active document. */
+  /** Non-null in Replace mode while `.*` is on and the template is invalid. */
+  readonly templateError: ReplacementTemplateError | null;
+  /** `true` for a read-only project / document — replace is unavailable. */
+  readonly readOnly: boolean;
+  /** Owner-computed: the replace-current button / Enter action is allowed. */
+  readonly replaceCurrentEnabled: boolean;
   readonly matchCount: number;
-  /** 0-based index of the currently highlighted match, or `null`. */
   readonly activeIndex: number | null;
-  /**
-   * Bumped by the owner to re-focus + select the search input — e.g. Ctrl+F
-   * pressed again while the panel is already open.
-   */
+  /** Bumped by the owner to re-focus + select the mode's primary input. */
   readonly focusToken: number;
+  readonly onModeChange: (mode: ActiveFindPanelMode) => void;
   readonly onQueryChange: (query: string) => void;
+  readonly onReplaceTextChange: (replaceText: string) => void;
   readonly onToggleOption: (key: keyof ActiveDocumentFindOptions) => void;
   readonly onToggleMarkAll: () => void;
+  readonly onReplaceCurrent: () => void;
   readonly onNext: () => void;
   readonly onPrevious: () => void;
   readonly onClose: () => void;
 }
 
+/** Shared: a button whose mousedown never steals focus from the text input. */
+function preventFocusSteal(event: ReactMouseEvent): void {
+  event.preventDefault();
+}
+
 export function ActiveFindPanel({
   translate,
+  mode,
   query,
+  replaceText,
   options,
   markAll,
   regexError,
+  templateError,
+  readOnly,
+  replaceCurrentEnabled,
   matchCount,
   activeIndex,
   focusToken,
+  onModeChange,
   onQueryChange,
+  onReplaceTextChange,
   onToggleOption,
   onToggleMarkAll,
+  onReplaceCurrent,
   onNext,
   onPrevious,
   onClose
 }: ActiveFindPanelProps): JSX.Element {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const queryInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Focus + select on mount and whenever the owner bumps `focusToken`.
+  const replaceMode = mode === "replace";
+
+  // Focus + select the query input on mount and whenever the owner bumps
+  // `focusToken` (Ctrl+F / Ctrl+H, or a mode-tab click).
   useEffect(() => {
-    const input = inputRef.current;
+    const input = queryInputRef.current;
     if (!input) {
       return;
     }
@@ -86,27 +121,59 @@ export function ActiveFindPanel({
         })
       : translate("editor.find.noMatches");
 
-  const handleInputKeyDown = (
+  const errorText = hasRegexError
+    ? translate("search.invalidRegex")
+    : replaceMode && templateError !== null
+      ? translate(replacementTemplateErrorTranslationKey(templateError))
+      : replaceMode && readOnly
+        ? translate("editor.find.readOnlyReplaceUnavailable")
+        : null;
+
+  /**
+   * #424 Slice 3 dogfood: while a panel input has focus the CodeMirror keymap
+   * never sees Ctrl+F / Ctrl+H (the editor is not focused), so the panel
+   * switches modes itself. Handled → `preventDefault` + `stopPropagation`.
+   * Returns `true` when it consumed the event.
+   */
+  const handleModeShortcut = (
+    event: ReactKeyboardEvent<HTMLInputElement>
+  ): boolean => {
+    const plainCtrlOrCmd =
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.ctrlKey !== event.metaKey;
+    if (!plainCtrlOrCmd) {
+      return false;
+    }
+    if (event.code === "KeyF") {
+      event.preventDefault();
+      event.stopPropagation();
+      // The owner re-focuses + selects the query input via `focusToken`.
+      onModeChange("search");
+      return true;
+    }
+    if (event.code === "KeyH") {
+      event.preventDefault();
+      event.stopPropagation();
+      onModeChange("replace");
+      return true;
+    }
+    return false;
+  };
+
+  const handleQueryKeyDown = (
     event: ReactKeyboardEvent<HTMLInputElement>
   ): void => {
-    // Never treat a key as a command while the IME is composing.
     if (event.nativeEvent.isComposing) {
+      return;
+    }
+    if (handleModeShortcut(event)) {
       return;
     }
     if (event.key === "Escape") {
       event.preventDefault();
       onClose();
-      return;
-    }
-    if (
-      event.code === "KeyF" &&
-      (event.ctrlKey || event.metaKey) &&
-      !event.altKey &&
-      !event.shiftKey
-    ) {
-      // Ctrl+F inside the panel: keep it here, re-select the query.
-      event.preventDefault();
-      inputRef.current?.select();
       return;
     }
     if (event.key === "Enter") {
@@ -119,15 +186,66 @@ export function ActiveFindPanel({
     }
   };
 
+  const handleReplaceKeyDown = (
+    event: ReactKeyboardEvent<HTMLInputElement>
+  ): void => {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+    if (handleModeShortcut(event)) {
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        onPrevious();
+      } else if (replaceCurrentEnabled) {
+        onReplaceCurrent();
+      }
+    }
+  };
+
   return (
     <div
       className="activeFindPanel"
       role="search"
       aria-label={translate("editor.find.panelLabel")}
     >
+      <div className="activeFindPanelRow activeFindPanelModeRow" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          className="activeFindPanelModeTab"
+          aria-selected={!replaceMode}
+          data-active={!replaceMode ? "true" : undefined}
+          title={translate("editor.find.mode.search")}
+          onMouseDown={preventFocusSteal}
+          onClick={() => onModeChange("search")}
+        >
+          {translate("editor.find.mode.search")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className="activeFindPanelModeTab"
+          aria-selected={replaceMode}
+          data-active={replaceMode ? "true" : undefined}
+          title={translate("editor.find.mode.replace")}
+          onMouseDown={preventFocusSteal}
+          onClick={() => onModeChange("replace")}
+        >
+          {translate("editor.find.mode.replace")}
+        </button>
+      </div>
+
       <div className="activeFindPanelRow activeFindPanelQueryRow">
         <input
-          ref={inputRef}
+          ref={queryInputRef}
           type="text"
           className="activeFindPanelInput"
           data-invalid={hasRegexError ? "true" : undefined}
@@ -137,7 +255,7 @@ export function ActiveFindPanel({
           spellCheck={false}
           autoComplete="off"
           onChange={(event) => onQueryChange(event.currentTarget.value)}
-          onKeyDown={handleInputKeyDown}
+          onKeyDown={handleQueryKeyDown}
         />
         <div
           className="activeFindPanelOptions"
@@ -176,11 +294,29 @@ export function ActiveFindPanel({
           className="activeFindPanelButton activeFindPanelCloseButton"
           aria-label={translate("editor.find.close")}
           title={translate("editor.find.close")}
+          onMouseDown={preventFocusSteal}
           onClick={onClose}
         >
           ×
         </button>
       </div>
+
+      {replaceMode ? (
+        <div className="activeFindPanelRow activeFindPanelReplaceRow">
+          <input
+            type="text"
+            className="activeFindPanelInput activeFindPanelReplaceInput"
+            data-invalid={templateError !== null ? "true" : undefined}
+            value={replaceText}
+            placeholder={translate("editor.find.replacePlaceholder")}
+            aria-label={translate("editor.find.replacePlaceholder")}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(event) => onReplaceTextChange(event.currentTarget.value)}
+            onKeyDown={handleReplaceKeyDown}
+          />
+        </div>
+      ) : null}
 
       <div className="activeFindPanelRow activeFindPanelNavRow">
         <button
@@ -189,6 +325,7 @@ export function ActiveFindPanel({
           aria-label={translate("editor.find.previous")}
           title={translate("editor.find.previous")}
           disabled={!hasMatches}
+          onMouseDown={preventFocusSteal}
           onClick={onPrevious}
         >
           ◀
@@ -199,6 +336,7 @@ export function ActiveFindPanel({
           data-pressed={markAll ? "true" : undefined}
           aria-pressed={markAll}
           title={translate("editor.find.markMatches")}
+          onMouseDown={preventFocusSteal}
           onClick={onToggleMarkAll}
         >
           {translate("editor.find.markMatches")}
@@ -212,15 +350,33 @@ export function ActiveFindPanel({
           aria-label={translate("editor.find.next")}
           title={translate("editor.find.next")}
           disabled={!hasMatches}
+          onMouseDown={preventFocusSteal}
           onClick={onNext}
         >
           ▶
         </button>
+        {replaceMode ? (
+          <button
+            type="button"
+            className="activeFindPanelButton activeFindPanelReplaceCurrentButton"
+            aria-label={translate("editor.find.replaceCurrent")}
+            title={translate("editor.find.replaceCurrentTooltip")}
+            disabled={!replaceCurrentEnabled}
+            onMouseDown={preventFocusSteal}
+            onClick={onReplaceCurrent}
+          >
+            <span
+              className="activeFindPanelReplaceCurrentIcon"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: REPLACE_CURRENT_ICON }}
+            />
+          </button>
+        ) : null}
       </div>
 
-      {hasRegexError ? (
+      {errorText !== null ? (
         <p className="activeFindPanelError" role="alert">
-          {translate("search.invalidRegex")}
+          {errorText}
         </p>
       ) : null}
     </div>

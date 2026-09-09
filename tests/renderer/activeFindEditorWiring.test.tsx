@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MarkdownEditor } from "../../src/renderer/MarkdownEditor";
+import {
+  MarkdownEditor,
+  type MarkdownEditorParagraphIndentController
+} from "../../src/renderer/MarkdownEditor";
 import type { MarkdownEditorActiveFindConfig } from "../../src/renderer/find/activeFindKeymapExtension";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -185,7 +188,8 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
     const headerIndex = source.indexOf('translate("workspace.editor")');
     // the real editor element, not <MarkdownEditorSurface>
     const editorIndex = source.indexOf("<MarkdownEditor\n");
-    const panelIndex = source.indexOf("<ActiveFindPanel");
+    // the JSX element, not `useState<ActiveFindPanelMode>`
+    const panelIndex = source.indexOf("<ActiveFindPanel\n");
     expect(headerIndex).toBeGreaterThan(-1);
     expect(panelIndex).toBeGreaterThan(headerIndex);
     expect(panelIndex).toBeLessThan(editorIndex);
@@ -250,6 +254,158 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
     expect(findRegion).not.toContain("setSidebarMode");
     expect(findRegion).not.toContain("openProjectSearch");
     expect(findRegion).not.toContain("SearchSidebar");
+  });
+});
+
+describe("EditorSurface replace-current wiring (#424 Slice 3)", () => {
+  const source = readFileSync("src/renderer/EditorSurface.tsx", "utf8");
+
+  it("captures the active editor's replace controller by wrapping the bubble-up callback", () => {
+    expect(source).toContain("handleParagraphIndentControllerChange");
+    expect(source).toContain("findReplaceControllerRef.current = controller");
+    expect(source).toContain("onParagraphIndentControllerChange(controller)");
+    expect(source).toContain(
+      "onParagraphIndentControllerChange={\n            handleParagraphIndentControllerChange\n          }"
+    );
+  });
+
+  it("replace-current re-evaluates against the LIVE buffer and dispatches ONE input.replace transaction", () => {
+    const handler = source.slice(
+      source.indexOf("const handleFindReplaceCurrent"),
+      source.indexOf("const handleFindClose")
+    );
+    expect(handler).toContain("controller.getBufferText() ?? content");
+    expect(handler).toContain("evaluateActiveDocumentFind(");
+    expect(handler).toContain("buildActiveDocumentReplacement(");
+    expect(handler).toContain("controller.applyReplaceInBufferChanges([");
+    expect(handler).toContain("resolveActiveFindIndexAfterReplacement(");
+    // no disk save, no project-wide replace
+    expect(handler).not.toContain("saveProjectDocument");
+    expect(handler).not.toContain("writeMarkdown");
+    expect(handler).not.toContain("applyProjectReplace");
+  });
+
+  it("gates replace-current on read-only / regex / template / controller / a live match", () => {
+    const gate = source.slice(
+      source.indexOf("const findReplaceCurrentEnabled ="),
+      source.indexOf("const findReplaceCurrentEnabled =") + 400
+    );
+    expect(gate).toContain('findMode === "replace"');
+    expect(gate).toContain("!readOnly");
+    expect(gate).toContain("findControllerReady");
+    expect(gate).toContain("findRegexError === null");
+    expect(gate).toContain("findTemplateError === null");
+    expect(gate).toContain("findMatchCount > 0");
+    expect(gate).toContain("findActiveIndex !== null");
+  });
+});
+
+describe("MarkdownEditor replace controller for #424 Slice 3", () => {
+  function captureController() {
+    let controller: MarkdownEditorParagraphIndentController | null = null;
+    const { contentDom } = mount({
+      value: "alpha beta alpha",
+      onParagraphIndentControllerChange: (next) => {
+        controller = next;
+      }
+    });
+    return { controller: () => controller!, contentDom };
+  }
+
+  function ctrlZ(): KeyboardEvent {
+    return new KeyboardEvent("keydown", {
+      key: "z",
+      code: "KeyZ",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+  }
+
+  it("getBufferText returns the live document text", () => {
+    const { controller } = captureController();
+    expect(controller().getBufferText()).toBe("alpha beta alpha");
+  });
+
+  it("applyReplaceInBufferChanges replaces one range and Undo restores it (one step)", () => {
+    const { controller, contentDom } = captureController();
+
+    act(() => {
+      controller().applyReplaceInBufferChanges([
+        { from: 0, to: 5, insert: "OMEGA" }
+      ]);
+    });
+    expect(controller().getBufferText()).toBe("OMEGA beta alpha");
+
+    act(() => {
+      contentDom().dispatchEvent(ctrlZ());
+    });
+    expect(controller().getBufferText()).toBe("alpha beta alpha");
+  });
+});
+
+describe("read-only active editor Find shortcuts (#424 Slice 3 dogfood)", () => {
+  function findKeydownOn(): KeyboardEvent {
+    return new KeyboardEvent("keydown", {
+      key: "f",
+      code: "KeyF",
+      ctrlKey: true,
+      isComposing: false,
+      bubbles: true,
+      cancelable: true
+    });
+  }
+
+  it("makes the read-only editor content focusable (tabindex) so its keymap can fire", () => {
+    const { contentDom } = mount({ value: "text", readOnly: true });
+    expect(contentDom().getAttribute("tabindex")).toBe("0");
+    expect(contentDom().getAttribute("contenteditable")).toBe("false");
+  });
+
+  it("a writable editor is unchanged (CodeMirror manages focusability)", () => {
+    const { contentDom } = mount({ value: "text", readOnly: false });
+    expect(contentDom().getAttribute("tabindex")).not.toBe("0");
+    expect(contentDom().getAttribute("contenteditable")).toBe("true");
+  });
+
+  it("reconfigures the tabindex when readOnly flips at runtime", () => {
+    const { contentDom, rerender } = mount({ value: "t", readOnly: false });
+    expect(contentDom().getAttribute("tabindex")).not.toBe("0");
+    rerender({ value: "t", readOnly: true });
+    expect(contentDom().getAttribute("tabindex")).toBe("0");
+    rerender({ value: "t", readOnly: false });
+    expect(contentDom().getAttribute("tabindex")).not.toBe("0");
+  });
+
+  it("Ctrl+F still opens the Find panel on a read-only editor (no mutation possible)", () => {
+    const requestOpen = vi.fn();
+    const { contentDom } = mount({
+      value: "text",
+      readOnly: true,
+      activeFind: { requestOpen }
+    });
+    const event = findKeydownOn();
+    act(() => {
+      contentDom().dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    expect(requestOpen).toHaveBeenCalledWith("search", "");
+  });
+
+  it("applyReplaceInBufferChanges does not mutate a read-only buffer", () => {
+    let controller: MarkdownEditorParagraphIndentController | null = null;
+    mount({
+      value: "keep this",
+      readOnly: true,
+      onParagraphIndentControllerChange: (c) => {
+        controller = c;
+      }
+    });
+    const applied = controller!.applyReplaceInBufferChanges([
+      { from: 0, to: 4, insert: "NOPE" }
+    ]);
+    expect(applied).toBe(false);
+    expect(controller!.getBufferText()).toBe("keep this");
   });
 });
 

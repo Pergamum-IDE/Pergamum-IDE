@@ -15,8 +15,16 @@ import {
   type TextSearchMatch,
   type TextSearchOptions
 } from "../../shared/textSearch";
+import {
+  countCaptureGroups,
+  renderReplacement,
+  validateReplacementTemplate,
+  type ReplacementTemplateError
+} from "../replace/replacementTemplate";
+import type { TranslationKey } from "../../shared/i18n";
 
 export type { TextSearchMatch };
+export type { ReplacementTemplateError };
 
 /**
  * The `Ab` / `Aa` / `.*` toggle state. The shared `TextSearchOptions` shape
@@ -128,6 +136,111 @@ export function toggleActiveDocumentFindOption(
     };
   }
   return { ...options, [key]: next };
+}
+
+// ---------------------------------------------------------------------------
+// #424 Slice 3: Replace-current
+// ---------------------------------------------------------------------------
+
+/**
+ * The replacement string for one match. Plain mode → `replaceText` verbatim
+ * (empty deletes the match). Regex mode → the shared #386 replacement
+ * template (`$1` / `${1}` / `$$`) expanded against this match's capture
+ * groups, re-`exec`'d at the match position against `text`.
+ *
+ * `ok:false` only in regex mode, when the template does not parse / references
+ * a missing group — mirrors the project-wide Replace preflight exactly.
+ */
+export type ActiveDocumentReplacementResult =
+  | { readonly ok: true; readonly replacement: string }
+  | { readonly ok: false; readonly templateError: ReplacementTemplateError };
+
+export function buildActiveDocumentReplacement(
+  text: string,
+  match: TextSearchMatch,
+  replaceText: string,
+  options: ActiveDocumentFindOptions,
+  query: string
+): ActiveDocumentReplacementResult {
+  if (!options.useRegex) {
+    return { ok: true, replacement: replaceText };
+  }
+
+  const validation = validateReplacementTemplate(
+    replaceText,
+    countCaptureGroups(query)
+  );
+  if (!validation.ok) {
+    return { ok: false, templateError: validation.error };
+  }
+
+  const { regex } = compileSearchRegex(query, options.caseSensitive);
+  if (regex === null) {
+    // The caller gates on `regexError` first, so this is unreachable in
+    // practice; treat the template as literal rather than throw.
+    return { ok: true, replacement: replaceText };
+  }
+  regex.lastIndex = match.startOffset;
+  const exec = regex.exec(text);
+  const captureArray: readonly (string | undefined)[] =
+    exec && exec.index === match.startOffset ? exec : [match.matchedText];
+
+  return {
+    ok: true,
+    replacement: renderReplacement(validation.tokens, captureArray)
+  };
+}
+
+/**
+ * The template-error (if any) for the current Replace-mode inputs — used to
+ * disable the replace-current button and show a message. `null` outside regex
+ * mode or when the template is fine.
+ */
+export function activeDocumentReplacementTemplateError(
+  replaceText: string,
+  options: ActiveDocumentFindOptions,
+  query: string
+): ReplacementTemplateError | null {
+  if (!options.useRegex) {
+    return null;
+  }
+  const validation = validateReplacementTemplate(
+    replaceText,
+    countCaptureGroups(query)
+  );
+  return validation.ok ? null : validation.error;
+}
+
+/**
+ * i18n key for a replacement-template error — the SAME mapping the
+ * project-wide Replace uses (`missingGroup` → its own key, everything else →
+ * the generic "unsupported capture reference" message).
+ */
+export function replacementTemplateErrorTranslationKey(
+  error: ReplacementTemplateError
+): TranslationKey {
+  return error === "missingGroup"
+    ? "search.replace.template.missingGroup"
+    : "search.replace.template.unsupported";
+}
+
+/**
+ * Where the active index should land after a replace: the first match whose
+ * start is at or after `replacementStartOffset` (so navigation continues
+ * forward from where the replaced text was), wrapping to the first match when
+ * none is left after that point. `null` when nothing matches any more.
+ */
+export function resolveActiveFindIndexAfterReplacement(
+  matches: readonly Pick<TextSearchMatch, "startOffset">[],
+  replacementStartOffset: number
+): number | null {
+  if (matches.length === 0) {
+    return null;
+  }
+  const at = matches.findIndex(
+    (m) => m.startOffset >= replacementStartOffset
+  );
+  return at === -1 ? 0 : at;
 }
 
 export type ActiveFindCursorDirection = "next" | "previous";

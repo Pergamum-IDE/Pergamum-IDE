@@ -59,6 +59,9 @@ export function SearchOptionToggle({
       aria-label={label}
       title={hint}
       disabled={disabled}
+      // #424 Slice 3 focus polish: toggling an option must not pull focus out
+      // of the adjacent search / replace input in real Chromium.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onToggle}
     >
       <span

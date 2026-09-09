@@ -137,6 +137,28 @@ export interface MarkdownEditorDocumentStateOptions {
 }
 
 /**
+ * The contents of the shared `readOnlyCompartment` for a given read-only
+ * state. Built here (and reused by MarkdownEditor.tsx's reconfigure sites) so
+ * the three places that set it never drift.
+ *
+ * #424 Slice 3 dogfood: a read-only editor is `contenteditable="false"` and so
+ * NOT focusable, which means its keymap — including the Ctrl+F / Ctrl+H that
+ * open the active-document Find / Replace panel — never fires. `tabindex="0"`
+ * makes the content focusable (click / `view.focus()`) again while
+ * `EditorState.readOnly` still blocks every edit. A writable editor is left
+ * exactly as before (CodeMirror manages its own focusability).
+ */
+export function readOnlyCompartmentContent(readOnly: boolean): Extension[] {
+  return [
+    EditorState.readOnly.of(readOnly),
+    EditorView.editable.of(!readOnly),
+    ...(readOnly
+      ? [EditorView.contentAttributes.of({ tabindex: "0" })]
+      : [])
+  ];
+}
+
+/**
  * Builds a brand-new `EditorState` for one document — used both for the
  * very first document an editor instance shows (mount) and for any later
  * document that has no cached state yet (first-ever switch to it).
@@ -172,10 +194,9 @@ export function createMarkdownEditorDocumentState(
       }),
       markdown(),
       EditorView.lineWrapping,
-      options.readOnlyCompartment.of([
-        EditorState.readOnly.of(options.readOnlyRef.current),
-        EditorView.editable.of(!options.readOnlyRef.current)
-      ]),
+      options.readOnlyCompartment.of(
+        readOnlyCompartmentContent(options.readOnlyRef.current)
+      ),
       options.visibilityCompartment.of(
         createVisibilityExtension(
           createLineEndingVisibilityFeatures(

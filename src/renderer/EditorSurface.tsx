@@ -45,13 +45,18 @@ import {
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import {
   DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+  activeDocumentReplacementTemplateError,
+  buildActiveDocumentReplacement,
   clampActiveFindIndex,
   evaluateActiveDocumentFind,
   resolveActiveFindCursor,
+  resolveActiveFindIndexAfterReplacement,
   toggleActiveDocumentFindOption,
-  type ActiveDocumentFindOptions
+  type ActiveDocumentFindOptions,
+  type ReplacementTemplateError
 } from "./find/activeDocumentFind";
 import type { ActiveFindHighlightSpec } from "./find/activeFindHighlightExtension";
+import type { ActiveFindPanelMode } from "./find/activeFindKeymapExtension";
 import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
 import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
 import { formatMarkdownImageLinkDiagnosticMessage } from "./markdownImageLinkDiagnosticMessage";
@@ -888,9 +893,26 @@ function MarkdownEditorSurface({
   // `activeFindHighlight` prop. No App.tsx wiring, no project-wide Search.
   // -------------------------------------------------------------------------
   const [findOpen, setFindOpen] = useState(false);
+  const [findMode, setFindMode] = useState<ActiveFindPanelMode>("search");
   const [findQuery, setFindQuery] = useState("");
+  const [findReplaceText, setFindReplaceText] = useState("");
   const [findOptions, setFindOptions] = useState<ActiveDocumentFindOptions>(
     DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS
+  );
+  // #424 Slice 3: the active editor's replace-transaction controller, captured
+  // by wrapping the bubble-up callback so replace-current can dispatch a real
+  // `input.replace` transaction without any App.tsx wiring. `ready` mirrors it
+  // in state so the button's enabled/disabled is reactive.
+  const findReplaceControllerRef =
+    useRef<MarkdownEditorParagraphIndentController | null>(null);
+  const [findControllerReady, setFindControllerReady] = useState(false);
+  const handleParagraphIndentControllerChange = useCallback(
+    (controller: MarkdownEditorParagraphIndentController | null) => {
+      findReplaceControllerRef.current = controller;
+      setFindControllerReady(controller !== null);
+      onParagraphIndentControllerChange(controller);
+    },
+    [onParagraphIndentControllerChange]
   );
   // #424 Slice 2: "マークする" defaults ON — a Find panel that highlights
   // nothing reads as broken. The toggle lets the user quiet it.
@@ -925,6 +947,30 @@ function MarkdownEditorSurface({
     () => JSON.stringify([findQuery, findOptions]),
     [findQuery, findOptions]
   );
+
+  // #424 Slice 3: replacement-template error (regex mode only) + the single
+  // "can replace-current run" gate, both owner-computed so the panel stays
+  // presentational.
+  const findTemplateError = useMemo<ReplacementTemplateError | null>(
+    () =>
+      findOpen && findMode === "replace"
+        ? activeDocumentReplacementTemplateError(
+            findReplaceText,
+            findOptions,
+            findQuery
+          )
+        : null,
+    [findOpen, findMode, findReplaceText, findOptions, findQuery]
+  );
+  const findReplaceCurrentEnabled =
+    findOpen &&
+    findMode === "replace" &&
+    !readOnly &&
+    findControllerReady &&
+    findRegexError === null &&
+    findTemplateError === null &&
+    findMatchCount > 0 &&
+    findActiveIndex !== null;
 
   const jumpToFindMatch = useCallback(
     (match: { startOffset: number; endOffset: number }) => {
@@ -985,7 +1031,9 @@ function MarkdownEditorSurface({
   // per-document Find state yet).
   useEffect(() => {
     setFindOpen(false);
+    setFindMode("search");
     setFindQuery("");
+    setFindReplaceText("");
     setFindOptions(DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS);
     setFindActiveIndex(null);
     setFindExtraSelection(null);
@@ -993,8 +1041,9 @@ function MarkdownEditorSurface({
 
   const activeFindConfig = useMemo<MarkdownEditorActiveFindConfig>(
     () => ({
-      requestOpen: (initialQuery: string) => {
+      requestOpen: (mode, initialQuery) => {
         setFindOpen(true);
+        setFindMode(mode);
         setFindFocusToken((token) => token + 1);
         if (initialQuery.length > 0) {
           setFindQuery(initialQuery);
@@ -1004,8 +1053,18 @@ function MarkdownEditorSurface({
     []
   );
 
+  const handleFindModeChange = useCallback((mode: ActiveFindPanelMode) => {
+    setFindMode(mode);
+    // Return focus to the query input (the panel's focus effect handles it).
+    setFindFocusToken((token) => token + 1);
+  }, []);
+
   const handleFindQueryChange = useCallback((next: string) => {
     setFindQuery(next);
+  }, []);
+
+  const handleFindReplaceTextChange = useCallback((next: string) => {
+    setFindReplaceText(next);
   }, []);
 
   const handleFindToggleOption = useCallback(
@@ -1044,6 +1103,87 @@ function MarkdownEditorSurface({
       jumpToFindMatch(findMatches[nextIndex]);
     }
   }, [findMatches, findActiveIndex, jumpToFindMatch]);
+
+  // #424 Slice 3: replace the CURRENT match only, through the active editor's
+  // `input.replace` transaction (one undo step). Re-evaluates against the
+  // live buffer text right before dispatch so a stale `content` prop can
+  // never place the edit at the wrong offset. Never touches disk, an
+  // inactive tab, a closed document, or the project-wide replace path.
+  const handleFindReplaceCurrent = useCallback(() => {
+    if (readOnly || findRegexError !== null) {
+      return;
+    }
+    const controller = findReplaceControllerRef.current;
+    if (!controller) {
+      return;
+    }
+
+    const liveText = controller.getBufferText() ?? content;
+    const evaluation = evaluateActiveDocumentFind(
+      liveText,
+      findQuery,
+      findOptions
+    );
+    if (evaluation.regexError !== null || evaluation.matches.length === 0) {
+      return;
+    }
+    const index = clampActiveFindIndex(
+      findActiveIndex,
+      evaluation.matches.length
+    );
+    if (index === null) {
+      return;
+    }
+    const match = evaluation.matches[index];
+
+    const built = buildActiveDocumentReplacement(
+      liveText,
+      match,
+      findReplaceText,
+      findOptions,
+      findQuery
+    );
+    if (!built.ok) {
+      return;
+    }
+
+    const applied = controller.applyReplaceInBufferChanges([
+      {
+        from: match.startOffset,
+        to: match.endOffset,
+        insert: built.replacement
+      }
+    ]);
+    if (!applied) {
+      return;
+    }
+
+    // The buffer just changed — recompute against the NEW live text and move
+    // to the first match at/after where the replacement started.
+    const afterText = controller.getBufferText() ?? liveText;
+    const afterMatches = evaluateActiveDocumentFind(
+      afterText,
+      findQuery,
+      findOptions
+    ).matches;
+    const nextIndex = resolveActiveFindIndexAfterReplacement(
+      afterMatches,
+      match.startOffset
+    );
+    setFindActiveIndex(nextIndex);
+    if (nextIndex !== null) {
+      jumpToFindMatch(afterMatches[nextIndex]);
+    }
+  }, [
+    readOnly,
+    findRegexError,
+    content,
+    findQuery,
+    findOptions,
+    findReplaceText,
+    findActiveIndex,
+    jumpToFindMatch
+  ]);
 
   const handleFindClose = useCallback(() => {
     setFindOpen(false);
@@ -1178,16 +1318,24 @@ function MarkdownEditorSurface({
         {findOpen ? (
           <ActiveFindPanel
             translate={translate}
+            mode={findMode}
             query={findQuery}
+            replaceText={findReplaceText}
             options={findOptions}
             markAll={findMarkAll}
             regexError={findRegexError}
+            templateError={findTemplateError}
+            readOnly={readOnly}
+            replaceCurrentEnabled={findReplaceCurrentEnabled}
             matchCount={findMatchCount}
             activeIndex={findActiveIndex}
             focusToken={findFocusToken}
+            onModeChange={handleFindModeChange}
             onQueryChange={handleFindQueryChange}
+            onReplaceTextChange={handleFindReplaceTextChange}
             onToggleOption={handleFindToggleOption}
             onToggleMarkAll={handleFindToggleMarkAll}
+            onReplaceCurrent={handleFindReplaceCurrent}
             onNext={handleFindNext}
             onPrevious={handleFindPrevious}
             onClose={handleFindClose}
@@ -1201,7 +1349,9 @@ function MarkdownEditorSurface({
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}
           activeFindHighlight={activeFindHighlight}
-          onParagraphIndentControllerChange={onParagraphIndentControllerChange}
+          onParagraphIndentControllerChange={
+            handleParagraphIndentControllerChange
+          }
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
           onImageAttachmentPositionControllerChange={

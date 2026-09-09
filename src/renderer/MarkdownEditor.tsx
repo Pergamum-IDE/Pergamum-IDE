@@ -52,6 +52,7 @@ import {
 } from "./find/activeFindHighlightExtension";
 import {
   createMarkdownEditorDocumentState,
+  readOnlyCompartmentContent,
   type MarkdownEditorDocumentState
 } from "./markdownEditorDocumentState";
 import {
@@ -314,6 +315,13 @@ export interface MarkdownEditorParagraphIndentController {
   applyReplaceInBufferChanges(
     changes: readonly ParagraphIndentChange[]
   ): boolean;
+  /**
+   * #424 Slice 3: the live buffer text of the shared active EditorView, or
+   * `null` when no view is mounted. The active-document Find panel re-reads
+   * this immediately before a replace so it never applies match offsets that
+   * were computed against a slightly-stale React `content` prop.
+   */
+  getBufferText(): string | null;
   /**
    * #386 Project Documents Replace: after the file was saved to disk, refresh
    * the live view to the saved content. This is a disk SYNC, not an edit -
@@ -775,10 +783,9 @@ export function MarkdownEditor({
     lineEndingField: StateField<LineEndingBreakSet>
   ) {
     return [
-      readOnlyCompartment.reconfigure([
-        EditorState.readOnly.of(readOnlyRef.current),
-        EditorView.editable.of(!readOnlyRef.current)
-      ]),
+      readOnlyCompartment.reconfigure(
+        readOnlyCompartmentContent(readOnlyRef.current)
+      ),
       visibilityCompartment.reconfigure(
         createVisibilityExtension(
           createLineEndingVisibilityFeatures(
@@ -1042,6 +1049,7 @@ export function MarkdownEditor({
         dispatchBufferChanges(changes, undefined),
       applyReplaceInBufferChanges: (changes) =>
         dispatchBufferChanges(changes, "input.replace"),
+      getBufferText: () => viewRef.current?.state.doc.toString() ?? null,
       syncBufferToDiskContent: (fullText, breaks) => {
         const view = viewRef.current;
         if (!view) {
@@ -1144,10 +1152,9 @@ export function MarkdownEditor({
     }
 
     view.dispatch({
-      effects: readOnlyCompartment.reconfigure([
-        EditorState.readOnly.of(readOnly),
-        EditorView.editable.of(!readOnly)
-      ])
+      effects: readOnlyCompartment.reconfigure(
+        readOnlyCompartmentContent(readOnly)
+      )
     });
   }, [readOnly]);
 

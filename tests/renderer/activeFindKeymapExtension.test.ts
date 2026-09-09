@@ -53,7 +53,45 @@ function findKeydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEvent 
   });
 }
 
-describe("createActiveFindKeymapExtension (#424 Slice 1)", () => {
+function replaceKeydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEvent {
+  return new KeyboardEvent("keydown", {
+    key: "h",
+    code: "KeyH",
+    ctrlKey: true,
+    isComposing: false,
+    bubbles: true,
+    cancelable: true,
+    ...overrides
+  });
+}
+
+describe("createActiveFindKeymapExtension (#424)", () => {
+  it("Ctrl+F opens in search mode, Ctrl+H opens in replace mode; both preventDefault", () => {
+    const requestOpen = vi.fn();
+    const testView = createView({ config: { requestOpen } });
+
+    const fEvent = findKeydown();
+    testView.contentDOM.dispatchEvent(fEvent);
+    expect(fEvent.defaultPrevented).toBe(true);
+    expect(requestOpen).toHaveBeenNthCalledWith(1, "search", "");
+
+    const hEvent = replaceKeydown();
+    testView.contentDOM.dispatchEvent(hEvent);
+    expect(hEvent.defaultPrevented).toBe(true);
+    expect(requestOpen).toHaveBeenNthCalledWith(2, "replace", "");
+  });
+
+  it("also handles Cmd+H (metaKey) for macOS replace mode", () => {
+    const requestOpen = vi.fn();
+    const testView = createView({ config: { requestOpen } });
+
+    const event = replaceKeydown({ ctrlKey: false, metaKey: true });
+    testView.contentDOM.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(requestOpen).toHaveBeenCalledWith("replace", "");
+  });
+
   it("calls requestOpen and preventDefaults Ctrl+F when a config is supplied", () => {
     const requestOpen = vi.fn();
     const testView = createView({ config: { requestOpen } });
@@ -117,12 +155,13 @@ describe("createActiveFindKeymapExtension (#424 Slice 1)", () => {
     expect(requestOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores Ctrl+Shift+F and Ctrl+Alt+F", () => {
+  it("ignores Ctrl+Shift+F / Ctrl+Alt+F / Ctrl+Shift+H", () => {
     const requestOpen = vi.fn();
     const testView = createView({ config: { requestOpen } });
 
     testView.contentDOM.dispatchEvent(findKeydown({ shiftKey: true }));
     testView.contentDOM.dispatchEvent(findKeydown({ altKey: true }));
+    testView.contentDOM.dispatchEvent(replaceKeydown({ shiftKey: true }));
 
     expect(requestOpen).not.toHaveBeenCalled();
   });
@@ -137,7 +176,7 @@ describe("createActiveFindKeymapExtension (#424 Slice 1)", () => {
 
     testView.contentDOM.dispatchEvent(findKeydown());
 
-    expect(requestOpen).toHaveBeenCalledWith("quick");
+    expect(requestOpen).toHaveBeenCalledWith("search", "quick");
   });
 
   it("passes an empty seed for an empty or multi-line selection", () => {
@@ -150,7 +189,7 @@ describe("createActiveFindKeymapExtension (#424 Slice 1)", () => {
 
     testView.contentDOM.dispatchEvent(findKeydown());
 
-    expect(requestOpen).toHaveBeenCalledWith("");
+    expect(requestOpen).toHaveBeenCalledWith("search", "");
   });
 });
 
