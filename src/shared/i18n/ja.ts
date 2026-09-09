@@ -667,6 +667,7 @@ export const jaTranslations = {
   "editor.find.previous": "前へ",
   "editor.find.next": "次へ",
   "editor.find.close": "閉じる",
+  "editor.find.markMatches": "一致箇所をマーク",
   "editor.find.noMatches": "一致なし",
   "editor.find.matchCount": "{current} / {total}",
   "glossary.addEntry": "語彙を追加",

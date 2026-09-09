@@ -107,6 +107,77 @@ describe("MarkdownEditor activeFind prop wiring (#424 Slice 1)", () => {
   });
 });
 
+describe("MarkdownEditor activeFindHighlight prop wiring (#424 Slice 2)", () => {
+  function marks(): NodeListOf<Element> {
+    return container!.querySelectorAll(".cm-pergamum-findMatch");
+  }
+
+  it("paints a highlight span per range and marks the active one", () => {
+    const { rerender } = mount({ value: "foo foo foo" });
+    rerender({
+      value: "foo foo foo",
+      activeFindHighlight: {
+        matches: [
+          { from: 0, to: 3 },
+          { from: 4, to: 7 },
+          { from: 8, to: 11 }
+        ],
+        activeIndex: 1
+      }
+    });
+
+    expect(marks()).toHaveLength(3);
+    expect(
+      container!.querySelectorAll(".cm-pergamum-findMatch-active")
+    ).toHaveLength(1);
+  });
+
+  it("clears every highlight when the prop goes back to null", () => {
+    const { rerender } = mount({
+      value: "foo foo",
+      activeFindHighlight: {
+        matches: [
+          { from: 0, to: 3 },
+          { from: 4, to: 7 }
+        ],
+        activeIndex: 0
+      }
+    });
+    expect(marks()).toHaveLength(2);
+
+    rerender({ value: "foo foo", activeFindHighlight: null });
+    expect(marks()).toHaveLength(0);
+  });
+
+  it("does not carry highlights across a document switch", () => {
+    const { rerender } = mount({
+      value: "foo foo",
+      documentKey: "doc-a",
+      activeFindHighlight: {
+        matches: [{ from: 0, to: 3 }],
+        activeIndex: 0
+      }
+    });
+    expect(marks()).toHaveLength(1);
+
+    // switch to another document; the panel would also close and drop the prop
+    rerender({
+      value: "bar bar",
+      documentKey: "doc-b",
+      activeFindHighlight: null
+    });
+    expect(marks()).toHaveLength(0);
+
+    // switching back must NOT restore the stale highlight
+    rerender({
+      value: "foo foo",
+      documentKey: "doc-a",
+      activeFindHighlight: null
+    });
+    expect(marks()).toHaveLength(0);
+  });
+});
+
 describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
   const source = readFileSync("src/renderer/EditorSurface.tsx", "utf8");
 
@@ -121,31 +192,46 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
     expect(source).toContain("{findOpen ? (");
   });
 
-  it("threads the Find config + navigation + focus-return props into MarkdownEditor", () => {
+  it("threads the Find config + navigation + focus-return + highlight props into MarkdownEditor", () => {
     expect(source).toContain("activeFind={activeFindConfig}");
     expect(source).toContain("extraPendingSelection={findExtraSelection}");
     expect(source).toContain(
       "onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}"
     );
     expect(source).toContain("extraFocusRequest={findFocusRequest}");
+    expect(source).toContain("activeFindHighlight={activeFindHighlight}");
   });
 
   it("searches the active buffer via the shared matcher and reuses the selection-jump path", () => {
+    expect(source).toContain('from "./find/activeDocumentFind"');
     expect(source).toContain(
-      'from "./find/activeDocumentFind"'
+      "evaluateActiveDocumentFind(content, findQuery, findOptions)"
     );
-    expect(source).toContain("runActiveDocumentFind(content, findQuery)");
     expect(source).toContain("resolveActiveFindCursor(");
     // navigation jumps must not steal focus out of the search box
     expect(source).toContain("focusEditor: false");
   });
 
-  it("closes the panel on a genuine tab switch and returns focus on close", () => {
+  it("#424 Slice 2: options exclusivity, index clamp, and mark-all highlight are all local", () => {
+    expect(source).toContain("toggleActiveDocumentFindOption(");
+    expect(source).toContain("clampActiveFindIndex(current, findMatchCount)");
+    // mark-all set is only non-null for an open panel with a valid match
+    const highlightMemo = source.slice(
+      source.indexOf("const activeFindHighlight = useMemo"),
+      source.indexOf("const activeFindHighlight = useMemo") + 500
+    );
+    expect(highlightMemo).toContain("!findOpen || !findMarkAll || findMatchCount === 0");
+  });
+
+  it("closes the panel + resets inputs on a genuine tab switch and returns focus on close", () => {
     const closeEffect = source.slice(
       source.indexOf("// A genuine tab switch closes the panel"),
-      source.indexOf("// A genuine tab switch closes the panel") + 320
+      source.indexOf("// A genuine tab switch closes the panel") + 400
     );
     expect(closeEffect).toContain("setFindOpen(false)");
+    expect(closeEffect).toContain(
+      "setFindOptions(DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS)"
+    );
     expect(closeEffect).toContain("}, [documentKey]);");
 
     const closeHandler = source.slice(
@@ -158,7 +244,7 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
 
   it("does not open the project-wide Search pane", () => {
     const findRegion = source.slice(
-      source.indexOf("#424 Slice 1: active-document Find panel"),
+      source.indexOf("#424: active-document Find panel"),
       source.indexOf("handleFindExtraSelectionApplied")
     );
     expect(findRegion).not.toContain("setSidebarMode");

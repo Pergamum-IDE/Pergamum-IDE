@@ -44,9 +44,14 @@ import {
 } from "./MarkdownEditor";
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import {
+  DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+  clampActiveFindIndex,
+  evaluateActiveDocumentFind,
   resolveActiveFindCursor,
-  runActiveDocumentFind
+  toggleActiveDocumentFindOption,
+  type ActiveDocumentFindOptions
 } from "./find/activeDocumentFind";
+import type { ActiveFindHighlightSpec } from "./find/activeFindHighlightExtension";
 import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
 import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
 import { formatMarkdownImageLinkDiagnosticMessage } from "./markdownImageLinkDiagnosticMessage";
@@ -873,16 +878,23 @@ function MarkdownEditorSurface({
   const previewPaneRef = useRef<HTMLElement | null>(null);
 
   // -------------------------------------------------------------------------
-  // #424 Slice 1: active-document Find panel.
+  // #424: active-document Find panel.
   //
   // Everything is local to this component — the panel searches only THIS
   // editor's current buffer (`content`), navigation reuses the same
   // "select + reveal" transaction the Outline / Go to Line jumps use (via
-  // the dedicated `extraPendingSelection` prop), and closing returns focus
-  // through `extraFocusRequest`. No App.tsx wiring, no project-wide Search.
+  // the dedicated `extraPendingSelection` prop), closing returns focus
+  // through `extraFocusRequest`, and "マークする" highlights ride the
+  // `activeFindHighlight` prop. No App.tsx wiring, no project-wide Search.
   // -------------------------------------------------------------------------
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
+  const [findOptions, setFindOptions] = useState<ActiveDocumentFindOptions>(
+    DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS
+  );
+  // #424 Slice 2: "マークする" defaults ON — a Find panel that highlights
+  // nothing reads as broken. The toggle lets the user quiet it.
+  const [findMarkAll, setFindMarkAll] = useState(true);
   const [findActiveIndex, setFindActiveIndex] = useState<number | null>(null);
   const [findFocusToken, setFindFocusToken] = useState(0);
   const [findExtraSelection, setFindExtraSelection] = useState<{
@@ -894,18 +906,25 @@ function MarkdownEditorSurface({
   const [findFocusRequest, setFindFocusRequest] =
     useState<MarkdownEditorFocusRequest | null>(null);
   const findFocusRequestSeqRef = useRef(0);
-  // The query the panel last auto-jumped for — so editing the document under
-  // an open panel updates the match count without yanking the viewport.
-  const findSeededQueryRef = useRef<string | null>(null);
+  // The (query + options) combination the panel last auto-jumped for — so
+  // editing the document under an open panel updates the count without
+  // yanking the viewport, but changing a search input DOES re-seed.
+  const findSeededInputKeyRef = useRef<string | null>(null);
 
-  const findMatches = useMemo(
+  const findEvaluation = useMemo(
     () =>
       findOpen && findQuery.length > 0
-        ? runActiveDocumentFind(content, findQuery)
-        : [],
-    [findOpen, findQuery, content]
+        ? evaluateActiveDocumentFind(content, findQuery, findOptions)
+        : { matches: [], regexError: null },
+    [findOpen, findQuery, findOptions, content]
   );
+  const findMatches = findEvaluation.matches;
+  const findRegexError = findEvaluation.regexError;
   const findMatchCount = findMatches.length;
+  const findInputKey = useMemo(
+    () => JSON.stringify([findQuery, findOptions]),
+    [findQuery, findOptions]
+  );
 
   const jumpToFindMatch = useCallback(
     (match: { startOffset: number; endOffset: number }) => {
@@ -919,30 +938,55 @@ function MarkdownEditorSurface({
     []
   );
 
-  // Re-seed the active index + jump when the QUERY changes (not on every
-  // keystroke in the document).
+  // Re-seed the active index + jump when a SEARCH INPUT changes (query or an
+  // option) — not on every keystroke in the document.
   useEffect(() => {
     if (!findOpen) {
-      findSeededQueryRef.current = null;
+      findSeededInputKeyRef.current = null;
       return;
     }
-    if (findSeededQueryRef.current === findQuery) {
+    if (findSeededInputKeyRef.current === findInputKey) {
       return;
     }
-    findSeededQueryRef.current = findQuery;
+    findSeededInputKeyRef.current = findInputKey;
     if (findMatches.length > 0) {
       setFindActiveIndex(0);
       jumpToFindMatch(findMatches[0]);
     } else {
       setFindActiveIndex(null);
     }
-  }, [findOpen, findQuery, findMatches, jumpToFindMatch]);
+  }, [findOpen, findInputKey, findMatches, jumpToFindMatch]);
 
-  // A genuine tab switch closes the panel (Slice 1 keeps no per-document
-  // Find state).
+  // #424 Slice 2: clamp the active index into range after the match set
+  // changes under an open panel (document edited, count shrank).
+  useEffect(() => {
+    setFindActiveIndex((current) =>
+      clampActiveFindIndex(current, findMatchCount)
+    );
+  }, [findMatchCount]);
+
+  // #424 Slice 2: the "mark all" highlight set for the active document —
+  // null (no highlights) unless the panel is open, mark-all is on, the
+  // query is valid and non-empty, and there is at least one match.
+  const activeFindHighlight = useMemo<ActiveFindHighlightSpec | null>(() => {
+    if (!findOpen || !findMarkAll || findMatchCount === 0) {
+      return null;
+    }
+    return {
+      matches: findMatches.map((match) => ({
+        from: match.startOffset,
+        to: match.endOffset
+      })),
+      activeIndex: findActiveIndex
+    };
+  }, [findOpen, findMarkAll, findMatchCount, findMatches, findActiveIndex]);
+
+  // A genuine tab switch closes the panel and resets its inputs (no
+  // per-document Find state yet).
   useEffect(() => {
     setFindOpen(false);
     setFindQuery("");
+    setFindOptions(DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS);
     setFindActiveIndex(null);
     setFindExtraSelection(null);
   }, [documentKey]);
@@ -962,6 +1006,19 @@ function MarkdownEditorSurface({
 
   const handleFindQueryChange = useCallback((next: string) => {
     setFindQuery(next);
+  }, []);
+
+  const handleFindToggleOption = useCallback(
+    (key: keyof ActiveDocumentFindOptions) => {
+      setFindOptions((current) =>
+        toggleActiveDocumentFindOption(current, key)
+      );
+    },
+    []
+  );
+
+  const handleFindToggleMarkAll = useCallback(() => {
+    setFindMarkAll((current) => !current);
   }, []);
 
   const handleFindNext = useCallback(() => {
@@ -1122,10 +1179,15 @@ function MarkdownEditorSurface({
           <ActiveFindPanel
             translate={translate}
             query={findQuery}
+            options={findOptions}
+            markAll={findMarkAll}
+            regexError={findRegexError}
             matchCount={findMatchCount}
             activeIndex={findActiveIndex}
             focusToken={findFocusToken}
             onQueryChange={handleFindQueryChange}
+            onToggleOption={handleFindToggleOption}
+            onToggleMarkAll={handleFindToggleMarkAll}
             onNext={handleFindNext}
             onPrevious={handleFindPrevious}
             onClose={handleFindClose}
@@ -1138,6 +1200,7 @@ function MarkdownEditorSurface({
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}
+          activeFindHighlight={activeFindHighlight}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}

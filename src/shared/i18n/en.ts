@@ -668,6 +668,7 @@ export const enTranslations = {
   "editor.find.previous": "Previous",
   "editor.find.next": "Next",
   "editor.find.close": "Close",
+  "editor.find.markMatches": "Mark matches",
   "editor.find.noMatches": "No matches",
   "editor.find.matchCount": "{current} / {total}",
   "glossary.addEntry": "Add glossary entry",

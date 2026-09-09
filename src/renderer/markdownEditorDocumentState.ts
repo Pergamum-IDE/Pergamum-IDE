@@ -55,6 +55,7 @@ import {
   createActiveFindKeymapExtension,
   type MarkdownEditorActiveFindConfig
 } from "./find/activeFindKeymapExtension";
+import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
 import { createMarkdownImageAttachmentPositionTrackingExtension } from "./markdownImageAttachmentPositionTracker";
 import {
@@ -196,6 +197,9 @@ export function createMarkdownEditorDocumentState(
       createActiveFindKeymapExtension({
         getConfig: () => options.activeFindRef?.current ?? null
       }),
+      // #424 Slice 2: inert until the Find panel dispatches its first
+      // "mark all" effect; safe on every document's state.
+      activeFindHighlightField,
       createMarkdownImageAttachmentPositionTrackingExtension(),
       createMarkdownImageAttachmentPasteExtension(imageAttachmentPasteOptions),
       ...(options.imageLinkDiagnosticsOptions

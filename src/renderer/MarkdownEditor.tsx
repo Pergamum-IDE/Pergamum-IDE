@@ -45,6 +45,12 @@ import {
 import type { MarkdownEditorGlossaryCompletionConfig } from "./glossaryCompletionExtension";
 import type { MarkdownEditorActiveFindConfig } from "./find/activeFindKeymapExtension";
 import {
+  activeFindHighlightField,
+  clearActiveFindHighlightsEffect,
+  setActiveFindHighlightsEffect,
+  type ActiveFindHighlightSpec
+} from "./find/activeFindHighlightExtension";
+import {
   createMarkdownEditorDocumentState,
   type MarkdownEditorDocumentState
 } from "./markdownEditorDocumentState";
@@ -240,6 +246,13 @@ interface MarkdownEditorProps {
    * spaces never collide. Applied once per new id for the current document.
    */
   extraFocusRequest?: MarkdownEditorFocusRequest | null;
+  /**
+   * #424 Slice 2: the "マークする" (mark all) highlight set for the ACTIVE
+   * document. `null` clears every highlight (panel closed, mark-all off,
+   * empty query, invalid regex, no matches). Ranges are in the current
+   * buffer's coordinates.
+   */
+  activeFindHighlight?: ActiveFindHighlightSpec | null;
   /**
    * #407 B3: optional foundation for clipboard image paste. When omitted,
    * the CodeMirror paste handler deliberately returns false before calling
@@ -456,6 +469,7 @@ export function MarkdownEditor({
   extraPendingSelection,
   onExtraPendingSelectionApplied,
   extraFocusRequest,
+  activeFindHighlight,
   onImageAttachmentPaste,
   onImageAttachmentPositionControllerChange,
   imageAttachmentSourceDocumentId,
@@ -960,6 +974,9 @@ export function MarkdownEditor({
       // edits made since the last switch-away would never make it into the
       // cache, since the switch effect below only captures on a SWITCH, not
       // on a plain unmount.
+      // #424 Slice 2: as in the switch path, drop transient Find highlights
+      // before caching so a later remount never restores them.
+      view.dispatch({ effects: clearActiveFindHighlightsEffect.of(null) });
       documentStates.set(documentKeyRef.current, {
         state: view.state,
         lineEndingField: lineEndingFieldRef.current!
@@ -1229,6 +1246,10 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
+      // #424 Slice 2: Find "mark all" highlights are transient panel UI — drop
+      // them from the OUTGOING document's state before it is cached, so
+      // switching back later never restores stale highlights.
+      view.dispatch({ effects: clearActiveFindHighlightsEffect.of(null) });
       // #387/#392: cache the OUTGOING document's live EditorState (its full
       // undo history included) under the key it is STILL showing, before
       // that key ref advances below.
@@ -1389,6 +1410,31 @@ export function MarkdownEditor({
     appliedExtraFocusRequestIdRef.current = extraFocusRequest.id;
     view.focus();
   }, [extraFocusRequest, documentKey]);
+
+  // #424 Slice 2: push the Find panel's "mark all" set into the active
+  // document's highlight StateField. `null` clears it. The panel recomputes
+  // and re-dispatches on every query / option / content change, so this
+  // effect just mirrors the latest prop value.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    if (
+      !activeFindHighlight &&
+      view.state.field(activeFindHighlightField).size === 0
+    ) {
+      // Nothing painted and nothing to paint — skip the no-op transaction
+      // (this is the common case: every Markdown editor mount with the panel
+      // closed).
+      return;
+    }
+    view.dispatch({
+      effects: activeFindHighlight
+        ? setActiveFindHighlightsEffect.of(activeFindHighlight)
+        : clearActiveFindHighlightsEffect.of(null)
+    });
+  }, [activeFindHighlight]);
 
   return (
     <div
