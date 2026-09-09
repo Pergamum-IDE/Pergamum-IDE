@@ -315,6 +315,7 @@ type FileExplorerDeleteFlowState =
 
 interface FileExplorerViewProps {
   projectName: string | null;
+  projectFilePath?: string | null;
   rootEntries: FileExplorerEntry[];
   entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>;
   expandedDirectoryPaths: ReadonlySet<string>;
@@ -3722,6 +3723,7 @@ export function FileExplorer({
     <>
       <FileExplorerView
         projectName={project?.name ?? null}
+        projectFilePath={project?.activeProjectFilePath ?? null}
         rootEntries={entriesByDirectoryPath[rootDirectoryKey] ?? []}
         entriesByDirectoryPath={entriesByDirectoryPath}
         expandedDirectoryPaths={expandedDirectoryPaths}
@@ -4311,6 +4313,7 @@ const PASTE_DISABLED_REASON_MESSAGE_KEY: Record<
 
 export function FileExplorerView({
   projectName,
+  projectFilePath,
   rootEntries,
   entriesByDirectoryPath,
   expandedDirectoryPaths,
@@ -4644,7 +4647,7 @@ export function FileExplorerView({
             data-file-explorer-entry-kind="root"
             data-file-explorer-entry-path=""
             data-file-explorer-drop-target={dropTargetState("")}
-            title={projectName}
+            title={projectFilePath ?? projectName ?? undefined}
             onKeyDown={(event) => onRootKeyDown?.(event)}
             onClick={onSelectRoot}
             onDragOver={(event) => onRowDragOver?.(event, null)}

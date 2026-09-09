@@ -19,7 +19,6 @@ function createMockProject(
     activeProjectFilePath: `C:/works/projects/${name}/novel.pergamum`,
     name,
     config: {
-      name,
       ...(settings ? { settings } : {})
     },
     accessMode: { kind: "readWrite" },
@@ -56,7 +55,6 @@ describe("Project Settings lifecycle & resolution integration (#396 Slice 3)", (
       ...currentProject,
       config: {
         ...currentProject.config,
-        name: currentProject.name,
         settings: updatedSettings
       }
     };
@@ -138,7 +136,6 @@ describe("Project Settings lifecycle & resolution integration (#396 Slice 3)", (
       ...project,
       config: {
         ...project.config,
-        name: project.name,
         settings: undefined
       }
     };
@@ -193,7 +190,6 @@ describe("Project Settings lifecycle & resolution integration (#396 Slice 3)", (
           ...currentProject,
           config: {
             ...currentProject.config,
-            name: currentProject.name,
             settings: updatedSettings
           }
         };

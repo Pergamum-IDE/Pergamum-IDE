@@ -76,7 +76,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
 
       const loaded = await loadProjectConfig(workDir);
       expect(loaded).not.toBeNull();
-      expect(loaded?.config.name).toBe("Test Novel");
+      expect((loaded?.config as Record<string, unknown>).name).toBeUndefined();
       expect(loaded?.config.settings?.preview?.renderer).toBe("markdown");
 
       // Verify rawSnapshot preserves unknown fields

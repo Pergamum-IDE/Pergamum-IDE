@@ -941,7 +941,7 @@ describe("project file IPC foundation", () => {
     await updateCurrentProjectWindowTitle();
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE -"
+      "a novel IDE - Pergamum"
     );
   });
 
@@ -1006,9 +1006,7 @@ describe("project file IPC foundation", () => {
       activeProjectFilePath: path.resolve(projectFilePath),
       accessMode: defaultProjectAccessMode,
       name: "Secret Draft",
-      config: {
-        name: "Secret Draft"
-      },
+      config: {},
       documents: [
         {
           relativePath: "chapter-01.md",
@@ -1034,7 +1032,7 @@ describe("project file IPC foundation", () => {
 
     await expect(
       fs.readFile(path.join(projectRootPath, projectConfigFileName), "utf8")
-    ).resolves.toBe('{\n  "name": "Secret Draft"\n}\n');
+    ).resolves.toBe("{}\n");
     await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
       {
         projectName: "Secret Draft",
@@ -1069,7 +1067,7 @@ describe("project file IPC foundation", () => {
     await createProjectHandler({ sender: {} });
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Title Create -"
+      "Title Create - Pergamum"
     );
   });
 
@@ -1405,7 +1403,7 @@ describe("project file IPC foundation", () => {
     );
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Readonly Title - [読み取り専用]"
+      "Readonly Title - [読み取り専用] - Pergamum"
     );
   });
 
@@ -1553,7 +1551,7 @@ describe("project file IPC foundation", () => {
     await expect(fs.access(projectFilePath)).resolves.toBeUndefined();
     await expect(
       fs.readFile(path.join(projectRootPath, projectConfigFileName), "utf8")
-    ).resolves.toBe('{\n  "name": "Confirmed"\n}\n');
+    ).resolves.toBe("{}\n");
   });
 
   it("openProject returns null when the .pergamum open dialog is canceled", async () => {
@@ -1623,9 +1621,7 @@ describe("project file IPC foundation", () => {
       activeProjectFilePath: path.resolve(projectFilePath),
       accessMode: defaultProjectAccessMode,
       name: "Metadata Project Name",
-      config: {
-        name: "Config Name"
-      },
+      config: {},
       documents: [
         {
           relativePath: "chapter.md",
@@ -1677,7 +1673,7 @@ describe("project file IPC foundation", () => {
     await openProjectHandler({ sender: {} });
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Metadata Title -"
+      "Metadata Title - Pergamum"
     );
   });
 
@@ -2198,7 +2194,7 @@ describe("project file IPC foundation", () => {
     await releaseCurrentProjectWriteOwnership();
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE -"
+      "a novel IDE - Pergamum"
     );
   });
 
@@ -2244,7 +2240,7 @@ describe("project file IPC foundation", () => {
     expect(currentActiveProjectFilePath()).toBeNull();
     expect(currentProjectAccessMode()).toBeNull();
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE -"
+      "a novel IDE - Pergamum"
     );
   });
 
@@ -2413,8 +2409,8 @@ describe("project file IPC foundation", () => {
     await openProjectHandler({ sender: {} });
 
     expect(titleWindow.setTitle.mock.calls.map(([title]) => title)).toEqual([
-      "Pergamum - First Title -",
-      "Pergamum - Second Title -"
+      "First Title - Pergamum",
+      "Second Title - Pergamum"
     ]);
   });
 
@@ -2711,9 +2707,7 @@ describe("project file IPC foundation", () => {
       activeProjectFilePath: path.resolve(projectFilePath),
       accessMode: defaultProjectAccessMode,
       name: "Recent Metadata Name",
-      config: {
-        name: "Config Name"
-      }
+      config: {}
     });
     const recentProjects = await readRecentProjects(userDataPath);
     expect(recentProjects).toHaveLength(1);
@@ -2763,7 +2757,7 @@ describe("project file IPC foundation", () => {
     );
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Recent Title Metadata -"
+      "Recent Title Metadata - Pergamum"
     );
   });
 

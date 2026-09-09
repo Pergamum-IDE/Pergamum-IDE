@@ -265,6 +265,8 @@ export const PROJECT_CHANNELS = {
    * these to the same source list a drag & drop feeds.
    */
   pickTextImportSources: "projects:pickTextImportSources",
+  /** #422: logical project rename (updates SQLite metadata, not physical files). */
+  updateProjectName: "projects:updateProjectName",
   saveProjectDocument: "projects:saveProjectDocument",
   saveProjectSettings: "projects:saveProjectSettings",
   closeCurrentProject: "projects:closeCurrentProject"
@@ -484,9 +486,34 @@ export type WriteMarkdownResult =
   | SaveMarkdownRejectedResult;
 
 export interface PergamumProjectConfig {
-  name?: string;
   settings?: ProjectSettings;
 }
+
+/** #422: Request payload for logical project rename. */
+export interface UpdateProjectNameRequest {
+  readonly projectId?: string;
+  readonly name: string;
+}
+
+/** #422: Failure reasons for logical project rename. */
+export type UpdateProjectNameFailureReason =
+  | "noProject"
+  | "projectMismatch"
+  | "readOnlyProject"
+  | "invalidName"
+  | "updateFailed";
+
+/** #422: Result of logical project rename. */
+export type UpdateProjectNameResult =
+  | {
+      readonly ok: true;
+      readonly project: PergamumProject;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: UpdateProjectNameFailureReason;
+      readonly message?: string;
+    };
 
 export interface UpdateProjectSettingsRequest {
   readonly set?: Record<string, unknown>;
@@ -1076,6 +1103,10 @@ export interface PergamumApi {
     pickTextImportSources: (
       request: PickTextImportSourcesRequest
     ) => Promise<PickTextImportSourcesResult>;
+    /** #422: update logical project name in SQLite metadata. */
+    updateProjectName: (
+      request: UpdateProjectNameRequest
+    ) => Promise<UpdateProjectNameResult>;
     saveProjectDocument: (
       relativePath: string,
       content: string

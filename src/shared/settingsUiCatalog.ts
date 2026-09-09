@@ -100,6 +100,11 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     labelKey: "settings.category.appearance.label"
   },
   {
+    id: "project",
+    order: 250,
+    labelKey: "settings.category.project.label"
+  },
+  {
     id: "editor",
     order: 300,
     labelKey: "settings.category.editor.label"
@@ -129,11 +134,6 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     id: "files",
     order: 500,
     labelKey: "settings.category.files.label"
-  },
-  {
-    id: "project",
-    order: 600,
-    labelKey: "settings.category.project.label"
   },
   {
     id: "commands",

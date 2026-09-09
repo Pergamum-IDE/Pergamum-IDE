@@ -37,16 +37,23 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     );
   });
 
-  it("malformed project identity outside settings still fails project open", async () => {
+  it("non-object JSON root still fails project open", async () => {
+    fsMock.readFile.mockResolvedValue(JSON.stringify("not an object"));
+
+    await expect(readProjectConfig("C:\\fake-project")).rejects.toThrow(
+      /expected a JSON object/
+    );
+  });
+
+  it("legacy non-string name outside settings does not fail project open", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: 123
       })
     );
 
-    await expect(readProjectConfig("C:\\fake-project")).rejects.toThrow(
-      /"name" must be a string/
-    );
+    const config = await readProjectConfig("C:\\fake-project");
+    expect(config?.settings).toBeUndefined();
   });
 
   it("opens with no project settings when settings is missing", async () => {
