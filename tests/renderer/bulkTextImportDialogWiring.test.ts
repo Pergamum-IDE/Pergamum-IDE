@@ -161,11 +161,15 @@ describe("Bulk text import dialog App wiring (#420 Step 5)", () => {
       "window.pergamum.projects.getCurrentProjectId()"
     );
     expect(executeBlock).toContain('return { ok: false, reason: "noProject" }');
-    // line-ending policy comes from the existing new-file setting, not a new UI
+    // targetLineEnding still comes from the existing new-file setting
     expect(executeBlock).toContain(
       "effectiveSettings.files.newFile.lineEnding"
     );
-    expect(executeBlock).toContain("normalizeLineEndings: true");
+    // #420 Step 8: normalization is driven by the dialog's toggle, not hardcoded
+    expect(executeBlock).toContain(
+      "normalizeLineEndings: input.normalizeLineEndings"
+    );
+    expect(executeBlock).not.toContain("normalizeLineEndings: true");
   });
 
   it("refreshes the File Explorer after a successful import, without auto-opening", () => {
@@ -222,9 +226,12 @@ describe("Bulk text import dialog App wiring (#420 Step 6)", () => {
   it("shares one add-paths path between drop and the picker buttons", () => {
     const source = dialogSource();
 
-    // Both the drop handler and the picker handler call `addPaths`.
-    expect(source).toContain("addPaths(getDroppedFilePaths(files))");
-    expect(source).toContain("addPaths(paths)");
+    // Both the drop handler and the picker handler call `addPaths`, now with
+    // a #420 Step 8 source-batch kind tag.
+    expect(source).toContain('addPaths(getDroppedFilePaths(files), "drop")');
+    expect(source).toContain(
+      'addPaths(paths, kind === "files" ? "filePicker" : "folderPicker")'
+    );
     // The dialog only ever calls the injected `pickSources` prop.
     expect(source).not.toContain("pickTextImportSources");
     expect(source).not.toContain("window.pergamum");

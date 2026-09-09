@@ -97,3 +97,54 @@ describe("text import decode helpers (#420 Step 1)", () => {
     expect(preview.tail).toBe(`${"😀".repeat(19)}終`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #420 Step 8: BOM auto-selection is the ONLY implicit encoding decision.
+// Shift_JIS / EUC-JP / ISO-2022-JP are never guessed — a BOM-less file always
+// defaults to UTF-8 regardless of what its bytes actually are.
+// ---------------------------------------------------------------------------
+
+describe("text import BOM handling is declaration-only (#420 Step 8)", () => {
+  it("maps every BOM kind to its declared default encoding", () => {
+    expect(defaultTextImportEncodingForBom("none")).toBe("utf8");
+    expect(defaultTextImportEncodingForBom("utf8")).toBe("utf8Bom");
+    expect(defaultTextImportEncodingForBom("utf16le")).toBe("utf16le");
+    expect(defaultTextImportEncodingForBom("utf16be")).toBe("utf16be");
+  });
+
+  it("never infers Shift_JIS from BOM-less CP932 bytes", () => {
+    // 「日本語①」in CP932 — perfectly valid Shift_JIS, no BOM.
+    const cp932 = Uint8Array.from([
+      0x93, 0xfa, 0x96, 0x7b, 0x8c, 0xea, 0x87, 0x40
+    ]);
+    expect(detectTextImportBom(cp932)).toBe("none");
+    expect(defaultTextImportEncodingForBom(detectTextImportBom(cp932))).toBe(
+      "utf8"
+    );
+  });
+
+  it("never infers EUC-JP from BOM-less EUC-JP bytes", () => {
+    const eucJp = Uint8Array.from([0xc6, 0xfc, 0xcb, 0xdc, 0xb8, 0xec]);
+    expect(detectTextImportBom(eucJp)).toBe("none");
+    expect(defaultTextImportEncodingForBom(detectTextImportBom(eucJp))).toBe(
+      "utf8"
+    );
+  });
+
+  it("never infers ISO-2022-JP from its escape-sequence bytes", () => {
+    const iso = Uint8Array.from([
+      0x1b, 0x24, 0x42, 0x46, 0x7c, 0x4b, 0x5c, 0x38, 0x6c, 0x1b, 0x28, 0x42
+    ]);
+    expect(detectTextImportBom(iso)).toBe("none");
+    expect(defaultTextImportEncodingForBom(detectTextImportBom(iso))).toBe(
+      "utf8"
+    );
+  });
+
+  it("requires the full 3-byte UTF-8 BOM before selecting utf8Bom", () => {
+    expect(detectTextImportBom(Uint8Array.from([0xef, 0xbb]))).toBe("none");
+    expect(
+      detectTextImportBom(Uint8Array.from([0xef, 0xbb, 0xbf, 0x41]))
+    ).toBe("utf8");
+  });
+});

@@ -2198,8 +2198,10 @@ export function App(): JSX.Element {
   // explicit Import click for the importable rows); App fills in the project
   // id and the line-ending policy. New imported `.md` documents inherit the
   // project's "new file" line ending (`files.newFile.lineEnding`, default
-  // LF); normalization is on so the written file matches that policy. A
-  // dedicated line-ending picker is left to a later step.
+  // LF). #420 Step 8: normalization is now driven by the dialog's
+  // "match line endings to application settings" toggle
+  // (`input.normalizeLineEndings`); `targetLineEnding` is still the app
+  // setting so a normalized write matches that policy.
   const bulkTextImportNewFileLineEnding =
     effectiveSettings.files.newFile.lineEnding;
   const bulkTextImportExecute = useCallback(
@@ -2215,7 +2217,7 @@ export function App(): JSX.Element {
         destinationFolderProjectRelativePath:
           input.destinationFolderProjectRelativePath,
         files: input.files,
-        normalizeLineEndings: true,
+        normalizeLineEndings: input.normalizeLineEndings,
         targetLineEnding: bulkTextImportNewFileLineEnding
       });
     },

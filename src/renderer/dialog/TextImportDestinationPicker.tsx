@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Translate } from "../../shared/i18n";
 import { InfoDialog } from "./InfoDialog";
+import folderIconUrl from "../../../assets/icons/ionicons/explorer/folder-outline.svg?url";
+import folderOpenIconUrl from "../../../assets/icons/ionicons/explorer/folder-open-outline.svg?url";
 
 /**
  * #420 Step 3: a lazy, project-scoped folder tree for choosing the bulk text
@@ -136,6 +138,13 @@ export function TextImportDestinationPicker({
                 >
                   {isExpanded ? "▾" : "▸"}
                 </button>
+                <img
+                  className="textImportDestinationPickerFolderIcon"
+                  src={isExpanded ? folderOpenIconUrl : folderIconUrl}
+                  alt=""
+                  aria-hidden="true"
+                  data-folder-icon={isExpanded ? "folder-open" : "folder"}
+                />
                 <button
                   type="button"
                   role="radio"
@@ -203,7 +212,14 @@ export function TextImportDestinationPicker({
           onClick={() => setSelected("")}
           onDoubleClick={() => onConfirm("")}
         >
-          {translate("textImport.dialog.destinationPickerRoot")}
+          <img
+            className="textImportDestinationPickerFolderIcon"
+            src={folderOpenIconUrl}
+            alt=""
+            aria-hidden="true"
+            data-folder-icon="folder-open"
+          />
+          <span>{translate("textImport.dialog.destinationPickerRoot")}</span>
         </button>
         {renderChildren("", 1)}
       </div>

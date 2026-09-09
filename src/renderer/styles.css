@@ -6185,8 +6185,11 @@ label.settingsItemHeader {
   color: var(--app-dialog-foreground, #1f2933);
 }
 
+/* #420 Step 8: no destination folder ⟹ the whole D&D area is inert. */
 .bulkTextImportDialogDropArea.isDisabled {
   opacity: 0.68;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .bulkTextImportDialogDropArea p {
@@ -6270,6 +6273,210 @@ label.settingsItemHeader {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+/* #420 Step 8: source batch + source folder grouping of the target list. */
+.bulkTextImportDialogBatchGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogBatchGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 5px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogBatchHeader,
+.bulkTextImportDialogFolderScopeHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bulkTextImportDialogFolderScopeHeader {
+  padding-block: 2px;
+}
+
+/* Title takes the slack so the count + label + selector sit at the row end. */
+.bulkTextImportDialogBatchTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Sits immediately right of the ▼ toggle and reads left-to-right; the count /
+   apply label / selector are pushed to the row end by this element's grow. */
+.bulkTextImportDialogFolderScopePath {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.bulkTextImportDialogBatchCount,
+.bulkTextImportDialogFolderScopeCount {
+  flex: 0 0 auto;
+  font-size: 0.74rem;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogBulkApplyLabel {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+}
+
+.bulkTextImportDialogFolderScope {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid var(--app-dialog-border, #cbd5df);
+  min-width: 0;
+}
+
+.bulkTextImportDialogFolderScope[data-collapsed="true"] {
+  gap: 0;
+}
+
+.bulkTextImportDialogFolderScopeToggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.4em;
+  block-size: 1.4em;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--app-dialog-secondary-foreground, #52616f);
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bulkTextImportDialogFolderScopeToggle:hover {
+  color: var(--app-dialog-foreground, #1f2933);
+}
+
+.bulkTextImportDialogBatchEncodingSelect,
+.bulkTextImportDialogFolderEncodingSelect {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.74rem;
+  padding: 1px 4px;
+  max-width: 150px;
+}
+
+.bulkTextImportDialogBatchEncodingSelect:disabled,
+.bulkTextImportDialogFolderEncodingSelect:disabled {
+  opacity: 0.6;
+}
+
+/* #420 Step 8: "match line endings to application settings" — toggle slider.
+   Semantics stay a native checkbox (role="switch"); the checkbox is laid over
+   the track at zero opacity so label click / keyboard / focus all work. */
+.bulkTextImportDialogLineEndingToggle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-block-end: 10px;
+}
+
+.bulkTextImportDialogLineEndingToggleLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.bulkTextImportDialogLineEndingToggleSwitch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  inline-size: 34px;
+  block-size: 18px;
+}
+
+.bulkTextImportDialogLineEndingToggleInput {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.bulkTextImportDialogLineEndingToggleInput:disabled {
+  cursor: not-allowed;
+}
+
+.bulkTextImportDialogLineEndingToggleTrack {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--app-dialog-border, #cbd5df);
+  transition: background 0.15s ease;
+  pointer-events: none;
+}
+
+.bulkTextImportDialogLineEndingToggleThumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.bulkTextImportDialogLineEndingToggleInput:checked
+  + .bulkTextImportDialogLineEndingToggleTrack {
+  background: var(--app-accent, #2f6fed);
+}
+
+.bulkTextImportDialogLineEndingToggleInput:checked
+  + .bulkTextImportDialogLineEndingToggleTrack
+  .bulkTextImportDialogLineEndingToggleThumb {
+  transform: translateX(16px);
+}
+
+.bulkTextImportDialogLineEndingToggleInput:disabled
+  + .bulkTextImportDialogLineEndingToggleTrack {
+  opacity: 0.5;
+}
+
+.bulkTextImportDialogLineEndingToggleInput:focus-visible
+  + .bulkTextImportDialogLineEndingToggleTrack {
+  outline: 2px solid var(--app-accent, #2f6fed);
+  outline-offset: 2px;
+}
+
+.bulkTextImportDialogLineEndingToggleHint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--app-dialog-secondary-foreground, #52616f);
 }
 
 .bulkTextImportDialogFileRow,
@@ -6503,8 +6710,18 @@ label.settingsItemHeader {
   color: #fff;
 }
 
+/* #420: folder icon shown between the twisty and the folder name. */
+.textImportDestinationPickerFolderIcon {
+  inline-size: 16px;
+  block-size: 16px;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
 .textImportDestinationPickerRoot {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   width: 100%;
   margin-bottom: 2px;
 }

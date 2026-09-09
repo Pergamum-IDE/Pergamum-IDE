@@ -78,6 +78,17 @@ export interface BulkTextImportFileRowViewState {
    * preview — the original skip is downgraded to an informational note.
    */
   readonly decodeRecovered: boolean;
+  /**
+   * #420 Step 8: id of the {@link TextImportSourceBatch} this row belongs to
+   * (the add operation that introduced its source). `""` only when there are
+   * no batches at all.
+   */
+  readonly sourceBatchId: string;
+  /**
+   * #420 Step 8: `${sourceBatchId}` + the normalised source **parent folder**
+   * path — the grouping key for the folder-level bulk encoding control.
+   */
+  readonly sourceFolderGroupKey: string;
 }
 
 /** #420 Step 5: lifecycle of the one-shot `executeTextImport` call. */
@@ -87,11 +98,52 @@ export type TextImportExecutionStatus =
   | "completed"
   | "failed";
 
+// ---------------------------------------------------------------------------
+// #420 Step 8: source batches + folder grouping + bulk encoding control
+// ---------------------------------------------------------------------------
+
+/** One add operation: a drop, an "add files…" or an "add folders…". */
+export type TextImportSourceBatchKind = "drop" | "filePicker" | "folderPicker";
+
+export interface TextImportSourceBatch {
+  /** Stable id, unique within a dialog session. */
+  readonly id: string;
+  readonly kind: TextImportSourceBatchKind;
+  /** Exactly the external paths this operation actually added (no dups). */
+  readonly sourcePaths: readonly string[];
+  /** 1-based monotonic add order across every kind. */
+  readonly createdOrder: number;
+}
+
+/** Value of a **file-row** encoding control: a real encoding or a manual skip. */
+export type TextImportEncodingControlValue = TextImportEncoding | "skip";
+
+/**
+ * Value of a **batch / folder** bulk encoding control: a real encoding, a
+ * manual skip, or the display-only `"mixed"` marker (never selected to run an
+ * apply).
+ */
+export type TextImportBulkEncodingControlValue =
+  | TextImportEncoding
+  | "skip"
+  | "mixed";
+
+export const TEXT_IMPORT_BULK_SKIP_CONTROL_VALUE = "skip" as const;
+export const TEXT_IMPORT_BULK_MIXED_CONTROL_VALUE = "mixed" as const;
+
 export interface BulkTextImportDialogState {
   /** `null` = not chosen yet; `""` = the project root. */
   readonly destinationFolderProjectRelativePath: string | null;
   /** Absolute external paths, in add order, no duplicates. */
   readonly sourcePaths: readonly string[];
+  /**
+   * #420 Step 8: one entry per D&D / picker add operation, in add order. Kept
+   * consistent with `sourcePaths` — every path in a batch is also in
+   * `sourcePaths`, and every non-duplicate add produces exactly one batch.
+   */
+  readonly sourceBatches: readonly TextImportSourceBatch[];
+  /** Monotonic counter backing {@link TextImportSourceBatch.createdOrder}. */
+  readonly sourceBatchSeq: number;
   readonly dryRunStatus: BulkTextImportDryRunStatus;
   readonly dryRunResult?: TextImportDryRunResult;
   /**
@@ -117,12 +169,21 @@ export interface BulkTextImportDialogState {
   readonly executionResult?: ExecuteTextImportResult;
   /** Message for a thrown / transport-level execute failure. */
   readonly executionErrorMessage?: string;
+  /**
+   * #420 Step 8: "match line endings to application settings" toggle. `true`
+   * (the default, restored on every open) ⟹ the execute request carries
+   * `normalizeLineEndings: true`; `false` ⟹ the main process keeps each source
+   * file's original line endings. Never affects the dry-run or preview.
+   */
+  readonly normalizeLineEndings: boolean;
 }
 
 export function createInitialBulkTextImportDialogState(): BulkTextImportDialogState {
   return {
     destinationFolderProjectRelativePath: null,
     sourcePaths: [],
+    sourceBatches: [],
+    sourceBatchSeq: 0,
     dryRunStatus: "idle",
     dryRunResult: undefined,
     dryRunRequestId: 0,
@@ -130,7 +191,8 @@ export function createInitialBulkTextImportDialogState(): BulkTextImportDialogSt
     executionStatus: "idle",
     executionRequestId: 0,
     executionResult: undefined,
-    executionErrorMessage: undefined
+    executionErrorMessage: undefined,
+    normalizeLineEndings: true
   };
 }
 
@@ -252,19 +314,25 @@ export function isTextImportEncodingEditable(
 }
 
 /** Build one editable view row from a dry-run file entry. */
-export function createFileRowViewState(file: {
-  readonly id: string;
-  readonly sourcePath: string;
-  readonly sourceDisplayPath: string;
-  readonly targetProjectRelativePath: string;
-  readonly selectedEncoding: TextImportEncoding;
-  readonly bomKind: TextImportBomKind;
-  readonly renamed: boolean;
-  readonly skipped: boolean;
-  readonly skipReason?: TextImportSkipReason;
-  readonly previewHead: string;
-  readonly previewTail: string;
-}): BulkTextImportFileRowViewState {
+export function createFileRowViewState(
+  file: {
+    readonly id: string;
+    readonly sourcePath: string;
+    readonly sourceDisplayPath: string;
+    readonly targetProjectRelativePath: string;
+    readonly selectedEncoding: TextImportEncoding;
+    readonly bomKind: TextImportBomKind;
+    readonly renamed: boolean;
+    readonly skipped: boolean;
+    readonly skipReason?: TextImportSkipReason;
+    readonly previewHead: string;
+    readonly previewTail: string;
+  },
+  grouping: {
+    readonly sourceBatchId?: string;
+    readonly sourceFolderGroupKey?: string;
+  } = {}
+): BulkTextImportFileRowViewState {
   return {
     id: file.id,
     sourcePath: file.sourcePath,
@@ -281,7 +349,9 @@ export function createFileRowViewState(file: {
     previewStatus: "idle",
     previewErrorReason: undefined,
     previewRequestId: undefined,
-    decodeRecovered: false
+    decodeRecovered: false,
+    sourceBatchId: grouping.sourceBatchId ?? "",
+    sourceFolderGroupKey: grouping.sourceFolderGroupKey ?? ""
   };
 }
 
@@ -293,12 +363,22 @@ export function createFileRowViewState(file: {
  * handling simple.
  */
 export function buildFileRowViewStates(
-  dryRunResult: TextImportDryRunResult | undefined
+  dryRunResult: TextImportDryRunResult | undefined,
+  batches: readonly TextImportSourceBatch[] = []
 ): readonly BulkTextImportFileRowViewState[] {
   if (!dryRunResult || !dryRunResult.ok) {
     return [];
   }
-  return dryRunResult.files.map((file) => createFileRowViewState(file));
+  return dryRunResult.files.map((file) => {
+    const sourceBatchId = resolveSourceBatchIdForPath(file.sourcePath, batches);
+    return createFileRowViewState(file, {
+      sourceBatchId,
+      sourceFolderGroupKey: buildSourceFolderGroupKey(
+        sourceBatchId,
+        file.sourcePath
+      )
+    });
+  });
 }
 
 /**
@@ -677,4 +757,412 @@ export function bulkTextImportDestinationLabel(
   return destinationFolderProjectRelativePath.length === 0
     ? rootLabel
     : destinationFolderProjectRelativePath;
+}
+
+// ---------------------------------------------------------------------------
+// #420 Step 8: pure external-path string helpers
+//
+// The renderer must not touch `node:path` or read external files. These are
+// string-only helpers that accept both Windows `\` and POSIX `/` separators.
+// ---------------------------------------------------------------------------
+
+/** Trim, unify separators to `/`, collapse repeats, drop any trailing `/`. */
+export function normalizeExternalPathForGrouping(path: string): string {
+  return path
+    .trim()
+    .replace(/[\\/]+/g, "/")
+    .replace(/(.)\/+$/, "$1");
+}
+
+/**
+ * The last segment of an external path — the file (or folder) name.
+ * `C:\x\euc-jp.txt` → `euc-jp.txt`, `/a/b/` → `b`, `plain.txt` → `plain.txt`.
+ * Used so a grouped file row shows only its name (the parent folder is on the
+ * source-folder group header).
+ */
+export function getExternalPathBaseName(path: string): string {
+  const normalized = normalizeExternalPathForGrouping(path);
+  const slash = normalized.lastIndexOf("/");
+  return slash < 0 ? normalized : normalized.slice(slash + 1);
+}
+
+/**
+ * The parent-folder portion of an external path. `/a.txt` → `/`,
+ * `C:\x\a.txt` → `C:/x`, a bare name → `""`.
+ */
+export function getExternalParentFolderPath(path: string): string {
+  const normalized = normalizeExternalPathForGrouping(path);
+  const slash = normalized.lastIndexOf("/");
+  if (slash < 0) {
+    return "";
+  }
+  if (slash === 0) {
+    return "/";
+  }
+  return normalized.slice(0, slash);
+}
+
+/**
+ * `true` when `childPath` is `rootPath` itself or lives underneath it. An
+ * empty `rootPath` never contains anything.
+ */
+export function isExternalPathSameOrDescendant(
+  childPath: string,
+  rootPath: string
+): boolean {
+  const child = normalizeExternalPathForGrouping(childPath);
+  const root = normalizeExternalPathForGrouping(rootPath);
+  if (root.length === 0) {
+    return false;
+  }
+  return child === root || child.startsWith(`${root}/`);
+}
+
+// ---------------------------------------------------------------------------
+// #420 Step 8: source batch state
+// ---------------------------------------------------------------------------
+
+/**
+ * Record one add operation. Appends only the genuinely new (non-blank,
+ * non-duplicate) paths to `sourcePaths` and, when at least one was added,
+ * creates exactly one {@link TextImportSourceBatch} for them. A cancelled
+ * picker (`paths` empty) or a duplicate-only add returns the same state
+ * reference — no batch, no re-render.
+ */
+export function appendSourceBatch(
+  state: BulkTextImportDialogState,
+  kind: TextImportSourceBatchKind,
+  paths: readonly string[]
+): BulkTextImportDialogState {
+  const nextSourcePaths = addSourcePaths(state.sourcePaths, paths);
+  if (nextSourcePaths === state.sourcePaths) {
+    return state;
+  }
+  const existing = new Set(state.sourcePaths);
+  const addedPaths = nextSourcePaths.filter((path) => !existing.has(path));
+  const createdOrder = state.sourceBatchSeq + 1;
+  const batch: TextImportSourceBatch = {
+    id: `text-import-batch-${createdOrder}`,
+    kind,
+    sourcePaths: addedPaths,
+    createdOrder
+  };
+  return {
+    ...state,
+    sourcePaths: nextSourcePaths,
+    sourceBatches: [...state.sourceBatches, batch],
+    sourceBatchSeq: createdOrder
+  };
+}
+
+/**
+ * Which batch a dry-run row's source belongs to: the first batch whose paths
+ * exactly equal, contain, or are contained by the row's `sourcePath`. Falls
+ * back to the most recent batch so a row is never orphaned (a dry-run may
+ * normalise a path differently than the drop / picker did). `""` only when
+ * there are no batches.
+ */
+export function resolveSourceBatchIdForPath(
+  sourcePath: string,
+  batches: readonly TextImportSourceBatch[]
+): string {
+  if (batches.length === 0) {
+    return "";
+  }
+  const normalizedSource = normalizeExternalPathForGrouping(sourcePath);
+  for (const batch of batches) {
+    for (const batchPath of batch.sourcePaths) {
+      if (
+        normalizeExternalPathForGrouping(batchPath) === normalizedSource ||
+        isExternalPathSameOrDescendant(sourcePath, batchPath)
+      ) {
+        return batch.id;
+      }
+    }
+  }
+  return batches[batches.length - 1].id;
+}
+
+/** `${sourceBatchId}` + the normalised source parent-folder path. */
+export function buildSourceFolderGroupKey(
+  sourceBatchId: string,
+  sourcePath: string
+): string {
+  return `${sourceBatchId}\u0000${normalizeExternalPathForGrouping(
+    getExternalParentFolderPath(sourcePath)
+  )}`;
+}
+
+// ---------------------------------------------------------------------------
+// #420 Step 8: batch / source-folder grouping for rendering
+// ---------------------------------------------------------------------------
+
+export interface BulkTextImportFolderGroupView {
+  readonly key: string;
+  /** Full source folder path, for display + `title`. */
+  readonly sourceFolderPath: string;
+  readonly rows: readonly BulkTextImportFileRowViewState[];
+}
+
+export interface BulkTextImportBatchGroupView {
+  readonly batch: TextImportSourceBatch;
+  /** 1-based index among batches of the same {@link TextImportSourceBatchKind}. */
+  readonly kindOrdinal: number;
+  readonly rows: readonly BulkTextImportFileRowViewState[];
+  readonly folderGroups: readonly BulkTextImportFolderGroupView[];
+}
+
+/**
+ * Group `rows` by their `sourceBatchId` (in batch add order) and then by
+ * `sourceFolderGroupKey` (in first-appearance order). Rows whose batch id is
+ * unknown — only possible when `batches` is empty — are returned separately so
+ * the caller can still render them flat.
+ */
+export function groupBulkTextImportFileRows(
+  rows: readonly BulkTextImportFileRowViewState[],
+  batches: readonly TextImportSourceBatch[]
+): {
+  readonly batchGroups: readonly BulkTextImportBatchGroupView[];
+  readonly ungroupedRows: readonly BulkTextImportFileRowViewState[];
+} {
+  const knownBatchIds = new Set(batches.map((batch) => batch.id));
+  const rowsByBatch = new Map<string, BulkTextImportFileRowViewState[]>();
+  const ungroupedRows: BulkTextImportFileRowViewState[] = [];
+
+  for (const row of rows) {
+    if (!knownBatchIds.has(row.sourceBatchId)) {
+      ungroupedRows.push(row);
+      continue;
+    }
+    const list = rowsByBatch.get(row.sourceBatchId);
+    if (list) {
+      list.push(row);
+    } else {
+      rowsByBatch.set(row.sourceBatchId, [row]);
+    }
+  }
+
+  const orderedBatches = [...batches].sort(
+    (left, right) => left.createdOrder - right.createdOrder
+  );
+  const kindOrdinals: Record<TextImportSourceBatchKind, number> = {
+    drop: 0,
+    filePicker: 0,
+    folderPicker: 0
+  };
+  const batchGroups: BulkTextImportBatchGroupView[] = [];
+
+  for (const batch of orderedBatches) {
+    kindOrdinals[batch.kind] += 1;
+    const batchRows = rowsByBatch.get(batch.id);
+    if (!batchRows || batchRows.length === 0) {
+      continue;
+    }
+
+    const folderIndexByKey = new Map<string, number>();
+    const folderGroups: {
+      key: string;
+      sourceFolderPath: string;
+      rows: BulkTextImportFileRowViewState[];
+    }[] = [];
+
+    for (const row of batchRows) {
+      let index = folderIndexByKey.get(row.sourceFolderGroupKey);
+      if (index === undefined) {
+        index = folderGroups.length;
+        folderIndexByKey.set(row.sourceFolderGroupKey, index);
+        folderGroups.push({
+          key: row.sourceFolderGroupKey,
+          sourceFolderPath: getExternalParentFolderPath(row.sourcePath),
+          rows: []
+        });
+      }
+      folderGroups[index].rows.push(row);
+    }
+
+    batchGroups.push({
+      batch,
+      kindOrdinal: kindOrdinals[batch.kind],
+      rows: batchRows,
+      folderGroups
+    });
+  }
+
+  return { batchGroups, ungroupedRows };
+}
+
+// ---------------------------------------------------------------------------
+// #420 Step 8: bulk (batch / folder) encoding control
+// ---------------------------------------------------------------------------
+
+/**
+ * The value a bulk (batch / folder) encoding control shows for `rows`:
+ *
+ * - `"mixed"`  — no encoding-editable rows, or a mix of encodings / a mix of
+ *   skipped and non-skipped rows (display only, never applied),
+ * - `"skip"`   — every editable row is manually skipped,
+ * - an encoding — every editable row shares it and none is skipped.
+ */
+export function resolveBulkEncodingControlValue(
+  rows: readonly BulkTextImportFileRowViewState[]
+): TextImportBulkEncodingControlValue {
+  const eligible = rows.filter((row) => isTextImportEncodingEditable(row));
+  if (eligible.length === 0) {
+    return "mixed";
+  }
+  if (eligible.every((row) => row.manualSkipped)) {
+    return "skip";
+  }
+  if (eligible.some((row) => row.manualSkipped)) {
+    return "mixed";
+  }
+  const [first] = eligible;
+  return eligible.every((row) => row.selectedEncoding === first.selectedEncoding)
+    ? first.selectedEncoding
+    : "mixed";
+}
+
+/**
+ * The ids of the rows within `rows` a bulk apply should touch: rows with a
+ * source path that an encoding change (or a manual skip) can act on. Rows
+ * skipped for a reason no encoding can fix (`targetExists`, `notTextFile`, …)
+ * are left out.
+ */
+export function collectBulkEncodingApplyRowIds(
+  rows: readonly BulkTextImportFileRowViewState[]
+): readonly string[] {
+  return rows
+    .filter(
+      (row) =>
+        row.sourcePath.length > 0 && isTextImportEncodingEditable(row)
+    )
+    .map((row) => row.id);
+}
+
+/**
+ * Apply one encoding to every row in `rowIds` that is still editable: clear a
+ * manual skip, set the encoding, and move the row into `loading` tagged with
+ * `previewRequestId`. Returns the same array reference when `rowIds` is empty
+ * or nothing changed.
+ */
+export function applyBulkSelectedEncoding(
+  rows: readonly BulkTextImportFileRowViewState[],
+  rowIds: readonly string[],
+  encoding: TextImportEncoding,
+  previewRequestId: number
+): readonly BulkTextImportFileRowViewState[] {
+  if (rowIds.length === 0) {
+    return rows;
+  }
+  const ids = new Set(rowIds);
+  let changed = false;
+  const next = rows.map((row) => {
+    if (!ids.has(row.id) || !isTextImportEncodingEditable(row)) {
+      return row;
+    }
+    changed = true;
+    return {
+      ...row,
+      manualSkipped: false,
+      selectedEncoding: encoding,
+      previewStatus: "loading" as const,
+      previewErrorReason: undefined,
+      previewRequestId
+    };
+  });
+  return changed ? next : rows;
+}
+
+/**
+ * Mark every editable row in `rowIds` as manually skipped, invalidating any
+ * in-flight preview for it. Returns the same array reference when `rowIds` is
+ * empty or nothing changed.
+ */
+export function applyBulkManualSkip(
+  rows: readonly BulkTextImportFileRowViewState[],
+  rowIds: readonly string[]
+): readonly BulkTextImportFileRowViewState[] {
+  if (rowIds.length === 0) {
+    return rows;
+  }
+  const ids = new Set(rowIds);
+  let changed = false;
+  const next = rows.map((row) => {
+    if (!ids.has(row.id) || !isTextImportEncodingEditable(row)) {
+      return row;
+    }
+    if (
+      row.manualSkipped &&
+      row.previewStatus === "idle" &&
+      row.previewErrorReason === undefined &&
+      row.previewRequestId === undefined
+    ) {
+      return row;
+    }
+    changed = true;
+    return {
+      ...row,
+      manualSkipped: true,
+      previewStatus: "idle" as const,
+      previewErrorReason: undefined,
+      previewRequestId: undefined
+    };
+  });
+  return changed ? next : rows;
+}
+
+/**
+ * Fold a batch `previewTextImportFiles` response onto the rows. A top-level
+ * failure (`ok:false`, or a thrown callback modelled as `{ ok: false }`)
+ * fails every requested row with `"updateFailed"`; otherwise each response
+ * entry lands on its row by id, and any requested row missing from the
+ * response is failed too. Per-row stale-response handling is unchanged: a row
+ * not waiting on `previewRequestId` is skipped.
+ */
+export function applyBulkPreviewResponse(
+  rows: readonly BulkTextImportFileRowViewState[],
+  previewRequestId: number,
+  response:
+    | {
+        readonly ok: true;
+        readonly files: readonly PreviewTextImportFilePreviewResult[];
+      }
+    | { readonly ok: false },
+  requestedRowIds: readonly string[]
+): readonly BulkTextImportFileRowViewState[] {
+  if (!response.ok) {
+    let out = rows;
+    for (const id of requestedRowIds) {
+      out = applyPreviewFailure(out, id, previewRequestId, "updateFailed");
+    }
+    return out;
+  }
+
+  let out = rows;
+  const handled = new Set<string>();
+  for (const file of response.files) {
+    handled.add(file.id);
+    out = file.ok
+      ? applyPreviewSuccess(out, file.id, previewRequestId, file)
+      : applyPreviewFailure(out, file.id, previewRequestId, file.reason);
+  }
+  for (const id of requestedRowIds) {
+    if (!handled.has(id)) {
+      out = applyPreviewFailure(out, id, previewRequestId, "updateFailed");
+    }
+  }
+  return out;
+}
+
+const BATCH_HEADING_KEYS: Record<TextImportSourceBatchKind, TranslationKey> = {
+  drop: "textImport.dialog.batchHeading.drop",
+  filePicker: "textImport.dialog.batchHeading.files",
+  folderPicker: "textImport.dialog.batchHeading.folders"
+};
+
+/** Translation key for a batch group's heading (takes `{index}`). */
+export function textImportBatchHeadingKey(
+  kind: TextImportSourceBatchKind
+): TranslationKey {
+  return BATCH_HEADING_KEYS[kind];
 }

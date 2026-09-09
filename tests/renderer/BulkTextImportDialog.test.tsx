@@ -411,6 +411,80 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     ).toBe("docs");
   });
 
+  it("shows a decorative folder icon per row that flips to the open variant on expand (#420)", async () => {
+    renderDialog({ listFolders: defaultListFolders() });
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          ".bulkTextImportDialogSelectDestinationButton"
+        )!
+        .click();
+    });
+    await flush();
+
+    // root row: open-folder icon, decorative
+    const rootIcon = container
+      .querySelector<HTMLElement>(".textImportDestinationPickerRoot")!
+      .querySelector<HTMLImageElement>(".textImportDestinationPickerFolderIcon")!;
+    expect(rootIcon.tagName).toBe("IMG");
+    expect(rootIcon.getAttribute("data-folder-icon")).toBe("folder-open");
+    expect(rootIcon.getAttribute("aria-hidden")).toBe("true");
+    expect(rootIcon.getAttribute("alt")).toBe("");
+
+    const rows = () =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>(
+          ".textImportDestinationPickerRow"
+        )
+      );
+
+    // collapsed folder row: twisty → icon → name, closed-folder icon
+    const firstRow = rows()[0];
+    const children = Array.from(firstRow.children);
+    expect(
+      children[0].classList.contains("textImportDestinationPickerTwisty")
+    ).toBe(true);
+    expect(
+      children[1].classList.contains("textImportDestinationPickerFolderIcon")
+    ).toBe(true);
+    expect(
+      children[2].classList.contains("textImportDestinationPickerName")
+    ).toBe(true);
+    expect(children[2].textContent).toBe("docs");
+    const icon = firstRow.querySelector<HTMLImageElement>(
+      ".textImportDestinationPickerFolderIcon"
+    )!;
+    expect(icon.getAttribute("data-folder-icon")).toBe("folder");
+    expect(icon.getAttribute("aria-hidden")).toBe("true");
+    expect(icon.getAttribute("alt")).toBe("");
+
+    // expand → aria-expanded flips and the icon becomes the open variant
+    const twisty = firstRow.querySelector<HTMLButtonElement>(
+      ".textImportDestinationPickerTwisty"
+    )!;
+    expect(twisty.getAttribute("aria-expanded")).toBe("false");
+    act(() => {
+      twisty.click();
+    });
+    await flush();
+
+    const expandedRow = rows()[0];
+    expect(
+      expandedRow
+        .querySelector(".textImportDestinationPickerTwisty")
+        ?.getAttribute("aria-expanded")
+    ).toBe("true");
+    expect(
+      expandedRow
+        .querySelector(".textImportDestinationPickerFolderIcon")
+        ?.getAttribute("data-folder-icon")
+    ).toBe("folder-open");
+    // folder name / selection button unaffected
+    expect(
+      expandedRow.querySelector(".textImportDestinationPickerName")?.textContent
+    ).toBe("docs");
+  });
+
   it("labels the project root selection with the root label", async () => {
     renderDialog();
     await chooseDestination("");
@@ -630,7 +704,9 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     const target = row?.querySelector<HTMLElement>(
       ".bulkTextImportDialogFileTarget"
     );
-    expect(source?.textContent).toBe("/very/long/source/path/手記.txt");
+    // #420 Step 8: the row shows only the file name; the parent folder is on
+    // the source-folder group header. The full path stays in `title`.
+    expect(source?.textContent).toBe("手記.txt");
     expect(target?.textContent).toBe("docs/手記.md");
     expect(source?.className).toContain(
       "bulkTextImportDialogSourcePathLeftEllipsis"
@@ -659,8 +735,9 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     const previewTail = row?.querySelector<HTMLElement>(
       ".bulkTextImportDialogFilePreviewTail"
     );
-    expect(previewHead?.textContent).toBe("はじまり二行目");
-    expect(previewTail?.textContent).toBe("おわり終端");
+    // #420 Step 8: display-only truncation hint — `head…` / `…tail`.
+    expect(previewHead?.textContent).toBe("はじまり二行目...");
+    expect(previewTail?.textContent).toBe("...おわり終端");
     expect(previewHead?.textContent).not.toContain("\r");
     expect(previewHead?.textContent).not.toContain("\n");
     expect(previewTail?.textContent).not.toContain("\r");
@@ -819,10 +896,24 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     ).toBe("⊘");
   });
 
-  it("renders folder rows and flags folders with skipped descendants", async () => {
+  it("drops the separate folder-summary section — folder groups carry the rows (#420 Step 8)", async () => {
     const onDryRun = vi.fn(async () =>
       okResult(
-        [fileRow()],
+        [
+          fileRow({
+            id: "a1",
+            sourcePath: "/ext/chapter/a1.txt",
+            sourceDisplayPath: "a1.txt",
+            targetProjectRelativePath: "docs/chapter/a1.md"
+          }),
+          fileRow({
+            id: "a2",
+            sourcePath: "/ext/chapter/a2.txt",
+            sourceDisplayPath: "a2.txt",
+            skipped: true,
+            skipReason: "targetExists"
+          })
+        ],
         [
           folderRow({
             sourcePath: "/ext/chapter",
@@ -838,12 +929,24 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     dropFiles(["/ext/chapter"]);
     await flush();
 
-    const folder = container.querySelector<HTMLElement>(
-      ".bulkTextImportDialogFolderRow"
+    // no separated folder summary / flat file section any more
+    expect(container.querySelector(".bulkTextImportDialogFolderRow")).toBeNull();
+    expect(
+      container.querySelector(".bulkTextImportDialogFolderGroup")
+    ).toBeNull();
+
+    // one source-folder group, holding both compact file rows
+    const scope = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogFolderScope"
     );
-    expect(folder?.getAttribute("data-has-skipped-descendant")).toBe("true");
-    expect(folder?.textContent).toContain("docs/chapter");
-    expect(folder?.textContent).toContain("スキップされるファイルを含みます。");
+    expect(scope).not.toBeNull();
+    expect(scope?.textContent).toContain("/ext/chapter");
+    expect(
+      scope?.querySelectorAll(".bulkTextImportDialogFileRow")
+    ).toHaveLength(2);
+    expect(
+      scope?.querySelector(".bulkTextImportDialogFolderEncodingSelect")
+    ).not.toBeNull();
   });
 
   it("shows a failure state when the dry-run cannot be computed", async () => {
@@ -1237,13 +1340,13 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
         select.disabled
       ])
     );
-    expect(disabledById["/ext/normal.txt"]).toBe(false);
-    expect(disabledById["/ext/decode.txt"]).toBe(false);
-    expect(disabledById["/ext/exists.txt"]).toBe(true);
-    expect(disabledById["/ext/nottext.bin"]).toBe(true);
-    expect(disabledById["/ext/missing.txt"]).toBe(true);
-    expect(disabledById["/ext/unreadable.txt"]).toBe(true);
-    expect(disabledById["/ext/unsupported"]).toBe(true);
+    expect(disabledById["normal.txt"]).toBe(false);
+    expect(disabledById["decode.txt"]).toBe(false);
+    expect(disabledById["exists.txt"]).toBe(true);
+    expect(disabledById["nottext.bin"]).toBe(true);
+    expect(disabledById["missing.txt"]).toBe(true);
+    expect(disabledById["unreadable.txt"]).toBe(true);
+    expect(disabledById["unsupported"]).toBe(true);
   });
 
   it("recovers a decodeFailed row when a new encoding previews successfully", async () => {
@@ -1570,7 +1673,8 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
           targetProjectRelativePath: "docs/a.md",
           encoding: "shiftJis"
         }
-      ]
+      ],
+      normalizeLineEndings: true
     });
   });
 
@@ -1657,7 +1761,8 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
           targetProjectRelativePath: "docs/rec.md",
           encoding: "eucJp"
         }
-      ]
+      ],
+      normalizeLineEndings: true
     });
   });
 
@@ -1709,7 +1814,8 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
           targetProjectRelativePath: "docs/a.md",
           encoding: "utf8"
         }
-      ]
+      ],
+      normalizeLineEndings: true
     });
   });
 
@@ -2199,5 +2305,871 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     const dropArea = container.querySelector(".bulkTextImportDialogDropArea")!;
     expect(dropArea.contains(addFilesButton())).toBe(true);
     expect(dropArea.contains(addFoldersButton())).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // #420 Step 8: source batch + source folder grouping, bulk encoding controls
+  // ---------------------------------------------------------------------------
+
+  function batchSelect(): HTMLSelectElement {
+    return container.querySelector<HTMLSelectElement>(
+      ".bulkTextImportDialogBatchEncodingSelect"
+    )!;
+  }
+  function folderSelects(): HTMLSelectElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLSelectElement>(
+        ".bulkTextImportDialogFolderEncodingSelect"
+      )
+    );
+  }
+  function folderScopes(): HTMLElement[] {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(".bulkTextImportDialogFolderScope")
+    );
+  }
+
+  const twoFolderRows = [
+    fileRow({
+      id: "a1",
+      sourcePath: "/ext/input/A/a1.txt",
+      sourceDisplayPath: "a1.txt",
+      targetProjectRelativePath: "docs/A/a1.md"
+    }),
+    fileRow({
+      id: "a2",
+      sourcePath: "/ext/input/A/a2.txt",
+      sourceDisplayPath: "a2.txt",
+      targetProjectRelativePath: "docs/A/a2.md"
+    }),
+    fileRow({
+      id: "b1",
+      sourcePath: "/ext/input/B/b1.txt",
+      sourceDisplayPath: "b1.txt",
+      targetProjectRelativePath: "docs/B/b1.md"
+    })
+  ];
+
+  async function readyGrouped(
+    props: Partial<BulkTextImportDialogProps> = {},
+    files: readonly TextImportDryRunFile[] = twoFolderRows,
+    dropped: readonly string[] = ["/ext/input/A", "/ext/input/B"]
+  ): Promise<BulkTextImportDialogProps> {
+    const resolved = renderDialog({
+      onDryRun: vi.fn(async () => okResult(files)),
+      onPreview: vi.fn(
+        async (r: PreviewTextImportFilesRequest) => previewOk(r.files[0]?.id ?? "a1")
+      ),
+      ...props
+    });
+    await chooseDestination("docs");
+    dropFiles(dropped);
+    await flush();
+    return resolved;
+  }
+
+  it("groups file rows by source batch and then by source folder, with counts", async () => {
+    await readyGrouped();
+
+    const batchHeader = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogBatchHeader"
+    );
+    expect(batchHeader?.textContent).toContain("D&D追加 1");
+    expect(batchHeader?.textContent).toContain("3 ファイル");
+    expect(batchSelect()).not.toBeNull();
+
+    const scopes = folderScopes();
+    expect(scopes).toHaveLength(2);
+    expect(scopes[0].textContent).toContain("/ext/input/A");
+    expect(scopes[0].textContent).toContain("2 ファイル");
+    expect(scopes[1].textContent).toContain("/ext/input/B");
+    expect(scopes[1].textContent).toContain("1 ファイル");
+    expect(folderSelects()).toHaveLength(2);
+    // the compact per-file rows are preserved inside each folder scope
+    expect(
+      scopes[0].querySelectorAll(".bulkTextImportDialogFileRow")
+    ).toHaveLength(2);
+  });
+
+  it("offers the seven encodings plus 処理スキップ in the bulk selectors", async () => {
+    await readyGrouped();
+    const options = Array.from(batchSelect().options).map((o) => o.text);
+    for (const label of [
+      "UTF-8",
+      "UTF-8 BOM",
+      "Shift_JIS / CP932",
+      "EUC-JP",
+      "UTF-16 LE",
+      "UTF-16 BE",
+      "ISO-2022-JP",
+      "処理スキップ"
+    ]) {
+      expect(options).toContain(label);
+    }
+  });
+
+  it("applies a batch encoding to every row with a single batch preview IPC", async () => {
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) =>
+        ({
+          ok: true,
+          files: r.files.map((f) => ({
+            ok: true,
+            id: f.id,
+            sourcePath: f.sourcePath,
+            encoding: f.encoding,
+            bomKind: "none" as const,
+            previewHead: "冒頭",
+            previewTail: "末尾"
+          }))
+        }) satisfies PreviewTextImportFilesResult
+    );
+    await readyGrouped({ onPreview });
+
+    await changeEncoding(batchSelect(), "eucJp");
+
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(onPreview.mock.calls[0][0].files.map((f: any) => f.id).sort()).toEqual(
+      ["a1", "a2", "b1"]
+    );
+    expect(onPreview.mock.calls[0][0].files.every((f: any) => f.encoding === "eucJp")).toBe(
+      true
+    );
+    expect(encodingSelects().map((s) => s.value)).toEqual([
+      "eucJp",
+      "eucJp",
+      "eucJp"
+    ]);
+  });
+
+  it("applies a folder encoding only to that folder's rows", async () => {
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) =>
+        ({
+          ok: true,
+          files: r.files.map((f) => ({
+            ok: true,
+            id: f.id,
+            sourcePath: f.sourcePath,
+            encoding: f.encoding,
+            bomKind: "none" as const,
+            previewHead: "x",
+            previewTail: "y"
+          }))
+        }) satisfies PreviewTextImportFilesResult
+    );
+    await readyGrouped({ onPreview });
+
+    await changeEncoding(folderSelects()[0], "eucJp");
+
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(onPreview.mock.calls[0][0].files.map((f: any) => f.id).sort()).toEqual([
+      "a1",
+      "a2"
+    ]);
+    // folder A rows switch; folder B row keeps its dry-run encoding (shiftJis)
+    expect(encodingSelects().map((s) => s.value)).toEqual([
+      "eucJp",
+      "eucJp",
+      "shiftJis"
+    ]);
+  });
+
+  it("bulk-skips a whole batch without previewing and disables Import", async () => {
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) => previewOk(r.files[0].id)
+    );
+    await readyGrouped({ onPreview });
+
+    await changeEncoding(batchSelect(), "skip");
+
+    const rows = Array.from(
+      container.querySelectorAll<HTMLElement>(".bulkTextImportDialogFileRow")
+    );
+    expect(rows.every((r) => r.getAttribute("data-skipped") === "true")).toBe(true);
+    expect(
+      rows.every(
+        (r) =>
+          r.querySelector(".bulkTextImportDialogFileStatusSymbol")?.textContent ===
+          "⊘"
+      )
+    ).toBe(true);
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(importButton().disabled).toBe(true);
+  });
+
+  it("bulk-skips only one source folder", async () => {
+    await readyGrouped();
+
+    await changeEncoding(folderSelects()[1], "skip");
+
+    const scopes = folderScopes();
+    const folderARows = Array.from(
+      scopes[0].querySelectorAll<HTMLElement>(".bulkTextImportDialogFileRow")
+    );
+    const folderBRows = Array.from(
+      scopes[1].querySelectorAll<HTMLElement>(".bulkTextImportDialogFileRow")
+    );
+    expect(folderARows.every((r) => r.getAttribute("data-skipped") === "false")).toBe(
+      true
+    );
+    expect(folderBRows.every((r) => r.getAttribute("data-skipped") === "true")).toBe(
+      true
+    );
+    // still importable via folder A
+    expect(importButton().disabled).toBe(false);
+  });
+
+  it("shows the bulk selector as 混在 when a file-level override diverges", async () => {
+    await readyGrouped();
+    // batch initially agrees on the dry-run encoding
+    expect(batchSelect().value).toBe("shiftJis");
+
+    await changeEncoding(encodingSelects()[0], "eucJp");
+
+    expect(batchSelect().value).toBe("mixed");
+    expect(Array.from(batchSelect().options).map((o) => o.text)).toContain("混在");
+    // the folder that still agrees keeps a concrete value
+    expect(folderSelects()[1].value).toBe("shiftJis");
+  });
+
+  it("drops a stale bulk preview response when a second bulk apply starts", async () => {
+    const first = deferred<PreviewTextImportFilesResult>();
+    const second = deferred<PreviewTextImportFilesResult>();
+    const onPreview = vi
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    await readyGrouped({ onPreview });
+
+    await changeEncoding(batchSelect(), "eucJp");
+    await changeEncoding(batchSelect(), "utf16be");
+    expect(onPreview).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      second.resolve({
+        ok: true,
+        files: ["a1", "a2", "b1"].map((id) => ({
+          ok: true,
+          id,
+          sourcePath: `/ext/${id}`,
+          encoding: "utf16be",
+          bomKind: "none",
+          previewHead: "second",
+          previewTail: "t"
+        }))
+      });
+    });
+    await flush();
+    expect(container.textContent).toContain("second");
+
+    await act(async () => {
+      first.resolve({
+        ok: true,
+        files: ["a1", "a2", "b1"].map((id) => ({
+          ok: true,
+          id,
+          sourcePath: `/ext/${id}`,
+          encoding: "eucJp",
+          bomKind: "none",
+          previewHead: "STALE",
+          previewTail: "t"
+        }))
+      });
+    });
+    await flush();
+    expect(container.textContent).not.toContain("STALE");
+  });
+
+  it("honours a BOM-derived initial encoding and lets a bulk apply override it", async () => {
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) => previewOk(r.files[0].id)
+    );
+    await readyGrouped(
+      { onPreview },
+      [
+        fileRow({
+          id: "bom",
+          sourcePath: "/ext/input/A/bom.txt",
+          sourceDisplayPath: "bom.txt",
+          targetProjectRelativePath: "docs/A/bom.md",
+          selectedEncoding: "utf8Bom",
+          bomKind: "utf8"
+        })
+      ],
+      ["/ext/input/A"]
+    );
+
+    // renderer never reads the BOM — it trusts the dry-run's selectedEncoding
+    expect(encodingSelects()[0].value).toBe("utf8Bom");
+    expect(container.querySelector(".bulkTextImportDialogFileBom")).toBeNull();
+
+    await changeEncoding(batchSelect(), "shiftJis");
+    expect(encodingSelects()[0].value).toBe("shiftJis");
+  });
+
+  it("disables the bulk selectors before a destination is chosen and while importing", async () => {
+    const gate = deferred<ExecuteTextImportResult>();
+    // before a destination: no rows, so no bulk selectors at all
+    renderDialog({ onExecute: vi.fn(() => gate.promise) });
+    expect(container.querySelector(".bulkTextImportDialogBatchEncodingSelect")).toBeNull();
+
+    await readyGrouped({ onExecute: vi.fn(() => gate.promise) });
+    expect(batchSelect().disabled).toBe(false);
+    expect(folderSelects()[0].disabled).toBe(false);
+
+    act(() => {
+      importButton().click();
+    });
+    await flush();
+
+    expect(batchSelect().disabled).toBe(true);
+    expect(folderSelects()[0].disabled).toBe(true);
+
+    await act(async () => {
+      gate.resolve({ ok: true, imported: [], skipped: [], failed: [] });
+    });
+    await flush();
+  });
+
+  it("makes the source folder group the primary structure — header + rows together", async () => {
+    await readyGrouped();
+
+    // no separated summary sections
+    expect(container.querySelector(".bulkTextImportDialogFolderRow")).toBeNull();
+    expect(
+      container.querySelector(".bulkTextImportDialogFolderGroup")
+    ).toBeNull();
+
+    const scopes = folderScopes();
+    expect(scopes).toHaveLength(2);
+    for (const scope of scopes) {
+      // header shows the full source folder path, a file count and a bulk selector
+      const header = scope.querySelector<HTMLElement>(
+        ".bulkTextImportDialogFolderScopeHeader"
+      )!;
+      expect(header.textContent).toMatch(/\/ext\/input\/[AB]/);
+      expect(header.textContent).toContain("ファイル");
+      expect(
+        header.querySelector(".bulkTextImportDialogFolderEncodingSelect")
+      ).not.toBeNull();
+      expect(
+        header.querySelector(".bulkTextImportDialogFolderScopeToggle")
+      ).not.toBeNull();
+      // and the Step 7 compact rows live inside the same group
+      const rowsInScope = scope.querySelectorAll(
+        ".bulkTextImportDialogFileRow"
+      );
+      expect(rowsInScope.length).toBeGreaterThan(0);
+      for (const row of Array.from(rowsInScope)) {
+        expect(
+          row.querySelector(".bulkTextImportDialogFileMain")
+        ).not.toBeNull();
+        expect(
+          row.querySelector(".bulkTextImportDialogFileEncodingSelect")
+        ).not.toBeNull();
+      }
+    }
+  });
+
+  it("keeps a batch-level bulk apply control above the folder groups", async () => {
+    await readyGrouped();
+    const batchGroup = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogBatchGroup"
+    )!;
+    const header = batchGroup.querySelector<HTMLElement>(
+      ".bulkTextImportDialogBatchHeader"
+    )!;
+    expect(header.textContent).toContain("D&D追加 1");
+    expect(
+      header.querySelector(".bulkTextImportDialogBatchEncodingSelect")
+    ).not.toBeNull();
+    // the folder groups are nested inside the same batch section
+    expect(
+      batchGroup.querySelectorAll(".bulkTextImportDialogFolderScope")
+    ).toHaveLength(2);
+  });
+
+  it("collapses and expands a source folder group without touching the others", async () => {
+    await readyGrouped();
+    const scopes = folderScopes();
+    expect(
+      scopes[0].querySelectorAll(".bulkTextImportDialogFileRow")
+    ).toHaveLength(2);
+
+    const toggle = scopes[0].querySelector<HTMLButtonElement>(
+      ".bulkTextImportDialogFolderScopeToggle"
+    )!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    act(() => {
+      toggle.click();
+    });
+
+    const collapsed = folderScopes()[0];
+    expect(collapsed.getAttribute("data-collapsed")).toBe("true");
+    expect(
+      collapsed.querySelectorAll(".bulkTextImportDialogFileRow")
+    ).toHaveLength(0);
+    // folder B is unaffected
+    expect(
+      folderScopes()[1].querySelectorAll(".bulkTextImportDialogFileRow")
+    ).toHaveLength(1);
+
+    act(() => {
+      folderScopes()[0]
+        .querySelector<HTMLButtonElement>(
+          ".bulkTextImportDialogFolderScopeToggle"
+        )!
+        .click();
+    });
+    expect(
+      folderScopes()[0].querySelectorAll(".bulkTextImportDialogFileRow")
+    ).toHaveLength(2);
+  });
+
+  it("keeps the file-level dropdown behaviour intact inside a folder group", async () => {
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) =>
+        previewOk(r.files[0].id, { previewHead: "個別更新" })
+    );
+    await readyGrouped({ onPreview });
+
+    await changeEncoding(encodingSelects()[0], "utf16le");
+
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(onPreview.mock.calls[0][0].files).toEqual([
+      { id: "a1", sourcePath: "/ext/input/A/a1.txt", encoding: "utf16le" }
+    ]);
+    expect(encodingSelects()[0].value).toBe("utf16le");
+    // siblings untouched
+    expect(encodingSelects()[1].value).toBe("shiftJis");
+    expect(encodingSelects()[2].value).toBe("shiftJis");
+    expect(firstFileRow().textContent).toContain("個別更新");
+  });
+
+  it("puts the source folder path immediately right of the ▼ toggle", async () => {
+    await readyGrouped();
+    const header = folderScopes()[0].querySelector<HTMLElement>(
+      ".bulkTextImportDialogFolderScopeHeader"
+    )!;
+    const children = Array.from(header.children);
+    // toggle first, then the full source folder path, then count / label / select
+    expect(children[0].classList.contains("bulkTextImportDialogFolderScopeToggle")).toBe(
+      true
+    );
+    expect(children[1].classList.contains("bulkTextImportDialogFolderScopePath")).toBe(
+      true
+    );
+    expect(children[1].textContent).toBe("/ext/input/A");
+    // the path is not reversed / right-aligned any more
+    expect(
+      children[1].classList.contains("bulkTextImportDialogSourcePathLeftEllipsis")
+    ).toBe(false);
+    // count / selector come after the path
+    const selectIndex = children.findIndex((c) =>
+      c.classList.contains("bulkTextImportDialogFolderEncodingSelect")
+    );
+    const pathIndex = children.findIndex((c) =>
+      c.classList.contains("bulkTextImportDialogFolderScopePath")
+    );
+    expect(selectIndex).toBeGreaterThan(pathIndex);
+  });
+
+  // -------------------------------------------------------------------------
+  // #420 Step 8: line-ending normalization toggle
+  // -------------------------------------------------------------------------
+
+  function lineEndingToggle(): HTMLInputElement {
+    return container.querySelector<HTMLInputElement>(
+      ".bulkTextImportDialogLineEndingToggleInput"
+    )!;
+  }
+  async function setLineEndingToggle(checked: boolean): Promise<void> {
+    if (lineEndingToggle().checked === checked) {
+      return;
+    }
+    // A real click toggles `.checked` and fires React's onChange for a
+    // controlled checkbox (dispatching a bare "change" event does not).
+    act(() => {
+      lineEndingToggle().click();
+    });
+    await flush();
+  }
+
+  it("shows the line-ending toggle, on by default, with its hint", async () => {
+    renderDialog();
+    expect(lineEndingToggle()).not.toBeNull();
+    expect(lineEndingToggle().checked).toBe(true);
+    expect(container.textContent).toContain(
+      "改行コードをアプリケーション設定に揃える"
+    );
+    expect(container.textContent).toContain(
+      "元のテキストファイルの改行コードを保持します"
+    );
+  });
+
+  it("passes normalizeLineEndings: true to execute while the toggle is on", async () => {
+    const props = await readyForImport();
+    clickImport();
+    await flush();
+    expect(props.onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({ normalizeLineEndings: true })
+    );
+  });
+
+  it("passes normalizeLineEndings: false once the toggle is turned off", async () => {
+    const props = await readyForImport();
+    await setLineEndingToggle(false);
+    expect(lineEndingToggle().checked).toBe(false);
+
+    clickImport();
+    await flush();
+    expect(props.onExecute).toHaveBeenCalledWith(
+      expect.objectContaining({ normalizeLineEndings: false })
+    );
+  });
+
+  it("does not re-run dry-run or preview when the toggle changes, but clears the result", async () => {
+    const props = await readyForImport();
+    clickImport();
+    await flush();
+    expect(container.textContent).toContain("取り込みが完了しました。");
+    (props.onDryRun as ReturnType<typeof vi.fn>).mockClear();
+    (props.onPreview as ReturnType<typeof vi.fn>).mockClear();
+
+    await setLineEndingToggle(false);
+
+    expect(props.onDryRun).not.toHaveBeenCalled();
+    expect(props.onPreview).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("取り込みが完了しました。");
+    expect(
+      container.querySelector(".bulkTextImportDialogExecutionBanner")
+    ).toBeNull();
+  });
+
+  it("disables the toggle while an import is running", async () => {
+    const gate = deferred<ExecuteTextImportResult>();
+    await readyForImport({ onExecute: vi.fn(() => gate.promise) });
+    expect(lineEndingToggle().disabled).toBe(false);
+
+    clickImport();
+    await flush();
+    expect(lineEndingToggle().disabled).toBe(true);
+
+    await act(async () => {
+      gate.resolve({ ok: true, imported: [], skipped: [], failed: [] });
+    });
+    await flush();
+  });
+
+  it("resets the toggle to on when the dialog is closed and reopened", async () => {
+    function Harness(): JSX.Element {
+      const [isOpen, setIsOpen] = React.useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setIsOpen(true)}>
+            open
+          </button>
+          <BulkTextImportDialog
+            isOpen={isOpen}
+            translate={translate}
+            onClose={() => setIsOpen(false)}
+            listFolders={defaultListFolders()}
+            onDryRun={vi.fn(async () => okResult([fileRow({ id: "f1" })]))}
+            getDroppedFilePaths={(files) => files.map((file) => file.name)}
+          />
+        </>
+      );
+    }
+    act(() => {
+      root.render(<Harness />);
+    });
+
+    await chooseDestination("docs");
+    await setLineEndingToggle(false);
+    expect(lineEndingToggle().checked).toBe(false);
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(".bulkTextImportDialogCancelButton")
+        ?.click();
+    });
+    act(() => {
+      container.querySelector<HTMLButtonElement>("button")!.click();
+    });
+    await flush();
+
+    expect(lineEndingToggle().checked).toBe(true);
+  });
+
+  it("renders the line-ending control as a toggle slider (switch semantics)", async () => {
+    renderDialog();
+    const input = lineEndingToggle();
+    expect(input.getAttribute("type")).toBe("checkbox");
+    expect(input.getAttribute("role")).toBe("switch");
+    expect(input.getAttribute("aria-checked")).toBe("true");
+
+    const wrapper = container.querySelector<HTMLElement>(
+      ".bulkTextImportDialogLineEndingToggle"
+    )!;
+    expect(
+      wrapper.querySelector(".bulkTextImportDialogLineEndingToggleSwitch")
+    ).not.toBeNull();
+    expect(
+      wrapper.querySelector(".bulkTextImportDialogLineEndingToggleTrack")
+    ).not.toBeNull();
+    expect(
+      wrapper.querySelector(".bulkTextImportDialogLineEndingToggleThumb")
+    ).not.toBeNull();
+
+    // label click toggles it (once a destination makes it interactive)
+    await chooseDestination("docs");
+    act(() => {
+      container
+        .querySelector<HTMLElement>(
+          ".bulkTextImportDialogLineEndingToggleText"
+        )!
+        .click();
+    });
+    await flush();
+    expect(lineEndingToggle().checked).toBe(false);
+    expect(lineEndingToggle().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("disables the line-ending toggle until a destination folder is chosen", async () => {
+    renderDialog();
+    expect(lineEndingToggle().disabled).toBe(true);
+
+    // a click while disabled is inert — stays on
+    act(() => {
+      lineEndingToggle().click();
+    });
+    await flush();
+    expect(lineEndingToggle().checked).toBe(true);
+
+    await chooseDestination("docs");
+    expect(lineEndingToggle().disabled).toBe(false);
+
+    // the project root ("") also counts as a destination
+    // (re-render clean and pick the root)
+    act(() => root.unmount());
+    root = createRoot(container);
+    renderDialog();
+    expect(lineEndingToggle().disabled).toBe(true);
+    await chooseDestination("");
+    expect(lineEndingToggle().disabled).toBe(false);
+  });
+
+  it("shows only the file name in a grouped file row, with the full path on the group header and in title", async () => {
+    await readyGrouped(
+      {},
+      [
+        fileRow({
+          id: "a1",
+          sourcePath: "/ext/input/A/euc-jp.txt",
+          sourceDisplayPath: "euc-jp.txt",
+          targetProjectRelativePath: "decode/euc-jp.md"
+        })
+      ],
+      ["/ext/input/A"]
+    );
+
+    const scope = folderScopes()[0];
+    // parent path only on the folder group header
+    expect(
+      scope
+        .querySelector(".bulkTextImportDialogFolderScopeHeader")
+        ?.textContent
+    ).toContain("/ext/input/A");
+
+    const source = firstFileRow().querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileSource"
+    )!;
+    expect(source.textContent).toBe("euc-jp.txt");
+    expect(source.textContent).not.toContain("/ext/input/A");
+    // full sourcePath still available on the title
+    expect(source.title).toContain("/ext/input/A/euc-jp.txt");
+
+    // target keeps its project-relative path and left alignment
+    const target = firstFileRow().querySelector<HTMLElement>(
+      ".bulkTextImportDialogFileTarget"
+    )!;
+    expect(target.textContent).toBe("decode/euc-jp.md");
+    expect(target.className).toContain(
+      "bulkTextImportDialogTargetPathEllipsis"
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // #420 Step 8: preview head/tail truncation hint (display only)
+  // -------------------------------------------------------------------------
+
+  function previewHeadSpan(): HTMLElement {
+    return firstFileRow().querySelector<HTMLElement>(
+      ".bulkTextImportDialogFilePreviewHead"
+    )!;
+  }
+  function previewTailSpan(): HTMLElement {
+    return firstFileRow().querySelector<HTMLElement>(
+      ".bulkTextImportDialogFilePreviewTail"
+    )!;
+  }
+
+  it("appends ... to the head preview and prepends ... to the tail preview", async () => {
+    await readyGrouped(
+      {},
+      [
+        fileRow({
+          id: "p1",
+          sourcePath: "/ext/input/A/p1.txt",
+          sourceDisplayPath: "p1.txt",
+          previewHead: "先頭の20文字ぶんのテキスト",
+          previewTail: "末尾の20文字ぶんのテキスト"
+        })
+      ],
+      ["/ext/input/A"]
+    );
+
+    expect(previewHeadSpan().textContent).toBe("先頭の20文字ぶんのテキスト...");
+    expect(previewTailSpan().textContent).toBe("...末尾の20文字ぶんのテキスト");
+    // title carries the same decorated text
+    expect(previewHeadSpan().title).toContain("先頭の20文字ぶんのテキスト...");
+  });
+
+  it("derives the ... hint per render — it does not accumulate or mutate state", async () => {
+    const props = await readyForImport({}, [
+      fileRow({
+        id: "p1",
+        previewHead: "あたま",
+        previewTail: "しっぽ"
+      })
+    ]);
+    expect(previewHeadSpan().textContent).toBe("あたま...");
+
+    // an unrelated re-render (toggle) must not double the ellipsis
+    act(() => {
+      container
+        .querySelector<HTMLInputElement>(
+          ".bulkTextImportDialogLineEndingToggleInput"
+        )!
+        .click();
+    });
+    await flush();
+
+    expect(previewHeadSpan().textContent).toBe("あたま...");
+    expect(previewTailSpan().textContent).toBe("...しっぽ");
+    // the underlying preview state is untouched: re-previewing sends the raw
+    // text's encoding request, and a fresh success still renders `raw...`.
+    expect(props.onDryRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the empty-preview placeholder alone, with no stray ...", async () => {
+    await readyGrouped(
+      {},
+      [
+        fileRow({
+          id: "empty",
+          sourcePath: "/ext/input/A/empty.txt",
+          sourceDisplayPath: "empty.txt",
+          previewHead: "",
+          previewTail: ""
+        })
+      ],
+      ["/ext/input/A"]
+    );
+
+    expect(previewHeadSpan().textContent).toBe(
+      t("ja", "textImport.dialog.previewEmpty")
+    );
+    expect(previewHeadSpan().textContent).not.toContain("...");
+    expect(previewTailSpan().textContent).not.toContain("...");
+  });
+
+  it("leaves skipped and preview-failed rows' preview text unchanged", async () => {
+    // skipped (targetExists) row — shows the skip reason, not a `...` preview
+    await readyGrouped(
+      {},
+      [
+        fileRow({
+          id: "skip",
+          sourcePath: "/ext/input/A/skip.txt",
+          sourceDisplayPath: "skip.txt",
+          skipped: true,
+          skipReason: "targetExists",
+          previewHead: "見えないはず",
+          previewTail: "見えないはず"
+        })
+      ],
+      ["/ext/input/A"]
+    );
+    expect(firstFileRow().textContent).toContain(
+      t("ja", "textImport.dialog.skipReason.targetExists")
+    );
+    expect(previewHeadSpan().textContent).not.toContain("見えないはず");
+    expect(previewHeadSpan().textContent).not.toBe("見えないはず...");
+
+    // preview-failed row — shows the failure message, not a `...` preview
+    act(() => root.unmount());
+    root = createRoot(container);
+    const onPreview = vi.fn(
+      async (r: PreviewTextImportFilesRequest) =>
+        previewPerFileFailure(r.files[0].id, "decodeFailed")
+    );
+    await readyGrouped(
+      { onPreview },
+      [
+        fileRow({
+          id: "fail",
+          sourcePath: "/ext/input/A/fail.txt",
+          sourceDisplayPath: "fail.txt"
+        })
+      ],
+      ["/ext/input/A"]
+    );
+    await changeEncoding(encodingSelects()[0], "eucJp");
+    expect(firstFileRow().getAttribute("data-preview-status")).toBe("failed");
+    expect(firstFileRow().textContent).toContain(
+      "この文字コードではプレビューできません。"
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // #420 Step 8: the D&D area is inert until a destination folder is chosen
+  // -------------------------------------------------------------------------
+
+  it("makes the drag & drop area fully inert until a destination folder is chosen", async () => {
+    renderDialog();
+    const area = () =>
+      container.querySelector<HTMLElement>(".bulkTextImportDialogDropArea")!;
+
+    expect(area().className).toContain("isDisabled");
+    expect(area().getAttribute("aria-disabled")).toBe("true");
+
+    // dragover is not claimed while disabled (handler skips preventDefault)
+    const dragOver = new Event("dragover", { bubbles: true, cancelable: true });
+    Object.defineProperty(dragOver, "dataTransfer", { value: { files: [] } });
+    act(() => {
+      area().dispatchEvent(dragOver);
+    });
+    expect(dragOver.defaultPrevented).toBe(false);
+
+    // and CSS neutralises real pointer input over the disabled area
+    const rule = cssRule(".bulkTextImportDialogDropArea.isDisabled");
+    expect(rule).toContain("pointer-events: none");
+
+    await chooseDestination("docs");
+    expect(area().className).not.toContain("isDisabled");
+    expect(area().getAttribute("aria-disabled")).toBe("false");
+
+    const dragOver2 = new Event("dragover", {
+      bubbles: true,
+      cancelable: true
+    });
+    Object.defineProperty(dragOver2, "dataTransfer", { value: { files: [] } });
+    act(() => {
+      area().dispatchEvent(dragOver2);
+    });
+    expect(dragOver2.defaultPrevented).toBe(true);
   });
 });

@@ -309,6 +309,52 @@ describe("text import core (#420 Step 1)", () => {
     });
   });
 
+  it("selects utf16le / utf16be / utf8 from the BOM (or its absence) in dry-run (#420 Step 8)", async () => {
+    const utf16lePath = path.join(externalRootPath, "utf16le.txt");
+    const utf16bePath = path.join(externalRootPath, "utf16be.txt");
+    const plainPath = path.join(externalRootPath, "plain.txt");
+    const body = Buffer.from("本文", "utf16le");
+    const le = Buffer.concat([Buffer.from([0xff, 0xfe]), body]);
+    const be = Buffer.from(le);
+    for (let i = 0; i < be.length; i += 2) {
+      const b = be[i];
+      be[i] = be[i + 1];
+      be[i + 1] = b;
+    }
+    await writeBytes(utf16lePath, le);
+    await writeBytes(utf16bePath, be);
+    // BOM-less content — always defaults to UTF-8, never a guessed encoding.
+    await writeBytes(plainPath, "plain text");
+
+    const result = expectDryRunOk(
+      await dryRunTextImport({
+        currentProjectId: projectId,
+        projectRootPath,
+        request: {
+          projectId,
+          destinationFolderProjectRelativePath: "chapters",
+          sourcePaths: [utf16lePath, utf16bePath, plainPath]
+        }
+      })
+    );
+
+    expect(result.files[0]).toMatchObject({
+      selectedEncoding: "utf16le",
+      bomKind: "utf16le",
+      previewHead: "本文"
+    });
+    expect(result.files[1]).toMatchObject({
+      selectedEncoding: "utf16be",
+      bomKind: "utf16be",
+      previewHead: "本文"
+    });
+    // no BOM ⟹ UTF-8 default, even though the bytes are really Shift_JIS
+    expect(result.files[2]).toMatchObject({
+      selectedEncoding: "utf8",
+      bomKind: "none"
+    });
+  });
+
   it("previewTextImportFile uses the requested encoding and reports decode failure", async () => {
     const sourcePath = path.join(externalRootPath, "sjis.txt");
     await writeBytes(

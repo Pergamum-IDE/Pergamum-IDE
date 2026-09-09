@@ -15,9 +15,7 @@ import {
   type ExecuteTextImportResult,
   type PreviewTextImportFilesRequest,
   type PreviewTextImportFilesResult,
-  type TextImportDryRunFolder,
-  type TextImportDryRunResult,
-  type TextImportEncoding
+  type TextImportDryRunResult
 } from "../../shared/textImport";
 import { InfoDialog } from "./InfoDialog";
 import {
@@ -25,32 +23,44 @@ import {
   type TextImportFolderListing
 } from "./TextImportDestinationPicker";
 import {
+  applyBulkManualSkip,
+  applyBulkPreviewResponse,
+  applyBulkSelectedEncoding,
   applyManualSkip,
   applyPreviewFailure,
   applyPreviewSuccess,
   applySelectedEncoding,
   applyTextImportExecutionStart,
-  addSourcePaths,
+  appendSourceBatch,
   buildExecuteTextImportFileRequests,
   buildFileRowViewStates,
   bulkTextImportCanExecute,
   bulkTextImportDestinationLabel,
   bulkTextImportInputsKey,
   bulkTextImportInputsReady,
+  collectBulkEncodingApplyRowIds,
   collectImportableTextImportRows,
   createInitialBulkTextImportDialogState,
+  getExternalPathBaseName,
+  groupBulkTextImportFileRows,
   isStaleDryRunResponse,
   isStaleTextImportExecutionResponse,
   isTextImportEncodingEditable,
   isTextImportPreviewFailureReason,
   resetTextImportExecutionState,
+  resolveBulkEncodingControlValue,
+  textImportBatchHeadingKey,
   textImportEncodingNameKey,
   textImportExecutionSummaryKey,
   textImportExecutionSummaryKind,
   textImportPreviewFailureReasonKey,
   textImportSkipReasonKey,
   type BulkTextImportDialogState,
-  type BulkTextImportFileRowViewState
+  type BulkTextImportFileRowViewState,
+  type TextImportBulkEncodingControlValue,
+  type TextImportEncodingControlValue,
+  type TextImportSourceBatch,
+  type TextImportSourceBatchKind
 } from "./bulkTextImportDialogState";
 
 export interface BulkTextImportDryRunInput {
@@ -61,9 +71,15 @@ export interface BulkTextImportDryRunInput {
 export interface BulkTextImportExecuteInput {
   readonly destinationFolderProjectRelativePath: string;
   readonly files: readonly ExecuteTextImportFileRequest[];
+  /**
+   * #420 Step 8: value of the "match line endings to application settings"
+   * toggle. `true` ⟹ the caller passes `normalizeLineEndings: true`;
+   * `false` ⟹ original source line endings are kept by the main process.
+   */
+  readonly normalizeLineEndings: boolean;
 }
 
-type TextImportRowEncodingSelectValue = TextImportEncoding | "skip";
+type TextImportRowEncodingSelectValue = TextImportEncodingControlValue;
 
 const TEXT_IMPORT_ROW_SKIP_SELECT_VALUE = "skip";
 
@@ -239,7 +255,7 @@ export function BulkTextImportDialog({
           ...current,
           dryRunStatus: result.ok ? "ready" : "failed",
           dryRunResult: result,
-          fileRows: buildFileRowViewStates(result)
+          fileRows: buildFileRowViewStates(result, current.sourceBatches)
         };
       });
     })();
@@ -252,23 +268,27 @@ export function BulkTextImportDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onDryRun, inputsReady, inputsKey]);
 
-  const addPaths = useCallback((paths: readonly string[]) => {
-    if (paths.length === 0) {
-      return;
-    }
-    setState((current) => {
-      if (
-        current.destinationFolderProjectRelativePath === null ||
-        current.executionStatus === "importing"
-      ) {
-        return current;
+  // #420 Step 8: every add is one `kind`-tagged source batch. `appendSourceBatch`
+  // dedupes against the current source list and only creates a batch when at
+  // least one genuinely new path was added (a cancelled picker / duplicate-only
+  // add returns the same state, so React bails).
+  const addPaths = useCallback(
+    (paths: readonly string[], kind: TextImportSourceBatchKind) => {
+      if (paths.length === 0) {
+        return;
       }
-      const nextSourcePaths = addSourcePaths(current.sourcePaths, paths);
-      return nextSourcePaths === current.sourcePaths
-        ? current
-        : { ...current, sourcePaths: nextSourcePaths };
-    });
-  }, []);
+      setState((current) => {
+        if (
+          current.destinationFolderProjectRelativePath === null ||
+          current.executionStatus === "importing"
+        ) {
+          return current;
+        }
+        return appendSourceBatch(current, kind, paths);
+      });
+    },
+    []
+  );
 
   const canAddSourcesNow = useCallback((): boolean => {
     const current = stateRef.current;
@@ -287,14 +307,23 @@ export function BulkTextImportDialog({
         return;
       }
       const files = Array.from(event.dataTransfer?.files ?? []);
-      addPaths(getDroppedFilePaths(files));
+      addPaths(getDroppedFilePaths(files), "drop");
     },
     [addPaths, canAddSourcesNow, getDroppedFilePaths]
   );
 
-  const handleDragOver = useCallback((event: ReactDragEvent<HTMLElement>) => {
-    event.preventDefault();
-  }, []);
+  const handleDragOver = useCallback(
+    (event: ReactDragEvent<HTMLElement>) => {
+      // Only claim the drop when sources can actually be added (a destination
+      // is chosen and no import is running). Skipping `preventDefault` here
+      // makes the browser treat the area as a non-target (no copy cursor).
+      if (!canAddSourcesNow()) {
+        return;
+      }
+      event.preventDefault();
+    },
+    [canAddSourcesNow]
+  );
   const handleDragEnter = useCallback((event: ReactDragEvent<HTMLElement>) => {
     event.preventDefault();
     if (!canAddSourcesNow()) {
@@ -326,7 +355,7 @@ export function BulkTextImportDialog({
       void (async () => {
         try {
           const paths = await pickSources(kind);
-          addPaths(paths);
+          addPaths(paths, kind === "files" ? "filePicker" : "folderPicker");
         } catch {
           // A picker failure is non-fatal: the user can retry or use D&D.
         } finally {
@@ -450,6 +479,114 @@ export function BulkTextImportDialog({
     [onPreview]
   );
 
+  // #420 Step 8: apply one encoding (or a manual skip) to every eligible row
+  // under a source batch / source folder in ONE go. Encoding applies fire a
+  // single batch preview request (the injected `onPreview`) for all targeted
+  // rows; the "skip" action never previews. Like the per-file handler this
+  // never re-runs the dry-run, and it shares `previewSeqRef` so a fresh
+  // dry-run (or a later bulk apply) invalidates any in-flight response.
+  const handleBulkEncodingChange = useCallback(
+    (
+      scopeRowIds: readonly string[],
+      value: TextImportRowEncodingSelectValue
+    ) => {
+      const current = stateRef.current;
+      if (
+        current.destinationFolderProjectRelativePath === null ||
+        current.executionStatus === "importing"
+      ) {
+        return;
+      }
+      const scope = new Set(scopeRowIds);
+      const targetRows = current.fileRows.filter(
+        (row) =>
+          scope.has(row.id) &&
+          row.sourcePath.length > 0 &&
+          isTextImportEncodingEditable(row)
+      );
+      if (targetRows.length === 0) {
+        return;
+      }
+      const targetIds = targetRows.map((row) => row.id);
+
+      if (value === TEXT_IMPORT_ROW_SKIP_SELECT_VALUE) {
+        setState((state) => ({
+          ...resetTextImportExecutionState(state),
+          fileRows: applyBulkManualSkip(state.fileRows, targetIds)
+        }));
+        return;
+      }
+
+      if (!onPreview) {
+        return;
+      }
+
+      const requestId = (previewSeqRef.current += 1);
+      const previewFiles = targetRows.map((row) => ({
+        id: row.id,
+        sourcePath: row.sourcePath,
+        encoding: value
+      }));
+      setState((state) => ({
+        ...resetTextImportExecutionState(state),
+        fileRows: applyBulkSelectedEncoding(
+          state.fileRows,
+          targetIds,
+          value,
+          requestId
+        )
+      }));
+
+      void (async () => {
+        let result: PreviewTextImportFilesResult;
+        try {
+          result = await onPreview({ files: previewFiles });
+        } catch {
+          setState((state) => ({
+            ...state,
+            fileRows: applyBulkPreviewResponse(
+              state.fileRows,
+              requestId,
+              { ok: false },
+              targetIds
+            )
+          }));
+          return;
+        }
+        setState((state) => ({
+          ...state,
+          fileRows: applyBulkPreviewResponse(
+            state.fileRows,
+            requestId,
+            result,
+            targetIds
+          )
+        }));
+      })();
+    },
+    [onPreview]
+  );
+
+  // #420 Step 8: the "match line endings to application settings" toggle. Only
+  // touches `normalizeLineEndings` (read at Import time) and clears any prior
+  // execution result — it never re-runs the dry-run or a preview, since the
+  // planned targets and decoded previews do not depend on it.
+  const handleNormalizeLineEndingsChange = useCallback((next: boolean) => {
+    setState((current) => {
+      if (
+        current.destinationFolderProjectRelativePath === null ||
+        current.executionStatus === "importing" ||
+        current.normalizeLineEndings === next
+      ) {
+        return current;
+      }
+      return {
+        ...resetTextImportExecutionState(current),
+        normalizeLineEndings: next
+      };
+    });
+  }, []);
+
   // #420 Step 5: while an import is running, Cancel / the close button /
   // Escape are inert — the main process would keep writing files.
   const handleClose = useCallback(() => {
@@ -477,6 +614,7 @@ export function BulkTextImportDialog({
     if (files.length === 0) {
       return;
     }
+    const { normalizeLineEndings } = current;
 
     const requestId = (executionSeqRef.current += 1);
     setState((state) => applyTextImportExecutionStart(state, requestId));
@@ -486,7 +624,8 @@ export function BulkTextImportDialog({
       try {
         result = await onExecute({
           destinationFolderProjectRelativePath: destination,
-          files
+          files,
+          normalizeLineEndings
         });
       } catch (error) {
         setState((state) =>
@@ -700,10 +839,42 @@ export function BulkTextImportDialog({
 
           <section className="bulkTextImportDialogSection bulkTextImportDialogTargets">
             <h3>{translate("textImport.dialog.targetsHeading")}</h3>
+
+            <div className="bulkTextImportDialogLineEndingToggle">
+              <label className="bulkTextImportDialogLineEndingToggleLabel">
+                <span className="bulkTextImportDialogLineEndingToggleSwitch">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    className="bulkTextImportDialogLineEndingToggleInput"
+                    checked={state.normalizeLineEndings}
+                    aria-checked={state.normalizeLineEndings}
+                    disabled={!destinationChosen || isImporting}
+                    onChange={(event: ReactChangeEvent<HTMLInputElement>) =>
+                      handleNormalizeLineEndingsChange(event.target.checked)
+                    }
+                  />
+                  <span
+                    className="bulkTextImportDialogLineEndingToggleTrack"
+                    aria-hidden="true"
+                  >
+                    <span className="bulkTextImportDialogLineEndingToggleThumb" />
+                  </span>
+                </span>
+                <span className="bulkTextImportDialogLineEndingToggleText">
+                  {translate("textImport.dialog.lineEndingToggle")}
+                </span>
+              </label>
+              <p className="bulkTextImportDialogLineEndingToggleHint">
+                {translate("textImport.dialog.lineEndingToggleHint")}
+              </p>
+            </div>
+
             <BulkTextImportTargets
               state={state}
               translate={translate}
               onEncodingChange={onPreview ? handleEncodingChange : undefined}
+              onBulkEncodingChange={handleBulkEncodingChange}
               encodingLocked={!destinationChosen || isImporting}
             />
           </section>
@@ -739,12 +910,18 @@ function BulkTextImportTargets({
   state,
   translate,
   onEncodingChange,
+  onBulkEncodingChange,
   encodingLocked = false
 }: {
   readonly state: BulkTextImportDialogState;
   readonly translate: Translate;
   readonly onEncodingChange?: (
     rowId: string,
+    value: TextImportRowEncodingSelectValue
+  ) => void;
+  /** #420 Step 8: apply one encoding / skip to a batch or source folder. */
+  readonly onBulkEncodingChange?: (
+    scopeRowIds: readonly string[],
     value: TextImportRowEncodingSelectValue
   ) => void;
   /** #420 Step 5: freeze every encoding dropdown while an import is running. */
@@ -788,53 +965,281 @@ function BulkTextImportTargets({
     );
   }
 
-  const folders = state.dryRunResult.folders;
   const rows = state.fileRows;
 
+  // #420 Step 8: the target list is now nothing but the source-folder groups
+  // (wrapped by their add-batch). The old separate "フォルダ / ファイル"
+  // summary sections are gone — every file row lives inside its source folder
+  // group, and folder-vs-skip information is carried by each row's own status.
   return (
     <div className="bulkTextImportDialogResult">
-      {folders.length > 0 ? (
-        <div className="bulkTextImportDialogFolderGroup">
-          <h4>
-            {translate("textImport.dialog.foldersHeading", {
-              count: folders.length
-            })}
-          </h4>
-          <ul className="bulkTextImportDialogFolderList">
-            {folders.map((folder) => (
-              <BulkTextImportFolderRow
-                key={folder.sourcePath}
-                folder={folder}
-                translate={translate}
-              />
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="bulkTextImportDialogFileGroup">
-        <h4>
-          {translate("textImport.dialog.filesHeading", { count: rows.length })}
-        </h4>
-        {rows.length === 0 ? (
-          <p className="bulkTextImportDialogEmptyTargets">
-            {translate("textImport.dialog.emptyTargets")}
-          </p>
-        ) : (
-          <ul className="bulkTextImportDialogFileList">
-            {rows.map((row) => (
-              <BulkTextImportFileRow
-                key={row.id}
-                row={row}
-                translate={translate}
-                onEncodingChange={onEncodingChange}
-                encodingLocked={encodingLocked}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+      {rows.length === 0 ? (
+        <p className="bulkTextImportDialogEmptyTargets">
+          {translate("textImport.dialog.emptyTargets")}
+        </p>
+      ) : (
+        <BulkTextImportBatchGroups
+          rows={rows}
+          batches={state.sourceBatches}
+          translate={translate}
+          onEncodingChange={onEncodingChange}
+          onBulkEncodingChange={
+            encodingLocked ? undefined : onBulkEncodingChange
+          }
+          encodingLocked={encodingLocked}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * #420 Step 8: the "取り込み対象" list, grouped by source batch (one D&D /
+ * picker add) and then by source folder, each level carrying a bulk encoding
+ * control. Individual file rows keep their own dropdown.
+ */
+function BulkTextImportBatchGroups({
+  rows,
+  batches,
+  translate,
+  onEncodingChange,
+  onBulkEncodingChange,
+  encodingLocked
+}: {
+  readonly rows: readonly BulkTextImportFileRowViewState[];
+  readonly batches: readonly TextImportSourceBatch[];
+  readonly translate: Translate;
+  readonly onEncodingChange?: (
+    rowId: string,
+    value: TextImportRowEncodingSelectValue
+  ) => void;
+  readonly onBulkEncodingChange?: (
+    scopeRowIds: readonly string[],
+    value: TextImportRowEncodingSelectValue
+  ) => void;
+  readonly encodingLocked: boolean;
+}): JSX.Element {
+  const { batchGroups, ungroupedRows } = groupBulkTextImportFileRows(
+    rows,
+    batches
+  );
+
+  // #420 Step 8 (P2): source-folder groups can be collapsed. State is keyed by
+  // the stable `sourceFolderGroupKey`; a fresh dry-run keeps that key
+  // (batch id + parent path), so a collapsed folder stays collapsed across a
+  // re-preview. Stale keys are harmless.
+  const [collapsedFolderKeys, setCollapsedFolderKeys] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const toggleFolder = useCallback((key: string) => {
+    setCollapsedFolderKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  const renderRowList = (
+    list: readonly BulkTextImportFileRowViewState[]
+  ): JSX.Element => (
+    <ul className="bulkTextImportDialogFileList">
+      {list.map((row) => (
+        <BulkTextImportFileRow
+          key={row.id}
+          row={row}
+          translate={translate}
+          onEncodingChange={onEncodingChange}
+          encodingLocked={encodingLocked}
+        />
+      ))}
+    </ul>
+  );
+
+  return (
+    <div className="bulkTextImportDialogBatchGroups">
+      {batchGroups.map((group) => {
+        const batchHeading = translate(
+          textImportBatchHeadingKey(group.batch.kind),
+          { index: group.kindOrdinal }
+        );
+        return (
+          <section
+            key={group.batch.id}
+            className="bulkTextImportDialogBatchGroup"
+            data-batch-kind={group.batch.kind}
+          >
+            <header className="bulkTextImportDialogBatchHeader">
+              <span className="bulkTextImportDialogBatchTitle">
+                {batchHeading}
+              </span>
+              <span className="bulkTextImportDialogBatchCount">
+                {translate("textImport.dialog.batchFileCount", {
+                  count: group.rows.length
+                })}
+              </span>
+              <span className="bulkTextImportDialogBulkApplyLabel">
+                {translate("textImport.dialog.bulkEncodingLabel")}
+              </span>
+              <BulkTextImportEncodingControl
+                className="bulkTextImportDialogBatchEncodingSelect"
+                controlLabel={translate("textImport.dialog.bulkEncodingLabel")}
+                ariaLabel={translate(
+                  "textImport.dialog.bulkEncodingSelectAriaLabel",
+                  { name: batchHeading }
+                )}
+                value={resolveBulkEncodingControlValue(group.rows)}
+                disabled={
+                  encodingLocked ||
+                  onBulkEncodingChange === undefined ||
+                  collectBulkEncodingApplyRowIds(group.rows).length === 0
+                }
+                translate={translate}
+                onChange={(value) =>
+                  onBulkEncodingChange?.(
+                    group.rows.map((row) => row.id),
+                    value
+                  )
+                }
+              />
+            </header>
+
+            {group.folderGroups.map((folderGroup) => {
+              const collapsed = collapsedFolderKeys.has(folderGroup.key);
+              return (
+                <div
+                  key={folderGroup.key}
+                  className="bulkTextImportDialogFolderScope"
+                  data-collapsed={collapsed ? "true" : "false"}
+                >
+                  <header className="bulkTextImportDialogFolderScopeHeader">
+                    <button
+                      type="button"
+                      className="bulkTextImportDialogFolderScopeToggle"
+                      aria-expanded={!collapsed}
+                      aria-label={translate(
+                        collapsed
+                          ? "textImport.dialog.folderScopeExpand"
+                          : "textImport.dialog.folderScopeCollapse",
+                        { name: folderGroup.sourceFolderPath }
+                      )}
+                      onClick={() => toggleFolder(folderGroup.key)}
+                    >
+                      <span aria-hidden="true">{collapsed ? "▶" : "▼"}</span>
+                    </button>
+                    <span
+                      className="bulkTextImportDialogFolderScopePath"
+                      title={folderGroup.sourceFolderPath}
+                      aria-label={folderGroup.sourceFolderPath}
+                    >
+                      {folderGroup.sourceFolderPath}
+                    </span>
+                    <span className="bulkTextImportDialogFolderScopeCount">
+                      {translate("textImport.dialog.folderFileCount", {
+                        count: folderGroup.rows.length
+                      })}
+                    </span>
+                    <span className="bulkTextImportDialogBulkApplyLabel">
+                      {translate("textImport.dialog.folderEncodingLabel")}
+                    </span>
+                    <BulkTextImportEncodingControl
+                      className="bulkTextImportDialogFolderEncodingSelect"
+                      controlLabel={translate(
+                        "textImport.dialog.folderEncodingLabel"
+                      )}
+                      ariaLabel={translate(
+                        "textImport.dialog.folderEncodingSelectAriaLabel",
+                        { name: folderGroup.sourceFolderPath }
+                      )}
+                      value={resolveBulkEncodingControlValue(folderGroup.rows)}
+                      disabled={
+                        encodingLocked ||
+                        onBulkEncodingChange === undefined ||
+                        collectBulkEncodingApplyRowIds(folderGroup.rows)
+                          .length === 0
+                      }
+                      translate={translate}
+                      onChange={(value) =>
+                        onBulkEncodingChange?.(
+                          folderGroup.rows.map((row) => row.id),
+                          value
+                        )
+                      }
+                    />
+                  </header>
+                  {collapsed ? null : renderRowList(folderGroup.rows)}
+                </div>
+              );
+            })}
+          </section>
+        );
+      })}
+
+      {ungroupedRows.length > 0 ? renderRowList(ungroupedRows) : null}
+    </div>
+  );
+}
+
+/**
+ * #420 Step 8: a batch- / folder-level encoding `<select>`. Options are the
+ * seven encodings plus 処理スキップ; a `"mixed"` value shows a disabled
+ * placeholder and is never emitted by `onChange`.
+ */
+function BulkTextImportEncodingControl({
+  className,
+  controlLabel,
+  ariaLabel,
+  value,
+  disabled,
+  translate,
+  onChange
+}: {
+  readonly className: string;
+  readonly controlLabel: string;
+  readonly ariaLabel: string;
+  readonly value: TextImportBulkEncodingControlValue;
+  readonly disabled: boolean;
+  readonly translate: Translate;
+  readonly onChange: (value: TextImportRowEncodingSelectValue) => void;
+}): JSX.Element {
+  return (
+    <select
+      className={className}
+      value={value}
+      disabled={disabled}
+      title={controlLabel}
+      aria-label={ariaLabel}
+      onChange={(event: ReactChangeEvent<HTMLSelectElement>) => {
+        const next = event.target.value;
+        if (next === TEXT_IMPORT_ROW_SKIP_SELECT_VALUE) {
+          onChange(next);
+          return;
+        }
+        if (isTextImportEncoding(next)) {
+          onChange(next);
+        }
+      }}
+    >
+      {value === "mixed" ? (
+        <option value="mixed" disabled>
+          {translate("textImport.dialog.bulkEncodingMixed")}
+        </option>
+      ) : null}
+      {TEXT_IMPORT_ENCODINGS.map((encoding) => (
+        <option key={encoding} value={encoding}>
+          {translate(textImportEncodingNameKey(encoding))}
+        </option>
+      ))}
+      <option disabled value="__bulk_separator">
+        ─────────
+      </option>
+      <option value={TEXT_IMPORT_ROW_SKIP_SELECT_VALUE}>
+        {translate("textImport.dialog.skipImport")}
+      </option>
+    </select>
   );
 }
 
@@ -875,9 +1280,13 @@ function BulkTextImportFileRow({
     : statusLabel;
   const sourceLabel = translate("textImport.dialog.sourceFile");
   const targetLabel = translate("textImport.dialog.targetFile");
-  const sourceDisplayPath =
+  // #420 Step 8: the parent folder is on the source-folder group header, so a
+  // grouped file row shows only the file name. The full path stays in `title`.
+  const sourceFullPath =
     row.sourcePath.length > 0 ? row.sourcePath : row.sourceDisplayPath;
-  const sourceTitle = `${sourceLabel}: ${sourceDisplayPath}`;
+  const sourceName =
+    getExternalPathBaseName(sourceFullPath) || sourceFullPath;
+  const sourceTitle = `${sourceLabel}: ${sourceFullPath}`;
   const targetTitle = `${targetLabel}: ${row.targetProjectRelativePath}`;
   const preview = bulkTextImportFilePreviewDisplay(
     row,
@@ -916,7 +1325,7 @@ function BulkTextImportFileRow({
             title={sourceTitle}
             aria-label={sourceTitle}
           >
-            {sourceDisplayPath}
+            {sourceName}
           </span>
           <span
             className="bulkTextImportDialogFilePathArrow"
@@ -963,7 +1372,7 @@ function BulkTextImportFileRow({
             value={encodingSelectValue}
             disabled={!encodingEditable}
             aria-label={translate("textImport.dialog.encodingSelectAriaLabel", {
-              name: sourceDisplayPath
+              name: sourceName
             })}
             onChange={(event: ReactChangeEvent<HTMLSelectElement>) => {
               const next = event.target.value;
@@ -1113,14 +1522,17 @@ function bulkTextImportFilePreviewDisplay(
     };
   }
 
-  const head = compactTextImportPreviewText(
-    row.previewHead,
-    translate("textImport.dialog.previewEmpty")
-  );
-  const tail = compactTextImportPreviewText(
-    row.previewTail,
-    translate("textImport.dialog.previewEmpty")
-  );
+  // Display-only truncation hint: the head is a 20-char slice from the start
+  // of the file, the tail a 20-char slice from the end, so show `head…` and
+  // `…tail`. The `previewHead` / `previewTail` state is never mutated, and an
+  // empty preview shows the "empty" placeholder alone (no stray ellipsis).
+  const emptyLabel = translate("textImport.dialog.previewEmpty");
+  const headCompact = compactTextImportPreviewText(row.previewHead, "");
+  const tailCompact = compactTextImportPreviewText(row.previewTail, "");
+  const head =
+    headCompact.length > 0 ? `${headCompact}...` : emptyLabel;
+  const tail =
+    tailCompact.length > 0 ? `...${tailCompact}` : emptyLabel;
   return {
     kind: "Ready",
     head,
@@ -1183,35 +1595,6 @@ function bulkTextImportPreviewFailureReasonText(
         )
       })
     : null;
-}
-
-function BulkTextImportFolderRow({
-  folder,
-  translate
-}: {
-  readonly folder: TextImportDryRunFolder;
-  readonly translate: Translate;
-}): JSX.Element {
-  return (
-    <li
-      className="bulkTextImportDialogFolderRow"
-      data-has-skipped-descendant={
-        folder.hasSkippedDescendant ? "true" : "false"
-      }
-    >
-      <span className="bulkTextImportDialogFolderSource">
-        {folder.sourcePath}
-      </span>
-      <span className="bulkTextImportDialogFolderTarget">
-        {folder.targetProjectRelativePath}
-      </span>
-      {folder.hasSkippedDescendant ? (
-        <span className="bulkTextImportDialogFolderSkipNote" role="note">
-          {translate("textImport.dialog.folderHasSkipped")}
-        </span>
-      ) : null}
-    </li>
-  );
 }
 
 /**

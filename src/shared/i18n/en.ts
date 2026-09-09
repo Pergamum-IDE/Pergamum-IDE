@@ -983,6 +983,24 @@ export const enTranslations = {
   "textImport.dialog.emptyTargetsHint": "Add a destination folder and text files.",
   "textImport.dialog.filesHeading": "Files ({count})",
   "textImport.dialog.foldersHeading": "Folders ({count})",
+  "textImport.dialog.batchHeading.drop": "Drop {index}",
+  "textImport.dialog.batchHeading.files": "Files {index}",
+  "textImport.dialog.batchHeading.folders": "Folders {index}",
+  "textImport.dialog.batchFileCount": "{count} files",
+  "textImport.dialog.folderFileCount": "{count} files",
+  "textImport.dialog.bulkEncodingLabel": "Apply to batch",
+  "textImport.dialog.folderEncodingLabel": "Apply to folder",
+  "textImport.dialog.bulkEncodingMixed": "Mixed",
+  "textImport.dialog.bulkEncodingSelectAriaLabel":
+    "Set the encoding for {name} in bulk",
+  "textImport.dialog.folderEncodingSelectAriaLabel":
+    "Set the encoding for the {name} folder in bulk",
+  "textImport.dialog.folderScopeExpand": "Expand {name}",
+  "textImport.dialog.folderScopeCollapse": "Collapse {name}",
+  "textImport.dialog.lineEndingToggle":
+    "Match line endings to application settings",
+  "textImport.dialog.lineEndingToggleHint":
+    "When enabled, imported Markdown files use the application's configured line ending. When disabled, original text file line endings are preserved.",
   "textImport.dialog.sourcePath": "Source",
   "textImport.dialog.targetPath": "Target",
   "textImport.dialog.encoding": "Encoding",

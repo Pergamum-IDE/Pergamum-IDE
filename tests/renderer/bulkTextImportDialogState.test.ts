@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   addSourcePaths,
+  appendSourceBatch,
+  applyBulkManualSkip,
+  applyBulkPreviewResponse,
+  applyBulkSelectedEncoding,
+  collectBulkEncodingApplyRowIds,
+  getExternalParentFolderPath,
+  getExternalPathBaseName,
+  groupBulkTextImportFileRows,
+  isExternalPathSameOrDescendant,
+  normalizeExternalPathForGrouping,
+  resolveBulkEncodingControlValue,
+  resolveSourceBatchIdForPath,
+  textImportBatchHeadingKey,
+  type TextImportSourceBatch,
   applyManualSkip,
   applyPreviewFailure,
   applyPreviewSuccess,
@@ -36,6 +50,7 @@ import {
   TEXT_IMPORT_ENCODINGS,
   TEXT_IMPORT_SKIP_REASONS,
   type ExecuteTextImportResult,
+  type PreviewTextImportFilesResult,
   type TextImportDryRunResult
 } from "../../src/shared/textImport";
 
@@ -816,6 +831,497 @@ describe("bulkTextImportDialogState", () => {
       );
       expect(textImportExecutionSummaryKey("failed")).toBe(
         "textImport.dialog.importFailed"
+      );
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #420 Step 8: source batches, folder grouping, bulk encoding control
+// ---------------------------------------------------------------------------
+
+describe("bulkTextImportDialogState — #420 Step 8", () => {
+  function step8Row(
+    overrides: Partial<BulkTextImportFileRowViewState> = {}
+  ): BulkTextImportFileRowViewState {
+    return {
+      id: "f1",
+      sourcePath: "/ext/A/a1.txt",
+      sourceDisplayPath: "a1.txt",
+      targetProjectRelativePath: "docs/A/a1.md",
+      renamed: false,
+      skipped: false,
+      skipReason: undefined,
+      manualSkipped: false,
+      selectedEncoding: "utf8",
+      bomKind: "none",
+      previewHead: "head",
+      previewTail: "tail",
+      previewStatus: "idle",
+      previewErrorReason: undefined,
+      previewRequestId: undefined,
+      decodeRecovered: false,
+      sourceBatchId: "text-import-batch-1",
+      sourceFolderGroupKey: "text-import-batch-1\u0000/ext/A",
+      ...overrides
+    };
+  }
+
+  describe("path string helpers", () => {
+    it("normalizes both separators and trims a trailing slash", () => {
+      expect(normalizeExternalPathForGrouping("C:\\works\\input\\A\\")).toBe(
+        "C:/works/input/A"
+      );
+      expect(normalizeExternalPathForGrouping("  /ext/A/  ")).toBe("/ext/A");
+      expect(normalizeExternalPathForGrouping("/")).toBe("/");
+    });
+
+    it("returns the parent folder for Windows and POSIX paths", () => {
+      expect(getExternalParentFolderPath("C:\\works\\input\\A\\a1.txt")).toBe(
+        "C:/works/input/A"
+      );
+      expect(getExternalParentFolderPath("/ext/A/a1.txt")).toBe("/ext/A");
+      expect(getExternalParentFolderPath("/a.txt")).toBe("/");
+      expect(getExternalParentFolderPath("bare.txt")).toBe("");
+    });
+
+    it("detects same-or-descendant across separators", () => {
+      expect(
+        isExternalPathSameOrDescendant("C:\\a\\b\\c.txt", "C:/a/b")
+      ).toBe(true);
+      expect(isExternalPathSameOrDescendant("/ext/A", "/ext/A")).toBe(true);
+      expect(isExternalPathSameOrDescendant("/ext/AB/x.txt", "/ext/A")).toBe(
+        false
+      );
+      expect(isExternalPathSameOrDescendant("/ext/A/x.txt", "")).toBe(false);
+    });
+
+    it("returns the trailing file name for a grouped row", () => {
+      expect(
+        getExternalPathBaseName("C:\\works\\Pergamum\\euc-jp.txt")
+      ).toBe("euc-jp.txt");
+      expect(getExternalPathBaseName("/ext/input/A/a1.txt")).toBe("a1.txt");
+      expect(getExternalPathBaseName("plain.txt")).toBe("plain.txt");
+      expect(getExternalPathBaseName("/ext/dir/")).toBe("dir");
+    });
+  });
+
+  describe("appendSourceBatch", () => {
+    it("creates exactly one batch for a drop of new paths", () => {
+      const state = createInitialBulkTextImportDialogState();
+      const next = appendSourceBatch(state, "drop", ["/ext/A", "/ext/B"]);
+      expect(next.sourceBatches).toHaveLength(1);
+      expect(next.sourceBatches[0]).toMatchObject({
+        kind: "drop",
+        createdOrder: 1,
+        sourcePaths: ["/ext/A", "/ext/B"]
+      });
+      expect(next.sourcePaths).toEqual(["/ext/A", "/ext/B"]);
+    });
+
+    it("assigns kind per operation and keeps add order", () => {
+      let state = createInitialBulkTextImportDialogState();
+      state = appendSourceBatch(state, "drop", ["/ext/A"]);
+      state = appendSourceBatch(state, "filePicker", ["/ext/x.txt"]);
+      state = appendSourceBatch(state, "folderPicker", ["/ext/C"]);
+      expect(state.sourceBatches.map((b) => b.kind)).toEqual([
+        "drop",
+        "filePicker",
+        "folderPicker"
+      ]);
+      expect(state.sourceBatches.map((b) => b.createdOrder)).toEqual([1, 2, 3]);
+      expect(state.sourcePaths).toEqual(["/ext/A", "/ext/x.txt", "/ext/C"]);
+    });
+
+    it("does not create a batch for a duplicate-only or cancelled add", () => {
+      let state = createInitialBulkTextImportDialogState();
+      state = appendSourceBatch(state, "drop", ["/ext/A"]);
+      expect(appendSourceBatch(state, "drop", ["/ext/A"])).toBe(state);
+      expect(appendSourceBatch(state, "filePicker", [])).toBe(state);
+      expect(state.sourceBatches).toHaveLength(1);
+    });
+
+    it("keeps only the genuinely new paths in a batch", () => {
+      let state = createInitialBulkTextImportDialogState();
+      state = appendSourceBatch(state, "drop", ["/ext/A"]);
+      state = appendSourceBatch(state, "drop", ["/ext/A", "/ext/B"]);
+      expect(state.sourceBatches[1].sourcePaths).toEqual(["/ext/B"]);
+      const flatFromBatches = state.sourceBatches.flatMap((b) => b.sourcePaths);
+      expect(flatFromBatches).toEqual(state.sourcePaths);
+    });
+  });
+
+  describe("resolveSourceBatchIdForPath + buildFileRowViewStates", () => {
+    const batches: TextImportSourceBatch[] = [
+      {
+        id: "text-import-batch-1",
+        kind: "folderPicker",
+        sourcePaths: ["C:\\works\\input\\A"],
+        createdOrder: 1
+      },
+      {
+        id: "text-import-batch-2",
+        kind: "filePicker",
+        sourcePaths: ["/ext/misc/single.txt"],
+        createdOrder: 2
+      }
+    ];
+
+    it("matches a file under a folder batch (Windows separators)", () => {
+      expect(
+        resolveSourceBatchIdForPath("C:/works/input/A/a1.txt", batches)
+      ).toBe("text-import-batch-1");
+    });
+
+    it("matches an exact file path in a picker batch", () => {
+      expect(
+        resolveSourceBatchIdForPath("/ext/misc/single.txt", batches)
+      ).toBe("text-import-batch-2");
+    });
+
+    it("falls back to the most recent batch when nothing matches", () => {
+      expect(resolveSourceBatchIdForPath("/ext/orphan.txt", batches)).toBe(
+        "text-import-batch-2"
+      );
+    });
+
+    it("returns '' when there are no batches", () => {
+      expect(resolveSourceBatchIdForPath("/ext/a.txt", [])).toBe("");
+    });
+
+    it("tags dry-run rows with a batch id and a folder group key", () => {
+      const result: TextImportDryRunResult = {
+        ok: true,
+        files: [
+          {
+            id: "a1",
+            sourcePath: "C:/works/input/A/a1.txt",
+            sourceDisplayPath: "a1.txt",
+            targetProjectRelativePath: "docs/A/a1.md",
+            originalTargetProjectRelativePath: "docs/A/a1.md",
+            selectedEncoding: "utf8",
+            bomKind: "none",
+            renamed: false,
+            skipped: false,
+            previewHead: "",
+            previewTail: ""
+          }
+        ],
+        folders: []
+      };
+      const [r] = buildFileRowViewStates(result, batches);
+      expect(r.sourceBatchId).toBe("text-import-batch-1");
+      expect(r.sourceFolderGroupKey).toBe(
+        "text-import-batch-1\u0000C:/works/input/A"
+      );
+    });
+  });
+
+  describe("groupBulkTextImportFileRows", () => {
+    const batches: TextImportSourceBatch[] = [
+      {
+        id: "b1",
+        kind: "drop",
+        sourcePaths: ["/ext/A", "/ext/B"],
+        createdOrder: 1
+      },
+      {
+        id: "b2",
+        kind: "filePicker",
+        sourcePaths: ["/ext/misc/one.txt"],
+        createdOrder: 2
+      }
+    ];
+
+    const rows = [
+      step8Row({
+        id: "a1",
+        sourcePath: "/ext/A/a1.txt",
+        sourceBatchId: "b1",
+        sourceFolderGroupKey: "b1\u0000/ext/A"
+      }),
+      step8Row({
+        id: "a2",
+        sourcePath: "/ext/A/a2.txt",
+        sourceBatchId: "b1",
+        sourceFolderGroupKey: "b1\u0000/ext/A"
+      }),
+      step8Row({
+        id: "b1f1",
+        sourcePath: "/ext/B/b1.txt",
+        sourceBatchId: "b1",
+        sourceFolderGroupKey: "b1\u0000/ext/B"
+      }),
+      step8Row({
+        id: "one",
+        sourcePath: "/ext/misc/one.txt",
+        sourceBatchId: "b2",
+        sourceFolderGroupKey: "b2\u0000/ext/misc"
+      })
+    ];
+
+    it("groups by batch then by source folder, with counts and ordinals", () => {
+      const { batchGroups, ungroupedRows } = groupBulkTextImportFileRows(
+        rows,
+        batches
+      );
+      expect(ungroupedRows).toEqual([]);
+      expect(batchGroups.map((g) => g.batch.id)).toEqual(["b1", "b2"]);
+      expect(batchGroups[0].kindOrdinal).toBe(1);
+      expect(batchGroups[1].kindOrdinal).toBe(1);
+      expect(batchGroups[0].rows).toHaveLength(3);
+      expect(
+        batchGroups[0].folderGroups.map((f) => [
+          f.sourceFolderPath,
+          f.rows.length
+        ])
+      ).toEqual([
+        ["/ext/A", 2],
+        ["/ext/B", 1]
+      ]);
+      expect(batchGroups[1].folderGroups[0].sourceFolderPath).toBe("/ext/misc");
+    });
+
+    it("increments kindOrdinal per batch kind", () => {
+      const twoDrops: TextImportSourceBatch[] = [
+        { id: "d1", kind: "drop", sourcePaths: ["/x"], createdOrder: 1 },
+        { id: "d2", kind: "drop", sourcePaths: ["/y"], createdOrder: 2 }
+      ];
+      const dropRows = [
+        step8Row({
+          id: "x",
+          sourcePath: "/x/a.txt",
+          sourceBatchId: "d1",
+          sourceFolderGroupKey: "d1\u0000/x"
+        }),
+        step8Row({
+          id: "y",
+          sourcePath: "/y/b.txt",
+          sourceBatchId: "d2",
+          sourceFolderGroupKey: "d2\u0000/y"
+        })
+      ];
+      const { batchGroups } = groupBulkTextImportFileRows(dropRows, twoDrops);
+      expect(batchGroups.map((g) => g.kindOrdinal)).toEqual([1, 2]);
+    });
+
+    it("returns rows with an unknown batch id as ungrouped", () => {
+      const orphan = [step8Row({ id: "z", sourceBatchId: "gone" })];
+      const { batchGroups, ungroupedRows } = groupBulkTextImportFileRows(
+        orphan,
+        batches
+      );
+      expect(batchGroups).toEqual([]);
+      expect(ungroupedRows.map((r) => r.id)).toEqual(["z"]);
+    });
+  });
+
+  describe("resolveBulkEncodingControlValue", () => {
+    it("returns the shared encoding when every editable row agrees", () => {
+      expect(
+        resolveBulkEncodingControlValue([
+          step8Row({ id: "a", selectedEncoding: "shiftJis" }),
+          step8Row({ id: "b", selectedEncoding: "shiftJis" })
+        ])
+      ).toBe("shiftJis");
+    });
+
+    it("returns 'skip' when every editable row is manually skipped", () => {
+      expect(
+        resolveBulkEncodingControlValue([
+          step8Row({ id: "a", manualSkipped: true }),
+          step8Row({ id: "b", manualSkipped: true })
+        ])
+      ).toBe("skip");
+    });
+
+    it("returns 'mixed' for mixed encodings or a skip/non-skip mix", () => {
+      expect(
+        resolveBulkEncodingControlValue([
+          step8Row({ id: "a", selectedEncoding: "shiftJis" }),
+          step8Row({ id: "b", selectedEncoding: "eucJp" })
+        ])
+      ).toBe("mixed");
+      expect(
+        resolveBulkEncodingControlValue([
+          step8Row({ id: "a", manualSkipped: true }),
+          step8Row({ id: "b", selectedEncoding: "utf8" })
+        ])
+      ).toBe("mixed");
+    });
+
+    it("returns 'mixed' when no row is encoding-editable", () => {
+      expect(
+        resolveBulkEncodingControlValue([
+          step8Row({ id: "a", skipped: true, skipReason: "targetExists" })
+        ])
+      ).toBe("mixed");
+    });
+  });
+
+  describe("collectBulkEncodingApplyRowIds", () => {
+    it("keeps normal / decodeFailed / manualSkipped rows and drops the rest", () => {
+      const ids = collectBulkEncodingApplyRowIds([
+        step8Row({ id: "normal" }),
+        step8Row({
+          id: "decode",
+          skipped: true,
+          skipReason: "decodeFailed"
+        }),
+        step8Row({ id: "manual", manualSkipped: true }),
+        step8Row({ id: "exists", skipped: true, skipReason: "targetExists" }),
+        step8Row({ id: "nottext", skipped: true, skipReason: "notTextFile" }),
+        step8Row({ id: "nosrc", sourcePath: "" })
+      ]);
+      expect(ids).toEqual(["normal", "decode", "manual"]);
+    });
+  });
+
+  describe("applyBulkSelectedEncoding / applyBulkManualSkip", () => {
+    it("applies an encoding to the targeted rows only, clearing manual skip", () => {
+      const rows = [
+        step8Row({ id: "a", selectedEncoding: "utf8", manualSkipped: true }),
+        step8Row({ id: "b", selectedEncoding: "utf8" }),
+        step8Row({ id: "c", selectedEncoding: "utf8" })
+      ];
+      const next = applyBulkSelectedEncoding(rows, ["a", "b"], "eucJp", 9);
+      expect(next[0]).toMatchObject({
+        selectedEncoding: "eucJp",
+        manualSkipped: false,
+        previewStatus: "loading",
+        previewRequestId: 9
+      });
+      expect(next[1].selectedEncoding).toBe("eucJp");
+      expect(next[2].selectedEncoding).toBe("utf8");
+      expect(next[2].previewStatus).toBe("idle");
+    });
+
+    it("returns the same reference for an empty id list", () => {
+      const rows = [step8Row()];
+      expect(applyBulkSelectedEncoding(rows, [], "eucJp", 1)).toBe(rows);
+      expect(applyBulkManualSkip(rows, [])).toBe(rows);
+    });
+
+    it("marks the targeted rows manually skipped, ignoring non-decode skips", () => {
+      const rows = [
+        step8Row({ id: "a" }),
+        step8Row({ id: "b", skipped: true, skipReason: "targetExists" })
+      ];
+      const next = applyBulkManualSkip(rows, ["a", "b"]);
+      expect(next[0].manualSkipped).toBe(true);
+      expect(next[1].manualSkipped).toBe(false);
+    });
+  });
+
+  describe("applyBulkPreviewResponse", () => {
+    function loadingRows(): BulkTextImportFileRowViewState[] {
+      return [
+        step8Row({ id: "a", previewStatus: "loading", previewRequestId: 5 }),
+        step8Row({ id: "b", previewStatus: "loading", previewRequestId: 5 })
+      ];
+    }
+
+    it("applies per-file success and failure by id", () => {
+      const response: PreviewTextImportFilesResult = {
+        ok: true,
+        files: [
+          {
+            ok: true,
+            id: "a",
+            sourcePath: "/ext/A/a1.txt",
+            encoding: "eucJp",
+            bomKind: "none",
+            previewHead: "H",
+            previewTail: "T"
+          },
+          {
+            ok: false,
+            id: "b",
+            sourcePath: "/ext/A/a2.txt",
+            encoding: "eucJp",
+            reason: "decodeFailed"
+          }
+        ]
+      };
+      const next = applyBulkPreviewResponse(loadingRows(), 5, response, [
+        "a",
+        "b"
+      ]);
+      expect(next[0]).toMatchObject({ previewStatus: "ready", previewHead: "H" });
+      expect(next[1]).toMatchObject({
+        previewStatus: "failed",
+        previewErrorReason: "decodeFailed"
+      });
+    });
+
+    it("fails every requested row on a top-level failure", () => {
+      const next = applyBulkPreviewResponse(loadingRows(), 5, { ok: false }, [
+        "a",
+        "b"
+      ]);
+      expect(next.map((r) => r.previewStatus)).toEqual(["failed", "failed"]);
+      expect(next.every((r) => r.previewErrorReason === "updateFailed")).toBe(
+        true
+      );
+    });
+
+    it("fails a requested row missing from the response", () => {
+      const response: PreviewTextImportFilesResult = {
+        ok: true,
+        files: [
+          {
+            ok: true,
+            id: "a",
+            sourcePath: "/ext/A/a1.txt",
+            encoding: "eucJp",
+            bomKind: "none",
+            previewHead: "H",
+            previewTail: "T"
+          }
+        ]
+      };
+      const next = applyBulkPreviewResponse(loadingRows(), 5, response, [
+        "a",
+        "b"
+      ]);
+      expect(next[1]).toMatchObject({
+        previewStatus: "failed",
+        previewErrorReason: "updateFailed"
+      });
+    });
+
+    it("ignores rows no longer waiting on the request id (stale)", () => {
+      const rows = [
+        step8Row({ id: "a", previewStatus: "loading", previewRequestId: 7 })
+      ];
+      const response: PreviewTextImportFilesResult = {
+        ok: true,
+        files: [
+          {
+            ok: true,
+            id: "a",
+            sourcePath: "/ext/A/a1.txt",
+            encoding: "eucJp",
+            bomKind: "none",
+            previewHead: "STALE",
+            previewTail: "T"
+          }
+        ]
+      };
+      expect(applyBulkPreviewResponse(rows, 5, response, ["a"])).toBe(rows);
+    });
+  });
+
+  describe("textImportBatchHeadingKey", () => {
+    it("maps each batch kind to its heading key", () => {
+      expect(textImportBatchHeadingKey("drop")).toBe(
+        "textImport.dialog.batchHeading.drop"
+      );
+      expect(textImportBatchHeadingKey("filePicker")).toBe(
+        "textImport.dialog.batchHeading.files"
+      );
+      expect(textImportBatchHeadingKey("folderPicker")).toBe(
+        "textImport.dialog.batchHeading.folders"
       );
     });
   });
