@@ -93,6 +93,17 @@ function baseApplicationSettings(
       },
       undoHistoryMinDepth: getCatalogDefaultValue("editor.undoHistoryMinDepth")
     },
+    search: {
+      nearby: {
+        unit: getCatalogDefaultValue("search.nearby.unit"),
+        characterDistance: getCatalogDefaultValue(
+          "search.nearby.characterDistance"
+        ),
+        paragraphDistance: getCatalogDefaultValue(
+          "search.nearby.paragraphDistance"
+        )
+      }
+    },
     files: {
       newFile: {
         lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),

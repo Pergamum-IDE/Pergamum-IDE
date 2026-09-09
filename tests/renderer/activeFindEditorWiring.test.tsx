@@ -230,7 +230,7 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
   it("closes the panel + resets inputs on a genuine tab switch and returns focus on close", () => {
     const closeEffect = source.slice(
       source.indexOf("// A genuine tab switch closes the panel"),
-      source.indexOf("// A genuine tab switch closes the panel") + 400
+      source.indexOf("// A genuine tab switch closes the panel") + 640
     );
     expect(closeEffect).toContain("setFindOpen(false)");
     expect(closeEffect).toContain(
@@ -297,6 +297,223 @@ describe("EditorSurface replace-current wiring (#424 Slice 3)", () => {
     expect(gate).toContain("findTemplateError === null");
     expect(gate).toContain("findMatchCount > 0");
     expect(gate).toContain("findActiveIndex !== null");
+  });
+});
+
+describe("EditorSurface replace-all + 語彙 wiring (#424 Slice 4)", () => {
+  const source = readFileSync("src/renderer/EditorSurface.tsx", "utf8");
+
+  it("threads the replace-all + glossary-candidate props into the panel", () => {
+    expect(source).toContain("replaceAllEnabled={findReplaceAllEnabled}");
+    expect(source).toContain("glossaryCandidates={findGlossaryCandidates}");
+    expect(source).toContain("onReplaceAll={handleFindReplaceAll}");
+  });
+
+  it("builds the 語彙 candidates from the project glossary entries", () => {
+    expect(source).toContain('from "./find/findGlossaryPicker"');
+    expect(source).toContain(
+      "collectFindGlossaryCandidates(glossaryEntries)"
+    );
+  });
+
+  it("replace-all re-evaluates the LIVE buffer and dispatches ONE transaction", () => {
+    const handler = source.slice(
+      source.indexOf("const handleFindReplaceAll"),
+      source.indexOf("const handleFindQueryKindChange")
+    );
+    expect(handler).toContain("controller.getBufferText() ?? content");
+    expect(handler).toContain("buildActiveDocumentReplaceAllChanges(");
+    expect(handler).toContain("controller.applyReplaceInBufferChanges(built.changes)");
+    expect(handler).toContain("resolveActiveFindIndexAfterReplaceAll(");
+    // never a disk save or the project-wide replace path
+    expect(handler).not.toContain("saveProjectDocument");
+    expect(handler).not.toContain("writeMarkdown");
+    expect(handler).not.toContain("applyProjectReplace");
+  });
+
+  it("gates replace-all like replace-current minus the current-match requirement", () => {
+    const gate = source.slice(
+      source.indexOf("const findReplaceAllEnabled ="),
+      source.indexOf("const findReplaceAllEnabled =") + 400
+    );
+    expect(gate).toContain('findMode === "replace"');
+    expect(gate).toContain("!readOnly");
+    expect(gate).toContain("findControllerReady");
+    expect(gate).toContain("findHasReplaceQuery");
+    expect(gate).toContain("findRegexError === null");
+    expect(gate).toContain("findTemplateError === null");
+    expect(gate).toContain("findMatchCount > 0");
+    expect(gate).not.toContain("findActiveIndex !== null");
+  });
+});
+
+describe("EditorSurface glossary search mode wiring (#424 Slice 6)", () => {
+  const source = readFileSync("src/renderer/EditorSurface.tsx", "utf8");
+
+  it("threads the queryKind + glossary-mode props into the panel", () => {
+    expect(source).toContain("queryKind={findQueryKind}");
+    expect(source).toContain("glossaryRelation={findGlossaryRelation}");
+    expect(source).toContain("searchGlossaryAtomIds={findSearchGlossaryAtomIds}");
+    expect(source).toContain("replaceGlossaryAtomId={findReplaceGlossaryAtomId}");
+    expect(source).toContain("onQueryKindChange={handleFindQueryKindChange}");
+    expect(source).toContain(
+      "onGlossaryRelationChange={handleFindGlossaryRelationChange}"
+    );
+    expect(source).toContain(
+      "onSearchGlossaryAtomIdsChange={handleFindSearchGlossaryAtomIdsChange}"
+    );
+    expect(source).toContain(
+      "onReplaceGlossaryAtomIdChange={handleFindReplaceGlossaryAtomIdChange}"
+    );
+  });
+
+  it("evaluates glossary matches through the shared surface matcher", () => {
+    expect(source).toContain('from "./find/activeGlossaryFind"');
+    expect(source).toContain("buildActiveGlossaryFindTerms(");
+    expect(source).toContain("runActiveGlossaryFind(");
+    const evalMemo = source.slice(
+      source.indexOf("const findEvaluation = useMemo"),
+      source.indexOf("const findMatches = findEvaluation.matches")
+    );
+    expect(evalMemo).toContain('findQueryKind === "glossary"');
+    // relation only matters on the Search tab
+    expect(evalMemo).toContain('findMode === "replace" ? "any" : findGlossaryRelation');
+  });
+
+  it("#424 Slice 7: threads the effective nearby-search settings into eval + panel", () => {
+    expect(source).toContain(
+      "glossaryNearbySearchSettings: ActiveGlossaryNearbySettings"
+    );
+    expect(source).toContain(
+      'from "./find/activeGlossaryNearbySearch"'
+    );
+    const evalMemo = source.slice(
+      source.indexOf("const findEvaluation = useMemo"),
+      source.indexOf("const findMatches = findEvaluation.matches")
+    );
+    // the 4th arg to runActiveGlossaryFind is the effective nearby settings
+    expect(evalMemo).toContain("glossaryNearbySearchSettings");
+    expect(source).toContain(
+      "glossaryNearbySettings={glossaryNearbySearchSettings}"
+    );
+    // App.tsx feeds it from the effective (project > application) settings
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    expect(appSource).toContain(
+      "glossaryNearbySearchSettings={\n                          effectiveSettings.search.nearby\n                        }"
+    );
+  });
+
+  it("glossary replace-current / replace-all insert the LITERAL replace text (no template)", () => {
+    const current = source.slice(
+      source.indexOf("const handleFindReplaceCurrent"),
+      source.indexOf("const handleFindReplaceAll")
+    );
+    const all = source.slice(
+      source.indexOf("const handleFindReplaceAll"),
+      source.indexOf("const handleFindQueryKindChange")
+    );
+    for (const handler of [current, all]) {
+      expect(handler).toContain('findQueryKind === "glossary"');
+      expect(handler).toContain("controller.getBufferText() ?? content");
+      expect(handler).toContain("runActiveGlossaryFind(");
+      // literal insert on the glossary path — the atom's value drives the
+      // search, the replace text goes in verbatim
+      expect(handler).toContain("insert: findReplaceText");
+      expect(handler).not.toContain("saveProjectDocument");
+      expect(handler).not.toContain("applyProjectReplace");
+    }
+    // the glossary branch returns before the text template path
+    expect(current).toContain("if (findRegexError !== null) {\n      return;");
+  });
+
+  it("a genuine tab switch resets the glossary-mode state back to text", () => {
+    const resetEffect = source.slice(
+      source.indexOf("// A genuine tab switch closes the panel"),
+      source.indexOf("// A genuine tab switch closes the panel") + 620
+    );
+    expect(resetEffect).toContain('setFindQueryKind("text")');
+    expect(resetEffect).toContain('setFindGlossaryRelation("any")');
+    expect(resetEffect).toContain("setFindSearchGlossaryAtomIds([])");
+    expect(resetEffect).toContain("setFindReplaceGlossaryAtomId(null)");
+    expect(resetEffect).toContain("}, [documentKey]);");
+  });
+
+  it("keeps the search-multi and replace-single glossary selections separate", () => {
+    // no code path copies one into the other
+    expect(source).not.toContain(
+      "setFindReplaceGlossaryAtomId(findSearchGlossaryAtomIds"
+    );
+    expect(source).not.toContain(
+      "setFindSearchGlossaryAtomIds([findReplaceGlossaryAtomId"
+    );
+  });
+});
+
+describe("MarkdownEditor replace controller for #424 Slice 4 (replace-all)", () => {
+  function captureController(value: string) {
+    let controller: MarkdownEditorParagraphIndentController | null = null;
+    const { contentDom } = mount({
+      value,
+      onParagraphIndentControllerChange: (next) => {
+        controller = next;
+      }
+    });
+    return { controller: () => controller!, contentDom };
+  }
+
+  function ctrlZ(): KeyboardEvent {
+    return new KeyboardEvent("keydown", {
+      key: "z",
+      code: "KeyZ",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+  }
+
+  it("applies every change in one transaction and Undo restores them all at once", () => {
+    const { controller, contentDom } = captureController("a x a x a");
+
+    act(() => {
+      controller().applyReplaceInBufferChanges([
+        { from: 0, to: 1, insert: "B" },
+        { from: 4, to: 5, insert: "B" },
+        { from: 8, to: 9, insert: "B" }
+      ]);
+    });
+    expect(controller().getBufferText()).toBe("B x B x B");
+
+    act(() => {
+      contentDom().dispatchEvent(ctrlZ());
+    });
+    expect(controller().getBufferText()).toBe("a x a x a");
+  });
+
+  it("an empty change list is a no-op that still reports success", () => {
+    const { controller } = captureController("unchanged");
+    let applied = false;
+    act(() => {
+      applied = controller().applyReplaceInBufferChanges([]);
+    });
+    expect(applied).toBe(true);
+    expect(controller().getBufferText()).toBe("unchanged");
+  });
+
+  it("a read-only buffer refuses a multi-change replace-all batch", () => {
+    let controller: MarkdownEditorParagraphIndentController | null = null;
+    mount({
+      value: "a a a",
+      readOnly: true,
+      onParagraphIndentControllerChange: (c) => {
+        controller = c;
+      }
+    });
+    const applied = controller!.applyReplaceInBufferChanges([
+      { from: 0, to: 1, insert: "X" },
+      { from: 2, to: 3, insert: "X" }
+    ]);
+    expect(applied).toBe(false);
+    expect(controller!.getBufferText()).toBe("a a a");
   });
 });
 

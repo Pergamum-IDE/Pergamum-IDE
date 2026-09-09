@@ -73,6 +73,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "appearance",
         "project",
         "editor",
+        "searchReplace",
         "imageAttachment",
         "preview",
         "documentMap",
@@ -200,7 +201,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
           "preview.renderer",
-          "preview.updateDelayMs"
+          "preview.updateDelayMs",
+          "search.nearby.unit",
+          "search.nearby.characterDistance",
+          "search.nearby.paragraphDistance"
         ].sort()
       );
     });

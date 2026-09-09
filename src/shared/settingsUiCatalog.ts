@@ -52,6 +52,7 @@ export type SettingCategory =
   | "application"
   | "appearance"
   | "editor"
+  | "searchReplace"
   | "imageAttachment"
   | "preview"
   | "documentMap"
@@ -108,6 +109,13 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     id: "editor",
     order: 300,
     labelKey: "settings.category.editor.label"
+  },
+  {
+    // #424 Slice 7: Search & Replace sits after Editor — a document-authoring
+    // concern shared by the active Find panel and (later) project-wide search.
+    id: "searchReplace",
+    order: 340,
+    labelKey: "settings.category.searchReplace.label"
   },
   {
     // #407: clipboard image attachment settings sit directly after Editor —
@@ -359,6 +367,12 @@ const previewUpdateDelayRange = getCatalogEntry(
 const undoHistoryMinDepthRange = getCatalogEntry(
   "editor.undoHistoryMinDepth"
 ).numericRange;
+const nearbyCharacterDistanceRange = getCatalogEntry(
+  "search.nearby.characterDistance"
+).numericRange;
+const nearbyParagraphDistanceRange = getCatalogEntry(
+  "search.nearby.paragraphDistance"
+).numericRange;
 const notificationDurationRange = getCatalogEntry(
   "workbench.notification.durationMs"
 ).numericRange;
@@ -407,6 +421,56 @@ export const settingCatalogItems = defineSettingCatalog([
       step: 100
     },
     defaultValue: getCatalogDefaultValue("editor.undoHistoryMinDepth")
+  },
+  {
+    // #424 Slice 7: glossary "近傍" (Nearby) search range.
+    key: "search.nearby.unit",
+    category: "searchReplace",
+    order: 100,
+    labelKey: "settings.search.nearby.unit.label",
+    descriptionKey: "settings.search.nearby.unit.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "characters",
+          labelKey: "settings.search.nearby.unit.option.characters.label"
+        },
+        {
+          value: "paragraphs",
+          labelKey: "settings.search.nearby.unit.option.paragraphs.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("search.nearby.unit")
+  },
+  {
+    key: "search.nearby.characterDistance",
+    category: "searchReplace",
+    order: 200,
+    labelKey: "settings.search.nearby.characterDistance.label",
+    descriptionKey: "settings.search.nearby.characterDistance.description",
+    control: {
+      kind: "number",
+      min: nearbyCharacterDistanceRange.min,
+      max: nearbyCharacterDistanceRange.max,
+      step: 50
+    },
+    defaultValue: getCatalogDefaultValue("search.nearby.characterDistance")
+  },
+  {
+    key: "search.nearby.paragraphDistance",
+    category: "searchReplace",
+    order: 300,
+    labelKey: "settings.search.nearby.paragraphDistance.label",
+    descriptionKey: "settings.search.nearby.paragraphDistance.description",
+    control: {
+      kind: "number",
+      min: nearbyParagraphDistanceRange.min,
+      max: nearbyParagraphDistanceRange.max,
+      step: 1
+    },
+    defaultValue: getCatalogDefaultValue("search.nearby.paragraphDistance")
   },
   {
     key: "editor.paragraphIndent.excludeLeadingCharacters",

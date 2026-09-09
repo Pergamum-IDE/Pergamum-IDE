@@ -200,6 +200,21 @@ export interface ApplicationImageAttachmentSettings {
   insertMarkdownLink: boolean;
 }
 
+// #424 Slice 7: glossary "近傍" (Nearby) relation search range.
+// applicationWithProjectOverride — always concrete here (never sparse);
+// resolveEffectiveSettings applies the Project > Application > Built-in chain.
+export type SearchNearbyUnit = "characters" | "paragraphs";
+
+export interface SearchNearbySettings {
+  unit: SearchNearbyUnit;
+  characterDistance: number;
+  paragraphDistance: number;
+}
+
+export interface ApplicationSearchSettings {
+  nearby: SearchNearbySettings;
+}
+
 // #174: language and statusBar.visible moved here from legacy top-level
 // ApplicationSettings.language / .showStatusBar — both applicationOnly
 // catalog entries, always resolved to a concrete value at read time (not
@@ -223,6 +238,7 @@ export interface ApplicationSettings {
   workbench: ApplicationWorkbenchSettings;
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
+  search: ApplicationSearchSettings;
   files: ApplicationFilesSettings;
   imageAttachment: ApplicationImageAttachmentSettings;
   // #375: Document Map draw colours + dialogue delimiter pairs.
@@ -241,6 +257,7 @@ export interface SaveApplicationSettingsRequest {
   workbench: ApplicationWorkbenchSettings;
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
+  search: ApplicationSearchSettings;
   files: ApplicationFilesSettings;
   imageAttachment: ApplicationImageAttachmentSettings;
   documentMap: DocumentMapSettings;
@@ -296,9 +313,22 @@ export interface ProjectImageAttachmentSettings {
   insertMarkdownLink?: boolean;
 }
 
+// #424 Slice 7: sparse project override — only the keys the project actually
+// overrides are present, mirroring ProjectEditorSettings etc.
+export interface ProjectSearchNearbySettings {
+  unit?: SearchNearbyUnit;
+  characterDistance?: number;
+  paragraphDistance?: number;
+}
+
+export interface ProjectSearchSettings {
+  nearby?: ProjectSearchNearbySettings;
+}
+
 export interface ProjectSettings {
   editor?: ProjectEditorSettings;
   preview?: ProjectPreviewSettings;
+  search?: ProjectSearchSettings;
   files?: ProjectFilesSettings;
   imageAttachment?: ProjectImageAttachmentSettings;
   documentMap?: ProjectDocumentMapSettings;
@@ -350,6 +380,8 @@ export interface EffectiveSettings {
   workbench: EffectiveWorkbenchSettings;
   commandPalette: EffectiveCommandPaletteSettings;
   editor: EffectiveEditorSettings;
+  /** #424 Slice 7: concrete after Project > Application > Built-in. */
+  search: ApplicationSearchSettings;
   files: EffectiveFilesSettings;
   imageAttachment: EffectiveImageAttachmentSettings;
   /** #375: applicationOnly, passes straight through (always concrete). */
@@ -383,6 +415,17 @@ export const defaultNotificationDurationMs: number = getCatalogDefaultValue(
 
 export const defaultNotificationOutputEnabled: boolean =
   getCatalogDefaultValue("notification.output.enabled");
+
+// #424 Slice 7: catalog is the only source of truth for these defaults.
+export const defaultSearchNearbySettings: SearchNearbySettings = {
+  unit: getCatalogDefaultValue("search.nearby.unit"),
+  characterDistance: getCatalogDefaultValue("search.nearby.characterDistance"),
+  paragraphDistance: getCatalogDefaultValue("search.nearby.paragraphDistance")
+};
+
+export function cloneDefaultSearchSettings(): ApplicationSearchSettings {
+  return { nearby: { ...defaultSearchNearbySettings } };
+}
 
 export const builtInDefaultSettings: EffectiveSettings = {
   preview: {
@@ -482,6 +525,7 @@ export const builtInDefaultSettings: EffectiveSettings = {
       "editor.undoHistoryMinDepth"
     )
   },
+  search: cloneDefaultSearchSettings(),
   files: {
     newFile: {
       lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
@@ -576,6 +620,7 @@ export const defaultApplicationSettings: ApplicationSettings = {
     },
     undoHistoryMinDepth: builtInDefaultSettings.editor.undoHistoryMinDepth
   },
+  search: cloneDefaultSearchSettings(),
   files: {
     newFile: {
       lineEnding: builtInDefaultSettings.files.newFile.lineEnding,
@@ -668,6 +713,7 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       undoHistoryMinDepth:
         defaultApplicationSettings.editor.undoHistoryMinDepth
     },
+    search: cloneDefaultSearchSettings(),
     files: {
       newFile: {
         lineEnding: defaultApplicationSettings.files.newFile.lineEnding,
@@ -809,6 +855,24 @@ export function resolveEffectiveSettings(
       // #394 Step 1: applicationOnly, always concrete already — same
       // fallback-free pass-through as lineEnding/whitespace above.
       undoHistoryMinDepth: applicationSettings.editor.undoHistoryMinDepth
+    },
+    // #424 Slice 7: nearby search range — Project override > Application >
+    // Built-in, per key (the project override is sparse).
+    search: {
+      nearby: {
+        unit:
+          projectSettings?.search?.nearby?.unit ??
+          applicationSettings.search.nearby.unit ??
+          builtInDefaultSettings.search.nearby.unit,
+        characterDistance:
+          projectSettings?.search?.nearby?.characterDistance ??
+          applicationSettings.search.nearby.characterDistance ??
+          builtInDefaultSettings.search.nearby.characterDistance,
+        paragraphDistance:
+          projectSettings?.search?.nearby?.paragraphDistance ??
+          applicationSettings.search.nearby.paragraphDistance ??
+          builtInDefaultSettings.search.nearby.paragraphDistance
+      }
     },
     files: {
       newFile: {

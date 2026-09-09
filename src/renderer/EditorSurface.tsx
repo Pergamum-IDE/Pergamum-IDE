@@ -46,15 +46,24 @@ import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import {
   DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
   activeDocumentReplacementTemplateError,
+  buildActiveDocumentReplaceAllChanges,
   buildActiveDocumentReplacement,
   clampActiveFindIndex,
   evaluateActiveDocumentFind,
   resolveActiveFindCursor,
+  resolveActiveFindIndexAfterReplaceAll,
   resolveActiveFindIndexAfterReplacement,
   toggleActiveDocumentFindOption,
   type ActiveDocumentFindOptions,
   type ReplacementTemplateError
 } from "./find/activeDocumentFind";
+import { collectFindGlossaryCandidates } from "./find/findGlossaryPicker";
+import {
+  buildActiveGlossaryFindTerms,
+  runActiveGlossaryFind,
+  type ActiveGlossarySearchRelation
+} from "./find/activeGlossaryFind";
+import type { ActiveGlossaryNearbySettings } from "./find/activeGlossaryNearbySearch";
 import type { ActiveFindHighlightSpec } from "./find/activeFindHighlightExtension";
 import type { ActiveFindPanelMode } from "./find/activeFindKeymapExtension";
 import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
@@ -417,6 +426,8 @@ interface EditorSurfaceProps {
    * affects Save, dirty state, or selection.
    */
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  /** #424 Slice 7: glossary "nearby" relation search range (effective). */
+  glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -550,6 +561,7 @@ export function EditorSurface({
   markerGlyph,
   undoHistoryMinDepth,
   whitespaceSettings,
+  glossaryNearbySearchSettings,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -609,6 +621,7 @@ export function EditorSurface({
           markerGlyph={markerGlyph}
           undoHistoryMinDepth={undoHistoryMinDepth}
           whitespaceSettings={whitespaceSettings}
+          glossaryNearbySearchSettings={glossaryNearbySearchSettings}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
@@ -694,6 +707,8 @@ interface MarkdownEditorSurfaceProps {
   /** #394 Step 1: see EditorSurfaceProps's own doc comment. */
   undoHistoryMinDepth: number;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  /** #424 Slice 7: glossary "nearby" relation search range (effective). */
+  glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -773,6 +788,7 @@ function MarkdownEditorSurface({
   markerGlyph,
   undoHistoryMinDepth,
   whitespaceSettings,
+  glossaryNearbySearchSettings,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -878,6 +894,13 @@ function MarkdownEditorSurface({
     () => ({ entries: glossaryEntries }),
     [glossaryEntries]
   );
+  // #424 Slice 4: project glossary atoms for the Find panel's `語彙` picker —
+  // project-ordered, each tagged with whether it is its entry's representative
+  // form. The picker inserts an atom's RAW value into the query.
+  const findGlossaryCandidates = useMemo(
+    () => collectFindGlossaryCandidates(glossaryEntries),
+    [glossaryEntries]
+  );
   const reportedDocumentOpenIdRef = useRef<string | null>(null);
   const editorPaneRef = useRef<HTMLElement | null>(null);
   const previewPaneRef = useRef<HTMLElement | null>(null);
@@ -899,6 +922,21 @@ function MarkdownEditorSurface({
   const [findOptions, setFindOptions] = useState<ActiveDocumentFindOptions>(
     DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS
   );
+  // #424 Slice 6: text vs Glossary Atom search. `search` selects multiple atoms
+  // (`findSearchGlossaryAtomIds` + `findGlossaryRelation`), `replace` selects
+  // one (`findReplaceGlossaryAtomId`); the two selections are kept SEPARATE so
+  // switching tabs never silently reuses the other's picks.
+  const [findQueryKind, setFindQueryKind] = useState<"text" | "glossary">(
+    "text"
+  );
+  const [findGlossaryRelation, setFindGlossaryRelation] =
+    useState<ActiveGlossarySearchRelation>("any");
+  const [findSearchGlossaryAtomIds, setFindSearchGlossaryAtomIds] = useState<
+    string[]
+  >([]);
+  const [findReplaceGlossaryAtomId, setFindReplaceGlossaryAtomId] = useState<
+    string | null
+  >(null);
   // #424 Slice 3: the active editor's replace-transaction controller, captured
   // by wrapping the bubble-up callback so replace-current can dispatch a real
   // `input.replace` transaction without any App.tsx wiring. `ready` mirrors it
@@ -933,19 +971,83 @@ function MarkdownEditorSurface({
   // yanking the viewport, but changing a search input DOES re-seed.
   const findSeededInputKeyRef = useRef<string | null>(null);
 
-  const findEvaluation = useMemo(
+  // #424 Slice 6: the selected glossary atom ids for the ACTIVE tab, and the
+  // shared-matcher terms they resolve to (raw value + each atom's matchFlags).
+  const findGlossarySelectedAtomIds = useMemo(
     () =>
-      findOpen && findQuery.length > 0
-        ? evaluateActiveDocumentFind(content, findQuery, findOptions)
-        : { matches: [], regexError: null },
-    [findOpen, findQuery, findOptions, content]
+      findMode === "replace"
+        ? findReplaceGlossaryAtomId !== null
+          ? [findReplaceGlossaryAtomId]
+          : []
+        : findSearchGlossaryAtomIds,
+    [findMode, findReplaceGlossaryAtomId, findSearchGlossaryAtomIds]
   );
+  const findGlossaryTerms = useMemo(
+    () =>
+      buildActiveGlossaryFindTerms(
+        findGlossaryCandidates,
+        findGlossarySelectedAtomIds
+      ),
+    [findGlossaryCandidates, findGlossarySelectedAtomIds]
+  );
+
+  const findEvaluation = useMemo(() => {
+    if (!findOpen) {
+      return { matches: [], regexError: null };
+    }
+    if (findQueryKind === "glossary") {
+      return {
+        matches:
+          findGlossaryTerms.length > 0
+            ? runActiveGlossaryFind(
+                content,
+                findGlossaryTerms,
+                // Relation is a Search-tab concept; a single Replace-tab atom
+                // is the same under "any" / "all" / "nearby".
+                findMode === "replace" ? "any" : findGlossaryRelation,
+                glossaryNearbySearchSettings
+              )
+            : [],
+        regexError: null
+      };
+    }
+    return findQuery.length > 0
+      ? evaluateActiveDocumentFind(content, findQuery, findOptions)
+      : { matches: [], regexError: null };
+  }, [
+    findOpen,
+    findQueryKind,
+    findGlossaryTerms,
+    findMode,
+    findGlossaryRelation,
+    glossaryNearbySearchSettings,
+    findQuery,
+    findOptions,
+    content
+  ]);
   const findMatches = findEvaluation.matches;
   const findRegexError = findEvaluation.regexError;
   const findMatchCount = findMatches.length;
   const findInputKey = useMemo(
-    () => JSON.stringify([findQuery, findOptions]),
-    [findQuery, findOptions]
+    () =>
+      findQueryKind === "glossary"
+        ? JSON.stringify([
+            "glossary",
+            findMode,
+            findSearchGlossaryAtomIds,
+            findReplaceGlossaryAtomId,
+            findGlossaryRelation
+          ])
+        : JSON.stringify(["text", findQuery, findOptions]),
+    [
+      findQueryKind,
+      findMode,
+      findSearchGlossaryAtomIds,
+      findReplaceGlossaryAtomId,
+      findGlossaryRelation,
+      findQuery,
+      findOptions
+    ]
   );
 
   // #424 Slice 3: replacement-template error (regex mode only) + the single
@@ -953,24 +1055,43 @@ function MarkdownEditorSurface({
   // presentational.
   const findTemplateError = useMemo<ReplacementTemplateError | null>(
     () =>
-      findOpen && findMode === "replace"
+      // Glossary mode's replacement text is always literal — no template.
+      findOpen && findMode === "replace" && findQueryKind === "text"
         ? activeDocumentReplacementTemplateError(
             findReplaceText,
             findOptions,
             findQuery
           )
         : null,
-    [findOpen, findMode, findReplaceText, findOptions, findQuery]
+    [findOpen, findMode, findQueryKind, findReplaceText, findOptions, findQuery]
   );
+  // #424 Slice 6: in glossary mode "there is a query" means "an atom is
+  // selected" (text mode: the query string is non-empty).
+  const findHasReplaceQuery =
+    findQueryKind === "glossary"
+      ? findReplaceGlossaryAtomId !== null
+      : findQuery.length > 0;
   const findReplaceCurrentEnabled =
     findOpen &&
     findMode === "replace" &&
     !readOnly &&
     findControllerReady &&
+    findHasReplaceQuery &&
     findRegexError === null &&
     findTemplateError === null &&
     findMatchCount > 0 &&
     findActiveIndex !== null;
+  // #424 Slice 4: replace-all shares every replace-current gate EXCEPT the
+  // "there is a current match" one — it acts on the whole match set.
+  const findReplaceAllEnabled =
+    findOpen &&
+    findMode === "replace" &&
+    !readOnly &&
+    findControllerReady &&
+    findHasReplaceQuery &&
+    findRegexError === null &&
+    findTemplateError === null &&
+    findMatchCount > 0;
 
   const jumpToFindMatch = useCallback(
     (match: { startOffset: number; endOffset: number }) => {
@@ -1037,6 +1158,10 @@ function MarkdownEditorSurface({
     setFindOptions(DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS);
     setFindActiveIndex(null);
     setFindExtraSelection(null);
+    setFindQueryKind("text");
+    setFindGlossaryRelation("any");
+    setFindSearchGlossaryAtomIds([]);
+    setFindReplaceGlossaryAtomId(null);
   }, [documentKey]);
 
   const activeFindConfig = useMemo<MarkdownEditorActiveFindConfig>(
@@ -1110,7 +1235,7 @@ function MarkdownEditorSurface({
   // never place the edit at the wrong offset. Never touches disk, an
   // inactive tab, a closed document, or the project-wide replace path.
   const handleFindReplaceCurrent = useCallback(() => {
-    if (readOnly || findRegexError !== null) {
+    if (readOnly) {
       return;
     }
     const controller = findReplaceControllerRef.current;
@@ -1119,6 +1244,48 @@ function MarkdownEditorSurface({
     }
 
     const liveText = controller.getBufferText() ?? content;
+
+    // #424 Slice 6: glossary mode — replace the current occurrence of the
+    // selected atom value with the LITERAL replace text (no regex template).
+    if (findQueryKind === "glossary") {
+      const terms = buildActiveGlossaryFindTerms(
+        findGlossaryCandidates,
+        findReplaceGlossaryAtomId !== null ? [findReplaceGlossaryAtomId] : []
+      );
+      if (terms.length === 0) {
+        return;
+      }
+      const matches = runActiveGlossaryFind(liveText, terms, "any");
+      const index = clampActiveFindIndex(findActiveIndex, matches.length);
+      if (index === null) {
+        return;
+      }
+      const match = matches[index];
+      const applied = controller.applyReplaceInBufferChanges([
+        { from: match.startOffset, to: match.endOffset, insert: findReplaceText }
+      ]);
+      if (!applied) {
+        return;
+      }
+      const afterMatches = runActiveGlossaryFind(
+        controller.getBufferText() ?? liveText,
+        terms,
+        "any"
+      );
+      const nextIndex = resolveActiveFindIndexAfterReplacement(
+        afterMatches,
+        match.startOffset
+      );
+      setFindActiveIndex(nextIndex);
+      if (nextIndex !== null) {
+        jumpToFindMatch(afterMatches[nextIndex]);
+      }
+      return;
+    }
+
+    if (findRegexError !== null) {
+      return;
+    }
     const evaluation = evaluateActiveDocumentFind(
       liveText,
       findQuery,
@@ -1176,6 +1343,9 @@ function MarkdownEditorSurface({
     }
   }, [
     readOnly,
+    findQueryKind,
+    findGlossaryCandidates,
+    findReplaceGlossaryAtomId,
     findRegexError,
     content,
     findQuery,
@@ -1184,6 +1354,138 @@ function MarkdownEditorSurface({
     findActiveIndex,
     jumpToFindMatch
   ]);
+
+  // #424 Slice 4: replace EVERY match in the active document in ONE
+  // `input.replace` transaction (one undo step). Re-evaluates against the live
+  // buffer immediately before dispatch and builds every change from that SAME
+  // snapshot, so no stale offset is ever used. Never touches disk, an inactive
+  // tab, a closed document, or the project-wide replace path.
+  const handleFindReplaceAll = useCallback(() => {
+    if (readOnly) {
+      return;
+    }
+    const controller = findReplaceControllerRef.current;
+    if (!controller) {
+      return;
+    }
+
+    const liveText = controller.getBufferText() ?? content;
+
+    // #424 Slice 6: glossary mode — replace every occurrence of the selected
+    // atom value with the LITERAL replace text, in one transaction.
+    if (findQueryKind === "glossary") {
+      const terms = buildActiveGlossaryFindTerms(
+        findGlossaryCandidates,
+        findReplaceGlossaryAtomId !== null ? [findReplaceGlossaryAtomId] : []
+      );
+      if (terms.length === 0) {
+        return;
+      }
+      const matches = runActiveGlossaryFind(liveText, terms, "any");
+      if (matches.length === 0) {
+        return;
+      }
+      const changes = matches.map((match) => ({
+        from: match.startOffset,
+        to: match.endOffset,
+        insert: findReplaceText
+      }));
+      const applied = controller.applyReplaceInBufferChanges(changes);
+      if (!applied) {
+        return;
+      }
+      const afterMatches = runActiveGlossaryFind(
+        controller.getBufferText() ?? liveText,
+        terms,
+        "any"
+      );
+      const nextIndex = resolveActiveFindIndexAfterReplaceAll(afterMatches);
+      setFindActiveIndex(nextIndex);
+      if (nextIndex !== null) {
+        jumpToFindMatch(afterMatches[nextIndex]);
+      }
+      return;
+    }
+
+    if (findRegexError !== null || findQuery.length === 0) {
+      return;
+    }
+    const evaluation = evaluateActiveDocumentFind(
+      liveText,
+      findQuery,
+      findOptions
+    );
+    if (evaluation.regexError !== null || evaluation.matches.length === 0) {
+      return;
+    }
+
+    const built = buildActiveDocumentReplaceAllChanges(
+      liveText,
+      evaluation.matches,
+      findReplaceText,
+      findOptions,
+      findQuery
+    );
+    if (!built.ok || built.changes.length === 0) {
+      return;
+    }
+
+    const applied = controller.applyReplaceInBufferChanges(built.changes);
+    if (!applied) {
+      return;
+    }
+
+    // The buffer just changed wholesale — re-search the NEW live text and land
+    // on the first remaining match (or clear the cursor when none remain).
+    const afterText = controller.getBufferText() ?? liveText;
+    const afterMatches = evaluateActiveDocumentFind(
+      afterText,
+      findQuery,
+      findOptions
+    ).matches;
+    const nextIndex = resolveActiveFindIndexAfterReplaceAll(afterMatches);
+    setFindActiveIndex(nextIndex);
+    if (nextIndex !== null) {
+      jumpToFindMatch(afterMatches[nextIndex]);
+    }
+  }, [
+    readOnly,
+    findQueryKind,
+    findGlossaryCandidates,
+    findReplaceGlossaryAtomId,
+    findRegexError,
+    content,
+    findQuery,
+    findOptions,
+    findReplaceText,
+    jumpToFindMatch
+  ]);
+
+  // #424 Slice 6: the `語彙` icon toggles text ⇄ glossary query kind; the other
+  // three just mirror the panel's selectors into local state. The existing
+  // `findInputKey` effect re-seeds + jumps whenever any of them change.
+  const handleFindQueryKindChange = useCallback((kind: "text" | "glossary") => {
+    setFindQueryKind(kind);
+    setFindFocusToken((token) => token + 1);
+  }, []);
+  const handleFindGlossaryRelationChange = useCallback(
+    (relation: ActiveGlossarySearchRelation) => {
+      setFindGlossaryRelation(relation);
+    },
+    []
+  );
+  const handleFindSearchGlossaryAtomIdsChange = useCallback(
+    (atomIds: string[]) => {
+      setFindSearchGlossaryAtomIds(atomIds);
+    },
+    []
+  );
+  const handleFindReplaceGlossaryAtomIdChange = useCallback(
+    (atomId: string | null) => {
+      setFindReplaceGlossaryAtomId(atomId);
+    },
+    []
+  );
 
   const handleFindClose = useCallback(() => {
     setFindOpen(false);
@@ -1327,6 +1629,13 @@ function MarkdownEditorSurface({
             templateError={findTemplateError}
             readOnly={readOnly}
             replaceCurrentEnabled={findReplaceCurrentEnabled}
+            replaceAllEnabled={findReplaceAllEnabled}
+            glossaryCandidates={findGlossaryCandidates}
+            queryKind={findQueryKind}
+            glossaryRelation={findGlossaryRelation}
+            glossaryNearbySettings={glossaryNearbySearchSettings}
+            searchGlossaryAtomIds={findSearchGlossaryAtomIds}
+            replaceGlossaryAtomId={findReplaceGlossaryAtomId}
             matchCount={findMatchCount}
             activeIndex={findActiveIndex}
             focusToken={findFocusToken}
@@ -1336,6 +1645,11 @@ function MarkdownEditorSurface({
             onToggleOption={handleFindToggleOption}
             onToggleMarkAll={handleFindToggleMarkAll}
             onReplaceCurrent={handleFindReplaceCurrent}
+            onReplaceAll={handleFindReplaceAll}
+            onQueryKindChange={handleFindQueryKindChange}
+            onGlossaryRelationChange={handleFindGlossaryRelationChange}
+            onSearchGlossaryAtomIdsChange={handleFindSearchGlossaryAtomIdsChange}
+            onReplaceGlossaryAtomIdChange={handleFindReplaceGlossaryAtomIdChange}
             onNext={handleFindNext}
             onPrevious={handleFindPrevious}
             onClose={handleFindClose}

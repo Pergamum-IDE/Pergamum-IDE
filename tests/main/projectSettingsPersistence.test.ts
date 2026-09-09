@@ -297,6 +297,89 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
     });
   });
 
+  describe("#424 Slice 7: search.nearby.* project overrides", () => {
+    it("loads sparse search.nearby.* flat keys into nested ProjectSettings", async () => {
+      const configPath = path.join(workDir, projectConfigFileName);
+      await fs.writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            settings: {
+              "search.nearby.unit": "characters",
+              "search.nearby.characterDistance": 1200
+            }
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const loaded = await loadProjectConfig(workDir);
+      expect(loaded?.config.settings?.search?.nearby).toEqual({
+        unit: "characters",
+        characterDistance: 1200
+      });
+    });
+
+    it("ignores an out-of-range distance without failing project load (S-23)", async () => {
+      const configPath = path.join(workDir, projectConfigFileName);
+      await fs.writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            settings: {
+              "search.nearby.paragraphDistance": 999,
+              "search.nearby.unit": "paragraphs"
+            }
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const loaded = await loadProjectConfig(workDir);
+      expect(
+        loaded?.config.settings?.search?.nearby?.paragraphDistance
+      ).toBeUndefined();
+      expect(loaded?.config.settings?.search?.nearby?.unit).toBe("paragraphs");
+    });
+
+    it("save → load round-trips a distance override, and remove clears it", async () => {
+      const saved = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: null,
+        request: { set: { "search.nearby.characterDistance": 750 } }
+      });
+      expect(
+        saved.config.settings?.search?.nearby?.characterDistance
+      ).toBe(750);
+
+      const configPath = path.join(workDir, projectConfigFileName);
+      const disk = JSON.parse(await fs.readFile(configPath, "utf8"));
+      // stored as a flat dotted key
+      expect(disk.settings).toEqual({ "search.nearby.characterDistance": 750 });
+
+      const removed = await saveProjectSettings({
+        rootPath: workDir,
+        rawSnapshot: saved.rawSnapshot,
+        request: { remove: ["search.nearby.characterDistance"] }
+      });
+      expect(removed.config.settings).toBeUndefined();
+    });
+
+    it("rejects an out-of-range distance on save", async () => {
+      await expect(
+        saveProjectSettings({
+          rootPath: workDir,
+          rawSnapshot: null,
+          request: { set: { "search.nearby.characterDistance": 5 } }
+        })
+      ).rejects.toThrow();
+    });
+  });
+
   describe("projectConfigStore saveProjectSettings", () => {
     it("saves editor.fontFamily override and removes it cleanly with absence", async () => {
       const saveResult = await saveProjectSettings({

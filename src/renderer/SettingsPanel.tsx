@@ -5,7 +5,8 @@ import type {
   LineEndingMarkerGlyph,
   NewFileEncoding,
   NewFileLineEnding,
-  SaveApplicationSettingsRequest
+  SaveApplicationSettingsRequest,
+  SearchNearbyUnit
 } from "../shared/api";
 import type { Language, Translate, TranslationKey } from "../shared/i18n";
 import type { SettingKey } from "../shared/settingsCatalog";
@@ -142,6 +143,7 @@ function saveRequest(
     workbench: overrides.workbench ?? settings.workbench,
     commandPalette: overrides.commandPalette ?? settings.commandPalette,
     editor: overrides.editor ?? settings.editor,
+    search: overrides.search ?? settings.search,
     files: overrides.files ?? settings.files,
     imageAttachment: overrides.imageAttachment ?? settings.imageAttachment,
     documentMap: overrides.documentMap ?? settings.documentMap
@@ -512,6 +514,40 @@ function buildNextSettings(
         imageAttachment: {
           ...settings.imageAttachment,
           insertMarkdownLink: Boolean(rawValue)
+        }
+      });
+    // #424 Slice 7: glossary nearby search range (applicationWithProjectOverride).
+    case "search.nearby.unit":
+      return saveRequest(settings, {
+        search: {
+          nearby: {
+            ...settings.search.nearby,
+            unit: rawValue as SearchNearbyUnit
+          }
+        }
+      });
+    case "search.nearby.characterDistance":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        search: {
+          nearby: {
+            ...settings.search.nearby,
+            characterDistance: rawValue
+          }
+        }
+      });
+    case "search.nearby.paragraphDistance":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        search: {
+          nearby: {
+            ...settings.search.nearby,
+            paragraphDistance: rawValue
+          }
         }
       });
   }

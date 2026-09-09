@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   activeDocumentReplacementTemplateError,
+  buildActiveDocumentReplaceAllChanges,
   buildActiveDocumentReplacement,
   clampActiveFindIndex,
   DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
   evaluateActiveDocumentFind,
   replacementTemplateErrorTranslationKey,
   resolveActiveFindCursor,
+  resolveActiveFindIndexAfterReplaceAll,
   resolveActiveFindIndexAfterReplacement,
   runActiveDocumentFind,
   toggleActiveDocumentFindOption
@@ -349,6 +351,154 @@ describe("activeDocumentReplacementTemplateError (#424 Slice 3)", () => {
     expect(replacementTemplateErrorTranslationKey("ambiguousReference")).toBe(
       "search.replace.template.unsupported"
     );
+  });
+});
+
+describe("buildActiveDocumentReplaceAllChanges (#424 Slice 4)", () => {
+  const plain = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS;
+  const regex = { ...DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS, useRegex: true };
+
+  function allMatches(text: string, query: string, options = plain) {
+    return evaluateActiveDocumentFind(text, query, options).matches;
+  }
+
+  it("builds one change per match for plain text (offsets from one snapshot)", () => {
+    const text = "cat cot cat";
+    const result = buildActiveDocumentReplaceAllChanges(
+      text,
+      allMatches(text, "cat"),
+      "dog",
+      plain,
+      "cat"
+    );
+    expect(result).toEqual({
+      ok: true,
+      changes: [
+        { from: 0, to: 3, insert: "dog" },
+        { from: 8, to: 11, insert: "dog" }
+      ]
+    });
+  });
+
+  it("an empty replacement deletes every match", () => {
+    const text = "a-b-c";
+    const result = buildActiveDocumentReplaceAllChanges(
+      text,
+      allMatches(text, "-"),
+      "",
+      plain,
+      "-"
+    );
+    expect(result).toEqual({
+      ok: true,
+      changes: [
+        { from: 1, to: 2, insert: "" },
+        { from: 3, to: 4, insert: "" }
+      ]
+    });
+  });
+
+  it("returns no changes when there are no matches", () => {
+    const result = buildActiveDocumentReplaceAllChanges(
+      "nothing here",
+      [],
+      "x",
+      plain,
+      "zzz"
+    );
+    expect(result).toEqual({ ok: true, changes: [] });
+  });
+
+  it("regex $1 / ${1} expand per match against that match's captures", () => {
+    const text = "(foo) and (barbar)";
+    const pattern = String.raw`\((\w+)\)`;
+    const dollar = buildActiveDocumentReplaceAllChanges(
+      text,
+      allMatches(text, pattern, regex),
+      "[$1]",
+      regex,
+      pattern
+    );
+    expect(dollar).toEqual({
+      ok: true,
+      changes: [
+        { from: 0, to: 5, insert: "[foo]" },
+        { from: 10, to: 18, insert: "[barbar]" }
+      ]
+    });
+    const braced = buildActiveDocumentReplaceAllChanges(
+      text,
+      allMatches(text, pattern, regex),
+      "${1}!",
+      regex,
+      pattern
+    );
+    expect(braced.ok && braced.changes.map((c) => c.insert)).toEqual([
+      "foo!",
+      "barbar!"
+    ]);
+  });
+
+  it("$$ produces a literal $ in every change", () => {
+    const text = "ab ab";
+    const result = buildActiveDocumentReplaceAllChanges(
+      text,
+      allMatches(text, "(a)(b)", regex),
+      "$$$1",
+      regex,
+      "(a)(b)"
+    );
+    expect(result.ok && result.changes.map((c) => c.insert)).toEqual([
+      "$a",
+      "$a"
+    ]);
+  });
+
+  it("an invalid replacement template rejects the whole batch", () => {
+    const text = "foo foo";
+    expect(
+      buildActiveDocumentReplaceAllChanges(
+        text,
+        allMatches(text, "(foo)", regex),
+        "$&",
+        regex,
+        "(foo)"
+      )
+    ).toEqual({ ok: false, templateError: "unsupportedSequence" });
+    expect(
+      buildActiveDocumentReplaceAllChanges(
+        text,
+        allMatches(text, "(foo)", regex),
+        "$2",
+        regex,
+        "(foo)"
+      )
+    ).toEqual({ ok: false, templateError: "missingGroup" });
+  });
+
+  it("a $-template stays literal in plain mode", () => {
+    const text = "x x";
+    const result = buildActiveDocumentReplaceAllChanges(
+      text,
+      allMatches(text, "x"),
+      "$1$&",
+      plain,
+      "x"
+    );
+    expect(result.ok && result.changes.map((c) => c.insert)).toEqual([
+      "$1$&",
+      "$1$&"
+    ]);
+  });
+});
+
+describe("resolveActiveFindIndexAfterReplaceAll (#424 Slice 4)", () => {
+  it("lands on the first match when any remain", () => {
+    expect(resolveActiveFindIndexAfterReplaceAll([{}, {}, {}])).toBe(0);
+  });
+
+  it("clears the cursor when nothing is left", () => {
+    expect(resolveActiveFindIndexAfterReplaceAll([])).toBeNull();
   });
 });
 

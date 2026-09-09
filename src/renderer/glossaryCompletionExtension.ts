@@ -34,7 +34,7 @@ import {
   collectGlossaryCompletionAtoms,
   extractGlossaryCompletionPrefix,
   filterGlossaryCompletionCandidates,
-  glossaryCompletionCandidateDetail
+  toGlossaryCompletionDisplayItem
 } from "./glossaryCompletion";
 
 export interface MarkdownEditorGlossaryCompletionConfig {
@@ -78,14 +78,15 @@ function glossaryCompletionSource(
 
     return {
       from: context.pos - prefix.length,
-      options: candidates.map((candidate) => ({
-        label: candidate.value,
-        // Only shown when it differs from the registered form itself - see
-        // glossaryCompletionCandidateDetail's own doc comment. No "親語彙:" /
-        // "Glossary entry:" label prefix - just the bare representative form,
-        // so the common (representative-form) case shows no detail at all.
-        detail: glossaryCompletionCandidateDetail(candidate) ?? undefined,
-        apply: candidate.value
+      // Built from the SHARED GlossaryCompletionDisplayItem model so the
+      // CodeMirror tooltip and the Find/Replace panel popup stay identical:
+      // `value` is the label, `detail` ("→ 代表語", only for a non-
+      // representative form) is the muted suffix, `insertText` is the RAW
+      // atom value (never normalized to the representative form).
+      options: candidates.map(toGlossaryCompletionDisplayItem).map((item) => ({
+        label: item.value,
+        detail: item.detail ?? undefined,
+        apply: item.insertText
       })),
       // Candidate order/membership is entirely our own (Glossary sortOrder,
       // startsWith-only) - CodeMirror's built-in fuzzy filter/sort must not

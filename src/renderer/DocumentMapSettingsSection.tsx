@@ -31,6 +31,7 @@ function saveRequestWithDocumentMap(
     workbench: settings.workbench,
     commandPalette: settings.commandPalette,
     editor: settings.editor,
+    search: settings.search,
     files: settings.files,
     imageAttachment: settings.imageAttachment,
     documentMap

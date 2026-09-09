@@ -191,6 +191,94 @@ export function buildActiveDocumentReplacement(
   };
 }
 
+// ---------------------------------------------------------------------------
+// #424 Slice 4: Replace-all
+// ---------------------------------------------------------------------------
+
+/** One replacement edit against a single text snapshot. */
+export interface ActiveDocumentReplaceChange {
+  readonly from: number;
+  readonly to: number;
+  readonly insert: string;
+}
+
+export type ActiveDocumentReplaceAllResult =
+  | {
+      readonly ok: true;
+      readonly changes: readonly ActiveDocumentReplaceChange[];
+    }
+  | { readonly ok: false; readonly templateError: ReplacementTemplateError };
+
+/**
+ * Every replacement edit for `matches` — all computed against the SAME `text`
+ * snapshot, so the `from` / `to` offsets stay mutually consistent and can be
+ * handed to CodeMirror as ONE transaction (one undo step). `matches` must be
+ * the ascending, non-overlapping list `evaluateActiveDocumentFind` returns for
+ * `text`.
+ *
+ * Plain mode → every `insert` is `replaceText` verbatim (empty deletes the
+ * match). Regex mode → the shared #386 template (`$1` / `${1}` / `$$`) is
+ * validated ONCE up front and, on failure, the whole batch is rejected
+ * (`ok:false`) — exactly like the project-wide Replace preflight — then
+ * expanded per match against that match's capture groups.
+ */
+export function buildActiveDocumentReplaceAllChanges(
+  text: string,
+  matches: readonly TextSearchMatch[],
+  replaceText: string,
+  options: ActiveDocumentFindOptions,
+  query: string
+): ActiveDocumentReplaceAllResult {
+  const literalChanges = (): ActiveDocumentReplaceChange[] =>
+    matches.map((match) => ({
+      from: match.startOffset,
+      to: match.endOffset,
+      insert: replaceText
+    }));
+
+  if (!options.useRegex) {
+    return { ok: true, changes: literalChanges() };
+  }
+
+  const validation = validateReplacementTemplate(
+    replaceText,
+    countCaptureGroups(query)
+  );
+  if (!validation.ok) {
+    return { ok: false, templateError: validation.error };
+  }
+
+  const { regex } = compileSearchRegex(query, options.caseSensitive);
+  if (regex === null) {
+    // The caller gates on `regexError` first, so this is unreachable in
+    // practice; treat the template as literal rather than throw.
+    return { ok: true, changes: literalChanges() };
+  }
+
+  const changes: ActiveDocumentReplaceChange[] = matches.map((match) => {
+    regex.lastIndex = match.startOffset;
+    const exec = regex.exec(text);
+    const captureArray: readonly (string | undefined)[] =
+      exec && exec.index === match.startOffset ? exec : [match.matchedText];
+    return {
+      from: match.startOffset,
+      to: match.endOffset,
+      insert: renderReplacement(validation.tokens, captureArray)
+    };
+  });
+  return { ok: true, changes };
+}
+
+/**
+ * Where the active index lands after a replace-all: the first match (index `0`)
+ * when any remain in the re-searched buffer, otherwise `null`.
+ */
+export function resolveActiveFindIndexAfterReplaceAll(
+  matches: readonly unknown[]
+): number | null {
+  return matches.length > 0 ? 0 : null;
+}
+
 /**
  * The template-error (if any) for the current Replace-mode inputs — used to
  * disable the replace-current button and show a message. `null` outside regex

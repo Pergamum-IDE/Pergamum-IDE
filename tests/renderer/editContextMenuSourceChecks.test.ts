@@ -88,14 +88,21 @@ function allSourceText(): string {
  * DocumentMapSettingsSection.tsx, scoped to that handle `<button>`.
  *
  * find/ActiveFindPanel.tsx (#424) is the same category as CommandPalette.tsx:
- * Enter / Shift+Enter (find next / previous), Escape (close) and Ctrl+F
- * (re-select) inside its OWN, already-focused search `<input>` — local widget
- * interaction for the active-document Find panel, not a competing global
- * shortcut system. It reuses the existing `event.nativeEvent.isComposing` IME
- * signal (no new composition tracking), and the panel is only mounted while
- * open. The Ctrl+F that OPENS the panel is a CodeMirror `EditorView`
- * domEventHandler (find/activeFindKeymapExtension.ts), not an app/global
- * listener either.
+ * Enter / Shift+Enter (find next / previous), Escape (close), Ctrl+F / Ctrl+H
+ * (mode switch) and Ctrl+Space (glossary IntelliSense) inside its OWN,
+ * already-focused search `<input>` — local widget interaction for the
+ * active-document Find panel, not a competing global shortcut system. It reuses
+ * the existing `event.nativeEvent.isComposing` IME signal (no new composition
+ * tracking), and the panel is only mounted while open. The Ctrl+F that OPENS
+ * the panel is a CodeMirror `EditorView` domEventHandler
+ * (find/activeFindKeymapExtension.ts), not an app/global listener either.
+ *
+ * find/ActiveFindGlossarySelect.tsx (#424 Slice 6) is the same category: the
+ * glossary-search-mode selector's `onKeyDown` is Arrow / Enter / Escape /
+ * Backspace / Ctrl+Space for its OWN focused filter `<input>` (a combobox), and
+ * it forwards keys it does not own (Ctrl+F / Ctrl+H, Escape-closes-the-panel)
+ * back to ActiveFindPanel via `onUnhandledKeyDown`. Same IME guard, mounted
+ * only while the panel is open in glossary mode.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -110,7 +117,8 @@ const onKeyDownExemptFileNames = new Set([
   "DocumentMapSettingsSection.tsx",
   "DialogueDelimiterPairsEditor.tsx",
   "GlossaryEntryManager.tsx",
-  "ActiveFindPanel.tsx"
+  "ActiveFindPanel.tsx",
+  "ActiveFindGlossarySelect.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {

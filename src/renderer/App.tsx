@@ -10242,6 +10242,9 @@ export function App(): JSX.Element {
                         whitespaceSettings={
                           effectiveSettings.editor.whitespace
                         }
+                        glossaryNearbySearchSettings={
+                          effectiveSettings.search.nearby
+                        }
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}
                         translate={translate}
