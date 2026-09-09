@@ -51,6 +51,10 @@ import {
   createGlossaryCompletionExtension,
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
+import {
+  createActiveFindKeymapExtension,
+  type MarkdownEditorActiveFindConfig
+} from "./find/activeFindKeymapExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
 import { createMarkdownImageAttachmentPositionTrackingExtension } from "./markdownImageAttachmentPositionTracker";
 import {
@@ -106,6 +110,14 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly whitespaceCompartment: Compartment;
   readonly whitespaceSettingsRef: LiveRef<ApplicationEditorWhitespaceSettings>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
+  /**
+   * #424: read live by the Ctrl+F keydown handler. `null` (the default, and
+   * what a non-active-document editor such as the Glossary description field
+   * supplies) leaves Ctrl+F inert. Only the active Markdown document editor
+   * (EditorSurface's MarkdownEditorSurface) provides a config that opens the
+   * Pergamum Find panel.
+   */
+  readonly activeFindRef?: LiveRef<MarkdownEditorActiveFindConfig | null>;
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /**
    * #411: when present, adds the broken-image-link lint extension (gutter +
@@ -180,6 +192,9 @@ export function createMarkdownEditorDocumentState(
       createGlossaryCompletionExtension({
         getConfig: () => options.glossaryCompletionRef.current,
         isReadOnly: () => options.readOnlyRef.current
+      }),
+      createActiveFindKeymapExtension({
+        getConfig: () => options.activeFindRef?.current ?? null
       }),
       createMarkdownImageAttachmentPositionTrackingExtension(),
       createMarkdownImageAttachmentPasteExtension(imageAttachmentPasteOptions),

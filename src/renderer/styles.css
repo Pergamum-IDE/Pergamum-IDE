@@ -3695,6 +3695,93 @@ label.settingsItemHeader {
   font-size: 15px;
 }
 
+/* #424 Slice 1: active-document Find panel, between the editor pane header
+   and the CodeMirror surface. Two-row stack so Slice 2+ can grow the query
+   row (語彙 / Ab / Aa / .*) and the nav row (マークする) without a reflow. */
+.activeFindPanel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e3e8ee;
+  background: #f4f6f9;
+}
+
+.activeFindPanelRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.activeFindPanelInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid #c4cdd8;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  background: #ffffff;
+  color: #1f2733;
+}
+
+.activeFindPanelInput:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: -1px;
+  border-color: #7aa7d9;
+}
+
+.activeFindPanelButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #3d4a58;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.activeFindPanelButton:hover {
+  background: #e4e9ef;
+}
+
+.activeFindPanelButton:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: 1px;
+}
+
+.activeFindPanelButton:disabled {
+  color: #9aa5b1;
+  cursor: default;
+}
+
+.activeFindPanelButton:disabled:hover {
+  background: transparent;
+}
+
+.activeFindPanelCloseButton {
+  font-size: 15px;
+}
+
+.activeFindPanelCount {
+  flex: 0 0 auto;
+  min-width: 3.5em;
+  padding: 0 4px;
+  color: #52616f;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 .editorHost .cm-focused {
   outline: none;
 }

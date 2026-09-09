@@ -37,10 +37,16 @@ import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
   MarkdownEditor,
   type MarkdownImageAttachmentPositionController,
+  type MarkdownEditorActiveFindConfig,
   type MarkdownEditorFocusRequest,
   type MarkdownEditorParagraphIndentController,
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
+import { ActiveFindPanel } from "./find/ActiveFindPanel";
+import {
+  resolveActiveFindCursor,
+  runActiveDocumentFind
+} from "./find/activeDocumentFind";
 import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
 import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
 import { formatMarkdownImageLinkDiagnosticMessage } from "./markdownImageLinkDiagnosticMessage";
@@ -866,6 +872,135 @@ function MarkdownEditorSurface({
   const editorPaneRef = useRef<HTMLElement | null>(null);
   const previewPaneRef = useRef<HTMLElement | null>(null);
 
+  // -------------------------------------------------------------------------
+  // #424 Slice 1: active-document Find panel.
+  //
+  // Everything is local to this component — the panel searches only THIS
+  // editor's current buffer (`content`), navigation reuses the same
+  // "select + reveal" transaction the Outline / Go to Line jumps use (via
+  // the dedicated `extraPendingSelection` prop), and closing returns focus
+  // through `extraFocusRequest`. No App.tsx wiring, no project-wide Search.
+  // -------------------------------------------------------------------------
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findActiveIndex, setFindActiveIndex] = useState<number | null>(null);
+  const [findFocusToken, setFindFocusToken] = useState(0);
+  const [findExtraSelection, setFindExtraSelection] = useState<{
+    start: number;
+    end: number;
+    scrollY: "center";
+    focusEditor: false;
+  } | null>(null);
+  const [findFocusRequest, setFindFocusRequest] =
+    useState<MarkdownEditorFocusRequest | null>(null);
+  const findFocusRequestSeqRef = useRef(0);
+  // The query the panel last auto-jumped for — so editing the document under
+  // an open panel updates the match count without yanking the viewport.
+  const findSeededQueryRef = useRef<string | null>(null);
+
+  const findMatches = useMemo(
+    () =>
+      findOpen && findQuery.length > 0
+        ? runActiveDocumentFind(content, findQuery)
+        : [],
+    [findOpen, findQuery, content]
+  );
+  const findMatchCount = findMatches.length;
+
+  const jumpToFindMatch = useCallback(
+    (match: { startOffset: number; endOffset: number }) => {
+      setFindExtraSelection({
+        start: match.startOffset,
+        end: match.endOffset,
+        scrollY: "center",
+        focusEditor: false
+      });
+    },
+    []
+  );
+
+  // Re-seed the active index + jump when the QUERY changes (not on every
+  // keystroke in the document).
+  useEffect(() => {
+    if (!findOpen) {
+      findSeededQueryRef.current = null;
+      return;
+    }
+    if (findSeededQueryRef.current === findQuery) {
+      return;
+    }
+    findSeededQueryRef.current = findQuery;
+    if (findMatches.length > 0) {
+      setFindActiveIndex(0);
+      jumpToFindMatch(findMatches[0]);
+    } else {
+      setFindActiveIndex(null);
+    }
+  }, [findOpen, findQuery, findMatches, jumpToFindMatch]);
+
+  // A genuine tab switch closes the panel (Slice 1 keeps no per-document
+  // Find state).
+  useEffect(() => {
+    setFindOpen(false);
+    setFindQuery("");
+    setFindActiveIndex(null);
+    setFindExtraSelection(null);
+  }, [documentKey]);
+
+  const activeFindConfig = useMemo<MarkdownEditorActiveFindConfig>(
+    () => ({
+      requestOpen: (initialQuery: string) => {
+        setFindOpen(true);
+        setFindFocusToken((token) => token + 1);
+        if (initialQuery.length > 0) {
+          setFindQuery(initialQuery);
+        }
+      }
+    }),
+    []
+  );
+
+  const handleFindQueryChange = useCallback((next: string) => {
+    setFindQuery(next);
+  }, []);
+
+  const handleFindNext = useCallback(() => {
+    const nextIndex = resolveActiveFindCursor(
+      findMatches.length,
+      findActiveIndex,
+      "next"
+    );
+    setFindActiveIndex(nextIndex);
+    if (nextIndex !== null) {
+      jumpToFindMatch(findMatches[nextIndex]);
+    }
+  }, [findMatches, findActiveIndex, jumpToFindMatch]);
+
+  const handleFindPrevious = useCallback(() => {
+    const nextIndex = resolveActiveFindCursor(
+      findMatches.length,
+      findActiveIndex,
+      "previous"
+    );
+    setFindActiveIndex(nextIndex);
+    if (nextIndex !== null) {
+      jumpToFindMatch(findMatches[nextIndex]);
+    }
+  }, [findMatches, findActiveIndex, jumpToFindMatch]);
+
+  const handleFindClose = useCallback(() => {
+    setFindOpen(false);
+    findFocusRequestSeqRef.current += 1;
+    setFindFocusRequest({
+      id: findFocusRequestSeqRef.current,
+      documentKey
+    });
+  }, [documentKey]);
+
+  const handleFindExtraSelectionApplied = useCallback(() => {
+    setFindExtraSelection(null);
+  }, []);
+
   // One-shot measurement (#152, extended #154, #161): fires only when
   // documentOpenId changes (i.e. a new open just applied its editor state
   // and this component has now re-rendered with that document's content),
@@ -983,9 +1118,26 @@ function MarkdownEditorSurface({
         <div className="paneHeader">
           {translate("workspace.editor")}
         </div>
+        {findOpen ? (
+          <ActiveFindPanel
+            translate={translate}
+            query={findQuery}
+            matchCount={findMatchCount}
+            activeIndex={findActiveIndex}
+            focusToken={findFocusToken}
+            onQueryChange={handleFindQueryChange}
+            onNext={handleFindNext}
+            onPrevious={handleFindPrevious}
+            onClose={handleFindClose}
+          />
+        ) : null}
         <MarkdownEditor
           value={content}
           onChange={onChangeMarkdownContent}
+          activeFind={activeFindConfig}
+          extraPendingSelection={findExtraSelection}
+          onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
+          extraFocusRequest={findFocusRequest}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}

@@ -16,11 +16,21 @@
  * `basicSetup`'s own doc comment explicitly invites exactly this kind of
  * customization ("once you decide you want to configure your editor more
  * precisely, you take this package's source ... and adjust it as
- * desired") - this is that adjustment, kept to the single line that
- * excludes `completionKeymap`. Every other binding it lists is preserved
- * verbatim; `glossaryCompletionExtension.ts`'s own keymap re-adds every
- * completion key EXCEPT Ctrl-Space (Escape / arrows / PageUp / PageDown /
- * Enter), and its trigger extension owns Ctrl-Space exclusively.
+ * desired") - this is that adjustment. Two changes from the verbatim list:
+ *
+ * 1. `completionKeymap` is excluded (see above) so
+ *    `glossaryCompletionExtension.ts` can own Ctrl-Space exclusively.
+ *
+ * 2. #424: the `@codemirror/search` panel openers - `Mod-f`
+ *    (`openSearchPanel`), `F3` and `Mod-g` (`findNext` / `findPrevious`,
+ *    which themselves fall back to `openSearchPanel` when there is no active
+ *    query) - are dropped from `searchKeymap`. Pergamum shows its OWN
+ *    active-document Find panel above the editor (see
+ *    `find/activeFindKeymapExtension.ts`), so the native bottom search panel
+ *    must never open from the keyboard. Every unrelated `searchKeymap`
+ *    binding is kept: `Mod-d` (selectNextOccurrence), `Mod-Alt-g`
+ *    (gotoLine), `Mod-Shift-l` (selectSelectionMatches) and `Escape`
+ *    (closeSearchPanel - inert when the panel never opens).
  */
 
 import {
@@ -47,6 +57,21 @@ import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
+
+/**
+ * #424: `searchKeymap` bindings that open (or fall back to opening) the
+ * native `@codemirror/search` panel. Filtered out of the base keymap so
+ * Pergamum's own Find panel is the only Ctrl+F surface.
+ */
+const NATIVE_SEARCH_PANEL_KEYS: ReadonlySet<string> = new Set([
+  "Mod-f",
+  "F3",
+  "Mod-g"
+]);
+
+const searchKeymapWithoutPanelOpeners = searchKeymap.filter(
+  (binding) => binding.key === undefined || !NATIVE_SEARCH_PANEL_KEYS.has(binding.key)
+);
 
 export interface MarkdownEditorBaseSetupOptions {
   /**
@@ -85,7 +110,7 @@ export function createMarkdownEditorBaseSetup(
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,
-      ...searchKeymap,
+      ...searchKeymapWithoutPanelOpeners,
       ...historyKeymap,
       ...foldKeymap,
       ...lintKeymap

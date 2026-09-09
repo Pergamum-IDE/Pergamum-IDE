@@ -43,6 +43,7 @@ import {
   type EditorViewState
 } from "./editorViewState";
 import type { MarkdownEditorGlossaryCompletionConfig } from "./glossaryCompletionExtension";
+import type { MarkdownEditorActiveFindConfig } from "./find/activeFindKeymapExtension";
 import {
   createMarkdownEditorDocumentState,
   type MarkdownEditorDocumentState
@@ -69,12 +70,19 @@ import type {
 } from "../shared/api";
 
 export type { MarkdownEditorGlossaryCompletionConfig };
+export type { MarkdownEditorActiveFindConfig };
 
 interface MarkdownEditorPendingSelection {
   start: number;
   end: number;
   /** #352: `"center"` for an Outline heading jump, otherwise `"nearest"`. */
   scrollY?: "nearest" | "center";
+  /**
+   * #424: default `true`. `false` keeps DOM focus where it is (used by the
+   * Find panel so navigating between matches does not steal focus out of the
+   * search box).
+   */
+  focusEditor?: boolean;
 }
 
 interface MarkdownEditorProps {
@@ -210,6 +218,28 @@ interface MarkdownEditorProps {
    * supplies it.
    */
   glossaryCompletion?: MarkdownEditorGlossaryCompletionConfig | null;
+  /**
+   * #424 Slice 1: Ctrl+F opens the Pergamum active-document Find panel.
+   * `undefined` / `null` (the default; the Glossary description field never
+   * passes it) leaves Ctrl+F inert. Only EditorSurface's MarkdownEditorSurface
+   * supplies it. Read live via a ref, so a value change is picked up without
+   * rebuilding the EditorView.
+   */
+  activeFind?: MarkdownEditorActiveFindConfig | null;
+  /**
+   * #424: a Find-panel-driven "select + reveal this range" request, kept
+   * entirely separate from `pendingSelection` (which App owns for Outline /
+   * Go to Line / session restore). A new object is applied once; pass
+   * `focusEditor: false` to leave focus in the search box.
+   */
+  extraPendingSelection?: MarkdownEditorPendingSelection | null;
+  onExtraPendingSelectionApplied?: () => void;
+  /**
+   * #424: a Find-panel-driven "return focus to the editor" request (on panel
+   * close). Independent of `focusRequest` (App-owned) so their monotonic id
+   * spaces never collide. Applied once per new id for the current document.
+   */
+  extraFocusRequest?: MarkdownEditorFocusRequest | null;
   /**
    * #407 B3: optional foundation for clipboard image paste. When omitted,
    * the CodeMirror paste handler deliberately returns false before calling
@@ -422,6 +452,10 @@ export function MarkdownEditor({
   focusRequest,
   onFocusRequestApplied,
   glossaryCompletion,
+  activeFind,
+  extraPendingSelection,
+  onExtraPendingSelectionApplied,
+  extraFocusRequest,
   onImageAttachmentPaste,
   onImageAttachmentPositionControllerChange,
   imageAttachmentSourceDocumentId,
@@ -461,6 +495,11 @@ export function MarkdownEditor({
   // honored without recreating the EditorView.
   const glossaryCompletionRef = useRef<MarkdownEditorGlossaryCompletionConfig | null>(
     glossaryCompletion ?? null
+  );
+  // #424: read fresh by the Ctrl+F keydown handler baked into the document's
+  // EditorState — a prop change is honored without recreating the view.
+  const activeFindRef = useRef<MarkdownEditorActiveFindConfig | null>(
+    activeFind ?? null
   );
   const imageAttachmentPasteHandlerRef =
     useRef<MarkdownImageAttachmentPasteHandler | null>(
@@ -691,6 +730,7 @@ export function MarkdownEditor({
       whitespaceCompartment,
       whitespaceSettingsRef,
       glossaryCompletionRef,
+      activeFindRef,
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
       // #411 / #412: only add the broken-image-link lint extension when the
@@ -803,6 +843,10 @@ export function MarkdownEditor({
   useEffect(() => {
     glossaryCompletionRef.current = glossaryCompletion ?? null;
   }, [glossaryCompletion]);
+
+  useEffect(() => {
+    activeFindRef.current = activeFind ?? null;
+  }, [activeFind]);
 
   useEffect(() => {
     imageAttachmentPasteHandlerRef.current = onImageAttachmentPaste ?? null;
@@ -1252,6 +1296,32 @@ export function MarkdownEditor({
     onPendingSelectionApplied?.();
   }, [pendingSelection, onPendingSelectionApplied]);
 
+  // #424: the Find panel's "select + reveal this match" request. Same shape as
+  // the effect above but its own prop, so App's pendingSelection flow is
+  // untouched, and `focusEditor: false` keeps focus in the search box.
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (!view || !extraPendingSelection) {
+      return;
+    }
+
+    const docLength = view.state.doc.length;
+    const from = Math.max(0, Math.min(extraPendingSelection.start, docLength));
+    const to = Math.max(from, Math.min(extraPendingSelection.end, docLength));
+
+    view.dispatch({
+      selection: EditorSelection.single(from, to),
+      effects: EditorView.scrollIntoView(from, {
+        y: extraPendingSelection.scrollY ?? "nearest"
+      })
+    });
+    if (extraPendingSelection.focusEditor !== false) {
+      view.focus();
+    }
+    onExtraPendingSelectionApplied?.();
+  }, [extraPendingSelection, onExtraPendingSelectionApplied]);
+
   // #274: re-apply a persisted #273 View State exactly once for the document
   // this editor is now showing. Declared after the document-switch effect so
   // the content is already in place; `applyEditorViewState` digest-gates
@@ -1298,6 +1368,27 @@ export function MarkdownEditor({
     view.focus();
     onFocusRequestApplied?.(focusRequest.id);
   }, [focusRequest, documentKey, onFocusRequestApplied]);
+
+  // #424: the Find panel's "return focus to the editor" request on close.
+  // Kept separate from `focusRequest` so the two monotonic id spaces never
+  // collide; applied once per new id for the current document.
+  const appliedExtraFocusRequestIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (
+      !view ||
+      !extraFocusRequest ||
+      extraFocusRequest.documentKey !== documentKey ||
+      appliedExtraFocusRequestIdRef.current === extraFocusRequest.id
+    ) {
+      return;
+    }
+
+    appliedExtraFocusRequestIdRef.current = extraFocusRequest.id;
+    view.focus();
+  }, [extraFocusRequest, documentKey]);
 
   return (
     <div
