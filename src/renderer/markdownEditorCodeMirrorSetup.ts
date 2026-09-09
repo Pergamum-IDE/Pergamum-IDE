@@ -91,11 +91,19 @@ export function createMarkdownEditorBaseSetup(
   options: MarkdownEditorBaseSetupOptions
 ): Extension[] {
   return [
+    // #428: gutter display order is the left-to-right DOM order of the
+    // `activeGutters` facet entries, which follows extension order here.
+    // `foldGutter()` is listed BEFORE `lineNumbers()` so the marker (fold)
+    // gutter renders on the far left and the line-number gutter sits to its
+    // right, next to the text — the swap this issue asks for. Nothing else
+    // about the two gutters changes (no width / padding / body-offset
+    // tuning); `highlightActiveLineGutter()` still decorates whichever
+    // gutter element is on the active line regardless of their order.
+    foldGutter(),
     lineNumbers(),
     highlightActiveLineGutter(),
     highlightSpecialChars(),
     history({ minDepth: options.undoHistoryMinDepth }),
-    foldGutter(),
     drawSelection(),
     dropCursor(),
     EditorState.allowMultipleSelections.of(true),

@@ -3695,6 +3695,20 @@ label.settingsItemHeader {
   font-size: 15px;
 }
 
+/* #428: keep the line-number gutter as the RIGHTMOST gutter (immediately
+   left of the text) whenever more than one gutter is present. The base
+   setup already lists `foldGutter()` before `lineNumbers()` so the marker
+   gutter renders on the left, but the optional #411 broken-image-link
+   lint gutter is contributed after the base setup and would otherwise
+   land to the right of the line numbers. `.cm-gutters` is `display:flex`;
+   every other gutter keeps the default `order:0`, so nudging the line
+   numbers to `order:1` groups all marker gutters on the left and the line
+   numbers on the right in every combination. Order only — no width,
+   padding, or body-offset change. */
+.editorHost .cm-gutters .cm-lineNumbers {
+  order: 1;
+}
+
 /* #424 Slice 1: active-document Find panel, between the editor pane header
    and the CodeMirror surface. Two-row stack so Slice 2+ can grow the query
    row (語彙 / Ab / Aa / .*) and the nav row (マークする) without a reflow. */
