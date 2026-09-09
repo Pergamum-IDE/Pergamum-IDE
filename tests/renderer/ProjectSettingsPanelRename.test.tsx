@@ -3,7 +3,10 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ProjectSettingsPanel } from "../../src/renderer/ProjectSettingsPanel";
+import {
+  ProjectSettingsPanel,
+  getEligibleProjectSettingCategories
+} from "../../src/renderer/ProjectSettingsPanel";
 import type { Translate } from "../../src/shared/i18n";
 import { enTranslations } from "../../src/shared/i18n/en";
 import { jaTranslations } from "../../src/shared/i18n/ja";
@@ -50,7 +53,7 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
     }
   });
 
-  it("shows 'プロジェクト全般' (JA) and 'General' (EN) category button when projectName is provided", () => {
+  it("shows categories in expected order with 'プロジェクト全般' (JA) and 'General' (EN) immediately after 'すべて' / 'All'", () => {
     act(() => {
       root!.render(
         <ProjectSettingsPanel
@@ -67,7 +70,15 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
     const categories = Array.from(
       container!.querySelectorAll(".settingsCategoryButton")
     ).map((btn) => btn.textContent);
-    expect(categories).toContain("プロジェクト全般");
+    expect(categories).toEqual([
+      "すべて",
+      "プロジェクト全般",
+      "エディタ",
+      "画像添付",
+      "プレビュー",
+      "文書マップ",
+      "ファイル"
+    ]);
 
     act(() => {
       root!.render(
@@ -85,7 +96,46 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
     const categoriesEn = Array.from(
       container!.querySelectorAll(".settingsCategoryButton")
     ).map((btn) => btn.textContent);
-    expect(categoriesEn).toContain("General");
+    expect(categoriesEn).toEqual([
+      "All",
+      "General",
+      "Editor",
+      "Image Attachment",
+      "Preview",
+      "Document Map",
+      "Files"
+    ]);
+  });
+
+  it("displays 'project.name' key under project name description", () => {
+    act(() => {
+      root!.render(
+        <ProjectSettingsPanel
+          translate={translateJa}
+          projectName="吾輩は猫である"
+          isReadOnly={false}
+          projectSettings={{}}
+          applicationSettings={defaultApplicationSettings}
+          onSaveSettings={vi.fn()}
+        />
+      );
+    });
+
+    const keyElement = container!.querySelector(
+      '.settingsItemRow[data-project-setting="name"] .settingsItemKey'
+    );
+    expect(keyElement).not.toBeNull();
+    expect(keyElement!.textContent).toBe("project.name");
+  });
+
+  it("orders project category immediately after all in getEligibleProjectSettingCategories when includeProjectCategory is true", () => {
+    const categories = getEligibleProjectSettingCategories(
+      [],
+      translateJa,
+      undefined,
+      { includeProjectCategory: true }
+    );
+    expect(categories.map((c) => c.id)).toEqual(["all", "project"]);
   });
 
   it("displays current project name in Project Name input", () => {

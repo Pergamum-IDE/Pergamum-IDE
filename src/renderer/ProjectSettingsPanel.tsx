@@ -725,6 +725,7 @@ export function ProjectSettingsPanelView({
                       >
                         {translate("settings.project.name.description")}
                       </p>
+                      <code className="settingsItemKey">project.name</code>
                     </div>
                   </div>
                 </div>

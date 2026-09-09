@@ -71,12 +71,12 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(settingCategoryCatalog.map((category) => category.id)).toEqual([
         "application",
         "appearance",
+        "project",
         "editor",
         "imageAttachment",
         "preview",
         "documentMap",
         "files",
-        "project",
         "commands",
         "sound"
       ]);
