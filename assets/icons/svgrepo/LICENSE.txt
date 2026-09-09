@@ -7,6 +7,8 @@ https://www.svgrepo.com/svg/245661/vocabulary
 https://www.svgrepo.com/svg/412480/scroll
 https://www.svgrepo.com/svg/509890/document
 https://www.svgrepo.com/svg/510065/markdown
+https://www.svgrepo.com/svg/361287/replace
+https://www.svgrepo.com/svg/361289/replace-all
 
-License: CC0 License
+License: CC0 License / MIT License
 Downloaded: 2026-09-04

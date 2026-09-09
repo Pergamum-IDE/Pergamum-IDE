@@ -106,6 +106,12 @@ export function readSettingValue(
       return settings.imageAttachment.saveDirectory;
     case "imageAttachment.insertMarkdownLink":
       return settings.imageAttachment.insertMarkdownLink;
+    case "search.nearby.unit":
+      return settings.search.nearby.unit;
+    case "search.nearby.characterDistance":
+      return settings.search.nearby.characterDistance;
+    case "search.nearby.paragraphDistance":
+      return settings.search.nearby.paragraphDistance;
   }
 
   const exhaustiveCheck: never = key;

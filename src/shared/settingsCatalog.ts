@@ -50,7 +50,9 @@ export const settingAreas = [
   "debug",
   "documentMap",
   // #407: clipboard image attachment — save-directory + Markdown-link toggle.
-  "imageAttachment"
+  "imageAttachment",
+  // #424 Slice 7: glossary nearby search range (+ future project-wide search).
+  "search"
 ] as const;
 
 export type SettingArea = (typeof settingAreas)[number];
@@ -806,6 +808,40 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: [],
     requiresRestart: true
+  }),
+  // #424 Slice 7: glossary "近傍" (Nearby) search range. applicationWithProject
+  // Override so a project can widen / tighten the range without changing the
+  // global default. Not restart-required — the active Find panel re-runs its
+  // nearby query from the live effective value on every change.
+  "search.nearby.unit": defineEnumSetting({
+    key: "search.nearby.unit",
+    scope: "applicationWithProjectOverride",
+    enumValues: ["characters", "paragraphs"],
+    defaultValue: "paragraphs",
+    labelKey: "settings.search.nearby.unit.label",
+    descriptionKey: "settings.search.nearby.unit.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "search.nearby.characterDistance": defineNumberSetting({
+    key: "search.nearby.characterDistance",
+    scope: "applicationWithProjectOverride",
+    defaultValue: 500,
+    labelKey: "settings.search.nearby.characterDistance.label",
+    descriptionKey: "settings.search.nearby.characterDistance.description",
+    numericRange: { min: 50, max: 10000, integer: true },
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "search.nearby.paragraphDistance": defineNumberSetting({
+    key: "search.nearby.paragraphDistance",
+    scope: "applicationWithProjectOverride",
+    defaultValue: 2,
+    labelKey: "settings.search.nearby.paragraphDistance.label",
+    descriptionKey: "settings.search.nearby.paragraphDistance.description",
+    numericRange: { min: 0, max: 20, integer: true },
+    deprecatedAliases: [],
+    migrationNotes: []
   }),
   "files.newFile.lineEnding": defineEnumSetting({
     key: "files.newFile.lineEnding",

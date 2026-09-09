@@ -640,8 +640,8 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 rows for imageAttachment.saveDirectory / .insertMarkdownLink.
-    expect(rows).toHaveLength(13);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*.
+    expect(rows).toHaveLength(16);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -911,17 +911,18 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const headings = container.querySelectorAll<HTMLHeadingElement>(
       "h2.settingsItemPaneHeading"
     );
-    // #407: the "画像添付" category sits between Editor and Preview.
-    expect(headings).toHaveLength(5);
+    // #407 / #424 Slice 7: "検索・置換" + "画像添付" sit between Editor and Preview.
+    expect(headings).toHaveLength(6);
     expect(headings[0].textContent).toBe("エディタ");
-    expect(headings[1].textContent).toBe("画像添付");
-    expect(headings[2].textContent).toBe("プレビュー");
-    expect(headings[3].textContent).toBe("文書マップ");
-    expect(headings[4].textContent).toBe("ファイル");
+    expect(headings[1].textContent).toBe("検索・置換");
+    expect(headings[2].textContent).toBe("画像添付");
+    expect(headings[3].textContent).toBe("プレビュー");
+    expect(headings[4].textContent).toBe("文書マップ");
+    expect(headings[5].textContent).toBe("ファイル");
 
     // Sections use existing .settingsItemPane class
     const panes = container.querySelectorAll(".settingsItemPane");
-    expect(panes).toHaveLength(5);
+    expect(panes).toHaveLength(6);
 
     // Verify exact sequence of elements inside row:
     // 1. header (label + inline actions) -> 2. control -> 3. description -> 4. key
@@ -1009,6 +1010,10 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           { id: "all", labelKey: "settings.category.all.label" },
           { id: "editor", labelKey: "settings.category.editor.label" },
           {
+            id: "searchReplace",
+            labelKey: "settings.category.searchReplace.label"
+          },
+          {
             id: "imageAttachment",
             labelKey: "settings.category.imageAttachment.label"
           },
@@ -1034,6 +1039,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         expect(categories.map((c) => c.id)).toEqual([
           "all",
           "editor",
+          "searchReplace",
           "imageAttachment",
           "preview",
           "documentMap",
@@ -1150,6 +1156,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "editor.characterCount.exclude.headings",
           "editor.characterCount.exclude.markdownSyntax",
           "editor.characterCount.exclude.markdownComments",
+          "search.nearby.unit",
+          "search.nearby.characterDistance",
+          "search.nearby.paragraphDistance",
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
           "preview.renderer",
@@ -1282,13 +1291,14 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      expect(categoryButtons).toHaveLength(6);
+      expect(categoryButtons).toHaveLength(7);
       expect(categoryButtons[0].textContent).toBe("すべて");
       expect(categoryButtons[1].textContent).toBe("エディタ");
-      expect(categoryButtons[2].textContent).toBe("画像添付");
-      expect(categoryButtons[3].textContent).toBe("プレビュー");
-      expect(categoryButtons[4].textContent).toBe("文書マップ");
-      expect(categoryButtons[5].textContent).toBe("ファイル");
+      expect(categoryButtons[2].textContent).toBe("検索・置換");
+      expect(categoryButtons[3].textContent).toBe("画像添付");
+      expect(categoryButtons[4].textContent).toBe("プレビュー");
+      expect(categoryButtons[5].textContent).toBe("文書マップ");
+      expect(categoryButtons[6].textContent).toBe("ファイル");
 
       expect(
         categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
@@ -1303,6 +1313,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       ).map((h) => h.textContent);
       expect(headings).toEqual([
         "エディタ",
+        "検索・置換",
         "画像添付",
         "プレビュー",
         "文書マップ",
@@ -1321,6 +1332,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
+        "search.nearby.unit",
+        "search.nearby.characterDistance",
+        "search.nearby.paragraphDistance",
         "imageAttachment.saveDirectory",
         "imageAttachment.insertMarkdownLink",
         "preview.renderer",
@@ -1372,7 +1386,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.markdownComments"
       ]);
 
-      // Click "画像添付" (#407)
+      // Click "検索・置換" (#424 Slice 7)
       act(() => {
         categoryButtons[2].click();
       });
@@ -1384,11 +1398,12 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
-        "imageAttachment.saveDirectory",
-        "imageAttachment.insertMarkdownLink"
+        "search.nearby.unit",
+        "search.nearby.characterDistance",
+        "search.nearby.paragraphDistance"
       ]);
 
-      // Click "プレビュー"
+      // Click "画像添付" (#407)
       act(() => {
         categoryButtons[3].click();
       });
@@ -1399,9 +1414,12 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["preview.renderer"]);
+      expect(itemKeys).toEqual([
+        "imageAttachment.saveDirectory",
+        "imageAttachment.insertMarkdownLink"
+      ]);
 
-      // Click "文書マップ"
+      // Click "プレビュー"
       act(() => {
         categoryButtons[4].click();
       });
@@ -1412,15 +1430,28 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["documentMap.dialogueDelimiterPairs"]);
+      expect(itemKeys).toEqual(["preview.renderer"]);
 
-      // Click "ファイル"
+      // Click "文書マップ"
       act(() => {
         categoryButtons[5].click();
       });
 
       expect(
         categoryButtons[5].classList.contains("settingsCategoryButtonSelected")
+      ).toBe(true);
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["documentMap.dialogueDelimiterPairs"]);
+
+      // Click "ファイル"
+      act(() => {
+        categoryButtons[6].click();
+      });
+
+      expect(
+        categoryButtons[6].classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
@@ -1447,6 +1478,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
+        "search.nearby.unit",
+        "search.nearby.characterDistance",
+        "search.nearby.paragraphDistance",
         "imageAttachment.saveDirectory",
         "imageAttachment.insertMarkdownLink",
         "preview.renderer",
@@ -1525,6 +1559,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
+        "search.nearby.unit",
+        "search.nearby.characterDistance",
+        "search.nearby.paragraphDistance",
         "imageAttachment.saveDirectory",
         "imageAttachment.insertMarkdownLink",
         "preview.renderer",
@@ -1752,8 +1789,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      // #407: categoryButtons[2] is now "画像添付"; Preview moved to index 3.
-      const previewButton = categoryButtons[3];
+      // #407 / #424 Slice 7: [2]="検索・置換", [3]="画像添付"; Preview at index 4.
+      const previewButton = categoryButtons[4];
 
       await act(async () => {
         textInput.blur();

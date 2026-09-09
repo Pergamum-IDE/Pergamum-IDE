@@ -187,6 +187,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
       "アプリケーション",
       "外観",
       "エディタ",
+      "検索・置換",
       "プレビュー",
       "ファイル",
       "コマンドパレット",
@@ -213,9 +214,11 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     expect(labels).not.toContain("詳細設定");
     // "文書マップ" has no scalar catalog items but is force-kept (#375 Task Q).
     expect(labels).toContain("文書マップ");
-    // #407: "画像添付" adds a 9th category with its own scalar catalog items.
+    // #407: "画像添付" adds a category with its own scalar catalog items.
     expect(labels).toContain("画像添付");
-    expect(labels).toHaveLength(9);
+    // #424 Slice 7: "検索・置換" adds another with its own scalar catalog items.
+    expect(labels).toContain("検索・置換");
+    expect(labels).toHaveLength(10);
   });
 
   it("shows the '文書マップ' heading only once in the pane body (no duplicate section heading) (#375 fix)", () => {
@@ -340,6 +343,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "Application",
       "Appearance",
       "Editor",
+      "Search & Replace",
       "Image Attachment",
       "Preview",
       "Document Map",
@@ -847,6 +851,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
@@ -880,6 +885,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: defaultApplicationSettings.preview,
       workbench: {
         ...defaultApplicationSettings.workbench,
@@ -910,6 +916,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: defaultApplicationSettings.preview,
       notification: { output: { enabled: false } },
       workbench: defaultApplicationSettings.workbench,
@@ -938,6 +945,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: defaultApplicationSettings.preview,
       workbench: defaultApplicationSettings.workbench,
       commandPalette: defaultApplicationSettings.commandPalette,
@@ -976,6 +984,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1008,6 +1017,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1044,6 +1054,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1085,6 +1096,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenLastCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1100,6 +1112,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenLastCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1132,6 +1145,7 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: settings.preview,
       workbench: settings.workbench,
       commandPalette: {
@@ -1168,6 +1182,50 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     onChange({ target: { valueAsNumber: Number.NaN } });
 
     expect(onChangeSettings).not.toHaveBeenCalled();
+  });
+
+  it("#424 Slice 7 blocker: Application Settings can change search.nearby.unit (paragraphs <-> characters)", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
+    const onChangeSettings = vi.fn();
+
+    const toCharacters = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "searchReplace",
+      searchQuery: isolate("search.nearby.unit"),
+      onChangeSettings
+    });
+    const select = controlElement(toCharacters, "search.nearby.unit");
+    expect(select.props.disabled).not.toBe(true);
+    (select.props.onChange as (e: { target: { value: string } }) => void)({
+      target: { value: "characters" }
+    });
+    expect(onChangeSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        search: { nearby: { ...settings.search.nearby, unit: "characters" } }
+      })
+    );
+
+    // ...and back to paragraphs from a "characters" starting point
+    const charSettings: ApplicationSettings = {
+      ...settings,
+      search: { nearby: { ...settings.search.nearby, unit: "characters" } }
+    };
+    const back = settingsPanelViewElement("en", {
+      settings: charSettings,
+      selectedCategoryId: "searchReplace",
+      searchQuery: isolate("search.nearby.unit"),
+      onChangeSettings
+    });
+    (
+      (controlElement(back, "search.nearby.unit").props.onChange) as (e: {
+        target: { value: string };
+      }) => void
+    )({ target: { value: "paragraphs" } });
+    expect(onChangeSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        search: { nearby: { ...charSettings.search.nearby, unit: "paragraphs" } }
+      })
+    );
   });
 
   it("preserves the save-failure display: the error prop still renders as a settingsError message", () => {
@@ -1521,6 +1579,7 @@ describe("SettingsPanelView preview.updateDelayMs (#250 follow-up)", () => {
     expect(onChangeSettings).toHaveBeenCalledWith({
       documentMap: defaultApplicationSettings.documentMap,
       imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
       preview: { ...settings.preview, updateDelayMs: 10000 },
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
@@ -1729,6 +1788,8 @@ describe("Settings number control right-alignment (common style)", () => {
         "commandPalette.footerDetail.marquee.speed",
         "editor.undoHistoryMinDepth",
         "preview.updateDelayMs",
+        "search.nearby.characterDistance",
+        "search.nearby.paragraphDistance",
         "workbench.notification.durationMs"
       ].sort()
     );

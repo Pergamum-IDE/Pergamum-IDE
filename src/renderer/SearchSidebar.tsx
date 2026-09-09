@@ -27,10 +27,13 @@ import {
   type SearchTelemetryContext
 } from "./searchTelemetry";
 import type { ReplacePreviewOpenRequest } from "./replace/replacePreviewTypes";
-import glossarySearchIconRaw from "../../assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw";
-import wholeWordIconRaw from "../../assets/icons/Pergamum/search/word.svg?raw";
-import caseSensitiveIconRaw from "../../assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw";
-import useRegexIconRaw from "../../assets/icons/svgrepo/search/regex-svgrepo-com.svg?raw";
+import {
+  CASE_SENSITIVE_ICON,
+  GLOSSARY_SEARCH_ICON,
+  SearchOptionToggle,
+  USE_REGEX_ICON,
+  WHOLE_WORD_ICON
+} from "./searchOptionToggle";
 
 /**
  * #384 — the Search pane.
@@ -124,67 +127,6 @@ type SearchState =
 
 /** Shared idle instance so an effect that "stays idle" causes no re-render. */
 const IDLE_STATE: SearchState = { kind: "idle" };
-
-/**
- * The bundled svgrepo / Pergamum search glyphs ship as standalone documents
- * (XML prolog, `<!DOCTYPE>`, a BOM, a hard-coded black `fill`). Strip the
- * document scaffolding and swap the fixed fill for `currentColor` so the
- * icon inherits the toggle button's text colour in every theme.
- */
-function inlineSearchIcon(raw: string): string {
-  return raw
-    .replace(/^﻿/, "")
-    .replace(/<\?xml[^>]*\?>/gi, "")
-    .replace(/<!DOCTYPE[^>]*>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/fill="#0{3}(?:0{3})?"/gi, 'fill="currentColor"')
-    .replace(/fill:\s*#0{3}(?:0{3})?/gi, "fill:currentColor")
-    .replace(/(<svg\b[^>]*?)\swidth="[^"]*"/i, "$1")
-    .replace(/(<svg\b[^>]*?)\sheight="[^"]*"/i, "$1")
-    .trim();
-}
-
-const GLOSSARY_SEARCH_ICON = inlineSearchIcon(glossarySearchIconRaw);
-const WHOLE_WORD_ICON = inlineSearchIcon(wholeWordIconRaw);
-const CASE_SENSITIVE_ICON = inlineSearchIcon(caseSensitiveIconRaw);
-const USE_REGEX_ICON = inlineSearchIcon(useRegexIconRaw);
-
-interface SearchOptionToggleProps {
-  readonly icon: string;
-  readonly pressed: boolean;
-  readonly label: string;
-  readonly hint: string;
-  readonly disabled?: boolean;
-  readonly onToggle: () => void;
-}
-
-function SearchOptionToggle({
-  icon,
-  pressed,
-  label,
-  hint,
-  disabled = false,
-  onToggle
-}: SearchOptionToggleProps): JSX.Element {
-  return (
-    <button
-      type="button"
-      className="searchOptionToggle"
-      data-pressed={pressed && !disabled ? "true" : undefined}
-      aria-pressed={pressed && !disabled}
-      aria-label={label}
-      title={hint}
-      disabled={disabled}
-      onClick={onToggle}
-    >
-      <span
-        className="searchOptionToggleIcon"
-        aria-hidden="true"
-        dangerouslySetInnerHTML={{ __html: icon }}
-      />
-    </button>
-  );
-}
 
 /** A preview line with its matched span wrapped in `<mark>`. */
 function SearchResultPreview({

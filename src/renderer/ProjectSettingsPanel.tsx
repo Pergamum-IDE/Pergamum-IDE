@@ -61,6 +61,7 @@ export function isSupportedProjectSettingControl(
     control.kind === "text" ||
     control.kind === "select" ||
     control.kind === "switch" ||
+    control.kind === "number" ||
     control.kind === "custom"
   );
 }
@@ -202,6 +203,12 @@ export function readProjectSettingValue(
       return settings.imageAttachment?.saveDirectory;
     case "imageAttachment.insertMarkdownLink":
       return settings.imageAttachment?.insertMarkdownLink;
+    case "search.nearby.unit":
+      return settings.search?.nearby?.unit;
+    case "search.nearby.characterDistance":
+      return settings.search?.nearby?.characterDistance;
+    case "search.nearby.paragraphDistance":
+      return settings.search?.nearby?.paragraphDistance;
     default:
       return undefined;
   }
@@ -515,6 +522,7 @@ export interface ProjectSettingsPanelViewProps {
   onTextFocus?: (key: SettingKey) => void;
   onTextBlur?: (key: SettingKey) => void;
   onSelectChange?: (key: SettingKey, value: string) => void;
+  onNumberChange?: (key: SettingKey, value: number) => void;
   onSwitchChange?: (key: SettingKey, checked: boolean) => void;
   onDialoguePairsCommit?: (
     key: SettingKey,
@@ -551,6 +559,7 @@ export function ProjectSettingsPanelView({
   onTextFocus,
   onTextBlur,
   onSelectChange,
+  onNumberChange,
   onSwitchChange,
   onDialoguePairsCommit,
   onOpenImageAttachmentDialog
@@ -777,6 +786,25 @@ export function ProjectSettingsPanelView({
                               </option>
                             ))}
                           </select>
+                        );
+                      } else if (item.control.kind === "number") {
+                        controlElement = (
+                          <input
+                            type="number"
+                            className="settingsNumberInput"
+                            value={displayValue}
+                            min={item.control.min}
+                            max={item.control.max}
+                            step={item.control.step}
+                            disabled={isReadOnly || isSaving}
+                            onChange={(e) => {
+                              const next = e.target.valueAsNumber;
+                              if (Number.isFinite(next)) {
+                                onNumberChange?.(item.key, next);
+                              }
+                            }}
+                            aria-labelledby={labelId}
+                          />
                         );
                       } else if (item.control.kind === "switch") {
                         controlElement = (
@@ -1185,6 +1213,58 @@ export function ProjectSettingsPanel({
     }
   };
 
+  // #424 Slice 7: number override rows (search.nearby.*) — same differential
+  // set/remove flow as select, with the value already coerced to a number.
+  const handleNumberChange = async (
+    key: SettingKey,
+    value: number
+  ): Promise<void> => {
+    if (isReadOnly || isSaving) {
+      return;
+    }
+
+    const currentEffective = readEffectiveProjectSettingValue(
+      key,
+      projectSettings,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const validation = validateProjectSettingValue(
+      key,
+      value,
+      currentEffective
+    );
+    if (!validation.ok || validation.value === undefined) {
+      return;
+    }
+
+    const inheritedValue = readInheritedSettingValue(
+      key,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const request = createDifferentialProjectSettingRequest(
+      key,
+      validation.value,
+      inheritedValue
+    );
+
+    const committedProjectValue = readProjectSettingValue(key, projectSettings);
+    if (committedProjectValue === undefined && "remove" in request) {
+      return;
+    }
+
+    setError(null);
+    setIsSaving(true);
+    try {
+      await onSaveSettings(request);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSwitchChange = async (
     key: SettingKey,
     checked: boolean
@@ -1494,6 +1574,9 @@ export function ProjectSettingsPanel({
         onTextFocus={handleTextFocus}
         onTextBlur={(key) => {
           void handleTextBlur(key);
+        }}
+        onNumberChange={(key, value) => {
+          void handleNumberChange(key, value);
         }}
         onSelectChange={(key, value) => {
           void handleSelectChange(key, value);

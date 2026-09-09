@@ -43,8 +43,16 @@ import {
   type EditorViewState
 } from "./editorViewState";
 import type { MarkdownEditorGlossaryCompletionConfig } from "./glossaryCompletionExtension";
+import type { MarkdownEditorActiveFindConfig } from "./find/activeFindKeymapExtension";
+import {
+  activeFindHighlightField,
+  clearActiveFindHighlightsEffect,
+  setActiveFindHighlightsEffect,
+  type ActiveFindHighlightSpec
+} from "./find/activeFindHighlightExtension";
 import {
   createMarkdownEditorDocumentState,
+  readOnlyCompartmentContent,
   type MarkdownEditorDocumentState
 } from "./markdownEditorDocumentState";
 import {
@@ -69,12 +77,19 @@ import type {
 } from "../shared/api";
 
 export type { MarkdownEditorGlossaryCompletionConfig };
+export type { MarkdownEditorActiveFindConfig };
 
 interface MarkdownEditorPendingSelection {
   start: number;
   end: number;
   /** #352: `"center"` for an Outline heading jump, otherwise `"nearest"`. */
   scrollY?: "nearest" | "center";
+  /**
+   * #424: default `true`. `false` keeps DOM focus where it is (used by the
+   * Find panel so navigating between matches does not steal focus out of the
+   * search box).
+   */
+  focusEditor?: boolean;
 }
 
 interface MarkdownEditorProps {
@@ -211,6 +226,35 @@ interface MarkdownEditorProps {
    */
   glossaryCompletion?: MarkdownEditorGlossaryCompletionConfig | null;
   /**
+   * #424 Slice 1: Ctrl+F opens the Pergamum active-document Find panel.
+   * `undefined` / `null` (the default; the Glossary description field never
+   * passes it) leaves Ctrl+F inert. Only EditorSurface's MarkdownEditorSurface
+   * supplies it. Read live via a ref, so a value change is picked up without
+   * rebuilding the EditorView.
+   */
+  activeFind?: MarkdownEditorActiveFindConfig | null;
+  /**
+   * #424: a Find-panel-driven "select + reveal this range" request, kept
+   * entirely separate from `pendingSelection` (which App owns for Outline /
+   * Go to Line / session restore). A new object is applied once; pass
+   * `focusEditor: false` to leave focus in the search box.
+   */
+  extraPendingSelection?: MarkdownEditorPendingSelection | null;
+  onExtraPendingSelectionApplied?: () => void;
+  /**
+   * #424: a Find-panel-driven "return focus to the editor" request (on panel
+   * close). Independent of `focusRequest` (App-owned) so their monotonic id
+   * spaces never collide. Applied once per new id for the current document.
+   */
+  extraFocusRequest?: MarkdownEditorFocusRequest | null;
+  /**
+   * #424 Slice 2: the "マークする" (mark all) highlight set for the ACTIVE
+   * document. `null` clears every highlight (panel closed, mark-all off,
+   * empty query, invalid regex, no matches). Ranges are in the current
+   * buffer's coordinates.
+   */
+  activeFindHighlight?: ActiveFindHighlightSpec | null;
+  /**
    * #407 B3: optional foundation for clipboard image paste. When omitted,
    * the CodeMirror paste handler deliberately returns false before calling
    * `preventDefault()`, so B4's unimplemented orchestration cannot break
@@ -271,6 +315,13 @@ export interface MarkdownEditorParagraphIndentController {
   applyReplaceInBufferChanges(
     changes: readonly ParagraphIndentChange[]
   ): boolean;
+  /**
+   * #424 Slice 3: the live buffer text of the shared active EditorView, or
+   * `null` when no view is mounted. The active-document Find panel re-reads
+   * this immediately before a replace so it never applies match offsets that
+   * were computed against a slightly-stale React `content` prop.
+   */
+  getBufferText(): string | null;
   /**
    * #386 Project Documents Replace: after the file was saved to disk, refresh
    * the live view to the saved content. This is a disk SYNC, not an edit -
@@ -422,6 +473,11 @@ export function MarkdownEditor({
   focusRequest,
   onFocusRequestApplied,
   glossaryCompletion,
+  activeFind,
+  extraPendingSelection,
+  onExtraPendingSelectionApplied,
+  extraFocusRequest,
+  activeFindHighlight,
   onImageAttachmentPaste,
   onImageAttachmentPositionControllerChange,
   imageAttachmentSourceDocumentId,
@@ -461,6 +517,11 @@ export function MarkdownEditor({
   // honored without recreating the EditorView.
   const glossaryCompletionRef = useRef<MarkdownEditorGlossaryCompletionConfig | null>(
     glossaryCompletion ?? null
+  );
+  // #424: read fresh by the Ctrl+F keydown handler baked into the document's
+  // EditorState — a prop change is honored without recreating the view.
+  const activeFindRef = useRef<MarkdownEditorActiveFindConfig | null>(
+    activeFind ?? null
   );
   const imageAttachmentPasteHandlerRef =
     useRef<MarkdownImageAttachmentPasteHandler | null>(
@@ -691,6 +752,7 @@ export function MarkdownEditor({
       whitespaceCompartment,
       whitespaceSettingsRef,
       glossaryCompletionRef,
+      activeFindRef,
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
       // #411 / #412: only add the broken-image-link lint extension when the
@@ -721,10 +783,9 @@ export function MarkdownEditor({
     lineEndingField: StateField<LineEndingBreakSet>
   ) {
     return [
-      readOnlyCompartment.reconfigure([
-        EditorState.readOnly.of(readOnlyRef.current),
-        EditorView.editable.of(!readOnlyRef.current)
-      ]),
+      readOnlyCompartment.reconfigure(
+        readOnlyCompartmentContent(readOnlyRef.current)
+      ),
       visibilityCompartment.reconfigure(
         createVisibilityExtension(
           createLineEndingVisibilityFeatures(
@@ -803,6 +864,10 @@ export function MarkdownEditor({
   useEffect(() => {
     glossaryCompletionRef.current = glossaryCompletion ?? null;
   }, [glossaryCompletion]);
+
+  useEffect(() => {
+    activeFindRef.current = activeFind ?? null;
+  }, [activeFind]);
 
   useEffect(() => {
     imageAttachmentPasteHandlerRef.current = onImageAttachmentPaste ?? null;
@@ -916,6 +981,9 @@ export function MarkdownEditor({
       // edits made since the last switch-away would never make it into the
       // cache, since the switch effect below only captures on a SWITCH, not
       // on a plain unmount.
+      // #424 Slice 2: as in the switch path, drop transient Find highlights
+      // before caching so a later remount never restores them.
+      view.dispatch({ effects: clearActiveFindHighlightsEffect.of(null) });
       documentStates.set(documentKeyRef.current, {
         state: view.state,
         lineEndingField: lineEndingFieldRef.current!
@@ -981,6 +1049,7 @@ export function MarkdownEditor({
         dispatchBufferChanges(changes, undefined),
       applyReplaceInBufferChanges: (changes) =>
         dispatchBufferChanges(changes, "input.replace"),
+      getBufferText: () => viewRef.current?.state.doc.toString() ?? null,
       syncBufferToDiskContent: (fullText, breaks) => {
         const view = viewRef.current;
         if (!view) {
@@ -1083,10 +1152,9 @@ export function MarkdownEditor({
     }
 
     view.dispatch({
-      effects: readOnlyCompartment.reconfigure([
-        EditorState.readOnly.of(readOnly),
-        EditorView.editable.of(!readOnly)
-      ])
+      effects: readOnlyCompartment.reconfigure(
+        readOnlyCompartmentContent(readOnly)
+      )
     });
   }, [readOnly]);
 
@@ -1185,6 +1253,10 @@ export function MarkdownEditor({
         documentKeyRef.current,
         captureEditorViewState(view)
       );
+      // #424 Slice 2: Find "mark all" highlights are transient panel UI — drop
+      // them from the OUTGOING document's state before it is cached, so
+      // switching back later never restores stale highlights.
+      view.dispatch({ effects: clearActiveFindHighlightsEffect.of(null) });
       // #387/#392: cache the OUTGOING document's live EditorState (its full
       // undo history included) under the key it is STILL showing, before
       // that key ref advances below.
@@ -1252,6 +1324,32 @@ export function MarkdownEditor({
     onPendingSelectionApplied?.();
   }, [pendingSelection, onPendingSelectionApplied]);
 
+  // #424: the Find panel's "select + reveal this match" request. Same shape as
+  // the effect above but its own prop, so App's pendingSelection flow is
+  // untouched, and `focusEditor: false` keeps focus in the search box.
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (!view || !extraPendingSelection) {
+      return;
+    }
+
+    const docLength = view.state.doc.length;
+    const from = Math.max(0, Math.min(extraPendingSelection.start, docLength));
+    const to = Math.max(from, Math.min(extraPendingSelection.end, docLength));
+
+    view.dispatch({
+      selection: EditorSelection.single(from, to),
+      effects: EditorView.scrollIntoView(from, {
+        y: extraPendingSelection.scrollY ?? "nearest"
+      })
+    });
+    if (extraPendingSelection.focusEditor !== false) {
+      view.focus();
+    }
+    onExtraPendingSelectionApplied?.();
+  }, [extraPendingSelection, onExtraPendingSelectionApplied]);
+
   // #274: re-apply a persisted #273 View State exactly once for the document
   // this editor is now showing. Declared after the document-switch effect so
   // the content is already in place; `applyEditorViewState` digest-gates
@@ -1298,6 +1396,52 @@ export function MarkdownEditor({
     view.focus();
     onFocusRequestApplied?.(focusRequest.id);
   }, [focusRequest, documentKey, onFocusRequestApplied]);
+
+  // #424: the Find panel's "return focus to the editor" request on close.
+  // Kept separate from `focusRequest` so the two monotonic id spaces never
+  // collide; applied once per new id for the current document.
+  const appliedExtraFocusRequestIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (
+      !view ||
+      !extraFocusRequest ||
+      extraFocusRequest.documentKey !== documentKey ||
+      appliedExtraFocusRequestIdRef.current === extraFocusRequest.id
+    ) {
+      return;
+    }
+
+    appliedExtraFocusRequestIdRef.current = extraFocusRequest.id;
+    view.focus();
+  }, [extraFocusRequest, documentKey]);
+
+  // #424 Slice 2: push the Find panel's "mark all" set into the active
+  // document's highlight StateField. `null` clears it. The panel recomputes
+  // and re-dispatches on every query / option / content change, so this
+  // effect just mirrors the latest prop value.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    if (
+      !activeFindHighlight &&
+      view.state.field(activeFindHighlightField).size === 0
+    ) {
+      // Nothing painted and nothing to paint — skip the no-op transaction
+      // (this is the common case: every Markdown editor mount with the panel
+      // closed).
+      return;
+    }
+    view.dispatch({
+      effects: activeFindHighlight
+        ? setActiveFindHighlightsEffect.of(activeFindHighlight)
+        : clearActiveFindHighlightsEffect.of(null)
+    });
+  }, [activeFindHighlight]);
 
   return (
     <div

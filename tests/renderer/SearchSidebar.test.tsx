@@ -294,18 +294,26 @@ describe("SearchSidebar (#384 Phase 1 — Search pane UI foundation)", () => {
   });
 
   it("wires the exact search icon assets required by #384", () => {
+    // #424 Slice 2: the icon imports + inlining + <SearchOptionToggle> moved
+    // to the shared `searchOptionToggle` module (used by both the Search pane
+    // and the active-document Find panel). SearchSidebar consumes them.
+    const shared = readFileSync(
+      "src/renderer/searchOptionToggle.tsx",
+      "utf8"
+    );
     const source = readFileSync("src/renderer/SearchSidebar.tsx", "utf8");
 
-    expect(source).toContain(
+    expect(shared).toContain(
       "assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw"
     );
-    expect(source).toContain("assets/icons/Pergamum/search/word.svg?raw");
-    expect(source).toContain(
+    expect(shared).toContain("assets/icons/Pergamum/search/word.svg?raw");
+    expect(shared).toContain(
       "assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw"
     );
-    expect(source).toContain(
+    expect(shared).toContain(
       "assets/icons/svgrepo/search/regex-svgrepo-com.svg?raw"
     );
+    expect(source).toContain('from "./searchOptionToggle"');
   });
 });
 

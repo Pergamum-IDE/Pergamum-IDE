@@ -51,6 +51,11 @@ import {
   createGlossaryCompletionExtension,
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
+import {
+  createActiveFindKeymapExtension,
+  type MarkdownEditorActiveFindConfig
+} from "./find/activeFindKeymapExtension";
+import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
 import { createMarkdownImageAttachmentPositionTrackingExtension } from "./markdownImageAttachmentPositionTracker";
 import {
@@ -106,6 +111,14 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly whitespaceCompartment: Compartment;
   readonly whitespaceSettingsRef: LiveRef<ApplicationEditorWhitespaceSettings>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
+  /**
+   * #424: read live by the Ctrl+F keydown handler. `null` (the default, and
+   * what a non-active-document editor such as the Glossary description field
+   * supplies) leaves Ctrl+F inert. Only the active Markdown document editor
+   * (EditorSurface's MarkdownEditorSurface) provides a config that opens the
+   * Pergamum Find panel.
+   */
+  readonly activeFindRef?: LiveRef<MarkdownEditorActiveFindConfig | null>;
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /**
    * #411: when present, adds the broken-image-link lint extension (gutter +
@@ -121,6 +134,28 @@ export interface MarkdownEditorDocumentStateOptions {
   createUpdateListenerExtension: (
     lineEndingField: StateField<LineEndingBreakSet>
   ) => Extension;
+}
+
+/**
+ * The contents of the shared `readOnlyCompartment` for a given read-only
+ * state. Built here (and reused by MarkdownEditor.tsx's reconfigure sites) so
+ * the three places that set it never drift.
+ *
+ * #424 Slice 3 dogfood: a read-only editor is `contenteditable="false"` and so
+ * NOT focusable, which means its keymap — including the Ctrl+F / Ctrl+H that
+ * open the active-document Find / Replace panel — never fires. `tabindex="0"`
+ * makes the content focusable (click / `view.focus()`) again while
+ * `EditorState.readOnly` still blocks every edit. A writable editor is left
+ * exactly as before (CodeMirror manages its own focusability).
+ */
+export function readOnlyCompartmentContent(readOnly: boolean): Extension[] {
+  return [
+    EditorState.readOnly.of(readOnly),
+    EditorView.editable.of(!readOnly),
+    ...(readOnly
+      ? [EditorView.contentAttributes.of({ tabindex: "0" })]
+      : [])
+  ];
 }
 
 /**
@@ -159,10 +194,9 @@ export function createMarkdownEditorDocumentState(
       }),
       markdown(),
       EditorView.lineWrapping,
-      options.readOnlyCompartment.of([
-        EditorState.readOnly.of(options.readOnlyRef.current),
-        EditorView.editable.of(!options.readOnlyRef.current)
-      ]),
+      options.readOnlyCompartment.of(
+        readOnlyCompartmentContent(options.readOnlyRef.current)
+      ),
       options.visibilityCompartment.of(
         createVisibilityExtension(
           createLineEndingVisibilityFeatures(
@@ -181,6 +215,12 @@ export function createMarkdownEditorDocumentState(
         getConfig: () => options.glossaryCompletionRef.current,
         isReadOnly: () => options.readOnlyRef.current
       }),
+      createActiveFindKeymapExtension({
+        getConfig: () => options.activeFindRef?.current ?? null
+      }),
+      // #424 Slice 2: inert until the Find panel dispatches its first
+      // "mark all" effect; safe on every document's state.
+      activeFindHighlightField,
       createMarkdownImageAttachmentPositionTrackingExtension(),
       createMarkdownImageAttachmentPasteExtension(imageAttachmentPasteOptions),
       ...(options.imageLinkDiagnosticsOptions

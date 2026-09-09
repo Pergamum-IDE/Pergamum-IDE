@@ -117,6 +117,13 @@ function saveRequest(
       characterCount: defaultCharacterCountSettings,
       undoHistoryMinDepth: defaultUndoHistoryMinDepth
     },
+    search: {
+      nearby: {
+        unit: "paragraphs",
+        characterDistance: 500,
+        paragraphDistance: 2
+      }
+    },
     files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
     imageAttachment: { saveDirectory: "", insertMarkdownLink: true },
     documentMap: {

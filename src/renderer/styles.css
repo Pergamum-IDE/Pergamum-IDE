@@ -3695,6 +3695,454 @@ label.settingsItemHeader {
   font-size: 15px;
 }
 
+/* #424 Slice 1: active-document Find panel, between the editor pane header
+   and the CodeMirror surface. Two-row stack so Slice 2+ can grow the query
+   row (語彙 / Ab / Aa / .*) and the nav row (マークする) without a reflow. */
+.activeFindPanel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e3e8ee;
+  background: #f4f6f9;
+}
+
+.activeFindPanelRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.activeFindPanelInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid #c4cdd8;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  background: #ffffff;
+  color: #1f2733;
+}
+
+.activeFindPanelInput:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: -1px;
+  border-color: #7aa7d9;
+}
+
+.activeFindPanelButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #3d4a58;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.activeFindPanelButton:hover {
+  background: #e4e9ef;
+}
+
+.activeFindPanelButton:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: 1px;
+}
+
+.activeFindPanelButton:disabled {
+  color: #9aa5b1;
+  cursor: default;
+}
+
+.activeFindPanelButton:disabled:hover {
+  background: transparent;
+}
+
+.activeFindPanelCloseButton {
+  font-size: 15px;
+}
+
+.activeFindPanelCount {
+  flex: 0 0 auto;
+  min-width: 3.5em;
+  padding: 0 4px;
+  color: #52616f;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* #424 Slice 2: option toggles (shared .searchOptionToggle), mark-all
+   toggle, regex-error line, and the editor-surface match highlights. */
+.activeFindPanelOptions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.activeFindPanelInput[data-invalid="true"] {
+  border-color: #c0392b;
+}
+
+.activeFindPanelInput[data-invalid="true"]:focus-visible {
+  outline-color: #c0392b;
+  border-color: #c0392b;
+}
+
+.activeFindPanelMarkToggle {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #c4cdd8;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #3d4a58;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.activeFindPanelMarkToggle:hover {
+  background: #eef2f6;
+}
+
+.activeFindPanelMarkToggle:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: 1px;
+}
+
+.activeFindPanelMarkToggle[data-pressed="true"] {
+  background: #dceafc;
+  border-color: #7aa7d9;
+  color: #1f2733;
+}
+
+.activeFindPanelError {
+  margin: 0;
+  padding: 2px 2px 0;
+  color: #c0392b;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+/* #424 Slice 3: 検索 / 置換 mode tabs, replace input row, replace-current. */
+.activeFindPanelModeRow {
+  gap: 2px;
+  /* #424 Slice 4: close [×] sits on this row, pushed to the far right. */
+  justify-content: space-between;
+}
+
+.activeFindPanelModeTabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.activeFindPanelModeTab {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: #52616f;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.activeFindPanelModeTab:hover {
+  background: #e4e9ef;
+}
+
+.activeFindPanelModeTab:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: 1px;
+}
+
+.activeFindPanelModeTab[data-active="true"] {
+  background: #ffffff;
+  border-color: #c4cdd8;
+  border-bottom-color: #ffffff;
+  color: #1f2733;
+  font-weight: 600;
+}
+
+.activeFindPanelReplaceInput {
+  flex: 1 1 auto;
+}
+
+.activeFindPanelReplaceCurrentButton {
+  min-width: 24px;
+}
+
+.activeFindPanelReplaceCurrentIcon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+}
+
+.activeFindPanelReplaceCurrentIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* #424 Slice 4: visible-label 全置換 button + 語彙 picker popover. */
+.activeFindPanelReplaceAllButton {
+  gap: 4px;
+}
+
+.activeFindPanelReplaceAllIcon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+}
+
+.activeFindPanelReplaceAllIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.activeFindPanelReplaceAllLabel {
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* #424 Slice 6: the `語彙` icon that toggles text ⇄ glossary query kind. */
+.activeFindPanelGlossaryIcon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+}
+
+.activeFindPanelGlossaryIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* #424 Slice 5: Ctrl+Space Glossary IntelliSense popup, anchored under the
+   query / replace input row. Tuned to match the Markdown Editor's CodeMirror
+   completion tooltip (the source of truth): a compact single-column list, the
+   registered form followed inline by a muted italic "→ 代表語" detail, and the
+   active row highlighted the CodeMirror way (#17c / white). */
+.activeFindPanelQueryRow,
+.activeFindPanelReplaceRow {
+  position: relative;
+}
+
+.activeFindPanelCompletion {
+  position: absolute;
+  z-index: 7;
+  top: calc(100% + 1px);
+  left: 0;
+  min-width: 250px;
+  max-width: min(700px, 95vw);
+  max-height: 10em;
+  overflow: hidden auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #ddd;
+  background: #f5f5f5;
+  color: #1f2733;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.activeFindPanelCompletionOption,
+.activeFindPanelCompletionEmpty {
+  padding: 1px 3px;
+  line-height: 1.2;
+  overflow-x: hidden;
+  text-overflow: ellipsis;
+}
+
+.activeFindPanelCompletionOption {
+  cursor: pointer;
+}
+
+.activeFindPanelCompletionOption[data-active="true"] {
+  background: #1177cc;
+  color: #ffffff;
+}
+
+.activeFindPanelCompletionOption[data-active="true"]
+  .activeFindPanelCompletionDetail {
+  color: #ffffff;
+}
+
+.activeFindPanelCompletionDetail {
+  margin-left: 0.5em;
+  font-style: italic;
+  color: #52616f;
+}
+
+.activeFindPanelCompletionEmpty {
+  font-style: italic;
+  color: #52616f;
+  cursor: default;
+}
+
+/* #424 Slice 6: glossary search mode — the multi / single Atom selector that
+   replaces the text query input, and the relation (いずれか / 全て) dropdown. */
+.activeFindPanelGlossarySelect {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.activeFindPanelGlossarySelectControl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-height: 24px;
+  padding: 2px 4px;
+  border: 1px solid #c4cdd8;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.activeFindPanelGlossarySelectControl:focus-within {
+  outline: 2px solid #7aa7d9;
+  outline-offset: -1px;
+  border-color: #7aa7d9;
+}
+
+.activeFindPanelGlossarySelectInput {
+  flex: 1 1 60px;
+  min-width: 60px;
+  width: auto;
+  padding: 2px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.activeFindPanelGlossarySelectInput:focus-visible {
+  outline: none;
+  border: 0;
+}
+
+.activeFindPanelGlossaryChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 12em;
+  padding: 0 2px 0 6px;
+  border-radius: 10px;
+  background: #dceafc;
+  color: #1f2733;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.activeFindPanelGlossaryChipValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeFindPanelGlossaryChipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #3d4a58;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.activeFindPanelGlossaryChipRemove:hover {
+  background: #c3ddfb;
+}
+
+.activeFindPanelGlossarySelectOption {
+  display: flex;
+  align-items: baseline;
+}
+
+.activeFindPanelGlossarySelectCheck {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 11px;
+  height: 11px;
+  margin-right: 5px;
+  border: 1px solid #9aa5b1;
+  border-radius: 2px;
+}
+
+.activeFindPanelGlossarySelectOption[data-selected="true"]
+  .activeFindPanelGlossarySelectCheck {
+  background: #1177cc;
+  border-color: #1177cc;
+}
+
+.activeFindPanelGlossarySelectOption[data-active="true"]
+  .activeFindPanelGlossarySelectCheck {
+  border-color: #ffffff;
+}
+
+.activeFindPanelGlossaryRelation {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #52616f;
+}
+
+.activeFindPanelGlossaryRelationSelect {
+  height: 22px;
+  border: 1px solid #c4cdd8;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1f2733;
+  font: inherit;
+  font-size: 12px;
+}
+
+/* #424 Slice 7: "近傍: 前後2パラグラフ" summary next to the relation select. */
+.activeFindPanelGlossaryRelationSummary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #52616f;
+}
+
+.cm-pergamum-findMatch {
+  background: rgba(255, 214, 102, 0.45);
+  border-radius: 2px;
+}
+
+.cm-pergamum-findMatch-active {
+  background: rgba(255, 179, 71, 0.75);
+  outline: 1px solid #e08600;
+}
+
 .editorHost .cm-focused {
   outline: none;
 }

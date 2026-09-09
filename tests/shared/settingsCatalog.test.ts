@@ -666,6 +666,8 @@ describe("Settings Catalog Foundation (#150)", () => {
         "commandPalette.footerDetail.marquee.delay",
         "commandPalette.footerDetail.marquee.speed",
         "editor.undoHistoryMinDepth",
+        "search.nearby.characterDistance",
+        "search.nearby.paragraphDistance",
         "preview.updateDelayMs",
         "workbench.notification.durationMs"
       ]);
@@ -1189,6 +1191,9 @@ describe("Settings Catalog Foundation (#150)", () => {
           "imageAttachment.insertMarkdownLink",
           "preview.renderer",
           "preview.updateDelayMs",
+          "search.nearby.unit",
+          "search.nearby.characterDistance",
+          "search.nearby.paragraphDistance",
           "workbench.colorTheme",
           "workbench.fontFamily",
           "workbench.sound.enabled",

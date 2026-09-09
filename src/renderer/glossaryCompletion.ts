@@ -43,6 +43,41 @@ export interface GlossaryCompletionCandidate {
 }
 
 /**
+ * The single display model shared by BOTH Glossary IntelliSense surfaces:
+ * the Markdown Editor's CodeMirror completion tooltip
+ * (`glossaryCompletionExtension.ts`) and the active Find / Replace panel's
+ * React popup (`find/activeFindGlossaryCompletion.ts`). Same rows, same
+ * representative / non-representative rule, same order - only the host widget
+ * differs.
+ *
+ * - `value`      the registered form; the popup's primary label.
+ * - `detail`     `"→ 代表語"` for a non-representative form, else `null` - see
+ *                {@link glossaryCompletionCandidateDetail}.
+ * - `insertText` what actually gets inserted - the RAW atom value, never
+ *                normalized to the entry's representative form.
+ */
+export interface GlossaryCompletionDisplayItem {
+  readonly atomId: string;
+  readonly entryId: string;
+  readonly value: string;
+  readonly detail: string | null;
+  readonly insertText: string;
+}
+
+/** Project a raw candidate into the shared {@link GlossaryCompletionDisplayItem}. */
+export function toGlossaryCompletionDisplayItem(
+  candidate: GlossaryCompletionCandidate
+): GlossaryCompletionDisplayItem {
+  return {
+    atomId: candidate.atomId,
+    entryId: candidate.entryId,
+    value: candidate.value,
+    detail: glossaryCompletionCandidateDetail(candidate),
+    insertText: candidate.value
+  };
+}
+
+/**
  * Flattens `entries` into every atom with a non-empty trim-normalized value,
  * in `entries`' own array order (the project's Entry sortOrder) and then each
  * entry's atom `sortOrder` (atoms already arrive pre-sorted per

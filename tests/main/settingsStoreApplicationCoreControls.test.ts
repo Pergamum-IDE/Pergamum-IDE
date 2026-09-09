@@ -155,6 +155,17 @@ function validSaveRequest(
       characterCount: defaultCharacterCountSettings,
       undoHistoryMinDepth: defaultUndoHistoryMinDepth
     },
+    search: {
+      nearby: {
+        unit: getCatalogDefaultValue("search.nearby.unit"),
+        characterDistance: getCatalogDefaultValue(
+          "search.nearby.characterDistance"
+        ),
+        paragraphDistance: getCatalogDefaultValue(
+          "search.nearby.paragraphDistance"
+        )
+      }
+    },
     files: {
       newFile: {
         lineEnding: "lf",
@@ -717,6 +728,58 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     expect(settings.imageAttachment).toEqual({
       saveDirectory: "",
       insertMarkdownLink: true
+    });
+  });
+
+  it("#424 Slice 7 blocker: a changed search.nearby.* block round-trips through save then load (Application Settings write-through)", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    const saved = await saveApplicationSettings(
+      validSaveRequest({
+        search: {
+          nearby: {
+            unit: "characters",
+            characterDistance: 1234,
+            paragraphDistance: 7
+          }
+        }
+      })
+    );
+    // returned to the renderer with the new value (not the loaded default)
+    expect(saved.search.nearby).toEqual({
+      unit: "characters",
+      characterDistance: 1234,
+      paragraphDistance: 7
+    });
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [string, string];
+    const written = JSON.parse(writtenContent);
+    expect(written.search).toEqual({
+      nearby: {
+        unit: "characters",
+        characterDistance: 1234,
+        paragraphDistance: 7
+      }
+    });
+
+    fsMock.readFile.mockResolvedValue(writtenContent);
+    const reloaded = await loadSettings();
+    expect(reloaded.search.nearby).toEqual({
+      unit: "characters",
+      characterDistance: 1234,
+      paragraphDistance: 7
+    });
+  });
+
+  it("#424 Slice 7: a settings.json without a search block loads the catalog defaults", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    const settings = await loadSettings();
+
+    expect(settings.search.nearby).toEqual({
+      unit: "paragraphs",
+      characterDistance: 500,
+      paragraphDistance: 2
     });
   });
 

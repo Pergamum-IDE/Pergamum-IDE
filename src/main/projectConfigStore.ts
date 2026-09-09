@@ -11,6 +11,7 @@ import {
   type ProjectFilesSettings,
   type ProjectImageAttachmentSettings,
   type ProjectPreviewSettings,
+  type ProjectSearchSettings,
   type ProjectSettings
 } from "../shared/settings";
 import type { DocumentMapDialogueDelimiterPair } from "../shared/documentMapSettings";
@@ -71,6 +72,7 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
   let files: ProjectFilesSettings | undefined;
   let documentMap: ProjectDocumentMapSettings | undefined;
   let imageAttachment: ProjectImageAttachmentSettings | undefined;
+  let search: ProjectSearchSettings | undefined;
 
   const rawRenderer = value["preview.renderer"];
   if (rawRenderer !== undefined && isPreviewRendererId(rawRenderer)) {
@@ -197,13 +199,48 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     }
   }
 
-  if (preview || editor || files || documentMap || imageAttachment) {
+  // #424 Slice 7: sparse glossary nearby-search overrides — each key accepted
+  // independently; a rejected value is omitted so resolveEffectiveSettings
+  // falls through to Application / Built-in.
+  const nearbyKeys = [
+    ["unit", "search.nearby.unit"],
+    ["characterDistance", "search.nearby.characterDistance"],
+    ["paragraphDistance", "search.nearby.paragraphDistance"]
+  ] as const;
+  let nearby: Record<string, unknown> | undefined;
+  for (const [subKey, fullKey] of nearbyKeys) {
+    const rawVal = value[fullKey];
+    if (rawVal === undefined) {
+      continue;
+    }
+    const validation = validateCatalogValue(fullKey, rawVal);
+    if (validation.ok) {
+      nearby = {
+        ...(nearby ?? {}),
+        [subKey]:
+          validation.value !== undefined ? validation.value : rawVal
+      };
+    }
+  }
+  if (nearby !== undefined) {
+    search = { nearby: nearby as ProjectSearchSettings["nearby"] };
+  }
+
+  if (
+    preview ||
+    editor ||
+    files ||
+    documentMap ||
+    imageAttachment ||
+    search
+  ) {
     return {
       ...(preview ? { preview } : {}),
       ...(editor ? { editor } : {}),
       ...(files ? { files } : {}),
       ...(documentMap ? { documentMap } : {}),
-      ...(imageAttachment ? { imageAttachment } : {})
+      ...(imageAttachment ? { imageAttachment } : {}),
+      ...(search ? { search } : {})
     };
   }
 

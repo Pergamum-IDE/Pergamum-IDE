@@ -500,6 +500,32 @@ function readImageAttachmentSettings(
   };
 }
 
+// #424 Slice 7: glossary nearby search range. Tolerant on the application
+// side (like imageAttachment above) — an invalid / missing on-disk value
+// falls back to the catalog default rather than rejecting the whole file.
+function readSearchSettings(
+  value: unknown
+): ApplicationSettings["search"] {
+  const searchValue = isObject(value) ? value : undefined;
+  const nearbyValue = isObject(searchValue?.nearby)
+    ? (searchValue.nearby as Record<string, unknown>)
+    : undefined;
+
+  return {
+    nearby: {
+      unit: resolveCatalogValue("search.nearby.unit", nearbyValue?.unit).value,
+      characterDistance: resolveCatalogValue(
+        "search.nearby.characterDistance",
+        nearbyValue?.characterDistance
+      ).value,
+      paragraphDistance: resolveCatalogValue(
+        "search.nearby.paragraphDistance",
+        nearbyValue?.paragraphDistance
+      ).value
+    }
+  };
+}
+
 function readSettingsValue(value: unknown): ApplicationSettings {
   if (!isObject(value)) {
     return createDefaultApplicationSettings();
@@ -513,6 +539,7 @@ function readSettingsValue(value: unknown): ApplicationSettings {
     workbench: readWorkbenchSettings(value.workbench),
     commandPalette: readCommandPaletteSettings(value.commandPalette),
     editor: readEditorSettings(value.editor),
+    search: readSearchSettings(value.search),
     files: readFilesSettings(value.files),
     imageAttachment: readImageAttachmentSettings(value.imageAttachment),
     documentMap: readDocumentMapSettings(value.documentMap),
@@ -583,7 +610,7 @@ export function parseSaveApplicationSettingsRequest(
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 7 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 8 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -591,6 +618,7 @@ export function parseSaveApplicationSettingsRequest(
     !keys.includes("workbench") ||
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
+    !keys.includes("search") ||
     !keys.includes("files") ||
     !keys.includes("imageAttachment") ||
     !keys.includes("documentMap")
@@ -610,11 +638,64 @@ export function parseSaveApplicationSettingsRequest(
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
+    search: parseSearchSettingsForWrite(value.search),
     files: parseFilesSettingsForWrite(value.files),
     imageAttachment: parseImageAttachmentSettingsForWrite(
       value.imageAttachment
     ),
     documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap)
+  };
+}
+
+// #424 Slice 7: strict write parser — the renderer always sends a full,
+// concrete `search.nearby` block (never sparse on the application side).
+function parseSearchSettingsForWrite(
+  value: unknown
+): ApplicationSettings["search"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== 1 || !keys.includes("nearby")) {
+    throw new Error("Invalid application settings.");
+  }
+  if (!isObject(value.nearby)) {
+    throw new Error("Invalid application settings.");
+  }
+  const nearby = value.nearby as Record<string, unknown>;
+  const nearbyKeys = Object.keys(nearby);
+  if (
+    nearbyKeys.length !== 3 ||
+    !nearbyKeys.includes("unit") ||
+    !nearbyKeys.includes("characterDistance") ||
+    !nearbyKeys.includes("paragraphDistance")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const unitResolution = resolveCatalogValue("search.nearby.unit", nearby.unit);
+  const characterResolution = resolveCatalogValue(
+    "search.nearby.characterDistance",
+    nearby.characterDistance
+  );
+  const paragraphResolution = resolveCatalogValue(
+    "search.nearby.paragraphDistance",
+    nearby.paragraphDistance
+  );
+  if (
+    !unitResolution.ok ||
+    !characterResolution.ok ||
+    !paragraphResolution.ok
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    nearby: {
+      unit: unitResolution.value,
+      characterDistance: characterResolution.value,
+      paragraphDistance: paragraphResolution.value
+    }
   };
 }
 
@@ -1376,7 +1457,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 8 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 9 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1384,6 +1465,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     !keys.includes("workbench") ||
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
+    !keys.includes("search") ||
     !keys.includes("files") ||
     !keys.includes("imageAttachment") ||
     !keys.includes("documentMap") ||
@@ -1404,6 +1486,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
+    search: parseSearchSettingsForWrite(value.search),
     files: parseFilesSettingsForWrite(value.files),
     imageAttachment: parseImageAttachmentSettingsForWrite(
       value.imageAttachment
@@ -1466,6 +1549,15 @@ export async function saveApplicationSettings(
 
   if (settingsRequest.notification !== undefined) {
     nextSettings.notification = settingsRequest.notification;
+  }
+
+  // #424 Slice 7: write-through like editor/files above — the save request
+  // always carries the full `search` block (all three nearby keys). Without
+  // this, an Application Settings change to `search.nearby.*` was silently
+  // dropped (the loaded value was kept). Tolerate an omitting request by
+  // keeping the loaded value rather than clobbering it with `undefined`.
+  if (settingsRequest.search !== undefined) {
+    nextSettings.search = settingsRequest.search;
   }
 
   // #407: write-through like documentMap below — a real save request always

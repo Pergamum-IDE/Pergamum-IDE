@@ -168,9 +168,13 @@ export type {
   PreviewRendererId,
   RecordRecentProjectInput,
   ProjectImageAttachmentSettings,
+  ProjectSearchSettings,
   ProjectSettings,
   RecentProject,
   SaveApplicationSettingsRequest,
+  ApplicationSearchSettings,
+  SearchNearbySettings,
+  SearchNearbyUnit,
   WorkbenchNotificationSettings
 } from "./settings";
 export type {
