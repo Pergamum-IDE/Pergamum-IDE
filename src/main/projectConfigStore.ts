@@ -215,16 +215,12 @@ function parseProjectConfig(value: unknown): PergamumProjectConfig {
     throw invalidProjectConfig("expected a JSON object.");
   }
 
-  const name = value.name;
-
-  if (name !== undefined && typeof name !== "string") {
-    throw invalidProjectConfig('"name" must be a string.');
-  }
-
+  // #422: Project Name source of truth is SQLite metadata.project_name.
+  // Any top-level "name" in pergamum.json is legacy ignored and not exposed
+  // on PergamumProjectConfig, nor does a non-string "name" fail project open.
   const settings = parseProjectSettings(value.settings);
 
   return {
-    ...(name === undefined ? {} : { name }),
     ...(settings === undefined ? {} : { settings })
   };
 }

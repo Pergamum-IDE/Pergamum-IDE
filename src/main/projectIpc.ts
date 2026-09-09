@@ -57,6 +57,8 @@ import {
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult,
   type StartupProjectOpenResult,
+  type UpdateProjectNameRequest,
+  type UpdateProjectNameResult,
   type UpdateProjectSettingsRequest,
   type ProjectSettings
 } from "../shared/api";
@@ -152,9 +154,11 @@ import {
   readProjectMetadata,
   resolveProjectFilePath,
   resolveProjectRoot,
+  updateProjectMetadataName,
   type ProjectDatabase,
   type ProjectMetadata
 } from "./projectDatabase";
+import { validateProjectName } from "../shared/projectName";
 import {
   findRecentProjectByFilePath,
   loadSettings,
@@ -756,6 +760,10 @@ export function currentProjectId(): string | null {
   return currentProjectState?.projectId ?? null;
 }
 
+export function currentProjectName(): string | null {
+  return currentProjectState?.projectName ?? null;
+}
+
 export function currentProjectAccessMode(): ProjectAccessMode | null {
   return currentProjectState?.accessMode ?? null;
 }
@@ -819,6 +827,181 @@ export async function saveCurrentProjectSettings(
   } finally {
     releaseQueue!();
   }
+}
+
+async function updateProjectMetadataNameAndClose(
+  database: ProjectDatabase,
+  newName: string,
+  logger: DebugLogger
+): Promise<ProjectMetadata> {
+  try {
+    return await updateProjectMetadataName(database, newName, logger);
+  } finally {
+    await database.close();
+  }
+}
+
+function parseUpdateProjectNameRequest(
+  value: unknown
+): UpdateProjectNameRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.name !== "string" ||
+    (value.projectId !== undefined && typeof value.projectId !== "string")
+  ) {
+    throw new Error("Invalid update project name request.");
+  }
+  return {
+    ...(typeof value.projectId === "string"
+      ? { projectId: value.projectId }
+      : {}),
+    name: value.name
+  };
+}
+
+export type ProjectMetadataNameUpdater = (
+  projectFilePath: string,
+  newName: string,
+  logger: DebugLogger
+) => Promise<ProjectMetadata>;
+
+export type ProjectWindowTitleUpdater = () => Promise<void>;
+
+async function defaultProjectMetadataNameUpdater(
+  projectFilePath: string,
+  newName: string,
+  logger: DebugLogger
+): Promise<ProjectMetadata> {
+  const database = await openProjectDatabase(projectFilePath, logger);
+  return updateProjectMetadataNameAndClose(database, newName, logger);
+}
+
+function projectDocumentsFromState(
+  state: CurrentProjectState
+): ProjectDocument[] {
+  return Array.from(state.documentRelativePaths)
+    .map((relativePath) => ({
+      relativePath,
+      name: path.basename(relativePath)
+    }))
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+function createProjectSnapshotFromState(
+  state: CurrentProjectState,
+  newName?: string
+): PergamumProject {
+  return {
+    rootPath: state.rootPath,
+    activeProjectFilePath: state.activeProjectFilePath,
+    accessMode: state.accessMode,
+    name: newName ?? state.projectName,
+    config: state.config,
+    documents: projectDocumentsFromState(state)
+  };
+}
+
+/**
+ * #422: Update logical project name in SQLite metadata.
+ *
+ * Does NOT mutate physical files, DB file name, project path, or pergamum.json.
+ */
+export async function updateCurrentProjectName(
+  request: UpdateProjectNameRequest,
+  logger: DebugLogger = getDebugLogger(),
+  databaseNameUpdater: ProjectMetadataNameUpdater = defaultProjectMetadataNameUpdater,
+  windowTitleUpdater: ProjectWindowTitleUpdater = requestCurrentProjectWindowTitleUpdate
+): Promise<UpdateProjectNameResult> {
+  if (!currentProjectState) {
+    return { ok: false, reason: "noProject" };
+  }
+  if (
+    request.projectId !== undefined &&
+    request.projectId !== currentProjectState.projectId
+  ) {
+    return { ok: false, reason: "projectMismatch" };
+  }
+  if (currentProjectState.accessMode.kind === "readOnly") {
+    return { ok: false, reason: "readOnlyProject" };
+  }
+
+  const activeState = currentProjectState;
+
+  const validation = validateProjectName(request.name);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      reason: "invalidName",
+      message: `Invalid project name: ${validation.error}.`
+    };
+  }
+
+  const normalizedName = validation.normalizedName;
+  const projectFilePath = activeState.activeProjectFilePath;
+
+  let updatedMetadata: ProjectMetadata;
+  try {
+    updatedMetadata = await databaseNameUpdater(
+      projectFilePath,
+      normalizedName,
+      logger
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "updateFailed",
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+
+  // #422 P0: Check for stale project race. If project was closed, switched, or altered
+  // during the database update await, do NOT mutate currentProjectState or notify title / recents.
+  if (
+    currentProjectState !== activeState ||
+    !currentProjectState ||
+    currentProjectState.projectId !== activeState.projectId ||
+    (request.projectId !== undefined &&
+      currentProjectState.projectId !== request.projectId) ||
+    updatedMetadata.projectId !== activeState.projectId ||
+    currentProjectState.activeProjectFilePath !==
+      activeState.activeProjectFilePath ||
+    currentProjectState.rootPath !== activeState.rootPath
+  ) {
+    return {
+      ok: false,
+      reason: "projectMismatch",
+      message:
+        "The active project changed while the project name was being updated."
+    };
+  }
+
+  // #422 P0: Synchronously build returned project snapshot from activeState and updatedMetadata.
+  // There is NO await between the stale guard above and the state mutation below!
+  const updatedProject = createProjectSnapshotFromState(
+    activeState,
+    updatedMetadata.projectName
+  );
+
+  const snapshotActiveProjectFilePath = activeState.activeProjectFilePath;
+  const snapshotRootPath = activeState.rootPath;
+
+  // Immediately and synchronously update currentProjectState.projectName on the same turn.
+  currentProjectState.projectName = updatedMetadata.projectName;
+
+  await windowTitleUpdater();
+
+  await recordProjectRecently(
+    recentProjectInputFromMetadata(
+      updatedMetadata,
+      snapshotActiveProjectFilePath,
+      snapshotRootPath
+    )
+  );
+
+  return {
+    ok: true,
+    project: updatedProject
+  };
 }
 
 export function requireCurrentProjectRootPath(): string {
@@ -3653,9 +3836,9 @@ async function createProjectFromProjectFile(
   );
   const metadata = await readProjectMetadataAndClose(database);
 
-  const config: PergamumProjectConfig = {
-    name: metadata.projectName
-  };
+  // #422: Project Name source of truth is SQLite metadata.project_name.
+  // pergamum.json is for configuration and does not carry the project name.
+  const config: PergamumProjectConfig = {};
 
   await writeProjectConfig(projectRootPath, config);
   const lockStartedAt = Date.now();
@@ -4066,6 +4249,17 @@ export function registerProjectIpc(
     ): Promise<ProjectSettings | undefined> => {
       const request = parseUpdateProjectSettingsRequest(rawRequest);
       return saveCurrentProjectSettings(request);
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.updateProjectName,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<UpdateProjectNameResult> => {
+      const request = parseUpdateProjectNameRequest(rawRequest);
+      return updateCurrentProjectName(request);
     }
   );
 

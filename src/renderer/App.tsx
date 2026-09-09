@@ -20,6 +20,7 @@ import type {
   LifecycleCloseDecision,
   LifecycleWindowCloseRequest,
   SaveWorkingCopyOutcome,
+  UpdateProjectNameResult,
   UpdateProjectSettingsRequest
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
@@ -9729,6 +9730,39 @@ export function App(): JSX.Element {
     return updatedSettings;
   }
 
+  async function handleUpdateProjectName(
+    name: string
+  ): Promise<UpdateProjectNameResult> {
+    if (!window.pergamum?.projects?.updateProjectName) {
+      return { ok: false, reason: "noProject" };
+    }
+
+    const targetProjectFilePath = project?.activeProjectFilePath;
+    if (!targetProjectFilePath) {
+      return { ok: false, reason: "noProject" };
+    }
+
+    const projectId = await window.pergamum.projects.getCurrentProjectId();
+    const result = await window.pergamum.projects.updateProjectName({
+      projectId: projectId ?? undefined,
+      name
+    });
+
+    if (result.ok) {
+      setProject((prev) => {
+        if (!prev || prev.activeProjectFilePath !== targetProjectFilePath) {
+          return prev;
+        }
+        return {
+          ...prev,
+          name: result.project.name
+        };
+      });
+    }
+
+    return result;
+  }
+
   // Pergamum persists Settings on every interaction (on every
   // keystroke/toggle in the Settings panel) — this is the ONLY thing that
   // still happens per-change; no restart check runs here.
@@ -10171,10 +10205,12 @@ export function App(): JSX.Element {
                     <ProjectSettingsPanel
                       key={project?.activeProjectFilePath ?? "no-project"}
                       translate={translate}
+                      projectName={project?.name}
                       projectSettings={project?.config?.settings}
                       applicationSettings={settings}
                       isReadOnly={project?.accessMode?.kind === "readOnly"}
                       onSaveSettings={handleSaveProjectSettings}
+                      onUpdateProjectName={handleUpdateProjectName}
                     />
                   ) : isDebugLogTabActive ? (
                     <section className="debugLogTab">

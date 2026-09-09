@@ -1115,6 +1115,16 @@ export const enTranslations = {
   "settings.project.modified": "Modified",
   "settings.project.matchApplicationSettings": "Match Application Settings",
   "settings.project.readOnlyNotice": "Project is open in read-only mode. Settings cannot be modified.",
+  "settings.project.name.label": "Project Name",
+  "settings.project.name.description":
+    "Change the project display name. The project file name and location are not changed.",
+  "settings.project.name.error.empty": "Project name cannot be empty.",
+  "settings.project.name.error.tooLong":
+    "Project name must be 120 characters or fewer.",
+  "settings.project.name.error.controlCharacters":
+    "Project name cannot contain control characters.",
+  "settings.project.name.error.invalid": "Invalid project name.",
+  "settings.project.name.saving": "Saving...",
   "settings.documentMap.title": "Document Map",
   "settings.documentMap.viewportLensOpacity.label": "Viewport lens opacity",
   "settings.documentMap.viewportLensOpacity.description":
@@ -1248,7 +1258,7 @@ export const enTranslations = {
   "settings.category.preview.label": "Preview",
   "settings.category.documentMap.label": "Document Map",
   "settings.category.files.label": "Files",
-  "settings.category.project.label": "Project",
+  "settings.category.project.label": "General",
   "settings.category.commands.label": "Command Palette",
   "settings.category.sound.label": "Sound",
   "settings.category.all.label": "All",

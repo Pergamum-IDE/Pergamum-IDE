@@ -12,6 +12,7 @@ import {
 import { getDebugLogger } from "./debugLogger";
 import { createUuidv7 } from "./ids";
 import { validateUuidv7 } from "../shared/glossary";
+import { validateProjectName } from "../shared/projectName";
 
 export const projectFileExtension = ".pergamum";
 export const projectDatabaseFileName = "pergamum.db";
@@ -716,6 +717,45 @@ export async function readProjectMetadata(
         ? row.last_opened_with_app_version
         : undefined
   };
+}
+
+/**
+ * #422: Update the logical project name in database metadata.
+ *
+ * This updates `metadata.project_name` and `metadata.updated_at` without
+ * modifying physical files, paths, or directory locations.
+ */
+export async function updateProjectMetadataName(
+  database: ProjectDatabase,
+  newProjectName: string,
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<ProjectMetadata> {
+  const validation = validateProjectName(newProjectName);
+  if (!validation.ok) {
+    throw new ProjectDatabaseError(
+      "PROJECT_DATABASE_VALIDATION_ERROR",
+      `Invalid project name: ${validation.error}.`
+    );
+  }
+
+  const normalizedName = validation.normalizedName;
+  const now = new Date().toISOString();
+
+  return withDbOperationLog(
+    {
+      logger,
+      dbOperation: "update",
+      dbEntityKind: "database"
+    },
+    async () => {
+      await database.run(
+        "UPDATE metadata SET project_name = ?, updated_at = ? WHERE id = 1",
+        [normalizedName, now]
+      );
+      const updated = await readProjectMetadata(database);
+      return dbOperationResult(updated);
+    }
+  );
 }
 
 export async function createProjectDatabase(

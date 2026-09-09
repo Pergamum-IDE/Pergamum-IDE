@@ -4,7 +4,12 @@ import {
   type ChangeEvent,
   type FocusEvent
 } from "react";
-import type { ProjectSettings, UpdateProjectSettingsRequest } from "../shared/api";
+import type {
+  ProjectSettings,
+  UpdateProjectNameResult,
+  UpdateProjectSettingsRequest
+} from "../shared/api";
+import { validateProjectName } from "../shared/projectName";
 import type { Translate } from "../shared/i18n";
 import type { SaveApplicationSettingsRequest } from "../shared/settings";
 import {
@@ -135,11 +140,15 @@ export function filterProjectSettingItems(
 export function getEligibleProjectSettingCategories(
   eligibleItems: readonly SettingCatalogItem[],
   translate: Translate,
-  categories: readonly SettingCategoryCatalogItem[] = settingCategoryCatalog
+  categories: readonly SettingCategoryCatalogItem[] = settingCategoryCatalog,
+  options?: { readonly includeProjectCategory?: boolean }
 ): readonly ProjectSettingCategoryItem[] {
   const categoryIds = new Set<SettingCategory>(
     eligibleItems.map((item) => item.category)
   );
+  if (options?.includeProjectCategory) {
+    categoryIds.add("project");
+  }
 
   const sortedCategories = sortSettingCategoryCatalog(
     (key) => translate(key as any),
@@ -484,6 +493,14 @@ export function groupProjectSettingItemsByCategory(
 
 export interface ProjectSettingsPanelViewProps {
   translate: Translate;
+  projectName?: string;
+  projectNameDraft?: string;
+  isProjectNameDirty?: boolean;
+  projectNameError?: string | null;
+  isSavingProjectName?: boolean;
+  onProjectNameChange?: (value: string) => void;
+  onProjectNameFocus?: () => void;
+  onProjectNameBlur?: () => void;
   items: readonly ProjectSettingItemViewState[];
   categories: readonly ProjectSettingCategoryItem[];
   selectedCategoryId: ProjectSettingCategoryFilter;
@@ -512,6 +529,14 @@ function translateI18nKey(translate: Translate, key: string): string {
 
 export function ProjectSettingsPanelView({
   translate,
+  projectName,
+  projectNameDraft = projectName ?? "",
+  isProjectNameDirty = false,
+  projectNameError = null,
+  isSavingProjectName = false,
+  onProjectNameChange,
+  onProjectNameFocus,
+  onProjectNameBlur,
   items,
   categories,
   selectedCategoryId,
@@ -531,6 +556,24 @@ export function ProjectSettingsPanelView({
   onOpenImageAttachmentDialog
 }: ProjectSettingsPanelViewProps): JSX.Element {
   const categoryGroups = groupProjectSettingItemsByCategory(items);
+
+  const normalizedSearch = normalizeProjectSettingsSearchQuery(searchQuery);
+  const isProjectCategorySelected =
+    (selectedCategoryId === "all" || selectedCategoryId === "project") &&
+    projectName !== undefined;
+  const matchesProjectNameSearch =
+    normalizedSearch.length === 0 ||
+    "プロジェクト名".toLowerCase().includes(normalizedSearch) ||
+    "project name".toLowerCase().includes(normalizedSearch) ||
+    "プロジェクト全般".toLowerCase().includes(normalizedSearch) ||
+    "general".toLowerCase().includes(normalizedSearch) ||
+    "project".toLowerCase().includes(normalizedSearch) ||
+    translate("settings.project.name.label").toLowerCase().includes(normalizedSearch) ||
+    translate("settings.category.project.label").toLowerCase().includes(normalizedSearch) ||
+    translate("settings.project.name.description").toLowerCase().includes(normalizedSearch);
+
+  const shouldShowProjectGeneralPane =
+    isProjectCategorySelected && matchesProjectNameSearch;
 
   return (
     <section
@@ -603,13 +646,91 @@ export function ProjectSettingsPanelView({
         </nav>
 
         <div className="projectSettingsContent">
-          {items.length === 0 ? (
+          {!shouldShowProjectGeneralPane && items.length === 0 ? (
             <p className="settingsSearchEmpty">
               {translate("settings.search.empty")}
             </p>
           ) : (
-            categoryGroups.map((group) => (
-              <div key={group.category} className="settingsItemPane">
+            <>
+              {shouldShowProjectGeneralPane ? (
+                <div
+                  key="project"
+                  className="settingsItemPane"
+                  data-settings-category="project"
+                >
+                  <h2 className="settingsItemPaneHeading">
+                    {translate("settings.category.project.label")}
+                  </h2>
+                  <div className="settingsItemList">
+                    <div
+                      className="settingsItemRow projectSettingField"
+                      data-project-setting="name"
+                    >
+                      <div className="settingsItemHeader">
+                        <label
+                          htmlFor="projectNameInput"
+                          className="settingsItemLabel"
+                        >
+                          {translate("settings.project.name.label")}
+                        </label>
+                        {isSavingProjectName ? (
+                          <span
+                            className="projectSettingSavingBadge"
+                            role="status"
+                          >
+                            {translate("settings.project.name.saving")}
+                          </span>
+                        ) : isProjectNameDirty ? (
+                          <span
+                            className="projectSettingModifiedBadge"
+                            role="status"
+                          >
+                            {translate("settings.project.modified")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="projectSettingInputWrapper">
+                        <input
+                          id="projectNameInput"
+                          type="text"
+                          className={`settingsTextInput${projectNameError ? " isError" : ""}`}
+                          value={projectNameDraft}
+                          disabled={
+                            isReadOnly || isSavingProjectName || !projectName
+                          }
+                          onChange={(e) => onProjectNameChange?.(e.target.value)}
+                          onFocus={() => onProjectNameFocus?.()}
+                          onBlur={() => onProjectNameBlur?.()}
+                          aria-label={translate("settings.project.name.label")}
+                          aria-invalid={projectNameError ? "true" : undefined}
+                          aria-describedby={
+                            projectNameError
+                              ? "projectNameError projectNameDescription"
+                              : "projectNameDescription"
+                          }
+                        />
+                      </div>
+                      {projectNameError ? (
+                        <p
+                          id="projectNameError"
+                          className="settingsFieldError"
+                          role="alert"
+                        >
+                          {projectNameError}
+                        </p>
+                      ) : null}
+                      <p
+                        id="projectNameDescription"
+                        className="settingsDescription"
+                      >
+                        {translate("settings.project.name.description")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {categoryGroups.map((group) => (
+                <div key={group.category} className="settingsItemPane">
                 <h2 className="settingsItemPaneHeading">
                   {translateI18nKey(translate, group.categoryLabelKey)}
                 </h2>
@@ -733,7 +854,8 @@ export function ProjectSettingsPanelView({
                   })}
                 </div>
               </div>
-            ))
+            ))}
+            </>
           )}
         </div>
       </div>
@@ -746,6 +868,7 @@ const defaultProjectSettingsUiItems: readonly SettingCatalogItem[] =
 
 export interface ProjectSettingsPanelProps {
   translate: Translate;
+  projectName?: string;
   projectSettings: ProjectSettings | undefined;
   applicationSettings?: PartialApplicationSettings;
   /** @deprecated Kept for Slice 3/4 backward compatibility. Use applicationSettings instead. */
@@ -754,19 +877,120 @@ export interface ProjectSettingsPanelProps {
   onSaveSettings: (
     request: UpdateProjectSettingsRequest
   ) => Promise<ProjectSettings | undefined>;
+  onUpdateProjectName?: (
+    name: string
+  ) => Promise<UpdateProjectNameResult>;
   items?: readonly SettingCatalogItem[];
 }
 
 export function ProjectSettingsPanel({
   translate,
+  projectName,
   projectSettings,
   applicationSettings,
   inheritedFontFamily,
   isReadOnly,
   onSaveSettings,
+  onUpdateProjectName,
   items: propsItems
 }: ProjectSettingsPanelProps): JSX.Element {
   const catalogItems = propsItems ?? defaultProjectSettingsUiItems;
+
+  const [projectNameDraft, setProjectNameDraft] = useState<string>(
+    projectName ?? ""
+  );
+  const [isProjectNameFocused, setIsProjectNameFocused] = useState(false);
+  const [projectNameError, setProjectNameError] = useState<string | null>(null);
+  const [isSavingProjectName, setIsSavingProjectName] = useState(false);
+
+  useEffect(() => {
+    if (!isProjectNameFocused) {
+      setProjectNameDraft(projectName ?? "");
+      setProjectNameError(null);
+    }
+  }, [projectName]);
+
+  const isProjectNameDirty =
+    projectNameDraft.trim() !== (projectName ?? "").trim();
+
+  const handleProjectNameChange = (val: string): void => {
+    setProjectNameDraft(val);
+    const validation = validateProjectName(val);
+    if (!validation.ok) {
+      if (validation.error === "empty") {
+        setProjectNameError(translate("settings.project.name.error.empty"));
+      } else if (validation.error === "tooLong") {
+        setProjectNameError(translate("settings.project.name.error.tooLong"));
+      } else if (validation.error === "controlCharacters") {
+        setProjectNameError(
+          translate("settings.project.name.error.controlCharacters")
+        );
+      } else {
+        setProjectNameError(translate("settings.project.name.error.invalid"));
+      }
+    } else {
+      setProjectNameError(null);
+    }
+  };
+
+  const handleProjectNameCommit = async (): Promise<void> => {
+    if (
+      isReadOnly ||
+      isSavingProjectName ||
+      !onUpdateProjectName ||
+      !projectName
+    ) {
+      return;
+    }
+
+    if (!isProjectNameDirty) {
+      setProjectNameDraft(projectName);
+      setProjectNameError(null);
+      return;
+    }
+
+    const validation = validateProjectName(projectNameDraft);
+    if (!validation.ok) {
+      if (validation.error === "empty") {
+        setProjectNameError(translate("settings.project.name.error.empty"));
+      } else if (validation.error === "tooLong") {
+        setProjectNameError(translate("settings.project.name.error.tooLong"));
+      } else if (validation.error === "controlCharacters") {
+        setProjectNameError(
+          translate("settings.project.name.error.controlCharacters")
+        );
+      } else {
+        setProjectNameError(translate("settings.project.name.error.invalid"));
+      }
+      return;
+    }
+
+    setIsSavingProjectName(true);
+    try {
+      const result = await onUpdateProjectName(validation.normalizedName);
+      if (result.ok) {
+        setProjectNameDraft(result.project.name);
+        setProjectNameError(null);
+      } else {
+        if (result.reason === "invalidName") {
+          setProjectNameError(
+            result.message ?? translate("settings.project.name.error.invalid")
+          );
+        } else if (result.reason === "readOnlyProject") {
+          setProjectNameError(translate("settings.project.readOnlyNotice"));
+        } else {
+          setProjectNameError(
+            result.message ??
+              translate("status.commandFailed", { message: result.reason })
+          );
+        }
+      }
+    } catch (err) {
+      setProjectNameError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSavingProjectName(false);
+    }
+  };
 
   const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
   const [activeEditingKey, setActiveEditingKey] = useState<string | null>(null);
@@ -1189,7 +1413,9 @@ export function ProjectSettingsPanel({
 
   const categories = getEligibleProjectSettingCategories(
     eligibleItems,
-    translate
+    translate,
+    settingCategoryCatalog,
+    { includeProjectCategory: projectName !== undefined }
   );
 
   const filteredItems = filterProjectSettingItems(
@@ -1240,6 +1466,17 @@ export function ProjectSettingsPanel({
     <>
       <ProjectSettingsPanelView
         translate={translate}
+        projectName={projectName}
+        projectNameDraft={projectNameDraft}
+        isProjectNameDirty={isProjectNameDirty}
+        projectNameError={projectNameError}
+        isSavingProjectName={isSavingProjectName}
+        onProjectNameChange={handleProjectNameChange}
+        onProjectNameFocus={() => setIsProjectNameFocused(true)}
+        onProjectNameBlur={() => {
+          setIsProjectNameFocused(false);
+          void handleProjectNameCommit();
+        }}
         items={viewItems}
         categories={categories}
         selectedCategoryId={selectedCategoryId}

@@ -1121,6 +1121,16 @@ export const jaTranslations = {
   "settings.project.modified": "変更中",
   "settings.project.matchApplicationSettings": "アプリケーション設定に合わせる",
   "settings.project.readOnlyNotice": "読み取り専用モードのため、設定は変更できません。",
+  "settings.project.name.label": "プロジェクト名",
+  "settings.project.name.description":
+    "プロジェクトの表示名を変更します。プロジェクトファイル名や保存場所は変更されません。",
+  "settings.project.name.error.empty": "プロジェクト名を入力してください。",
+  "settings.project.name.error.tooLong":
+    "プロジェクト名は120文字以内で入力してください。",
+  "settings.project.name.error.controlCharacters":
+    "プロジェクト名に制御文字を含めることはできません。",
+  "settings.project.name.error.invalid": "無効なプロジェクト名です。",
+  "settings.project.name.saving": "保存中...",
   "settings.documentMap.title": "文書マップ",
   "settings.documentMap.viewportLensOpacity.label": "ビューポートレンズの濃さ",
   "settings.documentMap.viewportLensOpacity.description":
@@ -1254,7 +1264,7 @@ export const jaTranslations = {
   "settings.category.preview.label": "プレビュー",
   "settings.category.documentMap.label": "文書マップ",
   "settings.category.files.label": "ファイル",
-  "settings.category.project.label": "プロジェクト",
+  "settings.category.project.label": "プロジェクト全般",
   "settings.category.commands.label": "コマンドパレット",
   "settings.category.sound.label": "サウンド",
   "settings.category.all.label": "すべて",
