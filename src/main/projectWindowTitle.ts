@@ -91,13 +91,11 @@ export function createProjectWindowTitle({
   const subject = projectWindowTitleSubject(projectName, language);
 
   if (!titleStatus) {
-    const trailingSeparator =
-      subject.kind === "defaultSuffix" ? " -" : " -";
-    return `Pergamum - ${subject.text}${trailingSeparator}`;
+    return `${subject.text} - Pergamum`;
   }
 
   const statusText = projectWindowTitleStatusText(titleStatus, language);
-  return `Pergamum - ${subject.text} - [${statusText}]`;
+  return `${subject.text} - [${statusText}] - Pergamum`;
 }
 
 export const defaultProjectWindowTitle = createProjectWindowTitle({

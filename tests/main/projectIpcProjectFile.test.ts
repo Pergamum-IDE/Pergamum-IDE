@@ -941,7 +941,7 @@ describe("project file IPC foundation", () => {
     await updateCurrentProjectWindowTitle();
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE -"
+      "a novel IDE - Pergamum"
     );
   });
 
@@ -1067,7 +1067,7 @@ describe("project file IPC foundation", () => {
     await createProjectHandler({ sender: {} });
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Title Create -"
+      "Title Create - Pergamum"
     );
   });
 
@@ -1403,7 +1403,7 @@ describe("project file IPC foundation", () => {
     );
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Readonly Title - [読み取り専用]"
+      "Readonly Title - [読み取り専用] - Pergamum"
     );
   });
 
@@ -1673,7 +1673,7 @@ describe("project file IPC foundation", () => {
     await openProjectHandler({ sender: {} });
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Metadata Title -"
+      "Metadata Title - Pergamum"
     );
   });
 
@@ -2194,7 +2194,7 @@ describe("project file IPC foundation", () => {
     await releaseCurrentProjectWriteOwnership();
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE -"
+      "a novel IDE - Pergamum"
     );
   });
 
@@ -2240,7 +2240,7 @@ describe("project file IPC foundation", () => {
     expect(currentActiveProjectFilePath()).toBeNull();
     expect(currentProjectAccessMode()).toBeNull();
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - a novel IDE -"
+      "a novel IDE - Pergamum"
     );
   });
 
@@ -2409,8 +2409,8 @@ describe("project file IPC foundation", () => {
     await openProjectHandler({ sender: {} });
 
     expect(titleWindow.setTitle.mock.calls.map(([title]) => title)).toEqual([
-      "Pergamum - First Title -",
-      "Pergamum - Second Title -"
+      "First Title - Pergamum",
+      "Second Title - Pergamum"
     ]);
   });
 
@@ -2757,7 +2757,7 @@ describe("project file IPC foundation", () => {
     );
 
     expect(titleWindow.setTitle).toHaveBeenCalledWith(
-      "Pergamum - Recent Title Metadata -"
+      "Recent Title Metadata - Pergamum"
     );
   });
 

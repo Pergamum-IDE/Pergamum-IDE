@@ -18,7 +18,7 @@ describe("project window title", () => {
         language: "ja"
       })
     ).toBe(defaultProjectWindowTitle);
-    expect(defaultProjectWindowTitle).toBe("Pergamum - a novel IDE -");
+    expect(defaultProjectWindowTitle).toBe("a novel IDE - Pergamum");
   });
 
   it("builds a project title without a status suffix for readWrite access", () => {
@@ -30,7 +30,7 @@ describe("project window title", () => {
         }),
         language: "ja"
       })
-    ).toBe("Pergamum - 王都 -");
+    ).toBe("王都 - Pergamum");
   });
 
   it("builds the readOnly marker as a localized status suffix", () => {
@@ -50,13 +50,13 @@ describe("project window title", () => {
         titleStatus,
         language: "ja"
       })
-    ).toBe("Pergamum - 王都 - [読み取り専用]");
+    ).toBe("王都 - [読み取り専用] - Pergamum");
     expect(
       createProjectWindowTitle({
         projectName: "Novel",
         titleStatus,
         language: "en"
       })
-    ).toBe("Pergamum - Novel - [Read-only]");
+    ).toBe("Novel - [Read-only] - Pergamum");
   });
 });
