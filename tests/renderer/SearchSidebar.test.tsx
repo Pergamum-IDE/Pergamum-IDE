@@ -306,12 +306,12 @@ describe("SearchSidebar (#384 Phase 1 — Search pane UI foundation)", () => {
     expect(shared).toContain(
       "assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw"
     );
-    expect(shared).toContain("assets/icons/Pergamum/search/word.svg?raw");
+    expect(shared).toContain("assets/icons/codicons/search/whole-word.svg?raw");
     expect(shared).toContain(
-      "assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw"
+      "assets/icons/codicons/search/case-sensitive.svg?raw"
     );
     expect(shared).toContain(
-      "assets/icons/svgrepo/search/regex-svgrepo-com.svg?raw"
+      "assets/icons/codicons/search/regex.svg?raw"
     );
     expect(source).toContain('from "./searchOptionToggle"');
   });

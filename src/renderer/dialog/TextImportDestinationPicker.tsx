@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Translate } from "../../shared/i18n";
 import { InfoDialog } from "./InfoDialog";
-import folderIconUrl from "../../../assets/icons/ionicons/explorer/folder-outline.svg?url";
-import folderOpenIconUrl from "../../../assets/icons/ionicons/explorer/folder-open-outline.svg?url";
+import folderIconUrl from "../../../assets/icons/codicons/explorer/folder.svg?url";
+import folderOpenIconUrl from "../../../assets/icons/codicons/explorer/folder-opened.svg?url";
 
 /**
  * #420 Step 3: a lazy, project-scoped folder tree for choosing the bulk text

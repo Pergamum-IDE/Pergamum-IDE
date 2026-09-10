@@ -22,8 +22,8 @@ import markdownFileIconUrl from "../../assets/icons/svgrepo/explorer/markdown-sv
 import imageFileIconUrl from "../../assets/icons/feather/explorer/image.svg?url";
 import txtFileIconUrl from "../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
 import documentTextIconUrl from "../../assets/icons/ionicons/explorer/document-text-outline.svg?url";
-import folderOpenIconUrl from "../../assets/icons/ionicons/explorer/folder-open-outline.svg?url";
-import folderIconUrl from "../../assets/icons/ionicons/explorer/folder-outline.svg?url";
+import folderOpenIconUrl from "../../assets/icons/codicons/explorer/folder-opened.svg?url";
+import folderIconUrl from "../../assets/icons/codicons/explorer/folder.svg?url";
 import pencilOutlineIconUrl from "../../assets/icons/ionicons/explorer/pencil-outline.svg?url";
 import refreshIconUrl from "../../assets/icons/ionicons/explorer/refresh-outline.svg?url";
 import type {

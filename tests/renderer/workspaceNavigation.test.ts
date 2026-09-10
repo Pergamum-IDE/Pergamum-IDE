@@ -524,10 +524,10 @@ describe("workspace navigation", () => {
       "assets/icons/file-associations/pergamum/pergamum-scroll-file-icon.svg?url"
     );
     expect(source).toContain(
-      "assets/icons/ionicons/explorer/folder-open-outline.svg?url"
+      "assets/icons/codicons/explorer/folder-opened.svg?url"
     );
     expect(source).toContain(
-      "assets/icons/ionicons/explorer/folder-outline.svg?url"
+      "assets/icons/codicons/explorer/folder.svg?url"
     );
     expect(source).toContain(
       "assets/icons/ionicons/explorer/document-text-outline.svg?url"

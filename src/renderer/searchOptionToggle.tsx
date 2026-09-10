@@ -5,9 +5,9 @@
  * neither feature reimplements the icon inlining or the button markup.
  */
 import glossarySearchIconRaw from "../../assets/icons/svgrepo/search/vocabulary-svgrepo-com.svg?raw";
-import wholeWordIconRaw from "../../assets/icons/Pergamum/search/word.svg?raw";
-import caseSensitiveIconRaw from "../../assets/icons/svgrepo/search/case-sensitive-svgrepo-com.svg?raw";
-import useRegexIconRaw from "../../assets/icons/svgrepo/search/regex-svgrepo-com.svg?raw";
+import wholeWordIconRaw from "../../assets/icons/codicons/search/whole-word.svg?raw";
+import caseSensitiveIconRaw from "../../assets/icons/codicons/search/case-sensitive.svg?raw";
+import useRegexIconRaw from "../../assets/icons/codicons/search/regex.svg?raw";
 
 /**
  * The bundled svgrepo / Pergamum search glyphs ship as standalone documents
