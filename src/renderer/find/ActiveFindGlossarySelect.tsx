@@ -207,7 +207,10 @@ export function ActiveFindGlossarySelect({
       <div className="activeFindPanelGlossarySelectControl">
         {selectedCandidates.map((candidate) => (
           <span key={candidate.atomId} className="activeFindPanelGlossaryChip">
-            <span className="activeFindPanelGlossaryChipValue">
+            <span
+              className="activeFindPanelGlossaryChipValue"
+              title={candidate.value}
+            >
               {candidate.value}
             </span>
             <button

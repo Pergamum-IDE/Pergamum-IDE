@@ -22,3 +22,40 @@ Modifications:
 - SVG path data is otherwise unmodified unless noted in commit history
 
 No endorsement by Microsoft is implied. Microsoft, Visual Studio Code, VS Code, Windows, and related names or marks are trademarks or registered trademarks of Microsoft Corporation.
+
+## SVG Repo icons
+
+Pergamum includes selected SVG icons obtained from SVG Repo.
+
+SVG Repo hosts icons under multiple licenses. Each imported SVG Repo icon is tracked with its original page and license.
+
+See: `assets/icons/svgrepo/SOURCES.md'
+
+## Typewriter sounds
+
+Pergamum includes typewriter sound effects obtained from OpenGameArt.
+
+- Source: OpenGameArt - Typewriter sounds
+- Author: Cassie-OrbitGames
+- URL: <https://opengameart.org/content/typewriter-sounds>
+- License: CC0
+- License checked: 2026-08-22
+- Details: `assets/sounds/README.md`
+
+Included files:
+
+- `typewriter1.wav`
+- `typewriter2.wav`
+- `typewriter3.wav`
+- `typewriter4.wav`
+- `typewriter5.wav`
+- `typewriter6.wav`
+- `typewriter7.wav`
+- `typewriter8.wav`
+
+Pergamum usage:
+
+- newline sound: `typewriter8.wav`
+- keypress sound: `typewriter1.wav`, `typewriter2.wav`, `typewriter3.wav`, `typewriter4.wav`, `typewriter5.wav`, `typewriter6.wav`, `typewriter7.wav`
+
+CC0 does not require attribution as a license condition, but Pergamum records this source for traceability.

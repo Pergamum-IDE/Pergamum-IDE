@@ -3879,7 +3879,8 @@ label.settingsItemHeader {
 /* #424 Slice 3: 検索 / 置換 mode tabs, replace input row, replace-current. */
 .activeFindPanelModeRow {
   gap: 2px;
-  /* #424 Slice 4: close [×] sits on this row, pushed to the far right. */
+  /* #424 Slice 4: close [×] sits on this row; space-between pushes it to the
+     inline-end while the mode tabs stay at the inline-start. */
   justify-content: space-between;
 }
 
@@ -3987,7 +3988,8 @@ label.settingsItemHeader {
   position: absolute;
   z-index: 7;
   top: calc(100% + 1px);
-  left: 0;
+  /* Anchored to the inline-start edge of the query / replace input row. */
+  inset-inline-start: 0;
   min-width: 250px;
   max-width: min(700px, 95vw);
   max-height: 10em;
@@ -4025,7 +4027,8 @@ label.settingsItemHeader {
 }
 
 .activeFindPanelCompletionDetail {
-  margin-left: 0.5em;
+  /* Gap before the muted "→ 代表語" detail that follows the form inline. */
+  margin-inline-start: 0.5em;
   font-style: italic;
   color: #52616f;
 }
@@ -4082,7 +4085,9 @@ label.settingsItemHeader {
   align-items: center;
   gap: 2px;
   max-width: 12em;
-  padding: 0 2px 0 6px;
+  /* inline-start: room before the value; inline-end: tight against the ✕. */
+  padding-block: 0;
+  padding-inline: 6px 2px;
   border-radius: 10px;
   background: #dceafc;
   color: #1f2733;
@@ -4126,7 +4131,8 @@ label.settingsItemHeader {
   align-self: center;
   width: 11px;
   height: 11px;
-  margin-right: 5px;
+  /* Gap after the check box, before the option label. */
+  margin-inline-end: 5px;
   border: 1px solid #9aa5b1;
   border-radius: 2px;
 }
