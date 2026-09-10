@@ -84,8 +84,12 @@ interface DocumentTabBarProps {
     movedTabId: WorkspaceTabId,
     targetIndex: number
   ) => void;
-  isUtilityWindowOpen: boolean;
-  onToggleUtilityWindow: () => void;
+  // #436 Phase 8-0 PoC (Slice 1): this toggle replaced the former Utility
+  // Window toggle. It is a transitional confirmation affordance for the
+  // Glossary Entry Editor Pane until the real entry points (Glossary side
+  // pane, glossary settings, Ctrl+G, context menu) are wired in later slices.
+  isGlossaryEntryEditorPaneOpen: boolean;
+  onToggleGlossaryEntryEditorPane: () => void;
 }
 
 /** #354: dedicated MIME marker so a tab reorder drag is never confused with a
@@ -133,8 +137,8 @@ export function DocumentTabBar({
   onTabAction,
   describeTabContextMenu,
   onReorderWorkspaceTabs,
-  isUtilityWindowOpen,
-  onToggleUtilityWindow
+  isGlossaryEntryEditorPaneOpen,
+  onToggleGlossaryEntryEditorPane
 }: DocumentTabBarProps): JSX.Element {
   const contextMenuEnabled = Boolean(onTabAction && describeTabContextMenu);
   const reorderEnabled = Boolean(onReorderWorkspaceTabs);
@@ -196,7 +200,9 @@ export function DocumentTabBar({
     );
   }
 
-  const utilityWindowLabel = translate("utilityWindow.label");
+  const glossaryEntryEditorPaneLabel = translate(
+    "glossaryEntryEditorPane.label"
+  );
   const closeTabLabel = translate("tabs.closeTab");
   const unsavedLabel = translate("tabs.unsaved");
   const readOnlyTooltip = translate("projectAccess.readOnly.tooltip");
@@ -547,16 +553,16 @@ export function DocumentTabBar({
       <button
         type="button"
         className={
-          isUtilityWindowOpen
-            ? "documentTabBarUtilityToggle isActive"
-            : "documentTabBarUtilityToggle"
+          isGlossaryEntryEditorPaneOpen
+            ? "documentTabBarGlossaryEntryEditorToggle isActive"
+            : "documentTabBarGlossaryEntryEditorToggle"
         }
-        aria-pressed={isUtilityWindowOpen}
-        aria-label={utilityWindowLabel}
-        title={utilityWindowLabel}
-        onClick={onToggleUtilityWindow}
+        aria-pressed={isGlossaryEntryEditorPaneOpen}
+        aria-label={glossaryEntryEditorPaneLabel}
+        title={glossaryEntryEditorPaneLabel}
+        onClick={onToggleGlossaryEntryEditorPane}
       >
-        {utilityWindowLabel}
+        {glossaryEntryEditorPaneLabel}
       </button>
 
       {tabContextMenu !== null && menuDescriptor !== null ? (

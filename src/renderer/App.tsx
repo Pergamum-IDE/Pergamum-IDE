@@ -314,8 +314,19 @@ import {
   createLineJumpEditorSnapshot,
   documentLineStartOffset
 } from "./lineJumpQuery";
-import { UtilityWindow } from "./UtilityWindow";
-import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
+// #436 Phase 8-0 PoC (Slice 1): the former Utility Window (UtilityWindow.tsx)
+// and its GlossaryOccurrencesPanel host are no longer rendered — see the
+// editor-area body below. Those files, the `utilityWindow*` commands, the
+// `layout.utilityWindow` state and `openUtilityWindowOnOccurrencesTab` are
+// kept dormant for a later slice to remove once the occurrence-navigation UI
+// has a new home.
+import { GlossaryEntryEditorPane } from "./GlossaryEntryEditorPane";
+import {
+  closeGlossaryEntryEditorPane,
+  createInitialGlossaryEntryEditorPaneState,
+  toggleGlossaryEntryEditorPane,
+  type GlossaryEntryEditorPaneState
+} from "./glossaryEntryEditorPaneState";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -471,8 +482,7 @@ import { useHorizontalDrag } from "./useHorizontalDrag";
 import { useVerticalDrag } from "./useVerticalDrag";
 import {
   createUtilityWindowCommandTitles,
-  registerUtilityWindowCommands,
-  utilityWindowCommandIds
+  registerUtilityWindowCommands
 } from "./utilityWindowCommands";
 import {
   createDebugLogCommandTitles,
@@ -988,6 +998,15 @@ export function App(): JSX.Element {
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
     createInitialWorkbenchLayoutState
   );
+  // #436 Phase 8-0 PoC (Slice 1): the bottom pane that replaces the former
+  // Utility Window. Ephemeral React state — NOT persisted to the session yet
+  // and NOT wired to glossary add / edit / Ctrl+G / the context menu yet.
+  // Later slices extend the open payload (mode / entryId / presetRepresentative)
+  // and add the real create / edit forms.
+  const [glossaryEntryEditorPane, setGlossaryEntryEditorPane] =
+    useState<GlossaryEntryEditorPaneState>(
+      createInitialGlossaryEntryEditorPaneState
+    );
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
   // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
   // project-owned) — closed on project close. Opening / activating it NEVER
@@ -2951,6 +2970,12 @@ export function App(): JSX.Element {
         renameActiveEditorTargetName
       )
     );
+    // #436 Phase 8-0 PoC (Slice 1): these commands still flip
+    // `layout.utilityWindow.open`, but the Utility Window is no longer
+    // rendered, so they are dormant (the Command Palette still lists them).
+    // TODO(#436 later slice): remove these commands, `utilityWindowCommands`,
+    // `UtilityWindow.tsx`, `GlossaryOccurrencesPanel.tsx` and the
+    // `layout.utilityWindow` state once occurrence navigation has a new home.
     registerUtilityWindowCommands(
       registry,
       {
@@ -10178,11 +10203,13 @@ export function App(): JSX.Element {
                   onTabAction={handleTabAction}
                   describeTabContextMenu={describeTabContextMenuForTab}
                   onReorderWorkspaceTabs={handleReorderWorkspaceTabs}
-                  isUtilityWindowOpen={layout.utilityWindow.open}
-                  onToggleUtilityWindow={() =>
-                    executeUiCommand(utilityWindowCommandIds.toggle, {
-                      source: "documentTabBar"
-                    })
+                  isGlossaryEntryEditorPaneOpen={
+                    glossaryEntryEditorPane.isOpen
+                  }
+                  onToggleGlossaryEntryEditorPane={() =>
+                    setGlossaryEntryEditorPane((current) =>
+                      toggleGlossaryEntryEditorPane(current, { mode: "create" })
+                    )
                   }
                 />
 
@@ -10399,67 +10426,24 @@ export function App(): JSX.Element {
                         onViewportChanged={handleViewportChanged}
                       />
 
-                      {layout.utilityWindow.open ? (
-                        <>
-                          <div
-                            className="utilityWindowResizeHandle"
-                            role="separator"
-                            aria-orientation="horizontal"
-                            aria-label={translate(
-                              "workbench.utilityWindowResizeHandle"
-                            )}
-                            onPointerDown={
-                              utilityWindowResizeDrag.onPointerDown
-                            }
-                            onPointerMove={
-                              utilityWindowResizeDrag.onPointerMove
-                            }
-                            onPointerUp={utilityWindowResizeDrag.onPointerUp}
-                            onPointerCancel={
-                              utilityWindowResizeDrag.onPointerCancel
-                            }
-                          />
-                          <UtilityWindow
-                            activeTab={layout.utilityWindow.activeTab}
-                            height={layout.utilityWindow.height}
-                            translate={translate}
-                            onSelectTab={selectUtilityWindowTab}
-                            onClose={() =>
-                              executeUiCommand(utilityWindowCommandIds.close, {
-                                source: "utilityWindow"
-                              })
-                            }
-                          >
-                            <GlossaryOccurrencesPanel
-                              session={glossaryOccurrenceTrackingState}
-                              translate={translate}
-                              onNavigatePrevious={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.previous,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                              onNavigateNext={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.next,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                              onOpenEntry={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.openEntry,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                              onCloseTracking={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.closeTracking,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                            />
-                          </UtilityWindow>
-                        </>
+                      {/* #436 Phase 8-0 PoC (Slice 1): the former Utility
+                          Window (and its GlossaryOccurrencesPanel host) is no
+                          longer rendered in this slot — it now frames the
+                          Glossary Entry Editor Pane. The pane replaces the
+                          per-entry glossary editing tabs in later slices; for
+                          now it is a placeholder shell with a working close
+                          control, not yet wired to glossary add / edit /
+                          Ctrl+G / the context menu. */}
+                      {glossaryEntryEditorPane.isOpen ? (
+                        <GlossaryEntryEditorPane
+                          mode={glossaryEntryEditorPane.mode}
+                          translate={translate}
+                          onClose={() =>
+                            setGlossaryEntryEditorPane(
+                              closeGlossaryEntryEditorPane()
+                            )
+                          }
+                        />
                       ) : null}
                     </>
                   ) : shouldShowWelcome ? (

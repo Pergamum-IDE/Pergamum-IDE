@@ -1028,7 +1028,7 @@ label.settingsItemHeader {
   display: block;
 }
 
-.documentTabBarUtilityToggle {
+.documentTabBarGlossaryEntryEditorToggle {
   height: auto;
   flex: 0 0 auto;
   border: 0;
@@ -1041,12 +1041,12 @@ label.settingsItemHeader {
   padding: 0 14px;
 }
 
-.documentTabBarUtilityToggle:hover {
+.documentTabBarGlossaryEntryEditorToggle:hover {
   background: #e2eaf2;
 }
 
-.documentTabBarUtilityToggle.isActive,
-.documentTabBarUtilityToggle.isActive:hover {
+.documentTabBarGlossaryEntryEditorToggle.isActive,
+.documentTabBarGlossaryEntryEditorToggle.isActive:hover {
   background: #ffffff;
   color: #17212b;
 }
@@ -1395,6 +1395,68 @@ label.settingsItemHeader {
 }
 
 .utilityWindowEmpty {
+  margin: 0;
+  color: #6b7785;
+  font-size: 13px;
+}
+
+/* #436 Phase 8-0 PoC (Slice 1): the bottom pane that replaces the Utility
+   Window and will host the glossary entry create / edit forms in later
+   slices. Fixed height for now — no resize handle this slice. Tone matches
+   the surrounding workbench chrome (.pane / the former .utilityWindow). */
+.glossaryEntryEditorPane {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  height: 240px;
+  border-top: 1px solid #d3dae2;
+  background: #ffffff;
+}
+
+.glossaryEntryEditorPaneHeader {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid #e3e8ee;
+  background: #fbfcfd;
+}
+
+.glossaryEntryEditorPaneTitle {
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.glossaryEntryEditorPaneCloseButton {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.glossaryEntryEditorPaneCloseButton:hover {
+  background: #eef3f8;
+  color: #17212b;
+}
+
+.glossaryEntryEditorPaneBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.glossaryEntryEditorPaneNotice {
   margin: 0;
   color: #6b7785;
   font-size: 13px;

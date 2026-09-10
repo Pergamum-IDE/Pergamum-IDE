@@ -790,6 +790,10 @@ export const enTranslations = {
   "glossaryEditor.nextOccurrenceLabel": "▶",
   "glossaryEditor.previousOccurrence": "Previous occurrence",
   "glossaryEditor.previousOccurrenceLabel": "◀",
+  "glossaryEntryEditorPane.label": "Glossary Entry Editor",
+  "glossaryEntryEditorPane.poNotice":
+    "This pane is being introduced as part of the #436 PoC.",
+  "glossaryEntryEditorPane.close": "Close",
   "glossaryTagEditor.background": "Background color",
   "glossaryTagEditor.cancel": "Cancel",
   "glossaryTagEditor.create": "Create",

@@ -122,8 +122,8 @@ function render(overrides: RenderOverrides = {}) {
         onReorderWorkspaceTabs: (overrides.withReorder ?? true)
           ? onReorderWorkspaceTabs
           : undefined,
-        isUtilityWindowOpen: false,
-        onToggleUtilityWindow: vi.fn()
+        isGlossaryEntryEditorPaneOpen: false,
+        onToggleGlossaryEntryEditorPane: vi.fn()
       })
     );
   });

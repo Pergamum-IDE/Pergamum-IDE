@@ -67,8 +67,8 @@ function renderTabBar(
       onCloseDocument: overrides.onCloseDocument ?? noop,
       onSelectSpecialTab: overrides.onSelectSpecialTab,
       onCloseSpecialTab: overrides.onCloseSpecialTab,
-      isUtilityWindowOpen: false,
-      onToggleUtilityWindow: noop
+      isGlossaryEntryEditorPaneOpen: false,
+      onToggleGlossaryEntryEditorPane: noop
     })
   );
 }
