@@ -40,6 +40,9 @@ interface GlossarySidebarProps {
   activeDocumentContent: string | null;
   onActivateEntry: (entryId: GlossaryEntryId) => void;
   onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<boolean>;
+  /** #436 Slice 3: "語彙を追加" opens the bottom Glossary Entry Editor Pane in
+   *  create mode. Replaces the old inline create form / new-tab flow. */
+  onOpenCreateEntryPane: () => void;
   onNavigateOccurrence: (
     entry: GlossaryEntry,
     direction: "previous" | "next"
@@ -97,6 +100,7 @@ export function GlossarySidebar({
   activeDocumentContent,
   onActivateEntry,
   onCreateEntry,
+  onOpenCreateEntryPane,
   onNavigateOccurrence
 }: GlossarySidebarProps): JSX.Element {
   const [state, setState] = useState<GlossarySidebarState>(() =>
@@ -416,6 +420,10 @@ export function GlossarySidebar({
         )}
       </div>
 
+      {/* #436 Slice 3: unreachable since "語彙を追加" now opens the bottom
+          Glossary Entry Editor Pane (`onOpenCreateEntryPane`). Kept dormant —
+          `createForm` / `submitCreateForm` / `onCreateEntry` are removed in
+          Slice 5 once the pane hosts the real create form. */}
       {createForm.isOpen ? (
         <form
           className="glossaryCreateForm"
@@ -498,13 +506,7 @@ export function GlossarySidebar({
           type="button"
           className="workspaceSidebarButton"
           disabled={projectRootPath === null || readOnly}
-          onClick={() =>
-            setCreateForm((form) =>
-              form.isOpen
-                ? INITIAL_CREATE_FORM
-                : { ...INITIAL_CREATE_FORM, isOpen: true }
-            )
-          }
+          onClick={() => onOpenCreateEntryPane()}
         >
           {translate("glossary.addEntry")}
         </button>

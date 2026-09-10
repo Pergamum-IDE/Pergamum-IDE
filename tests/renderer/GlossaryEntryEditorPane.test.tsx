@@ -10,7 +10,6 @@ import {
   createInitialGlossaryEntryEditorPaneState,
   openGlossaryEntryCreatePane,
   openGlossaryEntryEditPane,
-  toggleGlossaryEntryEditorDeveloperPane,
   type OpenGlossaryEntryEditorPaneState
 } from "../../src/renderer/glossaryEntryEditorPaneState";
 
@@ -81,22 +80,6 @@ describe("glossaryEntryEditorPaneState — Slice 2 operation API (#436)", () => 
 
   it("close returns the closed state", () => {
     expect(closeGlossaryEntryEditorPane()).toEqual({ isOpen: false });
-  });
-
-  it("developer toggle flips closed -> create(developer) -> closed", () => {
-    const opened = toggleGlossaryEntryEditorDeveloperPane(
-      createInitialGlossaryEntryEditorPaneState()
-    );
-    expect(opened).toMatchObject({
-      isOpen: true,
-      mode: "create",
-      source: "developer",
-      presetRepresentative: "新しい語彙"
-    });
-
-    expect(toggleGlossaryEntryEditorDeveloperPane(opened)).toEqual({
-      isOpen: false
-    });
   });
 });
 

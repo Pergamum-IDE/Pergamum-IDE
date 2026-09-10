@@ -121,9 +121,7 @@ function render(overrides: RenderOverrides = {}) {
           : undefined,
         onReorderWorkspaceTabs: (overrides.withReorder ?? true)
           ? onReorderWorkspaceTabs
-          : undefined,
-        isGlossaryEntryEditorPaneOpen: false,
-        onToggleGlossaryEntryEditorPane: vi.fn()
+          : undefined
       })
     );
   });

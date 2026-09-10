@@ -322,11 +322,18 @@ import {
 // has a new home.
 import { GlossaryEntryEditorPane } from "./GlossaryEntryEditorPane";
 import {
+  DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
   closeGlossaryEntryEditorPane,
   createInitialGlossaryEntryEditorPaneState,
-  toggleGlossaryEntryEditorDeveloperPane,
+  openGlossaryEntryCreatePane,
+  openGlossaryEntryEditPane,
   type GlossaryEntryEditorPaneState
 } from "./glossaryEntryEditorPaneState";
+import {
+  createGlossaryEntryEditorPaneCommandTitles,
+  glossaryEntryEditorPaneCommandIds,
+  registerGlossaryEntryEditorPaneCommands
+} from "./glossaryEntryEditorPaneCommands";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -3099,6 +3106,26 @@ export function App(): JSX.Element {
       },
       createGlossaryCommandTitles(translate)
     );
+    // #436 Phase 8-0 PoC (Slice 3): the unified Glossary Entry Editor Pane
+    // entry points. Only the Glossary side pane's "語彙を追加" dispatches
+    // `openCreateEntryPane` so far; the glossary settings screen, Ctrl+G and
+    // the editor context menu route through the same commands in later
+    // slices. Palette-hidden and not keybound yet.
+    registerGlossaryEntryEditorPaneCommands(
+      registry,
+      {
+        openGlossaryEntryCreatePane: (options) => {
+          setGlossaryEntryEditorPane(openGlossaryEntryCreatePane(options));
+        },
+        openGlossaryEntryEditPane: (options) => {
+          setGlossaryEntryEditorPane(openGlossaryEntryEditPane(options));
+        },
+        closeGlossaryEntryEditorPane: () => {
+          setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+        }
+      },
+      createGlossaryEntryEditorPaneCommandTitles(translate)
+    );
     registerGlossaryOccurrencesCommands(
       registry,
       {
@@ -3498,6 +3525,22 @@ export function App(): JSX.Element {
       });
       return false;
     }
+  }
+
+  // #436 Phase 8-0 PoC (Slice 3): the Glossary side pane's "語彙を追加" now
+  // opens the bottom Glossary Entry Editor Pane in create mode instead of the
+  // sidebar's inline create form / a new glossary entry tab. No DB write and
+  // no form yet — later slices flesh out the pane and remove the old inline
+  // form + `createGlossaryEntryFromSidebar` path.
+  function openGlossaryCreateEntryPaneFromSidebar(): void {
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      { source: "workspaceSidebar" },
+      {
+        source: "glossary-pane",
+        presetRepresentative: DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE
+      }
+    );
   }
 
   // #375: Glossary tag CRUD, driven by the Glossary Tag Manager special
@@ -10122,6 +10165,9 @@ export function App(): JSX.Element {
                         );
                       }}
                       onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
+                      onOpenGlossaryCreateEntryPane={
+                        openGlossaryCreateEntryPaneFromSidebar
+                      }
                       glossaryActiveDocumentContent={
                         activeMarkdownDocument
                           ? currentDocumentContent(activeMarkdownDocument)
@@ -10203,14 +10249,6 @@ export function App(): JSX.Element {
                   onTabAction={handleTabAction}
                   describeTabContextMenu={describeTabContextMenuForTab}
                   onReorderWorkspaceTabs={handleReorderWorkspaceTabs}
-                  isGlossaryEntryEditorPaneOpen={
-                    glossaryEntryEditorPane.isOpen
-                  }
-                  onToggleGlossaryEntryEditorPane={() =>
-                    setGlossaryEntryEditorPane(
-                      toggleGlossaryEntryEditorDeveloperPane
-                    )
-                  }
                 />
 
                 <section className="editorAreaBody" ref={editorAreaBodyRef}>

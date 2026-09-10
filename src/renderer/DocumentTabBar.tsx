@@ -84,12 +84,6 @@ interface DocumentTabBarProps {
     movedTabId: WorkspaceTabId,
     targetIndex: number
   ) => void;
-  // #436 Phase 8-0 PoC (Slice 1): this toggle replaced the former Utility
-  // Window toggle. It is a transitional confirmation affordance for the
-  // Glossary Entry Editor Pane until the real entry points (Glossary side
-  // pane, glossary settings, Ctrl+G, context menu) are wired in later slices.
-  isGlossaryEntryEditorPaneOpen: boolean;
-  onToggleGlossaryEntryEditorPane: () => void;
 }
 
 /** #354: dedicated MIME marker so a tab reorder drag is never confused with a
@@ -136,9 +130,7 @@ export function DocumentTabBar({
   onCloseSpecialTab = () => undefined,
   onTabAction,
   describeTabContextMenu,
-  onReorderWorkspaceTabs,
-  isGlossaryEntryEditorPaneOpen,
-  onToggleGlossaryEntryEditorPane
+  onReorderWorkspaceTabs
 }: DocumentTabBarProps): JSX.Element {
   const contextMenuEnabled = Boolean(onTabAction && describeTabContextMenu);
   const reorderEnabled = Boolean(onReorderWorkspaceTabs);
@@ -200,9 +192,6 @@ export function DocumentTabBar({
     );
   }
 
-  const glossaryEntryEditorPaneLabel = translate(
-    "glossaryEntryEditorPane.label"
-  );
   const closeTabLabel = translate("tabs.closeTab");
   const unsavedLabel = translate("tabs.unsaved");
   const readOnlyTooltip = translate("projectAccess.readOnly.tooltip");
@@ -549,21 +538,6 @@ export function DocumentTabBar({
       >
         {orderedTabs.map(renderWorkspaceTab)}
       </nav>
-
-      <button
-        type="button"
-        className={
-          isGlossaryEntryEditorPaneOpen
-            ? "documentTabBarGlossaryEntryEditorToggle isActive"
-            : "documentTabBarGlossaryEntryEditorToggle"
-        }
-        aria-pressed={isGlossaryEntryEditorPaneOpen}
-        aria-label={glossaryEntryEditorPaneLabel}
-        title={glossaryEntryEditorPaneLabel}
-        onClick={onToggleGlossaryEntryEditorPane}
-      >
-        {glossaryEntryEditorPaneLabel}
-      </button>
 
       {tabContextMenu !== null && menuDescriptor !== null ? (
         <div

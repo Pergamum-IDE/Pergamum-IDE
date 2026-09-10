@@ -12,6 +12,7 @@ import { registerDebugLogCommands } from "../../src/renderer/debugLogCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 import { registerFileExplorerCommands } from "../../src/renderer/fileExplorerCommands";
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
+import { registerGlossaryEntryEditorPaneCommands } from "../../src/renderer/glossaryEntryEditorPaneCommands";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
 import { registerProjectSettingsCommands } from "../../src/renderer/projectSettingsCommands";
@@ -202,6 +203,22 @@ function buildCoreCommandRegistry(): CommandRegistry {
       manageTagsDescription: "Manage glossary tags",
       manageEntries: "Manage glossary entries",
       manageEntriesDescription: "Manage glossary entries"
+    }
+  );
+  registerGlossaryEntryEditorPaneCommands(
+    registry,
+    {
+      openGlossaryEntryCreatePane: () => undefined,
+      openGlossaryEntryEditPane: () => undefined,
+      closeGlossaryEntryEditorPane: () => undefined
+    },
+    {
+      openCreatePane: "Open create pane",
+      openCreatePaneDescription: "Open create pane",
+      openEditPane: "Open edit pane",
+      openEditPaneDescription: "Open edit pane",
+      closePane: "Close pane",
+      closePaneDescription: "Close pane"
     }
   );
   registerGlossaryOccurrencesCommands(

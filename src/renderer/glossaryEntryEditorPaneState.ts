@@ -104,16 +104,3 @@ export function openGlossaryEntryEditPane(
 export function closeGlossaryEntryEditorPane(): GlossaryEntryEditorPaneState {
   return { isOpen: false };
 }
-
-/**
- * #436 Slice 1/2 transitional dev affordance only: the Document Tab Bar toggle
- * flips the pane open in create mode (source "developer") / closed. Removed or
- * replaced by the real entry points in later slices.
- */
-export function toggleGlossaryEntryEditorDeveloperPane(
-  current: GlossaryEntryEditorPaneState
-): GlossaryEntryEditorPaneState {
-  return current.isOpen
-    ? closeGlossaryEntryEditorPane()
-    : openGlossaryEntryCreatePane({ source: "developer" });
-}

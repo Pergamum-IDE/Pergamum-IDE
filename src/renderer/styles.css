@@ -1028,29 +1028,6 @@ label.settingsItemHeader {
   display: block;
 }
 
-.documentTabBarGlossaryEntryEditorToggle {
-  height: auto;
-  flex: 0 0 auto;
-  border: 0;
-  border-left: 1px solid #d3dae2;
-  border-radius: 0;
-  background: transparent;
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 0 14px;
-}
-
-.documentTabBarGlossaryEntryEditorToggle:hover {
-  background: #e2eaf2;
-}
-
-.documentTabBarGlossaryEntryEditorToggle.isActive,
-.documentTabBarGlossaryEntryEditorToggle.isActive:hover {
-  background: #ffffff;
-  color: #17212b;
-}
-
 /*
  * #342: variable-width tabs. The tab is sized to its content (file name +
  * trailing slot + padding), not forced to an equal share, and never grows or

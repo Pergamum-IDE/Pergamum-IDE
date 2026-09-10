@@ -114,6 +114,9 @@ interface WorkspaceSidebarProps {
   onCreateGlossaryEntry: (
     input: CreateGlossaryEntryInput
   ) => Promise<boolean>;
+  /** #436 Slice 3: open the bottom Glossary Entry Editor Pane in create mode
+   *  from the Glossary side pane's "語彙を追加" button. */
+  onOpenGlossaryCreateEntryPane: () => void;
   /** #375: active Markdown document body for glossary occurrence counts. */
   glossaryActiveDocumentContent: string | null;
   /** #375 Document Map: every project glossary entry (occurrence scan). */
@@ -232,6 +235,7 @@ export function WorkspaceSidebar({
   onFileExplorerMoveResultMessage,
   onActivateGlossaryEntry,
   onCreateGlossaryEntry,
+  onOpenGlossaryCreateEntryPane,
   glossaryActiveDocumentContent,
   documentMapGlossaryEntries = [],
   documentMapGlossaryTags = [],
@@ -364,6 +368,7 @@ export function WorkspaceSidebar({
           activeDocumentContent={glossaryActiveDocumentContent}
           onActivateEntry={onActivateGlossaryEntry}
           onCreateEntry={onCreateGlossaryEntry}
+          onOpenCreateEntryPane={onOpenGlossaryCreateEntryPane}
           onNavigateOccurrence={onNavigateGlossaryOccurrence}
         />
       );
