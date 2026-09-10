@@ -16,8 +16,8 @@ import {
   WHOLE_WORD_ICON,
   inlineSearchIcon
 } from "../searchOptionToggle";
-import replaceCurrentIconRaw from "../../../assets/icons/svgrepo/editor/replace-svgrepo-com.svg?raw";
-import replaceAllIconRaw from "../../../assets/icons/svgrepo/editor/replace-all-svgrepo-com.svg?raw";
+import replaceCurrentIconRaw from "../../../assets/icons/codicons/search/replace.svg?raw";
+import replaceAllIconRaw from "../../../assets/icons/codicons/search/replace-all.svg?raw";
 import {
   replacementTemplateErrorTranslationKey,
   type ActiveDocumentFindOptions,
