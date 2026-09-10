@@ -400,13 +400,19 @@ export const EDIT_CHANNELS = {
 export const APP_INFO_CHANNELS = {
   getAppInfo: "appInfo:getAppInfo",
   openRepository: "appInfo:openRepository",
-  openTypewriterSoundsCredit: "appInfo:openTypewriterSoundsCredit"
+  openThirdPartyNotices: "appInfo:openThirdPartyNotices"
 } as const;
 
 export const APP_INFO_EXTERNAL_LINKS = {
   repository: "https://github.com/Pergamum-IDE/Pergamum-IDE",
-  typewriterSoundsCredit:
-    "https://opengameart.org/content/typewriter-sounds"
+  /**
+   * #432: the About dialog's secondary external link opens the repo's
+   * aggregated third-party notices (Feather / Ionicons / SVG Repo / Codicons /
+   * typewriter sounds). Fixed, application-owned constant — the renderer never
+   * passes a URL through this path (see appInfoIpc.ts).
+   */
+  thirdPartyNotices:
+    "https://github.com/Pergamum-IDE/Pergamum-IDE/blob/main/THIRD_PARTY_NOTICES.md"
 } as const;
 
 export type MarkdownLineEnding =
@@ -1246,7 +1252,7 @@ export interface PergamumApi {
   appInfo: {
     getAppInfo: () => Promise<PergamumAppInfo>;
     openRepository: () => Promise<void>;
-    openTypewriterSoundsCredit: () => Promise<void>;
+    openThirdPartyNotices: () => Promise<void>;
   };
   imageAttachment: {
     save: (

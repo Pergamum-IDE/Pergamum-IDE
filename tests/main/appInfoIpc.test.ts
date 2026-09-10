@@ -32,10 +32,10 @@ import {
   pergamumRepositoryUrl,
   readPackageLicense,
   registerAppInfoIpc,
+  thirdPartyNoticesUrl,
   type AppInfoMetadataProvider,
   type ExternalLinkOpener,
-  type RuntimeMetadataProvider,
-  typewriterSoundsCreditUrl
+  type RuntimeMetadataProvider
 } from "../../src/main/appInfoIpc";
 
 const runtimeMetadataProvider: RuntimeMetadataProvider = {
@@ -153,7 +153,7 @@ describe("app info IPC (#221)", () => {
         {},
         "https://example.invalid/not-allowed"
       );
-      await ipcHandler(APP_INFO_CHANNELS.openTypewriterSoundsCredit)(
+      await ipcHandler(APP_INFO_CHANNELS.openThirdPartyNotices)(
         {},
         "https://example.invalid/not-allowed"
       );
@@ -162,15 +162,24 @@ describe("app info IPC (#221)", () => {
         pergamumRepositoryUrl
       );
       expect(externalLinkOpener.openExternal).toHaveBeenCalledWith(
-        typewriterSoundsCreditUrl
+        thirdPartyNoticesUrl
       );
+      // The handler ignores any argument — it only ever opens the fixed URL.
       expect(externalLinkOpener.openExternal).not.toHaveBeenCalledWith(
         "https://example.invalid/not-allowed"
       );
-      expect(APP_INFO_CHANNELS as Record<string, unknown>).not.toHaveProperty(
-        "openThirdPartyNotices"
+      // #432: the fixed external link is the third-party notices page, and the
+      // old typewriter-sounds identifiers are gone.
+      expect(APP_INFO_CHANNELS.openThirdPartyNotices).toBe(
+        "appInfo:openThirdPartyNotices"
       );
-      expect(electronMock.ipcHandle).not.toHaveBeenCalledWith(
+      expect(thirdPartyNoticesUrl).toBe(
+        "https://github.com/Pergamum-IDE/Pergamum-IDE/blob/main/THIRD_PARTY_NOTICES.md"
+      );
+      expect(APP_INFO_CHANNELS as Record<string, unknown>).not.toHaveProperty(
+        "openTypewriterSoundsCredit"
+      );
+      expect(electronMock.ipcHandle).toHaveBeenCalledWith(
         "appInfo:openThirdPartyNotices",
         expect.any(Function)
       );
