@@ -31,7 +31,11 @@ export interface AboutDialogProps {
   opener: Element | null;
   onClose: () => void;
   onOpenRepository: () => void;
-  onOpenTypewriterSoundsCredit: () => void;
+  /**
+   * #432: opens the repo's THIRD_PARTY_NOTICES.md in the external browser
+   * through the fixed-URL app-info channel (no URL argument, no in-app viewer).
+   */
+  onOpenThirdPartyNotices: () => void;
   onShowStaffCredits: (placement: NotificationToastPlacement) => void;
 }
 
@@ -84,7 +88,7 @@ export function AboutDialog({
   opener,
   onClose,
   onOpenRepository,
-  onOpenTypewriterSoundsCredit,
+  onOpenThirdPartyNotices,
   onShowStaffCredits
 }: AboutDialogProps): JSX.Element {
   const [copyState, setCopyState] =
@@ -289,19 +293,18 @@ export function AboutDialog({
         <section className="aboutDialogSection">
           <h3>{translate("dialog.about.thirdPartyLabel")}</h3>
           <p>{translate("dialog.about.thirdPartySummary")}</p>
-          <p>{translate("dialog.about.thirdPartyGuidance")}</p>
-        </section>
-
-        <section className="aboutDialogSection">
-          <h3>{translate("dialog.about.creditsLabel")}</h3>
+          {/* #432: entry point to the aggregated THIRD_PARTY_NOTICES.md, opened
+              externally through the fixed-URL app-info channel (no in-app
+              license viewer). Replaces the former per-asset typewriter
+              acknowledgement. */}
           <button
             type="button"
             className="aboutDialogLinkButton"
-            aria-label={translate("dialog.about.openTypewriterSoundsCredit")}
-            title={APP_INFO_EXTERNAL_LINKS.typewriterSoundsCredit}
-            onClick={onOpenTypewriterSoundsCredit}
+            aria-label={translate("dialog.about.thirdPartyNoticesLinkAria")}
+            title={APP_INFO_EXTERNAL_LINKS.thirdPartyNotices}
+            onClick={onOpenThirdPartyNotices}
           >
-            <span>{translate("dialog.about.typewriterCredit")}</span>
+            <span>{translate("dialog.about.thirdPartyNoticesLink")}</span>
             {"\u00a0"}
             <img
               className="aboutDialogExternalLinkIcon"

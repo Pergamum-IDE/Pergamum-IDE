@@ -46,7 +46,7 @@ function renderAboutDialog(): string {
       opener: null,
       onClose: noop,
       onOpenRepository: noop,
-      onOpenTypewriterSoundsCredit: noop,
+      onOpenThirdPartyNotices: noop,
       onShowStaffCredits: noop
     })
   );
@@ -73,7 +73,7 @@ function expectDialogHorizontalPaddingVariable(rule: string): void {
 }
 
 describe("AboutDialog (#221)", () => {
-  it("renders app identity, runtime app info, repository guidance, and credits", () => {
+  it("renders app identity, runtime app info, repository guidance, and the third-party notices link", () => {
     const markup = renderAboutDialog();
 
     expect(markup).toContain("aboutDialogAppIcon");
@@ -100,16 +100,20 @@ describe("AboutDialog (#221)", () => {
     expect(markup).not.toContain("(Open on GitHub)");
     expect(markup).toContain("Third-party notices:");
     expect(markup).toContain("This application uses open-source software.");
-    expect(markup).toContain(
+    // #432: the dedicated typewriter-sounds acknowledgement is gone; instead a
+    // single link opens the aggregated THIRD_PARTY_NOTICES.md externally.
+    expect(markup).not.toContain("Credits:");
+    expect(markup).not.toContain("Typewriter sounds:");
+    expect(markup).not.toContain("Cassie-OrbitGames");
+    expect(markup).not.toContain("OpenGameArt");
+    expect(markup).not.toContain(
       "Third-party license notices will be included with the distribution or repository."
     );
-    expect(markup).not.toContain("THIRD_PARTY_NOTICES");
-    expect(markup).toContain("Credits:");
+    expect(markup).toContain("Third-party licenses");
+    expect(markup).toContain(APP_INFO_EXTERNAL_LINKS.thirdPartyNotices);
     expect(markup).toContain(
-      "Typewriter sounds: Cassie-OrbitGames / OpenGameArt.org - CC0"
+      "https://github.com/Pergamum-IDE/Pergamum-IDE/blob/main/THIRD_PARTY_NOTICES.md"
     );
-    expect(markup).toContain(APP_INFO_EXTERNAL_LINKS.typewriterSoundsCredit);
-    expect(markup).not.toContain("(Open credit page)");
     expect(markup).toContain('aria-label="Copy technical information"');
     expect(markup).toContain('title="Copy technical information"');
     expect(markup).not.toContain(">Copy technical information<");
@@ -140,13 +144,14 @@ describe("AboutDialog (#221)", () => {
     expect(source).toContain('aria-live="polite"');
     expect(source).not.toContain('className="appDialogButtonLabel"');
     expect(source).toContain("onOpenRepository");
-    expect(source).toContain("onOpenTypewriterSoundsCredit");
+    expect(source).toContain("onOpenThirdPartyNotices");
     expect(source).toContain("onShowStaffCredits");
     expect(source).toContain('kind: "anchorRect"');
     expect(source).toContain("getBoundingClientRect");
     expect((source.match(/\{"\\u00a0"\}/g) ?? []).length).toBe(2);
-    expect(source).not.toContain("openThirdPartyNotices");
-    expect(source).not.toContain("onOpenThirdPartyNotices");
+    // #432 follow-up: the historical typewriter-sounds names are fully gone.
+    expect(source).not.toContain("TypewriterSoundsCredit");
+    expect(source).not.toContain("typewriterCredit");
     expect(source).not.toContain(["assets/logo", ".png"].join(""));
     expect(source).not.toContain("href=");
     expect(source).not.toContain("Markdown");
@@ -169,20 +174,59 @@ describe("AboutDialog (#221)", () => {
     ]);
   });
 
-  it("does not render a Third-party notices link or external-link icon", () => {
+  it("#432: renders the third-party notices external link inside the Third-party notices section, and no Credits section", () => {
     const markup = renderAboutDialog();
     const thirdPartyStart = markup.indexOf("Third-party notices:");
-    const creditsStart = markup.indexOf("Credits:");
+    const copyControlStart = markup.indexOf("aboutDialogTechnicalInfoControl");
 
     expect(thirdPartyStart).toBeGreaterThan(-1);
-    expect(creditsStart).toBeGreaterThan(thirdPartyStart);
+    expect(copyControlStart).toBeGreaterThan(thirdPartyStart);
 
-    const thirdPartySectionMarkup = markup.slice(thirdPartyStart, creditsStart);
-
-    expect(thirdPartySectionMarkup).not.toContain("aboutDialogLinkButton");
-    expect(thirdPartySectionMarkup).not.toContain(
-      "aboutDialogExternalLinkIcon"
+    // Everything from the section heading to the footer copy control.
+    const thirdPartySectionMarkup = markup.slice(
+      thirdPartyStart,
+      copyControlStart
     );
+
+    expect(thirdPartySectionMarkup).toContain("aboutDialogLinkButton");
+    expect(thirdPartySectionMarkup).toContain("aboutDialogExternalLinkIcon");
+    expect(thirdPartySectionMarkup).toContain("Third-party licenses");
+    expect(thirdPartySectionMarkup).toContain(
+      "https://github.com/Pergamum-IDE/Pergamum-IDE/blob/main/THIRD_PARTY_NOTICES.md"
+    );
+    // The dialog opens the notices EXTERNALLY — never inlines / renders the file.
+    expect(markup).not.toContain("Credits:");
+    expect(markup).not.toContain("dangerouslySetInnerHTML");
+  });
+
+  it("#432: routes the third-party notices link through a fixed-URL app-info channel named for its target", () => {
+    const source = readFileSync(
+      "src/renderer/dialog/AboutDialog.tsx",
+      "utf8"
+    );
+
+    // The link reuses the one fixed-URL app-info action; no href, no URL arg.
+    expect(source).toContain("onClick={onOpenThirdPartyNotices}");
+    expect(source).toContain(
+      "title={APP_INFO_EXTERNAL_LINKS.thirdPartyNotices}"
+    );
+    expect(source).not.toContain("href=");
+    expect(source).not.toContain("openExternal");
+    // Historical typewriter-sounds identifiers / acknowledgement text are gone.
+    expect(source).not.toContain("TypewriterSoundsCredit");
+    expect(source).not.toContain("typewriterCredit");
+    expect(source).not.toContain("creditsLabel");
+    expect(source).not.toContain("thirdPartyGuidance");
+
+    const apiSource = readFileSync("src/shared/api.ts", "utf8");
+    expect(apiSource).toContain(
+      'openThirdPartyNotices: "appInfo:openThirdPartyNotices"'
+    );
+    expect(apiSource).toContain(
+      "https://github.com/Pergamum-IDE/Pergamum-IDE/blob/main/THIRD_PARTY_NOTICES.md"
+    );
+    expect(apiSource).not.toContain("opengameart.org");
+    expect(apiSource).not.toContain("TypewriterSoundsCredit");
   });
 
   it("restores copy state and shows failed feedback even if clipboard copy throws unexpectedly", () => {

@@ -490,19 +490,22 @@ describe("glossary preload API", () => {
 
     await api.appInfo.getAppInfo();
     await api.appInfo.openRepository();
-    await api.appInfo.openTypewriterSoundsCredit();
+    await api.appInfo.openThirdPartyNotices();
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [APP_INFO_CHANNELS.getAppInfo],
       [APP_INFO_CHANNELS.openRepository],
-      [APP_INFO_CHANNELS.openTypewriterSoundsCredit]
+      [APP_INFO_CHANNELS.openThirdPartyNotices]
     ]);
+    // #432: the preload exposes only the fixed-channel functions — no generic
+    // URL opener, and the old typewriter-sounds name is gone.
     expect(api.appInfo as Record<string, unknown>).not.toHaveProperty(
       "openExternal"
     );
     expect(api.appInfo as Record<string, unknown>).not.toHaveProperty(
-      "openThirdPartyNotices"
+      "openTypewriterSoundsCredit"
     );
+    expect(typeof api.appInfo.openThirdPartyNotices).toBe("function");
   });
 
   it("exposes context menu popup, command selection, and native edit delegation APIs", async () => {

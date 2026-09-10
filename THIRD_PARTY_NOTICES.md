@@ -1,5 +1,50 @@
 # Third Party Notices
 
+This file aggregates attribution and license information for the third-party
+assets bundled with Pergamum. It covers:
+
+- Feather icons
+- Ionicons icons
+- SVG Repo icons
+- Codicons icons
+- Typewriter sounds
+
+## Feather icons
+
+Pergamum includes selected SVG icons from Feather.
+
+- Project: Feather
+- Copyright: (c) 2013-2023 Cole Bemis
+- Source: <https://github.com/feathericons/feather>
+- License: MIT
+- License text: `assets/icons/feather/LICENSE.txt`
+
+Modifications:
+
+- selected SVG files were copied into Pergamum's asset tree
+  (`assets/icons/feather/`)
+- file names and paths may have been changed to match Pergamum conventions
+- icons may be styled by CSS, including size and color
+- SVG path data is otherwise unmodified unless noted in commit history
+
+## Ionicons icons
+
+Pergamum includes selected SVG icons from Ionicons.
+
+- Project: Ionicons
+- Copyright: (c) 2015-present Ionic (<http://ionic.io/>)
+- Source: <https://github.com/ionic-team/ionicons>
+- License: MIT
+- License text: `assets/icons/ionicons/LICENSE.txt`
+
+Modifications:
+
+- selected SVG files were copied into Pergamum's asset tree
+  (`assets/icons/ionicons/`)
+- file names and paths may have been changed to match Pergamum conventions
+- icons may be styled by CSS, including size and color
+- SVG path data is otherwise unmodified unless noted in commit history
+
 ## Codicons
 
 Pergamum includes selected SVG icons from Codicons.

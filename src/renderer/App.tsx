@@ -4501,9 +4501,9 @@ export function App(): JSX.Element {
       .catch(reportAboutExternalLinkFailure);
   }
 
-  function openAboutTypewriterSoundsCredit(): void {
+  function openAboutThirdPartyNotices(): void {
     void window.pergamum.appInfo
-      .openTypewriterSoundsCredit()
+      .openThirdPartyNotices()
       .catch(reportAboutExternalLinkFailure);
   }
 
@@ -10544,7 +10544,7 @@ export function App(): JSX.Element {
           opener={aboutDialogOpenerRef.current}
           onClose={closeAboutDialog}
           onOpenRepository={openAboutRepository}
-          onOpenTypewriterSoundsCredit={openAboutTypewriterSoundsCredit}
+          onOpenThirdPartyNotices={openAboutThirdPartyNotices}
           onShowStaffCredits={showAboutStaffCredits}
         />
       ) : null}

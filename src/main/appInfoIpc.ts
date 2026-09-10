@@ -9,8 +9,8 @@ import {
 } from "../shared/api";
 
 export const pergamumRepositoryUrl = APP_INFO_EXTERNAL_LINKS.repository;
-export const typewriterSoundsCreditUrl =
-  APP_INFO_EXTERNAL_LINKS.typewriterSoundsCredit;
+export const thirdPartyNoticesUrl =
+  APP_INFO_EXTERNAL_LINKS.thirdPartyNotices;
 export const pergamumCopyright = "Copyright (c) 2026 Pergamum IDE";
 
 export interface AppInfoMetadataProvider {
@@ -119,7 +119,7 @@ export function registerAppInfoIpc(options: {
   ipcMain.handle(APP_INFO_CHANNELS.openRepository, () =>
     openFixedExternalLink(externalLinkOpener, pergamumRepositoryUrl)
   );
-  ipcMain.handle(APP_INFO_CHANNELS.openTypewriterSoundsCredit, () =>
-    openFixedExternalLink(externalLinkOpener, typewriterSoundsCreditUrl)
+  ipcMain.handle(APP_INFO_CHANNELS.openThirdPartyNotices, () =>
+    openFixedExternalLink(externalLinkOpener, thirdPartyNoticesUrl)
   );
 }

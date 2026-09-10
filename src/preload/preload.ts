@@ -369,8 +369,8 @@ const pergamumApi: PergamumApi = {
   appInfo: {
     getAppInfo: () => ipcRenderer.invoke(APP_INFO_CHANNELS.getAppInfo),
     openRepository: () => ipcRenderer.invoke(APP_INFO_CHANNELS.openRepository),
-    openTypewriterSoundsCredit: () =>
-      ipcRenderer.invoke(APP_INFO_CHANNELS.openTypewriterSoundsCredit)
+    openThirdPartyNotices: () =>
+      ipcRenderer.invoke(APP_INFO_CHANNELS.openThirdPartyNotices)
   },
   imageAttachment: {
     save: (payload) =>
