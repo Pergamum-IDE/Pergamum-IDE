@@ -33,13 +33,30 @@ The name Pergamum comes from an ancient Greek city in what is now western Turkey
 
 ## Current status
 
-As of v0.70.0, Pergamum has completed up through Phase 6, “Make it possible to close and come back.”
+Pergamum is currently at **v0.80.0**.
 
-The foundations for daily dogfooding are now taking shape, including manuscript editing, Project files, Command Palette, Settings, Debug Log, Session restore, and Document Recovery.
+It has completed up through Phase 7, “Make it possible to walk through the project,” and the core features for writing a novel are now in place.
+
+As of v0.80.0, the following areas are implemented:
+
+- Markdown manuscript editing
+- Project management via `.pergamum` project files
+- Hierarchical File Explorer and file operations
+- Active Document Find / Replace (search and replace within the open document)
+- Project-wide Search / Replace
+- Glossary (managing terms, characters, places, and so on) and Glossary Completion
+- Document Map / Document Metrics
+- Session restore and Document Recovery
+- Atomic Markdown save / Project write lock
+- Image paste / preview / link updates
+- Application / Project settings
+- About dialog / third-party notices
 
 That said, Pergamum is not yet a stable release for general use.
 
 In particular, the Glossary / project database schema may still change in the future. If you use Pergamum with important manuscripts or structured data, please manage the entire working directory with Git or ordinary backups.
+
+For work planned up to v0.90.0, see the [Roadmap](#roadmap) section below. Those items are planned, not implemented.
 
 ---
 
@@ -140,41 +157,63 @@ Pergamum can currently do the following:
 | -- | -- |
 | Project | Create and open `.pergamum` project files |
 | Project | Manage Project root / project metadata |
+| Project | Change a Project's display name (logical rename) |
 | Project | Prevent concurrent writes with a Project write lock |
 | Project | Open a project as read-only when another process is already using it |
-| Project | Safely recover stale Project write locks |
+| Project | Safely recover stale write locks / recovery locks |
 | Project | Close the current Project |
+| File Explorer | Show project folders and files as a tree |
+| File Explorer | Expand / collapse folders, open files, refresh |
+| File Explorer | Detect files added, removed, or changed outside the app |
+| File Explorer | Create, rename, and delete files and folders (with confirmation) |
+| File Explorer | Move files and folders (context menu / cut & paste / drag & drop, with confirmation) |
+| File Explorer | Multi-selection, reveal the active document |
+| Import | Bulk-import `.txt` files as Markdown with a chosen character encoding |
 | Editor | Edit Markdown manuscript text |
-| Editor | Open multiple documents in tabs |
-| Editor | Close opened tabs |
-| Editor | Open external Markdown files |
-| Editor | Preserve line endings when saving |
+| Editor | Open multiple documents in tabs / close tabs / open external Markdown |
+| Editor | Keep editor state per tab |
+| Editor | Preserve line endings when saving / diagnose line ending distribution |
 | Editor | Save through an atomic Markdown save pipeline |
-| Editor | Show character count |
+| Editor | Show character count in the Status Bar (Unicode code point based) |
 | Editor | Bulk insert / remove paragraph indentation |
+| Editor | Configure Markdown undo history depth |
+| Search / Replace | Search and replace within the open document (Active Document Find / Replace) |
+| Search / Replace | Options such as case, whole word, and regex; replace all |
+| Search / Replace | Glossary-based search modes / nearby search |
+| Search / Replace | Search across the whole project (Search pane) |
+| Search / Replace | Replace across the whole project |
 | Preview | Show Markdown Preview |
 | Preview | Decorate Glossary matches in Preview |
+| Preview | Render project-local image links in Preview |
+| Assets | Paste a clipboard image, save it to assets, and insert a Markdown link |
+| Assets | Diagnose broken image links (lint warnings) |
+| Assets | Update image links / references when Markdown or image files are moved |
 | Glossary | Create, edit, and delete Glossary entries |
-| Glossary | Manage Glossary forms |
+| Glossary | Manage Glossary forms (canonical / alias / variant, boundary policy) |
 | Glossary | Show Hover Cards for Glossary matches |
 | Glossary | Navigate from Glossary entries to their occurrences in the manuscript |
-| Glossary | Search entries in the Glossary navigator |
-| Glossary | Review occurrences in the Glossary occurrences tab |
+| Glossary | Search entries in the Glossary navigator / review occurrences in the occurrences tab |
+| Glossary | Highlight primary tags visually |
+| Glossary | Invoke Glossary Completion with Ctrl+Space |
+| Document Map | Show a bird's-eye view of the document and navigate by click / viewport lens |
+| Document Map | Configure which tags and rendering to show; page large documents when rendering |
+| Document Metrics | Show metrics such as character, line, and paragraph counts and dialogue ratio |
 | Command | Search and run operations from the Command Palette |
 | Command | Use application menu / shortcuts / context menu |
-| Settings | View and edit settings in the Settings Page |
-| Session | Restore the previous project / tabs / window state |
+| Settings | View and edit application / project settings in the Settings Page |
+| Settings | Override application settings per project; search and categorize settings |
+| Settings | Confirm and safely restart for settings that require a restart |
+| Session | Restore the previous project / tabs / active document / window state |
+| Session | Time out safely if Session loading takes abnormally long |
 | Recovery | Persist Recovery payloads for unsaved manuscript text |
 | Recovery | Show unsaved text from the previous run as recovery candidates |
-| Recovery | Restore Recovery candidates as `.recovered.md` files |
-| Recovery | Explicitly discard Recovery candidates |
+| Recovery | Restore Recovery candidates as `.recovered.md` files / explicitly discard them |
 | Recovery | Suppress repeated auto-show for the same Recovery candidate set |
-| Notification | Show lightweight informational notifications with NotificationToast |
-| Workbench | Work with Navigator / Editor / Preview panes |
-| Workbench | Collapse the Sidebar |
+| Notification | Show informational (non-error) notifications with NotificationToast |
+| Workbench | Work with Navigator / Editor / Preview panes, collapse the Sidebar, reorder tabs |
 | Utility Window | Open the Utility Window |
-| Debug | Output Debug mode JSONL logs |
-| Debug | Inspect logs in the Debug Log tab |
+| Debug | Output Debug mode JSONL logs / inspect them in the Debug Log tab |
+| About | Show the About dialog with a link to third-party notices |
 | Persistence | Store structured project data in SQLite |
 | Distribution | Provide foundations for a Windows installer and `.pergamum` file association |
 
@@ -259,6 +298,36 @@ Cases where it is not deleted:
 ```
 
 Pergamum does not discard Recovery candidates on its own.
+
+---
+
+## Storage model
+
+Pergamum separates storage formats by the nature of the data.
+
+| Location | Format | Role |
+| -- | -- | -- |
+| Markdown files | UTF-8 Markdown | Source of truth for manuscript text; ordinary human-readable text files |
+| `.pergamum` project file | SQLite database | Source of truth for structured story information: characters, terms, places, organizations, concepts |
+| `pergamum.json` | JSON | Project settings (project-scope settings) |
+| Application data | JSON and similar | Session state (the previous working environment) |
+| Recovery Store | Working copies on the application data side | Recovery data for not losing unsaved text; not the source of truth for the manuscript |
+
+Pergamum does not bend the manuscript to fit the database, nor does it force structured information into Markdown. Each kind of data is placed where it is easiest to handle.
+
+### Reliability and safety
+
+Pergamum does not treat saving and recovery safety lightly.
+
+| Mechanism | Description |
+| -- | -- |
+| Atomic Markdown save | Manuscript saves go through an atomic pipeline that never leaves a half-written state |
+| Project write lock | Prevents multiple processes from writing to the same project at once; opens read-only when another process holds it |
+| Stale lock recovery | Safely reclaims write locks / recovery locks left behind by abnormal termination |
+| Session restore | Restores the previous project / tabs / active document / window state; does not corrupt existing session data even if loading fails |
+| Document Recovery | Keeps unsaved text on the application data side and offers it as a recovery candidate on the next run; opens it as `.recovered.md` instead of overwriting the original file |
+
+Pergamum will not discard your unsaved manuscript until you explicitly choose to discard it.
 
 ---
 
@@ -403,16 +472,15 @@ The current major limitations are as follows:
 
 | Category | Current limitation |
 | -- | -- |
-| File format | Manuscript files that can be opened are limited to `*.md` |
-| File format | `*.txt` and other text files are not yet supported |
-| Encoding | Only UTF-8 is supported |
-| Encoding | Non-UTF-8 encodings such as Shift_JIS, EUC-JP, and UTF-16 are not yet supported |
-| Project database | The Glossary / project database schema is still under development |
-| Project database | Future changes may include breaking changes |
+| File format | Files that can be opened and edited directly are limited to `*.md` |
+| File format | Opening and editing raw `.txt` files directly is not yet supported (bulk import into Markdown with a chosen encoding is supported; direct editing is planned for v0.90.0) |
+| Encoding | Manuscript editing is UTF-8 only (encoding conversion at import time is handled by the Import feature) |
+| Project database | The Glossary / project database schema is still under development and future changes may include breaking changes |
 | Compatibility | Long-term DB compatibility is not guaranteed at this stage |
 | Recovery | Recovery is for rescuing unsaved manuscript text, not a replacement for history management or Git |
-| Search | Advanced search and navigation across the entire work are future development targets |
-| Output | Full-fledged output for submission, printing, and ebooks is not implemented yet |
+| Search | Project-wide text search and replace are available; advanced search such as FTS or outline search is a future development target |
+| Output | Project-wide TXT export is planned for v0.90.0; full-fledged output such as PDF / DOCX / EPUB / vertical writing is not implemented yet |
+| Theme | A dark theme is planned for v0.90.0 (currently light theme only) |
 | Distribution | Distribution foundations are being prepared, but this is not a stable release |
 
 In particular, `.pergamum` is currently the source of truth for structured data in Pergamum.
@@ -515,15 +583,17 @@ If you only look at the code, the reasons behind decisions such as the following
 
 Therefore, Pergamum tries to record not only **what was adopted**, but also **what was considered and why it was not adopted**.
 
+For the full list of ADRs and their statuses, see [`docs/adr/README.md`](./docs/adr/README.md).
+
 Major ADRs:
 
 - [ADR-0001: Project Persistence Architecture](./docs/adr/0001-project-persistence-architecture.md)
 - [ADR-0002: Structured Project Data and Glossary Model](./docs/adr/0002-structured-project-data-and-glossary-model.md)
 - [ADR-0003: UI Interaction Architecture](./docs/adr/0003-ui-interaction-architecture.md)
 - [ADR-0004: Manuscript Non-Destructive Policy](./docs/adr/0004-manuscript-non-destructive-policy.md)
-- [ADR-0005: Command Domain Taxonomy](./docs/adr/0005-command-domain-taxonomy.md)
-- [ADR-0008: Project File / Root / Recovery Layout](./docs/adr/0008-project-file-root-recovery-layout.md)
-- [ADR-0009: Recovery Store Architecture](./docs/adr/0009-recovery-store-architecture.md)
+- [ADR-0006: Durable State Categories and Settings Architecture](./docs/adr/0006-settings-architecture.en.md)
+- [ADR-0008: Project File, Project Root, and Project-Local Recovery Layout](./docs/adr/0008-project_file-project_root-and-project_local-recovery-layout.en.md)
+- [ADR-0009: Working Copy Persistence and Recovery Model](./docs/adr/0009-working-copy-persistence-and-recovery-model.en.md)
 
 Sometimes design is decided before implementation.
 
@@ -537,38 +607,55 @@ The Pergamum development roadmap is maintained here:
 
 - [Pergamum Roadmap](./docs/roadmap.md)
 
-The source of truth for implementation scope is GitHub Issues.
+The source of truth for implementation scope is GitHub Issues. The roadmap is treated as a map for keeping track of direction, priorities, and postponed items.
 
-The roadmap is treated as a map for keeping track of direction, priorities, and postponed items.
-
-Pergamum has completed through Phase 6, “Make it possible to close and come back,” and is preparing to move to the next stage.
-
-The broad flow is:
+The broad flow so far is:
 
 ```text
-Phase 4:
-  Make it easy to find and use operations
-
-Phase 5:
-  Avoid touching the manuscript too much
-
-Phase 6:
-  Make it possible to close and come back
-
-Phase 7:
-  Make it possible to walk through the project
-
-Phase 8:
-  Make it ready to hand to other people
-
-v0.90.0:
-  Make it usable every day
+Phase 4 (v0.50.0):  Make it easy to find and use operations   … done
+Phase 5 (v0.51.x):  Avoid touching the manuscript too much     … done
+Phase 6 (v0.60.x):  Make it possible to close and come back     … done
+Phase 7 (v0.70.x):  Make it possible to walk through the project … done
+v0.80.0:            Core features for a novelists' IDE are in place (current)
 ```
 
-See `roadmap.md` for details of each Phase.
+Up to v0.90.0, work proceeds in the following agreed order. These items are **planned**, not implemented.
+
+```text
+1.  Keyboard shortcut support
+2.  TAB handling refinements
+3.  Raw TXT format support
+4.  Ruby / emphasis dots support
+5.  Markdown toolbar
+6.  General Preview refinements
+7.  Project-wide TXT export
+8.  Settings JSON export
+9.  Dark theme
+10. Polish
+```
+
+The scope, non-scope, and acceptance criteria for each item are defined in individual GitHub Issues.
+
+For candidates beyond `v1.x` (DB migration, Git integration, Plugin API, DOCX / EPUB / PDF and vertical-writing output, arbitrary CSS themes, collaborative editing / cloud sync, and so on), see `docs/roadmap.md`.
+
+---
+
+## Third-party notices
+
+Pergamum bundles a few third-party assets (icons and sound effects).
+
+Attribution and license information for each asset is collected in [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
+
+- Feather icons (MIT)
+- Ionicons (MIT)
+- Codicons (CC BY 4.0)
+- SVG Repo icons (per-icon licenses)
+- Typewriter sounds (OpenGameArt, CC0)
 
 ---
 
 ## License
 
-Pergamum is released under the MIT License.
+Pergamum is free software released under the MIT License.
+
+For the licenses of the bundled third-party assets, see [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).

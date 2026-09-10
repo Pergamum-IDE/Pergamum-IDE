@@ -33,13 +33,30 @@ Pergamum は、**本文を書く場所と、作品世界について作者が知
 
 ## 現在の状態
 
-現在の Pergamum は、v0.70.0 時点で Phase 6「閉じても戻れるようにする」までを完了した段階です。
+現在の Pergamum は **v0.80.0** です。
 
-本文編集、Project file、Command Palette、Settings、Debug Log、Session restore、Document Recovery など、毎日 dogfood しながら使うための基盤が整いつつあります。
+Phase 7「プロジェクトを歩けるようにする」までを完了し、小説を書くための中核機能がひととおり揃った段階です。
+
+v0.80.0 時点で、次のような領域が実装済みです。
+
+- Markdown 本文の編集
+- `.pergamum` project file によるプロジェクト管理
+- 階層 File Explorer とファイル操作
+- Active Document Find / Replace（開いている文書内の検索・置換）
+- Project 全体の Search / Replace
+- Glossary（用語・人物・地名などの管理）と Glossary Completion
+- Document Map / Document Metrics
+- Session restore と Document Recovery
+- Atomic Markdown save / Project write lock
+- 画像の貼り付け・プレビュー・リンク追従
+- Application / Project settings
+- About dialog / third-party notices
 
 一方で、まだ一般利用向けの安定版ではありません。
 
 特に Glossary / project database の schema は今後も変更される可能性があります。重要な原稿や構造化データを扱う場合は、作業ディレクトリ全体を Git や通常のバックアップで管理してください。
+
+v0.90.0 までに予定している作業は、後述の「[ロードマップ](#ロードマップ)」を参照してください。実装済みの機能ではありません。
 
 ---
 
@@ -142,41 +159,63 @@ Pergamum は現在も開発中ですが、Markdown 原稿を安全に扱うた�
 | -- | -- |
 | Project | `.pergamum` project file を作成・開く |
 | Project | Project root / project metadata を管理する |
+| Project | Project の表示名を変更する（logical rename） |
 | Project | Project write lock により同時書き込みを防ぐ |
 | Project | 他プロセスが開いている project を read-only で開く |
-| Project | stale project write lock を安全に回収する |
+| Project | stale な write lock / recovery lock を安全に回収する |
 | Project | Project を閉じる |
+| File Explorer | プロジェクト内のフォルダ・ファイルを階層表示する |
+| File Explorer | フォルダの展開・折りたたみ、ファイルを開く、再表示（refresh） |
+| File Explorer | 外部で追加・削除・変更されたファイルを検知する |
+| File Explorer | ファイル・フォルダの作成・リネーム・削除（確認付き） |
+| File Explorer | ファイル・フォルダの移動（コンテキストメニュー / 切り取り・貼り付け / ドラッグ&ドロップ、確認付き） |
+| File Explorer | 複数選択、アクティブ文書の reveal |
+| Import | 文字コードを指定して `.txt` を Markdown として一括取り込みする |
 | Editor | Markdown 本文を編集する |
-| Editor | 複数の文書をタブで開く |
-| Editor | 開いたタブを閉じる |
-| Editor | 外部 Markdown ファイルを開く |
-| Editor | 改行コードを保ったまま保存する |
+| Editor | 複数の文書をタブで開く / タブを閉じる / 外部 Markdown を開く |
+| Editor | タブごとに editor state を保持する |
+| Editor | 改行コードを保ったまま保存する / 改行コードの分布を診断する |
 | Editor | Atomic Markdown save pipeline で保存する |
-| Editor | 文字数カウントを表示する |
+| Editor | 文字数を Status Bar に表示する（Unicode code point 基準） |
 | Editor | 段落字下げの一括挿入・削除を行う |
+| Editor | Markdown の undo 履歴の深さを設定する |
+| Search / Replace | 開いている文書内を検索・置換する（Active Document Find / Replace） |
+| Search / Replace | 大文字小文字・単語単位・正規表現などのオプション、全置換 |
+| Search / Replace | Glossary を使った検索モード / 近傍検索 |
+| Search / Replace | Project 全体をテキスト検索する（Search pane） |
+| Search / Replace | Project 全体で置換する |
 | Preview | Markdown Preview を表示する |
 | Preview | Glossary match を Preview 上に装飾する |
+| Preview | project-local な画像リンクをプレビュー表示する |
+| Assets | クリップボードの画像を貼り付け、assets に保存して Markdown リンクを挿入する |
+| Assets | 壊れた画像リンクを診断（lint 警告）する |
+| Assets | Markdown / 画像ファイルの移動時に画像リンク・参照を追従更新する |
 | Glossary | Glossary entry を作成・編集・削除する |
-| Glossary | Glossary form を管理する |
+| Glossary | Glossary form を管理する（canonical / alias / variant、境界ポリシー） |
 | Glossary | Glossary match の Hover Card を表示する |
 | Glossary | Glossary entry から本文中の使用箇所へ移動する |
-| Glossary | Glossary navigator で entry を探す |
-| Glossary | Glossary occurrences tab で使用箇所を確認する |
+| Glossary | Glossary navigator で entry を探す / occurrences tab で使用箇所を確認する |
+| Glossary | primary tag を視覚的に強調する |
+| Glossary | Ctrl+Space で Glossary Completion を呼び出す |
+| Document Map | 文書全体を俯瞰表示し、クリック / viewport lens で移動する |
+| Document Map | 表示するタグや描画方法を設定する、大きな文書をページングして描画する |
+| Document Metrics | 文字数・行数・段落数・会話文比率などの指標を表示する |
 | Command | Command Palette から操作を検索・実行する |
 | Command | Application menu / shortcut / context menu から操作する |
-| Settings | Settings Page で設定を確認・変更する |
-| Session | 前回の project / tabs / window state を復元する |
+| Settings | Settings Page で application / project 設定を確認・変更する |
+| Settings | project 設定で application 設定を上書きする、設定を検索・分類表示する |
+| Settings | 再起動が必要な設定は確認のうえ安全に再起動する |
+| Session | 前回の project / tabs / active document / window state を復元する |
+| Session | Session の読み込みが異常に遅い場合は安全に time out する |
 | Recovery | 未保存本文の Recovery payload を保持する |
 | Recovery | 前回起動時の未保存本文を復元候補として表示する |
-| Recovery | Recovery candidate を `.recovered.md` として復元する |
-| Recovery | Recovery candidate を明示的に破棄する |
+| Recovery | Recovery candidate を `.recovered.md` として復元する / 明示的に破棄する |
 | Recovery | 同じ Recovery candidate set の repeated auto-show を抑制する |
-| Notification | 軽い情報通知を NotificationToast で表示する |
-| Workbench | Navigator / Editor / Preview のペインを扱う |
-| Workbench | Sidebar を折りたたむ |
+| Notification | 正常系の情報通知を NotificationToast で表示する |
+| Workbench | Navigator / Editor / Preview のペインを扱う、Sidebar を折りたたむ、タブを並べ替える |
 | Utility Window | 支援ウィンドウを開く |
-| Debug | Debug mode JSONL log を出力する |
-| Debug | Debug Log tab でログを確認する |
+| Debug | Debug mode JSONL log を出力する / Debug Log tab で確認する |
+| About | About dialog を表示し、third-party notices への導線を出す |
 | Persistence | SQLite に構造化プロジェクトデータを保存する |
 | Distribution | Windows installer / `.pergamum` file association の基盤を持つ |
 
@@ -261,6 +300,36 @@ Recovery row は、以下の場合にのみ削除されます。
 ```
 
 Pergamum は、Recovery candidate を勝手に捨てません。
+
+---
+
+## 保存モデル
+
+Pergamum は、データの性質ごとに保存形式を分けています。
+
+| 保存先 | 形式 | 役割 |
+| -- | -- | -- |
+| Markdown ファイル | UTF-8 Markdown | 原稿本文の正本。人間が読める通常のテキストファイル |
+| `.pergamum` project file | SQLite database | 人物・用語・地名・組織・概念など、構造化された作品情報の正本 |
+| `pergamum.json` | JSON | プロジェクト設定（project scope の settings） |
+| Application data | JSON など | Session state（前回の作業環境） |
+| Recovery Store | application data 側の作業コピー | 未保存本文を失わないための recovery data。本文の正本ではない |
+
+本文をデータベースの都合に合わせることはせず、構造化情報を Markdown に押し込むこともしません。それぞれを一番扱いやすい場所に置きます。
+
+### 信頼性 / 安全性
+
+Pergamum は、保存と復旧の安全性を軽く扱いません。
+
+| 仕組み | 内容 |
+| -- | -- |
+| Atomic Markdown save | 本文の保存は、書き込み途中の状態を残さない atomic な pipeline で行う |
+| Project write lock | 同じ project を複数プロセスが同時に書き換えないようにする。他プロセスが開いている場合は read-only で開く |
+| Stale lock recovery | 異常終了などで残った write lock / recovery lock を安全に回収する |
+| Session restore | 前回の project / tabs / active document / window state を復元する。読み込みに失敗しても既存の session data を壊さない |
+| Document Recovery | 未保存本文を application data 側に保持し、次回起動時に復元候補として提示する。元ファイルを上書きせず `.recovered.md` として開く |
+
+Pergamum は、作者が明示的に破棄するまで、未保存の原稿を勝手に捨てません。
 
 ---
 
@@ -407,16 +476,15 @@ Pergamum は現在も開発中です。
 
 | 分類 | 現在の制限 |
 | -- | -- |
-| File format | 開ける原稿ファイルは `*.md` のみです |
-| File format | `*.txt` やその他のテキストファイルは未対応です |
-| Encoding | UTF-8 のみ対応しています |
-| Encoding | Shift_JIS / EUC-JP / UTF-16 など、UTF-8 以外の文字コードは未対応です |
-| Project database | Glossary / project database の schema は開発中です |
-| Project database | 今後の変更で破壊的変更が入る可能性があります |
+| File format | 直接開いて編集できる原稿ファイルは `*.md` のみです |
+| File format | 生 `.txt` を直接開いて編集することは未対応です（文字コードを指定した Markdown への一括取り込みには対応。直接編集は v0.90.0 で対応予定） |
+| Encoding | 編集対象の本文は UTF-8 のみ対応しています（取り込み時の文字コード変換は Import 機能で対応） |
+| Project database | Glossary / project database の schema は開発中で、今後の変更で破壊的変更が入る可能性があります |
 | Compatibility | 現時点では、永続的な DB 互換性を保証しません |
 | Recovery | Recovery は未保存本文の救済用であり、履歴管理や Git の代替ではありません |
-| Search | 作品全体を歩くための高度な検索・一覧機能は今後の開発対象です |
-| Output | 投稿・印刷・電子書籍向けの本格的な出力機能は未実装です |
+| Search | Project 全体のテキスト検索・置換は利用できます。FTS / outline 検索など高度な検索は今後の開発対象です |
+| Output | プロジェクト全体の TXT エクスポートは v0.90.0 で対応予定です。PDF / DOCX / EPUB / 縦書きなど本格的な出力は未実装です |
+| Theme | ダークテーマは v0.90.0 で対応予定です（現在はライトテーマのみ） |
 | Distribution | 配布基盤は整備中ですが、安定版リリースではありません |
 
 特に `.pergamum` は、現在の Pergamum における構造化データの正本です。
@@ -521,15 +589,17 @@ Pergamum では、大きな設計判断を ADR（Architecture Decision Record）
 
 そのため、「何を採用したか」だけでなく、**何を検討し、なぜ採用しなかったのか**もできるだけ記録しています。
 
-現在の主要な ADR:
+ADR の一覧と各 Status は [`docs/adr/README.md`](./docs/adr/README.md) を参照してください。
+
+主要な ADR:
 
 - [ADR-0001: Project Persistence Architecture](./docs/adr/0001-project-persistence-architecture.md)
 - [ADR-0002: Structured Project Data and Glossary Model](./docs/adr/0002-structured-project-data-and-glossary-model.md)
 - [ADR-0003: UI Interaction Architecture](./docs/adr/0003-ui-interaction-architecture.md)
 - [ADR-0004: Manuscript Non-Destructive Policy](./docs/adr/0004-manuscript-non-destructive-policy.md)
-- [ADR-0005: Command Domain Taxonomy](./docs/adr/0005-command-domain-taxonomy.md)
-- [ADR-0008: Project File / Root / Recovery Layout](./docs/adr/0008-project-file-root-recovery-layout.md)
-- [ADR-0009: Recovery Store Architecture](./docs/adr/0009-recovery-store-architecture.md)
+- [ADR-0006: Durable State Categories and Settings Architecture](./docs/adr/0006-settings-architecture.ja.md)
+- [ADR-0008: Project File, Project Root, and Project-Local Recovery Layout](./docs/adr/0008-project_file-project_root-and-project_local-recovery-layout.ja.md)
+- [ADR-0009: Working Copy Persistence and Recovery Model](./docs/adr/0009-working-copy-persistence-and-recovery-model.ja.md)
 
 実装より先に設計を決めることもあります。
 
@@ -543,38 +613,55 @@ Pergamum の開発ロードマップは以下に整理しています。
 
 - [Pergamum ロードマップ](./docs/roadmap.md)
 
-実装スコープの正本は GitHub Issue です。
+実装スコープの正本は GitHub Issue です。ロードマップは、方向性・優先順位・保留事項を見失わないための地図として扱います。
 
-ロードマップは、方向性・優先順位・保留事項を見失わないための地図として扱います。
-
-現在は Phase 6「閉じても戻れるようにする」までを完了し、次の段階に進む準備をしています。
-
-大きな流れは以下です。
+これまでの大きな流れは以下です。
 
 ```text
-Phase 4:
-  迷わず触れるようにする
-
-Phase 5:
-  触りすぎないようにする
-
-Phase 6:
-  閉じても戻れるようにする
-
-Phase 7:
-  プロジェクトを歩けるようにする
-
-Phase 8:
-  他人の手に渡せるようにする
-
-v0.90.0:
-  毎日開けるようにする
+Phase 4 (v0.50.0):  迷わず触れるようにする        … 完了
+Phase 5 (v0.51.x):  触りすぎないようにする        … 完了
+Phase 6 (v0.60.x):  閉じても戻れるようにする      … 完了
+Phase 7 (v0.70.x):  プロジェクトを歩けるようにする  … 完了
+v0.80.0:            小説 IDE としての中核機能が揃った段階（現在地）
 ```
 
-各 Phase の詳細は `roadmap.md` を参照してください。
+v0.90.0 までは、合意済みの次の順序で進めます。これらは実装済みではなく **予定** です。
+
+```text
+1.  ショートカットキー対応
+2.  TAB 関連の手入れ
+3.  生 TXT 形式サポート
+4.  ルビ・傍点対応
+5.  Markdown ツールバー
+6.  プレビュー機能全般の手入れ
+7.  プロジェクト全体の TXT エクスポート
+8.  設定値の JSON エクスポート
+9.  ダークテーマ
+10. ポリッシュ
+```
+
+各項目の詳細・非スコープ・受け入れ条件は個別の GitHub Issue で定義します。
+
+`v1.x` 以降の候補（DB migration、Git 連携、Plugin API、DOCX / EPUB / PDF・縦書き出力、任意 CSS テーマ、共同編集・クラウド同期など）は `docs/roadmap.md` を参照してください。
+
+---
+
+## Third-party notices
+
+Pergamum は、いくつかのサードパーティ製アセット（アイコン、効果音）を同梱しています。
+
+各アセットの著作権表示とライセンス情報は [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) にまとめています。
+
+- Feather icons (MIT)
+- Ionicons (MIT)
+- Codicons (CC BY 4.0)
+- SVG Repo icons（アイコンごとに個別ライセンス）
+- Typewriter sounds（OpenGameArt, CC0）
 
 ---
 
 ## ライセンス
 
-Pergamum は MIT ライセンスで公開しています。
+Pergamum は MIT ライセンスで公開しているフリーソフトウェアです。
+
+同梱しているサードパーティ製アセットのライセンスは [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) を参照してください。
