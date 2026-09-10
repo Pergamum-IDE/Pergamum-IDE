@@ -17,6 +17,7 @@ import type {
   ExpectedLineEnding,
   LineEndingMarkerGlyph,
   NewFileLineEnding,
+  SelectionHighlightMode,
   WorkbenchSoundSettings
 } from "../shared/settings";
 import type { GlossaryTag } from "../shared/glossary";
@@ -44,7 +45,6 @@ import {
 } from "./MarkdownEditor";
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import {
-  DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
   activeDocumentReplacementTemplateError,
   buildActiveDocumentReplaceAllChanges,
   buildActiveDocumentReplacement,
@@ -65,7 +65,15 @@ import {
 } from "./find/activeGlossaryFind";
 import type { ActiveGlossaryNearbySettings } from "./find/activeGlossaryNearbySearch";
 import type { ActiveFindHighlightSpec } from "./find/activeFindHighlightExtension";
+import type { ActiveFindGutterMarkerSpec } from "./find/activeFindGutterMarkerExtension";
 import type { ActiveFindPanelMode } from "./find/activeFindKeymapExtension";
+import {
+  getActiveFindDocumentState,
+  getActiveFindUiState,
+  setActiveFindDocumentState,
+  setActiveFindUiState,
+  type ActiveFindDocumentState
+} from "./find/activeFindSessionStore";
 import type { MarkdownImageAttachmentPasteHandler } from "./markdownImageAttachmentPasteExtension";
 import type { MarkdownImageLinkDiagnosticReason } from "../shared/api";
 import { formatMarkdownImageLinkDiagnosticMessage } from "./markdownImageLinkDiagnosticMessage";
@@ -420,6 +428,10 @@ interface EditorSurfaceProps {
    * markdownEditorCodeMirrorSetup.ts).
    */
   undoHistoryMinDepth: number;
+  /** `editor.selectionHighlightMode` (#425), active Markdown editor only. */
+  selectionHighlightMode: SelectionHighlightMode;
+  /** `editor.findGutterMarkers` (#425), active Markdown editor only. */
+  findGutterMarkers: boolean;
   /**
    * `editor.whitespace.*` (#256) — display-only whitespace marker
    * toggles, passed straight through to the Markdown editor. Never
@@ -560,6 +572,8 @@ export function EditorSurface({
   expectedLineEnding,
   markerGlyph,
   undoHistoryMinDepth,
+  selectionHighlightMode,
+  findGutterMarkers,
   whitespaceSettings,
   glossaryNearbySearchSettings,
   projectRootPath,
@@ -620,6 +634,8 @@ export function EditorSurface({
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
           undoHistoryMinDepth={undoHistoryMinDepth}
+          selectionHighlightMode={selectionHighlightMode}
+          findGutterMarkers={findGutterMarkers}
           whitespaceSettings={whitespaceSettings}
           glossaryNearbySearchSettings={glossaryNearbySearchSettings}
           projectRootPath={projectRootPath}
@@ -706,6 +722,8 @@ interface MarkdownEditorSurfaceProps {
   markerGlyph: LineEndingMarkerGlyph;
   /** #394 Step 1: see EditorSurfaceProps's own doc comment. */
   undoHistoryMinDepth: number;
+  selectionHighlightMode: SelectionHighlightMode;
+  findGutterMarkers: boolean;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
@@ -787,6 +805,8 @@ function MarkdownEditorSurface({
   expectedLineEnding,
   markerGlyph,
   undoHistoryMinDepth,
+  selectionHighlightMode,
+  findGutterMarkers,
   whitespaceSettings,
   glossaryNearbySearchSettings,
   projectRootPath,
@@ -915,28 +935,41 @@ function MarkdownEditorSurface({
   // through `extraFocusRequest`, and "マークする" highlights ride the
   // `activeFindHighlight` prop. No App.tsx wiring, no project-wide Search.
   // -------------------------------------------------------------------------
-  const [findOpen, setFindOpen] = useState(false);
-  const [findMode, setFindMode] = useState<ActiveFindPanelMode>("search");
-  const [findQuery, setFindQuery] = useState("");
-  const [findReplaceText, setFindReplaceText] = useState("");
+  // #425 follow-up: seed from the process-lived store (activeFindSessionStore).
+  // `open` / `mode` are surface-global (survive tab switch AND a Settings-tab
+  // round trip that unmounts this component). Everything else is per
+  // `documentKey`. Read once here; the mirror effects below keep the store in
+  // sync, and the render-phase swap block re-loads on a tab switch.
+  const initialFindUi = useRef(getActiveFindUiState()).current;
+  const initialFindDoc = useRef(
+    getActiveFindDocumentState(documentKey)
+  ).current;
+  const [findOpen, setFindOpen] = useState(initialFindUi.open);
+  const [findMode, setFindMode] = useState<ActiveFindPanelMode>(
+    initialFindUi.mode
+  );
+  const [findQuery, setFindQuery] = useState(initialFindDoc.query);
+  const [findReplaceText, setFindReplaceText] = useState(
+    initialFindDoc.replaceText
+  );
   const [findOptions, setFindOptions] = useState<ActiveDocumentFindOptions>(
-    DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS
+    initialFindDoc.options
   );
   // #424 Slice 6: text vs Glossary Atom search. `search` selects multiple atoms
   // (`findSearchGlossaryAtomIds` + `findGlossaryRelation`), `replace` selects
   // one (`findReplaceGlossaryAtomId`); the two selections are kept SEPARATE so
   // switching tabs never silently reuses the other's picks.
   const [findQueryKind, setFindQueryKind] = useState<"text" | "glossary">(
-    "text"
+    initialFindDoc.queryKind
   );
   const [findGlossaryRelation, setFindGlossaryRelation] =
-    useState<ActiveGlossarySearchRelation>("any");
+    useState<ActiveGlossarySearchRelation>(initialFindDoc.glossaryRelation);
   const [findSearchGlossaryAtomIds, setFindSearchGlossaryAtomIds] = useState<
     string[]
-  >([]);
+  >(() => [...initialFindDoc.searchGlossaryAtomIds]);
   const [findReplaceGlossaryAtomId, setFindReplaceGlossaryAtomId] = useState<
     string | null
-  >(null);
+  >(initialFindDoc.replaceGlossaryAtomId);
   // #424 Slice 3: the active editor's replace-transaction controller, captured
   // by wrapping the bubble-up callback so replace-current can dispatch a real
   // `input.replace` transaction without any App.tsx wiring. `ready` mirrors it
@@ -954,7 +987,7 @@ function MarkdownEditorSurface({
   );
   // #424 Slice 2: "マークする" defaults ON — a Find panel that highlights
   // nothing reads as broken. The toggle lets the user quiet it.
-  const [findMarkAll, setFindMarkAll] = useState(true);
+  const [findMarkAll, setFindMarkAll] = useState(initialFindDoc.markAll);
   const [findActiveIndex, setFindActiveIndex] = useState<number | null>(null);
   const [findFocusToken, setFindFocusToken] = useState(0);
   const [findExtraSelection, setFindExtraSelection] = useState<{
@@ -970,6 +1003,98 @@ function MarkdownEditorSurface({
   // editing the document under an open panel updates the count without
   // yanking the viewport, but changing a search input DOES re-seed.
   const findSeededInputKeyRef = useRef<string | null>(null);
+
+  // #425 follow-up: which `documentKey` the search-condition state above
+  // currently belongs to. Diverges from `documentKey` for exactly one render
+  // on a tab switch, when the render-phase block below swaps the state over.
+  const [findStateDocumentKey, setFindStateDocumentKey] = useState(documentKey);
+
+  const currentFindDocumentState: ActiveFindDocumentState = {
+    query: findQuery,
+    replaceText: findReplaceText,
+    queryKind: findQueryKind,
+    options: findOptions,
+    glossaryRelation: findGlossaryRelation,
+    searchGlossaryAtomIds: findSearchGlossaryAtomIds,
+    replaceGlossaryAtomId: findReplaceGlossaryAtomId,
+    markAll: findMarkAll
+  };
+
+  // A genuine Markdown tab switch: adopt the incoming document's saved search
+  // conditions (or the defaults) SYNCHRONOUSLY during render — the same pattern
+  // `useDebouncedPreviewContent` above uses for `documentKey` changes, so match
+  // recomputation never flashes the previous document's query even for a frame.
+  // The panel's open/mode is untouched (that is surface-global). Only the
+  // derived state (current-match index, pending selection) is dropped.
+  if (findStateDocumentKey !== documentKey) {
+    setFindStateDocumentKey(documentKey);
+    const incoming = getActiveFindDocumentState(documentKey);
+    setFindQuery(incoming.query);
+    setFindReplaceText(incoming.replaceText);
+    setFindQueryKind(incoming.queryKind);
+    setFindOptions(incoming.options);
+    setFindGlossaryRelation(incoming.glossaryRelation);
+    setFindSearchGlossaryAtomIds([...incoming.searchGlossaryAtomIds]);
+    setFindReplaceGlossaryAtomId(incoming.replaceGlossaryAtomId);
+    setFindMarkAll(incoming.markAll);
+    setFindActiveIndex(null);
+    setFindExtraSelection(null);
+  }
+
+  // #425 follow-up: mirror the current search conditions into the store under
+  // the document they belong to (`findStateDocumentKey`, NOT `documentKey` —
+  // during the one-render swap gap they differ, and writing under the new key
+  // then would clobber the incoming document's saved state). Document-derived
+  // state (matches / current index / decorations / gutter markers) is NOT
+  // persisted — it is recomputed for the active document.
+  useEffect(() => {
+    setActiveFindDocumentState(findStateDocumentKey, {
+      query: findQuery,
+      replaceText: findReplaceText,
+      queryKind: findQueryKind,
+      options: findOptions,
+      glossaryRelation: findGlossaryRelation,
+      searchGlossaryAtomIds: findSearchGlossaryAtomIds,
+      replaceGlossaryAtomId: findReplaceGlossaryAtomId,
+      markAll: findMarkAll
+    });
+  }, [
+    findStateDocumentKey,
+    findQuery,
+    findReplaceText,
+    findQueryKind,
+    findOptions,
+    findGlossaryRelation,
+    findSearchGlossaryAtomIds,
+    findReplaceGlossaryAtomId,
+    findMarkAll
+  ]);
+
+  // Surface-global UI state (panel open + Find/Replace mode) — survives a tab
+  // switch and this component's own unmount (Settings-tab round trip).
+  useEffect(() => {
+    setActiveFindUiState({ open: findOpen, mode: findMode });
+  }, [findOpen, findMode]);
+
+  // Unmount safety net: a change committed the same tick as an unmount might
+  // not flush the mirror effect first. Keep a live snapshot (updated in an
+  // effect, never during render) and persist it on the way out so a
+  // Settings-tab round trip never drops the last keystroke.
+  const findStateDocumentKeyRef = useRef(findStateDocumentKey);
+  const currentFindDocumentStateRef = useRef(currentFindDocumentState);
+  useEffect(() => {
+    findStateDocumentKeyRef.current = findStateDocumentKey;
+    currentFindDocumentStateRef.current = currentFindDocumentState;
+  });
+  useEffect(
+    () => () => {
+      setActiveFindDocumentState(
+        findStateDocumentKeyRef.current,
+        currentFindDocumentStateRef.current
+      );
+    },
+    []
+  );
 
   // #424 Slice 6: the selected glossary atom ids for the ACTIVE tab, and the
   // shared-matcher terms they resolve to (raw value + each atom's matchFlags).
@@ -1148,24 +1273,30 @@ function MarkdownEditorSurface({
     };
   }, [findOpen, findMarkAll, findMatchCount, findMatches, findActiveIndex]);
 
-  // A genuine tab switch closes the panel and resets its inputs (no
-  // per-document Find state yet).
-  useEffect(() => {
-    setFindOpen(false);
-    setFindMode("search");
-    setFindQuery("");
-    setFindReplaceText("");
-    setFindOptions(DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS);
-    setFindActiveIndex(null);
-    setFindExtraSelection(null);
-    setFindQueryKind("text");
-    setFindGlossaryRelation("any");
-    setFindSearchGlossaryAtomIds([]);
-    setFindReplaceGlossaryAtomId(null);
-  }, [documentKey]);
+  const activeFindGutterMarkers =
+    useMemo<ActiveFindGutterMarkerSpec | null>(() => {
+      if (!findOpen || findMatchCount === 0) {
+        return null;
+      }
+
+      return {
+        matches: findMatches.map((match) => ({
+          from: match.startOffset,
+          to: match.endOffset
+        }))
+      };
+    }, [findOpen, findMatchCount, findMatches]);
+
+  // The actual tab-switch handling — adopting the incoming document's search
+  // conditions and dropping the derived state (current-match index, pending
+  // selection) — happens in the render-phase swap block above; `open` / `mode`
+  // stay surface-global.
 
   const activeFindConfig = useMemo<MarkdownEditorActiveFindConfig>(
     () => ({
+      // #425 follow-up: idempotent open. `setFindMode(mode)` makes Ctrl+F force
+      // Search and Ctrl+H force Replace even when the panel is already open;
+      // `findFocusToken` re-focuses the query input.
       requestOpen: (mode, initialQuery) => {
         setFindOpen(true);
         setFindMode(mode);
@@ -1663,6 +1794,7 @@ function MarkdownEditorSurface({
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}
           activeFindHighlight={activeFindHighlight}
+          activeFindGutterMarkers={activeFindGutterMarkers}
           onParagraphIndentControllerChange={
             handleParagraphIndentControllerChange
           }
@@ -1691,6 +1823,8 @@ function MarkdownEditorSurface({
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
           undoHistoryMinDepth={undoHistoryMinDepth}
+          selectionHighlightMode={selectionHighlightMode}
+          findGutterMarkers={findGutterMarkers}
           whitespaceSettings={whitespaceSettings}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}

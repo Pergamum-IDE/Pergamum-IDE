@@ -429,6 +429,14 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     "editor.undoHistoryMinDepth",
     editorValue?.undoHistoryMinDepth
   ).value;
+  const selectionHighlightMode = resolveCatalogValue(
+    "editor.selectionHighlightMode",
+    editorValue?.selectionHighlightMode
+  ).value;
+  const findGutterMarkers = resolveCatalogValue(
+    "editor.findGutterMarkers",
+    editorValue?.findGutterMarkers
+  ).value;
 
   if (
     editorValue === undefined ||
@@ -440,7 +448,9 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
       whitespace,
       paragraphIndent,
       characterCount,
-      undoHistoryMinDepth
+      undoHistoryMinDepth,
+      selectionHighlightMode,
+      findGutterMarkers
     };
   }
 
@@ -450,7 +460,9 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     whitespace,
     paragraphIndent,
     characterCount,
-    undoHistoryMinDepth
+    undoHistoryMinDepth,
+    selectionHighlightMode,
+    findGutterMarkers
   };
 }
 
@@ -1335,6 +1347,8 @@ function parseEditorSettingsForWrite(
   const hasParagraphIndent = keys.includes("paragraphIndent");
   const hasCharacterCount = keys.includes("characterCount");
   const hasUndoHistoryMinDepth = keys.includes("undoHistoryMinDepth");
+  const hasSelectionHighlightMode = keys.includes("selectionHighlightMode");
+  const hasFindGutterMarkers = keys.includes("findGutterMarkers");
 
   if (
     !hasLineEnding ||
@@ -1342,7 +1356,9 @@ function parseEditorSettingsForWrite(
     !hasParagraphIndent ||
     !hasCharacterCount ||
     !hasUndoHistoryMinDepth ||
-    keys.length !== (hasFontFamily ? 6 : 5)
+    !hasSelectionHighlightMode ||
+    !hasFindGutterMarkers ||
+    keys.length !== (hasFontFamily ? 8 : 7)
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -1362,12 +1378,26 @@ function parseEditorSettingsForWrite(
     "editor.undoHistoryMinDepth",
     value.undoHistoryMinDepth
   );
+  const selectionHighlightModeResolution = resolveCatalogValue(
+    "editor.selectionHighlightMode",
+    value.selectionHighlightMode
+  );
+  const findGutterMarkersResolution = resolveCatalogValue(
+    "editor.findGutterMarkers",
+    value.findGutterMarkers
+  );
 
-  if (!undoHistoryMinDepthResolution.ok) {
+  if (
+    !undoHistoryMinDepthResolution.ok ||
+    !selectionHighlightModeResolution.ok ||
+    !findGutterMarkersResolution.ok
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   const undoHistoryMinDepth = undoHistoryMinDepthResolution.value;
+  const selectionHighlightMode = selectionHighlightModeResolution.value;
+  const findGutterMarkers = findGutterMarkersResolution.value;
 
   if (!hasFontFamily) {
     return {
@@ -1375,7 +1405,9 @@ function parseEditorSettingsForWrite(
       whitespace,
       paragraphIndent,
       characterCount,
-      undoHistoryMinDepth
+      undoHistoryMinDepth,
+      selectionHighlightMode,
+      findGutterMarkers
     };
   }
 
@@ -1392,7 +1424,9 @@ function parseEditorSettingsForWrite(
     whitespace,
     paragraphIndent,
     characterCount,
-    undoHistoryMinDepth
+    undoHistoryMinDepth,
+    selectionHighlightMode,
+    findGutterMarkers
   };
 }
 

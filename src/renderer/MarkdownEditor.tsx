@@ -23,6 +23,7 @@ import type {
   ExpectedLineEnding,
   LineEndingMarkerGlyph,
   NewFileLineEnding,
+  SelectionHighlightMode,
   WorkbenchSoundSettings
 } from "../shared/settings";
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
@@ -43,7 +44,12 @@ import {
   type EditorViewState
 } from "./editorViewState";
 import type { MarkdownEditorGlossaryCompletionConfig } from "./glossaryCompletionExtension";
-import type { MarkdownEditorActiveFindConfig } from "./find/activeFindKeymapExtension";
+import {
+  nextActiveFindEditorInstanceId,
+  publishCurrentActiveFindConfig,
+  unpublishCurrentActiveFindConfig,
+  type MarkdownEditorActiveFindConfig
+} from "./find/activeFindKeymapExtension";
 import {
   activeFindHighlightField,
   clearActiveFindHighlightsEffect,
@@ -51,10 +57,22 @@ import {
   type ActiveFindHighlightSpec
 } from "./find/activeFindHighlightExtension";
 import {
+  activeFindGutterMarkerField,
+  activeFindGutterMarkerCompartment,
+  clearActiveFindGutterMarkersEffect,
+  createActiveFindGutterMarkerExtension,
+  setActiveFindGutterMarkersEffect,
+  type ActiveFindGutterMarkerSpec
+} from "./find/activeFindGutterMarkerExtension";
+import {
   createMarkdownEditorDocumentState,
   readOnlyCompartmentContent,
   type MarkdownEditorDocumentState
 } from "./markdownEditorDocumentState";
+import {
+  createSelectionHighlightExtension,
+  selectionHighlightCompartment
+} from "./selectionHighlightExtension";
 import {
   clearPendingImageAttachmentPosition,
   resolvePendingImageAttachmentPosition,
@@ -144,6 +162,18 @@ interface MarkdownEditorProps {
    */
   undoHistoryMinDepth?: number;
   /**
+   * `editor.selectionHighlightMode` (#425) controls only passive selection
+   * match highlighting. Active Find / Replace highlights are driven by
+   * `activeFindHighlight` below and remain independent.
+   */
+  selectionHighlightMode?: SelectionHighlightMode;
+  /**
+   * `editor.findGutterMarkers` (#425): whether Active Find / Replace match
+   * lines can show gutter markers. This is independent from passive selection
+   * highlighting and from the Find panel's mark-all text highlight toggle.
+   */
+  findGutterMarkers?: boolean;
+  /**
    * `editor.whitespace.*` (#256) — which whitespace categories to paint
    * display-only markers for (ideographic space, ASCII space, tab, other
    * Unicode `Zs`). Independent of #252's line-ending marker. Toggling any
@@ -229,8 +259,10 @@ interface MarkdownEditorProps {
    * #424 Slice 1: Ctrl+F opens the Pergamum active-document Find panel.
    * `undefined` / `null` (the default; the Glossary description field never
    * passes it) leaves Ctrl+F inert. Only EditorSurface's MarkdownEditorSurface
-   * supplies it. Read live via a ref, so a value change is picked up without
-   * rebuilding the EditorView.
+   * supplies it. #425 follow-up: while this component is mounted with a
+   * config, it publishes it into the module-level current-Active-Find slot the
+   * keymap reads (see find/activeFindKeymapExtension.ts) — so a cached
+   * EditorState restored after a remount still reaches the current surface.
    */
   activeFind?: MarkdownEditorActiveFindConfig | null;
   /**
@@ -254,6 +286,12 @@ interface MarkdownEditorProps {
    * buffer's coordinates.
    */
   activeFindHighlight?: ActiveFindHighlightSpec | null;
+  /**
+   * #425: line-level gutter markers for active-document Find / Replace
+   * matches. `null` clears the marker set. The boolean setting gate is the
+   * separate `findGutterMarkers` prop above.
+   */
+  activeFindGutterMarkers?: ActiveFindGutterMarkerSpec | null;
   /**
    * #407 B3: optional foundation for clipboard image paste. When omitted,
    * the CodeMirror paste handler deliberately returns false before calling
@@ -456,6 +494,8 @@ export function MarkdownEditor({
   expectedLineEnding = "lf",
   markerGlyph = "⏎",
   undoHistoryMinDepth = 100,
+  selectionHighlightMode = "default",
+  findGutterMarkers = false,
   whitespaceSettings,
   pendingSelection,
   onPendingSelectionApplied,
@@ -478,6 +518,7 @@ export function MarkdownEditor({
   onExtraPendingSelectionApplied,
   extraFocusRequest,
   activeFindHighlight,
+  activeFindGutterMarkers,
   onImageAttachmentPaste,
   onImageAttachmentPositionControllerChange,
   imageAttachmentSourceDocumentId,
@@ -518,11 +559,15 @@ export function MarkdownEditor({
   const glossaryCompletionRef = useRef<MarkdownEditorGlossaryCompletionConfig | null>(
     glossaryCompletion ?? null
   );
-  // #424: read fresh by the Ctrl+F keydown handler baked into the document's
-  // EditorState — a prop change is honored without recreating the view.
-  const activeFindRef = useRef<MarkdownEditorActiveFindConfig | null>(
-    activeFind ?? null
-  );
+  // #424 / #425 follow-up: the Ctrl+F / Ctrl+H keymap routes through a
+  // module-level current-config slot (see find/activeFindKeymapExtension.ts),
+  // NOT a mount-local ref — a cached EditorState (and its baked keymap) can
+  // outlive this component. The effect below publishes this editor's
+  // `activeFind` prop into that slot while mounted. The opaque id is only used
+  // for the `activeFind.*` debug logs.
+  const activeFindEditorInstanceId = useRef(
+    nextActiveFindEditorInstanceId()
+  ).current;
   const imageAttachmentPasteHandlerRef =
     useRef<MarkdownImageAttachmentPasteHandler | null>(
       onImageAttachmentPaste ?? null
@@ -588,6 +633,9 @@ export function MarkdownEditor({
   const whitespaceSettingsRef = useRef<ApplicationEditorWhitespaceSettings>(
     whitespaceSettings ?? noWhitespaceRendering
   );
+  const selectionHighlightModeRef =
+    useRef<SelectionHighlightMode>(selectionHighlightMode);
+  const findGutterMarkersRef = useRef(findGutterMarkers);
   // #387: points at whichever document is CURRENTLY active's own
   // `lineEndingField` instance (each document gets its own — see
   // markdownEditorDocumentState.ts), kept fresh here so the
@@ -751,8 +799,15 @@ export function MarkdownEditor({
       markerGlyphRef,
       whitespaceCompartment,
       whitespaceSettingsRef,
+      selectionHighlightCompartment,
+      selectionHighlightModeRef,
+      findGutterMarkerCompartment: activeFindGutterMarkerCompartment,
+      findGutterMarkersRef,
       glossaryCompletionRef,
-      activeFindRef,
+      activeFindDiagnostics: {
+        editorInstanceId: activeFindEditorInstanceId,
+        expectActiveFindSurface: (activeFind ?? null) !== null
+      },
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
       // #411 / #412: only add the broken-image-link lint extension when the
@@ -798,6 +853,12 @@ export function MarkdownEditor({
       ),
       whitespaceCompartment.reconfigure(
         whitespaceMarkerLayer(() => whitespaceSettingsRef.current)
+      ),
+      selectionHighlightCompartment.reconfigure(
+        createSelectionHighlightExtension(selectionHighlightModeRef.current)
+      ),
+      activeFindGutterMarkerCompartment.reconfigure(
+        createActiveFindGutterMarkerExtension(findGutterMarkersRef.current)
       )
     ];
   }
@@ -865,9 +926,24 @@ export function MarkdownEditor({
     glossaryCompletionRef.current = glossaryCompletion ?? null;
   }, [glossaryCompletion]);
 
+  // #425 follow-up: publish this editor's `activeFind` config into the
+  // module-level current-Active-Find slot the Ctrl+F / Ctrl+H keymap reads.
+  // Only the one MarkdownEditor that actually gets a config (EditorSurface's
+  // MarkdownEditorSurface) publishes; the Glossary description field passes
+  // none and stays inert. Cleanup is identity-checked so a remount's publish
+  // is never clobbered by the outgoing mount's teardown.
   useEffect(() => {
-    activeFindRef.current = activeFind ?? null;
-  }, [activeFind]);
+    if (!activeFind) {
+      return undefined;
+    }
+    publishCurrentActiveFindConfig({
+      config: activeFind,
+      editorInstanceId: activeFindEditorInstanceId
+    });
+    return () => {
+      unpublishCurrentActiveFindConfig(activeFind);
+    };
+  }, [activeFind, activeFindEditorInstanceId]);
 
   useEffect(() => {
     imageAttachmentPasteHandlerRef.current = onImageAttachmentPaste ?? null;
@@ -983,7 +1059,12 @@ export function MarkdownEditor({
       // on a plain unmount.
       // #424 Slice 2: as in the switch path, drop transient Find highlights
       // before caching so a later remount never restores them.
-      view.dispatch({ effects: clearActiveFindHighlightsEffect.of(null) });
+      view.dispatch({
+        effects: [
+          clearActiveFindHighlightsEffect.of(null),
+          clearActiveFindGutterMarkersEffect.of(null)
+        ]
+      });
       documentStates.set(documentKeyRef.current, {
         state: view.state,
         lineEndingField: lineEndingFieldRef.current!
@@ -1221,6 +1302,38 @@ export function MarkdownEditor({
   ]);
 
   useEffect(() => {
+    selectionHighlightModeRef.current = selectionHighlightMode;
+
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: selectionHighlightCompartment.reconfigure(
+        createSelectionHighlightExtension(selectionHighlightMode)
+      )
+    });
+  }, [selectionHighlightMode]);
+
+  useEffect(() => {
+    findGutterMarkersRef.current = findGutterMarkers;
+
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: activeFindGutterMarkerCompartment.reconfigure(
+        createActiveFindGutterMarkerExtension(findGutterMarkers)
+      )
+    });
+  }, [findGutterMarkers]);
+
+  useEffect(() => {
     const view = viewRef.current;
 
     if (!view) {
@@ -1256,7 +1369,12 @@ export function MarkdownEditor({
       // #424 Slice 2: Find "mark all" highlights are transient panel UI — drop
       // them from the OUTGOING document's state before it is cached, so
       // switching back later never restores stale highlights.
-      view.dispatch({ effects: clearActiveFindHighlightsEffect.of(null) });
+      view.dispatch({
+        effects: [
+          clearActiveFindHighlightsEffect.of(null),
+          clearActiveFindGutterMarkersEffect.of(null)
+        ]
+      });
       // #387/#392: cache the OUTGOING document's live EditorState (its full
       // undo history included) under the key it is STILL showing, before
       // that key ref advances below.
@@ -1442,6 +1560,27 @@ export function MarkdownEditor({
         : clearActiveFindHighlightsEffect.of(null)
     });
   }, [activeFindHighlight]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (!view || !findGutterMarkers) {
+      return;
+    }
+
+    const currentMarkerCount =
+      view.state.field(activeFindGutterMarkerField, false)?.size ?? 0;
+
+    if (!activeFindGutterMarkers && currentMarkerCount === 0) {
+      return;
+    }
+
+    view.dispatch({
+      effects: activeFindGutterMarkers
+        ? setActiveFindGutterMarkersEffect.of(activeFindGutterMarkers)
+        : clearActiveFindGutterMarkersEffect.of(null)
+    });
+  }, [activeFindGutterMarkers, findGutterMarkers]);
 
   return (
     <div

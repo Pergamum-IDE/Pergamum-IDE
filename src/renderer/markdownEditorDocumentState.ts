@@ -37,7 +37,8 @@ import { EditorView } from "@codemirror/view";
 import type {
   ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
-  LineEndingMarkerGlyph
+  LineEndingMarkerGlyph,
+  SelectionHighlightMode
 } from "../shared/settings";
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
@@ -51,12 +52,11 @@ import {
   createGlossaryCompletionExtension,
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
-import {
-  createActiveFindKeymapExtension,
-  type MarkdownEditorActiveFindConfig
-} from "./find/activeFindKeymapExtension";
+import { createActiveFindKeymapExtension } from "./find/activeFindKeymapExtension";
+import { createActiveFindGutterMarkerExtension } from "./find/activeFindGutterMarkerExtension";
 import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
+import { createSelectionHighlightExtension } from "./selectionHighlightExtension";
 import { createMarkdownImageAttachmentPositionTrackingExtension } from "./markdownImageAttachmentPositionTracker";
 import {
   createMarkdownImageAttachmentPasteExtension,
@@ -110,15 +110,27 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly markerGlyphRef: LiveRef<LineEndingMarkerGlyph>;
   readonly whitespaceCompartment: Compartment;
   readonly whitespaceSettingsRef: LiveRef<ApplicationEditorWhitespaceSettings>;
+  readonly selectionHighlightCompartment: Compartment;
+  readonly selectionHighlightModeRef: LiveRef<SelectionHighlightMode>;
+  readonly findGutterMarkerCompartment: Compartment;
+  readonly findGutterMarkersRef: LiveRef<boolean>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
   /**
-   * #424: read live by the Ctrl+F keydown handler. `null` (the default, and
-   * what a non-active-document editor such as the Glossary description field
-   * supplies) leaves Ctrl+F inert. Only the active Markdown document editor
-   * (EditorSurface's MarkdownEditorSurface) provides a config that opens the
-   * Pergamum Find panel.
+   * #424 / #425 follow-up: the Ctrl+F / Ctrl+H keymap no longer reads a
+   * mount-local ref (a cached EditorState outlives its editor mount — see
+   * activeFindKeymapExtension.ts). It routes through the module-level current
+   * Active Find slot instead, which `MarkdownEditor` publishes from its
+   * `activeFind` prop. Nothing about the config needs to be threaded here.
+   *
+   * `activeFindDiagnostics` is only used for the `activeFind.shortcut.routeFailed`
+   * debug log: the opaque id of the editor that built this state, and whether
+   * this editor is the one that IS the Active Find surface (so the Glossary
+   * description field never logs a "route failed").
    */
-  readonly activeFindRef?: LiveRef<MarkdownEditorActiveFindConfig | null>;
+  readonly activeFindDiagnostics?: {
+    readonly editorInstanceId: string;
+    readonly expectActiveFindSurface: boolean;
+  };
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /**
    * #411: when present, adds the broken-image-link lint extension (gutter +
@@ -211,12 +223,22 @@ export function createMarkdownEditorDocumentState(
       options.whitespaceCompartment.of(
         whitespaceMarkerLayer(() => options.whitespaceSettingsRef.current)
       ),
+      options.selectionHighlightCompartment.of(
+        createSelectionHighlightExtension(
+          options.selectionHighlightModeRef.current
+        )
+      ),
+      options.findGutterMarkerCompartment.of(
+        createActiveFindGutterMarkerExtension(
+          options.findGutterMarkersRef.current
+        )
+      ),
       createGlossaryCompletionExtension({
         getConfig: () => options.glossaryCompletionRef.current,
         isReadOnly: () => options.readOnlyRef.current
       }),
       createActiveFindKeymapExtension({
-        getConfig: () => options.activeFindRef?.current ?? null
+        diagnostics: options.activeFindDiagnostics
       }),
       // #424 Slice 2: inert until the Find panel dispatches its first
       // "mark all" effect; safe on every document's state.

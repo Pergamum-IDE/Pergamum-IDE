@@ -670,6 +670,25 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "editor.selectionHighlightMode": defineEnumSetting({
+    key: "editor.selectionHighlightMode",
+    scope: "applicationOnly",
+    enumValues: ["off", "default", "smart"],
+    defaultValue: "default",
+    labelKey: "settings.editor.selectionHighlightMode.label",
+    descriptionKey: "settings.editor.selectionHighlightMode.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.findGutterMarkers": defineBooleanSetting({
+    key: "editor.findGutterMarkers",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.editor.findGutterMarkers.label",
+    descriptionKey: "settings.editor.findGutterMarkers.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   // #252: diagnostic-only setting for the line-ending marker/distribution
   // UI — never used to decide an existing break's kind, a new break's
   // inherited kind, or a save-time conversion. Kept fully separate from

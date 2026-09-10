@@ -2,7 +2,7 @@
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { searchPanelOpen } from "@codemirror/search";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createActiveFindKeymapExtension,
   type MarkdownEditorActiveFindConfig
@@ -239,5 +239,75 @@ describe("Ctrl+F no longer opens the native CodeMirror search panel (#424)", () 
     );
 
     expect(testView.state.selection.ranges.length).toBe(2);
+  });
+});
+
+describe("#425 follow-up: activeFind.shortcut.routeFailed debug log", () => {
+  let logEvent: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    logEvent = vi.fn().mockResolvedValue(undefined);
+    (window as unknown as { pergamum: unknown }).pergamum = {
+      debugLog: { logEvent }
+    };
+  });
+  afterEach(() => {
+    delete (window as unknown as { pergamum?: unknown }).pergamum;
+  });
+
+  function viewWith(diag?: {
+    editorInstanceId: string;
+    expectActiveFindSurface: boolean;
+  }): EditorView {
+    view = new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        extensions: [
+          createActiveFindKeymapExtension({
+            getConfig: () => null,
+            diagnostics: diag
+          })
+        ]
+      })
+    });
+    return view;
+  }
+
+  it("logs a warn-level routeFailed when the Active Find surface has no binding", () => {
+    const v = viewWith({ editorInstanceId: "editor-9", expectActiveFindSurface: true });
+    v.contentDOM.dispatchEvent(findKeydown());
+
+    expect(logEvent).toHaveBeenCalledTimes(1);
+    const req = logEvent.mock.calls[0][0];
+    expect(req.level).toBe("warn");
+    expect(req.event).toBe("activeFind.shortcut.routeFailed");
+    expect(req.details).toMatchObject({
+      reason: "no_active_find_binding",
+      activeFindMode: "search",
+      activeFindEditorInstanceId: "editor-9"
+    });
+    // never carries user text
+    expect(JSON.stringify(req)).not.toContain("query");
+  });
+
+  it("Ctrl+H reports replace mode", () => {
+    const v = viewWith({ editorInstanceId: "editor-9", expectActiveFindSurface: true });
+    v.contentDOM.dispatchEvent(replaceKeydown());
+    expect(logEvent.mock.calls[0][0].details.activeFindMode).toBe("replace");
+  });
+
+  it("stays SILENT for a non-Active-Find editor (Glossary description field)", () => {
+    const v = viewWith({
+      editorInstanceId: "editor-9",
+      expectActiveFindSurface: false
+    });
+    v.contentDOM.dispatchEvent(findKeydown());
+    expect(logEvent).not.toHaveBeenCalled();
+  });
+
+  it("stays silent when no diagnostics context is supplied at all", () => {
+    const v = viewWith();
+    v.contentDOM.dispatchEvent(findKeydown());
+    expect(logEvent).not.toHaveBeenCalled();
   });
 });

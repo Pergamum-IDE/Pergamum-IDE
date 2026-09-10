@@ -172,6 +172,7 @@ export type {
   ProjectSettings,
   RecentProject,
   SaveApplicationSettingsRequest,
+  SelectionHighlightMode,
   ApplicationSearchSettings,
   SearchNearbySettings,
   SearchNearbyUnit,

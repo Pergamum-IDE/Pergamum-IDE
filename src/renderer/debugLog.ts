@@ -65,6 +65,16 @@ export function logRendererDebugEvent(input: {
     ...(input.details ? { details: input.details } : {})
   };
 
-  void window.pergamum.debugLog.logEvent(request).catch(() => undefined);
+  // Debug logging must never throw into a caller (and the preload bridge is
+  // absent in unit tests / very early startup).
+  try {
+    const logEvent = window.pergamum?.debugLog?.logEvent;
+
+    if (typeof logEvent === "function") {
+      void logEvent(request).catch(() => undefined);
+    }
+  } catch {
+    /* ignore — diagnostics only */
+  }
 }
 

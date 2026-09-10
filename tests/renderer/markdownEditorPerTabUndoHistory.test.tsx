@@ -12,7 +12,9 @@ import {
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import { MarkdownEditor } from "../../src/renderer/MarkdownEditor";
+import { activeFindGutterMarkerField } from "../../src/renderer/find/activeFindGutterMarkerExtension";
 import type { MarkdownEditorDocumentState } from "../../src/renderer/markdownEditorDocumentState";
+import { smartSelectionHighlightField } from "../../src/renderer/selectionHighlightExtension";
 
 /**
  * #387/#392: per-document EditorState so Undo/Redo history survives a
@@ -369,5 +371,81 @@ describe("MarkdownEditor EditorState cache survives unmount/remount (#392)", () 
     a.remount({ documentKey: "doc:A", value: "A1" });
     expect(a.view().state.doc.toString()).toBe("A1");
     expect(undoDepth(a.view().state)).toBe(1);
+  });
+
+  it("#425 reconciles selection highlight mode across cached unmount/remount restore", () => {
+    const documentStates = new Map<string, MarkdownEditorDocumentState>();
+    const pendingSelection = { start: 0, end: 5, focusEditor: false };
+    const harness = mount(
+      { documentKey: "doc:A", value: "night knight night" },
+      documentStates
+    );
+
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: "night knight night",
+          documentKey: "doc:A",
+          documentStates,
+          selectionHighlightMode: "smart",
+          pendingSelection,
+          onChange: () => undefined
+        })
+      );
+    });
+    expect(
+      harness.view().state.field(smartSelectionHighlightField, false)?.size ?? 0
+    ).toBe(2);
+
+    harness.unmount();
+    harness.remount({ documentKey: "doc:A", value: "night knight night" });
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: "night knight night",
+          documentKey: "doc:A",
+          documentStates,
+          selectionHighlightMode: "off",
+          pendingSelection: null,
+          onChange: () => undefined
+        })
+      );
+    });
+
+    expect(
+      harness.view().state.field(smartSelectionHighlightField, false)?.size ?? 0
+    ).toBe(0);
+  });
+
+  it("#425 can add find gutter markers after restoring a cached state from a new mount", () => {
+    const documentStates = new Map<string, MarkdownEditorDocumentState>();
+    const harness = mount(
+      { documentKey: "doc:A", value: "foo\nfoo" },
+      documentStates
+    );
+
+    harness.unmount();
+    harness.remount({ documentKey: "doc:A", value: "foo\nfoo" });
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: "foo\nfoo",
+          documentKey: "doc:A",
+          documentStates,
+          findGutterMarkers: true,
+          activeFindGutterMarkers: {
+            matches: [
+              { from: 0, to: 3 },
+              { from: 4, to: 7 }
+            ]
+          },
+          onChange: () => undefined
+        })
+      );
+    });
+
+    expect(
+      harness.view().state.field(activeFindGutterMarkerField, false)?.size ?? 0
+    ).toBe(2);
   });
 });

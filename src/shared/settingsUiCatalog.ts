@@ -423,6 +423,42 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.undoHistoryMinDepth")
   },
   {
+    key: "editor.selectionHighlightMode",
+    category: "editor",
+    order: 130,
+    labelKey: "settings.editor.selectionHighlightMode.label",
+    descriptionKey: "settings.editor.selectionHighlightMode.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "off",
+          labelKey: "settings.editor.selectionHighlightMode.option.off.label"
+        },
+        {
+          value: "default",
+          labelKey: "settings.editor.selectionHighlightMode.option.default.label"
+        },
+        {
+          value: "smart",
+          labelKey: "settings.editor.selectionHighlightMode.option.smart.label",
+          descriptionKey:
+            "settings.editor.selectionHighlightMode.option.smart.description"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("editor.selectionHighlightMode")
+  },
+  {
+    key: "editor.findGutterMarkers",
+    category: "editor",
+    order: 140,
+    labelKey: "settings.editor.findGutterMarkers.label",
+    descriptionKey: "settings.editor.findGutterMarkers.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("editor.findGutterMarkers")
+  },
+  {
     // #424 Slice 7: glossary "近傍" (Nearby) search range.
     key: "search.nearby.unit",
     category: "searchReplace",

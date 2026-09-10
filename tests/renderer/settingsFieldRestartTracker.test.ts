@@ -87,7 +87,11 @@ function baseApplicationSettings(
           )
         }
       },
-      undoHistoryMinDepth: getCatalogDefaultValue("editor.undoHistoryMinDepth")
+      undoHistoryMinDepth: getCatalogDefaultValue("editor.undoHistoryMinDepth"),
+      selectionHighlightMode: getCatalogDefaultValue(
+        "editor.selectionHighlightMode"
+      ),
+      findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers")
     },
     search: {
       nearby: {
