@@ -1462,6 +1462,32 @@ label.settingsItemHeader {
   font-size: 13px;
 }
 
+/* #436 Slice 2: debug echo of the operation-API state. Replaced by the real
+   create / edit form in a later slice. */
+.glossaryEntryEditorPaneDebug {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.glossaryEntryEditorPaneDebugRow {
+  display: contents;
+}
+
+.glossaryEntryEditorPaneDebugRow dt {
+  color: #6b7785;
+  font-weight: 700;
+}
+
+.glossaryEntryEditorPaneDebugRow dd {
+  margin: 0;
+  color: #17212b;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+    monospace;
+}
+
 /* #377: the Debug Log special tab wrapper — a scroll container that fills the
    editor area, mirroring the Glossary management tabs. */
 .debugLogTab {

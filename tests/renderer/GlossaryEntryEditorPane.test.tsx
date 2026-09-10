@@ -5,10 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t, type Translate } from "../../src/shared/i18n";
 import { GlossaryEntryEditorPane } from "../../src/renderer/GlossaryEntryEditorPane";
 import {
+  DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
   closeGlossaryEntryEditorPane,
   createInitialGlossaryEntryEditorPaneState,
-  openGlossaryEntryEditorPane,
-  toggleGlossaryEntryEditorPane
+  openGlossaryEntryCreatePane,
+  openGlossaryEntryEditPane,
+  toggleGlossaryEntryEditorDeveloperPane,
+  type OpenGlossaryEntryEditorPaneState
 } from "../../src/renderer/glossaryEntryEditorPaneState";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -16,45 +19,88 @@ import {
 
 const translate: Translate = (key, values) => t("ja", key, values);
 
-describe("glossaryEntryEditorPaneState (#436 Slice 1)", () => {
+describe("glossaryEntryEditorPaneState — Slice 2 operation API (#436)", () => {
   it("starts closed", () => {
     expect(createInitialGlossaryEntryEditorPaneState()).toEqual({
       isOpen: false
     });
   });
 
-  it("opens with the mode and the later-slice payload fields", () => {
+  it("create open sets mode 'create' and keeps the source", () => {
     expect(
-      openGlossaryEntryEditorPane({
-        mode: "edit",
-        entryId: "e1",
-        presetRepresentative: "シズク"
-      })
-    ).toEqual({
+      openGlossaryEntryCreatePane({ source: "glossary-pane" })
+    ).toMatchObject({
       isOpen: true,
-      mode: "edit",
-      entryId: "e1",
+      mode: "create",
+      source: "glossary-pane"
+    });
+  });
+
+  it("create open keeps an explicit presetRepresentative", () => {
+    const state = openGlossaryEntryCreatePane({
+      source: "editor-selection",
+      presetRepresentative: "シズク"
+    });
+
+    expect(state).toEqual({
+      isOpen: true,
+      mode: "create",
+      source: "editor-selection",
       presetRepresentative: "シズク"
     });
   });
 
-  it("toggles closed -> open -> closed", () => {
-    const opened = toggleGlossaryEntryEditorPane(
-      createInitialGlossaryEntryEditorPaneState(),
-      { mode: "create" }
-    );
-    expect(opened.isOpen).toBe(true);
+  it("create open falls back to 新しい語彙 when presetRepresentative is missing or empty", () => {
+    expect(DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE).toBe("新しい語彙");
 
-    const closed = toggleGlossaryEntryEditorPane(opened, { mode: "create" });
-    expect(closed).toEqual({ isOpen: false });
+    for (const preset of [undefined, ""]) {
+      const state = openGlossaryEntryCreatePane({
+        source: "glossary-settings",
+        presetRepresentative: preset
+      });
+      expect(state).toMatchObject({
+        mode: "create",
+        presetRepresentative: "新しい語彙"
+      });
+    }
   });
 
-  it("close always returns the closed state", () => {
+  it("edit open sets mode 'edit' and keeps the entryId and source", () => {
+    expect(
+      openGlossaryEntryEditPane({
+        source: "glossary-settings",
+        entryId: "entry-42"
+      })
+    ).toEqual({
+      isOpen: true,
+      mode: "edit",
+      source: "glossary-settings",
+      entryId: "entry-42"
+    });
+  });
+
+  it("close returns the closed state", () => {
     expect(closeGlossaryEntryEditorPane()).toEqual({ isOpen: false });
+  });
+
+  it("developer toggle flips closed -> create(developer) -> closed", () => {
+    const opened = toggleGlossaryEntryEditorDeveloperPane(
+      createInitialGlossaryEntryEditorPaneState()
+    );
+    expect(opened).toMatchObject({
+      isOpen: true,
+      mode: "create",
+      source: "developer",
+      presetRepresentative: "新しい語彙"
+    });
+
+    expect(toggleGlossaryEntryEditorDeveloperPane(opened)).toEqual({
+      isOpen: false
+    });
   });
 });
 
-describe("GlossaryEntryEditorPane (#436 Slice 1)", () => {
+describe("GlossaryEntryEditorPane — Slice 2 debug UI (#436)", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -69,39 +115,67 @@ describe("GlossaryEntryEditorPane (#436 Slice 1)", () => {
     container.remove();
   });
 
-  it("renders the pane frame, title and PoC notice while open", () => {
+  function renderPane(
+    state: OpenGlossaryEntryEditorPaneState,
+    onClose: () => void = () => undefined
+  ): void {
     act(() => {
       root.render(
         <GlossaryEntryEditorPane
-          mode="create"
-          translate={translate}
-          onClose={() => undefined}
-        />
-      );
-    });
-
-    const pane = container.querySelector(".glossaryEntryEditorPane");
-    expect(pane).not.toBeNull();
-    expect(pane?.getAttribute("aria-label")).toBe("語彙登録・編集ペイン");
-    expect(
-      container.querySelector(".glossaryEntryEditorPaneTitle")?.textContent
-    ).toBe("語彙登録・編集ペイン");
-    expect(
-      container.querySelector(".glossaryEntryEditorPaneNotice")?.textContent
-    ).toBe("このペインは #436 PoC で導入中です。");
-  });
-
-  it("invokes onClose when the close control is clicked", () => {
-    const onClose = vi.fn();
-    act(() => {
-      root.render(
-        <GlossaryEntryEditorPane
-          mode="create"
+          state={state}
           translate={translate}
           onClose={onClose}
         />
       );
     });
+  }
+
+  function field(name: string): string | undefined {
+    return (
+      container.querySelector(`[data-field="${name}"]`)?.textContent ??
+      undefined
+    );
+  }
+
+  it("shows mode / source / preset representative for a create-mode pane", () => {
+    renderPane(
+      openGlossaryEntryCreatePane({
+        source: "developer"
+      })
+    );
+
+    const pane = container.querySelector(".glossaryEntryEditorPane");
+    expect(pane?.getAttribute("aria-label")).toBe("語彙登録・編集ペイン");
+    expect(pane?.getAttribute("data-pane-mode")).toBe("create");
+    expect(pane?.getAttribute("data-pane-source")).toBe("developer");
+    expect(field("mode")).toBe("create");
+    expect(field("source")).toBe("developer");
+    expect(field("presetRepresentative")).toBe("新しい語彙");
+    expect(field("entryId")).toBeUndefined();
+  });
+
+  it("shows mode / source / entry id for an edit-mode pane", () => {
+    renderPane(
+      openGlossaryEntryEditPane({
+        source: "glossary-settings",
+        entryId: "entry-7"
+      })
+    );
+
+    expect(field("mode")).toBe("edit");
+    expect(field("source")).toBe("glossary-settings");
+    expect(field("entryId")).toBe("entry-7");
+    expect(field("presetRepresentative")).toBeUndefined();
+  });
+
+  it("invokes onClose when the close control is clicked", () => {
+    const onClose = vi.fn();
+    renderPane(
+      openGlossaryEntryCreatePane({
+        source: "developer"
+      }),
+      onClose
+    );
 
     const closeButton = container.querySelector<HTMLButtonElement>(
       ".glossaryEntryEditorPaneCloseButton"

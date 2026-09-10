@@ -48,6 +48,15 @@ export const jaTranslations = {
   "command.disabled.readOnlyProject": "読み取り専用のため使用できません",
   "command.glossary.entry.create": "語彙を作成",
   "command.glossary.entry.open": "語彙を開く",
+  "command.glossary.openCreateEntryPane": "語彙登録・編集ペインを新規作成で開く",
+  "command.glossary.openCreateEntryPane.description":
+    "語彙登録・編集ペインを新しい語彙の作成モードで開きます。（#436 PoC）",
+  "command.glossary.openEditEntryPane": "語彙登録・編集ペインを編集で開く",
+  "command.glossary.openEditEntryPane.description":
+    "既存の語彙を語彙登録・編集ペインの編集モードで開きます。（#436 PoC）",
+  "command.glossary.closeEntryEditorPane": "語彙登録・編集ペインを閉じる",
+  "command.glossary.closeEntryEditorPane.description":
+    "語彙登録・編集ペインを閉じます。（#436 PoC）",
   "command.glossary.entry.occurrences.next": "次の使用箇所",
   "command.glossary.entry.occurrences.previous": "前の使用箇所",
   "command.glossary.entry.manage": "語彙集: 語彙を管理",

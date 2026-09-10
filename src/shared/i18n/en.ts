@@ -50,6 +50,17 @@ export const enTranslations = {
   "command.disabled.readOnlyProject": "Unavailable in read-only mode",
   "command.glossary.entry.create": "Create glossary entry",
   "command.glossary.entry.open": "Open glossary entry",
+  "command.glossary.openCreateEntryPane":
+    "Open Glossary Entry Editor Pane in create mode",
+  "command.glossary.openCreateEntryPane.description":
+    "Open the Glossary Entry Editor Pane to create a new entry. (#436 PoC)",
+  "command.glossary.openEditEntryPane":
+    "Open Glossary Entry Editor Pane in edit mode",
+  "command.glossary.openEditEntryPane.description":
+    "Open an existing entry in the Glossary Entry Editor Pane. (#436 PoC)",
+  "command.glossary.closeEntryEditorPane": "Close Glossary Entry Editor Pane",
+  "command.glossary.closeEntryEditorPane.description":
+    "Close the Glossary Entry Editor Pane. (#436 PoC)",
   "command.glossary.entry.occurrences.next": "Next occurrence",
   "command.glossary.entry.occurrences.previous": "Previous occurrence",
   "command.glossary.entry.manage": "Glossary: Manage Entries",

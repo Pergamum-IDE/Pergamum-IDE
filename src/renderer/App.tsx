@@ -324,7 +324,7 @@ import { GlossaryEntryEditorPane } from "./GlossaryEntryEditorPane";
 import {
   closeGlossaryEntryEditorPane,
   createInitialGlossaryEntryEditorPaneState,
-  toggleGlossaryEntryEditorPane,
+  toggleGlossaryEntryEditorDeveloperPane,
   type GlossaryEntryEditorPaneState
 } from "./glossaryEntryEditorPaneState";
 import {
@@ -10207,8 +10207,8 @@ export function App(): JSX.Element {
                     glossaryEntryEditorPane.isOpen
                   }
                   onToggleGlossaryEntryEditorPane={() =>
-                    setGlossaryEntryEditorPane((current) =>
-                      toggleGlossaryEntryEditorPane(current, { mode: "create" })
+                    setGlossaryEntryEditorPane(
+                      toggleGlossaryEntryEditorDeveloperPane
                     )
                   }
                 />
@@ -10436,7 +10436,7 @@ export function App(): JSX.Element {
                           Ctrl+G / the context menu. */}
                       {glossaryEntryEditorPane.isOpen ? (
                         <GlossaryEntryEditorPane
-                          mode={glossaryEntryEditorPane.mode}
+                          state={glossaryEntryEditorPane}
                           translate={translate}
                           onClose={() =>
                             setGlossaryEntryEditorPane(
