@@ -297,6 +297,48 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     ).toEqual(applicationSettings.editor.whitespace);
   });
 
+  it("#425 editor selection highlight mode and find gutter marker defaults derive from the catalog and remain independent", () => {
+    const selectionDefault = getCatalogDefaultValue(
+      "editor.selectionHighlightMode"
+    );
+    const findGutterDefault = getCatalogDefaultValue("editor.findGutterMarkers");
+
+    expect(builtInDefaultSettings.editor.selectionHighlightMode).toBe(
+      selectionDefault
+    );
+    expect(defaultApplicationSettings.editor.selectionHighlightMode).toBe(
+      selectionDefault
+    );
+    expect(
+      createDefaultApplicationSettings().editor.selectionHighlightMode
+    ).toBe(selectionDefault);
+    expect(builtInDefaultSettings.editor.findGutterMarkers).toBe(
+      findGutterDefault
+    );
+    expect(defaultApplicationSettings.editor.findGutterMarkers).toBe(
+      findGutterDefault
+    );
+    expect(createDefaultApplicationSettings().editor.findGutterMarkers).toBe(
+      findGutterDefault
+    );
+
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: {
+        ...defaultApplicationSettings.editor,
+        selectionHighlightMode: "off",
+        findGutterMarkers: true
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, {}).editor
+    ).toMatchObject({
+      selectionHighlightMode: "off",
+      findGutterMarkers: true
+    });
+  });
+
   it("does not add Project Settings shape for #195 Application Settings controls", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
@@ -1057,4 +1099,3 @@ describe("documentMap.dialogueDelimiterPairs override resolution (#396 Slice 7 A
     ]);
   });
 });
-

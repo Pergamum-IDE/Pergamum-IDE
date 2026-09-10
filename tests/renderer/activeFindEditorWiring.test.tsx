@@ -2,12 +2,16 @@
 import { readFileSync } from "node:fs";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MarkdownEditor,
   type MarkdownEditorParagraphIndentController
 } from "../../src/renderer/MarkdownEditor";
 import type { MarkdownEditorActiveFindConfig } from "../../src/renderer/find/activeFindKeymapExtension";
+import type { MarkdownEditorDocumentState } from "../../src/renderer/markdownEditorDocumentState";
+import { activeFindGutterMarkerField } from "../../src/renderer/find/activeFindGutterMarkerExtension";
+import { smartSelectionHighlightField } from "../../src/renderer/selectionHighlightExtension";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -63,6 +67,17 @@ function findKeydown(): KeyboardEvent {
   });
 }
 
+function editorView(): EditorView {
+  const content = container?.querySelector(".cm-content");
+  const view = content instanceof HTMLElement ? EditorView.findFromDOM(content) : null;
+
+  if (!view) {
+    throw new Error("Expected mounted CodeMirror EditorView.");
+  }
+
+  return view;
+}
+
 describe("MarkdownEditor activeFind prop wiring (#424 Slice 1)", () => {
   it("routes Ctrl+F to the supplied config's requestOpen and preventDefaults it", () => {
     const requestOpen = vi.fn();
@@ -107,6 +122,98 @@ describe("MarkdownEditor activeFind prop wiring (#424 Slice 1)", () => {
     });
     expect(second.defaultPrevented).toBe(true);
     expect(requestOpen).toHaveBeenCalledTimes(1);
+  });
+
+  // #425 follow-up: the real dogfood failure. A MarkdownEditor unmounts
+  // (Settings-tab round trip), the App-owned `documentStates` cache — and the
+  // cached EditorState's baked Ctrl+F keymap — survive, and a BRAND NEW
+  // MarkdownEditor mounts, restores that state, and is wired to a DIFFERENT
+  // surface's config. Ctrl+F must reach the NEW config, never the dead one.
+  it("routes Ctrl+F to the CURRENT config after a remount that restores a cached EditorState", () => {
+    const documentStates = new Map<string, MarkdownEditorDocumentState>();
+    const requestOpenOld = vi.fn();
+    const requestOpenNew = vi.fn();
+
+    const firstContainer = document.createElement("div");
+    document.body.appendChild(firstContainer);
+    const firstRoot = createRoot(firstContainer);
+    act(() => {
+      firstRoot.render(
+        React.createElement(MarkdownEditor, {
+          value: "hello world",
+          onChange: () => undefined,
+          documentKey: "doc-1",
+          documentStates,
+          activeFind: { requestOpen: requestOpenOld }
+        })
+      );
+    });
+    const firstContent = firstContainer.querySelector(
+      ".cm-content"
+    ) as HTMLElement;
+    act(() => {
+      firstContent.dispatchEvent(findKeydown());
+    });
+    expect(requestOpenOld).toHaveBeenCalledTimes(1);
+
+    // Navigate away — editor unmounts, cache (with baked keymap) survives.
+    act(() => firstRoot.unmount());
+    firstContainer.remove();
+
+    const secondContainer = document.createElement("div");
+    document.body.appendChild(secondContainer);
+    const secondRoot = createRoot(secondContainer);
+    act(() => {
+      secondRoot.render(
+        React.createElement(MarkdownEditor, {
+          value: "hello world",
+          onChange: () => undefined,
+          documentKey: "doc-1",
+          documentStates,
+          activeFind: { requestOpen: requestOpenNew }
+        })
+      );
+    });
+    const secondContent = secondContainer.querySelector(
+      ".cm-content"
+    ) as HTMLElement;
+    act(() => {
+      secondContent.dispatchEvent(findKeydown());
+    });
+
+    expect(requestOpenNew).toHaveBeenCalledTimes(1);
+    expect(requestOpenOld).toHaveBeenCalledTimes(1); // never re-invoked
+
+    act(() => secondRoot.unmount());
+    secondContainer.remove();
+  });
+
+  it("Ctrl+F is inert again once the only active-find MarkdownEditor unmounts", () => {
+    const requestOpen = vi.fn();
+    const soloContainer = document.createElement("div");
+    document.body.appendChild(soloContainer);
+    const soloRoot = createRoot(soloContainer);
+    act(() => {
+      soloRoot.render(
+        React.createElement(MarkdownEditor, {
+          value: "x",
+          onChange: () => undefined,
+          documentKey: "doc-solo",
+          activeFind: { requestOpen }
+        })
+      );
+    });
+    act(() => soloRoot.unmount());
+    soloContainer.remove();
+
+    // A non-find editor (Glossary description field shape) now mounts.
+    const { contentDom } = mount({ contextSurface: "glossaryDescription" });
+    const event = findKeydown();
+    act(() => {
+      contentDom().dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(false);
+    expect(requestOpen).not.toHaveBeenCalled();
   });
 });
 
@@ -181,6 +288,163 @@ describe("MarkdownEditor activeFindHighlight prop wiring (#424 Slice 2)", () => 
   });
 });
 
+describe("MarkdownEditor selection highlight mode prop wiring (#425)", () => {
+  function selectionMarkCount(): number {
+    return editorView().state.field(smartSelectionHighlightField, false)?.size ?? 0;
+  }
+
+  it("paints smart selection matches and clears them when the mode changes to off", () => {
+    const pendingSelection = {
+      start: 0,
+      end: 5,
+      focusEditor: false
+    };
+    const onPendingSelectionApplied = vi.fn();
+    const { rerender } = mount({
+      value: "night knight night",
+      selectionHighlightMode: "smart",
+      pendingSelection,
+      onPendingSelectionApplied
+    });
+
+    expect(onPendingSelectionApplied).toHaveBeenCalledTimes(1);
+    expect(selectionMarkCount()).toBe(2);
+
+    rerender({
+      value: "night knight night",
+      selectionHighlightMode: "off",
+      pendingSelection: null,
+      onPendingSelectionApplied
+    });
+
+    expect(selectionMarkCount()).toBe(0);
+  });
+
+  it("does not leave the smart highlight field active when switched to CodeMirror default mode", () => {
+    const pendingSelection = {
+      start: 0,
+      end: 5,
+      focusEditor: false
+    };
+    const { rerender } = mount({
+      value: "night knight night",
+      selectionHighlightMode: "smart",
+      pendingSelection
+    });
+
+    expect(selectionMarkCount()).toBe(2);
+
+    rerender({
+      value: "night knight night",
+      selectionHighlightMode: "default",
+      pendingSelection: null
+    });
+
+    expect(selectionMarkCount()).toBe(0);
+  });
+
+  it("reconciles cached document state to the current mode when reactivated", () => {
+    const pendingSelection = {
+      start: 0,
+      end: 5,
+      focusEditor: false
+    };
+    const { rerender } = mount({
+      value: "night knight night",
+      documentKey: "doc-a",
+      selectionHighlightMode: "smart",
+      pendingSelection
+    });
+
+    expect(selectionMarkCount()).toBe(2);
+
+    rerender({
+      value: "other",
+      documentKey: "doc-b",
+      selectionHighlightMode: "smart",
+      pendingSelection: null
+    });
+
+    rerender({
+      value: "night knight night",
+      documentKey: "doc-a",
+      selectionHighlightMode: "off",
+      pendingSelection: null
+    });
+
+    expect(selectionMarkCount()).toBe(0);
+  });
+});
+
+describe("MarkdownEditor activeFindGutterMarkers prop wiring (#425)", () => {
+  function gutterMarkerCount(): number {
+    return editorView().state.field(activeFindGutterMarkerField, false)?.size ?? 0;
+  }
+
+  it("applies the independent findGutterMarkers setting gate and updates without remounting", () => {
+    const markers = {
+      matches: [
+        { from: 0, to: 3 },
+        { from: 4, to: 7 }
+      ]
+    };
+    const { rerender } = mount({
+      value: "foo\nfoo",
+      findGutterMarkers: false,
+      activeFindGutterMarkers: markers
+    });
+
+    expect(gutterMarkerCount()).toBe(0);
+
+    rerender({
+      value: "foo\nfoo",
+      findGutterMarkers: true,
+      activeFindGutterMarkers: markers
+    });
+
+    expect(gutterMarkerCount()).toBe(2);
+    expect(
+      container!.querySelector(".cm-pergamum-findGutterMarker svg")
+    ).toBeTruthy();
+
+    rerender({
+      value: "foo\nfoo",
+      findGutterMarkers: true,
+      activeFindGutterMarkers: null
+    });
+
+    expect(gutterMarkerCount()).toBe(0);
+  });
+
+  it("does not restore stale gutter markers from a cached document state after a switch", () => {
+    const { rerender } = mount({
+      value: "foo\nfoo",
+      documentKey: "doc-a",
+      findGutterMarkers: true,
+      activeFindGutterMarkers: {
+        matches: [{ from: 0, to: 3 }]
+      }
+    });
+    expect(gutterMarkerCount()).toBe(1);
+
+    rerender({
+      value: "bar\nbar",
+      documentKey: "doc-b",
+      findGutterMarkers: true,
+      activeFindGutterMarkers: null
+    });
+    expect(gutterMarkerCount()).toBe(0);
+
+    rerender({
+      value: "foo\nfoo",
+      documentKey: "doc-a",
+      findGutterMarkers: true,
+      activeFindGutterMarkers: null
+    });
+    expect(gutterMarkerCount()).toBe(0);
+  });
+});
+
 describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
   const source = readFileSync("src/renderer/EditorSurface.tsx", "utf8");
 
@@ -204,6 +468,7 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
     );
     expect(source).toContain("extraFocusRequest={findFocusRequest}");
     expect(source).toContain("activeFindHighlight={activeFindHighlight}");
+    expect(source).toContain("activeFindGutterMarkers={activeFindGutterMarkers}");
   });
 
   it("searches the active buffer via the shared matcher and reuses the selection-jump path", () => {
@@ -227,17 +492,41 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
     expect(highlightMemo).toContain("!findOpen || !findMarkAll || findMatchCount === 0");
   });
 
-  it("closes the panel + resets inputs on a genuine tab switch and returns focus on close", () => {
-    const closeEffect = source.slice(
-      source.indexOf("// A genuine tab switch closes the panel"),
-      source.indexOf("// A genuine tab switch closes the panel") + 640
+  it("#425 follow-up: tab switch swaps per-doc search state in a render-phase block; open/mode stay surface-global", () => {
+    // render-phase swap block (the `useDebouncedPreviewContent`-style pattern)
+    const swapStart = source.indexOf(
+      "if (findStateDocumentKey !== documentKey) {"
     );
-    expect(closeEffect).toContain("setFindOpen(false)");
-    expect(closeEffect).toContain(
-      "setFindOptions(DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS)"
-    );
-    expect(closeEffect).toContain("}, [documentKey]);");
+    expect(swapStart).toBeGreaterThan(-1);
+    const swap = source.slice(swapStart, swapStart + 700);
+    // per-document search conditions are re-loaded from the store
+    expect(swap).toContain("getActiveFindDocumentState(documentKey)");
+    expect(swap).toContain("setFindQuery(incoming.query)");
+    expect(swap).toContain("setFindReplaceText(incoming.replaceText)");
+    expect(swap).toContain("setFindOptions(incoming.options)");
+    expect(swap).toContain("setFindQueryKind(incoming.queryKind)");
+    // derived state is dropped
+    expect(swap).toContain("setFindActiveIndex(null)");
+    expect(swap).toContain("setFindExtraSelection(null)");
+    // panel open / mode are NOT touched in the swap (surface-global)
+    expect(swap).not.toContain("setFindOpen(");
+    expect(swap).not.toContain("setFindMode(");
 
+    // no leftover diagnostic tracer
+    expect(source).not.toContain("traceActiveFind");
+    expect(source).not.toContain("activeFindTrace");
+
+    // mirror effects: per-doc search state under `findStateDocumentKey`, and
+    // surface-global UI state
+    expect(source).toContain(
+      "setActiveFindDocumentState(findStateDocumentKey, {"
+    );
+    expect(source).toContain(
+      "setActiveFindUiState({ open: findOpen, mode: findMode })"
+    );
+    expect(source).toContain('from "./find/activeFindSessionStore"');
+
+    // explicit close still returns focus to the editor
     const closeHandler = source.slice(
       source.indexOf("const handleFindClose"),
       source.indexOf("const handleFindClose") + 320
@@ -254,6 +543,41 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
     expect(findRegion).not.toContain("setSidebarMode");
     expect(findRegion).not.toContain("openProjectSearch");
     expect(findRegion).not.toContain("SearchSidebar");
+  });
+});
+
+describe("#425 follow-up: project unload clears the Active Find session (App wiring)", () => {
+  const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+
+  it("resets the session (with a privacy-safe debug log) on project switch AND explicit close", () => {
+    expect(appSource).toContain(
+      "function resetActiveFindSessionForProjectContextChange()"
+    );
+    expect(appSource).toContain("resetActiveFindSession();");
+    expect(appSource).toContain('event: "activeFind.session.reset"');
+    expect(appSource).toContain('reason: "project_context_changed"');
+    // summary is booleans / counts only — no query field threaded in
+    expect(appSource).toContain("getActiveFindSessionSummary()");
+    expect(appSource).toContain("activeFindDocumentStateCount: before.documentStateCount");
+
+    // called from both project-context-change choke points
+    const activate = appSource.slice(
+      appSource.indexOf("async function activateProject("),
+      appSource.indexOf("async function activateProject(") + 900
+    );
+    expect(activate).toContain("resetActiveFindSessionForProjectContextChange()");
+    const explicitClose = appSource.slice(
+      appSource.indexOf("function resetRendererProjectAfterExplicitClose("),
+      appSource.indexOf("function resetRendererProjectAfterExplicitClose(") + 900
+    );
+    expect(explicitClose).toContain(
+      "resetActiveFindSessionForProjectContextChange()"
+    );
+  });
+
+  it("no leftover activeFindTrace / __afTrace references anywhere in the renderer entry points", () => {
+    expect(appSource).not.toContain("activeFindTrace");
+    expect(appSource).not.toContain("__afTrace");
   });
 });
 
@@ -426,16 +750,30 @@ describe("EditorSurface glossary search mode wiring (#424 Slice 6)", () => {
     expect(current).toContain("if (findRegexError !== null) {\n      return;");
   });
 
-  it("a genuine tab switch resets the glossary-mode state back to text", () => {
-    const resetEffect = source.slice(
-      source.indexOf("// A genuine tab switch closes the panel"),
-      source.indexOf("// A genuine tab switch closes the panel") + 620
+  it("#425 follow-up: a tab switch SWAPS the glossary-mode session per documentKey (not a reset-to-text)", () => {
+    const swapStart = source.indexOf(
+      "if (findStateDocumentKey !== documentKey) {"
     );
-    expect(resetEffect).toContain('setFindQueryKind("text")');
-    expect(resetEffect).toContain('setFindGlossaryRelation("any")');
-    expect(resetEffect).toContain("setFindSearchGlossaryAtomIds([])");
-    expect(resetEffect).toContain("setFindReplaceGlossaryAtomId(null)");
-    expect(resetEffect).toContain("}, [documentKey]);");
+    const swap = source.slice(swapStart, swapStart + 700);
+    // not "reset to text/any/[]" — the INCOMING document's saved values load
+    expect(swap).not.toContain('setFindQueryKind("text")');
+    expect(swap).not.toContain('setFindGlossaryRelation("any")');
+    expect(swap).toContain("setFindQueryKind(incoming.queryKind)");
+    expect(swap).toContain(
+      "setFindGlossaryRelation(incoming.glossaryRelation)"
+    );
+    expect(swap).toContain(
+      "setFindSearchGlossaryAtomIds([...incoming.searchGlossaryAtomIds])"
+    );
+    expect(swap).toContain(
+      "setFindReplaceGlossaryAtomId(incoming.replaceGlossaryAtomId)"
+    );
+    // and they are mirrored back per document
+    expect(source).toContain("glossaryRelation: findGlossaryRelation");
+    expect(source).toContain("searchGlossaryAtomIds: findSearchGlossaryAtomIds");
+    expect(source).toContain(
+      "replaceGlossaryAtomId: findReplaceGlossaryAtomId"
+    );
   });
 
   it("keeps the search-multi and replace-single glossary selections separate", () => {

@@ -659,4 +659,42 @@ describe("debug log details sanitizer", () => {
     expect(details).not.toHaveProperty("searchedCharacterCount");
     expect(details).not.toHaveProperty("searchStartedAt");
   });
+
+  it("#425 follow-up: keeps privacy-safe Active Find diagnostic fields, normalizes an unknown mode", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        activeFindMode: "search",
+        activeFindModeBefore: "grep",
+        activeFindOpenBefore: true,
+        activeFindDocumentStateCount: 3,
+        activeFindSurfaceInstanceId: "surface-2",
+        activeFindEditorInstanceId: "editor-7"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      activeFindMode: "search",
+      activeFindModeBefore: "unknown",
+      activeFindOpenBefore: true,
+      activeFindDocumentStateCount: 3,
+      activeFindSurfaceInstanceId: "surface-2",
+      activeFindEditorInstanceId: "editor-7"
+    });
+  });
+
+  it("#425 follow-up: drops junk Active Find diagnostic values", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        activeFindMode: "search",
+        activeFindDocumentStateCount: -1,
+        activeFindSurfaceInstanceId: "a b c/../secret",
+        activeFindEditorInstanceId: 42
+      },
+      context()
+    );
+
+    // only the valid field survives
+    expect(details).toEqual({ activeFindMode: "search" });
+  });
 });

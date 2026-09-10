@@ -53,7 +53,7 @@ import {
   indentOnInput,
   syntaxHighlighting
 } from "@codemirror/language";
-import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
+import { searchKeymap } from "@codemirror/search";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
@@ -114,7 +114,6 @@ export function createMarkdownEditorBaseSetup(
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),
-    highlightSelectionMatches(),
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,

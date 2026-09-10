@@ -202,6 +202,10 @@ import {
   rendererDebugErrorInfo
 } from "./debugLog";
 import { DebugLogPanel } from "./DebugLogPanel";
+import {
+  getActiveFindSessionSummary,
+  resetActiveFindSession
+} from "./find/activeFindSessionStore";
 import { createDocumentOpenIdFactory } from "./documentOpenId";
 import {
   EditorSurface,
@@ -6652,6 +6656,29 @@ export function App(): JSX.Element {
     );
   }
 
+  /**
+   * #425 follow-up: the Active Find session (per-`documentKey` query / replace /
+   * options / glossary conditions, and the surface-global panel open/mode) is a
+   * process-lived module store (see find/activeFindSessionStore.ts). A project
+   * close / switch must clear it so another project never restores the previous
+   * one's search terms. Logs a privacy-safe entry (booleans / counts only, no
+   * user text).
+   */
+  function resetActiveFindSessionForProjectContextChange(): void {
+    const before = getActiveFindSessionSummary();
+    resetActiveFindSession();
+    logRendererDebugEvent({
+      level: "info",
+      event: "activeFind.session.reset",
+      details: {
+        reason: "project_context_changed",
+        activeFindOpenBefore: before.open,
+        activeFindModeBefore: before.mode,
+        activeFindDocumentStateCount: before.documentStateCount
+      }
+    });
+  }
+
   async function activateProject(
     openedProject: PergamumProject
   ): Promise<StatusMessage | null> {
@@ -6661,6 +6688,7 @@ export function App(): JSX.Element {
       rootPath: openedProject.rootPath
     };
 
+    resetActiveFindSessionForProjectContextChange();
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
     sidebarGlossaryOccurrenceCursorRef.current = null;
@@ -6749,6 +6777,7 @@ export function App(): JSX.Element {
 
     projectCloseBarrierReleaseAfterCommitRef.current = commitBarrierToken;
     projectActivationLifetimeRef.current.startProjectContextSwitch();
+    resetActiveFindSessionForProjectContextChange();
     editorNavigation.reset();
     lastActiveMarkdownEditorIdRef.current = null;
     sidebarGlossaryOccurrenceCursorRef.current = null;
@@ -10238,6 +10267,12 @@ export function App(): JSX.Element {
                         }
                         undoHistoryMinDepth={
                           effectiveSettings.editor.undoHistoryMinDepth
+                        }
+                        selectionHighlightMode={
+                          effectiveSettings.editor.selectionHighlightMode
+                        }
+                        findGutterMarkers={
+                          effectiveSettings.editor.findGutterMarkers
                         }
                         whitespaceSettings={
                           effectiveSettings.editor.whitespace

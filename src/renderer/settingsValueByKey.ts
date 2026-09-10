@@ -92,6 +92,10 @@ export function readSettingValue(
       return settings.editor.characterCount.exclude.markdownComments;
     case "editor.undoHistoryMinDepth":
       return settings.editor.undoHistoryMinDepth;
+    case "editor.selectionHighlightMode":
+      return settings.editor.selectionHighlightMode;
+    case "editor.findGutterMarkers":
+      return settings.editor.findGutterMarkers;
     case "files.newFile.lineEnding":
       return settings.files.newFile.lineEnding;
     case "files.newFile.encoding":

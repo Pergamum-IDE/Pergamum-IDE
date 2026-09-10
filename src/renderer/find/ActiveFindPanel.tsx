@@ -309,17 +309,13 @@ export function ActiveFindPanel({
     if (!plainCtrlOrCmd) {
       return false;
     }
-    if (event.code === "KeyF") {
+    if (event.code === "KeyF" || event.code === "KeyH") {
+      const nextMode: ActiveFindPanelMode =
+        event.code === "KeyF" ? "search" : "replace";
       event.preventDefault();
       event.stopPropagation();
       // The owner re-focuses + selects the query input via `focusToken`.
-      onModeChange("search");
-      return true;
-    }
-    if (event.code === "KeyH") {
-      event.preventDefault();
-      event.stopPropagation();
-      onModeChange("replace");
+      onModeChange(nextMode);
       return true;
     }
     return false;

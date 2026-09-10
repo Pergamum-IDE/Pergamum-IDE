@@ -138,6 +138,9 @@ export type ParagraphIndentExcludeLeadingCharacters = SettingValueOf<
 export type UndoHistoryMinDepth = SettingValueOf<
   "editor.undoHistoryMinDepth"
 >;
+export type SelectionHighlightMode = SettingValueOf<
+  "editor.selectionHighlightMode"
+>;
 
 export interface ApplicationEditorLineEndingSettings {
   expected: ExpectedLineEnding;
@@ -174,6 +177,8 @@ export interface ApplicationEditorSettings {
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
   undoHistoryMinDepth: UndoHistoryMinDepth;
+  selectionHighlightMode: SelectionHighlightMode;
+  findGutterMarkers: boolean;
 }
 
 export interface ApplicationNewFileSettings {
@@ -362,6 +367,8 @@ export interface EffectiveEditorSettings {
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
   characterCount: ApplicationEditorCharacterCountSettings;
   undoHistoryMinDepth: UndoHistoryMinDepth;
+  selectionHighlightMode: SelectionHighlightMode;
+  findGutterMarkers: boolean;
 }
 
 export interface EffectiveFilesSettings {
@@ -523,7 +530,11 @@ export const builtInDefaultSettings: EffectiveSettings = {
     },
     undoHistoryMinDepth: getCatalogDefaultValue(
       "editor.undoHistoryMinDepth"
-    )
+    ),
+    selectionHighlightMode: getCatalogDefaultValue(
+      "editor.selectionHighlightMode"
+    ),
+    findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers")
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -618,7 +629,10 @@ export const defaultApplicationSettings: ApplicationSettings = {
           builtInDefaultSettings.editor.characterCount.exclude.markdownComments
       }
     },
-    undoHistoryMinDepth: builtInDefaultSettings.editor.undoHistoryMinDepth
+    undoHistoryMinDepth: builtInDefaultSettings.editor.undoHistoryMinDepth,
+    selectionHighlightMode:
+      builtInDefaultSettings.editor.selectionHighlightMode,
+    findGutterMarkers: builtInDefaultSettings.editor.findGutterMarkers
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -711,7 +725,10 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
         }
       },
       undoHistoryMinDepth:
-        defaultApplicationSettings.editor.undoHistoryMinDepth
+        defaultApplicationSettings.editor.undoHistoryMinDepth,
+      selectionHighlightMode:
+        defaultApplicationSettings.editor.selectionHighlightMode,
+      findGutterMarkers: defaultApplicationSettings.editor.findGutterMarkers
     },
     search: cloneDefaultSearchSettings(),
     files: {
@@ -854,7 +871,9 @@ export function resolveEffectiveSettings(
       },
       // #394 Step 1: applicationOnly, always concrete already — same
       // fallback-free pass-through as lineEnding/whitespace above.
-      undoHistoryMinDepth: applicationSettings.editor.undoHistoryMinDepth
+      undoHistoryMinDepth: applicationSettings.editor.undoHistoryMinDepth,
+      selectionHighlightMode: applicationSettings.editor.selectionHighlightMode,
+      findGutterMarkers: applicationSettings.editor.findGutterMarkers
     },
     // #424 Slice 7: nearby search range — Project override > Application >
     // Built-in, per key (the project override is sparse).

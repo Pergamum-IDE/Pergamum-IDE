@@ -915,6 +915,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.sound.newline.enabled",
         "workbench.sound.keypress.enabled",
         "commandPalette.footerDetail.enable",
+        "editor.findGutterMarkers",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderTab",
@@ -1119,16 +1120,55 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.markdownComments",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.whitespace",
+        "editor.findGutterMarkers",
         "editor.fontFamily",
         "editor.lineEnding.expected",
         "editor.lineEnding.markerGlyph",
         "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.selectionHighlightMode",
         "editor.undoHistoryMinDepth",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderOtherUnicodeSpace",
         "editor.whitespace.renderTab"
       ]);
+    });
+
+    it("#425 registers selectionHighlightMode as a 3-state applicationOnly enum and findGutterMarkers as an independent boolean", () => {
+      const selectionHighlightMode = getCatalogEntry(
+        "editor.selectionHighlightMode"
+      );
+      const findGutterMarkers = getCatalogEntry("editor.findGutterMarkers");
+
+      expect(selectionHighlightMode).toMatchObject({
+        type: "enum",
+        scope: "applicationOnly",
+        enumValues: ["off", "default", "smart"],
+        defaultValue: "default"
+      });
+      expect(findGutterMarkers).toMatchObject({
+        type: "boolean",
+        scope: "applicationOnly",
+        defaultValue: false
+      });
+      expect(
+        validateCatalogValue("editor.selectionHighlightMode", "off")
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("editor.selectionHighlightMode", "default")
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("editor.selectionHighlightMode", "smart")
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("editor.selectionHighlightMode", "smartWithGutter")
+      ).toEqual({ ok: false, failure: "enumValue" });
+      expect(
+        validateCatalogValue("editor.findGutterMarkers", true)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("editor.findGutterMarkers", "true")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
     it("has no free-form category field on catalog entries", () => {
@@ -1176,10 +1216,12 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.characterCount.exclude.markdownComments",
           "editor.characterCount.exclude.markdownSyntax",
           "editor.characterCount.exclude.whitespace",
+          "editor.findGutterMarkers",
           "editor.fontFamily",
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.selectionHighlightMode",
           "editor.undoHistoryMinDepth",
           "editor.whitespace.renderAsciiSpace",
           "editor.whitespace.renderIdeographicSpace",

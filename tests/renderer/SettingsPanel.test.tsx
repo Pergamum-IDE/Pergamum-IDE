@@ -428,6 +428,8 @@ describe("SettingsPanelView category behavior (#230)", () => {
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "editor.fontFamily",
       "editor.undoHistoryMinDepth",
+      "editor.selectionHighlightMode",
+      "editor.findGutterMarkers",
       "editor.paragraphIndent.excludeLeadingCharacters",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
@@ -1063,7 +1065,9 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         whitespace: settings.editor.whitespace,
         paragraphIndent: settings.editor.paragraphIndent,
         characterCount: settings.editor.characterCount,
-        undoHistoryMinDepth: settings.editor.undoHistoryMinDepth
+        undoHistoryMinDepth: settings.editor.undoHistoryMinDepth,
+        selectionHighlightMode: settings.editor.selectionHighlightMode,
+        findGutterMarkers: settings.editor.findGutterMarkers
       },
       files: settings.files
     });
@@ -1119,6 +1123,63 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       editor: {
         ...settings.editor,
         paragraphIndent: { excludeLeadingCharacters: "「『（〖" }
+      },
+      files: settings.files
+    });
+  });
+
+  it("#425 saves selection highlight mode and find gutter marker settings from Settings > Editor", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "editor",
+      onChangeSettings
+    });
+    const selectionMode = controlElement(
+      element,
+      "editor.selectionHighlightMode"
+    );
+    const findGutterMarkers = controlElement(
+      element,
+      "editor.findGutterMarkers"
+    );
+
+    expect(selectionMode.props.value).toBe("default");
+    expect(findGutterMarkers.props.checked).toBe(false);
+
+    (selectionMode.props.onChange as (event: { target: { value: string } }) => void)(
+      { target: { value: "smart" } }
+    );
+
+    expect(onChangeSettings).toHaveBeenLastCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
+      preview: settings.preview,
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: {
+        ...settings.editor,
+        selectionHighlightMode: "smart"
+      },
+      files: settings.files
+    });
+
+    (findGutterMarkers.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void)({ target: { checked: true } });
+
+    expect(onChangeSettings).toHaveBeenLastCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
+      preview: settings.preview,
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: {
+        ...settings.editor,
+        findGutterMarkers: true
       },
       files: settings.files
     });

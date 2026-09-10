@@ -3709,6 +3709,31 @@ label.settingsItemHeader {
   order: 1;
 }
 
+.editorHost .cm-pergamum-findGutter {
+  min-width: 18px;
+}
+
+.editorHost .cm-pergamum-findGutterMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: #52616f;
+  opacity: 0.86;
+}
+
+.editorHost .cm-pergamum-findGutterMarker svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.cm-pergamum-selectionMatch {
+  background: rgba(92, 141, 190, 0.22);
+  border-radius: 2px;
+}
+
 /* #424 Slice 1: active-document Find panel, between the editor pane header
    and the CodeMirror surface. Two-row stack so Slice 2+ can grow the query
    row (語彙 / Ab / Aa / .*) and the nav row (マークする) without a reflow. */

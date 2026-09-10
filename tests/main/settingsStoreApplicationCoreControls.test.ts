@@ -61,6 +61,12 @@ const defaultParagraphIndentSettings = {
 const defaultUndoHistoryMinDepth = getCatalogDefaultValue(
   "editor.undoHistoryMinDepth"
 );
+const defaultSelectionHighlightMode = getCatalogDefaultValue(
+  "editor.selectionHighlightMode"
+);
+const defaultFindGutterMarkers = getCatalogDefaultValue(
+  "editor.findGutterMarkers"
+);
 
 const defaultCharacterCountSettings = {
   exclude: {
@@ -153,7 +159,9 @@ function validSaveRequest(
       whitespace: defaultWhitespaceSettings,
       paragraphIndent: defaultParagraphIndentSettings,
       characterCount: defaultCharacterCountSettings,
-      undoHistoryMinDepth: defaultUndoHistoryMinDepth
+      undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+      selectionHighlightMode: defaultSelectionHighlightMode,
+      findGutterMarkers: defaultFindGutterMarkers
     },
     search: {
       nearby: {
@@ -407,6 +415,8 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
             renderOtherUnicodeSpace: "yes"
           },
           paragraphIndent: { excludeLeadingCharacters: 42 },
+          selectionHighlightMode: "defaultWithGutter",
+          findGutterMarkers: "yes",
           // #394 Step 1: below the numericRange minimum (100) — must fall
           // back to the catalog default, not fail startup.
           undoHistoryMinDepth: 50
@@ -438,6 +448,10 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.editor.undoHistoryMinDepth).toBe(
       defaultUndoHistoryMinDepth
     );
+    expect(settings.editor.selectionHighlightMode).toBe(
+      defaultSelectionHighlightMode
+    );
+    expect(settings.editor.findGutterMarkers).toBe(defaultFindGutterMarkers);
     expect(settings.files.newFile).toEqual({
       lineEnding: "lf",
       encoding: "utf8"
@@ -563,7 +577,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
               headings: true
             }
           },
-          undoHistoryMinDepth: 1000
+          undoHistoryMinDepth: 1000,
+          selectionHighlightMode: "smart",
+          findGutterMarkers: true
         },
         commandPalette: {
           footerDetail: {
@@ -627,7 +643,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           headings: true
         }
       },
-      undoHistoryMinDepth: 1000
+      undoHistoryMinDepth: 1000,
+      selectionHighlightMode: "smart",
+      findGutterMarkers: true
     });
     expect(written.files).toEqual({
       newFile: {
@@ -670,7 +688,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           whitespace: defaultWhitespaceSettings,
           paragraphIndent: defaultParagraphIndentSettings,
           characterCount: defaultCharacterCountSettings,
-          undoHistoryMinDepth: 1000
+          undoHistoryMinDepth: 1000,
+          selectionHighlightMode: defaultSelectionHighlightMode,
+          findGutterMarkers: defaultFindGutterMarkers
         }
       })
     );
@@ -688,6 +708,39 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     const reloaded = await loadSettings();
 
     expect(reloaded.editor.undoHistoryMinDepth).toBe(1000);
+  });
+
+  it("#425 changed editor.selectionHighlightMode and editor.findGutterMarkers round-trip through save then load", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    await saveApplicationSettings(
+      validSaveRequest({
+        editor: {
+          lineEnding: defaultLineEndingSettings,
+          whitespace: defaultWhitespaceSettings,
+          paragraphIndent: defaultParagraphIndentSettings,
+          characterCount: defaultCharacterCountSettings,
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+          selectionHighlightMode: "off",
+          findGutterMarkers: true
+        }
+      })
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+
+    expect(written.editor.selectionHighlightMode).toBe("off");
+    expect(written.editor.findGutterMarkers).toBe(true);
+
+    fsMock.readFile.mockResolvedValue(writtenContent);
+    const reloaded = await loadSettings();
+
+    expect(reloaded.editor.selectionHighlightMode).toBe("off");
+    expect(reloaded.editor.findGutterMarkers).toBe(true);
   });
 
   it("#407 B1: changed imageAttachment.* values round-trip through save then load", async () => {
@@ -909,7 +962,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           whitespace: defaultWhitespaceSettings,
           paragraphIndent: defaultParagraphIndentSettings,
           characterCount: defaultCharacterCountSettings,
-          undoHistoryMinDepth: defaultUndoHistoryMinDepth
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+          selectionHighlightMode: defaultSelectionHighlightMode,
+          findGutterMarkers: defaultFindGutterMarkers
         }
       }),
       validSaveRequest({
@@ -930,7 +985,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
             excludeLeadingCharacters: 42 as unknown as string
           },
           characterCount: defaultCharacterCountSettings,
-          undoHistoryMinDepth: defaultUndoHistoryMinDepth
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+          selectionHighlightMode: defaultSelectionHighlightMode,
+          findGutterMarkers: defaultFindGutterMarkers
         }
       }),
       validSaveRequest({
@@ -944,7 +1001,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
               markdownSyntax: "yes" as unknown as boolean
             }
           },
-          undoHistoryMinDepth: defaultUndoHistoryMinDepth
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+          selectionHighlightMode: defaultSelectionHighlightMode,
+          findGutterMarkers: defaultFindGutterMarkers
         }
       }),
       validSaveRequest({
@@ -956,7 +1015,34 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           },
           paragraphIndent: defaultParagraphIndentSettings,
           characterCount: defaultCharacterCountSettings,
-          undoHistoryMinDepth: defaultUndoHistoryMinDepth
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+          selectionHighlightMode: defaultSelectionHighlightMode,
+          findGutterMarkers: defaultFindGutterMarkers
+        }
+      }),
+      validSaveRequest({
+        editor: {
+          lineEnding: defaultLineEndingSettings,
+          whitespace: defaultWhitespaceSettings,
+          paragraphIndent: defaultParagraphIndentSettings,
+          characterCount: defaultCharacterCountSettings,
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+          selectionHighlightMode: "defaultWithGutter" as unknown as
+            | "off"
+            | "default"
+            | "smart",
+          findGutterMarkers: defaultFindGutterMarkers
+        }
+      }),
+      validSaveRequest({
+        editor: {
+          lineEnding: defaultLineEndingSettings,
+          whitespace: defaultWhitespaceSettings,
+          paragraphIndent: defaultParagraphIndentSettings,
+          characterCount: defaultCharacterCountSettings,
+          undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+          selectionHighlightMode: defaultSelectionHighlightMode,
+          findGutterMarkers: "yes" as unknown as boolean
         }
       }),
       validSaveRequest({

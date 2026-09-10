@@ -191,6 +191,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.selectionHighlightMode",
+          "editor.findGutterMarkers",
           "editor.undoHistoryMinDepth",
           "editor.whitespace.renderAsciiSpace",
           "editor.whitespace.renderIdeographicSpace",
@@ -450,6 +452,44 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(getSettingCatalogItem("workbench.statusBar.visible")?.category).toBe(
         "application"
       );
+    });
+
+    it("#425 places selection highlight mode and find gutter marker controls independently in Settings > Editor", () => {
+      expect(getSettingCatalogItem("editor.selectionHighlightMode")).toMatchObject(
+        {
+          category: "editor",
+          order: 130,
+          control: {
+            kind: "select",
+            options: [
+              {
+                value: "off",
+                labelKey:
+                  "settings.editor.selectionHighlightMode.option.off.label"
+              },
+              {
+                value: "default",
+                labelKey:
+                  "settings.editor.selectionHighlightMode.option.default.label"
+              },
+              {
+                value: "smart",
+                labelKey:
+                  "settings.editor.selectionHighlightMode.option.smart.label",
+                descriptionKey:
+                  "settings.editor.selectionHighlightMode.option.smart.description"
+              }
+            ]
+          },
+          defaultValue: "default"
+        }
+      );
+      expect(getSettingCatalogItem("editor.findGutterMarkers")).toMatchObject({
+        category: "editor",
+        order: 140,
+        control: { kind: "switch" },
+        defaultValue: false
+      });
     });
 
     it("every item's labelKey / descriptionKey resolves in ja and en", () => {

@@ -12,6 +12,7 @@ import {
   debugLogDbOperations,
   debugLogLineEndingKinds,
   debugLogOperations,
+  debugLogActiveFindModes,
   debugLogPathKinds,
   debugLogPlatforms,
   debugLogReasons,
@@ -28,6 +29,7 @@ import {
   type DebugLogCommandExecutionSource,
   knownDebugLogCommandIds,
   knownDebugLogStatusKeys,
+  type DebugLogActiveFindMode,
   type DebugLogArch,
   type DebugLogDbEntityKind,
   type DebugLogDbOperation,
@@ -914,6 +916,50 @@ export function sanitizeDebugLogDetails(
 
         if (searchStartedAt) {
           sanitized.searchStartedAt = searchStartedAt;
+        }
+        break;
+      }
+      case "activeFindMode":
+        sanitized.activeFindMode = enumOrUnknown<DebugLogActiveFindMode>(
+          debugLogActiveFindModes,
+          value
+        );
+        break;
+      case "activeFindModeBefore":
+        sanitized.activeFindModeBefore = enumOrUnknown<DebugLogActiveFindMode>(
+          debugLogActiveFindModes,
+          value
+        );
+        break;
+      case "activeFindOpenBefore": {
+        const activeFindOpenBefore = sanitizeBoolean(value);
+
+        if (activeFindOpenBefore !== undefined) {
+          sanitized.activeFindOpenBefore = activeFindOpenBefore;
+        }
+        break;
+      }
+      case "activeFindDocumentStateCount": {
+        const activeFindDocumentStateCount = sanitizeNonNegativeInteger(value);
+
+        if (activeFindDocumentStateCount !== undefined) {
+          sanitized.activeFindDocumentStateCount = activeFindDocumentStateCount;
+        }
+        break;
+      }
+      case "activeFindSurfaceInstanceId": {
+        const activeFindSurfaceInstanceId = sanitizeSafeCode(value);
+
+        if (activeFindSurfaceInstanceId) {
+          sanitized.activeFindSurfaceInstanceId = activeFindSurfaceInstanceId;
+        }
+        break;
+      }
+      case "activeFindEditorInstanceId": {
+        const activeFindEditorInstanceId = sanitizeSafeCode(value);
+
+        if (activeFindEditorInstanceId) {
+          sanitized.activeFindEditorInstanceId = activeFindEditorInstanceId;
         }
         break;
       }

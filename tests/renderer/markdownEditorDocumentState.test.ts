@@ -36,6 +36,10 @@ function baseOptions(overrides: Partial<Parameters<typeof createMarkdownEditorDo
       renderTab: false,
       renderOtherUnicodeSpace: false
     }),
+    selectionHighlightCompartment: new Compartment(),
+    selectionHighlightModeRef: ref("default" as const),
+    findGutterMarkerCompartment: new Compartment(),
+    findGutterMarkersRef: ref(false),
     glossaryCompletionRef: ref(null),
     createUpdateListenerExtension: () => [],
     ...overrides

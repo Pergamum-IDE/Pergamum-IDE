@@ -76,6 +76,10 @@ export const debugLogEventNames = [
   "save.succeeded",
   "save.failed",
   "glossary.occurrences.scan.failed",
+  "activeFind.session.reset",
+  "activeFind.shortcut.routeFailed",
+  "activeFind.binding.published",
+  "activeFind.binding.unpublished",
   "search.started",
   "search.completed",
   "search.staleDiscarded",
@@ -238,6 +242,7 @@ export const debugLogReasons = [
   "glossary_already_saving",
   "standalone_save_canceled",
   "no_save_target",
+  "no_active_find_binding",
   "permissionDenied",
   "notFound",
   "invalidPath",
@@ -390,6 +395,18 @@ export const debugLogGlossarySearchRelationModes = [
 
 export type DebugLogGlossarySearchRelationMode =
   (typeof debugLogGlossarySearchRelationModes)[number];
+
+/**
+ * #425 follow-up: which panel mode an `activeFind.*` diagnostic event
+ * describes. NEVER accompanied by a query / replace / selection string.
+ */
+export const debugLogActiveFindModes = [
+  "search",
+  "replace",
+  "unknown"
+] as const;
+
+export type DebugLogActiveFindMode = (typeof debugLogActiveFindModes)[number];
 
 export type DebugLogErrorCategory =
   | "notFound"
@@ -552,6 +569,22 @@ export interface DebugLogDetails {
   searchAppliedToUi?: boolean;
   /** ISO timestamp the search execution started. */
   searchStartedAt?: string;
+
+  /**
+   * #425 follow-up Active Find diagnostics (`activeFind.session.reset` /
+   * `activeFind.shortcut.routeFailed` / `activeFind.binding.published` /
+   * `activeFind.binding.unpublished`). Privacy: NEVER carries the query,
+   * replace text, or a selection — only lengths / booleans / opaque instance
+   * ids / counts. `reason` reuses the shared `reason` field.
+   */
+  activeFindMode?: DebugLogActiveFindMode;
+  activeFindModeBefore?: DebugLogActiveFindMode;
+  activeFindOpenBefore?: boolean;
+  /** How many per-`documentKey` search states the session store held. */
+  activeFindDocumentStateCount?: number;
+  /** Opaque per-mount ids (e.g. `"surface-3"`, `"editor-7"`), never a path. */
+  activeFindSurfaceInstanceId?: string;
+  activeFindEditorInstanceId?: string;
 
   error?: SanitizedErrorInfo;
 }

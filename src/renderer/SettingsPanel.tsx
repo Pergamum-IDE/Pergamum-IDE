@@ -6,7 +6,8 @@ import type {
   NewFileEncoding,
   NewFileLineEnding,
   SaveApplicationSettingsRequest,
-  SearchNearbyUnit
+  SearchNearbyUnit,
+  SelectionHighlightMode
 } from "../shared/api";
 import type { Language, Translate, TranslationKey } from "../shared/i18n";
 import type { SettingKey } from "../shared/settingsCatalog";
@@ -443,6 +444,20 @@ function buildNextSettings(
 
       return saveRequest(settings, {
         editor: { ...settings.editor, undoHistoryMinDepth: rawValue }
+      });
+    case "editor.selectionHighlightMode":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          selectionHighlightMode: rawValue as SelectionHighlightMode
+        }
+      });
+    case "editor.findGutterMarkers":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          findGutterMarkers: Boolean(rawValue)
+        }
       });
     case "files.newFile.lineEnding":
       return saveRequest(settings, {

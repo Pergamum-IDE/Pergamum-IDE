@@ -81,6 +81,12 @@ const defaultCharacterCountSettings = {
 const defaultUndoHistoryMinDepth = getCatalogDefaultValue(
   "editor.undoHistoryMinDepth"
 );
+const defaultSelectionHighlightMode = getCatalogDefaultValue(
+  "editor.selectionHighlightMode"
+);
+const defaultFindGutterMarkers = getCatalogDefaultValue(
+  "editor.findGutterMarkers"
+);
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
@@ -108,7 +114,9 @@ function saveRequest(
       whitespace: defaultWhitespaceSettings,
       paragraphIndent: defaultParagraphIndentSettings,
       characterCount: defaultCharacterCountSettings,
-      undoHistoryMinDepth: defaultUndoHistoryMinDepth
+      undoHistoryMinDepth: defaultUndoHistoryMinDepth,
+      selectionHighlightMode: defaultSelectionHighlightMode,
+      findGutterMarkers: defaultFindGutterMarkers
     },
     files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
     imageAttachment: { saveDirectory: "", insertMarkdownLink: true },
