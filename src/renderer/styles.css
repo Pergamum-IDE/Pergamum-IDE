@@ -1460,36 +1460,53 @@ label.settingsItemHeader {
   padding: 16px;
 }
 
-.glossaryEntryEditorPaneNotice {
+/* #436 Slice 8: edit-mode loading / load-failed text, while
+   `GlossaryEntryEditForm` waits on / fails to fetch the target entry. */
+.glossaryEntryEditorPaneStatus {
   margin: 0;
   color: #6b7785;
   font-size: 13px;
 }
 
-/* #436 Slice 2: debug echo of the operation-API state. Replaced by the real
-   create / edit form in a later slice. */
-.glossaryEntryEditorPaneDebug {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 12px;
-  margin: 12px 0 0;
-  font-size: 13px;
+/* #436 Slice 8: the minimal Save control above the relocated (unmodified)
+   GlossaryEditor — the old glossaryEntry tab had none of its own; it saved
+   through the global Ctrl+S / Save command, which does not reach a pane that
+   is not an open editor tab. */
+.glossaryEntryEditorPaneEditSession {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  height: 100%;
 }
 
-.glossaryEntryEditorPaneDebugRow {
-  display: contents;
+.glossaryEntryEditorPaneEditActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e3e8ee;
+  background: #fbfcfd;
 }
 
-.glossaryEntryEditorPaneDebugRow dt {
-  color: #6b7785;
-  font-weight: 700;
+.glossaryEntryEditorPaneSaveButton {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid #2f6f9f;
+  border-radius: 4px;
+  background: #2f6f9f;
+  color: #ffffff;
+  cursor: pointer;
 }
 
-.glossaryEntryEditorPaneDebugRow dd {
-  margin: 0;
-  color: #17212b;
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
-    monospace;
+.glossaryEntryEditorPaneSaveButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.glossaryEntryEditorPaneSaveFailed {
+  color: #b3261e;
+  font-size: 12px;
 }
 
 /* #436 Slice 7: the shared Glossary Entry Editor Pane form (create today;

@@ -5,8 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t, type Translate } from "../../src/shared/i18n";
 import type {
   CreateGlossaryEntryInput,
-  GlossaryTag
+  GlossaryEntry,
+  GlossaryEntryId,
+  GlossaryTag,
+  UpdateGlossaryEntryInput
 } from "../../src/shared/glossary";
+import type { GlossaryEntryDraft } from "../../src/renderer/glossaryEntryDraft";
 import { GlossaryEntryEditorPane } from "../../src/renderer/GlossaryEntryEditorPane";
 import { GlossaryEntryForm } from "../../src/renderer/GlossaryEntryForm";
 import {
@@ -217,6 +221,13 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     height?: number;
     availableTags?: readonly GlossaryTag[];
     onCreateEntry?: (input: CreateGlossaryEntryInput) => Promise<boolean>;
+    onLoadEntry?: (
+      entryId: GlossaryEntryId
+    ) => Promise<GlossaryEntry | null>;
+    onSaveEntry?: (
+      input: UpdateGlossaryEntryInput
+    ) => Promise<GlossaryEntry>;
+    onDeleteEntry?: (draft: GlossaryEntryDraft) => Promise<boolean>;
     onClose?: () => void;
   }): void {
     act(() => {
@@ -229,17 +240,34 @@ describe("GlossaryEntryEditorPane (#436)", () => {
           onCreateEntry={
             options.onCreateEntry ?? (() => Promise.resolve(true))
           }
+          onLoadEntry={
+            options.onLoadEntry ?? (() => new Promise(() => undefined))
+          }
+          onSaveEntry={
+            options.onSaveEntry ??
+            (() => Promise.reject(new Error("not used in this test")))
+          }
+          onDeleteEntry={
+            options.onDeleteEntry ?? (() => Promise.resolve(false))
+          }
+          onOpenTagManager={() => undefined}
+          onNavigateToPreviousOccurrence={() => undefined}
+          onNavigateToNextOccurrence={() => undefined}
+          readOnly={false}
+          markerGlyph="↓"
+          expectedLineEnding="lf"
+          newFileLineEndingFallback="lf"
+          whitespaceSettings={{
+            renderIdeographicSpace: false,
+            renderAsciiSpace: false,
+            renderTab: false,
+            renderOtherUnicodeSpace: false
+          }}
+          undoHistoryMinDepth={100}
           onClose={options.onClose ?? (() => undefined)}
         />
       );
     });
-  }
-
-  function field(name: string): string | undefined {
-    return (
-      container.querySelector(`[data-field="${name}"]`)?.textContent ??
-      undefined
-    );
   }
 
   function representativeInput(): HTMLInputElement {
@@ -457,20 +485,47 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     });
   });
 
-  it("keeps edit mode as a debug echo of the pane state", () => {
+  it("delegates edit mode to GlossaryEntryEditForm, which loads entryId and hosts the EXISTING GlossaryEditor (#436 Slice 8)", async () => {
+    const onLoadEntry = vi.fn(() =>
+      Promise.resolve({
+        id: "entry-7",
+        description: "",
+        atoms: [
+          {
+            id: "atom-1",
+            entryId: "entry-7",
+            sortOrder: 0,
+            value: "石田三成",
+            matchFlags: 0,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z"
+          }
+        ],
+        tags: [],
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z"
+      })
+    );
     renderPane({
       state: openGlossaryEntryEditPane({
         source: "glossary-settings",
         entryId: "entry-7"
-      })
+      }),
+      onLoadEntry
     });
 
-    expect(field("mode")).toBe("edit");
-    expect(field("source")).toBe("glossary-settings");
-    expect(field("entryId")).toBe("entry-7");
+    expect(onLoadEntry).toHaveBeenCalledWith("entry-7");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // No new create-mode form in edit mode — the EXISTING GlossaryEditor.
+    expect(container.querySelector(".glossaryEntryForm")).toBeNull();
+    expect(container.querySelector(".glossaryEditor")).not.toBeNull();
     expect(
-      container.querySelector(".glossaryEntryForm")
-    ).toBeNull();
+      container.querySelector<HTMLInputElement>(".glossaryEditorAtomValue")
+        ?.value
+    ).toBe("石田三成");
   });
 
   it("applies the supplied height to the pane (Slice 6 remediation)", () => {

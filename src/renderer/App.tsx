@@ -60,6 +60,7 @@ import type {
   GlossaryEntry,
   GlossaryEntryId,
   GlossaryTag,
+  UpdateGlossaryEntryInput,
   UpdateGlossaryTagInput
 } from "../shared/glossary";
 import type {
@@ -3501,6 +3502,104 @@ export function App(): JSX.Element {
         values: { message: errorMessage(error, translate) }
       });
       return false;
+    }
+  }
+
+  // #436 Phase 8-0 PoC (Slice 8): load the entry an edit-mode pane targets.
+  // A thin forward of the existing glossary IPC — `GlossaryEntryEditForm`
+  // owns the loading / failed / ready state and the race guard.
+  async function handleLoadGlossaryEntryFromPane(
+    entryId: GlossaryEntryId
+  ): Promise<GlossaryEntry | null> {
+    return window.pergamum.glossary.getById(entryId);
+  }
+
+  // #436 Phase 8-0 PoC (Slice 8): save an edit-mode pane's draft. This is the
+  // SAME glossary update IPC and save-failed dialog the old glossaryEntry
+  // tab's Ctrl+S save used (`saveGlossaryEntryByEditorId`) — reused here
+  // without its `openDocumentsState` / `EditorId` plumbing, since the pane is
+  // never an open editor tab. Resolves the saved entry (so the caller can
+  // re-key local atom ids via `applyGlossaryEntryDraftSaveResult`); rethrows
+  // after surfacing the error so the caller marks the draft `saveFailed`.
+  async function handleSaveGlossaryEntryFromPane(
+    input: UpdateGlossaryEntryInput
+  ): Promise<GlossaryEntry> {
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+
+    try {
+      const savedEntry = await window.pergamum.glossary.update(input);
+
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setGlossaryRefreshToken((token) => token + 1);
+        setStatus({
+          key: "status.savedPath",
+          values: { path: representativeGlossarySurface(savedEntry) }
+        });
+      }
+
+      return savedEntry;
+    } catch (error) {
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setStatus({
+          key: "status.saveFailed",
+          values: { message: errorMessage(error, translate) }
+        });
+        await showGlossarySaveFailedDialog();
+      }
+
+      throw error;
+    }
+  }
+
+  // #436 Phase 8-0 PoC (Slice 8): delete an entry from the bottom pane's edit
+  // mode. Reuses the SAME destructive confirm dialog (`confirmDeleteGlossaryEntry`)
+  // and the same in-flight guard `deleteActiveGlossaryEntry` / the Glossary
+  // Management delete use — but, unlike those, there is no glossaryEntry tab
+  // to invalidate or close here, only the pane (the caller closes it).
+  async function handleDeleteGlossaryEntryFromPane(
+    draft: GlossaryEntryDraft
+  ): Promise<boolean> {
+    if (glossaryDeleteInFlightRef.current) {
+      return false;
+    }
+
+    glossaryDeleteInFlightRef.current = true;
+
+    try {
+      if (!(await confirmDeleteGlossaryEntry(draft))) {
+        return false;
+      }
+
+      const result = await window.pergamum.glossary.delete(draft.entry.id);
+
+      if (!result.deleted) {
+        return false;
+      }
+
+      setGlossaryRefreshToken((token) => token + 1);
+      setGlossaryOccurrenceTrackingState((state) =>
+        state.kind === "active" && state.entryId === draft.entry.id
+          ? inactiveGlossaryOccurrenceTrackingState
+          : state
+      );
+      return true;
+    } catch (error) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    } finally {
+      glossaryDeleteInFlightRef.current = false;
     }
   }
 
@@ -10444,9 +10543,11 @@ export function App(): JSX.Element {
                   {/* #436 Phase 8-0 PoC: the former Utility Window slot now
                       frames the Glossary Entry Editor Pane, below WHATEVER tab
                       content is shown above. Create mode is a real new-entry
-                      form (Slice 6); edit mode is still a debug echo. It never
-                      opens a glossary entry tab, and never changes the active
-                      tab. Resizable via the top-edge handle. */}
+                      form (Slice 6/7); edit mode (Slice 8) hosts the EXISTING
+                      GlossaryEditor.tsx (the same screen the old glossaryEntry
+                      tab used) against a pane-local draft — never a revived
+                      glossaryEntry tab, never a change to the active tab.
+                      Resizable via the top-edge handle. */}
                   {glossaryEntryEditorPane.isOpen ? (
                     <>
                       <div
@@ -10478,6 +10579,36 @@ export function App(): JSX.Element {
                         )}
                         availableTags={glossaryTags}
                         onCreateEntry={handleCreateGlossaryEntryFromPane}
+                        onLoadEntry={handleLoadGlossaryEntryFromPane}
+                        onSaveEntry={handleSaveGlossaryEntryFromPane}
+                        onDeleteEntry={handleDeleteGlossaryEntryFromPane}
+                        onOpenTagManager={openGlossaryTagManagerTab}
+                        onNavigateToPreviousOccurrence={(entryId) =>
+                          executeUiCommand(
+                            glossaryCommandIds.previousOccurrence,
+                            { source: "editorSurface" },
+                            entryId
+                          )
+                        }
+                        onNavigateToNextOccurrence={(entryId) =>
+                          executeUiCommand(
+                            glossaryCommandIds.nextOccurrence,
+                            { source: "editorSurface" },
+                            entryId
+                          )
+                        }
+                        readOnly={project?.accessMode.kind === "readOnly"}
+                        markerGlyph={effectiveSettings.editor.lineEnding.markerGlyph}
+                        expectedLineEnding={
+                          effectiveSettings.editor.lineEnding.expected
+                        }
+                        newFileLineEndingFallback={
+                          effectiveSettings.files.newFile.lineEnding
+                        }
+                        whitespaceSettings={effectiveSettings.editor.whitespace}
+                        undoHistoryMinDepth={
+                          effectiveSettings.editor.undoHistoryMinDepth
+                        }
                         onClose={() =>
                           setGlossaryEntryEditorPane(
                             closeGlossaryEntryEditorPane()

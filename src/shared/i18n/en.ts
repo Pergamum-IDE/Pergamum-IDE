@@ -795,8 +795,6 @@ export const enTranslations = {
   "glossaryEditor.previousOccurrence": "Previous occurrence",
   "glossaryEditor.previousOccurrenceLabel": "◀",
   "glossaryEntryEditorPane.label": "Glossary Entry Editor",
-  "glossaryEntryEditorPane.poNotice":
-    "This pane is being introduced as part of the #436 PoC.",
   "glossaryEntryEditorPane.close": "Close",
   "glossaryEntryEditorPane.resizeHandle": "Resize the Glossary Entry Editor pane",
   "glossaryEntryEditorPane.form.representativeLabel": "Primary form",
@@ -810,6 +808,12 @@ export const enTranslations = {
   "glossaryEntryEditorPane.create.submit": "Create",
   "glossaryEntryEditorPane.create.failed":
     "Could not create the glossary entry.",
+  "glossaryEntryEditorPane.edit.loading": "Loading the glossary entry…",
+  "glossaryEntryEditorPane.edit.loadFailed":
+    "Could not load the glossary entry.",
+  "glossaryEntryEditorPane.edit.save": "Save",
+  "glossaryEntryEditorPane.edit.saveFailed":
+    "Could not save the glossary entry.",
   "glossaryTagEditor.background": "Background color",
   "glossaryTagEditor.cancel": "Cancel",
   "glossaryTagEditor.create": "Create",

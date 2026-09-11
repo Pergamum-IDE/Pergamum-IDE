@@ -1,12 +1,23 @@
 import type {
   CreateGlossaryEntryInput,
-  GlossaryTag
+  GlossaryEntry,
+  GlossaryEntryId,
+  GlossaryTag,
+  UpdateGlossaryEntryInput
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
+import type {
+  ApplicationEditorWhitespaceSettings,
+  ExpectedLineEnding,
+  LineEndingMarkerGlyph,
+  NewFileLineEnding
+} from "../shared/settings";
+import { GlossaryEntryEditForm } from "./GlossaryEntryEditForm";
 import {
   GlossaryEntryForm,
   type GlossaryEntryFormValue
 } from "./GlossaryEntryForm";
+import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
 import type { OpenGlossaryEntryEditorPaneState } from "./glossaryEntryEditorPaneState";
 
 interface GlossaryEntryEditorPaneProps {
@@ -17,6 +28,21 @@ interface GlossaryEntryEditorPaneProps {
   availableTags: readonly GlossaryTag[];
   /** Persist a new entry. Resolves `true` on success, `false` on failure. */
   onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<boolean>;
+  /** Load the entry an edit-mode pane targets. `null` = not found. */
+  onLoadEntry: (entryId: GlossaryEntryId) => Promise<GlossaryEntry | null>;
+  /** Persist an edit-mode draft. Resolves the saved entry; rejects on failure. */
+  onSaveEntry: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
+  /** Confirm + delete the entry being edited. `true` only if actually deleted. */
+  onDeleteEntry: (draft: GlossaryEntryDraft) => Promise<boolean>;
+  onOpenTagManager: () => void;
+  onNavigateToPreviousOccurrence: (entryId: GlossaryEntryId) => void;
+  onNavigateToNextOccurrence: (entryId: GlossaryEntryId) => void;
+  readOnly: boolean;
+  markerGlyph: LineEndingMarkerGlyph;
+  expectedLineEnding: ExpectedLineEnding;
+  newFileLineEndingFallback: NewFileLineEnding;
+  whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  undoHistoryMinDepth: number;
   onClose: () => void;
 }
 
@@ -25,8 +51,7 @@ interface GlossaryEntryEditorPaneProps {
  * tagIds}` value → the create IPC's `CreateGlossaryEntryInput`. The form has
  * no multi-atom UI yet, so the representative becomes the single
  * `sortOrder: 0` atom. Kept here (not inside `GlossaryEntryForm`) so the form
- * stays create/edit-agnostic — an edit-mode adapter to `UpdateGlossaryEntryInput`
- * lives beside this one, not inside the shared form.
+ * stays create-agnostic of the IPC shape.
  */
 function createGlossaryEntryInputFromFormValue(
   value: GlossaryEntryFormValue
@@ -45,13 +70,10 @@ function createGlossaryEntryInputFromFormValue(
  * slot the former Utility Window used, and replaces the per-entry glossary
  * editing tabs.
  *
- * - create mode: a real new-entry form. Slice 6 introduced it as a
- *   create-only component; Slice 7 generalized it to `GlossaryEntryForm` —
- *   per PO direction, registering and editing a glossary entry are never
- *   separate screens, so edit mode reuses the same component once wired up.
- * - edit  mode: still a debug echo of the operation-API state — the real edit
- *   wiring (load the entry, `GlossaryEntryForm` with an update adapter)
- *   arrives in a later slice.
+ * - create mode: a real new-entry form (`GlossaryEntryForm`, Slice 6/7).
+ * - edit   mode (Slice 8): the EXISTING `GlossaryEditor.tsx` — the same
+ *   screen the old glossaryEntry tab used — hosted by `GlossaryEntryEditForm`
+ *   against a pane-local draft. No new edit form was built for this Slice.
  */
 export function GlossaryEntryEditorPane({
   state,
@@ -59,6 +81,18 @@ export function GlossaryEntryEditorPane({
   height,
   availableTags,
   onCreateEntry,
+  onLoadEntry,
+  onSaveEntry,
+  onDeleteEntry,
+  onOpenTagManager,
+  onNavigateToPreviousOccurrence,
+  onNavigateToNextOccurrence,
+  readOnly,
+  markerGlyph,
+  expectedLineEnding,
+  newFileLineEndingFallback,
+  whitespaceSettings,
+  undoHistoryMinDepth,
   onClose
 }: GlossaryEntryEditorPaneProps): JSX.Element {
   const label = translate("glossaryEntryEditorPane.label");
@@ -101,25 +135,25 @@ export function GlossaryEntryEditorPane({
             onClose={onClose}
           />
         ) : (
-          <>
-            <p className="glossaryEntryEditorPaneNotice">
-              {translate("glossaryEntryEditorPane.poNotice")}
-            </p>
-            <dl className="glossaryEntryEditorPaneDebug">
-              <div className="glossaryEntryEditorPaneDebugRow">
-                <dt>Mode</dt>
-                <dd data-field="mode">{state.mode}</dd>
-              </div>
-              <div className="glossaryEntryEditorPaneDebugRow">
-                <dt>Source</dt>
-                <dd data-field="source">{state.source}</dd>
-              </div>
-              <div className="glossaryEntryEditorPaneDebugRow">
-                <dt>Entry ID</dt>
-                <dd data-field="entryId">{state.entryId}</dd>
-              </div>
-            </dl>
-          </>
+          <GlossaryEntryEditForm
+            key={state.entryId}
+            entryId={state.entryId}
+            availableTags={availableTags}
+            translate={translate}
+            readOnly={readOnly}
+            markerGlyph={markerGlyph}
+            expectedLineEnding={expectedLineEnding}
+            newFileLineEndingFallback={newFileLineEndingFallback}
+            whitespaceSettings={whitespaceSettings}
+            undoHistoryMinDepth={undoHistoryMinDepth}
+            onLoadEntry={onLoadEntry}
+            onSaveEntry={onSaveEntry}
+            onDeleteEntry={onDeleteEntry}
+            onOpenTagManager={onOpenTagManager}
+            onNavigateToPreviousOccurrence={onNavigateToPreviousOccurrence}
+            onNavigateToNextOccurrence={onNavigateToNextOccurrence}
+            onClose={onClose}
+          />
         )}
       </div>
     </section>

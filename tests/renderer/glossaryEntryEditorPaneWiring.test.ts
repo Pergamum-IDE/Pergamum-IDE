@@ -173,4 +173,81 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
       expect(body).not.toContain("openEditor");
     }
   });
+
+  it("#436 Slice 8: edit mode's App handlers reuse the EXISTING glossary getById/update/delete IPC + dialogs, never a tab", () => {
+    const source = appSource();
+
+    const loadHandler = region(
+      source,
+      "async function handleLoadGlossaryEntryFromPane(",
+      260
+    );
+    expect(loadHandler).toContain(
+      "return window.pergamum.glossary.getById(entryId)"
+    );
+
+    const saveHandler = region(
+      source,
+      "async function handleSaveGlossaryEntryFromPane(",
+      1400
+    );
+    expect(saveHandler).toContain("await window.pergamum.glossary.update(input)");
+    expect(saveHandler).toContain("setGlossaryRefreshToken((token) => token + 1)");
+    expect(saveHandler).toContain("showGlossarySaveFailedDialog()");
+    expect(saveHandler).not.toContain("openEditor");
+    expect(saveHandler).not.toContain("createGlossaryEntryEditorId");
+    expect(saveHandler).not.toContain("openDocumentsState");
+
+    const deleteHandler = region(
+      source,
+      "async function handleDeleteGlossaryEntryFromPane(",
+      900
+    );
+    expect(deleteHandler).toContain("confirmDeleteGlossaryEntry(draft)");
+    expect(deleteHandler).toContain(
+      "await window.pergamum.glossary.delete(draft.entry.id)"
+    );
+    expect(deleteHandler).toContain("glossaryDeleteInFlightRef.current");
+    expect(deleteHandler).not.toContain("closeOpenEditor");
+    expect(deleteHandler).not.toContain("invalidateEditor");
+
+    // The pane gets all three edit-mode handlers.
+    const paneStart = source.indexOf("<GlossaryEntryEditorPane\n");
+    const paneElement = source.slice(
+      paneStart,
+      source.indexOf("/>", paneStart) + 2
+    );
+    expect(paneElement).toContain(
+      "onLoadEntry={handleLoadGlossaryEntryFromPane}"
+    );
+    expect(paneElement).toContain(
+      "onSaveEntry={handleSaveGlossaryEntryFromPane}"
+    );
+    expect(paneElement).toContain(
+      "onDeleteEntry={handleDeleteGlossaryEntryFromPane}"
+    );
+  });
+
+  it("#436 Slice 8: edit mode hosts the EXISTING GlossaryEditor.tsx via GlossaryEntryEditForm — no new edit form component", () => {
+    const paneSource = readFileSync(
+      "src/renderer/GlossaryEntryEditorPane.tsx",
+      "utf8"
+    );
+    expect(paneSource).toContain(
+      'import { GlossaryEntryEditForm } from "./GlossaryEntryEditForm"'
+    );
+    expect(paneSource).toContain("<GlossaryEntryEditForm");
+    // The create-mode form's mode="edit" was never wired up (Slice 8 does
+    // not use GlossaryEntryForm for editing).
+    expect(paneSource).not.toContain('mode="edit"');
+
+    const editFormSource = readFileSync(
+      "src/renderer/GlossaryEntryEditForm.tsx",
+      "utf8"
+    );
+    expect(editFormSource).toContain(
+      'import { GlossaryEditor } from "./GlossaryEditor"'
+    );
+    expect(editFormSource).toContain("<GlossaryEditor");
+  });
 });
