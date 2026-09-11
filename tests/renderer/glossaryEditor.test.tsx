@@ -14,7 +14,10 @@ import type {
 } from "../../src/shared/glossary";
 import type { Translate } from "../../src/shared/i18n";
 import { pergamumContextSurfaceAttribute } from "../../src/shared/editContextMenu";
-import { GlossaryEditor } from "../../src/renderer/GlossaryEditor";
+import {
+  GlossaryEditor,
+  type GlossaryEditorMode
+} from "../../src/renderer/GlossaryEditor";
 import {
   createGlossaryEntryDraft,
   updateGlossaryEntryDraftAtomValue,
@@ -101,21 +104,21 @@ function noopHandlers() {
     onUnassignTag: vi.fn(),
     onReorderAssignedTag: vi.fn(),
     onOpenTagManager: vi.fn(),
-    onDeleteEntry: vi.fn(),
-    onNavigateToPreviousOccurrence: vi.fn(),
-    onNavigateToNextOccurrence: vi.fn()
+    onDeleteEntry: vi.fn()
   };
 }
 
 function render(
   draft: GlossaryEntryDraft,
   overrides: {
+    mode?: GlossaryEditorMode;
     availableTags?: readonly GlossaryTag[];
     readOnly?: boolean;
   } = {}
 ): string {
   return renderToStaticMarkup(
     React.createElement(GlossaryEditor, {
+      mode: overrides.mode ?? "edit",
       draft,
       availableTags: overrides.availableTags ?? [tagA, tagB],
       translate,
@@ -247,26 +250,37 @@ describe("GlossaryEditor (#375)", () => {
     expect(markup).toContain('role="alert"');
   });
 
-  it("renders previous/next occurrence buttons and a delete-entry icon button", () => {
-    const markup = render(createGlossaryEntryDraft(entry()));
+  it("renders a delete-entry icon button in edit mode", () => {
+    const markup = render(createGlossaryEntryDraft(entry()), {
+      mode: "edit"
+    });
 
-    expect(markup).toContain("glossaryEditor.previousOccurrenceLabel");
-    expect(markup).toContain("glossaryEditor.nextOccurrenceLabel");
     expect(markup).toContain('aria-label="glossaryEditor.deleteEntry"');
   });
 
-  it("disables every write control in read-only mode but keeps occurrence navigation live", () => {
+  it("#436 Slice 9: hides the delete-entry button in create mode (nothing persisted yet)", () => {
+    const markup = render(createGlossaryEntryDraft(entry()), {
+      mode: "create"
+    });
+
+    expect(markup).not.toContain('aria-label="glossaryEditor.deleteEntry"');
+  });
+
+  it("#436 Slice 9: no longer renders occurrence navigation UI", () => {
+    const markup = render(createGlossaryEntryDraft(entry()));
+
+    expect(markup).not.toContain("glossaryEditorOccurrenceButton");
+    expect(markup).not.toContain("previousOccurrence");
+    expect(markup).not.toContain("nextOccurrence");
+  });
+
+  it("disables every write control in read-only mode", () => {
     const markup = render(createGlossaryEntryDraft(entry()), {
       readOnly: true
     });
 
     expect(markup).toContain("glossaryEditorAddAtom");
     expect(markup).toMatch(/glossaryEditorAddAtom[^>]*disabled/);
-    // Occurrence buttons are never disabled.
-    const occurrence = markup.slice(
-      markup.indexOf("glossaryEditorOccurrenceButton")
-    );
-    expect(occurrence.slice(0, 200)).not.toContain("disabled");
   });
 
   it("renders the draft description as Markdown preview, not raw source", () => {
@@ -310,6 +324,7 @@ describe("GlossaryEditor (#375) — tag manager link", () => {
     act(() => {
       root.render(
         React.createElement(GlossaryEditor, {
+          mode: "edit",
           draft: createGlossaryEntryDraft(entry()),
           availableTags: [tagA, tagB],
           translate,
@@ -349,6 +364,7 @@ describe("GlossaryEditor (#375) — atom drag-reorder", () => {
     act(() => {
       root.render(
         React.createElement(GlossaryEditor, {
+          mode: "edit",
           draft: createGlossaryEntryDraft(entry()),
           availableTags: [tagA, tagB],
           translate,
@@ -532,6 +548,7 @@ describe("GlossaryEditor — description editor line-break marker (#412 Blocker 
     act(() => {
       root.render(
         React.createElement(GlossaryEditor, {
+          mode: "edit",
           draft: draftWithMultilineDescription(),
           availableTags: [tagA, tagB],
           translate,

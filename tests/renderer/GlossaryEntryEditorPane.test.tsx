@@ -12,7 +12,6 @@ import type {
 } from "../../src/shared/glossary";
 import type { GlossaryEntryDraft } from "../../src/renderer/glossaryEntryDraft";
 import { GlossaryEntryEditorPane } from "../../src/renderer/GlossaryEntryEditorPane";
-import { GlossaryEntryForm } from "../../src/renderer/GlossaryEntryForm";
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
   GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT,
@@ -29,23 +28,6 @@ import {
   true;
 
 const translate: Translate = (key, values) => t("ja", key, values);
-
-const tagWarrior: GlossaryTag = {
-  id: "018f-tag-warrior",
-  label: "武将",
-  description: null,
-  backgroundRgb: "#334155",
-  foregroundRgb: "#ffffff",
-  sortOrder: 0,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z"
-};
-const tagPlace: GlossaryTag = {
-  ...tagWarrior,
-  id: "018f-tag-place",
-  label: "地名",
-  sortOrder: 1
-};
 
 describe("glossaryEntryEditorPaneState — Slice 2 operation API (#436)", () => {
   it("starts closed", () => {
@@ -148,60 +130,36 @@ describe("clampGlossaryEntryEditorPaneHeight — Slice 6 remediation (#436)", ()
   });
 });
 
-describe("GlossaryEntryForm — create/edit-agnostic per PO direction (#436 Slice 7)", () => {
-  let container: HTMLDivElement;
-  let root: Root;
+function savedEntryFixture(
+  overrides: Partial<GlossaryEntry> = {}
+): GlossaryEntry {
+  return {
+    id: "entry-99",
+    description: "",
+    atoms: [
+      {
+        id: "atom-99",
+        entryId: "entry-99",
+        sortOrder: 0,
+        value: "徳川家康",
+        matchFlags: 0,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    tags: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides
+  };
+}
 
-  beforeEach(() => {
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-  });
-
-  afterEach(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-
-  it("renders identically for mode='edit' — no separate edit form exists", () => {
-    act(() => {
-      root.render(
-        <GlossaryEntryForm
-          mode="edit"
-          initialValue={{
-            representative: "徳川家康",
-            description: "征夷大将軍",
-            tagIds: []
-          }}
-          availableTags={[]}
-          translate={translate}
-          submitLabel="保存"
-          failedMessage="語彙を保存できませんでした。"
-          onSubmit={() => Promise.resolve(true)}
-          onClose={() => undefined}
-        />
-      );
-    });
-
-    const form = container.querySelector("form.glossaryEntryForm");
-    expect(form?.getAttribute("data-form-mode")).toBe("edit");
-    expect(
-      container.querySelector<HTMLInputElement>(
-        ".glossaryEntryFormRepresentative"
-      )?.value
-    ).toBe("徳川家康");
-    expect(
-      container.querySelector<HTMLInputElement>(
-        ".glossaryEntryFormDescription"
-      )?.value
-    ).toBe("征夷大将軍");
-    expect(
-      container.querySelector(".glossaryEntryFormSubmit")?.textContent
-    ).toBe("保存");
-  });
-});
-
-describe("GlossaryEntryEditorPane (#436)", () => {
+// #436 Slice 9: create and edit both render the SAME `GlossaryEntryEditorSession`
+// hosting the EXISTING `GlossaryEditor` — no more separate `GlossaryEntryForm`.
+// These tests therefore exercise the pane through `GlossaryEditor`'s own DOM
+// (`.glossaryEditorAtomValue`, `.glossaryEditorDeleteButton`, …) rather than
+// the retired `.glossaryEntryForm*` classes.
+describe("GlossaryEntryEditorPane (#436 Slice 9: unified create/edit via GlossaryEditor)", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -220,7 +178,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     state: OpenGlossaryEntryEditorPaneState;
     height?: number;
     availableTags?: readonly GlossaryTag[];
-    onCreateEntry?: (input: CreateGlossaryEntryInput) => Promise<boolean>;
+    onCreateEntry?: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;
     onLoadEntry?: (
       entryId: GlossaryEntryId
     ) => Promise<GlossaryEntry | null>;
@@ -228,6 +186,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
       input: UpdateGlossaryEntryInput
     ) => Promise<GlossaryEntry>;
     onDeleteEntry?: (draft: GlossaryEntryDraft) => Promise<boolean>;
+    readOnly?: boolean;
     onClose?: () => void;
   }): void {
     act(() => {
@@ -238,7 +197,8 @@ describe("GlossaryEntryEditorPane (#436)", () => {
           height={options.height ?? 280}
           availableTags={options.availableTags ?? []}
           onCreateEntry={
-            options.onCreateEntry ?? (() => Promise.resolve(true))
+            options.onCreateEntry ??
+            (() => Promise.resolve(savedEntryFixture()))
           }
           onLoadEntry={
             options.onLoadEntry ?? (() => new Promise(() => undefined))
@@ -251,9 +211,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
             options.onDeleteEntry ?? (() => Promise.resolve(false))
           }
           onOpenTagManager={() => undefined}
-          onNavigateToPreviousOccurrence={() => undefined}
-          onNavigateToNextOccurrence={() => undefined}
-          readOnly={false}
+          readOnly={options.readOnly ?? false}
           markerGlyph="↓"
           expectedLineEnding="lf"
           newFileLineEndingFallback="lf"
@@ -272,10 +230,10 @@ describe("GlossaryEntryEditorPane (#436)", () => {
 
   function representativeInput(): HTMLInputElement {
     const input = container.querySelector<HTMLInputElement>(
-      ".glossaryEntryFormRepresentative"
+      ".glossaryEditorAtomValue"
     );
     if (!input) {
-      throw new Error("no representative input");
+      throw new Error("no representative atom input");
     }
     return input;
   }
@@ -291,17 +249,23 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     });
   }
 
-  function submitForm(): void {
+  function saveButton(): HTMLButtonElement {
+    const button = container.querySelector<HTMLButtonElement>(
+      ".glossaryEntryEditorPaneSaveButton"
+    );
+    if (!button) {
+      throw new Error("no save button");
+    }
+    return button;
+  }
+
+  function clickSave(): void {
     act(() => {
-      container
-        .querySelector("form.glossaryEntryForm")!
-        .dispatchEvent(
-          new window.Event("submit", { bubbles: true, cancelable: true })
-        );
+      saveButton().dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
   }
 
-  it("renders the create form seeded from presetRepresentative", () => {
+  it("renders the create session seeded from presetRepresentative, no delete button, Save labeled 作成", () => {
     renderPane({
       state: openGlossaryEntryCreatePane({
         source: "glossary-pane",
@@ -313,91 +277,31 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     expect(pane?.getAttribute("data-pane-mode")).toBe("create");
     expect(pane?.getAttribute("data-pane-source")).toBe("glossary-pane");
     expect(representativeInput().value).toBe("織田信長");
-    expect(
-      container.querySelector(".glossaryEntryFormSubmit")
-    ).not.toBeNull();
-    expect(
-      container.querySelector(".glossaryEntryFormCancel")
-    ).not.toBeNull();
-    // No debug echo in create mode any more.
-    expect(container.querySelector(".glossaryEntryEditorPaneDebug")).toBeNull();
+    expect(container.querySelector(".glossaryEditorDeleteButton")).toBeNull();
+    expect(saveButton().textContent).toBe("作成");
+    // #436 Slice 9: the retired create-only form no longer renders.
+    expect(container.querySelector(".glossaryEntryForm")).toBeNull();
+    expect(container.querySelector(".glossaryEditor")).not.toBeNull();
   });
 
-  it("seeds the input with 新しい語彙 for a preset-less side-pane open", () => {
+  it("seeds the atom with 新しい語彙 for a preset-less side-pane open", () => {
     renderPane({
       state: openGlossaryEntryCreatePane({ source: "glossary-pane" })
     });
     expect(representativeInput().value).toBe("新しい語彙");
   });
 
-  it("shows the available tags and toggles selection", () => {
-    renderPane({
-      state: openGlossaryEntryCreatePane({ source: "glossary-settings" }),
-      availableTags: [tagWarrior, tagPlace]
-    });
-
-    const toggles = container.querySelectorAll<HTMLButtonElement>(
-      ".glossaryEntryFormTagToggle"
-    );
-    expect(toggles).toHaveLength(2);
-    expect(toggles[0].getAttribute("aria-pressed")).toBe("false");
-    // "no tags selected" hint while nothing is selected
-    expect(container.textContent).toContain("タグが選択されていません");
-
-    act(() => toggles[0].click());
-    expect(
-      container
-        .querySelectorAll(".glossaryEntryFormTagToggle")[0]
-        .getAttribute("aria-pressed")
-    ).toBe("true");
-    expect(container.textContent).not.toContain("タグが選択されていません");
-  });
-
-  it("shows a hint and still allows creating when no tags exist", async () => {
-    const onCreateEntry = vi.fn(() => Promise.resolve(true));
-    renderPane({
-      state: openGlossaryEntryCreatePane({
-        source: "glossary-pane",
-        presetRepresentative: "港町"
-      }),
-      availableTags: [],
-      onCreateEntry
-    });
-
-    expect(container.textContent).toContain("利用できるタグがありません");
-
-    submitForm();
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(onCreateEntry).toHaveBeenCalledWith({
-      description: "",
-      atoms: [{ value: "港町", matchFlags: 0 }],
-      tagIds: []
-    });
-  });
-
-  it("trims the representative and passes selected tags on create, then closes", async () => {
-    const onCreateEntry = vi.fn(() => Promise.resolve(true));
+  it("creates the entry on Save, stays open, and flips the session to edit (Save→保存, delete button appears)", async () => {
+    const onCreateEntry = vi.fn(() => Promise.resolve(savedEntryFixture()));
     const onClose = vi.fn();
     renderPane({
       state: openGlossaryEntryCreatePane({ source: "glossary-settings" }),
-      availableTags: [tagWarrior, tagPlace],
       onCreateEntry,
       onClose
     });
 
     setInputValue(representativeInput(), "  徳川家康  ");
-    act(() =>
-      container
-        .querySelectorAll<HTMLButtonElement>(
-          ".glossaryEntryFormTagToggle"
-        )[1]
-        .click()
-    );
-
-    submitForm();
+    clickSave();
     await act(async () => {
       await Promise.resolve();
     });
@@ -405,32 +309,17 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     expect(onCreateEntry).toHaveBeenCalledWith({
       description: "",
       atoms: [{ value: "徳川家康", matchFlags: 0 }],
-      tagIds: [tagPlace.id]
+      tagIds: []
     });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    // #436 Slice 9: create does NOT close the pane — it becomes an edit
+    // session for the newly-created entry.
+    expect(onClose).not.toHaveBeenCalled();
+    expect(saveButton().textContent).toBe("保存");
+    expect(container.querySelector(".glossaryEditorDeleteButton")).not.toBeNull();
   });
 
-  it("blocks creating a blank / whitespace-only representative and shows an error", async () => {
-    const onCreateEntry = vi.fn(() => Promise.resolve(true));
-    renderPane({
-      state: openGlossaryEntryCreatePane({ source: "glossary-pane" }),
-      onCreateEntry
-    });
-
-    setInputValue(representativeInput(), "   ");
-    submitForm();
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(onCreateEntry).not.toHaveBeenCalled();
-    expect(
-      container.querySelector(".glossaryEntryFormError")?.textContent
-    ).toBe("代表表記を入力してください。");
-  });
-
-  it("shows an error and stays open when create fails", async () => {
-    const onCreateEntry = vi.fn(() => Promise.resolve(false));
+  it("shows an error and stays in create mode when create fails", async () => {
+    const onCreateEntry = vi.fn(() => Promise.reject(new Error("boom")));
     const onClose = vi.fn();
     renderPane({
       state: openGlossaryEntryCreatePane({
@@ -441,7 +330,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
       onClose
     });
 
-    submitForm();
+    clickSave();
     await act(async () => {
       await Promise.resolve();
     });
@@ -449,15 +338,18 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     expect(onCreateEntry).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
     expect(
-      container.querySelector(".glossaryEntryFormError")?.textContent
+      container.querySelector(".glossaryEntryEditorPaneSaveFailed")
+        ?.textContent
     ).toBe("語彙を作成できませんでした。");
+    // Still create mode — the draft was never actually persisted.
+    expect(saveButton().textContent).toBe("作成");
   });
 
   it("prevents a double submit while a create is in flight", async () => {
-    let resolveCreate: (ok: boolean) => void = () => undefined;
+    let resolveCreate: (entry: GlossaryEntry) => void = () => undefined;
     const onCreateEntry = vi.fn(
       () =>
-        new Promise<boolean>((resolve) => {
+        new Promise<GlossaryEntry>((resolve) => {
           resolveCreate = resolve;
         })
     );
@@ -469,23 +361,35 @@ describe("GlossaryEntryEditorPane (#436)", () => {
       onCreateEntry
     });
 
-    submitForm();
-    submitForm();
-    submitForm();
+    clickSave();
+    clickSave();
+    clickSave();
     expect(onCreateEntry).toHaveBeenCalledTimes(1);
-    expect(
-      container.querySelector<HTMLButtonElement>(
-        ".glossaryEntryFormSubmit"
-      )?.disabled
-    ).toBe(true);
+    expect(saveButton().disabled).toBe(true);
 
     await act(async () => {
-      resolveCreate(false);
+      resolveCreate(savedEntryFixture());
       await Promise.resolve();
     });
   });
 
-  it("delegates edit mode to GlossaryEntryEditForm, which loads entryId and hosts the EXISTING GlossaryEditor (#436 Slice 8)", async () => {
+  it("disables Save and shows the validity message when the only atom is blanked out", () => {
+    renderPane({
+      state: openGlossaryEntryCreatePane({
+        source: "glossary-pane",
+        presetRepresentative: "新しい語彙"
+      })
+    });
+
+    setInputValue(representativeInput(), "   ");
+
+    expect(saveButton().disabled).toBe(true);
+    expect(
+      container.querySelector(".glossaryEditorValidityMessage")?.textContent
+    ).toBe("表記を1つ以上入力してください。");
+  });
+
+  it("delegates edit mode to GlossaryEntryEditorSession, which loads entryId and hosts the EXISTING GlossaryEditor (#436 Slice 8/9)", async () => {
     const onLoadEntry = vi.fn(() =>
       Promise.resolve({
         id: "entry-7",
@@ -519,13 +423,12 @@ describe("GlossaryEntryEditorPane (#436)", () => {
       await Promise.resolve();
     });
 
-    // No new create-mode form in edit mode — the EXISTING GlossaryEditor.
+    // No create-only form ever rendered — the EXISTING GlossaryEditor, mode edit.
     expect(container.querySelector(".glossaryEntryForm")).toBeNull();
     expect(container.querySelector(".glossaryEditor")).not.toBeNull();
-    expect(
-      container.querySelector<HTMLInputElement>(".glossaryEditorAtomValue")
-        ?.value
-    ).toBe("石田三成");
+    expect(representativeInput().value).toBe("石田三成");
+    expect(container.querySelector(".glossaryEditorDeleteButton")).not.toBeNull();
+    expect(saveButton().textContent).toBe("保存");
   });
 
   it("applies the supplied height to the pane (Slice 6 remediation)", () => {

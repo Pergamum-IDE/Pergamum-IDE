@@ -103,18 +103,24 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     expect(source).not.toContain("onCreateGlossaryEntry={");
   });
 
-  it("#436 Slice 6: the pane's create form persists through the glossary create IPC and refreshes, never a tab", () => {
+  it("#436 Slice 6/9: the pane's create session persists through the glossary create IPC and refreshes, never a tab", () => {
     const source = appSource();
 
     const handler = region(
       source,
       "async function handleCreateGlossaryEntryFromPane(",
-      420
+      1400
     );
     expect(handler).toContain("await window.pergamum.glossary.create(input)");
     expect(handler).toContain("setGlossaryRefreshToken((token) => token + 1)");
+    // #436 Slice 9: mirrors handleSaveGlossaryEntryFromPane — resolves the
+    // saved entry (so the caller can flip create → edit), reuses the SAME
+    // save-failed dialog, and rethrows on failure.
+    expect(handler).toContain("): Promise<GlossaryEntry> {");
+    expect(handler).toContain("showGlossarySaveFailedDialog()");
     expect(handler).not.toContain("openEditor");
     expect(handler).not.toContain("createGlossaryEntryEditorId");
+    expect(handler).not.toContain("openDocumentsState");
 
     // The pane gets the tag list and the create handler.
     const paneStart = source.indexOf("<GlossaryEntryEditorPane\n");
@@ -127,6 +133,10 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     expect(paneElement).toContain(
       "onCreateEntry={handleCreateGlossaryEntryFromPane}"
     );
+    // #436 Slice 9: occurrence navigation is out of the pane entirely — the
+    // session/GlossaryEditor no longer accept those props.
+    expect(paneElement).not.toContain("onNavigateToPreviousOccurrence");
+    expect(paneElement).not.toContain("onNavigateToNextOccurrence");
   });
 
   it("#436 Slice 6 remediation: the pane sits below the active-tab content region, not inside the Markdown-only branch, and is resizable", () => {
@@ -228,26 +238,60 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     );
   });
 
-  it("#436 Slice 8: edit mode hosts the EXISTING GlossaryEditor.tsx via GlossaryEntryEditForm — no new edit form component", () => {
+  it("#436 Slice 9: both create and edit route through the SAME GlossaryEntryEditorSession, which hosts the EXISTING GlossaryEditor", () => {
     const paneSource = readFileSync(
       "src/renderer/GlossaryEntryEditorPane.tsx",
       "utf8"
     );
     expect(paneSource).toContain(
-      'import { GlossaryEntryEditForm } from "./GlossaryEntryEditForm"'
+      'import { GlossaryEntryEditorSession } from "./GlossaryEntryEditorSession"'
     );
-    expect(paneSource).toContain("<GlossaryEntryEditForm");
-    // The create-mode form's mode="edit" was never wired up (Slice 8 does
-    // not use GlossaryEntryForm for editing).
-    expect(paneSource).not.toContain('mode="edit"');
+    // Both branches of the mode ternary render the SAME session component —
+    // no separate create-only form.
+    expect(
+      (paneSource.match(/<GlossaryEntryEditorSession/g) ?? []).length
+    ).toBe(2);
+    expect(paneSource).toContain('mode="create"');
+    expect(paneSource).toContain('mode="edit"');
+    // The retired create-only form is at most mentioned in a comment now —
+    // never imported or rendered.
+    expect(paneSource).not.toContain('from "./GlossaryEntryForm"');
+    expect(paneSource).not.toContain("<GlossaryEntryForm");
 
-    const editFormSource = readFileSync(
-      "src/renderer/GlossaryEntryEditForm.tsx",
+    const sessionSource = readFileSync(
+      "src/renderer/GlossaryEntryEditorSession.tsx",
       "utf8"
     );
-    expect(editFormSource).toContain(
+    expect(sessionSource).toContain(
       'import { GlossaryEditor } from "./GlossaryEditor"'
     );
-    expect(editFormSource).toContain("<GlossaryEditor");
+    expect(sessionSource).toContain("<GlossaryEditor");
+    // `mode` is forwarded to GlossaryEditor based on whether the draft has
+    // ever been persisted — not a separately-tracked create/edit flag.
+    expect(sessionSource).toContain("mode={isNew ? \"create\" : \"edit\"}");
+    expect(sessionSource).toContain("glossaryEntryDraftIsNew(draft)");
+    expect(sessionSource).toContain("glossaryEntryDraftCreateInput(draft)");
+    expect(sessionSource).toContain("onCreateEntry(");
+
+    // #436 Slice 9: the create-only form is gone entirely.
+    expect(() =>
+      readFileSync("src/renderer/GlossaryEntryForm.tsx", "utf8")
+    ).toThrow();
+  });
+
+  it("#436 Slice 9: GlossaryEditor's occurrence navigation UI is gone, but the broader occurrence command system is untouched", () => {
+    const editorSource = readFileSync(
+      "src/renderer/GlossaryEditor.tsx",
+      "utf8"
+    );
+    expect(editorSource).not.toContain("onNavigateToPreviousOccurrence");
+    expect(editorSource).not.toContain("onNavigateToNextOccurrence");
+    expect(editorSource).not.toContain("glossaryEditorOccurrenceButton");
+    expect(editorSource).toContain("export type GlossaryEditorMode");
+
+    // Out of scope for Slice 9: the occurrence command ids / search system.
+    const source = appSource();
+    expect(source).toContain("glossaryCommandIds.previousOccurrence");
+    expect(source).toContain("glossaryCommandIds.nextOccurrence");
   });
 });

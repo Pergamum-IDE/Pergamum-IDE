@@ -43,7 +43,12 @@ const ATOM_REORDER_MIME = "application/x-pergamum-glossary-atom-reorder";
 /** The grab-to-reorder glyph shown at the head of every atom row. */
 const ATOM_DRAG_HANDLE_GLYPH = "⣿"; // ⣿
 
+/** #436 Slice 9: `"create"` hides the delete button (nothing persisted yet
+ *  to delete) — everything else renders identically in both modes. */
+export type GlossaryEditorMode = "create" | "edit";
+
 interface GlossaryEditorProps {
+  mode: GlossaryEditorMode;
   draft: GlossaryEntryDraft;
   /** Every tag defined in the project, for the attach/detach picker. */
   availableTags: readonly GlossaryTag[];
@@ -75,8 +80,6 @@ interface GlossaryEditorProps {
    */
   onOpenTagManager: () => void;
   onDeleteEntry: () => void;
-  onNavigateToPreviousOccurrence: () => void;
-  onNavigateToNextOccurrence: () => void;
   readOnly?: boolean;
   /**
    * #412 Blocker 1: the SAME global editor settings the main Markdown editor
@@ -92,6 +95,7 @@ interface GlossaryEditorProps {
 }
 
 export function GlossaryEditor({
+  mode,
   draft,
   availableTags,
   translate,
@@ -106,8 +110,6 @@ export function GlossaryEditor({
   onReorderAssignedTag,
   onOpenTagManager,
   onDeleteEntry,
-  onNavigateToPreviousOccurrence,
-  onNavigateToNextOccurrence,
   readOnly = false,
   markerGlyph,
   expectedLineEnding,
@@ -170,41 +172,25 @@ export function GlossaryEditor({
     >
       <header className="glossaryEditorHeader">
         <h1>{title}</h1>
-        <button
-          type="button"
-          className="glossaryEditorOccurrenceButton"
-          aria-label={translate("glossaryEditor.previousOccurrence")}
-          title={translate("glossaryEditor.previousOccurrence")}
-          onClick={onNavigateToPreviousOccurrence}
-        >
-          {translate("glossaryEditor.previousOccurrenceLabel")}
-        </button>
-        <button
-          type="button"
-          className="glossaryEditorOccurrenceButton"
-          aria-label={translate("glossaryEditor.nextOccurrence")}
-          title={translate("glossaryEditor.nextOccurrence")}
-          onClick={onNavigateToNextOccurrence}
-        >
-          {translate("glossaryEditor.nextOccurrenceLabel")}
-        </button>
-        <button
-          type="button"
-          className="glossaryEditorDeleteButton"
-          aria-label={translate("glossaryEditor.deleteEntry")}
-          title={translate("glossaryEditor.deleteEntry")}
-          disabled={readOnly}
-          onClick={() => {
-            if (!readOnly) {
-              onDeleteEntry();
-            }
-          }}
-        >
-          <span
-            aria-hidden="true"
-            dangerouslySetInnerHTML={{ __html: deleteIcon }}
-          />
-        </button>
+        {mode === "edit" ? (
+          <button
+            type="button"
+            className="glossaryEditorDeleteButton"
+            aria-label={translate("glossaryEditor.deleteEntry")}
+            title={translate("glossaryEditor.deleteEntry")}
+            disabled={readOnly}
+            onClick={() => {
+              if (!readOnly) {
+                onDeleteEntry();
+              }
+            }}
+          >
+            <span
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: deleteIcon }}
+            />
+          </button>
+        ) : null}
       </header>
 
       <section className="glossaryEditorSection">

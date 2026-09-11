@@ -3484,24 +3484,51 @@ export function App(): JSX.Element {
     );
   }
 
-  // #436 Phase 8-0 PoC (Slice 6): create a new Glossary entry from the bottom
-  // pane's create form. Persists through the existing glossary create IPC,
-  // refreshes every glossary consumer, and NEVER opens a glossary entry tab.
-  // Returns `false` (with a status-line note) on failure so the form can show
-  // its inline error and stay open.
+  // #436 Phase 8-0 PoC (Slice 9): create a new Glossary entry from the bottom
+  // pane's create-mode session (`GlossaryEntryEditorSession` over the SAME
+  // `GlossaryEditor` edit mode uses). Persists through the existing glossary
+  // create IPC, refreshes every glossary consumer, and NEVER opens a
+  // glossary entry tab. Mirrors `handleSaveGlossaryEntryFromPane` below:
+  // resolves the saved entry (so the caller can re-key local atom ids AND
+  // flip the session from create-like to edit-like via
+  // `applyGlossaryEntryDraftSaveResult`); rethrows after surfacing the error
+  // so the caller marks the draft `saveFailed` and the pane stays open.
   async function handleCreateGlossaryEntryFromPane(
     input: CreateGlossaryEntryInput
-  ): Promise<boolean> {
+  ): Promise<GlossaryEntry> {
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+
     try {
-      await window.pergamum.glossary.create(input);
-      setGlossaryRefreshToken((token) => token + 1);
-      return true;
+      const savedEntry = await window.pergamum.glossary.create(input);
+
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setGlossaryRefreshToken((token) => token + 1);
+        setStatus({
+          key: "status.savedPath",
+          values: { path: representativeGlossarySurface(savedEntry) }
+        });
+      }
+
+      return savedEntry;
     } catch (error) {
-      setStatus({
-        key: "status.commandFailed",
-        values: { message: errorMessage(error, translate) }
-      });
-      return false;
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setStatus({
+          key: "status.saveFailed",
+          values: { message: errorMessage(error, translate) }
+        });
+        await showGlossarySaveFailedDialog();
+      }
+
+      throw error;
     }
   }
 
@@ -10583,20 +10610,6 @@ export function App(): JSX.Element {
                         onSaveEntry={handleSaveGlossaryEntryFromPane}
                         onDeleteEntry={handleDeleteGlossaryEntryFromPane}
                         onOpenTagManager={openGlossaryTagManagerTab}
-                        onNavigateToPreviousOccurrence={(entryId) =>
-                          executeUiCommand(
-                            glossaryCommandIds.previousOccurrence,
-                            { source: "editorSurface" },
-                            entryId
-                          )
-                        }
-                        onNavigateToNextOccurrence={(entryId) =>
-                          executeUiCommand(
-                            glossaryCommandIds.nextOccurrence,
-                            { source: "editorSurface" },
-                            entryId
-                          )
-                        }
                         readOnly={project?.accessMode.kind === "readOnly"}
                         markerGlyph={effectiveSettings.editor.lineEnding.markerGlyph}
                         expectedLineEnding={

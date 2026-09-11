@@ -1509,113 +1509,6 @@ label.settingsItemHeader {
   font-size: 12px;
 }
 
-/* #436 Slice 7: the shared Glossary Entry Editor Pane form (create today;
-   edit reuses it once wired up — never a separate screen per PO direction). */
-.glossaryEntryForm {
-  display: flex;
-  min-width: 0;
-  max-width: 520px;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.glossaryEntryFormField {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.glossaryEntryFormField input {
-  font: inherit;
-  font-weight: 400;
-  color: #17212b;
-  padding: 6px 8px;
-  border: 1px solid #d3dae2;
-  border-radius: 4px;
-  background: #ffffff;
-}
-
-.glossaryEntryFormTagsSection {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.glossaryEntryFormTagsLabel {
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.glossaryEntryFormTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.glossaryEntryFormTagToggle {
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-}
-
-.glossaryEntryFormTagToggle[aria-pressed="true"] {
-  outline: 2px solid #2f6f9f;
-  outline-offset: 1px;
-}
-
-.glossaryEntryFormTagsHint,
-.glossaryEntryFormError {
-  margin: 0;
-  font-size: 12px;
-}
-
-.glossaryEntryFormTagsHint {
-  color: #6b7785;
-}
-
-.glossaryEntryFormError {
-  color: #b3261e;
-}
-
-.glossaryEntryFormActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.glossaryEntryFormActions button {
-  font: inherit;
-  padding: 6px 14px;
-  border: 1px solid #d3dae2;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #17212b;
-  cursor: pointer;
-}
-
-.glossaryEntryFormActions .glossaryEntryFormSubmit {
-  border-color: #2f6f9f;
-  background: #2f6f9f;
-  color: #ffffff;
-}
-
-.glossaryEntryFormActions button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.glossaryEntryFormSubmit[aria-disabled="true"] {
-  opacity: 0.6;
-}
-
 /* #377: the Debug Log special tab wrapper — a scroll container that fills the
    editor area, mirroring the Glossary management tabs. */
 .debugLogTab {
@@ -4660,20 +4553,6 @@ label.settingsItemHeader {
   color: #17212b;
   font-size: 28px;
   line-height: 1.2;
-}
-
-.glossaryEditorOccurrenceButton {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cbd5df;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #25313d;
-  cursor: pointer;
-  padding: 5px 10px;
-  font-size: 14px;
 }
 
 .glossaryEditorDeleteButton {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  CreateGlossaryEntryInput,
   GlossaryEntry,
   GlossaryEntryId,
   GlossaryTag,
@@ -18,7 +19,10 @@ import {
   applyGlossaryEntryDraftSaveResult,
   assignGlossaryEntryDraftTag,
   createGlossaryEntryDraft,
+  createNewGlossaryEntryDraft,
   deleteGlossaryEntryDraftAtom,
+  glossaryEntryDraftCreateInput,
+  glossaryEntryDraftIsNew,
   glossaryEntryDraftUpdateInput,
   glossaryEntryDraftValidity,
   isGlossaryEntryDraftDirty,
@@ -33,8 +37,7 @@ import {
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
 
-interface GlossaryEntryEditFormProps {
-  entryId: GlossaryEntryId;
+interface GlossaryEntryEditorSessionCommonProps {
   availableTags: readonly GlossaryTag[];
   translate: Translate;
   readOnly: boolean;
@@ -43,75 +46,104 @@ interface GlossaryEntryEditFormProps {
   newFileLineEndingFallback: NewFileLineEnding;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   undoHistoryMinDepth: number;
-  /** Load the entry to edit. `null` = not found (rendered like a load failure). */
+  /** Load the entry an edit-mode session targets. `null` = not found
+   *  (rendered like a load failure). Unused in create mode. */
   onLoadEntry: (entryId: GlossaryEntryId) => Promise<GlossaryEntry | null>;
-  /** Persist the draft through the EXISTING glossary update IPC. Resolves
-   *  with the saved entry (used to re-key local atom ids); rejects on
-   *  failure (the host is expected to have already surfaced the error). */
+  /** Persist a create-mode draft through the EXISTING glossary create IPC.
+   *  Resolves the saved entry (used to re-key local atom ids AND to flip the
+   *  session from create-like to edit-like for every save after this one). */
+  onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;
+  /** Persist an edit-mode (or already-saved-once create) draft through the
+   *  EXISTING glossary update IPC. Resolves the saved entry. */
   onSaveEntry: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
   /** Confirm + hard-delete through the EXISTING destructive-confirm flow.
    *  Resolves `true` only if the entry was actually deleted. */
   onDeleteEntry: (draft: GlossaryEntryDraft) => Promise<boolean>;
   onOpenTagManager: () => void;
-  onNavigateToPreviousOccurrence: (entryId: GlossaryEntryId) => void;
-  onNavigateToNextOccurrence: (entryId: GlossaryEntryId) => void;
   onClose: () => void;
 }
 
-type LoadState =
+type GlossaryEntryEditorSessionProps = GlossaryEntryEditorSessionCommonProps &
+  (
+    | { mode: "create"; presetRepresentative: string }
+    | { mode: "edit"; entryId: GlossaryEntryId }
+  );
+
+type SessionState =
   | { status: "loading" }
   | { status: "failed" }
   | { status: "ready"; draft: GlossaryEntryDraft };
 
 /**
- * #436 Phase 8-0 PoC — Slice 8.
+ * #436 Phase 8-0 PoC — Slice 9.
  *
- * Edit-mode orchestration for the Glossary Entry Editor Pane. Per PO
- * direction this Slice does NOT build a new edit form — it loads
- * `entryId` (loading / failed / ready) and then renders the EXISTING
- * `GlossaryEditor.tsx` (the same component the old `glossaryEntry` tab used),
- * wired to a LOCAL draft — not `currentEditor` / `openDocumentsState` — so no
- * `glossaryEntry` tab is revived. Every editing/validation/save-shape
- * primitive comes straight from `glossaryEntryDraft.ts` unchanged; the only
- * new code here is the plumbing that used to live in `updateActiveGlossaryDraft`
- * (tab-coupled) re-pointed at this pane-local draft, plus a minimal Save
- * control (the old tab had none of its own — saving went through the global
- * Ctrl+S / Save command, which does not apply to a non-tab pane).
+ * The Glossary Entry Editor Pane's ONE editing session, for BOTH create and
+ * edit — per PO direction, a new-entry-only screen is exactly the fork this
+ * whole effort exists to avoid. Renders the EXISTING `GlossaryEditor.tsx`
+ * (Slice 8 relocated it here unmodified; this Slice only adds `mode` to it)
+ * against a session-local draft:
+ *
+ *   - `mode: "create"` seeds a fresh, not-yet-persisted draft synchronously
+ *     (`createNewGlossaryEntryDraft`) — no `onLoadEntry` call, no DB write
+ *     until Save.
+ *   - `mode: "edit"` loads `entryId` first (loading / failed / ready), same
+ *     race-guarded effect Slice 8 used.
+ *
+ * After a create draft's FIRST successful save, `applyGlossaryEntryDraftSaveResult`
+ * rebases `draft.entry` to the real saved entry, so `glossaryEntryDraftIsNew`
+ * flips to `false` on its own — every subsequent Save in the SAME session
+ * calls `onSaveEntry` (update), never `onCreateEntry` again. The initial
+ * `mode` prop therefore only decides how the session STARTS; what a given
+ * Save does is always decided by `glossaryEntryDraftIsNew(draft)`.
  */
-export function GlossaryEntryEditForm({
-  entryId,
-  availableTags,
-  translate,
-  readOnly,
-  markerGlyph,
-  expectedLineEnding,
-  newFileLineEndingFallback,
-  whitespaceSettings,
-  undoHistoryMinDepth,
-  onLoadEntry,
-  onSaveEntry,
-  onDeleteEntry,
-  onOpenTagManager,
-  onNavigateToPreviousOccurrence,
-  onNavigateToNextOccurrence,
-  onClose
-}: GlossaryEntryEditFormProps): JSX.Element {
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+export function GlossaryEntryEditorSession(
+  props: GlossaryEntryEditorSessionProps
+): JSX.Element {
+  const {
+    availableTags,
+    translate,
+    readOnly,
+    markerGlyph,
+    expectedLineEnding,
+    newFileLineEndingFallback,
+    whitespaceSettings,
+    undoHistoryMinDepth,
+    onLoadEntry,
+    onCreateEntry,
+    onSaveEntry,
+    onDeleteEntry,
+    onOpenTagManager,
+    onClose
+  } = props;
+
+  const [state, setState] = useState<SessionState>(() =>
+    props.mode === "create"
+      ? {
+          status: "ready",
+          draft: createNewGlossaryEntryDraft(props.presetRepresentative)
+        }
+      : { status: "loading" }
+  );
   const loadRequestIdRef = useRef(0);
   // `onLoadEntry` is a plain (non-memoized) callback from the host — kept in
   // a ref so a host re-render never re-triggers the load effect below; only
-  // `entryId` changing does.
+  // the target entryId changing does.
   const onLoadEntryRef = useRef(onLoadEntry);
   onLoadEntryRef.current = onLoadEntry;
+  const editEntryId = props.mode === "edit" ? props.entryId : undefined;
 
   useEffect(() => {
+    if (editEntryId === undefined) {
+      return;
+    }
+
     const requestId = loadRequestIdRef.current + 1;
     loadRequestIdRef.current = requestId;
     let isActive = true;
 
     setState({ status: "loading" });
 
-    void onLoadEntryRef.current(entryId)
+    void onLoadEntryRef.current(editEntryId)
       .then((entry) => {
         if (!isActive || loadRequestIdRef.current !== requestId) {
           return;
@@ -134,7 +166,7 @@ export function GlossaryEntryEditForm({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onLoadEntry is
     // read through `onLoadEntryRef` above, deliberately excluded here.
-  }, [entryId]);
+  }, [editEntryId]);
 
   if (state.status === "loading") {
     return (
@@ -153,6 +185,7 @@ export function GlossaryEntryEditForm({
   }
 
   const draft = state.draft;
+  const isNew = glossaryEntryDraftIsNew(draft);
 
   function updateDraft(
     update: (current: GlossaryEntryDraft) => GlossaryEntryDraft
@@ -177,15 +210,19 @@ export function GlossaryEntryEditForm({
     updateDraft(markGlossaryEntryDraftSaving);
 
     try {
-      const savedEntry = await onSaveEntry(glossaryEntryDraftUpdateInput(draft));
-      updateDraft((current) => applyGlossaryEntryDraftSaveResult(current, savedEntry));
+      const savedEntry = isNew
+        ? await onCreateEntry(glossaryEntryDraftCreateInput(draft))
+        : await onSaveEntry(glossaryEntryDraftUpdateInput(draft));
+      updateDraft((current) =>
+        applyGlossaryEntryDraftSaveResult(current, savedEntry)
+      );
     } catch {
       updateDraft(markGlossaryEntryDraftSaveFailed);
     }
   }
 
   async function handleDelete(): Promise<void> {
-    if (readOnly) {
+    if (readOnly || isNew) {
       return;
     }
 
@@ -199,6 +236,12 @@ export function GlossaryEntryEditForm({
     draft.saveState !== "saving" &&
     isGlossaryEntryDraftDirty(draft) &&
     glossaryEntryDraftValidity(draft).ok;
+  const saveLabel = translate(
+    isNew ? "glossaryEntryEditorPane.create.submit" : "glossaryEntryEditorPane.edit.save"
+  );
+  const saveFailedMessage = translate(
+    isNew ? "glossaryEntryEditorPane.create.failed" : "glossaryEntryEditorPane.edit.saveFailed"
+  );
 
   return (
     <div className="glossaryEntryEditorPaneEditSession">
@@ -209,15 +252,16 @@ export function GlossaryEntryEditForm({
           disabled={!canSave}
           onClick={() => void handleSave()}
         >
-          {translate("glossaryEntryEditorPane.edit.save")}
+          {saveLabel}
         </button>
         {draft.saveState === "saveFailed" ? (
           <span className="glossaryEntryEditorPaneSaveFailed" role="alert">
-            {translate("glossaryEntryEditorPane.edit.saveFailed")}
+            {saveFailedMessage}
           </span>
         ) : null}
       </div>
       <GlossaryEditor
+        mode={isNew ? "create" : "edit"}
         draft={draft}
         availableTags={availableTags}
         translate={translate}
@@ -260,12 +304,6 @@ export function GlossaryEntryEditForm({
         }
         onOpenTagManager={onOpenTagManager}
         onDeleteEntry={() => void handleDelete()}
-        onNavigateToPreviousOccurrence={() =>
-          onNavigateToPreviousOccurrence(draft.entry.id)
-        }
-        onNavigateToNextOccurrence={() =>
-          onNavigateToNextOccurrence(draft.entry.id)
-        }
         readOnly={readOnly}
         markerGlyph={markerGlyph}
         expectedLineEnding={expectedLineEnding}

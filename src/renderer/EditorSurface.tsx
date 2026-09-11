@@ -680,8 +680,15 @@ export function EditorSurface({
         />
       );
     case "glossaryEntry":
+      // #436 Slice 5: this branch is unreachable — nothing ever opens a
+      // `glossaryEntry` editor tab any more (create/edit both live in the
+      // bottom Glossary Entry Editor Pane). Kept only so `CurrentEditor`'s
+      // `glossaryEntry` variant still renders something if it were ever
+      // reached. `mode="edit"` since a revived tab could only ever target an
+      // existing entry (create never went through a tab).
       return (
         <GlossaryEditor
+          mode="edit"
           draft={editor.draft}
           availableTags={glossaryAvailableTags}
           translate={translate}
@@ -696,10 +703,6 @@ export function EditorSurface({
           onReorderAssignedTag={onReorderAssignedGlossaryEntryTag}
           onOpenTagManager={onOpenGlossaryTagManager}
           onDeleteEntry={onDeleteGlossaryEntry}
-          onNavigateToPreviousOccurrence={
-            onNavigateToPreviousGlossaryOccurrence
-          }
-          onNavigateToNextOccurrence={onNavigateToNextGlossaryOccurrence}
           readOnly={isProjectOwnedReadOnly}
           markerGlyph={markerGlyph}
           expectedLineEnding={expectedLineEnding}

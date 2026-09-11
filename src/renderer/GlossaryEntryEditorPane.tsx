@@ -12,11 +12,7 @@ import type {
   LineEndingMarkerGlyph,
   NewFileLineEnding
 } from "../shared/settings";
-import { GlossaryEntryEditForm } from "./GlossaryEntryEditForm";
-import {
-  GlossaryEntryForm,
-  type GlossaryEntryFormValue
-} from "./GlossaryEntryForm";
+import { GlossaryEntryEditorSession } from "./GlossaryEntryEditorSession";
 import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
 import type { OpenGlossaryEntryEditorPaneState } from "./glossaryEntryEditorPaneState";
 
@@ -26,17 +22,16 @@ interface GlossaryEntryEditorPaneProps {
   /** Current pane height in px (user-resizable via the top-edge handle). */
   height: number;
   availableTags: readonly GlossaryTag[];
-  /** Persist a new entry. Resolves `true` on success, `false` on failure. */
-  onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<boolean>;
-  /** Load the entry an edit-mode pane targets. `null` = not found. */
+  /** Persist a create-mode draft. Resolves the saved entry. */
+  onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;
+  /** Load the entry an edit-mode session targets. `null` = not found. */
   onLoadEntry: (entryId: GlossaryEntryId) => Promise<GlossaryEntry | null>;
-  /** Persist an edit-mode draft. Resolves the saved entry; rejects on failure. */
+  /** Persist an edit-mode (or already-saved-once create) draft. Resolves the
+   *  saved entry. */
   onSaveEntry: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
   /** Confirm + delete the entry being edited. `true` only if actually deleted. */
   onDeleteEntry: (draft: GlossaryEntryDraft) => Promise<boolean>;
   onOpenTagManager: () => void;
-  onNavigateToPreviousOccurrence: (entryId: GlossaryEntryId) => void;
-  onNavigateToNextOccurrence: (entryId: GlossaryEntryId) => void;
   readOnly: boolean;
   markerGlyph: LineEndingMarkerGlyph;
   expectedLineEnding: ExpectedLineEnding;
@@ -47,33 +42,16 @@ interface GlossaryEntryEditorPaneProps {
 }
 
 /**
- * #436 Slice 7: `GlossaryEntryForm`'s generic `{representative, description,
- * tagIds}` value → the create IPC's `CreateGlossaryEntryInput`. The form has
- * no multi-atom UI yet, so the representative becomes the single
- * `sortOrder: 0` atom. Kept here (not inside `GlossaryEntryForm`) so the form
- * stays create-agnostic of the IPC shape.
- */
-function createGlossaryEntryInputFromFormValue(
-  value: GlossaryEntryFormValue
-): CreateGlossaryEntryInput {
-  return {
-    description: value.description,
-    atoms: [{ value: value.representative, matchFlags: 0 }],
-    tagIds: [...value.tagIds]
-  };
-}
-
-/**
  * #436 Phase 8-0 PoC.
  *
  * The Glossary Entry Editor Pane sits below the editor / preview area, in the
  * slot the former Utility Window used, and replaces the per-entry glossary
  * editing tabs.
  *
- * - create mode: a real new-entry form (`GlossaryEntryForm`, Slice 6/7).
- * - edit   mode (Slice 8): the EXISTING `GlossaryEditor.tsx` — the same
- *   screen the old glossaryEntry tab used — hosted by `GlossaryEntryEditForm`
- *   against a pane-local draft. No new edit form was built for this Slice.
+ * Both create and edit mode render the SAME `GlossaryEntryEditorSession` —
+ * which in turn hosts the EXISTING `GlossaryEditor.tsx` (Slice 8) — per PO
+ * direction: a new-entry-only screen is exactly the fork this pane exists to
+ * avoid (Slice 9 retired the earlier `GlossaryEntryForm` create-only form).
  */
 export function GlossaryEntryEditorPane({
   state,
@@ -85,8 +63,6 @@ export function GlossaryEntryEditorPane({
   onSaveEntry,
   onDeleteEntry,
   onOpenTagManager,
-  onNavigateToPreviousOccurrence,
-  onNavigateToNextOccurrence,
   readOnly,
   markerGlyph,
   expectedLineEnding,
@@ -117,26 +93,29 @@ export function GlossaryEntryEditorPane({
       </div>
       <div className="glossaryEntryEditorPaneBody">
         {state.mode === "create" ? (
-          <GlossaryEntryForm
+          <GlossaryEntryEditorSession
             key={`${state.source}:${state.presetRepresentative}`}
             mode="create"
-            initialValue={{
-              representative: state.presetRepresentative,
-              description: "",
-              tagIds: []
-            }}
+            presetRepresentative={state.presetRepresentative}
             availableTags={availableTags}
             translate={translate}
-            submitLabel={translate("glossaryEntryEditorPane.create.submit")}
-            failedMessage={translate("glossaryEntryEditorPane.create.failed")}
-            onSubmit={(value) =>
-              onCreateEntry(createGlossaryEntryInputFromFormValue(value))
-            }
+            readOnly={readOnly}
+            markerGlyph={markerGlyph}
+            expectedLineEnding={expectedLineEnding}
+            newFileLineEndingFallback={newFileLineEndingFallback}
+            whitespaceSettings={whitespaceSettings}
+            undoHistoryMinDepth={undoHistoryMinDepth}
+            onLoadEntry={onLoadEntry}
+            onCreateEntry={onCreateEntry}
+            onSaveEntry={onSaveEntry}
+            onDeleteEntry={onDeleteEntry}
+            onOpenTagManager={onOpenTagManager}
             onClose={onClose}
           />
         ) : (
-          <GlossaryEntryEditForm
+          <GlossaryEntryEditorSession
             key={state.entryId}
+            mode="edit"
             entryId={state.entryId}
             availableTags={availableTags}
             translate={translate}
@@ -147,11 +126,10 @@ export function GlossaryEntryEditorPane({
             whitespaceSettings={whitespaceSettings}
             undoHistoryMinDepth={undoHistoryMinDepth}
             onLoadEntry={onLoadEntry}
+            onCreateEntry={onCreateEntry}
             onSaveEntry={onSaveEntry}
             onDeleteEntry={onDeleteEntry}
             onOpenTagManager={onOpenTagManager}
-            onNavigateToPreviousOccurrence={onNavigateToPreviousOccurrence}
-            onNavigateToNextOccurrence={onNavigateToNextOccurrence}
             onClose={onClose}
           />
         )}
