@@ -9954,6 +9954,7 @@ export function App(): JSX.Element {
       readText: createProjectSearchReadText(activeContext),
       terms,
       relationMode,
+      nearbySettings: effectiveSettings.search.nearby,
       isCancelled
     });
   }

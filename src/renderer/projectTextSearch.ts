@@ -9,6 +9,7 @@ import {
   type GlossaryAtomSearchTerm,
   type GlossarySearchRelationMode
 } from "./glossaryAtomSearch";
+import type { SearchNearbySettings } from "../shared/settings";
 
 /**
  * #384 Phase 2 - orchestrates a plain-text search across the current
@@ -216,8 +217,9 @@ export interface RunProjectGlossaryAtomSearchInput {
   readonly readText: ProjectDocumentReader;
   /** The selected atoms' terms. An empty list yields an empty result. */
   readonly terms: readonly GlossaryAtomSearchTerm[];
-  /** `any` (OR, default), `all` (per paragraph) or `nearby` (400-char window). */
+  /** `any` (OR, default), `all` (per paragraph) or `nearby` (settings-aware). */
   readonly relationMode?: GlossarySearchRelationMode;
+  readonly nearbySettings?: SearchNearbySettings;
   readonly isCancelled?: () => boolean;
 }
 
@@ -246,7 +248,8 @@ export async function runProjectGlossaryAtomSearch(
     isCancelled: input.isCancelled,
     findMatches: (text, perFileLimit) =>
       findGlossaryAtomRelationMatches(text, terms, relationMode, {
-        limit: perFileLimit
+        limit: perFileLimit,
+        nearbySettings: input.nearbySettings
       })
   });
 }

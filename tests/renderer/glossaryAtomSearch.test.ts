@@ -11,10 +11,10 @@ import {
   findGlossaryAtomMatches,
   findGlossaryAtomRelationMatches,
   isGlossarySearchMatch,
-  NEARBY_WINDOW_CHARACTERS,
   splitTextParagraphs,
   type GlossaryAtomSearchTerm
 } from "../../src/renderer/glossaryAtomSearch";
+import type { SearchNearbySettings } from "../../src/shared/settings";
 
 const timestamp = "2026-09-04T00:00:00.000Z";
 
@@ -63,6 +63,28 @@ function term(
   matchFlags = 0
 ): GlossaryAtomSearchTerm {
   return { value, matchFlags, atomId, entryId, entryLabel };
+}
+
+function nearbyCharacters(
+  characterDistance: number,
+  paragraphDistance = 0
+): SearchNearbySettings {
+  return {
+    unit: "characters",
+    characterDistance,
+    paragraphDistance
+  };
+}
+
+function nearbyParagraphs(
+  paragraphDistance: number,
+  characterDistance = 50
+): SearchNearbySettings {
+  return {
+    unit: "paragraphs",
+    characterDistance,
+    paragraphDistance
+  };
 }
 
 describe("collectSelectableGlossaryAtoms (#384)", () => {
@@ -360,16 +382,64 @@ describe("findGlossaryAtomRelationMatches — nearby (#384)", () => {
   const ORDA = term("オーダ", "a-orda", "e-orda", "オーダ");
   const DOMINICUS = term("ドミニクス", "a-dom", "e-dom", "ドミニクス");
 
-  it("hits when all atoms fall inside the window, misses when too far", () => {
-    const near = `オーダ${"あ".repeat(50)}ドミニクス`;
+  it("uses characterDistance when unit is characters (#442)", () => {
+    const text = `オーダ${"あ".repeat(30)}ドミニクス`;
     expect(
-      findGlossaryAtomRelationMatches(near, [ORDA, DOMINICUS], "nearby")
-    ).toHaveLength(1);
-
-    const far = `オーダ${"あ".repeat(NEARBY_WINDOW_CHARACTERS + 20)}ドミニクス`;
-    expect(
-      findGlossaryAtomRelationMatches(far, [ORDA, DOMINICUS], "nearby")
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby", {
+        nearbySettings: nearbyCharacters(20)
+      })
     ).toEqual([]);
+    expect(
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby", {
+        nearbySettings: nearbyCharacters(40)
+      })
+    ).toHaveLength(1);
+  });
+
+  it("does not use paragraphDistance when unit is characters (#442)", () => {
+    const text = ["オーダ", "", "ドミニクス"].join("\n");
+    expect(
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby", {
+        nearbySettings: nearbyCharacters(20, 0)
+      })
+    ).toHaveLength(1);
+  });
+
+  it("uses paragraphDistance when unit is paragraphs (#442)", () => {
+    const text = ["オーダ", "", "中間段落", "", "ドミニクス"].join("\n");
+    expect(
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby", {
+        nearbySettings: nearbyParagraphs(1)
+      })
+    ).toEqual([]);
+    expect(
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby", {
+        nearbySettings: nearbyParagraphs(2)
+      })
+    ).toHaveLength(1);
+  });
+
+  it("does not use characterDistance when unit is paragraphs (#442)", () => {
+    const text = `オーダ${"あ".repeat(600)}ドミニクス`;
+    expect(
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby", {
+        nearbySettings: nearbyParagraphs(0, 50)
+      })
+    ).toHaveLength(1);
+  });
+
+  it("falls back to the catalog-backed nearby defaults when settings are missing (#442)", () => {
+    const text = [
+      `オーダ${"あ".repeat(600)}`,
+      "",
+      "中間段落",
+      "",
+      "ドミニクス"
+    ].join("\n");
+
+    expect(
+      findGlossaryAtomRelationMatches(text, [ORDA, DOMINICUS], "nearby")
+    ).toHaveLength(1);
   });
 
   it("group result carries every atom in the window, anchored at the first", () => {

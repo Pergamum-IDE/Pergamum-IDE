@@ -209,6 +209,11 @@ describe("runProjectGlossaryAtomSearch (#384)", () => {
     entryId: `entry-${value}`,
     entryLabel: value
   });
+  const nearbyParagraphs = (paragraphDistance: number) => ({
+    unit: "paragraphs" as const,
+    characterDistance: 50,
+    paragraphDistance
+  });
 
   it("returns an empty result when no atoms are selected", async () => {
     const readText = vi.fn(async () => "ジャンヌ");
@@ -290,5 +295,27 @@ describe("runProjectGlossaryAtomSearch (#384)", () => {
       "オーダ",
       "ドミニクス"
     ]);
+  });
+
+  it("threads nearby settings into the project-wide nearby relation (#442)", async () => {
+    const text = ["オーダ", "", "中間段落", "", "ドミニクス"].join("\n");
+
+    const narrowResult = await runProjectGlossaryAtomSearch({
+      documents: [doc("a.md")],
+      readText: async () => text,
+      terms: [term("オーダ"), term("ドミニクス")],
+      relationMode: "nearby",
+      nearbySettings: nearbyParagraphs(1)
+    });
+    expect(narrowResult.totalMatches).toBe(0);
+
+    const wideResult = await runProjectGlossaryAtomSearch({
+      documents: [doc("a.md")],
+      readText: async () => text,
+      terms: [term("オーダ"), term("ドミニクス")],
+      relationMode: "nearby",
+      nearbySettings: nearbyParagraphs(2)
+    });
+    expect(wideResult.totalMatches).toBe(1);
   });
 });
