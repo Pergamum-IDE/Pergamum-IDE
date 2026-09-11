@@ -339,7 +339,7 @@ describe("runColdStartRestore (#274)", () => {
     expect(active && active.kind === "file" && active.path).toBe("/w/x/a.md");
   });
 
-  it("a glossary entry restore failure is isolated to that editor", async () => {
+  it("#436 Slice 5: a retired glossaryEntry editor in an old session is dropped, its siblings still restore", async () => {
     const h = harness(
       okPayload([
         record({
@@ -349,13 +349,15 @@ describe("runColdStartRestore (#274)", () => {
             sm("/w/x/a.md", 1)
           ]
         })
-      ]),
-      { getGlossaryEntryById: () => Promise.resolve(null) }
+      ])
     );
     await runColdStartRestore(h.deps);
 
     expect(h.applied[0].openDocuments.documents).toHaveLength(1);
-    expect(h.skipped).toEqual(["gone"]);
+    expect(h.applied[0].openDocuments.documents[0].id.kind).toBe("file");
+    // Retired, not "failed" — no user-facing skip notification.
+    expect(h.skipped).toEqual([]);
+    expect(h.deps.getGlossaryEntryById).not.toHaveBeenCalled();
   });
 
   // -------------------------------------------------------------------------
@@ -388,85 +390,33 @@ describe("runColdStartRestore (#274)", () => {
   const G1 = sid("glossary-1");
   const G2 = sid("glossary-2");
 
-  it("glossary-only restore, saved active missing → deterministic glossary fallback (active non-null)", async () => {
-    const h = harness(
-      okPayload([
-        record({
-          projectContext: withProject,
-          editors: [
-            { kind: "glossaryEntry", order: 0, entryId: G1, viewState: null }
-          ],
-          activeEditor: null
-        })
-      ]),
-      {
-        getGlossaryEntryById: (id) =>
-          Promise.resolve({ ...GLOSSARY_ENTRY, id } as never)
-      }
-    );
-    await runColdStartRestore(h.deps);
+  it("#436 Slice 5: a session of only retired glossaryEntry editors restores to zero documents (invariant held)", async () => {
+    for (const activeEditor of [
+      null,
+      { kind: "untitled" as const, untitledId: "u-gone" }
+    ]) {
+      const h = harness(
+        okPayload([
+          record({
+            projectContext: withProject,
+            editors: [
+              { kind: "glossaryEntry", order: 0, entryId: G1, viewState: null },
+              { kind: "glossaryEntry", order: 1, entryId: G2, viewState: null }
+            ],
+            activeEditor
+          })
+        ])
+      );
+      await runColdStartRestore(h.deps);
 
-    const env = h.applied[0];
-    assertOpenDocumentsInvariant(env);
-    expect(env.openDocuments.documents).toHaveLength(1);
-    expect(env.openDocuments.activeDocumentId?.kind).toBe("glossaryEntry");
+      const env = h.applied[0];
+      assertOpenDocumentsInvariant(env);
+      expect(env.openDocuments.documents).toEqual([]);
+      expect(env.openDocuments.activeDocumentId).toBeNull();
+    }
   });
 
-  it("glossary-only restore, saved active was untitled (skipped) → deterministic glossary fallback", async () => {
-    const h = harness(
-      okPayload([
-        record({
-          projectContext: withProject,
-          editors: [
-            { kind: "glossaryEntry", order: 0, entryId: G1, viewState: null }
-          ],
-          activeEditor: { kind: "untitled", untitledId: "u-gone" }
-        })
-      ]),
-      {
-        getGlossaryEntryById: (id) =>
-          Promise.resolve({ ...GLOSSARY_ENTRY, id } as never)
-      }
-    );
-    await runColdStartRestore(h.deps);
-
-    const env = h.applied[0];
-    assertOpenDocumentsInvariant(env);
-    expect(env.openDocuments.activeDocumentId?.kind).toBe("glossaryEntry");
-    // never a fake untitled
-    expect(
-      env.openDocuments.documents.every((d) => d.id.kind !== "untitled")
-    ).toBe(true);
-  });
-
-  it("multiple glossary-only editors → active = first by saved order (deterministic)", async () => {
-    const h = harness(
-      okPayload([
-        record({
-          projectContext: withProject,
-          editors: [
-            { kind: "glossaryEntry", order: 0, entryId: G1, viewState: null },
-            { kind: "glossaryEntry", order: 1, entryId: G2, viewState: null }
-          ],
-          activeEditor: null
-        })
-      ]),
-      {
-        getGlossaryEntryById: (id) =>
-          Promise.resolve({ ...GLOSSARY_ENTRY, id } as never)
-      }
-    );
-    await runColdStartRestore(h.deps);
-
-    const env = h.applied[0];
-    assertOpenDocumentsInvariant(env);
-    const active = env.openDocuments.activeDocumentId;
-    expect(
-      active && active.kind === "glossaryEntry" && active.entryId
-    ).toBe(G1);
-  });
-
-  it("mixed glossary + file editor, saved active missing → filename fallback still wins (glossary not a file editor)", async () => {
+  it("#436 Slice 5: mixed retired glossaryEntry + file editor restores only the file", async () => {
     const h = harness(
       okPayload([
         record({
@@ -477,16 +427,13 @@ describe("runColdStartRestore (#274)", () => {
           ],
           activeEditor: { kind: "untitled", untitledId: "u-gone" }
         })
-      ]),
-      {
-        getGlossaryEntryById: (id) =>
-          Promise.resolve({ ...GLOSSARY_ENTRY, id } as never)
-      }
+      ])
     );
     await runColdStartRestore(h.deps);
 
     const env = h.applied[0];
     assertOpenDocumentsInvariant(env);
+    expect(env.openDocuments.documents).toHaveLength(1);
     expect(env.openDocuments.activeDocumentId?.kind).toBe("file");
   });
 

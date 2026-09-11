@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import chevronsDownIcon from "../../assets/icons/feather/glossary/chevrons-down.svg?raw";
 import chevronsRightIcon from "../../assets/icons/feather/glossary/chevrons-right.svg?raw";
-import type {
-  CreateGlossaryEntryInput,
-  GlossaryEntry,
-  GlossaryEntryId,
-  GlossaryTagId
-} from "../shared/glossary";
+import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { tallyGlossaryEntryHits } from "./glossaryOccurrenceNavigation";
 import {
@@ -38,8 +33,12 @@ interface GlossarySidebarProps {
   translate: Translate;
   /** Active Markdown document body for occurrence hit counts, or null. */
   activeDocumentContent: string | null;
+  /**
+   * #436: open an existing entry for editing (row "…" button). Routes through
+   * the host to the bottom Glossary Entry Editor Pane in edit mode
+   * (source "glossary-pane") — never a glossary entry editor tab.
+   */
   onActivateEntry: (entryId: GlossaryEntryId) => void;
-  onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<boolean>;
   /** #436 Slice 3: "語彙を追加" opens the bottom Glossary Entry Editor Pane in
    *  create mode. Replaces the old inline create form / new-tab flow. */
   onOpenCreateEntryPane: () => void;
@@ -48,22 +47,6 @@ interface GlossarySidebarProps {
     direction: "previous" | "next"
   ) => void;
 }
-
-interface GlossaryCreateFormState {
-  isOpen: boolean;
-  representativeValue: string;
-  tagIds: GlossaryTagId[];
-  isSubmitting: boolean;
-  error: string | null;
-}
-
-const INITIAL_CREATE_FORM: GlossaryCreateFormState = {
-  isOpen: false,
-  representativeValue: "",
-  tagIds: [],
-  isSubmitting: false,
-  error: null
-};
 
 /** `<option>` value for the "no tags" pseudo-filter (never a real tag id). */
 const TAG_FILTER_NONE_OPTION = "__none__";
@@ -99,7 +82,6 @@ export function GlossarySidebar({
   translate,
   activeDocumentContent,
   onActivateEntry,
-  onCreateEntry,
   onOpenCreateEntryPane,
   onNavigateOccurrence
 }: GlossarySidebarProps): JSX.Element {
@@ -115,8 +97,6 @@ export function GlossarySidebar({
   const [expandedEntryIds, setExpandedEntryIds] = useState<
     ReadonlySet<GlossaryEntryId>
   >(new Set());
-  const [createForm, setCreateForm] =
-    useState<GlossaryCreateFormState>(INITIAL_CREATE_FORM);
   const projectRootPathRef = useRef<string | null>(projectRootPath);
   const loadRequestIdRef = useRef(0);
 
@@ -181,40 +161,6 @@ export function GlossarySidebar({
       isActive = false;
     };
   }, [projectRootPath, refreshToken]);
-
-  async function submitCreateForm(): Promise<void> {
-    const value = createForm.representativeValue.trim();
-
-    if (readOnly || value.length === 0 || createForm.isSubmitting) {
-      return;
-    }
-
-    setCreateForm((form) => ({ ...form, isSubmitting: true, error: null }));
-
-    try {
-      const didOpen = await onCreateEntry({
-        description: "",
-        atoms: [{ value, matchFlags: 0 }],
-        tagIds: [...createForm.tagIds]
-      });
-
-      setCreateForm(
-        didOpen
-          ? INITIAL_CREATE_FORM
-          : {
-              ...createForm,
-              isSubmitting: false,
-              error: translate("glossary.create.error")
-            }
-      );
-    } catch {
-      setCreateForm((form) => ({
-        ...form,
-        isSubmitting: false,
-        error: translate("glossary.create.error")
-      }));
-    }
-  }
 
   const entryHitCounts = useMemo(
     () =>
@@ -419,87 +365,6 @@ export function GlossarySidebar({
           </ul>
         )}
       </div>
-
-      {/* #436 Slice 3: unreachable since "語彙を追加" now opens the bottom
-          Glossary Entry Editor Pane (`onOpenCreateEntryPane`). Kept dormant —
-          `createForm` / `submitCreateForm` / `onCreateEntry` are removed in
-          Slice 5 once the pane hosts the real create form. */}
-      {createForm.isOpen ? (
-        <form
-          className="glossaryCreateForm"
-          aria-label={translate("glossary.create.title")}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!readOnly) {
-              void submitCreateForm();
-            }
-          }}
-        >
-          <label className="glossaryCreateFormField">
-            <span>{translate("glossary.create.surfaceLabel")}</span>
-            <input
-              type="text"
-              value={createForm.representativeValue}
-              disabled={createForm.isSubmitting || readOnly}
-              onChange={(event) =>
-                setCreateForm((form) => ({
-                  ...form,
-                  representativeValue: event.target.value
-                }))
-              }
-            />
-          </label>
-          {state.status === "loaded" && state.tags.length > 0 ? (
-            <div className="glossaryCreateFormTags">
-              {state.tags.map((tag) => {
-                const attached = createForm.tagIds.includes(tag.id);
-                return (
-                  <button
-                    type="button"
-                    key={tag.id}
-                    aria-pressed={attached}
-                    className="glossaryCreateFormTagToggle"
-                    onClick={() =>
-                      setCreateForm((form) => ({
-                        ...form,
-                        tagIds: attached
-                          ? form.tagIds.filter((id) => id !== tag.id)
-                          : [...form.tagIds, tag.id]
-                      }))
-                    }
-                  >
-                    <GlossaryTagChip tag={tag} muted={!attached} />
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-          {createForm.error ? (
-            <p className="glossaryCreateFormError" role="alert">
-              {createForm.error}
-            </p>
-          ) : null}
-          <div className="glossaryCreateFormActions">
-            <button
-              type="button"
-              disabled={createForm.isSubmitting}
-              onClick={() => setCreateForm(INITIAL_CREATE_FORM)}
-            >
-              {translate("glossary.create.cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={
-                createForm.isSubmitting ||
-                readOnly ||
-                createForm.representativeValue.trim().length === 0
-              }
-            >
-              {translate("glossary.create.submit")}
-            </button>
-          </div>
-        </form>
-      ) : null}
 
       <div className="workspaceSidebarActions glossarySidebarActions">
         <button

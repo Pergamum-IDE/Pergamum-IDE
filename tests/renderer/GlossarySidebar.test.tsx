@@ -100,7 +100,6 @@ function baseProps(overrides: Record<string, unknown> = {}) {
     translate,
     activeDocumentContent: null,
     onActivateEntry: vi.fn(),
-    onCreateEntry: vi.fn().mockResolvedValue(true),
     onOpenCreateEntryPane: vi.fn(),
     onNavigateOccurrence: vi.fn(),
     ...overrides
@@ -281,14 +280,15 @@ describe("GlossarySidebar (#375)", () => {
     expect(rows()).toHaveLength(3);
   });
 
-  it("opens the Glossary Entry Editor Pane instead of an inline form when 語彙を追加 is clicked (#436 Slice 3)", async () => {
+  it("opens the Glossary Entry Editor Pane when 語彙を追加 is clicked, with no inline create form (#436 Slices 3/5)", async () => {
     const props = await render();
 
     act(() => button("glossary.addEntry").click());
 
     expect(props.onOpenCreateEntryPane).toHaveBeenCalledTimes(1);
+    // #436 Slice 5: the old inline create form is gone entirely.
     expect(container.querySelector(".glossaryCreateForm")).toBeNull();
-    expect(props.onCreateEntry).not.toHaveBeenCalled();
+    expect(container.querySelector("form")).toBeNull();
   });
 
   it("no longer hosts any tag CRUD UI (moved to the Glossary Tag Manager tab)", async () => {

@@ -86,4 +86,20 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     ]);
     expect(appSource()).not.toContain("createEntryFromSelection");
   });
+
+  it("#436 Slice 5: opening a glossary entry (side pane / palette / occurrence) opens the pane, never a glossaryEntry tab", () => {
+    const source = appSource();
+
+    // The `glossary.entry.open` controller now opens the Entry Editor Pane.
+    const body = region(source, "openGlossaryEntry: (entryId) => {", 260);
+    expect(body).toContain(
+      'openGlossaryEntryEditPane({ source: "glossary-pane", entryId })'
+    );
+    expect(body).not.toContain("openEditorFromExplicitActivation");
+
+    // The retired inline create path and its command are gone.
+    expect(source).not.toContain("function createGlossaryEntryFromSidebar");
+    expect(source).not.toContain("glossaryCommandIds.createEntry");
+    expect(source).not.toContain("onCreateGlossaryEntry={");
+  });
 });

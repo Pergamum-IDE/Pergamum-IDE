@@ -153,7 +153,7 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
     it("passes a null active-document highlight (clears the highlight) instead of hiding File Explorer", () => {
       const sidebarStart = appSource.indexOf("<WorkspaceSidebar");
       const sidebarEnd = appSource.indexOf(
-        "onCreateGlossaryEntry={",
+        "onActivateGlossaryEntry={",
         sidebarStart
       );
       const sidebarProps = appSource.slice(sidebarStart, sidebarEnd);
@@ -225,7 +225,6 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
             onActivateProjectDocument: vi.fn(),
             onFileExplorerCreateEntryRequestHandled: vi.fn(),
             onActivateGlossaryEntry: vi.fn(),
-            onCreateGlossaryEntry: vi.fn(async () => true),
             onOpenGlossaryCreateEntryPane: vi.fn(),
             glossaryActiveDocumentContent: null,
             onNavigateGlossaryOccurrence: vi.fn()
@@ -269,7 +268,6 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
             onActivateProjectDocument: vi.fn(),
             onFileExplorerCreateEntryRequestHandled: vi.fn(),
             onActivateGlossaryEntry: vi.fn(),
-            onCreateGlossaryEntry: vi.fn(async () => true),
             onOpenGlossaryCreateEntryPane: vi.fn(),
             glossaryActiveDocumentContent: null,
             onNavigateGlossaryOccurrence: vi.fn()

@@ -55,7 +55,6 @@ import {
   type StartupMarkdownRejectionReason
 } from "../shared/sessionRestore";
 import type {
-  CreateGlossaryEntryInput,
   CreateGlossaryTagInput,
   GlossaryEntry,
   GlossaryEntryId,
@@ -137,7 +136,6 @@ import {
   serializeLineEndings
 } from "./lineEndingTracking";
 import {
-  createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
   currentEditorGlossaryEntryId,
   currentEditorProjectRelativePath,
@@ -3044,52 +3042,15 @@ export function App(): JSX.Element {
     registerGlossaryCommands(
       registry,
       {
-        openGlossaryEntry: async (entryId) => {
-          const editorId = createGlossaryEntryEditorId(
-            entryId,
-            activeProjectContext
+        // #436 Phase 8-0 PoC (Slice 5): opening a glossary entry no longer
+        // opens a `glossaryEntry` editor tab — it opens the bottom Glossary
+        // Entry Editor Pane in edit mode. Every caller (Glossary side pane
+        // "…", the Command Palette @-jump, occurrence tracking) routes here.
+        openGlossaryEntry: (entryId) => {
+          setGlossaryEntryEditorPane(
+            openGlossaryEntryEditPane({ source: "glossary-pane", entryId })
           );
-
-          return await openEditorFromExplicitActivation(editorId);
-        },
-        createGlossaryEntry: async (input) => {
-          const projectGeneration =
-            projectActivationLifetimeRef.current.captureProjectActivationGeneration();
-          let entry: GlossaryEntry;
-
-          try {
-            entry = await window.pergamum.glossary.create(input);
-          } catch (error) {
-            if (
-              !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-                projectGeneration
-              )
-            ) {
-              return false;
-            }
-
-            throw error;
-          }
-
-          if (
-            !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-              projectGeneration
-            )
-          ) {
-            return false;
-          }
-
-          setGlossaryRefreshToken((token) => token + 1);
-
-          const editorId = createGlossaryEntryEditorId(
-            entry.id,
-            activeProjectContext
-          );
-
-          return await openEditorFromExplicitActivation(editorId, {
-            history: "record",
-            resolvedEditor: createGlossaryEntryCurrentEditor(entry)
-          });
+          return true;
         },
         navigateToPreviousGlossaryOccurrence: (entryId) =>
           navigateGlossaryOccurrenceRef.current(entryId, "previous"),
@@ -3505,33 +3466,10 @@ export function App(): JSX.Element {
   }
 
 
-  async function createGlossaryEntryFromSidebar(
-    input: CreateGlossaryEntryInput
-  ): Promise<boolean> {
-    try {
-      return await commandRegistry.execute(
-        glossaryCommandIds.createEntry,
-        { source: "workspaceSidebar" },
-        input
-      );
-    } catch (error) {
-      if (error instanceof CommandDisabledError) {
-        return false;
-      }
-
-      setStatus({
-        key: "status.commandFailed",
-        values: { message: errorMessage(error, translate) }
-      });
-      return false;
-    }
-  }
-
-  // #436 Phase 8-0 PoC (Slice 3): the Glossary side pane's "語彙を追加" now
-  // opens the bottom Glossary Entry Editor Pane in create mode instead of the
-  // sidebar's inline create form / a new glossary entry tab. No DB write and
-  // no form yet — later slices flesh out the pane and remove the old inline
-  // form + `createGlossaryEntryFromSidebar` path.
+  // #436 Phase 8-0 PoC (Slice 3): the Glossary side pane's "語彙を追加" opens
+  // the bottom Glossary Entry Editor Pane in create mode. (Slice 5 removed the
+  // old inline create form and the immediate-DB-create command it used.) No DB
+  // write and no form yet.
   function openGlossaryCreateEntryPaneFromSidebar(): void {
     executeUiCommand(
       glossaryEntryEditorPaneCommandIds.openCreatePane,
@@ -10174,7 +10112,6 @@ export function App(): JSX.Element {
                           entryId
                         );
                       }}
-                      onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
                       onOpenGlossaryCreateEntryPane={
                         openGlossaryCreateEntryPaneFromSidebar
                       }

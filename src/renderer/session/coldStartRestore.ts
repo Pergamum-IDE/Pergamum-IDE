@@ -10,9 +10,9 @@
  *   2. selects AT MOST ONE Session to restore (single-window)
  *   3. reopens its Project through the normal open lifecycle (never a
  *      Session-Restore shortcut), verifying the saved identity
- *   4. reopens its editors (`projectMarkdown` / `standaloneMarkdown` /
- *      `glossaryEntry`; `untitled` is skipped in #274), preserving relative
- *      order, skipping missing resources locally
+ *   4. reopens its editors (`projectMarkdown` / `standaloneMarkdown`;
+ *      `untitled` is skipped in #274, and `glossaryEntry` is retired in #436),
+ *      preserving relative order, skipping missing resources locally
  *   5. resolves the active editor (saved → filename fallback → no-active)
  *   6. hands the assembled working environment + pending #273 View States
  *      to the host to apply
@@ -60,14 +60,12 @@ export type StartupMarkdownRejectedRoute = Extract<
 >;
 import {
   createFileEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   serializeEditorId,
   type ActiveProjectContext,
   type EditorId
 } from "../../shared/editorId";
 import {
-  createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
   type CurrentEditor
 } from "../currentEditor";
@@ -116,6 +114,11 @@ export interface ColdStartRestoreDeps {
     relativePath: string
   ) => Promise<string>;
   readonly readMarkdownFile: (filePath: string) => Promise<MarkdownFile>;
+  /**
+   * #436 Slice 5: no longer used during restore (the `glossaryEntry` editor
+   * tab is retired). Retained on the deps contract for now; drop when the
+   * `glossaryEntry` editor kind is fully removed.
+   */
   readonly getGlossaryEntryById: (
     entryId: string
   ) => Promise<GlossaryEntry | null>;
@@ -274,37 +277,12 @@ async function buildRestoredEditor(
       };
     }
 
-    case "glossaryEntry": {
-      if (!projectRestoreSucceeded || !project || !activeProjectContext) {
-        return null;
-      }
-
-      let entry: GlossaryEntry | null;
-
-      try {
-        entry = await deps.getGlossaryEntryById(editor.entryId);
-      } catch {
-        entry = null;
-      }
-
-      if (!entry) {
-        deps.notifyEditorSkipped(editor.entryId);
-        return null;
-      }
-
-      const id = createGlossaryEntryEditorId(
-        editor.entryId,
-        activeProjectContext
-      );
-
-      return {
-        openDocument: { id, editor: createGlossaryEntryCurrentEditor(entry) },
-        sessionIdentity: sessionEditorIdentity(editor),
-        fallbackFilename: null,
-        viewStateKey: null,
-        viewState: null
-      };
-    }
+    case "glossaryEntry":
+      // #436 Phase 8-0 PoC (Slice 5): the `glossaryEntry` editor tab is
+      // retired — nothing opens one any more, and it is never restored. A
+      // pre-#436 session may still list one; parsing that record stays
+      // supported so startup never fails, but the editor is simply dropped.
+      return null;
   }
 }
 

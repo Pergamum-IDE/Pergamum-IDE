@@ -188,7 +188,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     {
       openGlossaryEntry: () => true,
-      createGlossaryEntry: () => true,
       navigateToPreviousGlossaryOccurrence: () => true,
       navigateToNextGlossaryOccurrence: () => true,
       openGlossaryTagManager: () => true,
@@ -196,7 +195,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
     },
     {
       openEntry: "Open glossary entry",
-      createEntry: "Create glossary entry",
       previousOccurrence: "Previous occurrence",
       nextOccurrence: "Next occurrence",
       manageTags: "Manage glossary tags",

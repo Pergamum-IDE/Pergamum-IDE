@@ -66,7 +66,6 @@ const workspaceSidebarRequiredDefaults = {
   glossaryRefreshToken: 0,
   fileExplorerCreateEntryRequest: null,
   onFileExplorerCreateEntryRequestHandled: () => undefined,
-  onCreateGlossaryEntry: () => Promise.resolve(true),
   onOpenGlossaryCreateEntryPane: () => undefined,
   glossaryActiveDocumentContent: null,
   onNavigateGlossaryOccurrence: () => undefined
@@ -717,12 +716,17 @@ describe("workspace navigation", () => {
     expect(source).toContain("onActivateProjectDocument={(relativePath) => {");
   });
 
-  it("connects Glossary activation through command execution", () => {
+  it("connects Glossary activation through command execution to the Entry Editor Pane (#436 Slice 5)", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 
     expect(source).toContain("registerGlossaryCommands(");
-    expect(source).toContain("createGlossaryEntryEditorId(");
+    // #436 Slice 5: opening a glossary entry no longer opens a `glossaryEntry`
+    // editor tab — the command controller opens the bottom Glossary Entry
+    // Editor Pane in edit mode.
     expect(source).toContain(
+      'openGlossaryEntryEditPane({ source: "glossary-pane", entryId })'
+    );
+    expect(source).not.toContain(
       "return await openEditorFromExplicitActivation(editorId);"
     );
     expect(source).toContain(
@@ -894,8 +898,7 @@ describe("workspace navigation", () => {
       glossaryRefreshToken: 0,
       translate,
       onActivateProjectDocument: () => undefined,
-      onActivateGlossaryEntry: () => undefined,
-      onCreateGlossaryEntry: async () => false
+      onActivateGlossaryEntry: () => undefined
     });
 
     expect(React.isValidElement(sidebar)).toBe(true);
@@ -914,7 +917,6 @@ describe("workspace navigation", () => {
         activeDocumentContent: null,
         translate,
         onActivateEntry: () => undefined,
-        onCreateEntry: () => Promise.resolve(true),
         onOpenCreateEntryPane: () => undefined,
         onNavigateOccurrence: () => undefined
       })
