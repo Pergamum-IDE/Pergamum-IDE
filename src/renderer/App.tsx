@@ -3638,19 +3638,29 @@ export function App(): JSX.Element {
     return entries;
   }
 
-  // #375: Glossary Management tab — the top-left "Add entry" button. Goes
-  // through the SAME create flow as the Glossary sidebar's "Add entry"
-  // (glossary.entry.create): it persists a new entry (seeded with a
-  // placeholder surface for the user to rename), bumps the refresh token so
-  // every glossary consumer reloads, and opens its editor tab.
+  // #436 Phase 8-0 PoC (Slice 4): the Glossary Management tab's "語彙追加"
+  // button and its per-row edit action open the bottom Glossary Entry Editor
+  // Pane (create / edit mode, source "glossary-settings") instead of
+  // persisting a placeholder entry and opening a glossary entry editor tab.
+  // No DB write and no form yet — later slices flesh out the pane and remove
+  // the old glossary entry tab path.
   function handleAddGlossaryEntryFromManager(): void {
-    void createGlossaryEntryFromSidebar({
-      description: "",
-      atoms: [
-        { value: translate("glossary.entryManager.newEntryValue"), matchFlags: 0 }
-      ],
-      tagIds: []
-    });
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      { source: "editorSurface" },
+      {
+        source: "glossary-settings",
+        presetRepresentative: DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE
+      }
+    );
+  }
+
+  function handleEditGlossaryEntryFromManager(entryId: GlossaryEntryId): void {
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openEditPane,
+      { source: "editorSurface" },
+      { source: "glossary-settings", entryId }
+    );
   }
 
   // #375: Glossary Management tab — hard delete of an entry through the shared
@@ -10270,13 +10280,7 @@ export function App(): JSX.Element {
                         entries={glossaryEntries}
                         translate={translate}
                         onAddEntry={handleAddGlossaryEntryFromManager}
-                        onOpenEntry={(entryId) => {
-                          executeUiCommand(
-                            glossaryCommandIds.openEntry,
-                            { source: "editorSurface" },
-                            entryId
-                          );
-                        }}
+                        onOpenEntry={handleEditGlossaryEntryFromManager}
                         onDeleteEntry={(entryId) =>
                           handleDeleteGlossaryEntryFromManager(entryId)
                         }
