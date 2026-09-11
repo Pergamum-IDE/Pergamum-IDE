@@ -321,21 +321,25 @@ import {
 // kept dormant for a later slice to remove once the occurrence-navigation UI
 // has a new home.
 import { GlossaryEntryEditorPane } from "./GlossaryEntryEditorPane";
+import type { GlossaryEntryEditorSessionHandle } from "./GlossaryEntryEditorSession";
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
   GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT,
   clampGlossaryEntryEditorPaneHeight,
   closeGlossaryEntryEditorPane,
   createInitialGlossaryEntryEditorPaneState,
+  isSameGlossaryEntryEditorPaneTarget,
   openGlossaryEntryCreatePane,
   openGlossaryEntryEditPane,
-  type GlossaryEntryEditorPaneState
+  type GlossaryEntryEditorPaneState,
+  type OpenGlossaryEntryEditorPaneState
 } from "./glossaryEntryEditorPaneState";
 import {
   createGlossaryEntryEditorPaneCommandTitles,
   glossaryEntryEditorPaneCommandIds,
   registerGlossaryEntryEditorPaneCommands
 } from "./glossaryEntryEditorPaneCommands";
+import { confirmGlossaryEntryEditorPaneDiscardOrSave } from "./glossaryEntryEditorPaneDirtyConfirmation";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -1014,6 +1018,81 @@ export function App(): JSX.Element {
     useState<GlossaryEntryEditorPaneState>(
       createInitialGlossaryEntryEditorPaneState
     );
+  // #436 Slice 11: readable from async continuations (dirty-confirm dialogs)
+  // that ran a state snapshot before an `await` — mirrors `projectRef`.
+  const glossaryEntryEditorPaneRef = useRef(glossaryEntryEditorPane);
+  glossaryEntryEditorPaneRef.current = glossaryEntryEditorPane;
+  // #436 Slice 11: the currently-mounted session's imperative isDirty/save
+  // handle (forwarded through `GlossaryEntryEditorPane`) — `null` while the
+  // pane is closed. Never read directly; always go through
+  // `confirmGlossaryEntryEditorPaneDirtyIfNeeded`.
+  const glossaryEntryEditorSessionHandleRef =
+    useRef<GlossaryEntryEditorSessionHandle | null>(null);
+
+  // #436 Slice 11: the ONE place that decides whether the pane's current
+  // draft is safe to abandon. `false` means the caller MUST abort its
+  // operation — the confirm dialog already explained why (the user
+  // cancelled, or chose Save and the save failed, in which case the pane's
+  // own failure UI is already visible).
+  async function confirmGlossaryEntryEditorPaneDirtyIfNeeded(): Promise<boolean> {
+    if (!glossaryEntryEditorPaneRef.current.isOpen) {
+      return true;
+    }
+
+    const handle = glossaryEntryEditorSessionHandleRef.current;
+
+    if (!handle) {
+      return true;
+    }
+
+    const outcome = await confirmGlossaryEntryEditorPaneDiscardOrSave({
+      isDirty: () => handle.isDirty(),
+      save: () => handle.save(),
+      translate,
+      choiceDialog
+    });
+
+    return outcome === "proceed";
+  }
+
+  // #436 Slice 11: every "open create/edit pane" caller (Glossary side pane,
+  // glossary settings add/edit, the Command Palette @-jump / occurrence
+  // tracking's `openGlossaryEntry`) goes through this instead of calling
+  // `setGlossaryEntryEditorPane` directly. Re-opening the IDENTICAL target
+  // (same create preset, or the same entryId already open) is a no-op —
+  // keeps the current draft, never prompts (nothing would be lost either
+  // way). Anything else confirms first when the CURRENT pane has unsaved
+  // work; a cancel (or a failed save) leaves the current pane untouched.
+  async function transitionGlossaryEntryEditorPane(
+    next: OpenGlossaryEntryEditorPaneState
+  ): Promise<void> {
+    if (
+      isSameGlossaryEntryEditorPaneTarget(
+        glossaryEntryEditorPaneRef.current,
+        next
+      )
+    ) {
+      setGlossaryEntryEditorPane(next);
+      return;
+    }
+
+    if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+      return;
+    }
+
+    setGlossaryEntryEditorPane(next);
+  }
+
+  // #436 Slice 11: closing the pane (header close button, the dormant
+  // `closePane` command) gates on the same dirty confirm.
+  async function closeGlossaryEntryEditorPaneWithConfirm(): Promise<void> {
+    if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+      return;
+    }
+
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+  }
+
   const [glossaryEntryEditorPaneHeight, setGlossaryEntryEditorPaneHeight] =
     useState(GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT);
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
@@ -3050,8 +3129,10 @@ export function App(): JSX.Element {
         // opens a `glossaryEntry` editor tab — it opens the bottom Glossary
         // Entry Editor Pane in edit mode. Every caller (Glossary side pane
         // "…", the Command Palette @-jump, occurrence tracking) routes here.
-        openGlossaryEntry: (entryId) => {
-          setGlossaryEntryEditorPane(
+        // #436 Slice 11: routed through the dirty-confirm transition — a
+        // pending unsaved pane draft is confirmed before switching entries.
+        openGlossaryEntry: async (entryId) => {
+          await transitionGlossaryEntryEditorPane(
             openGlossaryEntryEditPane({ source: "glossary-pane", entryId })
           );
           return true;
@@ -3079,14 +3160,21 @@ export function App(): JSX.Element {
     registerGlossaryEntryEditorPaneCommands(
       registry,
       {
-        openGlossaryEntryCreatePane: (options) => {
-          setGlossaryEntryEditorPane(openGlossaryEntryCreatePane(options));
+        // #436 Slice 11: routed through the dirty-confirm transition/close
+        // helpers — a pending unsaved pane draft is confirmed before
+        // switching to a different create/edit target or closing outright.
+        openGlossaryEntryCreatePane: async (options) => {
+          await transitionGlossaryEntryEditorPane(
+            openGlossaryEntryCreatePane(options)
+          );
         },
-        openGlossaryEntryEditPane: (options) => {
-          setGlossaryEntryEditorPane(openGlossaryEntryEditPane(options));
+        openGlossaryEntryEditPane: async (options) => {
+          await transitionGlossaryEntryEditorPane(
+            openGlossaryEntryEditPane(options)
+          );
         },
-        closeGlossaryEntryEditorPane: () => {
-          setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+        closeGlossaryEntryEditorPane: async () => {
+          await closeGlossaryEntryEditorPaneWithConfirm();
         }
       },
       createGlossaryEntryEditorPaneCommandTitles(translate)
@@ -3335,11 +3423,21 @@ export function App(): JSX.Element {
   const projectFileQuickOpenDocuments = project?.documents ?? [];
 
   async function confirmProjectSwitch(): Promise<boolean> {
-    return confirmProjectSwitchWithUnsavedDocuments({
+    const markdownProceed = await confirmProjectSwitchWithUnsavedDocuments({
       state: openDocumentsState,
       translate,
       choiceDialog
     });
+
+    if (!markdownProceed) {
+      return false;
+    }
+
+    // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
+    // separate from the Markdown check above (the pane's draft was never an
+    // open editor). Asked only once the Markdown check already proceeded, so
+    // a Markdown cancel never also prompts about the glossary pane.
+    return confirmGlossaryEntryEditorPaneDirtyIfNeeded();
   }
 
   async function resolveProjectOpenResult(
@@ -7020,6 +7118,15 @@ export function App(): JSX.Element {
     let shouldShowCloseFailedDialog = false;
     lifecycleOperationInProgressRef.current = true;
     try {
+      // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
+      // entirely separate from the Markdown dirty-resolution below (the
+      // pane's draft was never an open editor, so that flow has no
+      // visibility into it). Runs FIRST: a cancel (or a failed save) aborts
+      // the close here, before the commit-barrier flow ever starts.
+      if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+        return;
+      }
+
       const dirtyResolution = await resolveDirtyForLifecycle(
         "explicitProjectClose",
         project.name
@@ -7106,43 +7213,52 @@ export function App(): JSX.Element {
     } else {
       lifecycleOperationInProgressRef.current = true;
       try {
-        const dirtyResolution = await resolveDirtyForLifecycle(
-          request.intent,
-          "Pergamum"
-        );
-
-        if (
-          dirtyResolution.status === "resolved" ||
-          dirtyResolution.status === "discarded"
-        ) {
-          commitBarrierToken = dirtyResolution.commitBarrierToken;
-
-          if (request.isFinalWindow) {
-            // #272: the final window close keeps this Session in the restore
-            // set; a best-effort flush is enough (durability is continuous).
-            void sessionPersistence.flushNow();
-            // #286: best-effort Recovery payload flush on normal shutdown —
-            // failing to flush here NEVER deletes an existing Recovery row.
-            void recoveryPayloadCoordinator.flushNow();
-            decision = { status: "approved", requestId: request.requestId };
-          } else {
-            // #272 (review Blocker 5): an ordinary non-final window close
-            // removes this Session from the future restore set. That removal
-            // MUST be durable before we approve the close — otherwise a
-            // manifest write failure would let the closed Session revive on
-            // next launch. On failure, decline the close (safe: the window
-            // stays open, the user can retry).
-            try {
-              await sessionPersistence.dropFromRestoreSet();
-              decision = { status: "approved", requestId: request.requestId };
-            } catch {
-              exitLifecycleCommitBarrier(commitBarrierToken);
-              commitBarrierToken = null;
-              decision = { status: "cancelled", requestId: request.requestId };
-            }
-          }
-        } else {
+        // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm,
+        // separate from the Markdown dirty-resolution below (the pane's
+        // draft was never an open editor). Runs FIRST — a cancel (or a
+        // failed save) declines the window close, same as a Markdown cancel
+        // does, WITHOUT ever starting the commit-barrier flow.
+        if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
           decision = { status: "cancelled", requestId: request.requestId };
+        } else {
+          const dirtyResolution = await resolveDirtyForLifecycle(
+            request.intent,
+            "Pergamum"
+          );
+
+          if (
+            dirtyResolution.status === "resolved" ||
+            dirtyResolution.status === "discarded"
+          ) {
+            commitBarrierToken = dirtyResolution.commitBarrierToken;
+
+            if (request.isFinalWindow) {
+              // #272: the final window close keeps this Session in the restore
+              // set; a best-effort flush is enough (durability is continuous).
+              void sessionPersistence.flushNow();
+              // #286: best-effort Recovery payload flush on normal shutdown —
+              // failing to flush here NEVER deletes an existing Recovery row.
+              void recoveryPayloadCoordinator.flushNow();
+              decision = { status: "approved", requestId: request.requestId };
+            } else {
+              // #272 (review Blocker 5): an ordinary non-final window close
+              // removes this Session from the future restore set. That removal
+              // MUST be durable before we approve the close — otherwise a
+              // manifest write failure would let the closed Session revive on
+              // next launch. On failure, decline the close (safe: the window
+              // stays open, the user can retry).
+              try {
+                await sessionPersistence.dropFromRestoreSet();
+                decision = { status: "approved", requestId: request.requestId };
+              } catch {
+                exitLifecycleCommitBarrier(commitBarrierToken);
+                commitBarrierToken = null;
+                decision = { status: "cancelled", requestId: request.requestId };
+              }
+            }
+          } else {
+            decision = { status: "cancelled", requestId: request.requestId };
+          }
         }
       } catch {
         decision = {
@@ -7187,6 +7303,14 @@ export function App(): JSX.Element {
 
     lifecycleOperationInProgressRef.current = true;
     try {
+      // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
+      // separate from the Markdown dirty-resolution below (the pane's draft
+      // was never an open editor). Runs FIRST: a cancel (or a failed save)
+      // aborts the quit/restart here, before the commit-barrier flow starts.
+      if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+        return;
+      }
+
       const dirtyResolution = await resolveDirtyForLifecycle(
         "explicitApplicationQuit",
         "Pergamum"
@@ -10611,6 +10735,7 @@ export function App(): JSX.Element {
                         }
                       />
                       <GlossaryEntryEditorPane
+                        ref={glossaryEntryEditorSessionHandleRef}
                         state={glossaryEntryEditorPane}
                         translate={translate}
                         height={clampGlossaryEntryEditorPaneHeight(
@@ -10636,9 +10761,7 @@ export function App(): JSX.Element {
                           effectiveSettings.editor.undoHistoryMinDepth
                         }
                         onClose={() =>
-                          setGlossaryEntryEditorPane(
-                            closeGlossaryEntryEditorPane()
-                          )
+                          void closeGlossaryEntryEditorPaneWithConfirm()
                         }
                       />
                     </>

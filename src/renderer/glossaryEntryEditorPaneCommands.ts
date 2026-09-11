@@ -35,9 +35,11 @@ export const glossaryEntryEditorPaneCommandIds = {
 export interface GlossaryEntryEditorPaneCommandController {
   openGlossaryEntryCreatePane(
     options: OpenGlossaryEntryCreatePaneOptions
-  ): void;
-  openGlossaryEntryEditPane(options: OpenGlossaryEntryEditPaneOptions): void;
-  closeGlossaryEntryEditorPane(): void;
+  ): void | Promise<void>;
+  openGlossaryEntryEditPane(
+    options: OpenGlossaryEntryEditPaneOptions
+  ): void | Promise<void>;
+  closeGlossaryEntryEditorPane(): void | Promise<void>;
 }
 
 export interface GlossaryEntryEditorPaneCommandTitles {

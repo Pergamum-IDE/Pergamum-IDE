@@ -91,10 +91,12 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     const source = appSource();
 
     // The `glossary.entry.open` controller now opens the Entry Editor Pane.
-    const body = region(source, "openGlossaryEntry: (entryId) => {", 260);
+    const body = region(source, "openGlossaryEntry: async (entryId) => {", 260);
     expect(body).toContain(
       'openGlossaryEntryEditPane({ source: "glossary-pane", entryId })'
     );
+    // #436 Slice 11: routed through the dirty-confirm transition helper.
+    expect(body).toContain("transitionGlossaryEntryEditorPane(");
     expect(body).not.toContain("openEditorFromExplicitActivation");
 
     // The retired inline create path and its command are gone.
@@ -243,9 +245,8 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
       "src/renderer/GlossaryEntryEditorPane.tsx",
       "utf8"
     );
-    expect(paneSource).toContain(
-      'import { GlossaryEntryEditorSession } from "./GlossaryEntryEditorSession"'
-    );
+    expect(paneSource).toContain('from "./GlossaryEntryEditorSession"');
+    expect(paneSource).toContain("GlossaryEntryEditorSession,");
     // Both branches of the mode ternary render the SAME session component —
     // no separate create-only form.
     expect(
@@ -269,8 +270,8 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     // `mode` is forwarded to GlossaryEditor based on whether the draft has
     // ever been persisted — not a separately-tracked create/edit flag.
     expect(sessionSource).toContain("mode={isNew ? \"create\" : \"edit\"}");
-    expect(sessionSource).toContain("glossaryEntryDraftIsNew(draft)");
-    expect(sessionSource).toContain("glossaryEntryDraftCreateInput(draft)");
+    expect(sessionSource).toContain("glossaryEntryDraftIsNew(");
+    expect(sessionSource).toContain("glossaryEntryDraftCreateInput(");
     expect(sessionSource).toContain("onCreateEntry(");
 
     // #436 Slice 9: the create-only form is gone entirely.

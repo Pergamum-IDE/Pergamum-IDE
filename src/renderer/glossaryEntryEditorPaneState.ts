@@ -105,6 +105,32 @@ export function closeGlossaryEntryEditorPane(): GlossaryEntryEditorPaneState {
   return { isOpen: false };
 }
 
+/**
+ * #436 Slice 11 — is `next` a re-open of the SAME target `current` already
+ * has open? Used to skip the dirty confirm when an "open create/edit pane"
+ * action is really just re-triggering the identical session (e.g. clicking
+ * 語彙を追加 again, or re-opening the same entry's edit icon) — the existing
+ * draft is simply kept (no data loss either way), so asking the user to
+ * choose Save/Discard/Cancel would be pure friction for a no-op. `source` is
+ * deliberately NOT part of the comparison — two different entry points
+ * opening the same create preset / the same entryId are still the same
+ * target from the pane's point of view.
+ */
+export function isSameGlossaryEntryEditorPaneTarget(
+  current: GlossaryEntryEditorPaneState,
+  next: OpenGlossaryEntryEditorPaneState
+): boolean {
+  if (!current.isOpen || current.mode !== next.mode) {
+    return false;
+  }
+
+  return current.mode === "create" && next.mode === "create"
+    ? current.presetRepresentative === next.presetRepresentative
+    : current.mode === "edit" &&
+        next.mode === "edit" &&
+        current.entryId === next.entryId;
+}
+
 /* -------------------------------------------------------------------------- *
  * #436 Slice 6 remediation: the pane is a user-resizable bottom region.
  * Height is held in renderer memory across open/close, not persisted.

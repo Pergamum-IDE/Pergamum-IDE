@@ -802,6 +802,12 @@ export const enTranslations = {
   "glossaryEntryEditorPane.edit.save": "Save",
   "glossaryEntryEditorPane.edit.saveFailed":
     "Could not save the glossary entry.",
+  "glossaryEntryEditorPane.dirty.title": "Unsaved glossary entry",
+  "glossaryEntryEditorPane.dirty.message":
+    "This glossary entry has unsaved changes. Save before continuing?",
+  "glossaryEntryEditorPane.dirty.saveAndContinue": "Save and Continue",
+  "glossaryEntryEditorPane.dirty.discardAndContinue": "Discard and Continue",
+  "glossaryEntryEditorPane.dirty.cancel": "Cancel",
   "glossaryTagEditor.background": "Background color",
   "glossaryTagEditor.cancel": "Cancel",
   "glossaryTagEditor.create": "Create",

@@ -19,6 +19,7 @@ import {
   clampGlossaryEntryEditorPaneHeight,
   closeGlossaryEntryEditorPane,
   createInitialGlossaryEntryEditorPaneState,
+  isSameGlossaryEntryEditorPaneTarget,
   openGlossaryEntryCreatePane,
   openGlossaryEntryEditPane,
   type OpenGlossaryEntryEditorPaneState
@@ -91,6 +92,83 @@ describe("glossaryEntryEditorPaneState — Slice 2 operation API (#436)", () => 
 
   it("close returns the closed state", () => {
     expect(closeGlossaryEntryEditorPane()).toEqual({ isOpen: false });
+  });
+});
+
+describe("isSameGlossaryEntryEditorPaneTarget (#436 Slice 11)", () => {
+  it("is false when the pane is closed", () => {
+    expect(
+      isSameGlossaryEntryEditorPaneTarget(
+        { isOpen: false },
+        openGlossaryEntryEditPane({ source: "glossary-pane", entryId: "e1" })
+      )
+    ).toBe(false);
+  });
+
+  it("is false across different modes", () => {
+    expect(
+      isSameGlossaryEntryEditorPaneTarget(
+        openGlossaryEntryCreatePane({ source: "glossary-pane" }),
+        openGlossaryEntryEditPane({ source: "glossary-pane", entryId: "e1" })
+      )
+    ).toBe(false);
+  });
+
+  it("edit mode: true only for the SAME entryId, regardless of source", () => {
+    const current = openGlossaryEntryEditPane({
+      source: "glossary-pane",
+      entryId: "e1"
+    });
+
+    expect(
+      isSameGlossaryEntryEditorPaneTarget(
+        current,
+        openGlossaryEntryEditPane({ source: "glossary-settings", entryId: "e1" })
+      )
+    ).toBe(true);
+    expect(
+      isSameGlossaryEntryEditorPaneTarget(
+        current,
+        openGlossaryEntryEditPane({ source: "glossary-pane", entryId: "e2" })
+      )
+    ).toBe(false);
+  });
+
+  it("create mode: true only for the SAME presetRepresentative, regardless of source", () => {
+    const current = openGlossaryEntryCreatePane({
+      source: "glossary-pane",
+      presetRepresentative: "織田信長"
+    });
+
+    expect(
+      isSameGlossaryEntryEditorPaneTarget(
+        current,
+        openGlossaryEntryCreatePane({
+          source: "glossary-settings",
+          presetRepresentative: "織田信長"
+        })
+      )
+    ).toBe(true);
+    expect(
+      isSameGlossaryEntryEditorPaneTarget(
+        current,
+        openGlossaryEntryCreatePane({
+          source: "glossary-pane",
+          presetRepresentative: "豊臣秀吉"
+        })
+      )
+    ).toBe(false);
+  });
+
+  it("re-triggering 語彙を追加 twice with no preset resolves to the same default target", () => {
+    const current = openGlossaryEntryCreatePane({ source: "glossary-pane" });
+
+    expect(
+      isSameGlossaryEntryEditorPaneTarget(
+        current,
+        openGlossaryEntryCreatePane({ source: "glossary-pane" })
+      )
+    ).toBe(true);
   });
 });
 

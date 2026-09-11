@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState
+} from "react";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
@@ -75,6 +81,32 @@ type SessionState =
   | { status: "ready"; draft: GlossaryEntryDraft };
 
 /**
+ * #436 Slice 11 — an imperative escape hatch for the project-lifecycle /
+ * pane-transition dirty confirm (`glossaryEntryEditorPaneDirtyConfirmation.ts`),
+ * which lives in `App.tsx` / project-close / project-switch / quit-restart
+ * choke points OUTSIDE this component. Those callers need to ask "is there
+ * unsaved work right now" and "save it, and tell me if that worked" without
+ * owning the draft themselves — the draft stays pane-local state, exactly as
+ * Slice 8/9 designed it. `forwardRef`/`useImperativeHandle` is new to this
+ * codebase (no prior precedent) but is the standard, minimal way to expose a
+ * live method pair off a component that otherwise has no reason to lift its
+ * state up.
+ */
+export interface GlossaryEntryEditorSessionHandle {
+  /** `false` while loading/failed (nothing editable yet) or once clean. */
+  isDirty(): boolean;
+  /**
+   * No-ops (resolves `true`) when already clean, loading, or failed — there
+   * is nothing to save. Resolves `false` on an invalid draft (e.g. every
+   * atom blanked out), a read-only project, or a failed create/update IPC
+   * call — callers MUST treat `false` as "do not proceed" (the pane stays
+   * open, mid-save state / the failure message stay visible for the user to
+   * fix), exactly like the in-pane Save button already does.
+   */
+  save(): Promise<boolean>;
+}
+
+/**
  * #436 Phase 8-0 PoC — Slice 9.
  *
  * The Glossary Entry Editor Pane's ONE editing session, for BOTH create and
@@ -96,9 +128,10 @@ type SessionState =
  * `mode` prop therefore only decides how the session STARTS; what a given
  * Save does is always decided by `glossaryEntryDraftIsNew(draft)`.
  */
-export function GlossaryEntryEditorSession(
-  props: GlossaryEntryEditorSessionProps
-): JSX.Element {
+export const GlossaryEntryEditorSession = forwardRef<
+  GlossaryEntryEditorSessionHandle,
+  GlossaryEntryEditorSessionProps
+>(function GlossaryEntryEditorSession(props, ref): JSX.Element {
   const {
     availableTags,
     translate,
@@ -168,6 +201,61 @@ export function GlossaryEntryEditorSession(
     // read through `onLoadEntryRef` above, deliberately excluded here.
   }, [editEntryId]);
 
+  function updateDraft(
+    update: (current: GlossaryEntryDraft) => GlossaryEntryDraft
+  ): void {
+    setState((current) =>
+      current.status === "ready"
+        ? { status: "ready", draft: update(current.draft) }
+        : current
+    );
+  }
+
+  function isDirty(): boolean {
+    return state.status === "ready" && isGlossaryEntryDraftDirty(state.draft);
+  }
+
+  // #436 Slice 11: shared by the in-pane Save button AND the imperative
+  // handle's `save()` (the dirty-confirm "保存して続行" choice) — exactly
+  // one save code path, so a dialog-driven save behaves identically to a
+  // manual one (same validity/read-only guards, same saveState transitions).
+  async function performSave(): Promise<boolean> {
+    if (state.status !== "ready") {
+      return true; // nothing editable yet — trivially "nothing to save".
+    }
+
+    const currentDraft = state.draft;
+
+    if (!isGlossaryEntryDraftDirty(currentDraft)) {
+      return true;
+    }
+
+    if (
+      readOnly ||
+      currentDraft.saveState === "saving" ||
+      !glossaryEntryDraftValidity(currentDraft).ok
+    ) {
+      return false;
+    }
+
+    updateDraft(markGlossaryEntryDraftSaving);
+
+    try {
+      const savedEntry = glossaryEntryDraftIsNew(currentDraft)
+        ? await onCreateEntry(glossaryEntryDraftCreateInput(currentDraft))
+        : await onSaveEntry(glossaryEntryDraftUpdateInput(currentDraft));
+      updateDraft((current) =>
+        applyGlossaryEntryDraftSaveResult(current, savedEntry)
+      );
+      return true;
+    } catch {
+      updateDraft(markGlossaryEntryDraftSaveFailed);
+      return false;
+    }
+  }
+
+  useImperativeHandle(ref, () => ({ isDirty, save: performSave }));
+
   if (state.status === "loading") {
     return (
       <p className="glossaryEntryEditorPaneStatus" role="status">
@@ -187,38 +275,8 @@ export function GlossaryEntryEditorSession(
   const draft = state.draft;
   const isNew = glossaryEntryDraftIsNew(draft);
 
-  function updateDraft(
-    update: (current: GlossaryEntryDraft) => GlossaryEntryDraft
-  ): void {
-    setState((current) =>
-      current.status === "ready"
-        ? { status: "ready", draft: update(current.draft) }
-        : current
-    );
-  }
-
   async function handleSave(): Promise<void> {
-    if (
-      readOnly ||
-      draft.saveState === "saving" ||
-      !isGlossaryEntryDraftDirty(draft) ||
-      !glossaryEntryDraftValidity(draft).ok
-    ) {
-      return;
-    }
-
-    updateDraft(markGlossaryEntryDraftSaving);
-
-    try {
-      const savedEntry = isNew
-        ? await onCreateEntry(glossaryEntryDraftCreateInput(draft))
-        : await onSaveEntry(glossaryEntryDraftUpdateInput(draft));
-      updateDraft((current) =>
-        applyGlossaryEntryDraftSaveResult(current, savedEntry)
-      );
-    } catch {
-      updateDraft(markGlossaryEntryDraftSaveFailed);
-    }
+    await performSave();
   }
 
   async function handleDelete(): Promise<void> {
@@ -313,4 +371,4 @@ export function GlossaryEntryEditorSession(
       />
     </div>
   );
-}
+});

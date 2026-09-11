@@ -15,9 +15,12 @@ function region(source: string, header: string, length = 2000): string {
 // outlive the project it belongs to — every renderer choke point that tears
 // down / replaces the active project's project-scoped UI (the same 3 spots
 // that already reset the Glossary Tag Manager / Entry Manager / Project
-// Settings tabs) must also close the pane. Dirty confirmation is explicitly
-// NOT part of this slice — the draft is discarded silently, same as it was
-// before Slice 10 existed.
+// Settings tabs) must also close the pane. Slice 10 itself deliberately did
+// this UNCONDITIONALLY (no dirty confirmation yet — see the note on the
+// "unconditional reset" test below); Slice 11 added the confirm, but as a
+// separate, EARLIER gate at the callers (`closeProject`/`confirmProjectSwitch`)
+// rather than inside these 3 reset functions themselves — see
+// `glossaryEntryEditorPaneDirtyConfirmationWiring.test.ts`.
 describe("Glossary Entry Editor Pane project-lifecycle reset (#436 Slice 10)", () => {
   it("closes the pane on explicit Project Close, alongside the other project-scoped tab resets", () => {
     const body = region(
@@ -72,14 +75,23 @@ describe("Glossary Entry Editor Pane project-lifecycle reset (#436 Slice 10)", (
     }
   });
 
-  it("does not introduce a dirty-confirm dialog for the pane's draft (Slice 10 non-goal, later slice)", () => {
+  it("#436 Slice 11: the reset call inside all 3 functions stays an unconditional, synchronous state set", () => {
     const source = appSource();
 
-    // The reset call itself is an unconditional, synchronous state set — no
-    // confirm dialog / dirty-check gate wraps it in any of the 3 functions
-    // (already verified individually above).
-    expect(source).not.toContain("glossaryEntryEditorPaneDirty");
-    expect(source).not.toContain("confirmCloseGlossaryEntryEditorPane");
+    // Slice 11's dirty confirm gates the CALLERS (closeProject,
+    // confirmProjectSwitch, runQuitOrRestartFlow, handleLifecycleWindowCloseRequest)
+    // — see glossaryEntryEditorPaneDirtyConfirmationWiring.test.ts. These 3
+    // reset functions themselves are unconditional on purpose: by the time
+    // any of them runs, the confirm (if any) has already happened.
+    for (const header of [
+      "function resetRendererProjectAfterExplicitClose(",
+      "async function activateProject(",
+      "function applyRestoredEnvironment("
+    ]) {
+      const body = region(source, header);
+      expect(body).not.toContain("confirmGlossaryEntryEditorPaneDirtyIfNeeded");
+      expect(body).not.toContain("confirmGlossaryEntryEditorPaneDiscardOrSave");
+    }
   });
 
   it("#436 Slice 9 regression: create/edit both still route through GlossaryEntryEditorSession hosting GlossaryEditor", () => {
@@ -87,9 +99,7 @@ describe("Glossary Entry Editor Pane project-lifecycle reset (#436 Slice 10)", (
       "src/renderer/GlossaryEntryEditorPane.tsx",
       "utf8"
     );
-    expect(paneSource).toContain(
-      'import { GlossaryEntryEditorSession } from "./GlossaryEntryEditorSession"'
-    );
+    expect(paneSource).toContain('from "./GlossaryEntryEditorSession"');
     expect(paneSource).toContain('mode="create"');
     expect(paneSource).toContain('mode="edit"');
   });

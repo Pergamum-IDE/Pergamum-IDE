@@ -29,11 +29,15 @@ function recordingController(): {
   return {
     calls,
     controller: {
-      openGlossaryEntryCreatePane: (options) =>
-        calls.push(`create:${options.source}:${options.presetRepresentative ?? ""}`),
-      openGlossaryEntryEditPane: (options) =>
-        calls.push(`edit:${options.source}:${options.entryId}`),
-      closeGlossaryEntryEditorPane: () => calls.push("close")
+      openGlossaryEntryCreatePane: (options) => {
+        calls.push(`create:${options.source}:${options.presetRepresentative ?? ""}`);
+      },
+      openGlossaryEntryEditPane: (options) => {
+        calls.push(`edit:${options.source}:${options.entryId}`);
+      },
+      closeGlossaryEntryEditorPane: () => {
+        calls.push("close");
+      }
     }
   };
 }

@@ -8,7 +8,10 @@ import type {
   GlossaryEntry,
   GlossaryTag
 } from "../../src/shared/glossary";
-import { GlossaryEntryEditorSession } from "../../src/renderer/GlossaryEntryEditorSession";
+import {
+  GlossaryEntryEditorSession,
+  type GlossaryEntryEditorSessionHandle
+} from "../../src/renderer/GlossaryEntryEditorSession";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -97,10 +100,12 @@ describe("GlossaryEntryEditorSession (#436 Slice 9: one session, both create and
     onClose?: () => void;
     readOnly?: boolean;
     availableTags?: readonly GlossaryTag[];
+    handleRef?: React.RefObject<GlossaryEntryEditorSessionHandle>;
   }): void {
     act(() => {
       root.render(
         <GlossaryEntryEditorSession
+          ref={options.handleRef}
           mode="edit"
           entryId={options.entryId ?? "entry-1"}
           availableTags={options.availableTags ?? [tagWarrior]}
@@ -139,10 +144,12 @@ describe("GlossaryEntryEditorSession (#436 Slice 9: one session, both create and
     onClose?: () => void;
     readOnly?: boolean;
     availableTags?: readonly GlossaryTag[];
+    handleRef?: React.RefObject<GlossaryEntryEditorSessionHandle>;
   }): void {
     act(() => {
       root.render(
         <GlossaryEntryEditorSession
+          ref={options.handleRef}
           mode="create"
           presetRepresentative={options.presetRepresentative ?? "新しい語彙"}
           availableTags={options.availableTags ?? [tagWarrior]}
@@ -591,6 +598,228 @@ describe("GlossaryEntryEditorSession (#436 Slice 9: one session, both create and
     it("disables Save while read-only, even with a preset representative in hand", () => {
       renderCreate({ presetRepresentative: "シズク", readOnly: true });
       expect(saveButton()?.disabled).toBe(true);
+    });
+  });
+
+  describe("imperative handle (#436 Slice 11: isDirty/save for the dirty-confirm)", () => {
+    it("edit mode: isDirty() is false while loading, false once clean, true once edited", async () => {
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderEdit({
+        onLoadEntry: () => Promise.resolve(makeEntry()),
+        handleRef
+      });
+
+      expect(handleRef.current?.isDirty()).toBe(false); // still loading
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(handleRef.current?.isDirty()).toBe(false); // loaded, clean
+
+      setInputValue(atomValueInput(0), "内府");
+
+      expect(handleRef.current?.isDirty()).toBe(true);
+    });
+
+    it("edit mode: save() persists a dirty draft through onSaveEntry, resolves true, and isDirty() flips back to false", async () => {
+      const onSaveEntry = vi.fn((input: unknown) =>
+        Promise.resolve({ ...makeEntry(), ...(input as object) } as GlossaryEntry)
+      );
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderEdit({
+        onLoadEntry: () => Promise.resolve(makeEntry()),
+        onSaveEntry: onSaveEntry as never,
+        handleRef
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      setInputValue(atomValueInput(0), "内府");
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await handleRef.current?.save();
+      });
+
+      expect(result).toBe(true);
+      expect(onSaveEntry).toHaveBeenCalledTimes(1);
+      expect(handleRef.current?.isDirty()).toBe(false);
+    });
+
+    it("edit mode: save() no-ops (resolves true) when the draft is already clean", async () => {
+      const onSaveEntry = vi.fn(() => Promise.resolve(makeEntry()));
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderEdit({
+        onLoadEntry: () => Promise.resolve(makeEntry()),
+        onSaveEntry: onSaveEntry as never,
+        handleRef
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await handleRef.current?.save();
+      });
+
+      expect(result).toBe(true);
+      expect(onSaveEntry).not.toHaveBeenCalled();
+    });
+
+    it("edit mode: save() resolves false and leaves the draft dirty when onSaveEntry rejects", async () => {
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderEdit({
+        onLoadEntry: () => Promise.resolve(makeEntry()),
+        onSaveEntry: (() => Promise.reject(new Error("boom"))) as never,
+        handleRef
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      setInputValue(atomValueInput(0), "内府");
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await handleRef.current?.save();
+      });
+
+      expect(result).toBe(false);
+      expect(handleRef.current?.isDirty()).toBe(true); // still unsaved
+      expect(
+        container.querySelector(".glossaryEntryEditorPaneSaveFailed")
+      ).not.toBeNull();
+    });
+
+    it("edit mode: save() resolves false for an invalid draft (every atom blanked out) — never silently discards", async () => {
+      const onSaveEntry = vi.fn(() => Promise.resolve(makeEntry()));
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderEdit({
+        onLoadEntry: () =>
+          Promise.resolve(
+            makeEntry({
+              atoms: [
+                {
+                  id: "atom-representative",
+                  entryId: "entry-1",
+                  sortOrder: 0,
+                  value: "徳川家康",
+                  matchFlags: 0,
+                  createdAt: timestamp,
+                  updatedAt: timestamp
+                }
+              ]
+            })
+          ),
+        onSaveEntry: onSaveEntry as never,
+        handleRef
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      setInputValue(atomValueInput(0), "   ");
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await handleRef.current?.save();
+      });
+
+      expect(result).toBe(false);
+      expect(onSaveEntry).not.toHaveBeenCalled();
+    });
+
+    it("edit mode read-only: isDirty() is false and save() trivially resolves true (nothing editable)", async () => {
+      const onSaveEntry = vi.fn(() => Promise.resolve(makeEntry()));
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderEdit({
+        onLoadEntry: () => Promise.resolve(makeEntry()),
+        onSaveEntry: onSaveEntry as never,
+        readOnly: true,
+        handleRef
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(handleRef.current?.isDirty()).toBe(false);
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await handleRef.current?.save();
+      });
+
+      expect(result).toBe(true);
+      expect(onSaveEntry).not.toHaveBeenCalled();
+    });
+
+    it("create mode: isDirty() is true immediately (unsaved from the start)", () => {
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderCreate({ presetRepresentative: "シズク", handleRef });
+
+      expect(handleRef.current?.isDirty()).toBe(true);
+    });
+
+    it("create mode: save() persists through onCreateEntry, resolves true, and isDirty() flips back to false", async () => {
+      // #436 Slice 9: `applyGlossaryEntryDraftSaveResult` rebases only
+      // `entry`/`tagIds`/atom ids, never `description` — the saved entry
+      // must therefore match the (untouched) create draft's own
+      // description ("") and tags ([]) for the draft to read back as clean.
+      const onCreateEntry = vi.fn(() =>
+        Promise.resolve(
+          makeEntry({
+            id: "entry-77",
+            description: "",
+            tags: [],
+            atoms: [
+              {
+                id: "atom-77",
+                entryId: "entry-77",
+                sortOrder: 0,
+                value: "シズク",
+                matchFlags: 0,
+                createdAt: timestamp,
+                updatedAt: timestamp
+              }
+            ]
+          })
+        )
+      );
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderCreate({
+        presetRepresentative: "シズク",
+        onCreateEntry,
+        handleRef
+      });
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await handleRef.current?.save();
+      });
+
+      expect(result).toBe(true);
+      expect(onCreateEntry).toHaveBeenCalledTimes(1);
+      expect(handleRef.current?.isDirty()).toBe(false);
+    });
+
+    it("create mode: save() resolves false when onCreateEntry rejects — the draft stays dirty", async () => {
+      const handleRef = React.createRef<GlossaryEntryEditorSessionHandle>();
+      renderCreate({
+        presetRepresentative: "シズク",
+        onCreateEntry: () => Promise.reject(new Error("boom")),
+        handleRef
+      });
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await handleRef.current?.save();
+      });
+
+      expect(result).toBe(false);
+      expect(handleRef.current?.isDirty()).toBe(true);
     });
   });
 });

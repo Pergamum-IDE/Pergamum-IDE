@@ -796,6 +796,12 @@ export const jaTranslations = {
   "glossaryEntryEditorPane.edit.loadFailed": "語彙を読み込めませんでした。",
   "glossaryEntryEditorPane.edit.save": "保存",
   "glossaryEntryEditorPane.edit.saveFailed": "語彙を保存できませんでした。",
+  "glossaryEntryEditorPane.dirty.title": "未保存の語彙があります",
+  "glossaryEntryEditorPane.dirty.message":
+    "語彙の変更が保存されていません。保存して続行しますか？",
+  "glossaryEntryEditorPane.dirty.saveAndContinue": "保存して続行",
+  "glossaryEntryEditorPane.dirty.discardAndContinue": "破棄して続行",
+  "glossaryEntryEditorPane.dirty.cancel": "キャンセル",
   "glossaryTagEditor.background": "背景色",
   "glossaryTagEditor.cancel": "キャンセル",
   "glossaryTagEditor.create": "作成",

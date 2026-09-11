@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
@@ -12,7 +13,10 @@ import type {
   LineEndingMarkerGlyph,
   NewFileLineEnding
 } from "../shared/settings";
-import { GlossaryEntryEditorSession } from "./GlossaryEntryEditorSession";
+import {
+  GlossaryEntryEditorSession,
+  type GlossaryEntryEditorSessionHandle
+} from "./GlossaryEntryEditorSession";
 import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
 import type { OpenGlossaryEntryEditorPaneState } from "./glossaryEntryEditorPaneState";
 
@@ -52,25 +56,38 @@ interface GlossaryEntryEditorPaneProps {
  * which in turn hosts the EXISTING `GlossaryEditor.tsx` (Slice 8) — per PO
  * direction: a new-entry-only screen is exactly the fork this pane exists to
  * avoid (Slice 9 retired the earlier `GlossaryEntryForm` create-only form).
+ *
+ * #436 Slice 11: forwards its ref straight through to whichever
+ * `GlossaryEntryEditorSession` is currently mounted (only one of the two
+ * branches below is ever mounted at a time), so `App.tsx`'s project-lifecycle
+ * / pane-transition dirty confirm can reach the live session's
+ * `isDirty()`/`save()` without the pane needing to know anything about dirty
+ * state itself.
  */
-export function GlossaryEntryEditorPane({
-  state,
-  translate,
-  height,
-  availableTags,
-  onCreateEntry,
-  onLoadEntry,
-  onSaveEntry,
-  onDeleteEntry,
-  onOpenTagManager,
-  readOnly,
-  markerGlyph,
-  expectedLineEnding,
-  newFileLineEndingFallback,
-  whitespaceSettings,
-  undoHistoryMinDepth,
-  onClose
-}: GlossaryEntryEditorPaneProps): JSX.Element {
+export const GlossaryEntryEditorPane = forwardRef<
+  GlossaryEntryEditorSessionHandle,
+  GlossaryEntryEditorPaneProps
+>(function GlossaryEntryEditorPane(
+  {
+    state,
+    translate,
+    height,
+    availableTags,
+    onCreateEntry,
+    onLoadEntry,
+    onSaveEntry,
+    onDeleteEntry,
+    onOpenTagManager,
+    readOnly,
+    markerGlyph,
+    expectedLineEnding,
+    newFileLineEndingFallback,
+    whitespaceSettings,
+    undoHistoryMinDepth,
+    onClose
+  },
+  ref
+): JSX.Element {
   const label = translate("glossaryEntryEditorPane.label");
 
   return (
@@ -94,6 +111,7 @@ export function GlossaryEntryEditorPane({
       <div className="glossaryEntryEditorPaneBody">
         {state.mode === "create" ? (
           <GlossaryEntryEditorSession
+            ref={ref}
             key={`${state.source}:${state.presetRepresentative}`}
             mode="create"
             presetRepresentative={state.presetRepresentative}
@@ -114,6 +132,7 @@ export function GlossaryEntryEditorPane({
           />
         ) : (
           <GlossaryEntryEditorSession
+            ref={ref}
             key={state.entryId}
             mode="edit"
             entryId={state.entryId}
@@ -136,4 +155,4 @@ export function GlossaryEntryEditorPane({
       </div>
     </section>
   );
-}
+});
