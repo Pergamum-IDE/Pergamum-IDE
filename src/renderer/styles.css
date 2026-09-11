@@ -1492,8 +1492,9 @@ label.settingsItemHeader {
     monospace;
 }
 
-/* #436 Slice 6: the create-mode new-entry form. */
-.glossaryEntryCreateForm {
+/* #436 Slice 7: the shared Glossary Entry Editor Pane form (create today;
+   edit reuses it once wired up — never a separate screen per PO direction). */
+.glossaryEntryForm {
   display: flex;
   min-width: 0;
   max-width: 520px;
@@ -1501,7 +1502,7 @@ label.settingsItemHeader {
   gap: 12px;
 }
 
-.glossaryEntryCreateFormField {
+.glossaryEntryFormField {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -1511,7 +1512,7 @@ label.settingsItemHeader {
   font-weight: 700;
 }
 
-.glossaryEntryCreateFormField input {
+.glossaryEntryFormField input {
   font: inherit;
   font-weight: 400;
   color: #17212b;
@@ -1521,26 +1522,26 @@ label.settingsItemHeader {
   background: #ffffff;
 }
 
-.glossaryEntryCreateFormTagsSection {
+.glossaryEntryFormTagsSection {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 6px;
 }
 
-.glossaryEntryCreateFormTagsLabel {
+.glossaryEntryFormTagsLabel {
   color: #52616f;
   font-size: 12px;
   font-weight: 700;
 }
 
-.glossaryEntryCreateFormTags {
+.glossaryEntryFormTags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.glossaryEntryCreateFormTagToggle {
+.glossaryEntryFormTagToggle {
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -1548,32 +1549,32 @@ label.settingsItemHeader {
   cursor: pointer;
 }
 
-.glossaryEntryCreateFormTagToggle[aria-pressed="true"] {
+.glossaryEntryFormTagToggle[aria-pressed="true"] {
   outline: 2px solid #2f6f9f;
   outline-offset: 1px;
 }
 
-.glossaryEntryCreateFormTagsHint,
-.glossaryEntryCreateFormError {
+.glossaryEntryFormTagsHint,
+.glossaryEntryFormError {
   margin: 0;
   font-size: 12px;
 }
 
-.glossaryEntryCreateFormTagsHint {
+.glossaryEntryFormTagsHint {
   color: #6b7785;
 }
 
-.glossaryEntryCreateFormError {
+.glossaryEntryFormError {
   color: #b3261e;
 }
 
-.glossaryEntryCreateFormActions {
+.glossaryEntryFormActions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
-.glossaryEntryCreateFormActions button {
+.glossaryEntryFormActions button {
   font: inherit;
   padding: 6px 14px;
   border: 1px solid #d3dae2;
@@ -1583,18 +1584,18 @@ label.settingsItemHeader {
   cursor: pointer;
 }
 
-.glossaryEntryCreateFormActions .glossaryEntryCreateFormSubmit {
+.glossaryEntryFormActions .glossaryEntryFormSubmit {
   border-color: #2f6f9f;
   background: #2f6f9f;
   color: #ffffff;
 }
 
-.glossaryEntryCreateFormActions button:disabled {
+.glossaryEntryFormActions button:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-.glossaryEntryCreateFormSubmit[aria-disabled="true"] {
+.glossaryEntryFormSubmit[aria-disabled="true"] {
   opacity: 0.6;
 }
 

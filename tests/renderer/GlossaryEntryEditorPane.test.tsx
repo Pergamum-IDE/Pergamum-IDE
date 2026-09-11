@@ -8,6 +8,7 @@ import type {
   GlossaryTag
 } from "../../src/shared/glossary";
 import { GlossaryEntryEditorPane } from "../../src/renderer/GlossaryEntryEditorPane";
+import { GlossaryEntryForm } from "../../src/renderer/GlossaryEntryForm";
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
   GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT,
@@ -143,6 +144,59 @@ describe("clampGlossaryEntryEditorPaneHeight — Slice 6 remediation (#436)", ()
   });
 });
 
+describe("GlossaryEntryForm — create/edit-agnostic per PO direction (#436 Slice 7)", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("renders identically for mode='edit' — no separate edit form exists", () => {
+    act(() => {
+      root.render(
+        <GlossaryEntryForm
+          mode="edit"
+          initialValue={{
+            representative: "徳川家康",
+            description: "征夷大将軍",
+            tagIds: []
+          }}
+          availableTags={[]}
+          translate={translate}
+          submitLabel="保存"
+          failedMessage="語彙を保存できませんでした。"
+          onSubmit={() => Promise.resolve(true)}
+          onClose={() => undefined}
+        />
+      );
+    });
+
+    const form = container.querySelector("form.glossaryEntryForm");
+    expect(form?.getAttribute("data-form-mode")).toBe("edit");
+    expect(
+      container.querySelector<HTMLInputElement>(
+        ".glossaryEntryFormRepresentative"
+      )?.value
+    ).toBe("徳川家康");
+    expect(
+      container.querySelector<HTMLInputElement>(
+        ".glossaryEntryFormDescription"
+      )?.value
+    ).toBe("征夷大将軍");
+    expect(
+      container.querySelector(".glossaryEntryFormSubmit")?.textContent
+    ).toBe("保存");
+  });
+});
+
 describe("GlossaryEntryEditorPane (#436)", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -190,7 +244,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
 
   function representativeInput(): HTMLInputElement {
     const input = container.querySelector<HTMLInputElement>(
-      ".glossaryEntryCreateFormRepresentative"
+      ".glossaryEntryFormRepresentative"
     );
     if (!input) {
       throw new Error("no representative input");
@@ -212,7 +266,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
   function submitForm(): void {
     act(() => {
       container
-        .querySelector("form.glossaryEntryCreateForm")!
+        .querySelector("form.glossaryEntryForm")!
         .dispatchEvent(
           new window.Event("submit", { bubbles: true, cancelable: true })
         );
@@ -232,10 +286,10 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     expect(pane?.getAttribute("data-pane-source")).toBe("glossary-pane");
     expect(representativeInput().value).toBe("織田信長");
     expect(
-      container.querySelector(".glossaryEntryCreateFormSubmit")
+      container.querySelector(".glossaryEntryFormSubmit")
     ).not.toBeNull();
     expect(
-      container.querySelector(".glossaryEntryCreateFormCancel")
+      container.querySelector(".glossaryEntryFormCancel")
     ).not.toBeNull();
     // No debug echo in create mode any more.
     expect(container.querySelector(".glossaryEntryEditorPaneDebug")).toBeNull();
@@ -255,20 +309,20 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     });
 
     const toggles = container.querySelectorAll<HTMLButtonElement>(
-      ".glossaryEntryCreateFormTagToggle"
+      ".glossaryEntryFormTagToggle"
     );
     expect(toggles).toHaveLength(2);
     expect(toggles[0].getAttribute("aria-pressed")).toBe("false");
-    // "creating without tags" hint while nothing is selected
-    expect(container.textContent).toContain("タグなしで作成します");
+    // "no tags selected" hint while nothing is selected
+    expect(container.textContent).toContain("タグが選択されていません");
 
     act(() => toggles[0].click());
     expect(
       container
-        .querySelectorAll(".glossaryEntryCreateFormTagToggle")[0]
+        .querySelectorAll(".glossaryEntryFormTagToggle")[0]
         .getAttribute("aria-pressed")
     ).toBe("true");
-    expect(container.textContent).not.toContain("タグなしで作成します");
+    expect(container.textContent).not.toContain("タグが選択されていません");
   });
 
   it("shows a hint and still allows creating when no tags exist", async () => {
@@ -310,7 +364,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     act(() =>
       container
         .querySelectorAll<HTMLButtonElement>(
-          ".glossaryEntryCreateFormTagToggle"
+          ".glossaryEntryFormTagToggle"
         )[1]
         .click()
     );
@@ -343,7 +397,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
 
     expect(onCreateEntry).not.toHaveBeenCalled();
     expect(
-      container.querySelector(".glossaryEntryCreateFormError")?.textContent
+      container.querySelector(".glossaryEntryFormError")?.textContent
     ).toBe("代表表記を入力してください。");
   });
 
@@ -367,7 +421,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     expect(onCreateEntry).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
     expect(
-      container.querySelector(".glossaryEntryCreateFormError")?.textContent
+      container.querySelector(".glossaryEntryFormError")?.textContent
     ).toBe("語彙を作成できませんでした。");
   });
 
@@ -393,7 +447,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     expect(onCreateEntry).toHaveBeenCalledTimes(1);
     expect(
       container.querySelector<HTMLButtonElement>(
-        ".glossaryEntryCreateFormSubmit"
+        ".glossaryEntryFormSubmit"
       )?.disabled
     ).toBe(true);
 
@@ -415,7 +469,7 @@ describe("GlossaryEntryEditorPane (#436)", () => {
     expect(field("source")).toBe("glossary-settings");
     expect(field("entryId")).toBe("entry-7");
     expect(
-      container.querySelector(".glossaryEntryCreateForm")
+      container.querySelector(".glossaryEntryForm")
     ).toBeNull();
   });
 

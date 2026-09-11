@@ -3,7 +3,10 @@ import type {
   GlossaryTag
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
-import { GlossaryEntryCreateForm } from "./GlossaryEntryCreateForm";
+import {
+  GlossaryEntryForm,
+  type GlossaryEntryFormValue
+} from "./GlossaryEntryForm";
 import type { OpenGlossaryEntryEditorPaneState } from "./glossaryEntryEditorPaneState";
 
 interface GlossaryEntryEditorPaneProps {
@@ -18,15 +21,37 @@ interface GlossaryEntryEditorPaneProps {
 }
 
 /**
+ * #436 Slice 7: `GlossaryEntryForm`'s generic `{representative, description,
+ * tagIds}` value → the create IPC's `CreateGlossaryEntryInput`. The form has
+ * no multi-atom UI yet, so the representative becomes the single
+ * `sortOrder: 0` atom. Kept here (not inside `GlossaryEntryForm`) so the form
+ * stays create/edit-agnostic — an edit-mode adapter to `UpdateGlossaryEntryInput`
+ * lives beside this one, not inside the shared form.
+ */
+function createGlossaryEntryInputFromFormValue(
+  value: GlossaryEntryFormValue
+): CreateGlossaryEntryInput {
+  return {
+    description: value.description,
+    atoms: [{ value: value.representative, matchFlags: 0 }],
+    tagIds: [...value.tagIds]
+  };
+}
+
+/**
  * #436 Phase 8-0 PoC.
  *
  * The Glossary Entry Editor Pane sits below the editor / preview area, in the
  * slot the former Utility Window used, and replaces the per-entry glossary
  * editing tabs.
  *
- * - create mode (Slice 6): a real new-entry form (`GlossaryEntryCreateForm`).
+ * - create mode: a real new-entry form. Slice 6 introduced it as a
+ *   create-only component; Slice 7 generalized it to `GlossaryEntryForm` —
+ *   per PO direction, registering and editing a glossary entry are never
+ *   separate screens, so edit mode reuses the same component once wired up.
  * - edit  mode: still a debug echo of the operation-API state — the real edit
- *   form arrives in a later slice.
+ *   wiring (load the entry, `GlossaryEntryForm` with an update adapter)
+ *   arrives in a later slice.
  */
 export function GlossaryEntryEditorPane({
   state,
@@ -58,12 +83,21 @@ export function GlossaryEntryEditorPane({
       </div>
       <div className="glossaryEntryEditorPaneBody">
         {state.mode === "create" ? (
-          <GlossaryEntryCreateForm
+          <GlossaryEntryForm
             key={`${state.source}:${state.presetRepresentative}`}
-            presetRepresentative={state.presetRepresentative}
+            mode="create"
+            initialValue={{
+              representative: state.presetRepresentative,
+              description: "",
+              tagIds: []
+            }}
             availableTags={availableTags}
             translate={translate}
-            onCreate={onCreateEntry}
+            submitLabel={translate("glossaryEntryEditorPane.create.submit")}
+            failedMessage={translate("glossaryEntryEditorPane.create.failed")}
+            onSubmit={(value) =>
+              onCreateEntry(createGlossaryEntryInputFromFormValue(value))
+            }
             onClose={onClose}
           />
         ) : (
