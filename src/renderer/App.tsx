@@ -6872,6 +6872,9 @@ export function App(): JSX.Element {
     );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
+    // #436 Slice 10: the Glossary Entry Editor Pane holds a project-owned
+    // draft (create or edit) — it never survives a project switch either.
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     setOpenDocumentsState((state) =>
       resetOpenDocumentsForProjectContextSwitch(state)
     );
@@ -6961,6 +6964,11 @@ export function App(): JSX.Element {
     );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
+    // #436 Slice 10: the Glossary Entry Editor Pane holds a project-owned
+    // draft (create or edit) — it never survives a project close. Dirty
+    // confirmation for this draft is a later slice; this just guarantees the
+    // pane cannot outlive the project it was editing.
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     const nextOpenDocumentsState = removeProjectScopedOpenEditors(
       openDocumentsStateRef.current
     );
@@ -7550,6 +7558,11 @@ export function App(): JSX.Element {
     setGlossaryOccurrenceTrackingState(
       inactiveGlossaryOccurrenceTrackingState
     );
+    // #436 Slice 10: restoring an environment (cold start) never carries a
+    // Glossary Entry Editor Pane draft forward — the pane state itself is
+    // not part of the Session snapshot (Slice 1-9 non-goal), so this is
+    // mostly defensive, matching the other project-scoped resets here.
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     pendingRestoreViewStatesRef.current = new Map(env.pendingViewStates);
     setPendingRestoreViewStateVersion((version) => version + 1);
     setProject(env.project);
