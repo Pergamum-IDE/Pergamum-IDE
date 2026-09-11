@@ -47,7 +47,7 @@ import {
  *
  * - `glossary`: the query box becomes a GlossaryAtom multi-select and the
  *   `Ab` / `Aa` / `.*` icons are replaced by a relation-mode selector
- *   (`any` OR / `all` per paragraph / `nearby` 400-char window). The text
+ *   (`any` OR / `all` per paragraph / `nearby` configured distance). The text
  *   options are forced off while this mode is active and are not restored when
  *   it is turned off. No search runs until at least one atom is picked.
  *

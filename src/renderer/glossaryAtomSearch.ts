@@ -12,6 +12,10 @@ import {
   lineStartOffsets,
   type TextSearchMatch
 } from "../shared/textSearch";
+import {
+  defaultSearchNearbySettings,
+  type SearchNearbySettings
+} from "../shared/settings";
 
 /**
  * #384 Glossary Atom Search - the pure helpers behind the Search pane's
@@ -56,14 +60,10 @@ export interface GlossaryAtomSearchTerm {
  * - `any`    — OR: show any occurrence of any selected atom (v1 behaviour).
  * - `all`    — show a PARAGRAPH (blank-line block) that contains every
  *              selected atom at least once.
- * - `nearby` — show a window at most {@link NEARBY_WINDOW_CHARACTERS} wide
- *              that contains every selected atom.
+ * - `nearby` — show a configured character / paragraph window that contains
+ *              every selected atom.
  */
 export type GlossarySearchRelationMode = "any" | "all" | "nearby";
-
-/** `nearby` window width in UTF-16 code units (~one 400-char manuscript page).
- *  Not user-configurable in this phase. */
-export const NEARBY_WINDOW_CHARACTERS = 400;
 
 /** One selected atom's representative occurrence inside an `all` / `nearby`
  *  group result. */
@@ -177,6 +177,12 @@ export function buildGlossaryAtomSearchTerms(
 export interface FindGlossaryAtomMatchesOptions {
   /** Stop after this many result rows (per document). `0` / omitted = no cap. */
   readonly limit?: number;
+}
+
+export interface FindGlossaryAtomRelationMatchesOptions
+  extends FindGlossaryAtomMatchesOptions {
+  /** Glossary nearby distance. Falls back to catalog-backed defaults. */
+  readonly nearbySettings?: SearchNearbySettings;
 }
 
 function resolveLimit(limit: number | undefined): number {
@@ -295,7 +301,7 @@ export function findGlossaryAtomRelationMatches(
   text: string,
   terms: readonly GlossaryAtomSearchTerm[],
   relationMode: GlossarySearchRelationMode,
-  options: FindGlossaryAtomMatchesOptions = {}
+  options: FindGlossaryAtomRelationMatchesOptions = {}
 ): GlossarySearchMatch[] {
   if (relationMode === "all") {
     return findGlossaryAtomAllMatches(text, terms, options);
@@ -321,6 +327,11 @@ function collectTermOccurrences(
     hits: findGlossaryAtomMatches(text, [term], {})
   }));
 }
+
+type NearbyFlatOccurrence = {
+  readonly termIndex: number;
+  readonly occurrence: GlossarySearchMatchAtom;
+};
 
 function occurrenceOf(
   term: GlossaryAtomSearchTerm,
@@ -389,6 +400,55 @@ export function splitTextParagraphs(
   return paragraphs;
 }
 
+function findTextParagraphIndexForOffset(
+  paragraphs: readonly { start: number; end: number }[],
+  offset: number
+): number | null {
+  for (let index = 0; index < paragraphs.length; index += 1) {
+    const paragraph = paragraphs[index];
+    if (offset >= paragraph.start && offset < paragraph.end) {
+      return index;
+    }
+  }
+
+  const last = paragraphs[paragraphs.length - 1];
+  if (last && offset >= last.start && offset <= last.end) {
+    return paragraphs.length - 1;
+  }
+  return null;
+}
+
+function nearbyWindowSatisfiesSettings(
+  flat: readonly NearbyFlatOccurrence[],
+  low: number,
+  high: number,
+  settings: SearchNearbySettings,
+  paragraphs: readonly { start: number; end: number }[]
+): boolean {
+  if (settings.unit === "characters") {
+    const windowStart = flat[low].occurrence.startOffset;
+    const windowEnd = flat[high].occurrence.endOffset;
+    return windowEnd - windowStart <= settings.characterDistance;
+  }
+
+  let minParagraph = Number.POSITIVE_INFINITY;
+  let maxParagraph = Number.NEGATIVE_INFINITY;
+  for (let index = low; index <= high; index += 1) {
+    const paragraphIndex =
+      findTextParagraphIndexForOffset(
+        paragraphs,
+        flat[index].occurrence.startOffset
+      ) ?? -1;
+    if (paragraphIndex < minParagraph) {
+      minParagraph = paragraphIndex;
+    }
+    if (paragraphIndex > maxParagraph) {
+      maxParagraph = paragraphIndex;
+    }
+  }
+  return maxParagraph - minParagraph <= settings.paragraphDistance;
+}
+
 function findGlossaryAtomAllMatches(
   text: string,
   terms: readonly GlossaryAtomSearchTerm[],
@@ -439,7 +499,7 @@ function findGlossaryAtomAllMatches(
 function findGlossaryAtomNearbyMatches(
   text: string,
   terms: readonly GlossaryAtomSearchTerm[],
-  options: FindGlossaryAtomMatchesOptions
+  options: FindGlossaryAtomRelationMatchesOptions
 ): GlossarySearchMatch[] {
   const usableTerms = terms.filter((term) => term.value.trim().length > 0);
   if (text.length === 0 || usableTerms.length === 0) {
@@ -452,8 +512,7 @@ function findGlossaryAtomNearbyMatches(
   }
 
   // Every occurrence, tagged with its term index, in document order.
-  const flat: Array<{ termIndex: number; occurrence: GlossarySearchMatchAtom }> =
-    [];
+  const flat: NearbyFlatOccurrence[] = [];
   perTerm.forEach(({ term, hits }, termIndex) => {
     for (const hit of hits) {
       flat.push({ termIndex, occurrence: occurrenceOf(term, hit) });
@@ -468,6 +527,9 @@ function findGlossaryAtomNearbyMatches(
   const need = usableTerms.length;
   const limit = resolveLimit(options.limit);
   const lineStarts = lineStartOffsets(text);
+  const nearbySettings = options.nearbySettings ?? defaultSearchNearbySettings;
+  const paragraphs =
+    nearbySettings.unit === "paragraphs" ? splitTextParagraphs(text) : [];
   const counts = new Array<number>(need).fill(0);
   const results: GlossarySearchMatch[] = [];
   let distinctTerms = 0;
@@ -488,8 +550,15 @@ function findGlossaryAtomNearbyMatches(
     }
 
     const windowStart = flat[low].occurrence.startOffset;
-    const windowEnd = flat[high].occurrence.endOffset;
-    if (windowEnd - windowStart > NEARBY_WINDOW_CHARACTERS) {
+    if (
+      !nearbyWindowSatisfiesSettings(
+        flat,
+        low,
+        high,
+        nearbySettings,
+        paragraphs
+      )
+    ) {
       continue;
     }
     // Dedupe: one result per distinct leading occurrence.
