@@ -102,4 +102,75 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     expect(source).not.toContain("glossaryCommandIds.createEntry");
     expect(source).not.toContain("onCreateGlossaryEntry={");
   });
+
+  it("#436 Slice 6: the pane's create form persists through the glossary create IPC and refreshes, never a tab", () => {
+    const source = appSource();
+
+    const handler = region(
+      source,
+      "async function handleCreateGlossaryEntryFromPane(",
+      420
+    );
+    expect(handler).toContain("await window.pergamum.glossary.create(input)");
+    expect(handler).toContain("setGlossaryRefreshToken((token) => token + 1)");
+    expect(handler).not.toContain("openEditor");
+    expect(handler).not.toContain("createGlossaryEntryEditorId");
+
+    // The pane gets the tag list and the create handler.
+    const paneStart = source.indexOf("<GlossaryEntryEditorPane\n");
+    expect(paneStart).toBeGreaterThan(-1);
+    const paneElement = source.slice(
+      paneStart,
+      source.indexOf("/>", paneStart) + 2
+    );
+    expect(paneElement).toContain("availableTags={glossaryTags}");
+    expect(paneElement).toContain(
+      "onCreateEntry={handleCreateGlossaryEntryFromPane}"
+    );
+  });
+
+  it("#436 Slice 6 remediation: the pane sits below the active-tab content region, not inside the Markdown-only branch, and is resizable", () => {
+    const source = appSource();
+
+    const bodyStart = source.indexOf(
+      '<section className="editorAreaBody" ref={editorAreaBodyRef}>'
+    );
+    const bodyEnd = source.indexOf('<footer className="statusBar">');
+    const body = source.slice(bodyStart, bodyEnd);
+
+    // The tab content is wrapped, and the pane + resize handle are SIBLINGS of
+    // that wrapper (so they render under any tab, not only a Markdown doc).
+    expect(body).toContain('<div className="editorAreaContent">');
+    const contentClose = body.indexOf("</div>");
+    const paneCond = body.indexOf("{glossaryEntryEditorPane.isOpen ? (");
+    expect(contentClose).toBeGreaterThan(-1);
+    expect(paneCond).toBeGreaterThan(contentClose);
+
+    // The Markdown branch no longer wraps EditorSurface + pane in a fragment.
+    expect(body).toContain(") : activeDocument ? (\n                    <EditorSurface");
+
+    // A top-edge resize handle drives the pane height.
+    expect(body).toContain('className="glossaryEntryEditorPaneResizeHandle"');
+    expect(body).toContain(
+      "glossaryEntryEditorPaneResizeDrag.onPointerDown"
+    );
+    expect(body).toContain(
+      "height={clampGlossaryEntryEditorPaneHeight("
+    );
+  });
+
+  it("#436 Slice 6 remediation: the Glossary Management add / edit handlers open the pane without switching the active tab", () => {
+    const source = appSource();
+
+    for (const header of [
+      "function handleAddGlossaryEntryFromManager()",
+      "function handleEditGlossaryEntryFromManager(entryId: GlossaryEntryId)"
+    ]) {
+      const body = region(source, header, 420);
+      expect(body).toContain("executeUiCommand(");
+      expect(body).not.toContain("setActiveSpecialTabId");
+      expect(body).not.toContain("activateDocument");
+      expect(body).not.toContain("openEditor");
+    }
+  });
 });

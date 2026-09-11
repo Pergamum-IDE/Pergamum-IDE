@@ -55,6 +55,7 @@ import {
   type StartupMarkdownRejectionReason
 } from "../shared/sessionRestore";
 import type {
+  CreateGlossaryEntryInput,
   CreateGlossaryTagInput,
   GlossaryEntry,
   GlossaryEntryId,
@@ -321,6 +322,8 @@ import {
 import { GlossaryEntryEditorPane } from "./GlossaryEntryEditorPane";
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
+  GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT,
+  clampGlossaryEntryEditorPaneHeight,
   closeGlossaryEntryEditorPane,
   createInitialGlossaryEntryEditorPaneState,
   openGlossaryEntryCreatePane,
@@ -506,7 +509,6 @@ import {
 } from "./welcomeSurface";
 import {
   clampSidebarWidth,
-  clampUtilityWindowHeight,
   createInitialWorkbenchLayoutState,
   resolveActiveActivityMode,
   resolveSidebarToggle,
@@ -1003,15 +1005,16 @@ export function App(): JSX.Element {
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
     createInitialWorkbenchLayoutState
   );
-  // #436 Phase 8-0 PoC (Slice 1): the bottom pane that replaces the former
-  // Utility Window. Ephemeral React state — NOT persisted to the session yet
-  // and NOT wired to glossary add / edit / Ctrl+G / the context menu yet.
-  // Later slices extend the open payload (mode / entryId / presetRepresentative)
-  // and add the real create / edit forms.
+  // #436 Phase 8-0 PoC: the bottom pane that replaces the former Utility
+  // Window. Ephemeral React state — NOT persisted to the session. Its height
+  // (Slice 6 remediation) is likewise renderer-memory only, but survives
+  // close/reopen within the same app run.
   const [glossaryEntryEditorPane, setGlossaryEntryEditorPane] =
     useState<GlossaryEntryEditorPaneState>(
       createInitialGlossaryEntryEditorPaneState
     );
+  const [glossaryEntryEditorPaneHeight, setGlossaryEntryEditorPaneHeight] =
+    useState(GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT);
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
   // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
   // project-owned) — closed on project close. Opening / activating it NEVER
@@ -1626,24 +1629,25 @@ export function App(): JSX.Element {
       );
     }
   });
-  const utilityWindowHeightAtDragStartRef = useRef(layout.utilityWindow.height);
-  const utilityWindowResizeDrag = useVerticalDrag({
+  // #436 Slice 6 remediation: top-edge drag resizes the Glossary Entry Editor
+  // Pane. Dragging up (negative deltaY) grows it; clamped against the editor
+  // area's height so the tab content above keeps a usable minimum.
+  const glossaryEntryEditorPaneHeightAtDragStartRef = useRef(
+    glossaryEntryEditorPaneHeight
+  );
+  const glossaryEntryEditorPaneResizeDrag = useVerticalDrag({
     onDragStart: () => {
-      utilityWindowHeightAtDragStartRef.current = layout.utilityWindow.height;
+      glossaryEntryEditorPaneHeightAtDragStartRef.current =
+        glossaryEntryEditorPaneHeight;
     },
     onDragMove: (deltaY) => {
-      const nextHeight = clampUtilityWindowHeight(
-        utilityWindowHeightAtDragStartRef.current - deltaY,
+      const nextHeight = clampGlossaryEntryEditorPaneHeight(
+        glossaryEntryEditorPaneHeightAtDragStartRef.current - deltaY,
         editorAreaBodyRef.current?.clientHeight
       );
 
-      setLayout((current) =>
-        current.utilityWindow.height === nextHeight
-          ? current
-          : {
-              ...current,
-              utilityWindow: { ...current.utilityWindow, height: nextHeight }
-            }
+      setGlossaryEntryEditorPaneHeight((current) =>
+        current === nextHeight ? current : nextHeight
       );
     }
   });
@@ -2043,35 +2047,34 @@ export function App(): JSX.Element {
   useEffect(() => {
     function handleWindowResize(): void {
       const sidebarContainerWidth = mainAreaRef.current?.clientWidth;
-      const utilityWindowContainerHeight =
-        editorAreaBodyRef.current?.clientHeight;
+      const editorAreaHeight = editorAreaBodyRef.current?.clientHeight;
 
       setLayout((current) => {
         const nextWidth =
           sidebarContainerWidth === undefined
             ? current.sidebar.width
             : clampSidebarWidth(current.sidebar.width, sidebarContainerWidth);
-        const nextHeight =
-          utilityWindowContainerHeight === undefined
-            ? current.utilityWindow.height
-            : clampUtilityWindowHeight(
-                current.utilityWindow.height,
-                utilityWindowContainerHeight
-              );
 
-        if (
-          nextWidth === current.sidebar.width &&
-          nextHeight === current.utilityWindow.height
-        ) {
+        if (nextWidth === current.sidebar.width) {
           return current;
         }
 
         return {
           ...current,
-          sidebar: { ...current.sidebar, width: nextWidth },
-          utilityWindow: { ...current.utilityWindow, height: nextHeight }
+          sidebar: { ...current.sidebar, width: nextWidth }
         };
       });
+
+      // #436 Slice 6 remediation: keep the pane height within the new area.
+      if (editorAreaHeight !== undefined) {
+        setGlossaryEntryEditorPaneHeight((current) => {
+          const next = clampGlossaryEntryEditorPaneHeight(
+            current,
+            editorAreaHeight
+          );
+          return next === current ? current : next;
+        });
+      }
     }
 
     window.addEventListener("resize", handleWindowResize);
@@ -3468,8 +3471,7 @@ export function App(): JSX.Element {
 
   // #436 Phase 8-0 PoC (Slice 3): the Glossary side pane's "語彙を追加" opens
   // the bottom Glossary Entry Editor Pane in create mode. (Slice 5 removed the
-  // old inline create form and the immediate-DB-create command it used.) No DB
-  // write and no form yet.
+  // old inline create form and the immediate-DB-create command it used.)
   function openGlossaryCreateEntryPaneFromSidebar(): void {
     executeUiCommand(
       glossaryEntryEditorPaneCommandIds.openCreatePane,
@@ -3479,6 +3481,27 @@ export function App(): JSX.Element {
         presetRepresentative: DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE
       }
     );
+  }
+
+  // #436 Phase 8-0 PoC (Slice 6): create a new Glossary entry from the bottom
+  // pane's create form. Persists through the existing glossary create IPC,
+  // refreshes every glossary consumer, and NEVER opens a glossary entry tab.
+  // Returns `false` (with a status-line note) on failure so the form can show
+  // its inline error and stay open.
+  async function handleCreateGlossaryEntryFromPane(
+    input: CreateGlossaryEntryInput
+  ): Promise<boolean> {
+    try {
+      await window.pergamum.glossary.create(input);
+      setGlossaryRefreshToken((token) => token + 1);
+      return true;
+    } catch (error) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    }
   }
 
   // #375: Glossary tag CRUD, driven by the Glossary Tag Manager special
@@ -10199,6 +10222,12 @@ export function App(): JSX.Element {
                 />
 
                 <section className="editorAreaBody" ref={editorAreaBodyRef}>
+                  {/* #436 Slice 6 remediation: the active tab's content lives
+                      in its own region so the Glossary Entry Editor Pane can
+                      sit below ANY tab (Markdown editor, preview split, or the
+                      glossary management / settings tabs), not just below a
+                      Markdown document. */}
+                  <div className="editorAreaContent">
                   {isGlossaryTagManagerTabActive ? (
                     <section className="glossaryTagManagerTab">
                       <GlossaryTagManager
@@ -10252,8 +10281,7 @@ export function App(): JSX.Element {
                       <DebugLogPanel translate={translate} />
                     </section>
                   ) : activeDocument ? (
-                    <>
-                      <EditorSurface
+                    <EditorSurface
                         editor={activeDocument.editor}
                         activeDocumentKey={serializeEditorId(
                           activeDocument.id
@@ -10404,33 +10432,59 @@ export function App(): JSX.Element {
                     }
                         onViewportChanged={handleViewportChanged}
                       />
-
-                      {/* #436 Phase 8-0 PoC (Slice 1): the former Utility
-                          Window (and its GlossaryOccurrencesPanel host) is no
-                          longer rendered in this slot — it now frames the
-                          Glossary Entry Editor Pane. The pane replaces the
-                          per-entry glossary editing tabs in later slices; for
-                          now it is a placeholder shell with a working close
-                          control, not yet wired to glossary add / edit /
-                          Ctrl+G / the context menu. */}
-                      {glossaryEntryEditorPane.isOpen ? (
-                        <GlossaryEntryEditorPane
-                          state={glossaryEntryEditorPane}
-                          translate={translate}
-                          onClose={() =>
-                            setGlossaryEntryEditorPane(
-                              closeGlossaryEntryEditorPane()
-                            )
-                          }
-                        />
-                      ) : null}
-                    </>
                   ) : shouldShowWelcome ? (
                     /* #262 / #311 dogfood blocker: with a project open the
                        zero-tab Welcome is scoped to the editor body — the
                        sidebar / File Explorer stay mounted and stay under the
                        sole control of the side navigation. */
                     welcomeScreen
+                  ) : null}
+                  </div>
+
+                  {/* #436 Phase 8-0 PoC: the former Utility Window slot now
+                      frames the Glossary Entry Editor Pane, below WHATEVER tab
+                      content is shown above. Create mode is a real new-entry
+                      form (Slice 6); edit mode is still a debug echo. It never
+                      opens a glossary entry tab, and never changes the active
+                      tab. Resizable via the top-edge handle. */}
+                  {glossaryEntryEditorPane.isOpen ? (
+                    <>
+                      <div
+                        className="glossaryEntryEditorPaneResizeHandle"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label={translate(
+                          "glossaryEntryEditorPane.resizeHandle"
+                        )}
+                        onPointerDown={
+                          glossaryEntryEditorPaneResizeDrag.onPointerDown
+                        }
+                        onPointerMove={
+                          glossaryEntryEditorPaneResizeDrag.onPointerMove
+                        }
+                        onPointerUp={
+                          glossaryEntryEditorPaneResizeDrag.onPointerUp
+                        }
+                        onPointerCancel={
+                          glossaryEntryEditorPaneResizeDrag.onPointerCancel
+                        }
+                      />
+                      <GlossaryEntryEditorPane
+                        state={glossaryEntryEditorPane}
+                        translate={translate}
+                        height={clampGlossaryEntryEditorPaneHeight(
+                          glossaryEntryEditorPaneHeight,
+                          editorAreaBodyRef.current?.clientHeight
+                        )}
+                        availableTags={glossaryTags}
+                        onCreateEntry={handleCreateGlossaryEntryFromPane}
+                        onClose={() =>
+                          setGlossaryEntryEditorPane(
+                            closeGlossaryEntryEditorPane()
+                          )
+                        }
+                      />
+                    </>
                   ) : null}
                 </section>
               </section>

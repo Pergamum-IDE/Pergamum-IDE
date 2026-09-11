@@ -798,6 +798,18 @@ export const enTranslations = {
   "glossaryEntryEditorPane.poNotice":
     "This pane is being introduced as part of the #436 PoC.",
   "glossaryEntryEditorPane.close": "Close",
+  "glossaryEntryEditorPane.resizeHandle": "Resize the Glossary Entry Editor pane",
+  "glossaryEntryEditorPane.create.representativeLabel": "Primary form",
+  "glossaryEntryEditorPane.create.descriptionLabel": "Description",
+  "glossaryEntryEditorPane.create.tagsLabel": "Tags",
+  "glossaryEntryEditorPane.create.noTagsAvailable": "No tags available",
+  "glossaryEntryEditorPane.create.noTagsSelected": "Creating without tags",
+  "glossaryEntryEditorPane.create.submit": "Create",
+  "glossaryEntryEditorPane.create.cancel": "Cancel",
+  "glossaryEntryEditorPane.create.emptyRepresentative":
+    "Enter a primary form.",
+  "glossaryEntryEditorPane.create.failed":
+    "Could not create the glossary entry.",
   "glossaryTagEditor.background": "Background color",
   "glossaryTagEditor.cancel": "Cancel",
   "glossaryTagEditor.create": "Create",

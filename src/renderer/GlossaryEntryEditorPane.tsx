@@ -1,25 +1,39 @@
+import type {
+  CreateGlossaryEntryInput,
+  GlossaryTag
+} from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
+import { GlossaryEntryCreateForm } from "./GlossaryEntryCreateForm";
 import type { OpenGlossaryEntryEditorPaneState } from "./glossaryEntryEditorPaneState";
 
 interface GlossaryEntryEditorPaneProps {
   state: OpenGlossaryEntryEditorPaneState;
   translate: Translate;
+  /** Current pane height in px (user-resizable via the top-edge handle). */
+  height: number;
+  availableTags: readonly GlossaryTag[];
+  /** Persist a new entry. Resolves `true` on success, `false` on failure. */
+  onCreateEntry: (input: CreateGlossaryEntryInput) => Promise<boolean>;
   onClose: () => void;
 }
 
 /**
- * #436 Phase 8-0 PoC — Slices 1/2.
+ * #436 Phase 8-0 PoC.
  *
- * Placeholder shell for the Glossary Entry Editor Pane. It sits below the
- * editor / preview area, in the slot the former Utility Window used. The
- * create / edit form bodies arrive in later slices; for now this only proves
- * the bottom-pane frame, a working close control, and echoes the state the
- * Slice 2 operation API produced (mode / source / presetRepresentative /
- * entryId) so each future entry point can be verified.
+ * The Glossary Entry Editor Pane sits below the editor / preview area, in the
+ * slot the former Utility Window used, and replaces the per-entry glossary
+ * editing tabs.
+ *
+ * - create mode (Slice 6): a real new-entry form (`GlossaryEntryCreateForm`).
+ * - edit  mode: still a debug echo of the operation-API state — the real edit
+ *   form arrives in a later slice.
  */
 export function GlossaryEntryEditorPane({
   state,
   translate,
+  height,
+  availableTags,
+  onCreateEntry,
   onClose
 }: GlossaryEntryEditorPaneProps): JSX.Element {
   const label = translate("glossaryEntryEditorPane.label");
@@ -30,6 +44,7 @@ export function GlossaryEntryEditorPane({
       aria-label={label}
       data-pane-mode={state.mode}
       data-pane-source={state.source}
+      style={{ height }}
     >
       <div className="glossaryEntryEditorPaneHeader">
         <span className="glossaryEntryEditorPaneTitle">{label}</span>
@@ -42,32 +57,36 @@ export function GlossaryEntryEditorPane({
         </button>
       </div>
       <div className="glossaryEntryEditorPaneBody">
-        <p className="glossaryEntryEditorPaneNotice">
-          {translate("glossaryEntryEditorPane.poNotice")}
-        </p>
-        <dl className="glossaryEntryEditorPaneDebug">
-          <div className="glossaryEntryEditorPaneDebugRow">
-            <dt>Mode</dt>
-            <dd data-field="mode">{state.mode}</dd>
-          </div>
-          <div className="glossaryEntryEditorPaneDebugRow">
-            <dt>Source</dt>
-            <dd data-field="source">{state.source}</dd>
-          </div>
-          {state.mode === "create" ? (
-            <div className="glossaryEntryEditorPaneDebugRow">
-              <dt>Preset representative</dt>
-              <dd data-field="presetRepresentative">
-                {state.presetRepresentative}
-              </dd>
-            </div>
-          ) : (
-            <div className="glossaryEntryEditorPaneDebugRow">
-              <dt>Entry ID</dt>
-              <dd data-field="entryId">{state.entryId}</dd>
-            </div>
-          )}
-        </dl>
+        {state.mode === "create" ? (
+          <GlossaryEntryCreateForm
+            key={`${state.source}:${state.presetRepresentative}`}
+            presetRepresentative={state.presetRepresentative}
+            availableTags={availableTags}
+            translate={translate}
+            onCreate={onCreateEntry}
+            onClose={onClose}
+          />
+        ) : (
+          <>
+            <p className="glossaryEntryEditorPaneNotice">
+              {translate("glossaryEntryEditorPane.poNotice")}
+            </p>
+            <dl className="glossaryEntryEditorPaneDebug">
+              <div className="glossaryEntryEditorPaneDebugRow">
+                <dt>Mode</dt>
+                <dd data-field="mode">{state.mode}</dd>
+              </div>
+              <div className="glossaryEntryEditorPaneDebugRow">
+                <dt>Source</dt>
+                <dd data-field="source">{state.source}</dd>
+              </div>
+              <div className="glossaryEntryEditorPaneDebugRow">
+                <dt>Entry ID</dt>
+                <dd data-field="entryId">{state.entryId}</dd>
+              </div>
+            </dl>
+          </>
+        )}
       </div>
     </section>
   );

@@ -1278,6 +1278,17 @@ label.settingsItemHeader {
   flex-direction: column;
 }
 
+/* #436 Slice 6 remediation: the active tab's content, above the resizable
+   Glossary Entry Editor Pane. Holds whichever surface the tab shows (Markdown
+   editor / preview split, or a settings-style tab). */
+.editorAreaContent {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
 .utilityWindowResizeHandle {
   height: 6px;
   min-height: 6px;
@@ -1377,18 +1388,34 @@ label.settingsItemHeader {
   font-size: 13px;
 }
 
-/* #436 Phase 8-0 PoC (Slice 1): the bottom pane that replaces the Utility
-   Window and will host the glossary entry create / edit forms in later
-   slices. Fixed height for now — no resize handle this slice. Tone matches
-   the surrounding workbench chrome (.pane / the former .utilityWindow). */
+/* #436 Phase 8-0 PoC: the bottom pane that replaces the Utility Window and
+   hosts the glossary entry create / edit forms. User-resizable via the
+   top-edge `.glossaryEntryEditorPaneResizeHandle` — inline `height` (px) is
+   supplied by App and clamped by `clampGlossaryEntryEditorPaneHeight`. Tone
+   matches the surrounding workbench chrome (.pane / the former
+   .utilityWindow). */
 .glossaryEntryEditorPane {
   display: flex;
   min-width: 0;
   flex: 0 0 auto;
   flex-direction: column;
-  height: 240px;
   border-top: 1px solid #d3dae2;
   background: #ffffff;
+}
+
+.glossaryEntryEditorPaneResizeHandle {
+  height: 6px;
+  min-height: 6px;
+  flex: 0 0 auto;
+  border-top: 1px solid #d3dae2;
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.glossaryEntryEditorPaneResizeHandle:hover,
+.glossaryEntryEditorPaneResizeHandle:active {
+  background: #7aa7d9;
 }
 
 .glossaryEntryEditorPaneHeader {
@@ -1463,6 +1490,112 @@ label.settingsItemHeader {
   color: #17212b;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
     monospace;
+}
+
+/* #436 Slice 6: the create-mode new-entry form. */
+.glossaryEntryCreateForm {
+  display: flex;
+  min-width: 0;
+  max-width: 520px;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.glossaryEntryCreateFormField {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.glossaryEntryCreateFormField input {
+  font: inherit;
+  font-weight: 400;
+  color: #17212b;
+  padding: 6px 8px;
+  border: 1px solid #d3dae2;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.glossaryEntryCreateFormTagsSection {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.glossaryEntryCreateFormTagsLabel {
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.glossaryEntryCreateFormTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.glossaryEntryCreateFormTagToggle {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.glossaryEntryCreateFormTagToggle[aria-pressed="true"] {
+  outline: 2px solid #2f6f9f;
+  outline-offset: 1px;
+}
+
+.glossaryEntryCreateFormTagsHint,
+.glossaryEntryCreateFormError {
+  margin: 0;
+  font-size: 12px;
+}
+
+.glossaryEntryCreateFormTagsHint {
+  color: #6b7785;
+}
+
+.glossaryEntryCreateFormError {
+  color: #b3261e;
+}
+
+.glossaryEntryCreateFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.glossaryEntryCreateFormActions button {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid #d3dae2;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #17212b;
+  cursor: pointer;
+}
+
+.glossaryEntryCreateFormActions .glossaryEntryCreateFormSubmit {
+  border-color: #2f6f9f;
+  background: #2f6f9f;
+  color: #ffffff;
+}
+
+.glossaryEntryCreateFormActions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.glossaryEntryCreateFormSubmit[aria-disabled="true"] {
+  opacity: 0.6;
 }
 
 /* #377: the Debug Log special tab wrapper — a scroll container that fills the

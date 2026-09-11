@@ -104,3 +104,44 @@ export function openGlossaryEntryEditPane(
 export function closeGlossaryEntryEditorPane(): GlossaryEntryEditorPaneState {
   return { isOpen: false };
 }
+
+/* -------------------------------------------------------------------------- *
+ * #436 Slice 6 remediation: the pane is a user-resizable bottom region.
+ * Height is held in renderer memory across open/close, not persisted.
+ * -------------------------------------------------------------------------- */
+
+export const GLOSSARY_ENTRY_EDITOR_PANE_MIN_HEIGHT = 180;
+export const GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT = 280;
+
+/** Largest share of the editor-area height the pane may take by dragging. */
+const GLOSSARY_ENTRY_EDITOR_PANE_MAX_HEIGHT_RATIO = 0.65;
+/** The tab content above the pane never drags below this. */
+const GLOSSARY_ENTRY_EDITOR_PANE_CONTENT_MIN_HEIGHT = 160;
+
+/**
+ * Clamps a candidate pane height to at least
+ * `GLOSSARY_ENTRY_EDITOR_PANE_MIN_HEIGHT`. When `availableHeight` (the editor
+ * area's total height) is given, the result is additionally capped to the
+ * smaller of 65% of that height and `availableHeight - contentMin`, so the tab
+ * content above keeps a usable minimum. If the area is too short to satisfy
+ * both minimums, the content minimum wins and the pane shrinks below its own
+ * stated minimum rather than pushing the content out.
+ */
+export function clampGlossaryEntryEditorPaneHeight(
+  height: number,
+  availableHeight?: number
+): number {
+  if (availableHeight === undefined || availableHeight <= 0) {
+    return Math.max(GLOSSARY_ENTRY_EDITOR_PANE_MIN_HEIGHT, height);
+  }
+
+  const ratioCap = Math.round(
+    availableHeight * GLOSSARY_ENTRY_EDITOR_PANE_MAX_HEIGHT_RATIO
+  );
+  const contentCap =
+    availableHeight - GLOSSARY_ENTRY_EDITOR_PANE_CONTENT_MIN_HEIGHT;
+  const upper = Math.max(0, Math.min(ratioCap, contentCap));
+  const lower = Math.min(GLOSSARY_ENTRY_EDITOR_PANE_MIN_HEIGHT, upper);
+
+  return Math.min(Math.max(height, lower), upper);
+}
