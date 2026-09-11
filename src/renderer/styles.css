@@ -1028,29 +1028,6 @@ label.settingsItemHeader {
   display: block;
 }
 
-.documentTabBarUtilityToggle {
-  height: auto;
-  flex: 0 0 auto;
-  border: 0;
-  border-left: 1px solid #d3dae2;
-  border-radius: 0;
-  background: transparent;
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 0 14px;
-}
-
-.documentTabBarUtilityToggle:hover {
-  background: #e2eaf2;
-}
-
-.documentTabBarUtilityToggle.isActive,
-.documentTabBarUtilityToggle.isActive:hover {
-  background: #ffffff;
-  color: #17212b;
-}
-
 /*
  * #342: variable-width tabs. The tab is sized to its content (file name +
  * trailing slot + padding), not forced to an equal share, and never grows or
@@ -1301,6 +1278,17 @@ label.settingsItemHeader {
   flex-direction: column;
 }
 
+/* #436 Slice 6 remediation: the active tab's content, above the resizable
+   Glossary Entry Editor Pane. Holds whichever surface the tab shows (Markdown
+   editor / preview split, or a settings-style tab). */
+.editorAreaContent {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
 .utilityWindowResizeHandle {
   height: 6px;
   min-height: 6px;
@@ -1398,6 +1386,127 @@ label.settingsItemHeader {
   margin: 0;
   color: #6b7785;
   font-size: 13px;
+}
+
+/* #436 Phase 8-0 PoC: the bottom pane that replaces the Utility Window and
+   hosts the glossary entry create / edit forms. User-resizable via the
+   top-edge `.glossaryEntryEditorPaneResizeHandle` — inline `height` (px) is
+   supplied by App and clamped by `clampGlossaryEntryEditorPaneHeight`. Tone
+   matches the surrounding workbench chrome (.pane / the former
+   .utilityWindow). */
+.glossaryEntryEditorPane {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  border-top: 1px solid #d3dae2;
+  background: #ffffff;
+}
+
+.glossaryEntryEditorPaneResizeHandle {
+  height: 6px;
+  min-height: 6px;
+  flex: 0 0 auto;
+  border-top: 1px solid #d3dae2;
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.glossaryEntryEditorPaneResizeHandle:hover,
+.glossaryEntryEditorPaneResizeHandle:active {
+  background: #7aa7d9;
+}
+
+.glossaryEntryEditorPaneHeader {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid #e3e8ee;
+  background: #fbfcfd;
+}
+
+.glossaryEntryEditorPaneTitle {
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.glossaryEntryEditorPaneCloseButton {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.glossaryEntryEditorPaneCloseButton:hover {
+  background: #eef3f8;
+  color: #17212b;
+}
+
+.glossaryEntryEditorPaneBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+/* #436 Slice 8: edit-mode loading / load-failed text, while
+   `GlossaryEntryEditForm` waits on / fails to fetch the target entry. */
+.glossaryEntryEditorPaneStatus {
+  margin: 0;
+  color: #6b7785;
+  font-size: 13px;
+}
+
+/* #436 Slice 8: the minimal Save control above the relocated (unmodified)
+   GlossaryEditor — the old glossaryEntry tab had none of its own; it saved
+   through the global Ctrl+S / Save command, which does not reach a pane that
+   is not an open editor tab. */
+.glossaryEntryEditorPaneEditSession {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  height: 100%;
+}
+
+.glossaryEntryEditorPaneEditActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e3e8ee;
+  background: #fbfcfd;
+}
+
+.glossaryEntryEditorPaneSaveButton {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid #2f6f9f;
+  border-radius: 4px;
+  background: #2f6f9f;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.glossaryEntryEditorPaneSaveButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.glossaryEntryEditorPaneSaveFailed {
+  color: #b3261e;
+  font-size: 12px;
 }
 
 /* #377: the Debug Log special tab wrapper — a scroll container that fills the
@@ -3316,34 +3425,6 @@ label.settingsItemHeader {
   width: 100%;
 }
 
-.glossaryCreateForm {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
-  border-top: 1px solid var(--workspace-sidebar-divider);
-}
-
-.glossaryCreateFormField {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--workspace-sidebar-muted-foreground);
-}
-
-.glossaryCreateFormError {
-  margin: 0;
-  color: #b3261e;
-  font-size: 12px;
-}
-
-.glossaryCreateFormActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
 .fileExplorerList {
   flex: 1;
   min-height: 0;
@@ -4472,20 +4553,6 @@ label.settingsItemHeader {
   color: #17212b;
   font-size: 28px;
   line-height: 1.2;
-}
-
-.glossaryEditorOccurrenceButton {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cbd5df;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #25313d;
-  cursor: pointer;
-  padding: 5px 10px;
-  font-size: 14px;
 }
 
 .glossaryEditorDeleteButton {

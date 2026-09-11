@@ -1,14 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import {
-  CommandDisabledError,
-  CommandRegistry
-} from "../../src/shared/commandRegistry";
+import { CommandRegistry } from "../../src/shared/commandRegistry";
 import {
   createGlossaryCommandTitles,
   glossaryCommandIds,
   glossaryTagManagerCommandWhen,
-  glossaryWriteCommandWhen,
   registerGlossaryCommands
 } from "../../src/renderer/glossaryCommands";
 
@@ -17,7 +13,6 @@ const executionOptions = { source: "workspaceSidebar" } as const;
 
 const allCommandTitles = {
   openEntry: "Open glossary entry",
-  createEntry: "Create glossary entry",
   previousOccurrence: "Previous occurrence",
   nextOccurrence: "Next occurrence",
   manageTags: "Glossary: Manage Tags",
@@ -30,7 +25,6 @@ function registerAllGlossaryCommands(
   registry: CommandRegistry,
   overrides: Partial<{
     openGlossaryEntry: () => boolean | Promise<boolean>;
-    createGlossaryEntry: () => boolean | Promise<boolean>;
     navigateToPreviousGlossaryOccurrence: (
       entryId: string
     ) => boolean | Promise<boolean>;
@@ -45,7 +39,6 @@ function registerAllGlossaryCommands(
     registry,
     {
       openGlossaryEntry: () => true,
-      createGlossaryEntry: () => true,
       navigateToPreviousGlossaryOccurrence: () => true,
       navigateToNextGlossaryOccurrence: () => true,
       openGlossaryTagManager: () => true,
@@ -63,14 +56,15 @@ function registerAllGlossaryCommands(
 }
 
 describe("glossary commands", () => {
-  it("registers entry open/create, occurrence navigation, and tag manager commands", () => {
+  it("registers entry open, occurrence navigation, and tag manager commands", () => {
     const registry = new CommandRegistry();
 
     registerAllGlossaryCommands(registry);
 
+    // #436 Slice 5: the `glossary.entry.create` command was removed (the
+    // Glossary Entry Editor Pane create flow replaces it).
     expect(registry.list().map((command) => command.id)).toEqual([
       "glossary.entry.open",
-      "glossary.entry.create",
       "glossary.entry.occurrences.previous",
       "glossary.entry.occurrences.next",
       "glossary.tag.manage",
@@ -78,12 +72,6 @@ describe("glossary commands", () => {
     ]);
     expect(registry.get(glossaryCommandIds.openEntry)?.title).toBe(
       "Open glossary entry"
-    );
-    expect(registry.get(glossaryCommandIds.createEntry)?.title).toBe(
-      "Create glossary entry"
-    );
-    expect(registry.get(glossaryCommandIds.createEntry)?.when).toEqual(
-      glossaryWriteCommandWhen
     );
     expect(registry.get(glossaryCommandIds.previousOccurrence)?.title).toBe(
       "Previous occurrence"
@@ -139,59 +127,6 @@ describe("glossary commands", () => {
     expect(openGlossaryEntry).toHaveBeenCalledWith(entryId);
   });
 
-  it("creates Glossary entries through a typed command argument", async () => {
-    const registry = new CommandRegistry();
-    const createGlossaryEntry = vi.fn(async () => true);
-    const input = {
-      description: "",
-      atoms: [{ value: "王都", matchFlags: 0 }],
-      tagIds: []
-    };
-
-    registerAllGlossaryCommands(registry, { createGlossaryEntry });
-
-    await expect(
-      registry.execute(glossaryCommandIds.createEntry, executionOptions, input)
-    ).resolves.toBe(true);
-    expect(createGlossaryEntry).toHaveBeenCalledWith(input);
-  });
-
-  it("disables Glossary entry create in read-only project sessions", async () => {
-    const registry = new CommandRegistry();
-    const createGlossaryEntry = vi.fn(async () => true);
-    const input = {
-      description: "",
-      atoms: [{ value: "王都", matchFlags: 0 }],
-      tagIds: []
-    };
-
-    registerAllGlossaryCommands(registry, { createGlossaryEntry });
-    registry.setCommandContextProvider(() => ({
-      "project.isOpen": true,
-      "project.access.readWrite": false,
-      "project.access.readOnly": true
-    }));
-
-    expect(
-      registry.enablementForContext(
-        glossaryCommandIds.createEntry,
-        {
-          "project.isOpen": true,
-          "project.access.readWrite": false,
-          "project.access.readOnly": true
-        },
-        input
-      )
-    ).toEqual({
-      enabled: false,
-      disabledReason: "readOnlyProject"
-    });
-    await expect(
-      registry.execute(glossaryCommandIds.createEntry, executionOptions, input)
-    ).rejects.toBeInstanceOf(CommandDisabledError);
-    expect(createGlossaryEntry).not.toHaveBeenCalled();
-  });
-
   it("navigates to the previous Glossary occurrence through a typed entryId command argument", async () => {
     const registry = new CommandRegistry();
     const navigateToPreviousGlossaryOccurrence = vi.fn(async () => true);
@@ -235,7 +170,6 @@ describe("glossary commands", () => {
 
     expect(createGlossaryCommandTitles(translate)).toEqual({
       openEntry: "translated:command.glossary.entry.open",
-      createEntry: "translated:command.glossary.entry.create",
       previousOccurrence:
         "translated:command.glossary.entry.occurrences.previous",
       nextOccurrence: "translated:command.glossary.entry.occurrences.next",

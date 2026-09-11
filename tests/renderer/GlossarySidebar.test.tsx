@@ -100,7 +100,7 @@ function baseProps(overrides: Record<string, unknown> = {}) {
     translate,
     activeDocumentContent: null,
     onActivateEntry: vi.fn(),
-    onCreateEntry: vi.fn().mockResolvedValue(true),
+    onOpenCreateEntryPane: vi.fn(),
     onNavigateOccurrence: vi.fn(),
     ...overrides
   };
@@ -280,40 +280,15 @@ describe("GlossarySidebar (#375)", () => {
     expect(rows()).toHaveLength(3);
   });
 
-  it("creates an entry from the bottom form with the representative atom value and selected tags", async () => {
+  it("opens the Glossary Entry Editor Pane when 語彙を追加 is clicked, with no inline create form (#436 Slices 3/5)", async () => {
     const props = await render();
 
     act(() => button("glossary.addEntry").click());
-    const valueInput = container.querySelector<HTMLInputElement>(
-      ".glossaryCreateForm input[type='text']"
-    )!;
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        "value"
-      )!.set!;
-      setter.call(valueInput, "徳川家康");
-      valueInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    act(() =>
-      container
-        .querySelectorAll<HTMLButtonElement>(".glossaryCreateFormTagToggle")[0]
-        .click()
-    );
-    await act(async () => {
-      container
-        .querySelector("form.glossaryCreateForm")!
-        .dispatchEvent(
-          new window.Event("submit", { bubbles: true, cancelable: true })
-        );
-      await Promise.resolve();
-    });
 
-    expect(props.onCreateEntry).toHaveBeenCalledWith({
-      description: "",
-      atoms: [{ value: "徳川家康", matchFlags: 0 }],
-      tagIds: [tagWarrior.id]
-    });
+    expect(props.onOpenCreateEntryPane).toHaveBeenCalledTimes(1);
+    // #436 Slice 5: the old inline create form is gone entirely.
+    expect(container.querySelector(".glossaryCreateForm")).toBeNull();
+    expect(container.querySelector("form")).toBeNull();
   });
 
   it("no longer hosts any tag CRUD UI (moved to the Glossary Tag Manager tab)", async () => {

@@ -7,7 +7,6 @@ import type {
   MovedImageFile
 } from "./markdownImageReferenceMoveUpdate";
 import type {
-  CreateGlossaryEntryInput,
   GlossaryEntry,
   GlossaryEntryId,
   GlossaryTag
@@ -110,10 +109,14 @@ interface WorkspaceSidebarProps {
    *  the Move routes. */
   fileExplorerDirtyProjectDocumentRelativePaths?: readonly string[];
   onFileExplorerMoveResultMessage?: (message: string) => void;
+  /**
+   * #436: open an existing glossary entry for editing (Glossary side pane row
+   * "…"). Routes to the bottom Glossary Entry Editor Pane in edit mode.
+   */
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
-  onCreateGlossaryEntry: (
-    input: CreateGlossaryEntryInput
-  ) => Promise<boolean>;
+  /** #436 Slice 3: open the bottom Glossary Entry Editor Pane in create mode
+   *  from the Glossary side pane's "語彙を追加" button. */
+  onOpenGlossaryCreateEntryPane: () => void;
   /** #375: active Markdown document body for glossary occurrence counts. */
   glossaryActiveDocumentContent: string | null;
   /** #375 Document Map: every project glossary entry (occurrence scan). */
@@ -231,7 +234,7 @@ export function WorkspaceSidebar({
   fileExplorerDirtyProjectDocumentRelativePaths,
   onFileExplorerMoveResultMessage,
   onActivateGlossaryEntry,
-  onCreateGlossaryEntry,
+  onOpenGlossaryCreateEntryPane,
   glossaryActiveDocumentContent,
   documentMapGlossaryEntries = [],
   documentMapGlossaryTags = [],
@@ -363,7 +366,7 @@ export function WorkspaceSidebar({
           translate={translate}
           activeDocumentContent={glossaryActiveDocumentContent}
           onActivateEntry={onActivateGlossaryEntry}
-          onCreateEntry={onCreateGlossaryEntry}
+          onOpenCreateEntryPane={onOpenGlossaryCreateEntryPane}
           onNavigateOccurrence={onNavigateGlossaryOccurrence}
         />
       );

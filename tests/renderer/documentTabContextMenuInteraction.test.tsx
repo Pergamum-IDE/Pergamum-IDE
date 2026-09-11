@@ -121,9 +121,7 @@ function render(overrides: RenderOverrides = {}) {
           : undefined,
         onReorderWorkspaceTabs: (overrides.withReorder ?? true)
           ? onReorderWorkspaceTabs
-          : undefined,
-        isUtilityWindowOpen: false,
-        onToggleUtilityWindow: vi.fn()
+          : undefined
       })
     );
   });

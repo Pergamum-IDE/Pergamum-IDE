@@ -75,7 +75,7 @@ describe("project access mode command wiring (#211)", () => {
     const editorSurfaceBlock = sourceBlock(
       source,
       "<EditorSurface",
-      "{layout.utilityWindow.open ?"
+      "{glossaryEntryEditorPane.isOpen ?"
     );
 
     expect(editorSurfaceBlock).toContain(

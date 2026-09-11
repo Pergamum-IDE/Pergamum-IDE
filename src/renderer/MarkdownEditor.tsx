@@ -65,6 +65,11 @@ import {
   type ActiveFindGutterMarkerSpec
 } from "./find/activeFindGutterMarkerExtension";
 import {
+  publishCurrentGlossarySelectionShortcutConfig,
+  unpublishCurrentGlossarySelectionShortcutConfig,
+  type MarkdownEditorGlossarySelectionShortcutConfig
+} from "./glossarySelectionShortcutExtension";
+import {
   createMarkdownEditorDocumentState,
   readOnlyCompartmentContent,
   type MarkdownEditorDocumentState
@@ -96,6 +101,7 @@ import type {
 
 export type { MarkdownEditorGlossaryCompletionConfig };
 export type { MarkdownEditorActiveFindConfig };
+export type { MarkdownEditorGlossarySelectionShortcutConfig };
 
 interface MarkdownEditorPendingSelection {
   start: number;
@@ -265,6 +271,21 @@ interface MarkdownEditorProps {
    * EditorState restored after a remount still reaches the current surface.
    */
   activeFind?: MarkdownEditorActiveFindConfig | null;
+  /**
+   * #436 Slice 12: Ctrl+G opens/creates a Glossary entry from the current
+   * selection. `undefined`/`null` (the default; the Glossary description
+   * field never passes it) leaves Ctrl+G inert. Only EditorSurface's
+   * MarkdownEditorSurface supplies it. Same module-level-slot publish
+   * mechanism as `activeFind` above, for the same reason (a cached
+   * EditorState restored after a remount must never call a stale
+   * `requestOpen`) — see glossarySelectionShortcutExtension.ts. Whether
+   * this prop is present ALSO decides `glossarySelectionShortcutEnabled`
+   * passed to `createMarkdownEditorDocumentState` below: only this
+   * instance's built document states ever contain the Ctrl+G keydown
+   * handler at all, so the description field's states cannot react to
+   * whatever config another instance currently has published.
+   */
+  glossarySelectionShortcut?: MarkdownEditorGlossarySelectionShortcutConfig | null;
   /**
    * #424: a Find-panel-driven "select + reveal this range" request, kept
    * entirely separate from `pendingSelection` (which App owns for Outline /
@@ -514,6 +535,7 @@ export function MarkdownEditor({
   onFocusRequestApplied,
   glossaryCompletion,
   activeFind,
+  glossarySelectionShortcut,
   extraPendingSelection,
   onExtraPendingSelectionApplied,
   extraFocusRequest,
@@ -808,6 +830,13 @@ export function MarkdownEditor({
         editorInstanceId: activeFindEditorInstanceId,
         expectActiveFindSurface: (activeFind ?? null) !== null
       },
+      // #436 Slice 12 remediation: mirrors `expectActiveFindSurface` above —
+      // this is a construction-time decision (not a live ref) of whether THIS
+      // MarkdownEditor instance is the one that ever publishes
+      // `glossarySelectionShortcut`. The Glossary description field never
+      // receives that prop, so its built states always get `false` here and
+      // never contain the Ctrl+G keydown handler at all.
+      glossarySelectionShortcutEnabled: (glossarySelectionShortcut ?? null) !== null,
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
       // #411 / #412: only add the broken-image-link lint extension when the
@@ -944,6 +973,20 @@ export function MarkdownEditor({
       unpublishCurrentActiveFindConfig(activeFind);
     };
   }, [activeFind, activeFindEditorInstanceId]);
+
+  // #436 Slice 12: same publish/unpublish shape as `activeFind` above, for
+  // the same module-level-slot reason. Only EditorSurface's
+  // MarkdownEditorSurface passes `glossarySelectionShortcut`; the Glossary
+  // description field passes none and stays inert.
+  useEffect(() => {
+    if (!glossarySelectionShortcut) {
+      return undefined;
+    }
+    publishCurrentGlossarySelectionShortcutConfig(glossarySelectionShortcut);
+    return () => {
+      unpublishCurrentGlossarySelectionShortcutConfig(glossarySelectionShortcut);
+    };
+  }, [glossarySelectionShortcut]);
 
   useEffect(() => {
     imageAttachmentPasteHandlerRef.current = onImageAttachmentPaste ?? null;

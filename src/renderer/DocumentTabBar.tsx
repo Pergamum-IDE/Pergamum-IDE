@@ -84,8 +84,6 @@ interface DocumentTabBarProps {
     movedTabId: WorkspaceTabId,
     targetIndex: number
   ) => void;
-  isUtilityWindowOpen: boolean;
-  onToggleUtilityWindow: () => void;
 }
 
 /** #354: dedicated MIME marker so a tab reorder drag is never confused with a
@@ -132,9 +130,7 @@ export function DocumentTabBar({
   onCloseSpecialTab = () => undefined,
   onTabAction,
   describeTabContextMenu,
-  onReorderWorkspaceTabs,
-  isUtilityWindowOpen,
-  onToggleUtilityWindow
+  onReorderWorkspaceTabs
 }: DocumentTabBarProps): JSX.Element {
   const contextMenuEnabled = Boolean(onTabAction && describeTabContextMenu);
   const reorderEnabled = Boolean(onReorderWorkspaceTabs);
@@ -196,7 +192,6 @@ export function DocumentTabBar({
     );
   }
 
-  const utilityWindowLabel = translate("utilityWindow.label");
   const closeTabLabel = translate("tabs.closeTab");
   const unsavedLabel = translate("tabs.unsaved");
   const readOnlyTooltip = translate("projectAccess.readOnly.tooltip");
@@ -543,21 +538,6 @@ export function DocumentTabBar({
       >
         {orderedTabs.map(renderWorkspaceTab)}
       </nav>
-
-      <button
-        type="button"
-        className={
-          isUtilityWindowOpen
-            ? "documentTabBarUtilityToggle isActive"
-            : "documentTabBarUtilityToggle"
-        }
-        aria-pressed={isUtilityWindowOpen}
-        aria-label={utilityWindowLabel}
-        title={utilityWindowLabel}
-        onClick={onToggleUtilityWindow}
-      >
-        {utilityWindowLabel}
-      </button>
 
       {tabContextMenu !== null && menuDescriptor !== null ? (
         <div

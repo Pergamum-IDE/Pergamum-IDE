@@ -8,6 +8,7 @@
  */
 
 import type {
+  CreateGlossaryEntryInput,
   GlossaryAtomInput,
   GlossaryEntry,
   GlossaryTag,
@@ -69,6 +70,60 @@ export function createGlossaryEntryDraft(
     tagIds: tagIdsFromEntry(entry),
     saveState: "clean"
   };
+}
+
+/**
+ * #436 Slice 9: a not-yet-persisted entry's `entry.id` — `glossaryEntryDraftIsNew`
+ * is the single source of truth for "has this draft ever been saved" (never
+ * compared against directly outside this module).
+ */
+const UNSAVED_GLOSSARY_ENTRY_ID = "";
+
+/**
+ * #436 Slice 9: seeds a create-mode draft — no DB entry exists yet, so the
+ * dirty-comparison baseline (`draft.entry`) is an empty placeholder. Because
+ * `presetRepresentative` is non-empty and the placeholder's atoms are `[]`,
+ * `isGlossaryEntryDraftDirty` is true immediately (Save enables right away,
+ * matching "there is nothing persisted to be clean against" — unlike edit
+ * mode, an untouched create draft is still something TO save). Nothing is
+ * written to the DB until the caller actually saves it.
+ */
+export function createNewGlossaryEntryDraft(
+  presetRepresentative: string
+): GlossaryEntryDraft {
+  const placeholderEntry: GlossaryEntry = {
+    id: UNSAVED_GLOSSARY_ENTRY_ID,
+    description: "",
+    atoms: [],
+    tags: [],
+    createdAt: "",
+    updatedAt: ""
+  };
+
+  return {
+    entry: placeholderEntry,
+    description: "",
+    atoms: [
+      {
+        id: createLocalGlossaryAtomId(),
+        value: presetRepresentative,
+        matchFlags: 0
+      }
+    ],
+    tagIds: [],
+    saveState: "dirty"
+  };
+}
+
+/**
+ * #436 Slice 9: true until the draft's FIRST successful save. A create-mode
+ * host uses this (not a separately-tracked mode flag) to decide whether the
+ * next save calls `glossary.create` or `glossary.update` — `
+ * applyGlossaryEntryDraftSaveResult` rebases `draft.entry` to the real saved
+ * entry, so this flips to `false` on its own right after the first save.
+ */
+export function glossaryEntryDraftIsNew(draft: GlossaryEntryDraft): boolean {
+  return draft.entry.id === UNSAVED_GLOSSARY_ENTRY_ID;
 }
 
 /** The representative atom draft — index 0, mirroring `sortOrder = 0`. */
@@ -444,6 +499,18 @@ export function glossaryEntryDraftUpdateInput(
 ): UpdateGlossaryEntryInput {
   return {
     id: draft.entry.id,
+    description: draft.description,
+    atoms: atomInputsFromDraft(draft),
+    tagIds: [...draft.tagIds]
+  };
+}
+
+/** #436 Slice 9: the create-mode counterpart of `glossaryEntryDraftUpdateInput` —
+ *  same atom/tag extraction, no `id` (the entry does not exist yet). */
+export function glossaryEntryDraftCreateInput(
+  draft: GlossaryEntryDraft
+): CreateGlossaryEntryInput {
+  return {
     description: draft.description,
     atoms: atomInputsFromDraft(draft),
     tagIds: [...draft.tagIds]

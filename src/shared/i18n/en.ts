@@ -48,8 +48,22 @@ export const enTranslations = {
   "command.editor.selection.selectAll": "Select All",
   "command.editor.selection.selectAll.description": "Select all text in the current editor.",
   "command.disabled.readOnlyProject": "Unavailable in read-only mode",
-  "command.glossary.entry.create": "Create glossary entry",
   "command.glossary.entry.open": "Open glossary entry",
+  "command.glossary.openCreateEntryPane":
+    "Open Glossary Entry Editor Pane in create mode",
+  "command.glossary.openCreateEntryPane.description":
+    "Open the Glossary Entry Editor Pane to create a new entry. (#436 PoC)",
+  "command.glossary.openEditEntryPane":
+    "Open Glossary Entry Editor Pane in edit mode",
+  "command.glossary.openEditEntryPane.description":
+    "Open an existing entry in the Glossary Entry Editor Pane. (#436 PoC)",
+  "command.glossary.closeEntryEditorPane": "Close Glossary Entry Editor Pane",
+  "command.glossary.closeEntryEditorPane.description":
+    "Close the Glossary Entry Editor Pane. (#436 PoC)",
+  "command.glossary.openFromEditorSelection":
+    "Open Glossary Entry from Selection",
+  "command.glossary.openFromEditorSelection.description":
+    "Opens the matching entry's edit screen if the selection exactly matches an existing glossary entry, otherwise opens a new-entry screen seeded with the selection. (Ctrl+G)",
   "command.glossary.entry.occurrences.next": "Next occurrence",
   "command.glossary.entry.occurrences.previous": "Previous occurrence",
   "command.glossary.entry.manage": "Glossary: Manage Entries",
@@ -693,11 +707,6 @@ export const enTranslations = {
   "editor.find.replaceAllTooltip": "Replace all matches",
   "glossary.addEntry": "Add glossary entry",
   "glossary.collapseEntry": "Collapse",
-  "glossary.create.cancel": "Cancel",
-  "glossary.create.error": "Could not create the glossary entry.",
-  "glossary.create.submit": "Create",
-  "glossary.create.surfaceLabel": "Primary form",
-  "glossary.create.title": "New glossary entry",
   "glossary.deleteDialog.cancel": "Cancel",
   "glossary.deleteDialog.counts": "{atomCount} form(s), {tagCount} tag(s)",
   "glossary.deleteDialog.delete": "Delete",
@@ -721,7 +730,6 @@ export const enTranslations = {
   "glossary.entryManager.dragHandle": "Drag to reorder glossary entry",
   "glossary.entryManager.editEntry": "Edit glossary entry",
   "glossary.entryManager.deleteEntry": "Delete entry",
-  "glossary.entryManager.newEntryValue": "New entry",
   "glossary.tagManager.addTag": "Add tag",
   "glossary.tagManager.columns.createdAt": "Created",
   "glossary.tagManager.columns.delete": "Delete",
@@ -786,10 +794,24 @@ export const enTranslations = {
   "glossaryEditor.description": "Description",
   "glossaryEditor.emptyDescription": "No description.",
   "glossaryEditor.label": "Glossary editor",
-  "glossaryEditor.nextOccurrence": "Next occurrence",
-  "glossaryEditor.nextOccurrenceLabel": "▶",
-  "glossaryEditor.previousOccurrence": "Previous occurrence",
-  "glossaryEditor.previousOccurrenceLabel": "◀",
+  "glossaryEntryEditorPane.label": "Glossary Entry Editor",
+  "glossaryEntryEditorPane.close": "Close",
+  "glossaryEntryEditorPane.resizeHandle": "Resize the Glossary Entry Editor pane",
+  "glossaryEntryEditorPane.create.submit": "Create",
+  "glossaryEntryEditorPane.create.failed":
+    "Could not create the glossary entry.",
+  "glossaryEntryEditorPane.edit.loading": "Loading the glossary entry…",
+  "glossaryEntryEditorPane.edit.loadFailed":
+    "Could not load the glossary entry.",
+  "glossaryEntryEditorPane.edit.save": "Save",
+  "glossaryEntryEditorPane.edit.saveFailed":
+    "Could not save the glossary entry.",
+  "glossaryEntryEditorPane.dirty.title": "Unsaved glossary entry",
+  "glossaryEntryEditorPane.dirty.message":
+    "This glossary entry has unsaved changes. Save before continuing?",
+  "glossaryEntryEditorPane.dirty.saveAndContinue": "Save and Continue",
+  "glossaryEntryEditorPane.dirty.discardAndContinue": "Discard and Continue",
+  "glossaryEntryEditorPane.dirty.cancel": "Cancel",
   "glossaryTagEditor.background": "Background color",
   "glossaryTagEditor.cancel": "Cancel",
   "glossaryTagEditor.create": "Create",
@@ -1320,6 +1342,8 @@ export const enTranslations = {
   "status.documentOpenFailed": "Document open failed: {message}",
   "status.commandFailed": "Command failed: {message}",
   "status.characterCount": "{count} characters",
+  "status.glossaryCreateFromSelectionAmbiguous":
+    "Multiple glossary entries matched. Select the target from the Glossary pane.",
   "status.glossaryOccurrenceEntryNotFound": "The tracked glossary entry could not be found.",
   "status.glossaryOccurrenceNoActiveDocument": "No document to search.",
   "status.glossaryOccurrenceNotFound": "No occurrences in this document.",

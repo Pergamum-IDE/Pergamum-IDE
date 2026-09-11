@@ -60,6 +60,7 @@ import type {
   GlossaryEntry,
   GlossaryEntryId,
   GlossaryTag,
+  UpdateGlossaryEntryInput,
   UpdateGlossaryTagInput
 } from "../shared/glossary";
 import type {
@@ -137,7 +138,6 @@ import {
   serializeLineEndings
 } from "./lineEndingTracking";
 import {
-  createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
   currentEditorGlossaryEntryId,
   currentEditorProjectRelativePath,
@@ -314,8 +314,34 @@ import {
   createLineJumpEditorSnapshot,
   documentLineStartOffset
 } from "./lineJumpQuery";
-import { UtilityWindow } from "./UtilityWindow";
-import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
+// #436 Phase 8-0 PoC (Slice 1): the former Utility Window (UtilityWindow.tsx)
+// and its GlossaryOccurrencesPanel host are no longer rendered — see the
+// editor-area body below. Those files, the `utilityWindow*` commands, the
+// `layout.utilityWindow` state and `openUtilityWindowOnOccurrencesTab` are
+// kept dormant for a later slice to remove once the occurrence-navigation UI
+// has a new home.
+import { GlossaryEntryEditorPane } from "./GlossaryEntryEditorPane";
+import type { GlossaryEntryEditorSessionHandle } from "./GlossaryEntryEditorSession";
+import {
+  DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
+  GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT,
+  clampGlossaryEntryEditorPaneHeight,
+  closeGlossaryEntryEditorPane,
+  createInitialGlossaryEntryEditorPaneState,
+  isSameGlossaryEntryEditorPaneTarget,
+  openGlossaryEntryCreatePane,
+  openGlossaryEntryEditPane,
+  type GlossaryEntryEditorPaneSource,
+  type GlossaryEntryEditorPaneState,
+  type OpenGlossaryEntryEditorPaneState
+} from "./glossaryEntryEditorPaneState";
+import {
+  createGlossaryEntryEditorPaneCommandTitles,
+  glossaryEntryEditorPaneCommandIds,
+  registerGlossaryEntryEditorPaneCommands
+} from "./glossaryEntryEditorPaneCommands";
+import { confirmGlossaryEntryEditorPaneDiscardOrSave } from "./glossaryEntryEditorPaneDirtyConfirmation";
+import { resolveGlossaryEntryEditorPaneTargetFromSelection } from "./glossarySelectionResolution";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -471,8 +497,7 @@ import { useHorizontalDrag } from "./useHorizontalDrag";
 import { useVerticalDrag } from "./useVerticalDrag";
 import {
   createUtilityWindowCommandTitles,
-  registerUtilityWindowCommands,
-  utilityWindowCommandIds
+  registerUtilityWindowCommands
 } from "./utilityWindowCommands";
 import {
   createDebugLogCommandTitles,
@@ -491,7 +516,6 @@ import {
 } from "./welcomeSurface";
 import {
   clampSidebarWidth,
-  clampUtilityWindowHeight,
   createInitialWorkbenchLayoutState,
   resolveActiveActivityMode,
   resolveSidebarToggle,
@@ -988,6 +1012,141 @@ export function App(): JSX.Element {
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
     createInitialWorkbenchLayoutState
   );
+  // #436 Phase 8-0 PoC: the bottom pane that replaces the former Utility
+  // Window. Ephemeral React state — NOT persisted to the session. Its height
+  // (Slice 6 remediation) is likewise renderer-memory only, but survives
+  // close/reopen within the same app run.
+  const [glossaryEntryEditorPane, setGlossaryEntryEditorPane] =
+    useState<GlossaryEntryEditorPaneState>(
+      createInitialGlossaryEntryEditorPaneState
+    );
+  // #436 Slice 11: readable from async continuations (dirty-confirm dialogs)
+  // that ran a state snapshot before an `await` — mirrors `projectRef`.
+  const glossaryEntryEditorPaneRef = useRef(glossaryEntryEditorPane);
+  glossaryEntryEditorPaneRef.current = glossaryEntryEditorPane;
+  // #436 Slice 11: the currently-mounted session's imperative isDirty/save
+  // handle (forwarded through `GlossaryEntryEditorPane`) — `null` while the
+  // pane is closed. Never read directly; always go through
+  // `confirmGlossaryEntryEditorPaneDirtyIfNeeded`.
+  const glossaryEntryEditorSessionHandleRef =
+    useRef<GlossaryEntryEditorSessionHandle | null>(null);
+
+  // #436 Slice 11: the ONE place that decides whether the pane's current
+  // draft is safe to abandon. `false` means the caller MUST abort its
+  // operation — the confirm dialog already explained why (the user
+  // cancelled, or chose Save and the save failed, in which case the pane's
+  // own failure UI is already visible).
+  async function confirmGlossaryEntryEditorPaneDirtyIfNeeded(): Promise<boolean> {
+    if (!glossaryEntryEditorPaneRef.current.isOpen) {
+      return true;
+    }
+
+    const handle = glossaryEntryEditorSessionHandleRef.current;
+
+    if (!handle) {
+      return true;
+    }
+
+    const outcome = await confirmGlossaryEntryEditorPaneDiscardOrSave({
+      isDirty: () => handle.isDirty(),
+      save: () => handle.save(),
+      translate,
+      choiceDialog
+    });
+
+    return outcome === "proceed";
+  }
+
+  // #436 Slice 11: every "open create/edit pane" caller (Glossary side pane,
+  // glossary settings add/edit, the Command Palette @-jump / occurrence
+  // tracking's `openGlossaryEntry`) goes through this instead of calling
+  // `setGlossaryEntryEditorPane` directly. Re-opening the IDENTICAL target
+  // (same create preset, or the same entryId already open) is a no-op —
+  // keeps the current draft, never prompts (nothing would be lost either
+  // way). Anything else confirms first when the CURRENT pane has unsaved
+  // work; a cancel (or a failed save) leaves the current pane untouched.
+  async function transitionGlossaryEntryEditorPane(
+    next: OpenGlossaryEntryEditorPaneState
+  ): Promise<void> {
+    if (
+      isSameGlossaryEntryEditorPaneTarget(
+        glossaryEntryEditorPaneRef.current,
+        next
+      )
+    ) {
+      setGlossaryEntryEditorPane(next);
+      return;
+    }
+
+    if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+      return;
+    }
+
+    setGlossaryEntryEditorPane(next);
+  }
+
+  // #436 Slice 11: closing the pane (header close button, the dormant
+  // `closePane` command) gates on the same dirty confirm.
+  async function closeGlossaryEntryEditorPaneWithConfirm(): Promise<void> {
+    if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+      return;
+    }
+
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+  }
+
+  // #436 Slice 12: shared by Ctrl+G (source editor-selection) and, in a
+  // later slice, the editor right-click context menu (a different member of
+  // GlossaryEntryEditorPaneSource) — see glossarySelectionResolution.ts's
+  // doc comment. Resolves the selection against the CURRENT `glossaryEntries`
+  // (kept fresh by the effect that also feeds the Glossary sidebar /
+  // Management tab — see its own `glossaryRefreshToken` dependency), then
+  // routes through the SAME dirty-confirm transition every other "open
+  // create/edit pane" caller uses — never touches pane state directly.
+  async function openGlossaryEntryEditorPaneFromSelection(
+    selectedText: string,
+    source: GlossaryEntryEditorPaneSource
+  ): Promise<void> {
+    const resolution = resolveGlossaryEntryEditorPaneTargetFromSelection(
+      selectedText,
+      glossaryEntries
+    );
+
+    if (resolution.kind === "ambiguous") {
+      setStatus({ key: "status.glossaryCreateFromSelectionAmbiguous" });
+      return;
+    }
+
+    if (resolution.kind === "create") {
+      await transitionGlossaryEntryEditorPane(
+        openGlossaryEntryCreatePane({
+          source,
+          presetRepresentative: resolution.presetRepresentative
+        })
+      );
+      return;
+    }
+
+    await transitionGlossaryEntryEditorPane(
+      openGlossaryEntryEditPane({ source, entryId: resolution.entryId })
+    );
+  }
+
+  // #436 Slice 12: the Ctrl+G keymap extension's `requestOpen` bubbles up to
+  // here through EditorSurface's `onGlossarySelectionShortcut` prop, carrying
+  // only the RAW selected text — dispatched through the command registry
+  // (not called directly) so it goes through the same
+  // when/isEnabled/logging path every other UI-triggered command does.
+  function handleGlossarySelectionShortcut(selectedText: string): void {
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
+      { source: "editorSurface" },
+      selectedText
+    );
+  }
+
+  const [glossaryEntryEditorPaneHeight, setGlossaryEntryEditorPaneHeight] =
+    useState(GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT);
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
   // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
   // project-owned) — closed on project close. Opening / activating it NEVER
@@ -1602,24 +1761,25 @@ export function App(): JSX.Element {
       );
     }
   });
-  const utilityWindowHeightAtDragStartRef = useRef(layout.utilityWindow.height);
-  const utilityWindowResizeDrag = useVerticalDrag({
+  // #436 Slice 6 remediation: top-edge drag resizes the Glossary Entry Editor
+  // Pane. Dragging up (negative deltaY) grows it; clamped against the editor
+  // area's height so the tab content above keeps a usable minimum.
+  const glossaryEntryEditorPaneHeightAtDragStartRef = useRef(
+    glossaryEntryEditorPaneHeight
+  );
+  const glossaryEntryEditorPaneResizeDrag = useVerticalDrag({
     onDragStart: () => {
-      utilityWindowHeightAtDragStartRef.current = layout.utilityWindow.height;
+      glossaryEntryEditorPaneHeightAtDragStartRef.current =
+        glossaryEntryEditorPaneHeight;
     },
     onDragMove: (deltaY) => {
-      const nextHeight = clampUtilityWindowHeight(
-        utilityWindowHeightAtDragStartRef.current - deltaY,
+      const nextHeight = clampGlossaryEntryEditorPaneHeight(
+        glossaryEntryEditorPaneHeightAtDragStartRef.current - deltaY,
         editorAreaBodyRef.current?.clientHeight
       );
 
-      setLayout((current) =>
-        current.utilityWindow.height === nextHeight
-          ? current
-          : {
-              ...current,
-              utilityWindow: { ...current.utilityWindow, height: nextHeight }
-            }
+      setGlossaryEntryEditorPaneHeight((current) =>
+        current === nextHeight ? current : nextHeight
       );
     }
   });
@@ -2019,35 +2179,34 @@ export function App(): JSX.Element {
   useEffect(() => {
     function handleWindowResize(): void {
       const sidebarContainerWidth = mainAreaRef.current?.clientWidth;
-      const utilityWindowContainerHeight =
-        editorAreaBodyRef.current?.clientHeight;
+      const editorAreaHeight = editorAreaBodyRef.current?.clientHeight;
 
       setLayout((current) => {
         const nextWidth =
           sidebarContainerWidth === undefined
             ? current.sidebar.width
             : clampSidebarWidth(current.sidebar.width, sidebarContainerWidth);
-        const nextHeight =
-          utilityWindowContainerHeight === undefined
-            ? current.utilityWindow.height
-            : clampUtilityWindowHeight(
-                current.utilityWindow.height,
-                utilityWindowContainerHeight
-              );
 
-        if (
-          nextWidth === current.sidebar.width &&
-          nextHeight === current.utilityWindow.height
-        ) {
+        if (nextWidth === current.sidebar.width) {
           return current;
         }
 
         return {
           ...current,
-          sidebar: { ...current.sidebar, width: nextWidth },
-          utilityWindow: { ...current.utilityWindow, height: nextHeight }
+          sidebar: { ...current.sidebar, width: nextWidth }
         };
       });
+
+      // #436 Slice 6 remediation: keep the pane height within the new area.
+      if (editorAreaHeight !== undefined) {
+        setGlossaryEntryEditorPaneHeight((current) => {
+          const next = clampGlossaryEntryEditorPaneHeight(
+            current,
+            editorAreaHeight
+          );
+          return next === current ? current : next;
+        });
+      }
     }
 
     window.addEventListener("resize", handleWindowResize);
@@ -2951,6 +3110,12 @@ export function App(): JSX.Element {
         renameActiveEditorTargetName
       )
     );
+    // #436 Phase 8-0 PoC (Slice 1): these commands still flip
+    // `layout.utilityWindow.open`, but the Utility Window is no longer
+    // rendered, so they are dormant (the Command Palette still lists them).
+    // TODO(#436 later slice): remove these commands, `utilityWindowCommands`,
+    // `UtilityWindow.tsx`, `GlossaryOccurrencesPanel.tsx` and the
+    // `layout.utilityWindow` state once occurrence navigation has a new home.
     registerUtilityWindowCommands(
       registry,
       {
@@ -3012,52 +3177,17 @@ export function App(): JSX.Element {
     registerGlossaryCommands(
       registry,
       {
+        // #436 Phase 8-0 PoC (Slice 5): opening a glossary entry no longer
+        // opens a `glossaryEntry` editor tab — it opens the bottom Glossary
+        // Entry Editor Pane in edit mode. Every caller (Glossary side pane
+        // "…", the Command Palette @-jump, occurrence tracking) routes here.
+        // #436 Slice 11: routed through the dirty-confirm transition — a
+        // pending unsaved pane draft is confirmed before switching entries.
         openGlossaryEntry: async (entryId) => {
-          const editorId = createGlossaryEntryEditorId(
-            entryId,
-            activeProjectContext
+          await transitionGlossaryEntryEditorPane(
+            openGlossaryEntryEditPane({ source: "glossary-pane", entryId })
           );
-
-          return await openEditorFromExplicitActivation(editorId);
-        },
-        createGlossaryEntry: async (input) => {
-          const projectGeneration =
-            projectActivationLifetimeRef.current.captureProjectActivationGeneration();
-          let entry: GlossaryEntry;
-
-          try {
-            entry = await window.pergamum.glossary.create(input);
-          } catch (error) {
-            if (
-              !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-                projectGeneration
-              )
-            ) {
-              return false;
-            }
-
-            throw error;
-          }
-
-          if (
-            !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-              projectGeneration
-            )
-          ) {
-            return false;
-          }
-
-          setGlossaryRefreshToken((token) => token + 1);
-
-          const editorId = createGlossaryEntryEditorId(
-            entry.id,
-            activeProjectContext
-          );
-
-          return await openEditorFromExplicitActivation(editorId, {
-            history: "record",
-            resolvedEditor: createGlossaryEntryCurrentEditor(entry)
-          });
+          return true;
         },
         navigateToPreviousGlossaryOccurrence: (entryId) =>
           navigateGlossaryOccurrenceRef.current(entryId, "previous"),
@@ -3073,6 +3203,39 @@ export function App(): JSX.Element {
         }
       },
       createGlossaryCommandTitles(translate)
+    );
+    // #436 Phase 8-0 PoC (Slice 3): the unified Glossary Entry Editor Pane
+    // entry points. The Glossary side pane's "語彙を追加", the glossary
+    // settings screen, and (Slice 12) Ctrl+G all dispatch through these
+    // commands. The editor context menu still routes through the same
+    // `openGlossaryEntryEditorPaneFromSelection` in a later slice.
+    registerGlossaryEntryEditorPaneCommands(
+      registry,
+      {
+        // #436 Slice 11: routed through the dirty-confirm transition/close
+        // helpers — a pending unsaved pane draft is confirmed before
+        // switching to a different create/edit target or closing outright.
+        openGlossaryEntryCreatePane: async (options) => {
+          await transitionGlossaryEntryEditorPane(
+            openGlossaryEntryCreatePane(options)
+          );
+        },
+        openGlossaryEntryEditPane: async (options) => {
+          await transitionGlossaryEntryEditorPane(
+            openGlossaryEntryEditPane(options)
+          );
+        },
+        closeGlossaryEntryEditorPane: async () => {
+          await closeGlossaryEntryEditorPaneWithConfirm();
+        },
+        openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {
+          await openGlossaryEntryEditorPaneFromSelection(
+            selectedText,
+            "editor-selection"
+          );
+        }
+      },
+      createGlossaryEntryEditorPaneCommandTitles(translate)
     );
     registerGlossaryOccurrencesCommands(
       registry,
@@ -3318,11 +3481,21 @@ export function App(): JSX.Element {
   const projectFileQuickOpenDocuments = project?.documents ?? [];
 
   async function confirmProjectSwitch(): Promise<boolean> {
-    return confirmProjectSwitchWithUnsavedDocuments({
+    const markdownProceed = await confirmProjectSwitchWithUnsavedDocuments({
       state: openDocumentsState,
       translate,
       choiceDialog
     });
+
+    if (!markdownProceed) {
+      return false;
+    }
+
+    // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
+    // separate from the Markdown check above (the pane's draft was never an
+    // open editor). Asked only once the Markdown check already proceeded, so
+    // a Markdown cancel never also prompts about the glossary pane.
+    return confirmGlossaryEntryEditorPaneDirtyIfNeeded();
   }
 
   async function resolveProjectOpenResult(
@@ -3453,25 +3626,163 @@ export function App(): JSX.Element {
   }
 
 
-  async function createGlossaryEntryFromSidebar(
+  // #436 Phase 8-0 PoC (Slice 3): the Glossary side pane's "語彙を追加" opens
+  // the bottom Glossary Entry Editor Pane in create mode. (Slice 5 removed the
+  // old inline create form and the immediate-DB-create command it used.)
+  function openGlossaryCreateEntryPaneFromSidebar(): void {
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      { source: "workspaceSidebar" },
+      {
+        source: "glossary-pane",
+        presetRepresentative: DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE
+      }
+    );
+  }
+
+  // #436 Phase 8-0 PoC (Slice 9): create a new Glossary entry from the bottom
+  // pane's create-mode session (`GlossaryEntryEditorSession` over the SAME
+  // `GlossaryEditor` edit mode uses). Persists through the existing glossary
+  // create IPC, refreshes every glossary consumer, and NEVER opens a
+  // glossary entry tab. Mirrors `handleSaveGlossaryEntryFromPane` below:
+  // resolves the saved entry (so the caller can re-key local atom ids AND
+  // flip the session from create-like to edit-like via
+  // `applyGlossaryEntryDraftSaveResult`); rethrows after surfacing the error
+  // so the caller marks the draft `saveFailed` and the pane stays open.
+  async function handleCreateGlossaryEntryFromPane(
     input: CreateGlossaryEntryInput
-  ): Promise<boolean> {
+  ): Promise<GlossaryEntry> {
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+
     try {
-      return await commandRegistry.execute(
-        glossaryCommandIds.createEntry,
-        { source: "workspaceSidebar" },
-        input
-      );
+      const savedEntry = await window.pergamum.glossary.create(input);
+
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setGlossaryRefreshToken((token) => token + 1);
+        setStatus({
+          key: "status.savedPath",
+          values: { path: representativeGlossarySurface(savedEntry) }
+        });
+      }
+
+      return savedEntry;
     } catch (error) {
-      if (error instanceof CommandDisabledError) {
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setStatus({
+          key: "status.saveFailed",
+          values: { message: errorMessage(error, translate) }
+        });
+        await showGlossarySaveFailedDialog();
+      }
+
+      throw error;
+    }
+  }
+
+  // #436 Phase 8-0 PoC (Slice 8): load the entry an edit-mode pane targets.
+  // A thin forward of the existing glossary IPC — `GlossaryEntryEditForm`
+  // owns the loading / failed / ready state and the race guard.
+  async function handleLoadGlossaryEntryFromPane(
+    entryId: GlossaryEntryId
+  ): Promise<GlossaryEntry | null> {
+    return window.pergamum.glossary.getById(entryId);
+  }
+
+  // #436 Phase 8-0 PoC (Slice 8): save an edit-mode pane's draft. This is the
+  // SAME glossary update IPC and save-failed dialog the old glossaryEntry
+  // tab's Ctrl+S save used (`saveGlossaryEntryByEditorId`) — reused here
+  // without its `openDocumentsState` / `EditorId` plumbing, since the pane is
+  // never an open editor tab. Resolves the saved entry (so the caller can
+  // re-key local atom ids via `applyGlossaryEntryDraftSaveResult`); rethrows
+  // after surfacing the error so the caller marks the draft `saveFailed`.
+  async function handleSaveGlossaryEntryFromPane(
+    input: UpdateGlossaryEntryInput
+  ): Promise<GlossaryEntry> {
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+
+    try {
+      const savedEntry = await window.pergamum.glossary.update(input);
+
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setGlossaryRefreshToken((token) => token + 1);
+        setStatus({
+          key: "status.savedPath",
+          values: { path: representativeGlossarySurface(savedEntry) }
+        });
+      }
+
+      return savedEntry;
+    } catch (error) {
+      if (
+        projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        setStatus({
+          key: "status.saveFailed",
+          values: { message: errorMessage(error, translate) }
+        });
+        await showGlossarySaveFailedDialog();
+      }
+
+      throw error;
+    }
+  }
+
+  // #436 Phase 8-0 PoC (Slice 8): delete an entry from the bottom pane's edit
+  // mode. Reuses the SAME destructive confirm dialog (`confirmDeleteGlossaryEntry`)
+  // and the same in-flight guard `deleteActiveGlossaryEntry` / the Glossary
+  // Management delete use — but, unlike those, there is no glossaryEntry tab
+  // to invalidate or close here, only the pane (the caller closes it).
+  async function handleDeleteGlossaryEntryFromPane(
+    draft: GlossaryEntryDraft
+  ): Promise<boolean> {
+    if (glossaryDeleteInFlightRef.current) {
+      return false;
+    }
+
+    glossaryDeleteInFlightRef.current = true;
+
+    try {
+      if (!(await confirmDeleteGlossaryEntry(draft))) {
         return false;
       }
 
+      const result = await window.pergamum.glossary.delete(draft.entry.id);
+
+      if (!result.deleted) {
+        return false;
+      }
+
+      setGlossaryRefreshToken((token) => token + 1);
+      setGlossaryOccurrenceTrackingState((state) =>
+        state.kind === "active" && state.entryId === draft.entry.id
+          ? inactiveGlossaryOccurrenceTrackingState
+          : state
+      );
+      return true;
+    } catch (error) {
       setStatus({
         key: "status.commandFailed",
         values: { message: errorMessage(error, translate) }
       });
       return false;
+    } finally {
+      glossaryDeleteInFlightRef.current = false;
     }
   }
 
@@ -3570,19 +3881,29 @@ export function App(): JSX.Element {
     return entries;
   }
 
-  // #375: Glossary Management tab — the top-left "Add entry" button. Goes
-  // through the SAME create flow as the Glossary sidebar's "Add entry"
-  // (glossary.entry.create): it persists a new entry (seeded with a
-  // placeholder surface for the user to rename), bumps the refresh token so
-  // every glossary consumer reloads, and opens its editor tab.
+  // #436 Phase 8-0 PoC (Slice 4): the Glossary Management tab's "語彙追加"
+  // button and its per-row edit action open the bottom Glossary Entry Editor
+  // Pane (create / edit mode, source "glossary-settings") instead of
+  // persisting a placeholder entry and opening a glossary entry editor tab.
+  // No DB write and no form yet — later slices flesh out the pane and remove
+  // the old glossary entry tab path.
   function handleAddGlossaryEntryFromManager(): void {
-    void createGlossaryEntryFromSidebar({
-      description: "",
-      atoms: [
-        { value: translate("glossary.entryManager.newEntryValue"), matchFlags: 0 }
-      ],
-      tagIds: []
-    });
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      { source: "editorSurface" },
+      {
+        source: "glossary-settings",
+        presetRepresentative: DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE
+      }
+    );
+  }
+
+  function handleEditGlossaryEntryFromManager(entryId: GlossaryEntryId): void {
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openEditPane,
+      { source: "editorSurface" },
+      { source: "glossary-settings", entryId }
+    );
   }
 
   // #375: Glossary Management tab — hard delete of an entry through the shared
@@ -6707,6 +7028,9 @@ export function App(): JSX.Element {
     );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
+    // #436 Slice 10: the Glossary Entry Editor Pane holds a project-owned
+    // draft (create or edit) — it never survives a project switch either.
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     setOpenDocumentsState((state) =>
       resetOpenDocumentsForProjectContextSwitch(state)
     );
@@ -6796,6 +7120,11 @@ export function App(): JSX.Element {
     );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
+    // #436 Slice 10: the Glossary Entry Editor Pane holds a project-owned
+    // draft (create or edit) — it never survives a project close. Dirty
+    // confirmation for this draft is a later slice; this just guarantees the
+    // pane cannot outlive the project it was editing.
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     const nextOpenDocumentsState = removeProjectScopedOpenEditors(
       openDocumentsStateRef.current
     );
@@ -6847,6 +7176,15 @@ export function App(): JSX.Element {
     let shouldShowCloseFailedDialog = false;
     lifecycleOperationInProgressRef.current = true;
     try {
+      // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
+      // entirely separate from the Markdown dirty-resolution below (the
+      // pane's draft was never an open editor, so that flow has no
+      // visibility into it). Runs FIRST: a cancel (or a failed save) aborts
+      // the close here, before the commit-barrier flow ever starts.
+      if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+        return;
+      }
+
       const dirtyResolution = await resolveDirtyForLifecycle(
         "explicitProjectClose",
         project.name
@@ -6933,43 +7271,52 @@ export function App(): JSX.Element {
     } else {
       lifecycleOperationInProgressRef.current = true;
       try {
-        const dirtyResolution = await resolveDirtyForLifecycle(
-          request.intent,
-          "Pergamum"
-        );
-
-        if (
-          dirtyResolution.status === "resolved" ||
-          dirtyResolution.status === "discarded"
-        ) {
-          commitBarrierToken = dirtyResolution.commitBarrierToken;
-
-          if (request.isFinalWindow) {
-            // #272: the final window close keeps this Session in the restore
-            // set; a best-effort flush is enough (durability is continuous).
-            void sessionPersistence.flushNow();
-            // #286: best-effort Recovery payload flush on normal shutdown —
-            // failing to flush here NEVER deletes an existing Recovery row.
-            void recoveryPayloadCoordinator.flushNow();
-            decision = { status: "approved", requestId: request.requestId };
-          } else {
-            // #272 (review Blocker 5): an ordinary non-final window close
-            // removes this Session from the future restore set. That removal
-            // MUST be durable before we approve the close — otherwise a
-            // manifest write failure would let the closed Session revive on
-            // next launch. On failure, decline the close (safe: the window
-            // stays open, the user can retry).
-            try {
-              await sessionPersistence.dropFromRestoreSet();
-              decision = { status: "approved", requestId: request.requestId };
-            } catch {
-              exitLifecycleCommitBarrier(commitBarrierToken);
-              commitBarrierToken = null;
-              decision = { status: "cancelled", requestId: request.requestId };
-            }
-          }
-        } else {
+        // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm,
+        // separate from the Markdown dirty-resolution below (the pane's
+        // draft was never an open editor). Runs FIRST — a cancel (or a
+        // failed save) declines the window close, same as a Markdown cancel
+        // does, WITHOUT ever starting the commit-barrier flow.
+        if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
           decision = { status: "cancelled", requestId: request.requestId };
+        } else {
+          const dirtyResolution = await resolveDirtyForLifecycle(
+            request.intent,
+            "Pergamum"
+          );
+
+          if (
+            dirtyResolution.status === "resolved" ||
+            dirtyResolution.status === "discarded"
+          ) {
+            commitBarrierToken = dirtyResolution.commitBarrierToken;
+
+            if (request.isFinalWindow) {
+              // #272: the final window close keeps this Session in the restore
+              // set; a best-effort flush is enough (durability is continuous).
+              void sessionPersistence.flushNow();
+              // #286: best-effort Recovery payload flush on normal shutdown —
+              // failing to flush here NEVER deletes an existing Recovery row.
+              void recoveryPayloadCoordinator.flushNow();
+              decision = { status: "approved", requestId: request.requestId };
+            } else {
+              // #272 (review Blocker 5): an ordinary non-final window close
+              // removes this Session from the future restore set. That removal
+              // MUST be durable before we approve the close — otherwise a
+              // manifest write failure would let the closed Session revive on
+              // next launch. On failure, decline the close (safe: the window
+              // stays open, the user can retry).
+              try {
+                await sessionPersistence.dropFromRestoreSet();
+                decision = { status: "approved", requestId: request.requestId };
+              } catch {
+                exitLifecycleCommitBarrier(commitBarrierToken);
+                commitBarrierToken = null;
+                decision = { status: "cancelled", requestId: request.requestId };
+              }
+            }
+          } else {
+            decision = { status: "cancelled", requestId: request.requestId };
+          }
         }
       } catch {
         decision = {
@@ -7014,6 +7361,14 @@ export function App(): JSX.Element {
 
     lifecycleOperationInProgressRef.current = true;
     try {
+      // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
+      // separate from the Markdown dirty-resolution below (the pane's draft
+      // was never an open editor). Runs FIRST: a cancel (or a failed save)
+      // aborts the quit/restart here, before the commit-barrier flow starts.
+      if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+        return;
+      }
+
       const dirtyResolution = await resolveDirtyForLifecycle(
         "explicitApplicationQuit",
         "Pergamum"
@@ -7385,6 +7740,11 @@ export function App(): JSX.Element {
     setGlossaryOccurrenceTrackingState(
       inactiveGlossaryOccurrenceTrackingState
     );
+    // #436 Slice 10: restoring an environment (cold start) never carries a
+    // Glossary Entry Editor Pane draft forward — the pane state itself is
+    // not part of the Session snapshot (Slice 1-9 non-goal), so this is
+    // mostly defensive, matching the other project-scoped resets here.
+    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     pendingRestoreViewStatesRef.current = new Map(env.pendingViewStates);
     setPendingRestoreViewStateVersion((version) => version + 1);
     setProject(env.project);
@@ -10096,7 +10456,9 @@ export function App(): JSX.Element {
                           entryId
                         );
                       }}
-                      onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
+                      onOpenGlossaryCreateEntryPane={
+                        openGlossaryCreateEntryPaneFromSidebar
+                      }
                       glossaryActiveDocumentContent={
                         activeMarkdownDocument
                           ? currentDocumentContent(activeMarkdownDocument)
@@ -10178,15 +10540,15 @@ export function App(): JSX.Element {
                   onTabAction={handleTabAction}
                   describeTabContextMenu={describeTabContextMenuForTab}
                   onReorderWorkspaceTabs={handleReorderWorkspaceTabs}
-                  isUtilityWindowOpen={layout.utilityWindow.open}
-                  onToggleUtilityWindow={() =>
-                    executeUiCommand(utilityWindowCommandIds.toggle, {
-                      source: "documentTabBar"
-                    })
-                  }
                 />
 
                 <section className="editorAreaBody" ref={editorAreaBodyRef}>
+                  {/* #436 Slice 6 remediation: the active tab's content lives
+                      in its own region so the Glossary Entry Editor Pane can
+                      sit below ANY tab (Markdown editor, preview split, or the
+                      glossary management / settings tabs), not just below a
+                      Markdown document. */}
+                  <div className="editorAreaContent">
                   {isGlossaryTagManagerTabActive ? (
                     <section className="glossaryTagManagerTab">
                       <GlossaryTagManager
@@ -10205,13 +10567,7 @@ export function App(): JSX.Element {
                         entries={glossaryEntries}
                         translate={translate}
                         onAddEntry={handleAddGlossaryEntryFromManager}
-                        onOpenEntry={(entryId) => {
-                          executeUiCommand(
-                            glossaryCommandIds.openEntry,
-                            { source: "editorSurface" },
-                            entryId
-                          );
-                        }}
+                        onOpenEntry={handleEditGlossaryEntryFromManager}
                         onDeleteEntry={(entryId) =>
                           handleDeleteGlossaryEntryFromManager(entryId)
                         }
@@ -10246,8 +10602,7 @@ export function App(): JSX.Element {
                       <DebugLogPanel translate={translate} />
                     </section>
                   ) : activeDocument ? (
-                    <>
-                      <EditorSurface
+                    <EditorSurface
                         editor={activeDocument.editor}
                         activeDocumentKey={serializeEditorId(
                           activeDocument.id
@@ -10293,6 +10648,9 @@ export function App(): JSX.Element {
                           handleChangeMarkdownEditorPreviewRatio
                         }
                         onChangeMarkdownContent={setActiveDocumentContent}
+                        onGlossarySelectionShortcut={
+                          handleGlossarySelectionShortcut
+                        }
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }
@@ -10398,76 +10756,76 @@ export function App(): JSX.Element {
                     }
                         onViewportChanged={handleViewportChanged}
                       />
-
-                      {layout.utilityWindow.open ? (
-                        <>
-                          <div
-                            className="utilityWindowResizeHandle"
-                            role="separator"
-                            aria-orientation="horizontal"
-                            aria-label={translate(
-                              "workbench.utilityWindowResizeHandle"
-                            )}
-                            onPointerDown={
-                              utilityWindowResizeDrag.onPointerDown
-                            }
-                            onPointerMove={
-                              utilityWindowResizeDrag.onPointerMove
-                            }
-                            onPointerUp={utilityWindowResizeDrag.onPointerUp}
-                            onPointerCancel={
-                              utilityWindowResizeDrag.onPointerCancel
-                            }
-                          />
-                          <UtilityWindow
-                            activeTab={layout.utilityWindow.activeTab}
-                            height={layout.utilityWindow.height}
-                            translate={translate}
-                            onSelectTab={selectUtilityWindowTab}
-                            onClose={() =>
-                              executeUiCommand(utilityWindowCommandIds.close, {
-                                source: "utilityWindow"
-                              })
-                            }
-                          >
-                            <GlossaryOccurrencesPanel
-                              session={glossaryOccurrenceTrackingState}
-                              translate={translate}
-                              onNavigatePrevious={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.previous,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                              onNavigateNext={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.next,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                              onOpenEntry={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.openEntry,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                              onCloseTracking={() =>
-                                executeUiCommand(
-                                  glossaryOccurrencesCommandIds.closeTracking,
-                                  { source: "utilityWindow" }
-                                )
-                              }
-                            />
-                          </UtilityWindow>
-                        </>
-                      ) : null}
-                    </>
                   ) : shouldShowWelcome ? (
                     /* #262 / #311 dogfood blocker: with a project open the
                        zero-tab Welcome is scoped to the editor body — the
                        sidebar / File Explorer stay mounted and stay under the
                        sole control of the side navigation. */
                     welcomeScreen
+                  ) : null}
+                  </div>
+
+                  {/* #436 Phase 8-0 PoC: the former Utility Window slot now
+                      frames the Glossary Entry Editor Pane, below WHATEVER tab
+                      content is shown above. Create mode is a real new-entry
+                      form (Slice 6/7); edit mode (Slice 8) hosts the EXISTING
+                      GlossaryEditor.tsx (the same screen the old glossaryEntry
+                      tab used) against a pane-local draft — never a revived
+                      glossaryEntry tab, never a change to the active tab.
+                      Resizable via the top-edge handle. */}
+                  {glossaryEntryEditorPane.isOpen ? (
+                    <>
+                      <div
+                        className="glossaryEntryEditorPaneResizeHandle"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label={translate(
+                          "glossaryEntryEditorPane.resizeHandle"
+                        )}
+                        onPointerDown={
+                          glossaryEntryEditorPaneResizeDrag.onPointerDown
+                        }
+                        onPointerMove={
+                          glossaryEntryEditorPaneResizeDrag.onPointerMove
+                        }
+                        onPointerUp={
+                          glossaryEntryEditorPaneResizeDrag.onPointerUp
+                        }
+                        onPointerCancel={
+                          glossaryEntryEditorPaneResizeDrag.onPointerCancel
+                        }
+                      />
+                      <GlossaryEntryEditorPane
+                        ref={glossaryEntryEditorSessionHandleRef}
+                        state={glossaryEntryEditorPane}
+                        translate={translate}
+                        height={clampGlossaryEntryEditorPaneHeight(
+                          glossaryEntryEditorPaneHeight,
+                          editorAreaBodyRef.current?.clientHeight
+                        )}
+                        availableTags={glossaryTags}
+                        onCreateEntry={handleCreateGlossaryEntryFromPane}
+                        onLoadEntry={handleLoadGlossaryEntryFromPane}
+                        onSaveEntry={handleSaveGlossaryEntryFromPane}
+                        onDeleteEntry={handleDeleteGlossaryEntryFromPane}
+                        onOpenTagManager={openGlossaryTagManagerTab}
+                        readOnly={project?.accessMode.kind === "readOnly"}
+                        markerGlyph={effectiveSettings.editor.lineEnding.markerGlyph}
+                        expectedLineEnding={
+                          effectiveSettings.editor.lineEnding.expected
+                        }
+                        newFileLineEndingFallback={
+                          effectiveSettings.files.newFile.lineEnding
+                        }
+                        whitespaceSettings={effectiveSettings.editor.whitespace}
+                        undoHistoryMinDepth={
+                          effectiveSettings.editor.undoHistoryMinDepth
+                        }
+                        onClose={() =>
+                          void closeGlossaryEntryEditorPaneWithConfirm()
+                        }
+                      />
+                    </>
                   ) : null}
                 </section>
               </section>
