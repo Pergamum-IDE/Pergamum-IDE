@@ -17,7 +17,9 @@ const titles = {
   openEditPane: "Open edit pane",
   openEditPaneDescription: "Open edit pane description",
   closePane: "Close pane",
-  closePaneDescription: "Close pane description"
+  closePaneDescription: "Close pane description",
+  openFromEditorSelection: "Open from editor selection",
+  openFromEditorSelectionDescription: "Open from editor selection description"
 };
 
 function recordingController(): {
@@ -37,13 +39,16 @@ function recordingController(): {
       },
       closeGlossaryEntryEditorPane: () => {
         calls.push("close");
+      },
+      openGlossaryEntryEditorPaneFromSelection: (selectedText) => {
+        calls.push(`fromSelection:${selectedText}`);
       }
     }
   };
 }
 
 describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
-  it("registers the create / edit / close pane commands under the glossary domain", () => {
+  it("registers the create / edit / close / open-from-selection pane commands under the glossary domain", () => {
     const registry = new CommandRegistry();
     const { controller } = recordingController();
 
@@ -52,7 +57,8 @@ describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
     expect(registry.list().map((command) => command.id)).toEqual([
       glossaryEntryEditorPaneCommandIds.openCreatePane,
       glossaryEntryEditorPaneCommandIds.openEditPane,
-      glossaryEntryEditorPaneCommandIds.closePane
+      glossaryEntryEditorPaneCommandIds.closePane,
+      glossaryEntryEditorPaneCommandIds.openFromEditorSelection
     ]);
     expect(glossaryEntryEditorPaneCommandIds.openCreatePane).toBe(
       "glossary.openCreateEntryPane"
@@ -62,6 +68,9 @@ describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
     );
     expect(glossaryEntryEditorPaneCommandIds.closePane).toBe(
       "glossary.closeEntryEditorPane"
+    );
+    expect(glossaryEntryEditorPaneCommandIds.openFromEditorSelection).toBe(
+      "glossary.openFromEditorSelection"
     );
   });
 
@@ -96,11 +105,17 @@ describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
       glossaryEntryEditorPaneCommandIds.closePane,
       executionOptions
     );
+    await registry.execute(
+      glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
+      executionOptions,
+      "アリス"
+    );
 
     expect(calls).toEqual([
       "create:glossary-pane:",
       "edit:glossary-settings:entry-9",
-      "close"
+      "close",
+      "fromSelection:アリス"
     ]);
   });
 
@@ -112,7 +127,10 @@ describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
       openEditPane: "command.glossary.openEditEntryPane",
       openEditPaneDescription: "command.glossary.openEditEntryPane.description",
       closePane: "command.glossary.closeEntryEditorPane",
-      closePaneDescription: "command.glossary.closeEntryEditorPane.description"
+      closePaneDescription: "command.glossary.closeEntryEditorPane.description",
+      openFromEditorSelection: "command.glossary.openFromEditorSelection",
+      openFromEditorSelectionDescription:
+        "command.glossary.openFromEditorSelection.description"
     });
   });
 });

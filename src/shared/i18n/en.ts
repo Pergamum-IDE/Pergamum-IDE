@@ -60,6 +60,10 @@ export const enTranslations = {
   "command.glossary.closeEntryEditorPane": "Close Glossary Entry Editor Pane",
   "command.glossary.closeEntryEditorPane.description":
     "Close the Glossary Entry Editor Pane. (#436 PoC)",
+  "command.glossary.openFromEditorSelection":
+    "Open Glossary Entry from Selection",
+  "command.glossary.openFromEditorSelection.description":
+    "Opens the matching entry's edit screen if the selection exactly matches an existing glossary entry, otherwise opens a new-entry screen seeded with the selection. (Ctrl+G)",
   "command.glossary.entry.occurrences.next": "Next occurrence",
   "command.glossary.entry.occurrences.previous": "Previous occurrence",
   "command.glossary.entry.manage": "Glossary: Manage Entries",
@@ -1338,6 +1342,8 @@ export const enTranslations = {
   "status.documentOpenFailed": "Document open failed: {message}",
   "status.commandFailed": "Command failed: {message}",
   "status.characterCount": "{count} characters",
+  "status.glossaryCreateFromSelectionAmbiguous":
+    "Multiple glossary entries matched. Select the target from the Glossary pane.",
   "status.glossaryOccurrenceEntryNotFound": "The tracked glossary entry could not be found.",
   "status.glossaryOccurrenceNoActiveDocument": "No document to search.",
   "status.glossaryOccurrenceNotFound": "No occurrences in this document.",

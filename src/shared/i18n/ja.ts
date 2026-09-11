@@ -56,6 +56,9 @@ export const jaTranslations = {
   "command.glossary.closeEntryEditorPane": "語彙登録・編集ペインを閉じる",
   "command.glossary.closeEntryEditorPane.description":
     "語彙登録・編集ペインを閉じます。（#436 PoC）",
+  "command.glossary.openFromEditorSelection": "選択範囲から語彙を開く",
+  "command.glossary.openFromEditorSelection.description":
+    "選択範囲が既存の語彙に一致すればその編集画面を、一致しなければ選択範囲を代表表記にした新規作成画面を開きます。（Ctrl+G）",
   "command.glossary.entry.occurrences.next": "次の使用箇所",
   "command.glossary.entry.occurrences.previous": "前の使用箇所",
   "command.glossary.entry.manage": "語彙集: 語彙を管理",
@@ -1337,6 +1340,8 @@ export const jaTranslations = {
   "status.documentOpenFailed": "文書を開けませんでした: {message}",
   "status.commandFailed": "コマンドを実行できませんでした: {message}",
   "status.characterCount": "{count}文字",
+  "status.glossaryCreateFromSelectionAmbiguous":
+    "複数の語彙に一致しました。語彙ペインから対象を選択してください。",
   "status.glossaryOccurrenceEntryNotFound": "追跡中の語彙が見つかりませんでした。",
   "status.glossaryOccurrenceNoActiveDocument": "移動先の文書がありません",
   "status.glossaryOccurrenceNotFound": "この文書内に使用箇所がありません",

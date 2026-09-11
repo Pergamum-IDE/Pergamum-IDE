@@ -40,6 +40,7 @@ import {
   type MarkdownImageAttachmentPositionController,
   type MarkdownEditorActiveFindConfig,
   type MarkdownEditorFocusRequest,
+  type MarkdownEditorGlossarySelectionShortcutConfig,
   type MarkdownEditorParagraphIndentController,
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
@@ -452,6 +453,9 @@ interface EditorSurfaceProps {
     content: string,
     lineEndingBreaks: LineEndingBreakSet
   ) => void;
+  /** #436 Slice 12: Ctrl+G fired in the active Markdown editor, with its
+   *  current (primary) selection's RAW text (`""` when empty). */
+  onGlossarySelectionShortcut: (selectedText: string) => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -585,6 +589,7 @@ export function EditorSurface({
   markdownEditorPreviewRatio,
   onChangeMarkdownEditorPreviewRatio,
   onChangeMarkdownContent,
+  onGlossarySelectionShortcut,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -645,6 +650,7 @@ export function EditorSurface({
           soundSettings={soundSettings}
           readOnly={isProjectOwnedReadOnly}
           onChangeMarkdownContent={onChangeMarkdownContent}
+          onGlossarySelectionShortcut={onGlossarySelectionShortcut}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -740,6 +746,8 @@ interface MarkdownEditorSurfaceProps {
     content: string,
     lineEndingBreaks: LineEndingBreakSet
   ) => void;
+  /** #436 Slice 12: see EditorSurfaceProps's own doc comment. */
+  onGlossarySelectionShortcut: (selectedText: string) => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -819,6 +827,7 @@ function MarkdownEditorSurface({
   soundSettings,
   readOnly,
   onChangeMarkdownContent,
+  onGlossarySelectionShortcut,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -1312,6 +1321,15 @@ function MarkdownEditorSurface({
     []
   );
 
+  // #436 Slice 12: a plain pass-through of the host's callback — unlike
+  // `activeFindConfig` above, this surface owns no local state of its own
+  // for Ctrl+G; App.tsx resolves the selection and drives the pane.
+  const glossarySelectionShortcutConfig =
+    useMemo<MarkdownEditorGlossarySelectionShortcutConfig>(
+      () => ({ requestOpen: onGlossarySelectionShortcut }),
+      [onGlossarySelectionShortcut]
+    );
+
   const handleFindModeChange = useCallback((mode: ActiveFindPanelMode) => {
     setFindMode(mode);
     // Return focus to the query input (the panel's focus effect handles it).
@@ -1793,6 +1811,7 @@ function MarkdownEditorSurface({
           value={content}
           onChange={onChangeMarkdownContent}
           activeFind={activeFindConfig}
+          glossarySelectionShortcut={glossarySelectionShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}

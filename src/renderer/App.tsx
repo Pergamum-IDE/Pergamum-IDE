@@ -331,6 +331,7 @@ import {
   isSameGlossaryEntryEditorPaneTarget,
   openGlossaryEntryCreatePane,
   openGlossaryEntryEditPane,
+  type GlossaryEntryEditorPaneSource,
   type GlossaryEntryEditorPaneState,
   type OpenGlossaryEntryEditorPaneState
 } from "./glossaryEntryEditorPaneState";
@@ -340,6 +341,7 @@ import {
   registerGlossaryEntryEditorPaneCommands
 } from "./glossaryEntryEditorPaneCommands";
 import { confirmGlossaryEntryEditorPaneDiscardOrSave } from "./glossaryEntryEditorPaneDirtyConfirmation";
+import { resolveGlossaryEntryEditorPaneTargetFromSelection } from "./glossarySelectionResolution";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -1091,6 +1093,56 @@ export function App(): JSX.Element {
     }
 
     setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+  }
+
+  // #436 Slice 12: shared by Ctrl+G (source editor-selection) and, in a
+  // later slice, the editor right-click context menu (a different member of
+  // GlossaryEntryEditorPaneSource) — see glossarySelectionResolution.ts's
+  // doc comment. Resolves the selection against the CURRENT `glossaryEntries`
+  // (kept fresh by the effect that also feeds the Glossary sidebar /
+  // Management tab — see its own `glossaryRefreshToken` dependency), then
+  // routes through the SAME dirty-confirm transition every other "open
+  // create/edit pane" caller uses — never touches pane state directly.
+  async function openGlossaryEntryEditorPaneFromSelection(
+    selectedText: string,
+    source: GlossaryEntryEditorPaneSource
+  ): Promise<void> {
+    const resolution = resolveGlossaryEntryEditorPaneTargetFromSelection(
+      selectedText,
+      glossaryEntries
+    );
+
+    if (resolution.kind === "ambiguous") {
+      setStatus({ key: "status.glossaryCreateFromSelectionAmbiguous" });
+      return;
+    }
+
+    if (resolution.kind === "create") {
+      await transitionGlossaryEntryEditorPane(
+        openGlossaryEntryCreatePane({
+          source,
+          presetRepresentative: resolution.presetRepresentative
+        })
+      );
+      return;
+    }
+
+    await transitionGlossaryEntryEditorPane(
+      openGlossaryEntryEditPane({ source, entryId: resolution.entryId })
+    );
+  }
+
+  // #436 Slice 12: the Ctrl+G keymap extension's `requestOpen` bubbles up to
+  // here through EditorSurface's `onGlossarySelectionShortcut` prop, carrying
+  // only the RAW selected text — dispatched through the command registry
+  // (not called directly) so it goes through the same
+  // when/isEnabled/logging path every other UI-triggered command does.
+  function handleGlossarySelectionShortcut(selectedText: string): void {
+    executeUiCommand(
+      glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
+      { source: "editorSurface" },
+      selectedText
+    );
   }
 
   const [glossaryEntryEditorPaneHeight, setGlossaryEntryEditorPaneHeight] =
@@ -3153,10 +3205,10 @@ export function App(): JSX.Element {
       createGlossaryCommandTitles(translate)
     );
     // #436 Phase 8-0 PoC (Slice 3): the unified Glossary Entry Editor Pane
-    // entry points. Only the Glossary side pane's "語彙を追加" dispatches
-    // `openCreateEntryPane` so far; the glossary settings screen, Ctrl+G and
-    // the editor context menu route through the same commands in later
-    // slices. Palette-hidden and not keybound yet.
+    // entry points. The Glossary side pane's "語彙を追加", the glossary
+    // settings screen, and (Slice 12) Ctrl+G all dispatch through these
+    // commands. The editor context menu still routes through the same
+    // `openGlossaryEntryEditorPaneFromSelection` in a later slice.
     registerGlossaryEntryEditorPaneCommands(
       registry,
       {
@@ -3175,6 +3227,12 @@ export function App(): JSX.Element {
         },
         closeGlossaryEntryEditorPane: async () => {
           await closeGlossaryEntryEditorPaneWithConfirm();
+        },
+        openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {
+          await openGlossaryEntryEditorPaneFromSelection(
+            selectedText,
+            "editor-selection"
+          );
         }
       },
       createGlossaryEntryEditorPaneCommandTitles(translate)
@@ -10590,6 +10648,9 @@ export function App(): JSX.Element {
                           handleChangeMarkdownEditorPreviewRatio
                         }
                         onChangeMarkdownContent={setActiveDocumentContent}
+                        onGlossarySelectionShortcut={
+                          handleGlossarySelectionShortcut
+                        }
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }

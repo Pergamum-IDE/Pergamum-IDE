@@ -78,12 +78,14 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     expect(element).not.toContain("glossaryCommandIds.createEntry");
   });
 
-  it("does not add a Ctrl+G create-from-selection command yet (Slice 8)", () => {
+  it("#436 Slice 12: Ctrl+G's openFromEditorSelection is now the 4th pane command", () => {
     expect(Object.keys(glossaryEntryEditorPaneCommandIds).sort()).toEqual([
       "closePane",
       "openCreatePane",
-      "openEditPane"
+      "openEditPane",
+      "openFromEditorSelection"
     ]);
+    // The old (never-implemented) candidate name from earlier slices' specs.
     expect(appSource()).not.toContain("createEntryFromSelection");
   });
 

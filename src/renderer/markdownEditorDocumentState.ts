@@ -53,6 +53,7 @@ import {
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
 import { createActiveFindKeymapExtension } from "./find/activeFindKeymapExtension";
+import { createGlossarySelectionShortcutKeymapExtension } from "./glossarySelectionShortcutExtension";
 import { createActiveFindGutterMarkerExtension } from "./find/activeFindGutterMarkerExtension";
 import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
@@ -131,6 +132,26 @@ export interface MarkdownEditorDocumentStateOptions {
     readonly editorInstanceId: string;
     readonly expectActiveFindSurface: boolean;
   };
+  /**
+   * #436 Slice 12 remediation: whether THIS editor instance is the one Ctrl+G
+   * ("Mod-g") should ever fire from. `true` only for the editor instance that
+   * actually publishes into the module-level current-glossary-selection-shortcut
+   * slot (EditorSurface's MarkdownEditorSurface — see MarkdownEditor.tsx's
+   * `glossarySelectionShortcut` prop); `false` (the default when omitted) for
+   * every other `MarkdownEditor` instance, e.g. GlossaryEditor's own
+   * description-field editor.
+   *
+   * This is a BUILD-TIME decision, not a live ref: the module-level config slot
+   * can hold ANOTHER instance's published config at any moment (e.g. the main
+   * document editor's, while a `Ctrl+G` keydown lands in the description
+   * field's own view), so merely checking "is a config currently published"
+   * inside the keydown handler is not enough — the auxiliary editor would read
+   * and act on somebody else's config. Gating at extension-inclusion time means
+   * the auxiliary editor's `EditorState` never even contains the keydown
+   * handler, so it cannot be reached at all, regardless of what is currently
+   * published.
+   */
+  readonly glossarySelectionShortcutEnabled?: boolean;
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /**
    * #411: when present, adds the broken-image-link lint extension (gutter +
@@ -240,6 +261,15 @@ export function createMarkdownEditorDocumentState(
       createActiveFindKeymapExtension({
         diagnostics: options.activeFindDiagnostics
       }),
+      // #436 Slice 12 remediation: Ctrl+G — see glossarySelectionShortcutExtension.ts
+      // and this options interface's `glossarySelectionShortcutEnabled` doc
+      // comment. Included ONLY for the one editor instance the shortcut
+      // actually belongs to; every other MarkdownEditor's state (e.g. the
+      // Glossary description field) gets no keydown handler at all, so Ctrl+G
+      // cannot fire there no matter what the module-level slot holds.
+      ...(options.glossarySelectionShortcutEnabled
+        ? [createGlossarySelectionShortcutKeymapExtension()]
+        : []),
       // #424 Slice 2: inert until the Find panel dispatches its first
       // "mark all" effect; safe on every document's state.
       activeFindHighlightField,
