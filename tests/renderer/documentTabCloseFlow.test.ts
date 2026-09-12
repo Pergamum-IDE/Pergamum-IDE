@@ -12,10 +12,8 @@ import {
 } from "../../src/renderer/dialog/appDialogTypes";
 import {
   createInitialOpenDocumentsState,
-  openOrActivateEditor,
   openOrActivateDocument,
-  updateActiveOpenDocument,
-  updateActiveOpenEditor
+  updateActiveOpenDocument
 } from "../../src/renderer/openDocuments";
 import {
   createUntitledDocument,
@@ -23,35 +21,12 @@ import {
 } from "../../src/renderer/currentDocument";
 import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
 import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
-import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
 import { t, type Translate } from "../../src/shared/i18n";
 import { createProjectDocumentEditorId } from "../../src/shared/editorId";
-import type { GlossaryEntry } from "../../src/shared/glossary";
-import { updateGlossaryEntryDraftDescription } from "../../src/renderer/glossaryEntryDraft";
 
 const translateJa: Translate = (key, values) => t("ja", key, values);
 const translateEn: Translate = (key, values) => t("en", key, values);
 const tabTargetName = "Chapter 1.md";
-const projectContext = { rootPath: "C:\\Novel" };
-
-const glossaryEntry: GlossaryEntry = {
-  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  description: "王国の首都",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  tags: [],
-  atoms: [
-    {
-      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
-      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      sortOrder: 0,
-      value: "王都",
-      matchFlags: 0,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
-    }
-  ]
-};
 
 // #262: the zero-tab initial state has no active editor to close, so these
 // helpers seed a real single Untitled Markdown tab.
@@ -70,26 +45,6 @@ function dirtyState() {
       "changed",
       buildLineEndingBreakSet(analyzeLineEndings("changed"))
     )
-  );
-}
-
-function dirtyGlossaryState() {
-  return updateActiveOpenEditor(
-    openOrActivateEditor(
-      createInitialOpenDocumentsState(),
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    ),
-    (editor) =>
-      editor.kind === "glossaryEntry"
-        ? {
-            ...editor,
-            draft: updateGlossaryEntryDraftDescription(
-              editor.draft,
-              "変更後の説明"
-            )
-          }
-        : editor
   );
 }
 
@@ -531,31 +486,4 @@ describe("runEditorCloseFlow (#184/#192)", () => {
     ).toBe("noTarget");
   });
 
-  it("uses the glossary tab title in the shared unsaved-changes prompt", async () => {
-    const state = dirtyGlossaryState();
-    const choiceDialog = vi.fn().mockResolvedValue({
-      kind: "chosen",
-      id: dirtyCloseChoiceIds.cancel
-    });
-    const saveDirtyEditorBeforeClose = vi.fn();
-    const onClose = vi.fn();
-
-    await runEditorCloseFlow(undefined, {
-      state,
-      translate: translateJa,
-      choiceDialog,
-      saveDirtyEditorBeforeClose,
-      onClose
-    });
-
-    expect(choiceDialog).toHaveBeenCalledTimes(1);
-    expect(choiceDialog.mock.calls[0]?.[0].message).toEqual({
-      kind: "plainText",
-      text:
-        "王都には保存されていない変更があります。\n" +
-        "閉じる前に変更を保存するか選択してください。"
-    });
-    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-  });
 });

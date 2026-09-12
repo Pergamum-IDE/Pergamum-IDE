@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   createUntitledEditorId,
   editorIdEquals,
@@ -23,10 +22,6 @@ const markdownEditor = createProjectDocumentEditorId(
   "chapter-01.md",
   projectContext
 );
-const glossaryEditor = createGlossaryEntryEditorId(
-  "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  projectContext
-);
 
 type ResolvedEditor = {
   readonly id: EditorId;
@@ -39,8 +34,6 @@ function editorLabel(editorId: EditorId): string {
       return `untitled-${editorId.sessionId}`;
     case "projectDocument":
       return `projectDocument-${editorId.relativePath}`;
-    case "glossaryEntry":
-      return `glossaryEntry-${editorId.entryId}`;
     case "file":
       return `file-${editorId.path}`;
   }
@@ -163,7 +156,7 @@ describe("EditorNavigation", () => {
     expectAppliedEditors(appliedEditors, [editorA, editorB, editorA, editorB]);
   });
 
-  it("navigates across Markdown and Glossary EditorIds without type-specific history branches", async () => {
+  it("navigates across EditorIds without type-specific history branches", async () => {
     const appliedEditors: ResolvedEditor[] = [];
     const navigation = new EditorNavigation<ResolvedEditor>({
       resolveEditor: async (editorId) =>
@@ -174,15 +167,15 @@ describe("EditorNavigation", () => {
     });
 
     await navigation.openEditor(markdownEditor);
-    await navigation.openEditor(glossaryEditor);
+    await navigation.openEditor(editorA);
     await expect(navigation.navigateBack()).resolves.toBe(true);
     await expect(navigation.navigateForward()).resolves.toBe(true);
 
     expectAppliedEditors(appliedEditors, [
       markdownEditor,
-      glossaryEditor,
+      editorA,
       markdownEditor,
-      glossaryEditor
+      editorA
     ]);
   });
 

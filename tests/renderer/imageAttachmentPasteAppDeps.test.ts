@@ -3,14 +3,10 @@ import { undo, undoDepth } from "@codemirror/commands";
 import { describe, expect, it, vi } from "vitest";
 import {
   createProjectDocumentEditorId,
-  createGlossaryEntryEditorId,
   serializeEditorId
 } from "../../src/shared/editorId";
 import { createProjectDocument } from "../../src/renderer/currentDocument";
-import {
-  createMarkdownCurrentEditor,
-  createGlossaryEntryCurrentEditor
-} from "../../src/renderer/currentEditor";
+import { createMarkdownCurrentEditor } from "../../src/renderer/currentEditor";
 import {
   createMarkdownEditorDocumentState,
   type MarkdownEditorDocumentState
@@ -583,94 +579,6 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
       cachedDocumentStates: new Map(),
       setOpenDocumentsState: vi.fn()
     });
-    expect(insertResult).toBe(false);
-  });
-
-  it("target document not markdown: reports targetDocumentNotMarkdown and rejects link insertion", () => {
-    const activeProjectContext = { rootPath: PROJECT_ROOT };
-    const validUuidv7 = "018d3e26-f72c-7b44-9352-8706d95393d9";
-    const glossaryId = createGlossaryEntryEditorId(validUuidv7, activeProjectContext);
-    const serializedGlossaryId = serializeEditorId(glossaryId);
-    const glossaryEntry: GlossaryEntry = {
-      id: validUuidv7,
-      description: "Description",
-      atoms: [
-        {
-          id: "018d3e26-f72c-7b44-9352-8706d95393da",
-          entryId: validUuidv7,
-          sortOrder: 0,
-          value: "Terminology",
-          matchFlags: 0,
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: "2026-01-01T00:00:00.000Z"
-        }
-      ],
-      tags: [],
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
-    };
-
-    const openDocumentsState: OpenDocumentsState = {
-      documents: [{ id: glossaryId, editor: createGlossaryEntryCurrentEditor(glossaryEntry) }],
-      activeDocumentId: glossaryId,
-      nextUntitledId: 2
-    };
-    const currentProject = createProjectContext();
-    const pending: PendingImageAttachment = {
-      id: "pending-1",
-      positionTrackingId: "track-1",
-      sourceDocumentId: serializedGlossaryId,
-      sourceEditorId: imageAttachmentSourceEditorId(
-        currentProject.activeProjectFilePath,
-        serializedGlossaryId
-      ),
-      initialPosition: 0,
-      bytes: new Uint8Array(),
-      reportedMimeType: "image/png",
-      detectedFormat: "png",
-      originalFileName: "pic.png",
-      actualBytes: 0,
-      hadMultipleImages: false,
-      ignoredAdditionalImageCount: 0
-    };
-
-    const resolution = resolveImageAttachmentPasteTarget({
-      pending,
-      openDocumentsState,
-      isEditorAreaSpecialTabActive: false,
-      currentProject,
-      isLifecycleCommitBarrierActive: false,
-      livePositionController: null,
-      cachedDocumentStates: new Map()
-    });
-
-    expect(resolution).toEqual({
-      ok: false,
-      reason: "targetDocumentNotMarkdown"
-    });
-
-    const insertResult = insertMarkdownImageLinkIntoTarget({
-      request: {
-        pending,
-        target: {
-          documentId: serializedGlossaryId,
-          markdownRelativePath: "irrelevant",
-          documentName: "irrelevant",
-          isActive: false,
-          position: 0
-        },
-        markdownLink: "![](pic.png)"
-      },
-      openDocumentsState,
-      isEditorAreaSpecialTabActive: false,
-      currentProject,
-      isLifecycleCommitBarrierActive: false,
-      livePositionController: null,
-      liveParagraphIndentController: null,
-      cachedDocumentStates: new Map(),
-      setOpenDocumentsState: vi.fn()
-    });
-
     expect(insertResult).toBe(false);
   });
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectDocument } from "../../src/shared/api";
 import {
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
   type ActiveProjectContext,
@@ -12,10 +11,8 @@ import {
   createProjectDocument,
   type ProjectCurrentDocument
 } from "../../src/renderer/currentDocument";
-import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
 import {
   createOpenDocumentsStateWithDocument,
-  openOrActivateEditor,
   type OpenDocumentsState
 } from "../../src/renderer/openDocuments";
 import {
@@ -63,16 +60,10 @@ const oldGlossaryEntry: GlossaryEntry = {
 };
 
 function oldProjectScopedOpenDocuments(): OpenDocumentsState {
-  const state = createOpenDocumentsStateWithDocument(
+  return createOpenDocumentsStateWithDocument(
     createProjectDocument(oldDocument, "old content"),
     oldProjectContext,
     7
-  );
-
-  return openOrActivateEditor(
-    state,
-    createGlossaryEntryCurrentEditor(oldGlossaryEntry),
-    oldProjectContext
   );
 }
 
@@ -123,7 +114,7 @@ describe("project activation state", () => {
     expectEmptyZeroTabState(resetState);
   });
 
-  it("does not restore an old Glossary Editor when first Project document loading fails", async () => {
+  it("does not restore an old Project editor when first Project document loading fails", async () => {
     const lifetime = new ProjectActivationLifetime();
     const token = lifetime.startProjectContextSwitch();
     const failedLoad = deferred<ReturnType<typeof createProjectDocument>>();
@@ -222,9 +213,15 @@ describe("project activation state", () => {
     });
 
     lifetime.markExplicitEditorActivation();
-    state = openOrActivateEditor(
+    state = applyLoadedFirstDocument(
       state,
-      createGlossaryEntryCurrentEditor(oldGlossaryEntry),
+      createProjectDocument(
+        {
+          relativePath: "explicit.md",
+          name: "explicit.md"
+        },
+        "explicit content"
+      ),
       newProjectContext
     );
 
@@ -235,7 +232,7 @@ describe("project activation state", () => {
     expect(
       editorIdEquals(
         state.activeDocumentId as EditorId,
-        createGlossaryEntryEditorId(oldGlossaryEntry.id, newProjectContext)
+        createProjectDocumentEditorId("explicit.md", newProjectContext)
       )
     ).toBe(true);
   });
@@ -277,7 +274,7 @@ describe("project activation state", () => {
       state.documents.some((document) =>
         editorIdEquals(
           document.id,
-          createGlossaryEntryEditorId(oldGlossaryEntry.id, oldProjectContext)
+          createProjectDocumentEditorId(oldDocument.relativePath, oldProjectContext)
         )
       )
     ).toBe(false);
@@ -309,7 +306,7 @@ describe("project activation state", () => {
     let openedEditor = false;
 
     const staleCreateCompletion = (async () => {
-      const entry = await pendingCreate.promise;
+      await pendingCreate.promise;
 
       if (!lifetime.isProjectActivationCurrent(createGeneration)) {
         return;
@@ -349,7 +346,7 @@ describe("project activation state", () => {
     });
 
     const staleCreateCompletion = (async () => {
-      const entry = await pendingCreate.promise;
+      await pendingCreate.promise;
 
       if (!lifetime.isProjectActivationCurrent(createGeneration)) {
         return;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
+  editorIdEquals,
   type ActiveProjectContext,
   type EditorId
 } from "../../src/shared/editorId";
@@ -295,14 +295,14 @@ describe("reorderWorkspaceTabOrder (#398)", () => {
     ]);
   });
 
-  it("I: preserves a Glossary Entry Editor document tab's identity through a reorder (never swapped or dropped)", () => {
-    const entryEditorId = createGlossaryEntryEditorId(
-      "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+  it("I: preserves a document tab's identity through a reorder (never swapped or dropped)", () => {
+    const preservedEditorId = createProjectDocumentEditorId(
+      "preserved.md",
       projectContext
     );
     const order: WorkspaceTabId[] = [
       documentWorkspaceTabId(aId),
-      documentWorkspaceTabId(entryEditorId),
+      documentWorkspaceTabId(preservedEditorId),
       specialWorkspaceTabId("glossaryEntryManager")
     ];
     const result = reorderWorkspaceTabOrder(
@@ -313,17 +313,13 @@ describe("reorderWorkspaceTabOrder (#398)", () => {
     expect(result).toEqual([
       specialWorkspaceTabId("glossaryEntryManager"),
       documentWorkspaceTabId(aId),
-      documentWorkspaceTabId(entryEditorId)
+      documentWorkspaceTabId(preservedEditorId)
     ]);
-    // The moved-past glossary entry tab still carries the SAME entryId.
+    // The moved-past document tab still carries the SAME editor id.
     const preserved = result.find(
-      (id) => id.kind === "document" && id.editorId.kind === "glossaryEntry"
+      (id) => id.kind === "document" && editorIdEquals(id.editorId, preservedEditorId)
     );
-    expect(
-      preserved?.kind === "document" &&
-        preserved.editorId.kind === "glossaryEntry" &&
-        preserved.editorId.entryId
-    ).toBe("018f4b8c-7a2b-7c3d-8e4f-123456789abc");
+    expect(preserved?.kind).toBe("document");
   });
 });
 

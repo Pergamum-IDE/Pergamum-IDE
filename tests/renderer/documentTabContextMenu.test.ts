@@ -9,7 +9,6 @@ import type { DocumentTab } from "../../src/renderer/openDocuments";
 import type { ProjectAccessMode } from "../../src/shared/api";
 import {
   createFileEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   createUntitledEditorId,
   type ActiveProjectContext
@@ -34,15 +33,6 @@ const externalTab: DocumentTab = {
 const untitledTab: DocumentTab = {
   id: createUntitledEditorId(1),
   title: "Untitled-1",
-  isDirty: false,
-  isExternalMarkdownFile: false
-};
-const glossaryTab: DocumentTab = {
-  id: createGlossaryEntryEditorId(
-    "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-    projectContext
-  ),
-  title: "王都",
   isDirty: false,
   isExternalMarkdownFile: false
 };
@@ -137,20 +127,6 @@ describe("describeTabContextMenu (#354)", () => {
     expect(m.enabled("copyFileName")).toBe(true);
   });
 
-  it("glossary tab — close operations only", () => {
-    const m = menu(glossaryTab, { allTabs: [glossaryTab] });
-    expect(m.enabled("close")).toBe(true);
-    expect(m.enabled("selectInFileExplorer")).toBe(false);
-    expect(m.enabled("renameFile")).toBe(false);
-    expect(m.enabled("saveAs")).toBe(false);
-    expect(m.reason("saveAs")).toBe(
-      "tabs.contextMenu.disabled.unsupportedForTab"
-    );
-    expect(m.enabled("copyAbsolutePath")).toBe(false);
-    expect(m.enabled("copyRelativePath")).toBe(false);
-    expect(m.enabled("copyFileName")).toBe(false);
-  });
-
   it("read-only project disables Rename Tab File with the read-only reason", () => {
     const m = menu(projectTab("a.md"), { projectAccess: readOnly });
     expect(m.enabled("renameFile")).toBe(false);
@@ -227,10 +203,6 @@ describe("resolveTabCopyText (#354)", () => {
     expect(text.fileName).toBe("Untitled-1");
   });
 
-  it("glossary — everything disabled", () => {
-    const text = resolveTabCopyText(glossaryTab, { projectRootPath: "C:\\Novel" });
-    expect(text).toEqual({ absolute: null, relative: null, fileName: null });
-  });
 });
 
 describe("resolveTabReorderTargetIndex (#354)", () => {

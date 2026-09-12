@@ -13,11 +13,10 @@ export type SaveWorkingCopyOutcome =
   | "failed"
   | "ignored";
 
-export type DirtyWorkingCopyKind = "markdown" | "glossaryEntry";
+export type DirtyWorkingCopyKind = "markdown";
 
 export type DirtyWorkingCopyScope =
   | "projectDocument"
-  | "glossary"
   | "standaloneMarkdown"
   | "untitledMarkdown";
 

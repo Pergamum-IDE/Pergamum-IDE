@@ -8,9 +8,7 @@ import {
 import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
 import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
 import {
-  createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
-  type GlossaryEntryCurrentEditor,
   type MarkdownCurrentEditor
 } from "../../src/renderer/currentEditor";
 import {
@@ -27,7 +25,6 @@ import {
   editorIdsForBatchTabClose,
   findOpenDocument,
   isOpenDocumentDirty,
-  openOrActivateEditor,
   openOrActivateDocument,
   reorderOpenDocuments,
   replaceOpenDocument,
@@ -35,13 +32,11 @@ import {
   removeProjectScopedOpenEditors,
   resolveCloseTargetEditorId,
   updateActiveOpenDocument,
-  updateActiveOpenEditor,
   type OpenDocumentsState
 } from "../../src/renderer/openDocuments";
 import {
   createEditorIdForPath,
   createFileEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   createUntitledEditorId,
   editorIdEquals,
@@ -53,7 +48,6 @@ import type {
   PergamumProject,
   ProjectDocument
 } from "../../src/shared/api";
-import type { GlossaryEntry } from "../../src/shared/glossary";
 
 function markdownFile(path: string, content: string): MarkdownFile {
   return {
@@ -90,25 +84,6 @@ const project: PergamumProject = {
   name: "Novel",
   config: null,
   documents: [firstProjectDocument, secondProjectDocument]
-};
-
-const glossaryEntry: GlossaryEntry = {
-  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  description: "王国の首都",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  atoms: [
-    {
-      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
-      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      sortOrder: 0,
-      value: "王都",
-      matchFlags: 0,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
-    }
-  ],
-  tags: []
 };
 
 describe("OpenDocumentsState", () => {
@@ -451,39 +426,6 @@ describe("OpenDocumentsState", () => {
     ).toBe(true);
   });
 
-  it("keeps Markdown documents and glossary entries in one Open Documents state", () => {
-    const projectDocument = createProjectDocument(
-      firstProjectDocument,
-      "project content"
-    );
-    let state = createOpenDocumentsStateWithDocument(
-      projectDocument,
-      projectContext
-    );
-
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
-
-    expect(state.documents).toHaveLength(2);
-    expect(documentTabs(state)).toEqual([
-      {
-        id: createProjectDocumentEditorId("chapter-01.md", projectContext),
-        title: "chapter-01.md",
-        isDirty: false,
-        isExternalMarkdownFile: false
-      },
-      {
-        id: createGlossaryEntryEditorId(glossaryEntry.id, projectContext),
-        title: "王都",
-        isDirty: false,
-        isExternalMarkdownFile: false
-      }
-    ]);
-  });
-
   it("marks only an external (file-kind) Markdown document's tab as isExternalMarkdownFile (#152 dogfood follow-up)", () => {
     const projectDocument = createProjectDocument(
       firstProjectDocument,
@@ -499,15 +441,10 @@ describe("OpenDocumentsState", () => {
       createFileDocument(markdownFile("C:\\Outside\\notes.md", "external content")),
       projectContext
     );
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
 
     const flags = documentTabs(state).map((tab) => tab.isExternalMarkdownFile);
 
-    expect(flags).toEqual([false, true, false]);
+    expect(flags).toEqual([false, true]);
   });
 
   it("opening an external Markdown file mutates no project state", () => {
@@ -553,68 +490,6 @@ describe("OpenDocumentsState", () => {
     expect(documentTabs(state)[0].isExternalMarkdownFile).toBe(true);
   });
 
-  it("does not duplicate the same glossary entry when reopened", () => {
-    const firstEditor = createGlossaryEntryCurrentEditor(glossaryEntry);
-    const secondEditor = createGlossaryEntryCurrentEditor({
-      ...glossaryEntry,
-      description: "changed after the first open"
-    });
-    let state = openOrActivateEditor(
-      createInitialOpenDocumentsState(),
-      firstEditor,
-      projectContext
-    );
-
-    state = openOrActivateEditor(state, secondEditor, projectContext);
-
-    expect(state.documents).toHaveLength(1);
-    expect(
-      editorIdEquals(
-        state.activeDocumentId as EditorId,
-        createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
-      )
-    ).toBe(true);
-    expect(state.documents[0].editor.kind).toBe("glossaryEntry");
-    expect(
-      (state.documents[0].editor as GlossaryEntryCurrentEditor).draft.entry
-        .description
-    ).toBe("王国の首都");
-  });
-
-  it("updates only the active editor's draft, leaving other open editors untouched", () => {
-    const projectDocument = createProjectDocument(
-      firstProjectDocument,
-      "project content"
-    );
-    let state = createOpenDocumentsStateWithDocument(
-      projectDocument,
-      projectContext
-    );
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
-
-    const updatedState = updateActiveOpenEditor(state, (editor) =>
-      editor.kind === "glossaryEntry"
-        ? {
-            ...editor,
-            draft: { ...editor.draft, description: "編集後" }
-          }
-        : editor
-    );
-
-    expect(
-      (updatedState.documents[1].editor as GlossaryEntryCurrentEditor).draft
-        .description
-    ).toBe("編集後");
-    expect(
-      (updatedState.documents[0].editor as MarkdownCurrentEditor).document
-        .content
-    ).toBe("project content");
-  });
-
   it("does nothing when closing an EditorId that is not open", () => {
     const state = createOpenDocumentsStateWithDocument(
       createProjectDocument(firstProjectDocument, "project content"),
@@ -623,38 +498,34 @@ describe("OpenDocumentsState", () => {
 
     const nextState = closeOpenEditor(
       state,
-      createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+      createProjectDocumentEditorId("not-open.md", projectContext)
     );
 
     expect(nextState).toBe(state);
   });
 
   it("closes an inactive tab without changing the active document", () => {
-    const projectDocument = createProjectDocument(
-      firstProjectDocument,
-      "project content"
-    );
     let state = createOpenDocumentsStateWithDocument(
-      projectDocument,
+      createProjectDocument(firstProjectDocument, "project content"),
       projectContext
     );
-    state = openOrActivateEditor(
+    state = openOrActivateDocument(
       state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
+      createProjectDocument(secondProjectDocument, "second content"),
       projectContext
     );
 
-    const glossaryEditorId = createGlossaryEntryEditorId(
-      glossaryEntry.id,
-      projectContext
-    );
     const projectDocumentEditorId = createProjectDocumentEditorId(
       "chapter-01.md",
       projectContext
     );
+    const secondProjectDocumentEditorId = createProjectDocumentEditorId(
+      "chapter-02.md",
+      projectContext
+    );
     state = activateOpenDocument(state, projectDocumentEditorId);
 
-    const nextState = closeOpenEditor(state, glossaryEditorId);
+    const nextState = closeOpenEditor(state, secondProjectDocumentEditorId);
 
     expect(nextState.documents).toHaveLength(1);
     expect(editorIdEquals(nextState.activeDocumentId as EditorId, projectDocumentEditorId)).toBe(
@@ -663,17 +534,13 @@ describe("OpenDocumentsState", () => {
   });
 
   it("activates an adjacent tab when closing the active tab", () => {
-    const projectDocument = createProjectDocument(
-      firstProjectDocument,
-      "project content"
-    );
     let state = createOpenDocumentsStateWithDocument(
-      projectDocument,
+      createProjectDocument(firstProjectDocument, "project content"),
       projectContext
     );
-    state = openOrActivateEditor(
+    state = openOrActivateDocument(
       state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
+      createProjectDocument(secondProjectDocument, "second content"),
       projectContext
     );
 
@@ -685,13 +552,13 @@ describe("OpenDocumentsState", () => {
     expect(
       editorIdEquals(
         state.activeDocumentId as EditorId,
-        createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+        createProjectDocumentEditorId("chapter-02.md", projectContext)
       )
     ).toBe(true);
 
     const nextState = closeOpenEditor(
       state,
-      createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+      createProjectDocumentEditorId("chapter-02.md", projectContext)
     );
 
     expect(nextState.documents).toHaveLength(1);
@@ -701,17 +568,17 @@ describe("OpenDocumentsState", () => {
   });
 
   it("returns to the empty zero-tab state when closing the last open tab (#262)", () => {
-    const glossaryEditorId = createGlossaryEntryEditorId(
-      glossaryEntry.id,
-      projectContext
+    const seededState = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "project content"),
+      projectContext,
+      5
     );
-    const seededState = openOrActivateEditor(
-      createInitialOpenDocumentsState(5),
-      createGlossaryEntryCurrentEditor(glossaryEntry),
+    const projectDocumentEditorId = createProjectDocumentEditorId(
+      "chapter-01.md",
       projectContext
     );
 
-    const nextState = closeOpenEditor(seededState, glossaryEditorId);
+    const nextState = closeOpenEditor(seededState, projectDocumentEditorId);
 
     // #262: no placeholder Untitled tab is re-seeded — `nextUntitledId` is
     // preserved so future Untitled tabs still get fresh session IDs.
@@ -724,11 +591,6 @@ describe("OpenDocumentsState", () => {
     const standalonePath = "C:\\Outside\\memo.md";
     let state = createOpenDocumentsStateWithDocument(
       createProjectDocument(firstProjectDocument, "project content"),
-      projectContext
-    );
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
       projectContext
     );
     state = openOrActivateDocument(
@@ -773,11 +635,6 @@ describe("OpenDocumentsState", () => {
       createFileDocument(markdownFile(standalonePath, "standalone content")),
       projectContext
     );
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
     state = activateOpenDocument(state, standaloneEditorId);
 
     const nextState = removeProjectScopedOpenEditors(state);
@@ -799,11 +656,6 @@ describe("OpenDocumentsState", () => {
     const standaloneEditorId = createFileEditorIdForPath(standalonePath);
     let state = createOpenDocumentsStateWithDocument(
       createProjectDocument(firstProjectDocument, "project content"),
-      projectContext
-    );
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
       projectContext
     );
     state = openOrActivateDocument(
@@ -828,11 +680,6 @@ describe("OpenDocumentsState", () => {
       createProjectDocument(firstProjectDocument, "project content"),
       projectContext,
       7
-    );
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
     );
 
     const nextState = removeProjectScopedOpenEditors(state);
@@ -929,9 +776,9 @@ describe("OpenDocumentsState zero-tab invariant (#262)", () => {
     ).toBe(true);
 
     // open a second tab, then re-activate the first
-    state = openOrActivateEditor(
+    state = openOrActivateDocument(
       state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
+      createProjectDocument(secondProjectDocument, "second content"),
       projectContext
     );
     expectConsistent(state);
@@ -941,7 +788,7 @@ describe("OpenDocumentsState zero-tab invariant (#262)", () => {
     // close the inactive tab -> still consistent, still 1 tab
     state = closeOpenEditor(
       state,
-      createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+      createProjectDocumentEditorId("chapter-02.md", projectContext)
     );
     expectConsistent(state);
     expect(state.documents).toHaveLength(1);
@@ -1096,14 +943,6 @@ describe("activeProjectDocumentRelativePath (#318)", () => {
     expect(activeProjectDocumentRelativePath(state)).toBeNull();
   });
 
-  it("is null for a glossary-entry editor", () => {
-    const state = createOpenDocumentsStateWithEditor(
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
-
-    expect(activeProjectDocumentRelativePath(state)).toBeNull();
-  });
 });
 
 describe("reorderOpenDocuments / editorIdsForBatchTabClose (#354)", () => {

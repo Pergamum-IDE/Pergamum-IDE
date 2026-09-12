@@ -69,19 +69,19 @@ describe("evaluateCommandEnablement", () => {
 
   it("requires at least one child to be true for anyOf", () => {
     const expression: CommandEnablementExpression = {
-      anyOf: [{ key: "editor.kind.markdown" }, { key: "editor.kind.glossary" }]
+      anyOf: [{ key: "editor.kind.markdown" }, { key: "project.isOpen" }]
     };
 
     expect(
       evaluateCommandEnablement(expression, {
         "editor.kind.markdown": false,
-        "editor.kind.glossary": true
+        "project.isOpen": true
       })
     ).toBe(true);
     expect(
       evaluateCommandEnablement(expression, {
         "editor.kind.markdown": false,
-        "editor.kind.glossary": false
+        "project.isOpen": false
       })
     ).toBe(false);
   });
@@ -90,9 +90,9 @@ describe("evaluateCommandEnablement", () => {
     const expression: CommandEnablementExpression = {
       allOf: [
         { key: "project.isOpen" },
-        { not: { key: "editor.kind.glossary" } },
+        { not: { key: "editor.isDirty" } },
         {
-          anyOf: [{ key: "editor.isDirty" }, { key: "editor.hasDocument" }]
+          anyOf: [{ key: "editor.kind.markdown" }, { key: "editor.hasDocument" }]
         }
       ]
     };
@@ -100,16 +100,16 @@ describe("evaluateCommandEnablement", () => {
     expect(
       evaluateCommandEnablement(expression, {
         "project.isOpen": true,
-        "editor.kind.glossary": false,
         "editor.isDirty": false,
+        "editor.kind.markdown": false,
         "editor.hasDocument": true
       })
     ).toBe(true);
     expect(
       evaluateCommandEnablement(expression, {
         "project.isOpen": true,
-        "editor.kind.glossary": true,
-        "editor.isDirty": false,
+        "editor.isDirty": true,
+        "editor.kind.markdown": false,
         "editor.hasDocument": true
       })
     ).toBe(false);

@@ -199,7 +199,7 @@ function basename(value: string): string {
 /**
  * The filename used for the deterministic active-editor fallback ordering.
  * `null` for kinds that never participate as a "file editor" fallback
- * (glossary, untitled).
+ * (untitled).
  */
 export function fallbackFilenameForSessionEditor(
   editor: SessionEditor
@@ -210,7 +210,6 @@ export function fallbackFilenameForSessionEditor(
     case "standaloneMarkdown":
       return basename(editor.filePath);
     case "untitled":
-    case "glossaryEntry":
       return null;
   }
 }
@@ -227,11 +226,10 @@ export interface RestoredEditorLike {
  *   1. the saved active editor, if it was itself restored
  *   2. otherwise the successful FILE editor (`projectMarkdown` /
  *      `standaloneMarkdown`) whose filename sorts first (lexicographic
- *      ascending); glossary / untitled never participate in THIS step
+ *      ascending); untitled never participates in THIS step
  *   3. otherwise, if there are restored editors at all but none is a file
- *      editor (e.g. glossary-only), the first restored editor in saved
- *      `order` — an invariant-safe last resort, NOT a fake / empty editor,
- *      and Glossary is still not treated as a "file editor" above
+ *      editor, the first restored editor in saved `order` — an
+ *      invariant-safe last resort, NOT a fake / empty editor
  *   4. otherwise `null` — genuine safe no-active (zero restored editors)
  *
  * Steps 3–4 keep the renderer's `OpenDocumentsState` invariant intact:

@@ -80,7 +80,6 @@ export function describeTabContextMenu(
   const kind: TabKind = tab.id.kind;
   const isProjectDocument = kind === "projectDocument";
   const isExternalFile = kind === "file";
-  const isGlossary = kind === "glossaryEntry";
   const isReadOnlyProject = ctx.projectAccess?.kind === "readOnly";
 
   const index = ctx.allTabs.findIndex((candidate) =>
@@ -140,15 +139,7 @@ export function describeTabContextMenu(
 
   // --- rename / save as ----------------------------------------------------
   items.push(renameItem(isProjectDocument, isReadOnlyProject, tab.isDirty));
-  items.push(
-    isGlossary
-      ? disabledItem(
-          "saveAs",
-          "tabs.contextMenu.saveAs",
-          "tabs.contextMenu.disabled.unsupportedForTab"
-        )
-      : enabledItem("saveAs", "tabs.contextMenu.saveAs")
-  );
+  items.push(enabledItem("saveAs", "tabs.contextMenu.saveAs"));
 
   // --- copy group --------------------------------------------------------
   items.push(
@@ -175,13 +166,7 @@ export function describeTabContextMenu(
         )
   );
   items.push(
-    isGlossary
-      ? disabledItem(
-          "copyFileName",
-          "tabs.contextMenu.copyFileName",
-          "tabs.contextMenu.disabled.unsupportedForTab"
-        )
-      : enabledItem("copyFileName", "tabs.contextMenu.copyFileName")
+    enabledItem("copyFileName", "tabs.contextMenu.copyFileName")
   );
 
   return { items };
@@ -254,8 +239,6 @@ export function resolveTabCopyText(
       };
     case "untitled":
       return { absolute: null, relative: null, fileName: tab.title || null };
-    case "glossaryEntry":
-      return { absolute: null, relative: null, fileName: null };
   }
 }
 

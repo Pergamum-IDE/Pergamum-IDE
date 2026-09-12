@@ -93,7 +93,7 @@ describe("Glossary Tag Manager special tab wiring (#375)", () => {
     // The Entry editor "manage tags" link, the command handler and the menu
     // all funnel through openGlossaryTagManagerTab(), which takes no args.
     expect(source).toContain(
-      "onOpenGlossaryTagManager={openGlossaryTagManagerTab}"
+      "onOpenTagManager={openGlossaryTagManagerTab}"
     );
     expect(source).toContain("function openGlossaryTagManagerTab(): void {");
     expect(source).not.toContain("openGlossaryTagManagerTab({");

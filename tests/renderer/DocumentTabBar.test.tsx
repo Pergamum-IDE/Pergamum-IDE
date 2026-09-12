@@ -8,7 +8,6 @@ import type { DocumentTab } from "../../src/renderer/openDocuments";
 import { t, type Translate } from "../../src/shared/i18n";
 import {
   createEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   type ActiveProjectContext,
   type EditorId
@@ -37,11 +36,6 @@ const externalFileId: EditorId = createEditorIdForPath(
   "C:\\Outside\\notes.md",
   null
 );
-const glossaryEntryId: EditorId = createGlossaryEntryEditorId(
-  "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  projectContext
-);
-
 function renderTabBar(
   tabs: DocumentTab[],
   overrides: {
@@ -355,19 +349,6 @@ describe("DocumentTabBar", () => {
 
     expect(markup).not.toContain("documentTabExternalIcon");
     expect(markup).not.toContain("feather-alert-triangle");
-  });
-
-  it("does not render the warning icon for a glossary editor tab", () => {
-    const markup = renderTabBar([
-      {
-        id: glossaryEntryId,
-        title: "王都",
-        isDirty: false,
-        isExternalMarkdownFile: false
-      }
-    ]);
-
-    expect(markup).not.toContain("documentTabExternalIcon");
   });
 
   it("gives the icon an accessible label and tooltip with the exact English warning text", () => {

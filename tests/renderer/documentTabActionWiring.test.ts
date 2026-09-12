@@ -76,11 +76,11 @@ describe("editor tab context menu wiring (#354)", () => {
       appSource.indexOf('case "saveAs":'),
       appSource.indexOf('case "copyAbsolutePath":')
     );
-    expect(branch).toContain('tab.id.kind === "glossaryEntry"');
     expect(branch).toContain(
       "void saveFile({ editorId: tab.id, forceSaveAs: true })"
     );
     expect(branch).not.toContain("activateDocument");
+    expect(branch).not.toContain("glossaryEntry");
   });
 
   it("Copy commands resolve text via the pure helper, notify on success, and open a dialog on failure", () => {

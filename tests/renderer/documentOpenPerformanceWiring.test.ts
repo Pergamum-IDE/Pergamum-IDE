@@ -334,9 +334,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
 
     it("EditorSurface threads documentOpenId only to MarkdownEditorSurface (line-mode editors are out of scope for #152)", () => {
       const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
-      const markdownCaseEnd = editorSurfaceSource.indexOf(
-        'case "glossaryEntry":'
-      );
+      const markdownCaseEnd = editorSurfaceSource.indexOf("return null;");
       const markdownCase = editorSurfaceSource.slice(
         markdownCaseStart,
         markdownCaseEnd
@@ -461,9 +459,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       );
 
       const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
-      const markdownCaseEnd = editorSurfaceSource.indexOf(
-        'case "glossaryEntry":'
-      );
+      const markdownCaseEnd = editorSurfaceSource.indexOf("return null;");
       const markdownCase = editorSurfaceSource.slice(
         markdownCaseStart,
         markdownCaseEnd
@@ -720,9 +716,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       );
 
       const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
-      const markdownCaseEnd = editorSurfaceSource.indexOf(
-        'case "glossaryEntry":'
-      );
+      const markdownCaseEnd = editorSurfaceSource.indexOf("return null;");
       const markdownCase = editorSurfaceSource.slice(
         markdownCaseStart,
         markdownCaseEnd

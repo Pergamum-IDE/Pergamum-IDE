@@ -188,8 +188,8 @@ describe("resolveRestoredActiveEditor (#274)", () => {
     identity: { kind: "standaloneMarkdown", filePath: "/x/aaa.md" },
     fallbackFilename: "aaa.md"
   };
-  const glossary: RestoredEditorLike = {
-    identity: { kind: "glossaryEntry", entryId: "e1" },
+  const untitled: RestoredEditorLike = {
+    identity: { kind: "untitled", untitledId: "u1" },
     fallbackFilename: null
   };
 
@@ -211,52 +211,13 @@ describe("resolveRestoredActiveEditor (#274)", () => {
     ).toEqual(standalone.identity); // "aaa.md" < "mid.md"
   });
 
-  it("glossary is never selected via the FILE (filename) fallback when a file editor exists", () => {
+  it("untitled is never selected via the FILE (filename) fallback when a file editor exists", () => {
     expect(
       resolveRestoredActiveEditor({
-        restored: [glossary, standalone],
-        savedActive: { kind: "untitled", untitledId: "u1" }
-      })
-    ).toEqual(standalone.identity);
-  });
-
-  it("no successful FILE editor but other editors exist → first restored editor (invariant-safe)", () => {
-    expect(
-      resolveRestoredActiveEditor({
-        restored: [glossary],
-        savedActive: null
-      })
-    ).toEqual(glossary.identity);
-  });
-
-  it("no successful FILE editor, saved active untitled (skipped) → first restored editor", () => {
-    const g2: RestoredEditorLike = {
-      identity: { kind: "glossaryEntry", entryId: "e2" },
-      fallbackFilename: null
-    };
-    expect(
-      resolveRestoredActiveEditor({
-        restored: [glossary, g2],
+        restored: [untitled, standalone],
         savedActive: { kind: "untitled", untitledId: "u-gone" }
       })
-    ).toEqual(glossary.identity);
-  });
-
-  it("multiple glossary-only editors → deterministic first by saved order", () => {
-    const g2: RestoredEditorLike = {
-      identity: { kind: "glossaryEntry", entryId: "e2" },
-      fallbackFilename: null
-    };
-    const g3: RestoredEditorLike = {
-      identity: { kind: "glossaryEntry", entryId: "e3" },
-      fallbackFilename: null
-    };
-    expect(
-      resolveRestoredActiveEditor({
-        restored: [g2, glossary, g3],
-        savedActive: null
-      })
-    ).toEqual(g2.identity);
+    ).toEqual(standalone.identity);
   });
 
   it("zero restored editors → genuine safe no-active (null)", () => {
@@ -280,16 +241,16 @@ describe("fallbackFilenameForSessionEditor", () => {
       filePath: "C:\\notes\\two.md",
       viewState: null
     };
-    const gl: SessionEditor = {
-      kind: "glossaryEntry",
+    const untitledEditor: SessionEditor = {
+      kind: "untitled",
       order: 2,
-      entryId: "e",
+      untitledId: "u1",
       viewState: null
     };
 
     expect(fallbackFilenameForSessionEditor(pm)).toBe("one.md");
     expect(fallbackFilenameForSessionEditor(sm)).toBe("two.md");
-    expect(fallbackFilenameForSessionEditor(gl)).toBeNull();
+    expect(fallbackFilenameForSessionEditor(untitledEditor)).toBeNull();
   });
 });
 

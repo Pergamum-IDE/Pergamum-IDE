@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  ConflictingEditorKindError,
-  buildCommandContextSnapshot
-} from "../../src/renderer/commandContextSnapshot";
+import { buildCommandContextSnapshot } from "../../src/renderer/commandContextSnapshot";
 
 const baseInput = {
   projectIsOpen: true,
@@ -11,7 +8,6 @@ const baseInput = {
   editorHasDocument: true,
   editorIsDirty: false,
   editorKindMarkdown: true,
-  editorKindGlossary: false,
   editorDocumentProjectOwned: true,
   editorDocumentProjectFile: true,
   activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
@@ -29,7 +25,6 @@ describe("buildCommandContextSnapshot", () => {
       "editor.hasDocument": true,
       "editor.isDirty": false,
       "editor.kind.markdown": true,
-      "editor.kind.glossary": false,
       "editor.document.projectOwned": true,
       "editor.document.projectFile": true,
       "activeEditor.saveBlockedByReadOnlyProjectRootForUi": false,
@@ -78,23 +73,12 @@ describe("buildCommandContextSnapshot", () => {
     }
   });
 
-  it("throws when editor.kind.markdown and editor.kind.glossary are both true", () => {
-    expect(() =>
+  it("allows no Markdown editor to be active", () => {
+    expect(
       buildCommandContextSnapshot({
         ...baseInput,
-        editorKindMarkdown: true,
-        editorKindGlossary: true
-      })
-    ).toThrow(ConflictingEditorKindError);
-  });
-
-  it("allows neither editor kind to be true", () => {
-    expect(() =>
-      buildCommandContextSnapshot({
-        ...baseInput,
-        editorKindMarkdown: false,
-        editorKindGlossary: false
-      })
-    ).not.toThrow();
+        editorKindMarkdown: false
+      })["editor.kind.markdown"]
+    ).toBe(false);
   });
 });

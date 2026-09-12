@@ -67,7 +67,7 @@ describe("project access mode command wiring (#211)", () => {
     expect(contextBlock).toContain(
       'activeMarkdownDocument?.kind === "project"'
     );
-    expect(contextBlock).toContain('currentEditor?.kind === "glossaryEntry"');
+    expect(contextBlock).not.toContain('currentEditor?.kind === "glossaryEntry"');
   });
 
   it("passes read-only editor state into the editor surface", () => {
@@ -88,7 +88,7 @@ describe("project access mode command wiring (#211)", () => {
     const setActiveDocumentContentBlock = sourceBlock(
       source,
       "function setActiveDocumentContent",
-      "function updateActiveGlossaryDraft"
+      "function openGlossaryCreateEntryPaneFromSidebar"
     );
 
     expect(setActiveDocumentContentBlock).toContain(

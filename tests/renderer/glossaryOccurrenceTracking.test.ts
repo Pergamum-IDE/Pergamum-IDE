@@ -16,10 +16,7 @@ import {
 } from "../../src/renderer/currentDocument";
 import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
 import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
-import {
-  createGlossaryEntryCurrentEditor,
-  createMarkdownCurrentEditor
-} from "../../src/renderer/currentEditor";
+import { createMarkdownCurrentEditor } from "../../src/renderer/currentEditor";
 import type { OpenDocumentsState } from "../../src/renderer/openDocuments";
 import {
   findGlossaryEntryOccurrences,
@@ -84,19 +81,6 @@ function markdownOpenDocumentsState(
 
   return {
     documents: [{ id: editorId, editor: createMarkdownCurrentEditor(document) }],
-    activeDocumentId: editorId,
-    nextUntitledId: 1
-  };
-}
-
-function glossaryEntryOpenDocumentsState(
-  editorId: EditorId,
-  entry: GlossaryEntry
-): OpenDocumentsState {
-  return {
-    documents: [
-      { id: editorId, editor: createGlossaryEntryCurrentEditor(entry) }
-    ],
     activeDocumentId: editorId,
     nextUntitledId: 1
   };
@@ -546,21 +530,6 @@ describe("resolveGlossaryOccurrenceTrackingSession", () => {
     );
 
     expect(result).toEqual({ kind: "targetMissing" });
-  });
-
-  it("resolves to targetNotMarkdown when the target editor is now a Glossary Editor", async () => {
-    const result = await resolveGlossaryOccurrenceTrackingSession(
-      activeSession,
-      {
-        openDocumentsState: glossaryEntryOpenDocumentsState(
-          documentEditorId,
-          maidEntry
-        ),
-        getGlossaryEntryById: async () => maidEntry
-      }
-    );
-
-    expect(result).toEqual({ kind: "targetNotMarkdown" });
   });
 
   it("resolves to entryMissing when the entry has been deleted", async () => {

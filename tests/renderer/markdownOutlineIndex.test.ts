@@ -6,7 +6,6 @@ import {
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
 import {
-  createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor
 } from "../../src/renderer/currentEditor";
 import {
@@ -26,28 +25,8 @@ import {
   syncMarkdownOutlineIndex
 } from "../../src/renderer/markdownOutlineIndex";
 import { serializeEditorId, type ActiveProjectContext } from "../../src/shared/editorId";
-import type { GlossaryEntry } from "../../src/shared/glossary";
 
 const projectContext: ActiveProjectContext = { rootPath: "C:\\Novel" };
-
-const glossaryEntry: GlossaryEntry = {
-  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  description: "d",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  atoms: [
-    {
-      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
-      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      sortOrder: 0,
-      value: "王都",
-      matchFlags: 0,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
-    }
-  ],
-  tags: []
-};
 
 function stateWithProjectDoc(content = "# Alpha\n## Beta"): OpenDocumentsState {
   return openOrActivateDocument(
@@ -99,28 +78,9 @@ describe("buildMarkdownOutlineDocument (#352)", () => {
     expect(doc!.documentKind).toBe("untitled");
     expect(doc!.displayPath).toBeNull();
   });
-
-  it("returns null for a glossary editor", () => {
-    const state = openOrActivateEditor(
-      createInitialOpenDocumentsState(),
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
-    expect(buildMarkdownOutlineDocument(state.documents[0])).toBeNull();
-  });
 });
 
 describe("syncMarkdownOutlineIndex (#352)", () => {
-  it("adds newly opened Markdown docs and skips glossary editors", () => {
-    let state = stateWithProjectDoc();
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
-    const index = syncMarkdownOutlineIndex(state, emptyMarkdownOutlineIndex);
-    expect(index.documents.size).toBe(1);
-  });
 
   it("carries an already-indexed doc over verbatim (no re-parse) even when its text moved", () => {
     let state = stateWithProjectDoc("# Alpha");
@@ -320,23 +280,5 @@ describe("collectMarkdownHeadingSearchCandidates (#141)", () => {
         createInitialOpenDocumentsState()
       )
     ).toEqual([]);
-  });
-
-  it("ignores a non-Markdown (glossary) editor — it is never in the index", () => {
-    let state = twoProjectDocState();
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
-    const index = syncMarkdownOutlineIndex(state, emptyMarkdownOutlineIndex);
-
-    const candidates = collectMarkdownHeadingSearchCandidates(index, state);
-
-    expect(candidates.map((candidate) => candidate.text).sort()).toEqual([
-      "A1",
-      "A2",
-      "B1"
-    ]);
   });
 });

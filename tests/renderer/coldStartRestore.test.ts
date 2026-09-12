@@ -16,7 +16,6 @@ import {
   type SessionEditorViewState,
   type SessionRecord
 } from "../../src/shared/session";
-import type { GlossaryEntry } from "../../src/shared/glossary";
 import { PROJECT_ID, RUN_ID, sid } from "../shared/sessionTestFixtures";
 
 const PROJECT: PergamumProject = {
@@ -39,23 +38,6 @@ const MD_FILE: MarkdownFile = {
     hadBom: false
   }
 };
-
-const GLOSSARY_ENTRY = {
-  id: "e1",
-  description: "",
-  atoms: [
-    {
-      id: "atom-1",
-      entryId: "e1",
-      sortOrder: 0,
-      value: "Term",
-      matchFlags: 0,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
-    }
-  ],
-  tags: []
-} as unknown as GlossaryEntry;
 
 function record(overrides: Partial<SessionRecord> = {}): SessionRecord {
   return {
@@ -130,7 +112,6 @@ function harness(
     }),
     readProjectDocumentContent: vi.fn(() => Promise.resolve("body\n")),
     readMarkdownFile: vi.fn(() => Promise.resolve(MD_FILE)),
-    getGlossaryEntryById: vi.fn(() => Promise.resolve(GLOSSARY_ENTRY)),
     applyRestoredEnvironment: (env) => {
       // record the adoption order relative to apply
       applied.push(env);
@@ -339,27 +320,6 @@ describe("runColdStartRestore (#274)", () => {
     expect(active && active.kind === "file" && active.path).toBe("/w/x/a.md");
   });
 
-  it("#436 Slice 5: a retired glossaryEntry editor in an old session is dropped, its siblings still restore", async () => {
-    const h = harness(
-      okPayload([
-        record({
-          projectContext: withProject,
-          editors: [
-            { kind: "glossaryEntry", order: 0, entryId: "gone", viewState: null },
-            sm("/w/x/a.md", 1)
-          ]
-        })
-      ])
-    );
-    await runColdStartRestore(h.deps);
-
-    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
-    expect(h.applied[0].openDocuments.documents[0].id.kind).toBe("file");
-    // Retired, not "failed" — no user-facing skip notification.
-    expect(h.skipped).toEqual([]);
-    expect(h.deps.getGlossaryEntryById).not.toHaveBeenCalled();
-  });
-
   // -------------------------------------------------------------------------
   // #274 FIX-2: restore must never produce an illegal OpenDocumentsState
   //   documents.length === 0  ⟺  activeDocumentId === null
@@ -385,56 +345,6 @@ describe("runColdStartRestore (#274)", () => {
     await runColdStartRestore(h.deps);
     assertOpenDocumentsInvariant(h.applied[0]);
     expect(h.applied[0].openDocuments.documents).toEqual([]);
-  });
-
-  const G1 = sid("glossary-1");
-  const G2 = sid("glossary-2");
-
-  it("#436 Slice 5: a session of only retired glossaryEntry editors restores to zero documents (invariant held)", async () => {
-    for (const activeEditor of [
-      null,
-      { kind: "untitled" as const, untitledId: "u-gone" }
-    ]) {
-      const h = harness(
-        okPayload([
-          record({
-            projectContext: withProject,
-            editors: [
-              { kind: "glossaryEntry", order: 0, entryId: G1, viewState: null },
-              { kind: "glossaryEntry", order: 1, entryId: G2, viewState: null }
-            ],
-            activeEditor
-          })
-        ])
-      );
-      await runColdStartRestore(h.deps);
-
-      const env = h.applied[0];
-      assertOpenDocumentsInvariant(env);
-      expect(env.openDocuments.documents).toEqual([]);
-      expect(env.openDocuments.activeDocumentId).toBeNull();
-    }
-  });
-
-  it("#436 Slice 5: mixed retired glossaryEntry + file editor restores only the file", async () => {
-    const h = harness(
-      okPayload([
-        record({
-          projectContext: withProject,
-          editors: [
-            { kind: "glossaryEntry", order: 0, entryId: G1, viewState: null },
-            sm("/w/x/zzz.md", 1)
-          ],
-          activeEditor: { kind: "untitled", untitledId: "u-gone" }
-        })
-      ])
-    );
-    await runColdStartRestore(h.deps);
-
-    const env = h.applied[0];
-    assertOpenDocumentsInvariant(env);
-    expect(env.openDocuments.documents).toHaveLength(1);
-    expect(env.openDocuments.activeDocumentId?.kind).toBe("file");
   });
 
   it("carries persisted #273 View State into pendingViewStates", async () => {
