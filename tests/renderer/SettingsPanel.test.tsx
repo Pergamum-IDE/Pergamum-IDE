@@ -408,6 +408,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "workbench.language",
       "workbench.statusBar.visible",
+      "workbench.normalizeUnicodeToNfc",
       "notification.output.enabled",
       "workbench.notification.durationMs"
     ]);

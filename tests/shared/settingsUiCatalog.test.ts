@@ -175,6 +175,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "workbench.language",
           "workbench.statusBar.visible",
           "workbench.statusBar.characterCount.visible",
+          "workbench.normalizeUnicodeToNfc",
           "workbench.sound.enabled",
           "workbench.sound.dialog.enabled",
           "workbench.sound.newline.enabled",

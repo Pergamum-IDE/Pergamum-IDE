@@ -579,6 +579,19 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  // #446: application-wide upstream switch for normalizing external-input /
+  // saved Unicode text to NFC. Settings-only — no actual normalization is
+  // applied by this entry; see src/shared/settings.ts's own comment on the
+  // sparse ApplicationWorkbenchSettings.normalizeUnicodeToNfc field.
+  "workbench.normalizeUnicodeToNfc": defineBooleanSetting({
+    key: "workbench.normalizeUnicodeToNfc",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.workbench.normalizeUnicodeToNfc.label",
+    descriptionKey: "settings.workbench.normalizeUnicodeToNfc.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "workbench.sound.enabled": defineBooleanSetting({
     key: "workbench.sound.enabled",
     scope: "applicationOnly",

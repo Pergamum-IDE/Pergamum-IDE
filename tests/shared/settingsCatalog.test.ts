@@ -902,7 +902,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       }
     });
 
-    it("workbench.statusBar.visible (#174), character count (#259), sound feedback (#200), command palette footer details (#370), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("workbench.statusBar.visible (#174), character count (#259), NFC normalization (#446), sound feedback (#200), command palette footer details (#370), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
@@ -910,6 +910,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(booleanEntries.map((entry) => entry.key)).toEqual([
         "workbench.statusBar.visible",
         "workbench.statusBar.characterCount.visible",
+        "workbench.normalizeUnicodeToNfc",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
@@ -1244,7 +1245,8 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.sound.keypress.enabled",
           "workbench.language",
           "workbench.statusBar.characterCount.visible",
-          "workbench.statusBar.visible"
+          "workbench.statusBar.visible",
+          "workbench.normalizeUnicodeToNfc"
         ].sort()
       );
       expect(keys).not.toContain("commandPalette.description.enable");
@@ -1427,6 +1429,42 @@ describe("Settings Catalog Foundation (#150)", () => {
           failure: "typeMismatch"
         });
       }
+    });
+  });
+
+  describe("workbench.normalizeUnicodeToNfc (#446)", () => {
+    it("is registered as an applicationOnly boolean defaulting to true", () => {
+      const entry = getCatalogEntry("workbench.normalizeUnicodeToNfc");
+
+      expect(entry.scope).toBe("applicationOnly");
+      expect(entry.type).toBe("boolean");
+      expect(getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")).toBe(
+        true
+      );
+    });
+
+    it("validates only boolean values", () => {
+      expect(
+        validateCatalogValue("workbench.normalizeUnicodeToNfc", true)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("workbench.normalizeUnicodeToNfc", false)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("workbench.normalizeUnicodeToNfc", "true")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("has no deprecated aliases and is not project-scoped", () => {
+      expect(
+        getCatalogEntry("workbench.normalizeUnicodeToNfc").deprecatedAliases
+      ).toEqual([]);
+      expect(getCatalogEntry("workbench.normalizeUnicodeToNfc").scope).not.toBe(
+        "projectOnly"
+      );
+      expect(getCatalogEntry("workbench.normalizeUnicodeToNfc").scope).not.toBe(
+        "applicationWithProjectOverride"
+      );
     });
   });
 

@@ -598,6 +598,61 @@ describe("workbench.notification.durationMs wiring (#266)", () => {
   });
 });
 
+describe("workbench.normalizeUnicodeToNfc wiring (#446)", () => {
+  it("builtInDefaultSettings.workbench.normalizeUnicodeToNfc derives from the catalog default (true)", () => {
+    expect(builtInDefaultSettings.workbench.normalizeUnicodeToNfc).toBe(
+      getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")
+    );
+    expect(builtInDefaultSettings.workbench.normalizeUnicodeToNfc).toBe(true);
+  });
+
+  it("defaultApplicationSettings / createDefaultApplicationSettings leave workbench.normalizeUnicodeToNfc unset (sparse, like fontFamily/notification)", () => {
+    expect(
+      defaultApplicationSettings.workbench.normalizeUnicodeToNfc
+    ).toBeUndefined();
+    expect(
+      createDefaultApplicationSettings().workbench.normalizeUnicodeToNfc
+    ).toBeUndefined();
+  });
+
+  it("resolveEffectiveSettings falls through to the catalog default (true) when workbench.normalizeUnicodeToNfc is absent", () => {
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined).workbench
+        .normalizeUnicodeToNfc
+    ).toBe(true);
+  });
+
+  it("resolveEffectiveSettings passes through an explicit false override", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        normalizeUnicodeToNfc: false
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, undefined).workbench
+        .normalizeUnicodeToNfc
+    ).toBe(false);
+  });
+
+  it("has no project-scope fallthrough — applicationOnly", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        normalizeUnicodeToNfc: false
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, {}).workbench
+        .normalizeUnicodeToNfc
+    ).toBe(false);
+  });
+});
+
 describe("notification.output.enabled wiring (#298)", () => {
   it("defaultNotificationOutputEnabled is the catalog default (true)", () => {
     expect(defaultNotificationOutputEnabled).toBe(

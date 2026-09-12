@@ -1277,6 +1277,8 @@ export const enTranslations = {
   "settings.workbench.language.label": "Display language",
   "settings.workbench.language.option.ja.label": "日本語",
   "settings.workbench.language.option.en.label": "English",
+  "settings.workbench.normalizeUnicodeToNfc.label": "Normalize Unicode text to NFC",
+  "settings.workbench.normalizeUnicodeToNfc.description": "Normalizes Unicode text from external input and saved data to NFC, making visually identical strings easier to treat consistently. Usually keep this enabled.",
   "settings.notification.output.enabled.description": "Show lightweight notifications such as operation results in the bottom-right corner of Pergamum. Warnings and errors may still be shown in dialogs regardless of this setting.",
   "settings.notification.output.enabled.label": "Show in-app notifications",
   "settings.workbench.notification.durationMs.description": "Base display time before an information notification (NotificationToast) disappears automatically. Set 0 to keep notifications until dismissed. Positive values are adjusted by priority and clamped from 3000 ms to 30000 ms. Warnings and errors are not shown as these notifications.",

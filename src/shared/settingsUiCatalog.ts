@@ -804,6 +804,15 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("workbench.statusBar.visible")
   },
   {
+    key: "workbench.normalizeUnicodeToNfc",
+    category: "application",
+    order: 350,
+    labelKey: "settings.workbench.normalizeUnicodeToNfc.label",
+    descriptionKey: "settings.workbench.normalizeUnicodeToNfc.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")
+  },
+  {
     key: "workbench.notification.durationMs",
     category: "application",
     order: 400,

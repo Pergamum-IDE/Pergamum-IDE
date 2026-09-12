@@ -1277,6 +1277,8 @@ export const jaTranslations = {
   "settings.workbench.language.label": "表示言語",
   "settings.workbench.language.option.ja.label": "日本語",
   "settings.workbench.language.option.en.label": "English",
+  "settings.workbench.normalizeUnicodeToNfc.label": "Unicode文字をNFC形式に正規化する",
+  "settings.workbench.normalizeUnicodeToNfc.description": "外部入力や保存データのUnicode文字をNFC形式に揃え、見た目が同じ文字列を同じ表記として扱いやすくします。通常はオンのままにしてください。",
   "settings.notification.output.enabled.description": "操作結果などの軽い通知を Pergamum の画面右下に表示します。警告やエラーはこの設定に関係なく、必要に応じてダイアログで表示されます。",
   "settings.notification.output.enabled.label": "アプリ内通知を表示",
   "settings.workbench.notification.durationMs.description": "情報通知（NotificationToast）が自動的に消えるまでの基準時間です。0 にすると自動的に消えません。正の値は優先度に応じて補正され、3000 ms から 30000 ms に収まります。警告やエラーはこの通知では表示されません。",
