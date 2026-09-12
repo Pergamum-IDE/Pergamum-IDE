@@ -78,9 +78,23 @@ describe("applyProjectReplaceSelection (#386)", () => {
     expect(apply).toContain("enabled.has(candidate.id)");
     expect(apply).toContain("applyReplacementEditsToText(");
     expect(apply).toContain("serializeLineEndings(");
+    expect(apply).toContain("normalizeMarkdownTextForStorage(serialized, {");
+    expect(apply).toContain(
+      "effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
     expect(apply).toContain(
       "window.pergamum.projects.saveProjectDocument("
     );
+    expect(apply).toContain("serializedForStorage");
+  });
+
+  it("#449 syncs open clean buffers from the NFC-normalized project replace text", () => {
+    expect(apply).toContain("const savedText = normalizeLineEndings(serializedForStorage)");
+    expect(apply).toContain(
+      "analyzeLineEndings(serializedForStorage)"
+    );
+    expect(apply).toContain("nextText: savedText");
+    expect(apply).toContain("nextBreaks: savedBreaks");
   });
 
   it("aggregates success / partial / total failure into a ReplaceApplyResult, not a separate dialog/toast", () => {

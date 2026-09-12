@@ -3,15 +3,19 @@ import { history, redo, undo } from "@codemirror/commands";
 import { describe, expect, it } from "vitest";
 import {
   applyStandaloneSaveResult,
+  applySavedCurrentDocumentSnapshotToWorkingCopy,
   createFileDocument,
   createProjectDocument,
   createUntitledDocument,
+  currentDocumentWorkingStateEquals,
   initialDocumentContent,
   isCurrentDocumentDirty,
   markCurrentDocumentSaved,
+  prepareCurrentDocumentForMarkdownStorage,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
 import {
+  buildLineEndingBreakSet,
   createLineEndingTrackingExtension,
   lineEndingBreakSetToArray,
   type LineEndingBreakSet
@@ -396,6 +400,128 @@ describe("dirty detection considers line-ending tracking state, not just content
 
     expect(contentOnlyMatch.content).toBe(document.savedContent);
     expect(isCurrentDocumentDirty(contentOnlyMatch)).toBe(true);
+  });
+});
+
+describe("prepareCurrentDocumentForMarkdownStorage (#449)", () => {
+  it("normalizes serialized Markdown text to NFC and keeps the saved document clean", () => {
+    const document = createFileDocument(
+      markdownFile("C:/nfd.md", "か\u3099\r\nnext")
+    );
+
+    const prepared = prepareCurrentDocumentForMarkdownStorage(document, {
+      normalizeUnicodeToNfc: true
+    });
+    const saved = markCurrentDocumentSaved(prepared.document);
+
+    expect(prepared.didNormalizeText).toBe(true);
+    expect(prepared.serializedContent).toBe("が\r\nnext");
+    expect(prepared.document.content).toBe("が\nnext");
+    expect(lineEndingBreakSetToArray(prepared.document.lineEndingBreaks)).toEqual([
+      { position: 1, kind: "crlf" }
+    ]);
+    expect(isCurrentDocumentDirty(saved)).toBe(false);
+    expect(
+      serializeLineEndings(
+        saved.content,
+        lineEndingBreakSetToArray(saved.lineEndingBreaks)
+      )
+    ).toBe(prepared.serializedContent);
+  });
+
+  it("does not normalize Markdown text when the setting is disabled", () => {
+    const document = createFileDocument(
+      markdownFile("C:/nfd.md", "か\u3099\r\nnext")
+    );
+
+    const prepared = prepareCurrentDocumentForMarkdownStorage(document, {
+      normalizeUnicodeToNfc: false
+    });
+
+    expect(prepared.didNormalizeText).toBe(false);
+    expect(prepared.document).toBe(document);
+    expect(prepared.serializedContent).toBe("か\u3099\r\nnext");
+  });
+
+  it("keeps an already-NFC document unchanged", () => {
+    const document = createFileDocument(markdownFile("C:/nfc.md", "が\nnext"));
+
+    const prepared = prepareCurrentDocumentForMarkdownStorage(document, {
+      normalizeUnicodeToNfc: true
+    });
+
+    expect(prepared.didNormalizeText).toBe(false);
+    expect(prepared.document).toBe(document);
+    expect(prepared.serializedContent).toBe("が\nnext");
+  });
+
+  it("preserves mixed line-ending kinds while recalculating positions after NFC changes", () => {
+    const document = createFileDocument(
+      markdownFile("C:/mixed.md", "か\u3099\r\nA\nは\u309A\rB")
+    );
+
+    const prepared = prepareCurrentDocumentForMarkdownStorage(document, {
+      normalizeUnicodeToNfc: true
+    });
+
+    expect(prepared.serializedContent).toBe("が\r\nA\nぱ\rB");
+    expect(prepared.document.content).toBe("が\nA\nぱ\nB");
+    expect(lineEndingBreakSetToArray(prepared.document.lineEndingBreaks)).toEqual([
+      { position: 1, kind: "crlf" },
+      { position: 3, kind: "lf" },
+      { position: 5, kind: "cr" }
+    ]);
+  });
+});
+
+describe("save completion baseline merge (#449)", () => {
+  it("treats an unchanged save-start working copy as safe to replace with the saved NFC snapshot", () => {
+    const document = createFileDocument(
+      markdownFile("C:/nfd.md", "か\u3099\n")
+    );
+    const prepared = prepareCurrentDocumentForMarkdownStorage(document, {
+      normalizeUnicodeToNfc: true
+    });
+    const saved = markCurrentDocumentSaved(prepared.document);
+
+    expect(currentDocumentWorkingStateEquals(document, document)).toBe(true);
+    expect(isCurrentDocumentDirty(saved)).toBe(false);
+    expect(saved.content).toBe("が\n");
+    expect(saved.savedContent).toBe("が\n");
+  });
+
+  it("keeps concurrent user edits dirty while updating only the saved NFC baseline", () => {
+    const saveStart = createFileDocument(
+      markdownFile("C:/nfd.md", "か\u3099\n")
+    );
+    const prepared = prepareCurrentDocumentForMarkdownStorage(saveStart, {
+      normalizeUnicodeToNfc: true
+    });
+    const savedSnapshot = markCurrentDocumentSaved(prepared.document);
+    const liveAfterTyping = updateCurrentDocumentContent(
+      saveStart,
+      "か\u3099 typed\n",
+      buildLineEndingBreakSet(analyzeLineEndings("か\u3099 typed\n"))
+    );
+
+    expect(
+      currentDocumentWorkingStateEquals(liveAfterTyping, saveStart)
+    ).toBe(false);
+
+    const merged = applySavedCurrentDocumentSnapshotToWorkingCopy(
+      liveAfterTyping,
+      savedSnapshot
+    );
+
+    expect(merged.content).toBe("か\u3099 typed\n");
+    expect(merged.savedContent).toBe("が\n");
+    expect(isCurrentDocumentDirty(merged)).toBe(true);
+    expect(
+      serializeLineEndings(
+        merged.content,
+        lineEndingBreakSetToArray(merged.lineEndingBreaks)
+      )
+    ).toBe("か\u3099 typed\n");
   });
 });
 

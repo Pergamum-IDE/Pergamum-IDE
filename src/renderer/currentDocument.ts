@@ -9,9 +9,18 @@ import { createUuidv7 } from "../shared/uuidv7";
 import {
   buildLineEndingBreakSet,
   lineEndingBreakSetsEqual,
+  lineEndingBreakSetToArray,
   type LineEndingBreakSet
 } from "./editorLineEndingField";
-import { analyzeLineEndings, normalizeLineEndings } from "./lineEndingTracking";
+import {
+  analyzeLineEndings,
+  normalizeLineEndings,
+  serializeLineEndings
+} from "./lineEndingTracking";
+import {
+  normalizeMarkdownTextForStorage,
+  type MarkdownTextStorageNormalizationOptions
+} from "../shared/markdownTextNormalization";
 
 /**
  * The encoding DETECTED from a document's source file, kept so a later
@@ -85,6 +94,12 @@ export type CurrentDocument =
   | UntitledCurrentDocument
   | FileCurrentDocument
   | ProjectCurrentDocument;
+
+export interface PreparedCurrentDocumentForMarkdownStorage {
+  readonly document: CurrentDocument;
+  readonly serializedContent: string;
+  readonly didNormalizeText: boolean;
+}
 
 function readEncodingFromMetadata(
   metadata: MarkdownFileReadMetadata | undefined
@@ -217,6 +232,16 @@ export function isCurrentDocumentDirty(document: CurrentDocument): boolean {
   );
 }
 
+export function currentDocumentWorkingStateEquals(
+  left: CurrentDocument,
+  right: CurrentDocument
+): boolean {
+  return (
+    left.content === right.content &&
+    lineEndingBreakSetsEqual(left.lineEndingBreaks, right.lineEndingBreaks)
+  );
+}
+
 export function isProjectCurrentDocument(
   document: CurrentDocument
 ): document is ProjectCurrentDocument {
@@ -232,6 +257,51 @@ export function updateCurrentDocumentContent(
     ...document,
     content,
     lineEndingBreaks
+  };
+}
+
+export function prepareCurrentDocumentForMarkdownStorage(
+  document: CurrentDocument,
+  options: MarkdownTextStorageNormalizationOptions
+): PreparedCurrentDocumentForMarkdownStorage {
+  const serializedContent = serializeLineEndings(
+    document.content,
+    lineEndingBreakSetToArray(document.lineEndingBreaks)
+  );
+  const normalizedSerializedContent = normalizeMarkdownTextForStorage(
+    serializedContent,
+    options
+  );
+
+  if (normalizedSerializedContent === serializedContent) {
+    return {
+      document,
+      serializedContent,
+      didNormalizeText: false
+    };
+  }
+
+  return {
+    document: updateCurrentDocumentContent(
+      document,
+      normalizeLineEndings(normalizedSerializedContent),
+      buildLineEndingBreakSet(analyzeLineEndings(normalizedSerializedContent))
+    ),
+    serializedContent: normalizedSerializedContent,
+    didNormalizeText: true
+  };
+}
+
+export function applySavedCurrentDocumentSnapshotToWorkingCopy(
+  workingCopy: CurrentDocument,
+  savedSnapshot: CurrentDocument
+): CurrentDocument {
+  return {
+    ...savedSnapshot,
+    content: workingCopy.content,
+    lineEndingBreaks: workingCopy.lineEndingBreaks,
+    savedContent: savedSnapshot.content,
+    savedLineEndingBreaks: savedSnapshot.lineEndingBreaks
   };
 }
 

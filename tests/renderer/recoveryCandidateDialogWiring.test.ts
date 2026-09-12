@@ -104,6 +104,12 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     );
   });
 
+  it("#449 passes the effective Unicode-normalization setting into current-run Recovery payloads", () => {
+    expect(appSource).toContain(
+      "buildRecoveryDirtyDocuments(openDocumentsStateRef.current, {\n        project,\n        activeProjectContext,\n        normalizeUnicodeToNfc:\n          effectiveSettings.workbench.normalizeUnicodeToNfc\n      })"
+    );
+  });
+
   it("gates startup recovery presentation on owner + settled cold start + no open modal, once per process", () => {
     const effect = appSource.slice(
       appSource.indexOf("one-shot startup presentation of previous-run Recovery candidates"),

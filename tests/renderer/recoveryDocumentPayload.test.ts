@@ -21,7 +21,8 @@ import {
 import {
   buildRecoveryDirtyDocuments,
   buildRecoveryDocumentPayload,
-  recoveryDocumentKeyForDocument
+  recoveryDocumentKeyForDocument,
+  type RecoveryDocumentBuildContext
 } from "../../src/renderer/recovery/recoveryDocumentPayload";
 
 const projectContext: ActiveProjectContext = { rootPath: "C:/Proj/root" };
@@ -33,6 +34,17 @@ const project = {
   config: null,
   documents: [{ relativePath: "ch/01.md", name: "01.md" }]
 } as unknown as PergamumProject;
+
+function recoveryBuildContext(
+  overrides: Partial<RecoveryDocumentBuildContext> = {}
+): RecoveryDocumentBuildContext {
+  return {
+    project: null,
+    activeProjectContext: null,
+    normalizeUnicodeToNfc: true,
+    ...overrides
+  };
+}
 
 /** Apply new content with correctly recomputed line-ending breaks (what
  *  CodeMirror would produce), mirroring a real edit. */
@@ -70,10 +82,7 @@ describe("recoveryDocumentPayload — identity", () => {
     });
     expect(key).toBe("file:C:/Novel/chapter.md");
 
-    const payload = buildRecoveryDocumentPayload(doc, {
-      project: null,
-      activeProjectContext: null
-    })!;
+    const payload = buildRecoveryDocumentPayload(doc, recoveryBuildContext())!;
     expect(payload).toMatchObject({
       documentKey: "file:C:/Novel/chapter.md",
       documentType: "markdown.file",
@@ -95,10 +104,7 @@ describe("recoveryDocumentPayload — identity", () => {
       })
     ).toBe("untitled:0198d95f-97d8-7000-8000-000000000abc");
 
-    const payload = buildRecoveryDocumentPayload(doc, {
-      project: null,
-      activeProjectContext: null
-    })!;
+    const payload = buildRecoveryDocumentPayload(doc, recoveryBuildContext())!;
     expect(payload).toMatchObject({
       documentKey: "untitled:0198d95f-97d8-7000-8000-000000000abc",
       documentType: "markdown.untitled",
@@ -124,10 +130,10 @@ describe("recoveryDocumentPayload — identity", () => {
         hadBom: false
       }
     );
-    const payload = buildRecoveryDocumentPayload(doc, {
-      project,
-      activeProjectContext: projectContext
-    })!;
+    const payload = buildRecoveryDocumentPayload(
+      doc,
+      recoveryBuildContext({ project, activeProjectContext: projectContext })
+    )!;
     expect(payload).toMatchObject({
       documentKey: "file:C:/Proj/root/ch/01.md",
       documentType: "markdown.file",
@@ -150,10 +156,7 @@ describe("recoveryDocumentPayload — identity", () => {
         hadBom: true
       }
     });
-    const payload = buildRecoveryDocumentPayload(doc, {
-      project: null,
-      activeProjectContext: null
-    })!;
+    const payload = buildRecoveryDocumentPayload(doc, recoveryBuildContext())!;
     expect(payload.documentEncoding).toBe("utf-8-bom");
     expect(payload.documentLineend).toBe("unknown");
   });
@@ -167,10 +170,10 @@ describe("recoveryDocumentPayload — payload + base fingerprint", () => {
       "line one CHANGED\nline two\nline three\n"
     );
 
-    const payload = buildRecoveryDocumentPayload(dirty, {
-      project: null,
-      activeProjectContext: null
-    })!;
+    const payload = buildRecoveryDocumentPayload(
+      dirty,
+      recoveryBuildContext()
+    )!;
 
     expect(payload.payloadText).toBe(
       "line one CHANGED\nline two\nline three\n"
@@ -185,18 +188,42 @@ describe("recoveryDocumentPayload — payload + base fingerprint", () => {
 
   it("base fingerprint does not move across successive dirty edits", () => {
     const doc = fileDoc("C:/a.md", "base\n");
-    const first = buildRecoveryDocumentPayload(withContent(doc, "base + a\n"), {
-      project: null,
-      activeProjectContext: null
-    })!;
+    const first = buildRecoveryDocumentPayload(
+      withContent(doc, "base + a\n"),
+      recoveryBuildContext()
+    )!;
     const second = buildRecoveryDocumentPayload(
       withContent(doc, "base + a + b\n"),
-      { project: null, activeProjectContext: null }
+      recoveryBuildContext()
     )!;
 
     expect(second.baseSha256).toBe(first.baseSha256);
     expect(second.baseSize).toBe(first.baseSize);
     expect(second.payloadText).not.toBe(first.payloadText);
+  });
+
+  it("normalizes payloadText to NFC when Unicode normalization is enabled", () => {
+    const dirty = withContent(fileDoc("C:/a.md", "base\n"), "か\u3099\n");
+
+    const payload = buildRecoveryDocumentPayload(dirty, {
+      project: null,
+      activeProjectContext: null,
+      normalizeUnicodeToNfc: true
+    })!;
+
+    expect(payload.payloadText).toBe("が\n");
+  });
+
+  it("leaves payloadText unnormalized when Unicode normalization is disabled", () => {
+    const dirty = withContent(fileDoc("C:/a.md", "base\n"), "か\u3099\n");
+
+    const payload = buildRecoveryDocumentPayload(dirty, {
+      project: null,
+      activeProjectContext: null,
+      normalizeUnicodeToNfc: false
+    })!;
+
+    expect(payload.payloadText).toBe("か\u3099\n");
   });
 });
 
@@ -220,9 +247,35 @@ describe("buildRecoveryDirtyDocuments", () => {
 
     const dirty = buildRecoveryDirtyDocuments(state, {
       project: null,
-      activeProjectContext: null
+      activeProjectContext: null,
+      normalizeUnicodeToNfc: true
     });
     expect(dirty.map((d) => d.documentKey)).toEqual(["file:C:/dirty.md"]);
     expect(dirty[0].payload.payloadText).toBe("edited");
+  });
+
+  it("passes Unicode normalization settings through to dirty Markdown payloads", () => {
+    let state = createInitialOpenDocumentsState();
+    state = openOrActivateEditor(
+      state,
+      createMarkdownCurrentEditor(
+        withContent(fileDoc("C:/dirty.md", "orig"), "か\u3099")
+      ),
+      null
+    );
+
+    const normalized = buildRecoveryDirtyDocuments(state, {
+      project: null,
+      activeProjectContext: null,
+      normalizeUnicodeToNfc: true
+    });
+    const preserved = buildRecoveryDirtyDocuments(state, {
+      project: null,
+      activeProjectContext: null,
+      normalizeUnicodeToNfc: false
+    });
+
+    expect(normalized[0].payload.payloadText).toBe("が");
+    expect(preserved[0].payload.payloadText).toBe("か\u3099");
   });
 });
