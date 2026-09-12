@@ -806,6 +806,8 @@ export const enTranslations = {
   "glossaryEntryEditorPane.edit.save": "Save",
   "glossaryEntryEditorPane.edit.saveFailed":
     "Could not save the glossary entry.",
+  "glossaryEntryEditorPane.saveFailed.duplicateAtomValue":
+    'A glossary Atom "{value}" already exists.',
   "glossaryEntryEditorPane.dirty.title": "Unsaved glossary entry",
   "glossaryEntryEditorPane.dirty.message":
     "This glossary entry has unsaved changes. Save before continuing?",

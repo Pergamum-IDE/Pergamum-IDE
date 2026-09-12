@@ -5,9 +5,12 @@ import {
   setGlossaryAtomBoundaryStartPolicy
 } from "../../src/shared/glossaryAtomFlags";
 import {
+  glossaryAtomValueConflictMessage,
   GlossaryValidationError,
   nonRepresentativeGlossaryAtoms,
+  normalizeGlossaryAtomValueForStorage,
   normalizeGlossaryRgbHex,
+  parseGlossaryAtomValueConflictMessage,
   primaryGlossaryTag,
   representativeGlossaryAtom,
   validateCreateGlossaryEntryInput,
@@ -237,6 +240,75 @@ describe("representative atom derivations (#375)", () => {
   });
 });
 
+describe("normalizeGlossaryAtomValueForStorage (#439/#446)", () => {
+  // "が" (U+304C, precomposed) vs "か" + combining voiced sound mark (U+304B
+  // U+3099, decomposed) — visually identical, distinct code points until NFC.
+  const composed = "が";
+  const decomposed = "が";
+
+  it("trims surrounding whitespace when NFC is off", () => {
+    expect(
+      normalizeGlossaryAtomValueForStorage("  桜田門  ", {
+        normalizeUnicodeToNfc: false
+      })
+    ).toBe("桜田門");
+  });
+
+  it("trims AND NFC-normalizes when NFC is on", () => {
+    expect(
+      normalizeGlossaryAtomValueForStorage(`  ${decomposed}  `, {
+        normalizeUnicodeToNfc: true
+      })
+    ).toBe(composed);
+  });
+
+  it("leaves an already-NFC value unchanged when NFC is on", () => {
+    expect(
+      normalizeGlossaryAtomValueForStorage(composed, {
+        normalizeUnicodeToNfc: true
+      })
+    ).toBe(composed);
+  });
+
+  it("does NOT NFC-normalize when the setting is off — composed and decomposed stay distinct", () => {
+    expect(
+      normalizeGlossaryAtomValueForStorage(decomposed, {
+        normalizeUnicodeToNfc: false
+      })
+    ).toBe(decomposed);
+    expect(
+      normalizeGlossaryAtomValueForStorage(decomposed, {
+        normalizeUnicodeToNfc: false
+      })
+    ).not.toBe(composed);
+  });
+
+  it("reduces to an empty string when the value is entirely whitespace, regardless of the NFC option", () => {
+    expect(
+      normalizeGlossaryAtomValueForStorage("   ", { normalizeUnicodeToNfc: true })
+    ).toBe("");
+    expect(
+      normalizeGlossaryAtomValueForStorage("   ", { normalizeUnicodeToNfc: false })
+    ).toBe("");
+  });
+});
+
+describe("glossaryAtomValueConflictMessage / parseGlossaryAtomValueConflictMessage (#439)", () => {
+  it("round-trips a value through the message format", () => {
+    const message = glossaryAtomValueConflictMessage("王都アルセリア");
+
+    expect(parseGlossaryAtomValueConflictMessage(message)).toBe(
+      "王都アルセリア"
+    );
+  });
+
+  it("returns null for a message that is not a conflict message", () => {
+    expect(
+      parseGlossaryAtomValueConflictMessage("Some unrelated error.")
+    ).toBeNull();
+  });
+});
+
 describe("validateCreateGlossaryEntryInput (#375)", () => {
   it("accepts a description, >=1 atoms (array order = sortOrder), and 0..n tag ids", () => {
     const result = validateCreateGlossaryEntryInput({
@@ -292,6 +364,52 @@ describe("validateCreateGlossaryEntryInput (#375)", () => {
       })
     ).toThrow(/duplicate tag id/);
   });
+
+  it("defaults to NFC normalization on (workbench.normalizeUnicodeToNfc's catalog default, #446)", () => {
+    // "が" (precomposed) vs "か" + combining voiced sound mark (decomposed).
+    const result = validateCreateGlossaryEntryInput({
+      description: "",
+      atoms: [{ value: "が", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    expect(result.atoms[0].value).toBe("が");
+  });
+
+  it("#439/#446: NFC ON — composed and decomposed atom values in the same entry are rejected as duplicates", () => {
+    expect(() =>
+      validateCreateGlossaryEntryInput(
+        {
+          description: "",
+          atoms: [
+            { value: "が", matchFlags: 0 },
+            { value: "が", matchFlags: 0 }
+          ],
+          tagIds: []
+        },
+        { normalizeUnicodeToNfc: true }
+      )
+    ).toThrow(/duplicates another atom value/);
+  });
+
+  it("#439/#446: NFC OFF — composed and decomposed atom values in the same entry are kept distinct, and stored without NFC", () => {
+    const result = validateCreateGlossaryEntryInput(
+      {
+        description: "",
+        atoms: [
+          { value: "が", matchFlags: 0 },
+          { value: "が", matchFlags: 0 }
+        ],
+        tagIds: []
+      },
+      { normalizeUnicodeToNfc: false }
+    );
+
+    expect(result.atoms.map((atom) => atom.value)).toEqual([
+      "が",
+      "が"
+    ]);
+  });
 });
 
 describe("validateUpdateGlossaryEntryInput (#375)", () => {
@@ -307,6 +425,20 @@ describe("validateUpdateGlossaryEntryInput (#375)", () => {
     });
     expect(result.atoms[0].id).toBe(atomId1);
     expect(result.atoms[1].id).toBeUndefined();
+  });
+
+  it("#439/#446: passes normalizeUnicodeToNfc through, same as create", () => {
+    const result = validateUpdateGlossaryEntryInput(
+      {
+        id: entryId,
+        description: "",
+        atoms: [{ value: "が", matchFlags: 0 }],
+        tagIds: []
+      },
+      { normalizeUnicodeToNfc: true }
+    );
+
+    expect(result.atoms[0].value).toBe("が");
   });
 });
 

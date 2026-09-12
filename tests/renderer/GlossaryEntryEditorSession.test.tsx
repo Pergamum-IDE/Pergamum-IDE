@@ -384,6 +384,35 @@ describe("GlossaryEntryEditorSession (#436 Slice 9: one session, both create and
       ).toBe("語彙を保存できませんでした。");
     });
 
+    it("#439: shows the specific duplicate-atom-value message when the save rejects with a GLOSSARY_ATOM_VALUE_CONFLICT-style message", async () => {
+      const onClose = vi.fn();
+      renderEdit({
+        onLoadEntry: () => Promise.resolve(makeEntry()),
+        onSaveEntry: (() =>
+          Promise.reject(
+            new Error(
+              'A glossary atom with the value "王都アルセリア" already exists.'
+            )
+          )) as never,
+        onClose
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      setInputValue(atomValueInput(0), "内府");
+      act(() => saveButton()?.click());
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(
+        container.querySelector(".glossaryEntryEditorPaneSaveFailed")
+          ?.textContent
+      ).toBe("同じ表記の語彙Atom「王都アルセリア」がすでに存在します。");
+    });
+
     it("closes the pane only when onDeleteEntry resolves true", async () => {
       const onDeleteEntry = vi.fn(() => Promise.resolve(false));
       const onClose = vi.fn();

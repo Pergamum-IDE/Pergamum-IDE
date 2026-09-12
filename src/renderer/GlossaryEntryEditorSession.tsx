@@ -5,12 +5,13 @@ import {
   useRef,
   useState
 } from "react";
-import type {
-  CreateGlossaryEntryInput,
-  GlossaryEntry,
-  GlossaryEntryId,
-  GlossaryTag,
-  UpdateGlossaryEntryInput
+import {
+  parseGlossaryAtomValueConflictMessage,
+  type CreateGlossaryEntryInput,
+  type GlossaryEntry,
+  type GlossaryEntryId,
+  type GlossaryTag,
+  type UpdateGlossaryEntryInput
 } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import type {
@@ -157,6 +158,14 @@ export const GlossaryEntryEditorSession = forwardRef<
         }
       : { status: "loading" }
   );
+  // #439: the offending value from a rejected save's
+  // GLOSSARY_ATOM_VALUE_CONFLICT error (cross-entry, or same-entry only after
+  // NFC normalization) — `null` shows the existing generic saveFailedMessage
+  // instead. Reset on every new save attempt so a stale value never survives
+  // past the save it came from.
+  const [duplicateAtomValue, setDuplicateAtomValue] = useState<string | null>(
+    null
+  );
   const loadRequestIdRef = useRef(0);
   // `onLoadEntry` is a plain (non-memoized) callback from the host — kept in
   // a ref so a host re-render never re-triggers the load effect below; only
@@ -239,6 +248,7 @@ export const GlossaryEntryEditorSession = forwardRef<
     }
 
     updateDraft(markGlossaryEntryDraftSaving);
+    setDuplicateAtomValue(null);
 
     try {
       const savedEntry = glossaryEntryDraftIsNew(currentDraft)
@@ -248,8 +258,13 @@ export const GlossaryEntryEditorSession = forwardRef<
         applyGlossaryEntryDraftSaveResult(current, savedEntry)
       );
       return true;
-    } catch {
+    } catch (error) {
       updateDraft(markGlossaryEntryDraftSaveFailed);
+      setDuplicateAtomValue(
+        error instanceof Error
+          ? parseGlossaryAtomValueConflictMessage(error.message)
+          : null
+      );
       return false;
     }
   }
@@ -297,9 +312,16 @@ export const GlossaryEntryEditorSession = forwardRef<
   const saveLabel = translate(
     isNew ? "glossaryEntryEditorPane.create.submit" : "glossaryEntryEditorPane.edit.save"
   );
-  const saveFailedMessage = translate(
-    isNew ? "glossaryEntryEditorPane.create.failed" : "glossaryEntryEditorPane.edit.saveFailed"
-  );
+  const saveFailedMessage =
+    duplicateAtomValue !== null
+      ? translate("glossaryEntryEditorPane.saveFailed.duplicateAtomValue", {
+          value: duplicateAtomValue
+        })
+      : translate(
+          isNew
+            ? "glossaryEntryEditorPane.create.failed"
+            : "glossaryEntryEditorPane.edit.saveFailed"
+        );
 
   return (
     <div className="glossaryEntryEditorPaneEditSession">

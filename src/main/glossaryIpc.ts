@@ -16,10 +16,13 @@ import {
   validateReorderGlossaryTagIds,
   validateUpdateGlossaryEntryInput,
   validateUpdateGlossaryTagInput,
+  type GlossaryAtomValueNormalizationOptions,
   type GlossaryEntry,
   type GlossaryTag,
   type UpdateGlossaryEntryInput
 } from "../shared/glossary";
+import { resolveEffectiveSettings } from "../shared/settings";
+import { loadSettings } from "./settingsStore";
 import {
   createGlossaryEntry,
   createGlossaryTag,
@@ -120,6 +123,22 @@ function parseReorderGlossaryEntriesRequest(value: unknown): {
   };
 }
 
+/**
+ * #446/#439: reads the CURRENT Application Setting fresh for every
+ * create/update call, rather than caching it — a change to
+ * workbench.normalizeUnicodeToNfc in Settings must apply to the very next
+ * save without an app restart. applicationOnly (no project override), so
+ * `resolveEffectiveSettings` is called with `null` project settings.
+ */
+async function resolveGlossaryAtomValueNormalizationOptions(): Promise<GlossaryAtomValueNormalizationOptions> {
+  const applicationSettings = await loadSettings();
+
+  return {
+    normalizeUnicodeToNfc: resolveEffectiveSettings(applicationSettings, null)
+      .workbench.normalizeUnicodeToNfc
+  };
+}
+
 function isMissingGlossaryStoreError(error: unknown): boolean {
   return (
     error instanceof GlossaryStoreError &&
@@ -159,10 +178,11 @@ export function createGlossaryIpcHandlers(
 
   return {
     async create(rawRequest) {
-      const input = validateCreateGlossaryEntryInput(rawRequest);
+      const options = await resolveGlossaryAtomValueNormalizationOptions();
+      const input = validateCreateGlossaryEntryInput(rawRequest, options);
 
       return withDatabase((database) =>
-        createGlossaryEntry(database, input, logger)
+        createGlossaryEntry(database, input, options, logger)
       );
     },
     async getById(rawRequest) {
@@ -180,11 +200,12 @@ export function createGlossaryIpcHandlers(
       let input: UpdateGlossaryEntryInput | null = null;
 
       try {
-        input = validateUpdateGlossaryEntryInput(rawRequest);
+        const options = await resolveGlossaryAtomValueNormalizationOptions();
+        input = validateUpdateGlossaryEntryInput(rawRequest, options);
         const validatedInput = input;
 
         return await withDatabase((database) =>
-          updateGlossaryEntry(database, validatedInput, logger)
+          updateGlossaryEntry(database, validatedInput, options, logger)
         );
       } catch (error) {
         const documentRef = input

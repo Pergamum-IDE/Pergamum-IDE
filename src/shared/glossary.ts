@@ -321,6 +321,76 @@ function validateGlossaryAtomValue(value: unknown, path: string): string {
   return trimmed;
 }
 
+// ---------------------------------------------------------------------------
+// #439/#446: Unicode NFC normalization for Glossary Atom values
+// ---------------------------------------------------------------------------
+
+export interface GlossaryAtomValueNormalizationOptions {
+  /** Mirrors the workbench.normalizeUnicodeToNfc Application Setting (#446). */
+  readonly normalizeUnicodeToNfc: boolean;
+}
+
+/**
+ * #446's catalog default (true) — used only as the fallback for callers that
+ * do not have an actual effective-settings value on hand (e.g. an existing
+ * test calling a validator directly). Real create/update requests must pass
+ * the caller's actual workbench.normalizeUnicodeToNfc value instead of
+ * relying on this default.
+ */
+const defaultGlossaryAtomValueNormalizationOptions: GlossaryAtomValueNormalizationOptions =
+  { normalizeUnicodeToNfc: true };
+
+/**
+ * #439: the canonical form written to the DB and used for duplicate-value
+ * comparison — trimmed, and additionally NFC-normalized when the caller's
+ * workbench.normalizeUnicodeToNfc setting is on. Create/update input
+ * validation (below) and glossaryStore.ts's cross-entry conflict check both
+ * go through this SAME helper, so "what gets compared" always matches "what
+ * gets persisted."
+ */
+export function normalizeGlossaryAtomValueForStorage(
+  value: string,
+  options: GlossaryAtomValueNormalizationOptions
+): string {
+  const trimmed = value.trim();
+
+  return options.normalizeUnicodeToNfc ? trimmed.normalize("NFC") : trimmed;
+}
+
+const glossaryAtomValueConflictMessagePrefix =
+  'A glossary atom with the value "';
+const glossaryAtomValueConflictMessageSuffix = '" already exists.';
+
+/**
+ * #439: the exact message glossaryStore.ts's atom-value conflict error
+ * throws. Kept here (not duplicated in glossaryStore.ts) so the renderer can
+ * recover the offending value after an IPC round trip — Electron preserves a
+ * thrown Error's `message` across `ipcRenderer.invoke`, but not its
+ * class/`code` — without the two sides hardcoding the same string format
+ * independently.
+ */
+export function glossaryAtomValueConflictMessage(value: string): string {
+  return `${glossaryAtomValueConflictMessagePrefix}${value}${glossaryAtomValueConflictMessageSuffix}`;
+}
+
+/** The inverse of {@link glossaryAtomValueConflictMessage}. `null` if `message`
+ *  is not one of those messages. */
+export function parseGlossaryAtomValueConflictMessage(
+  message: string
+): string | null {
+  if (
+    !message.startsWith(glossaryAtomValueConflictMessagePrefix) ||
+    !message.endsWith(glossaryAtomValueConflictMessageSuffix)
+  ) {
+    return null;
+  }
+
+  return message.slice(
+    glossaryAtomValueConflictMessagePrefix.length,
+    message.length - glossaryAtomValueConflictMessageSuffix.length
+  );
+}
+
 function validateGlossaryTagDescription(
   value: unknown,
   path: string
@@ -448,13 +518,20 @@ export function validateGlossaryEntry(
 
 function validateGlossaryAtomInput(
   value: unknown,
-  path: string
+  path: string,
+  options: GlossaryAtomValueNormalizationOptions
 ): GlossaryAtomInput {
   if (!isObject(value)) {
     invalidGlossary(`${path} must be an object.`);
   }
 
-  const atomValue = validateGlossaryAtomValue(value.value, `${path}.value`);
+  const rawValue = validateNonEmptyString(value.value, `${path}.value`);
+  const atomValue = normalizeGlossaryAtomValueForStorage(rawValue, options);
+
+  if (atomValue.length === 0) {
+    invalidGlossary(`${path}.value must not be blank.`);
+  }
+
   const matchFlags = validateGlossaryMatchFlags(
     value.matchFlags,
     `${path}.matchFlags`
@@ -473,16 +550,19 @@ function validateGlossaryAtomInput(
 
 function validateGlossaryAtomInputs(
   value: readonly unknown[],
-  path: string
+  path: string,
+  options: GlossaryAtomValueNormalizationOptions
 ): GlossaryAtomInput[] {
   const atoms = value.map((atom, index) =>
-    validateGlossaryAtomInput(atom, `${path}[${index}]`)
+    validateGlossaryAtomInput(atom, `${path}[${index}]`, options)
   );
 
   if (atoms.length === 0) {
     invalidGlossary(`${path} must contain at least one atom.`);
   }
 
+  // #439: this is the trim/NFC-canonical value (per `options`) — a duplicate
+  // caught here already accounts for NFC when the caller's setting is on.
   assertNoDuplicateAtomValues(
     atoms.map((atom, index) => ({
       path: `${path}[${index}].value`,
@@ -514,7 +594,8 @@ function validateGlossaryTagIds(
 }
 
 export function validateCreateGlossaryEntryInput(
-  value: unknown
+  value: unknown,
+  options: GlossaryAtomValueNormalizationOptions = defaultGlossaryAtomValueNormalizationOptions
 ): CreateGlossaryEntryInput {
   if (!isObject(value)) {
     invalidGlossary("Glossary entry input must be an object.");
@@ -530,13 +611,14 @@ export function validateCreateGlossaryEntryInput(
 
   return {
     description: validateString(value.description, "description"),
-    atoms: validateGlossaryAtomInputs(value.atoms, "atoms"),
+    atoms: validateGlossaryAtomInputs(value.atoms, "atoms", options),
     tagIds: validateGlossaryTagIds(value.tagIds, "tagIds")
   };
 }
 
 export function validateUpdateGlossaryEntryInput(
-  value: unknown
+  value: unknown,
+  options: GlossaryAtomValueNormalizationOptions = defaultGlossaryAtomValueNormalizationOptions
 ): UpdateGlossaryEntryInput {
   if (!isObject(value)) {
     invalidGlossary("Glossary entry input must be an object.");
@@ -553,7 +635,7 @@ export function validateUpdateGlossaryEntryInput(
   return {
     id: validateGlossaryEntryId(value.id, "id"),
     description: validateString(value.description, "description"),
-    atoms: validateGlossaryAtomInputs(value.atoms, "atoms"),
+    atoms: validateGlossaryAtomInputs(value.atoms, "atoms", options),
     tagIds: validateGlossaryTagIds(value.tagIds, "tagIds")
   };
 }

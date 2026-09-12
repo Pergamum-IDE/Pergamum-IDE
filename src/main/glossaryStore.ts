@@ -6,7 +6,9 @@
  */
 
 import {
+  glossaryAtomValueConflictMessage,
   GlossaryValidationError,
+  normalizeGlossaryAtomValueForStorage,
   validateCreateGlossaryEntryInput,
   validateCreateGlossaryTagInput,
   validateDeleteGlossaryTagInput,
@@ -23,6 +25,7 @@ import {
   type CreateGlossaryTagInput,
   type DeleteGlossaryTagInput,
   type GlossaryAtom,
+  type GlossaryAtomValueNormalizationOptions,
   type GlossaryEntry,
   type GlossaryTag,
   type UpdateGlossaryEntryInput,
@@ -48,7 +51,14 @@ export type GlossaryStoreErrorCode =
   | "GLOSSARY_TAG_NOT_FOUND"
   | "GLOSSARY_TAG_LABEL_CONFLICT"
   | "GLOSSARY_TAG_REORDER_MISMATCH"
-  | "GLOSSARY_ENTRY_REORDER_MISMATCH";
+  | "GLOSSARY_ENTRY_REORDER_MISMATCH"
+  | "GLOSSARY_ATOM_VALUE_CONFLICT";
+
+/** #446: the effective workbench.normalizeUnicodeToNfc value for one
+ *  create/update call. Callers (glossaryIpc.ts) resolve the real Application
+ *  Setting; the exported default below only backstops direct/test callers. */
+export const defaultGlossaryAtomValueNormalizationOptions: GlossaryAtomValueNormalizationOptions =
+  { normalizeUnicodeToNfc: true };
 
 export class GlossaryStoreError extends Error {
   readonly code: GlossaryStoreErrorCode;
@@ -143,6 +153,13 @@ function tagLabelConflict(label: string): GlossaryStoreError {
   );
 }
 
+function atomValueConflict(value: string): GlossaryStoreError {
+  return new GlossaryStoreError(
+    "GLOSSARY_ATOM_VALUE_CONFLICT",
+    glossaryAtomValueConflictMessage(value)
+  );
+}
+
 function tagReorderMismatch(message: string): GlossaryStoreError {
   return new GlossaryStoreError("GLOSSARY_TAG_REORDER_MISMATCH", message);
 }
@@ -227,6 +244,64 @@ async function assertGlossaryTagLabelAvailable(
 
   if (conflict) {
     throw tagLabelConflict(label);
+  }
+}
+
+/**
+ * #439: reject an atom value already used by another entry's atom, or
+ * duplicated within THIS SAME save's own atom list. Comparison uses
+ * `options` — the effective workbench.normalizeUnicodeToNfc (#446) for this
+ * save — against every OTHER entry's stored atom value, so an existing
+ * on-disk value that predates #446 (and is therefore not itself
+ * NFC-normalized) is still compared in canonical form. `atomValues` must
+ * already be `normalizeGlossaryAtomValueForStorage`-canonical (i.e. what
+ * `validateCreateGlossaryEntryInput`/`validateUpdateGlossaryEntryInput`
+ * produced with the SAME `options`) — this function does not re-normalize
+ * them. Raised OUTSIDE any `database.transaction(...)` wrapper (which would
+ * re-wrap it as a transaction error), like `assertGlossaryTagLabelAvailable`
+ * above.
+ *
+ * The intra-input pass here is on top of, not instead of, the shared
+ * validator's own trim-only duplicate check (`assertNoDuplicateAtomValues`,
+ * always active regardless of this setting) — it only catches the
+ * additional case of two atoms that are equal AFTER NFC normalization.
+ */
+async function assertGlossaryAtomValuesAvailable(
+  database: ProjectDatabase,
+  atomValues: readonly string[],
+  excludeEntryId: string | null,
+  options: GlossaryAtomValueNormalizationOptions
+): Promise<void> {
+  const seenInThisSave = new Set<string>();
+
+  for (const value of atomValues) {
+    if (seenInThisSave.has(value)) {
+      throw atomValueConflict(value);
+    }
+
+    seenInThisSave.add(value);
+  }
+
+  const rows = await database.all<{ entry_id: unknown; value: unknown }>(
+    "SELECT entry_id, value FROM glossary_atoms"
+  );
+  const otherEntryCanonicalValues = new Set(
+    rows
+      .filter(
+        (row) => stringColumn(row.entry_id, "entry_id") !== excludeEntryId
+      )
+      .map((row) =>
+        normalizeGlossaryAtomValueForStorage(
+          stringColumn(row.value, "value"),
+          options
+        )
+      )
+  );
+
+  for (const value of atomValues) {
+    if (otherEntryCanonicalValues.has(value)) {
+      throw atomValueConflict(value);
+    }
   }
 }
 
@@ -537,13 +612,14 @@ async function writeEntryAtomsAndTags(
 export async function createGlossaryEntry(
   database: ProjectDatabase,
   input: CreateGlossaryEntryInput,
+  options: GlossaryAtomValueNormalizationOptions = defaultGlossaryAtomValueNormalizationOptions,
   logger: DbOperationLogger = getDebugLogger()
 ): Promise<GlossaryEntry> {
   const validatedInput = validateOrLogDbSkipped(
     logger,
     "create",
     "glossaryEntry",
-    () => validateCreateGlossaryEntryInput(input)
+    () => validateCreateGlossaryEntryInput(input, options)
   );
   const entryId = createUuidv7();
   const timestamp = nowTimestamp();
@@ -552,6 +628,12 @@ export async function createGlossaryEntry(
     { logger, dbOperation: "create", dbEntityKind: "glossaryEntry" },
     async () => {
       await assertReferencedTagsExist(database, validatedInput.tagIds);
+      await assertGlossaryAtomValuesAvailable(
+        database,
+        validatedInput.atoms.map((atom) => atom.value),
+        null,
+        options
+      );
 
       const entry = await database.transaction(async () => {
         // #375: a new entry goes to the END of the project-wide order.
@@ -642,13 +724,14 @@ export async function listGlossaryEntries(
 export async function updateGlossaryEntry(
   database: ProjectDatabase,
   input: UpdateGlossaryEntryInput,
+  options: GlossaryAtomValueNormalizationOptions = defaultGlossaryAtomValueNormalizationOptions,
   logger: DbOperationLogger = getDebugLogger()
 ): Promise<GlossaryEntry> {
   const validatedInput = validateOrLogDbSkipped(
     logger,
     "update",
     "glossaryEntry",
-    () => validateUpdateGlossaryEntryInput(input)
+    () => validateUpdateGlossaryEntryInput(input, options)
   );
   const timestamp = nowTimestamp();
 
@@ -660,6 +743,12 @@ export async function updateGlossaryEntry(
       }
 
       await assertReferencedTagsExist(database, validatedInput.tagIds);
+      await assertGlossaryAtomValuesAvailable(
+        database,
+        validatedInput.atoms.map((atom) => atom.value),
+        validatedInput.id,
+        options
+      );
 
       const updated = await database.transaction(async () => {
         const entryResult = await database.run(
