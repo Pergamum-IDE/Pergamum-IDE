@@ -291,6 +291,13 @@ function buildNextSettings(
           notification: { durationMs: rawValue }
         }
       });
+    case "workbench.normalizeUnicodeToNfc":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          normalizeUnicodeToNfc: Boolean(rawValue)
+        }
+      });
     case "workbench.sound.enabled":
       return saveRequest(settings, {
         workbench: {

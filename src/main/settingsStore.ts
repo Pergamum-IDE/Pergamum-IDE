@@ -277,6 +277,20 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     workbench.notification = notification;
   }
 
+  // #446: sparse like fontFamily/notification above — a missing or invalid
+  // on-disk value stays absent, and resolveEffectiveSettings falls through to
+  // the catalog default (true) later.
+  if (
+    workbenchValue !== undefined &&
+    typeof workbenchValue.normalizeUnicodeToNfc === "boolean" &&
+    validateCatalogValue(
+      "workbench.normalizeUnicodeToNfc",
+      workbenchValue.normalizeUnicodeToNfc
+    ).ok
+  ) {
+    workbench.normalizeUnicodeToNfc = workbenchValue.normalizeUnicodeToNfc;
+  }
+
   return workbench;
 }
 
@@ -1013,8 +1027,12 @@ function parseWorkbenchSettingsForWrite(
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
   const hasNotification = keys.includes("notification");
+  const hasNormalizeUnicodeToNfc = keys.includes("normalizeUnicodeToNfc");
   const expectedKeyCount =
-    3 + (hasFontFamily ? 1 : 0) + (hasNotification ? 1 : 0);
+    3 +
+    (hasFontFamily ? 1 : 0) +
+    (hasNotification ? 1 : 0) +
+    (hasNormalizeUnicodeToNfc ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1047,6 +1065,21 @@ function parseWorkbenchSettingsForWrite(
     workbench.notification = parseWorkbenchNotificationSettingsForWrite(
       value.notification
     );
+  }
+
+  // #446: sparse like fontFamily/notification — an invalid value rejects the
+  // whole save request rather than silently dropping just this field.
+  if (hasNormalizeUnicodeToNfc) {
+    const normalizeUnicodeToNfcResolution = resolveCatalogValue(
+      "workbench.normalizeUnicodeToNfc",
+      value.normalizeUnicodeToNfc
+    );
+
+    if (!normalizeUnicodeToNfcResolution.ok) {
+      throw new Error("Invalid application settings.");
+    }
+
+    workbench.normalizeUnicodeToNfc = normalizeUnicodeToNfcResolution.value;
   }
 
   if (!hasFontFamily) {

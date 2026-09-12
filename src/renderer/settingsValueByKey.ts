@@ -48,6 +48,11 @@ export function readSettingValue(
         settings.workbench.notification?.durationMs ??
         getCatalogDefaultValue("workbench.notification.durationMs")
       );
+    case "workbench.normalizeUnicodeToNfc":
+      return (
+        settings.workbench.normalizeUnicodeToNfc ??
+        getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")
+      );
     case "workbench.sound.enabled":
       return settings.workbench.sound.enabled;
     case "workbench.sound.dialog.enabled":

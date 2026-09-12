@@ -235,6 +235,9 @@ export interface ApplicationWorkbenchSettings {
   // #266: sparse, like fontFamily — absence means "use the catalog default";
   // it is never eagerly written back as the default.
   notification?: WorkbenchNotificationSettings;
+  // #446: sparse, like fontFamily/notification — absence means "use the
+  // catalog default (true)"; it is never eagerly written back as the default.
+  normalizeUnicodeToNfc?: boolean;
 }
 
 export interface ApplicationSettings {
@@ -354,6 +357,7 @@ export interface EffectiveWorkbenchSettings {
   sound: WorkbenchSoundSettings;
   fontFamily: string;
   notification: WorkbenchNotificationSettings;
+  normalizeUnicodeToNfc: boolean;
 }
 
 export interface EffectiveCommandPaletteSettings {
@@ -471,7 +475,10 @@ export const builtInDefaultSettings: EffectiveSettings = {
       durationMs: getCatalogDefaultValue(
         "workbench.notification.durationMs"
       )
-    }
+    },
+    normalizeUnicodeToNfc: getCatalogDefaultValue(
+      "workbench.normalizeUnicodeToNfc"
+    )
   },
   commandPalette: {
     footerDetail: {
@@ -813,7 +820,13 @@ export function resolveEffectiveSettings(
         durationMs:
           applicationSettings.workbench.notification?.durationMs ??
           builtInDefaultSettings.workbench.notification.durationMs
-      }
+      },
+      // #446: applicationOnly, sparse like fontFamily/notification — fall
+      // through to the catalog-backed default (true) when settings.json
+      // omits it.
+      normalizeUnicodeToNfc:
+        applicationSettings.workbench.normalizeUnicodeToNfc ??
+        builtInDefaultSettings.workbench.normalizeUnicodeToNfc
     },
     commandPalette: {
       footerDetail: {
