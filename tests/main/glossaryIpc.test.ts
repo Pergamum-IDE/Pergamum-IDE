@@ -8,7 +8,12 @@ import { projectDatabaseFileName } from "../../src/main/projectDatabase";
 
 const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
-  showMessageBox: vi.fn()
+  showMessageBox: vi.fn(),
+  // #446/#439: create/update now read Application Settings
+  // (workbench.normalizeUnicodeToNfc) via settingsStore.ts's loadSettings(),
+  // which resolves this path — a fake, never-populated directory so the read
+  // fails with ENOENT and loadSettings() falls back to defaults (NFC on).
+  getPath: vi.fn(() => path.join(os.tmpdir(), "pergamum-glossary-ipc-fake-userdata"))
 }));
 
 vi.mock("electron", () => ({
@@ -16,7 +21,8 @@ vi.mock("electron", () => ({
   // main process must never open a native message box. `dialog` is still
   // stubbed here purely so an accidental regression is caught.
   dialog: { showMessageBox: electronMock.showMessageBox },
-  ipcMain: { handle: electronMock.handle }
+  ipcMain: { handle: electronMock.handle },
+  app: { getPath: electronMock.getPath }
 }));
 
 import {
@@ -236,6 +242,101 @@ describe("glossary IPC (#375)", () => {
     await expect(
       api.reorderEntries({ entryIdsInOrder: ["not-a-uuid"] })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  describe("#439/#446: workbench.normalizeUnicodeToNfc wiring through create/update", () => {
+    let userDataPath: string;
+
+    beforeEach(async () => {
+      userDataPath = await fs.mkdtemp(
+        path.join(os.tmpdir(), "pergamum-glossary-ipc-userdata-")
+      );
+      electronMock.getPath.mockReturnValue(userDataPath);
+    });
+
+    afterEach(async () => {
+      electronMock.getPath.mockReturnValue(
+        path.join(os.tmpdir(), "pergamum-glossary-ipc-fake-userdata")
+      );
+      await fs.rm(userDataPath, { recursive: true, force: true });
+    });
+
+    async function writeApplicationSettings(
+      normalizeUnicodeToNfc: boolean
+    ): Promise<void> {
+      await fs.writeFile(
+        path.join(userDataPath, "settings.json"),
+        JSON.stringify({
+          workbench: { normalizeUnicodeToNfc }
+        }),
+        "utf8"
+      );
+    }
+
+    // "が" (U+304C, precomposed) vs "か" + combining voiced sound mark
+    // (U+304B U+3099, decomposed).
+    const composed = "が";
+    const decomposed = "が";
+
+    it("NFC on (settings.json): stores the NFC-normalized value and rejects a cross-entry NFC-equivalent duplicate", async () => {
+      await writeApplicationSettings(true);
+      const api = handlers();
+
+      const first = await api.create({
+        description: "",
+        atoms: [{ value: composed, matchFlags: 0 }],
+        tagIds: []
+      });
+      expect(first.atoms[0].value).toBe(composed);
+
+      await expect(
+        api.create({
+          description: "",
+          atoms: [{ value: decomposed, matchFlags: 0 }],
+          tagIds: []
+        })
+      ).rejects.toMatchObject({ code: "GLOSSARY_ATOM_VALUE_CONFLICT" });
+    });
+
+    it("NFC off (settings.json): stores the value trimmed only and allows a composed/decomposed pair across entries", async () => {
+      await writeApplicationSettings(false);
+      const api = handlers();
+
+      const first = await api.create({
+        description: "",
+        atoms: [{ value: `  ${composed}  `, matchFlags: 0 }],
+        tagIds: []
+      });
+      expect(first.atoms[0].value).toBe(composed);
+
+      const second = await api.create({
+        description: "",
+        atoms: [{ value: decomposed, matchFlags: 0 }],
+        tagIds: []
+      });
+      expect(second.atoms[0].value).toBe(decomposed);
+
+      expect(await api.list()).toHaveLength(2);
+    });
+
+    it("a duplicate-atom-value rejection surfaces a parseable message naming the offending value", async () => {
+      await writeApplicationSettings(true);
+      const api = handlers();
+
+      await api.create({
+        description: "",
+        atoms: [{ value: "王都アルセリア", matchFlags: 0 }],
+        tagIds: []
+      });
+
+      await expect(
+        api.create({
+          description: "",
+          atoms: [{ value: "王都アルセリア", matchFlags: 0 }],
+          tagIds: []
+        })
+      ).rejects.toThrow(/"王都アルセリア"/);
+    });
   });
 
   it("#375: create / update carry ordered entry tag assignment; a duplicate id is rejected", async () => {

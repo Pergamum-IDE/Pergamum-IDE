@@ -256,6 +256,7 @@ describe("glossary store (#375)", () => {
       createGlossaryEntry(
         database,
         { description: "", atoms: [], tagIds: [] },
+        { normalizeUnicodeToNfc: true },
         logger
       )
     ).rejects.toBeInstanceOf(GlossaryValidationError);
@@ -267,6 +268,201 @@ describe("glossary store (#375)", () => {
           event.details?.reason === "validation_failed"
       )
     ).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // Atom value duplicate validation + NFC normalization (#439/#446)
+  // -----------------------------------------------------------------------
+
+  const NFC_ON = { normalizeUnicodeToNfc: true } as const;
+  const NFC_OFF = { normalizeUnicodeToNfc: false } as const;
+
+  it("defaults to NFC normalization on when no options are passed (#446 catalog default)", async () => {
+    const entry = await createGlossaryEntry(database, {
+      description: "",
+      // "が" decomposed: か (U+304B) + combining voiced sound mark (U+3099).
+      atoms: [{ value: "が", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    expect(entry.atoms[0].value).toBe("が");
+  });
+
+  it("create rejects a REPRESENTATIVE atom that duplicates another entry's atom value", async () => {
+    await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "王都アルセリア", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    await expect(
+      createGlossaryEntry(database, {
+        description: "",
+        atoms: [{ value: "王都アルセリア", matchFlags: 0 }],
+        tagIds: []
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_ATOM_VALUE_CONFLICT" });
+  });
+
+  it("create rejects a NON-representative atom that duplicates another entry's atom value", async () => {
+    await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "アルセリア", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    await expect(
+      createGlossaryEntry(database, {
+        description: "",
+        atoms: [
+          { value: "王都アルセリア", matchFlags: 0 },
+          { value: "アルセリア", matchFlags: 0 }
+        ],
+        tagIds: []
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_ATOM_VALUE_CONFLICT" });
+
+    // Nothing was persisted from the rejected create.
+    expect(await listGlossaryEntries(database)).toHaveLength(1);
+  });
+
+  it("edit allows the entry's own existing atom value unchanged", async () => {
+    const created = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "オーダ", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    await expect(
+      updateGlossaryEntry(database, {
+        id: created.id,
+        description: "改稿",
+        atoms: [{ value: "オーダ", matchFlags: 0 }],
+        tagIds: []
+      })
+    ).resolves.toMatchObject({ description: "改稿" });
+  });
+
+  it("edit rejects an atom value that duplicates ANOTHER entry's atom value", async () => {
+    await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "他エントリの表記", matchFlags: 0 }],
+      tagIds: []
+    });
+    const created = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "自分の表記", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    await expect(
+      updateGlossaryEntry(database, {
+        id: created.id,
+        description: "",
+        atoms: [{ value: "他エントリの表記", matchFlags: 0 }],
+        tagIds: []
+      })
+    ).rejects.toMatchObject({ code: "GLOSSARY_ATOM_VALUE_CONFLICT" });
+
+    // The rejected update did not overwrite the entry's stored atom.
+    const reloaded = await getGlossaryEntryById(database, created.id);
+    expect(reloaded?.atoms.map((a) => a.value)).toEqual(["自分の表記"]);
+  });
+
+  it("edit rejects duplicate atom values inside the SAME entry", async () => {
+    const created = await createGlossaryEntry(database, {
+      description: "",
+      atoms: [{ value: "x", matchFlags: 0 }],
+      tagIds: []
+    });
+
+    await expect(
+      updateGlossaryEntry(database, {
+        id: created.id,
+        description: "",
+        atoms: [
+          { value: "x", matchFlags: 0 },
+          { value: "y", matchFlags: 0 },
+          { value: "y", matchFlags: 1 }
+        ],
+        tagIds: []
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("NFC ON: a composed value conflicts with another entry's decomposed value, and vice versa", async () => {
+    await createGlossaryEntry(
+      database,
+      { description: "", atoms: [{ value: "が", matchFlags: 0 }], tagIds: [] },
+      NFC_ON
+    );
+
+    await expect(
+      createGlossaryEntry(
+        database,
+        {
+          description: "",
+          atoms: [{ value: "が", matchFlags: 0 }],
+          tagIds: []
+        },
+        NFC_ON
+      )
+    ).rejects.toMatchObject({ code: "GLOSSARY_ATOM_VALUE_CONFLICT" });
+  });
+
+  it("NFC OFF: a composed value does NOT conflict with another entry's decomposed value", async () => {
+    await createGlossaryEntry(
+      database,
+      { description: "", atoms: [{ value: "が", matchFlags: 0 }], tagIds: [] },
+      NFC_OFF
+    );
+
+    const second = await createGlossaryEntry(
+      database,
+      {
+        description: "",
+        atoms: [{ value: "が", matchFlags: 0 }],
+        tagIds: []
+      },
+      NFC_OFF
+    );
+
+    expect(second.atoms[0].value).toBe("が");
+    expect(await listGlossaryEntries(database)).toHaveLength(2);
+  });
+
+  it("NFC ON: the stored atom value is NFC-normalized", async () => {
+    const entry = await createGlossaryEntry(
+      database,
+      {
+        description: "",
+        atoms: [{ value: "  が  ", matchFlags: 0 }],
+        tagIds: []
+      },
+      NFC_ON
+    );
+
+    expect(entry.atoms[0].value).toBe("が");
+
+    const reloaded = await getGlossaryEntryById(database, entry.id);
+    expect(reloaded?.atoms[0].value).toBe("が");
+  });
+
+  it("NFC OFF: the stored atom value is trimmed only, not NFC-normalized", async () => {
+    const entry = await createGlossaryEntry(
+      database,
+      {
+        description: "",
+        atoms: [{ value: "  が  ", matchFlags: 0 }],
+        tagIds: []
+      },
+      NFC_OFF
+    );
+
+    expect(entry.atoms[0].value).toBe("が");
+
+    const reloaded = await getGlossaryEntryById(database, entry.id);
+    expect(reloaded?.atoms[0].value).toBe("が");
   });
 
   // -----------------------------------------------------------------------
