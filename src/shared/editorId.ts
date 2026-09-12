@@ -1,8 +1,3 @@
-import {
-  validateGlossaryEntryId,
-  type GlossaryEntryId
-} from "./glossary";
-
 declare const editorIdBrand: unique symbol;
 declare const serializedEditorIdBrand: unique symbol;
 
@@ -25,11 +20,6 @@ type UntitledEditorId = {
   readonly sessionId: number;
 } & EditorIdBrand;
 
-type GlossaryEntryEditorId = {
-  readonly kind: "glossaryEntry";
-  readonly entryId: GlossaryEntryId;
-} & EditorIdBrand;
-
 type UnbrandedEditorId =
   | {
       readonly kind: "file";
@@ -42,17 +32,12 @@ type UnbrandedEditorId =
   | {
       readonly kind: "untitled";
       readonly sessionId: number;
-    }
-  | {
-      readonly kind: "glossaryEntry";
-      readonly entryId: GlossaryEntryId;
     };
 
 export type EditorId =
   | FileEditorId
   | ProjectDocumentEditorId
-  | UntitledEditorId
-  | GlossaryEntryEditorId;
+  | UntitledEditorId;
 
 export type SerializedEditorId = string & {
   readonly [serializedEditorIdBrand]: "SerializedEditorId";
@@ -275,15 +260,6 @@ function createProjectDocumentEditorIdFromCanonicalPath(
   });
 }
 
-function createGlossaryEntryEditorIdFromCanonicalEntryId(
-  entryId: GlossaryEntryId
-): EditorId {
-  return createEditorId({
-    kind: "glossaryEntry",
-    entryId
-  });
-}
-
 export function createEditorIdForPath(
   path: string,
   activeProjectContext: ActiveProjectContext | null
@@ -325,17 +301,6 @@ export function createProjectDocumentEditorId(
   );
 }
 
-export function createGlossaryEntryEditorId(
-  entryId: string,
-  activeProjectContext: ActiveProjectContext | null
-): EditorId {
-  requireProjectContext(activeProjectContext);
-
-  return createGlossaryEntryEditorIdFromCanonicalEntryId(
-    validateGlossaryEntryId(entryId)
-  );
-}
-
 export function createUntitledEditorId(sessionId: number): EditorId {
   if (!Number.isSafeInteger(sessionId) || sessionId <= 0) {
     throw new Error("Untitled EditorId session ID must be a positive integer.");
@@ -363,11 +328,6 @@ export function serializeEditorId(editorId: EditorId): SerializedEditorId {
       return JSON.stringify({
         kind: "untitled",
         sessionId: editorId.sessionId
-      }) as SerializedEditorId;
-    case "glossaryEntry":
-      return JSON.stringify({
-        kind: "glossaryEntry",
-        entryId: editorId.entryId
       }) as SerializedEditorId;
   }
 }
@@ -447,16 +407,6 @@ function deserializeCanonicalEditorId(
       }
 
       return createUntitledEditorId(value.sessionId);
-    case "glossaryEntry":
-      assertSerializedEditorIdKeys(value, ["kind", "entryId"]);
-
-      if (typeof value.entryId !== "string") {
-        throw new Error(
-          "Serialized glossaryEntry EditorId must include an entryId."
-        );
-      }
-
-      return createGlossaryEntryEditorId(value.entryId, activeProjectContext);
     default:
       throw new Error("Serialized EditorId kind is not supported.");
   }
@@ -492,15 +442,9 @@ export function editorIdEquals(left: EditorId, right: EditorId): boolean {
       );
     case "untitled":
       return right.kind === "untitled" && left.sessionId === right.sessionId;
-    case "glossaryEntry":
-      return (
-        right.kind === "glossaryEntry" && left.entryId === right.entryId
-      );
   }
 }
 
 export function isProjectScopedEditorId(editorId: EditorId): boolean {
-  return (
-    editorId.kind === "projectDocument" || editorId.kind === "glossaryEntry"
-  );
+  return editorId.kind === "projectDocument";
 }

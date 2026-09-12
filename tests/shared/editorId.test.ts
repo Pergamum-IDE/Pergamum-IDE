@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   createEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   createUntitledEditorId,
   deserializeEditorId,
@@ -20,16 +19,12 @@ const posixProjectContext: ActiveProjectContext = {
   rootPath: "/Novel"
 };
 
-const glossaryEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
-const otherGlossaryEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
-
 describe("EditorId", () => {
   it("round-trips every EditorId kind through canonical serialization", () => {
     const editorIds = [
       createEditorIdForPath("D:\\Outside\\chapter-01.md", projectContext),
       createEditorIdForPath("C:\\Novel\\chapter-01.md", projectContext),
-      createUntitledEditorId(3),
-      createGlossaryEntryEditorId(glossaryEntryId, projectContext)
+      createUntitledEditorId(3)
     ];
 
     for (const editorId of editorIds) {
@@ -170,15 +165,6 @@ describe("EditorId", () => {
     ).toThrow("Windows special paths are not supported.");
   });
 
-  it("compares glossaryEntry EditorIds by entry ID", () => {
-    expect(
-      editorIdEquals(
-        createGlossaryEntryEditorId(glossaryEntryId, projectContext),
-        createGlossaryEntryEditorId(otherGlossaryEntryId, projectContext)
-      )
-    ).toBe(false);
-  });
-
   it("deserializes projectDocument through active Project Context canonicalization", () => {
     const deserialized = deserializeEditorId(
       '{"kind":"projectDocument","relativePath":"Chapter-01.md"}',
@@ -196,12 +182,6 @@ describe("EditorId", () => {
     expect(() =>
       deserializeEditorId(
         '{"kind":"projectDocument","relativePath":"chapter-01.md"}',
-        null
-      )
-    ).toThrow("Active Project Context is required.");
-    expect(() =>
-      deserializeEditorId(
-        `{"kind":"glossaryEntry","entryId":"${glossaryEntryId}"}`,
         null
       )
     ).toThrow("Active Project Context is required.");
@@ -241,9 +221,6 @@ describe("EditorId", () => {
   it("requires active Project Context for project-scoped factory inputs", () => {
     expect(() =>
       createProjectDocumentEditorId("chapter-01.md", null)
-    ).toThrow("Active Project Context is required.");
-    expect(() =>
-      createGlossaryEntryEditorId(glossaryEntryId, null)
     ).toThrow("Active Project Context is required.");
   });
 });

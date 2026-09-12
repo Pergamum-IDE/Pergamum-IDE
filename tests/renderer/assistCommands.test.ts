@@ -181,7 +181,7 @@ describe("assist commands (#252)", () => {
     }
   });
 
-  it("is disabled when the active editor is not a Markdown document (e.g. Glossary editor)", () => {
+  it("is disabled when the active editor is not a Markdown document", () => {
     const registry = new CommandRegistry();
 
     registerAssistCommandSet(registry);
@@ -189,7 +189,7 @@ describe("assist commands (#252)", () => {
     expect(
       registry.isEnabledForContext(
         assistCommandIds.showLineEndingDistribution,
-        { "editor.kind.markdown": false, "editor.kind.glossary": true }
+        { "editor.kind.markdown": false }
       )
     ).toBe(false);
   });

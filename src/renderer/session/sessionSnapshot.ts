@@ -33,8 +33,7 @@ import type { PergamumProject } from "../../shared/api";
 
 /**
  * One open editor, reduced to what the Session needs, plus the key its
- * captured Editor View State is cached under (null for kinds that have no
- * CodeMirror view — Glossary).
+ * captured Editor View State is cached under.
  */
 export interface SessionEditorInput {
   /** `viewState` here is always `null` — the coordinator overlays the
@@ -58,18 +57,6 @@ function sessionEditorFromOpenEditor(
   editor: CurrentEditor,
   order: number
 ): SessionEditorInput | null {
-  if (editor.kind === "glossaryEntry") {
-    return {
-      editor: {
-        kind: "glossaryEntry",
-        order,
-        entryId: editor.draft.entry.id,
-        viewState: null
-      },
-      viewStateKey: null
-    };
-  }
-
   const viewStateKey = serializeEditorId(editorId);
 
   switch (editor.document.kind) {
@@ -163,7 +150,7 @@ export function buildRendererSessionSnapshot(
 ): RendererSessionSnapshot {
   const editors: SessionEditor[] = inputs.editors.map(
     ({ editor, viewStateKey }) => {
-      if (editor.kind === "glossaryEntry" || viewStateKey === null) {
+      if (viewStateKey === null) {
         return editor;
       }
 

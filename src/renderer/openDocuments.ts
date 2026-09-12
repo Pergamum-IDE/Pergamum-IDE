@@ -51,8 +51,8 @@ export interface DocumentTab {
   isDirty: boolean;
   /**
    * True for a Markdown document opened from outside the active project
-   * (`CurrentDocument.kind === "file"`) — never for a project document or a
-   * glossary entry. Derived from editor/document identity, not from
+   * (`CurrentDocument.kind === "file"`) — never for a project document.
+   * Derived from editor/document identity, not from
    * comparing raw paths against the project root (#152 dogfood follow-up).
    */
   isExternalMarkdownFile: boolean;
@@ -222,10 +222,6 @@ export function hasDirtyOpenDocuments(state: OpenDocumentsState): boolean {
 function dirtyWorkingCopyScopeForEditor(
   editor: CurrentEditor
 ): DirtyWorkingCopyScope {
-  if (editor.kind === "glossaryEntry") {
-    return "glossary";
-  }
-
   switch (editor.document.kind) {
     case "project":
       return "projectDocument";
@@ -502,10 +498,7 @@ export function closeOpenEditor(
 function isProjectScopedOpenEditor(openDocument: OpenDocument): boolean {
   const { editor } = openDocument;
 
-  return (
-    editor.kind === "glossaryEntry" ||
-    (editor.kind === "markdown" && editor.document.kind === "project")
-  );
+  return editor.document.kind === "project";
 }
 
 export function removeProjectScopedOpenEditors(

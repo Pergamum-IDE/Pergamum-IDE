@@ -147,8 +147,7 @@ export function collectMarkdownHeadingSearchCandidates(
 }
 
 /**
- * Build the outline record for one open document, or `null` when the editor
- * is not a Markdown document (glossary entry, etc.).
+ * Build the outline record for one open Markdown document.
  */
 export function buildMarkdownOutlineDocument(
   openDocument: OpenDocument

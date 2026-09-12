@@ -17,7 +17,7 @@ describe("Glossary delete confirmation wiring (#375)", () => {
     const confirmFn = block(
       source,
       "async function confirmDeleteGlossaryEntry(",
-      "async function deleteActiveGlossaryEntry()"
+      "function resolveGlossaryOccurrenceTrackingSessionContext()"
     );
 
     expect(confirmFn).toContain("confirmDialog({");
@@ -40,15 +40,15 @@ describe("Glossary delete confirmation wiring (#375)", () => {
     const source = appSource();
     const deleteFn = block(
       source,
-      "async function deleteActiveGlossaryEntry()",
-      "function openUtilityWindowOnOccurrencesTab()"
+      "async function handleDeleteGlossaryEntryFromPane(",
+      "async function handleCreateGlossaryTag("
     );
 
     const confirmIndex = deleteFn.indexOf(
       "if (!(await confirmDeleteGlossaryEntry(draft)))"
     );
     const ipcIndex = deleteFn.indexOf(
-      "await window.pergamum.glossary.delete(entryIdToDelete)"
+      "await window.pergamum.glossary.delete(draft.entry.id)"
     );
 
     expect(confirmIndex).toBeGreaterThan(-1);
@@ -57,8 +57,8 @@ describe("Glossary delete confirmation wiring (#375)", () => {
     expect(deleteFn).not.toContain("deleteEntryConfirmMessage");
     // Double-press guard.
     expect(deleteFn).toContain("glossaryDeleteInFlightRef.current");
-    // Existing post-delete behaviour is kept.
-    expect(deleteFn).toContain("closeOpenEditor(state, documentIdToDelete)");
+    // Existing post-delete behaviour is kept (no tab to close, refresh token bumped).
+    expect(deleteFn).not.toContain("closeOpenEditor");
     expect(deleteFn).toContain("setGlossaryRefreshToken((token) => token + 1)");
   });
 

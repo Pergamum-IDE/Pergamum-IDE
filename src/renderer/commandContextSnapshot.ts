@@ -7,7 +7,6 @@ export interface CommandContextSnapshotInput {
   readonly editorHasDocument: boolean;
   readonly editorIsDirty: boolean;
   readonly editorKindMarkdown: boolean;
-  readonly editorKindGlossary: boolean;
   readonly editorDocumentProjectOwned: boolean;
   /** #318: active editor is a Markdown editor backed by a project file. */
   readonly editorDocumentProjectFile: boolean;
@@ -15,15 +14,6 @@ export interface CommandContextSnapshotInput {
   readonly occurrenceTrackingActive: boolean;
   readonly recoveryOwner: boolean;
   readonly recoveryHasRecoverableCandidates: boolean;
-}
-
-export class ConflictingEditorKindError extends Error {
-  constructor() {
-    super(
-      "editor.kind.markdown and editor.kind.glossary must not both be true for the same logical editor context."
-    );
-    this.name = "ConflictingEditorKindError";
-  }
 }
 
 /**
@@ -35,10 +25,6 @@ export class ConflictingEditorKindError extends Error {
 export function buildCommandContextSnapshot(
   input: CommandContextSnapshotInput
 ): CommandContext {
-  if (import.meta.env.DEV && input.editorKindMarkdown && input.editorKindGlossary) {
-    throw new ConflictingEditorKindError();
-  }
-
   return Object.freeze({
     "project.isOpen": input.projectIsOpen,
     "project.access.readWrite": input.projectAccessReadWrite,
@@ -46,7 +32,6 @@ export function buildCommandContextSnapshot(
     "editor.hasDocument": input.editorHasDocument,
     "editor.isDirty": input.editorIsDirty,
     "editor.kind.markdown": input.editorKindMarkdown,
-    "editor.kind.glossary": input.editorKindGlossary,
     "editor.document.projectOwned": input.editorDocumentProjectOwned,
     "editor.document.projectFile": input.editorDocumentProjectFile,
     "activeEditor.saveBlockedByReadOnlyProjectRootForUi":

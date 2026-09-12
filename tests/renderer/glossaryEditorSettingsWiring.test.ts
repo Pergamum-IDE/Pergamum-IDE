@@ -11,8 +11,8 @@ import { describe, expect, it } from "vitest";
  * line-ending breaks seeded from the loaded description.
  */
 describe("Glossary description editor settings wiring (#412 Blocker 1)", () => {
-  const editorSurfaceSource = readFileSync(
-    "src/renderer/EditorSurface.tsx",
+  const sessionSource = readFileSync(
+    "src/renderer/GlossaryEntryEditorSession.tsx",
     "utf8"
   );
   const glossaryEditorSource = readFileSync(
@@ -28,17 +28,15 @@ describe("Glossary description editor settings wiring (#412 Blocker 1)", () => {
     "undoHistoryMinDepth"
   ];
 
-  it("EditorSurface passes every global editor setting to <GlossaryEditor>", () => {
-    const glossaryBlock = editorSurfaceSource.slice(
-      editorSurfaceSource.indexOf("<GlossaryEditor"),
-      editorSurfaceSource.indexOf("</>", editorSurfaceSource.indexOf("<GlossaryEditor")) +
-        editorSurfaceSource.indexOf("/>", editorSurfaceSource.indexOf("<GlossaryEditor"))
+  it("GlossaryEntryEditorSession passes every global editor setting to <GlossaryEditor>", () => {
+    const glossaryBlock = sessionSource.slice(
+      sessionSource.indexOf("<GlossaryEditor"),
+      sessionSource.indexOf("/>", sessionSource.indexOf("<GlossaryEditor"))
     );
     for (const prop of SETTINGS_PROPS) {
-      expect(editorSurfaceSource).toContain(`${prop}={${prop}}`);
+      expect(sessionSource).toContain(`${prop}={${prop}}`);
     }
-    // sanity: these appear in the GlossaryEditor element region, not only the
-    // Markdown one.
+    // sanity: these appear in the GlossaryEditor element region
     expect(glossaryBlock).toContain("markerGlyph={markerGlyph}");
   });
 

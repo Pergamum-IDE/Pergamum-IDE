@@ -16,9 +16,7 @@ import {
   closeOpenEditor,
   createInitialOpenDocumentsState,
   getDirtyWorkingCopies,
-  openOrActivateEditor,
   openOrActivateDocument,
-  updateOpenEditor,
   updateOpenDocument,
   type OpenDocumentsState
 } from "../../src/renderer/openDocuments";
@@ -29,22 +27,14 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
-import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
-import {
-  applyGlossaryEntryDraftSaveResult,
-  markGlossaryEntryDraftSaving,
-  updateGlossaryEntryDraftDescription
-} from "../../src/renderer/glossaryEntryDraft";
 import {
   createFileEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
   type ActiveProjectContext,
   type EditorId
 } from "../../src/shared/editorId";
 import { t, type Translate } from "../../src/shared/i18n";
-import type { GlossaryEntry } from "../../src/shared/glossary";
 import type {
   DirtyWorkingCopy,
   SaveWorkingCopyOutcome
@@ -53,24 +43,6 @@ import type {
 const translateJa: Translate = (key, values) => t("ja", key, values);
 const translateEn: Translate = (key, values) => t("en", key, values);
 const projectContext: ActiveProjectContext = { rootPath: "C:\\Novel" };
-const glossaryEntry: GlossaryEntry = {
-  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  description: "Capital city",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  atoms: [
-    {
-      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
-      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      sortOrder: 0,
-      value: "Alice",
-      matchFlags: 0,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
-    }
-  ],
-  tags: []
-};
 
 function addDirtyProjectDocument(
   state: OpenDocumentsState,
@@ -160,35 +132,6 @@ function addDirtyUntitledMarkdown(
   };
 }
 
-function addDirtyGlossaryEntry(
-  state: OpenDocumentsState
-): { state: OpenDocumentsState; editorId: EditorId } {
-  const editorId = createGlossaryEntryEditorId(
-    glossaryEntry.id,
-    projectContext
-  );
-  const openedState = openOrActivateEditor(
-    state,
-    createGlossaryEntryCurrentEditor(glossaryEntry),
-    projectContext
-  );
-
-  return {
-    editorId,
-    state: updateOpenEditor(openedState, editorId, (editor) =>
-      editor.kind === "glossaryEntry"
-        ? {
-            ...editor,
-            draft: updateGlossaryEntryDraftDescription(
-              editor.draft,
-              "Changed description"
-            )
-          }
-        : editor
-    )
-  };
-}
-
 function markEditorClean(
   state: OpenDocumentsState,
   editorId: EditorId
@@ -200,15 +143,7 @@ function markWorkingCopyClean(
   state: OpenDocumentsState,
   workingCopy: DirtyWorkingCopy
 ): OpenDocumentsState {
-  if (workingCopy.kind === "markdown") {
-    return markEditorClean(state, workingCopy.editorId);
-  }
-
-  return updateOpenEditor(state, workingCopy.editorId, (editor) =>
-    editor.kind === "glossaryEntry"
-      ? createGlossaryEntryCurrentEditor(editor.draft.entry)
-      : editor
-  );
+  return markEditorClean(state, workingCopy.editorId);
 }
 
 function expectDirtyTitles(
@@ -425,51 +360,6 @@ describe("resolveDirtyWorkingCopies algorithm (#271)", () => {
     expect(commitBarrier.isActive()).toBe(true);
   });
 
-  it("includes dirty glossary entries in explicit Project Close resolution", async () => {
-    let state = createInitialOpenDocumentsState();
-    const glossary = addDirtyGlossaryEntry(state);
-    state = glossary.state;
-    const choiceDialog = vi.fn(async () => saveAllChoice());
-    const commitBarrier = createCommitBarrierRecorder();
-    const saveDirtyWorkingCopy = vi.fn(
-      async (workingCopy: DirtyWorkingCopy) => {
-        state = markWorkingCopyClean(state, workingCopy);
-        return "saved" as const;
-      }
-    );
-
-    await expect(
-      resolveDirtyWorkingCopies(
-        "explicitProjectClose",
-        {
-          getState: () => state,
-          translate: translateEn,
-          targetName: "Project",
-          choiceDialog,
-          saveDirtyWorkingCopy
-        },
-        commitBarrier
-      )
-    ).resolves.toMatchObject({ status: "resolved" });
-
-    expect(
-      saveDirtyWorkingCopy.mock.calls.map(([workingCopy]) => ({
-        editorId: workingCopy.editorId,
-        scope: workingCopy.scope,
-        title: workingCopy.title
-      }))
-    ).toEqual([
-      {
-        editorId: glossary.editorId,
-        scope: "glossary",
-        title: "Alice"
-      }
-    ]);
-    expect(commitBarrier.tokens).toHaveLength(1);
-    expect(commitBarrier.isActive()).toBe(true);
-    expectDirtyTitles(state, []);
-  });
-
   it("includes dirty standalone Markdown in ordinary Window Close resolution", async () => {
     let state = createInitialOpenDocumentsState();
     state = addDirtyStandaloneMarkdown(state, "C:\\Outside\\memo.md").state;
@@ -664,65 +554,6 @@ describe("resolveDirtyWorkingCopies algorithm (#271)", () => {
       commitBarrierToken
     });
     expect(events).toEqual(["save:clean", "barrier:0", "caller:true"]);
-  });
-
-  it("lets a saved dirty Glossary entry become clean before lifecycle commit proceeds", async () => {
-    let state = createInitialOpenDocumentsState();
-    const glossary = addDirtyGlossaryEntry(state);
-    state = glossary.state;
-    const events: string[] = [];
-    const barrier = createLifecycleCommitBarrier();
-    const choiceDialog = vi.fn(async () => saveAllChoice());
-    const saveDirtyWorkingCopy = vi.fn(
-      async (workingCopy: DirtyWorkingCopy) => {
-        expect(workingCopy.scope).toBe("glossary");
-        const savedEntry = {
-          ...glossaryEntry,
-          description: "Changed description",
-          updatedAt: "2026-01-02T00:00:00.000Z"
-        };
-        state = updateOpenEditor(state, glossary.editorId, (editor) =>
-          editor.kind === "glossaryEntry"
-            ? {
-                ...editor,
-                draft: applyGlossaryEntryDraftSaveResult(
-                  markGlossaryEntryDraftSaving(editor.draft),
-                  savedEntry
-                )
-              }
-            : editor
-        );
-        events.push(
-          `save:${getDirtyWorkingCopiesForLifecycle(
-            "explicitProjectClose",
-            state
-          ).length}`
-        );
-        return "saved" as const;
-      }
-    );
-
-    const result = await resolveDirtyWorkingCopiesImpl(
-      "explicitProjectClose",
-      {
-        getState: () => state,
-        translate: translateEn,
-        targetName: "Project",
-        choiceDialog,
-        saveDirtyWorkingCopy,
-        enterCommitBarrier: (intent) => {
-          events.push(
-            `barrier:${getDirtyWorkingCopiesForLifecycle(intent, state).length}`
-          );
-          return barrier.enter(intent);
-        }
-      }
-    );
-    events.push(`caller:${barrier.isActive()}`);
-
-    expect(result).toMatchObject({ status: "resolved" });
-    expect(events).toEqual(["save:0", "barrier:0", "caller:true"]);
-    expectDirtyTitles(state, []);
   });
 
   it("aborts on partial save failure without rolling back earlier saves or processing later copies", async () => {

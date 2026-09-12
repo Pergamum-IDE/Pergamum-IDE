@@ -103,9 +103,6 @@ export function resolveImageAttachmentPasteTarget({
   if (!openDocument) {
     return { ok: false, reason: "targetDocumentUnavailable" };
   }
-  if (openDocument.editor.kind !== "markdown") {
-    return { ok: false, reason: "targetDocumentNotMarkdown" };
-  }
 
   const markdownDocument = openDocument.editor.document;
   if (!isProjectCurrentDocument(markdownDocument)) {
@@ -238,7 +235,7 @@ export function insertMarkdownImageLinkIntoTarget({
     (candidate) => serializeEditorId(candidate.id) === request.target.documentId
   );
 
-  if (!openDocument || openDocument.editor.kind !== "markdown") {
+  if (!openDocument) {
     return false;
   }
 

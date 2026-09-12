@@ -20,25 +20,17 @@ function sourceBlock(
 }
 
 describe("renderer lifecycle commit barrier wiring (#271)", () => {
-  it("blocks Markdown and Glossary draft mutation through their App ingress guards", () => {
+  it("blocks Markdown draft mutation through its App ingress guard", () => {
     const source = appSource();
     const markdownBlock = sourceBlock(
       source,
       "function setActiveDocumentContent",
-      "function updateActiveGlossaryDraft"
-    );
-    const glossaryDraftBlock = sourceBlock(
-      source,
-      "function updateActiveGlossaryDraft",
-      "function setActiveGlossaryEntryDescription"
+      "function openGlossaryCreateEntryPaneFromSidebar"
     );
 
     expect(markdownBlock.indexOf("if (!canMutateActiveWorkingCopy())")).toBeLessThan(
       markdownBlock.indexOf("updateActiveOpenDocument")
     );
-    expect(
-      glossaryDraftBlock.indexOf("if (!canMutateActiveWorkingCopy())")
-    ).toBeLessThan(glossaryDraftBlock.indexOf("updateActiveOpenEditor"));
   });
 
   it("blocks registry-routed commands at the existing modal execution blocker", () => {
@@ -52,59 +44,6 @@ describe("renderer lifecycle commit barrier wiring (#271)", () => {
     expect(blockerBlock).toContain("isLifecycleCommitBarrierActiveNow()");
     expect(blockerBlock).toContain("dialogController.getPendingRequest()");
     expect(blockerBlock).toContain('"app_modal_open"');
-  });
-
-  it("updates Glossary save state through the synchronous open documents ref", () => {
-    const source = appSource();
-    const saveGlossaryBlock = sourceBlock(
-      source,
-      "async function saveGlossaryEntryByEditorId(",
-      "async function deleteActiveGlossaryEntry()"
-    );
-    const savingStateIndex = saveGlossaryBlock.indexOf(
-      "const savingState = updateOpenEditor(\n      openDocumentsStateRef.current,"
-    );
-    const savingRefIndex = saveGlossaryBlock.indexOf(
-      "openDocumentsStateRef.current = savingState",
-      savingStateIndex
-    );
-    const savingSetStateIndex = saveGlossaryBlock.indexOf(
-      "setOpenDocumentsState(savingState)",
-      savingRefIndex
-    );
-    const savedStateIndex = saveGlossaryBlock.indexOf(
-      "const savedState = updateOpenEditor(\n        openDocumentsStateRef.current,"
-    );
-    const savedRefIndex = saveGlossaryBlock.indexOf(
-      "openDocumentsStateRef.current = savedState",
-      savedStateIndex
-    );
-    const savedSetStateIndex = saveGlossaryBlock.indexOf(
-      "setOpenDocumentsState(savedState)",
-      savedRefIndex
-    );
-    const failedStateIndex = saveGlossaryBlock.indexOf(
-      "const failedState = updateOpenEditor(\n        openDocumentsStateRef.current,"
-    );
-    const failedRefIndex = saveGlossaryBlock.indexOf(
-      "openDocumentsStateRef.current = failedState",
-      failedStateIndex
-    );
-    const failedSetStateIndex = saveGlossaryBlock.indexOf(
-      "setOpenDocumentsState(failedState)",
-      failedRefIndex
-    );
-
-    expect(saveGlossaryBlock).not.toContain("setOpenDocumentsState((state)");
-    expect(savingStateIndex).toBeGreaterThan(-1);
-    expect(savingRefIndex).toBeGreaterThan(savingStateIndex);
-    expect(savingSetStateIndex).toBeGreaterThan(savingRefIndex);
-    expect(savedStateIndex).toBeGreaterThan(-1);
-    expect(savedRefIndex).toBeGreaterThan(savedStateIndex);
-    expect(savedSetStateIndex).toBeGreaterThan(savedRefIndex);
-    expect(failedStateIndex).toBeGreaterThan(-1);
-    expect(failedRefIndex).toBeGreaterThan(failedStateIndex);
-    expect(failedSetStateIndex).toBeGreaterThan(failedRefIndex);
   });
 
   it("uses the barrier token returned by dirty resolution for Project Close commit", () => {

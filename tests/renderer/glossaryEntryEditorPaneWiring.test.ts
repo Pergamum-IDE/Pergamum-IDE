@@ -293,8 +293,11 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     expect(editorSource).toContain("export type GlossaryEditorMode");
 
     // Out of scope for Slice 9: the occurrence command ids / search system.
-    const source = appSource();
-    expect(source).toContain("glossaryCommandIds.previousOccurrence");
-    expect(source).toContain("glossaryCommandIds.nextOccurrence");
+    const commandsSource = readFileSync(
+      "src/renderer/glossaryCommands.ts",
+      "utf8"
+    );
+    expect(commandsSource).toContain("glossaryCommandIds.previousOccurrence");
+    expect(commandsSource).toContain("glossaryCommandIds.nextOccurrence");
   });
 });

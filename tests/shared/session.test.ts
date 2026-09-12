@@ -212,20 +212,6 @@ describe("parseSessionEditor (#272) — editor kinds", () => {
         viewState: null
       })
     ).toMatchObject({ kind: "untitled", untitledId: "7" });
-
-    expect(
-      parseSessionEditor({
-        kind: "glossaryEntry",
-        order: 3,
-        entryId: "0190aa00-0000-7000-8000-000000000000",
-        viewState: null
-      })
-    ).toEqual({
-      kind: "glossaryEntry",
-      order: 3,
-      entryId: "0190aa00-0000-7000-8000-000000000000",
-      viewState: null
-    });
   });
 
   it("drops an editor with a bad order or missing identity", () => {

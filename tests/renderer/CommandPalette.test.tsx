@@ -1500,18 +1500,6 @@ describe("CommandPalette line jump mode (#140 / #148)", () => {
     expect(markup).toContain("commandPaletteFooterHintUnavailable");
   });
 
-  it("renders a disabled result, not the generic message, for a Glossary Editor active tab", () => {
-    const markup = renderPalette({
-      registry: buildLineJumpRegistry(),
-      commandContext: { "editor.kind.markdown": false, "editor.kind.glossary": true },
-      translate: realTranslateEn,
-      initialInputValue: ":1"
-    });
-
-    expect(markup).not.toContain("commandPalette.lineJump.invalid");
-    expect(markup).toContain("commandPaletteItemDisabled");
-  });
-
   it("does not show a result count in line mode", () => {
     const markup = renderPalette({
       registry: buildLineJumpRegistry(),

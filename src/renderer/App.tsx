@@ -43,7 +43,6 @@ import {
 } from "../shared/commandRegistry";
 import {
   createEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
   serializeEditorId,
@@ -139,7 +138,6 @@ import {
 } from "./lineEndingTracking";
 import {
   createMarkdownCurrentEditor,
-  currentEditorGlossaryEntryId,
   currentEditorProjectRelativePath,
   currentEditorTitle,
   isCurrentEditorDirty,
@@ -348,23 +346,8 @@ import {
   type OpenEditorOptions
 } from "./editorNavigation";
 import {
-  addGlossaryEntryDraftAtom,
-  applyGlossaryEntryDraftSaveResult,
   createGlossaryEntryDraft,
-  deleteGlossaryEntryDraftAtom,
-  glossaryEntryDraftUpdateInput,
-  isGlossaryEntryDraftDirty,
-  markGlossaryEntryDraftSaveFailed,
-  markGlossaryEntryDraftSaving,
-  glossaryEntryDraftValidity,
   representativeGlossaryAtomDraft,
-  reorderGlossaryEntryDraftAtom,
-  assignGlossaryEntryDraftTag,
-  unassignGlossaryEntryDraftTag,
-  reorderAssignedGlossaryEntryDraftTags,
-  updateGlossaryEntryDraftAtomMatchFlags,
-  updateGlossaryEntryDraftAtomValue,
-  updateGlossaryEntryDraftDescription,
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
 import { representativeGlossarySurface } from "./glossaryPresentation";
@@ -377,10 +360,8 @@ import {
   inactiveGlossaryOccurrenceTrackingState,
   navigateGlossaryOccurrenceTracking,
   resolveGlossaryOccurrenceTrackingSession,
-  startGlossaryOccurrenceTracking,
   type GlossaryOccurrenceDirection,
   type GlossaryOccurrenceTrackingState,
-  type GlossaryOccurrenceTrackingOutcome,
   type NavigateGlossaryOccurrenceTrackingOutcome,
   type ResolveGlossaryOccurrenceTrackingSessionContext,
   type ResolveGlossaryOccurrenceTrackingSessionResult
@@ -520,7 +501,6 @@ import {
   resolveActiveActivityMode,
   resolveSidebarToggle,
   resolveUtilityWindowOpenState,
-  type UtilityWindowTabId,
   type WorkbenchLayoutState
 } from "./workbenchLayout";
 import {
@@ -793,14 +773,9 @@ function debugEditorIdKind(
 }
 
 function debugSaveTargetKind(editor: CurrentEditor): DebugLogSaveTargetKind {
-  switch (editor.kind) {
-    case "glossaryEntry":
-      return "glossaryEntry";
-    case "markdown":
-      return isProjectCurrentDocument(editor.document)
-        ? "projectDocument"
-        : "standaloneMarkdown";
-  }
+  return isProjectCurrentDocument(editor.document)
+    ? "projectDocument"
+    : "standaloneMarkdown";
 }
 
 export function App(): JSX.Element {
@@ -1271,12 +1246,6 @@ export function App(): JSX.Element {
   // Delete press while the confirm dialog is open or the delete IPC is in
   // flight.
   const glossaryDeleteInFlightRef = useRef(false);
-  const navigateGlossaryOccurrenceRef = useRef<
-    (
-      entryId: GlossaryEntryId,
-      direction: GlossaryOccurrenceDirection
-    ) => Promise<boolean>
-  >(() => Promise.resolve(false));
   const navigateGlossaryOccurrenceTrackingSessionRef = useRef<
     (direction: GlossaryOccurrenceDirection) => Promise<boolean>
   >(() => Promise.resolve(false));
@@ -2034,9 +2003,7 @@ export function App(): JSX.Element {
     ? "special"
     : currentEditor?.kind === "markdown"
       ? "markdown"
-      : currentEditor?.kind === "glossaryEntry"
-        ? "glossary"
-        : "empty";
+      : "empty";
   const isActiveRestoreViewStatePending =
     activeDocumentKey !== null &&
     pendingRestoreViewStatesRef.current.has(activeDocumentKey);
@@ -2537,9 +2504,8 @@ export function App(): JSX.Element {
   const isReadWriteProject = project?.accessMode.kind === "readWrite";
   const isProjectOwnedCurrentEditor =
     !isEditorAreaSpecialTabActive &&
-    (currentEditor?.kind === "glossaryEntry" ||
-      (currentEditor?.kind === "markdown" &&
-        activeMarkdownDocument?.kind === "project"));
+    currentEditor?.kind === "markdown" &&
+    activeMarkdownDocument?.kind === "project";
   // #318: the active editor's backing project-file path / name, when the
   // active editor is a Markdown editor over a current-project document.
   // Drives the Rename command label so the Command Palette shows which file
@@ -2577,17 +2543,10 @@ export function App(): JSX.Element {
   }, [openDocumentsState]);
   const isReadOnlyProjectOwnedEditor =
     isReadOnlyProject && isProjectOwnedCurrentEditor;
-  const isSavingGlossaryEntry =
-    currentEditor?.kind === "glossaryEntry" &&
-    currentEditor.draft.saveState === "saving";
-  const canSaveGlossaryEntry =
-    currentEditor?.kind === "glossaryEntry" &&
-    !isSavingGlossaryEntry &&
-    glossaryEntryDraftValidity(currentEditor.draft).ok;
   const canSave =
-    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
-      ? Boolean(activeMarkdownDocument)
-      : !isEditorAreaSpecialTabActive && canSaveGlossaryEntry;
+    !isEditorAreaSpecialTabActive &&
+    currentEditor?.kind === "markdown" &&
+    Boolean(activeMarkdownDocument);
   const canSaveAs =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -2899,14 +2858,12 @@ export function App(): JSX.Element {
         projectAccessReadWrite: isReadWriteProject,
         projectAccessReadOnly: isReadOnlyProject,
         editorHasDocument:
-          !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown"
-            ? Boolean(activeMarkdownDocument)
-            : !isEditorAreaSpecialTabActive && currentEditor?.kind === "glossaryEntry",
+          !isEditorAreaSpecialTabActive &&
+          currentEditor?.kind === "markdown" &&
+          Boolean(activeMarkdownDocument),
         editorIsDirty: !isEditorAreaSpecialTabActive && isDirty,
         editorKindMarkdown:
           !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown",
-        editorKindGlossary:
-          !isEditorAreaSpecialTabActive && currentEditor?.kind === "glossaryEntry",
         editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
         // #318: same source of truth as the Rename target resolution — an
         // active Markdown editor over a current-project document. Untitled,
@@ -3189,10 +3146,8 @@ export function App(): JSX.Element {
           );
           return true;
         },
-        navigateToPreviousGlossaryOccurrence: (entryId) =>
-          navigateGlossaryOccurrenceRef.current(entryId, "previous"),
-        navigateToNextGlossaryOccurrence: (entryId) =>
-          navigateGlossaryOccurrenceRef.current(entryId, "next"),
+        navigateToPreviousGlossaryOccurrence: () => false,
+        navigateToNextGlossaryOccurrence: () => false,
         openGlossaryTagManager: () => {
           openGlossaryTagManagerTab();
           return true;
@@ -3542,90 +3497,6 @@ export function App(): JSX.Element {
     );
   }
 
-  function updateActiveGlossaryDraft(
-    update: (draft: GlossaryEntryDraft) => GlossaryEntryDraft
-  ): void {
-    if (!canMutateActiveWorkingCopy()) {
-      return;
-    }
-
-    setOpenDocumentsState((state) =>
-      updateActiveOpenEditor(state, (editor) =>
-        editor.kind === "glossaryEntry"
-          ? { ...editor, draft: update(editor.draft) }
-          : editor
-      )
-    );
-  }
-
-  function setActiveGlossaryEntryDescription(description: string): void {
-    updateActiveGlossaryDraft((draft) =>
-      updateGlossaryEntryDraftDescription(draft, description)
-    );
-  }
-
-  function addActiveGlossaryEntryAtom(): void {
-    updateActiveGlossaryDraft(addGlossaryEntryDraftAtom);
-  }
-
-  function setActiveGlossaryEntryAtomValue(
-    atomId: string,
-    value: string
-  ): void {
-    updateActiveGlossaryDraft((draft) =>
-      updateGlossaryEntryDraftAtomValue(draft, atomId, value)
-    );
-  }
-
-  function setActiveGlossaryEntryAtomMatchFlags(
-    atomId: string,
-    matchFlags: number
-  ): void {
-    updateActiveGlossaryDraft((draft) =>
-      updateGlossaryEntryDraftAtomMatchFlags(draft, atomId, matchFlags)
-    );
-  }
-
-  function deleteActiveGlossaryEntryAtom(atomId: string): void {
-    updateActiveGlossaryDraft((draft) =>
-      deleteGlossaryEntryDraftAtom(draft, atomId)
-    );
-  }
-
-  function reorderActiveGlossaryEntryAtom(
-    atomId: string,
-    toIndex: number
-  ): void {
-    updateActiveGlossaryDraft((draft) =>
-      reorderGlossaryEntryDraftAtom(draft, atomId, toIndex)
-    );
-  }
-
-  function assignActiveGlossaryEntryTag(
-    tagId: string,
-    toIndex: number
-  ): void {
-    updateActiveGlossaryDraft((draft) =>
-      assignGlossaryEntryDraftTag(draft, tagId, toIndex)
-    );
-  }
-
-  function unassignActiveGlossaryEntryTag(tagId: string): void {
-    updateActiveGlossaryDraft((draft) =>
-      unassignGlossaryEntryDraftTag(draft, tagId)
-    );
-  }
-
-  function reorderAssignedActiveGlossaryEntryTag(
-    tagId: string,
-    toIndex: number
-  ): void {
-    updateActiveGlossaryDraft((draft) =>
-      reorderAssignedGlossaryEntryDraftTags(draft, tagId, toIndex)
-    );
-  }
-
-
   // #436 Phase 8-0 PoC (Slice 3): the Glossary side pane's "語彙を追加" opens
   // the bottom Glossary Entry Editor Pane in create mode. (Slice 5 removed the
   // old inline create form and the immediate-DB-create command it used.)
@@ -3907,7 +3778,7 @@ export function App(): JSX.Element {
   }
 
   // #375: Glossary Management tab — hard delete of an entry through the shared
-  // destructive confirm dialog. Closes the entry's editor tab if it is open.
+  // destructive confirm dialog.
   async function handleDeleteGlossaryEntryFromManager(
     entryId: string
   ): Promise<void> {
@@ -3945,12 +3816,6 @@ export function App(): JSX.Element {
         return;
       }
 
-      const editorId = createGlossaryEntryEditorId(
-        entryId,
-        activeProjectContext
-      );
-      editorNavigation.invalidateEditor(editorId);
-      setOpenDocumentsState((state) => closeOpenEditor(state, editorId));
       setGlossaryRefreshToken((token) => token + 1);
       setGlossaryOccurrenceTrackingState((state) =>
         state.kind === "active" && state.entryId === entryId
@@ -5087,9 +4952,6 @@ export function App(): JSX.Element {
         return;
       }
       case "saveAs":
-        if (tab.id.kind === "glossaryEntry") {
-          return;
-        }
         void saveFile({ editorId: tab.id, forceSaveAs: true });
         return;
       case "copyAbsolutePath":
@@ -5173,8 +5035,7 @@ export function App(): JSX.Element {
       openDocumentsState,
       project,
       activeProjectContext,
-      readProjectDocument,
-      getGlossaryEntryById: window.pergamum.glossary.getById
+      readProjectDocument
     });
   }
 
@@ -6104,180 +5965,6 @@ export function App(): JSX.Element {
     return { kind: "selected", path: selected.path };
   }
 
-  async function saveGlossaryEntryByEditorId(
-    editorId: EditorId
-  ): Promise<SaveFileOutcome> {
-    const editorIdKind = debugEditorIdKind(editorId);
-    const targetOpenDocument = findOpenDocument(
-      openDocumentsStateRef.current,
-      editorId
-    );
-
-    if (!targetOpenDocument || targetOpenDocument.editor.kind !== "glossaryEntry") {
-      logRendererDebugEvent({
-        level: "debug",
-        event: "save.skipped",
-        details: {
-          editorIdKind,
-          operation: "save",
-          result: "ignored",
-          reason: "unsupported_editor"
-        }
-      });
-      return "ignored";
-    }
-
-    const documentIdToSave = targetOpenDocument.id;
-    const draftToSave = targetOpenDocument.editor.draft;
-
-    if (!isGlossaryEntryDraftDirty(draftToSave)) {
-      logRendererDebugEvent({
-        level: "debug",
-        event: "save.skipped",
-        details: {
-          editorIdKind,
-          operation: "save",
-          result: "ignored",
-          reason: "glossary_not_dirty"
-        }
-      });
-      return "ignored";
-    }
-
-    if (draftToSave.saveState === "saving") {
-      logRendererDebugEvent({
-        level: "debug",
-        event: "save.skipped",
-        details: {
-          editorIdKind,
-          operation: "save",
-          result: "ignored",
-          reason: "glossary_already_saving"
-        }
-      });
-      return "ignored";
-    }
-
-    const projectGeneration =
-      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
-
-    const savingState = updateOpenEditor(
-      openDocumentsStateRef.current,
-      documentIdToSave,
-      (editor) =>
-        editor.kind === "glossaryEntry"
-          ? { ...editor, draft: markGlossaryEntryDraftSaving(editor.draft) }
-          : editor
-    );
-    openDocumentsStateRef.current = savingState;
-    setOpenDocumentsState(savingState);
-
-    try {
-      const savedEntry = await window.pergamum.glossary.update(
-        glossaryEntryDraftUpdateInput(draftToSave)
-      );
-
-      if (
-        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-          projectGeneration
-        )
-      ) {
-        logRendererDebugEvent({
-          level: "debug",
-          event: "save.skipped",
-          details: {
-            editorIdKind,
-            operation: "save",
-            result: "ignored",
-            reason: "project_context_changed"
-          }
-        });
-        return "ignored";
-      }
-
-      const savedState = updateOpenEditor(
-        openDocumentsStateRef.current,
-        documentIdToSave,
-        (editor) =>
-          editor.kind === "glossaryEntry"
-            ? {
-                ...editor,
-                draft: applyGlossaryEntryDraftSaveResult(
-                  editor.draft,
-                  savedEntry
-                )
-              }
-            : editor
-      );
-      openDocumentsStateRef.current = savedState;
-      setOpenDocumentsState(savedState);
-      setGlossaryRefreshToken((token) => token + 1);
-      setStatus({
-        key: "status.savedPath",
-        values: { path: representativeGlossarySurface(savedEntry) }
-      });
-      logRendererDebugEvent({
-        level: "debug",
-        event: "save.succeeded",
-        details: {
-          editorIdKind,
-          operation: "save",
-          result: "succeeded",
-          saveTargetKind: "glossaryEntry"
-        }
-      });
-      return "saved";
-    } catch (error) {
-      logRendererDebugEvent({
-        level: "error",
-        event: "save.failed",
-        details: {
-          editorIdKind,
-          operation: "save",
-          result: "failed",
-          error: rendererDebugErrorInfo(error)
-        }
-      });
-      if (
-        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-          projectGeneration
-        )
-      ) {
-        logRendererDebugEvent({
-          level: "debug",
-          event: "save.skipped",
-          details: {
-            editorIdKind,
-            operation: "save",
-            result: "ignored",
-            reason: "project_context_changed"
-          }
-        });
-        return "ignored";
-      }
-
-      const failedState = updateOpenEditor(
-        openDocumentsStateRef.current,
-        documentIdToSave,
-        (editor) =>
-          editor.kind === "glossaryEntry"
-            ? {
-                ...editor,
-                draft: markGlossaryEntryDraftSaveFailed(editor.draft)
-              }
-            : editor
-      );
-      openDocumentsStateRef.current = failedState;
-      setOpenDocumentsState(failedState);
-      setStatus({
-        key: "status.saveFailed",
-        values: { message: errorMessage(error, translate) }
-      });
-      await showGlossarySaveFailedDialog();
-      return "failed";
-    }
-  }
-
   // #375: confirm through the Pergamum destructive confirm dialog (never a
   // native OS message box) — Escape / Cancel / backdrop all resolve to "do
   // not delete"; only the explicit "Delete" button proceeds.
@@ -6322,179 +6009,6 @@ export function App(): JSX.Element {
       throw error;
     }
   }
-
-  async function deleteActiveGlossaryEntry(): Promise<void> {
-    if (isLifecycleCommitBarrierActiveNow()) {
-      return;
-    }
-
-    if (activeDocument?.editor.kind !== "glossaryEntry") {
-      return;
-    }
-
-    if (glossaryDeleteInFlightRef.current) {
-      return;
-    }
-
-    const documentIdToDelete = activeDocument.id;
-    const draft = activeDocument.editor.draft;
-    const entryIdToDelete = draft.entry.id;
-    const projectGeneration =
-      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
-
-    glossaryDeleteInFlightRef.current = true;
-
-    try {
-      if (!(await confirmDeleteGlossaryEntry(draft))) {
-        return;
-      }
-
-      const result = await window.pergamum.glossary.delete(entryIdToDelete);
-
-      if (
-        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-          projectGeneration
-        )
-      ) {
-        return;
-      }
-
-      if (!result.deleted) {
-        return;
-      }
-
-      editorNavigation.invalidateEditor(documentIdToDelete);
-      setOpenDocumentsState((state) =>
-        closeOpenEditor(state, documentIdToDelete)
-      );
-      setGlossaryRefreshToken((token) => token + 1);
-      setGlossaryOccurrenceTrackingState((state) =>
-        state.kind === "active" && state.entryId === entryIdToDelete
-          ? inactiveGlossaryOccurrenceTrackingState
-          : state
-      );
-    } catch (error) {
-      if (
-        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
-          projectGeneration
-        )
-      ) {
-        return;
-      }
-
-      setStatus({
-        key: "status.commandFailed",
-        values: { message: errorMessage(error, translate) }
-      });
-    } finally {
-      glossaryDeleteInFlightRef.current = false;
-    }
-  }
-
-  function openUtilityWindowOnOccurrencesTab(): void {
-    setLayout((current) => ({
-      ...current,
-      utilityWindow: {
-        ...resolveUtilityWindowOpenState(
-          current.utilityWindow,
-          true,
-          editorAreaBodyRef.current?.clientHeight
-        ),
-        activeTab: "occurrences"
-      }
-    }));
-  }
-
-  function selectUtilityWindowTab(tab: UtilityWindowTabId): void {
-    setLayout((current) => ({
-      ...current,
-      utilityWindow: {
-        ...current.utilityWindow,
-        activeTab: tab
-      }
-    }));
-  }
-
-  async function navigateGlossaryOccurrence(
-    entryId: GlossaryEntryId,
-    direction: GlossaryOccurrenceDirection
-  ): Promise<boolean> {
-    if (
-      activeDocument?.editor.kind !== "glossaryEntry" ||
-      activeDocument.editor.draft.entry.id !== entryId
-    ) {
-      return false;
-    }
-
-    const entry = activeDocument.editor.draft.entry;
-    const targetEditorId = lastActiveMarkdownEditorIdRef.current;
-    const targetOpenDocument = targetEditorId
-      ? findOpenDocument(openDocumentsState, targetEditorId)
-      : null;
-    const targetDocument =
-      targetOpenDocument && targetOpenDocument.editor.kind === "markdown"
-        ? {
-            editorId: targetOpenDocument.id,
-            content: currentDocumentContent(targetOpenDocument.editor.document)
-          }
-        : null;
-
-    let outcome: GlossaryOccurrenceTrackingOutcome;
-
-    try {
-      outcome = startGlossaryOccurrenceTracking({
-        currentSession: glossaryOccurrenceTrackingState,
-        entry,
-        entryLabel: representativeGlossarySurface(entry),
-        targetDocument,
-        direction
-      });
-    } catch (error) {
-      logRendererDebugEvent({
-        level: "error",
-        event: "glossary.occurrences.scan.failed",
-        details: {
-          editorIdKind: "glossaryEntry",
-          operation: "scan",
-          result: "failed",
-          statusKey: "status.commandFailed",
-          error: rendererDebugErrorInfo(error)
-        }
-      });
-      setStatus({
-        key: "status.commandFailed",
-        values: { message: errorMessage(error, translate) }
-      });
-      return false;
-    }
-
-    switch (outcome.kind) {
-      case "noTargetDocument":
-        setStatus({ key: "status.glossaryOccurrenceNoActiveDocument" });
-        return false;
-      case "noOccurrences":
-        setStatus({ key: "status.glossaryOccurrenceNotFound" });
-        return false;
-      case "tracking": {
-        const didOpen = await editorNavigation.openEditor(
-          outcome.session.targetMarkdownEditorId,
-          { history: "skip" }
-        );
-
-        if (!didOpen) {
-          setStatus({ key: "status.glossaryOccurrenceNoActiveDocument" });
-          return false;
-        }
-
-        setGlossaryOccurrenceTrackingState(outcome.session);
-        setPendingMarkdownSelection(outcome.range);
-        openUtilityWindowOnOccurrencesTab();
-        return true;
-      }
-    }
-  }
-
-  navigateGlossaryOccurrenceRef.current = navigateGlossaryOccurrence;
 
   function resolveGlossaryOccurrenceTrackingSessionContext(): ResolveGlossaryOccurrenceTrackingSessionContext {
     return {
@@ -6679,12 +6193,7 @@ export function App(): JSX.Element {
 
     const targetEditor = targetOpenDocument.editor;
     const targetIsDirty = isCurrentEditorDirty(targetEditor);
-    const targetCanSave =
-      targetEditor.kind === "markdown"
-        ? true
-        : targetEditor.kind === "glossaryEntry" &&
-          targetEditor.draft.saveState !== "saving" &&
-          glossaryEntryDraftValidity(targetEditor.draft).ok;
+    const targetCanSave = true;
 
     logRendererDebugEvent({
       level: "debug",
@@ -6718,39 +6227,7 @@ export function App(): JSX.Element {
           }
         });
 
-        if (targetEditor.kind === "glossaryEntry") {
-          if (options.forceSaveAs) {
-            logRendererDebugEvent({
-              level: "debug",
-              event: "save.skipped",
-              details: {
-                editorIdKind,
-                operation: "save",
-                result: "ignored",
-                reason: "unsupported_editor"
-              }
-            });
-            return "ignored";
-          }
-
-          return saveGlossaryEntryByEditorId(targetOpenDocument.id);
-        }
-
         try {
-          if (targetEditor.kind !== "markdown") {
-            logRendererDebugEvent({
-              level: "debug",
-              event: "save.skipped",
-              details: {
-                editorIdKind,
-                operation: "save",
-                result: "ignored",
-                reason: "unsupported_editor"
-              }
-            });
-            return "ignored";
-          }
-
           const documentToSave = targetEditor.document;
           const documentIdToSave = targetOpenDocument.id;
           // #286: the document identity BEFORE this save, so its Recovery
@@ -7858,8 +7335,6 @@ export function App(): JSX.Element {
       (await window.pergamum.projects.readProjectDocument(relativePath)).content,
     readMarkdownFile: (filePath) =>
       window.pergamum.files.readMarkdownFile(filePath),
-    getGlossaryEntryById: (entryId) =>
-      window.pergamum.glossary.getById(entryId),
     applyRestoredEnvironment: (env) => applyRestoredEnvironment(env),
     adoptSessionId: (sessionId) => {
       setRendererSessionId(sessionId);
@@ -10383,9 +9858,7 @@ export function App(): JSX.Element {
                           : null
                       }
                       highlightedGlossaryEntryId={
-                        currentEditor
-                          ? currentEditorGlossaryEntryId(currentEditor)
-                          : null
+                        null
                       }
                       glossaryRefreshToken={glossaryRefreshToken}
                       fileExplorerCreateEntryRequest={
@@ -10695,48 +10168,6 @@ export function App(): JSX.Element {
                         onMarkdownEditorFocusRequestApplied={
                           handleMarkdownEditorFocusRequestApplied
                         }
-                        glossaryAvailableTags={glossaryTags}
-                        onChangeGlossaryEntryDescription={
-                          setActiveGlossaryEntryDescription
-                        }
-                        onAddGlossaryEntryAtom={addActiveGlossaryEntryAtom}
-                        onChangeGlossaryEntryAtomValue={
-                          setActiveGlossaryEntryAtomValue
-                        }
-                        onChangeGlossaryEntryAtomMatchFlags={
-                          setActiveGlossaryEntryAtomMatchFlags
-                        }
-                        onDeleteGlossaryEntryAtom={deleteActiveGlossaryEntryAtom}
-                        onReorderGlossaryEntryAtom={reorderActiveGlossaryEntryAtom}
-                        onAssignGlossaryEntryTag={assignActiveGlossaryEntryTag}
-                        onUnassignGlossaryEntryTag={
-                          unassignActiveGlossaryEntryTag
-                        }
-                        onReorderAssignedGlossaryEntryTag={
-                          reorderAssignedActiveGlossaryEntryTag
-                        }
-                        onOpenGlossaryTagManager={openGlossaryTagManagerTab}
-                        onDeleteGlossaryEntry={() => {
-                          void deleteActiveGlossaryEntry();
-                        }}
-                        onNavigateToPreviousGlossaryOccurrence={() => {
-                          if (currentEditor?.kind === "glossaryEntry") {
-                            executeUiCommand(
-                              glossaryCommandIds.previousOccurrence,
-                              { source: "editorSurface" },
-                              currentEditor.draft.entry.id
-                            );
-                          }
-                        }}
-                        onNavigateToNextGlossaryOccurrence={() => {
-                          if (currentEditor?.kind === "glossaryEntry") {
-                            executeUiCommand(
-                              glossaryCommandIds.nextOccurrence,
-                              { source: "editorSurface" },
-                              currentEditor.draft.entry.id
-                            );
-                          }
-                        }}
                         pendingMarkdownSelection={pendingMarkdownSelection}
                         onPendingMarkdownSelectionApplied={() => {
                           setPendingMarkdownSelection(null);

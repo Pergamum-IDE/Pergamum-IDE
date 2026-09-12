@@ -134,7 +134,7 @@ describe("file I/O workflow wiring (#202)", () => {
     const selectBlock = sourceBlock(
       source,
       "async function selectStandaloneSaveTarget",
-      "async function saveGlossaryEntry"
+      "async function confirmDeleteGlossaryEntry"
     );
 
     expect(selectBlock).toContain(
@@ -151,7 +151,7 @@ describe("file I/O workflow wiring (#202)", () => {
     const selectBlock = sourceBlock(
       source,
       "async function selectStandaloneSaveTarget",
-      "async function saveGlossaryEntry"
+      "async function confirmDeleteGlossaryEntry"
     );
     const saveFileBlock = sourceBlock(
       source,

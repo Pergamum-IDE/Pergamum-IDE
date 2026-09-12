@@ -1,8 +1,6 @@
-import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import {
   createEditorIdForPath,
   createFileEditorIdForPath,
-  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   type ActiveProjectContext,
   type EditorId
@@ -13,27 +11,13 @@ import {
   isCurrentDocumentDirty,
   type CurrentDocument
 } from "./currentDocument";
-import {
-  createGlossaryEntryDraft,
-  isGlossaryEntryDraftDirty,
-  representativeGlossaryAtomDraft,
-  type GlossaryEntryDraft
-} from "./glossaryEntryDraft";
-import { representativeGlossarySurface } from "./glossaryPresentation";
 
 export interface MarkdownCurrentEditor {
   kind: "markdown";
   document: CurrentDocument;
 }
 
-export interface GlossaryEntryCurrentEditor {
-  kind: "glossaryEntry";
-  draft: GlossaryEntryDraft;
-}
-
-export type CurrentEditor =
-  | MarkdownCurrentEditor
-  | GlossaryEntryCurrentEditor;
+export type CurrentEditor = MarkdownCurrentEditor;
 
 export function createMarkdownCurrentEditor(
   document: CurrentDocument
@@ -44,15 +28,6 @@ export function createMarkdownCurrentEditor(
   };
 }
 
-export function createGlossaryEntryCurrentEditor(
-  entry: GlossaryEntry
-): GlossaryEntryCurrentEditor {
-  return {
-    kind: "glossaryEntry",
-    draft: createGlossaryEntryDraft(entry)
-  };
-}
-
 export function markdownDocumentForEditor(
   editor: CurrentEditor
 ): CurrentDocument | null {
@@ -60,24 +35,11 @@ export function markdownDocumentForEditor(
 }
 
 export function currentEditorTitle(editor: CurrentEditor): string {
-  switch (editor.kind) {
-    case "markdown":
-      return currentDocumentTitle(editor.document);
-    case "glossaryEntry":
-      return (
-        representativeGlossaryAtomDraft(editor.draft)?.value.trim() ||
-        representativeGlossarySurface(editor.draft.entry)
-      );
-  }
+  return currentDocumentTitle(editor.document);
 }
 
 export function isCurrentEditorDirty(editor: CurrentEditor): boolean {
-  switch (editor.kind) {
-    case "markdown":
-      return isCurrentDocumentDirty(editor.document);
-    case "glossaryEntry":
-      return isGlossaryEntryDraftDirty(editor.draft);
-  }
+  return isCurrentDocumentDirty(editor.document);
 }
 
 export function currentEditorProjectRelativePath(
@@ -88,34 +50,20 @@ export function currentEditorProjectRelativePath(
     : null;
 }
 
-export function currentEditorGlossaryEntryId(
-  editor: CurrentEditor
-): GlossaryEntryId | null {
-  return editor.kind === "glossaryEntry" ? editor.draft.entry.id : null;
-}
-
 export function editorIdForCurrentEditor(
   editor: CurrentEditor,
   activeProjectContext: ActiveProjectContext | null
 ): EditorId | null {
-  switch (editor.kind) {
-    case "markdown":
-      switch (editor.document.kind) {
-        case "file":
-          return createFileEditorIdForPath(editor.document.path);
-        case "project":
-          return createProjectDocumentEditorId(
-            editor.document.relativePath,
-            activeProjectContext
-          );
-        case "untitled":
-          return null;
-      }
-    case "glossaryEntry":
-      return createGlossaryEntryEditorId(
-        editor.draft.entry.id,
+  switch (editor.document.kind) {
+    case "file":
+      return createFileEditorIdForPath(editor.document.path);
+    case "project":
+      return createProjectDocumentEditorId(
+        editor.document.relativePath,
         activeProjectContext
       );
+    case "untitled":
+      return null;
   }
 }
 
@@ -123,17 +71,12 @@ export function isCurrentEditorIdentityCompatible(
   editor: CurrentEditor,
   editorId: EditorId
 ): boolean {
-  switch (editor.kind) {
-    case "markdown":
-      switch (editor.document.kind) {
-        case "file":
-          return editorId.kind === "file";
-        case "project":
-          return editorId.kind === "projectDocument";
-        case "untitled":
-          return editorId.kind === "untitled";
-      }
-    case "glossaryEntry":
-      return editorId.kind === "glossaryEntry";
+  switch (editor.document.kind) {
+    case "file":
+      return editorId.kind === "file";
+    case "project":
+      return editorId.kind === "projectDocument";
+    case "untitled":
+      return editorId.kind === "untitled";
   }
 }

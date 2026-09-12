@@ -107,8 +107,7 @@ export interface SessionEditorViewState {
 export type SessionEditorKind =
   | "projectMarkdown"
   | "standaloneMarkdown"
-  | "untitled"
-  | "glossaryEntry";
+  | "untitled";
 
 interface SessionEditorFields {
   /** 0-based tab position. Also kept explicit so a partially-valid list
@@ -137,19 +136,10 @@ export interface SessionUntitledEditor extends SessionEditorFields {
   readonly viewState: SessionEditorViewState | null;
 }
 
-export interface SessionGlossaryEntryEditor extends SessionEditorFields {
-  readonly kind: "glossaryEntry";
-  /** GlossaryEntryId. */
-  readonly entryId: string;
-  /** Glossary editors have no in-scope CodeMirror view state (#272/#273). */
-  readonly viewState: null;
-}
-
 export type SessionEditor =
   | SessionProjectMarkdownEditor
   | SessionStandaloneMarkdownEditor
-  | SessionUntitledEditor
-  | SessionGlossaryEntryEditor;
+  | SessionUntitledEditor;
 
 /**
  * Just enough to name which open editor was active — matched by identity
@@ -159,8 +149,7 @@ export type SessionEditor =
 export type SessionEditorIdentity =
   | { readonly kind: "projectMarkdown"; readonly relativePath: string }
   | { readonly kind: "standaloneMarkdown"; readonly filePath: string }
-  | { readonly kind: "untitled"; readonly untitledId: string }
-  | { readonly kind: "glossaryEntry"; readonly entryId: string };
+  | { readonly kind: "untitled"; readonly untitledId: string };
 
 // ---------------------------------------------------------------------------
 // Project context
@@ -419,15 +408,6 @@ export function parseSessionEditor(value: unknown): SessionEditor | null {
             viewState: parseSessionEditorViewState(value.viewState)
           }
         : null;
-    case "glossaryEntry":
-      return isIdentityString(value.entryId)
-        ? {
-            kind: "glossaryEntry",
-            order,
-            entryId: value.entryId,
-            viewState: null
-          }
-        : null;
     default:
       return null;
   }
@@ -443,8 +423,6 @@ export function sessionEditorIdentity(
       return { kind: "standaloneMarkdown", filePath: editor.filePath };
     case "untitled":
       return { kind: "untitled", untitledId: editor.untitledId };
-    case "glossaryEntry":
-      return { kind: "glossaryEntry", entryId: editor.entryId };
   }
 }
 
@@ -458,8 +436,6 @@ export function sessionEditorIdentityKey(
       return `standaloneMarkdown ${identity.filePath}`;
     case "untitled":
       return `untitled ${identity.untitledId}`;
-    case "glossaryEntry":
-      return `glossaryEntry ${identity.entryId}`;
   }
 }
 
@@ -489,10 +465,6 @@ export function parseSessionEditorIdentity(
     case "untitled":
       return isIdentityString(value.untitledId)
         ? { kind: "untitled", untitledId: value.untitledId }
-        : null;
-    case "glossaryEntry":
-      return isIdentityString(value.entryId)
-        ? { kind: "glossaryEntry", entryId: value.entryId }
         : null;
     default:
       return null;

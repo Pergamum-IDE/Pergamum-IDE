@@ -20,7 +20,6 @@ export interface ImageAttachmentPasteTarget {
 export type ImageAttachmentPasteTargetInvalidReason =
   | "projectNotOpen"
   | "targetDocumentUnavailable"
-  | "targetDocumentNotMarkdown"
   | "targetDocumentReadOnly"
   | "positionUnavailable"
   | "positionDeleted";

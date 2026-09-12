@@ -20,7 +20,6 @@ import type {
   SelectionHighlightMode,
   WorkbenchSoundSettings
 } from "../shared/settings";
-import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
   currentDocumentContent,
@@ -33,7 +32,6 @@ import {
   type LineEndingBreakSet
 } from "./editorLineEndingField";
 import type { PendingMarkdownSelection } from "./pendingMarkdownSelection";
-import { GlossaryEditor } from "./GlossaryEditor";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
   MarkdownEditor,
@@ -398,7 +396,7 @@ interface EditorSurfaceProps {
    * unmount/remount (navigating to Settings / a Manager tab / a Glossary
    * Entry editor and back all unmount EditorSurface). Forwarded straight
    * through to MarkdownEditor — see that component's `documentStates` prop
-   * doc comment. `undefined` for the `glossaryEntry` editor kind.
+   * doc comment.
    */
   documentStates?: Map<string, MarkdownEditorDocumentState>;
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
@@ -485,28 +483,6 @@ interface EditorSurfaceProps {
   onRestoreActiveEditorViewStateApplied: (key: string) => void;
   markdownEditorFocusRequest: MarkdownEditorFocusRequest | null;
   onMarkdownEditorFocusRequestApplied: (requestId: number) => void;
-  glossaryAvailableTags: readonly GlossaryTag[];
-  onChangeGlossaryEntryDescription: (description: string) => void;
-  onAddGlossaryEntryAtom: () => void;
-  onChangeGlossaryEntryAtomValue: (atomId: string, value: string) => void;
-  onChangeGlossaryEntryAtomMatchFlags: (
-    atomId: string,
-    matchFlags: number
-  ) => void;
-  onDeleteGlossaryEntryAtom: (atomId: string) => void;
-  onReorderGlossaryEntryAtom: (atomId: string, toIndex: number) => void;
-  /** #375: ordered tag assignment (two-list editor). */
-  onAssignGlossaryEntryTag: (tagId: string, toIndex: number) => void;
-  onUnassignGlossaryEntryTag: (tagId: string) => void;
-  onReorderAssignedGlossaryEntryTag: (
-    tagId: string,
-    toIndex: number
-  ) => void;
-  /** #375: open the Glossary Tag Manager special tab. */
-  onOpenGlossaryTagManager: () => void;
-  onDeleteGlossaryEntry: () => void;
-  onNavigateToPreviousGlossaryOccurrence: () => void;
-  onNavigateToNextGlossaryOccurrence: () => void;
   pendingMarkdownSelection: PendingMarkdownSelection | null;
   onPendingMarkdownSelectionApplied: () => void;
   /** In-flight document-open correlation id (#152), or null when idle. */
@@ -603,20 +579,6 @@ export function EditorSurface({
   onRestoreActiveEditorViewStateApplied,
   markdownEditorFocusRequest,
   onMarkdownEditorFocusRequestApplied,
-  glossaryAvailableTags,
-  onChangeGlossaryEntryDescription,
-  onAddGlossaryEntryAtom,
-  onChangeGlossaryEntryAtomValue,
-  onChangeGlossaryEntryAtomMatchFlags,
-  onDeleteGlossaryEntryAtom,
-  onReorderGlossaryEntryAtom,
-  onAssignGlossaryEntryTag,
-  onUnassignGlossaryEntryTag,
-  onReorderAssignedGlossaryEntryTag,
-  onOpenGlossaryTagManager,
-  onDeleteGlossaryEntry,
-  onNavigateToPreviousGlossaryOccurrence,
-  onNavigateToNextGlossaryOccurrence,
   pendingMarkdownSelection,
   onPendingMarkdownSelectionApplied,
   documentOpenId,
@@ -683,38 +645,6 @@ export function EditorSurface({
             onDocumentOpenPreviewFrameObserved
           }
           onViewportChanged={onViewportChanged}
-        />
-      );
-    case "glossaryEntry":
-      // #436 Slice 5: this branch is unreachable — nothing ever opens a
-      // `glossaryEntry` editor tab any more (create/edit both live in the
-      // bottom Glossary Entry Editor Pane). Kept only so `CurrentEditor`'s
-      // `glossaryEntry` variant still renders something if it were ever
-      // reached. `mode="edit"` since a revived tab could only ever target an
-      // existing entry (create never went through a tab).
-      return (
-        <GlossaryEditor
-          mode="edit"
-          draft={editor.draft}
-          availableTags={glossaryAvailableTags}
-          translate={translate}
-          onChangeDescription={onChangeGlossaryEntryDescription}
-          onAddAtom={onAddGlossaryEntryAtom}
-          onChangeAtomValue={onChangeGlossaryEntryAtomValue}
-          onChangeAtomMatchFlags={onChangeGlossaryEntryAtomMatchFlags}
-          onDeleteAtom={onDeleteGlossaryEntryAtom}
-          onReorderAtom={onReorderGlossaryEntryAtom}
-          onAssignTag={onAssignGlossaryEntryTag}
-          onUnassignTag={onUnassignGlossaryEntryTag}
-          onReorderAssignedTag={onReorderAssignedGlossaryEntryTag}
-          onOpenTagManager={onOpenGlossaryTagManager}
-          onDeleteEntry={onDeleteGlossaryEntry}
-          readOnly={isProjectOwnedReadOnly}
-          markerGlyph={markerGlyph}
-          expectedLineEnding={expectedLineEnding}
-          newFileLineEndingFallback={newFileLineEndingFallback}
-          whitespaceSettings={whitespaceSettings}
-          undoHistoryMinDepth={undoHistoryMinDepth}
         />
       );
   }

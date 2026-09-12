@@ -1,80 +1,18 @@
 import { describe, expect, it } from "vitest";
-import type { GlossaryEntry } from "../../src/shared/glossary";
-import { createGlossaryEntryEditorId } from "../../src/shared/editorId";
-import { createFileDocument } from "../../src/renderer/currentDocument";
 import {
-  createGlossaryEntryCurrentEditor,
+  createFileDocument,
+  createProjectDocument
+} from "../../src/renderer/currentDocument";
+import {
   createMarkdownCurrentEditor,
-  currentEditorGlossaryEntryId,
   currentEditorTitle,
   editorIdForCurrentEditor,
-  isCurrentEditorDirty,
-  type GlossaryEntryCurrentEditor
+  isCurrentEditorDirty
 } from "../../src/renderer/currentEditor";
-import { updateGlossaryEntryDraftDescription } from "../../src/renderer/glossaryEntryDraft";
 
 const projectContext = { rootPath: "C:\\Novel" };
 
-const ts = "2026-01-01T00:00:00.000Z";
-const entry: GlossaryEntry = {
-  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  description: "王国の首都",
-  createdAt: ts,
-  updatedAt: ts,
-  atoms: [
-    {
-      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
-      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      sortOrder: 0,
-      value: "王都",
-      matchFlags: 0,
-      createdAt: ts,
-      updatedAt: ts
-    }
-  ],
-  tags: []
-};
-
-describe("CurrentEditor for glossary entries", () => {
-  it("starts clean when opened from a resolved GlossaryEntry", () => {
-    const editor = createGlossaryEntryCurrentEditor(entry);
-
-    expect(isCurrentEditorDirty(editor)).toBe(false);
-  });
-
-  it("is dirty after the draft's description changes from the saved snapshot", () => {
-    const editor: GlossaryEntryCurrentEditor = {
-      kind: "glossaryEntry",
-      draft: updateGlossaryEntryDraftDescription(
-        createGlossaryEntryCurrentEditor(entry).draft,
-        "変更後の説明"
-      )
-    };
-
-    expect(isCurrentEditorDirty(editor)).toBe(true);
-  });
-
-  it("keeps the representative atom value as the title while the description is edited", () => {
-    const editor: GlossaryEntryCurrentEditor = {
-      kind: "glossaryEntry",
-      draft: updateGlossaryEntryDraftDescription(
-        createGlossaryEntryCurrentEditor(entry).draft,
-        "変更後の説明"
-      )
-    };
-
-    expect(currentEditorTitle(editor)).toBe("王都");
-  });
-
-  it("derives its EditorId and highlighted entry id from the draft's saved entry", () => {
-    const editor = createGlossaryEntryCurrentEditor(entry);
-
-    expect(currentEditorGlossaryEntryId(editor)).toBe(entry.id);
-    expect(
-      editorIdForCurrentEditor(editor, projectContext)
-    ).toEqual(createGlossaryEntryEditorId(entry.id, projectContext));
-  });
-
+describe("CurrentEditor", () => {
   it("keeps Markdown dirty behavior unchanged", () => {
     const document = createFileDocument({
       path: "C:\\Novel\\chapter.md",
@@ -96,5 +34,19 @@ describe("CurrentEditor for glossary entries", () => {
         createMarkdownCurrentEditor({ ...document, content: "changed" })
       )
     ).toBe(true);
+  });
+
+  it("derives Markdown titles and EditorIds from the current document", () => {
+    const doc = createProjectDocument(
+      { relativePath: "chapter.md", name: "chapter.md" },
+      "hello"
+    );
+    const editor = createMarkdownCurrentEditor(doc);
+
+    expect(currentEditorTitle(editor)).toBe("chapter.md");
+    expect(editorIdForCurrentEditor(editor, projectContext)).toMatchObject({
+      kind: "projectDocument",
+      relativePath: "chapter.md"
+    });
   });
 });

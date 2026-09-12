@@ -4,10 +4,7 @@ import {
   createProjectDocument,
   createUntitledDocument
 } from "../../src/renderer/currentDocument";
-import {
-  createGlossaryEntryCurrentEditor,
-  createMarkdownCurrentEditor
-} from "../../src/renderer/currentEditor";
+import { createMarkdownCurrentEditor } from "../../src/renderer/currentEditor";
 import {
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithEditor,
@@ -27,7 +24,6 @@ import {
 } from "../../src/renderer/session/sessionSnapshot";
 import type { EditorViewState } from "../../src/renderer/editorViewState";
 import type { PergamumProject, ProjectDocument } from "../../src/shared/api";
-import type { GlossaryEntry } from "../../src/shared/glossary";
 
 const projectContext: ActiveProjectContext = { rootPath: "C:/Novel" };
 
@@ -41,25 +37,6 @@ const project: PergamumProject = {
   name: "Novel",
   config: null,
   documents: [projectDocA, projectDocB]
-};
-
-const glossaryEntry: GlossaryEntry = {
-  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-  description: "",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  atoms: [
-    {
-      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
-      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-      sortOrder: 0,
-      value: "王都",
-      matchFlags: 0,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
-    }
-  ],
-  tags: []
 };
 
 const SESSION_ID = "018f0000-0000-7000-8000-000000000000";
@@ -114,11 +91,6 @@ describe("buildSessionSnapshotInputs (#272)", () => {
       projectContext
     );
     state = openOrActivateEditor(state, untitledEditor(), projectContext);
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
 
     const inputs = buildSessionSnapshotInputs(SESSION_ID, project, state);
 
@@ -135,20 +107,12 @@ describe("buildSessionSnapshotInputs (#272)", () => {
         order: 2,
         untitledId: "0198d95f-97d8-7000-8000-000000000001",
         viewState: null
-      },
-      {
-        kind: "glossaryEntry",
-        order: 3,
-        entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
-        viewState: null
       }
     ]);
     expect(inputs.projectContext).toEqual({
       projectFilePath: "C:/Novel/story.pergamum",
       rootPath: "C:/Novel"
     });
-    // Glossary has no view-state cache key.
-    expect(inputs.editors[3].viewStateKey).toBeNull();
     expect(inputs.editors[1].viewStateKey).not.toBeNull();
   });
 
@@ -257,11 +221,6 @@ describe("buildSessionSnapshotInputs (#272)", () => {
       projectContext
     );
     state = openOrActivateEditor(state, untitledEditor(), projectContext);
-    state = openOrActivateEditor(
-      state,
-      createGlossaryEntryCurrentEditor(glossaryEntry),
-      projectContext
-    );
 
     // What explicitProjectClose does in App.tsx: drop project-owned editors
     // and setProject(null).

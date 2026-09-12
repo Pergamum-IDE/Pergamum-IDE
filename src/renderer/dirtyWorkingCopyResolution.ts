@@ -2,7 +2,6 @@ import type { EditorId } from "../shared/editorId";
 import type { Translate, TranslationKey } from "../shared/i18n";
 import type {
   DirtyWorkingCopy,
-  DirtyWorkingCopyScope,
   LifecycleIntent,
   SaveWorkingCopyOutcome
 } from "../shared/lifecycle";
@@ -107,12 +106,6 @@ function discardKeyForIntent(intent: DirtyResolutionIntent): TranslationKey {
   }
 }
 
-function isProjectOwnedDirtyWorkingCopyScope(
-  scope: DirtyWorkingCopyScope
-): boolean {
-  return scope === "projectDocument" || scope === "glossary";
-}
-
 export function getDirtyWorkingCopiesForLifecycle(
   intent: DirtyResolutionIntent,
   state: OpenDocumentsState
@@ -123,8 +116,8 @@ export function getDirtyWorkingCopiesForLifecycle(
     return dirtyWorkingCopies;
   }
 
-  return dirtyWorkingCopies.filter((workingCopy) =>
-    isProjectOwnedDirtyWorkingCopyScope(workingCopy.scope)
+  return dirtyWorkingCopies.filter(
+    (workingCopy) => workingCopy.scope === "projectDocument"
   );
 }
 

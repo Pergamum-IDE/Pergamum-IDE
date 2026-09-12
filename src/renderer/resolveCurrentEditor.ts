@@ -2,17 +2,9 @@ import type {
   PergamumProject,
   ProjectDocument
 } from "../shared/api";
-import type {
-  ActiveProjectContext,
-  EditorId
-} from "../shared/editorId";
-import type {
-  GlossaryEntry,
-  GlossaryEntryId
-} from "../shared/glossary";
+import type { ActiveProjectContext, EditorId } from "../shared/editorId";
 import type { EditorResolveResult } from "./editorNavigation";
 import {
-  createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
   type CurrentEditor
 } from "./currentEditor";
@@ -30,9 +22,6 @@ export interface CurrentEditorResolverContext {
   readonly readProjectDocument: (
     document: ProjectDocument
   ) => Promise<CurrentDocument>;
-  readonly getGlossaryEntryById: (
-    entryId: GlossaryEntryId
-  ) => Promise<GlossaryEntry | null>;
 }
 
 export async function resolveCurrentEditor(
@@ -54,8 +43,6 @@ export async function resolveCurrentEditor(
   switch (editorId.kind) {
     case "projectDocument":
       return resolveProjectDocumentEditor(editorId, context);
-    case "glossaryEntry":
-      return resolveGlossaryEntryEditor(editorId, context);
     case "file":
     case "untitled":
       return { kind: "notFound" };
@@ -91,35 +78,6 @@ async function resolveProjectDocumentEditor(
         await context.readProjectDocument(projectDocument)
       )
     };
-  } catch (error) {
-    return {
-      kind: "unavailable",
-      error
-    };
-  }
-}
-
-async function resolveGlossaryEntryEditor(
-  editorId: EditorId,
-  context: CurrentEditorResolverContext
-): Promise<EditorResolveResult<CurrentEditor>> {
-  if (
-    editorId.kind !== "glossaryEntry" ||
-    !context.project ||
-    !context.activeProjectContext
-  ) {
-    return { kind: "notFound" };
-  }
-
-  try {
-    const entry = await context.getGlossaryEntryById(editorId.entryId);
-
-    return entry
-      ? {
-          kind: "resolved",
-          editor: createGlossaryEntryCurrentEditor(entry)
-        }
-      : { kind: "notFound" };
   } catch (error) {
     return {
       kind: "unavailable",
