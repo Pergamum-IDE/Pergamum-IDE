@@ -24,6 +24,7 @@ import type {
   UpdateProjectSettingsRequest
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
+import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
 import {
   applicationMenuCommandIds,
   type ApplicationMenuCommandId,
@@ -115,13 +116,16 @@ import {
 import { buildCommandContextSnapshot } from "./commandContextSnapshot";
 import {
   applyStandaloneSaveResult,
+  applySavedCurrentDocumentSnapshotToWorkingCopy,
   createFileDocument,
   createProjectDocument,
   currentDocumentContent,
+  currentDocumentWorkingStateEquals,
   currentProjectRelativePath,
   displayName,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
+  prepareCurrentDocumentForMarkdownStorage,
   standaloneSavePath,
   updateCurrentDocumentContent,
   type CurrentDocument
@@ -2218,6 +2222,10 @@ export function App(): JSX.Element {
     () => projectContextForProject(project),
     [project]
   );
+  const effectiveSettings = useMemo(
+    () => resolveEffectiveSettings(settings, project?.config?.settings),
+    [settings, project?.config?.settings]
+  );
   // #272: recomputed whenever the Project or the open-editor set changes.
   // Cheap (no serialization / hashing) — the coordinator debounces and
   // captures Editor View State at most once per flush.
@@ -2248,7 +2256,9 @@ export function App(): JSX.Element {
     recoveryPayloadCoordinator.updateDirtyDocuments(
       buildRecoveryDirtyDocuments(openDocumentsStateRef.current, {
         project,
-        activeProjectContext
+        activeProjectContext,
+        normalizeUnicodeToNfc:
+          effectiveSettings.workbench.normalizeUnicodeToNfc
       })
     );
   };
@@ -2291,7 +2301,8 @@ export function App(): JSX.Element {
     recoveryPayloadCoordinator,
     openDocumentsState,
     project,
-    activeProjectContext
+    activeProjectContext,
+    effectiveSettings.workbench.normalizeUnicodeToNfc
   ]);
   useEffect(
     () => () => recoveryPayloadCoordinator.dispose(),
@@ -2320,10 +2331,6 @@ export function App(): JSX.Element {
       imeCompositionSaveGuard.clearPendingSave("unmount");
     },
     [imeCompositionSaveGuard]
-  );
-  const effectiveSettings = useMemo(
-    () => resolveEffectiveSettings(settings, project?.config?.settings),
-    [settings, project?.config?.settings]
   );
   // #420 Step 5: run the bulk text import. The dialog owns *when* (only on an
   // explicit Import click for the importable rows); App fills in the project
@@ -5670,7 +5677,12 @@ export function App(): JSX.Element {
       return;
     }
 
-    const recoveryContext = { project, activeProjectContext };
+    const recoveryContext = {
+      project,
+      activeProjectContext,
+      normalizeUnicodeToNfc:
+        effectiveSettings.workbench.normalizeUnicodeToNfc
+    };
     const savedEditorId = editorIdForCurrentDocument(
       savedDocument,
       activeProjectContext
@@ -5735,6 +5747,73 @@ export function App(): JSX.Element {
       confirmLabel: translate("common.ok"),
       cancelLabel: null
     });
+  }
+
+  function syncActiveMarkdownBufferToSavedDocument(
+    documentId: EditorId,
+    savedDocument: CurrentDocument,
+    shouldSync: boolean
+  ): void {
+    if (!shouldSync) {
+      return;
+    }
+
+    const activeId = openDocumentsStateRef.current.activeDocumentId;
+
+    if (
+      activeId === null ||
+      isEditorAreaSpecialTabActive ||
+      currentEditor?.kind !== "markdown" ||
+      paragraphIndentControllerRef.current === null ||
+      !editorIdEquals(activeId, documentId)
+    ) {
+      return;
+    }
+
+    paragraphIndentControllerRef.current.syncBufferToDiskContent(
+      savedDocument.content,
+      savedDocument.lineEndingBreaks
+    );
+  }
+
+  function resolveSavedDocumentForOpenState(
+    documentId: EditorId,
+    saveStartDocument: CurrentDocument,
+    savedDocument: CurrentDocument
+  ): {
+    readonly document: CurrentDocument;
+    readonly canSyncActiveBuffer: boolean;
+  } {
+    const liveOpenDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      documentId
+    );
+    const liveDocument =
+      liveOpenDocument?.editor.kind === "markdown"
+        ? liveOpenDocument.editor.document
+        : null;
+
+    if (!liveDocument) {
+      return {
+        document: savedDocument,
+        canSyncActiveBuffer: false
+      };
+    }
+
+    if (currentDocumentWorkingStateEquals(liveDocument, saveStartDocument)) {
+      return {
+        document: savedDocument,
+        canSyncActiveBuffer: true
+      };
+    }
+
+    return {
+      document: applySavedCurrentDocumentSnapshotToWorkingCopy(
+        liveDocument,
+        savedDocument
+      ),
+      canSyncActiveBuffer: false
+    };
   }
 
   async function showGlossarySaveFailedDialog(): Promise<void> {
@@ -6228,27 +6307,23 @@ export function App(): JSX.Element {
         });
 
         try {
-          const documentToSave = targetEditor.document;
+          const originalDocumentToSave = targetEditor.document;
+          const preparedDocumentForStorage =
+            prepareCurrentDocumentForMarkdownStorage(originalDocumentToSave, {
+              normalizeUnicodeToNfc:
+                effectiveSettings.workbench.normalizeUnicodeToNfc
+            });
+          const documentToSave = preparedDocumentForStorage.document;
           const documentIdToSave = targetOpenDocument.id;
           // #286: the document identity BEFORE this save, so its Recovery
           // row can be retired after the atomic write succeeds (Save As /
           // Untitled first save change the identity).
           const preSaveRecoveryKey = recoveryDocumentKeyForDocument(
-            documentToSave,
+            originalDocumentToSave,
             { project, activeProjectContext }
           );
-          // #253: reconstruct the original (or newly-inherited) per-break
-          // line endings from the tracked kinds before writing — the
-          // canonical `content` itself is always CodeMirror's "\n"-only
-          // normalized text (see lineEndingTracking.ts). This is the only
-          // place a full-document line-ending pass happens on save; it
-          // never runs per keystroke. Both the project and standalone save
-          // branches below use this same serialized string, so the two
-          // save paths share one line-ending semantics.
-          const serializedContentToSave = serializeLineEndings(
-            documentToSave.content,
-            lineEndingBreakSetToArray(documentToSave.lineEndingBreaks)
-          );
+          const serializedContentToSave =
+            preparedDocumentForStorage.serializedContent;
 
           if (
             isProjectCurrentDocument(documentToSave) &&
@@ -6262,12 +6337,26 @@ export function App(): JSX.Element {
 
             const savedProjectSnapshot =
               markCurrentDocumentSaved(documentToSave);
-            replaceSavedDocument(documentIdToSave, savedProjectSnapshot);
+            const savedProjectOpenState = resolveSavedDocumentForOpenState(
+              documentIdToSave,
+              originalDocumentToSave,
+              savedProjectSnapshot
+            );
+            syncActiveMarkdownBufferToSavedDocument(
+              documentIdToSave,
+              savedProjectSnapshot,
+              savedProjectOpenState.canSyncActiveBuffer &&
+                preparedDocumentForStorage.didNormalizeText
+            );
+            replaceSavedDocument(
+              documentIdToSave,
+              savedProjectOpenState.document
+            );
             // #286: atomic project-document write succeeded → retire its
             // Recovery snapshot (post-save edits are re-flushed first).
             retireRecoverySnapshotAfterSave(
               preSaveRecoveryKey,
-              savedProjectSnapshot
+              savedProjectOpenState.document
             );
             setStatus({
               key: "status.savedPath",
@@ -6374,14 +6463,28 @@ export function App(): JSX.Element {
             documentToSave,
             savedStandaloneDocument
           );
+          const savedStandaloneOpenState = resolveSavedDocumentForOpenState(
+            documentIdToSave,
+            originalDocumentToSave,
+            savedDocument
+          );
+          syncActiveMarkdownBufferToSavedDocument(
+            documentIdToSave,
+            savedDocument,
+            savedStandaloneOpenState.canSyncActiveBuffer &&
+              preparedDocumentForStorage.didNormalizeText
+          );
           const didCollide = replaceSavedDocument(
             documentIdToSave,
-            savedDocument
+            savedStandaloneOpenState.document
           );
           // #286: atomic standalone / Save As / Untitled-first-save write
           // succeeded → retire the pre-save Recovery snapshot; a Save As
           // moves protection to the new file `document_key` first.
-          retireRecoverySnapshotAfterSave(preSaveRecoveryKey, savedDocument);
+          retireRecoverySnapshotAfterSave(
+            preSaveRecoveryKey,
+            savedStandaloneOpenState.document
+          );
 
           setStatus(
             didCollide
@@ -8034,9 +8137,13 @@ export function App(): JSX.Element {
       if (nextContent === read.content) {
         return "skipped";
       }
+      const storageContent = normalizeMarkdownTextForStorage(nextContent, {
+        normalizeUnicodeToNfc:
+          effectiveSettings.workbench.normalizeUnicodeToNfc
+      });
       await window.pergamum.projects.saveProjectDocument(
         documentProjectRelativePath,
-        nextContent
+        storageContent
       );
       return "updated";
     } catch {
@@ -9107,11 +9214,19 @@ export function App(): JSX.Element {
         nextText,
         lineEndingBreakSetToArray(nextBreaks)
       );
+      const serializedForStorage = normalizeMarkdownTextForStorage(serialized, {
+        normalizeUnicodeToNfc:
+          effectiveSettings.workbench.normalizeUnicodeToNfc
+      });
+      const savedText = normalizeLineEndings(serializedForStorage);
+      const savedBreaks = buildLineEndingBreakSet(
+        analyzeLineEndings(serializedForStorage)
+      );
 
       try {
         await window.pergamum.projects.saveProjectDocument(
           relativePath,
-          serialized
+          serializedForStorage
         );
       } catch {
         failureFileCount += 1;
@@ -9120,8 +9235,8 @@ export function App(): JSX.Element {
 
       saved.push({
         relativePath,
-        nextText,
-        nextBreaks,
+        nextText: savedText,
+        nextBreaks: savedBreaks,
         replacementCount: changeSpecs.length
       });
     }

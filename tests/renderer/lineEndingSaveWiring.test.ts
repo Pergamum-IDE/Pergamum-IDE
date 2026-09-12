@@ -18,7 +18,7 @@ function sourceBlock(
 }
 
 describe("line-ending preservation on save (#253)", () => {
-  it("computes the serialized (original line-ending) content once per save, ahead of both save branches", () => {
+  it("prepares the storage document once per save, ahead of both save branches", () => {
     const source = appSource();
     const saveBlock = sourceBlock(
       source,
@@ -26,20 +26,24 @@ describe("line-ending preservation on save (#253)", () => {
       "async function readProjectDocument"
     );
 
-    const serializeIndex = saveBlock.indexOf(
-      "const serializedContentToSave = serializeLineEndings("
+    const prepareIndex = saveBlock.indexOf(
+      "const preparedDocumentForStorage ="
+    );
+    const serializedIndex = saveBlock.indexOf(
+      "const serializedContentToSave =\n            preparedDocumentForStorage.serializedContent"
     );
     const projectBranchIndex = saveBlock.indexOf(
       "isProjectCurrentDocument(documentToSave)"
     );
     const standaloneBranchIndex = saveBlock.indexOf("const existingSavePath =");
 
-    expect(serializeIndex).toBeGreaterThan(-1);
-    expect(projectBranchIndex).toBeGreaterThan(serializeIndex);
+    expect(prepareIndex).toBeGreaterThan(-1);
+    expect(serializedIndex).toBeGreaterThan(prepareIndex);
+    expect(projectBranchIndex).toBeGreaterThan(serializedIndex);
     expect(standaloneBranchIndex).toBeGreaterThan(projectBranchIndex);
 
     expect(saveBlock).toContain(
-      "serializeLineEndings(\n            documentToSave.content,\n            lineEndingBreakSetToArray(documentToSave.lineEndingBreaks)\n          )"
+      "prepareCurrentDocumentForMarkdownStorage(originalDocumentToSave, {\n              normalizeUnicodeToNfc:\n                effectiveSettings.workbench.normalizeUnicodeToNfc\n            })"
     );
   });
 
@@ -91,6 +95,45 @@ describe("line-ending preservation on save (#253)", () => {
 
     expect(source).toContain(
       "updateCurrentDocumentContent(\n          document,\n          nextContent,\n          nextLineEndingBreaks\n        )"
+    );
+  });
+
+  it("#449 syncs an NFC-normalized active editor buffer only when the live buffer still matches the save-start snapshot", () => {
+    const source = appSource();
+    const saveBlock = sourceBlock(
+      source,
+      "async function saveFile(",
+      "async function readProjectDocument"
+    );
+    const projectResolutionNeedle =
+      "const savedProjectOpenState = resolveSavedDocumentForOpenState(\n              documentIdToSave,\n              originalDocumentToSave,\n              savedProjectSnapshot\n            );";
+    const projectSyncNeedle =
+      "syncActiveMarkdownBufferToSavedDocument(\n              documentIdToSave,\n              savedProjectSnapshot,\n              savedProjectOpenState.canSyncActiveBuffer &&\n                preparedDocumentForStorage.didNormalizeText\n            );";
+    const projectReplaceNeedle =
+      "replaceSavedDocument(\n              documentIdToSave,\n              savedProjectOpenState.document\n            );";
+    const standaloneResolutionNeedle =
+      "const savedStandaloneOpenState = resolveSavedDocumentForOpenState(\n            documentIdToSave,\n            originalDocumentToSave,\n            savedDocument\n          );";
+    const standaloneSyncNeedle =
+      "syncActiveMarkdownBufferToSavedDocument(\n            documentIdToSave,\n            savedDocument,\n            savedStandaloneOpenState.canSyncActiveBuffer &&\n              preparedDocumentForStorage.didNormalizeText\n          );";
+    const standaloneReplaceNeedle =
+      "savedStandaloneOpenState.document";
+
+    expect(saveBlock).toContain(projectResolutionNeedle);
+    expect(saveBlock).toContain(projectSyncNeedle);
+    expect(saveBlock.indexOf(projectResolutionNeedle)).toBeLessThan(
+      saveBlock.indexOf(projectSyncNeedle)
+    );
+    expect(saveBlock.indexOf(projectSyncNeedle)).toBeLessThan(
+      saveBlock.indexOf(projectReplaceNeedle)
+    );
+
+    expect(saveBlock).toContain(standaloneResolutionNeedle);
+    expect(saveBlock).toContain(standaloneSyncNeedle);
+    expect(saveBlock.indexOf(standaloneResolutionNeedle)).toBeLessThan(
+      saveBlock.indexOf(standaloneSyncNeedle)
+    );
+    expect(saveBlock.indexOf(standaloneSyncNeedle)).toBeLessThan(
+      saveBlock.indexOf(standaloneReplaceNeedle)
     );
   });
 });

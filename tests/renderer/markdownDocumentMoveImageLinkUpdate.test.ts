@@ -307,6 +307,12 @@ describe("#413 File Explorer / App wiring", () => {
     expect(appSource).toContain(
       "window.pergamum.projects.saveProjectDocument("
     );
+    expect(appSource).toContain(
+      "const storageContent = normalizeMarkdownTextForStorage(nextContent, {"
+    );
+    expect(appSource).toContain(
+      "effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
     // Per-document failure is tracked, never rolls the Move back.
     expect(appSource).toContain("failedDocuments");
   });

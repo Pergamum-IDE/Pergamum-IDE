@@ -19,6 +19,7 @@
 import type { ActiveProjectContext } from "../../shared/editorId";
 import { createFileEditorIdForPath } from "../../shared/editorId";
 import type { PergamumProject } from "../../shared/api";
+import { normalizeMarkdownTextForStorage } from "../../shared/markdownTextNormalization";
 import type {
   RecoveryDocumentLineEnd,
   RecoveryDocumentPayload
@@ -48,9 +49,14 @@ export interface RecoveryDirtyDocument {
   readonly payload: RecoveryDocumentPayload;
 }
 
-export interface RecoveryDocumentBuildContext {
+export interface RecoveryDocumentIdentityContext {
   readonly project: PergamumProject | null;
   readonly activeProjectContext: ActiveProjectContext | null;
+}
+
+export interface RecoveryDocumentBuildContext
+  extends RecoveryDocumentIdentityContext {
+  readonly normalizeUnicodeToNfc: boolean;
 }
 
 function normalizeAbsolutePath(absolutePath: string): string | null {
@@ -87,6 +93,15 @@ function serializedBody(document: CurrentDocument): string {
   );
 }
 
+function payloadTextForDocument(
+  document: CurrentDocument,
+  context: RecoveryDocumentBuildContext
+): string {
+  return normalizeMarkdownTextForStorage(serializedBody(document), {
+    normalizeUnicodeToNfc: context.normalizeUnicodeToNfc
+  });
+}
+
 function canonicalSavedBaseline(document: CurrentDocument): string {
   return serializeLineEndings(
     document.savedContent,
@@ -101,7 +116,7 @@ function canonicalSavedBaseline(document: CurrentDocument): string {
  */
 export function recoveryDocumentKeyForEditor(
   editor: CurrentEditor,
-  context: RecoveryDocumentBuildContext
+  context: RecoveryDocumentIdentityContext
 ): string | null {
   const document = markdownDocumentForEditor(editor);
 
@@ -121,7 +136,7 @@ export function recoveryDocumentKeyForEditor(
  */
 export function recoveryDocumentKeyForProjectRelativePath(
   relativePath: string,
-  context: RecoveryDocumentBuildContext
+  context: RecoveryDocumentIdentityContext
 ): string | null {
   if (!context.activeProjectContext) {
     return null;
@@ -136,7 +151,7 @@ export function recoveryDocumentKeyForProjectRelativePath(
 
 export function recoveryDocumentKeyForDocument(
   document: CurrentDocument,
-  context: RecoveryDocumentBuildContext
+  context: RecoveryDocumentIdentityContext
 ): string | null {
   if (document.kind === "untitled") {
     return recoveryUntitledDocumentKey(document.untitledId);
@@ -169,7 +184,7 @@ export function buildRecoveryDocumentPayload(
   document: CurrentDocument,
   context: RecoveryDocumentBuildContext
 ): RecoveryDocumentPayload | null {
-  const payloadText = serializedBody(document);
+  const payloadText = payloadTextForDocument(document, context);
 
   if (document.kind === "untitled") {
     return {
