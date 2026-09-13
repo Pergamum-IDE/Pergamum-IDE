@@ -2201,3 +2201,33 @@ describe("buildGlossaryDocumentMapPlan performance regression guard (architectur
     expect(functionBody).not.toContain("documentMapWinningDialogueRangeAtOffset");
   });
 });
+
+describe("collectGlossaryDocumentMapGlossaryOccurrences NFC matching (#453 Slice 9)", () => {
+  it("detects NFC/NFD equivalent occurrences when normalizeUnicodeToNfc is true", () => {
+    const nfdCafe = "cafe\u0301";
+    const entries = [entry("e1", [atom("café")])];
+    const text = `Title\n\n${nfdCafe} au lait`;
+
+    const occurrencesOff = collectGlossaryDocumentMapGlossaryOccurrences(
+      text,
+      entries
+    );
+    expect(occurrencesOff).toEqual([]);
+
+    const occurrencesOn = collectGlossaryDocumentMapGlossaryOccurrences(
+      text,
+      entries,
+      undefined,
+      GLOSSARY_DOCUMENT_MAP_HIT_COLOR,
+      undefined,
+      undefined,
+      { normalizeUnicodeToNfc: true }
+    );
+    expect(occurrencesOn).toHaveLength(1);
+    expect(occurrencesOn[0]).toMatchObject({
+      entryId: "e1",
+      startOffset: 7,
+      endOffset: 12
+    });
+  });
+});

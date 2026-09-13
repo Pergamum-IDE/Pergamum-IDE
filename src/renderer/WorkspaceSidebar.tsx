@@ -345,6 +345,7 @@ export function WorkspaceSidebar({
           editorWidth={documentMapEditorWidth}
           editorVisibleRange={documentMapEditorVisibleRange}
           documentMapSettings={documentMapSettings}
+          normalizeUnicodeToNfc={normalizeUnicodeToNfc}
           onNavigateToLine={onDocumentMapNavigateToLine}
         />
       );

@@ -16,15 +16,22 @@ import {
   hasGlossaryAtomFlag
 } from "./glossaryAtomFlags";
 import { shouldAcceptGlossarySurfaceBoundary } from "./glossarySurfaceBoundary";
+import {
+  createNormalizedTextWithSourceMap,
+  mapNormalizedRangeToSourceRange
+} from "./normalizedTextSourceMap";
 
 export interface GlossarySurfaceMatchingOptions {
   minimumSurfaceLength?: number;
+  /** #453 Slice 9: optional NFC normalization for surface matching. */
+  normalizeUnicodeToNfc?: boolean;
 }
 
 export interface GlossarySurfaceIndexEntry {
   entryId: GlossaryEntryId;
   atomId: GlossaryAtomId;
   surface: string;
+  matchSurface: string;
   checkStartBoundary: boolean;
   checkEndBoundary: boolean;
   /**
@@ -39,6 +46,7 @@ export interface GlossarySurfaceIndexEntry {
 
 export interface GlossarySurfaceIndex {
   readonly entries: readonly GlossarySurfaceIndexEntry[];
+  readonly normalizeUnicodeToNfc?: boolean;
 }
 
 export interface GlossarySurfaceMatchCandidate {
@@ -144,8 +152,8 @@ function compareIndexEntries(
   right: GlossarySurfaceIndexEntry
 ): number {
   return (
-    right.surface.length - left.surface.length ||
-    left.surface.localeCompare(right.surface) ||
+    right.matchSurface.length - left.matchSurface.length ||
+    left.matchSurface.localeCompare(right.matchSurface) ||
     left.entryId.localeCompare(right.entryId) ||
     left.atomId.localeCompare(right.atomId)
   );
@@ -176,12 +184,16 @@ export function buildGlossarySurfaceIndex(
   options?: GlossarySurfaceMatchingOptions
 ): GlossarySurfaceIndex {
   const minimumSurfaceLength = normalizedMinimumSurfaceLength(options);
+  const normalizeToNfc = options?.normalizeUnicodeToNfc ?? false;
   const indexEntries: GlossarySurfaceIndexEntry[] = [];
 
   for (const entry of entries) {
     for (const atom of entry.atoms) {
       const surface = atom.value.trim();
-      const surfaceLength = surfaceCharacterLength(surface);
+      const matchSurface = normalizeToNfc
+        ? surface.normalize("NFC")
+        : surface;
+      const surfaceLength = surfaceCharacterLength(matchSurface);
       // #365: a single-code-point value is only indexed when the atom
       // explicitly opts in. 2+ code points are unaffected.
       const singleCharacterOptIn =
@@ -202,6 +214,7 @@ export function buildGlossarySurfaceIndex(
         entryId: entry.id,
         atomId: atom.id,
         surface,
+        matchSurface,
         checkStartBoundary: glossaryBoundaryPolicyChecksBoundary(
           getGlossaryAtomBoundaryStartPolicy(atom.matchFlags)
         ),
@@ -210,13 +223,14 @@ export function buildGlossarySurfaceIndex(
         ),
         singleCharacterKanjiGuard:
           singleCharacterOptIn &&
-          isCjkIdeographCodePoint(surface.codePointAt(0) ?? 0)
+          isCjkIdeographCodePoint(matchSurface.codePointAt(0) ?? 0)
       });
     }
   }
 
   return {
-    entries: indexEntries.sort(compareIndexEntries)
+    entries: indexEntries.sort(compareIndexEntries),
+    normalizeUnicodeToNfc: normalizeToNfc
   };
 }
 
@@ -225,16 +239,50 @@ function collectRawGlossarySurfaceMatches(
   index: GlossarySurfaceIndex
 ): RawGlossarySurfaceMatch[] {
   const rawMatches: RawGlossarySurfaceMatch[] = [];
+  const normalizeToNfc = index.normalizeUnicodeToNfc ?? false;
 
-  for (let cursor = 0; cursor < text.length; cursor += 1) {
+  if (!normalizeToNfc) {
+    for (let cursor = 0; cursor < text.length; cursor += 1) {
+      for (const entry of index.entries) {
+        if (!text.startsWith(entry.matchSurface, cursor)) {
+          continue;
+        }
+
+        rawMatches.push({
+          start: cursor,
+          end: cursor + entry.matchSurface.length,
+          entry
+        });
+      }
+    }
+    return rawMatches;
+  }
+
+  const sourceMap = createNormalizedTextWithSourceMap(text, {
+    normalizeToNfc: true
+  });
+  const normalizedText = sourceMap.normalizedText;
+
+  for (let normCursor = 0; normCursor < normalizedText.length; normCursor += 1) {
     for (const entry of index.entries) {
-      if (!text.startsWith(entry.surface, cursor)) {
+      if (!normalizedText.startsWith(entry.matchSurface, normCursor)) {
+        continue;
+      }
+
+      const normStart = normCursor;
+      const normEnd = normCursor + entry.matchSurface.length;
+      const sourceRange = mapNormalizedRangeToSourceRange(
+        sourceMap,
+        normStart,
+        normEnd
+      );
+      if (!sourceRange) {
         continue;
       }
 
       rawMatches.push({
-        start: cursor,
-        end: cursor + entry.surface.length,
+        start: sourceRange.start,
+        end: sourceRange.end,
         entry
       });
     }
@@ -270,7 +318,7 @@ function isSingleCharacterKanjiAdjacencyAccepted(
     return true;
   }
 
-  const matchedCodePoint = rawMatch.entry.surface.codePointAt(0) ?? 0;
+  const matchedCodePoint = rawMatch.entry.matchSurface.codePointAt(0) ?? 0;
 
   return (
     !singleKanjiNeighbourBlocks(

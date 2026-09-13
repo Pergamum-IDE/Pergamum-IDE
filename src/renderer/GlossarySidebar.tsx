@@ -168,9 +168,11 @@ export function GlossarySidebar({
   const entryHitCounts = useMemo(
     () =>
       state.status === "loaded"
-        ? tallyGlossaryEntryHits(activeDocumentContent, state.entries)
+        ? tallyGlossaryEntryHits(activeDocumentContent, state.entries, {
+            normalizeUnicodeToNfc
+          })
         : new Map<string, number>(),
-    [activeDocumentContent, state.entries, state.status]
+    [activeDocumentContent, state.entries, state.status, normalizeUnicodeToNfc]
   );
 
   const visibleEntries =

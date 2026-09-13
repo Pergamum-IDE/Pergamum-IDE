@@ -2491,7 +2491,11 @@ export function App(): JSX.Element {
           analyzeDocumentMetricsDocument(
             content,
             glossaryEntries,
-            documentMetricsDialoguePairs
+            documentMetricsDialoguePairs,
+            {
+              normalizeUnicodeToNfc:
+                effectiveSettings.workbench.normalizeUnicodeToNfc
+            }
           )
         );
       } catch {
@@ -2503,7 +2507,8 @@ export function App(): JSX.Element {
   }, [
     documentMetricsAnalysisContent,
     glossaryEntries,
-    documentMetricsDialoguePairs
+    documentMetricsDialoguePairs,
+    effectiveSettings.workbench.normalizeUnicodeToNfc
   ]);
 
   const isDirty = currentEditor ? isCurrentEditorDirty(currentEditor) : false;
@@ -3867,7 +3872,10 @@ export function App(): JSX.Element {
       entry,
       targetDocument,
       direction,
-      currentCursor: sidebarGlossaryOccurrenceCursorRef.current
+      currentCursor: sidebarGlossaryOccurrenceCursorRef.current,
+      options: {
+        normalizeUnicodeToNfc: effectiveSettings.workbench.normalizeUnicodeToNfc
+      }
     });
 
     if (outcome.kind === "noOccurrences") {
@@ -6129,7 +6137,10 @@ export function App(): JSX.Element {
       outcome = navigateGlossaryOccurrenceTracking({
         session: resolved.session,
         content: resolved.targetContent,
-        direction
+        direction,
+        options: {
+          normalizeUnicodeToNfc: effectiveSettings.workbench.normalizeUnicodeToNfc
+        }
       });
     } catch (error) {
       logRendererDebugEvent({

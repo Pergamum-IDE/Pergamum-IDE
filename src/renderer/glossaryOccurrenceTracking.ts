@@ -10,6 +10,7 @@ import {
   findOpenDocument,
   type OpenDocumentsState
 } from "./openDocuments";
+import type { GlossarySurfaceMatchingOptions } from "../shared/glossarySurfaceMatching";
 
 export type { GlossaryOccurrenceDirection, GlossaryOccurrenceRange };
 
@@ -74,6 +75,7 @@ export interface NavigateGlossaryOccurrenceTrackingInput {
   session: GlossaryOccurrenceTrackingActiveState;
   content: string;
   direction: GlossaryOccurrenceDirection;
+  options?: GlossarySurfaceMatchingOptions;
 }
 
 export type NavigateGlossaryOccurrenceTrackingResult =
@@ -94,8 +96,8 @@ export type NavigateGlossaryOccurrenceTrackingResult =
 export function navigateGlossaryOccurrenceTracking(
   input: NavigateGlossaryOccurrenceTrackingInput
 ): NavigateGlossaryOccurrenceTrackingResult {
-  const { session, content, direction } = input;
-  const ranges = findGlossaryEntryOccurrences(content, session.entrySnapshot);
+  const { session, content, direction, options } = input;
+  const ranges = findGlossaryEntryOccurrences(content, session.entrySnapshot, options);
 
   if (ranges.length === 0) {
     return { kind: "noOccurrences" };

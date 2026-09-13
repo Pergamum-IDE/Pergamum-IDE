@@ -856,7 +856,9 @@ function MarkdownEditorSurface({
     [translate]
   );
   const { entries: glossaryEntries, surfaceIndex } =
-    useGlossaryEntriesForMatching(projectRootPath, glossaryRefreshToken);
+    useGlossaryEntriesForMatching(projectRootPath, glossaryRefreshToken, {
+      normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
+    });
   // #390 PoC: stable identity per `entries` value so MarkdownEditor's
   // effect-driven ref refresh doesn't fire on every unrelated re-render.
   const glossaryCompletion = useMemo(

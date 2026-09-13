@@ -2,7 +2,8 @@ import { editorIdEquals, type EditorId } from "../shared/editorId";
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import {
   buildGlossarySurfaceIndex,
-  matchGlossarySurfacesPerEntry
+  matchGlossarySurfacesPerEntry,
+  type GlossarySurfaceMatchingOptions
 } from "../shared/glossarySurfaceMatching";
 
 export interface GlossaryOccurrenceRange {
@@ -19,7 +20,8 @@ export interface GlossaryOccurrenceRange {
  */
 export function buildGlossaryEntryOccurrenceMap(
   text: string | null,
-  entries: readonly GlossaryEntry[]
+  entries: readonly GlossaryEntry[],
+  options?: GlossarySurfaceMatchingOptions
 ): Map<GlossaryEntryId, GlossaryOccurrenceRange[]> {
   const result = new Map<GlossaryEntryId, GlossaryOccurrenceRange[]>();
   for (const entry of entries) {
@@ -30,7 +32,7 @@ export function buildGlossaryEntryOccurrenceMap(
     return result;
   }
 
-  const index = buildGlossarySurfaceIndex(entries);
+  const index = buildGlossarySurfaceIndex(entries, options);
   const perEntryMatches = matchGlossarySurfacesPerEntry(text, index);
 
   for (const entry of entries) {
@@ -45,21 +47,23 @@ export function buildGlossaryEntryOccurrenceMap(
 
 export function findGlossaryEntryOccurrences(
   text: string,
-  entry: GlossaryEntry
+  entry: GlossaryEntry,
+  options?: GlossarySurfaceMatchingOptions
 ): GlossaryOccurrenceRange[] {
-  return buildGlossaryEntryOccurrenceMap(text, [entry]).get(entry.id) ?? [];
+  return buildGlossaryEntryOccurrenceMap(text, [entry], options).get(entry.id) ?? [];
 }
 
 export function tallyGlossaryEntryHits(
   text: string | null,
-  entries: readonly GlossaryEntry[]
+  entries: readonly GlossaryEntry[],
+  options?: GlossarySurfaceMatchingOptions
 ): Map<string, number> {
   const counts = new Map<string, number>();
   if (text === null || text.length === 0 || entries.length === 0) {
     return counts;
   }
 
-  const occurrenceMap = buildGlossaryEntryOccurrenceMap(text, entries);
+  const occurrenceMap = buildGlossaryEntryOccurrenceMap(text, entries, options);
   for (const [entryId, occurrences] of occurrenceMap) {
     if (occurrences.length > 0) {
       counts.set(entryId, occurrences.length);
@@ -96,6 +100,7 @@ export interface PlanGlossaryOccurrenceNavigationInput {
   direction: GlossaryOccurrenceDirection;
   currentCursor: GlossaryOccurrenceCursor | null;
   occurrences?: readonly GlossaryOccurrenceRange[];
+  options?: GlossarySurfaceMatchingOptions;
 }
 
 function anchorIndex(
@@ -134,7 +139,7 @@ function resolveOccurrenceIndex(
 export function planGlossaryOccurrenceNavigation(
   input: PlanGlossaryOccurrenceNavigationInput
 ): GlossaryOccurrenceNavigationOutcome {
-  const { entry, targetDocument, direction, currentCursor } = input;
+  const { entry, targetDocument, direction, currentCursor, options } = input;
 
   if (!targetDocument) {
     return { kind: "noTargetDocument" };
@@ -142,7 +147,7 @@ export function planGlossaryOccurrenceNavigation(
 
   const occurrences =
     input.occurrences ??
-    findGlossaryEntryOccurrences(targetDocument.content, entry);
+    findGlossaryEntryOccurrences(targetDocument.content, entry, options);
 
   if (occurrences.length === 0) {
     return { kind: "noOccurrences" };

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GlossaryEntry } from "../shared/glossary";
 import {
   buildGlossarySurfaceIndex,
-  type GlossarySurfaceIndex
+  type GlossarySurfaceIndex,
+  type GlossarySurfaceMatchingOptions
 } from "../shared/glossarySurfaceMatching";
 
 export type GlossaryEntriesForMatchingStatus =
@@ -37,7 +38,8 @@ function initialGlossaryEntriesForMatchingState(
 
 export function useGlossaryEntriesForMatching(
   projectRootPath: string | null,
-  refreshToken: number
+  refreshToken: number,
+  options?: GlossarySurfaceMatchingOptions
 ): GlossaryEntriesForMatchingResult {
   const [state, setState] = useState<GlossaryEntriesForMatchingState>(() =>
     initialGlossaryEntriesForMatchingState(projectRootPath)
@@ -52,9 +54,10 @@ export function useGlossaryEntriesForMatching(
     : projectRootPath
       ? "loading"
       : "noProject";
+  const normalizeUnicodeToNfc = options?.normalizeUnicodeToNfc ?? false;
   const surfaceIndex = useMemo(
-    () => buildGlossarySurfaceIndex(entries),
-    [entries]
+    () => buildGlossarySurfaceIndex(entries, options),
+    [entries, normalizeUnicodeToNfc]
   );
 
   useEffect(() => {

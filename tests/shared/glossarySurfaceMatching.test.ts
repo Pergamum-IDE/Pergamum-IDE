@@ -134,7 +134,7 @@ describe("glossary surface matching (#375)", () => {
     ).toHaveLength(1);
   });
 
-  it("does not NFC-normalize surface matching and reports raw UTF-16 ranges (#453 Slice 0)", () => {
+  it("does not NFC-normalize surface matching when disabled (#453 Slice 0/9)", () => {
     const nfdCafe = "cafe\u0301";
     const text = `xx ${nfdCafe} yy`;
 
@@ -148,6 +148,55 @@ describe("glossary surface matching (#375)", () => {
       matchedText: nfdCafe,
       range: { start: 3, end: 8 }
     });
+  });
+
+  it("NFC-normalizes surface matching and reports raw UTF-16 ranges when enabled (#453 Slice 9)", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `xx ${nfdCafe} yy`;
+
+    const nfcAtomMatches = matchGlossarySurfacesInText(
+      text,
+      buildGlossarySurfaceIndex([entry(entryBId, [atom(entryBId, "café")])], {
+        normalizeUnicodeToNfc: true
+      })
+    );
+    expect(nfcAtomMatches).toHaveLength(1);
+    expect(nfcAtomMatches[0]).toMatchObject({
+      matchedText: nfdCafe,
+      range: { start: 3, end: 8 }
+    });
+    expect(nfcAtomMatches[0].candidates[0].surface).toBe("café");
+
+    const nfdAtomMatches = matchGlossarySurfacesInText(
+      "xx café yy",
+      buildGlossarySurfaceIndex([entry(entryAId, [atom(entryAId, nfdCafe)])], {
+        normalizeUnicodeToNfc: true
+      })
+    );
+    expect(nfdAtomMatches).toHaveLength(1);
+    expect(nfdAtomMatches[0]).toMatchObject({
+      matchedText: "café",
+      range: { start: 3, end: 7 }
+    });
+    expect(nfdAtomMatches[0].candidates[0].surface).toBe(nfdCafe);
+  });
+
+  it("preserves longest-match priority when NFC normalization is enabled (#453 Slice 9)", () => {
+    const nfdCafe = "cafe\u0301";
+    const shortAtom = atom(entryAId, "café");
+    const longAtom = atom(entryAId, `${nfdCafe} au lait`);
+
+    const text = `A ${nfdCafe} au lait B`;
+    const matches = matchGlossarySurfacesInText(
+      text,
+      buildGlossarySurfaceIndex([entry(entryAId, [shortAtom, longAtom])], {
+        normalizeUnicodeToNfc: true
+      })
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].matchedText).toBe(`${nfdCafe} au lait`);
+    expect(matches[0].range).toEqual({ start: 2, end: 15 });
   });
 
   it("does not check a boundary edge unless the corresponding flag is set", () => {

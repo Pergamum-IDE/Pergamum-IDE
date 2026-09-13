@@ -601,4 +601,37 @@ describe("buildGlossaryEntryOccurrenceMap (#403 MEDIUM-1)", () => {
 
     expect(outcomePrecomputed).toEqual(outcomeDefault);
   });
+
+  it("finds NFC/NFD equivalent occurrences when normalizeUnicodeToNfc option is true (#453 Slice 9)", () => {
+    const nfdCafe = "cafe\u0301";
+    const cafeEntry = glossaryEntry("entry-cafe", ["café"]);
+    const text = `Title ${nfdCafe} end`;
+
+    expect(findGlossaryEntryOccurrences(text, cafeEntry)).toEqual([]);
+
+    const occurrencesOn = findGlossaryEntryOccurrences(text, cafeEntry, {
+      normalizeUnicodeToNfc: true
+    });
+    expect(occurrencesOn).toEqual([{ start: 6, end: 11 }]);
+
+    const tallyOn = tallyGlossaryEntryHits(text, [cafeEntry], {
+      normalizeUnicodeToNfc: true
+    });
+    expect(tallyOn.get("entry-cafe")).toBe(1);
+
+    const outcomeOn = planGlossaryOccurrenceNavigation({
+      entry: cafeEntry,
+      targetDocument: {
+        editorId: documentEditorId,
+        content: text
+      },
+      direction: "next",
+      currentCursor: null,
+      options: { normalizeUnicodeToNfc: true }
+    });
+    expect(outcomeOn).toMatchObject({
+      kind: "navigated",
+      range: { start: 6, end: 11 }
+    });
+  });
 });
