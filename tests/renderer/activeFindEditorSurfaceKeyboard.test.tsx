@@ -56,6 +56,7 @@ function renderEditorSurface(
       renderTab: false,
       renderOtherUnicodeSpace: false
     },
+    normalizeUnicodeToNfcMatching: false,
     glossaryNearbySearchSettings: {
       unit: "paragraphs",
       characterDistance: 500,

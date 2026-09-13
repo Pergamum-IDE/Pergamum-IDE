@@ -474,7 +474,10 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
   it("searches the active buffer via the shared matcher and reuses the selection-jump path", () => {
     expect(source).toContain('from "./find/activeDocumentFind"');
     expect(source).toContain(
-      "evaluateActiveDocumentFind(content, findQuery, findOptions)"
+      "evaluateActiveDocumentFind(content, findQuery, findOptions, {"
+    );
+    expect(source).toContain(
+      "findMode === \"search\" && normalizeUnicodeToNfcMatching"
     );
     expect(source).toContain("resolveActiveFindCursor(");
     // navigation jumps must not steal focus out of the search box

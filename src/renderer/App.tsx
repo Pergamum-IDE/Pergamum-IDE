@@ -9516,6 +9516,8 @@ export function App(): JSX.Element {
       readText: createProjectSearchReadText(activeContext),
       query,
       options,
+      normalizeUnicodeToNfc:
+        effectiveSettings.workbench.normalizeUnicodeToNfc,
       isCancelled
     });
   }
@@ -10221,6 +10223,9 @@ export function App(): JSX.Element {
                         }
                         glossaryNearbySearchSettings={
                           effectiveSettings.search.nearby
+                        }
+                        normalizeUnicodeToNfcMatching={
+                          effectiveSettings.workbench.normalizeUnicodeToNfc
                         }
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}

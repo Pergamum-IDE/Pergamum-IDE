@@ -166,6 +166,32 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(appSource).toContain("soundSettings={effectiveSettings.workbench.sound}");
     expect(appSource).toContain("soundFeedback={soundFeedback}");
   });
+
+  it("#453 Slice 3: App.tsx wires workbench.normalizeUnicodeToNfc into active Find and project Search matching", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const editorSurfaceIndex = appSource.indexOf("<EditorSurface");
+    const editorSurfaceBlock = appSource.slice(
+      editorSurfaceIndex,
+      appSource.indexOf("/>", editorSurfaceIndex) + 2
+    );
+    const runProjectSearchIndex = appSource.indexOf(
+      "async function runProjectSearch("
+    );
+    const runProjectSearchBlock = appSource.slice(
+      runProjectSearchIndex,
+      runProjectSearchIndex + 900
+    );
+
+    expect(editorSurfaceIndex).toBeGreaterThan(-1);
+    expect(editorSurfaceBlock).toContain("normalizeUnicodeToNfcMatching={");
+    expect(editorSurfaceBlock).toContain(
+      "effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
+    expect(runProjectSearchBlock).toContain("runProjectTextSearch({");
+    expect(runProjectSearchBlock).toContain(
+      "normalizeUnicodeToNfc:\n        effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
+  });
 });
 
 describe("status bar character count runtime wiring (#259)", () => {

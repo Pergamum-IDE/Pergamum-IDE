@@ -98,6 +98,8 @@ describe("evaluateActiveDocumentFind (#424 Slice 2)", () => {
     ...DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
     ...over
   });
+  const NFC_ON = { normalizeUnicodeToNfc: true } as const;
+  const NFC_OFF = { normalizeUnicodeToNfc: false } as const;
 
   it("returns matches with no regexError for a plain query", () => {
     const result = evaluateActiveDocumentFind("a a a", "a");
@@ -165,6 +167,71 @@ describe("evaluateActiveDocumentFind (#424 Slice 2)", () => {
     expect(evaluateActiveDocumentFind("text", "", opts({ useRegex: true }))).toEqual(
       { matches: [], regexError: null }
     );
+  });
+
+  it("#453 Slice 3: matches NFC query against NFD text when normalization is on", () => {
+    const nfdCafe = "cafe\u0301";
+    const result = evaluateActiveDocumentFind(
+      `xx ${nfdCafe} yy`,
+      "café",
+      opts(),
+      NFC_ON
+    );
+
+    expect(result.regexError).toBeNull();
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]).toMatchObject({
+      startOffset: 3,
+      endOffset: 8,
+      matchedText: nfdCafe
+    });
+  });
+
+  it("#453 Slice 3: matches NFD query against NFC text when normalization is on", () => {
+    const result = evaluateActiveDocumentFind(
+      "xx café yy",
+      "cafe\u0301",
+      opts(),
+      NFC_ON
+    );
+
+    expect(result.regexError).toBeNull();
+    expect(result.matches[0]).toMatchObject({
+      startOffset: 3,
+      endOffset: 7,
+      matchedText: "café"
+    });
+  });
+
+  it("#453 Slice 3: preserves raw matching when normalization is off", () => {
+    const nfdCafe = "cafe\u0301";
+
+    expect(
+      evaluateActiveDocumentFind(`xx ${nfdCafe} yy`, "café", opts(), NFC_OFF)
+        .matches
+    ).toEqual([]);
+    expect(
+      evaluateActiveDocumentFind(`xx ${nfdCafe} yy`, nfdCafe, opts(), NFC_OFF)
+        .matches[0]
+    ).toMatchObject({
+      startOffset: 3,
+      endOffset: 8,
+      matchedText: nfdCafe
+    });
+  });
+
+  it("#453 Slice 3: keeps regex raw even when normalization is on", () => {
+    const nfdCafe = "cafe\u0301";
+
+    const result = evaluateActiveDocumentFind(
+      `xx ${nfdCafe} yy`,
+      "café",
+      opts({ useRegex: true }),
+      NFC_ON
+    );
+
+    expect(result.regexError).toBeNull();
+    expect(result.matches).toEqual([]);
   });
 });
 
