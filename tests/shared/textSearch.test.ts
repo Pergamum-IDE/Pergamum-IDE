@@ -45,6 +45,21 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
     expect(m.matchedText).toBe("three");
   });
 
+  it("does not NFC-normalize plain matching and reports raw UTF-16 offsets (#453 Slice 0)", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `xx ${nfdCafe} yy`;
+
+    expect(findTextSearchMatches(text, "café", PLAIN)).toEqual([]);
+
+    const [match] = findTextSearchMatches(text, nfdCafe, PLAIN);
+    expect(match.startOffset).toBe(3);
+    expect(match.endOffset).toBe(8);
+    expect(match.matchedText).toBe(nfdCafe);
+    expect(
+      match.previewText.slice(match.previewMatchStart, match.previewMatchEnd)
+    ).toBe(nfdCafe);
+  });
+
   it("builds a preview slice with the match offsets relative to it", () => {
     const [m] = findTextSearchMatches("The quick brown fox", "brown", PLAIN);
     expect(m.previewText).toContain("brown");
@@ -225,6 +240,18 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
       expect(match.startOffset).toBe(2);
       expect(match.endOffset).toBe(6);
       expect(match.matchedText).toBe("MAID");
+    });
+
+    it("does not NFC-normalize regex matching and reports raw UTF-16 offsets (#453 Slice 0)", () => {
+      const nfdCafe = "cafe\u0301";
+      const text = `xx ${nfdCafe} yy`;
+
+      expect(findTextSearchMatches(text, "café", REGEX)).toEqual([]);
+
+      const [match] = findTextSearchMatches(text, nfdCafe, REGEX);
+      expect(match.startOffset).toBe(3);
+      expect(match.endOffset).toBe(8);
+      expect(match.matchedText).toBe(nfdCafe);
     });
 
     it("ignores the whole-word option in regex mode", () => {

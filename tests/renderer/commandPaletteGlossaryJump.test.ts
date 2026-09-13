@@ -165,6 +165,22 @@ describe("filterCommandPaletteGlossaryJumpCandidates (#142 / #142.1)", () => {
     ).toHaveLength(1);
   });
 
+  it("does not NFC-normalize prefix matching and marks raw UTF-16 ranges (#453 Slice 0)", () => {
+    const nfdCafe = "cafe\u0301";
+    const atoms = [atom({ value: `${nfdCafe} au lait` })];
+
+    expect(
+      filterCommandPaletteGlossaryJumpCandidates({ atoms, query: "café" })
+    ).toHaveLength(0);
+
+    const [candidate] = filterCommandPaletteGlossaryJumpCandidates({
+      atoms,
+      query: nfdCafe
+    });
+    expect(candidate.value).toBe(`${nfdCafe} au lait`);
+    expect(candidate.matchRanges).toEqual([{ start: 0, end: 5 }]);
+  });
+
   it("#142.1: lists every atom, unfiltered and with no highlighted range, for an empty (or whitespace-only) query", () => {
     const atoms = [
       atom({ atomId: "a", value: "第一" }),

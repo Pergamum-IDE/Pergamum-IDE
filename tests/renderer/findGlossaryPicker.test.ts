@@ -151,4 +151,20 @@ describe("filterFindGlossaryCandidates (#424 Slice 4)", () => {
       filterFindGlossaryCandidates(candidates, "harbor").map((c) => c.atomId)
     ).toEqual(["a3"]);
   });
+
+  it("does not NFC-normalize filter matching (#453 Slice 0)", () => {
+    const nfdCafe = "cafe\u0301";
+    const nfdCandidates = [
+      findCandidate({
+        atomId: "nfd",
+        value: `${nfdCafe} au lait`,
+        entryLabel: `${nfdCafe} entry`
+      })
+    ];
+
+    expect(filterFindGlossaryCandidates(nfdCandidates, "café")).toEqual([]);
+    expect(
+      filterFindGlossaryCandidates(nfdCandidates, nfdCafe).map((c) => c.atomId)
+    ).toEqual(["nfd"]);
+  });
 });

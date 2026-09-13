@@ -134,6 +134,22 @@ describe("glossary surface matching (#375)", () => {
     ).toHaveLength(1);
   });
 
+  it("does not NFC-normalize surface matching and reports raw UTF-16 ranges (#453 Slice 0)", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `xx ${nfdCafe} yy`;
+
+    expect(
+      matchText(text, [entry(entryBId, [atom(entryBId, "café")])])
+    ).toEqual([]);
+
+    const matches = matchText(text, [entry(entryAId, [atom(entryAId, nfdCafe)])]);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      matchedText: nfdCafe,
+      range: { start: 3, end: 8 }
+    });
+  });
+
   it("does not check a boundary edge unless the corresponding flag is set", () => {
     const noCheck = atom(entryAId, "オーダ", 0);
     expect(

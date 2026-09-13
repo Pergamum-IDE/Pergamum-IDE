@@ -163,6 +163,20 @@ describe("filterGlossaryCompletionCandidates (#390)", () => {
     expect(filterGlossaryCompletionCandidates({ atoms, prefix: "ORD" })).toHaveLength(1);
   });
 
+  it("does not NFC-normalize prefix matching (#453 Slice 0)", () => {
+    const nfdCafe = "cafe\u0301";
+    const atoms = [atom({ value: `${nfdCafe} au lait` })];
+
+    expect(
+      filterGlossaryCompletionCandidates({ atoms, prefix: "café" })
+    ).toHaveLength(0);
+    expect(
+      filterGlossaryCompletionCandidates({ atoms, prefix: nfdCafe }).map(
+        (candidate) => candidate.value
+      )
+    ).toEqual([`${nfdCafe} au lait`]);
+  });
+
   it("uses the selected registered form itself as the candidate value - never a fixed representative form", () => {
     const atoms = [
       atom({ atomId: "a1", entryId: "e1", value: "代表", entryLabel: "代表" }),
