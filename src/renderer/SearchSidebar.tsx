@@ -567,15 +567,23 @@ interface SearchSidebarProps {
     endOffset: number
   ) => void;
   /**
-   * #384: an incoming Command Palette `%` request. A new `token` applies it:
-   * a non-empty `query` forces text search mode, resets the options, sets the
-   * query (the existing debounced effect then runs the search) and focuses the
-   * query input. An empty `query` only focuses the input - no state change,
-   * no search.
+   * #384: an incoming Command Palette `%` request (also #457: Ctrl+Shift+F /
+   * Ctrl+Shift+H). A new `token` applies it: a non-empty `query` forces text
+   * search mode, resets the options, sets the query VERBATIM - never trimmed
+   * (#455) - (the existing debounced effect then runs the search) and
+   * focuses the query input. An empty `query` only focuses the input - no
+   * state change, no search - so an unusable / absent selection preserves
+   * whatever query already exists.
+   *
+   * #457: `tab`, when supplied, forces that Search/Replace sub-tab
+   * regardless of whether `query` is empty (Ctrl+Shift+F always lands on
+   * Search, Ctrl+Shift+H always on Replace). Omitted by the Command Palette
+   * `%` request, which never touches the active tab.
    */
   readonly queryRequest?: {
     readonly token: number;
     readonly query: string;
+    readonly tab?: SearchPaneTab;
   } | null;
   /**
    * #386: bumped by the host after an Open Documents Replace is applied. A new
@@ -665,6 +673,20 @@ export function SearchSidebar({
       setGlossaryRelationMode("any");
       setSelectedAtomIds([]);
       setQuery(queryRequest.query);
+    }
+
+    // #457: force the requested tab (Ctrl+Shift+F/H) independent of whether
+    // a usable query came with it. Mirrors switchTab()'s "leaving glossary
+    // mode for Replace" reset so the query textarea below is always the one
+    // actually rendered (Replace has no glossary search of its own).
+    if (queryRequest.tab !== undefined) {
+      if (queryRequest.tab === "replace" && mode === "glossary") {
+        setMode("text");
+        setOptions(DEFAULT_SEARCH_OPTIONS);
+        setGlossaryRelationMode("any");
+        setSelectedAtomIds([]);
+      }
+      setActiveTab(queryRequest.tab);
     }
 
     // Focus after the mode switch has had a chance to render the input.

@@ -9,7 +9,8 @@ import {
   assistCommandIds,
   commandPaletteCommandIds,
   editorCommandIds,
-  glossaryTabCommandIds
+  glossaryTabCommandIds,
+  searchSelectionShortcutCommandIds
 } from "../../src/shared/commandIds";
 
 const electronMock = vi.hoisted(() => ({
@@ -425,6 +426,76 @@ describe("application menu", () => {
     );
   });
 
+  // #457: Ctrl+Shift+F / Ctrl+Shift+H seed Project Search / Replace from
+  // whatever is currently selected in the renderer. Wired as Edit menu
+  // accelerators (not a renderer-side keydown listener) precisely because
+  // they must fire regardless of what has focus.
+  it("adds Find in Project / Replace in Project items to the Edit menu with Ctrl+Shift+F / Ctrl+Shift+H accelerators", () => {
+    const editItems = editMenuItems("win32");
+
+    const findItem = editItems.find(
+      (candidate) => candidate.label === "Find in Project..."
+    );
+    const replaceItem = editItems.find(
+      (candidate) => candidate.label === "Replace in Project..."
+    );
+
+    expect(findItem).toBeTruthy();
+    expect(findItem?.accelerator).toBe("CommandOrControl+Shift+F");
+    expect(findItem?.id).toBe(
+      searchSelectionShortcutCommandIds.openProjectSearchFromSelection
+    );
+
+    expect(replaceItem).toBeTruthy();
+    expect(replaceItem?.accelerator).toBe("CommandOrControl+Shift+H");
+    expect(replaceItem?.id).toBe(
+      searchSelectionShortcutCommandIds.openProjectReplaceFromSelection
+    );
+  });
+
+  it("sends the project-search-from-selection command from the Edit menu item", () => {
+    const { window, send } = menuWindowMock();
+    const editItems = editMenuItems("win32", { getMainWindow: () => window });
+
+    editItems
+      .find((candidate) => candidate.label === "Find in Project...")
+      ?.click?.({} as never, null as never, {} as never);
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      searchSelectionShortcutCommandIds.openProjectSearchFromSelection
+    );
+  });
+
+  it("sends the project-replace-from-selection command from the Edit menu item", () => {
+    const { window, send } = menuWindowMock();
+    const editItems = editMenuItems("win32", { getMainWindow: () => window });
+
+    editItems
+      .find((candidate) => candidate.label === "Replace in Project...")
+      ?.click?.({} as never, null as never, {} as never);
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      searchSelectionShortcutCommandIds.openProjectReplaceFromSelection
+    );
+  });
+
+  it("keeps the Find/Replace-in-Project accelerators consistent across macOS, Windows, and Linux", () => {
+    for (const platform of ["darwin", "win32", "linux"] as const) {
+      const editItems = editMenuItems(platform);
+      expect(
+        editItems.find((candidate) => candidate.label === "Find in Project...")
+          ?.accelerator
+      ).toBe("CommandOrControl+Shift+F");
+      expect(
+        editItems.find(
+          (candidate) => candidate.label === "Replace in Project..."
+        )?.accelerator
+      ).toBe("CommandOrControl+Shift+H");
+    }
+  });
+
   it("binds Ctrl+W to editor.close as a hidden item on Windows and Linux (#184)", () => {
     for (const platform of ["win32", "linux"] as const) {
       const fileItems = fileMenuItems(platform);
@@ -756,6 +827,15 @@ function viewMenuItems(
 ): MenuItemConstructorOptions[] {
   return submenuItems(
     findTopLevelMenu(buildApplicationMenu("en", options, platform), "View")
+  );
+}
+
+function editMenuItems(
+  platform: NodeJS.Platform,
+  options: ApplicationMenuOptions = emptyMenuOptions()
+): MenuItemConstructorOptions[] {
+  return submenuItems(
+    findTopLevelMenu(buildApplicationMenu("en", options, platform), "Edit")
   );
 }
 

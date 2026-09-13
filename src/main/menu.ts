@@ -15,6 +15,7 @@ import {
   editorCommandIds,
   glossaryTabCommandIds,
   isApplicationMenuCommandId,
+  searchSelectionShortcutCommandIds,
   type ApplicationMenuCommandId
 } from "../shared/commandIds";
 import { t, type Language, type TranslationKey } from "../shared/i18n";
@@ -261,7 +262,10 @@ function fileMenu(
   };
 }
 
-function editMenu(language: Language): MenuItemConstructorOptions {
+function editMenu(
+  language: Language,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
   return {
     label: label(language, "menu.edit"),
     submenu: [
@@ -272,7 +276,26 @@ function editMenu(language: Language): MenuItemConstructorOptions {
       roleItem("copy", language, "menu.copy"),
       roleItem("paste", language, "menu.paste"),
       { type: "separator" },
-      roleItem("selectAll", language, "menu.selectAll")
+      roleItem("selectAll", language, "menu.selectAll"),
+      { type: "separator" },
+      // #457: seeds the currently selected text (anywhere in the Pergamum
+      // UI, not just the active editor) into Project Search / Replace. The
+      // accelerator carries no payload - the renderer resolves the
+      // selection itself when the command executes.
+      commandMenuItem(
+        searchSelectionShortcutCommandIds.openProjectSearchFromSelection,
+        language,
+        "menu.edit.findInProject",
+        options,
+        "CommandOrControl+Shift+F"
+      ),
+      commandMenuItem(
+        searchSelectionShortcutCommandIds.openProjectReplaceFromSelection,
+        language,
+        "menu.edit.replaceInProject",
+        options,
+        "CommandOrControl+Shift+H"
+      )
     ]
   };
 }
@@ -473,7 +496,7 @@ export function buildApplicationMenu(
   const template: MenuItemConstructorOptions[] = [
     ...(platform === "darwin" ? [macApplicationMenu(language, options)] : []),
     fileMenu(language, platform, options),
-    editMenu(language),
+    editMenu(language, options),
     viewMenu(language, options),
     assistMenu(language, options),
     ...(platform === "darwin" ? [macWindowMenu(language)] : []),

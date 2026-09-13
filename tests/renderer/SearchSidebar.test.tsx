@@ -68,7 +68,11 @@ interface RenderOptions {
     startOffset: number,
     endOffset: number
   ) => void;
-  readonly queryRequest?: { readonly token: number; readonly query: string } | null;
+  readonly queryRequest?: {
+    readonly token: number;
+    readonly query: string;
+    readonly tab?: "search" | "replace";
+  } | null;
   readonly onReplaceInOpenDocuments?: (request: {
     findText: string;
     replaceText: string;
@@ -1618,5 +1622,177 @@ describe("SearchSidebar (#455 UI addendum — header row layout, tab styling, pl
   it("keeps the Replace-with placeholder terminology consistent with Active Find (置換語句)", () => {
     const ja = readFileSync("src/shared/i18n/ja.ts", "utf8");
     expect(ja).toContain('"search.replace.replaceWith": "置換語句"');
+  });
+});
+
+describe("SearchSidebar (#457 — queryRequest.tab forces the Search/Replace sub-tab)", () => {
+  function tabButton(name: "search.tab.search" | "search.tab.replace"): HTMLButtonElement {
+    return Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    ).find((t) => t.textContent === name)!;
+  }
+  function replaceInput(): HTMLTextAreaElement | null {
+    return container.querySelector<HTMLTextAreaElement>(
+      ".searchPaneReplaceInput"
+    );
+  }
+  function queryField(): HTMLTextAreaElement | null {
+    return container.querySelector<HTMLTextAreaElement>(".searchPaneInput");
+  }
+  function glossaryToggle(): HTMLButtonElement | undefined {
+    return toggleButtons().find(
+      (b) => b.getAttribute("aria-label") === "search.option.glossary"
+    );
+  }
+
+  it("Ctrl+Shift+F-style request (tab: 'search') switches away from the Replace tab", async () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult())
+    });
+    act(() => tabButton("search.tab.replace").click());
+    expect(tabButton("search.tab.replace").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+          queryRequest: { token: 1, query: "メイド", tab: "search" }
+        })
+      );
+    });
+    await advance(0);
+
+    expect(tabButton("search.tab.search").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+    expect(queryField()!.value).toBe("メイド");
+    expect(document.activeElement).toBe(queryField());
+  });
+
+  it("Ctrl+Shift+H-style request (tab: 'replace') switches to the Replace tab and focuses the FIND field, not the replacement field", async () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult())
+    });
+    expect(tabButton("search.tab.search").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+          queryRequest: { token: 1, query: "foo\nbar", tab: "replace" }
+        })
+      );
+    });
+    await advance(0);
+
+    expect(tabButton("search.tab.replace").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+    expect(queryField()!.value).toBe("foo\nbar");
+    expect(replaceInput()).not.toBeNull();
+    // Focus lands on the find/query field, never the replacement field.
+    expect(document.activeElement).toBe(queryField());
+    expect(document.activeElement).not.toBe(replaceInput());
+    // Replacement text is untouched.
+    expect(replaceInput()!.value).toBe("");
+  });
+
+  it("an unusable selection (empty query) still forces the tab and focuses, without clearing an existing query", async () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult())
+    });
+    typeQuery("existing query");
+    await advance(300);
+
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+          queryRequest: { token: 1, query: "", tab: "replace" }
+        })
+      );
+    });
+    await advance(0);
+
+    expect(tabButton("search.tab.replace").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+    // Existing query preserved - an empty request never clears it (#384 behaviour).
+    expect(queryField()!.value).toBe("existing query");
+    expect(document.activeElement).toBe(queryField());
+  });
+
+  it("forcing the Replace tab while in glossary mode drops back to plain text mode (so the find field actually renders)", async () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      runGlossarySearch: vi.fn<RunGlossarySearchFn>(async () => makeResult()),
+      glossaryEntries: GLOSSARY_ENTRIES
+    });
+    act(() => glossaryToggle()!.click());
+    expect(container.querySelector(".glossaryAtomSelect")).not.toBeNull();
+
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+          runGlossarySearch: vi.fn<RunGlossarySearchFn>(async () => makeResult()),
+          glossaryEntries: GLOSSARY_ENTRIES,
+          queryRequest: { token: 1, query: "", tab: "replace" }
+        })
+      );
+    });
+    await advance(0);
+
+    expect(tabButton("search.tab.replace").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+    expect(container.querySelector(".glossaryAtomSelect")).toBeNull();
+    expect(queryField()).not.toBeNull();
+    expect(document.activeElement).toBe(queryField());
+  });
+
+  it("omitting tab (the existing #384 Command Palette shape) never touches the active tab", async () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult())
+    });
+    act(() => tabButton("search.tab.replace").click());
+    expect(tabButton("search.tab.replace").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+
+    act(() => {
+      root.render(
+        React.createElement(SearchSidebar, {
+          translate,
+          projectAvailable: true,
+          runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+          queryRequest: { token: 1, query: "メイド" }
+        })
+      );
+    });
+    await advance(0);
+
+    // Still on Replace - the tab-less request never forces a switch.
+    expect(tabButton("search.tab.replace").getAttribute("aria-selected")).toBe(
+      "true"
+    );
+    expect(queryField()!.value).toBe("メイド");
   });
 });
