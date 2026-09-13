@@ -33,10 +33,18 @@ export type { ReplacementTemplateError };
  */
 export type ActiveDocumentFindOptions = Required<TextSearchOptions>;
 
+export interface ActiveDocumentFindMatchOptions {
+  readonly normalizeUnicodeToNfc: boolean;
+}
+
 export const DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS: ActiveDocumentFindOptions = {
   caseSensitive: false,
   wholeWord: false,
   useRegex: false
+};
+
+const DEFAULT_ACTIVE_DOCUMENT_FIND_MATCH_OPTIONS: ActiveDocumentFindMatchOptions = {
+  normalizeUnicodeToNfc: false
 };
 
 /**
@@ -54,13 +62,16 @@ export const ACTIVE_DOCUMENT_FIND_MATCH_LIMIT = 5000;
 export function runActiveDocumentFind(
   text: string,
   query: string,
-  options: ActiveDocumentFindOptions = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS
+  options: ActiveDocumentFindOptions = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+  matchOptions: ActiveDocumentFindMatchOptions =
+    DEFAULT_ACTIVE_DOCUMENT_FIND_MATCH_OPTIONS
 ): TextSearchMatch[] {
   if (query.length === 0 || text.length === 0) {
     return [];
   }
   return findTextSearchMatches(text, query, {
     ...options,
+    normalizeUnicodeToNfc: matchOptions.normalizeUnicodeToNfc,
     limit: ACTIVE_DOCUMENT_FIND_MATCH_LIMIT
   });
 }
@@ -79,7 +90,9 @@ export interface ActiveDocumentFindEvaluation {
 export function evaluateActiveDocumentFind(
   text: string,
   query: string,
-  options: ActiveDocumentFindOptions = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS
+  options: ActiveDocumentFindOptions = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+  matchOptions: ActiveDocumentFindMatchOptions =
+    DEFAULT_ACTIVE_DOCUMENT_FIND_MATCH_OPTIONS
 ): ActiveDocumentFindEvaluation {
   if (query.length === 0) {
     return { matches: [], regexError: null };
@@ -91,7 +104,7 @@ export function evaluateActiveDocumentFind(
     }
   }
   return {
-    matches: runActiveDocumentFind(text, query, options),
+    matches: runActiveDocumentFind(text, query, options, matchOptions),
     regexError: null
   };
 }

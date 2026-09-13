@@ -39,6 +39,7 @@ import {
 
 export interface MarkdownEditorGlossaryCompletionConfig {
   readonly entries: readonly GlossaryEntry[];
+  readonly normalizeUnicodeToNfc?: boolean;
 }
 
 // Generous relative to GLOSSARY_COMPLETION_SUFFIX_LOOKBACK: the delimiter
@@ -68,9 +69,14 @@ function glossaryCompletionSource(
     const textBeforeCaret = context.state.sliceDoc(lookbackFrom, context.pos);
     const prefix = extractGlossaryCompletionPrefix(
       textBeforeCaret,
-      atoms.map((atom) => atom.value)
+      atoms.map((atom) => atom.value),
+      { normalizeUnicodeToNfc: config.normalizeUnicodeToNfc }
     );
-    const candidates = filterGlossaryCompletionCandidates({ atoms, prefix });
+    const candidates = filterGlossaryCompletionCandidates({
+      atoms,
+      prefix,
+      normalizeUnicodeToNfc: config.normalizeUnicodeToNfc
+    });
 
     if (candidates.length === 0) {
       return null;

@@ -179,6 +179,8 @@ export interface RunProjectTextSearchInput {
   readonly readText: ProjectDocumentReader;
   readonly query: string;
   readonly options: TextSearchOptions;
+  /** Existing workbench.normalizeUnicodeToNfc setting for plain text search. */
+  readonly normalizeUnicodeToNfc?: boolean;
   /** Polled between files; when it returns `true` the run stops. */
   readonly isCancelled?: () => boolean;
   /** Override the whole-project match cap (see
@@ -207,6 +209,7 @@ export async function runProjectTextSearch(
     findMatches: (text, perFileLimit) =>
       findTextSearchMatches(text, query, {
         ...input.options,
+        normalizeUnicodeToNfc: input.normalizeUnicodeToNfc === true,
         limit: perFileLimit
       })
   });

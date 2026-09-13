@@ -439,6 +439,8 @@ interface EditorSurfaceProps {
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
+  /** Existing workbench.normalizeUnicodeToNfc setting for active text Find. */
+  normalizeUnicodeToNfcMatching: boolean;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -556,6 +558,7 @@ export function EditorSurface({
   findGutterMarkers,
   whitespaceSettings,
   glossaryNearbySearchSettings,
+  normalizeUnicodeToNfcMatching,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -605,6 +608,7 @@ export function EditorSurface({
           findGutterMarkers={findGutterMarkers}
           whitespaceSettings={whitespaceSettings}
           glossaryNearbySearchSettings={glossaryNearbySearchSettings}
+          normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
@@ -666,6 +670,8 @@ interface MarkdownEditorSurfaceProps {
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
+  /** Existing workbench.normalizeUnicodeToNfc setting for active text Find. */
+  normalizeUnicodeToNfcMatching: boolean;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
@@ -750,6 +756,7 @@ function MarkdownEditorSurface({
   findGutterMarkers,
   whitespaceSettings,
   glossaryNearbySearchSettings,
+  normalizeUnicodeToNfcMatching,
   projectRootPath,
   glossaryRefreshToken,
   translate,
@@ -849,12 +856,17 @@ function MarkdownEditorSurface({
     [translate]
   );
   const { entries: glossaryEntries, surfaceIndex } =
-    useGlossaryEntriesForMatching(projectRootPath, glossaryRefreshToken);
+    useGlossaryEntriesForMatching(projectRootPath, glossaryRefreshToken, {
+      normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
+    });
   // #390 PoC: stable identity per `entries` value so MarkdownEditor's
   // effect-driven ref refresh doesn't fire on every unrelated re-render.
   const glossaryCompletion = useMemo(
-    () => ({ entries: glossaryEntries }),
-    [glossaryEntries]
+    () => ({
+      entries: glossaryEntries,
+      normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
+    }),
+    [glossaryEntries, normalizeUnicodeToNfcMatching]
   );
   // #424 Slice 4: project glossary atoms for the Find panel's `語彙` picker —
   // project-ordered, each tagged with whether it is its entry's representative
@@ -1079,7 +1091,9 @@ function MarkdownEditorSurface({
       };
     }
     return findQuery.length > 0
-      ? evaluateActiveDocumentFind(content, findQuery, findOptions)
+      ? evaluateActiveDocumentFind(content, findQuery, findOptions, {
+          normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
+        })
       : { matches: [], regexError: null };
   }, [
     findOpen,
@@ -1090,22 +1104,30 @@ function MarkdownEditorSurface({
     glossaryNearbySearchSettings,
     findQuery,
     findOptions,
+    normalizeUnicodeToNfcMatching,
     content
   ]);
   const findMatches = findEvaluation.matches;
   const findRegexError = findEvaluation.regexError;
   const findMatchCount = findMatches.length;
   const findInputKey = useMemo(
-    () =>
-      findQueryKind === "glossary"
-        ? JSON.stringify([
-            "glossary",
-            findMode,
-            findSearchGlossaryAtomIds,
-            findReplaceGlossaryAtomId,
-            findGlossaryRelation
-          ])
-        : JSON.stringify(["text", findQuery, findOptions]),
+    () => {
+      if (findQueryKind === "glossary") {
+        return JSON.stringify([
+          "glossary",
+          findMode,
+          findSearchGlossaryAtomIds,
+          findReplaceGlossaryAtomId,
+          findGlossaryRelation
+        ]);
+      }
+      return JSON.stringify([
+        "text",
+        findQuery,
+        findOptions,
+        normalizeUnicodeToNfcMatching
+      ]);
+    },
     [
       findQueryKind,
       findMode,
@@ -1113,7 +1135,9 @@ function MarkdownEditorSurface({
       findReplaceGlossaryAtomId,
       findGlossaryRelation,
       findQuery,
-      findOptions
+      findOptions,
+      findMode,
+      normalizeUnicodeToNfcMatching
     ]
   );
 
@@ -1371,7 +1395,8 @@ function MarkdownEditorSurface({
     const evaluation = evaluateActiveDocumentFind(
       liveText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     );
     if (evaluation.regexError !== null || evaluation.matches.length === 0) {
       return;
@@ -1413,7 +1438,8 @@ function MarkdownEditorSurface({
     const afterMatches = evaluateActiveDocumentFind(
       afterText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     ).matches;
     const nextIndex = resolveActiveFindIndexAfterReplacement(
       afterMatches,
@@ -1432,6 +1458,7 @@ function MarkdownEditorSurface({
     content,
     findQuery,
     findOptions,
+    normalizeUnicodeToNfcMatching,
     findReplaceText,
     findActiveIndex,
     jumpToFindMatch
@@ -1495,7 +1522,8 @@ function MarkdownEditorSurface({
     const evaluation = evaluateActiveDocumentFind(
       liveText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     );
     if (evaluation.regexError !== null || evaluation.matches.length === 0) {
       return;
@@ -1523,7 +1551,8 @@ function MarkdownEditorSurface({
     const afterMatches = evaluateActiveDocumentFind(
       afterText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     ).matches;
     const nextIndex = resolveActiveFindIndexAfterReplaceAll(afterMatches);
     setFindActiveIndex(nextIndex);
@@ -1539,6 +1568,7 @@ function MarkdownEditorSurface({
     content,
     findQuery,
     findOptions,
+    normalizeUnicodeToNfcMatching,
     findReplaceText,
     jumpToFindMatch
   ]);
@@ -1721,6 +1751,7 @@ function MarkdownEditorSurface({
             matchCount={findMatchCount}
             activeIndex={findActiveIndex}
             focusToken={findFocusToken}
+            normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
             onModeChange={handleFindModeChange}
             onQueryChange={handleFindQueryChange}
             onReplaceTextChange={handleFindReplaceTextChange}

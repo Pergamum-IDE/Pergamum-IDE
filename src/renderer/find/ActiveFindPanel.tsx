@@ -29,6 +29,7 @@ import type { ActiveGlossarySearchRelation } from "./activeGlossaryFind";
 import type { ActiveGlossaryNearbySettings } from "./activeGlossaryNearbySearch";
 import { ActiveFindGlossaryCompletionPopup } from "./ActiveFindGlossaryCompletionPopup";
 import {
+  ACTIVE_FIND_GLOSSARY_COMPLETION_LIMIT,
   activeFindGlossaryAtomValues,
   applyActiveFindGlossaryCompletion,
   collectActiveFindGlossaryCompletionItems,
@@ -96,6 +97,8 @@ export interface ActiveFindPanelProps {
   readonly activeIndex: number | null;
   /** Bumped by the owner to re-focus + select the mode's primary input. */
   readonly focusToken: number;
+  /** Existing workbench.normalizeUnicodeToNfc setting for active text Find and Glossary Completion. */
+  readonly normalizeUnicodeToNfcMatching?: boolean;
   readonly onModeChange: (mode: ActiveFindPanelMode) => void;
   readonly onQueryChange: (query: string) => void;
   readonly onReplaceTextChange: (replaceText: string) => void;
@@ -141,6 +144,7 @@ export function ActiveFindPanel({
   matchCount,
   activeIndex,
   focusToken,
+  normalizeUnicodeToNfcMatching,
   onModeChange,
   onQueryChange,
   onReplaceTextChange,
@@ -194,10 +198,17 @@ export function ActiveFindPanel({
       completionOpen
         ? collectActiveFindGlossaryCompletionItems(
             glossaryCandidates,
-            completionPrefix
+            completionPrefix,
+            ACTIVE_FIND_GLOSSARY_COMPLETION_LIMIT,
+            { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
           )
         : [],
-    [completionOpen, glossaryCandidates, completionPrefix]
+    [
+      completionOpen,
+      glossaryCandidates,
+      completionPrefix,
+      normalizeUnicodeToNfcMatching
+    ]
   );
 
   // Focus + select the text query input on mount and whenever the owner bumps
@@ -331,7 +342,8 @@ export function ActiveFindPanel({
       target,
       value,
       caret,
-      completionAtomValues
+      completionAtomValues,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     );
 
   const openCompletion = (
@@ -637,6 +649,7 @@ export function ActiveFindPanel({
                 : "editor.find.glossarySearchPlaceholder"
             )}
             focusToken={focusToken}
+            normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
             onUnhandledKeyDown={handleGlossarySelectUnhandledKey}
           />
         ) : (

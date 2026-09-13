@@ -163,6 +163,99 @@ describe("filterGlossaryCompletionCandidates (#390)", () => {
     expect(filterGlossaryCompletionCandidates({ atoms, prefix: "ORD" })).toHaveLength(1);
   });
 
+  it("does not NFC-normalize prefix matching when setting is OFF (#453 Slice 6)", () => {
+    const nfdCafe = "cafe\u0301";
+    const atoms = [atom({ value: `${nfdCafe} au lait` })];
+
+    expect(
+      filterGlossaryCompletionCandidates({
+        atoms,
+        prefix: "café",
+        normalizeUnicodeToNfc: false
+      })
+    ).toHaveLength(0);
+    expect(
+      filterGlossaryCompletionCandidates({
+        atoms,
+        prefix: nfdCafe,
+        normalizeUnicodeToNfc: false
+      }).map((candidate) => candidate.value)
+    ).toEqual([`${nfdCafe} au lait`]);
+  });
+
+  describe("workbench.normalizeUnicodeToNfc matching (#453 Slice 6)", () => {
+    const nfdPocket = "ホ\u309Aケット"; // ホ + combining semi-voiced sound mark + ケット
+    const nfcPocket = "ポケット";
+    const nfdCafe = "cafe\u0301";
+    const nfcCafe = "café";
+
+    it("matches NFC typed prefix against NFD glossary atom value when enabled", () => {
+      const atoms = [atom({ atomId: "a1", value: nfdPocket, entryLabel: "ポケ" })];
+      const candidates = filterGlossaryCompletionCandidates({
+        atoms,
+        prefix: "ポケ", // NFC
+        normalizeUnicodeToNfc: true
+      });
+
+      expect(candidates).toHaveLength(1);
+      // Candidate value/label must remain raw NFD as stored in the glossary atom!
+      expect(candidates[0].value).toBe(nfdPocket);
+    });
+
+    it("matches NFD typed prefix against NFC glossary atom value when enabled", () => {
+      const atoms = [atom({ atomId: "a1", value: nfcPocket, entryLabel: nfcPocket })];
+      const nfdTypedPrefix = "ホ\u309Aケ";
+      const candidates = filterGlossaryCompletionCandidates({
+        atoms,
+        prefix: nfdTypedPrefix, // NFD
+        normalizeUnicodeToNfc: true
+      });
+
+      expect(candidates).toHaveLength(1);
+      // Candidate value must remain raw NFC
+      expect(candidates[0].value).toBe(nfcPocket);
+    });
+
+    it("preserves raw candidate label, raw inserted text, and raw entryLabel", () => {
+      const atoms = [
+        atom({ atomId: "a1", value: nfdPocket, entryLabel: "ポケ" }),
+        atom({ atomId: "a2", value: nfdCafe, entryLabel: nfcCafe })
+      ];
+      const candidates = filterGlossaryCompletionCandidates({
+        atoms,
+        prefix: "ポケ",
+        normalizeUnicodeToNfc: true
+      });
+
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].value).toBe(nfdPocket);
+      expect(candidates[0].entryLabel).toBe("ポケ");
+    });
+
+    it("combines NFC normalization with Latin case-insensitivity", () => {
+      const atoms = [atom({ atomId: "a1", value: `${nfdCafe} AU LAIT` })];
+      const candidates = filterGlossaryCompletionCandidates({
+        atoms,
+        prefix: "CAFÉ", // NFC uppercase
+        normalizeUnicodeToNfc: true
+      });
+
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].value).toBe(`${nfdCafe} AU LAIT`);
+    });
+
+    it("does not match NFC typed prefix against NFD atom value when disabled", () => {
+      const atoms = [atom({ atomId: "a1", value: nfdPocket })];
+      const candidates = filterGlossaryCompletionCandidates({
+        atoms,
+        prefix: "ポケ",
+        normalizeUnicodeToNfc: false
+      });
+
+      expect(candidates).toHaveLength(0);
+    });
+  });
+
   it("uses the selected registered form itself as the candidate value - never a fixed representative form", () => {
     const atoms = [
       atom({ atomId: "a1", entryId: "e1", value: "代表", entryLabel: "代表" }),
@@ -203,6 +296,25 @@ describe("extractGlossaryCompletionPrefix (#390 - candidate-aware suffix strateg
     expect(
       extractGlossaryCompletionPrefix("彼はアレ", ["アレ", "アレコレ"])
     ).toBe("アレ");
+  });
+
+  it("extracts raw typed suffix for NFD/NFC matching when normalizeUnicodeToNfc is enabled", () => {
+    const nfdPocket = "ホ\u309Aケット";
+    const nfdPrefix = "彼はホ\u309Aケ";
+    // Returns raw NFD suffix from document text!
+    expect(
+      extractGlossaryCompletionPrefix(nfdPrefix, ["ポケット"], {
+        normalizeUnicodeToNfc: true
+      })
+    ).toBe("ホ\u309Aケ");
+
+    const nfcPrefix = "彼はポケ";
+    // Returns raw NFC suffix from document text!
+    expect(
+      extractGlossaryCompletionPrefix(nfcPrefix, [nfdPocket], {
+        normalizeUnicodeToNfc: true
+      })
+    ).toBe("ポケ");
   });
 
   it("falls back to the delimiter-based prefix when no suffix matches any candidate", () => {

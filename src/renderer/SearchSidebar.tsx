@@ -297,6 +297,23 @@ function SearchResults({
   );
 }
 
+function normalizeGlossaryAtomSelectQuery(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return text.trim().toLowerCase();
+}
+
+function normalizeGlossaryAtomSelectCandidateField(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  // Candidate fields are lowercased ONLY (never trimmed) - preserves raw matching semantics.
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return text.toLowerCase();
+}
+
 /**
  * The `語彙検索` mode's atom picker: a trigger + focus-out-dismissed popup with
  * a filter box and a two-line row per atom (value / parent entry). Selected
@@ -307,12 +324,14 @@ function GlossaryAtomSelect({
   translate,
   atoms,
   selectedAtomIds,
-  onChange
+  onChange,
+  normalizeUnicodeToNfc = false
 }: {
   translate: Translate;
   atoms: readonly SelectableGlossaryAtom[];
   selectedAtomIds: readonly string[];
   onChange: (selectedAtomIds: string[]) => void;
+  normalizeUnicodeToNfc?: boolean;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -323,14 +342,23 @@ function GlossaryAtomSelect({
     .map((atomId) => byId.get(atomId))
     .filter((atom): atom is SelectableGlossaryAtom => atom !== undefined);
 
-  const normalizedFilter = filter.trim().toLowerCase();
+  const normalizedFilter = normalizeGlossaryAtomSelectQuery(
+    filter,
+    normalizeUnicodeToNfc
+  );
   const visibleAtoms =
     normalizedFilter.length === 0
       ? atoms
       : atoms.filter(
           (atom) =>
-            atom.value.toLowerCase().includes(normalizedFilter) ||
-            atom.entryLabel.toLowerCase().includes(normalizedFilter)
+            normalizeGlossaryAtomSelectCandidateField(
+              atom.value,
+              normalizeUnicodeToNfc
+            ).includes(normalizedFilter) ||
+            normalizeGlossaryAtomSelectCandidateField(
+              atom.entryLabel,
+              normalizeUnicodeToNfc
+            ).includes(normalizedFilter)
         );
 
   function toggle(atomId: string): void {
@@ -550,6 +578,8 @@ interface SearchSidebarProps {
    *  replace / options; the host runs the dirty-document gate, scans project
    *  files, and opens the Replace Preview Dialog (project scope). */
   readonly onReplaceInProject?: (request: ReplacePreviewOpenRequest) => void;
+  /** Existing workbench.normalizeUnicodeToNfc setting for Glossary Atom selector filtering. */
+  readonly normalizeUnicodeToNfc?: boolean;
 }
 
 export function SearchSidebar({
@@ -562,7 +592,8 @@ export function SearchSidebar({
   queryRequest = null,
   searchInvalidationToken = 0,
   onReplaceInOpenDocuments,
-  onReplaceInProject
+  onReplaceInProject,
+  normalizeUnicodeToNfc = false
 }: SearchSidebarProps): JSX.Element {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("text");
@@ -965,6 +996,7 @@ export function SearchSidebar({
               atoms={selectableAtoms}
               selectedAtomIds={selectedAtomIds}
               onChange={setSelectedAtomIds}
+              normalizeUnicodeToNfc={normalizeUnicodeToNfc}
             />
           ) : (
             <input

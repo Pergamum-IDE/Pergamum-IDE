@@ -54,6 +54,8 @@ export interface OpenDocumentsReplaceOptions {
   readonly caseSensitive: boolean;
   readonly wholeWord: boolean;
   readonly useRegex: boolean;
+  /** Existing workbench.normalizeUnicodeToNfc setting for plain text replace. */
+  readonly normalizeUnicodeToNfc?: boolean;
 }
 
 export type OpenDocumentsReplaceResult =
@@ -110,7 +112,8 @@ function plainCandidatesForTarget(
   const matches = findTextSearchMatches(target.text, findText, {
     caseSensitive: options.caseSensitive,
     wholeWord: options.wholeWord,
-    useRegex: false
+    useRegex: false,
+    normalizeUnicodeToNfc: options.normalizeUnicodeToNfc === true
   });
   return matches.map((match, index) =>
     candidateFromMatch(target, match, replaceText, index)

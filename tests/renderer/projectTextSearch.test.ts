@@ -199,6 +199,82 @@ describe("runProjectTextSearch (#384 Phase 2)", () => {
     ).toEqual(["メイド", "ジャンヌ"]);
     expect(result.fileCount).toBe(2);
   });
+
+  it("#453 Slice 3: matches NFC query against NFD file content when normalization is on", async () => {
+    const nfdCafe = "cafe\u0301";
+
+    const result = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText: async () => `xx ${nfdCafe} yy`,
+      query: "café",
+      options: PLAIN,
+      normalizeUnicodeToNfc: true
+    });
+
+    expect(result.totalMatches).toBe(1);
+    expect(result.files[0].matches[0]).toMatchObject({
+      startOffset: 3,
+      endOffset: 8,
+      matchedText: nfdCafe
+    });
+    expect(result.files[0].matches[0].previewText).toContain(nfdCafe);
+  });
+
+  it("#453 Slice 3: matches NFD query against NFC file content when normalization is on", async () => {
+    const result = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText: async () => "xx café yy",
+      query: "cafe\u0301",
+      options: PLAIN,
+      normalizeUnicodeToNfc: true
+    });
+
+    expect(result.files[0].matches[0]).toMatchObject({
+      startOffset: 3,
+      endOffset: 7,
+      matchedText: "café"
+    });
+  });
+
+  it("#453 Slice 3: preserves raw matching when normalization is off", async () => {
+    const nfdCafe = "cafe\u0301";
+
+    const nfcQuery = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText: async () => `xx ${nfdCafe} yy`,
+      query: "café",
+      options: PLAIN,
+      normalizeUnicodeToNfc: false
+    });
+    expect(nfcQuery.totalMatches).toBe(0);
+
+    const rawQuery = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText: async () => `xx ${nfdCafe} yy`,
+      query: nfdCafe,
+      options: PLAIN,
+      normalizeUnicodeToNfc: false
+    });
+    expect(rawQuery.files[0].matches[0]).toMatchObject({
+      startOffset: 3,
+      endOffset: 8,
+      matchedText: nfdCafe
+    });
+  });
+
+  it("#453 Slice 3: keeps regex raw even when normalization is on", async () => {
+    const nfdCafe = "cafe\u0301";
+
+    const result = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText: async () => `xx ${nfdCafe} yy`,
+      query: "café",
+      options: { caseSensitive: false, wholeWord: false, useRegex: true },
+      normalizeUnicodeToNfc: true
+    });
+
+    expect(result.totalMatches).toBe(0);
+  });
 });
 
 describe("runProjectGlossaryAtomSearch (#384)", () => {

@@ -2491,7 +2491,11 @@ export function App(): JSX.Element {
           analyzeDocumentMetricsDocument(
             content,
             glossaryEntries,
-            documentMetricsDialoguePairs
+            documentMetricsDialoguePairs,
+            {
+              normalizeUnicodeToNfc:
+                effectiveSettings.workbench.normalizeUnicodeToNfc
+            }
           )
         );
       } catch {
@@ -2503,7 +2507,8 @@ export function App(): JSX.Element {
   }, [
     documentMetricsAnalysisContent,
     glossaryEntries,
-    documentMetricsDialoguePairs
+    documentMetricsDialoguePairs,
+    effectiveSettings.workbench.normalizeUnicodeToNfc
   ]);
 
   const isDirty = currentEditor ? isCurrentEditorDirty(currentEditor) : false;
@@ -3867,7 +3872,10 @@ export function App(): JSX.Element {
       entry,
       targetDocument,
       direction,
-      currentCursor: sidebarGlossaryOccurrenceCursorRef.current
+      currentCursor: sidebarGlossaryOccurrenceCursorRef.current,
+      options: {
+        normalizeUnicodeToNfc: effectiveSettings.workbench.normalizeUnicodeToNfc
+      }
     });
 
     if (outcome.kind === "noOccurrences") {
@@ -6129,7 +6137,10 @@ export function App(): JSX.Element {
       outcome = navigateGlossaryOccurrenceTracking({
         session: resolved.session,
         content: resolved.targetContent,
-        direction
+        direction,
+        options: {
+          normalizeUnicodeToNfc: effectiveSettings.workbench.normalizeUnicodeToNfc
+        }
       });
     } catch (error) {
       logRendererDebugEvent({
@@ -8593,7 +8604,9 @@ export function App(): JSX.Element {
       {
         caseSensitive: request.searchOptions.caseSensitive,
         wholeWord: request.searchOptions.wholeWord,
-        useRegex: request.searchOptions.useRegex
+        useRegex: request.searchOptions.useRegex,
+        normalizeUnicodeToNfc:
+          effectiveSettings.workbench.normalizeUnicodeToNfc
       }
     );
 
@@ -9060,7 +9073,9 @@ export function App(): JSX.Element {
       {
         caseSensitive: request.searchOptions.caseSensitive,
         wholeWord: request.searchOptions.wholeWord,
-        useRegex: request.searchOptions.useRegex
+        useRegex: request.searchOptions.useRegex,
+        normalizeUnicodeToNfc:
+          effectiveSettings.workbench.normalizeUnicodeToNfc
       }
     );
 
@@ -9516,6 +9531,8 @@ export function App(): JSX.Element {
       readText: createProjectSearchReadText(activeContext),
       query,
       options,
+      normalizeUnicodeToNfc:
+        effectiveSettings.workbench.normalizeUnicodeToNfc,
       isCancelled
     });
   }
@@ -10073,6 +10090,9 @@ export function App(): JSX.Element {
                       searchProjectAvailable={project !== null}
                       runProjectSearch={runProjectSearch}
                       runProjectGlossarySearch={runProjectGlossarySearch}
+                      normalizeUnicodeToNfc={
+                        effectiveSettings.workbench.normalizeUnicodeToNfc
+                      }
                       searchQueryRequest={searchQueryRequest}
                       searchInvalidationToken={searchInvalidationToken}
                       onReplaceInOpenDocuments={
@@ -10221,6 +10241,9 @@ export function App(): JSX.Element {
                         }
                         glossaryNearbySearchSettings={
                           effectiveSettings.search.nearby
+                        }
+                        normalizeUnicodeToNfcMatching={
+                          effectiveSettings.workbench.normalizeUnicodeToNfc
                         }
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}
@@ -10419,6 +10442,9 @@ export function App(): JSX.Element {
             setIsCommandPaletteOpen(false);
           }}
           glossaryEntries={glossaryEntries}
+          normalizeUnicodeToNfc={
+            effectiveSettings.workbench.normalizeUnicodeToNfc
+          }
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);
             closeCommandPaletteAndRestoreMarkdownFocus();

@@ -165,6 +165,138 @@ describe("filterCommandPaletteGlossaryJumpCandidates (#142 / #142.1)", () => {
     ).toHaveLength(1);
   });
 
+  it("does not NFC-normalize prefix matching when setting is OFF (#453 Slice 7)", () => {
+    const nfdCafe = "cafe\u0301";
+    const atoms = [atom({ value: `${nfdCafe} au lait` })];
+
+    expect(
+      filterCommandPaletteGlossaryJumpCandidates({
+        atoms,
+        query: "café",
+        normalizeUnicodeToNfc: false
+      })
+    ).toHaveLength(0);
+
+    const [candidate] = filterCommandPaletteGlossaryJumpCandidates({
+      atoms,
+      query: nfdCafe,
+      normalizeUnicodeToNfc: false
+    });
+    expect(candidate.value).toBe(`${nfdCafe} au lait`);
+    expect(candidate.matchRanges).toEqual([{ start: 0, end: 5 }]);
+  });
+
+  describe("workbench.normalizeUnicodeToNfc matching (#453 Slice 7)", () => {
+    const nfdPocket = "ホ\u309Aケット"; // ホ + combining semi-voiced sound mark + ケット (len 5)
+    const nfcPocket = "ポケット"; // len 4
+    const nfdCafe = "cafe\u0301"; // len 5
+    const nfcCafe = "café"; // len 4
+
+    it("matches NFC query against NFD glossary atom value when enabled", () => {
+      const atoms = [
+        atom({
+          atomId: "a1",
+          entryId: "entry-pocket",
+          value: nfdPocket,
+          entryLabel: "ポケ"
+        })
+      ];
+      const candidates = filterCommandPaletteGlossaryJumpCandidates({
+        atoms,
+        query: "ポケ", // NFC
+        normalizeUnicodeToNfc: true
+      });
+
+      expect(candidates).toHaveLength(1);
+      const [candidate] = candidates;
+      // Candidate value/entryLabel/IDs must remain raw!
+      expect(candidate.value).toBe(nfdPocket);
+      expect(candidate.entryLabel).toBe("ポケ");
+      expect(candidate.entryId).toBe("entry-pocket");
+      expect(candidate.atomId).toBe("a1");
+      // Raw match range: "ポケ" in raw NFD text is 3 code units long (start: 0, end: 3)
+      expect(candidate.matchRanges).toEqual([{ start: 0, end: 3 }]);
+    });
+
+    it("matches NFD query against NFC glossary atom value when enabled", () => {
+      const atoms = [
+        atom({
+          atomId: "a1",
+          entryId: "entry-pocket",
+          value: nfcPocket,
+          entryLabel: nfcPocket
+        })
+      ];
+      const nfdQuery = "ホ\u309Aケ";
+      const candidates = filterCommandPaletteGlossaryJumpCandidates({
+        atoms,
+        query: nfdQuery, // NFD
+        normalizeUnicodeToNfc: true
+      });
+
+      expect(candidates).toHaveLength(1);
+      const [candidate] = candidates;
+      expect(candidate.value).toBe(nfcPocket);
+      expect(candidate.entryLabel).toBe(nfcPocket);
+      // Raw match range on NFC "ポケット" is 2 code units long (start: 0, end: 2)
+      expect(candidate.matchRanges).toEqual([{ start: 0, end: 2 }]);
+    });
+
+    it("combines NFC normalization with Latin case-insensitivity", () => {
+      const atoms = [atom({ value: `${nfdCafe} AU LAIT` })];
+      const candidates = filterCommandPaletteGlossaryJumpCandidates({
+        atoms,
+        query: "CAFÉ", // NFC uppercase
+        normalizeUnicodeToNfc: true
+      });
+
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].value).toBe(`${nfdCafe} AU LAIT`);
+      // "cafe\u0301" in raw NFD is 5 code units long
+      expect(candidates[0].matchRanges).toEqual([{ start: 0, end: 5 }]);
+    });
+
+    it("does not match NFC query against NFD atom value when setting is disabled", () => {
+      const atoms = [atom({ value: nfdPocket })];
+      const candidates = filterCommandPaletteGlossaryJumpCandidates({
+        atoms,
+        query: "ポケ",
+        normalizeUnicodeToNfc: false
+      });
+
+      expect(candidates).toHaveLength(0);
+    });
+
+    it("does not trim atom values for matching - preserving raw startsWith semantics", () => {
+      const atoms = [atom({ value: "  cafe" })];
+      expect(
+        filterCommandPaletteGlossaryJumpCandidates({
+          atoms,
+          query: "ca",
+          normalizeUnicodeToNfc: false
+        })
+      ).toHaveLength(0);
+      expect(
+        filterCommandPaletteGlossaryJumpCandidates({
+          atoms,
+          query: "ca",
+          normalizeUnicodeToNfc: true
+        })
+      ).toHaveLength(0);
+    });
+
+    it("trims query whitespace while preserving untrimmed atom values", () => {
+      const atoms = [atom({ value: "cafe" })];
+      const candidates = filterCommandPaletteGlossaryJumpCandidates({
+        atoms,
+        query: "  ca  ",
+        normalizeUnicodeToNfc: true
+      });
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0].value).toBe("cafe");
+    });
+  });
+
   it("#142.1: lists every atom, unfiltered and with no highlighted range, for an empty (or whitespace-only) query", () => {
     const atoms = [
       atom({ atomId: "a", value: "第一" }),

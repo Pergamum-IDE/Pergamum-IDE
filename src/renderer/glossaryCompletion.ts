@@ -109,10 +109,15 @@ export function collectGlossaryCompletionAtoms(
   return rows;
 }
 
-function normalizeGlossaryCompletionText(value: string): string {
+function normalizeGlossaryCompletionText(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
   // Latin case-insensitive, Japanese unaffected - mirrors
   // commandPaletteGlossaryJump.ts's normalizeGlossaryJumpNeedle policy.
-  return value.toLowerCase();
+  // Optional NFC normalization when workbench.normalizeUnicodeToNfc setting is enabled.
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return text.toLowerCase();
 }
 
 /**
@@ -143,8 +148,10 @@ export function filterGlossaryCompletionCandidates(input: {
   readonly atoms: readonly GlossaryCompletionAtom[];
   readonly prefix: string;
   readonly limit?: number;
+  readonly normalizeUnicodeToNfc?: boolean;
 }): GlossaryCompletionCandidate[] {
-  const needle = normalizeGlossaryCompletionText(input.prefix);
+  const normalizeToNfc = input.normalizeUnicodeToNfc ?? false;
+  const needle = normalizeGlossaryCompletionText(input.prefix, normalizeToNfc);
   const limit = input.limit ?? GLOSSARY_COMPLETION_CANDIDATE_LIMIT;
   const result: GlossaryCompletionCandidate[] = [];
 
@@ -155,7 +162,7 @@ export function filterGlossaryCompletionCandidates(input: {
 
     if (
       needle.length > 0 &&
-      !normalizeGlossaryCompletionText(atom.value).startsWith(needle)
+      !normalizeGlossaryCompletionText(atom.value, normalizeToNfc).startsWith(needle)
     ) {
       continue;
     }
@@ -228,20 +235,22 @@ export function extractDelimitedGlossaryCompletionPrefix(
  */
 export function extractGlossaryCompletionPrefix(
   textBeforeCaret: string,
-  candidateValues: readonly string[]
+  candidateValues: readonly string[],
+  options?: { readonly normalizeUnicodeToNfc?: boolean }
 ): string {
+  const normalizeToNfc = options?.normalizeUnicodeToNfc ?? false;
   const windowStart = Math.max(
     0,
     textBeforeCaret.length - GLOSSARY_COMPLETION_SUFFIX_LOOKBACK
   );
   const window = textBeforeCaret.slice(windowStart);
   const normalizedCandidates = candidateValues.map((value) =>
-    normalizeGlossaryCompletionText(value)
+    normalizeGlossaryCompletionText(value, normalizeToNfc)
   );
 
   for (let length = window.length; length > 0; length -= 1) {
     const suffix = window.slice(window.length - length);
-    const needle = normalizeGlossaryCompletionText(suffix);
+    const needle = normalizeGlossaryCompletionText(suffix, normalizeToNfc);
     const hasMatch = normalizedCandidates.some((value) =>
       value.startsWith(needle)
     );

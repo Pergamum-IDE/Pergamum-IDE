@@ -39,6 +39,8 @@ interface DocumentMapPanelProps {
   editorVisibleRange?: EditorVisibleTextRange | null;
   /** #375 `documentMap` settings — draw colours + dialogue delimiter pairs. */
   documentMapSettings?: DocumentMapSettings;
+  /** Existing workbench.normalizeUnicodeToNfc setting for Glossary occurrence detection. */
+  normalizeUnicodeToNfc?: boolean;
   /**
    * #375: the map resolved a 0-based SOURCE line (from a click or a
    * viewport-lens drag) — scroll the active Markdown editor there (navigation
@@ -73,6 +75,7 @@ export function DocumentMapPanel({
   editorWidth,
   editorVisibleRange = null,
   documentMapSettings,
+  normalizeUnicodeToNfc = false,
   onNavigateToLine,
   translate
 }: DocumentMapPanelProps): JSX.Element {
@@ -214,6 +217,7 @@ export function DocumentMapPanel({
             selectedTagIds={validSelectedTagIds}
             onNavigateToLine={onNavigateToLine}
             page={currentPage}
+            normalizeUnicodeToNfc={normalizeUnicodeToNfc}
             translate={translate}
           />
         </div>

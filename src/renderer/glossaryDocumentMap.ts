@@ -50,7 +50,8 @@ import { primaryGlossaryTag } from "../shared/glossary";
 import {
   buildGlossarySurfaceIndex,
   matchGlossarySurfacesInText,
-  type GlossarySurfaceIndex
+  type GlossarySurfaceIndex,
+  type GlossarySurfaceMatchingOptions
 } from "../shared/glossarySurfaceMatching";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
@@ -450,6 +451,8 @@ export interface BuildGlossaryDocumentMapPlanInput {
   renderMode?: GlossaryDocumentMapRenderMode;
   /** Optional pre-built surface index, to skip rebuilding it per render. */
   surfaceIndex?: GlossarySurfaceIndex;
+  /** #453 Slice 9: optional NFC normalization for Glossary occurrence detection. */
+  normalizeUnicodeToNfc?: boolean;
 }
 
 interface LineSpan {
@@ -726,9 +729,10 @@ function occurrencesFromSurfaceIndex(
  */
 export function collectGlossaryDocumentMapOccurrences(
   text: string,
-  entries: readonly GlossaryEntry[]
+  entries: readonly GlossaryEntry[],
+  options?: GlossarySurfaceMatchingOptions
 ): GlossaryOccurrenceRange[] {
-  return occurrencesFromSurfaceIndex(text, buildGlossarySurfaceIndex(entries));
+  return occurrencesFromSurfaceIndex(text, buildGlossarySurfaceIndex(entries, options));
 }
 
 /**
@@ -754,13 +758,14 @@ export function collectGlossaryDocumentMapGlossaryOccurrences(
   surfaceIndex?: GlossarySurfaceIndex,
   fallbackColor: string = GLOSSARY_DOCUMENT_MAP_HIT_COLOR,
   tagColorCache?: ReadonlyMap<string, string>,
-  selectedTagIds?: ReadonlySet<string>
+  selectedTagIds?: ReadonlySet<string>,
+  options?: GlossarySurfaceMatchingOptions
 ): GlossaryDocumentMapOccurrence[] {
   if (text.length === 0) {
     return [];
   }
 
-  const index = surfaceIndex ?? buildGlossarySurfaceIndex(entries);
+  const index = surfaceIndex ?? buildGlossarySurfaceIndex(entries, options);
   const entryById = new Map(entries.map((entry) => [entry.id, entry]));
   // The PRESENCE of the Set (even empty) means the filter is on — an empty
   // selection then draws nothing.
@@ -1205,7 +1210,8 @@ export function buildGlossaryDocumentMapPlan(
     input.surfaceIndex,
     glossaryFallbackColor,
     tagColorCache,
-    selectedTagIds
+    selectedTagIds,
+    { normalizeUnicodeToNfc: input.normalizeUnicodeToNfc }
   );
   const dialogues = collectDocumentMapDialogueRanges(text, dialoguePairs);
 

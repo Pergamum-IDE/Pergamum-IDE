@@ -22,7 +22,8 @@ import {
 import type { DocumentMapDialogueDelimiterPair } from "../shared/documentMapSettings";
 import {
   buildGlossarySurfaceIndex,
-  matchGlossarySurfacesInText
+  matchGlossarySurfacesInText,
+  type GlossarySurfaceMatchingOptions
 } from "../shared/glossarySurfaceMatching";
 import { collectDocumentMapDialogueRanges } from "./glossaryDocumentMap";
 
@@ -100,7 +101,8 @@ export function emptyDocumentMetricsDialogueRatio(
  */
 export function tallyGlossaryEntryHits(
   text: string,
-  entries: readonly GlossaryEntry[]
+  entries: readonly GlossaryEntry[],
+  options?: GlossarySurfaceMatchingOptions
 ): Map<string, number> {
   const counts = new Map<string, number>();
 
@@ -108,7 +110,7 @@ export function tallyGlossaryEntryHits(
     return counts;
   }
 
-  const index = buildGlossarySurfaceIndex(entries);
+  const index = buildGlossarySurfaceIndex(entries, options);
 
   for (const match of matchGlossarySurfacesInText(text, index)) {
     const entryId = match.candidates[0]?.entryId;
@@ -392,9 +394,10 @@ export function analyzeDocumentMetricsDialogueRatio(
 export function analyzeDocumentMetricsDocument(
   text: string,
   entries: readonly GlossaryEntry[],
-  dialoguePairs: readonly DocumentMapDialogueDelimiterPair[]
+  dialoguePairs: readonly DocumentMapDialogueDelimiterPair[],
+  options?: GlossarySurfaceMatchingOptions
 ): DocumentMetricsAnalysis {
-  const entryHitCounts = tallyGlossaryEntryHits(text, entries);
+  const entryHitCounts = tallyGlossaryEntryHits(text, entries, options);
 
   return {
     glossaryCounts: glossaryCountRowsFromTally(entryHitCounts, entries),

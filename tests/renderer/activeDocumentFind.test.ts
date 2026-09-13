@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   activeDocumentReplacementTemplateError,
+  type ActiveDocumentFindMatchOptions,
   buildActiveDocumentReplaceAllChanges,
   buildActiveDocumentReplacement,
   clampActiveFindIndex,
@@ -98,6 +99,8 @@ describe("evaluateActiveDocumentFind (#424 Slice 2)", () => {
     ...DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
     ...over
   });
+  const NFC_ON = { normalizeUnicodeToNfc: true } as const;
+  const NFC_OFF = { normalizeUnicodeToNfc: false } as const;
 
   it("returns matches with no regexError for a plain query", () => {
     const result = evaluateActiveDocumentFind("a a a", "a");
@@ -166,6 +169,71 @@ describe("evaluateActiveDocumentFind (#424 Slice 2)", () => {
       { matches: [], regexError: null }
     );
   });
+
+  it("#453 Slice 3: matches NFC query against NFD text when normalization is on", () => {
+    const nfdCafe = "cafe\u0301";
+    const result = evaluateActiveDocumentFind(
+      `xx ${nfdCafe} yy`,
+      "café",
+      opts(),
+      NFC_ON
+    );
+
+    expect(result.regexError).toBeNull();
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]).toMatchObject({
+      startOffset: 3,
+      endOffset: 8,
+      matchedText: nfdCafe
+    });
+  });
+
+  it("#453 Slice 3: matches NFD query against NFC text when normalization is on", () => {
+    const result = evaluateActiveDocumentFind(
+      "xx café yy",
+      "cafe\u0301",
+      opts(),
+      NFC_ON
+    );
+
+    expect(result.regexError).toBeNull();
+    expect(result.matches[0]).toMatchObject({
+      startOffset: 3,
+      endOffset: 7,
+      matchedText: "café"
+    });
+  });
+
+  it("#453 Slice 3: preserves raw matching when normalization is off", () => {
+    const nfdCafe = "cafe\u0301";
+
+    expect(
+      evaluateActiveDocumentFind(`xx ${nfdCafe} yy`, "café", opts(), NFC_OFF)
+        .matches
+    ).toEqual([]);
+    expect(
+      evaluateActiveDocumentFind(`xx ${nfdCafe} yy`, nfdCafe, opts(), NFC_OFF)
+        .matches[0]
+    ).toMatchObject({
+      startOffset: 3,
+      endOffset: 8,
+      matchedText: nfdCafe
+    });
+  });
+
+  it("#453 Slice 3: keeps regex raw even when normalization is on", () => {
+    const nfdCafe = "cafe\u0301";
+
+    const result = evaluateActiveDocumentFind(
+      `xx ${nfdCafe} yy`,
+      "café",
+      opts({ useRegex: true }),
+      NFC_ON
+    );
+
+    expect(result.regexError).toBeNull();
+    expect(result.matches).toEqual([]);
+  });
 });
 
 describe("toggleActiveDocumentFindOption (#424 Slice 2)", () => {
@@ -226,9 +294,23 @@ describe("clampActiveFindIndex (#424 Slice 2 review-note fix)", () => {
 describe("buildActiveDocumentReplacement (#424 Slice 3)", () => {
   const plain = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS;
   const regex = { ...DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS, useRegex: true };
+  const NFC_ON: ActiveDocumentFindMatchOptions = { normalizeUnicodeToNfc: true };
+  const NFC_OFF: ActiveDocumentFindMatchOptions = {
+    normalizeUnicodeToNfc: false
+  };
 
-  function firstMatch(text: string, query: string, options = plain) {
-    const m = evaluateActiveDocumentFind(text, query, options).matches[0];
+  function firstMatch(
+    text: string,
+    query: string,
+    options = plain,
+    matchOptions = NFC_OFF
+  ) {
+    const m = evaluateActiveDocumentFind(
+      text,
+      query,
+      options,
+      matchOptions
+    ).matches[0];
     if (!m) throw new Error("no match");
     return m;
   }
@@ -315,6 +397,72 @@ describe("buildActiveDocumentReplacement (#424 Slice 3)", () => {
     );
     expect(result).toEqual({ ok: true, replacement: "$1$&" });
   });
+
+  it("#453 Slice 4: replace-current uses the raw NFD source range for an NFC query", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `A ${nfdCafe} B`;
+    const match = firstMatch(text, "café", plain, NFC_ON);
+
+    expect(match).toMatchObject({
+      startOffset: 2,
+      endOffset: 7,
+      matchedText: nfdCafe
+    });
+    expect(
+      buildActiveDocumentReplacement(text, match, "X", plain, "café")
+    ).toEqual({ ok: true, replacement: "X" });
+    expect(
+      text.slice(0, match.startOffset) +
+        "X" +
+        text.slice(match.endOffset)
+    ).toBe("A X B");
+  });
+
+  it("#453 Slice 4: replace-current uses the raw NFC source range for an NFD query", () => {
+    const text = "A café B";
+    const match = firstMatch(text, "cafe\u0301", plain, NFC_ON);
+
+    expect(match).toMatchObject({
+      startOffset: 2,
+      endOffset: 6,
+      matchedText: "café"
+    });
+    expect(
+      buildActiveDocumentReplacement(text, match, "Y", plain, "cafe\u0301")
+    ).toEqual({ ok: true, replacement: "Y" });
+    expect(
+      text.slice(0, match.startOffset) +
+        "Y" +
+        text.slice(match.endOffset)
+    ).toBe("A Y B");
+  });
+
+  it("#453 Slice 4: replace-current preserves raw matching when normalization is off", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `A ${nfdCafe} B`;
+
+    expect(
+      evaluateActiveDocumentFind(text, "café", plain, NFC_OFF).matches
+    ).toEqual([]);
+    expect(firstMatch(text, nfdCafe, plain, NFC_OFF)).toMatchObject({
+      startOffset: 2,
+      endOffset: 7,
+      matchedText: nfdCafe
+    });
+  });
+
+  it("#453 Slice 4: regex replace-current remains raw even when normalization is on", () => {
+    const nfdCafe = "cafe\u0301";
+
+    expect(
+      evaluateActiveDocumentFind(
+        `A ${nfdCafe} B`,
+        "café",
+        regex,
+        NFC_ON
+      ).matches
+    ).toEqual([]);
+  });
 });
 
 describe("activeDocumentReplacementTemplateError (#424 Slice 3)", () => {
@@ -357,9 +505,22 @@ describe("activeDocumentReplacementTemplateError (#424 Slice 3)", () => {
 describe("buildActiveDocumentReplaceAllChanges (#424 Slice 4)", () => {
   const plain = DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS;
   const regex = { ...DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS, useRegex: true };
+  const NFC_ON: ActiveDocumentFindMatchOptions = { normalizeUnicodeToNfc: true };
 
-  function allMatches(text: string, query: string, options = plain) {
-    return evaluateActiveDocumentFind(text, query, options).matches;
+  function allMatches(
+    text: string,
+    query: string,
+    options = plain,
+    matchOptions: ActiveDocumentFindMatchOptions = {
+      normalizeUnicodeToNfc: false
+    }
+  ) {
+    return evaluateActiveDocumentFind(
+      text,
+      query,
+      options,
+      matchOptions
+    ).matches;
   }
 
   it("builds one change per match for plain text (offsets from one snapshot)", () => {
@@ -489,6 +650,28 @@ describe("buildActiveDocumentReplaceAllChanges (#424 Slice 4)", () => {
       "$1$&",
       "$1$&"
     ]);
+  });
+
+  it("#453 Slice 4: replace-all uses raw ranges for multiple normalized matches without drift", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `${nfdCafe} / ${nfdCafe}`;
+    const matches = allMatches(text, "café", plain, NFC_ON);
+
+    expect(matches.map((match) => [match.startOffset, match.endOffset])).toEqual(
+      [
+        [0, 5],
+        [8, 13]
+      ]
+    );
+    expect(
+      buildActiveDocumentReplaceAllChanges(text, matches, "X", plain, "café")
+    ).toEqual({
+      ok: true,
+      changes: [
+        { from: 0, to: 5, insert: "X" },
+        { from: 8, to: 13, insert: "X" }
+      ]
+    });
   });
 });
 

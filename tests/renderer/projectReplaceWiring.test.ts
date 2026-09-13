@@ -40,6 +40,18 @@ describe("openReplacePreviewForProjectDocuments (#386)", () => {
   });
 });
 
+describe("generateReplacePreviewCandidates (#386/#453 Slice 5)", () => {
+  const gen = functionBlock("generateReplacePreviewCandidates");
+
+  it("threads workbench.normalizeUnicodeToNfc into Open Documents Replace candidate generation", () => {
+    expect(gen).toContain("generateOpenDocumentsReplaceCandidates(");
+    expect(gen).toContain("normalizeUnicodeToNfc:");
+    expect(gen).toContain(
+      "effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
+  });
+});
+
 describe("generateProjectReplacePreviewCandidates (#386)", () => {
   const gen = functionBlock("generateProjectReplacePreviewCandidates");
 
@@ -53,6 +65,10 @@ describe("generateProjectReplacePreviewCandidates (#386)", () => {
 
   it("reuses the shared candidate generator and applies the 50k safety ceiling", () => {
     expect(gen).toContain("generateOpenDocumentsReplaceCandidates(");
+    expect(gen).toContain("normalizeUnicodeToNfc:");
+    expect(gen).toContain(
+      "effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
     expect(gen).toContain("REPLACE_PREVIEW_CANDIDATE_LIMIT");
   });
 

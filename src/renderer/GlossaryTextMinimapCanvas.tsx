@@ -108,6 +108,8 @@ interface GlossaryTextMinimapCanvasProps {
   page?: DocumentMapPage;
   /** Phase 2 hook — accepted, unused in Phase 1. */
   renderMode?: GlossaryDocumentMapRenderMode;
+  /** Existing workbench.normalizeUnicodeToNfc setting for Glossary occurrence detection. */
+  normalizeUnicodeToNfc?: boolean;
   translate: Translate;
 }
 
@@ -129,6 +131,7 @@ export function GlossaryTextMinimapCanvas({
   onNavigateToLine,
   page,
   renderMode,
+  normalizeUnicodeToNfc = false,
   translate
 }: GlossaryTextMinimapCanvasProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -620,6 +623,7 @@ export function GlossaryTextMinimapCanvas({
         documentMapSettings?.adjustTagColorsForVisibility ?? false,
         (selectedTagIds ?? []).join(","),
         renderMode,
+        normalizeUnicodeToNfc,
         entries
       ] as const;
 
@@ -640,7 +644,8 @@ export function GlossaryTextMinimapCanvas({
           adjustTagColorsForVisibility:
             documentMapSettings?.adjustTagColorsForVisibility,
           selectedTagIds,
-          renderMode
+          renderMode,
+          normalizeUnicodeToNfc
         });
         planCacheRef.current = { planKey: currentPlanKey, plan };
       }

@@ -35,6 +35,11 @@
  * (`管区` vs `第七管区`) are deliberately left permissive in v1.
  */
 
+import {
+  createNormalizedTextWithSourceMap,
+  mapNormalizedRangeToSourceRange
+} from "./normalizedTextSourceMap";
+
 export interface TextSearchOptions {
   readonly caseSensitive: boolean;
   readonly wholeWord: boolean;
@@ -283,6 +288,8 @@ export function compileSearchRegex(
 export interface FindTextSearchMatchesOptions extends TextSearchOptions {
   /** Stop after this many matches (per document). `0` / omitted = no cap. */
   readonly limit?: number;
+  /** Normalize plain search comparison text to NFC. Regex mode stays raw. */
+  readonly normalizeUnicodeToNfc?: boolean;
 }
 
 /**
@@ -316,9 +323,21 @@ export function findTextSearchMatches(
     );
   }
 
+  const normalizeUnicodeToNfc = options.normalizeUnicodeToNfc === true;
+  const sourceMap = createNormalizedTextWithSourceMap(text, {
+    normalizeToNfc: normalizeUnicodeToNfc
+  });
+  const comparableQuery = normalizeUnicodeToNfc
+    ? createNormalizedTextWithSourceMap(query, {
+        normalizeToNfc: true
+      }).normalizedText
+    : query;
+
   const caseSensitive = options.caseSensitive;
-  const haystack = caseSensitive ? text : text.toLowerCase();
-  const needle = caseSensitive ? query : query.toLowerCase();
+  const haystack = caseSensitive
+    ? sourceMap.normalizedText
+    : sourceMap.normalizedText.toLowerCase();
+  const needle = caseSensitive ? comparableQuery : comparableQuery.toLowerCase();
   if (needle.length === 0) {
     return [];
   }
@@ -332,9 +351,29 @@ export function findTextSearchMatches(
       break;
     }
     const end = start + needle.length;
+    const sourceRange = mapNormalizedRangeToSourceRange(sourceMap, start, end);
+    if (sourceRange === null) {
+      searchFrom = start + 1;
+      continue;
+    }
 
-    if (isWordBoundaryAccepted(text, start, end, query, options.wholeWord)) {
-      matches.push(createTextSearchMatch(text, lineStarts, start, end));
+    if (
+      isWordBoundaryAccepted(
+        text,
+        sourceRange.start,
+        sourceRange.end,
+        query,
+        options.wholeWord
+      )
+    ) {
+      matches.push(
+        createTextSearchMatch(
+          text,
+          lineStarts,
+          sourceRange.start,
+          sourceRange.end
+        )
+      );
       searchFrom = end;
     } else {
       // Rejected: step one past this occurrence so an overlapping candidate

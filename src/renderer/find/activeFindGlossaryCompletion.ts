@@ -45,13 +45,14 @@ export function resolveActiveFindGlossaryCompletionPrefix(
   target: ActiveFindGlossaryCompletionTarget,
   value: string,
   selectionStart: number,
-  atomValues: readonly string[] = []
+  atomValues: readonly string[] = [],
+  options?: { readonly normalizeUnicodeToNfc?: boolean }
 ): string {
   if (target === "query") {
     return value;
   }
   const caret = Math.max(0, Math.min(selectionStart, value.length));
-  return extractGlossaryCompletionPrefix(value.slice(0, caret), atomValues);
+  return extractGlossaryCompletionPrefix(value.slice(0, caret), atomValues, options);
 }
 
 /** Every registered form across `candidates`, for the prefix strategy. */
@@ -69,7 +70,8 @@ export function activeFindGlossaryAtomValues(
 export function collectActiveFindGlossaryCompletionItems(
   candidates: readonly FindGlossaryCandidate[],
   prefix: string,
-  limit: number = ACTIVE_FIND_GLOSSARY_COMPLETION_LIMIT
+  limit: number = ACTIVE_FIND_GLOSSARY_COMPLETION_LIMIT,
+  options?: { readonly normalizeUnicodeToNfc?: boolean }
 ): GlossaryCompletionDisplayItem[] {
   // The panel's `candidates` are already the flattened, project-ordered atom
   // list (`findGlossaryPicker.collectFindGlossaryCandidates`), so feed them
@@ -78,7 +80,8 @@ export function collectActiveFindGlossaryCompletionItems(
   return filterGlossaryCompletionCandidates({
     atoms: candidates,
     prefix,
-    limit
+    limit,
+    normalizeUnicodeToNfc: options?.normalizeUnicodeToNfc
   }).map(toGlossaryCompletionDisplayItem);
 }
 
