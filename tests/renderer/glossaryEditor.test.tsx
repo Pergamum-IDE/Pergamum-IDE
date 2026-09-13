@@ -270,8 +270,6 @@ describe("GlossaryEditor (#375)", () => {
     const markup = render(createGlossaryEntryDraft(entry()));
 
     expect(markup).not.toContain("glossaryEditorOccurrenceButton");
-    expect(markup).not.toContain("previousOccurrence");
-    expect(markup).not.toContain("nextOccurrence");
   });
 
   it("disables every write control in read-only mode", () => {

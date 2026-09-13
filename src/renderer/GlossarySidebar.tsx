@@ -270,8 +270,8 @@ export function GlossarySidebar({
                     <button
                       type="button"
                       className="glossarySidebarIconButton glossarySidebarOccurrenceButton"
-                      aria-label={translate("glossary.previousOccurrence")}
-                      title={translate("glossary.previousOccurrence")}
+                      aria-label={translate("glossary.occurrence.previous")}
+                      title={translate("glossary.occurrence.previous")}
                       disabled={occurrenceNavDisabled}
                       onClick={() =>
                         onNavigateOccurrence(entry, "previous")
@@ -317,8 +317,8 @@ export function GlossarySidebar({
                     <button
                       type="button"
                       className="glossarySidebarIconButton glossarySidebarOccurrenceButton glossarySidebarNextOccurrenceButton"
-                      aria-label={translate("glossary.nextOccurrence")}
-                      title={translate("glossary.nextOccurrence")}
+                      aria-label={translate("glossary.occurrence.next")}
+                      title={translate("glossary.occurrence.next")}
                       disabled={occurrenceNavDisabled}
                       onClick={() => onNavigateOccurrence(entry, "next")}
                     >

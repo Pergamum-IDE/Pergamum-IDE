@@ -16,14 +16,6 @@ export const glossaryCommandIds = {
   openEntry: defineCommandId<readonly [entryId: GlossaryEntryId], boolean>(
     "glossary.entry.open"
   ),
-  previousOccurrence: defineCommandId<
-    readonly [entryId: GlossaryEntryId],
-    boolean
-  >("glossary.entry.occurrences.previous"),
-  nextOccurrence: defineCommandId<
-    readonly [entryId: GlossaryEntryId],
-    boolean
-  >("glossary.entry.occurrences.next"),
   /** #375: opens the dedicated Glossary Tag Manager special tab. */
   manageTags: defineCommandId<readonly [], boolean>(
     glossaryTabCommandIds.manageTags
@@ -52,20 +44,12 @@ export const glossaryEntryManagerCommandWhen: CommandEnablementExpression = {
 
 export interface GlossaryCommandController {
   openGlossaryEntry(entryId: GlossaryEntryId): boolean | Promise<boolean>;
-  navigateToPreviousGlossaryOccurrence(
-    entryId: GlossaryEntryId
-  ): boolean | Promise<boolean>;
-  navigateToNextGlossaryOccurrence(
-    entryId: GlossaryEntryId
-  ): boolean | Promise<boolean>;
   openGlossaryTagManager(): boolean | Promise<boolean>;
   openGlossaryEntryManager(): boolean | Promise<boolean>;
 }
 
 export interface GlossaryCommandTitles {
   openEntry: string;
-  previousOccurrence: string;
-  nextOccurrence: string;
   manageTags: string;
   manageTagsDescription: string;
   manageEntries: string;
@@ -73,11 +57,6 @@ export interface GlossaryCommandTitles {
 }
 
 type OpenGlossaryEntryCommand = Command<
-  readonly [entryId: GlossaryEntryId],
-  boolean
->;
-
-type GlossaryOccurrenceCommand = Command<
   readonly [entryId: GlossaryEntryId],
   boolean
 >;
@@ -91,8 +70,6 @@ export function createGlossaryCommandTitles(
 ): GlossaryCommandTitles {
   return {
     openEntry: translate("command.glossary.entry.open"),
-    previousOccurrence: translate("command.glossary.entry.occurrences.previous"),
-    nextOccurrence: translate("command.glossary.entry.occurrences.next"),
     manageTags: translate("command.glossary.tag.manage"),
     manageTagsDescription: translate("command.glossary.tag.manage.description"),
     manageEntries: translate("command.glossary.entry.manage"),
@@ -107,8 +84,6 @@ export function createGlossaryCommands(
   titles: GlossaryCommandTitles
 ): readonly [
   OpenGlossaryEntryCommand,
-  GlossaryOccurrenceCommand,
-  GlossaryOccurrenceCommand,
   ManageGlossaryTagsCommand,
   ManageGlossaryEntriesCommand
 ] {
@@ -118,20 +93,6 @@ export function createGlossaryCommands(
       title: titles.openEntry,
       palette: { visible: false },
       execute: (entryId) => controller.openGlossaryEntry(entryId)
-    },
-    {
-      id: glossaryCommandIds.previousOccurrence,
-      title: titles.previousOccurrence,
-      palette: { visible: false },
-      execute: (entryId) =>
-        controller.navigateToPreviousGlossaryOccurrence(entryId)
-    },
-    {
-      id: glossaryCommandIds.nextOccurrence,
-      title: titles.nextOccurrence,
-      palette: { visible: false },
-      execute: (entryId) =>
-        controller.navigateToNextGlossaryOccurrence(entryId)
     },
     {
       id: glossaryCommandIds.manageTags,
@@ -157,15 +118,11 @@ export function registerGlossaryCommands(
 ): void {
   const [
     openEntryCommand,
-    previousOccurrenceCommand,
-    nextOccurrenceCommand,
     manageTagsCommand,
     manageEntriesCommand
   ] = createGlossaryCommands(controller, titles);
 
   registry.register(openEntryCommand);
-  registry.register(previousOccurrenceCommand);
-  registry.register(nextOccurrenceCommand);
   registry.register(manageTagsCommand);
   registry.register(manageEntriesCommand);
 }

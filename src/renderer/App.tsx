@@ -366,7 +366,7 @@ import {
   resolveGlossaryOccurrenceTrackingSession,
   type GlossaryOccurrenceDirection,
   type GlossaryOccurrenceTrackingState,
-  type NavigateGlossaryOccurrenceTrackingOutcome,
+  type NavigateGlossaryOccurrenceTrackingResult,
   type ResolveGlossaryOccurrenceTrackingSessionContext,
   type ResolveGlossaryOccurrenceTrackingSessionResult
 } from "./glossaryOccurrenceTracking";
@@ -3153,8 +3153,6 @@ export function App(): JSX.Element {
           );
           return true;
         },
-        navigateToPreviousGlossaryOccurrence: () => false,
-        navigateToNextGlossaryOccurrence: () => false,
         openGlossaryTagManager: () => {
           openGlossaryTagManagerTab();
           return true;
@@ -6125,7 +6123,7 @@ export function App(): JSX.Element {
       return false;
     }
 
-    let outcome: NavigateGlossaryOccurrenceTrackingOutcome;
+    let outcome: NavigateGlossaryOccurrenceTrackingResult;
 
     try {
       outcome = navigateGlossaryOccurrenceTracking({

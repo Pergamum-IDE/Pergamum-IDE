@@ -13,8 +13,6 @@ const executionOptions = { source: "workspaceSidebar" } as const;
 
 const allCommandTitles = {
   openEntry: "Open glossary entry",
-  previousOccurrence: "Previous occurrence",
-  nextOccurrence: "Next occurrence",
   manageTags: "Glossary: Manage Tags",
   manageTagsDescription: "Open the glossary tag manager tab.",
   manageEntries: "Glossary: Manage Entries",
@@ -25,12 +23,6 @@ function registerAllGlossaryCommands(
   registry: CommandRegistry,
   overrides: Partial<{
     openGlossaryEntry: () => boolean | Promise<boolean>;
-    navigateToPreviousGlossaryOccurrence: (
-      entryId: string
-    ) => boolean | Promise<boolean>;
-    navigateToNextGlossaryOccurrence: (
-      entryId: string
-    ) => boolean | Promise<boolean>;
     openGlossaryTagManager: () => boolean | Promise<boolean>;
     openGlossaryEntryManager: () => boolean | Promise<boolean>;
   }> = {}
@@ -39,8 +31,6 @@ function registerAllGlossaryCommands(
     registry,
     {
       openGlossaryEntry: () => true,
-      navigateToPreviousGlossaryOccurrence: () => true,
-      navigateToNextGlossaryOccurrence: () => true,
       openGlossaryTagManager: () => true,
       openGlossaryEntryManager: () => true,
       ...overrides
@@ -56,7 +46,7 @@ function registerAllGlossaryCommands(
 }
 
 describe("glossary commands", () => {
-  it("registers entry open, occurrence navigation, and tag manager commands", () => {
+  it("registers entry open, tag manager, and entry manager commands", () => {
     const registry = new CommandRegistry();
 
     registerAllGlossaryCommands(registry);
@@ -65,19 +55,11 @@ describe("glossary commands", () => {
     // Glossary Entry Editor Pane create flow replaces it).
     expect(registry.list().map((command) => command.id)).toEqual([
       "glossary.entry.open",
-      "glossary.entry.occurrences.previous",
-      "glossary.entry.occurrences.next",
       "glossary.tag.manage",
       "glossary.entry.manage"
     ]);
     expect(registry.get(glossaryCommandIds.openEntry)?.title).toBe(
       "Open glossary entry"
-    );
-    expect(registry.get(glossaryCommandIds.previousOccurrence)?.title).toBe(
-      "Previous occurrence"
-    );
-    expect(registry.get(glossaryCommandIds.nextOccurrence)?.title).toBe(
-      "Next occurrence"
     );
     expect(registry.get(glossaryCommandIds.manageTags)?.title).toBe(
       "Glossary: Manage Tags"
@@ -127,52 +109,11 @@ describe("glossary commands", () => {
     expect(openGlossaryEntry).toHaveBeenCalledWith(entryId);
   });
 
-  it("navigates to the previous Glossary occurrence through a typed entryId command argument", async () => {
-    const registry = new CommandRegistry();
-    const navigateToPreviousGlossaryOccurrence = vi.fn(async () => true);
-
-    registerAllGlossaryCommands(registry, {
-      navigateToPreviousGlossaryOccurrence
-    });
-
-    await expect(
-      registry.execute(
-        glossaryCommandIds.previousOccurrence,
-        executionOptions,
-        entryId
-      )
-    ).resolves.toBe(true);
-    expect(navigateToPreviousGlossaryOccurrence).toHaveBeenCalledWith(
-      entryId
-    );
-  });
-
-  it("navigates to the next Glossary occurrence through a typed entryId command argument", async () => {
-    const registry = new CommandRegistry();
-    const navigateToNextGlossaryOccurrence = vi.fn(async () => true);
-
-    registerAllGlossaryCommands(registry, {
-      navigateToNextGlossaryOccurrence
-    });
-
-    await expect(
-      registry.execute(
-        glossaryCommandIds.nextOccurrence,
-        executionOptions,
-        entryId
-      )
-    ).resolves.toBe(true);
-    expect(navigateToNextGlossaryOccurrence).toHaveBeenCalledWith(entryId);
-  });
-
   it("creates localized command titles outside the registry", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createGlossaryCommandTitles(translate)).toEqual({
       openEntry: "translated:command.glossary.entry.open",
-      previousOccurrence:
-        "translated:command.glossary.entry.occurrences.previous",
-      nextOccurrence: "translated:command.glossary.entry.occurrences.next",
       manageTags: "translated:command.glossary.tag.manage",
       manageTagsDescription:
         "translated:command.glossary.tag.manage.description",
