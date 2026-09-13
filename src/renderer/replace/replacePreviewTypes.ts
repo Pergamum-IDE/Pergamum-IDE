@@ -30,7 +30,9 @@ export interface ReplacePreviewSearchOptions {
  * they are NOT part of this request. Reused for both scopes.
  */
 export interface ReplacePreviewOpenRequest {
-  /** The current search query (already trimmed). */
+  /** The current search query, verbatim (#455: never trimmed - a multiline /
+   *  padded find pattern is preserved exactly as typed; only emptiness is
+   *  validated against the trimmed value upstream). */
   readonly findText: string;
   /** The replace-with text (verbatim, may be empty). */
   readonly replaceText: string;

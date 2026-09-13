@@ -824,10 +824,10 @@ export const jaTranslations = {
   "search.sidebarTitle": "検索",
   "search.tab.search": "検索",
   "search.tab.replace": "置換",
-  "search.query.placeholder": "検索",
+  "search.query.placeholder": "検索語句",
   "search.query.label": "検索文字列",
   "search.options.label": "検索オプション",
-  "search.replace.replaceWith": "置換後の文字列",
+  "search.replace.replaceWith": "置換語句",
   "search.replace.inOpenDocuments": "開いている文書のみ置換...",
   "search.replace.inProject": "プロジェクト内文書置換...",
   "search.replace.invalidRegex":

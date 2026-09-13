@@ -2026,41 +2026,62 @@ label.settingsItemHeader {
   min-height: 0;
 }
 
-/* #386 Search / Replace tabs in the pane header. */
-.searchPaneTabs {
+/* #386/#455 Search / Replace tabs + option controls, sharing one header row
+   so the query/replace textareas below get the sidebar's full width. Tab
+   visuals are a "folder tab" look matching the Active Find / Replace mode
+   tabs (activeFindPanelModeTab*) - values are duplicated rather than shared
+   classes so the Active Find component/CSS stay untouched. */
+.searchPaneHeaderRow {
   display: flex;
-  align-items: stretch;
-  gap: 4px;
-  padding: 0 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   text-transform: none;
 }
 
+.searchPaneTabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
 .searchPaneTab {
-  padding: 0 6px;
-  border: 0;
-  border-bottom: 2px solid transparent;
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
   background: transparent;
   color: var(--workspace-sidebar-muted-foreground);
   font: inherit;
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  line-height: 1;
   cursor: pointer;
 }
 
 .searchPaneTab:hover {
+  background: var(--workspace-sidebar-hover);
   color: var(--workspace-sidebar-item-foreground);
 }
 
 .searchPaneTab:focus-visible {
   outline: 2px solid var(--workspace-sidebar-focus-ring);
-  outline-offset: -2px;
+  outline-offset: 1px;
 }
 
 .searchPaneTab[data-active="true"] {
-  color: var(--workspace-sidebar-header-foreground);
-  border-bottom-color: var(--workspace-sidebar-focus-ring);
+  background: #ffffff;
+  border-color: var(--workspace-sidebar-border);
+  border-bottom-color: #ffffff;
+  color: #1f2733;
+  font-weight: 600;
+}
+
+/* Sits in the header row now (not the input row) - no visible text besides
+   the glossary relation <select>, so the header's uppercase reset here too. */
+.searchPaneOptions {
+  text-transform: none;
 }
 
 .searchPaneControls {
@@ -2071,7 +2092,7 @@ label.settingsItemHeader {
 
 .searchPaneInputRow {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 4px;
 }
 
@@ -2131,22 +2152,31 @@ label.settingsItemHeader {
   white-space: pre-wrap;
 }
 
+/* #455: input -> textarea (multiline query / find / replace text). Sized to
+   ~1 line by default; SearchSidebar's autoGrowTextarea() sets an inline
+   `height` on every change so the box grows with its content, and
+   `max-height` here caps that growth at ~5 lines. `overflow-y: hidden` -
+   content past the cap is clipped without a scrollbar; growth is still
+   bounded either way. Background/foreground match the other search boxes
+   (Active Find panel) rather than the theme-dependent sidebar palette, so
+   the field reads as a plain white text box in both light and dark themes. */
 .searchPaneInput {
   flex: 1;
   min-width: 0;
-  height: 26px;
-  padding: 0 8px;
+  min-height: 26px;
+  max-height: 100px;
+  padding: 4px 8px;
   border: 1px solid var(--workspace-sidebar-border);
   border-radius: 4px;
-  background: var(--workspace-sidebar-background);
-  color: var(--workspace-sidebar-item-foreground);
+  background: #ffffff;
+  color: #1f2733;
   font: inherit;
   font-size: 13px;
-  appearance: none;
-}
-
-.searchPaneInput::-webkit-search-cancel-button {
-  display: none;
+  line-height: 1.35;
+  resize: none;
+  overflow-y: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .searchPaneInput::placeholder {
@@ -2156,6 +2186,10 @@ label.settingsItemHeader {
 .searchPaneInput:focus-visible {
   outline: 2px solid var(--workspace-sidebar-focus-ring);
   outline-offset: -1px;
+}
+
+.searchPaneInput:disabled {
+  opacity: 0.6;
 }
 
 .searchPaneOptions {
