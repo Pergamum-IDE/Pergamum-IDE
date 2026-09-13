@@ -225,6 +225,95 @@ describe("generateOpenDocumentsReplaceCandidates - plain text (#386)", () => {
   });
 });
 
+describe("generateOpenDocumentsReplaceCandidates - multiline (#455)", () => {
+  it("finds a multiline find text and previews the full raw span replaced", () => {
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text: "before\nfoo\nbar\nafter" })],
+      "foo\nbar",
+      "baz",
+      PLAIN
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    expect(result.candidates).toHaveLength(1);
+    const [candidate] = result.candidates;
+    expect(candidate.beforeText).toBe("foo\nbar");
+    expect(candidate.afterText).toBe("baz");
+    expect(candidate.startOffset).toBe("before\n".length);
+    expect(candidate.endOffset).toBe("before\nfoo\nbar".length);
+  });
+
+  it("accepts a multiline replacement, preserved verbatim (not trimmed, not NFC-normalized)", () => {
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text: "foo" })],
+      "foo",
+      "bar\nbaz",
+      PLAIN
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.candidates[0].afterText).toBe("bar\nbaz");
+  });
+
+  it("preserves leading/trailing spaces and newlines in the replacement text exactly", () => {
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text: "foo" })],
+      "foo",
+      " bar\nbaz\n",
+      PLAIN
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.candidates[0].afterText).toBe(" bar\nbaz\n");
+  });
+
+  it("does not drift across multiple multiline matches when applied", () => {
+    const text = "A\nfoo\nbar\nB\nfoo\nbar\nC";
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text })],
+      "foo\nbar",
+      "X",
+      PLAIN
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.candidates).toHaveLength(2);
+
+    const applied = applyReplacementEditsToText(
+      text,
+      result.candidates.map((candidate) => ({
+        startOffset: candidate.startOffset!,
+        endOffset: candidate.endOffset!,
+        afterText: candidate.afterText
+      }))
+    );
+    expect(applied).toEqual({ text: "A\nX\nB\nX\nC", appliedCount: 2 });
+  });
+
+  it("preview candidate count matches the applied replacement count for multiline matches", () => {
+    const text = "foo\nbar x foo\nbar x foo\nbar";
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text })],
+      "foo\nbar",
+      "Y",
+      PLAIN
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    const applied = applyReplacementEditsToText(
+      text,
+      result.candidates.map((candidate) => ({
+        startOffset: candidate.startOffset!,
+        endOffset: candidate.endOffset!,
+        afterText: candidate.afterText
+      }))
+    );
+    expect(applied.appliedCount).toBe(result.candidates.length);
+  });
+});
+
 describe("generateOpenDocumentsReplaceCandidates - regex (#386)", () => {
   it("#453 Slice 5: regex remains raw even when normalization is on", () => {
     const nfdCafe = "cafe\u0301";

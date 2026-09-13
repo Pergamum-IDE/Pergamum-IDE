@@ -262,6 +262,31 @@ describe("runProjectTextSearch (#384 Phase 2)", () => {
     });
   });
 
+  it("#455: finds a multiline plain-text query across a document, offsets raw", async () => {
+    const result = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText: async () => "before\nfoo\nbar\nafter",
+      query: "foo\nbar",
+      options: PLAIN
+    });
+
+    expect(result.totalMatches).toBe(1);
+    expect(result.files[0].matches[0].matchedText).toBe("foo\nbar");
+  });
+
+  it("#455: a whitespace/newline-only query is treated as empty", async () => {
+    const readText = vi.fn(async () => "content");
+    const result = await runProjectTextSearch({
+      documents: [doc("a.md")],
+      readText,
+      query: "\n\n",
+      options: PLAIN
+    });
+
+    expect(result).toEqual(emptyProjectTextSearchResult("\n\n"));
+    expect(readText).not.toHaveBeenCalled();
+  });
+
   it("#453 Slice 3: keeps regex raw even when normalization is on", async () => {
     const nfdCafe = "cafe\u0301";
 

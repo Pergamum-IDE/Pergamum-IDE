@@ -368,6 +368,44 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
     });
   });
 
+  describe("multiline plain-text queries (#455)", () => {
+    it("finds a query spanning a newline as one match covering the full raw span", () => {
+      const text = "before\nfoo\nbar\nafter";
+      const [match] = findTextSearchMatches(text, "foo\nbar", PLAIN);
+
+      expect(match).toBeDefined();
+      expect(match.startOffset).toBe(text.indexOf("foo"));
+      expect(match.endOffset).toBe(text.indexOf("bar") + "bar".length);
+      expect(match.matchedText).toBe("foo\nbar");
+    });
+
+    it("preserves leading/trailing whitespace and newlines in the query itself", () => {
+      const text = "xx  foo\nbar  yy";
+      const [match] = findTextSearchMatches(text, "  foo\nbar  ", PLAIN);
+
+      expect(match).toBeDefined();
+      expect(match.matchedText).toBe("  foo\nbar  ");
+    });
+
+    it("still applies NFC normalization (#453) across a multiline match", () => {
+      const nfdCafe = "café";
+      const text = `xx\n${nfdCafe}\nyy`;
+
+      const [match] = findTextSearchMatches(text, "café", PLAIN_NFC);
+      expect(match.matchedText).toBe(nfdCafe);
+    });
+
+    it("regex mode still treats a literal \\n in the pattern raw (unaffected by #455)", () => {
+      const text = "foo\nbar";
+      const [match] = findTextSearchMatches(text, "foo\\nbar", {
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: true
+      });
+      expect(match.matchedText).toBe("foo\nbar");
+    });
+  });
+
   describe("compileSearchRegex (#384)", () => {
     it("compiles a valid pattern with the expected flags", () => {
       const insensitive = compileSearchRegex("メイド|ジャンヌ", false);

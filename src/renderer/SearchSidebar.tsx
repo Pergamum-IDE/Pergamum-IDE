@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -127,6 +128,21 @@ type SearchState =
 
 /** Shared idle instance so an effect that "stays idle" causes no re-render. */
 const IDLE_STATE: SearchState = { kind: "idle" };
+
+/**
+ * #455: auto-grow a query / find / replace textarea to fit its content, up
+ * to the CSS `max-height` on `.searchPaneInput` - beyond that the browser's
+ * own `max-height` clamp + `overflow-y: auto` take over, so this never grows
+ * the field without bound. Resetting to `"auto"` first lets `scrollHeight`
+ * shrink back down when text is deleted.
+ */
+function autoGrowTextarea(element: HTMLTextAreaElement | null): void {
+  if (!element) {
+    return;
+  }
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
 
 /** A preview line with its matched span wrapped in `<mark>`. */
 function SearchResultPreview({
@@ -613,7 +629,8 @@ export function SearchSidebar({
   runGlossaryRef.current = runGlossarySearch;
   const generationRef = useRef(0);
   const skeletonTimerRef = useRef<number | undefined>(undefined);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLTextAreaElement>(null);
+  const replaceInputRef = useRef<HTMLTextAreaElement>(null);
   const appliedQueryRequestTokenRef = useRef<number | null>(null);
 
   const clearSkeletonTimer = (): void => {
@@ -658,7 +675,10 @@ export function SearchSidebar({
     return () => window.clearTimeout(focusHandle);
   }, [queryRequest]);
 
-  const trimmedQuery = query.trim();
+  // #455: the RAW query text is what actually runs the search / replace -
+  // never trimmed, so a multiline query keeps its leading/trailing spaces
+  // and newlines exactly as typed. Only emptiness validation trims.
+  const isEmptyQuery = query.trim().length === 0;
   const glossaryMode = mode === "glossary";
   const replaceTab = activeTab === "replace";
   const textSearchAvailable = runSearch !== undefined;
@@ -669,8 +689,8 @@ export function SearchSidebar({
   const replaceBlockedByInvalidRegex =
     mode === "text" &&
     options.useRegex &&
-    trimmedQuery.length > 0 &&
-    compileSearchRegex(trimmedQuery, options.caseSensitive).regex === null;
+    !isEmptyQuery &&
+    compileSearchRegex(query, options.caseSensitive).regex === null;
 
   const selectableAtoms = useMemo(
     () => collectSelectableGlossaryAtoms(glossaryEntries),
@@ -681,6 +701,18 @@ export function SearchSidebar({
     () => buildGlossaryAtomSearchTerms(selectableAtoms, selectedAtomIds),
     [selectableAtoms, selectedAtomIds]
   );
+
+  // #455: auto-grow the query / replace textareas as their content grows,
+  // capped by the `.searchPaneInput` CSS `max-height` (then scrolls). Runs on
+  // every value change and on (re)mount - e.g. switching back to the Replace
+  // tab, or a Command Palette `%` request setting a multiline query.
+  useLayoutEffect(() => {
+    autoGrowTextarea(searchInputRef.current);
+  }, [query, glossaryMode]);
+
+  useLayoutEffect(() => {
+    autoGrowTextarea(replaceInputRef.current);
+  }, [replaceText, replaceTab]);
 
   useEffect(() => {
     // A fresh effect pass = a new / cancelled / debounced search: drop any
@@ -773,14 +805,14 @@ export function SearchSidebar({
     }
 
     // Text mode.
-    if (trimmedQuery.length === 0 || !textSearchAvailable) {
+    if (isEmptyQuery || !textSearchAvailable) {
       setSearchState((current) => (current === IDLE_STATE ? current : IDLE_STATE));
       return;
     }
 
     if (
       options.useRegex &&
-      compileSearchRegex(trimmedQuery, options.caseSensitive).regex === null
+      compileSearchRegex(query, options.caseSensitive).regex === null
     ) {
       // Invalid pattern: run nothing and invalidate any in-flight search so a
       // previously good result cannot linger as the current one.
@@ -818,7 +850,7 @@ export function SearchSidebar({
       logSearchStarted(telemetry);
       const startedAt = performance.now();
       void run(
-        trimmedQuery,
+        query,
         {
           caseSensitive: options.caseSensitive,
           wholeWord: options.wholeWord,
@@ -867,7 +899,8 @@ export function SearchSidebar({
     hasGlossaryAtoms,
     glossaryTerms,
     glossaryRelationMode,
-    trimmedQuery,
+    query,
+    isEmptyQuery,
     options.caseSensitive,
     options.wholeWord,
     options.useRegex,
@@ -904,8 +937,10 @@ export function SearchSidebar({
     // Hand the host the find / replace / options only. It opens the Replace
     // Preview Dialog immediately in a loading state and generates the
     // candidates itself, so a slow generation never looks like a dead click.
+    // #455: findText is the RAW query - not trimmed - so a multiline / padded
+    // find pattern is preserved exactly as typed.
     onReplaceInOpenDocuments?.({
-      findText: trimmedQuery,
+      findText: query,
       replaceText,
       searchOptions: {
         wholeWord: options.wholeWord,
@@ -922,7 +957,7 @@ export function SearchSidebar({
     // Same payload as the open-documents button; the host runs the dirty gate,
     // scans project files, and opens the Replace Preview Dialog (project scope).
     onReplaceInProject?.({
-      findText: trimmedQuery,
+      findText: query,
       replaceText,
       searchOptions: {
         wholeWord: options.wholeWord,
@@ -961,31 +996,88 @@ export function SearchSidebar({
       className="workspaceSidebarPanel searchPane"
       aria-label={translate("search.sidebarTitle")}
     >
-      <div
-        className="sidebarHeader searchPaneTabs"
-        role="tablist"
-        aria-label={translate("search.sidebarTitle")}
-      >
-        <button
-          type="button"
-          role="tab"
-          className="searchPaneTab"
-          aria-selected={!replaceTab}
-          data-active={!replaceTab ? "true" : undefined}
-          onClick={() => switchTab("search")}
+      {/* #455 UI addendum: the mode tabs and the option controls now share
+          one header row, so the query/replace textareas below get the full
+          sidebar width. */}
+      <div className="sidebarHeader searchPaneHeaderRow">
+        <div
+          className="searchPaneTabs"
+          role="tablist"
+          aria-label={translate("search.sidebarTitle")}
         >
-          {translate("search.tab.search")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          className="searchPaneTab"
-          aria-selected={replaceTab}
-          data-active={replaceTab ? "true" : undefined}
-          onClick={() => switchTab("replace")}
+          <button
+            type="button"
+            role="tab"
+            className="searchPaneTab"
+            aria-selected={!replaceTab}
+            data-active={!replaceTab ? "true" : undefined}
+            onClick={() => switchTab("search")}
+          >
+            {translate("search.tab.search")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className="searchPaneTab"
+            aria-selected={replaceTab}
+            data-active={replaceTab ? "true" : undefined}
+            onClick={() => switchTab("replace")}
+          >
+            {translate("search.tab.replace")}
+          </button>
+        </div>
+
+        <div
+          className="searchPaneOptions"
+          role="group"
+          aria-label={translate("search.options.label")}
         >
-          {translate("search.tab.replace")}
-        </button>
+          {replaceTab ? null : (
+            <SearchOptionToggle
+              icon={GLOSSARY_SEARCH_ICON}
+              pressed={glossaryMode}
+              label={translate("search.option.glossary")}
+              hint={translate("search.option.glossary.hint")}
+              onToggle={toggleGlossaryMode}
+            />
+          )}
+          {glossaryMode ? (
+            <GlossaryRelationSelect
+              translate={translate}
+              value={glossaryRelationMode}
+              onChange={setGlossaryRelationMode}
+            />
+          ) : (
+            <>
+              <SearchOptionToggle
+                icon={WHOLE_WORD_ICON}
+                pressed={options.wholeWord}
+                disabled={options.useRegex}
+                label={translate("search.option.wholeWord")}
+                hint={
+                  options.useRegex
+                    ? translate("search.wholeWordUnavailableWithRegex")
+                    : translate("search.option.wholeWord.hint")
+                }
+                onToggle={() => toggleOption("wholeWord")}
+              />
+              <SearchOptionToggle
+                icon={CASE_SENSITIVE_ICON}
+                pressed={options.caseSensitive}
+                label={translate("search.option.caseSensitive")}
+                hint={translate("search.option.caseSensitive.hint")}
+                onToggle={() => toggleOption("caseSensitive")}
+              />
+              <SearchOptionToggle
+                icon={USE_REGEX_ICON}
+                pressed={options.useRegex}
+                label={translate("search.option.useRegex")}
+                hint={translate("search.option.useRegex.hint")}
+                onToggle={() => toggleOption("useRegex")}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="searchPaneControls">
@@ -999,10 +1091,10 @@ export function SearchSidebar({
               normalizeUnicodeToNfc={normalizeUnicodeToNfc}
             />
           ) : (
-            <input
+            <textarea
               ref={searchInputRef}
-              type="search"
               className="searchPaneInput"
+              rows={1}
               value={query}
               placeholder={translate("search.query.placeholder")}
               aria-label={translate("search.query.label")}
@@ -1011,65 +1103,15 @@ export function SearchSidebar({
               onChange={(event) => setQuery(event.currentTarget.value)}
             />
           )}
-          <div
-            className="searchPaneOptions"
-            role="group"
-            aria-label={translate("search.options.label")}
-          >
-            {replaceTab ? null : (
-              <SearchOptionToggle
-                icon={GLOSSARY_SEARCH_ICON}
-                pressed={glossaryMode}
-                label={translate("search.option.glossary")}
-                hint={translate("search.option.glossary.hint")}
-                onToggle={toggleGlossaryMode}
-              />
-            )}
-            {glossaryMode ? (
-              <GlossaryRelationSelect
-                translate={translate}
-                value={glossaryRelationMode}
-                onChange={setGlossaryRelationMode}
-              />
-            ) : (
-              <>
-                <SearchOptionToggle
-                  icon={WHOLE_WORD_ICON}
-                  pressed={options.wholeWord}
-                  disabled={options.useRegex}
-                  label={translate("search.option.wholeWord")}
-                  hint={
-                    options.useRegex
-                      ? translate("search.wholeWordUnavailableWithRegex")
-                      : translate("search.option.wholeWord.hint")
-                  }
-                  onToggle={() => toggleOption("wholeWord")}
-                />
-                <SearchOptionToggle
-                  icon={CASE_SENSITIVE_ICON}
-                  pressed={options.caseSensitive}
-                  label={translate("search.option.caseSensitive")}
-                  hint={translate("search.option.caseSensitive.hint")}
-                  onToggle={() => toggleOption("caseSensitive")}
-                />
-                <SearchOptionToggle
-                  icon={USE_REGEX_ICON}
-                  pressed={options.useRegex}
-                  label={translate("search.option.useRegex")}
-                  hint={translate("search.option.useRegex.hint")}
-                  onToggle={() => toggleOption("useRegex")}
-                />
-              </>
-            )}
-          </div>
         </div>
 
         {replaceTab ? (
           <div className="searchPaneReplace">
             <div className="searchPaneReplaceRow">
-              <input
-                type="text"
+              <textarea
+                ref={replaceInputRef}
                 className="searchPaneInput searchPaneReplaceInput"
+                rows={1}
                 value={replaceText}
                 placeholder={translate("search.replace.replaceWith")}
                 aria-label={translate("search.replace.replaceWith")}

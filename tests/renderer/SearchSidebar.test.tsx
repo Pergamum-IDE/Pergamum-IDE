@@ -135,9 +135,10 @@ function optionToggle(index: number): HTMLButtonElement {
 }
 
 function typeQuery(text: string): void {
-  const input = container.querySelector<HTMLInputElement>(".searchPaneInput")!;
+  const input =
+    container.querySelector<HTMLTextAreaElement>(".searchPaneInput")!;
   const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
+    window.HTMLTextAreaElement.prototype,
     "value"
   )!.set!;
   act(() => {
@@ -216,9 +217,10 @@ describe("SearchSidebar (#384 Phase 1 — Search pane UI foundation)", () => {
     ]);
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
 
-    const input = container.querySelector<HTMLInputElement>(".searchPaneInput");
+    const input =
+      container.querySelector<HTMLTextAreaElement>(".searchPaneInput");
     expect(input).not.toBeNull();
-    expect(input!.getAttribute("type")).toBe("search");
+    expect(input!.tagName).toBe("TEXTAREA");
     expect(input!.getAttribute("placeholder")).toBe("search.query.placeholder");
     expect(input!.getAttribute("aria-label")).toBe("search.query.label");
 
@@ -275,10 +277,11 @@ describe("SearchSidebar (#384 Phase 1 — Search pane UI foundation)", () => {
 
   it("keeps the typed query in state (no search runs in Phase 1)", () => {
     render();
-    const input = container.querySelector<HTMLInputElement>(".searchPaneInput")!;
+    const input =
+      container.querySelector<HTMLTextAreaElement>(".searchPaneInput")!;
 
     const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
+      window.HTMLTextAreaElement.prototype,
       "value"
     )!.set!;
     act(() => {
@@ -959,8 +962,8 @@ describe("SearchSidebar (#384 — delayed loading skeleton)", () => {
 });
 
 describe("SearchSidebar (#384 — Command Palette `%` query request)", () => {
-  function searchInput(): HTMLInputElement | null {
-    return container.querySelector<HTMLInputElement>(".searchPaneInput");
+  function searchInput(): HTMLTextAreaElement | null {
+    return container.querySelector<HTMLTextAreaElement>(".searchPaneInput");
   }
 
   it("applies a non-empty request: sets the query, forces text mode, runs the search, focuses the input", async () => {
@@ -1092,8 +1095,10 @@ describe("SearchSidebar (#386 — Search / Replace tabs)", () => {
       container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
     ).find((t) => t.textContent === name)!;
   }
-  function replaceInput(): HTMLInputElement | null {
-    return container.querySelector<HTMLInputElement>(".searchPaneReplaceInput");
+  function replaceInput(): HTMLTextAreaElement | null {
+    return container.querySelector<HTMLTextAreaElement>(
+      ".searchPaneReplaceInput"
+    );
   }
   function replaceButtons(): HTMLButtonElement[] {
     return Array.from(
@@ -1133,22 +1138,23 @@ describe("SearchSidebar (#386 — Search / Replace tabs)", () => {
     typeQuery("メイド");
     goReplace();
     expect(
-      container.querySelector<HTMLInputElement>(".searchPaneInput")!.value
+      container.querySelector<HTMLTextAreaElement>(".searchPaneInput")!.value
     ).toBe("メイド");
 
     // Change it on the Replace tab.
     const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
+      window.HTMLTextAreaElement.prototype,
       "value"
     )!.set!;
     act(() => {
-      const el = container.querySelector<HTMLInputElement>(".searchPaneInput")!;
+      const el =
+        container.querySelector<HTMLTextAreaElement>(".searchPaneInput")!;
       setter.call(el, "ジャンヌ");
       el.dispatchEvent(new Event("input", { bubbles: true }));
     });
     goSearch();
     expect(
-      container.querySelector<HTMLInputElement>(".searchPaneInput")!.value
+      container.querySelector<HTMLTextAreaElement>(".searchPaneInput")!.value
     ).toBe("ジャンヌ");
   });
 
@@ -1265,11 +1271,11 @@ describe("SearchSidebar (#386 — Search / Replace tabs)", () => {
 
     goReplace();
     typeQuery("  メイド  ");
-    const replaceInput = container.querySelector<HTMLInputElement>(
+    const replaceInput = container.querySelector<HTMLTextAreaElement>(
       ".searchPaneReplaceInput"
     )!;
     const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
+      window.HTMLTextAreaElement.prototype,
       "value"
     )!.set!;
     act(() => {
@@ -1289,7 +1295,8 @@ describe("SearchSidebar (#386 — Search / Replace tabs)", () => {
         useRegex: boolean;
       };
     };
-    expect(request.findText).toBe("メイド"); // trimmed
+    // #455: findText is used verbatim - the surrounding spaces are NOT trimmed.
+    expect(request.findText).toBe("  メイド  ");
     expect(request.replaceText).toBe("使用人");
     expect(request.searchOptions).toEqual({
       wholeWord: false,
@@ -1343,5 +1350,273 @@ describe("SearchSidebar (#386 — Search / Replace tabs)", () => {
     act(() => replaceButtons()[0].click());
     expect(onReplaceInOpenDocuments).toHaveBeenCalledTimes(1);
     expect(replaceButtons()[0].disabled).toBe(false);
+  });
+});
+
+describe("SearchSidebar (#455 — multiline Project Search / Replace fields)", () => {
+  function queryField(): HTMLTextAreaElement {
+    return container.querySelector<HTMLTextAreaElement>(".searchPaneInput")!;
+  }
+  function replaceField(): HTMLTextAreaElement {
+    return container.querySelector<HTMLTextAreaElement>(
+      ".searchPaneReplaceInput"
+    )!;
+  }
+  function goReplace(): void {
+    act(() =>
+      Array.from(
+        container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      )
+        .find((t) => t.textContent === "search.tab.replace")!
+        .click()
+    );
+  }
+
+  it("renders the query field as a textarea, not an <input>", () => {
+    renderWith({ projectAvailable: true, runSearch: vi.fn<RunSearchFn>(async () => makeResult()) });
+    expect(queryField().tagName).toBe("TEXTAREA");
+  });
+
+  it("accepts and preserves a multiline query value", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("foo\nbar");
+    expect(queryField().value).toBe("foo\nbar");
+
+    await advance(300);
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    // The RAW multiline query reaches runSearch untouched.
+    expect(runSearch.mock.calls[0][0]).toBe("foo\nbar");
+  });
+
+  it("preserves leading/trailing spaces and newlines in the actual query used for search", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery(" foo\nbar ");
+    await advance(300);
+
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    expect(runSearch.mock.calls[0][0]).toBe(" foo\nbar ");
+  });
+
+  it("treats a newline/whitespace-only query as empty — runs nothing", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("\n\n");
+    await advance(400);
+
+    expect(runSearch).not.toHaveBeenCalled();
+    expect(bodyText()).toContain("search.emptyResults");
+  });
+
+  it("treats a non-blank multiline query as valid — not empty", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    typeQuery("\nfoo\n");
+    await advance(300);
+
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    expect(runSearch.mock.calls[0][0]).toBe("\nfoo\n");
+  });
+
+  it("hands multiline find text and multiline replacement text through verbatim, untrimmed", () => {
+    const onReplaceInOpenDocuments = vi.fn();
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult()),
+      onReplaceInOpenDocuments
+    });
+
+    goReplace();
+    typeQuery("foo\nbar");
+
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      "value"
+    )!.set!;
+    act(() => {
+      const field = replaceField();
+      setter.call(field, " baz\nqux ");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const button = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".searchPaneReplaceButton")
+    )[0];
+    act(() => button.click());
+
+    const request = onReplaceInOpenDocuments.mock.calls[0][0] as {
+      findText: string;
+      replaceText: string;
+    };
+    expect(request.findText).toBe("foo\nbar");
+    // Leading/trailing spaces and newlines in the replacement are kept exactly.
+    expect(request.replaceText).toBe(" baz\nqux ");
+  });
+
+  it("gives the query and replace-with fields a white background matching other search boxes", () => {
+    // Styles are not loaded into happy-dom, so this is a source-inspection
+    // check (matches the convention used elsewhere, e.g. lineEndMarkerColors).
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const start = styles.indexOf(".searchPaneInput {");
+    expect(start).toBeGreaterThan(-1);
+    const end = styles.indexOf("}", start);
+    const rule = styles.slice(start, end + 1);
+
+    expect(rule).toContain("background: #ffffff");
+    expect(rule).toContain("color: #1f2733");
+  });
+
+  it("Shift+Enter (and plain Enter) insert a newline rather than submitting anything", () => {
+    renderWith({ projectAvailable: true, runSearch: vi.fn<RunSearchFn>(async () => makeResult()) });
+    const field = queryField();
+
+    // No onKeyDown handler intercepts Enter — the browser's default textarea
+    // behaviour (insert "\n" into the value) is left in place. This is the
+    // smallest change that satisfies "a clear way to insert newlines": there
+    // was no pre-existing Enter-triggers-search binding on this field to
+    // preserve or conflict with.
+    let prevented = false;
+    field.addEventListener("keydown", (event) => {
+      prevented = (event as KeyboardEvent).defaultPrevented;
+    });
+    act(() => {
+      field.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true
+        })
+      );
+    });
+    expect(prevented).toBe(false);
+  });
+});
+
+describe("SearchSidebar (#455 UI addendum — header row layout, tab styling, placeholder)", () => {
+  function headerRow(): HTMLElement {
+    return container.querySelector<HTMLElement>(".searchPaneHeaderRow")!;
+  }
+  function inputRow(): HTMLElement {
+    return container.querySelector<HTMLElement>(".searchPaneInputRow")!;
+  }
+  function tabsContainer(): HTMLElement {
+    return container.querySelector<HTMLElement>(".searchPaneTabs")!;
+  }
+  function optionsContainer(): HTMLElement {
+    return container.querySelector<HTMLElement>(".searchPaneOptions")!;
+  }
+  function goReplace(): void {
+    act(() =>
+      Array.from(
+        container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      )
+        .find((t) => t.textContent === "search.tab.replace")!
+        .click()
+    );
+  }
+
+  it("moves the option controls out of the input row and into the tab header row", () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult())
+    });
+
+    // Options now live alongside the tabs in the header row...
+    expect(headerRow().contains(tabsContainer())).toBe(true);
+    expect(headerRow().contains(optionsContainer())).toBe(true);
+    // ...and no longer share the input row with the query textarea.
+    expect(inputRow().querySelector(".searchPaneOptions")).toBeNull();
+  });
+
+  it("gives the query textarea the full width of the input row (options no longer share it)", () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult())
+    });
+
+    expect(inputRow().children).toHaveLength(1);
+    expect(inputRow().firstElementChild!.className).toContain(
+      "searchPaneInput"
+    );
+  });
+
+  it("keeps every search option present and functional after the move", async () => {
+    const runSearch = vi.fn<RunSearchFn>(async () => makeResult());
+    renderWith({ projectAvailable: true, runSearch });
+
+    expect(
+      toggleButtons().map((b) => b.getAttribute("aria-label"))
+    ).toEqual([
+      "search.option.glossary",
+      "search.option.wholeWord",
+      "search.option.caseSensitive",
+      "search.option.useRegex"
+    ]);
+
+    const [, wholeWordToggle, , regexToggle] = toggleButtons();
+    act(() => wholeWordToggle.click());
+    act(() => regexToggle.click());
+    typeQuery("メイド");
+    await advance(300);
+
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    expect(runSearch.mock.calls[0][1]).toEqual({
+      caseSensitive: false,
+      wholeWord: false, // forced off by regex, as before the move
+      useRegex: true
+    });
+  });
+
+  it("gives the Search / Replace tabs a folder-tab look with a clear active state", () => {
+    // Styles are not loaded into happy-dom, so this is a source-inspection
+    // check for the visual rule (matches the convention used elsewhere).
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const activeStart = styles.indexOf('.searchPaneTab[data-active="true"] {');
+    expect(activeStart).toBeGreaterThan(-1);
+    const activeEnd = styles.indexOf("}", activeStart);
+    const activeRule = styles.slice(activeStart, activeEnd + 1);
+
+    expect(activeRule).toContain("background: #ffffff");
+    expect(activeRule).toContain("color: #1f2733");
+  });
+
+  it("marks the active/inactive tab clearly via aria-selected and data-active", () => {
+    renderWith({
+      projectAvailable: true,
+      runSearch: vi.fn<RunSearchFn>(async () => makeResult())
+    });
+    const tabs = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    );
+
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+    expect(tabs[0].getAttribute("data-active")).toBe("true");
+    expect(tabs[1].getAttribute("aria-selected")).toBe("false");
+    expect(tabs[1].hasAttribute("data-active")).toBe(false);
+
+    goReplace();
+    expect(tabs[0].getAttribute("aria-selected")).toBe("false");
+    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+    expect(tabs[1].getAttribute("data-active")).toBe("true");
+  });
+
+  it("uses the 検索語句 i18n text for the Project Search placeholder (shared with Active Find's wording)", () => {
+    const ja = readFileSync("src/shared/i18n/ja.ts", "utf8");
+    expect(ja).toContain('"search.query.placeholder": "検索語句"');
+    // Not hard-coded in the component — driven through translate().
+    const source = readFileSync("src/renderer/SearchSidebar.tsx", "utf8");
+    expect(source).not.toContain('"検索語句"');
+    expect(source).toContain('translate("search.query.placeholder")');
+  });
+
+  it("keeps the Replace-with placeholder terminology consistent with Active Find (置換語句)", () => {
+    const ja = readFileSync("src/shared/i18n/ja.ts", "utf8");
+    expect(ja).toContain('"search.replace.replaceWith": "置換語句"');
   });
 });
