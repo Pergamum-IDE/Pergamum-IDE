@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -123,6 +124,21 @@ function preventFocusSteal(event: ReactMouseEvent): void {
   event.preventDefault();
 }
 
+/**
+ * #456: auto-grow a query / replace textarea to fit its content, up to the
+ * CSS `max-height` on `.activeFindPanelInput` - beyond that the browser's own
+ * `max-height` clamp + `overflow-y: auto` take over, so this never grows the
+ * field without bound. Resetting to `"auto"` first lets `scrollHeight` shrink
+ * back down when text is deleted. Mirrors #455's SearchSidebar helper.
+ */
+function autoGrowTextarea(element: HTMLTextAreaElement | null): void {
+  if (!element) {
+    return;
+  }
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
+
 export function ActiveFindPanel({
   translate,
   mode,
@@ -160,8 +176,8 @@ export function ActiveFindPanel({
   onPrevious,
   onClose
 }: ActiveFindPanelProps): JSX.Element {
-  const queryInputRef = useRef<HTMLInputElement | null>(null);
-  const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const queryInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const replaceInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const replaceMode = mode === "replace";
   const glossaryMode = queryKind === "glossary";
@@ -185,7 +201,7 @@ export function ActiveFindPanel({
 
   const inputRefFor = (
     target: ActiveFindGlossaryCompletionTarget
-  ): HTMLInputElement | null =>
+  ): HTMLTextAreaElement | null =>
     (target === "query" ? queryInputRef : replaceInputRef).current;
 
   const completionAtomValues = useMemo(
@@ -230,6 +246,19 @@ export function ActiveFindPanel({
   useEffect(() => {
     setCompletionOpen(false);
   }, [mode, queryKind]);
+
+  // #456: auto-grow the query / replace textareas as their content grows,
+  // capped by the `.activeFindPanelInput` CSS `max-height` (then scrolls).
+  // Runs on every value change and on (re)mount - e.g. switching into
+  // Replace mode, or the panel opening with a previously-typed multiline
+  // query restored.
+  useLayoutEffect(() => {
+    autoGrowTextarea(queryInputRef.current);
+  }, [query, glossaryMode]);
+
+  useLayoutEffect(() => {
+    autoGrowTextarea(replaceInputRef.current);
+  }, [replaceText, replaceMode]);
 
   // #424 Slice 5: keep the completion's active index inside the row list as it
   // re-filters under the user's typing.
@@ -310,7 +339,9 @@ export function ActiveFindPanel({
    * Returns `true` when it consumed the event.
    */
   const handleModeShortcut = (
-    event: ReactKeyboardEvent<HTMLInputElement>
+    // #456: shared by the query/replace textareas AND the glossary select's
+    // own <input> - only generic KeyboardEvent fields are read below.
+    event: ReactKeyboardEvent<HTMLElement>
   ): boolean => {
     const plainCtrlOrCmd =
       (event.ctrlKey || event.metaKey) &&
@@ -407,7 +438,7 @@ export function ActiveFindPanel({
    * mode-shortcut / next / replace-current handling).
    */
   const handleCompletionKeyDown = (
-    event: ReactKeyboardEvent<HTMLInputElement>,
+    event: ReactKeyboardEvent<HTMLTextAreaElement>,
     target: ActiveFindGlossaryCompletionTarget
   ): boolean => {
     const ctrlSpaceTrigger =
@@ -476,7 +507,7 @@ export function ActiveFindPanel({
   };
 
   const handleReplaceInputChange = (
-    event: ReactChangeEvent<HTMLInputElement>
+    event: ReactChangeEvent<HTMLTextAreaElement>
   ): void => {
     const input = event.currentTarget;
     const value = input.value;
@@ -500,7 +531,7 @@ export function ActiveFindPanel({
   // ----------------------------------------------------------------------
 
   const handleQueryKeyDown = (
-    event: ReactKeyboardEvent<HTMLInputElement>
+    event: ReactKeyboardEvent<HTMLTextAreaElement>
   ): void => {
     if (event.nativeEvent.isComposing) {
       return;
@@ -518,17 +549,20 @@ export function ActiveFindPanel({
       return;
     }
     if (event.key === "Enter") {
-      event.preventDefault();
       if (event.shiftKey) {
-        onPrevious();
-      } else {
-        onNext();
+        // #456: Shift+Enter inserts a newline - let the textarea's default
+        // behaviour run (this REPLACES the previous Shift+Enter="previous
+        // match" binding; use the ◀ button for that now). Plain Enter AND
+        // Ctrl+Enter both keep the existing "find next" action.
+        return;
       }
+      event.preventDefault();
+      onNext();
     }
   };
 
   const handleReplaceKeyDown = (
-    event: ReactKeyboardEvent<HTMLInputElement>
+    event: ReactKeyboardEvent<HTMLTextAreaElement>
   ): void => {
     if (event.nativeEvent.isComposing) {
       return;
@@ -546,10 +580,12 @@ export function ActiveFindPanel({
       return;
     }
     if (event.key === "Enter") {
-      event.preventDefault();
       if (event.shiftKey) {
-        onPrevious();
-      } else if (replaceCurrentEnabled) {
+        // #456: same newline-vs-previous-match tradeoff as the query field.
+        return;
+      }
+      event.preventDefault();
+      if (replaceCurrentEnabled) {
         onReplaceCurrent();
       }
     }
@@ -607,8 +643,76 @@ export function ActiveFindPanel({
             {translate("editor.find.mode.replace")}
           </button>
         </div>
-        {/* Close acts on the whole panel — it lives on the mode-tab row, not
-            the query row. */}
+
+        {/* #456 follow-up: the glossary button + Ab/Aa/.* options sit in a
+            cluster just after the tabs (a modest gap, not pushed to the far
+            right) - `activeFindPanelCloseButton` below is the row's only
+            `margin-left: auto` element, so it alone stays pinned at the far
+            right edge regardless of how narrow this middle cluster is. */}
+        <div className="activeFindPanelHeaderOptions">
+          {/* #424 Slice 6: the `語彙` icon toggles text ⇄ glossary query kind. */}
+          <button
+            type="button"
+            className="activeFindPanelButton activeFindPanelGlossaryButton"
+            aria-pressed={glossaryMode}
+            data-active={glossaryMode ? "true" : undefined}
+            aria-label={translate("editor.find.queryKind.glossary")}
+            title={translate(
+              glossaryMode
+                ? "editor.find.queryKind.text"
+                : "editor.find.glossaryModeTooltip"
+            )}
+            disabled={!glossaryMode && !hasGlossaryCandidates}
+            onMouseDown={preventFocusSteal}
+            onClick={() =>
+              onQueryKindChange(glossaryMode ? "text" : "glossary")
+            }
+          >
+            <span
+              className="activeFindPanelGlossaryIcon"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: GLOSSARY_SEARCH_ICON }}
+            />
+          </button>
+          {glossaryMode ? null : (
+            <div
+              className="activeFindPanelOptions"
+              role="group"
+              aria-label={translate("search.options.label")}
+            >
+              <SearchOptionToggle
+                icon={WHOLE_WORD_ICON}
+                pressed={options.wholeWord}
+                disabled={options.useRegex}
+                label={translate("search.option.wholeWord")}
+                hint={
+                  options.useRegex
+                    ? translate("search.wholeWordUnavailableWithRegex")
+                    : translate("search.option.wholeWord.hint")
+                }
+                onToggle={() => onToggleOption("wholeWord")}
+              />
+              <SearchOptionToggle
+                icon={CASE_SENSITIVE_ICON}
+                pressed={options.caseSensitive}
+                label={translate("search.option.caseSensitive")}
+                hint={translate("search.option.caseSensitive.hint")}
+                onToggle={() => onToggleOption("caseSensitive")}
+              />
+              <SearchOptionToggle
+                icon={USE_REGEX_ICON}
+                pressed={options.useRegex}
+                label={translate("search.option.useRegex")}
+                hint={translate("search.option.useRegex.hint")}
+                onToggle={() => onToggleOption("useRegex")}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Close acts on the whole panel — pinned to the far right edge via
+            its own `margin-left: auto`, independent of the options cluster
+            above. */}
         <button
           type="button"
           className="activeFindPanelButton activeFindPanelCloseButton"
@@ -654,10 +758,10 @@ export function ActiveFindPanel({
           />
         ) : (
           <>
-            <input
+            <textarea
               ref={queryInputRef}
-              type="text"
               className="activeFindPanelInput"
+              rows={1}
               data-invalid={hasRegexError ? "true" : undefined}
               value={query}
               placeholder={translate("editor.find.searchPlaceholder")}
@@ -681,72 +785,14 @@ export function ActiveFindPanel({
             ) : null}
           </>
         )}
-        {/* #424 Slice 6: the `語彙` icon now toggles text ⇄ glossary query kind. */}
-        <button
-          type="button"
-          className="activeFindPanelButton activeFindPanelGlossaryButton"
-          aria-pressed={glossaryMode}
-          data-active={glossaryMode ? "true" : undefined}
-          aria-label={translate("editor.find.queryKind.glossary")}
-          title={translate(
-            glossaryMode
-              ? "editor.find.queryKind.text"
-              : "editor.find.glossaryModeTooltip"
-          )}
-          disabled={!glossaryMode && !hasGlossaryCandidates}
-          onMouseDown={preventFocusSteal}
-          onClick={() =>
-            onQueryKindChange(glossaryMode ? "text" : "glossary")
-          }
-        >
-          <span
-            className="activeFindPanelGlossaryIcon"
-            aria-hidden="true"
-            dangerouslySetInnerHTML={{ __html: GLOSSARY_SEARCH_ICON }}
-          />
-        </button>
-        {glossaryMode ? null : (
-          <div
-            className="activeFindPanelOptions"
-            role="group"
-            aria-label={translate("search.options.label")}
-          >
-            <SearchOptionToggle
-              icon={WHOLE_WORD_ICON}
-              pressed={options.wholeWord}
-              disabled={options.useRegex}
-              label={translate("search.option.wholeWord")}
-              hint={
-                options.useRegex
-                  ? translate("search.wholeWordUnavailableWithRegex")
-                  : translate("search.option.wholeWord.hint")
-              }
-              onToggle={() => onToggleOption("wholeWord")}
-            />
-            <SearchOptionToggle
-              icon={CASE_SENSITIVE_ICON}
-              pressed={options.caseSensitive}
-              label={translate("search.option.caseSensitive")}
-              hint={translate("search.option.caseSensitive.hint")}
-              onToggle={() => onToggleOption("caseSensitive")}
-            />
-            <SearchOptionToggle
-              icon={USE_REGEX_ICON}
-              pressed={options.useRegex}
-              label={translate("search.option.useRegex")}
-              hint={translate("search.option.useRegex.hint")}
-              onToggle={() => onToggleOption("useRegex")}
-            />
-          </div>
-        )}
       </div>
 
       {replaceMode ? (
         <div className="activeFindPanelRow activeFindPanelReplaceRow">
-          <input
+          <textarea
             ref={replaceInputRef}
-            type="text"
             className="activeFindPanelInput activeFindPanelReplaceInput"
+            rows={1}
             data-invalid={templateError !== null ? "true" : undefined}
             value={replaceText}
             placeholder={translate("editor.find.replacePlaceholder")}

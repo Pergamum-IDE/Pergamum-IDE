@@ -3869,16 +3869,30 @@ label.settingsItemHeader {
   min-width: 0;
 }
 
+/* #456: input -> textarea (multiline query / find / replace text). Sized to
+   ~1 line by default; ActiveFindPanel's autoGrowTextarea() sets an inline
+   `height` on every change so the box grows with its content, and
+   `max-height` here caps that growth at ~5 lines. `overflow-y: hidden` -
+   content past the cap is clipped without a scrollbar; growth is still
+   bounded either way. Background/foreground/border are unchanged from the
+   original single-line input. */
 .activeFindPanelInput {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 24px;
+  max-height: 100px;
   padding: 4px 8px;
   border: 1px solid #c4cdd8;
   border-radius: 4px;
   font: inherit;
   font-size: 13px;
+  line-height: 1.35;
   background: #ffffff;
   color: #1f2733;
+  resize: none;
+  overflow-y: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .activeFindPanelInput:focus-visible {
@@ -3993,10 +4007,12 @@ label.settingsItemHeader {
 
 /* #424 Slice 3: 検索 / 置換 mode tabs, replace input row, replace-current. */
 .activeFindPanelModeRow {
-  gap: 2px;
-  /* #424 Slice 4: close [×] sits on this row; space-between pushes it to the
-     inline-end while the mode tabs stay at the inline-start. */
-  justify-content: space-between;
+  /* #456 follow-up: a modest, fixed gap between the tabs and the
+     glossary/options cluster right after them - NOT space-between, which
+     would drift that cluster all the way to the far right together with
+     close. Close alone gets pushed to the far edge via its own
+     `margin-left: auto` below. */
+  gap: 12px;
 }
 
 .activeFindPanelModeTabs {
@@ -4004,6 +4020,23 @@ label.settingsItemHeader {
   align-items: center;
   gap: 2px;
   min-width: 0;
+}
+
+/* #456 follow-up: the glossary button + Ab/Aa/.* options, grouped as one
+   cluster sitting close to the tabs (the row's fixed `gap` above), distinct
+   from the close button which is pinned to the far right independently. */
+.activeFindPanelHeaderOptions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* #456 follow-up: the ONLY element in the row pinned to the far right,
+   independent of how much (or little) room the options cluster takes. */
+.activeFindPanelCloseButton {
+  margin-inline-start: auto;
 }
 
 .activeFindPanelModeTab {
@@ -4075,6 +4108,14 @@ label.settingsItemHeader {
 .activeFindPanelReplaceAllLabel {
   font-size: 12px;
   line-height: 1;
+}
+
+/* #456 follow-up: a visible ON/OFF toggle state for the glossary mode button
+   - reuses the same pressed palette as `.activeFindPanelMarkToggle`. */
+.activeFindPanelGlossaryButton[data-active="true"] {
+  background: #dceafc;
+  border-color: #7aa7d9;
+  color: #1f2733;
 }
 
 /* #424 Slice 6: the `語彙` icon that toggles text ⇄ glossary query kind. */

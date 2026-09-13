@@ -170,6 +170,70 @@ describe("evaluateActiveDocumentFind (#424 Slice 2)", () => {
     );
   });
 
+  describe("#456: multiline query text", () => {
+    it("finds a query spanning a newline as one match covering the full raw span", () => {
+      const text = "before\nfoo\nbar\nafter";
+      const result = evaluateActiveDocumentFind(text, "foo\nbar", opts());
+
+      expect(result.regexError).toBeNull();
+      expect(result.matches).toHaveLength(1);
+      expect(result.matches[0]).toMatchObject({
+        startOffset: text.indexOf("foo"),
+        endOffset: text.indexOf("bar") + "bar".length,
+        matchedText: "foo\nbar"
+      });
+    });
+
+    it("preserves leading/trailing spaces and newlines in the query itself", () => {
+      const text = "xx  foo\nbar  yy";
+      const result = evaluateActiveDocumentFind(text, "  foo\nbar  ", opts());
+
+      expect(result.matches).toHaveLength(1);
+      expect(result.matches[0].matchedText).toBe("  foo\nbar  ");
+    });
+
+    it("treats a whitespace/newline-only query as empty (trimmed) - not a match or an error", () => {
+      expect(evaluateActiveDocumentFind("foo\nbar", "\n\n", opts())).toEqual({
+        matches: [],
+        regexError: null
+      });
+      expect(evaluateActiveDocumentFind("foo\nbar", "   ", opts())).toEqual({
+        matches: [],
+        regexError: null
+      });
+    });
+
+    it("a non-blank multiline query (with surrounding newlines) is NOT treated as empty", () => {
+      const result = evaluateActiveDocumentFind("xx foo yy", "\nfoo\n", opts());
+      // The raw query (with its newlines) does not literally occur in the
+      // text, so it legitimately finds nothing - but this must NOT be the
+      // "empty query" no-search path (no regexError, ok to search).
+      expect(result).toEqual({ matches: [], regexError: null });
+      const found = evaluateActiveDocumentFind("xx \nfoo\n yy", "\nfoo\n", opts());
+      expect(found.matches).toHaveLength(1);
+    });
+
+    it("#453: NFC matching still works across a multiline match", () => {
+      const nfdCafe = "café";
+      const text = `xx\n${nfdCafe}\nyy`;
+      const result = evaluateActiveDocumentFind(text, "café", opts(), NFC_ON);
+
+      expect(result.matches).toHaveLength(1);
+      expect(result.matches[0].matchedText).toBe(nfdCafe);
+    });
+
+    it("regex mode remains raw with an explicit \\n in the pattern", () => {
+      const result = evaluateActiveDocumentFind(
+        "foo\nbar",
+        "foo\\nbar",
+        opts({ useRegex: true })
+      );
+      expect(result.regexError).toBeNull();
+      expect(result.matches).toHaveLength(1);
+      expect(result.matches[0].matchedText).toBe("foo\nbar");
+    });
+  });
+
   it("#453 Slice 3: matches NFC query against NFD text when normalization is on", () => {
     const nfdCafe = "cafe\u0301";
     const result = evaluateActiveDocumentFind(
@@ -463,6 +527,34 @@ describe("buildActiveDocumentReplacement (#424 Slice 3)", () => {
       ).matches
     ).toEqual([]);
   });
+
+  describe("#456: multiline find text and replacement text", () => {
+    it("finds a multiline query and replace-current returns the raw match span", () => {
+      const text = "before\nfoo\nbar\nafter";
+      const match = firstMatch(text, "foo\nbar");
+      expect(match).toMatchObject({
+        startOffset: text.indexOf("foo"),
+        endOffset: text.indexOf("bar") + "bar".length,
+        matchedText: "foo\nbar"
+      });
+      expect(
+        buildActiveDocumentReplacement(text, match, "baz", plain, "foo\nbar")
+      ).toEqual({ ok: true, replacement: "baz" });
+    });
+
+    it("replacement text may contain newlines, used verbatim (not trimmed, not NFC-normalized)", () => {
+      const text = "foo";
+      const match = firstMatch(text, "foo");
+      const result = buildActiveDocumentReplacement(
+        text,
+        match,
+        " bar\nbaz\n",
+        plain,
+        "foo"
+      );
+      expect(result).toEqual({ ok: true, replacement: " bar\nbaz\n" });
+    });
+  });
 });
 
 describe("activeDocumentReplacementTemplateError (#424 Slice 3)", () => {
@@ -672,6 +764,46 @@ describe("buildActiveDocumentReplaceAllChanges (#424 Slice 4)", () => {
         { from: 8, to: 13, insert: "X" }
       ]
     });
+  });
+
+  it("#456: multiple multiline matches do not drift", () => {
+    const text = "A\nfoo\nbar\nB\nfoo\nbar\nC";
+    const matches = allMatches(text, "foo\nbar");
+    expect(matches.map((m) => [m.startOffset, m.endOffset])).toEqual([
+      [2, 9],
+      [12, 19]
+    ]);
+
+    const result = buildActiveDocumentReplaceAllChanges(
+      text,
+      matches,
+      "X",
+      plain,
+      "foo\nbar"
+    );
+    expect(result).toEqual({
+      ok: true,
+      changes: [
+        { from: 2, to: 9, insert: "X" },
+        { from: 12, to: 19, insert: "X" }
+      ]
+    });
+  });
+
+  it("#456: a multiline replacement is used verbatim for every match", () => {
+    const text = "foo x foo";
+    const matches = allMatches(text, "foo");
+    const result = buildActiveDocumentReplaceAllChanges(
+      text,
+      matches,
+      "bar\nbaz",
+      plain,
+      "foo"
+    );
+    expect(result.ok && result.changes.map((c) => c.insert)).toEqual([
+      "bar\nbaz",
+      "bar\nbaz"
+    ]);
   });
 });
 

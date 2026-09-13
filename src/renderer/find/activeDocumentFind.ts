@@ -94,7 +94,10 @@ export function evaluateActiveDocumentFind(
   matchOptions: ActiveDocumentFindMatchOptions =
     DEFAULT_ACTIVE_DOCUMENT_FIND_MATCH_OPTIONS
 ): ActiveDocumentFindEvaluation {
-  if (query.length === 0) {
+  // #456: emptiness is judged on the TRIMMED query (a whitespace/newline-only
+  // query is empty) but the RAW `query` - never trimmed - is what actually
+  // runs below, so a multiline / padded query keeps its exact text.
+  if (query.trim().length === 0) {
     return { matches: [], regexError: null };
   }
   if (options.useRegex) {

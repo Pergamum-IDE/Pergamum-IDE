@@ -14,8 +14,9 @@ import { resetActiveFindSession } from "../../src/renderer/find/activeFindSessio
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
+// #456: the Active Find query field is now a <textarea>.
 const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-  window.HTMLInputElement.prototype,
+  window.HTMLTextAreaElement.prototype,
   "value"
 )!.set!;
 
@@ -120,7 +121,7 @@ function renderEditorSurface(
 const cmContent = () =>
   container.querySelector<HTMLElement>(".cm-content") as HTMLElement;
 const queryInput = () =>
-  container.querySelector<HTMLInputElement>(".activeFindPanelInput")!;
+  container.querySelector<HTMLTextAreaElement>(".activeFindPanelInput")!;
 const findPanel = () => container.querySelector(".activeFindPanel");
 const modeTabs = () =>
   Array.from(
@@ -141,7 +142,7 @@ function keydownOnEditor(
   return event;
 }
 
-function typeInto(element: HTMLInputElement, value: string): void {
+function typeInto(element: HTMLTextAreaElement, value: string): void {
   act(() => {
     nativeInputValueSetter.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
@@ -228,6 +229,44 @@ describe("EditorSurface — Ctrl+F / Ctrl+H open the active Find panel (#424 Sli
     expect(modeTabs()[1].getAttribute("aria-selected")).toBe("true");
   });
 
+  it("#456: finds a multiline query end-to-end and next/previous navigate between multiline matches", () => {
+    renderEditorSurface({
+      editor: editorWithContent("A\nfoo\nbar\nB\nfoo\nbar\nC")
+    });
+    keydownOnEditor({ key: "f", code: "KeyF", ctrlKey: true });
+    typeInto(queryInput(), "foo\nbar");
+
+    const countText = () =>
+      container.querySelector(".activeFindPanelCount")?.textContent ?? "";
+    expect(countText()).toMatch(/\b2\b/);
+
+    const nextButton = container.querySelector<HTMLButtonElement>(
+      ".activeFindPanelNextButton"
+    )!;
+    const prevButton = container.querySelector<HTMLButtonElement>(
+      ".activeFindPanelPrevButton"
+    )!;
+    expect(nextButton.disabled).toBe(false);
+    expect(prevButton.disabled).toBe(false);
+
+    act(() => nextButton.click());
+    expect(countText()).toMatch(/\b2\b/); // still 2 matches, cursor moved
+    act(() => prevButton.click());
+    expect(countText()).toMatch(/\b2\b/);
+  });
+
+  it("#456: a whitespace/newline-only query shows no match count (treated as empty)", () => {
+    renderEditorSurface({
+      editor: editorWithContent("foo\nbar")
+    });
+    keydownOnEditor({ key: "f", code: "KeyF", ctrlKey: true });
+    typeInto(queryInput(), "\n\n");
+
+    const countText =
+      container.querySelector(".activeFindPanelCount")?.textContent ?? "";
+    expect(countText).toBe("");
+  });
+
   it("#425 findGutterMarkers=false suppresses Active Find gutter markers even when matches exist", () => {
     renderEditorSurface({
       editor: editorWithContent("foo foo\nfoo"),
@@ -275,7 +314,7 @@ describe("#425 follow-up — Active Find: panel open/mode is surface-global, sea
       activeDocumentKey: key
     });
   const queryInputs = () =>
-    container.querySelectorAll<HTMLInputElement>(".activeFindPanelInput");
+    container.querySelectorAll<HTMLTextAreaElement>(".activeFindPanelInput");
 
   it("keeps the panel OPEN across a tab switch, but the query is per document", () => {
     renderEditorSurface({
@@ -489,7 +528,9 @@ describe("#425 follow-up — Active Find session survives a Settings-tab round t
     keydownOnEditor({ key: "h", code: "KeyH", ctrlKey: true });
     typeInto(queryInput(), "alpha");
     typeInto(
-      container.querySelectorAll<HTMLInputElement>(".activeFindPanelInput")[1],
+      container.querySelectorAll<HTMLTextAreaElement>(
+        ".activeFindPanelInput"
+      )[1],
       "OMEGA"
     );
 
@@ -501,8 +542,9 @@ describe("#425 follow-up — Active Find session survives a Settings-tab round t
 
     expect(modeTabs()[1].getAttribute("aria-selected")).toBe("true");
     expect(
-      container.querySelectorAll<HTMLInputElement>(".activeFindPanelInput")[1]
-        .value
+      container.querySelectorAll<HTMLTextAreaElement>(
+        ".activeFindPanelInput"
+      )[1].value
     ).toBe("OMEGA");
   });
 
