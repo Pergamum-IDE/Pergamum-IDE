@@ -31,7 +31,9 @@ export type { ReplacementTemplateError };
  * but with every flag required, so the panel never carries an ambiguous
  * `undefined`.
  */
-export type ActiveDocumentFindOptions = Required<TextSearchOptions>;
+export type ActiveDocumentFindOptions = Required<
+  Omit<TextSearchOptions, "normalizeUnicodeToNfc">
+>;
 
 export const DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS: ActiveDocumentFindOptions = {
   caseSensitive: false,

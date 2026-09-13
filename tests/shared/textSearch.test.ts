@@ -9,9 +9,17 @@ const PLAIN: FindTextSearchMatchesOptions = {
   caseSensitive: false,
   wholeWord: false
 };
+const PLAIN_NFC: FindTextSearchMatchesOptions = {
+  ...PLAIN,
+  normalizeUnicodeToNfc: true
+};
 const WHOLE_WORD: FindTextSearchMatchesOptions = {
   caseSensitive: false,
   wholeWord: true
+};
+const WHOLE_WORD_NFC: FindTextSearchMatchesOptions = {
+  ...WHOLE_WORD,
+  normalizeUnicodeToNfc: true
 };
 
 function starts(text: string, query: string, options = PLAIN): number[] {
@@ -60,6 +68,69 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
     ).toBe(nfdCafe);
   });
 
+  it("NFC-normalizes plain matching while returning raw UTF-16 offsets (#453 Slice 2)", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `xx ${nfdCafe} yy`;
+
+    const [match] = findTextSearchMatches(text, "café", PLAIN_NFC);
+    expect(match.startOffset).toBe(3);
+    expect(match.endOffset).toBe(8);
+    expect(match.matchedText).toBe(nfdCafe);
+    expect(
+      match.previewText.slice(match.previewMatchStart, match.previewMatchEnd)
+    ).toBe(nfdCafe);
+  });
+
+  it("normalizes an NFD query against NFC text and keeps source ranges raw (#453 Slice 2)", () => {
+    const text = "xx café yy";
+
+    const [match] = findTextSearchMatches(text, "cafe\u0301", PLAIN_NFC);
+    expect(match.startOffset).toBe(3);
+    expect(match.endOffset).toBe(7);
+    expect(match.matchedText).toBe("café");
+  });
+
+  it("maps mixed ASCII, Japanese, and combining-mark matches to raw offsets (#453 Slice 2)", () => {
+    const text = "Aか\u3099B e\u0301猫";
+
+    const [japaneseMatch] = findTextSearchMatches(text, "がB", PLAIN_NFC);
+    expect(japaneseMatch.startOffset).toBe(1);
+    expect(japaneseMatch.endOffset).toBe(4);
+    expect(japaneseMatch.matchedText).toBe("か\u3099B");
+
+    const [accentMatch] = findTextSearchMatches(text, "é", PLAIN_NFC);
+    expect(accentMatch.startOffset).toBe(5);
+    expect(accentMatch.endOffset).toBe(7);
+    expect(accentMatch.matchedText).toBe("e\u0301");
+  });
+
+  it("finds multiple normalized matches without range drift (#453 Slice 2)", () => {
+    const nfdCafe = "cafe\u0301";
+    const text = `${nfdCafe} x ${nfdCafe}`;
+
+    expect(findTextSearchMatches(text, "café", PLAIN_NFC)).toEqual([
+      expect.objectContaining({
+        startOffset: 0,
+        endOffset: 5,
+        matchedText: nfdCafe
+      }),
+      expect.objectContaining({
+        startOffset: 8,
+        endOffset: 13,
+        matchedText: nfdCafe
+      })
+    ]);
+  });
+
+  it("combines NFC normalization with existing case-insensitive matching (#453 Slice 2)", () => {
+    const text = "xx CAFE\u0301 yy";
+
+    const [match] = findTextSearchMatches(text, "café", PLAIN_NFC);
+    expect(match.startOffset).toBe(3);
+    expect(match.endOffset).toBe(8);
+    expect(match.matchedText).toBe("CAFE\u0301");
+  });
+
   it("builds a preview slice with the match offsets relative to it", () => {
     const [m] = findTextSearchMatches("The quick brown fox", "brown", PLAIN);
     expect(m.previewText).toContain("brown");
@@ -98,6 +169,13 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
       expect(starts("maidservant handmaid mermaid", "maid", WHOLE_WORD)).toEqual(
         []
       );
+    });
+
+    it("applies whole-word checks to raw ranges after NFC-normalized matching (#453 Slice 2)", () => {
+      const nfdCafe = "cafe\u0301";
+      expect(
+        starts(`${nfdCafe} hand${nfdCafe}`, "café", WHOLE_WORD_NFC)
+      ).toEqual([0]);
     });
   });
 
@@ -252,6 +330,13 @@ describe("findTextSearchMatches (#384 Phase 2)", () => {
       expect(match.startOffset).toBe(3);
       expect(match.endOffset).toBe(8);
       expect(match.matchedText).toBe(nfdCafe);
+
+      expect(
+        findTextSearchMatches(text, "café", {
+          ...REGEX,
+          normalizeUnicodeToNfc: true
+        })
+      ).toEqual([]);
     });
 
     it("ignores the whole-word option in regex mode", () => {
