@@ -860,8 +860,11 @@ function MarkdownEditorSurface({
   // #390 PoC: stable identity per `entries` value so MarkdownEditor's
   // effect-driven ref refresh doesn't fire on every unrelated re-render.
   const glossaryCompletion = useMemo(
-    () => ({ entries: glossaryEntries }),
-    [glossaryEntries]
+    () => ({
+      entries: glossaryEntries,
+      normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
+    }),
+    [glossaryEntries, normalizeUnicodeToNfcMatching]
   );
   // #424 Slice 4: project glossary atoms for the Find panel's `語彙` picker —
   // project-ordered, each tagged with whether it is its entry's representative
@@ -1746,6 +1749,7 @@ function MarkdownEditorSurface({
             matchCount={findMatchCount}
             activeIndex={findActiveIndex}
             focusToken={findFocusToken}
+            normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
             onModeChange={handleFindModeChange}
             onQueryChange={handleFindQueryChange}
             onReplaceTextChange={handleFindReplaceTextChange}
