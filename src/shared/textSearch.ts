@@ -46,8 +46,6 @@ export interface TextSearchOptions {
   /** `.*` toggle: treat the query as a JavaScript regular expression. When
    *  set, `wholeWord` is ignored (the two are mutually exclusive in the UI). */
   readonly useRegex?: boolean;
-  /** Normalize plain search comparison text to NFC. Regex mode stays raw. */
-  readonly normalizeUnicodeToNfc?: boolean;
 }
 
 export interface TextSearchMatch {
@@ -290,6 +288,8 @@ export function compileSearchRegex(
 export interface FindTextSearchMatchesOptions extends TextSearchOptions {
   /** Stop after this many matches (per document). `0` / omitted = no cap. */
   readonly limit?: number;
+  /** Normalize plain search comparison text to NFC. Regex mode stays raw. */
+  readonly normalizeUnicodeToNfc?: boolean;
 }
 
 /**
