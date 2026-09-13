@@ -15,6 +15,7 @@ import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
 import { registerGlossaryEntryEditorPaneCommands } from "../../src/renderer/glossaryEntryEditorPaneCommands";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
+import { registerProjectSearchSelectionShortcutCommands } from "../../src/renderer/projectSearchSelectionShortcutCommands";
 import { registerProjectSettingsCommands } from "../../src/renderer/projectSettingsCommands";
 import { registerRecoveryCommands } from "../../src/renderer/recovery/recoveryCommands";
 import { registerUtilityWindowCommands } from "../../src/renderer/utilityWindowCommands";
@@ -273,6 +274,21 @@ function buildCoreCommandRegistry(): CommandRegistry {
     {
       open: "Open Project Settings",
       openDescription: "Open Project Settings"
+    }
+  );
+  registerProjectSearchSelectionShortcutCommands(
+    registry,
+    {
+      openProjectSearchFromSelection: () => undefined,
+      openProjectReplaceFromSelection: () => undefined
+    },
+    {
+      openProjectSearchFromSelection: "Open Project Search from Selection",
+      openProjectSearchFromSelectionDescription:
+        "Open Project Search from Selection",
+      openProjectReplaceFromSelection: "Open Project Replace from Selection",
+      openProjectReplaceFromSelectionDescription:
+        "Open Project Replace from Selection"
     }
   );
 

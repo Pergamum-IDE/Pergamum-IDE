@@ -20,7 +20,7 @@ import {
   type FileExplorerRevealRequest
 } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
-import { SearchSidebar } from "./SearchSidebar";
+import { SearchSidebar, type SearchPaneTab } from "./SearchSidebar";
 import type { ProjectTextSearchResult } from "./projectTextSearch";
 import type {
   GlossaryAtomSearchTerm,
@@ -191,10 +191,13 @@ interface WorkspaceSidebarProps {
     relationMode: GlossarySearchRelationMode,
     isCancelled: () => boolean
   ) => Promise<ProjectTextSearchResult>;
-  /** #384: Command Palette `%` project-search request handed to the Search pane. */
+  /** #384: Command Palette `%` project-search request handed to the Search
+   *  pane (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets
+   *  `tab` to force the Search/Replace sub-tab). */
   searchQueryRequest?: {
     readonly token: number;
     readonly query: string;
+    readonly tab?: SearchPaneTab;
   } | null;
   /** #386: bumped after an Open Documents Replace is applied so the Search pane
    *  re-runs its current search over the now-changed buffers. */

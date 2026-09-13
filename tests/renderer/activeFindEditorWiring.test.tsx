@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -9,6 +10,7 @@ import {
   type MarkdownEditorParagraphIndentController
 } from "../../src/renderer/MarkdownEditor";
 import type { MarkdownEditorActiveFindConfig } from "../../src/renderer/find/activeFindKeymapExtension";
+import { getCurrentActiveEditorSelectionText } from "../../src/renderer/find/activeEditorSelectionAccess";
 import type { MarkdownEditorDocumentState } from "../../src/renderer/markdownEditorDocumentState";
 import { activeFindGutterMarkerField } from "../../src/renderer/find/activeFindGutterMarkerExtension";
 import { smartSelectionHighlightField } from "../../src/renderer/selectionHighlightExtension";
@@ -220,6 +222,93 @@ describe("MarkdownEditor activeFind prop wiring (#424 Slice 1)", () => {
     });
     expect(event.defaultPrevented).toBe(false);
     expect(requestOpen).not.toHaveBeenCalled();
+  });
+});
+
+describe("MarkdownEditor active-editor selection access wiring (#457)", () => {
+  it("publishes a selection reader when activeFind is supplied, reflecting the live primary selection", () => {
+    const requestOpen = vi.fn();
+    mount({ value: "before foo bar after", activeFind: { requestOpen } });
+
+    const view = editorView();
+    act(() => {
+      view.dispatch({
+        selection: EditorSelection.range(
+          "before ".length,
+          "before foo bar".length
+        )
+      });
+    });
+
+    expect(getCurrentActiveEditorSelectionText()).toBe("foo bar");
+  });
+
+  it("returns '' for a collapsed (caret-only) selection", () => {
+    const requestOpen = vi.fn();
+    mount({ value: "hello", activeFind: { requestOpen } });
+
+    const view = editorView();
+    act(() => {
+      view.dispatch({ selection: EditorSelection.cursor(2) });
+    });
+
+    expect(getCurrentActiveEditorSelectionText()).toBe("");
+  });
+
+  it("preserves a raw multiline primary selection exactly", () => {
+    const requestOpen = vi.fn();
+    const value = "before\nfoo\nbar\nafter";
+    mount({ value, activeFind: { requestOpen } });
+
+    const view = editorView();
+    act(() => {
+      view.dispatch({
+        selection: EditorSelection.range(
+          value.indexOf("foo"),
+          value.indexOf("after")
+        )
+      });
+    });
+
+    expect(getCurrentActiveEditorSelectionText()).toBe("foo\nbar\n");
+  });
+
+  it("does NOT publish when no activeFind config is supplied (e.g. the Glossary description field)", () => {
+    mount({ value: "secret", contextSurface: "glossaryDescription" });
+    const view = editorView();
+    act(() => {
+      view.dispatch({ selection: EditorSelection.range(0, 6) });
+    });
+
+    expect(getCurrentActiveEditorSelectionText()).toBe("");
+  });
+
+  it("unpublishes on unmount", () => {
+    const requestOpen = vi.fn();
+    const soloContainer = document.createElement("div");
+    document.body.appendChild(soloContainer);
+    const soloRoot = createRoot(soloContainer);
+    act(() => {
+      soloRoot.render(
+        React.createElement(MarkdownEditor, {
+          value: "hello world",
+          onChange: () => undefined,
+          documentKey: "doc-solo-457",
+          activeFind: { requestOpen }
+        })
+      );
+    });
+    const content = soloContainer.querySelector(".cm-content") as HTMLElement;
+    const view = EditorView.findFromDOM(content)!;
+    act(() => {
+      view.dispatch({ selection: EditorSelection.range(0, 5) });
+    });
+    expect(getCurrentActiveEditorSelectionText()).toBe("hello");
+
+    act(() => soloRoot.unmount());
+    soloContainer.remove();
+
+    expect(getCurrentActiveEditorSelectionText()).toBe("");
   });
 });
 

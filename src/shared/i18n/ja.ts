@@ -59,6 +59,12 @@ export const jaTranslations = {
   "command.glossary.openFromEditorSelection": "選択範囲から語彙を開く",
   "command.glossary.openFromEditorSelection.description":
     "選択範囲が既存の語彙に一致すればその編集画面を、一致しなければ選択範囲を代表表記にした新規作成画面を開きます。（Ctrl+G）",
+  "command.search.project.openFromSelection": "選択範囲からプロジェクト内検索を開く",
+  "command.search.project.openFromSelection.description":
+    "現在選択されているテキスト（Markdownエディタ、プレビュー、語彙集など画面内のどこでも）をプロジェクト内検索の検索語句として開きます。（Ctrl+Shift+F）",
+  "command.search.project.replace.openFromSelection": "選択範囲からプロジェクト内置換を開く",
+  "command.search.project.replace.openFromSelection.description":
+    "現在選択されているテキストをプロジェクト内置換の検索語句として開きます。置換は実行しません。（Ctrl+Shift+H）",
   "command.glossary.entry.manage": "語彙集: 語彙を管理",
   "command.glossary.entry.manage.description": "語彙の並び替え・編集・削除を行う専用タブを開きます。",
   "command.glossary.tag.manage": "語彙集: タグを管理",
@@ -963,6 +969,8 @@ export const jaTranslations = {
   "menu.copy": "コピー",
   "menu.cut": "切り取り",
   "menu.edit": "編集",
+  "menu.edit.findInProject": "プロジェクト内検索...",
+  "menu.edit.replaceInProject": "プロジェクト内置換...",
   "menu.file": "ファイル",
   "menu.file.import": "インポート",
   "menu.file.import.bulkTextFiles": "テキストファイルをまとめてインポート...",

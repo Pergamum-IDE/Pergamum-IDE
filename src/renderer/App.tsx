@@ -524,6 +524,15 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import type { SearchPaneTab } from "./SearchSidebar";
+import {
+  isUsableSelectedText,
+  resolveCurrentSelectedTextForProjectSearch
+} from "./projectSearchSelectionResolver";
+import {
+  createProjectSearchSelectionShortcutCommandTitles,
+  registerProjectSearchSelectionShortcutCommands
+} from "./projectSearchSelectionShortcutCommands";
 import {
   emptyProjectTextSearchResult,
   runProjectGlossaryAtomSearch,
@@ -1208,12 +1217,14 @@ export function App(): JSX.Element {
   const fileExplorerRevealRequestSeqRef = useRef(0);
   const [fileExplorerRevealRequest, setFileExplorerRevealRequest] =
     useState<FileExplorerRevealRequest | null>(null);
-  // #384: Command Palette `%` project-search request handed to the Search pane.
+  // #384: Command Palette `%` project-search request handed to the Search pane
+  // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
   const searchQueryRequestSeqRef = useRef(0);
   const [searchQueryRequest, setSearchQueryRequest] = useState<{
     token: number;
     query: string;
+    tab?: SearchPaneTab;
   } | null>(null);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<PendingMarkdownSelection | null>(null);
@@ -1270,6 +1281,13 @@ export function App(): JSX.Element {
   );
   const quitApplicationCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
+  );
+  // #457: Ctrl+Shift+F / Ctrl+Shift+H application-menu accelerators.
+  const openProjectSearchFromSelectionCommandRef = useRef<() => void>(
+    () => undefined
+  );
+  const openProjectReplaceFromSelectionCommandRef = useRef<() => void>(
+    () => undefined
   );
   // #274: cold-start Session restore + launch routing runs exactly once,
   // after settings are ready. Replaces the bare startup-project open.
@@ -3201,6 +3219,19 @@ export function App(): JSX.Element {
         }
       },
       createGlossaryEntryEditorPaneCommandTitles(translate)
+    );
+    // #457: Ctrl+Shift+F / Ctrl+Shift+H - application-menu accelerators
+    // only (palette-hidden, same rationale as Ctrl+G above), since they
+    // must fire regardless of what has focus in the renderer.
+    registerProjectSearchSelectionShortcutCommands(
+      registry,
+      {
+        openProjectSearchFromSelection: () =>
+          openProjectSearchFromSelectionCommandRef.current(),
+        openProjectReplaceFromSelection: () =>
+          openProjectReplaceFromSelectionCommandRef.current()
+      },
+      createProjectSearchSelectionShortcutCommandTitles(translate)
     );
     registerGlossaryOccurrencesCommands(
       registry,
@@ -9568,7 +9599,12 @@ export function App(): JSX.Element {
   // pane (never a toggle) and hands `query` to it: a non-empty query lands in
   // the text search box and runs; an empty query just opens + focuses. The
   // Search pane owns the reset-to-text-mode and the actual search.
-  function openProjectSearch(query: string): void {
+  //
+  // #457: `tab`, when supplied (Ctrl+Shift+F -> "search", Ctrl+Shift+H ->
+  // "replace"), forces that Search/Replace sub-tab regardless of whether
+  // `query` is usable. The Command Palette caller above never passes it,
+  // so its existing behaviour (never touches the active tab) is unchanged.
+  function openProjectSearch(query: string, tab?: SearchPaneTab): void {
     setSidebarMode("search");
     setLayout((current) =>
       current.sidebar.collapsed
@@ -9587,10 +9623,30 @@ export function App(): JSX.Element {
     searchQueryRequestSeqRef.current += 1;
     setSearchQueryRequest({
       token: searchQueryRequestSeqRef.current,
-      query
+      query,
+      tab
     });
   }
 
+  // #457: Ctrl+Shift+F / Ctrl+Shift+H - resolve whatever text is currently
+  // selected ANYWHERE in the Pergamum UI (not just the active Markdown
+  // editor) and seed it into Project Search / Replace. Must run before
+  // `openProjectSearch` touches focus/layout, since moving focus can itself
+  // clear a form control's selection.
+  function handleProjectSearchSelectionShortcut(tab: SearchPaneTab): void {
+    const selectedText = resolveCurrentSelectedTextForProjectSearch();
+    // An unusable (empty/whitespace-only) selection seeds "" - which the
+    // Search pane's existing queryRequest handling already treats as "just
+    // open/focus, keep whatever query is already there" (#384 behaviour).
+    openProjectSearch(
+      isUsableSelectedText(selectedText) ? selectedText : "",
+      tab
+    );
+  }
+  openProjectSearchFromSelectionCommandRef.current = () =>
+    handleProjectSearchSelectionShortcut("search");
+  openProjectReplaceFromSelectionCommandRef.current = () =>
+    handleProjectSearchSelectionShortcut("replace");
 
   // #384 Phase 2: open (or activate) the file behind a Search pane result row
   // and select the matched range. `editorNavigation.openEditor` both activates

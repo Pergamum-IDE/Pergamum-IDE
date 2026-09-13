@@ -42,6 +42,22 @@ export const projectSettingsCommandIds = {
   open: defineCommandId("project.settings.open")
 } as const;
 
+/**
+ * #457: Ctrl+Shift+F / Ctrl+Shift+H, wired as application-menu accelerators
+ * (see src/main/menu.ts) rather than a CodeMirror keymap extension, since
+ * they must fire regardless of what has focus in the renderer. Neither
+ * carries a payload over IPC - each renderer-side command resolves the
+ * current selection itself at execute time.
+ */
+export const searchSelectionShortcutCommandIds = {
+  openProjectSearchFromSelection: defineCommandId<readonly [], void>(
+    "search.project.openFromSelection"
+  ),
+  openProjectReplaceFromSelection: defineCommandId<readonly [], void>(
+    "search.project.replace.openFromSelection"
+  )
+} as const;
+
 export const editorCommandIds = {
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),
@@ -93,7 +109,9 @@ export const applicationMenuCommandIds = [
   assistCommandIds.insertParagraphIndent,
   assistCommandIds.removeParagraphIndent,
   glossaryTabCommandIds.manageTags,
-  glossaryTabCommandIds.manageEntries
+  glossaryTabCommandIds.manageEntries,
+  searchSelectionShortcutCommandIds.openProjectSearchFromSelection,
+  searchSelectionShortcutCommandIds.openProjectReplaceFromSelection
 ] as const;
 
 export type ApplicationMenuCommandId =

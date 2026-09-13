@@ -70,6 +70,10 @@ import {
   type MarkdownEditorGlossarySelectionShortcutConfig
 } from "./glossarySelectionShortcutExtension";
 import {
+  publishCurrentActiveEditorSelectionAccess,
+  unpublishCurrentActiveEditorSelectionAccess
+} from "./find/activeEditorSelectionAccess";
+import {
   createMarkdownEditorDocumentState,
   readOnlyCompartmentContent,
   type MarkdownEditorDocumentState
@@ -987,6 +991,34 @@ export function MarkdownEditor({
       unpublishCurrentGlossarySelectionShortcutConfig(glossarySelectionShortcut);
     };
   }, [glossarySelectionShortcut]);
+
+  // #457: publish this editor's live-selection reader into the module-level
+  // slot the Project Search / Replace Ctrl+Shift+F / Ctrl+Shift+H selection
+  // resolver reads as its CodeMirror-selection fallback. Reuses `activeFind`
+  // (rather than a new prop) as the "this is the main document editor, not
+  // the Glossary description field's editor" gate - same shape/reasoning as
+  // the two publishes above.
+  useEffect(() => {
+    if (!activeFind) {
+      return undefined;
+    }
+    const access = {
+      getSelectionText: (): string => {
+        const view = viewRef.current;
+        if (!view) {
+          return "";
+        }
+        const selection = view.state.selection.main;
+        return selection.empty
+          ? ""
+          : view.state.sliceDoc(selection.from, selection.to);
+      }
+    };
+    publishCurrentActiveEditorSelectionAccess(access);
+    return () => {
+      unpublishCurrentActiveEditorSelectionAccess(access);
+    };
+  }, [activeFind]);
 
   useEffect(() => {
     imageAttachmentPasteHandlerRef.current = onImageAttachmentPaste ?? null;

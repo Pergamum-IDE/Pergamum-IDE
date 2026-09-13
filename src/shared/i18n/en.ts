@@ -64,6 +64,14 @@ export const enTranslations = {
     "Open Glossary Entry from Selection",
   "command.glossary.openFromEditorSelection.description":
     "Opens the matching entry's edit screen if the selection exactly matches an existing glossary entry, otherwise opens a new-entry screen seeded with the selection. (Ctrl+G)",
+  "command.search.project.openFromSelection":
+    "Open Project Search from Selection",
+  "command.search.project.openFromSelection.description":
+    "Opens Project Search seeded with the text currently selected anywhere in the Pergamum UI (Markdown editor, preview, glossary, etc.). (Ctrl+Shift+F)",
+  "command.search.project.replace.openFromSelection":
+    "Open Project Replace from Selection",
+  "command.search.project.replace.openFromSelection.description":
+    "Opens Project Replace seeded with the currently selected text as the find query. Never applies a replacement. (Ctrl+Shift+H)",
   "command.glossary.entry.manage": "Glossary: Manage Entries",
   "command.glossary.entry.manage.description": "Open a dedicated tab to reorder, edit, and delete glossary entries.",
   "command.glossary.tag.manage": "Glossary: Manage Tags",
@@ -969,6 +977,8 @@ export const enTranslations = {
   "menu.copy": "Copy",
   "menu.cut": "Cut",
   "menu.edit": "Edit",
+  "menu.edit.findInProject": "Find in Project...",
+  "menu.edit.replaceInProject": "Replace in Project...",
   "menu.file": "File",
   "menu.file.import": "Import",
   "menu.file.import.bulkTextFiles": "Bulk Import Text Files...",
