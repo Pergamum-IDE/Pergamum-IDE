@@ -12,6 +12,12 @@ import type { MarkdownEditorActiveFindConfig } from "../../src/renderer/find/act
 import type { MarkdownEditorDocumentState } from "../../src/renderer/markdownEditorDocumentState";
 import { activeFindGutterMarkerField } from "../../src/renderer/find/activeFindGutterMarkerExtension";
 import { smartSelectionHighlightField } from "../../src/renderer/selectionHighlightExtension";
+import {
+  buildActiveDocumentReplaceAllChanges,
+  buildActiveDocumentReplacement,
+  DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+  evaluateActiveDocumentFind
+} from "../../src/renderer/find/activeDocumentFind";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -477,7 +483,7 @@ describe("EditorSurface active Find panel wiring (#424 Slice 1)", () => {
       "evaluateActiveDocumentFind(content, findQuery, findOptions, {"
     );
     expect(source).toContain(
-      "findMode === \"search\" && normalizeUnicodeToNfcMatching"
+      "normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching"
     );
     expect(source).toContain("resolveActiveFindCursor(");
     // navigation jumps must not steal focus out of the search box
@@ -603,6 +609,9 @@ describe("EditorSurface replace-current wiring (#424 Slice 3)", () => {
     );
     expect(handler).toContain("controller.getBufferText() ?? content");
     expect(handler).toContain("evaluateActiveDocumentFind(");
+    expect(handler).toContain(
+      "normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching"
+    );
     expect(handler).toContain("buildActiveDocumentReplacement(");
     expect(handler).toContain("controller.applyReplaceInBufferChanges([");
     expect(handler).toContain("resolveActiveFindIndexAfterReplacement(");
@@ -649,6 +658,9 @@ describe("EditorSurface replace-all + 語彙 wiring (#424 Slice 4)", () => {
       source.indexOf("const handleFindQueryKindChange")
     );
     expect(handler).toContain("controller.getBufferText() ?? content");
+    expect(handler).toContain(
+      "normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching"
+    );
     expect(handler).toContain("buildActiveDocumentReplaceAllChanges(");
     expect(handler).toContain("controller.applyReplaceInBufferChanges(built.changes)");
     expect(handler).toContain("resolveActiveFindIndexAfterReplaceAll(");
@@ -855,6 +867,101 @@ describe("MarkdownEditor replace controller for #424 Slice 4 (replace-all)", () 
     ]);
     expect(applied).toBe(false);
     expect(controller!.getBufferText()).toBe("a a a");
+  });
+});
+
+describe("MarkdownEditor replace controller for #453 Slice 4", () => {
+  const NFC_ON = { normalizeUnicodeToNfc: true } as const;
+
+  function captureController(value: string) {
+    let controller: MarkdownEditorParagraphIndentController | null = null;
+    const { contentDom } = mount({
+      value,
+      onParagraphIndentControllerChange: (next) => {
+        controller = next;
+      }
+    });
+    return { controller: () => controller!, contentDom };
+  }
+
+  function ctrlZ(): KeyboardEvent {
+    return new KeyboardEvent("keydown", {
+      key: "z",
+      code: "KeyZ",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+  }
+
+  it("replace-current applies a normalized match's raw range and Undo restores raw NFD text", () => {
+    const original = "A cafe\u0301 B";
+    const { controller, contentDom } = captureController(original);
+    const text = controller().getBufferText() ?? "";
+    const [match] = evaluateActiveDocumentFind(
+      text,
+      "café",
+      DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+      NFC_ON
+    ).matches;
+    const replacement = buildActiveDocumentReplacement(
+      text,
+      match,
+      "X",
+      DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+      "café"
+    );
+    if (!replacement.ok) {
+      throw new Error("unexpected replacement template failure");
+    }
+
+    act(() => {
+      controller().applyReplaceInBufferChanges([
+        {
+          from: match.startOffset,
+          to: match.endOffset,
+          insert: replacement.replacement
+        }
+      ]);
+    });
+    expect(controller().getBufferText()).toBe("A X B");
+
+    act(() => {
+      contentDom().dispatchEvent(ctrlZ());
+    });
+    expect(controller().getBufferText()).toBe(original);
+  });
+
+  it("replace-all applies every normalized match's raw range in one undo step", () => {
+    const original = "cafe\u0301 / cafe\u0301";
+    const { controller, contentDom } = captureController(original);
+    const text = controller().getBufferText() ?? "";
+    const matches = evaluateActiveDocumentFind(
+      text,
+      "café",
+      DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+      NFC_ON
+    ).matches;
+    const built = buildActiveDocumentReplaceAllChanges(
+      text,
+      matches,
+      "X",
+      DEFAULT_ACTIVE_DOCUMENT_FIND_OPTIONS,
+      "café"
+    );
+    if (!built.ok) {
+      throw new Error("unexpected replacement template failure");
+    }
+
+    act(() => {
+      controller().applyReplaceInBufferChanges(built.changes);
+    });
+    expect(controller().getBufferText()).toBe("X / X");
+
+    act(() => {
+      contentDom().dispatchEvent(ctrlZ());
+    });
+    expect(controller().getBufferText()).toBe(original);
   });
 });
 

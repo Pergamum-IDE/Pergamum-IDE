@@ -1087,8 +1087,7 @@ function MarkdownEditorSurface({
     }
     return findQuery.length > 0
       ? evaluateActiveDocumentFind(content, findQuery, findOptions, {
-          normalizeUnicodeToNfc:
-            findMode === "search" && normalizeUnicodeToNfcMatching
+          normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
         })
       : { matches: [], regexError: null };
   }, [
@@ -1121,7 +1120,7 @@ function MarkdownEditorSurface({
         "text",
         findQuery,
         findOptions,
-        findMode === "search" && normalizeUnicodeToNfcMatching
+        normalizeUnicodeToNfcMatching
       ]);
     },
     [
@@ -1391,7 +1390,8 @@ function MarkdownEditorSurface({
     const evaluation = evaluateActiveDocumentFind(
       liveText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     );
     if (evaluation.regexError !== null || evaluation.matches.length === 0) {
       return;
@@ -1433,7 +1433,8 @@ function MarkdownEditorSurface({
     const afterMatches = evaluateActiveDocumentFind(
       afterText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     ).matches;
     const nextIndex = resolveActiveFindIndexAfterReplacement(
       afterMatches,
@@ -1452,6 +1453,7 @@ function MarkdownEditorSurface({
     content,
     findQuery,
     findOptions,
+    normalizeUnicodeToNfcMatching,
     findReplaceText,
     findActiveIndex,
     jumpToFindMatch
@@ -1515,7 +1517,8 @@ function MarkdownEditorSurface({
     const evaluation = evaluateActiveDocumentFind(
       liveText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     );
     if (evaluation.regexError !== null || evaluation.matches.length === 0) {
       return;
@@ -1543,7 +1546,8 @@ function MarkdownEditorSurface({
     const afterMatches = evaluateActiveDocumentFind(
       afterText,
       findQuery,
-      findOptions
+      findOptions,
+      { normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching }
     ).matches;
     const nextIndex = resolveActiveFindIndexAfterReplaceAll(afterMatches);
     setFindActiveIndex(nextIndex);
@@ -1559,6 +1563,7 @@ function MarkdownEditorSurface({
     content,
     findQuery,
     findOptions,
+    normalizeUnicodeToNfcMatching,
     findReplaceText,
     jumpToFindMatch
   ]);
