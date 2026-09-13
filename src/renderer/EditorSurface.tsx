@@ -1090,7 +1090,10 @@ function MarkdownEditorSurface({
         regexError: null
       };
     }
-    return findQuery.length > 0
+    // #456: isEmptyQuery is judged on the trimmed query; the RAW findQuery is
+    // what actually runs (evaluateActiveDocumentFind itself also guards this,
+    // this is just a scan-avoidance shortcut for the common empty case).
+    return findQuery.trim().length > 0
       ? evaluateActiveDocumentFind(content, findQuery, findOptions, {
           normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
         })
@@ -1161,7 +1164,7 @@ function MarkdownEditorSurface({
   const findHasReplaceQuery =
     findQueryKind === "glossary"
       ? findReplaceGlossaryAtomId !== null
-      : findQuery.length > 0;
+      : findQuery.trim().length > 0;
   const findReplaceCurrentEnabled =
     findOpen &&
     findMode === "replace" &&
@@ -1516,7 +1519,7 @@ function MarkdownEditorSurface({
       return;
     }
 
-    if (findRegexError !== null || findQuery.length === 0) {
+    if (findRegexError !== null || findQuery.trim().length === 0) {
       return;
     }
     const evaluation = evaluateActiveDocumentFind(

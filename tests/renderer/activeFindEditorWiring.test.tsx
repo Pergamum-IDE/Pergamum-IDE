@@ -852,6 +852,41 @@ describe("MarkdownEditor replace controller for #424 Slice 4 (replace-all)", () 
     expect(controller().getBufferText()).toBe("unchanged");
   });
 
+  it("#456: applies a multiline replacement and Undo restores the original raw multiline text", () => {
+    const original = "before\nfoo\nbar\nafter";
+    const { controller, contentDom } = captureController(original);
+
+    act(() => {
+      controller().applyReplaceInBufferChanges([
+        { from: original.indexOf("foo"), to: original.indexOf("after"), insert: "baz\n" }
+      ]);
+    });
+    expect(controller().getBufferText()).toBe("before\nbaz\nafter");
+
+    act(() => {
+      contentDom().dispatchEvent(ctrlZ());
+    });
+    expect(controller().getBufferText()).toBe(original);
+  });
+
+  it("#456: replaces multiple multiline matches in one transaction and Undo restores all of them", () => {
+    const original = "A\nfoo\nbar\nB\nfoo\nbar\nC";
+    const { controller, contentDom } = captureController(original);
+
+    act(() => {
+      controller().applyReplaceInBufferChanges([
+        { from: 2, to: 9, insert: "X" },
+        { from: 12, to: 19, insert: "X" }
+      ]);
+    });
+    expect(controller().getBufferText()).toBe("A\nX\nB\nX\nC");
+
+    act(() => {
+      contentDom().dispatchEvent(ctrlZ());
+    });
+    expect(controller().getBufferText()).toBe(original);
+  });
+
   it("a read-only buffer refuses a multi-change replace-all batch", () => {
     let controller: MarkdownEditorParagraphIndentController | null = null;
     mount({

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,9 +21,20 @@ const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
   window.HTMLInputElement.prototype,
   "value"
 )!.set!;
+const nativeTextareaValueSetter = Object.getOwnPropertyDescriptor(
+  window.HTMLTextAreaElement.prototype,
+  "value"
+)!.set!;
 
 function typeInto(element: HTMLInputElement, value: string): void {
   nativeInputValueSetter.call(element, value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+// #456: the query / replace fields are now <textarea> - a distinct setter is
+// required (happy-dom's HTMLInputElement value setter throws on one).
+function typeIntoTextarea(element: HTMLTextAreaElement, value: string): void {
+  nativeTextareaValueSetter.call(element, value);
   element.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
@@ -89,9 +101,10 @@ function render(overrides: Partial<ActiveFindPanelProps> = {}): ActiveFindPanelP
   return props;
 }
 
-const q = () => container.querySelector<HTMLInputElement>(".activeFindPanelInput")!;
+const q = () =>
+  container.querySelector<HTMLTextAreaElement>(".activeFindPanelInput")!;
 const replaceInput = () =>
-  container.querySelector<HTMLInputElement>(".activeFindPanelReplaceInput");
+  container.querySelector<HTMLTextAreaElement>(".activeFindPanelReplaceInput");
 const modeTabs = () =>
   Array.from(
     container.querySelectorAll<HTMLButtonElement>(".activeFindPanelModeTab")
@@ -211,7 +224,7 @@ describe("ActiveFindPanel — search mode carryover (#424 Slice 3)", () => {
 
   it("reports query edits", () => {
     const props = render();
-    act(() => typeInto(q(), "hello"));
+    act(() => typeIntoTextarea(q(), "hello"));
     expect(props.onQueryChange).toHaveBeenCalledWith("hello");
   });
 
@@ -240,22 +253,37 @@ describe("ActiveFindPanel — search mode carryover (#424 Slice 3)", () => {
     ).toBe(true);
   });
 
-  it("Enter / Shift+Enter / Escape from the query input", () => {
+  it("Enter finds next, Ctrl+Enter also finds next, Escape closes (#456)", () => {
     const props = render({ query: "x", matchCount: 3, activeIndex: 0 });
-    for (const [key, shift] of [
-      ["Enter", false],
-      ["Enter", true],
-      ["Escape", false]
-    ] as const) {
+    for (const init of [
+      { key: "Enter" },
+      { key: "Enter", ctrlKey: true },
+      { key: "Escape" }
+    ]) {
       act(() =>
         q().dispatchEvent(
-          new KeyboardEvent("keydown", { key, shiftKey: shift, bubbles: true })
+          new KeyboardEvent("keydown", { ...init, bubbles: true, cancelable: true })
         )
       );
     }
-    expect(props.onNext).toHaveBeenCalledTimes(1);
-    expect(props.onPrevious).toHaveBeenCalledTimes(1);
+    expect(props.onNext).toHaveBeenCalledTimes(2);
     expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("#456: Shift+Enter inserts a newline instead of navigating (no longer bound to previous)", () => {
+    const props = render({ query: "x", matchCount: 3, activeIndex: 0 });
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+    act(() => q().dispatchEvent(event));
+
+    // Not prevented — the textarea's default newline-insertion behaviour runs.
+    expect(event.defaultPrevented).toBe(false);
+    expect(props.onNext).not.toHaveBeenCalled();
+    expect(props.onPrevious).not.toHaveBeenCalled();
   });
 });
 
@@ -305,7 +333,7 @@ describe("ActiveFindPanel — mode tabs + replace mode (#424 Slice 3)", () => {
       mode: "replace",
       replaceCurrentEnabled: true
     });
-    act(() => typeInto(replaceInput()!, "xyz"));
+    act(() => typeIntoTextarea(replaceInput()!, "xyz"));
     expect(props.onReplaceTextChange).toHaveBeenCalledWith("xyz");
 
     act(() =>
@@ -326,17 +354,29 @@ describe("ActiveFindPanel — mode tabs + replace mode (#424 Slice 3)", () => {
     expect(props.onReplaceCurrent).not.toHaveBeenCalled();
   });
 
-  it("replace input Shift+Enter goes to previous, Escape closes; IME Enter is ignored", () => {
+  it("#456: replace input Ctrl+Enter also triggers replace-current", () => {
     const props = render({ mode: "replace", replaceCurrentEnabled: true });
     act(() =>
       replaceInput()!.dispatchEvent(
         new KeyboardEvent("keydown", {
           key: "Enter",
-          shiftKey: true,
+          ctrlKey: true,
           bubbles: true
         })
       )
     );
+    expect(props.onReplaceCurrent).toHaveBeenCalledTimes(1);
+  });
+
+  it("#456: replace input Shift+Enter inserts a newline (no longer previous); Escape closes; IME Enter is ignored", () => {
+    const props = render({ mode: "replace", replaceCurrentEnabled: true });
+    const shiftEnter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+    act(() => replaceInput()!.dispatchEvent(shiftEnter));
     act(() =>
       replaceInput()!.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
@@ -346,7 +386,8 @@ describe("ActiveFindPanel — mode tabs + replace mode (#424 Slice 3)", () => {
     Object.defineProperty(composing, "isComposing", { value: true });
     act(() => replaceInput()!.dispatchEvent(composing));
 
-    expect(props.onPrevious).toHaveBeenCalledTimes(1);
+    expect(shiftEnter.defaultPrevented).toBe(false);
+    expect(props.onPrevious).not.toHaveBeenCalled();
     expect(props.onClose).toHaveBeenCalledTimes(1);
     expect(props.onReplaceCurrent).not.toHaveBeenCalled();
   });
@@ -529,10 +570,12 @@ describe("ActiveFindPanel — 全置換 button (#424 Slice 4)", () => {
 });
 
 describe("ActiveFindPanel — 語彙 icon toggles queryKind (#424 Slice 6)", () => {
-  it("is an icon-only toggle in the query row, disabled in text mode when there are no candidates", () => {
+  it("is an icon-only toggle in the header row, disabled in text mode when there are no candidates (#456: moved from the query row)", () => {
     render({ glossaryCandidates: [] });
     const button = glossaryButton();
-    expect(button.closest(".activeFindPanelQueryRow")).not.toBeNull();
+    expect(button.closest(".activeFindPanelHeaderOptions")).not.toBeNull();
+    expect(button.closest(".activeFindPanelModeRow")).not.toBeNull();
+    expect(button.closest(".activeFindPanelQueryRow")).toBeNull();
     expect(button.textContent?.trim()).toBe("");
     expect(button.querySelector("svg")).not.toBeNull();
     expect(button.disabled).toBe(true);
@@ -1156,5 +1199,134 @@ describe("ActiveFindPanel — focus polish (#424 Slice 3)", () => {
       button.dispatchEvent(event);
       expect(event.defaultPrevented).toBe(true);
     }
+  });
+});
+
+describe("ActiveFindPanel (#456 — multiline fields + header row layout)", () => {
+  function headerOptions(): HTMLElement {
+    return container.querySelector<HTMLElement>(
+      ".activeFindPanelHeaderOptions"
+    )!;
+  }
+
+  it("renders the query field as a textarea, not an <input>", () => {
+    render();
+    expect(q().tagName).toBe("TEXTAREA");
+  });
+
+  it("renders the replace field as a textarea, not an <input>", () => {
+    render({ mode: "replace" });
+    expect(replaceInput()!.tagName).toBe("TEXTAREA");
+  });
+
+  it("accepts and preserves a multiline query value", () => {
+    const props = render();
+    act(() => typeIntoTextarea(q(), "foo\nbar"));
+    expect(props.onQueryChange).toHaveBeenCalledWith("foo\nbar");
+  });
+
+  it("preserves leading/trailing spaces and newlines in the replacement value", () => {
+    const props = render({ mode: "replace" });
+    act(() => typeIntoTextarea(replaceInput()!, " bar\nbaz\n"));
+    expect(props.onReplaceTextChange).toHaveBeenCalledWith(" bar\nbaz\n");
+  });
+
+  it("keeps the Search / Replace tabs at the inline-start, separate from the options cluster", () => {
+    render();
+    const tabs = modeTabs();
+    expect(tabs).toHaveLength(2);
+    // The tabs live in their own tablist, a sibling of the options cluster -
+    // not inside it.
+    expect(
+      headerOptions().querySelector(".activeFindPanelModeTab")
+    ).toBeNull();
+    expect(modeRow().contains(headerOptions())).toBe(true);
+  });
+
+  it("#456 follow-up: header row order is search tab, replace tab, glossary button, whole word, match case, regex, close (far right)", () => {
+    render();
+    const row = modeRow();
+    // Every interactive control in the row, document order.
+    const controls = Array.from(
+      row.querySelectorAll<HTMLElement>(
+        [
+          ".activeFindPanelModeTab",
+          ".activeFindPanelGlossaryButton",
+          ".searchOptionToggle",
+          ".activeFindPanelCloseButton"
+        ].join(",")
+      )
+    );
+    const label = (el: HTMLElement): string =>
+      el.className.includes("activeFindPanelModeTab")
+        ? (el.textContent ?? "")
+        : (el.getAttribute("aria-label") ?? "");
+
+    expect(controls.map(label)).toEqual([
+      t("ja", "editor.find.mode.search"),
+      t("ja", "editor.find.mode.replace"),
+      t("ja", "editor.find.queryKind.glossary"),
+      t("ja", "search.option.wholeWord"),
+      t("ja", "search.option.caseSensitive"),
+      t("ja", "search.option.useRegex"),
+      t("ja", "editor.find.close")
+    ]);
+  });
+
+  it("groups the glossary button + Ab/Aa/.* options as one cluster right after the tabs (not drifted toward the close button)", () => {
+    render();
+    const glossary = container.querySelector(".activeFindPanelGlossaryButton")!;
+    const options = container.querySelector(".activeFindPanelOptions")!;
+    expect(headerOptions().contains(glossary)).toBe(true);
+    expect(headerOptions().contains(options)).toBe(true);
+    // The close button is NOT part of this cluster - it is a sibling of it
+    // in the row, pinned to the far right independently.
+    expect(headerOptions().querySelector(".activeFindPanelCloseButton")).toBeNull();
+    expect(
+      modeRow().contains(
+        container.querySelector(".activeFindPanelCloseButton")!
+      )
+    ).toBe(true);
+  });
+
+  it("hides the Ab/Aa/.* options (but keeps the glossary button) in glossary mode; close stays available", () => {
+    render({ queryKind: "glossary", glossaryCandidates: GLOSSARY_CANDIDATES });
+    expect(headerOptions().querySelector(".activeFindPanelOptions")).toBeNull();
+    expect(
+      headerOptions().querySelector(".activeFindPanelGlossaryButton")
+    ).not.toBeNull();
+    expect(
+      container.querySelector(".activeFindPanelCloseButton")
+    ).not.toBeNull();
+  });
+
+  it("#456 follow-up: the glossary button shows a visible pressed/toggled state via aria-pressed and data-active", () => {
+    render({ glossaryCandidates: GLOSSARY_CANDIDATES });
+    const button = () =>
+      container.querySelector<HTMLButtonElement>(
+        ".activeFindPanelGlossaryButton"
+      )!;
+
+    expect(button().getAttribute("aria-pressed")).toBe("false");
+    expect(button().hasAttribute("data-active")).toBe(false);
+
+    render({
+      glossaryCandidates: GLOSSARY_CANDIDATES,
+      queryKind: "glossary"
+    });
+    expect(button().getAttribute("aria-pressed")).toBe("true");
+    expect(button().getAttribute("data-active")).toBe("true");
+  });
+
+  it("#456 follow-up: the glossary button's pressed state reuses the mark-toggle palette", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const start = styles.indexOf(
+      '.activeFindPanelGlossaryButton[data-active="true"] {'
+    );
+    expect(start).toBeGreaterThan(-1);
+    const end = styles.indexOf("}", start);
+    const rule = styles.slice(start, end + 1);
+    expect(rule).toContain("background: #dceafc");
+    expect(rule).toContain("border-color: #7aa7d9");
   });
 });
