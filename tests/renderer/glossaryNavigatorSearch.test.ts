@@ -131,6 +131,22 @@ describe("Glossary Navigator search filter (#375)", () => {
       entryIds(filterGlossaryEntriesForNavigator(entries, "maid"))
     ).toEqual(["entry-gamma", "entry-alpha"]);
   });
+
+  it("NFC-normalizes query and candidate atom values when enabled (#453 Slice 8)", () => {
+    const nfdCafe = "cafe\u0301";
+    const entries = [glossaryEntry("entry-nfd", "", [`${nfdCafe} au lait`])];
+
+    expect(
+      entryIds(filterGlossaryEntriesForNavigator(entries, "café"))
+    ).toEqual([]);
+    expect(
+      entryIds(
+        filterGlossaryEntriesForNavigator(entries, "café", {
+          normalizeUnicodeToNfc: true
+        })
+      )
+    ).toEqual(["entry-nfd"]);
+  });
 });
 
 describe("filterGlossaryEntriesByTag (#375)", () => {

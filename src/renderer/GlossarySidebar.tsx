@@ -46,6 +46,8 @@ interface GlossarySidebarProps {
     entry: GlossaryEntry,
     direction: "previous" | "next"
   ) => void;
+  /** Existing workbench.normalizeUnicodeToNfc setting for Glossary navigator search. */
+  normalizeUnicodeToNfc?: boolean;
 }
 
 /** `<option>` value for the "no tags" pseudo-filter (never a real tag id). */
@@ -83,7 +85,8 @@ export function GlossarySidebar({
   activeDocumentContent,
   onActivateEntry,
   onOpenCreateEntryPane,
-  onNavigateOccurrence
+  onNavigateOccurrence,
+  normalizeUnicodeToNfc = false
 }: GlossarySidebarProps): JSX.Element {
   const [state, setState] = useState<GlossarySidebarState>(() =>
     projectRootPath
@@ -174,7 +177,8 @@ export function GlossarySidebar({
     state.status === "loaded"
       ? filterGlossaryEntriesForNavigator(
           filterGlossaryEntriesByTag(state.entries, tagFilter),
-          searchQuery
+          searchQuery,
+          { normalizeUnicodeToNfc }
         )
       : [];
 

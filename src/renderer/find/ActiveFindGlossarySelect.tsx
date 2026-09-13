@@ -37,6 +37,8 @@ export interface ActiveFindGlossarySelectProps {
   readonly placeholder: string;
   /** Bumped by the owner to focus the filter input (panel open / mode tab). */
   readonly focusToken: number;
+  /** Existing workbench.normalizeUnicodeToNfc setting for Glossary Atom selector filtering. */
+  readonly normalizeUnicodeToNfcMatching?: boolean;
   /**
    * Panel-level handling for keys this selector does not own — Ctrl+F / Ctrl+H
    * mode switching and Escape-closes-the-panel. Returns `true` when consumed.
@@ -58,6 +60,7 @@ export function ActiveFindGlossarySelect({
   onChange,
   placeholder,
   focusToken,
+  normalizeUnicodeToNfcMatching,
   onUnhandledKeyDown
 }: ActiveFindGlossarySelectProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -79,8 +82,11 @@ export function ActiveFindGlossarySelect({
     .filter((candidate): candidate is FindGlossaryCandidate => candidate != null);
 
   const visible = useMemo(
-    () => filterFindGlossaryCandidates(candidates, filter),
-    [candidates, filter]
+    () =>
+      filterFindGlossaryCandidates(candidates, filter, {
+        normalizeUnicodeToNfc: normalizeUnicodeToNfcMatching
+      }),
+    [candidates, filter, normalizeUnicodeToNfcMatching]
   );
 
   useEffect(() => {

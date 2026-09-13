@@ -21,24 +21,49 @@ function glossaryNavigatorSearchValues(
   return entry.atoms.map((atom) => atom.value);
 }
 
+function normalizeGlossaryNavigatorQuery(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return asciiLowercaseForNavigatorSearch(text.trim());
+}
+
+function normalizeGlossaryNavigatorCandidateValue(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  // Candidate values are lowercased ONLY (never trimmed) - preserves raw matching semantics.
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return asciiLowercaseForNavigatorSearch(text);
+}
+
 export function matchesGlossaryNavigatorSearch(
   entry: GlossaryEntry,
-  query: string
+  query: string,
+  options?: { readonly normalizeUnicodeToNfc?: boolean }
 ): boolean {
-  const normalizedQuery = asciiLowercaseForNavigatorSearch(query.trim());
+  const normalizeToNfc = options?.normalizeUnicodeToNfc ?? false;
+  const normalizedQuery = normalizeGlossaryNavigatorQuery(
+    query,
+    normalizeToNfc
+  );
 
   if (normalizedQuery.length === 0) {
     return true;
   }
 
   return glossaryNavigatorSearchValues(entry).some((value) =>
-    asciiLowercaseForNavigatorSearch(value).includes(normalizedQuery)
+    normalizeGlossaryNavigatorCandidateValue(value, normalizeToNfc).includes(
+      normalizedQuery
+    )
   );
 }
 
 export function filterGlossaryEntriesForNavigator(
   entries: readonly GlossaryEntry[],
-  query: string
+  query: string,
+  options?: { readonly normalizeUnicodeToNfc?: boolean }
 ): readonly GlossaryEntry[] {
   const trimmedQuery = query.trim();
 
@@ -47,7 +72,7 @@ export function filterGlossaryEntriesForNavigator(
   }
 
   return entries.filter((entry) =>
-    matchesGlossaryNavigatorSearch(entry, trimmedQuery)
+    matchesGlossaryNavigatorSearch(entry, trimmedQuery, options)
   );
 }
 

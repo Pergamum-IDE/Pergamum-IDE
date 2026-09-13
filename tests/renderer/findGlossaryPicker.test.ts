@@ -152,7 +152,7 @@ describe("filterFindGlossaryCandidates (#424 Slice 4)", () => {
     ).toEqual(["a3"]);
   });
 
-  it("does not NFC-normalize filter matching (#453 Slice 0)", () => {
+  it("does not NFC-normalize filter matching when disabled (#453 Slice 0/8)", () => {
     const nfdCafe = "cafe\u0301";
     const nfdCandidates = [
       findCandidate({
@@ -166,5 +166,43 @@ describe("filterFindGlossaryCandidates (#424 Slice 4)", () => {
     expect(
       filterFindGlossaryCandidates(nfdCandidates, nfdCafe).map((c) => c.atomId)
     ).toEqual(["nfd"]);
+  });
+
+  it("NFC-normalizes query and candidate fields when enabled (#453 Slice 8)", () => {
+    const nfdCafe = "cafe\u0301";
+    const nfdCandidates = [
+      findCandidate({
+        atomId: "nfd",
+        value: `${nfdCafe} au lait`,
+        entryLabel: `${nfdCafe} entry`
+      })
+    ];
+
+    expect(
+      filterFindGlossaryCandidates(nfdCandidates, "café", {
+        normalizeUnicodeToNfc: true
+      }).map((c) => c.atomId)
+    ).toEqual(["nfd"]);
+    expect(
+      filterFindGlossaryCandidates(nfdCandidates, nfdCafe, {
+        normalizeUnicodeToNfc: true
+      }).map((c) => c.atomId)
+    ).toEqual(["nfd"]);
+  });
+
+  it("trims query but does NOT trim candidate fields during matching (#453 Slice 8)", () => {
+    const spaceCandidates = [
+      findCandidate({
+        atomId: "padded",
+        value: "  シズク  ",
+        entryLabel: "  シズク  "
+      })
+    ];
+
+    expect(
+      filterFindGlossaryCandidates(spaceCandidates, "  シズク  ", {
+        normalizeUnicodeToNfc: true
+      }).map((c) => c.atomId)
+    ).toEqual(["padded"]);
   });
 });

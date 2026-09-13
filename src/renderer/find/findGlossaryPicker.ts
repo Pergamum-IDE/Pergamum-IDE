@@ -68,21 +68,47 @@ export function collectFindGlossaryCandidates(
   return rows;
 }
 
+function normalizeFindGlossaryPickerQuery(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return text.trim().toLowerCase();
+}
+
+function normalizeFindGlossaryPickerCandidateField(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  // Candidate fields are lowercased ONLY (never trimmed) - preserves raw matching semantics.
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return text.toLowerCase();
+}
+
 /**
  * Case-insensitive substring filter over `value` and `entryLabel`, preserving
  * candidate order. An empty / whitespace-only filter returns every candidate.
+ * Optional NFC normalization when workbench.normalizeUnicodeToNfc setting is enabled.
  */
 export function filterFindGlossaryCandidates(
   candidates: readonly FindGlossaryCandidate[],
-  filter: string
+  filter: string,
+  options?: { readonly normalizeUnicodeToNfc?: boolean }
 ): FindGlossaryCandidate[] {
-  const needle = filter.trim().toLowerCase();
+  const normalizeToNfc = options?.normalizeUnicodeToNfc ?? false;
+  const needle = normalizeFindGlossaryPickerQuery(filter, normalizeToNfc);
   if (needle.length === 0) {
     return [...candidates];
   }
   return candidates.filter(
     (candidate) =>
-      candidate.value.toLowerCase().includes(needle) ||
-      candidate.entryLabel.toLowerCase().includes(needle)
+      normalizeFindGlossaryPickerCandidateField(
+        candidate.value,
+        normalizeToNfc
+      ).includes(needle) ||
+      normalizeFindGlossaryPickerCandidateField(
+        candidate.entryLabel,
+        normalizeToNfc
+      ).includes(needle)
   );
 }

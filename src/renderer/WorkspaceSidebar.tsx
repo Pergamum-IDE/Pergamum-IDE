@@ -103,6 +103,8 @@ interface WorkspaceSidebarProps {
   onFileExplorerEntriesDeleted?: (
     deletedRelativePaths: readonly string[]
   ) => void;
+  /** Existing workbench.normalizeUnicodeToNfc setting for Glossary picker/filter paths. */
+  normalizeUnicodeToNfc?: boolean;
   onFileExplorerRenameUnavailable?: (message: string) => void;
   /** #327/#338: project-relative paths of open documents with UNSAVED changes
    *  (the only editor state that blocks a Move), and a status-line sink for
@@ -230,6 +232,7 @@ export function WorkspaceSidebar({
   onFileExplorerApplyMoveImageRewrites,
   onFileExplorerClearMoveImageRewrites,
   onFileExplorerEntriesDeleted,
+  normalizeUnicodeToNfc = false,
   onFileExplorerRenameUnavailable,
   fileExplorerDirtyProjectDocumentRelativePaths,
   onFileExplorerMoveResultMessage,
@@ -324,6 +327,7 @@ export function WorkspaceSidebar({
           runSearch={runProjectSearch}
           glossaryEntries={documentMapGlossaryEntries}
           runGlossarySearch={runProjectGlossarySearch}
+          normalizeUnicodeToNfc={normalizeUnicodeToNfc}
           onOpenMatch={onOpenSearchMatch}
           queryRequest={searchQueryRequest}
           searchInvalidationToken={searchInvalidationToken}
@@ -365,6 +369,7 @@ export function WorkspaceSidebar({
           refreshToken={glossaryRefreshToken}
           translate={translate}
           activeDocumentContent={glossaryActiveDocumentContent}
+          normalizeUnicodeToNfc={normalizeUnicodeToNfc}
           onActivateEntry={onActivateGlossaryEntry}
           onOpenCreateEntryPane={onOpenGlossaryCreateEntryPane}
           onNavigateOccurrence={onNavigateGlossaryOccurrence}

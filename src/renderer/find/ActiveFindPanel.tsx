@@ -649,6 +649,7 @@ export function ActiveFindPanel({
                 : "editor.find.glossarySearchPlaceholder"
             )}
             focusToken={focusToken}
+            normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
             onUnhandledKeyDown={handleGlossarySelectUnhandledKey}
           />
         ) : (

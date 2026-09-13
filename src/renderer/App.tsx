@@ -10079,6 +10079,9 @@ export function App(): JSX.Element {
                       searchProjectAvailable={project !== null}
                       runProjectSearch={runProjectSearch}
                       runProjectGlossarySearch={runProjectGlossarySearch}
+                      normalizeUnicodeToNfc={
+                        effectiveSettings.workbench.normalizeUnicodeToNfc
+                      }
                       searchQueryRequest={searchQueryRequest}
                       searchInvalidationToken={searchInvalidationToken}
                       onReplaceInOpenDocuments={
