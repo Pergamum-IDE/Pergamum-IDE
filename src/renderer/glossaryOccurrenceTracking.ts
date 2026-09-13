@@ -1,4 +1,4 @@
-import { editorIdEquals, type EditorId } from "../shared/editorId";
+import type { EditorId } from "../shared/editorId";
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import { currentDocumentContent } from "./currentDocument";
 import {
@@ -33,11 +33,6 @@ export type GlossaryOccurrenceTrackingState =
 
 export const inactiveGlossaryOccurrenceTrackingState: GlossaryOccurrenceTrackingState =
   { kind: "inactive" };
-
-export interface GlossaryOccurrenceTrackingTargetDocument {
-  editorId: EditorId;
-  content: string;
-}
 
 /**
  * Picks the range to select after a recompute, anchored on the start
@@ -75,85 +70,13 @@ export function recomputeGlossaryOccurrenceIndex(
   return nextRanges.length - 1;
 }
 
-export type GlossaryOccurrenceTrackingOutcome =
-  | { kind: "noTargetDocument" }
-  | { kind: "noOccurrences" }
-  | {
-      kind: "tracking";
-      session: GlossaryOccurrenceTrackingActiveState;
-      range: GlossaryOccurrenceRange;
-    };
-
-export interface StartGlossaryOccurrenceTrackingInput {
-  currentSession: GlossaryOccurrenceTrackingState;
-  entry: GlossaryEntry;
-  entryLabel: string;
-  targetDocument: GlossaryOccurrenceTrackingTargetDocument | null;
-  direction: GlossaryOccurrenceDirection;
-}
-
-/**
- * Starts (or continues) an occurrence tracking session from the Glossary
- * Editor's previous/next occurrence buttons.
- *
- * Session replacement rules:
- *  - inactive, different entry, or different target -> fresh session,
- *    `next` selects the first range and `previous` the last
- *  - same entry and same target as the current active session -> the
- *    session continues; the range is recomputed against the current
- *    `targetDocument` content and the next/previous index is resolved
- *    from the current session's anchor (see recomputeGlossaryOccurrenceIndex)
- */
-export function startGlossaryOccurrenceTracking(
-  input: StartGlossaryOccurrenceTrackingInput
-): GlossaryOccurrenceTrackingOutcome {
-  const { currentSession, entry, entryLabel, targetDocument, direction } =
-    input;
-
-  if (!targetDocument) {
-    return { kind: "noTargetDocument" };
-  }
-
-  const ranges = findGlossaryEntryOccurrences(targetDocument.content, entry);
-
-  if (ranges.length === 0) {
-    return { kind: "noOccurrences" };
-  }
-
-  const continuingSession =
-    currentSession.kind === "active" &&
-    currentSession.entryId === entry.id &&
-    editorIdEquals(currentSession.targetMarkdownEditorId, targetDocument.editorId)
-      ? currentSession
-      : null;
-
-  const currentIndex = recomputeGlossaryOccurrenceIndex(
-    continuingSession?.ranges ?? [],
-    continuingSession?.currentIndex ?? -1,
-    ranges,
-    direction
-  );
-
-  const session: GlossaryOccurrenceTrackingActiveState = {
-    kind: "active",
-    entryId: entry.id,
-    entryLabel,
-    entrySnapshot: entry,
-    targetMarkdownEditorId: targetDocument.editorId,
-    ranges,
-    currentIndex
-  };
-
-  return { kind: "tracking", session, range: ranges[currentIndex] };
-}
-
 export interface NavigateGlossaryOccurrenceTrackingInput {
   session: GlossaryOccurrenceTrackingActiveState;
   content: string;
   direction: GlossaryOccurrenceDirection;
 }
 
-export type NavigateGlossaryOccurrenceTrackingOutcome =
+export type NavigateGlossaryOccurrenceTrackingResult =
   | { kind: "noOccurrences" }
   | {
       kind: "tracking";
@@ -170,7 +93,7 @@ export type NavigateGlossaryOccurrenceTrackingOutcome =
  */
 export function navigateGlossaryOccurrenceTracking(
   input: NavigateGlossaryOccurrenceTrackingInput
-): NavigateGlossaryOccurrenceTrackingOutcome {
+): NavigateGlossaryOccurrenceTrackingResult {
   const { session, content, direction } = input;
   const ranges = findGlossaryEntryOccurrences(content, session.entrySnapshot);
 

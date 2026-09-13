@@ -706,18 +706,6 @@ describe("glossary occurrence tracking status translations", () => {
       "No occurrences in this document."
     );
   });
-
-  it("#436 Slice 9: no longer defines the removed GlossaryEditor occurrence-nav UI keys", () => {
-    for (const key of [
-      "glossaryEditor.previousOccurrenceLabel",
-      "glossaryEditor.nextOccurrenceLabel",
-      "glossaryEditor.previousOccurrence",
-      "glossaryEditor.nextOccurrence"
-    ]) {
-      expect(Object.keys(jaTranslations)).not.toContain(key);
-      expect(Object.keys(enTranslations)).not.toContain(key);
-    }
-  });
 });
 
 describe("NotificationToast foundation translations (#266)", () => {

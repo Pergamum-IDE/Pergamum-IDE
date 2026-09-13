@@ -282,7 +282,7 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     ).toThrow();
   });
 
-  it("#436 Slice 9: GlossaryEditor's occurrence navigation UI is gone, but the broader occurrence command system is untouched", () => {
+  it("#444: GlossaryEditor's old entry-scoped occurrence commands stay removed", () => {
     const editorSource = readFileSync(
       "src/renderer/GlossaryEditor.tsx",
       "utf8"
@@ -292,12 +292,12 @@ describe("Glossary Entry Editor Pane entry-point wiring (#436 Slices 3-4)", () =
     expect(editorSource).not.toContain("glossaryEditorOccurrenceButton");
     expect(editorSource).toContain("export type GlossaryEditorMode");
 
-    // Out of scope for Slice 9: the occurrence command ids / search system.
+    // The active sidebar / Utility Window occurrence systems live elsewhere;
+    // `glossaryCommands.ts` must not revive the removed entry-scoped commands.
     const commandsSource = readFileSync(
       "src/renderer/glossaryCommands.ts",
       "utf8"
     );
-    expect(commandsSource).toContain("glossaryCommandIds.previousOccurrence");
-    expect(commandsSource).toContain("glossaryCommandIds.nextOccurrence");
+    expect(commandsSource).not.toContain("entry.occurrences");
   });
 });

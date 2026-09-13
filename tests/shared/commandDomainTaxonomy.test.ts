@@ -188,15 +188,11 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     {
       openGlossaryEntry: () => true,
-      navigateToPreviousGlossaryOccurrence: () => true,
-      navigateToNextGlossaryOccurrence: () => true,
       openGlossaryTagManager: () => true,
       openGlossaryEntryManager: () => true
     },
     {
       openEntry: "Open glossary entry",
-      previousOccurrence: "Previous occurrence",
-      nextOccurrence: "Next occurrence",
       manageTags: "Manage glossary tags",
       manageTagsDescription: "Manage glossary tags",
       manageEntries: "Manage glossary entries",
