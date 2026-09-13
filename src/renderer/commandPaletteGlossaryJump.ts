@@ -23,6 +23,10 @@ import {
   type GlossaryEntry,
   type GlossaryEntryId
 } from "../shared/glossary";
+import {
+  createNormalizedTextWithSourceMap,
+  mapNormalizedRangeToSourceRange
+} from "../shared/normalizedTextSourceMap";
 import type { CommandPaletteMatchRange } from "./commandPaletteEntries";
 
 /** Upper bound on rendered glossary-jump candidates, mirroring the heading-jump
@@ -83,11 +87,24 @@ export function collectGlossaryJumpAtoms(
   return rows;
 }
 
-function normalizeGlossaryJumpNeedle(value: string): string {
-  // Latin case-insensitive, Japanese unaffected (kana/kanji have no case) -
-  // the same blanket `toLowerCase()` policy `commandPaletteHeadingJump.ts`
-  // uses satisfies both halves of the spec without special-casing scripts.
-  return value.trim().toLowerCase();
+function normalizeGlossaryJumpQuery(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  // Query text is trimmed + lowercased (Latin case-insensitive, Japanese unaffected).
+  // Optional NFC normalization when workbench.normalizeUnicodeToNfc setting is enabled.
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return text.trim().toLowerCase();
+}
+
+function normalizeGlossaryJumpAtomValue(
+  value: string,
+  normalizeToNfc: boolean = false
+): string {
+  // Atom values are lowercased ONLY (never trimmed) - preserves raw atom matching semantics.
+  // Optional NFC normalization when workbench.normalizeUnicodeToNfc setting is enabled.
+  const text = normalizeToNfc ? value.normalize("NFC") : value;
+  return text.toLowerCase();
 }
 
 /**
@@ -102,8 +119,11 @@ export function filterCommandPaletteGlossaryJumpCandidates(input: {
   readonly atoms: readonly CommandPaletteGlossaryJumpAtom[];
   readonly query: string;
   readonly limit?: number;
+  readonly normalizeUnicodeToNfc?: boolean;
 }): CommandPaletteGlossaryJumpCandidate[] {
-  const needle = normalizeGlossaryJumpNeedle(input.query);
+  const normalizeToNfc = input.normalizeUnicodeToNfc ?? false;
+  const needle = normalizeGlossaryJumpQuery(input.query, normalizeToNfc);
+  const rawQueryLength = input.query.trim().length;
   const limit = input.limit ?? DEFAULT_MAX_GLOSSARY_JUMP_CANDIDATES;
   const result: CommandPaletteGlossaryJumpCandidate[] = [];
 
@@ -112,15 +132,36 @@ export function filterCommandPaletteGlossaryJumpCandidates(input: {
       break;
     }
 
-    const matchRanges: CommandPaletteMatchRange[] =
-      needle.length === 0
-        ? []
-        : atom.value.toLowerCase().startsWith(needle)
-          ? [{ start: 0, end: Math.min(needle.length, atom.value.length) }]
-          : [];
+    let matchRanges: CommandPaletteMatchRange[] = [];
 
-    if (needle.length > 0 && matchRanges.length === 0) {
-      continue;
+    if (needle.length > 0) {
+      const sourceMap = createNormalizedTextWithSourceMap(atom.value, {
+        normalizeToNfc
+      });
+      const atomKey = normalizeGlossaryJumpAtomValue(
+        sourceMap.normalizedText,
+        false
+      );
+
+      if (atomKey.startsWith(needle)) {
+        if (normalizeToNfc) {
+          const mapped = mapNormalizedRangeToSourceRange(
+            sourceMap,
+            0,
+            needle.length
+          );
+          const end = mapped
+            ? mapped.end
+            : Math.min(rawQueryLength, atom.value.length);
+          matchRanges = [{ start: 0, end: Math.min(end, atom.value.length) }];
+        } else {
+          matchRanges = [
+            { start: 0, end: Math.min(rawQueryLength, atom.value.length) }
+          ];
+        }
+      } else {
+        continue;
+      }
     }
 
     result.push({

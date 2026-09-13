@@ -153,6 +153,8 @@ export interface CommandPaletteProps {
    * `onExecuteCommand` - no dedicated execute callback needed.
    */
   glossaryEntries?: readonly GlossaryEntry[];
+  /** Existing workbench.normalizeUnicodeToNfc setting for Glossary Jump matching. */
+  normalizeUnicodeToNfc?: boolean;
   footerDetailSettings?: CommandPaletteFooterDetailSettings;
 }
 
@@ -673,6 +675,7 @@ export function CommandPalette({
   onExecuteHeadingJumpCandidate = () => undefined,
   onExecuteProjectSearch = () => undefined,
   glossaryEntries = [],
+  normalizeUnicodeToNfc = false,
   footerDetailSettings = defaultFooterDetailSettings
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
@@ -714,7 +717,8 @@ export function CommandPalette({
       const showManagerRow = initialParsed.query.trim().length === 0;
       const candidates = filterCommandPaletteGlossaryJumpCandidates({
         atoms: collectGlossaryJumpAtoms(glossaryEntries),
-        query: initialParsed.query
+        query: initialParsed.query,
+        normalizeUnicodeToNfc
       });
 
       return resolveGlossaryJumpSelection(
@@ -781,7 +785,8 @@ export function CommandPalette({
     mode === "glossary"
       ? filterCommandPaletteGlossaryJumpCandidates({
           atoms: collectGlossaryJumpAtoms(glossaryEntries),
-          query
+          query,
+          normalizeUnicodeToNfc
         })
       : [];
   // #142.1: the "open Glossary Manager" row only precedes the candidate list
@@ -878,7 +883,7 @@ export function CommandPalette({
       resolveGlossaryJumpSelection(glossaryJumpTotalRowCount, current)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, query, glossaryEntries]);
+  }, [mode, query, glossaryEntries, normalizeUnicodeToNfc]);
 
   function updateInput(value: string): void {
     setInputValue(value);
@@ -942,7 +947,8 @@ export function CommandPalette({
       const showManagerRow = resolved.query.trim().length === 0;
       const nextCandidates = filterCommandPaletteGlossaryJumpCandidates({
         atoms: collectGlossaryJumpAtoms(glossaryEntries),
-        query: resolved.query
+        query: resolved.query,
+        normalizeUnicodeToNfc
       });
 
       setSelectedIndex((current) =>

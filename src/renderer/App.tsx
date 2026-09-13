@@ -10428,6 +10428,9 @@ export function App(): JSX.Element {
             setIsCommandPaletteOpen(false);
           }}
           glossaryEntries={glossaryEntries}
+          normalizeUnicodeToNfc={
+            effectiveSettings.workbench.normalizeUnicodeToNfc
+          }
           onExecuteCommand={(commandId, ...args) => {
             executeUiCommand(commandId, { source: "commandPalette" }, ...args);
             closeCommandPaletteAndRestoreMarkdownFocus();
