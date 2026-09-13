@@ -18,6 +18,8 @@ function target(
 }
 
 const PLAIN = { caseSensitive: false, wholeWord: false, useRegex: false };
+const NFC_ON = { ...PLAIN, normalizeUnicodeToNfc: true };
+const NFC_OFF = { ...PLAIN, normalizeUnicodeToNfc: false };
 
 describe("generateOpenDocumentsReplaceCandidates - plain text (#386)", () => {
   it("generates candidates from open Markdown buffers with line:column, offsets and previews", () => {
@@ -104,6 +106,96 @@ describe("generateOpenDocumentsReplaceCandidates - plain text (#386)", () => {
     ).toBe(2);
   });
 
+  it("#453 Slice 5: matches an NFC query against NFD text with raw candidate ranges", () => {
+    const nfdCafe = "cafe\u0301";
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text: `A ${nfdCafe} B` })],
+      "café",
+      "X",
+      NFC_ON
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      startOffset: 2,
+      endOffset: 7,
+      beforeText: nfdCafe,
+      afterText: "X",
+      contextBefore: "A ",
+      contextAfter: " B"
+    });
+  });
+
+  it("#453 Slice 5: matches an NFD query against NFC text with raw candidate ranges", () => {
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text: "A café B" })],
+      "cafe\u0301",
+      "Y",
+      NFC_ON
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    expect(result.candidates[0]).toMatchObject({
+      startOffset: 2,
+      endOffset: 6,
+      beforeText: "café",
+      afterText: "Y"
+    });
+  });
+
+  it("#453 Slice 5: preserves raw matching when normalization is off", () => {
+    const nfdCafe = "cafe\u0301";
+    const nfcQuery = generateOpenDocumentsReplaceCandidates(
+      [target({ text: `A ${nfdCafe} B` })],
+      "café",
+      "X",
+      NFC_OFF
+    );
+    expect(nfcQuery.status === "ok" && nfcQuery.candidates).toHaveLength(0);
+
+    const rawQuery = generateOpenDocumentsReplaceCandidates(
+      [target({ text: `A ${nfdCafe} B` })],
+      nfdCafe,
+      "X",
+      NFC_OFF
+    );
+    expect(rawQuery.status).toBe("ok");
+    if (rawQuery.status !== "ok") return;
+    expect(rawQuery.candidates[0]).toMatchObject({
+      startOffset: 2,
+      endOffset: 7,
+      beforeText: nfdCafe
+    });
+  });
+
+  it("#453 Slice 5: finds normalized matches independently across files", () => {
+    const nfdCafe = "cafe\u0301";
+    const result = generateOpenDocumentsReplaceCandidates(
+      [
+        target({ documentId: "a", fileLabel: "a.md", text: `A ${nfdCafe}` }),
+        target({ documentId: "b", fileLabel: "b.md", text: `B ${nfdCafe}` })
+      ],
+      "café",
+      "X",
+      NFC_ON
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    expect(
+      result.candidates.map((candidate) => ({
+        documentId: candidate.documentId,
+        range: [candidate.startOffset, candidate.endOffset]
+      }))
+    ).toEqual([
+      { documentId: "a", range: [2, 7] },
+      { documentId: "b", range: [2, 7] }
+    ]);
+  });
+
   it("is not bounded by the Search pane's 1000-result display cap", () => {
     const result = generateOpenDocumentsReplaceCandidates(
       [target({ text: "x".repeat(3000) })],
@@ -134,6 +226,19 @@ describe("generateOpenDocumentsReplaceCandidates - plain text (#386)", () => {
 });
 
 describe("generateOpenDocumentsReplaceCandidates - regex (#386)", () => {
+  it("#453 Slice 5: regex remains raw even when normalization is on", () => {
+    const nfdCafe = "cafe\u0301";
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text: `A ${nfdCafe} B` })],
+      "café",
+      "X",
+      { ...NFC_ON, useRegex: true }
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.candidates).toHaveLength(0);
+  });
+
   it("fails preflight on an invalid regex", () => {
     const result = generateOpenDocumentsReplaceCandidates(
       [target({ text: "anything" })],
@@ -212,6 +317,42 @@ describe("generateOpenDocumentsReplaceCandidates - regex (#386)", () => {
 });
 
 describe("applyReplacementEditsToText (#386)", () => {
+  it("#453 Slice 5: applies normalized-match raw ranges without normalizing replacement text", () => {
+    const nfdCafe = "cafe\u0301";
+    const result = generateOpenDocumentsReplaceCandidates(
+      [target({ text: `${nfdCafe} / ${nfdCafe}` })],
+      "café",
+      "z\u0301",
+      NFC_ON
+    );
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    expect(
+      result.candidates.map((candidate) => [
+        candidate.startOffset,
+        candidate.endOffset
+      ])
+    ).toEqual([
+      [0, 5],
+      [8, 13]
+    ]);
+
+    expect(
+      applyReplacementEditsToText(
+        `${nfdCafe} / ${nfdCafe}`,
+        result.candidates.map((candidate) => ({
+          startOffset: candidate.startOffset!,
+          endOffset: candidate.endOffset!,
+          afterText: candidate.afterText
+        }))
+      )
+    ).toEqual({
+      text: "z\u0301 / z\u0301",
+      appliedCount: 2
+    });
+  });
+
   it("applies multiple replacements in one document without offset corruption", () => {
     // "aXbXcXd" -> replace each X with "YYYY"
     const text = "aXbXcXd";

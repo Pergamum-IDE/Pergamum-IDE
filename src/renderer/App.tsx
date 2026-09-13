@@ -8593,7 +8593,9 @@ export function App(): JSX.Element {
       {
         caseSensitive: request.searchOptions.caseSensitive,
         wholeWord: request.searchOptions.wholeWord,
-        useRegex: request.searchOptions.useRegex
+        useRegex: request.searchOptions.useRegex,
+        normalizeUnicodeToNfc:
+          effectiveSettings.workbench.normalizeUnicodeToNfc
       }
     );
 
@@ -9060,7 +9062,9 @@ export function App(): JSX.Element {
       {
         caseSensitive: request.searchOptions.caseSensitive,
         wholeWord: request.searchOptions.wholeWord,
-        useRegex: request.searchOptions.useRegex
+        useRegex: request.searchOptions.useRegex,
+        normalizeUnicodeToNfc:
+          effectiveSettings.workbench.normalizeUnicodeToNfc
       }
     );
 

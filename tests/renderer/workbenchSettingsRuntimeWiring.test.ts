@@ -192,6 +192,33 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
       "normalizeUnicodeToNfc:\n        effectiveSettings.workbench.normalizeUnicodeToNfc"
     );
   });
+
+  it("#453 Slice 5: App.tsx wires workbench.normalizeUnicodeToNfc into replace candidate generation", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const openDocsReplaceIndex = appSource.indexOf(
+      "async function generateReplacePreviewCandidates("
+    );
+    const openDocsReplaceBlock = appSource.slice(
+      openDocsReplaceIndex,
+      openDocsReplaceIndex + 1200
+    );
+    const projectReplaceIndex = appSource.indexOf(
+      "async function generateProjectReplacePreviewCandidates("
+    );
+    const projectReplaceBlock = appSource.slice(
+      projectReplaceIndex,
+      projectReplaceIndex + 2800
+    );
+
+    expect(openDocsReplaceIndex).toBeGreaterThan(-1);
+    expect(openDocsReplaceBlock).toContain(
+      "normalizeUnicodeToNfc:\n          effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
+    expect(projectReplaceIndex).toBeGreaterThan(-1);
+    expect(projectReplaceBlock).toContain(
+      "normalizeUnicodeToNfc:\n          effectiveSettings.workbench.normalizeUnicodeToNfc"
+    );
+  });
 });
 
 describe("status bar character count runtime wiring (#259)", () => {
