@@ -85,12 +85,13 @@ describe("planIndentTransaction (#463)", () => {
   });
 
   it.each(["- item", "+ item", "* item", "- [ ] task", "- [x] task", "- [X] task"])(
-    "outermost list item ('%s'): indent adds 2 spaces",
+    "outermost list item with preceding sibling ('%s'): indent adds 2 spaces",
     (lineText) => {
-      const state = stateFor(lineText, 2);
+      const doc = `- prev\n${lineText}`;
+      const state = stateFor(doc, doc.length - 1);
       const plan = planIndentTransaction(state, "indent");
       expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
-      expect(plan.changes).toEqual([{ from: 0, insert: "  " }]);
+      expect(plan.changes).toEqual([{ from: 7, insert: "  " }]);
     }
   );
 
@@ -138,7 +139,8 @@ describe("planIndentTransaction (#463)", () => {
       });
     });
 
-    it("mixed selection: indent modifies ONLY list lines, skipping paragraph and thematic break", () => {
+    it("mixed selection: indent modifies ONLY list lines with preceding siblings, skipping paragraph and thematic break", () => {
+      const mixedDoc = "top level paragraph\n- item 1\n- item 2\n- - -\n  - nested item 1\n  - nested item 2";
       const state = EditorState.create({
         doc: mixedDoc,
         selection: EditorSelection.single(0, mixedDoc.length),
@@ -146,10 +148,10 @@ describe("planIndentTransaction (#463)", () => {
       });
       const plan = planIndentTransaction(state, "indent");
       expect(plan.result).toEqual({ kind: "applied", changedLineCount: 2 });
-      // Line 2 ("- item", offset 20) and Line 4 ("  - nested item", offset 33)
+      // Line 3 ("- item 2", offset 29) and Line 6 ("  - nested item 2", offset 62)
       expect(plan.changes).toEqual([
-        { from: 20, insert: "  " },
-        { from: 33, insert: "  " }
+        { from: 29, insert: "  " },
+        { from: 62, insert: "  " }
       ]);
     });
 
@@ -177,36 +179,136 @@ describe("planIndentTransaction (#463)", () => {
   describe("multi-cursor and multiple ranges", () => {
     it("deduplicates overlapping touched lines across multiple selection ranges", () => {
       const doc = "- item 1\n- item 2\n- item 3";
-      // Two cursors on the same line (line 1)
+      // Two cursors on line 2 ("- item 2")
       const state = EditorState.create({
         doc,
         selection: EditorSelection.create([
-          EditorSelection.cursor(1),
-          EditorSelection.cursor(5)
+          EditorSelection.cursor(10),
+          EditorSelection.cursor(14)
         ]),
         extensions: [EditorState.allowMultipleSelections.of(true)]
       });
       const plan = planIndentTransaction(state, "indent");
       expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
-      expect(plan.changes).toEqual([{ from: 0, insert: "  " }]);
+      expect(plan.changes).toEqual([{ from: 9, insert: "  " }]);
     });
   });
 
   describe("buildLineChange dispatcher (#465 list support)", () => {
-    it("returns ChangeSpec for list items on indent, and null for non-list contexts", () => {
-      const doc = "para\n- item\n  - nested\n> quote\n    code";
+    it("returns ChangeSpec for list items with preceding sibling on indent, and null for unsupported contexts", () => {
+      const doc = "- prev\n- item\n  - nested1\n  - nested2\n> quote\n    code";
       const state = EditorState.create({ doc });
-      const line1 = state.doc.line(1); // para
+      const line1 = state.doc.line(1); // - prev
       const line2 = state.doc.line(2); // - item
-      const line3 = state.doc.line(3); //   - nested
-      const line4 = state.doc.line(4); // > quote
-      const line5 = state.doc.line(5); //     code
+      const line3 = state.doc.line(3); //   - nested1
+      const line4 = state.doc.line(4); //   - nested2
+      const line5 = state.doc.line(5); // > quote
+      const line6 = state.doc.line(6); //     code
 
-      expect(buildLineChange(line1, classifyLine(line1.text), "indent")).toBeNull();
-      expect(buildLineChange(line2, classifyLine(line2.text), "indent")).toEqual({ from: line2.from, insert: "  " });
-      expect(buildLineChange(line3, classifyLine(line3.text), "indent")).toEqual({ from: line3.from, insert: "  " });
-      expect(buildLineChange(line4, classifyLine(line4.text), "indent")).toBeNull();
-      expect(buildLineChange(line5, classifyLine(line5.text), "indent")).toBeNull();
+      expect(buildLineChange(line1, classifyLine(line1.text), "indent", state.doc)).toBeNull();
+      expect(buildLineChange(line2, classifyLine(line2.text), "indent", state.doc)).toEqual({ from: line2.from, insert: "  " });
+      expect(buildLineChange(line3, classifyLine(line3.text), "indent", state.doc)).toBeNull();
+      expect(buildLineChange(line4, classifyLine(line4.text), "indent", state.doc)).toEqual({ from: line4.from, insert: "  " });
+      expect(buildLineChange(line5, classifyLine(line5.text), "indent", state.doc)).toBeNull();
+      expect(buildLineChange(line6, classifyLine(line6.text), "indent", state.doc)).toBeNull();
+    });
+  });
+
+  describe("semantic list sink indent rules (#465 dogfood blocker remediation)", () => {
+    it("first unordered list item: indent is no-op", () => {
+      const state = stateFor("- あ\n- い", 2);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("first task list item: indent is no-op", () => {
+      const state = stateFor("- [ ] あ\n- [ ] い", 4);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("second unordered list item: indent sinks under previous item", () => {
+      const state = stateFor("- あ\n- い", 6);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 4, insert: "  " }]);
+    });
+
+    it("second task list item: indent sinks under previous item", () => {
+      const state = stateFor("- [ ] あ\n- [ ] い", 12);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 8, insert: "  " }]);
+    });
+
+    it("first nested child item: indent is no-op", () => {
+      const state = stateFor("- 親\n  - 子1\n  - 子2", 7);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("second nested child item: indent sinks under previous nested sibling", () => {
+      const state = stateFor("- 親\n  - 子1\n  - 子2", 14);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 11, insert: "  " }]);
+    });
+
+    it("dogfood case: selected odd items do not create non-semantic indentation", () => {
+      const doc = "- あ\n- い\n- う\n- え\n- お";
+      // Cursors touching line 1 ("- あ", pos 0), line 3 ("- う", pos 8), and line 5 ("- お", pos 16)
+      const state = EditorState.create({
+        doc,
+        selection: EditorSelection.create([
+          EditorSelection.cursor(0),
+          EditorSelection.cursor(8),
+          EditorSelection.cursor(16)
+        ]),
+        extensions: [EditorState.allowMultipleSelections.of(true)]
+      });
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 2 });
+      // Line 3 ("- う", offset 8) and Line 5 ("- お", offset 16) are indented
+      // Line 1 ("- あ") is a no-op because it has no preceding sibling candidate
+      expect(plan.changes).toEqual([
+        { from: 8, insert: "  " },
+        { from: 16, insert: "  " }
+      ]);
+    });
+
+    it("blank line stops parent candidate search", () => {
+      const doc = "- あ\n\n- い";
+      const state = stateFor(doc, doc.length - 1);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("paragraph stops parent candidate search", () => {
+      const doc = "- あ\n本文\n- い";
+      const state = stateFor(doc, doc.length - 1);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("thematic break stops parent candidate search", () => {
+      const doc = "- あ\n---\n- い";
+      const state = stateFor(doc, doc.length - 1);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("ordered list remains unsupported/no-op", () => {
+      const doc = "1. 第一\n- 第二";
+      const state = stateFor(doc, doc.length - 1);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
     });
   });
 
@@ -309,12 +411,12 @@ describe("indentCommand / outdentCommand as CodeMirror Commands (#463)", () => {
 });
 
 describe("editorIndentKeymap wired into the base CodeMirror setup (#463)", () => {
-  function mountView(input: { doc?: string; readOnly?: boolean } = {}): EditorView {
+  function mountView(input: { doc?: string; cursor?: number; readOnly?: boolean } = {}): EditorView {
     return new EditorView({
       parent: document.body,
       state: EditorState.create({
         doc: input.doc ?? "Hello world",
-        selection: EditorSelection.single(3),
+        selection: EditorSelection.single(input.cursor ?? 3),
         extensions: [
           ...createMarkdownEditorBaseSetup({ undoHistoryMinDepth: 100 }),
           ...(input.readOnly ? [EditorState.readOnly.of(true)] : [])
@@ -365,12 +467,12 @@ describe("editorIndentKeymap wired into the base CodeMirror setup (#463)", () =>
   });
 
   it("Mod+] (Ctrl+]) indents a list item line", () => {
-    const view = mountView({ doc: "- item" });
+    const view = mountView({ doc: "- prev\n- item", cursor: 7 });
     try {
       const event = ctrlBracketKeydown("]");
       view.contentDOM.dispatchEvent(event);
       expect(event.defaultPrevented).toBe(true);
-      expect(view.state.doc.toString()).toBe("  - item");
+      expect(view.state.doc.toString()).toBe("- prev\n  - item");
     } finally {
       view.destroy();
     }

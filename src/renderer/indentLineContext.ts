@@ -44,6 +44,8 @@
  * earlier is the only change needed to honor that priority.
  */
 
+import type { Line, Text } from "@codemirror/state";
+
 export type LineContext =
   | "blank"
   | "topLevelParagraph"
@@ -148,4 +150,65 @@ export function classifyLine(lineText: string): LineContext {
   }
 
   return "topLevelParagraph";
+}
+
+/**
+ * #465 remediation — checks whether an unordered list / task list item line
+ * has a preceding sibling candidate at the exact same indentation level
+ * within the current list block context.
+ *
+ * Rules:
+ * - Target line must match UNORDERED_LIST_MARKER_PATTERN (and not be a thematic break).
+ * - Target line indent column is `targetIndent`.
+ * - Search backwards line by line:
+ *   - Blank line or thematic break -> stop, return false.
+ *   - Unordered list item:
+ *     - prevIndent === targetIndent -> return true (found preceding sibling at same level).
+ *     - prevIndent < targetIndent -> return false (reached shallower parent level).
+ *     - prevIndent > targetIndent -> deeper child of a previous item, continue searching backwards.
+ *   - Any other line (ordered list, paragraph, blockquote, heading, indentedCode, etc.) -> stop, return false.
+ */
+export function canIndentListItem(doc: Text, line: Line): boolean {
+  const targetText = line.text;
+
+  if (THEMATIC_BREAK_PATTERN.test(targetText)) {
+    return false;
+  }
+
+  const targetMatch = UNORDERED_LIST_MARKER_PATTERN.exec(targetText);
+  if (!targetMatch) {
+    return false;
+  }
+
+  const targetIndent = leadingWhitespaceColumns(targetMatch[1]);
+
+  let currentLineNumber = line.number - 1;
+  while (currentLineNumber >= 1) {
+    const prevLine = doc.line(currentLineNumber);
+    const prevText = prevLine.text;
+
+    if (
+      BLANK_LINE_PATTERN.test(prevText) ||
+      THEMATIC_BREAK_PATTERN.test(prevText)
+    ) {
+      return false;
+    }
+
+    const prevListMatch = UNORDERED_LIST_MARKER_PATTERN.exec(prevText);
+    if (prevListMatch) {
+      const prevIndent = leadingWhitespaceColumns(prevListMatch[1]);
+      if (prevIndent === targetIndent) {
+        return true;
+      }
+      if (prevIndent < targetIndent) {
+        return false;
+      }
+      currentLineNumber--;
+      continue;
+    }
+
+    return false;
+  }
+
+  return false;
 }

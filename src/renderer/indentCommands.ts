@@ -27,10 +27,15 @@ import {
   ChangeSet,
   type ChangeSpec,
   type EditorState,
-  type Line
+  type Line,
+  type Text
 } from "@codemirror/state";
 import type { Command, EditorView, KeyBinding } from "@codemirror/view";
-import { classifyLine, type LineContext } from "./indentLineContext";
+import {
+  canIndentListItem,
+  classifyLine,
+  type LineContext
+} from "./indentLineContext";
 import { extractTouchedLines } from "./indentTouchedLines";
 
 export type IndentDirection = "indent" | "outdent";
@@ -70,21 +75,23 @@ function getLeadingWhitespaceDeleteLength(lineText: string): number {
 export function buildLineChange(
   line: Line,
   context: LineContext,
-  direction: IndentDirection
+  direction: IndentDirection,
+  doc?: Text
 ): ChangeSpec | null {
   switch (context) {
     case "listItem":
-      if (direction === "indent") {
-        return { from: line.from, insert: "  " };
-      }
-      return null;
     case "nestedListItem":
       if (direction === "indent") {
-        return { from: line.from, insert: "  " };
+        if (doc && canIndentListItem(doc, line)) {
+          return { from: line.from, insert: "  " };
+        }
+        return null;
       }
-      const deleteLen = getLeadingWhitespaceDeleteLength(line.text);
-      if (deleteLen > 0) {
-        return { from: line.from, to: line.from + deleteLen, insert: "" };
+      if (context === "nestedListItem") {
+        const deleteLen = getLeadingWhitespaceDeleteLength(line.text);
+        if (deleteLen > 0) {
+          return { from: line.from, to: line.from + deleteLen, insert: "" };
+        }
       }
       return null;
     case "blockquote":
@@ -179,7 +186,7 @@ export function planIndentTransaction(
 
   for (const line of touchedLines) {
     const context = classifyLine(line.text);
-    const change = buildLineChangeImpl(line, context, direction);
+    const change = buildLineChangeImpl(line, context, direction, state.doc);
     if (change === null) {
       noopReasons.push(lineNoopReason(context, direction));
     } else {
