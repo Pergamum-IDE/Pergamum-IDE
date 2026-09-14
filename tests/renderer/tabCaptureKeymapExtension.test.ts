@@ -118,6 +118,44 @@ describe("tabCaptureKeymapExtension (#467)", () => {
       }
     });
 
+    it("Tab key indents sinkable ordered list item by parent content column and renumbers it to 1", () => {
+      const doc = "1. parent\n2. item";
+      const view = mountEditor({ doc, captureTabInEditor: true });
+
+      try {
+        view.dispatch({
+          selection: EditorSelection.cursor(doc.indexOf("2. item")),
+        });
+
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("1. parent\n   1. item");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Shift+Tab key outdents nested ordered list item and renumbers it at parent level", () => {
+      const doc = "1. parent\n   1. item";
+      const view = mountEditor({ doc, captureTabInEditor: true });
+
+      try {
+        view.dispatch({
+          selection: EditorSelection.cursor(doc.indexOf("   1. item")),
+        });
+
+        const event = keydownEvent("Tab", { shiftKey: true });
+        view.contentDOM.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("1. parent\n2. item");
+      } finally {
+        view.destroy();
+      }
+    });
+
     it("read-only editor: Tab key is consumed but produces NO document changes", () => {
       const view = mountEditor({
         doc: "- item",

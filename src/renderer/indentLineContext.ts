@@ -51,6 +51,8 @@ export type LineContext =
   | "topLevelParagraph"
   | "listItem"
   | "nestedListItem"
+  | "orderedListItem"
+  | "nestedOrderedListItem"
   | "blockquote"
   | "indentedCode"
   | "unsupportedContext";
@@ -130,8 +132,10 @@ export function classifyLine(lineText: string): LineContext {
     return markerIndent > 0 ? "nestedListItem" : "listItem";
   }
 
-  if (ORDERED_LIST_MARKER_PATTERN.test(lineText)) {
-    return "unsupportedContext";
+  const orderedMatch = ORDERED_LIST_MARKER_PATTERN.exec(lineText);
+  if (orderedMatch) {
+    const markerIndent = leadingWhitespaceColumns(orderedMatch[1]);
+    return markerIndent > 0 ? "nestedOrderedListItem" : "orderedListItem";
   }
 
   if (BLOCKQUOTE_PATTERN.test(lineText)) {
@@ -153,33 +157,61 @@ export function classifyLine(lineText: string): LineContext {
 }
 
 /**
- * #465 remediation — checks whether an unordered list / task list item line
- * has a preceding sibling candidate at the exact same indentation level
- * within the current list block context.
- *
- * Rules:
- * - Target line must match UNORDERED_LIST_MARKER_PATTERN (and not be a thematic break).
- * - Target line indent column is `targetIndent`.
- * - Search backwards line by line:
- *   - Blank line or thematic break -> stop, return false.
- *   - Unordered list item:
- *     - prevIndent === targetIndent -> return true (found preceding sibling at same level).
- *     - prevIndent < targetIndent -> return false (reached shallower parent level).
- *     - prevIndent > targetIndent -> deeper child of a previous item, continue searching backwards.
- *   - Any other line (ordered list, paragraph, blockquote, heading, indentedCode, etc.) -> stop, return false.
+ * Calculates the content indent column of an ordered list item line.
+ * For example:
+ * - `"1. parent"` -> 3 (after `"1. "`)
+ * - `"1) parent"` -> 3 (after `"1) "`)
+ * - `"10. parent"` -> 4 (after `"10. "`)
+ * - `"   1. child"` -> 6 (3 leading spaces + `"1. "`)
  */
-export function canIndentListItem(doc: Text, line: Line): boolean {
+export function getOrderedListContentColumn(lineText: string): number {
+  const match = /^([ \t]*\d{1,9}[.)](?:[ \t]+|$))/.exec(lineText);
+  if (!match) {
+    return 3;
+  }
+  let columns = 0;
+  for (const char of match[1]) {
+    if (char === " ") {
+      columns += 1;
+    } else if (char === "\t") {
+      columns += 4 - (columns % 4);
+    } else {
+      columns += 1;
+    }
+  }
+  return columns;
+}
+
+export type ListIndentPlan =
+  | { readonly canIndent: false }
+  | { readonly canIndent: true; readonly insertSpaces: number };
+
+/**
+ * #465 / #470 remediation — checks whether a list item line (unordered or ordered)
+ * has a preceding sibling candidate at the exact same indentation level
+ * within the current list block context, and calculates the required indent spaces.
+ */
+export function canIndentListItem(doc: Text, line: Line): ListIndentPlan {
   const targetText = line.text;
 
   if (THEMATIC_BREAK_PATTERN.test(targetText)) {
-    return false;
+    return { canIndent: false };
   }
 
-  const targetMatch = UNORDERED_LIST_MARKER_PATTERN.exec(targetText);
-  if (!targetMatch) {
-    return false;
+  const unorderedMatch = UNORDERED_LIST_MARKER_PATTERN.exec(targetText);
+  const orderedMatch = unorderedMatch
+    ? null
+    : ORDERED_LIST_MARKER_PATTERN.exec(targetText);
+
+  if (!unorderedMatch && !orderedMatch) {
+    return { canIndent: false };
   }
 
+  const isUnordered = !!unorderedMatch;
+  const targetPattern = isUnordered
+    ? UNORDERED_LIST_MARKER_PATTERN
+    : ORDERED_LIST_MARKER_PATTERN;
+  const targetMatch = (unorderedMatch ?? orderedMatch)!;
   const targetIndent = leadingWhitespaceColumns(targetMatch[1]);
 
   let currentLineNumber = line.number - 1;
@@ -191,24 +223,249 @@ export function canIndentListItem(doc: Text, line: Line): boolean {
       BLANK_LINE_PATTERN.test(prevText) ||
       THEMATIC_BREAK_PATTERN.test(prevText)
     ) {
-      return false;
+      return { canIndent: false };
     }
 
-    const prevListMatch = UNORDERED_LIST_MARKER_PATTERN.exec(prevText);
+    const prevListMatch = targetPattern.exec(prevText);
     if (prevListMatch) {
       const prevIndent = leadingWhitespaceColumns(prevListMatch[1]);
       if (prevIndent === targetIndent) {
-        return true;
+        if (isUnordered) {
+          return { canIndent: true, insertSpaces: 2 };
+        }
+        const parentContentColumn = getOrderedListContentColumn(prevText);
+        const insertSpaces = Math.max(1, parentContentColumn - targetIndent);
+        return { canIndent: true, insertSpaces };
       }
       if (prevIndent < targetIndent) {
-        return false;
+        return { canIndent: false };
       }
       currentLineNumber--;
       continue;
     }
 
-    return false;
+    return { canIndent: false };
   }
 
-  return false;
+  return { canIndent: false };
 }
+
+/**
+ * #470 remediation — calculates how many leading spaces to remove when outdenting
+ * a nested ordered list item, restoring it to the parent level.
+ */
+export function getOrderedListOutdentDeleteLength(
+  doc: Text,
+  line: Line
+): number {
+  const match = ORDERED_LIST_MARKER_PATTERN.exec(line.text);
+  if (!match) {
+    return 0;
+  }
+
+  const targetIndent = leadingWhitespaceColumns(match[1]);
+  if (targetIndent === 0) {
+    return 0;
+  }
+
+  let currentLineNumber = line.number - 1;
+  while (currentLineNumber >= 1) {
+    const prevLine = doc.line(currentLineNumber);
+    const prevText = prevLine.text;
+
+    if (
+      BLANK_LINE_PATTERN.test(prevText) ||
+      THEMATIC_BREAK_PATTERN.test(prevText)
+    ) {
+      break;
+    }
+
+    const prevMatch = ORDERED_LIST_MARKER_PATTERN.exec(prevText);
+    if (prevMatch) {
+      const prevIndent = leadingWhitespaceColumns(prevMatch[1]);
+      if (prevIndent < targetIndent) {
+        return Math.max(1, targetIndent - prevIndent);
+      }
+      currentLineNumber--;
+      continue;
+    }
+    break;
+  }
+
+  return targetIndent;
+}
+
+export interface ParsedOrderedListMarker {
+  readonly indentStr: string;
+  readonly numberStr: string;
+  readonly delimiter: string;
+  readonly rest: string;
+}
+
+const ORDERED_LIST_MARKER_PARSE_PATTERN =
+  /^([ \t]*)(\d{1,9})([.)])([ \t].*|$)/;
+
+export function parseOrderedListMarker(
+  lineText: string
+): ParsedOrderedListMarker | null {
+  const match = ORDERED_LIST_MARKER_PARSE_PATTERN.exec(lineText);
+  if (!match) {
+    return null;
+  }
+  return {
+    indentStr: match[1],
+    numberStr: match[2],
+    delimiter: match[3],
+    rest: match[4]
+  };
+}
+
+export function renumberOrderedListLine(
+  lineText: string,
+  targetNumber: number
+): string {
+  const parsed = parseOrderedListMarker(lineText);
+  if (!parsed) {
+    return lineText;
+  }
+  return `${parsed.indentStr}${targetNumber}${parsed.delimiter}${parsed.rest}`;
+}
+
+/**
+ * #470 remediation — local renumbering helper for ordered list items.
+ * Identifies affected ordered list sibling runs in doc (given a map of
+ * whitespace-adjusted line texts) and returns a map of line number -> final text.
+ */
+export function computeOrderedListLocalRenumbering(
+  doc: Text,
+  modifiedLines: Map<number, string>
+): Map<number, string> {
+  const finalLines = new Map<number, string>(modifiedLines);
+  if (modifiedLines.size === 0) {
+    return finalLines;
+  }
+
+  const getLineText = (lineNum: number): string => {
+    return finalLines.get(lineNum) ?? doc.line(lineNum).text;
+  };
+
+  const candidateLineNums = new Set<number>();
+  for (const lineNum of modifiedLines.keys()) {
+    candidateLineNums.add(lineNum);
+    if (lineNum > 1) {
+      candidateLineNums.add(lineNum - 1);
+    }
+    if (lineNum < doc.lines) {
+      candidateLineNums.add(lineNum + 1);
+    }
+  }
+
+  const checkedRuns = new Set<number>();
+
+  for (const lineNum of candidateLineNums) {
+    const text = getLineText(lineNum);
+    if (!ORDERED_LIST_MARKER_PATTERN.test(text)) {
+      continue;
+    }
+
+    const indentCols = leadingWhitespaceColumns(text);
+
+    let startLine = lineNum;
+    while (startLine > 1) {
+      const prevLineNum = startLine - 1;
+      const prevText = getLineText(prevLineNum);
+
+      if (
+        BLANK_LINE_PATTERN.test(prevText) ||
+        THEMATIC_BREAK_PATTERN.test(prevText)
+      ) {
+        break;
+      }
+
+      if (ORDERED_LIST_MARKER_PATTERN.test(prevText)) {
+        const prevIndent = leadingWhitespaceColumns(prevText);
+        if (prevIndent === indentCols) {
+          startLine = prevLineNum;
+          continue;
+        }
+        if (prevIndent > indentCols) {
+          startLine = prevLineNum;
+          continue;
+        }
+        break;
+      }
+
+      break;
+    }
+
+    if (checkedRuns.has(startLine)) {
+      continue;
+    }
+    checkedRuns.add(startLine);
+
+    let endLine = lineNum;
+    const maxLine = doc.lines;
+    while (endLine < maxLine) {
+      const nextLineNum = endLine + 1;
+      const nextText = getLineText(nextLineNum);
+
+      if (
+        BLANK_LINE_PATTERN.test(nextText) ||
+        THEMATIC_BREAK_PATTERN.test(nextText)
+      ) {
+        break;
+      }
+
+      if (ORDERED_LIST_MARKER_PATTERN.test(nextText)) {
+        const nextIndent = leadingWhitespaceColumns(nextText);
+        if (nextIndent === indentCols) {
+          endLine = nextLineNum;
+          continue;
+        }
+        if (nextIndent > indentCols) {
+          endLine = nextLineNum;
+          continue;
+        }
+        break;
+      }
+
+      break;
+    }
+
+    const runLineNums: number[] = [];
+    for (let n = startLine; n <= endLine; n++) {
+      const curText = getLineText(n);
+      if (
+        ORDERED_LIST_MARKER_PATTERN.test(curText) &&
+        leadingWhitespaceColumns(curText) === indentCols
+      ) {
+        runLineNums.push(n);
+      }
+    }
+
+    if (runLineNums.length === 0) {
+      continue;
+    }
+
+    let startNum = 1;
+    if (indentCols === 0) {
+      const firstText = getLineText(runLineNums[0]);
+      const parsed = parseOrderedListMarker(firstText);
+      if (parsed) {
+        startNum = parseInt(parsed.numberStr, 10) || 1;
+      }
+    }
+
+    runLineNums.forEach((lineN, idx) => {
+      const curText = getLineText(lineN);
+      const expectedNum = startNum + idx;
+      const renumberedText = renumberOrderedListLine(curText, expectedNum);
+      if (renumberedText !== curText) {
+        finalLines.set(lineN, renumberedText);
+      }
+    });
+  }
+
+  return finalLines;
+}
+
