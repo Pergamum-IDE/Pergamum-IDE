@@ -27,9 +27,9 @@
 
 import { markdown } from "@codemirror/lang-markdown";
 import {
+  Compartment,
   EditorState,
   type ChangeSpec,
-  type Compartment,
   type Extension,
   type StateField
 } from "@codemirror/state";
@@ -67,6 +67,7 @@ import {
   createMarkdownImageLinkDiagnosticsExtension,
   type MarkdownImageLinkDiagnosticsExtensionOptions
 } from "./markdownImageLinkDiagnosticsExtension";
+import { createTabCaptureKeymapExtension } from "./tabCaptureKeymapExtension";
 
 /**
  * One open Markdown document's own `EditorState`, kept alongside the exact
@@ -115,6 +116,8 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly selectionHighlightModeRef: LiveRef<SelectionHighlightMode>;
   readonly findGutterMarkerCompartment: Compartment;
   readonly findGutterMarkersRef: LiveRef<boolean>;
+  readonly tabCaptureCompartment?: Compartment;
+  readonly captureTabInEditorRef?: LiveRef<boolean>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
   /**
    * #424 / #425 follow-up: the Ctrl+F / Ctrl+H keymap no longer reads a
@@ -252,6 +255,11 @@ export function createMarkdownEditorDocumentState(
       options.findGutterMarkerCompartment.of(
         createActiveFindGutterMarkerExtension(
           options.findGutterMarkersRef.current
+        )
+      ),
+      (options.tabCaptureCompartment ?? new Compartment()).of(
+        createTabCaptureKeymapExtension(
+          options.captureTabInEditorRef?.current ?? false
         )
       ),
       createGlossaryCompletionExtension({

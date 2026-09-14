@@ -451,6 +451,10 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     "editor.findGutterMarkers",
     editorValue?.findGutterMarkers
   ).value;
+  const captureTabInEditor = resolveCatalogValue(
+    "editor.captureTabInEditor",
+    editorValue?.captureTabInEditor
+  ).value;
 
   if (
     editorValue === undefined ||
@@ -464,7 +468,8 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
       characterCount,
       undoHistoryMinDepth,
       selectionHighlightMode,
-      findGutterMarkers
+      findGutterMarkers,
+      captureTabInEditor
     };
   }
 
@@ -476,7 +481,8 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     characterCount,
     undoHistoryMinDepth,
     selectionHighlightMode,
-    findGutterMarkers
+    findGutterMarkers,
+    captureTabInEditor
   };
 }
 
@@ -1382,6 +1388,7 @@ function parseEditorSettingsForWrite(
   const hasUndoHistoryMinDepth = keys.includes("undoHistoryMinDepth");
   const hasSelectionHighlightMode = keys.includes("selectionHighlightMode");
   const hasFindGutterMarkers = keys.includes("findGutterMarkers");
+  const hasCaptureTabInEditor = keys.includes("captureTabInEditor");
 
   if (
     !hasLineEnding ||
@@ -1391,7 +1398,8 @@ function parseEditorSettingsForWrite(
     !hasUndoHistoryMinDepth ||
     !hasSelectionHighlightMode ||
     !hasFindGutterMarkers ||
-    keys.length !== (hasFontFamily ? 8 : 7)
+    !hasCaptureTabInEditor ||
+    keys.length !== (hasFontFamily ? 9 : 8)
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -1419,11 +1427,16 @@ function parseEditorSettingsForWrite(
     "editor.findGutterMarkers",
     value.findGutterMarkers
   );
+  const captureTabInEditorResolution = resolveCatalogValue(
+    "editor.captureTabInEditor",
+    value.captureTabInEditor
+  );
 
   if (
     !undoHistoryMinDepthResolution.ok ||
     !selectionHighlightModeResolution.ok ||
-    !findGutterMarkersResolution.ok
+    !findGutterMarkersResolution.ok ||
+    !captureTabInEditorResolution.ok
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -1431,6 +1444,7 @@ function parseEditorSettingsForWrite(
   const undoHistoryMinDepth = undoHistoryMinDepthResolution.value;
   const selectionHighlightMode = selectionHighlightModeResolution.value;
   const findGutterMarkers = findGutterMarkersResolution.value;
+  const captureTabInEditor = captureTabInEditorResolution.value;
 
   if (!hasFontFamily) {
     return {
@@ -1440,7 +1454,8 @@ function parseEditorSettingsForWrite(
       characterCount,
       undoHistoryMinDepth,
       selectionHighlightMode,
-      findGutterMarkers
+      findGutterMarkers,
+      captureTabInEditor
     };
   }
 
@@ -1459,7 +1474,8 @@ function parseEditorSettingsForWrite(
     characterCount,
     undoHistoryMinDepth,
     selectionHighlightMode,
-    findGutterMarkers
+    findGutterMarkers,
+    captureTabInEditor
   };
 }
 

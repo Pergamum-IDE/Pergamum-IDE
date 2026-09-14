@@ -702,6 +702,15 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "editor.captureTabInEditor": defineBooleanSetting({
+    key: "editor.captureTabInEditor",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.editor.captureTabInEditor.label",
+    descriptionKey: "settings.editor.captureTabInEditor.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   // #252: diagnostic-only setting for the line-ending marker/distribution
   // UI — never used to decide an existing break's kind, a new break's
   // inherited kind, or a save-time conversion. Kept fully separate from

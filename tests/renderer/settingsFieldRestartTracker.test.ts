@@ -91,7 +91,8 @@ function baseApplicationSettings(
       selectionHighlightMode: getCatalogDefaultValue(
         "editor.selectionHighlightMode"
       ),
-      findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers")
+      findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers"),
+      captureTabInEditor: getCatalogDefaultValue("editor.captureTabInEditor")
     },
     search: {
       nearby: {

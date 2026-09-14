@@ -1270,6 +1270,8 @@ export const enTranslations = {
   "settings.editor.selectionHighlightMode.option.smart.description": "Highlights matches using Pergamum search rules, including Japanese-aware boundaries.",
   "settings.editor.findGutterMarkers.description": "Shows binocular markers in the gutter for Ctrl+F / Ctrl+H matches.",
   "settings.editor.findGutterMarkers.label": "Show Find matches in gutter",
+  "settings.editor.captureTabInEditor.description": "Use Tab / Shift+Tab for indentation inside the editor. When disabled, Tab moves focus normally. When enabled, use Escape then Tab or Ctrl+M to move focus out of the editor.",
+  "settings.editor.captureTabInEditor.label": "Tab Capture in Editor",
   "settings.files.newFile.encoding.description": "Default character encoding for newly created files. Currently only UTF-8 is available.",
   "settings.files.newFile.encoding.label": "New file encoding",
   "settings.files.newFile.lineEnding.description": "Default line ending for newly created files.",

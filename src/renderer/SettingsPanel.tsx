@@ -466,6 +466,13 @@ function buildNextSettings(
           findGutterMarkers: Boolean(rawValue)
         }
       });
+    case "editor.captureTabInEditor":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          captureTabInEditor: Boolean(rawValue)
+        }
+      });
     case "files.newFile.lineEnding":
       return saveRequest(settings, {
         files: {

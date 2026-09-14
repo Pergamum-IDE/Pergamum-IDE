@@ -194,6 +194,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.paragraphIndent.excludeLeadingCharacters",
           "editor.selectionHighlightMode",
           "editor.findGutterMarkers",
+          "editor.captureTabInEditor",
           "editor.undoHistoryMinDepth",
           "editor.whitespace.renderAsciiSpace",
           "editor.whitespace.renderIdeographicSpace",

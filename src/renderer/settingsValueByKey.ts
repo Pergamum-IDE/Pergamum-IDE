@@ -101,6 +101,8 @@ export function readSettingValue(
       return settings.editor.selectionHighlightMode;
     case "editor.findGutterMarkers":
       return settings.editor.findGutterMarkers;
+    case "editor.captureTabInEditor":
+      return settings.editor.captureTabInEditor;
     case "files.newFile.lineEnding":
       return settings.files.newFile.lineEnding;
     case "files.newFile.encoding":

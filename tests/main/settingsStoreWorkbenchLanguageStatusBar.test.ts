@@ -86,6 +86,9 @@ const defaultSelectionHighlightMode = getCatalogDefaultValue(
 const defaultFindGutterMarkers = getCatalogDefaultValue(
   "editor.findGutterMarkers"
 );
+const defaultCaptureTabInEditor = getCatalogDefaultValue(
+  "editor.captureTabInEditor"
+);
 function statusBarSettings(
   visible: boolean,
   characterCountVisible = getCatalogDefaultValue(
@@ -142,7 +145,8 @@ function saveRequest(
       characterCount: defaultCharacterCountSettings,
       undoHistoryMinDepth: defaultUndoHistoryMinDepth,
       selectionHighlightMode: defaultSelectionHighlightMode,
-      findGutterMarkers: defaultFindGutterMarkers
+      findGutterMarkers: defaultFindGutterMarkers,
+      captureTabInEditor: defaultCaptureTabInEditor
     },
     files: {
       newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -477,7 +481,8 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         characterCount: defaultCharacterCountSettings,
         undoHistoryMinDepth: defaultUndoHistoryMinDepth,
         selectionHighlightMode: defaultSelectionHighlightMode,
-        findGutterMarkers: defaultFindGutterMarkers
+        findGutterMarkers: defaultFindGutterMarkers,
+      captureTabInEditor: defaultCaptureTabInEditor
       },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -512,7 +517,8 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         characterCount: defaultCharacterCountSettings,
         undoHistoryMinDepth: defaultUndoHistoryMinDepth,
         selectionHighlightMode: defaultSelectionHighlightMode,
-        findGutterMarkers: defaultFindGutterMarkers
+        findGutterMarkers: defaultFindGutterMarkers,
+      captureTabInEditor: defaultCaptureTabInEditor
       },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
