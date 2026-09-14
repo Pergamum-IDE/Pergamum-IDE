@@ -70,6 +70,9 @@ const defaultFindGutterMarkers = getCatalogDefaultValue(
 const defaultCaptureTabInEditor = getCatalogDefaultValue(
   "editor.captureTabInEditor"
 );
+const defaultFencedCodeIndentUnit = getCatalogDefaultValue(
+  "editor.fencedCodeIndentUnit"
+);
 
 const defaultCharacterCountSettings = {
   exclude: {
@@ -165,7 +168,8 @@ function validSaveRequest(
       undoHistoryMinDepth: defaultUndoHistoryMinDepth,
       selectionHighlightMode: defaultSelectionHighlightMode,
       findGutterMarkers: defaultFindGutterMarkers,
-      captureTabInEditor: defaultCaptureTabInEditor
+      captureTabInEditor: defaultCaptureTabInEditor,
+      fencedCodeIndentUnit: defaultFencedCodeIndentUnit
     },
     search: {
       nearby: {
@@ -584,7 +588,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: 1000,
           selectionHighlightMode: "smart",
           findGutterMarkers: true,
-          captureTabInEditor: false
+          captureTabInEditor: false,
+          fencedCodeIndentUnit: "spaces4"
         },
         commandPalette: {
           footerDetail: {
@@ -651,7 +656,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       undoHistoryMinDepth: 1000,
       selectionHighlightMode: "smart",
       findGutterMarkers: true,
-      captureTabInEditor: false
+      captureTabInEditor: false,
+      fencedCodeIndentUnit: "spaces4"
     });
     expect(written.files).toEqual({
       newFile: {
@@ -697,7 +703,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: 1000,
           selectionHighlightMode: defaultSelectionHighlightMode,
           findGutterMarkers: defaultFindGutterMarkers,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       })
     );
@@ -730,7 +737,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: "off",
           findGutterMarkers: true,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       })
     );
@@ -973,7 +981,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
           findGutterMarkers: defaultFindGutterMarkers,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       }),
       validSaveRequest({
@@ -997,7 +1006,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
           findGutterMarkers: defaultFindGutterMarkers,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       }),
       validSaveRequest({
@@ -1014,7 +1024,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
           findGutterMarkers: defaultFindGutterMarkers,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       }),
       validSaveRequest({
@@ -1029,7 +1040,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
           findGutterMarkers: defaultFindGutterMarkers,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       }),
       validSaveRequest({
@@ -1044,7 +1056,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
             | "default"
             | "smart",
           findGutterMarkers: defaultFindGutterMarkers,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       }),
       validSaveRequest({
@@ -1056,7 +1069,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
           findGutterMarkers: "yes" as unknown as boolean,
-          captureTabInEditor: defaultCaptureTabInEditor
+          captureTabInEditor: defaultCaptureTabInEditor,
+          fencedCodeIndentUnit: defaultFencedCodeIndentUnit
         }
       }),
       validSaveRequest({

@@ -21,11 +21,13 @@ import {
 import type {
   ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
+  FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
   NewFileLineEnding,
   SelectionHighlightMode,
   WorkbenchSoundSettings
 } from "../shared/settings";
+import { fencedCodeIndentUnitFacet } from "./indentCommands";
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
 import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
@@ -185,6 +187,7 @@ interface MarkdownEditorProps {
    */
   findGutterMarkers?: boolean;
   captureTabInEditor?: boolean;
+  fencedCodeIndentUnit?: FencedCodeIndentUnit;
   /**
    * `editor.whitespace.*` (#256) — which whitespace categories to paint
    * display-only markers for (ideographic space, ASCII space, tab, other
@@ -524,6 +527,7 @@ export function MarkdownEditor({
   selectionHighlightMode = "default",
   findGutterMarkers = false,
   captureTabInEditor = false,
+  fencedCodeIndentUnit = "spaces4",
   whitespaceSettings,
   pendingSelection,
   onPendingSelectionApplied,
@@ -567,6 +571,8 @@ export function MarkdownEditor({
   const whitespaceCompartmentRef = useRef<Compartment | null>(null);
   const tabCaptureCompartmentRef = useRef<Compartment | null>(null);
   const captureTabInEditorRef = useRef(captureTabInEditor);
+  const fencedCodeIndentUnitCompartmentRef = useRef<Compartment | null>(null);
+  const fencedCodeIndentUnitRef = useRef(fencedCodeIndentUnit);
   const onChangeRef = useRef(onChange);
   // #272: read from a ref by the mount effect's cleanup (which is []-deps
   // and must not re-subscribe) so the outgoing View State is reported with
@@ -721,6 +727,12 @@ export function MarkdownEditor({
   }
   const tabCaptureCompartment = tabCaptureCompartmentRef.current;
 
+  if (!fencedCodeIndentUnitCompartmentRef.current) {
+    fencedCodeIndentUnitCompartmentRef.current = new Compartment();
+  }
+  const fencedCodeIndentUnitCompartment =
+    fencedCodeIndentUnitCompartmentRef.current;
+
   // #375 Document Map: hoisted out of the mount effect (rather than defined
   // inline there, as before #387) so the document-switch effect below can
   // build a fresh document's updateListener identically via
@@ -841,6 +853,8 @@ export function MarkdownEditor({
       findGutterMarkersRef,
       tabCaptureCompartment,
       captureTabInEditorRef,
+      fencedCodeIndentUnitCompartment,
+      fencedCodeIndentUnitRef,
       glossaryCompletionRef,
       activeFindDiagnostics: {
         editorInstanceId: activeFindEditorInstanceId,
@@ -904,6 +918,9 @@ export function MarkdownEditor({
       ),
       activeFindGutterMarkerCompartment.reconfigure(
         createActiveFindGutterMarkerExtension(findGutterMarkersRef.current)
+      ),
+      fencedCodeIndentUnitCompartment.reconfigure(
+        fencedCodeIndentUnitFacet.of(fencedCodeIndentUnitRef.current)
       )
     ];
   }
@@ -1435,6 +1452,22 @@ export function MarkdownEditor({
       )
     });
   }, [captureTabInEditor]);
+
+  useEffect(() => {
+    fencedCodeIndentUnitRef.current = fencedCodeIndentUnit;
+
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: fencedCodeIndentUnitCompartment.reconfigure(
+        fencedCodeIndentUnitFacet.of(fencedCodeIndentUnit)
+      )
+    });
+  }, [fencedCodeIndentUnit]);
 
   useEffect(() => {
     const view = viewRef.current;

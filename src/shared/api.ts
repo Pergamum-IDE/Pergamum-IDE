@@ -161,6 +161,7 @@ export type {
   ImageAttachmentSaveDirectory,
   NotificationOutputSettings,
   ExpectedLineEnding,
+  FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
   NewFileEncoding,
   NewFileLineEnding,

@@ -92,7 +92,8 @@ function baseApplicationSettings(
         "editor.selectionHighlightMode"
       ),
       findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers"),
-      captureTabInEditor: getCatalogDefaultValue("editor.captureTabInEditor")
+      captureTabInEditor: getCatalogDefaultValue("editor.captureTabInEditor"),
+      fencedCodeIndentUnit: getCatalogDefaultValue("editor.fencedCodeIndentUnit")
     },
     search: {
       nearby: {

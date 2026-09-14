@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildLineChange,
   editorIndentKeymap,
+  fencedCodeIndentUnitFacet,
   indentCommand,
   outdentCommand,
   planIndentTransaction,
@@ -12,6 +13,7 @@ import {
 } from "../../src/renderer/indentCommands";
 import { classifyLine } from "../../src/renderer/indentLineContext";
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
+import type { FencedCodeIndentUnit } from "../../src/shared/settings";
 
 function stateFor(
   doc: string,
@@ -510,12 +512,12 @@ describe("planIndentTransaction (#463)", () => {
       expect(plan.changes).toEqual([{ from: 0, to: 9, insert: "  quote" }]);
     });
 
-    it("does NOT modify > lines inside a fenced code block", () => {
+    it("indents > lines inside a fenced code block as plain code text (4 spaces), not blockquote (> >)", () => {
       const doc = "```md\n> quote inside code block\n```";
       const state = stateFor(doc, doc.indexOf("> quote"));
       const planIndent = planIndentTransaction(state, "indent");
-      expect(planIndent.changes).toEqual([]);
-      expect(planIndent.result.kind).toBe("noop");
+      expect(planIndent.changes).toEqual([{ from: 6, insert: "    " }]);
+      expect(planIndent.result).toEqual({ kind: "applied", changedLineCount: 1 });
 
       const planOutdent = planIndentTransaction(state, "outdent");
       expect(planOutdent.changes).toEqual([]);
@@ -541,6 +543,146 @@ describe("planIndentTransaction (#463)", () => {
       expect(plan.changes).toEqual([
         { from: 20, to: 27, insert: "> > quote" },
         { from: 37, insert: "  " }
+      ]);
+    });
+  });
+
+  describe("fenced code block code text indent / outdent (#474)", () => {
+    it("indents code text inside fenced block using configured spaces4 unit", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, insert: "    " }]);
+    });
+
+    it("indents code text inside fenced block using spaces2 unit", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "indent", undefined, "spaces2");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, insert: "  " }]);
+    });
+
+    it("indents code text inside fenced block using spaces6 unit", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "indent", undefined, "spaces6");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, insert: "      " }]);
+    });
+
+    it("indents code text inside fenced block using spaces8 unit", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "indent", undefined, "spaces8");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, insert: "        " }]);
+    });
+
+    it("indents code text inside fenced block using tab unit", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "indent", undefined, "tab");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, insert: "\t" }]);
+    });
+
+    it("outdents code text inside fenced block matching configured spaces4 unit", () => {
+      const doc = "```ts\n    const x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, to: 10, insert: "" }]);
+    });
+
+    it("outdents code text inside fenced block matching tab priority", () => {
+      const doc = "```ts\n\tconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "outdent", undefined, "spaces4");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, to: 7, insert: "" }]);
+    });
+
+    it("outdents code text inside fenced block with fewer spaces than unit (space fallback)", () => {
+      const doc = "```ts\n  const x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "outdent", undefined, "spaces4");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 6, to: 8, insert: "" }]);
+    });
+
+    it("outdents unindented code text inside fenced block is a no-op", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"));
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("fence delimiter lines are no-op", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      // Line 1: ```ts
+      const stateStart = stateFor(doc, 0);
+      const planStartIndent = planIndentTransaction(stateStart, "indent");
+      expect(planStartIndent.changes).toEqual([]);
+      expect(planStartIndent.result.kind).toBe("noop");
+
+      // Line 3: ```
+      const stateEnd = stateFor(doc, doc.length - 1);
+      const planEndIndent = planIndentTransaction(stateEnd, "indent");
+      expect(planEndIndent.changes).toEqual([]);
+      expect(planEndIndent.result.kind).toBe("noop");
+    });
+
+    it("empty / blank lines inside fenced code blocks are no-op (no invisible spaces inserted)", () => {
+      const doc = "```ts\nconst x = 1;\n  \nconst y = 2;\n```";
+      // Line 3: "  " (whitespace only)
+      const stateBlank = stateFor(doc, doc.indexOf("  \n"));
+      const planIndent = planIndentTransaction(stateBlank, "indent");
+      expect(planIndent.changes).toEqual([]);
+      expect(planIndent.result.kind).toBe("noop");
+
+      const planOutdent = planIndentTransaction(stateBlank, "outdent");
+      expect(planOutdent.changes).toEqual([]);
+      expect(planOutdent.result.kind).toBe("noop");
+    });
+
+    it("treats Markdown list / blockquote syntax inside fenced code block as plain code text", () => {
+      const doc = "```md\n- list item inside code\n> blockquote inside code\n```";
+      // Line 2: "- list item inside code" (first line in block, no preceding sibling candidate, but code text should indent!)
+      const stateList = stateFor(doc, doc.indexOf("- list"));
+      const planList = planIndentTransaction(stateList, "indent");
+      expect(planList.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(planList.changes).toEqual([{ from: 6, insert: "    " }]);
+
+      // Line 3: "> blockquote inside code" (code text should insert 4 spaces, NOT > > quote)
+      const stateQuote = stateFor(doc, doc.indexOf("> block"));
+      const planQuote = planIndentTransaction(stateQuote, "indent");
+      expect(planQuote.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(planQuote.changes).toEqual([{ from: 30, insert: "    " }]);
+    });
+
+    it("read-only editor: fenced code indent/outdent is no-op", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const state = stateFor(doc, doc.indexOf("const"), { readOnly: true });
+      expect(planIndentTransaction(state, "indent").changes).toEqual([]);
+      expect(planIndentTransaction(state, "outdent").changes).toEqual([]);
+    });
+
+    it("mixed selection: indents non-blank code text lines and skips fence delimiters and blank lines", () => {
+      const doc = "```ts\nconst a = 1;\n\nconst b = 2;\n```";
+      const state = EditorState.create({
+        doc,
+        selection: EditorSelection.single(0, doc.length),
+        extensions: [EditorState.allowMultipleSelections.of(true)]
+      });
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 2 });
+      // Line 2 ("const a = 1;", offset 6) and Line 4 ("const b = 2;", offset 20)
+      expect(plan.changes).toEqual([
+        { from: 6, insert: "    " },
+        { from: 20, insert: "    " }
       ]);
     });
   });
@@ -767,5 +909,82 @@ describe("editorIndentKeymap wired into the base CodeMirror setup (#463)", () =>
     } finally {
       view.destroy();
     }
+  });
+});
+
+describe("fencedCodeIndentUnit live setting integration (#474 blocker remediation)", () => {
+  function mountFencedCodeView(input: {
+    doc: string;
+    cursor: number;
+    unit?: FencedCodeIndentUnit;
+  }): EditorView {
+    return new EditorView({
+      parent: document.body,
+      state: EditorState.create({
+        doc: input.doc,
+        selection: EditorSelection.single(input.cursor),
+        extensions: [
+          ...createMarkdownEditorBaseSetup({
+            undoHistoryMinDepth: 100,
+            fencedCodeIndentUnit: input.unit ?? "spaces4"
+          })
+        ]
+      })
+    });
+  }
+
+  function ctrlBracketKeydown(bracket: "[" | "]"): KeyboardEvent {
+    return new KeyboardEvent("keydown", {
+      key: bracket,
+      code: bracket === "]" ? "BracketRight" : "BracketLeft",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+  }
+
+  it.each([
+    { unit: "spaces2" as const, expectedIndent: "  ", docAfter: "```js\n  const x = 1;\n```" },
+    { unit: "spaces8" as const, expectedIndent: "        ", docAfter: "```js\n        const x = 1;\n```" },
+    { unit: "tab" as const, expectedIndent: "\t", docAfter: "```js\n\tconst x = 1;\n```" }
+  ])("Mod+] uses live fencedCodeIndentUnit '$unit'", ({ unit, docAfter }) => {
+    const doc = "```js\nconst x = 1;\n```";
+    const view = mountFencedCodeView({ doc, cursor: 7, unit });
+    try {
+      const event = ctrlBracketKeydown("]");
+      view.contentDOM.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(view.state.doc.toString()).toBe(docAfter);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it.each([
+    { unit: "spaces2" as const, docBefore: "```js\n  const x = 1;\n```", docAfter: "```js\nconst x = 1;\n```" },
+    { unit: "spaces8" as const, docBefore: "```js\n        const x = 1;\n```", docAfter: "```js\nconst x = 1;\n```" },
+    { unit: "tab" as const, docBefore: "```js\n\tconst x = 1;\n```", docAfter: "```js\nconst x = 1;\n```" }
+  ])("Mod+[ outdents using live fencedCodeIndentUnit '$unit'", ({ unit, docBefore, docAfter }) => {
+    const view = mountFencedCodeView({ doc: docBefore, cursor: docBefore.indexOf("const"), unit });
+    try {
+      const event = ctrlBracketKeydown("[");
+      view.contentDOM.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(view.state.doc.toString()).toBe(docAfter);
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("planIndentTransaction without explicit fencedCodeIndentUnit reads facet value live from state", () => {
+    const doc = "```js\nconst x = 1;\n```";
+    const state = EditorState.create({
+      doc,
+      selection: EditorSelection.single(7),
+      extensions: [fencedCodeIndentUnitFacet.of("spaces2")]
+    });
+    const plan = planIndentTransaction(state, "indent");
+    expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+    expect(plan.changes).toEqual([{ from: 6, insert: "  " }]);
   });
 });

@@ -10295,6 +10295,9 @@ export function App(): JSX.Element {
                         whitespaceSettings={
                           effectiveSettings.editor.whitespace
                         }
+                        fencedCodeIndentUnit={
+                          effectiveSettings.editor.fencedCodeIndentUnit
+                        }
                         glossaryNearbySearchSettings={
                           effectiveSettings.search.nearby
                         }

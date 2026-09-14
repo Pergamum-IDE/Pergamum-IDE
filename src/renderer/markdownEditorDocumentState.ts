@@ -37,9 +37,11 @@ import { EditorView } from "@codemirror/view";
 import type {
   ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
+  FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
   SelectionHighlightMode
 } from "../shared/settings";
+import { fencedCodeIndentUnitFacet } from "./indentCommands";
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
 import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
@@ -118,6 +120,8 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly findGutterMarkersRef: LiveRef<boolean>;
   readonly tabCaptureCompartment?: Compartment;
   readonly captureTabInEditorRef?: LiveRef<boolean>;
+  readonly fencedCodeIndentUnitCompartment?: Compartment;
+  readonly fencedCodeIndentUnitRef?: LiveRef<FencedCodeIndentUnit>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
   /**
    * #424 / #425 follow-up: the Ctrl+F / Ctrl+H keymap no longer reads a
@@ -226,7 +230,8 @@ export function createMarkdownEditorDocumentState(
     doc: options.doc,
     extensions: [
       ...createMarkdownEditorBaseSetup({
-        undoHistoryMinDepth: options.undoHistoryMinDepth
+        undoHistoryMinDepth: options.undoHistoryMinDepth,
+        fencedCodeIndentUnit: options.fencedCodeIndentUnitRef?.current
       }),
       markdown(),
       EditorView.lineWrapping,
@@ -260,6 +265,11 @@ export function createMarkdownEditorDocumentState(
       (options.tabCaptureCompartment ?? new Compartment()).of(
         createTabCaptureKeymapExtension(
           options.captureTabInEditorRef?.current ?? false
+        )
+      ),
+      (options.fencedCodeIndentUnitCompartment ?? new Compartment()).of(
+        fencedCodeIndentUnitFacet.of(
+          options.fencedCodeIndentUnitRef?.current ?? "spaces4"
         )
       ),
       createGlossaryCompletionExtension({

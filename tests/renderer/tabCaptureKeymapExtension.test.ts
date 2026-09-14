@@ -194,6 +194,44 @@ describe("tabCaptureKeymapExtension (#467)", () => {
       }
     });
 
+    it("Tab key indents fenced code block code text line when captureTabInEditor is true (#474)", () => {
+      const doc = "```ts\nconst x = 1;\n```";
+      const view = mountEditor({ doc, captureTabInEditor: true });
+
+      try {
+        view.dispatch({
+          selection: EditorSelection.cursor(doc.indexOf("const")),
+        });
+
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("```ts\n    const x = 1;\n```");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Shift+Tab key outdents fenced code block code text line when captureTabInEditor is true (#474)", () => {
+      const doc = "```ts\n    const x = 1;\n```";
+      const view = mountEditor({ doc, captureTabInEditor: true });
+
+      try {
+        view.dispatch({
+          selection: EditorSelection.cursor(doc.indexOf("const")),
+        });
+
+        const event = keydownEvent("Tab", { shiftKey: true });
+        view.contentDOM.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("```ts\nconst x = 1;\n```");
+      } finally {
+        view.destroy();
+      }
+    });
+
     it("read-only editor: Tab key is consumed but produces NO document changes", () => {
       const view = mountEditor({
         doc: "- item",

@@ -25,6 +25,7 @@
 
 import {
   ChangeSet,
+  Facet,
   type ChangeSpec,
   type EditorState,
   type Line,
@@ -36,14 +37,27 @@ import {
   canIndentListItem,
   classifyLine,
   computeOrderedListLocalRenumbering,
+  getFencedCodeOutdentDeleteLength,
   getOrderedListOutdentDeleteLength,
+  isFenceDelimiterLine,
   isLineInsideFencedCodeBlock,
   parseBlockquoteLine,
   type LineContext
 } from "./indentLineContext";
 import { extractTouchedLines } from "./indentTouchedLines";
+import {
+  resolveFencedCodeIndentText,
+  type FencedCodeIndentUnit
+} from "../shared/settings";
 
 export type IndentDirection = "indent" | "outdent";
+
+export const fencedCodeIndentUnitFacet = Facet.define<
+  FencedCodeIndentUnit,
+  FencedCodeIndentUnit
+>({
+  combine: (values) => values[values.length - 1] ?? "spaces4"
+});
 
 /**
  * Why an indent / outdent command produced no document change. Kept
@@ -81,8 +95,27 @@ export function buildLineChange(
   line: Line,
   context: LineContext,
   direction: IndentDirection,
-  doc?: Text
+  doc?: Text,
+  fencedCodeIndentUnit: FencedCodeIndentUnit = "spaces4"
 ): ChangeSpec | null {
+  if (doc && isLineInsideFencedCodeBlock(doc, line.number)) {
+    if (isFenceDelimiterLine(line.text) || context === "blank") {
+      return null;
+    }
+    if (direction === "indent") {
+      const indentText = resolveFencedCodeIndentText(fencedCodeIndentUnit);
+      return { from: line.from, insert: indentText };
+    }
+    const deleteLen = getFencedCodeOutdentDeleteLength(
+      line.text,
+      fencedCodeIndentUnit
+    );
+    if (deleteLen > 0) {
+      return { from: line.from, to: line.from + deleteLen, insert: "" };
+    }
+    return null;
+  }
+
   switch (context) {
     case "listItem":
     case "nestedListItem":
@@ -113,9 +146,6 @@ export function buildLineChange(
       }
       return null;
     case "blockquote":
-      if (doc && isLineInsideFencedCodeBlock(doc, line.number)) {
-        return null;
-      }
       const bqInfo = parseBlockquoteLine(line.text);
       if (!bqInfo) {
         return null;
@@ -197,8 +227,12 @@ interface IndentPlan {
 export function planIndentTransaction(
   state: EditorState,
   direction: IndentDirection,
-  buildLineChangeImpl: typeof buildLineChange = buildLineChange
+  buildLineChangeImpl: typeof buildLineChange = buildLineChange,
+  fencedCodeIndentUnit?: FencedCodeIndentUnit
 ): IndentPlan {
+  const effectiveFencedCodeIndentUnit =
+    fencedCodeIndentUnit ?? state.facet(fencedCodeIndentUnitFacet);
+
   if (state.readOnly) {
     return { changes: [], result: { kind: "noop", reason: "readonly" } };
   }
@@ -218,7 +252,13 @@ export function planIndentTransaction(
 
   for (const line of touchedLines) {
     const context = classifyLine(line.text);
-    const change = buildLineChangeImpl(line, context, direction, state.doc);
+    const change = buildLineChangeImpl(
+      line,
+      context,
+      direction,
+      state.doc,
+      effectiveFencedCodeIndentUnit
+    );
     if (change === null) {
       noopReasons.push(lineNoopReason(context, direction));
     } else {
@@ -304,8 +344,19 @@ export function planIndentTransaction(
   };
 }
 
-function runIndentDirection(view: EditorView, direction: IndentDirection): true {
-  const plan = planIndentTransaction(view.state, direction);
+function runIndentDirection(
+  view: EditorView,
+  direction: IndentDirection,
+  fencedCodeIndentUnit?: FencedCodeIndentUnit
+): true {
+  const effectiveUnit =
+    fencedCodeIndentUnit ?? view.state.facet(fencedCodeIndentUnitFacet);
+  const plan = planIndentTransaction(
+    view.state,
+    direction,
+    buildLineChange,
+    effectiveUnit
+  );
   if (plan.changes.length > 0) {
     view.dispatch(
       view.state.update({

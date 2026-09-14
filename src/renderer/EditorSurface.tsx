@@ -15,6 +15,7 @@ import {
 import type {
   ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
+  FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
   NewFileLineEnding,
   SelectionHighlightMode,
@@ -437,6 +438,7 @@ interface EditorSurfaceProps {
    * affects Save, dirty state, or selection.
    */
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  fencedCodeIndentUnit?: FencedCodeIndentUnit;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
   /** Existing workbench.normalizeUnicodeToNfc setting for active text Find. */
@@ -557,6 +559,7 @@ export function EditorSurface({
   selectionHighlightMode,
   findGutterMarkers,
   whitespaceSettings,
+  fencedCodeIndentUnit,
   glossaryNearbySearchSettings,
   normalizeUnicodeToNfcMatching,
   projectRootPath,
@@ -607,6 +610,7 @@ export function EditorSurface({
           selectionHighlightMode={selectionHighlightMode}
           findGutterMarkers={findGutterMarkers}
           whitespaceSettings={whitespaceSettings}
+          fencedCodeIndentUnit={fencedCodeIndentUnit}
           glossaryNearbySearchSettings={glossaryNearbySearchSettings}
           normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
           projectRootPath={projectRootPath}
@@ -668,6 +672,7 @@ interface MarkdownEditorSurfaceProps {
   selectionHighlightMode: SelectionHighlightMode;
   findGutterMarkers: boolean;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  fencedCodeIndentUnit?: FencedCodeIndentUnit;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
   /** Existing workbench.normalizeUnicodeToNfc setting for active text Find. */
@@ -755,6 +760,7 @@ function MarkdownEditorSurface({
   selectionHighlightMode,
   findGutterMarkers,
   whitespaceSettings,
+  fencedCodeIndentUnit,
   glossaryNearbySearchSettings,
   normalizeUnicodeToNfcMatching,
   projectRootPath,
@@ -1812,6 +1818,7 @@ function MarkdownEditorSurface({
           selectionHighlightMode={selectionHighlightMode}
           findGutterMarkers={findGutterMarkers}
           whitespaceSettings={whitespaceSettings}
+          fencedCodeIndentUnit={fencedCodeIndentUnit}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}
           contextSurface="markdownEditor"

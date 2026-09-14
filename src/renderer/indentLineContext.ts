@@ -45,6 +45,10 @@
  */
 
 import type { Line, Text } from "@codemirror/state";
+import {
+  resolveFencedCodeIndentText,
+  type FencedCodeIndentUnit
+} from "../shared/settings";
 
 export type LineContext =
   | "blank"
@@ -563,5 +567,51 @@ export function isLineInsideFencedCodeBlock(
 
   return inFence;
 }
+
+export function isFenceDelimiterLine(lineText: string): boolean {
+  return /^ {0,3}(`{3,}|~{3,})/.test(lineText);
+}
+
+export function getFencedCodeOutdentDeleteLength(
+  lineText: string,
+  unit: FencedCodeIndentUnit = "spaces4"
+): number {
+  const indentText = resolveFencedCodeIndentText(unit);
+  if (lineText.startsWith(indentText)) {
+    return indentText.length;
+  }
+  if (lineText.startsWith("\t")) {
+    return 1;
+  }
+  let maxSpaces = 4;
+  switch (unit) {
+    case "spaces2":
+      maxSpaces = 2;
+      break;
+    case "spaces4":
+      maxSpaces = 4;
+      break;
+    case "spaces6":
+      maxSpaces = 6;
+      break;
+    case "spaces8":
+      maxSpaces = 8;
+      break;
+    case "tab":
+      maxSpaces = 4;
+      break;
+  }
+
+  let spaceCount = 0;
+  for (const char of lineText) {
+    if (char === " " && spaceCount < maxSpaces) {
+      spaceCount++;
+    } else {
+      break;
+    }
+  }
+  return spaceCount;
+}
+
 
 

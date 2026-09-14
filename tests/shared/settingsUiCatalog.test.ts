@@ -195,6 +195,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.selectionHighlightMode",
           "editor.findGutterMarkers",
           "editor.captureTabInEditor",
+          "editor.fencedCodeIndentUnit",
           "editor.undoHistoryMinDepth",
           "editor.whitespace.renderAsciiSpace",
           "editor.whitespace.renderIdeographicSpace",
@@ -247,6 +248,9 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "editor.lineEnding.expected"
       );
       const markerGlyph = getSettingCatalogItem("editor.lineEnding.markerGlyph");
+      const fencedCodeIndentUnit = getSettingCatalogItem(
+        "editor.fencedCodeIndentUnit"
+      );
 
       if (
         lineEnding?.control.kind !== "select" ||
@@ -254,7 +258,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
         renderer?.control.kind !== "select" ||
         language?.control.kind !== "select" ||
         expectedLineEnding?.control.kind !== "select" ||
-        markerGlyph?.control.kind !== "select"
+        markerGlyph?.control.kind !== "select" ||
+        fencedCodeIndentUnit?.control.kind !== "select"
       ) {
         throw new Error("Expected select controls.");
       }
@@ -281,6 +286,13 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "⏎",
         "↵",
         "↓"
+      ]);
+      expect(fencedCodeIndentUnit.control.options.map((o) => o.value)).toEqual([
+        "spaces2",
+        "spaces4",
+        "spaces6",
+        "spaces8",
+        "tab"
       ]);
     });
 
