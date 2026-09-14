@@ -31,6 +31,17 @@
  *    binding is kept: `Mod-d` (selectNextOccurrence), `Mod-Alt-g`
  *    (gotoLine), `Mod-Shift-l` (selectSelectionMatches) and `Escape`
  *    (closeSearchPanel - inert when the panel never opens).
+ *
+ * 3. #463: `defaultKeymap`'s own `Mod-[` / `Mod-]` (bound to
+ *    `@codemirror/commands`' `indentLess` / `indentMore` - a flat,
+ *    Markdown-unaware "insert/remove one indent unit on every selected
+ *    line") are dropped. ADR-0014 makes `Mod+]` / `Mod+[` the formal
+ *    indent / outdent keybinding, but dispatched through a single
+ *    Markdown-context-aware command (`indentCommands.ts`'s
+ *    `editorIndentKeymap`), not CodeMirror's generic one. `Tab` /
+ *    `Shift-Tab` are untouched - neither `defaultKeymap` nor this base
+ *    setup binds them (no `indentWithTab`), so they keep CodeMirror's own
+ *    default of falling through to ordinary focus movement.
  */
 
 import {
@@ -57,6 +68,7 @@ import { searchKeymap } from "@codemirror/search";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
+import { editorIndentKeymap } from "./indentCommands";
 
 /**
  * #424: `searchKeymap` bindings that open (or fall back to opening) the
@@ -71,6 +83,16 @@ const NATIVE_SEARCH_PANEL_KEYS: ReadonlySet<string> = new Set([
 
 const searchKeymapWithoutPanelOpeners = searchKeymap.filter(
   (binding) => binding.key === undefined || !NATIVE_SEARCH_PANEL_KEYS.has(binding.key)
+);
+
+/**
+ * #463: `defaultKeymap`'s own `Mod-[` / `Mod-]` (`indentLess` /
+ * `indentMore`). Replaced by `editorIndentKeymap`'s context-aware commands.
+ */
+const REPLACED_INDENT_KEYS: ReadonlySet<string> = new Set(["Mod-[", "Mod-]"]);
+
+const defaultKeymapWithoutIndentBindings = defaultKeymap.filter(
+  (binding) => binding.key === undefined || !REPLACED_INDENT_KEYS.has(binding.key)
 );
 
 export interface MarkdownEditorBaseSetupOptions {
@@ -116,7 +138,8 @@ export function createMarkdownEditorBaseSetup(
     highlightActiveLine(),
     keymap.of([
       ...closeBracketsKeymap,
-      ...defaultKeymap,
+      ...defaultKeymapWithoutIndentBindings,
+      ...editorIndentKeymap,
       ...searchKeymapWithoutPanelOpeners,
       ...historyKeymap,
       ...foldKeymap,
