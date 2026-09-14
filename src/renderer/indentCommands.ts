@@ -34,6 +34,8 @@ import type { Command, EditorView, KeyBinding } from "@codemirror/view";
 import {
   canIndentListItem,
   classifyLine,
+  computeOrderedListLocalRenumbering,
+  getOrderedListOutdentDeleteLength,
   type LineContext
 } from "./indentLineContext";
 import { extractTouchedLines } from "./indentTouchedLines";
@@ -81,14 +83,27 @@ export function buildLineChange(
   switch (context) {
     case "listItem":
     case "nestedListItem":
+    case "orderedListItem":
+    case "nestedOrderedListItem":
       if (direction === "indent") {
-        if (doc && canIndentListItem(doc, line)) {
-          return { from: line.from, insert: "  " };
+        if (doc) {
+          const plan = canIndentListItem(doc, line);
+          if (plan.canIndent) {
+            return { from: line.from, insert: " ".repeat(plan.insertSpaces) };
+          }
         }
         return null;
       }
       if (context === "nestedListItem") {
         const deleteLen = getLeadingWhitespaceDeleteLength(line.text);
+        if (deleteLen > 0) {
+          return { from: line.from, to: line.from + deleteLen, insert: "" };
+        }
+      }
+      if (context === "nestedOrderedListItem") {
+        const deleteLen = doc
+          ? getOrderedListOutdentDeleteLength(doc, line)
+          : getLeadingWhitespaceDeleteLength(line.text);
         if (deleteLen > 0) {
           return { from: line.from, to: line.from + deleteLen, insert: "" };
         }
@@ -121,8 +136,10 @@ function lineNoopReason(
     case "topLevelParagraph":
       return "topLevelParagraph";
     case "listItem":
+    case "orderedListItem":
       return direction === "outdent" ? "outermostList" : "noSupportedLines";
     case "nestedListItem":
+    case "nestedOrderedListItem":
     case "blockquote":
     case "indentedCode":
       return "noSupportedLines";
@@ -183,6 +200,8 @@ export function planIndentTransaction(
 
   const changes: ChangeSpec[] = [];
   const noopReasons: IndentNoopReason[] = [];
+  const modifiedLines = new Map<number, string>();
+  const lineChangeMap = new Map<number, ChangeSpec>();
 
   for (const line of touchedLines) {
     const context = classifyLine(line.text);
@@ -191,6 +210,31 @@ export function planIndentTransaction(
       noopReasons.push(lineNoopReason(context, direction));
     } else {
       changes.push(change);
+      lineChangeMap.set(line.number, change);
+      if (buildLineChangeImpl === buildLineChange) {
+        if (
+          context === "orderedListItem" ||
+          context === "nestedOrderedListItem"
+        ) {
+          if (direction === "indent") {
+            const plan = canIndentListItem(state.doc, line);
+            if (plan.canIndent) {
+              modifiedLines.set(
+                line.number,
+                " ".repeat(plan.insertSpaces) + line.text
+              );
+            }
+          } else {
+            const deleteLen = getOrderedListOutdentDeleteLength(
+              state.doc,
+              line
+            );
+            if (deleteLen > 0) {
+              modifiedLines.set(line.number, line.text.slice(deleteLen));
+            }
+          }
+        }
+      }
     }
   }
 
@@ -199,6 +243,46 @@ export function planIndentTransaction(
       changes: [],
       result: { kind: "noop", reason: summarizeNoopReason(noopReasons) }
     };
+  }
+
+  if (modifiedLines.size > 0) {
+    const renumberedMap = computeOrderedListLocalRenumbering(
+      state.doc,
+      modifiedLines
+    );
+    const finalChanges: ChangeSpec[] = [];
+    for (const line of touchedLines) {
+      if (lineChangeMap.has(line.number)) {
+        if (renumberedMap.has(line.number)) {
+          const newText = renumberedMap.get(line.number)!;
+          if (newText !== line.text) {
+            finalChanges.push({
+              from: line.from,
+              to: line.to,
+              insert: newText
+            });
+          }
+        } else {
+          finalChanges.push(lineChangeMap.get(line.number)!);
+        }
+      }
+    }
+
+    for (const [lineNum, newText] of renumberedMap.entries()) {
+      if (!lineChangeMap.has(lineNum)) {
+        const line = state.doc.line(lineNum);
+        if (newText !== line.text) {
+          finalChanges.push({ from: line.from, to: line.to, insert: newText });
+        }
+      }
+    }
+
+    if (finalChanges.length > 0) {
+      return {
+        changes: finalChanges,
+        result: { kind: "applied", changedLineCount: finalChanges.length }
+      };
+    }
   }
 
   return {

@@ -303,12 +303,125 @@ describe("planIndentTransaction (#463)", () => {
       expect(plan.result.kind).toBe("noop");
     });
 
-    it("ordered list remains unsupported/no-op", () => {
+    it("ordered list item does not treat unordered list item as preceding sibling", () => {
       const doc = "1. 第一\n- 第二";
       const state = stateFor(doc, doc.length - 1);
       const plan = planIndentTransaction(state, "indent");
       expect(plan.changes).toEqual([]);
       expect(plan.result.kind).toBe("noop");
+    });
+  });
+
+  describe("ordered list indent / outdent with local renumbering (#470 remediation)", () => {
+    it("ordered list first item: indent is no-op", () => {
+      const state = stateFor("1. first\n2. second", 2);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("indent 2. child under 1. parent becomes 1. parent \\n   1. child", () => {
+      const doc = "1. parent\n2. child";
+      const state = stateFor(doc, doc.indexOf("2. child"));
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 10, to: 18, insert: "   1. child" }]);
+    });
+
+    it("indent 2) child under 1) parent becomes 1) parent \\n   1) child (delimiter preserved)", () => {
+      const doc = "1) parent\n2) child";
+      const state = stateFor(doc, doc.indexOf("2) child"));
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 10, to: 18, insert: "   1) child" }]);
+    });
+
+    it("indent 11. child under 10. parent becomes 10. parent \\n    1. child", () => {
+      const doc = "10. parent\n11. child";
+      const state = stateFor(doc, doc.indexOf("11. child"));
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 11, to: 20, insert: "    1. child" }]);
+    });
+
+    it("selecting 1..5 keeps item 1 unchanged and turns items 2..5 into child list numbered 1..4", () => {
+      const doc = "1. い\n2. ろ\n3. は\n4. に\n5. ほ";
+      const state = EditorState.create({
+        doc,
+        selection: EditorSelection.single(0, doc.length),
+        extensions: [EditorState.allowMultipleSelections.of(true)]
+      });
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 4 });
+      expect(plan.changes).toEqual([
+        { from: 5, to: 9, insert: "   1. ろ" },
+        { from: 10, to: 14, insert: "   2. は" },
+        { from: 15, to: 19, insert: "   3. に" },
+        { from: 20, to: 24, insert: "   4. ほ" }
+      ]);
+    });
+
+    it("outdent 1. parent \\n   1. child => outdents child back to 2. child at column 0", () => {
+      const doc = "1. parent\n   1. child";
+      const state = stateFor(doc, doc.indexOf("1. child"));
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 10, to: 21, insert: "2. child" }]);
+    });
+
+    it("outdent 10. parent \\n    1. child => outdents child back to 11. child at column 0", () => {
+      const doc = "10. parent\n    1. child";
+      const state = stateFor(doc, doc.indexOf("1. child"));
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 11, to: 23, insert: "11. child" }]);
+    });
+
+    it("outermost ordered list item: outdent is no-op", () => {
+      const state = stateFor("1. item", 2);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result).toEqual({ kind: "noop", reason: "outermostList" });
+    });
+
+    it("does NOT renumber unrelated ordered lists in the document", () => {
+      const doc = "1. parent A\n2. child A\n\nSome paragraph\n\n1. list B\n2. item B";
+      const state = stateFor(doc, doc.indexOf("2. child A"));
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      // Only line 2 is changed, list B is not touched
+      expect(plan.changes).toEqual([{ from: 12, to: 22, insert: "   1. child A" }]);
+    });
+
+    it("does NOT treat an unordered list item as a parent candidate for an ordered list item", () => {
+      const doc = "- unordered\n1. ordered";
+      const state = stateFor(doc, doc.length - 1);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("does NOT treat an ordered list item as a parent candidate for an unordered list item", () => {
+      const doc = "1. ordered\n- unordered";
+      const state = stateFor(doc, doc.length - 1);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.changes).toEqual([]);
+      expect(plan.result.kind).toBe("noop");
+    });
+
+    it("mixed list selection: modifies ONLY valid list lines, preserving paragraph and thematic break", () => {
+      const doc = "- unordered 1\n- unordered 2\n1. ordered 1\n2. ordered 2\nparagraph\n---";
+      const state = EditorState.create({
+        doc,
+        selection: EditorSelection.single(0, doc.length),
+        extensions: [EditorState.allowMultipleSelections.of(true)]
+      });
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 2 });
+      expect(plan.changes).toEqual([
+        { from: 14, insert: "  " },
+        { from: 41, to: 53, insert: "   1. ordered 2" }
+      ]);
     });
   });
 
