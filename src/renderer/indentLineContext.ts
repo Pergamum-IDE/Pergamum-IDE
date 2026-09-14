@@ -58,10 +58,14 @@ export type LineContext =
  *  comment (U+3000 and other Unicode whitespace must not count). */
 const BLANK_LINE_PATTERN = /^[ \t]*$/;
 
-/** CommonMark bullet (`-`, `*`, `+`) or ordered (`1.` / `1)`) list marker,
+/** CommonMark bullet (`-`, `*`, `+`) list marker (including task lists),
  *  optionally indented, followed by whitespace or end-of-line (an "empty"
  *  list item marker with nothing after it is still a list item). */
-const LIST_MARKER_PATTERN = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$)/;
+const UNORDERED_LIST_MARKER_PATTERN = /^([ \t]*)(?:[-*+])(?:[ \t]+|$)/;
+
+/** Ordered (`1.` / `1)`) list marker. Unsupported in #465 (treated as
+ *  unsupportedContext). */
+const ORDERED_LIST_MARKER_PATTERN = /^([ \t]*)\d{1,9}[.)](?:[ \t]+|$)/;
 
 /** Up to 3 leading spaces, then `>` (CommonMark blockquote marker). */
 const BLOCKQUOTE_PATTERN = /^ {0,3}>/;
@@ -80,12 +84,6 @@ const THEMATIC_BREAK_PATTERN =
  *  a full HTML-block-start-condition parser, just enough to keep an obvious
  *  `<div>` / `<!--` line out of `topLevelParagraph`. */
 const HTML_BLOCK_START_PATTERN = /^ {0,3}<[a-zA-Z!/?]/;
-
-/** Leading-whitespace columns at or above this make a list-marker line
- *  `nestedListItem` instead of `listItem` (outermost). See the module
- *  doc comment - this is an approximation, not the true parent content
- *  column. */
-const NESTED_LIST_INDENT_THRESHOLD = 4;
 
 /** Leading-whitespace columns at or above this, with no other structural
  *  marker, make a non-blank line an indented code block (CommonMark: 4
@@ -124,12 +122,14 @@ export function classifyLine(lineText: string): LineContext {
     return "unsupportedContext";
   }
 
-  const listMatch = LIST_MARKER_PATTERN.exec(lineText);
+  const listMatch = UNORDERED_LIST_MARKER_PATTERN.exec(lineText);
   if (listMatch) {
     const markerIndent = leadingWhitespaceColumns(listMatch[1]);
-    return markerIndent >= NESTED_LIST_INDENT_THRESHOLD
-      ? "nestedListItem"
-      : "listItem";
+    return markerIndent > 0 ? "nestedListItem" : "listItem";
+  }
+
+  if (ORDERED_LIST_MARKER_PATTERN.test(lineText)) {
+    return "unsupportedContext";
   }
 
   if (BLOCKQUOTE_PATTERN.test(lineText)) {

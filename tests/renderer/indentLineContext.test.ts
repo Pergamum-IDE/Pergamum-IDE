@@ -32,27 +32,30 @@ describe("classifyLine (#463)", () => {
     }
   );
 
-  it.each(["1.", "1)", "10.", "10)"])(
-    "classifies an outermost ordered list item ('%s') as listItem",
+  it.each(["- [ ]", "- [x]", "- [X]", "* [ ]", "+ [x]"])(
+    "classifies an outermost task list item ('%s') as listItem",
     (marker) => {
-      expect(classifyLine(`${marker} item`)).toBe("listItem");
+      expect(classifyLine(`${marker} task`)).toBe("listItem");
+    }
+  );
+
+  it.each(["1.", "1)", "10.", "10)"])(
+    "classifies an ordered list item ('%s') as unsupportedContext (#465 out of scope)",
+    (marker) => {
+      expect(classifyLine(`${marker} item`)).toBe("unsupportedContext");
     }
   );
 
   it("classifies a bare list marker with nothing after it as listItem", () => {
     expect(classifyLine("-")).toBe("listItem");
-    expect(classifyLine("1.")).toBe("listItem");
   });
 
-  it("classifies a list marker indented 1-3 columns as still outermost", () => {
-    expect(classifyLine("  - item")).toBe("listItem");
-    expect(classifyLine("   1. item")).toBe("listItem");
-  });
-
-  it("classifies a list marker indented 4+ columns as nestedListItem", () => {
+  it("classifies an indented unordered list marker (1+ columns) as nestedListItem", () => {
+    expect(classifyLine("  - item")).toBe("nestedListItem");
+    expect(classifyLine("   * item")).toBe("nestedListItem");
     expect(classifyLine("    - item")).toBe("nestedListItem");
-    expect(classifyLine("        - item")).toBe("nestedListItem");
     expect(classifyLine("\t- item")).toBe("nestedListItem");
+    expect(classifyLine("  - [ ] task")).toBe("nestedListItem");
   });
 
   it("does not misclassify a mid-word hyphen, a negative number, or a hyphen-led option flag as a list item", () => {

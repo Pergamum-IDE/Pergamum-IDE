@@ -84,25 +84,32 @@ describe("planIndentTransaction (#463)", () => {
     expect(plan.result).toEqual({ kind: "noop", reason: "outermostList" });
   });
 
-  it("outermost list item: indent is a no-op, reason 'noSupportedLines' (future sink stub)", () => {
-    const state = stateFor("- item", 2);
-    const plan = planIndentTransaction(state, "indent");
-    expect(plan.changes).toEqual([]);
-    expect(plan.result).toEqual({ kind: "noop", reason: "noSupportedLines" });
-  });
-
-  it.each(directions)(
-    "nested list item: %s is a no-op, reason 'noSupportedLines' (future sink/lift stub)",
-    (direction) => {
-      const state = stateFor("    - item", 6);
-      const plan = planIndentTransaction(state, direction);
-      expect(plan.changes).toEqual([]);
-      expect(plan.result).toEqual({
-        kind: "noop",
-        reason: "noSupportedLines"
-      });
+  it.each(["- item", "+ item", "* item", "- [ ] task", "- [x] task", "- [X] task"])(
+    "outermost list item ('%s'): indent adds 2 spaces",
+    (lineText) => {
+      const state = stateFor(lineText, 2);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, insert: "  " }]);
     }
   );
+
+  it.each(["  - item", "  + item", "  * item", "  - [ ] task", "  - [x] task", "  - [X] task"])(
+    "indented list item ('%s'): outdent removes up to 2 spaces",
+    (lineText) => {
+      const state = stateFor(lineText, 4);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 2, insert: "" }]);
+    }
+  );
+
+  it("indented list item with 1 space: outdent removes 1 space", () => {
+    const state = stateFor(" - item", 3);
+    const plan = planIndentTransaction(state, "outdent");
+    expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+    expect(plan.changes).toEqual([{ from: 0, to: 1, insert: "" }]);
+  });
 
   it("a selection with no touched lines is defensively a no-op ('noSupportedLines')", () => {
     // Not reachable through normal selection construction (a selection
@@ -114,9 +121,9 @@ describe("planIndentTransaction (#463)", () => {
   });
 
   describe("mixed context (multiple touched lines)", () => {
-    const mixedDoc = "top level paragraph\n- list item\n    - nested item\nunsupported? no: # heading";
+    const mixedDoc = "top level paragraph\n- item\n- - -\n  - nested item";
 
-    it("uniform reason across touched lines is reported precisely", () => {
+    it("uniform reason across touched non-list lines is reported precisely", () => {
       // Both touched lines are top-level paragraphs.
       const doc = "first paragraph\nsecond paragraph";
       const state = EditorState.create({
@@ -131,22 +138,33 @@ describe("planIndentTransaction (#463)", () => {
       });
     });
 
-    it("a genuine mix of reasons falls back to 'noSupportedLines'", () => {
-      // line 1: topLevelParagraph, line 2: listItem (outermost, outdent ->
-      // 'outermostList'), line 3: nestedListItem ('noSupportedLines') -
-      // three DIFFERENT reasons, none of which dominates.
-      const doc = "top level paragraph\n- list item\n    - nested item";
+    it("mixed selection: indent modifies ONLY list lines, skipping paragraph and thematic break", () => {
       const state = EditorState.create({
-        doc,
-        selection: EditorSelection.single(0, doc.length),
+        doc: mixedDoc,
+        selection: EditorSelection.single(0, mixedDoc.length),
+        extensions: [EditorState.allowMultipleSelections.of(true)]
+      });
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 2 });
+      // Line 2 ("- item", offset 20) and Line 4 ("  - nested item", offset 33)
+      expect(plan.changes).toEqual([
+        { from: 20, insert: "  " },
+        { from: 33, insert: "  " }
+      ]);
+    });
+
+    it("mixed selection: outdent modifies ONLY nested list line, skipping paragraph, thematic break, and outermost list line", () => {
+      const state = EditorState.create({
+        doc: mixedDoc,
+        selection: EditorSelection.single(0, mixedDoc.length),
         extensions: [EditorState.allowMultipleSelections.of(true)]
       });
       const plan = planIndentTransaction(state, "outdent");
-      expect(plan.changes).toEqual([]);
-      expect(plan.result).toEqual({
-        kind: "noop",
-        reason: "noSupportedLines"
-      });
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      // Line 4 ("  - nested item", offset 33) -> removes 2 spaces at 33
+      expect(plan.changes).toEqual([
+        { from: 33, to: 35, insert: "" }
+      ]);
     });
 
     it("classifies every line of a mixed-context document without throwing", () => {
@@ -156,15 +174,39 @@ describe("planIndentTransaction (#463)", () => {
     });
   });
 
-  describe("buildLineChange dispatcher (#463 - future extension point)", () => {
-    it("returns null (no change) for every context in this issue", () => {
-      const doc = "para\n- item\n    - nested\n> quote\n    code";
+  describe("multi-cursor and multiple ranges", () => {
+    it("deduplicates overlapping touched lines across multiple selection ranges", () => {
+      const doc = "- item 1\n- item 2\n- item 3";
+      // Two cursors on the same line (line 1)
+      const state = EditorState.create({
+        doc,
+        selection: EditorSelection.create([
+          EditorSelection.cursor(1),
+          EditorSelection.cursor(5)
+        ]),
+        extensions: [EditorState.allowMultipleSelections.of(true)]
+      });
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, insert: "  " }]);
+    });
+  });
+
+  describe("buildLineChange dispatcher (#465 list support)", () => {
+    it("returns ChangeSpec for list items on indent, and null for non-list contexts", () => {
+      const doc = "para\n- item\n  - nested\n> quote\n    code";
       const state = EditorState.create({ doc });
-      for (const line of [1, 2, 3, 4, 5].map((n) => state.doc.line(n))) {
-        const context = classifyLine(line.text);
-        expect(buildLineChange(line, context, "indent")).toBeNull();
-        expect(buildLineChange(line, context, "outdent")).toBeNull();
-      }
+      const line1 = state.doc.line(1); // para
+      const line2 = state.doc.line(2); // - item
+      const line3 = state.doc.line(3); //   - nested
+      const line4 = state.doc.line(4); // > quote
+      const line5 = state.doc.line(5); //     code
+
+      expect(buildLineChange(line1, classifyLine(line1.text), "indent")).toBeNull();
+      expect(buildLineChange(line2, classifyLine(line2.text), "indent")).toEqual({ from: line2.from, insert: "  " });
+      expect(buildLineChange(line3, classifyLine(line3.text), "indent")).toEqual({ from: line3.from, insert: "  " });
+      expect(buildLineChange(line4, classifyLine(line4.text), "indent")).toBeNull();
+      expect(buildLineChange(line5, classifyLine(line5.text), "indent")).toBeNull();
     });
   });
 
@@ -322,12 +364,36 @@ describe("editorIndentKeymap wired into the base CodeMirror setup (#463)", () =>
     }
   });
 
-  it("read-only: Mod+] is still consumed (handled) but never changes the document", () => {
-    const view = mountView({ readOnly: true });
+  it("Mod+] (Ctrl+]) indents a list item line", () => {
+    const view = mountView({ doc: "- item" });
     try {
       const event = ctrlBracketKeydown("]");
       view.contentDOM.dispatchEvent(event);
-      expect(view.state.doc.toString()).toBe("Hello world");
+      expect(event.defaultPrevented).toBe(true);
+      expect(view.state.doc.toString()).toBe("  - item");
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("Mod+[ (Ctrl+[) outdents an indented list item line", () => {
+    const view = mountView({ doc: "  - item" });
+    try {
+      const event = ctrlBracketKeydown("[");
+      view.contentDOM.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(view.state.doc.toString()).toBe("- item");
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("read-only: Mod+] on a list item is consumed but leaves document unchanged", () => {
+    const view = mountView({ doc: "- item", readOnly: true });
+    try {
+      const event = ctrlBracketKeydown("]");
+      view.contentDOM.dispatchEvent(event);
+      expect(view.state.doc.toString()).toBe("- item");
     } finally {
       view.destroy();
     }

@@ -53,22 +53,39 @@ export type IndentCommandResult =
   | { readonly kind: "applied"; readonly changedLineCount: number }
   | { readonly kind: "noop"; readonly reason: IndentNoopReason };
 
+function getLeadingWhitespaceDeleteLength(lineText: string): number {
+  if (lineText.startsWith("  ")) {
+    return 2;
+  }
+  if (lineText.startsWith(" ") || lineText.startsWith("\t")) {
+    return 1;
+  }
+  return 0;
+}
+
 /**
  * Per-line context + direction -> a document change, or `null` for "this
- * line contributes nothing" (every branch, today). Exported so tests can
- * exercise the dispatcher directly, and so a future Issue can extend a
- * single `case` without touching the surrounding plumbing.
+ * line contributes nothing".
  */
 export function buildLineChange(
-  _line: Line,
+  line: Line,
   context: LineContext,
-  _direction: IndentDirection
+  direction: IndentDirection
 ): ChangeSpec | null {
   switch (context) {
     case "listItem":
+      if (direction === "indent") {
+        return { from: line.from, insert: "  " };
+      }
+      return null;
     case "nestedListItem":
-      // Future work: list sink / lift (ADR-0014 決定3, 決定6). Deliberately
-      // out of scope for #463 - stays a no-op until implemented.
+      if (direction === "indent") {
+        return { from: line.from, insert: "  " };
+      }
+      const deleteLen = getLeadingWhitespaceDeleteLength(line.text);
+      if (deleteLen > 0) {
+        return { from: line.from, to: line.from + deleteLen, insert: "" };
+      }
       return null;
     case "blockquote":
       // Future work: blockquote indent / outdent (ADR-0014 決定3).
