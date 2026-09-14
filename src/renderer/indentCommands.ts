@@ -32,10 +32,13 @@ import {
 } from "@codemirror/state";
 import type { Command, EditorView, KeyBinding } from "@codemirror/view";
 import {
+  buildBlockquoteText,
   canIndentListItem,
   classifyLine,
   computeOrderedListLocalRenumbering,
   getOrderedListOutdentDeleteLength,
+  isLineInsideFencedCodeBlock,
+  parseBlockquoteLine,
   type LineContext
 } from "./indentLineContext";
 import { extractTouchedLines } from "./indentTouchedLines";
@@ -110,8 +113,18 @@ export function buildLineChange(
       }
       return null;
     case "blockquote":
-      // Future work: blockquote indent / outdent (ADR-0014 決定3).
-      return null;
+      if (doc && isLineInsideFencedCodeBlock(doc, line.number)) {
+        return null;
+      }
+      const bqInfo = parseBlockquoteLine(line.text);
+      if (!bqInfo) {
+        return null;
+      }
+      const newBqText = buildBlockquoteText(bqInfo, direction);
+      if (newBqText === line.text) {
+        return null;
+      }
+      return { from: line.from, to: line.to, insert: newBqText };
     case "indentedCode":
       // Future work: fenced/indented code indent (ADR-0014 決定3, 決定5).
       return null;

@@ -1,13 +1,16 @@
 import { Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
+  buildBlockquoteText,
   classifyLine,
   computeOrderedListLocalRenumbering,
+  isLineInsideFencedCodeBlock,
+  parseBlockquoteLine,
   parseOrderedListMarker,
   renumberOrderedListLine
 } from "../../src/renderer/indentLineContext";
 
-describe("classifyLine (#463)", () => {
+describe("classifyLine (#463 / #472)", () => {
   it("classifies an empty or whitespace-only line as blank", () => {
     expect(classifyLine("")).toBe("blank");
     expect(classifyLine("   ")).toBe("blank");
@@ -87,10 +90,16 @@ describe("classifyLine (#463)", () => {
     expect(classifyLine("foo - bar")).toBe("topLevelParagraph");
   });
 
-  it("classifies a blockquote line", () => {
-    expect(classifyLine("> quoted")).toBe("blockquote");
-    expect(classifyLine("  > quoted")).toBe("blockquote");
-    expect(classifyLine(">")).toBe("blockquote");
+  it.each([
+    "> quote",
+    ">quote",
+    ">",
+    "> ",
+    "> > nested quote",
+    ">> nested quote",
+    "  > quote"
+  ])("classifies blockquote variants ('%s') as blockquote", (line) => {
+    expect(classifyLine(line)).toBe("blockquote");
   });
 
   it("classifies an indented (4+ column) non-list, non-blockquote line as indentedCode", () => {
@@ -166,4 +175,73 @@ describe("ordered list renumbering helpers (#470)", () => {
     expect(result.get(3)).toBe("   2. child2");
   });
 });
+
+describe("blockquote helpers (#472)", () => {
+  it("parses blockquote lines extracting leading indent, quote level, and content text", () => {
+    expect(parseBlockquoteLine("> quote")).toEqual({
+      leadingIndent: "",
+      quoteLevel: 1,
+      contentText: "quote"
+    });
+    expect(parseBlockquoteLine(">quote")).toEqual({
+      leadingIndent: "",
+      quoteLevel: 1,
+      contentText: "quote"
+    });
+    expect(parseBlockquoteLine(">")).toEqual({
+      leadingIndent: "",
+      quoteLevel: 1,
+      contentText: ""
+    });
+    expect(parseBlockquoteLine("> ")).toEqual({
+      leadingIndent: "",
+      quoteLevel: 1,
+      contentText: ""
+    });
+    expect(parseBlockquoteLine("> > nested quote")).toEqual({
+      leadingIndent: "",
+      quoteLevel: 2,
+      contentText: "nested quote"
+    });
+    expect(parseBlockquoteLine(">> nested quote")).toEqual({
+      leadingIndent: "",
+      quoteLevel: 2,
+      contentText: "nested quote"
+    });
+    expect(parseBlockquoteLine("  > quote")).toEqual({
+      leadingIndent: "  ",
+      quoteLevel: 1,
+      contentText: "quote"
+    });
+  });
+
+  it("builds blockquote text for indent and outdent in canonical spaced style", () => {
+    const single = { leadingIndent: "", quoteLevel: 1, contentText: "quote" };
+    expect(buildBlockquoteText(single, "indent")).toBe("> > quote");
+    expect(buildBlockquoteText(single, "outdent")).toBe("quote");
+
+    const compact = { leadingIndent: "", quoteLevel: 2, contentText: "quote" };
+    expect(buildBlockquoteText(compact, "indent")).toBe("> > > quote");
+    expect(buildBlockquoteText(compact, "outdent")).toBe("> quote");
+
+    const empty = { leadingIndent: "", quoteLevel: 1, contentText: "" };
+    expect(buildBlockquoteText(empty, "indent")).toBe("> >");
+    expect(buildBlockquoteText(empty, "outdent")).toBe("");
+  });
+
+  it("detects lines inside fenced code blocks", () => {
+    const doc = Text.of([
+      "> quote 1",
+      "```md",
+      "> quote inside code block",
+      "```",
+      "> quote 2"
+    ]);
+
+    expect(isLineInsideFencedCodeBlock(doc, 1)).toBe(false);
+    expect(isLineInsideFencedCodeBlock(doc, 3)).toBe(true);
+    expect(isLineInsideFencedCodeBlock(doc, 5)).toBe(false);
+  });
+});
+
 

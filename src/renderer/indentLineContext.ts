@@ -469,3 +469,99 @@ export function computeOrderedListLocalRenumbering(
   return finalLines;
 }
 
+export interface BlockquoteLineInfo {
+  readonly leadingIndent: string;
+  readonly quoteLevel: number;
+  readonly contentText: string;
+}
+
+const BLOCKQUOTE_PARSE_PATTERN = /^( {0,3})((?:>[ \t]*)+)(.*)$/;
+
+export function parseBlockquoteLine(
+  lineText: string
+): BlockquoteLineInfo | null {
+  const match = BLOCKQUOTE_PARSE_PATTERN.exec(lineText);
+  if (!match) {
+    return null;
+  }
+
+  let count = 0;
+  for (const char of match[2]) {
+    if (char === ">") {
+      count++;
+    }
+  }
+
+  const contentText = match[3].replace(/^[ \t]+/, "");
+
+  return {
+    leadingIndent: match[1],
+    quoteLevel: count,
+    contentText
+  };
+}
+
+export function buildBlockquoteText(
+  info: BlockquoteLineInfo,
+  direction: "indent" | "outdent"
+): string {
+  if (direction === "indent") {
+    const newLevel = info.quoteLevel + 1;
+    const markers = Array(newLevel).fill(">").join(" ");
+    return info.contentText.length > 0
+      ? `${info.leadingIndent}${markers} ${info.contentText}`
+      : `${info.leadingIndent}${markers}`;
+  }
+
+  if (info.quoteLevel > 1) {
+    const newLevel = info.quoteLevel - 1;
+    const markers = Array(newLevel).fill(">").join(" ");
+    return info.contentText.length > 0
+      ? `${info.leadingIndent}${markers} ${info.contentText}`
+      : `${info.leadingIndent}${markers}`;
+  }
+
+  // Outermost blockquote outdent: remove marker
+  return info.contentText.length > 0
+    ? `${info.leadingIndent}${info.contentText}`
+    : "";
+}
+
+/**
+ * #472 — Checks whether a line (by 1-based line number) is physically
+ * inside a fenced code block (```` ``` ```` or `~~~`).
+ */
+export function isLineInsideFencedCodeBlock(
+  doc: Text,
+  lineNum: number
+): boolean {
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLength = 0;
+
+  for (let n = 1; n < lineNum; n++) {
+    const text = doc.line(n).text;
+    const match = /^ {0,3}(`{3,}|~{3,})/.exec(text);
+    if (!inFence) {
+      if (match) {
+        inFence = true;
+        fenceChar = match[1][0];
+        fenceLength = match[1].length;
+      }
+    } else {
+      if (
+        match &&
+        match[1][0] === fenceChar &&
+        match[1].length >= fenceLength
+      ) {
+        inFence = false;
+        fenceChar = "";
+        fenceLength = 0;
+      }
+    }
+  }
+
+  return inFence;
+}
+
+
