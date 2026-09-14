@@ -11,5 +11,5 @@ review-notes/
 scripts/
 *.ps1
 /docs/handoff*.md
-
+review-logs/
 
