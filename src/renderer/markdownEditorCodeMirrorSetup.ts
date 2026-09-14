@@ -68,7 +68,8 @@ import { searchKeymap } from "@codemirror/search";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
-import { editorIndentKeymap } from "./indentCommands";
+import { editorIndentKeymap, fencedCodeIndentUnitFacet } from "./indentCommands";
+import type { FencedCodeIndentUnit } from "../shared/settings";
 
 /**
  * #424: `searchKeymap` bindings that open (or fall back to opening) the
@@ -107,12 +108,14 @@ export interface MarkdownEditorBaseSetupOptions {
    * practice for a document already open when the setting changes.
    */
   readonly undoHistoryMinDepth: number;
+  readonly fencedCodeIndentUnit?: FencedCodeIndentUnit;
 }
 
 export function createMarkdownEditorBaseSetup(
   options: MarkdownEditorBaseSetupOptions
 ): Extension[] {
   return [
+    fencedCodeIndentUnitFacet.of(options.fencedCodeIndentUnit ?? "spaces4"),
     // #428: gutter display order is the left-to-right DOM order of the
     // `activeGutters` facet entries, which follows extension order here.
     // `foldGutter()` is listed BEFORE `lineNumbers()` so the marker (fold)

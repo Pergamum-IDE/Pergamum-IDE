@@ -4,6 +4,8 @@ import {
   buildBlockquoteText,
   classifyLine,
   computeOrderedListLocalRenumbering,
+  getFencedCodeOutdentDeleteLength,
+  isFenceDelimiterLine,
   isLineInsideFencedCodeBlock,
   parseBlockquoteLine,
   parseOrderedListMarker,
@@ -241,6 +243,40 @@ describe("blockquote helpers (#472)", () => {
     expect(isLineInsideFencedCodeBlock(doc, 1)).toBe(false);
     expect(isLineInsideFencedCodeBlock(doc, 3)).toBe(true);
     expect(isLineInsideFencedCodeBlock(doc, 5)).toBe(false);
+  });
+});
+
+describe("fenced code helpers (#474)", () => {
+  it("detects fence delimiter lines", () => {
+    expect(isFenceDelimiterLine("```")).toBe(true);
+    expect(isFenceDelimiterLine("```ts")).toBe(true);
+    expect(isFenceDelimiterLine("  ```ts info")).toBe(true);
+    expect(isFenceDelimiterLine("~~~")).toBe(true);
+    expect(isFenceDelimiterLine("~~~~python")).toBe(true);
+    expect(isFenceDelimiterLine("const x = ```;")).toBe(false);
+    expect(isFenceDelimiterLine("``")).toBe(false);
+    expect(isFenceDelimiterLine("text")).toBe(false);
+  });
+
+  it("calculates outdent delete length matching configured unit, tab priority, or max space fallback", () => {
+    // Exact configured indent text matching
+    expect(getFencedCodeOutdentDeleteLength("    code", "spaces4")).toBe(4);
+    expect(getFencedCodeOutdentDeleteLength("  code", "spaces2")).toBe(2);
+    expect(getFencedCodeOutdentDeleteLength("      code", "spaces6")).toBe(6);
+    expect(getFencedCodeOutdentDeleteLength("        code", "spaces8")).toBe(8);
+    expect(getFencedCodeOutdentDeleteLength("\tcode", "tab")).toBe(1);
+
+    // Tab priority when unit is space-based
+    expect(getFencedCodeOutdentDeleteLength("\tcode", "spaces4")).toBe(1);
+
+    // Space fallback up to max spaces when less spaces than unit are present
+    expect(getFencedCodeOutdentDeleteLength("   code", "spaces4")).toBe(3);
+    expect(getFencedCodeOutdentDeleteLength(" code", "spaces4")).toBe(1);
+    expect(getFencedCodeOutdentDeleteLength("   code", "spaces2")).toBe(2);
+    expect(getFencedCodeOutdentDeleteLength("     code", "spaces4")).toBe(4);
+
+    // No leading spaces or tabs
+    expect(getFencedCodeOutdentDeleteLength("code", "spaces4")).toBe(0);
   });
 });
 

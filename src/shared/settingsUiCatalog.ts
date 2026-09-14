@@ -468,6 +468,39 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.captureTabInEditor")
   },
   {
+    key: "editor.fencedCodeIndentUnit",
+    category: "editor",
+    order: 155,
+    labelKey: "settings.editor.fencedCodeIndentUnit.label",
+    descriptionKey: "settings.editor.fencedCodeIndentUnit.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "spaces2",
+          labelKey: "settings.editor.fencedCodeIndentUnit.option.spaces2.label"
+        },
+        {
+          value: "spaces4",
+          labelKey: "settings.editor.fencedCodeIndentUnit.option.spaces4.label"
+        },
+        {
+          value: "spaces6",
+          labelKey: "settings.editor.fencedCodeIndentUnit.option.spaces6.label"
+        },
+        {
+          value: "spaces8",
+          labelKey: "settings.editor.fencedCodeIndentUnit.option.spaces8.label"
+        },
+        {
+          value: "tab",
+          labelKey: "settings.editor.fencedCodeIndentUnit.option.tab.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("editor.fencedCodeIndentUnit")
+  },
+  {
     // #424 Slice 7: glossary "近傍" (Nearby) search range.
     key: "search.nearby.unit",
     category: "searchReplace",

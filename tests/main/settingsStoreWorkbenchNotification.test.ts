@@ -127,7 +127,8 @@ function saveRequest(
       undoHistoryMinDepth: defaultUndoHistoryMinDepth,
       selectionHighlightMode: defaultSelectionHighlightMode,
       findGutterMarkers: defaultFindGutterMarkers,
-      captureTabInEditor: defaultCaptureTabInEditor
+      captureTabInEditor: defaultCaptureTabInEditor,
+      fencedCodeIndentUnit: "spaces4"
     },
     search: {
       nearby: {

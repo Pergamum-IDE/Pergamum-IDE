@@ -146,7 +146,8 @@ function saveRequest(
       undoHistoryMinDepth: defaultUndoHistoryMinDepth,
       selectionHighlightMode: defaultSelectionHighlightMode,
       findGutterMarkers: defaultFindGutterMarkers,
-      captureTabInEditor: defaultCaptureTabInEditor
+      captureTabInEditor: defaultCaptureTabInEditor,
+      fencedCodeIndentUnit: "spaces4"
     },
     files: {
       newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -482,7 +483,8 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         undoHistoryMinDepth: defaultUndoHistoryMinDepth,
         selectionHighlightMode: defaultSelectionHighlightMode,
         findGutterMarkers: defaultFindGutterMarkers,
-      captureTabInEditor: defaultCaptureTabInEditor
+        captureTabInEditor: defaultCaptureTabInEditor,
+        fencedCodeIndentUnit: "spaces4"
       },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -518,7 +520,8 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         undoHistoryMinDepth: defaultUndoHistoryMinDepth,
         selectionHighlightMode: defaultSelectionHighlightMode,
         findGutterMarkers: defaultFindGutterMarkers,
-      captureTabInEditor: defaultCaptureTabInEditor
+        captureTabInEditor: defaultCaptureTabInEditor,
+        fencedCodeIndentUnit: "spaces4"
       },
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }

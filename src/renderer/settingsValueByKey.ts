@@ -103,6 +103,8 @@ export function readSettingValue(
       return settings.editor.findGutterMarkers;
     case "editor.captureTabInEditor":
       return settings.editor.captureTabInEditor;
+    case "editor.fencedCodeIndentUnit":
+      return settings.editor.fencedCodeIndentUnit;
     case "files.newFile.lineEnding":
       return settings.files.newFile.lineEnding;
     case "files.newFile.encoding":

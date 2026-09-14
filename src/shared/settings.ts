@@ -142,6 +142,29 @@ export type SelectionHighlightMode = SettingValueOf<
   "editor.selectionHighlightMode"
 >;
 export type CaptureTabInEditor = SettingValueOf<"editor.captureTabInEditor">;
+export type FencedCodeIndentUnit =
+  | "spaces2"
+  | "spaces4"
+  | "spaces6"
+  | "spaces8"
+  | "tab";
+
+export function resolveFencedCodeIndentText(
+  unit: FencedCodeIndentUnit
+): string {
+  switch (unit) {
+    case "spaces2":
+      return "  ";
+    case "spaces4":
+      return "    ";
+    case "spaces6":
+      return "      ";
+    case "spaces8":
+      return "        ";
+    case "tab":
+      return "\t";
+  }
+}
 
 export interface ApplicationEditorLineEndingSettings {
   expected: ExpectedLineEnding;
@@ -181,6 +204,7 @@ export interface ApplicationEditorSettings {
   selectionHighlightMode: SelectionHighlightMode;
   findGutterMarkers: boolean;
   captureTabInEditor: boolean;
+  fencedCodeIndentUnit: FencedCodeIndentUnit;
 }
 
 export interface ApplicationNewFileSettings {
@@ -376,6 +400,7 @@ export interface EffectiveEditorSettings {
   selectionHighlightMode: SelectionHighlightMode;
   findGutterMarkers: boolean;
   captureTabInEditor: boolean;
+  fencedCodeIndentUnit: FencedCodeIndentUnit;
 }
 
 export interface EffectiveFilesSettings {
@@ -545,7 +570,8 @@ export const builtInDefaultSettings: EffectiveSettings = {
       "editor.selectionHighlightMode"
     ),
     findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers"),
-    captureTabInEditor: getCatalogDefaultValue("editor.captureTabInEditor")
+    captureTabInEditor: getCatalogDefaultValue("editor.captureTabInEditor"),
+    fencedCodeIndentUnit: getCatalogDefaultValue("editor.fencedCodeIndentUnit")
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -644,7 +670,8 @@ export const defaultApplicationSettings: ApplicationSettings = {
     selectionHighlightMode:
       builtInDefaultSettings.editor.selectionHighlightMode,
     findGutterMarkers: builtInDefaultSettings.editor.findGutterMarkers,
-    captureTabInEditor: builtInDefaultSettings.editor.captureTabInEditor
+    captureTabInEditor: builtInDefaultSettings.editor.captureTabInEditor,
+    fencedCodeIndentUnit: builtInDefaultSettings.editor.fencedCodeIndentUnit
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -741,7 +768,9 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       selectionHighlightMode:
         defaultApplicationSettings.editor.selectionHighlightMode,
       findGutterMarkers: defaultApplicationSettings.editor.findGutterMarkers,
-      captureTabInEditor: defaultApplicationSettings.editor.captureTabInEditor
+      captureTabInEditor: defaultApplicationSettings.editor.captureTabInEditor,
+      fencedCodeIndentUnit:
+        defaultApplicationSettings.editor.fencedCodeIndentUnit
     },
     search: cloneDefaultSearchSettings(),
     files: {
@@ -893,7 +922,8 @@ export function resolveEffectiveSettings(
       undoHistoryMinDepth: applicationSettings.editor.undoHistoryMinDepth,
       selectionHighlightMode: applicationSettings.editor.selectionHighlightMode,
       findGutterMarkers: applicationSettings.editor.findGutterMarkers,
-      captureTabInEditor: applicationSettings.editor.captureTabInEditor
+      captureTabInEditor: applicationSettings.editor.captureTabInEditor,
+      fencedCodeIndentUnit: applicationSettings.editor.fencedCodeIndentUnit
     },
     // #424 Slice 7: nearby search range — Project override > Application >
     // Built-in, per key (the project override is sparse).

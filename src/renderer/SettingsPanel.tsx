@@ -2,6 +2,7 @@ import { useState } from "react";
 import type {
   ApplicationSettings,
   ExpectedLineEnding,
+  FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
   NewFileEncoding,
   NewFileLineEnding,
@@ -471,6 +472,13 @@ function buildNextSettings(
         editor: {
           ...settings.editor,
           captureTabInEditor: Boolean(rawValue)
+        }
+      });
+    case "editor.fencedCodeIndentUnit":
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          fencedCodeIndentUnit: rawValue as FencedCodeIndentUnit
         }
       });
     case "files.newFile.lineEnding":

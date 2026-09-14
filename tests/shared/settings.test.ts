@@ -8,6 +8,7 @@ import {
   defaultPreviewRenderer,
   isPreviewRendererId,
   resolveEffectiveSettings,
+  resolveFencedCodeIndentText,
   type ApplicationSettings,
   type ProjectSettings
 } from "../../src/shared/settings";
@@ -59,6 +60,41 @@ describe("existing implementation alignment: preview.renderer (#150)", () => {
         preview: { renderer: "markdown" }
       }).preview.renderer
     ).toBe("markdown");
+  });
+});
+
+describe("editor.fencedCodeIndentUnit wiring (#474)", () => {
+  it("resolveFencedCodeIndentText returns expected text for each unit", () => {
+    expect(resolveFencedCodeIndentText("spaces2")).toBe("  ");
+    expect(resolveFencedCodeIndentText("spaces4")).toBe("    ");
+    expect(resolveFencedCodeIndentText("spaces6")).toBe("      ");
+    expect(resolveFencedCodeIndentText("spaces8")).toBe("        ");
+    expect(resolveFencedCodeIndentText("tab")).toBe("\t");
+  });
+
+  it("builtInDefaultSettings / defaultApplicationSettings / createDefaultApplicationSettings derive editor.fencedCodeIndentUnit from catalog default ('spaces4')", () => {
+    const catalogDefault = getCatalogDefaultValue("editor.fencedCodeIndentUnit");
+
+    expect(catalogDefault).toBe("spaces4");
+    expect(builtInDefaultSettings.editor.fencedCodeIndentUnit).toBe(catalogDefault);
+    expect(defaultApplicationSettings.editor.fencedCodeIndentUnit).toBe(catalogDefault);
+    expect(createDefaultApplicationSettings().editor.fencedCodeIndentUnit).toBe(catalogDefault);
+  });
+
+  it("resolveEffectiveSettings passes editor.fencedCodeIndentUnit through from application settings (applicationOnly)", () => {
+    expect(
+      resolveEffectiveSettings(
+        { ...defaultApplicationSettings, editor: { ...defaultApplicationSettings.editor, fencedCodeIndentUnit: "spaces2" } },
+        undefined
+      ).editor.fencedCodeIndentUnit
+    ).toBe("spaces2");
+
+    expect(
+      resolveEffectiveSettings(
+        { ...defaultApplicationSettings, editor: { ...defaultApplicationSettings.editor, fencedCodeIndentUnit: "tab" } },
+        {}
+      ).editor.fencedCodeIndentUnit
+    ).toBe("tab");
   });
 });
 

@@ -711,6 +711,16 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "editor.fencedCodeIndentUnit": defineEnumSetting({
+    key: "editor.fencedCodeIndentUnit",
+    scope: "applicationOnly",
+    enumValues: ["spaces2", "spaces4", "spaces6", "spaces8", "tab"],
+    defaultValue: "spaces4",
+    labelKey: "settings.editor.fencedCodeIndentUnit.label",
+    descriptionKey: "settings.editor.fencedCodeIndentUnit.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   // #252: diagnostic-only setting for the line-ending marker/distribution
   // UI — never used to decide an existing break's kind, a new break's
   // inherited kind, or a save-time conversion. Kept fully separate from

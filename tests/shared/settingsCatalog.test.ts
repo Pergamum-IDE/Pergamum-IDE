@@ -499,6 +499,23 @@ describe("Settings Catalog Foundation (#150)", () => {
         validateCatalogValue("files.newFile.encoding", "shift_jis")
       ).toEqual({ ok: false, failure: "enumValue" });
     });
+
+    it("accepts all editor.fencedCodeIndentUnit enum values and rejects invalid values (#474)", () => {
+      for (const unit of ["spaces2", "spaces4", "spaces6", "spaces8", "tab"] as const) {
+        expect(validateCatalogValue("editor.fencedCodeIndentUnit", unit)).toEqual({
+          ok: true
+        });
+      }
+      expect(
+        validateCatalogValue("editor.fencedCodeIndentUnit", "spaces3")
+      ).toEqual({ ok: false, failure: "enumValue" });
+      expect(
+        validateCatalogValue("editor.fencedCodeIndentUnit", "tabs")
+      ).toEqual({ ok: false, failure: "enumValue" });
+      expect(
+        validateCatalogValue("editor.fencedCodeIndentUnit", 4)
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
   });
 
   describe("invalid value result shape", () => {
@@ -1123,6 +1140,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.markdownComments",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.whitespace",
+        "editor.fencedCodeIndentUnit",
         "editor.findGutterMarkers",
         "editor.fontFamily",
         "editor.lineEnding.expected",
@@ -1220,6 +1238,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.characterCount.exclude.markdownComments",
           "editor.characterCount.exclude.markdownSyntax",
           "editor.characterCount.exclude.whitespace",
+          "editor.fencedCodeIndentUnit",
           "editor.findGutterMarkers",
           "editor.fontFamily",
           "editor.lineEnding.expected",

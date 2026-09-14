@@ -433,6 +433,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "editor.findGutterMarkers",
       "editor.captureTabInEditor",
       "editor.paragraphIndent.excludeLeadingCharacters",
+      "editor.fencedCodeIndentUnit",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
       "editor.whitespace.renderIdeographicSpace",
@@ -1070,7 +1071,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         undoHistoryMinDepth: settings.editor.undoHistoryMinDepth,
         selectionHighlightMode: settings.editor.selectionHighlightMode,
         findGutterMarkers: settings.editor.findGutterMarkers,
-        captureTabInEditor: settings.editor.captureTabInEditor
+        captureTabInEditor: settings.editor.captureTabInEditor,
+        fencedCodeIndentUnit: settings.editor.fencedCodeIndentUnit
       },
       files: settings.files
     });
