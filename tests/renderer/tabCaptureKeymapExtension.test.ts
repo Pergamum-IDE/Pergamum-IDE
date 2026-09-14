@@ -73,13 +73,34 @@ describe("tabCaptureKeymapExtension (#467)", () => {
   });
 
   describe("ON (captureTabInEditor = true)", () => {
-    it("Tab key indents unordered list item by 2 spaces", () => {
+    it("Tab key indents sinkable unordered list item by 2 spaces", () => {
+      const doc = "- parent\n- item";
+      const view = mountEditor({ doc, captureTabInEditor: true });
+
+      try {
+        view.dispatch({
+          selection: EditorSelection.cursor(doc.indexOf("- item")),
+        });
+
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("- parent\n  - item");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Tab key captures first unordered list item but leaves it unchanged", () => {
       const view = mountEditor({ doc: "- item", captureTabInEditor: true });
+
       try {
         const event = keydownEvent("Tab");
         view.contentDOM.dispatchEvent(event);
+
         expect(event.defaultPrevented).toBe(true);
-        expect(view.state.doc.toString()).toBe("  - item");
+        expect(view.state.doc.toString()).toBe("- item");
       } finally {
         view.destroy();
       }
