@@ -209,7 +209,7 @@ describe("planIndentTransaction (#463)", () => {
       expect(buildLineChange(line2, classifyLine(line2.text), "indent", state.doc)).toEqual({ from: line2.from, insert: "  " });
       expect(buildLineChange(line3, classifyLine(line3.text), "indent", state.doc)).toBeNull();
       expect(buildLineChange(line4, classifyLine(line4.text), "indent", state.doc)).toEqual({ from: line4.from, insert: "  " });
-      expect(buildLineChange(line5, classifyLine(line5.text), "indent", state.doc)).toBeNull();
+      expect(buildLineChange(line5, classifyLine(line5.text), "indent", state.doc)).toEqual({ from: line5.from, to: line5.to, insert: "> > quote" });
       expect(buildLineChange(line6, classifyLine(line6.text), "indent", state.doc)).toBeNull();
     });
   });
@@ -421,6 +421,126 @@ describe("planIndentTransaction (#463)", () => {
       expect(plan.changes).toEqual([
         { from: 14, insert: "  " },
         { from: 41, to: 53, insert: "   1. ordered 2" }
+      ]);
+    });
+  });
+
+  describe("blockquote indent / outdent (#472)", () => {
+    it("indents blockquote line from Q=1 to Q=2 (> quote -> > > quote)", () => {
+      const state = stateFor("> quote", 2);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 7, insert: "> > quote" }]);
+    });
+
+    it("indents nested blockquote line from Q=2 to Q=3 (> > quote -> > > > quote)", () => {
+      const state = stateFor("> > quote", 3);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 9, insert: "> > > quote" }]);
+    });
+
+    it("indents compact marker blockquote line into canonical spaced style (>> quote -> > > > quote)", () => {
+      const state = stateFor(">> quote", 2);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 8, insert: "> > > quote" }]);
+    });
+
+    it("outdents blockquote line from Q=2 to Q=1 (> > quote -> > quote)", () => {
+      const state = stateFor("> > quote", 3);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 9, insert: "> quote" }]);
+    });
+
+    it("outdents compact marker blockquote line from Q=2 to Q=1 (>> quote -> > quote)", () => {
+      const state = stateFor(">> quote", 2);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 8, insert: "> quote" }]);
+    });
+
+    it("outermost blockquote outdent removes marker (> quote -> quote)", () => {
+      const state = stateFor("> quote", 2);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 7, insert: "quote" }]);
+    });
+
+    it("outermost blockquote without space outdent removes marker (>quote -> quote)", () => {
+      const state = stateFor(">quote", 2);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 6, insert: "quote" }]);
+    });
+
+    it("empty blockquote line indent (> -> > >)", () => {
+      const state = stateFor(">", 1);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 1, insert: "> >" }]);
+    });
+
+    it("empty blockquote line outdent (> -> empty line)", () => {
+      const state = stateFor(">", 1);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 1, insert: "" }]);
+    });
+
+    it("empty blockquote line with space outdent (>  -> empty line)", () => {
+      const state = stateFor("> ", 1);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 2, insert: "" }]);
+    });
+
+    it("indented blockquote line indent preserves leading spaces (  > quote ->   > > quote)", () => {
+      const state = stateFor("  > quote", 4);
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 9, insert: "  > > quote" }]);
+    });
+
+    it("indented blockquote line outdent preserves leading spaces (  > quote ->   quote)", () => {
+      const state = stateFor("  > quote", 4);
+      const plan = planIndentTransaction(state, "outdent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
+      expect(plan.changes).toEqual([{ from: 0, to: 9, insert: "  quote" }]);
+    });
+
+    it("does NOT modify > lines inside a fenced code block", () => {
+      const doc = "```md\n> quote inside code block\n```";
+      const state = stateFor(doc, doc.indexOf("> quote"));
+      const planIndent = planIndentTransaction(state, "indent");
+      expect(planIndent.changes).toEqual([]);
+      expect(planIndent.result.kind).toBe("noop");
+
+      const planOutdent = planIndentTransaction(state, "outdent");
+      expect(planOutdent.changes).toEqual([]);
+      expect(planOutdent.result.kind).toBe("noop");
+    });
+
+    it("read-only editor: blockquote indent/outdent is no-op", () => {
+      const state = stateFor("> quote", 2, { readOnly: true });
+      expect(planIndentTransaction(state, "indent").changes).toEqual([]);
+      expect(planIndentTransaction(state, "outdent").changes).toEqual([]);
+    });
+
+    it("mixed selection: indents blockquote line and sinkable list line, skipping paragraph and thematic break", () => {
+      const doc = "top level paragraph\n> quote\n- parent\n- list item\n---";
+      const state = EditorState.create({
+        doc,
+        selection: EditorSelection.single(0, doc.length),
+        extensions: [EditorState.allowMultipleSelections.of(true)]
+      });
+      const plan = planIndentTransaction(state, "indent");
+      expect(plan.result).toEqual({ kind: "applied", changedLineCount: 2 });
+      // Line 2 ("> quote", offset 20 -> "> > quote") and Line 4 ("- list item", offset 37 -> 2 spaces)
+      expect(plan.changes).toEqual([
+        { from: 20, to: 27, insert: "> > quote" },
+        { from: 37, insert: "  " }
       ]);
     });
   });

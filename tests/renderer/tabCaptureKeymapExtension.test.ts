@@ -156,6 +156,44 @@ describe("tabCaptureKeymapExtension (#467)", () => {
       }
     });
 
+    it("Tab key indents blockquote line when captureTabInEditor is true", () => {
+      const doc = "> quote";
+      const view = mountEditor({ doc, captureTabInEditor: true });
+
+      try {
+        view.dispatch({
+          selection: EditorSelection.cursor(2),
+        });
+
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("> > quote");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Shift+Tab key outdents nested blockquote line when captureTabInEditor is true", () => {
+      const doc = "> > quote";
+      const view = mountEditor({ doc, captureTabInEditor: true });
+
+      try {
+        view.dispatch({
+          selection: EditorSelection.cursor(3),
+        });
+
+        const event = keydownEvent("Tab", { shiftKey: true });
+        view.contentDOM.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("> quote");
+      } finally {
+        view.destroy();
+      }
+    });
+
     it("read-only editor: Tab key is consumed but produces NO document changes", () => {
       const view = mountEditor({
         doc: "- item",
