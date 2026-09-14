@@ -98,6 +98,7 @@ import {
   unregisterEditorViewImageLinkDiagnosticsOptions,
   type MarkdownImageLinkDiagnosticsExtensionOptions
 } from "./markdownImageLinkDiagnosticsExtension";
+import { createTabCaptureKeymapExtension } from "./tabCaptureKeymapExtension";
 import type {
   MarkdownImageLinkDiagnosticReason,
   ProjectLocalImageResolutionContext
@@ -183,6 +184,7 @@ interface MarkdownEditorProps {
    * highlighting and from the Find panel's mark-all text highlight toggle.
    */
   findGutterMarkers?: boolean;
+  captureTabInEditor?: boolean;
   /**
    * `editor.whitespace.*` (#256) — which whitespace categories to paint
    * display-only markers for (ideographic space, ASCII space, tab, other
@@ -521,6 +523,7 @@ export function MarkdownEditor({
   undoHistoryMinDepth = 100,
   selectionHighlightMode = "default",
   findGutterMarkers = false,
+  captureTabInEditor = false,
   whitespaceSettings,
   pendingSelection,
   onPendingSelectionApplied,
@@ -562,6 +565,8 @@ export function MarkdownEditor({
   // a compartment reconfigure (tearing down / rebuilding just this layer),
   // never an EditorView rebuild.
   const whitespaceCompartmentRef = useRef<Compartment | null>(null);
+  const tabCaptureCompartmentRef = useRef<Compartment | null>(null);
+  const captureTabInEditorRef = useRef(captureTabInEditor);
   const onChangeRef = useRef(onChange);
   // #272: read from a ref by the mount effect's cleanup (which is []-deps
   // and must not re-subscribe) so the outgoing View State is reported with
@@ -711,6 +716,11 @@ export function MarkdownEditor({
   }
   const whitespaceCompartment = whitespaceCompartmentRef.current;
 
+  if (!tabCaptureCompartmentRef.current) {
+    tabCaptureCompartmentRef.current = new Compartment();
+  }
+  const tabCaptureCompartment = tabCaptureCompartmentRef.current;
+
   // #375 Document Map: hoisted out of the mount effect (rather than defined
   // inline there, as before #387) so the document-switch effect below can
   // build a fresh document's updateListener identically via
@@ -829,6 +839,8 @@ export function MarkdownEditor({
       selectionHighlightModeRef,
       findGutterMarkerCompartment: activeFindGutterMarkerCompartment,
       findGutterMarkersRef,
+      tabCaptureCompartment,
+      captureTabInEditorRef,
       glossaryCompletionRef,
       activeFindDiagnostics: {
         editorInstanceId: activeFindEditorInstanceId,
@@ -1407,6 +1419,22 @@ export function MarkdownEditor({
       )
     });
   }, [findGutterMarkers]);
+
+  useEffect(() => {
+    captureTabInEditorRef.current = captureTabInEditor;
+
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: tabCaptureCompartment.reconfigure(
+        createTabCaptureKeymapExtension(captureTabInEditor)
+      )
+    });
+  }, [captureTabInEditor]);
 
   useEffect(() => {
     const view = viewRef.current;

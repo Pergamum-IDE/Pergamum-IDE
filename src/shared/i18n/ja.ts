@@ -1268,6 +1268,8 @@ export const jaTranslations = {
   "settings.editor.selectionHighlightMode.option.smart.description": "Pergamum の検索ルールに基づいて、日本語境界を考慮したハイライトを行います。",
   "settings.editor.findGutterMarkers.description": "Ctrl+F / Ctrl+H の検索一致行に双眼鏡アイコンを表示します。",
   "settings.editor.findGutterMarkers.label": "検索一致行をガターに表示",
+  "settings.editor.captureTabInEditor.description": "エディタ内で Tab / Shift+Tab をインデント操作に使用します。オフの場合、Tab は通常のフォーカス移動に使われます。オンの場合でも Escape→Tab または Ctrl+M でエディタから移動できます。",
+  "settings.editor.captureTabInEditor.label": "Tabキーによるインデント",
   "settings.files.newFile.encoding.description": "新しく作成するファイルの既定の文字エンコーディングです。現在はUTF-8のみです。",
   "settings.files.newFile.encoding.label": "新規ファイルの文字エンコーディング",
   "settings.files.newFile.lineEnding.description": "新しく作成するファイルの既定の改行コードです。",

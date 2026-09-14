@@ -67,6 +67,9 @@ const defaultSelectionHighlightMode = getCatalogDefaultValue(
 const defaultFindGutterMarkers = getCatalogDefaultValue(
   "editor.findGutterMarkers"
 );
+const defaultCaptureTabInEditor = getCatalogDefaultValue(
+  "editor.captureTabInEditor"
+);
 
 const defaultCharacterCountSettings = {
   exclude: {
@@ -161,7 +164,8 @@ function validSaveRequest(
       characterCount: defaultCharacterCountSettings,
       undoHistoryMinDepth: defaultUndoHistoryMinDepth,
       selectionHighlightMode: defaultSelectionHighlightMode,
-      findGutterMarkers: defaultFindGutterMarkers
+      findGutterMarkers: defaultFindGutterMarkers,
+      captureTabInEditor: defaultCaptureTabInEditor
     },
     search: {
       nearby: {
@@ -579,7 +583,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           },
           undoHistoryMinDepth: 1000,
           selectionHighlightMode: "smart",
-          findGutterMarkers: true
+          findGutterMarkers: true,
+          captureTabInEditor: false
         },
         commandPalette: {
           footerDetail: {
@@ -645,7 +650,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       },
       undoHistoryMinDepth: 1000,
       selectionHighlightMode: "smart",
-      findGutterMarkers: true
+      findGutterMarkers: true,
+      captureTabInEditor: false
     });
     expect(written.files).toEqual({
       newFile: {
@@ -690,7 +696,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           characterCount: defaultCharacterCountSettings,
           undoHistoryMinDepth: 1000,
           selectionHighlightMode: defaultSelectionHighlightMode,
-          findGutterMarkers: defaultFindGutterMarkers
+          findGutterMarkers: defaultFindGutterMarkers,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       })
     );
@@ -722,7 +729,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           characterCount: defaultCharacterCountSettings,
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: "off",
-          findGutterMarkers: true
+          findGutterMarkers: true,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       })
     );
@@ -964,7 +972,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           characterCount: defaultCharacterCountSettings,
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
-          findGutterMarkers: defaultFindGutterMarkers
+          findGutterMarkers: defaultFindGutterMarkers,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       }),
       validSaveRequest({
@@ -987,7 +996,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           characterCount: defaultCharacterCountSettings,
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
-          findGutterMarkers: defaultFindGutterMarkers
+          findGutterMarkers: defaultFindGutterMarkers,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       }),
       validSaveRequest({
@@ -1003,7 +1013,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           },
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
-          findGutterMarkers: defaultFindGutterMarkers
+          findGutterMarkers: defaultFindGutterMarkers,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       }),
       validSaveRequest({
@@ -1017,7 +1028,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           characterCount: defaultCharacterCountSettings,
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
-          findGutterMarkers: defaultFindGutterMarkers
+          findGutterMarkers: defaultFindGutterMarkers,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       }),
       validSaveRequest({
@@ -1031,7 +1043,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
             | "off"
             | "default"
             | "smart",
-          findGutterMarkers: defaultFindGutterMarkers
+          findGutterMarkers: defaultFindGutterMarkers,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       }),
       validSaveRequest({
@@ -1042,7 +1055,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           characterCount: defaultCharacterCountSettings,
           undoHistoryMinDepth: defaultUndoHistoryMinDepth,
           selectionHighlightMode: defaultSelectionHighlightMode,
-          findGutterMarkers: "yes" as unknown as boolean
+          findGutterMarkers: "yes" as unknown as boolean,
+          captureTabInEditor: defaultCaptureTabInEditor
         }
       }),
       validSaveRequest({

@@ -459,6 +459,15 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.findGutterMarkers")
   },
   {
+    key: "editor.captureTabInEditor",
+    category: "editor",
+    order: 150,
+    labelKey: "settings.editor.captureTabInEditor.label",
+    descriptionKey: "settings.editor.captureTabInEditor.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("editor.captureTabInEditor")
+  },
+  {
     // #424 Slice 7: glossary "近傍" (Nearby) search range.
     key: "search.nearby.unit",
     category: "searchReplace",

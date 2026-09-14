@@ -141,6 +141,7 @@ export type UndoHistoryMinDepth = SettingValueOf<
 export type SelectionHighlightMode = SettingValueOf<
   "editor.selectionHighlightMode"
 >;
+export type CaptureTabInEditor = SettingValueOf<"editor.captureTabInEditor">;
 
 export interface ApplicationEditorLineEndingSettings {
   expected: ExpectedLineEnding;
@@ -179,6 +180,7 @@ export interface ApplicationEditorSettings {
   undoHistoryMinDepth: UndoHistoryMinDepth;
   selectionHighlightMode: SelectionHighlightMode;
   findGutterMarkers: boolean;
+  captureTabInEditor: boolean;
 }
 
 export interface ApplicationNewFileSettings {
@@ -373,6 +375,7 @@ export interface EffectiveEditorSettings {
   undoHistoryMinDepth: UndoHistoryMinDepth;
   selectionHighlightMode: SelectionHighlightMode;
   findGutterMarkers: boolean;
+  captureTabInEditor: boolean;
 }
 
 export interface EffectiveFilesSettings {
@@ -541,7 +544,8 @@ export const builtInDefaultSettings: EffectiveSettings = {
     selectionHighlightMode: getCatalogDefaultValue(
       "editor.selectionHighlightMode"
     ),
-    findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers")
+    findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers"),
+    captureTabInEditor: getCatalogDefaultValue("editor.captureTabInEditor")
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -639,7 +643,8 @@ export const defaultApplicationSettings: ApplicationSettings = {
     undoHistoryMinDepth: builtInDefaultSettings.editor.undoHistoryMinDepth,
     selectionHighlightMode:
       builtInDefaultSettings.editor.selectionHighlightMode,
-    findGutterMarkers: builtInDefaultSettings.editor.findGutterMarkers
+    findGutterMarkers: builtInDefaultSettings.editor.findGutterMarkers,
+    captureTabInEditor: builtInDefaultSettings.editor.captureTabInEditor
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -735,7 +740,8 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
         defaultApplicationSettings.editor.undoHistoryMinDepth,
       selectionHighlightMode:
         defaultApplicationSettings.editor.selectionHighlightMode,
-      findGutterMarkers: defaultApplicationSettings.editor.findGutterMarkers
+      findGutterMarkers: defaultApplicationSettings.editor.findGutterMarkers,
+      captureTabInEditor: defaultApplicationSettings.editor.captureTabInEditor
     },
     search: cloneDefaultSearchSettings(),
     files: {
@@ -886,7 +892,8 @@ export function resolveEffectiveSettings(
       // fallback-free pass-through as lineEnding/whitespace above.
       undoHistoryMinDepth: applicationSettings.editor.undoHistoryMinDepth,
       selectionHighlightMode: applicationSettings.editor.selectionHighlightMode,
-      findGutterMarkers: applicationSettings.editor.findGutterMarkers
+      findGutterMarkers: applicationSettings.editor.findGutterMarkers,
+      captureTabInEditor: applicationSettings.editor.captureTabInEditor
     },
     // #424 Slice 7: nearby search range — Project override > Application >
     // Built-in, per key (the project override is sparse).

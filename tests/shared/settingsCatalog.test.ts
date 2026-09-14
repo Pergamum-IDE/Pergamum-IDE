@@ -917,6 +917,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.sound.keypress.enabled",
         "commandPalette.footerDetail.enable",
         "editor.findGutterMarkers",
+        "editor.captureTabInEditor",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderTab",
@@ -1116,6 +1117,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       const editorEntries = getCatalogEntriesByArea("editor");
 
       expect(editorEntries.map((entry) => entry.key).sort()).toEqual([
+        "editor.captureTabInEditor",
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.lineBreaks",
         "editor.characterCount.exclude.markdownComments",
@@ -1212,6 +1214,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "commandPalette.footerDetail.marquee.delay",
           "commandPalette.footerDetail.marquee.speed",
           "documentMap.dialogueDelimiterPairs",
+          "editor.captureTabInEditor",
           "editor.characterCount.exclude.headings",
           "editor.characterCount.exclude.lineBreaks",
           "editor.characterCount.exclude.markdownComments",
@@ -1911,6 +1914,21 @@ describe("Settings Catalog Foundation (#150)", () => {
           { open: "「", close: "」", color: "invalid-color" }
         ])
       ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("defines editor.captureTabInEditor as boolean with default false (#467)", () => {
+      const entry = getCatalogEntry("editor.captureTabInEditor");
+      expect(entry).toEqual({
+        key: "editor.captureTabInEditor",
+        type: "boolean",
+        scope: "applicationOnly",
+        defaultValue: false,
+        labelKey: "settings.editor.captureTabInEditor.label",
+        descriptionKey: "settings.editor.captureTabInEditor.description",
+        deprecatedAliases: [],
+        migrationNotes: []
+      });
+      expect(getCatalogDefaultValue("editor.captureTabInEditor")).toBe(false);
     });
   });
 });

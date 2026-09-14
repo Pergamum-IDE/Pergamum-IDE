@@ -431,6 +431,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "editor.undoHistoryMinDepth",
       "editor.selectionHighlightMode",
       "editor.findGutterMarkers",
+      "editor.captureTabInEditor",
       "editor.paragraphIndent.excludeLeadingCharacters",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
@@ -1068,7 +1069,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         characterCount: settings.editor.characterCount,
         undoHistoryMinDepth: settings.editor.undoHistoryMinDepth,
         selectionHighlightMode: settings.editor.selectionHighlightMode,
-        findGutterMarkers: settings.editor.findGutterMarkers
+        findGutterMarkers: settings.editor.findGutterMarkers,
+        captureTabInEditor: settings.editor.captureTabInEditor
       },
       files: settings.files
     });
