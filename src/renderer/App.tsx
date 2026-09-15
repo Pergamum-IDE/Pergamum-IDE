@@ -149,6 +149,8 @@ import {
   type CurrentEditor
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
+import { useTabSwitchShortcuts } from "./editorTabShortcuts";
+import { type WorkspaceTab } from "./workspaceTabs";
 import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
 import { MarkdownImageLinkMoveUpdateDialog } from "./dialog/MarkdownImageLinkMoveUpdateDialog";
@@ -4088,6 +4090,24 @@ export function App(): JSX.Element {
       setActiveSpecialTabId(tabId);
     }
   }
+
+  function activateWorkspaceTab(tab: WorkspaceTab): void {
+    if (tab.kind === "document") {
+      activateDocument(tab.id);
+      return;
+    }
+
+    activateSpecialTab(tab.id);
+  }
+
+  // #480: Alt+Left / Alt+Right tab switching shortcuts.
+  useTabSwitchShortcuts({
+    tabs,
+    specialTabs,
+    workspaceTabOrder,
+    activeWorkspaceTabId,
+    onActivateWorkspaceTab: activateWorkspaceTab
+  });
 
   function closeSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings") {

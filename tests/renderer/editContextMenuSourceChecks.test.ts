@@ -97,12 +97,16 @@ function allSourceText(): string {
  * the panel is a CodeMirror `EditorView` domEventHandler
  * (find/activeFindKeymapExtension.ts), not an app/global listener either.
  *
- * find/ActiveFindGlossarySelect.tsx (#424 Slice 6) is the same category: the
+ * ActiveFindGlossarySelect.tsx (#424 Slice 6) is the same category: the
  * glossary-search-mode selector's `onKeyDown` is Arrow / Enter / Escape /
  * Backspace / Ctrl+Space for its OWN focused filter `<input>` (a combobox), and
  * it forwards keys it does not own (Ctrl+F / Ctrl+H, Escape-closes-the-panel)
  * back to ActiveFindPanel via `onUnhandledKeyDown`. Same IME guard, mounted
  * only while the panel is open in glossary mode.
+ *
+ * editorTabShortcuts.ts / App.tsx (#480) is the same category of exception:
+ * the Alt+Left / Alt+Right document tab switching shortcut listener, scoped with
+ * strict text-input and modal guards.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -118,7 +122,9 @@ const onKeyDownExemptFileNames = new Set([
   "DialogueDelimiterPairsEditor.tsx",
   "GlossaryEntryManager.tsx",
   "ActiveFindPanel.tsx",
-  "ActiveFindGlossarySelect.tsx"
+  "ActiveFindGlossarySelect.tsx",
+  "editorTabShortcuts.ts",
+  "App.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {
