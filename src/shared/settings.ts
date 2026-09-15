@@ -194,6 +194,23 @@ export interface ApplicationEditorCharacterCountSettings {
   exclude: ApplicationEditorCharacterCountExcludeSettings;
 }
 
+export type EmphasisMarkRule = "aozora" | "kakuyomu" | "narou";
+
+export type AozoraEmphasisMark =
+  | "whiteSesame"
+  | "sesame"
+  | "blackCircle"
+  | "whiteCircle"
+  | "blackTriangle"
+  | "whiteTriangle"
+  | "doubleCircle";
+
+export interface ApplicationEditorEmphasisMarkSettings {
+  rule: EmphasisMarkRule;
+  aozoraMark: AozoraEmphasisMark;
+  narouMarkText: string;
+}
+
 export interface ApplicationEditorSettings {
   fontFamily?: string;
   lineEnding: ApplicationEditorLineEndingSettings;
@@ -205,6 +222,7 @@ export interface ApplicationEditorSettings {
   findGutterMarkers: boolean;
   captureTabInEditor: boolean;
   fencedCodeIndentUnit: FencedCodeIndentUnit;
+  emphasisMark?: ApplicationEditorEmphasisMarkSettings;
 }
 
 export interface ApplicationNewFileSettings {
@@ -321,11 +339,18 @@ export interface ProjectEditorLineEndingSettings {
   expected?: ExpectedLineEnding;
 }
 
+export interface ProjectEditorEmphasisMarkSettings {
+  rule?: EmphasisMarkRule;
+  aozoraMark?: AozoraEmphasisMark;
+  narouMarkText?: string;
+}
+
 export interface ProjectEditorSettings {
   fontFamily?: string;
   paragraphIndent?: ProjectEditorParagraphIndentSettings;
   characterCount?: ProjectEditorCharacterCountSettings;
   lineEnding?: ProjectEditorLineEndingSettings;
+  emphasisMark?: ProjectEditorEmphasisMarkSettings;
 }
 
 export interface ProjectFilesNewFileSettings {
@@ -401,6 +426,7 @@ export interface EffectiveEditorSettings {
   findGutterMarkers: boolean;
   captureTabInEditor: boolean;
   fencedCodeIndentUnit: FencedCodeIndentUnit;
+  emphasisMark: ApplicationEditorEmphasisMarkSettings;
 }
 
 export interface EffectiveFilesSettings {
@@ -571,7 +597,12 @@ export const builtInDefaultSettings: EffectiveSettings = {
     ),
     findGutterMarkers: getCatalogDefaultValue("editor.findGutterMarkers"),
     captureTabInEditor: getCatalogDefaultValue("editor.captureTabInEditor"),
-    fencedCodeIndentUnit: getCatalogDefaultValue("editor.fencedCodeIndentUnit")
+    fencedCodeIndentUnit: getCatalogDefaultValue("editor.fencedCodeIndentUnit"),
+    emphasisMark: {
+      rule: getCatalogDefaultValue("editor.emphasisMark.rule"),
+      aozoraMark: getCatalogDefaultValue("editor.emphasisMark.aozoraMark"),
+      narouMarkText: getCatalogDefaultValue("editor.emphasisMark.narouMarkText")
+    }
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -671,7 +702,12 @@ export const defaultApplicationSettings: ApplicationSettings = {
       builtInDefaultSettings.editor.selectionHighlightMode,
     findGutterMarkers: builtInDefaultSettings.editor.findGutterMarkers,
     captureTabInEditor: builtInDefaultSettings.editor.captureTabInEditor,
-    fencedCodeIndentUnit: builtInDefaultSettings.editor.fencedCodeIndentUnit
+    fencedCodeIndentUnit: builtInDefaultSettings.editor.fencedCodeIndentUnit,
+    emphasisMark: {
+      rule: builtInDefaultSettings.editor.emphasisMark.rule,
+      aozoraMark: builtInDefaultSettings.editor.emphasisMark.aozoraMark,
+      narouMarkText: builtInDefaultSettings.editor.emphasisMark.narouMarkText
+    }
   },
   search: cloneDefaultSearchSettings(),
   files: {
@@ -770,7 +806,16 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       findGutterMarkers: defaultApplicationSettings.editor.findGutterMarkers,
       captureTabInEditor: defaultApplicationSettings.editor.captureTabInEditor,
       fencedCodeIndentUnit:
-        defaultApplicationSettings.editor.fencedCodeIndentUnit
+        defaultApplicationSettings.editor.fencedCodeIndentUnit,
+      emphasisMark: {
+        rule:
+          defaultApplicationSettings.editor.emphasisMark?.rule ?? "aozora",
+        aozoraMark:
+          defaultApplicationSettings.editor.emphasisMark?.aozoraMark ??
+          "whiteSesame",
+        narouMarkText:
+          defaultApplicationSettings.editor.emphasisMark?.narouMarkText ?? "・"
+      }
     },
     search: cloneDefaultSearchSettings(),
     files: {
@@ -923,7 +968,21 @@ export function resolveEffectiveSettings(
       selectionHighlightMode: applicationSettings.editor.selectionHighlightMode,
       findGutterMarkers: applicationSettings.editor.findGutterMarkers,
       captureTabInEditor: applicationSettings.editor.captureTabInEditor,
-      fencedCodeIndentUnit: applicationSettings.editor.fencedCodeIndentUnit
+      fencedCodeIndentUnit: applicationSettings.editor.fencedCodeIndentUnit,
+      emphasisMark: {
+        rule:
+          projectSettings?.editor?.emphasisMark?.rule ??
+          applicationSettings.editor.emphasisMark?.rule ??
+          builtInDefaultSettings.editor.emphasisMark.rule,
+        aozoraMark:
+          projectSettings?.editor?.emphasisMark?.aozoraMark ??
+          applicationSettings.editor.emphasisMark?.aozoraMark ??
+          builtInDefaultSettings.editor.emphasisMark.aozoraMark,
+        narouMarkText:
+          projectSettings?.editor?.emphasisMark?.narouMarkText ??
+          applicationSettings.editor.emphasisMark?.narouMarkText ??
+          builtInDefaultSettings.editor.emphasisMark.narouMarkText
+      }
     },
     // #424 Slice 7: nearby search range — Project override > Application >
     // Built-in, per key (the project override is sparse).

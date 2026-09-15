@@ -459,6 +459,20 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     "editor.fencedCodeIndentUnit",
     editorValue?.fencedCodeIndentUnit
   ).value;
+  const emphasisMark = {
+    rule: resolveCatalogValue(
+      "editor.emphasisMark.rule",
+      (editorValue?.emphasisMark as any)?.rule
+    ).value,
+    aozoraMark: resolveCatalogValue(
+      "editor.emphasisMark.aozoraMark",
+      (editorValue?.emphasisMark as any)?.aozoraMark
+    ).value,
+    narouMarkText: resolveCatalogValue(
+      "editor.emphasisMark.narouMarkText",
+      (editorValue?.emphasisMark as any)?.narouMarkText
+    ).value
+  };
 
   if (
     editorValue === undefined ||
@@ -474,7 +488,8 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
       selectionHighlightMode,
       findGutterMarkers,
       captureTabInEditor,
-      fencedCodeIndentUnit
+      fencedCodeIndentUnit,
+      emphasisMark
     };
   }
 
@@ -488,7 +503,8 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     selectionHighlightMode,
     findGutterMarkers,
     captureTabInEditor,
-    fencedCodeIndentUnit
+    fencedCodeIndentUnit,
+    emphasisMark
   };
 }
 
@@ -1444,12 +1460,28 @@ function parseEditorSettingsForWrite(
     value.fencedCodeIndentUnit
   );
 
+  const emphasisMarkRuleResolution = resolveCatalogValue(
+    "editor.emphasisMark.rule",
+    (value.emphasisMark as any)?.rule
+  );
+  const emphasisMarkAozoraMarkResolution = resolveCatalogValue(
+    "editor.emphasisMark.aozoraMark",
+    (value.emphasisMark as any)?.aozoraMark
+  );
+  const emphasisMarkNarouMarkTextResolution = resolveCatalogValue(
+    "editor.emphasisMark.narouMarkText",
+    (value.emphasisMark as any)?.narouMarkText
+  );
+
   if (
     !undoHistoryMinDepthResolution.ok ||
     !selectionHighlightModeResolution.ok ||
     !findGutterMarkersResolution.ok ||
     !captureTabInEditorResolution.ok ||
-    !fencedCodeIndentUnitResolution.ok
+    !fencedCodeIndentUnitResolution.ok ||
+    !emphasisMarkRuleResolution.ok ||
+    !emphasisMarkAozoraMarkResolution.ok ||
+    !emphasisMarkNarouMarkTextResolution.ok
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -1459,6 +1491,11 @@ function parseEditorSettingsForWrite(
   const findGutterMarkers = findGutterMarkersResolution.value;
   const captureTabInEditor = captureTabInEditorResolution.value;
   const fencedCodeIndentUnit = fencedCodeIndentUnitResolution.value;
+  const emphasisMark = {
+    rule: emphasisMarkRuleResolution.value,
+    aozoraMark: emphasisMarkAozoraMarkResolution.value,
+    narouMarkText: emphasisMarkNarouMarkTextResolution.value
+  };
 
   if (!hasFontFamily) {
     return {
@@ -1470,7 +1507,8 @@ function parseEditorSettingsForWrite(
       selectionHighlightMode,
       findGutterMarkers,
       captureTabInEditor,
-      fencedCodeIndentUnit
+      fencedCodeIndentUnit,
+      emphasisMark
     };
   }
 
@@ -1491,7 +1529,8 @@ function parseEditorSettingsForWrite(
     selectionHighlightMode,
     findGutterMarkers,
     captureTabInEditor,
-    fencedCodeIndentUnit
+    fencedCodeIndentUnit,
+    emphasisMark
   };
 }
 

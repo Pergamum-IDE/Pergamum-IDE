@@ -180,6 +180,7 @@ import {
 // #186: workbench.language's selectable values are owned by i18n, while the
 // catalog remains the owner of the setting's default and metadata.
 import { defaultLanguage, supportedLanguages, type Language } from "./i18n";
+import { validateNarouEmphasisMarkText } from "./emphasisMarkSettings";
 
 // ---------------------------------------------------------------------------
 // Key pattern / area validation (ADR-0006 S-10)
@@ -260,6 +261,12 @@ function validateStringValue(
 
   if (!satisfiesAllowedCharacterPolicy(value, entry.allowedCharacters)) {
     return { ok: false, failure: "disallowedCharacters" };
+  }
+
+  if (entry.key === "editor.emphasisMark.narouMarkText") {
+    if (!validateNarouEmphasisMarkText(value)) {
+      return { ok: false, failure: "disallowedCharacters" };
+    }
   }
 
   return { ok: true };
@@ -1007,6 +1014,46 @@ export const settingsCatalog = defineSettingsCatalog({
     defaultValue: true,
     labelKey: "settings.imageAttachment.insertMarkdownLink.label",
     descriptionKey: "settings.imageAttachment.insertMarkdownLink.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.emphasisMark.rule": defineEnumSetting({
+    key: "editor.emphasisMark.rule",
+    scope: "applicationWithProjectOverride",
+    enumValues: ["aozora", "kakuyomu", "narou"],
+    defaultValue: "aozora",
+    labelKey: "settings.editor.emphasisMark.rule.label",
+    descriptionKey: "settings.editor.emphasisMark.rule.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.emphasisMark.aozoraMark": defineEnumSetting({
+    key: "editor.emphasisMark.aozoraMark",
+    scope: "applicationWithProjectOverride",
+    enumValues: [
+      "whiteSesame",
+      "sesame",
+      "blackCircle",
+      "whiteCircle",
+      "blackTriangle",
+      "whiteTriangle",
+      "doubleCircle"
+    ],
+    defaultValue: "whiteSesame",
+    labelKey: "settings.editor.emphasisMark.aozoraMark.label",
+    descriptionKey: "settings.editor.emphasisMark.aozoraMark.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.emphasisMark.narouMarkText": defineStringSetting({
+    key: "editor.emphasisMark.narouMarkText",
+    scope: "applicationWithProjectOverride",
+    defaultValue: "・",
+    labelKey: "settings.editor.emphasisMark.narouMarkText.label",
+    descriptionKey: "settings.editor.emphasisMark.narouMarkText.description",
+    maxLength: 16,
+    allowedCharacters: "none",
+    allowEmptyString: false,
     deprecatedAliases: [],
     migrationNotes: []
   })
