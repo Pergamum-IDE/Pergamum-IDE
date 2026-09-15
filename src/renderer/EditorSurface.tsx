@@ -44,6 +44,7 @@ import {
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
+import { useActiveFindShortcuts } from "./editorFindShortcuts";
 import {
   activeDocumentReplacementTemplateError,
   buildActiveDocumentReplaceAllChanges,
@@ -1082,9 +1083,6 @@ function MarkdownEditorSurface({
   );
 
   const findEvaluation = useMemo(() => {
-    if (!findOpen) {
-      return { matches: [], regexError: null };
-    }
     if (findQueryKind === "glossary") {
       return {
         matches:
@@ -1110,7 +1108,6 @@ function MarkdownEditorSurface({
         })
       : { matches: [], regexError: null };
   }, [
-    findOpen,
     findQueryKind,
     findGlossaryTerms,
     findMode,
@@ -1348,6 +1345,13 @@ function MarkdownEditorSurface({
       jumpToFindMatch(findMatches[nextIndex]);
     }
   }, [findMatches, findActiveIndex, jumpToFindMatch]);
+
+  useActiveFindShortcuts({
+    active: true,
+    findMatchesCount: findMatches.length,
+    onNext: handleFindNext,
+    onPrevious: handleFindPrevious
+  });
 
   // #424 Slice 3: replace the CURRENT match only, through the active editor's
   // `input.replace` transaction (one undo step). Re-evaluates against the
