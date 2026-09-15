@@ -198,14 +198,24 @@ export function DocumentTabBar({
 
   function handleTabKeyDown(
     event: ReactKeyboardEvent<HTMLDivElement>,
-    documentId: EditorId
+    tab: DocumentTab,
+    isActive: boolean
   ): void {
+    if (event.key === "F2") {
+      if (isActive && tab.id.kind === "projectDocument") {
+        event.preventDefault();
+        event.stopPropagation();
+        onTabAction?.("renameFile", tab);
+      }
+      return;
+    }
+
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
 
     event.preventDefault();
-    onSelectDocument(documentId);
+    onSelectDocument(tab.id);
   }
 
   function handleSpecialTabKeyDown(
@@ -399,8 +409,19 @@ export function DocumentTabBar({
         data-tab-drop-indicator={dropIndicatorForTab(index)}
         draggable={reorderEnabled || undefined}
         onClick={() => onSelectDocument(tab.id)}
+        onDoubleClick={(event) => {
+          if (
+            event.target instanceof HTMLElement &&
+            event.target.closest(".documentTabCloseButton")
+          ) {
+            return;
+          }
+          if (isActive && tab.id.kind === "projectDocument") {
+            onTabAction?.("renameFile", tab);
+          }
+        }}
         onContextMenu={(event) => handleDocumentTabContextMenu(event, tab)}
-        onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
+        onKeyDown={(event) => handleTabKeyDown(event, tab, isActive)}
         onMouseDown={(event) => {
           handleDocumentTabMiddleClick(event, tab.id, onCloseDocument);
         }}
