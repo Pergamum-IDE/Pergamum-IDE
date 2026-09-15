@@ -1,7 +1,10 @@
-import React from "react";
+// @vitest-environment happy-dom
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { Transaction, type AnnotationType } from "@codemirror/state";
+import { afterEach, describe, expect, it } from "vitest";
+import { EditorSelection, Transaction, type AnnotationType } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { pergamumContextSurfaceAttribute } from "../../src/shared/editContextMenu";
 import {
   MarkdownEditor,
@@ -161,3 +164,93 @@ describe("MarkdownEditor sound input classification (#200)", () => {
     }
   });
 });
+
+describe("MarkdownEditor dynamic tab capture configuration (#476)", () => {
+  let container: HTMLDivElement | null = null;
+  let root: import("react-dom/client").Root | null = null;
+
+  afterEach(() => {
+    if (root) {
+      act(() => root!.unmount());
+      root = null;
+    }
+    container?.remove();
+    container = null;
+  });
+
+  it("dynamically enables Tab capture when captureTabInEditor prop changes from false to true", () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const doc = "```ts\nconst x = 1;\n```\n\n| A | B |\n| --- | --- |\n| C | D |";
+    const renderEditor = (captureTabInEditor: boolean) => {
+      act(() => {
+        root!.render(
+          React.createElement(MarkdownEditor, {
+            value: doc,
+            onChange: () => undefined,
+            captureTabInEditor,
+            fencedCodeIndentUnit: "spaces4"
+          })
+        );
+      });
+    };
+
+    // 1. Initial render with captureTabInEditor = false
+    renderEditor(false);
+    const cmElement = container!.querySelector<HTMLElement>(".cm-editor");
+    expect(cmElement).not.toBeNull();
+    const view = EditorView.findFromDOM(cmElement!)!;
+    expect(view).not.toBeNull();
+
+    // Focus table cell A
+    const cellAPos = doc.indexOf("| A | B |") + 2; // 'A'
+    view.dispatch({ selection: EditorSelection.cursor(cellAPos) });
+
+    const keydownTab = new KeyboardEvent("keydown", {
+      key: "Tab",
+      code: "Tab",
+      bubbles: true,
+      cancelable: true
+    });
+    view.contentDOM.dispatchEvent(keydownTab);
+
+    // Should NOT be intercepted when captureTabInEditor is false
+    expect(keydownTab.defaultPrevented).toBe(false);
+
+    // 2. Dynamic prop change to captureTabInEditor = true
+    renderEditor(true);
+
+    // Test table cell navigation with Tab
+    const tableTabEvent = new KeyboardEvent("keydown", {
+      key: "Tab",
+      code: "Tab",
+      bubbles: true,
+      cancelable: true
+    });
+    view.contentDOM.dispatchEvent(tableTabEvent);
+
+    expect(tableTabEvent.defaultPrevented).toBe(true);
+    const cellBPos = doc.indexOf("| A | B |") + 6; // 'B'
+    expect(view.state.selection.main.head).toBe(cellBPos);
+
+    // Test fenced code indentation with Tab
+    const codePos = doc.indexOf("const");
+    view.dispatch({ selection: EditorSelection.cursor(codePos) });
+    const fencedTabEvent = new KeyboardEvent("keydown", {
+      key: "Tab",
+      code: "Tab",
+      bubbles: true,
+      cancelable: true
+    });
+    view.contentDOM.dispatchEvent(fencedTabEvent);
+
+    expect(fencedTabEvent.defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe(
+      "```ts\n    const x = 1;\n```\n\n| A | B |\n| --- | --- |\n| C | D |"
+    );
+  });
+});
+

@@ -919,6 +919,9 @@ export function MarkdownEditor({
       activeFindGutterMarkerCompartment.reconfigure(
         createActiveFindGutterMarkerExtension(findGutterMarkersRef.current)
       ),
+      tabCaptureCompartment.reconfigure(
+        createTabCaptureKeymapExtension(captureTabInEditorRef.current)
+      ),
       fencedCodeIndentUnitCompartment.reconfigure(
         fencedCodeIndentUnitFacet.of(fencedCodeIndentUnitRef.current)
       )

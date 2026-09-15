@@ -10295,6 +10295,9 @@ export function App(): JSX.Element {
                         whitespaceSettings={
                           effectiveSettings.editor.whitespace
                         }
+                        captureTabInEditor={
+                          effectiveSettings.editor.captureTabInEditor
+                        }
                         fencedCodeIndentUnit={
                           effectiveSettings.editor.fencedCodeIndentUnit
                         }
