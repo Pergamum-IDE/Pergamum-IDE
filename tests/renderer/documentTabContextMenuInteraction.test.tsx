@@ -577,3 +577,119 @@ describe("DocumentTabBar horizontal reorder (#354, generalized to every workspac
     ]);
   });
 });
+
+describe("DocumentTabBar active tab rename triggers (#478)", () => {
+  it("active document tab double click triggers onTabAction('renameFile', tab)", () => {
+    const tabs = [projectTab("a.md"), projectTab("b.md")];
+    const onTabAction = vi.fn();
+    render({
+      tabs,
+      activeDocumentId: tabs[0].id,
+      onTabAction
+    });
+
+    const activeTabEl = documentTabEls()[0];
+    act(() => {
+      activeTabEl.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    });
+
+    expect(onTabAction).toHaveBeenCalledTimes(1);
+    expect(onTabAction).toHaveBeenCalledWith("renameFile", tabs[0]);
+  });
+
+  it("inactive document tab double click does NOT trigger onTabAction('renameFile', tab)", () => {
+    const tabs = [projectTab("a.md"), projectTab("b.md")];
+    const onTabAction = vi.fn();
+    render({
+      tabs,
+      activeDocumentId: tabs[0].id,
+      onTabAction
+    });
+
+    const inactiveTabEl = documentTabEls()[1];
+    act(() => {
+      inactiveTabEl.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    });
+
+    expect(onTabAction).not.toHaveBeenCalled();
+  });
+
+  it("close button double click on active tab does NOT trigger onTabAction('renameFile', tab)", () => {
+    const tabs = [projectTab("a.md"), projectTab("b.md")];
+    const onTabAction = vi.fn();
+    render({
+      tabs,
+      activeDocumentId: tabs[0].id,
+      onTabAction
+    });
+
+    const closeButton = documentTabEls()[0].querySelector<HTMLButtonElement>(".documentTabCloseButton");
+    expect(closeButton).not.toBeNull();
+
+    act(() => {
+      closeButton!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+    });
+
+    expect(onTabAction).not.toHaveBeenCalled();
+  });
+
+  it("active document tab F2 keydown triggers onTabAction('renameFile', tab)", () => {
+    const tabs = [projectTab("a.md"), projectTab("b.md")];
+    const onTabAction = vi.fn();
+    render({
+      tabs,
+      activeDocumentId: tabs[0].id,
+      onTabAction
+    });
+
+    const activeTabEl = documentTabEls()[0];
+    act(() => {
+      activeTabEl.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true })
+      );
+    });
+
+    expect(onTabAction).toHaveBeenCalledTimes(1);
+    expect(onTabAction).toHaveBeenCalledWith("renameFile", tabs[0]);
+  });
+
+  it("inactive document tab F2 keydown does NOT trigger onTabAction('renameFile', tab)", () => {
+    const tabs = [projectTab("a.md"), projectTab("b.md")];
+    const onTabAction = vi.fn();
+    render({
+      tabs,
+      activeDocumentId: tabs[0].id,
+      onTabAction
+    });
+
+    const inactiveTabEl = documentTabEls()[1];
+    act(() => {
+      inactiveTabEl.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true })
+      );
+    });
+
+    expect(onTabAction).not.toHaveBeenCalled();
+  });
+
+  it("external tab double click or F2 keydown does NOT trigger onTabAction('renameFile', tab)", () => {
+    const tabs = [externalTab];
+    const onTabAction = vi.fn();
+    render({
+      tabs,
+      activeDocumentId: externalTab.id,
+      onTabAction
+    });
+
+    const externalTabEl = documentTabEls()[0];
+    act(() => {
+      externalTabEl.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+      externalTabEl.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "F2", bubbles: true, cancelable: true })
+      );
+    });
+
+    expect(onTabAction).not.toHaveBeenCalled();
+  });
+});
+
