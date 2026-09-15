@@ -438,6 +438,7 @@ interface EditorSurfaceProps {
    * affects Save, dirty state, or selection.
    */
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  captureTabInEditor?: boolean;
   fencedCodeIndentUnit?: FencedCodeIndentUnit;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
@@ -559,6 +560,7 @@ export function EditorSurface({
   selectionHighlightMode,
   findGutterMarkers,
   whitespaceSettings,
+  captureTabInEditor,
   fencedCodeIndentUnit,
   glossaryNearbySearchSettings,
   normalizeUnicodeToNfcMatching,
@@ -610,6 +612,7 @@ export function EditorSurface({
           selectionHighlightMode={selectionHighlightMode}
           findGutterMarkers={findGutterMarkers}
           whitespaceSettings={whitespaceSettings}
+          captureTabInEditor={captureTabInEditor}
           fencedCodeIndentUnit={fencedCodeIndentUnit}
           glossaryNearbySearchSettings={glossaryNearbySearchSettings}
           normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
@@ -672,6 +675,7 @@ interface MarkdownEditorSurfaceProps {
   selectionHighlightMode: SelectionHighlightMode;
   findGutterMarkers: boolean;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
+  captureTabInEditor?: boolean;
   fencedCodeIndentUnit?: FencedCodeIndentUnit;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
@@ -760,6 +764,7 @@ function MarkdownEditorSurface({
   selectionHighlightMode,
   findGutterMarkers,
   whitespaceSettings,
+  captureTabInEditor,
   fencedCodeIndentUnit,
   glossaryNearbySearchSettings,
   normalizeUnicodeToNfcMatching,
@@ -1818,6 +1823,7 @@ function MarkdownEditorSurface({
           selectionHighlightMode={selectionHighlightMode}
           findGutterMarkers={findGutterMarkers}
           whitespaceSettings={whitespaceSettings}
+          captureTabInEditor={captureTabInEditor}
           fencedCodeIndentUnit={fencedCodeIndentUnit}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}

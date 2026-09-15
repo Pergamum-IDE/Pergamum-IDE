@@ -14,6 +14,7 @@ function mountEditor(input: {
   doc?: string;
   captureTabInEditor?: boolean;
   readOnly?: boolean;
+  fencedCodeIndentUnit?: "spaces2" | "spaces4" | "spaces6" | "spaces8" | "tab";
 }): EditorView {
   const captureTabInEditor = input.captureTabInEditor ?? false;
   return new EditorView({
@@ -22,7 +23,10 @@ function mountEditor(input: {
       doc: input.doc ?? "- item",
       selection: EditorSelection.single(2),
       extensions: [
-        ...createMarkdownEditorBaseSetup({ undoHistoryMinDepth: 100 }),
+        ...createMarkdownEditorBaseSetup({
+          undoHistoryMinDepth: 100,
+          fencedCodeIndentUnit: input.fencedCodeIndentUnit ?? "spaces4"
+        }),
         createTabCaptureKeymapExtension(captureTabInEditor),
         ...(input.readOnly ? [EditorState.readOnly.of(true)] : [])
       ]
@@ -245,6 +249,99 @@ describe("tabCaptureKeymapExtension (#467)", () => {
       } finally {
         view.destroy();
       }
+    });
+
+    describe("table cell navigation (#476)", () => {
+      const tableDoc = "| A | B |\n| --- | --- |\n| C | D |";
+
+      it("Tab key navigates to next table cell without document modification", () => {
+        const view = mountEditor({ doc: tableDoc, captureTabInEditor: true });
+        try {
+          view.dispatch({ selection: EditorSelection.cursor(2) }); // 'A'
+          const event = keydownEvent("Tab");
+          view.contentDOM.dispatchEvent(event);
+          expect(event.defaultPrevented).toBe(true);
+          expect(view.state.selection.main.head).toBe(6); // 'B'
+          expect(view.state.doc.toString()).toBe(tableDoc);
+        } finally {
+          view.destroy();
+        }
+      });
+
+      it("Shift+Tab key navigates to previous table cell without document modification", () => {
+        const view = mountEditor({ doc: tableDoc, captureTabInEditor: true });
+        try {
+          view.dispatch({ selection: EditorSelection.cursor(6) }); // 'B'
+          const event = keydownEvent("Tab", { shiftKey: true });
+          view.contentDOM.dispatchEvent(event);
+          expect(event.defaultPrevented).toBe(true);
+          expect(view.state.selection.main.head).toBe(2); // 'A'
+          expect(view.state.doc.toString()).toBe(tableDoc);
+        } finally {
+          view.destroy();
+        }
+      });
+
+      it("Tab key across row boundary skips delimiter row", () => {
+        const view = mountEditor({ doc: tableDoc, captureTabInEditor: true });
+        try {
+          view.dispatch({ selection: EditorSelection.cursor(6) }); // 'B'
+          const event = keydownEvent("Tab");
+          view.contentDOM.dispatchEvent(event);
+          expect(event.defaultPrevented).toBe(true);
+          expect(view.state.selection.main.head).toBe(26); // 'C'
+          expect(view.state.doc.toString()).toBe(tableDoc);
+        } finally {
+          view.destroy();
+        }
+      });
+
+      it("read-only editor: Tab navigates table cell cursor without changing document", () => {
+        const view = mountEditor({ doc: tableDoc, captureTabInEditor: true, readOnly: true });
+        try {
+          view.dispatch({ selection: EditorSelection.cursor(2) }); // 'A'
+          const event = keydownEvent("Tab");
+          view.contentDOM.dispatchEvent(event);
+          expect(event.defaultPrevented).toBe(true);
+          expect(view.state.selection.main.head).toBe(6); // 'B'
+          expect(view.state.doc.toString()).toBe(tableDoc);
+        } finally {
+          view.destroy();
+        }
+      });
+    });
+
+    describe("Repro matrix (#476 / #474 integration)", () => {
+      it("captureTabInEditor=true + fencedCodeIndentUnit='tab': Tab inside fenced code inserts tab, Tab in table moves cell", () => {
+        const doc = "```ts\nconst x = 1;\n```\n\n| A | B |\n| --- | --- |\n| C | D |";
+        const view = mountEditor({
+          doc,
+          captureTabInEditor: true,
+          fencedCodeIndentUnit: "tab"
+        });
+        try {
+          // 1. Fenced code Tab -> indents with '\t'
+          view.dispatch({ selection: EditorSelection.cursor(doc.indexOf("const")) });
+          const fencedTabEvent = keydownEvent("Tab");
+          view.contentDOM.dispatchEvent(fencedTabEvent);
+          expect(fencedTabEvent.defaultPrevented).toBe(true);
+          expect(view.state.doc.toString()).toBe(
+            "```ts\n\tconst x = 1;\n```\n\n| A | B |\n| --- | --- |\n| C | D |"
+          );
+
+          // 2. Table cell Tab -> navigates to next cell
+          const currentDoc = view.state.doc.toString();
+          const cellAPos = currentDoc.indexOf("| A | B |") + 2; // 'A'
+          const cellBPos = currentDoc.indexOf("| A | B |") + 6; // 'B'
+          view.dispatch({ selection: EditorSelection.cursor(cellAPos) });
+          const tableTabEvent = keydownEvent("Tab");
+          view.contentDOM.dispatchEvent(tableTabEvent);
+          expect(tableTabEvent.defaultPrevented).toBe(true);
+          expect(view.state.selection.main.head).toBe(cellBPos);
+        } finally {
+          view.destroy();
+        }
+      });
     });
   });
 

@@ -1,6 +1,7 @@
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentCommand, outdentCommand } from "./indentCommands";
+import { tryNavigateTableCell } from "./markdownTableNavigation";
 
 /**
  * Escape / Ctrl+M tab-capture bypass state for accessibility escape hatch.
@@ -63,6 +64,10 @@ export function createTabCaptureKeymapExtension(
           if (bypassNextTab) {
             bypassNextTab = false;
             return false; // Bypass capture -> allow browser focus movement
+          }
+          const direction = event.shiftKey ? "previous" : "next";
+          if (tryNavigateTableCell(view, direction)) {
+            return true;
           }
           if (event.shiftKey) {
             return outdentCommand(view);
