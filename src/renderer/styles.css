@@ -9067,3 +9067,66 @@ label.settingsItemHeader {
   white-space: pre-wrap;
   min-height: 36px;
 }
+
+.rubyTargetField {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  word-break: break-all;
+}
+
+.rubyTargetLabel {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rubyTargetText {
+  word-break: break-all;
+}
+
+.rubyInputHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rubyGraphemeCounter {
+  font-size: 12px;
+  color: var(--app-dialog-secondary-foreground, #6b7785);
+}
+
+.rubySourcePreviewField,
+.rubyAppliedPreviewField {
+  margin-top: 12px;
+}
+
+.rubySourcePreview {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--app-dialog-border, #d3dae2);
+  border-radius: 4px;
+  background: var(--app-dialog-header-background, #eef3f8);
+  color: var(--app-dialog-foreground, #25313d);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-all;
+  white-space: pre-wrap;
+  min-height: 36px;
+}
+
+.rubyAppliedPreview {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--app-dialog-border, #d3dae2);
+  border-radius: 4px;
+  background: var(--app-dialog-header-background, #eef3f8);
+  color: var(--app-dialog-foreground, #25313d);
+  font-size: 16px;
+  line-height: 1.8;
+  word-break: break-all;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+}

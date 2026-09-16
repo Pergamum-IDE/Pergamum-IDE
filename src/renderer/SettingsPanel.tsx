@@ -629,6 +629,18 @@ function buildNextSettings(
           }
         }
       });
+    case "editor.ruby.rule":
+      if (typeof rawValue !== "string") {
+        return null;
+      }
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          ruby: {
+            rule: rawValue as any
+          }
+        }
+      });
   }
 
   const exhaustiveCheck: never = key;

@@ -437,6 +437,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "editor.emphasisMark.rule",
       "editor.emphasisMark.aozoraMark",
       "editor.emphasisMark.narouMarkText",
+      "editor.ruby.rule",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
       "editor.whitespace.renderIdeographicSpace",
@@ -1076,7 +1077,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         findGutterMarkers: settings.editor.findGutterMarkers,
         captureTabInEditor: settings.editor.captureTabInEditor,
         fencedCodeIndentUnit: settings.editor.fencedCodeIndentUnit,
-        emphasisMark: settings.editor.emphasisMark
+        emphasisMark: settings.editor.emphasisMark,
+        ruby: settings.editor.ruby
       },
       files: settings.files
     });

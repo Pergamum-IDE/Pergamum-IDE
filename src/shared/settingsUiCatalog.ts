@@ -646,6 +646,23 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("editor.emphasisMark.narouMarkText")
   },
   {
+    key: "editor.ruby.rule",
+    category: "editor",
+    order: 190,
+    labelKey: "settings.editor.ruby.rule.label",
+    descriptionKey: "settings.editor.ruby.rule.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "aozora",
+          labelKey: "settings.editor.ruby.rule.option.aozora.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("editor.ruby.rule")
+  },
+  {
     // #407: a plain path text field for B1 — the "[path] [Edit]" bespoke
     // control + save-destination dialog is a later slice. applicationWith-
     // ProjectOverride, so it also appears as a Project Settings override row.

@@ -44,6 +44,7 @@ import {
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import type { MarkdownEditorEmphasisMarkShortcutConfig } from "./editorEmphasisShortcuts";
+import type { MarkdownEditorRubyShortcutConfig } from "./editorRubyShortcuts";
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import { useActiveFindShortcuts } from "./editorFindShortcuts";
 import {
@@ -469,6 +470,14 @@ interface EditorSurfaceProps {
   notifyEmphasisMarkNoSelection?: () => void;
   notifyEmphasisMarkReadOnly?: () => void;
   notifyEmphasisMarkMultiLine?: () => void;
+  onRubyShortcut?: (input: {
+    selectedText: string;
+    selection: { from: number; to: number };
+    opener?: Element | null;
+  }) => void;
+  notifyRubyNoSelection?: () => void;
+  notifyRubyReadOnly?: () => void;
+  notifyRubyMultiLine?: () => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -588,6 +597,10 @@ export function EditorSurface({
   notifyEmphasisMarkNoSelection,
   notifyEmphasisMarkReadOnly,
   notifyEmphasisMarkMultiLine,
+  onRubyShortcut,
+  notifyRubyNoSelection,
+  notifyRubyReadOnly,
+  notifyRubyMultiLine,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -642,6 +655,10 @@ export function EditorSurface({
           notifyEmphasisMarkNoSelection={notifyEmphasisMarkNoSelection}
           notifyEmphasisMarkReadOnly={notifyEmphasisMarkReadOnly}
           notifyEmphasisMarkMultiLine={notifyEmphasisMarkMultiLine}
+          onRubyShortcut={onRubyShortcut}
+          notifyRubyNoSelection={notifyRubyNoSelection}
+          notifyRubyReadOnly={notifyRubyReadOnly}
+          notifyRubyMultiLine={notifyRubyMultiLine}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -719,6 +736,14 @@ interface MarkdownEditorSurfaceProps {
   notifyEmphasisMarkNoSelection?: () => void;
   notifyEmphasisMarkReadOnly?: () => void;
   notifyEmphasisMarkMultiLine?: () => void;
+  onRubyShortcut?: (input: {
+    selectedText: string;
+    selection: { from: number; to: number };
+    opener?: Element | null;
+  }) => void;
+  notifyRubyNoSelection?: () => void;
+  notifyRubyReadOnly?: () => void;
+  notifyRubyMultiLine?: () => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -806,6 +831,10 @@ function MarkdownEditorSurface({
   notifyEmphasisMarkNoSelection,
   notifyEmphasisMarkReadOnly,
   notifyEmphasisMarkMultiLine,
+  onRubyShortcut,
+  notifyRubyNoSelection,
+  notifyRubyReadOnly,
+  notifyRubyMultiLine,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -1345,6 +1374,26 @@ function MarkdownEditorSurface({
       ]
     );
 
+  const rubyShortcutConfig = useMemo<MarkdownEditorRubyShortcutConfig>(
+    () => ({
+      requestOpenRubyDialog: (input) => {
+        onRubyShortcut?.({
+          ...input,
+          opener: window.document.activeElement
+        });
+      },
+      notifyNoSelection: () => notifyRubyNoSelection?.(),
+      notifyReadOnly: () => notifyRubyReadOnly?.(),
+      notifyMultiLine: () => notifyRubyMultiLine?.()
+    }),
+    [
+      onRubyShortcut,
+      notifyRubyNoSelection,
+      notifyRubyReadOnly,
+      notifyRubyMultiLine
+    ]
+  );
+
   const handleFindModeChange = useCallback((mode: ActiveFindPanelMode) => {
     setFindMode(mode);
     // Return focus to the query input (the panel's focus effect handles it).
@@ -1842,6 +1891,7 @@ function MarkdownEditorSurface({
           activeFind={activeFindConfig}
           glossarySelectionShortcut={glossarySelectionShortcutConfig}
           emphasisMarkShortcut={emphasisMarkShortcutConfig}
+          rubyShortcut={rubyShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}
