@@ -63,6 +63,24 @@ function availableRowKey(family: string): string {
   return `available-${family}`;
 }
 
+/**
+ * #496 remediation: the identity line shown on every font row. `family` is
+ * always the raw CSS-facing name; `displayName` (when present and
+ * different from `family`) is the localized name resolved at scan time
+ * (#496). Different families can legitimately resolve to the same
+ * localized `displayName` (e.g. "Yu Gothic" and "Yu Gothic UI" both ->
+ * "游ゴシック") — always leading with `family` keeps those rows
+ * distinguishable. This line never carries a represented-font style; only
+ * the mini sample line below it does (see #493's symbol-font-identity fix).
+ */
+function formatRowIdentity(family: string, displayName?: string): string {
+  const trimmedDisplayName = displayName?.trim();
+  if (!trimmedDisplayName || trimmedDisplayName === family) {
+    return family;
+  }
+  return `${family} / ${trimmedDisplayName}`;
+}
+
 export function FontPickerDialog({
   isOpen,
   slot,
@@ -452,7 +470,7 @@ export function FontPickerDialog({
                             <span className="fontPickerSelectedIndex">
                               {idx + 1}.
                             </span>
-                            {font.displayName || font.family}
+                            {formatRowIdentity(font.family, font.displayName)}
                           </span>
                           <span
                             className="fontPickerRowSample"
@@ -563,7 +581,7 @@ export function FontPickerDialog({
                               onClick={() => handleAvailableRowClick(candidate)}
                             >
                               <span className="fontPickerRowName">
-                                {candidate.displayName}
+                                {formatRowIdentity(candidate.family, candidate.displayName)}
                               </span>
                               <span
                                 className="fontPickerRowSample"

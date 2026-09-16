@@ -3,7 +3,7 @@ import type {
   FontSlot
 } from "../shared/fontSettings";
 import { FONT_SLOT_GENERIC_FALLBACKS } from "../shared/fontSettings";
-import type { Translate } from "../shared/i18n";
+import type { Language, Translate } from "../shared/i18n";
 import { FontCacheControl } from "./FontCacheControl";
 
 export interface FontFamilyListSettingControlProps {
@@ -12,6 +12,9 @@ export interface FontFamilyListSettingControlProps {
   readonly value?: readonly FontFamilySetting[];
   readonly disabled?: boolean;
   readonly translate: Translate;
+  /** #496: threaded through to `FontCacheControl` so a scan resolves
+   * localized display names for the app's current UI language. */
+  readonly uiLanguage?: Language;
   readonly onOpenDialog: (slot: FontSlot, opener?: Element | null) => void;
 }
 
@@ -21,6 +24,7 @@ export function FontFamilyListSettingControl({
   value,
   disabled = false,
   translate,
+  uiLanguage,
   onOpenDialog
 }: FontFamilyListSettingControlProps): JSX.Element {
   const genericFallback = FONT_SLOT_GENERIC_FALLBACKS[slot];
@@ -49,6 +53,7 @@ export function FontFamilyListSettingControl({
         id={`${id}-cache`}
         disabled={disabled}
         translate={translate}
+        uiLanguage={uiLanguage}
       />
     </div>
   );

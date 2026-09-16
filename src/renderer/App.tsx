@@ -10398,6 +10398,7 @@ export function App(): JSX.Element {
                       isLoading={isSettingsLoading}
                       error={settingsError}
                       translate={translate}
+                      displayLanguage={displayLanguage}
                       onChangeSettings={handleSettingsChangeRequest}
                       onSettingFieldFocus={handleSettingsFieldFocus}
                       onSettingFieldBlur={() => {
@@ -10408,6 +10409,7 @@ export function App(): JSX.Element {
                     <ProjectSettingsPanel
                       key={project?.activeProjectFilePath ?? "no-project"}
                       translate={translate}
+                      displayLanguage={displayLanguage}
                       projectName={project?.name}
                       projectSettings={project?.config?.settings}
                       applicationSettings={settings}

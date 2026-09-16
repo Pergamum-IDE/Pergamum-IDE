@@ -10,7 +10,7 @@ import type {
   UpdateProjectSettingsRequest
 } from "../shared/api";
 import { validateProjectName } from "../shared/projectName";
-import type { Translate } from "../shared/i18n";
+import type { Language, Translate } from "../shared/i18n";
 import type { SaveApplicationSettingsRequest } from "../shared/settings";
 import {
   getCatalogDefaultValue,
@@ -547,6 +547,9 @@ export function groupProjectSettingItemsByCategory(
 
 export interface ProjectSettingsPanelViewProps {
   translate: Translate;
+  /** #496: the app's current UI language — threaded down to the font
+   * picker's local-font scan so it resolves localized display names. */
+  displayLanguage?: Language;
   projectName?: string;
   projectNameDraft?: string;
   isProjectNameDirty?: boolean;
@@ -585,6 +588,7 @@ function translateI18nKey(translate: Translate, key: string): string {
 
 export function ProjectSettingsPanelView({
   translate,
+  displayLanguage,
   projectName,
   projectNameDraft = projectName ?? "",
   isProjectNameDirty = false,
@@ -915,6 +919,7 @@ export function ProjectSettingsPanelView({
                               value={fontListValue}
                               disabled={isReadOnly || isSaving}
                               translate={translate}
+                              uiLanguage={displayLanguage}
                               onOpenDialog={(slot, opener) =>
                                 onOpenFontPickerDialog?.(slot, opener)
                               }
@@ -964,6 +969,9 @@ const defaultProjectSettingsUiItems: readonly SettingCatalogItem[] =
 
 export interface ProjectSettingsPanelProps {
   translate: Translate;
+  /** #496: the app's current UI language — threaded down to the font
+   * picker's local-font scan so it resolves localized display names. */
+  displayLanguage?: Language;
   projectName?: string;
   projectSettings: ProjectSettings | undefined;
   applicationSettings?: PartialApplicationSettings;
@@ -981,6 +989,7 @@ export interface ProjectSettingsPanelProps {
 
 export function ProjectSettingsPanel({
   translate,
+  displayLanguage,
   projectName,
   projectSettings,
   applicationSettings,
@@ -1649,6 +1658,7 @@ export function ProjectSettingsPanel({
     <>
       <ProjectSettingsPanelView
         translate={translate}
+        displayLanguage={displayLanguage}
         projectName={projectName}
         projectNameDraft={projectNameDraft}
         isProjectNameDirty={isProjectNameDirty}

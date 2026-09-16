@@ -1011,4 +1011,202 @@ describe("FontPickerDialog (#494 D&D-only remediation)", () => {
       logSpy.mockRestore();
     });
   });
+
+  describe("#496 localized displayName", () => {
+    it("available row identity shows \"family / displayName\" when they differ", async () => {
+      await renderDialog({
+        initialValue: [],
+        cache: [{ family: "Yu Gothic", displayName: "游ゴシック" }]
+      });
+
+      const availableRow = availableRowButtons(container)[0];
+      const name = availableRow.querySelector<HTMLElement>(".fontPickerRowName");
+      const sample = availableRow.querySelector<HTMLElement>(".fontPickerRowSample");
+      expect(name?.textContent).toBe("Yu Gothic / 游ゴシック");
+      // Identity line: normal UI font, no represented-font style.
+      expect(name?.style.fontFamily).toBe("");
+      // Mini sample CSS uses the CSS-facing `family`, never the localized
+      // displayName.
+      expect(sample?.style.fontFamily).toContain("Yu Gothic");
+      expect(sample?.style.fontFamily).not.toContain("游ゴシック");
+
+      await step(() => availableRow.click());
+      const preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
+      expect(preview?.style.fontFamily).toContain("Yu Gothic");
+      expect(preview?.style.fontFamily).not.toContain("游ゴシック");
+    });
+
+    it("row identity shows only one name when family === displayName (no duplication)", async () => {
+      await renderDialog({
+        cache: [{ family: "Cascadia Code", displayName: "Cascadia Code" }]
+      });
+      const name = availableRowButtons(container)[0].querySelector<HTMLElement>(
+        ".fontPickerRowName"
+      );
+      expect(name?.textContent).toBe("Cascadia Code");
+      expect(name?.textContent).not.toContain("/");
+    });
+
+    it("selected row identity also shows \"family / displayName\" (index prefix retained), and only one name when equal", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Yu Gothic", displayName: "游ゴシック" },
+          { family: "Cascadia Code", displayName: "Cascadia Code" }
+        ]
+      });
+      const rows = selectedRowButtons(container);
+      const name0 = rows[0].querySelector<HTMLElement>(".fontPickerRowName");
+      const name1 = rows[1].querySelector<HTMLElement>(".fontPickerRowName");
+      expect(name0?.textContent).toBe("1.Yu Gothic / 游ゴシック");
+      expect(name0?.style.fontFamily).toBe("");
+      expect(name1?.textContent).toBe("2.Cascadia Code");
+      expect(name1?.textContent).not.toContain("/");
+    });
+
+    it("two different families that resolve to the same localized displayName remain distinguishable", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Yu Gothic", displayName: "游ゴシック" },
+          { family: "Yu Gothic UI", displayName: "游ゴシック" }
+        ]
+      });
+      const rowNames = availableRowButtons(container).map(
+        (b) => b.querySelector(".fontPickerRowName")?.textContent
+      );
+      expect(rowNames).toContain("Yu Gothic / 游ゴシック");
+      expect(rowNames).toContain("Yu Gothic UI / 游ゴシック");
+      // Distinct DOM text, not collapsed into one indistinguishable row.
+      expect(new Set(rowNames).size).toBe(2);
+    });
+
+    it("row structure keeps identity and mini sample as two non-overlapping lines with a stable, ellipsis-capable class structure", async () => {
+      const longFamily = "A".repeat(60);
+      const longDisplayName = "ロング".repeat(30);
+      await renderDialog({
+        initialValue: [{ family: longFamily, displayName: longDisplayName }],
+        cache: [{ family: "Yu Gothic", displayName: "游ゴシック" }]
+      });
+
+      for (const button of [
+        ...selectedRowButtons(container),
+        ...availableRowButtons(container)
+      ]) {
+        const name = button.querySelector<HTMLElement>(".fontPickerRowName");
+        const sample = button.querySelector<HTMLElement>(".fontPickerRowSample");
+        expect(name).toBeTruthy();
+        expect(sample).toBeTruthy();
+        // Two distinct elements — identity and sample never share a node.
+        expect(name).not.toBe(sample);
+        expect(name?.contains(sample!)).toBe(false);
+        expect(sample?.contains(name!)).toBe(false);
+      }
+
+      // Full (unellipsized-in-the-DOM) text survives even for extreme
+      // lengths — truncation is a CSS (ellipsis) concern, not a data-loss one.
+      const selectedName = selectedRowButtons(container)[0].querySelector(
+        ".fontPickerRowName"
+      );
+      expect(selectedName?.textContent).toContain(longFamily);
+      expect(selectedName?.textContent).toContain(longDisplayName);
+    });
+
+    it("each font row is one stable entity container (.fontPickerRow) with a grip and a body, and the body contains both lines — identical structure in both panes", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "游ゴシック" }]
+      });
+
+      const selectedRow = container.querySelector(
+        ".fontPickerPane-selected .fontPickerRow"
+      );
+      const availableRow = container.querySelector(
+        ".fontPickerPane-available .fontPickerRow"
+      );
+      expect(selectedRow).toBeTruthy();
+      expect(availableRow).toBeTruthy();
+
+      for (const row of [selectedRow, availableRow]) {
+        // Entity container: exactly the grip and the body, as direct
+        // children — nothing absolutely positioned floating outside it.
+        const children = Array.from(row!.children);
+        expect(children.length).toBe(2);
+        expect(children[0].classList.contains("fontPickerRowGrip")).toBe(true);
+        expect(children[1].classList.contains("fontPickerRowButton")).toBe(true);
+
+        // The body is the single containing element for both lines.
+        const body = children[1];
+        const name = body.querySelector(".fontPickerRowName");
+        const sample = body.querySelector(".fontPickerRowSample");
+        expect(name).toBeTruthy();
+        expect(sample).toBeTruthy();
+        expect(body.contains(name)).toBe(true);
+        expect(body.contains(sample)).toBe(true);
+        // Neither line lives outside the body (no loose siblings, no
+        // absolutely-positioned overlay elements elsewhere in the row).
+        expect(row!.querySelectorAll(".fontPickerRowName").length).toBe(1);
+        expect(row!.querySelectorAll(".fontPickerRowSample").length).toBe(1);
+      }
+
+      expect(container.innerHTML).not.toContain("dangerouslySetInnerHTML");
+    });
+
+    it("adopting via D&D preserves { family, displayName } exactly as cached, ready to be saved by Apply", async () => {
+      const onSaveMock = vi.fn();
+      await renderDialog({
+        initialValue: [],
+        cache: [{ family: "Yu Gothic", displayName: "游ゴシック" }],
+        onSave: onSaveMock
+      });
+
+      const availableLi = rowLiOf(availableRowButtons(container)[0]);
+      const selectedBox = container.querySelector<HTMLElement>(".fontPickerSelectedListBox");
+      await performDrag(availableLi, selectedBox);
+
+      const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
+      await step(() => applyBtn?.click());
+
+      expect(onSaveMock).toHaveBeenCalledWith([
+        { family: "Yu Gothic", displayName: "游ゴシック" }
+      ]);
+    });
+
+    it("search matches the localized displayName", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Yu Gothic", displayName: "游ゴシック" },
+          { family: "Cascadia Code", displayName: "Cascadia Code" }
+        ]
+      });
+      const searchInput = container.querySelector<HTMLInputElement>(".fontPickerSearchInput");
+      await step(() => {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          "value"
+        )?.set;
+        setter?.call(searchInput, "ゴシック");
+        searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const availableNames = names(availableRowButtons(container));
+      expect(availableNames.length).toBe(1);
+      expect(availableNames[0]).toContain("游ゴシック");
+    });
+
+    it("search still matches family even when displayName is localized and unrelated-looking", async () => {
+      await renderDialog({
+        cache: [{ family: "Yu Gothic", displayName: "游ゴシック" }]
+      });
+      const searchInput = container.querySelector<HTMLInputElement>(".fontPickerSearchInput");
+      await step(() => {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          "value"
+        )?.set;
+        setter?.call(searchInput, "Yu Gothic");
+        searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const availableNames = names(availableRowButtons(container));
+      expect(availableNames.length).toBe(1);
+      expect(availableNames[0]).toContain("游ゴシック");
+    });
+  });
 });

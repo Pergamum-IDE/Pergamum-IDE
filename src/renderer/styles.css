@@ -8069,12 +8069,21 @@ label.settingsItemHeader {
    gripper handle is held — see FontPickerDialog's `armedRowKey`), so it
    holds the handle and the click-to-preview button as two independent
    sibling controls rather than nesting a button inside a button.
-   `align-items: center` keeps the (small, fixed-size) grip vertically
-   centered against the row body regardless of the body's own height. */
+   #496 remediation: `display: grid` with an explicit `minmax(0, 1fr)` body
+   track — not flex — owns the row's height via `min-height` here (not on
+   the button anymore), so the two-line body is guaranteed the vertical
+   space it needs regardless of which represented font the sample line
+   renders in. `minmax(0, 1fr)` (not a bare `1fr`) is what lets the body's
+   ellipsis actually engage: the grid track's own minimum size would
+   otherwise grow to fit an unbreakable long name/sample and defeat
+   `text-overflow: ellipsis` no matter what the body itself declares. */
 .fontPickerRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
   gap: 2px;
+  min-height: 46px;
+  box-sizing: border-box;
   border-radius: 4px;
 }
 
@@ -8097,11 +8106,11 @@ label.settingsItemHeader {
 
 .fontPickerRowGrip {
   display: flex;
-  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
+  box-sizing: border-box;
   padding: 3px;
   border: none;
   border-radius: 4px;
@@ -8121,19 +8130,21 @@ label.settingsItemHeader {
   pointer-events: none;
 }
 
-/* #494 remediation: one stable font-entity card per row. `align-items:
-   stretch` (the flex default, stated explicitly here) gives the identity
-   and mini-sample lines the button's full width to truncate against, and
-   `min-height` (not a fixed `height`) keeps every row the same height
-   without clipping if the OS font scale makes a line taller than expected. */
+/* #496 remediation: the font-entity "body" — a grid item (see `.fontPickerRow`
+   above), not a flex sibling. `min-width: 0` is still required even inside a
+   grid: a grid item's automatic minimum width defaults to its min-content
+   size (the width of its longest unbreakable text) whenever its own
+   `overflow` is `visible`, which would silently defeat the identity/sample
+   lines' ellipsis no matter what those children declare. Row height now
+   lives on `.fontPickerRow` (`min-height`), not here — this element just
+   stacks its two lines and lets the grid center it. */
 .fontPickerRowButton {
   display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 44px;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 48px;
+  height: auto;
   gap: 2px;
   padding: 4px 8px;
   border: 1px solid transparent;
@@ -8153,11 +8164,18 @@ label.settingsItemHeader {
   background: rgba(47, 111, 237, 0.1);
 }
 
-/* #494 remediation: long font names/samples ellipsize instead of wrapping
-   (which used to break row height consistency and misalign the grip). The
-   identity line intentionally carries no `font-family` — see #493's
-   symbol-font-identity fix — only the mini-sample line is styled with the
-   represented font inline (FontPickerDialog.tsx). */
+/* #494/#496 remediation: long font names/samples ellipsize instead of
+   wrapping (which used to break row height consistency and misalign the
+   grip). The identity line intentionally carries no `font-family` — see
+   #493's symbol-font-identity fix — only the mini-sample line is styled
+   with the represented font inline (FontPickerDialog.tsx).
+   #496: each line gets an explicit `line-height`. Without one, the sample
+   line's *represented* font (which can be a CJK or symbol font with very
+   different internal ascent/descent metrics than the UI font) can render
+   its line box taller than the browser's default expectation, overlapping
+   or clipping against the identity line above it — a metrics mismatch, not
+   a stacking-order problem, so it is fixed here in layout, never with
+   `z-index`. */
 .fontPickerRowName,
 .fontPickerRowSample {
   display: block;
@@ -8165,10 +8183,12 @@ label.settingsItemHeader {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
 .fontPickerRowName {
   font-size: 0.92rem;
+  line-height: 1.25;
 }
 
 .fontPickerSelectedIndex {
@@ -8179,6 +8199,7 @@ label.settingsItemHeader {
 .fontPickerRowSample {
   color: var(--workspace-sidebar-muted-foreground);
   font-size: 0.8rem;
+  line-height: 1.2;
 }
 
 .fontPickerEmptyNotice {

@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from "react";
 import {
-  aggregateFontFamilies,
+  aggregateFontFamiliesWithDisplayNames,
   type FontCache,
   type FontCacheState,
-  type RawFontData
+  type RawFontData,
+  type RawFontDataWithDisplayName
 } from "../shared/fontCache";
 import {
   createCanvasMeasureTextWidth,
   measureFixedWidthForFamilies
 } from "./fontFixedWidthDetection";
-import type { Translate } from "../shared/i18n";
+import { resolveLocalizedDisplayName } from "./fontLocalizedDisplayName";
+import type { Language, Translate } from "../shared/i18n";
 
 declare global {
   interface Window {
@@ -21,6 +23,11 @@ export interface FontCacheControlProps {
   id: string;
   disabled?: boolean;
   translate: Translate;
+  /** #496: the application's current UI language, used to prefer localized
+   * `name`-table records when resolving each cached family's displayName.
+   * Optional (defaults to "ja") so existing callers/tests that don't care
+   * about localization keep working unchanged. */
+  uiLanguage?: Language;
 }
 
 function formatScannedDate(isoString: string): string {
@@ -38,10 +45,72 @@ function formatScannedDate(isoString: string): string {
   }
 }
 
+/**
+ * #496: resolves each raw scanned face's localized displayName, calling
+ * `FontData.blob()` only as needed. Faces are processed sequentially (see
+ * #495's precedent for sequential-is-fine at this scale), and — since many
+ * faces typically share one family (Regular/Bold/Italic/...) — once a
+ * family has already resolved a real localized name from an earlier face,
+ * later faces of that same family skip their own `blob()`/parse call
+ * entirely and just reuse it. This is a meaningful win in practice: a
+ * hundred-plus-family scan is commonly several hundred faces, not families.
+ *
+ * Deliberately does NOT build the result via `{ ...font, resolvedDisplayName }`
+ * — the real Font Access API's `FontData` exposes `family`/`fullName`/
+ * `postscriptName`/`style` as prototype accessors, not own properties, and
+ * object spread only copies own enumerable properties. Spreading silently
+ * produced empty `RawFontDataWithDisplayName` objects (every family lost —
+ * caught only in real-app dogfood, never in unit tests against plain mock
+ * objects), so every field is copied explicitly via direct property access
+ * instead, which correctly invokes the getters.
+ */
+async function resolveDisplayNamesForScan(
+  rawFonts: readonly RawFontData[],
+  uiLanguage: Language
+): Promise<RawFontDataWithDisplayName[]> {
+  const resolvedByFamily = new Map<string, string>();
+  const result: RawFontDataWithDisplayName[] = [];
+
+  const withResolvedName = (
+    font: RawFontData,
+    resolvedDisplayName: string | undefined
+  ): RawFontDataWithDisplayName => ({
+    family: font.family,
+    fullName: font.fullName,
+    postscriptName: font.postscriptName,
+    style: font.style,
+    blob: font.blob,
+    resolvedDisplayName
+  });
+
+  for (const font of rawFonts) {
+    if (!font) {
+      continue;
+    }
+    if (typeof font.family !== "string" || font.family.trim() === "") {
+      result.push(withResolvedName(font, undefined));
+      continue;
+    }
+
+    const alreadyResolved = resolvedByFamily.get(font.family);
+    if (alreadyResolved && alreadyResolved !== font.family) {
+      result.push(withResolvedName(font, alreadyResolved));
+      continue;
+    }
+
+    const resolvedDisplayName = await resolveLocalizedDisplayName(font, uiLanguage);
+    resolvedByFamily.set(font.family, resolvedDisplayName);
+    result.push(withResolvedName(font, resolvedDisplayName));
+  }
+
+  return result;
+}
+
 export const FontCacheControl: React.FC<FontCacheControlProps> = ({
   id,
   disabled = false,
-  translate
+  translate,
+  uiLanguage = "ja"
 }) => {
   const [cacheState, setCacheState] = useState<FontCacheState>({
     status: "notScanned"
@@ -94,10 +163,14 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
     setIsScanning(true);
     try {
       const rawFonts: RawFontData[] = await window.queryLocalFonts();
-      const aggregated = aggregateFontFamilies(rawFonts);
+      // #496 (ADR-0015): resolve each face's localized display name from
+      // its `name` table — user-action-only, same as the scan itself.
+      const rawFontsWithNames = await resolveDisplayNamesForScan(rawFonts, uiLanguage);
+      const aggregated = aggregateFontFamiliesWithDisplayNames(rawFontsWithNames);
       // #495 (ADR-0015): classify fixed-width vs proportional via Canvas
       // measurement, once per family, right after the user-triggered scan —
-      // never on startup, Settings open, or font picker open.
+      // never on startup, Settings open, or font picker open. Always keyed
+      // on `family` (CSS-facing), never the localized `displayName`.
       const measuredFamilies = measureFixedWidthForFamilies(
         aggregated,
         createCanvasMeasureTextWidth()
@@ -105,7 +178,7 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
       const newCache: FontCache = {
         version: 1,
         scannedAt: new Date().toISOString(),
-        uiLanguage: "ja",
+        uiLanguage,
         families: measuredFamilies
       };
 

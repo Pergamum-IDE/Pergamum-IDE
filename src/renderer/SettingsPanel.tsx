@@ -41,6 +41,9 @@ interface SettingsPanelProps {
   isLoading: boolean;
   error: string | null;
   translate: Translate;
+  /** #496: the app's current UI language — threaded down to the font
+   * picker's local-font scan so it resolves localized display names. */
+  displayLanguage?: Language;
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
   /**
    * #394 Step 2 follow-up: fires when any settings-item control gains focus.
@@ -769,6 +772,7 @@ interface SettingControlInputProps {
   disabled: boolean;
   labelId: string;
   translate: Translate;
+  displayLanguage?: Language;
   onChange: (rawValue: unknown) => void;
   onOpenSaveDestinationDialog?: (opener?: Element | null) => void;
   onOpenFontPickerDialog?: (slot: FontSlot, opener?: Element | null) => void;
@@ -780,6 +784,7 @@ function SettingControlInput({
   disabled,
   labelId,
   translate,
+  displayLanguage,
   onChange,
   onOpenSaveDestinationDialog,
   onOpenFontPickerDialog
@@ -879,6 +884,7 @@ function SettingControlInput({
             value={Array.isArray(value) ? (value as FontFamilySetting[]) : undefined}
             disabled={disabled}
             translate={translate}
+            uiLanguage={displayLanguage}
             onOpenDialog={(slot, opener) => onOpenFontPickerDialog?.(slot, opener)}
           />
         );
@@ -892,6 +898,7 @@ interface SettingItemRowProps {
   settings: ApplicationSettings;
   isLoading: boolean;
   translate: Translate;
+  displayLanguage?: Language;
   onChange: (item: SettingCatalogItem, rawValue: unknown) => void;
   onFieldFocus?: () => void;
   onFieldBlur?: () => void;
@@ -904,6 +911,7 @@ function SettingItemRow({
   settings,
   isLoading,
   translate,
+  displayLanguage,
   onChange,
   onFieldFocus,
   onFieldBlur,
@@ -940,6 +948,7 @@ function SettingItemRow({
             disabled={disabled}
             labelId={labelId}
             translate={translate}
+            displayLanguage={displayLanguage}
             onChange={(rawValue) => onChange(item, rawValue)}
             onOpenSaveDestinationDialog={onOpenSaveDestinationDialog}
             onOpenFontPickerDialog={onOpenFontPickerDialog}
@@ -982,6 +991,7 @@ export function SettingsPanelView({
   isLoading,
   error,
   translate,
+  displayLanguage,
   onChangeSettings,
   onSettingFieldFocus,
   onSettingFieldBlur,
@@ -1103,6 +1113,7 @@ export function SettingsPanelView({
                   settings={settings}
                   isLoading={isLoading}
                   translate={translate}
+                  displayLanguage={displayLanguage}
                   onChange={handleChange}
                   onFieldFocus={onSettingFieldFocus}
                   onFieldBlur={onSettingFieldBlur}
