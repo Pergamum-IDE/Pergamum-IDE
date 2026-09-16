@@ -212,6 +212,7 @@ import {
 } from "./find/activeFindSessionStore";
 import { createDocumentOpenIdFactory } from "./documentOpenId";
 import { EmphasisMarkDialog } from "./dialog/EmphasisMarkDialog";
+import { RubyMarkupDialog } from "./dialog/RubyMarkupDialog";
 import {
   EditorSurface,
   type DocumentOpenAggregateMetrics,
@@ -891,6 +892,11 @@ export function App(): JSX.Element {
     | null
   >(null);
   const [emphasisMarkDialogState, setEmphasisMarkDialogState] = useState<{
+    readonly selectedText: string;
+    readonly selection: { readonly from: number; readonly to: number };
+    readonly opener: Element | null;
+  } | null>(null);
+  const [rubyDialogState, setRubyDialogState] = useState<{
     readonly selectedText: string;
     readonly selection: { readonly from: number; readonly to: number };
     readonly opener: Element | null;
@@ -2991,6 +2997,60 @@ export function App(): JSX.Element {
       ]);
     },
     [emphasisMarkDialogState, notifyEmphasisMarkNoSelection]
+  );
+
+  const notifyRubyNoSelection = useCallback(() => {
+    notificationController.notify({
+      message: translate("rubyMarkup.toast.noSelection")
+    });
+  }, [translate, notificationController]);
+
+  const notifyRubyReadOnly = useCallback(() => {
+    notificationController.notify({
+      message: translate("rubyMarkup.toast.readOnly")
+    });
+  }, [translate, notificationController]);
+
+  const notifyRubyMultiLine = useCallback(() => {
+    notificationController.notify({
+      message: translate("rubyMarkup.toast.multiLine")
+    });
+  }, [translate, notificationController]);
+
+  const handleRubyShortcut = useCallback(
+    (input: {
+      selectedText: string;
+      selection: { from: number; to: number };
+      opener?: Element | null;
+    }) => {
+      setRubyDialogState({
+        selectedText: input.selectedText,
+        selection: input.selection,
+        opener: input.opener ?? null
+      });
+    },
+    []
+  );
+
+  const handleApplyRubyMarkup = useCallback(
+    (replacementText: string) => {
+      if (!rubyDialogState) {
+        return;
+      }
+      const { selection } = rubyDialogState;
+      if (selection.from === selection.to) {
+        notifyRubyNoSelection();
+        return;
+      }
+      paragraphIndentControllerRef.current?.applyReplaceInBufferChanges([
+        {
+          from: selection.from,
+          to: selection.to,
+          insert: replacementText
+        }
+      ]);
+    },
+    [rubyDialogState, notifyRubyNoSelection]
   );
   const statusBarNumberFormatter = useMemo(
     () => new Intl.NumberFormat(displayLanguage),
@@ -10414,6 +10474,10 @@ export function App(): JSX.Element {
                         notifyEmphasisMarkMultiLine={
                           notifyEmphasisMarkMultiLine
                         }
+                        onRubyShortcut={handleRubyShortcut}
+                        notifyRubyNoSelection={notifyRubyNoSelection}
+                        notifyRubyReadOnly={notifyRubyReadOnly}
+                        notifyRubyMultiLine={notifyRubyMultiLine}
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }
@@ -10758,6 +10822,18 @@ export function App(): JSX.Element {
           translate={translate}
           onApply={handleApplyEmphasisMark}
           onClose={() => setEmphasisMarkDialogState(null)}
+        />
+      ) : null}
+
+      {rubyDialogState !== null ? (
+        <RubyMarkupDialog
+          isOpen={true}
+          selectedText={rubyDialogState.selectedText}
+          initialRule={effectiveSettings.editor.ruby.rule}
+          opener={rubyDialogState.opener}
+          translate={translate}
+          onApply={handleApplyRubyMarkup}
+          onClose={() => setRubyDialogState(null)}
         />
       ) : null}
 

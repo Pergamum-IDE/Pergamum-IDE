@@ -195,6 +195,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.ruby.rule",
           "editor.selectionHighlightMode",
           "editor.findGutterMarkers",
           "editor.captureTabInEditor",
@@ -297,6 +298,29 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "spaces8",
         "tab"
       ]);
+    });
+
+    it("defines editor.ruby.rule in settings UI catalog with only aozora option for this PoC", () => {
+      const rubyRuleItem = getSettingCatalogItem("editor.ruby.rule");
+      expect(rubyRuleItem).toBeDefined();
+      expect(rubyRuleItem?.category).toBe("editor");
+      expect(rubyRuleItem?.control.kind).toBe("select");
+
+      const catalogEntry = getCatalogEntry("editor.ruby.rule");
+      expect(catalogEntry.scope).toBe("applicationWithProjectOverride");
+
+      if (rubyRuleItem?.control.kind === "select") {
+        expect(rubyRuleItem.control.options).toEqual([
+          {
+            value: "aozora",
+            labelKey: "settings.editor.ruby.rule.option.aozora.label"
+          }
+        ]);
+        const optionValues = rubyRuleItem.control.options.map((opt) => opt.value);
+        expect(optionValues).toEqual(["aozora"]);
+        expect(optionValues).not.toContain("kakuyomu");
+        expect(optionValues).not.toContain("narou");
+      }
     });
 
     it("commandPalette marquee delay/speed number controls carry min/max sourced from settingsCatalog.ts, not duplicated literals", () => {

@@ -140,6 +140,11 @@ export function readSettingValue(
         settings.editor.emphasisMark?.narouMarkText ??
         getCatalogDefaultValue("editor.emphasisMark.narouMarkText")
       );
+    case "editor.ruby.rule":
+      return (
+        settings.editor.ruby?.rule ??
+        getCatalogDefaultValue("editor.ruby.rule")
+      );
   }
 
   const exhaustiveCheck: never = key;

@@ -213,6 +213,12 @@ export interface ApplicationEditorEmphasisMarkSettings {
   narouMarkText: string;
 }
 
+export type RubyMarkupRule = "aozora";
+
+export interface ApplicationEditorRubyMarkupSettings {
+  rule: RubyMarkupRule;
+}
+
 export interface ApplicationEditorSettings {
   fontFamily?: string;
   lineEnding: ApplicationEditorLineEndingSettings;
@@ -225,6 +231,7 @@ export interface ApplicationEditorSettings {
   captureTabInEditor: boolean;
   fencedCodeIndentUnit: FencedCodeIndentUnit;
   emphasisMark?: ApplicationEditorEmphasisMarkSettings;
+  ruby?: ApplicationEditorRubyMarkupSettings;
 }
 
 export interface ApplicationNewFileSettings {
@@ -347,12 +354,17 @@ export interface ProjectEditorEmphasisMarkSettings {
   narouMarkText?: string;
 }
 
+export interface ProjectEditorRubySettings {
+  rule?: RubyMarkupRule;
+}
+
 export interface ProjectEditorSettings {
   fontFamily?: string;
   paragraphIndent?: ProjectEditorParagraphIndentSettings;
   characterCount?: ProjectEditorCharacterCountSettings;
   lineEnding?: ProjectEditorLineEndingSettings;
   emphasisMark?: ProjectEditorEmphasisMarkSettings;
+  ruby?: ProjectEditorRubySettings;
 }
 
 export interface ProjectFilesNewFileSettings {
@@ -429,6 +441,7 @@ export interface EffectiveEditorSettings {
   captureTabInEditor: boolean;
   fencedCodeIndentUnit: FencedCodeIndentUnit;
   emphasisMark: ApplicationEditorEmphasisMarkSettings;
+  ruby: ApplicationEditorRubyMarkupSettings;
 }
 
 export interface EffectiveFilesSettings {
@@ -604,6 +617,9 @@ export const builtInDefaultSettings: EffectiveSettings = {
       rule: getCatalogDefaultValue("editor.emphasisMark.rule"),
       aozoraMark: getCatalogDefaultValue("editor.emphasisMark.aozoraMark"),
       narouMarkText: getCatalogDefaultValue("editor.emphasisMark.narouMarkText")
+    },
+    ruby: {
+      rule: getCatalogDefaultValue("editor.ruby.rule")
     }
   },
   search: cloneDefaultSearchSettings(),
@@ -709,6 +725,9 @@ export const defaultApplicationSettings: ApplicationSettings = {
       rule: builtInDefaultSettings.editor.emphasisMark.rule,
       aozoraMark: builtInDefaultSettings.editor.emphasisMark.aozoraMark,
       narouMarkText: builtInDefaultSettings.editor.emphasisMark.narouMarkText
+    },
+    ruby: {
+      rule: builtInDefaultSettings.editor.ruby.rule
     }
   },
   search: cloneDefaultSearchSettings(),
@@ -984,6 +1003,12 @@ export function resolveEffectiveSettings(
           projectSettings?.editor?.emphasisMark?.narouMarkText ??
           applicationSettings.editor.emphasisMark?.narouMarkText ??
           builtInDefaultSettings.editor.emphasisMark.narouMarkText
+      },
+      ruby: {
+        rule:
+          projectSettings?.editor?.ruby?.rule ??
+          applicationSettings.editor.ruby?.rule ??
+          builtInDefaultSettings.editor.ruby.rule
       }
     },
     // #424 Slice 7: nearby search range — Project override > Application >

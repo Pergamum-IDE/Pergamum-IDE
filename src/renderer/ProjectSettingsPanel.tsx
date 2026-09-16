@@ -215,6 +215,8 @@ export function readProjectSettingValue(
       return settings.editor?.emphasisMark?.aozoraMark;
     case "editor.emphasisMark.narouMarkText":
       return settings.editor?.emphasisMark?.narouMarkText;
+    case "editor.ruby.rule":
+      return settings.editor?.ruby?.rule;
     default:
       return undefined;
   }

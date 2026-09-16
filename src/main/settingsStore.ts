@@ -473,6 +473,12 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
       (editorValue?.emphasisMark as any)?.narouMarkText
     ).value
   };
+  const ruby = {
+    rule: resolveCatalogValue(
+      "editor.ruby.rule",
+      (editorValue?.ruby as any)?.rule
+    ).value
+  };
 
   if (
     editorValue === undefined ||
@@ -489,7 +495,8 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
       findGutterMarkers,
       captureTabInEditor,
       fencedCodeIndentUnit,
-      emphasisMark
+      emphasisMark,
+      ruby
     };
   }
 
@@ -504,7 +511,8 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     findGutterMarkers,
     captureTabInEditor,
     fencedCodeIndentUnit,
-    emphasisMark
+    emphasisMark,
+    ruby
   };
 }
 
@@ -1413,9 +1421,10 @@ function parseEditorSettingsForWrite(
   const hasCaptureTabInEditor = keys.includes("captureTabInEditor");
   const hasFencedCodeIndentUnit = keys.includes("fencedCodeIndentUnit");
   const hasEmphasisMark = keys.includes("emphasisMark");
+  const hasRuby = keys.includes("ruby");
 
   const expectedKeyCount =
-    9 + (hasFontFamily ? 1 : 0) + (hasEmphasisMark ? 1 : 0);
+    9 + (hasFontFamily ? 1 : 0) + (hasEmphasisMark ? 1 : 0) + (hasRuby ? 1 : 0);
 
   if (
     !hasLineEnding ||
@@ -1477,6 +1486,11 @@ function parseEditorSettingsForWrite(
     (value.emphasisMark as any)?.narouMarkText
   );
 
+  const rubyRuleResolution = resolveCatalogValue(
+    "editor.ruby.rule",
+    (value.ruby as any)?.rule
+  );
+
   if (
     !undoHistoryMinDepthResolution.ok ||
     !selectionHighlightModeResolution.ok ||
@@ -1485,7 +1499,8 @@ function parseEditorSettingsForWrite(
     !fencedCodeIndentUnitResolution.ok ||
     !emphasisMarkRuleResolution.ok ||
     !emphasisMarkAozoraMarkResolution.ok ||
-    !emphasisMarkNarouMarkTextResolution.ok
+    !emphasisMarkNarouMarkTextResolution.ok ||
+    !rubyRuleResolution.ok
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -1500,6 +1515,9 @@ function parseEditorSettingsForWrite(
     aozoraMark: emphasisMarkAozoraMarkResolution.value,
     narouMarkText: emphasisMarkNarouMarkTextResolution.value
   };
+  const ruby = {
+    rule: rubyRuleResolution.value
+  };
 
   if (!hasFontFamily) {
     return {
@@ -1512,7 +1530,8 @@ function parseEditorSettingsForWrite(
       findGutterMarkers,
       captureTabInEditor,
       fencedCodeIndentUnit,
-      emphasisMark
+      emphasisMark,
+      ruby
     };
   }
 
@@ -1534,7 +1553,8 @@ function parseEditorSettingsForWrite(
     findGutterMarkers,
     captureTabInEditor,
     fencedCodeIndentUnit,
-    emphasisMark
+    emphasisMark,
+    ruby
   };
 }
 

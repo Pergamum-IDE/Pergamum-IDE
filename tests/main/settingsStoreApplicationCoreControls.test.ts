@@ -662,6 +662,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         rule: "aozora",
         aozoraMark: "sesame",
         narouMarkText: "・"
+      },
+      ruby: {
+        rule: "aozora"
       }
     });
     expect(written.files).toEqual({

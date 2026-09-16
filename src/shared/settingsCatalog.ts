@@ -1058,6 +1058,16 @@ export const settingsCatalog = defineSettingsCatalog({
     allowEmptyString: false,
     deprecatedAliases: [],
     migrationNotes: []
+  }),
+  "editor.ruby.rule": defineEnumSetting({
+    key: "editor.ruby.rule",
+    scope: "applicationWithProjectOverride",
+    enumValues: ["aozora"],
+    defaultValue: "aozora",
+    labelKey: "settings.editor.ruby.rule.label",
+    descriptionKey: "settings.editor.ruby.rule.description",
+    deprecatedAliases: [],
+    migrationNotes: []
   })
 });
 

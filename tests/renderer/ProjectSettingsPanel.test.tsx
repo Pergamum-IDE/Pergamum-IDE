@@ -640,8 +640,8 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*.
-    expect(rows).toHaveLength(19);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule.
+    expect(rows).toHaveLength(20);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -1153,6 +1153,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "editor.emphasisMark.rule",
           "editor.emphasisMark.aozoraMark",
           "editor.emphasisMark.narouMarkText",
+          "editor.ruby.rule",
           "editor.lineEnding.expected",
           "editor.characterCount.exclude.whitespace",
           "editor.characterCount.exclude.lineBreaks",
@@ -1183,6 +1184,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "editor.emphasisMark.rule",
           "editor.emphasisMark.aozoraMark",
           "editor.emphasisMark.narouMarkText",
+          "editor.ruby.rule",
           "editor.lineEnding.expected",
           "editor.characterCount.exclude.whitespace",
           "editor.characterCount.exclude.lineBreaks",
@@ -1335,6 +1337,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
         "editor.emphasisMark.narouMarkText",
+        "editor.ruby.rule",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1390,6 +1393,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
         "editor.emphasisMark.narouMarkText",
+        "editor.ruby.rule",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1487,6 +1491,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
         "editor.emphasisMark.narouMarkText",
+        "editor.ruby.rule",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1571,6 +1576,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
         "editor.emphasisMark.narouMarkText",
+        "editor.ruby.rule",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1663,7 +1669,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       act(() => {
         categoryButtons[1].click();
       });
-      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(11);
+      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(12);
 
       const settingInput = container.querySelector<HTMLInputElement>(
         "input.settingsTextInput"
@@ -3921,6 +3927,58 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
       expect(onSaveSettings).toHaveBeenCalledWith({
         remove: ["editor.emphasisMark.aozoraMark"]
       });
+    });
+
+    it("reads editor.ruby.rule correctly via readProjectSettingValue and renders in ProjectSettingsPanel", async () => {
+      expect(
+        readProjectSettingValue("editor.ruby.rule", {
+          editor: {
+            ruby: {
+              rule: "aozora"
+            }
+          }
+        })
+      ).toBe("aozora");
+
+      await act(async () => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={{
+              editor: {
+                ruby: {
+                  rule: "aozora"
+                }
+              }
+            }}
+            applicationSettings={{
+              editor: {
+                ruby: {
+                  rule: "aozora"
+                }
+              }
+            }}
+            isReadOnly={false}
+            onSaveSettings={vi.fn()}
+          />
+        );
+      });
+
+      const rubyRow = Array.from(
+        container.querySelectorAll(".settingsItemRow")
+      ).find(
+        (r) =>
+          r.querySelector(".settingsItemKey")?.textContent ===
+          "editor.ruby.rule"
+      )!;
+      expect(rubyRow).not.toBeUndefined();
+      expect(rubyRow.querySelector(".settingsItemKey")?.textContent).toBe("editor.ruby.rule");
+      expect(rubyRow.querySelector(".settingsItemLabel")?.textContent).toBe("ルビ記法ルール");
+
+      const select = rubyRow.querySelector<HTMLSelectElement>("select")!;
+      expect(select).not.toBeNull();
+      expect(select.value).toBe("aozora");
+      expect(select.selectedOptions[0].textContent).toBe("青空文庫");
     });
   });
 });
