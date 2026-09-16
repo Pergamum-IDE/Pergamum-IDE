@@ -25,17 +25,93 @@ const translateJa: Translate = (
   return template;
 };
 
-function findButtonByText(
-  root: HTMLElement,
-  selector: string,
-  text: string
-): HTMLButtonElement | undefined {
-  return Array.from(root.querySelectorAll<HTMLButtonElement>(selector)).find(
-    (b) => b.textContent?.includes(text)
+// #494 drag-and-drop test helpers. The dialog carries its drag payload in
+// React state (not `DataTransfer` — see FontPickerDialog's `DragSource`
+// comment), so these dispatch plain native events; happy-dom's `DragEvent`
+// constructor works but leaves `dataTransfer` undefined, which the
+// component already tolerates via try/catch and optional chaining.
+function mousedown(el: Element | null | undefined): void {
+  el?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+}
+
+function mouseup(el: Element | null | undefined): void {
+  el?.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+}
+
+function dragStart(el: Element | null | undefined): void {
+  el?.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true }));
+}
+
+function dragOver(el: Element | null | undefined, clientY = 0): void {
+  el?.dispatchEvent(
+    new DragEvent("dragover", { bubbles: true, cancelable: true, clientY })
   );
 }
 
-describe("FontPickerDialog (#493 two-pane UX)", () => {
+function drop(el: Element | null | undefined, clientY = 0): void {
+  el?.dispatchEvent(
+    new DragEvent("drop", { bubbles: true, cancelable: true, clientY })
+  );
+}
+
+function dragEnd(el: Element | null | undefined): void {
+  el?.dispatchEvent(new DragEvent("dragend", { bubbles: true, cancelable: true }));
+}
+
+function gripOf(row: Element | null | undefined): HTMLButtonElement | null | undefined {
+  return row?.querySelector<HTMLButtonElement>(".fontPickerRowGrip");
+}
+
+function rowLiOf(button: Element | null | undefined): HTMLLIElement | null {
+  return (button?.closest("li") as HTMLLIElement | null) ?? null;
+}
+
+/** Runs one drag-event dispatch per `act()`, matching this file's existing
+ * "one interaction per act()" convention so each step sees freshly
+ * committed React state/closures before the next fires. */
+async function step(fn: () => void): Promise<void> {
+  await act(async () => {
+    fn();
+  });
+}
+
+/** Full gripper-driven drag sequence: mousedown-arm -> dragstart -> dragover
+ * -> drop -> dragend, each its own `step()`. `sourceLi`/`targetEl` are the
+ * `<li>` / drop-target elements themselves. */
+async function performDrag(
+  sourceLi: Element | null | undefined,
+  targetEl: Element | null | undefined,
+  clientY = 0
+): Promise<void> {
+  const grip = gripOf(sourceLi);
+  await step(() => mousedown(grip));
+  await step(() => dragStart(sourceLi));
+  await step(() => dragOver(targetEl, clientY));
+  await step(() => drop(targetEl, clientY));
+  await step(() => dragEnd(sourceLi));
+}
+
+function selectedRowButtons(container: HTMLElement): HTMLButtonElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLButtonElement>(
+      ".fontPickerPane-selected .fontPickerRowButton"
+    )
+  );
+}
+
+function availableRowButtons(container: HTMLElement): HTMLButtonElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLButtonElement>(
+      ".fontPickerPane-available .fontPickerRowButton"
+    )
+  );
+}
+
+function names(buttons: HTMLButtonElement[]): (string | null)[] {
+  return buttons.map((b) => b.textContent);
+}
+
+describe("FontPickerDialog (#494 D&D-only remediation)", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -69,26 +145,45 @@ describe("FontPickerDialog (#493 two-pane UX)", () => {
     }
   });
 
+  async function renderDialog(props: {
+    initialValue?: FontFamilySetting[];
+    cache?: { family: string; displayName: string }[] | "notScanned" | { status: "error"; message: string };
+    onSave?: (selectedFonts: FontFamilySetting[]) => void;
+    onClose?: () => void;
+    isOpen?: boolean;
+  }): Promise<void> {
+    const { initialValue = [], cache = [], onSave = vi.fn(), onClose = vi.fn(), isOpen = true } = props;
+    if (cache === "notScanned") {
+      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
+    } else if (Array.isArray(cache)) {
+      (window as any).pergamum = loadedCache(cache);
+    } else {
+      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue(cache) } };
+    }
+
+    await act(async () => {
+      root.render(
+        <FontPickerDialog
+          isOpen={isOpen}
+          slot="editor.fontFamilyList"
+          initialValue={initialValue}
+          translate={translateJa}
+          onSave={onSave}
+          onClose={onClose}
+        />
+      );
+    });
+  }
+
   describe("dialog layout", () => {
     it("renders selected and available panes with fonts in the correct pane", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Cascadia Code", displayName: "Cascadia Code" },
-        { family: "Yu Gothic", displayName: "Yu Gothic" },
-        { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" },
-        { family: "sans-serif", displayName: "sans-serif" }
-      ]);
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [
+          { family: "Yu Gothic", displayName: "Yu Gothic" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" },
+          { family: "sans-serif", displayName: "sans-serif" }
+        ]
       });
 
       const selectedPane = container.querySelector(".fontPickerPane-selected");
@@ -96,89 +191,41 @@ describe("FontPickerDialog (#493 two-pane UX)", () => {
       expect(selectedPane).toBeTruthy();
       expect(availablePane).toBeTruthy();
 
-      const selectedItems = selectedPane!.querySelectorAll(".fontPickerRowButton");
-      expect(selectedItems.length).toBe(1);
-      expect(selectedItems[0].textContent).toContain("Cascadia Code");
+      expect(selectedRowButtons(container).length).toBe(1);
+      expect(selectedRowButtons(container)[0].textContent).toContain("Cascadia Code");
 
-      const availableItems = Array.from(
-        availablePane!.querySelectorAll<HTMLButtonElement>(".fontPickerRowButton")
-      );
-      const availableNames = availableItems.map((b) => b.textContent);
+      const availableNames = names(availableRowButtons(container));
       expect(availableNames.some((t) => t?.includes("Yu Gothic"))).toBe(true);
       expect(availableNames.some((t) => t?.includes("BIZ UD Gothic"))).toBe(true);
       expect(availableNames.some((t) => t?.includes("Cascadia Code"))).toBe(false);
       expect(availableNames.some((t) => t?.includes("sans-serif"))).toBe(false);
     });
 
-    it("renders a bounded scroll container for the available pane", async () => {
-      (window as any).pergamum = loadedCache(
-        Array.from({ length: 120 }, (_, i) => ({
+    it("renders a bounded scroll container for the available pane with 100+ fonts", async () => {
+      await renderDialog({
+        cache: Array.from({ length: 120 }, (_, i) => ({
           family: `Font ${i}`,
           displayName: `Font ${i}`
         }))
-      );
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
       });
 
       const box = container.querySelector<HTMLElement>(".fontPickerAvailableListBox");
       expect(box).toBeTruthy();
-      const items = box!.querySelectorAll(".fontPickerRowButton");
-      expect(items.length).toBe(120);
+      expect(box!.querySelectorAll(".fontPickerRowButton").length).toBe(120);
     });
 
     it("renders the top-to-bottom priority explanation in the selected pane", async () => {
-      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
-      });
-
+      await renderDialog({ cache: "notScanned" });
       const note = container.querySelector(".fontPickerPriorityNote");
       expect(note?.textContent).toBe(translateJa("fontPicker.label.priorityExplanation"));
     });
   });
 
-  describe("row font rendering", () => {
-    // #493 remediation: symbol fonts make their own name unreadable if the
-    // whole row is rendered in the represented font. The identity line must
-    // stay in the normal UI font; only the mini sample line renders in the
-    // represented family (+ generic fallback).
-    it("keeps the identity line in the normal UI font and applies the represented font-family only to the mini sample, for both panes, without dangerous HTML", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Yu Gothic", displayName: "Yu Gothic" }
-      ]);
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
+  describe("font entity rendering", () => {
+    it("renders each selected/available font as one stable entity: identity in the normal UI font, mini sample in the represented font, no overlap, no dangerous HTML", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
       });
 
       const selectedRow = container.querySelector<HTMLButtonElement>(
@@ -186,11 +233,18 @@ describe("FontPickerDialog (#493 two-pane UX)", () => {
       );
       const selectedName = selectedRow?.querySelector<HTMLElement>(".fontPickerRowName");
       const selectedSample = selectedRow?.querySelector<HTMLElement>(".fontPickerRowSample");
+      // Identity is the normal UI font: no represented-font style leaks onto
+      // the button or the identity line itself.
       expect(selectedRow?.style.fontFamily).toBe("");
       expect(selectedName?.style.fontFamily).toBe("");
+      // Only the mini sample line carries the represented font + slot
+      // generic fallback.
       expect(selectedSample?.style.fontFamily).toContain("Cascadia Code");
       expect(selectedSample?.style.fontFamily).toContain("monospace");
       expect(selectedName?.textContent).toContain("Cascadia Code");
+      // Identity and mini sample are two distinct elements (no overlap).
+      expect(selectedName).not.toBe(selectedSample);
+      expect(selectedSample?.textContent).toBe("Aa あア亜 123");
 
       const availableRow = container.querySelector<HTMLButtonElement>(
         ".fontPickerPane-available .fontPickerRowButton"
@@ -201,211 +255,544 @@ describe("FontPickerDialog (#493 two-pane UX)", () => {
       expect(availableName?.style.fontFamily).toBe("");
       expect(availableSample?.style.fontFamily).toContain("Yu Gothic");
       expect(availableSample?.style.fontFamily).toContain("monospace");
-      expect(availableName?.textContent).toContain("Yu Gothic");
 
-      // No dangerouslySetInnerHTML anywhere in the dialog markup.
       expect(container.innerHTML).not.toContain("dangerouslySetInnerHTML");
+    });
+
+    it("renders each font row within a structured grip-column + body-column entity that can ellipsize", async () => {
+      const longName = "A".repeat(120);
+      await renderDialog({
+        initialValue: [{ family: longName, displayName: longName }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+
+      const li = container.querySelector<HTMLLIElement>(".fontPickerPane-selected li");
+      expect(li).toBeTruthy();
+      // Structured entity: grip + body button as two sibling children.
+      expect(li!.children.length).toBe(2);
+      expect(li!.children[0].classList.contains("fontPickerRowGrip")).toBe(true);
+      expect(li!.children[1].classList.contains("fontPickerRowButton")).toBe(true);
+
+      // Text renders in full in the DOM (CSS ellipsizes visually); no crash
+      // on an extreme-length name.
+      const nameEl = li!.querySelector(".fontPickerRowName");
+      expect(nameEl?.textContent).toContain(longName);
+    });
+
+    it("does not make a symbol font's readable identity unreadable", async () => {
+      await renderDialog({ cache: [{ family: "Wingdings", displayName: "Wingdings" }] });
+      const name = container.querySelector<HTMLElement>(
+        ".fontPickerPane-available .fontPickerRowName"
+      );
+      // The identity line has no font-family override, so it always renders
+      // in the normal UI font regardless of how exotic the represented
+      // family is.
+      expect(name?.style.fontFamily).toBe("");
+      expect(name?.textContent).toBe("Wingdings");
+    });
+  });
+
+  describe("D&D-only controls (no Add/Remove/Up/Down buttons)", () => {
+    it("does not render Add, Remove, Up, or Down buttons", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+
+      const buttonTexts = Array.from(container.querySelectorAll("button")).map(
+        (b) => b.textContent?.trim()
+      );
+      expect(buttonTexts).not.toContain("上へ");
+      expect(buttonTexts).not.toContain("下へ");
+      expect(buttonTexts).not.toContain("削除");
+      expect(buttonTexts).not.toContain("追加");
+      expect(container.querySelector(".fontPickerPaneActions")).toBeNull();
+    });
+
+    it("renders the localized D&D operation caption", async () => {
+      await renderDialog({ cache: "notScanned" });
+      const caption = container.querySelector(".fontPickerDndCaption");
+      expect(caption).toBeTruthy();
+      expect(caption?.textContent).toBe(translateJa("fontPicker.label.dndCaption"));
+      expect(caption?.textContent).toBe(
+        "フォントをドラッグアンドドロップで採用、入れ替えができます。"
+      );
+    });
+  });
+
+  describe("gripper handle", () => {
+    it("renders on selected rows", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }]
+      });
+      expect(
+        container.querySelectorAll(".fontPickerPane-selected .fontPickerRowGrip").length
+      ).toBe(1);
+    });
+
+    it("renders on available rows", async () => {
+      await renderDialog({ cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }] });
+      expect(
+        container.querySelectorAll(".fontPickerPane-available .fontPickerRowGrip").length
+      ).toBe(1);
+    });
+
+    it("renders the assets/icons/codicons/dialog/gripper.svg asset", async () => {
+      await renderDialog({ cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }] });
+      const grip = container.querySelector(".fontPickerRowGrip");
+      // A path-data fragment unique to gripper.svg's six-dot glyph.
+      expect(grip?.innerHTML).toContain("M7 4C7 4.552");
+      expect(grip?.querySelector("svg")).toBeTruthy();
+    });
+
+    it("has an accessible name", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+      const grips = container.querySelectorAll<HTMLButtonElement>(".fontPickerRowGrip");
+      expect(grips.length).toBeGreaterThan(0);
+      for (const grip of Array.from(grips)) {
+        expect(grip.getAttribute("aria-label")).toBe(
+          translateJa("fontPicker.label.dragHandle")
+        );
+      }
+    });
+
+    it("row body click still previews the font and does not arm dragging", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+      const availableRowButton = availableRowButtons(container)[0];
+      await step(() => availableRowButton?.click());
+
+      const preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
+      expect(preview?.style.fontFamily).toContain("Yu Gothic");
+
+      const li = rowLiOf(availableRowButton);
+      expect(li?.getAttribute("draggable")).not.toBe("true");
+    });
+
+    it("mousedown on the gripper arms the row for dragging", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }]
+      });
+      const grip = container.querySelector<HTMLButtonElement>(
+        ".fontPickerPane-selected .fontPickerRowGrip"
+      );
+      const li = rowLiOf(grip);
+      expect(li?.getAttribute("draggable")).not.toBe("true");
+
+      await step(() => mousedown(grip));
+      expect(li?.getAttribute("draggable")).toBe("true");
+    });
+
+    it("clicking/dragging the gripper handle does not trigger click-to-preview", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+      const grip = container.querySelector<HTMLButtonElement>(
+        ".fontPickerPane-available .fontPickerRowGrip"
+      );
+      const previewBefore = container.querySelector<HTMLElement>(
+        ".fontPickerSamplePreview"
+      )?.style.fontFamily;
+
+      await step(() => mousedown(grip));
+      await step(() => grip?.click());
+      await step(() => mouseup(grip));
+
+      const previewAfter = container.querySelector<HTMLElement>(
+        ".fontPickerSamplePreview"
+      )?.style.fontFamily;
+      expect(previewAfter).toBe(previewBefore);
+      expect(previewAfter).toContain("Cascadia Code");
+    });
+
+    it("search input and sample textarea never carry a draggable attribute", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+      const searchInput = container.querySelector(".fontPickerSearchInput");
+      const sampleInput = container.querySelector(".fontPickerSampleInput");
+      expect(searchInput?.getAttribute("draggable")).toBeNull();
+      expect(sampleInput?.getAttribute("draggable")).toBeNull();
+    });
+
+    it("Apply and Cancel buttons never carry a draggable attribute", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }]
+      });
+      const applyBtn = container.querySelector(".appDialogButton-primary");
+      const cancelBtn = container.querySelector(".appDialogButton-cancel");
+      expect(applyBtn?.getAttribute("draggable")).toBeNull();
+      expect(cancelBtn?.getAttribute("draggable")).toBeNull();
+    });
+  });
+
+  describe("drag and drop behavior", () => {
+    it("right-to-left drag adopts an available font (append on empty-space drop), and it disappears from the available pane", async () => {
+      const onSaveMock = vi.fn();
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }],
+        onSave: onSaveMock
+      });
+
+      const availableLi = rowLiOf(availableRowButtons(container)[0]);
+      const selectedBox = container.querySelector<HTMLElement>(".fontPickerSelectedListBox");
+      await performDrag(availableLi, selectedBox);
+
+      const selectedNames = names(selectedRowButtons(container));
+      expect(selectedNames.length).toBe(2);
+      expect(selectedNames[0]).toContain("Cascadia Code");
+      expect(selectedNames[1]).toContain("Yu Gothic");
+      expect(names(availableRowButtons(container)).some((t) => t?.includes("Yu Gothic"))).toBe(
+        false
+      );
+      expect(onSaveMock).not.toHaveBeenCalled();
+    });
+
+    it("right-to-left drag onto a specific selected row inserts it at that position", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
+        ],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+
+      const availableLi = rowLiOf(availableRowButtons(container)[0]);
+      const firstSelectedLi = container.querySelector<HTMLLIElement>(
+        ".fontPickerPane-selected li[data-row-index='0']"
+      );
+      await performDrag(availableLi, firstSelectedLi, 0);
+
+      const selectedNames = names(selectedRowButtons(container));
+      expect(selectedNames.length).toBe(3);
+      expect(selectedNames[0]).toContain("Yu Gothic");
+      expect(selectedNames[1]).toContain("Cascadia Code");
+      expect(selectedNames[2]).toContain("BIZ UD Gothic");
+    });
+
+    it("left-to-right drag unadopts a selected font, which reappears in the available pane if still cached", async () => {
+      const onSaveMock = vi.fn();
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "Yu Gothic", displayName: "Yu Gothic" }
+        ],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }],
+        onSave: onSaveMock
+      });
+
+      const targetLi = rowLiOf(selectedRowButtons(container)[1]);
+      const availableBox = container.querySelector<HTMLElement>(".fontPickerAvailableListBox");
+      await performDrag(targetLi, availableBox);
+
+      const selectedNames = names(selectedRowButtons(container));
+      expect(selectedNames.length).toBe(1);
+      expect(selectedNames[0]).toContain("Cascadia Code");
+      expect(names(availableRowButtons(container)).some((t) => t?.includes("Yu Gothic"))).toBe(
+        true
+      );
+      expect(onSaveMock).not.toHaveBeenCalled();
+    });
+
+    it("left-to-right drag unadopts a font missing from the cache without crashing, and it does not reappear on the right", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "NonExistentFont", displayName: "NonExistentFont" }
+        ],
+        cache: []
+      });
+
+      const targetLi = rowLiOf(selectedRowButtons(container)[1]);
+      const availableBox = container.querySelector<HTMLElement>(".fontPickerAvailableListBox");
+      await performDrag(targetLi, availableBox);
+
+      const selectedNames = names(selectedRowButtons(container));
+      expect(selectedNames.length).toBe(1);
+      expect(selectedNames[0]).toContain("Cascadia Code");
+      expect(
+        names(availableRowButtons(container)).some((t) => t?.includes("NonExistentFont"))
+      ).toBe(false);
+    });
+
+    it("left-pane internal drag reorders selected fonts", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" },
+          { family: "Yu Gothic", displayName: "Yu Gothic" }
+        ]
+      });
+
+      const draggedLi = rowLiOf(selectedRowButtons(container)[2]); // Yu Gothic
+      const targetLi = container.querySelector<HTMLLIElement>(
+        ".fontPickerPane-selected li[data-row-index='1']"
+      ); // BIZ UD Gothic
+      await performDrag(draggedLi, targetLi, 0);
+
+      const namesAfter = names(selectedRowButtons(container));
+      expect(namesAfter[0]).toContain("Cascadia Code");
+      expect(namesAfter[1]).toContain("Yu Gothic");
+      expect(namesAfter[2]).toContain("BIZ UD Gothic");
+    });
+
+    it("a missing-from-cache selected font can be reordered within the left pane", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "NonExistentFont", displayName: "NonExistentFont" }
+        ]
+      });
+
+      const draggedLi = rowLiOf(selectedRowButtons(container)[1]); // NonExistentFont
+      const targetLi = container.querySelector<HTMLLIElement>(
+        ".fontPickerPane-selected li[data-row-index='0']"
+      );
+      await performDrag(draggedLi, targetLi, 0);
+
+      const namesAfter = names(selectedRowButtons(container));
+      expect(namesAfter[0]).toContain("NonExistentFont");
+      expect(namesAfter[1]).toContain("Cascadia Code");
+    });
+
+    it("prevents a duplicate adopt: an already-selected family is excluded from the available pane entirely", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Cascadia Code", displayName: "Cascadia Code" }]
+      });
+      expect(
+        names(availableRowButtons(container)).some((t) => t?.includes("Cascadia Code"))
+      ).toBe(false);
+    });
+
+    it("an invalid drop (no drag in progress) leaves the selected order unchanged", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
+        ]
+      });
+      const before = names(selectedRowButtons(container));
+      const selectedBox = container.querySelector<HTMLElement>(".fontPickerSelectedListBox");
+      await step(() => drop(selectedBox));
+      expect(names(selectedRowButtons(container))).toEqual(before);
+    });
+
+    it("a drag cancelled outside both panes (dragend with no drop) leaves the selected order unchanged", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
+        ]
+      });
+      const before = names(selectedRowButtons(container));
+      const li = rowLiOf(selectedRowButtons(container)[0]);
+      const grip = gripOf(li);
+
+      await step(() => mousedown(grip));
+      await step(() => dragStart(li));
+      await step(() => dragEnd(li));
+
+      expect(names(selectedRowButtons(container))).toEqual(before);
+      expect(li?.getAttribute("draggable")).not.toBe("true");
+    });
+
+    it("Apply saves the drag-reordered/adopted/unadopted list as a structured array; Cancel discards it", async () => {
+      const onSaveMock = vi.fn();
+      const onCloseMock = vi.fn();
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
+        ],
+        onSave: onSaveMock,
+        onClose: onCloseMock
+      });
+
+      const draggedLi = rowLiOf(selectedRowButtons(container)[1]); // BIZ UD Gothic
+      const targetLi = container.querySelector<HTMLLIElement>(
+        ".fontPickerPane-selected li[data-row-index='0']"
+      );
+      await performDrag(draggedLi, targetLi, 0);
+
+      const cancelBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-cancel");
+      await step(() => cancelBtn?.click());
+      expect(onSaveMock).not.toHaveBeenCalled();
+      expect(onCloseMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("Apply persists the drag-reordered list", async () => {
+      const onSaveMock = vi.fn();
+      await renderDialog({
+        initialValue: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
+        ],
+        onSave: onSaveMock
+      });
+
+      const draggedLi = rowLiOf(selectedRowButtons(container)[1]); // BIZ UD Gothic
+      const targetLi = container.querySelector<HTMLLIElement>(
+        ".fontPickerPane-selected li[data-row-index='0']"
+      );
+      await performDrag(draggedLi, targetLi, 0);
+
+      const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
+      await step(() => applyBtn?.click());
+
+      expect(onSaveMock).toHaveBeenCalledWith([
+        { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" },
+        { family: "Cascadia Code", displayName: "Cascadia Code" }
+      ]);
+    });
+
+    it("allows an empty selected list (no drags performed) to be applied", async () => {
+      const onSaveMock = vi.fn();
+      await renderDialog({ initialValue: [], onSave: onSaveMock });
+      const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
+      await step(() => applyBtn?.click());
+      expect(onSaveMock).toHaveBeenCalledWith([]);
+    });
+
+    it("filters the available list by search query", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Cascadia Code", displayName: "Cascadia Code" },
+          { family: "Yu Gothic", displayName: "Yu Gothic" },
+          { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
+        ]
+      });
+      const searchInput = container.querySelector<HTMLInputElement>(".fontPickerSearchInput");
+      await step(() => {
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          "value"
+        )?.set;
+        nativeInputValueSetter?.call(searchInput, "BIZ");
+        searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const availableNames = names(availableRowButtons(container));
+      expect(availableNames.length).toBe(1);
+      expect(availableNames[0]).toContain("BIZ UD Gothic");
+    });
+
+    it("does NOT invoke onSave when Cancel is clicked", async () => {
+      const onSaveMock = vi.fn();
+      const onCloseMock = vi.fn();
+      await renderDialog({ cache: "notScanned", onSave: onSaveMock, onClose: onCloseMock });
+      const cancelBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-cancel");
+      await step(() => cancelBtn?.click());
+      expect(onSaveMock).not.toHaveBeenCalled();
+      expect(onCloseMock).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("click-to-preview", () => {
-    it("clicking an available font changes the sample preview font without adding it", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Yu Gothic", displayName: "Yu Gothic" }
-      ]);
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
+    it("clicking an available font row previews it without adopting it", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
       });
-
-      const availableRow = container.querySelector<HTMLButtonElement>(
-        ".fontPickerPane-available .fontPickerRowButton"
-      );
-      await act(async () => {
-        availableRow?.click();
-      });
+      await step(() => availableRowButtons(container)[0]?.click());
 
       const preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
       expect(preview?.style.fontFamily).toContain("Yu Gothic");
       expect(preview?.style.fontFamily).not.toContain("Cascadia Code");
-
-      // Selected list is unchanged.
-      const selectedItems = container.querySelectorAll(
-        ".fontPickerPane-selected .fontPickerRowButton"
-      );
-      expect(selectedItems.length).toBe(1);
-      expect(selectedItems[0].textContent).toContain("Cascadia Code");
+      expect(selectedRowButtons(container).length).toBe(1);
+      expect(selectedRowButtons(container)[0].textContent).toContain("Cascadia Code");
     });
 
-    it("clicking a selected font row previews it without reordering/removing it, without saving, and Apply later persists the unchanged original list", async () => {
-      (window as any).pergamum = loadedCache([]);
+    it("clicking a selected font row previews it without reordering/removing it or saving", async () => {
       const onSaveMock = vi.fn();
       const onCloseMock = vi.fn();
       const initialValue = [
         { family: "Cascadia Code", displayName: "Cascadia Code" },
         { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
       ];
+      await renderDialog({ initialValue, onSave: onSaveMock, onClose: onCloseMock });
 
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={initialValue}
-            translate={translateJa}
-            onSave={onSaveMock}
-            onClose={onCloseMock}
-          />
-        );
-      });
+      await step(() => selectedRowButtons(container)[1]?.click());
 
-      const rows = container.querySelectorAll<HTMLButtonElement>(
-        ".fontPickerPane-selected .fontPickerRowButton"
-      );
-      await act(async () => {
-        rows[1].click();
-      });
-
-      // Preview switches to the clicked font alone.
       const preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
       expect(preview?.style.fontFamily).toContain("BIZ UD Gothic");
       expect(preview?.style.fontFamily).not.toContain("Cascadia Code");
 
-      // The selected list itself is untouched: same length, same order, same
-      // content as the initial value.
-      const rowsAfter = container.querySelectorAll(
-        ".fontPickerPane-selected .fontPickerRowButton"
-      );
+      const rowsAfter = names(selectedRowButtons(container));
       expect(rowsAfter.length).toBe(2);
-      expect(rowsAfter[0].textContent).toContain("Cascadia Code");
-      expect(rowsAfter[1].textContent).toContain("BIZ UD Gothic");
-
-      // No apply/save (or close) side effect from the click alone.
+      expect(rowsAfter[0]).toContain("Cascadia Code");
+      expect(rowsAfter[1]).toContain("BIZ UD Gothic");
       expect(onSaveMock).not.toHaveBeenCalled();
       expect(onCloseMock).not.toHaveBeenCalled();
 
-      // Applying afterwards proves no silent mutation happened: the saved
-      // value is exactly the original, unchanged list.
       const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
-      await act(async () => {
-        applyBtn?.click();
-      });
+      await step(() => applyBtn?.click());
       expect(onSaveMock).toHaveBeenCalledWith(initialValue);
     });
 
     it("does not call onSave when clicking rows", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Yu Gothic", displayName: "Yu Gothic" }
-      ]);
       const onSaveMock = vi.fn();
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={onSaveMock}
-            onClose={vi.fn()}
-          />
-        );
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }],
+        onSave: onSaveMock
       });
-
-      const availableRow = container.querySelector<HTMLButtonElement>(
-        ".fontPickerPane-available .fontPickerRowButton"
-      );
-      const selectedRow = container.querySelector<HTMLButtonElement>(
-        ".fontPickerPane-selected .fontPickerRowButton"
-      );
-
-      await act(async () => {
-        availableRow?.click();
-        selectedRow?.click();
+      await step(() => {
+        availableRowButtons(container)[0]?.click();
+        selectedRowButtons(container)[0]?.click();
       });
-
       expect(onSaveMock).not.toHaveBeenCalled();
     });
 
-    it("previews the full selected list via the selected-list preview control, and Add/Remove/Up/Down reset to it", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Yu Gothic", displayName: "Yu Gothic" }
-      ]);
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
+    it("the selected-list preview mode control still shows the full selected list, and resets after a drag", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
       });
 
-      // Default preview mode is selectedList already.
       let preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
       expect(preview?.style.fontFamily).toContain("Cascadia Code");
 
-      const availableRow = container.querySelector<HTMLButtonElement>(
-        ".fontPickerPane-available .fontPickerRowButton"
-      );
-      await act(async () => {
-        availableRow?.click(); // highlight + single-family preview
-      });
+      await step(() => availableRowButtons(container)[0]?.click());
       preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
       expect(preview?.style.fontFamily).toContain("Yu Gothic");
       expect(preview?.style.fontFamily).not.toContain("Cascadia Code");
 
-      const addBtn = findButtonByText(
-        container,
-        ".fontPickerPane-available .fontPickerPaneActions button",
-        translateJa("fontPicker.button.add")
-      );
-      await act(async () => {
-        addBtn?.click();
-      });
+      const availableLi = rowLiOf(availableRowButtons(container)[0]);
+      const selectedBox = container.querySelector<HTMLElement>(".fontPickerSelectedListBox");
+      await performDrag(availableLi, selectedBox);
 
-      // After Add, preview mode resets to the full selected list.
       preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
       expect(preview?.style.fontFamily).toContain("Cascadia Code");
       expect(preview?.style.fontFamily).toContain("Yu Gothic");
+
+      const previewBtn = container.querySelector<HTMLButtonElement>(
+        ".fontPickerPreviewModeButton"
+      );
+      expect(previewBtn?.getAttribute("aria-pressed")).toBe("true");
     });
   });
 
   describe("editable sample text", () => {
-    it("renders default sample text and updates preview text on edit; sample text is not saved and resets on reopen", async () => {
-      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
+    it("renders default sample text and updates preview text on edit; sample text is not saved", async () => {
       const onSaveMock = vi.fn();
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={onSaveMock}
-            onClose={vi.fn()}
-          />
-        );
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: "notScanned",
+        onSave: onSaveMock
       });
 
       const textarea = container.querySelector<HTMLTextAreaElement>(".fontPickerSampleInput");
       expect(textarea?.value).toBe(translateJa("fontPicker.sampleText"));
 
-      await act(async () => {
+      await step(() => {
         const nativeSetter = Object.getOwnPropertyDescriptor(
           window.HTMLTextAreaElement.prototype,
           "value"
@@ -418,22 +805,122 @@ describe("FontPickerDialog (#493 two-pane UX)", () => {
       expect(preview?.textContent).toBe("カスタム見本文");
 
       const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
-      await act(async () => {
-        applyBtn?.click();
-      });
+      await step(() => applyBtn?.click());
 
       expect(onSaveMock).toHaveBeenCalledWith([
         { family: "Cascadia Code", displayName: "Cascadia Code" }
       ]);
-      // Sample text must not leak into the saved value.
-      const savedArg = onSaveMock.mock.calls[0][0];
-      expect(JSON.stringify(savedArg)).not.toContain("カスタム見本文");
+      expect(JSON.stringify(onSaveMock.mock.calls[0][0])).not.toContain("カスタム見本文");
     });
 
-    it("resets sample text to default when the dialog is reopened", async () => {
-      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
+    it("editable sample text is dialog-local: editing then closing via Cancel never saves it, and reopening resets to the default", async () => {
+      const onSaveMock = vi.fn();
+      let onCloseCalls = 0;
+      let isOpen = true;
 
-      const renderDialog = async (isOpen: boolean) => {
+      const doRender = async () => {
+        (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
+        await act(async () => {
+          root.render(
+            <FontPickerDialog
+              isOpen={isOpen}
+              slot="editor.fontFamilyList"
+              initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
+              translate={translateJa}
+              onSave={onSaveMock}
+              onClose={() => {
+                onCloseCalls += 1;
+                isOpen = false;
+              }}
+            />
+          );
+        });
+      };
+      const textarea = () =>
+        container.querySelector<HTMLTextAreaElement>(".fontPickerSampleInput");
+
+      await doRender();
+      expect(textarea()?.value).toBe(translateJa("fontPicker.sampleText"));
+
+      await step(() => {
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          "value"
+        )?.set;
+        nativeSetter?.call(textarea(), "破棄されるべきテキスト");
+        textarea()!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(textarea()?.value).toBe("破棄されるべきテキスト");
+
+      const cancelBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-cancel");
+      await step(() => cancelBtn?.click());
+      expect(onCloseCalls).toBe(1);
+      expect(onSaveMock).not.toHaveBeenCalled();
+      await doRender(); // isOpen is now false.
+
+      isOpen = true;
+      await doRender();
+      expect(textarea()?.value).toBe(translateJa("fontPicker.sampleText"));
+      expect(textarea()?.value).not.toBe("破棄されるべきテキスト");
+    });
+  });
+
+  describe("full-width sample area", () => {
+    it("renders the sample input and preview below both panes, not nested inside either", async () => {
+      await renderDialog({ cache: "notScanned" });
+
+      const content = container.querySelector(".fontPickerContent");
+      const panes = content?.querySelector(":scope > .fontPickerPanes");
+      const sampleSection = content?.querySelector(":scope > .fontPickerSampleSection");
+      expect(panes).toBeTruthy();
+      expect(sampleSection).toBeTruthy();
+
+      // Sibling of `.fontPickerPanes`, not a descendant of either pane.
+      expect(
+        container.querySelector(".fontPickerPane-selected .fontPickerSampleSection")
+      ).toBeNull();
+      expect(
+        container.querySelector(".fontPickerPane-available .fontPickerSampleSection")
+      ).toBeNull();
+
+      // DOM order: panes come before the sample section.
+      const position = panes!.compareDocumentPosition(sampleSection!);
+      expect(Boolean(position & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+      const textarea = sampleSection?.querySelector(".fontPickerSampleInput");
+      const preview = sampleSection?.querySelector(".fontPickerSamplePreview");
+      expect(textarea).toBeTruthy();
+      expect(preview).toBeTruthy();
+    });
+
+    it("sample preview updates on sample text edit and on click-to-preview font changes", async () => {
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+
+      const textarea = container.querySelector<HTMLTextAreaElement>(".fontPickerSampleInput");
+      await step(() => {
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          "value"
+        )?.set;
+        nativeSetter?.call(textarea, "編集テキスト");
+        textarea!.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      let preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
+      expect(preview?.textContent).toBe("編集テキスト");
+
+      await step(() => availableRowButtons(container)[0]?.click());
+      preview = container.querySelector<HTMLElement>(".fontPickerSamplePreview");
+      expect(preview?.textContent).toBe("編集テキスト");
+      expect(preview?.style.fontFamily).toContain("Yu Gothic");
+    });
+
+    it("sample text is not persisted across reopen", async () => {
+      let isOpen = true;
+      const doRender = async () => {
+        (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
         await act(async () => {
           root.render(
             <FontPickerDialog
@@ -447,374 +934,43 @@ describe("FontPickerDialog (#493 two-pane UX)", () => {
           );
         });
       };
-
-      await renderDialog(true);
       const textarea = () =>
         container.querySelector<HTMLTextAreaElement>(".fontPickerSampleInput");
 
-      await act(async () => {
+      await doRender();
+      await step(() => {
         const nativeSetter = Object.getOwnPropertyDescriptor(
           window.HTMLTextAreaElement.prototype,
           "value"
         )?.set;
-        nativeSetter?.call(textarea(), "編集済みテキスト");
+        nativeSetter?.call(textarea(), "一時テキスト");
         textarea()!.dispatchEvent(new Event("input", { bubbles: true }));
       });
-      expect(textarea()?.value).toBe("編集済みテキスト");
 
-      await renderDialog(false);
-      await renderDialog(true);
-
-      expect(textarea()?.value).toBe(translateJa("fontPicker.sampleText"));
-    });
-
-    it("editable sample text is dialog-local: editing then closing via Cancel never saves it, and reopening resets to the default localized sample text", async () => {
-      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
-      const onSaveMock = vi.fn();
-      const onCloseMock = vi.fn();
-      let isOpen = true;
-
-      const renderDialog = async () => {
-        await act(async () => {
-          root.render(
-            <FontPickerDialog
-              isOpen={isOpen}
-              slot="editor.fontFamilyList"
-              initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-              translate={translateJa}
-              onSave={onSaveMock}
-              onClose={() => {
-                onCloseMock();
-                isOpen = false;
-              }}
-            />
-          );
-        });
-      };
-      const textarea = () =>
-        container.querySelector<HTMLTextAreaElement>(".fontPickerSampleInput");
-
-      // 1. Open the dialog.
-      await renderDialog();
-      expect(textarea()?.value).toBe(translateJa("fontPicker.sampleText"));
-
-      // 2. Edit the sample text.
-      await act(async () => {
-        const nativeSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLTextAreaElement.prototype,
-          "value"
-        )?.set;
-        nativeSetter?.call(textarea(), "破棄されるべきテキスト");
-        textarea()!.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-      expect(textarea()?.value).toBe("破棄されるべきテキスト");
-
-      // 3. Close via the actual Cancel button — never Apply.
-      const cancelBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-cancel");
-      await act(async () => {
-        cancelBtn?.click();
-      });
-      expect(onCloseMock).toHaveBeenCalledTimes(1);
-      expect(onSaveMock).not.toHaveBeenCalled();
-      await renderDialog(); // isOpen is now false, reflecting the close.
-
-      // 4. Reopen the dialog.
+      isOpen = false;
+      await doRender();
       isOpen = true;
-      await renderDialog();
+      await doRender();
 
-      // 5. Sample text is back to the default, not the discarded edit.
       expect(textarea()?.value).toBe(translateJa("fontPicker.sampleText"));
-      expect(textarea()?.value).not.toBe("破棄されるべきテキスト");
-    });
-  });
-
-  describe("existing behavior regression", () => {
-    it("preserves selected fonts missing from cache", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Yu Gothic", displayName: "Yu Gothic" }
-      ]);
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "NonExistentFont", displayName: "NonExistentFont" }]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
-      });
-
-      const selectedItems = container.querySelectorAll(".fontPickerPane-selected .fontPickerRowButton");
-      expect(selectedItems.length).toBe(1);
-      expect(selectedItems[0].textContent).toContain("NonExistentFont");
-    });
-
-    it("supports adding candidate via the explicit Add button, reordering, removing, and applying", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Cascadia Code", displayName: "Cascadia Code" },
-        { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
-      ]);
-
-      const onSaveMock = vi.fn();
-      const onCloseMock = vi.fn();
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={onSaveMock}
-            onClose={onCloseMock}
-          />
-        );
-      });
-
-      // Clicking the available row previews only; it must not add by itself.
-      const availRow = findButtonByText(
-        container,
-        ".fontPickerPane-available .fontPickerRowButton",
-        "BIZ UD Gothic"
-      );
-      await act(async () => {
-        availRow?.click();
-      });
-      expect(
-        container.querySelectorAll(".fontPickerPane-selected .fontPickerRowButton").length
-      ).toBe(1);
-
-      const addBtn = findButtonByText(
-        container,
-        ".fontPickerPane-available .fontPickerPaneActions button",
-        translateJa("fontPicker.button.add")
-      );
-      await act(async () => {
-        addBtn?.click();
-      });
-
-      let items = container.querySelectorAll(".fontPickerPane-selected .fontPickerRowButton");
-      expect(items.length).toBe(2);
-      expect(items[0].textContent).toContain("Cascadia Code");
-      expect(items[1].textContent).toContain("BIZ UD Gothic");
-
-      // Select second item (BIZ UD Gothic) and move up.
-      await act(async () => {
-        (items[1] as HTMLButtonElement).click();
-      });
-
-      const moveUpBtn = findButtonByText(
-        container,
-        ".fontPickerPane-selected .fontPickerPaneActions button",
-        translateJa("fontPicker.button.moveUp")
-      );
-      expect(moveUpBtn?.disabled).toBe(false);
-
-      await act(async () => {
-        moveUpBtn?.click();
-      });
-
-      items = container.querySelectorAll(".fontPickerPane-selected .fontPickerRowButton");
-      expect(items[0].textContent).toContain("BIZ UD Gothic");
-      expect(items[1].textContent).toContain("Cascadia Code");
-
-      const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
-      await act(async () => {
-        applyBtn?.click();
-      });
-
-      expect(onSaveMock).toHaveBeenCalledWith([
-        { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" },
-        { family: "Cascadia Code", displayName: "Cascadia Code" }
-      ]);
-      expect(onCloseMock).toHaveBeenCalledTimes(1);
-    });
-
-    it("prevents adding a duplicate family and never stores generic fallback families", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Cascadia Code", displayName: "Cascadia Code" }
-      ]);
-      const onSaveMock = vi.fn();
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={onSaveMock}
-            onClose={vi.fn()}
-          />
-        );
-      });
-
-      // Cascadia Code is already selected, so it is excluded from the
-      // available pane entirely — there is nothing to add a duplicate of.
-      const availableNames = Array.from(
-        container.querySelectorAll<HTMLButtonElement>(
-          ".fontPickerPane-available .fontPickerRowButton"
-        )
-      ).map((b) => b.textContent);
-      expect(availableNames.some((t) => t?.includes("Cascadia Code"))).toBe(false);
-
-      const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
-      await act(async () => {
-        applyBtn?.click();
-      });
-
-      expect(onSaveMock).toHaveBeenCalledWith([
-        { family: "Cascadia Code", displayName: "Cascadia Code" }
-      ]);
-    });
-
-    it("allows an empty selected list to be applied", async () => {
-      (window as any).pergamum = loadedCache([]);
-      const onSaveMock = vi.fn();
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[]}
-            translate={translateJa}
-            onSave={onSaveMock}
-            onClose={vi.fn()}
-          />
-        );
-      });
-
-      const applyBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-primary");
-      await act(async () => {
-        applyBtn?.click();
-      });
-
-      expect(onSaveMock).toHaveBeenCalledWith([]);
-    });
-
-    it("filters the available list by search query", async () => {
-      (window as any).pergamum = loadedCache([
-        { family: "Cascadia Code", displayName: "Cascadia Code" },
-        { family: "Yu Gothic", displayName: "Yu Gothic" },
-        { family: "BIZ UD Gothic", displayName: "BIZ UD Gothic" }
-      ]);
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
-      });
-
-      const searchInput = container.querySelector<HTMLInputElement>(".fontPickerSearchInput");
-      expect(searchInput).toBeDefined();
-
-      await act(async () => {
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLInputElement.prototype,
-          "value"
-        )?.set;
-        nativeInputValueSetter?.call(searchInput, "BIZ");
-        searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-
-      const availableItems = container.querySelectorAll(
-        ".fontPickerPane-available .fontPickerRowButton"
-      );
-      expect(availableItems.length).toBe(1);
-      expect(availableItems[0].textContent).toContain("BIZ UD Gothic");
-    });
-
-    it("does NOT invoke onSave when Cancel button is clicked", async () => {
-      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
-
-      const onSaveMock = vi.fn();
-      const onCloseMock = vi.fn();
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[]}
-            translate={translateJa}
-            onSave={onSaveMock}
-            onClose={onCloseMock}
-          />
-        );
-      });
-
-      const cancelBtn = container.querySelector<HTMLButtonElement>(".appDialogButton-cancel");
-      await act(async () => {
-        cancelBtn?.click();
-      });
-
-      expect(onSaveMock).not.toHaveBeenCalled();
-      expect(onCloseMock).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("cache state", () => {
-    it("loadedCache([]) fixture resolves to a valid loaded cache with an empty families array", async () => {
-      const fixture = loadedCache([]);
-      const resolved = await fixture.fontCache.load();
-      expect(resolved.status).toBe("loaded");
-      expect(resolved.cache.families).toEqual([]);
-    });
-
     it("does NOT call queryLocalFonts automatically on dialog open, and shows the not-scanned notice", async () => {
       const queryLocalFontsMock = vi.fn();
       (window as any).queryLocalFonts = queryLocalFontsMock;
-      (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: "notScanned"
       });
-
       expect(queryLocalFontsMock).not.toHaveBeenCalled();
       const notice = container.querySelector(".fontPickerNotice-warning");
       expect(notice?.textContent).toBe(translateJa("fontPicker.cacheNotScanned"));
     });
 
     it("shows the error state safely without crashing", async () => {
-      (window as any).pergamum = {
-        fontCache: {
-          load: vi.fn().mockResolvedValue({ status: "error", message: "boom" })
-        }
-      };
-
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
-      });
-
+      await renderDialog({ cache: { status: "error", message: "boom" } });
       const notice = container.querySelector(".fontPickerNotice-error");
       expect(notice?.textContent).toBe("boom");
     });
@@ -822,35 +978,37 @@ describe("FontPickerDialog (#493 two-pane UX)", () => {
     it("clicking font rows does not call queryLocalFonts", async () => {
       const queryLocalFontsMock = vi.fn();
       (window as any).queryLocalFonts = queryLocalFontsMock;
-      (window as any).pergamum = loadedCache([
-        { family: "Yu Gothic", displayName: "Yu Gothic" }
-      ]);
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
+      });
+      await step(() => {
+        availableRowButtons(container)[0]?.click();
+        selectedRowButtons(container)[0]?.click();
+      });
+      expect(queryLocalFontsMock).not.toHaveBeenCalled();
+    });
 
-      await act(async () => {
-        root.render(
-          <FontPickerDialog
-            isOpen={true}
-            slot="editor.fontFamilyList"
-            initialValue={[{ family: "Cascadia Code", displayName: "Cascadia Code" }]}
-            translate={translateJa}
-            onSave={vi.fn()}
-            onClose={vi.fn()}
-          />
-        );
+    it("dragging/dropping rows does not call queryLocalFonts, write the font cache, or log the full font list", async () => {
+      const queryLocalFontsMock = vi.fn();
+      (window as any).queryLocalFonts = queryLocalFontsMock;
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+      await renderDialog({
+        initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+        cache: [{ family: "Yu Gothic", displayName: "Yu Gothic" }]
       });
 
-      const availableRow = container.querySelector<HTMLButtonElement>(
-        ".fontPickerPane-available .fontPickerRowButton"
-      );
-      const selectedRow = container.querySelector<HTMLButtonElement>(
-        ".fontPickerPane-selected .fontPickerRowButton"
-      );
-      await act(async () => {
-        availableRow?.click();
-        selectedRow?.click();
-      });
+      const availableLi = rowLiOf(availableRowButtons(container)[0]);
+      const selectedBox = container.querySelector<HTMLElement>(".fontPickerSelectedListBox");
+      await performDrag(availableLi, selectedBox);
 
       expect(queryLocalFontsMock).not.toHaveBeenCalled();
+      expect((window as any).pergamum.fontCache).not.toHaveProperty("save");
+      for (const call of logSpy.mock.calls) {
+        expect(JSON.stringify(call)).not.toContain("Yu Gothic");
+      }
+      expect(container.querySelector('[class*="missingFont"]')).toBeNull();
+      logSpy.mockRestore();
     });
   });
 });

@@ -8065,13 +8065,77 @@ label.settingsItemHeader {
   list-style: none;
 }
 
+/* #494: the <li> wrapper is the draggable unit (armed only while its
+   gripper handle is held — see FontPickerDialog's `armedRowKey`), so it
+   holds the handle and the click-to-preview button as two independent
+   sibling controls rather than nesting a button inside a button.
+   `align-items: center` keeps the (small, fixed-size) grip vertically
+   centered against the row body regardless of the body's own height. */
+.fontPickerRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+}
+
+.fontPickerRow-dragging {
+  opacity: 0.4;
+}
+
+.fontPickerRow-dropBefore {
+  box-shadow: inset 0 2px 0 0 var(--app-dialog-icon-info, #2f6fed);
+}
+
+.fontPickerRow-dropAfter {
+  box-shadow: inset 0 -2px 0 0 var(--app-dialog-icon-info, #2f6fed);
+}
+
+.fontPickerListBox-dropTarget {
+  border-color: var(--app-dialog-icon-info, #2f6fed);
+  background: rgba(47, 111, 237, 0.06);
+}
+
+.fontPickerRowGrip {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--workspace-sidebar-muted-foreground);
+  cursor: grab;
+}
+
+.fontPickerRowGrip:hover {
+  background: rgba(15, 23, 32, 0.08);
+  color: var(--app-dialog-foreground);
+}
+
+.fontPickerRowGrip svg {
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+/* #494 remediation: one stable font-entity card per row. `align-items:
+   stretch` (the flex default, stated explicitly here) gives the identity
+   and mini-sample lines the button's full width to truncate against, and
+   `min-height` (not a fixed `height`) keeps every row the same height
+   without clipping if the OS font scale makes a line taller than expected. */
 .fontPickerRowButton {
   display: flex;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
+  justify-content: center;
   gap: 2px;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
@@ -8089,6 +8153,20 @@ label.settingsItemHeader {
   background: rgba(47, 111, 237, 0.1);
 }
 
+/* #494 remediation: long font names/samples ellipsize instead of wrapping
+   (which used to break row height consistency and misalign the grip). The
+   identity line intentionally carries no `font-family` — see #493's
+   symbol-font-identity fix — only the mini-sample line is styled with the
+   represented font inline (FontPickerDialog.tsx). */
+.fontPickerRowName,
+.fontPickerRowSample {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .fontPickerRowName {
   font-size: 0.92rem;
 }
@@ -8101,12 +8179,6 @@ label.settingsItemHeader {
 .fontPickerRowSample {
   color: var(--workspace-sidebar-muted-foreground);
   font-size: 0.8rem;
-}
-
-.fontPickerPaneActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .fontPickerEmptyNotice {
@@ -8135,10 +8207,15 @@ label.settingsItemHeader {
   gap: 4px;
 }
 
+/* #494 remediation: this is a sibling of `.fontPickerPanes` (not nested in
+   either pane), so it already spans the dialog's full width structurally;
+   `width: 100%` here is belt-and-braces against the generic
+   `.settingsTextInput` 360px cap (see `.fontPickerSampleInput` below). */
 .fontPickerSampleSection {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
   padding-top: 12px;
   border-top: 1px solid var(--app-dialog-border);
 }
@@ -8148,7 +8225,14 @@ label.settingsItemHeader {
   font-weight: 600;
 }
 
+/* #494 remediation: `.settingsTextInput` (shared with regular Settings rows)
+   caps width at `min(100%, 360px)`, which is what constrained the sample
+   input to roughly the left pane's width. Override it back to the full
+   sample section width — this rule is later in the cascade and wins at
+   equal specificity. */
 .fontPickerSampleInput {
+  width: 100%;
+  box-sizing: border-box;
   min-height: 44px;
   resize: vertical;
 }
@@ -8176,12 +8260,23 @@ label.settingsItemHeader {
 }
 
 .fontPickerSamplePreview {
+  width: 100%;
+  box-sizing: border-box;
   min-height: 48px;
   padding: 10px 12px;
   overflow-wrap: anywhere;
   border: 1px solid var(--app-dialog-border);
   border-radius: 6px;
   white-space: pre-wrap;
+}
+
+/* #494 remediation: brief explanation that list manipulation is D&D-only
+   now that Add/Remove/Up/Down are gone. Sits above both panes, small and
+   muted so it informs without dominating the dialog. */
+.fontPickerDndCaption {
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
 }
 
 @media (max-width: 620px) {
