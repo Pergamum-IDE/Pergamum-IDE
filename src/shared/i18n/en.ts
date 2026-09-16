@@ -715,6 +715,8 @@ export const enTranslations = {
   "emphasisMark.dialog.ruleLabel": "Emphasis mark rule:",
   "emphasisMark.dialog.markSymbolLabel": "Emphasis mark symbol:",
   "emphasisMark.dialog.previewLabel": "Preview:",
+  "emphasisMark.dialog.sourcePreviewLabel": "Generated source text:",
+  "emphasisMark.dialog.appliedPreviewLabel": "Applied preview:",
   "emphasisMark.dialog.kakuyomuNote": "Kakuyomu notation does not allow choosing the emphasis mark symbol.",
   "emphasisMark.dialog.narouInvalidNote": "Narou emphasis mark text must be 1-8 graphemes without newlines or 《, 》, ｜.",
   "emphasisMark.dialog.cancel": "Cancel",

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   countGraphemes,
+  EMPHASIS_RULE_PREVIEW_META,
+  getAozoraEmphasisPreviewSymbol,
+  getEmphasisMarkPreviewSymbol,
   sanitizeAozoraEmphasisMark,
   validateNarouEmphasisMarkText
 } from "../../src/shared/emphasisMarkSettings";
@@ -47,6 +50,71 @@ describe("Emphasis Mark Settings (Slice 1, #484)", () => {
       expect(countGraphemes("abc")).toBe(3);
       expect(countGraphemes("あいう")).toBe(3);
       expect(countGraphemes("𩸽")).toBe(1); // 2 UTF-16 units, 1 grapheme
+    });
+  });
+
+  describe("getAozoraEmphasisPreviewSymbol", () => {
+    it("maps all official Aozora emphasis mark types to their visual preview symbols", () => {
+      expect(getAozoraEmphasisPreviewSymbol("sesame")).toBe("﹅");
+      expect(getAozoraEmphasisPreviewSymbol("whiteSesame")).toBe("﹆");
+      expect(getAozoraEmphasisPreviewSymbol("circle")).toBe("●");
+      expect(getAozoraEmphasisPreviewSymbol("whiteCircle")).toBe("○");
+      expect(getAozoraEmphasisPreviewSymbol("blackTriangle")).toBe("▲");
+      expect(getAozoraEmphasisPreviewSymbol("whiteTriangle")).toBe("△");
+      expect(getAozoraEmphasisPreviewSymbol("doubleCircle")).toBe("◎");
+      expect(getAozoraEmphasisPreviewSymbol("fisheye")).toBe("◉");
+      expect(getAozoraEmphasisPreviewSymbol("saltire")).toBe("×");
+    });
+  });
+
+  describe("EMPHASIS_RULE_PREVIEW_META & getEmphasisMarkPreviewSymbol", () => {
+    it("defines preview metadata per rule according to Option 2", () => {
+      expect(EMPHASIS_RULE_PREVIEW_META.aozora).toEqual({
+        defaultSymbol: "﹅",
+        allowSymbolCustomization: true
+      });
+      expect(EMPHASIS_RULE_PREVIEW_META.kakuyomu).toEqual({
+        defaultSymbol: "・",
+        allowSymbolCustomization: false
+      });
+      expect(EMPHASIS_RULE_PREVIEW_META.narou).toEqual({
+        defaultSymbol: "・",
+        allowSymbolCustomization: true
+      });
+    });
+
+    it("resolves visual rendered preview symbols for all rules", () => {
+      expect(
+        getEmphasisMarkPreviewSymbol({
+          rule: "aozora",
+          aozoraMark: "circle",
+          narouMarkText: "・"
+        })
+      ).toBe("●");
+
+      expect(
+        getEmphasisMarkPreviewSymbol({
+          rule: "kakuyomu",
+          aozoraMark: "sesame",
+          narouMarkText: "・"
+        })
+      ).toBe("・");
+
+      expect(
+        getEmphasisMarkPreviewSymbol({
+          rule: "narou",
+          aozoraMark: "sesame",
+          narouMarkText: "★"
+        })
+      ).toBe("★");
+
+      expect(
+        getEmphasisMarkPreviewSymbol({
+          rule: "narou",
+          aozoraMark: "sesame",
+          narouMarkText: "invalid《"
+        })
+      ).toBe("");
     });
   });
 

@@ -1,7 +1,10 @@
 import { useId, useState, type FormEvent } from "react";
 import type { AozoraEmphasisMark, EmphasisMarkRule } from "../../shared/settings";
 import type { Translate } from "../../shared/i18n";
-import { validateNarouEmphasisMarkText } from "../../shared/emphasisMarkSettings";
+import {
+  getEmphasisMarkPreviewSymbol,
+  validateNarouEmphasisMarkText
+} from "../../shared/emphasisMarkSettings";
 import { applyEmphasisMark } from "../../shared/emphasisMarkGenerator";
 import { InfoDialog } from "./InfoDialog";
 
@@ -53,7 +56,7 @@ function EmphasisMarkDialogContent({
   const isNarouInvalid =
     rule === "narou" && !validateNarouEmphasisMarkText(narouMarkText);
 
-  const previewText = isNarouInvalid
+  const sourcePreviewText = isNarouInvalid
     ? ""
     : applyEmphasisMark({
         text: selectedText,
@@ -62,6 +65,12 @@ function EmphasisMarkDialogContent({
         narouMarkText
       });
 
+  const appliedPreviewSymbol = getEmphasisMarkPreviewSymbol({
+    rule,
+    aozoraMark,
+    narouMarkText
+  });
+
   const handleSubmit = (event?: FormEvent): void => {
     if (event) {
       event.preventDefault();
@@ -69,7 +78,7 @@ function EmphasisMarkDialogContent({
     if (isNarouInvalid) {
       return;
     }
-    onApply(previewText);
+    onApply(sourcePreviewText);
     onClose();
   };
 
@@ -185,11 +194,34 @@ function EmphasisMarkDialogContent({
           </div>
         )}
 
-        <div className="appFormField emphasisMarkPreviewField">
+        <div className="appFormField emphasisMarkSourcePreviewField">
           <div className="appFormLabel">
-            {translate("emphasisMark.dialog.previewLabel")}
+            {translate("emphasisMark.dialog.sourcePreviewLabel")}
           </div>
-          <div className="emphasisMarkPreview">{previewText}</div>
+          <div className="emphasisMarkSourcePreview">{sourcePreviewText}</div>
+        </div>
+
+        <div className="appFormField emphasisMarkAppliedPreviewField">
+          <div className="appFormLabel">
+            {translate("emphasisMark.dialog.appliedPreviewLabel")}
+          </div>
+          <div className="emphasisMarkAppliedPreview">
+            {!isNarouInvalid && (
+              <span
+                className="emphasisMarkRenderedPreviewText"
+                style={
+                  {
+                    WebkitTextEmphasisStyle: `"${appliedPreviewSymbol}"`,
+                    textEmphasisStyle: `"${appliedPreviewSymbol}"`,
+                    WebkitTextEmphasisPosition: "over right",
+                    textEmphasisPosition: "over right"
+                  } as React.CSSProperties
+                }
+              >
+                {selectedText}
+              </span>
+            )}
+          </div>
         </div>
       </form>
     </InfoDialog>

@@ -9049,11 +9049,14 @@ label.settingsItemHeader {
   word-break: break-all;
 }
 
-.emphasisMarkPreviewField {
+.emphasisMarkPreviewField,
+.emphasisMarkSourcePreviewField,
+.emphasisMarkAppliedPreviewField {
   margin-top: 12px;
 }
 
-.emphasisMarkPreview {
+.emphasisMarkPreview,
+.emphasisMarkSourcePreview {
   margin-top: 4px;
   padding: 8px 12px;
   border: 1px solid var(--app-dialog-border, #d3dae2);
@@ -9066,6 +9069,26 @@ label.settingsItemHeader {
   word-break: break-all;
   white-space: pre-wrap;
   min-height: 36px;
+}
+
+.emphasisMarkAppliedPreview {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--app-dialog-border, #d3dae2);
+  border-radius: 4px;
+  background: var(--app-dialog-header-background, #eef3f8);
+  color: var(--app-dialog-foreground, #25313d);
+  font-size: 16px;
+  line-height: 2.2;
+  word-break: break-all;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+}
+
+.emphasisMarkRenderedPreviewText {
+  text-emphasis-position: over right;
+  -webkit-text-emphasis-position: over right;
 }
 
 .rubyTargetField {

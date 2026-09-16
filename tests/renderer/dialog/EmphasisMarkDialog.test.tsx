@@ -64,10 +64,17 @@ describe("EmphasisMarkDialog", () => {
     expect(container.firstElementChild).toBeNull();
   });
 
-  it("renders dialog when isOpen is true and shows Aozora preview by default", () => {
+  it("renders dialog with separate source text preview and applied rendered preview labels", () => {
     renderDialog({ isOpen: true, selectedText: "選択範囲" });
     expect(container.textContent).toContain("選択範囲に傍点");
+    expect(container.textContent).toContain("変換後テキスト:");
+    expect(container.textContent).toContain("適用後プレビュー:");
     expect(container.textContent).toContain("選択範囲［＃「選択範囲」に傍点］");
+
+    const appliedTextEl = container.querySelector(".emphasisMarkRenderedPreviewText");
+    expect(appliedTextEl).not.toBeNull();
+    expect(appliedTextEl?.textContent).toBe("選択範囲");
+    expect((appliedTextEl as HTMLElement).style.textEmphasisStyle).toBe('"﹅"');
   });
 
   it("updates preview when changing rule to kakuyomu", () => {
@@ -81,9 +88,14 @@ describe("EmphasisMarkDialog", () => {
 
     expect(container.textContent).toContain("《《選択範囲》》");
     expect(container.textContent).toContain("カクヨム記法では傍点記号を指定できません。");
+
+    const appliedTextEl = container.querySelector(".emphasisMarkRenderedPreviewText");
+    expect(appliedTextEl).not.toBeNull();
+    expect(appliedTextEl?.textContent).toBe("選択範囲");
+    expect((appliedTextEl as HTMLElement).style.textEmphasisStyle).toBe('"・"');
   });
 
-  it("validates narou mark text and disables insert button on invalid input", () => {
+  it("validates narou mark text and updates both source and applied previews", () => {
     const onApply = vi.fn();
     const onClose = vi.fn();
     renderDialog({
@@ -96,6 +108,9 @@ describe("EmphasisMarkDialog", () => {
     });
 
     expect(container.textContent).toContain("｜選《・》｜択《・》｜範《・》｜囲《・》");
+    let appliedTextEl = container.querySelector(".emphasisMarkRenderedPreviewText");
+    expect(appliedTextEl?.textContent).toBe("選択範囲");
+    expect((appliedTextEl as HTMLElement).style.textEmphasisStyle).toBe('"・"');
 
     const textInput = container.querySelector<HTMLInputElement>("input[type='text']")!;
     setInputValue(textInput, "《》");
@@ -107,9 +122,13 @@ describe("EmphasisMarkDialog", () => {
     expect(container.textContent).toContain(
       "なろう傍点記号は改行・《・》・｜を含まない1〜8文字で入力してください。"
     );
+    expect(container.querySelector(".emphasisMarkRenderedPreviewText")).toBeNull();
 
     setInputValue(textInput, "★");
     expect(confirmButton.disabled).toBe(false);
+    appliedTextEl = container.querySelector(".emphasisMarkRenderedPreviewText");
+    expect(appliedTextEl?.textContent).toBe("選択範囲");
+    expect((appliedTextEl as HTMLElement).style.textEmphasisStyle).toBe('"★"');
 
     act(() => {
       confirmButton.click();
@@ -119,7 +138,7 @@ describe("EmphasisMarkDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("renders Aozora dropdown options with symbols and updates preview on sesame and whiteSesame selection", () => {
+  it("renders Aozora dropdown options with symbols and updates rendered preview for all 9 Aozora mark types", () => {
     const onApply = vi.fn();
     renderDialog({ isOpen: true, selectedText: "用語集", onApply });
 
@@ -137,42 +156,82 @@ describe("EmphasisMarkDialog", () => {
       "× ばつ傍点"
     ]);
 
+    const getPreviewStyle = (): string => {
+      const el = container.querySelector<HTMLElement>(".emphasisMarkRenderedPreviewText");
+      return el?.style.textEmphasisStyle ?? "";
+    };
+
+    // sesame -> ﹅
     act(() => {
       markSelect.value = "sesame";
       markSelect.dispatchEvent(new Event("change", { bubbles: true }));
     });
-
     expect(container.textContent).toContain("用語集［＃「用語集」に傍点］");
-    expect(container.textContent).not.toContain("用語集［＃「用語集」にゴマ傍点］");
+    expect(getPreviewStyle()).toBe('"﹅"');
 
-    act(() => {
-      markSelect.value = "circle";
-      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("用語集［＃「用語集」に丸傍点］");
-    expect(container.textContent).not.toContain("黒丸傍点");
-
-    act(() => {
-      markSelect.value = "fisheye";
-      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("用語集［＃「用語集」に蛇の目傍点］");
-
-    act(() => {
-      markSelect.value = "saltire";
-      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("用語集［＃「用語集」にばつ傍点］");
-
+    // whiteSesame -> ﹆
     act(() => {
       markSelect.value = "whiteSesame";
       markSelect.dispatchEvent(new Event("change", { bubbles: true }));
     });
-
     expect(container.textContent).toContain("用語集［＃「用語集」に白ゴマ傍点］");
+    expect(getPreviewStyle()).toBe('"﹆"');
+
+    // circle -> ●
+    act(() => {
+      markSelect.value = "circle";
+      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("用語集［＃「用語集」に丸傍点］");
+    expect(getPreviewStyle()).toBe('"●"');
+
+    // whiteCircle -> ○
+    act(() => {
+      markSelect.value = "whiteCircle";
+      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("用語集［＃「用語集」に白丸傍点］");
+    expect(getPreviewStyle()).toBe('"○"');
+
+    // blackTriangle -> ▲
+    act(() => {
+      markSelect.value = "blackTriangle";
+      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("用語集［＃「用語集」に黒三角傍点］");
+    expect(getPreviewStyle()).toBe('"▲"');
+
+    // whiteTriangle -> △
+    act(() => {
+      markSelect.value = "whiteTriangle";
+      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("用語集［＃「用語集」に白三角傍点］");
+    expect(getPreviewStyle()).toBe('"△"');
+
+    // doubleCircle -> ◎
+    act(() => {
+      markSelect.value = "doubleCircle";
+      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("用語集［＃「用語集」に二重丸傍点］");
+    expect(getPreviewStyle()).toBe('"◎"');
+
+    // fisheye -> ◉
+    act(() => {
+      markSelect.value = "fisheye";
+      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("用語集［＃「用語集」に蛇の目傍点］");
+    expect(getPreviewStyle()).toBe('"◉"');
+
+    // saltire -> ×
+    act(() => {
+      markSelect.value = "saltire";
+      markSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("用語集［＃「用語集」にばつ傍点］");
+    expect(getPreviewStyle()).toBe('"×"');
 
     const confirmButton = container.querySelector<HTMLButtonElement>(
       ".appDialogButton-confirm"
@@ -181,12 +240,21 @@ describe("EmphasisMarkDialog", () => {
       confirmButton.click();
     });
 
-    expect(onApply).toHaveBeenCalledWith("用語集［＃「用語集」に白ゴマ傍点］");
+    expect(onApply).toHaveBeenCalledWith("用語集［＃「用語集」にばつ傍点］");
   });
 
-  it("calls onClose when clicking Cancel button", () => {
+  it("does not use dangerouslySetInnerHTML and renders text nodes safely", () => {
+    renderDialog({ isOpen: true, selectedText: "<script>alert(1)</script>" });
+    const previewEl = container.querySelector(".emphasisMarkAppliedPreview");
+    expect(previewEl?.querySelector("script")).toBeNull();
+    const renderedTextEl = container.querySelector(".emphasisMarkRenderedPreviewText");
+    expect(renderedTextEl?.textContent).toBe("<script>alert(1)</script>");
+  });
+
+  it("calls onClose when clicking Cancel button without mutating text", () => {
+    const onApply = vi.fn();
     const onClose = vi.fn();
-    renderDialog({ isOpen: true, onClose });
+    renderDialog({ isOpen: true, onApply, onClose });
 
     const cancelButton = container.querySelector<HTMLButtonElement>(
       ".appDialogButton-cancel"
@@ -194,6 +262,7 @@ describe("EmphasisMarkDialog", () => {
     act(() => {
       cancelButton.click();
     });
+    expect(onApply).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
