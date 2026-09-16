@@ -15,20 +15,20 @@ const MS_LANG_ID_JAPANESE = 0x0411;
 const MS_LANG_ID_US_ENGLISH = 0x0409;
 
 /**
- * UI language -> ordered list of acceptable OpenType/Microsoft-platform
- * language IDs, most preferred first. `ja` tries Japanese name records
- * before falling back to US English ones; `en` (and any future default)
- * only looks for US English.
+ * UI language -> exact OpenType/Microsoft-platform language ID. ADR-0015
+ * F-15 uses the current UI language for localized display-name records; it
+ * does not fall through to another localized language before the `family`
+ * fallback.
  */
-export function getPreferredFontNameLanguageIds(
+export function getFontNameLanguageId(
   uiLanguage: FontNameUiLanguage
-): number[] {
+): number {
   switch (uiLanguage) {
     case "ja":
-      return [MS_LANG_ID_JAPANESE, MS_LANG_ID_US_ENGLISH];
+      return MS_LANG_ID_JAPANESE;
     case "en":
     default:
-      return [MS_LANG_ID_US_ENGLISH];
+      return MS_LANG_ID_US_ENGLISH;
   }
 }
 
@@ -36,7 +36,6 @@ export function getPreferredFontNameLanguageIds(
 // Family (1) name — see ADR-0015's priority order.
 const NAME_ID_TYPOGRAPHIC_FAMILY = 16;
 const NAME_ID_FONT_FAMILY = 1;
-const PREFERRED_NAME_IDS = [NAME_ID_TYPOGRAPHIC_FAMILY, NAME_ID_FONT_FAMILY];
 
 /**
  * Only reachable if a caller passes an empty/whitespace-only
@@ -50,38 +49,90 @@ const PREFERRED_NAME_IDS = [NAME_ID_TYPOGRAPHIC_FAMILY, NAME_ID_FONT_FAMILY];
 const UNRESOLVED_FONT_NAME_FALLBACK = "(unnamed font)";
 
 /**
- * Picks the best display name out of `records` for `uiLanguage`, walking
- * language IDs in preference order and, within each language, nameID 16
- * before nameID 1. A record whose decoded value is empty or whitespace-only
- * is treated as absent and skipped in favor of the next priority candidate.
- * Falls back to `fallbackFamily` (always `FontData.family` at the call site
- * — never a CSS family) when nothing usable is found; `fallbackFamily`
- * itself must be non-empty/non-whitespace for that to be meaningful (see
- * `UNRESOLVED_FONT_NAME_FALLBACK`). Never returns an empty string.
+ * Finds one name-table value for `languageID`/`nameID`, treating empty or
+ * whitespace-only values as absent.
+ */
+function findNameValue(
+  records: readonly FontNameRecord[],
+  languageID: number,
+  nameID: number
+): string | undefined {
+  const match = records.find(
+    (record) =>
+      record.languageID === languageID &&
+      record.nameID === nameID &&
+      record.value.trim().length > 0
+  );
+  return match?.value.trim();
+}
+
+function firstDeterministic(values: readonly string[]): string | undefined {
+  if (values.length === 0) {
+    return undefined;
+  }
+  return [...values].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "variant" })
+  )[0];
+}
+
+/**
+ * Resolves a family display name using ADR-0015 F-15 across every scanned
+ * face that belongs to the same `FontData.family`:
+ * 1. any face's current-UI-language nameID 16
+ * 2. for a face whose English nameID 1 exactly equals `family`, that face's
+ *    current-UI-language nameID 1
+ * 3. `family`
+ *
+ * This deliberately gathers candidates across all faces before deciding, so
+ * the result does not depend on `queryLocalFonts()` order and a first face
+ * without a localized name cannot prematurely lock in the fallback.
+ */
+export function resolveDisplayNameFromFamilyRecords(
+  faceRecords: readonly (readonly FontNameRecord[])[],
+  uiLanguage: FontNameUiLanguage,
+  family: string
+): string {
+  const uiLanguageId = getFontNameLanguageId(uiLanguage);
+
+  const typographicFamilyCandidates = faceRecords
+    .map((records) =>
+      findNameValue(records, uiLanguageId, NAME_ID_TYPOGRAPHIC_FAMILY)
+    )
+    .filter((value): value is string => value !== undefined);
+  const typographicFamily = firstDeterministic(typographicFamilyCandidates);
+  if (typographicFamily) {
+    return typographicFamily;
+  }
+
+  const familyNameCandidates = faceRecords
+    .filter(
+      (records) =>
+        findNameValue(records, MS_LANG_ID_US_ENGLISH, NAME_ID_FONT_FAMILY) ===
+        family
+    )
+    .map((records) => findNameValue(records, uiLanguageId, NAME_ID_FONT_FAMILY))
+    .filter((value): value is string => value !== undefined);
+  const familyName = firstDeterministic(familyNameCandidates);
+  if (familyName) {
+    return familyName;
+  }
+
+  if (family.trim().length > 0) {
+    return family;
+  }
+  return UNRESOLVED_FONT_NAME_FALLBACK;
+}
+
+/**
+ * Single-face convenience wrapper retained for focused parser/resolver tests
+ * and defensive fallback paths. The real scan flow resolves with
+ * `resolveDisplayNameFromFamilyRecords()` after collecting every face for a
+ * family.
  */
 export function resolveDisplayNameFromRecords(
   records: readonly FontNameRecord[],
   uiLanguage: FontNameUiLanguage,
   fallbackFamily: string
 ): string {
-  const languageIds = getPreferredFontNameLanguageIds(uiLanguage);
-
-  for (const languageId of languageIds) {
-    for (const nameId of PREFERRED_NAME_IDS) {
-      const match = records.find(
-        (record) =>
-          record.languageID === languageId &&
-          record.nameID === nameId &&
-          record.value.trim().length > 0
-      );
-      if (match) {
-        return match.value.trim();
-      }
-    }
-  }
-
-  if (fallbackFamily.trim().length > 0) {
-    return fallbackFamily;
-  }
-  return UNRESOLVED_FONT_NAME_FALLBACK;
+  return resolveDisplayNameFromFamilyRecords([records], uiLanguage, fallbackFamily);
 }

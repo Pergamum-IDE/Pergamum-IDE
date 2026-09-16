@@ -90,12 +90,59 @@ function buildFontWithRecords(records: RawNameRecordInput[]): ArrayBuffer {
   return buildSfntWithNameTable(buildNameTable(records));
 }
 
+function buildTtcWithFonts(fonts: RawNameRecordInput[][]): ArrayBuffer {
+  const nameTables = fonts.map((records) => buildNameTable(records));
+  const ttcHeaderSize = 12 + fonts.length * 4;
+  const sfntHeaderSize = 12;
+  const tableRecordSize = 16;
+  const sfntSizes = nameTables.map(
+    (nameTable) => sfntHeaderSize + tableRecordSize + nameTable.length
+  );
+  const totalSize =
+    ttcHeaderSize + sfntSizes.reduce((sum, size) => sum + size, 0);
+
+  const buffer = new ArrayBuffer(totalSize);
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+
+  writeTag(view, 0, "ttcf");
+  view.setUint16(4, 2, false); // majorVersion
+  view.setUint16(6, 0, false); // minorVersion
+  view.setUint32(8, fonts.length, false); // numFonts
+
+  let fontOffset = ttcHeaderSize;
+  for (let i = 0; i < fonts.length; i++) {
+    view.setUint32(12 + i * 4, fontOffset, false);
+    const nameTable = nameTables[i];
+    const nameTableStart = fontOffset + sfntHeaderSize + tableRecordSize;
+
+    view.setUint32(fontOffset, 0x00010000, false); // sfntVersion: TrueType
+    view.setUint16(fontOffset + 4, 1, false); // numTables
+    view.setUint16(fontOffset + 6, 0, false);
+    view.setUint16(fontOffset + 8, 0, false);
+    view.setUint16(fontOffset + 10, 0, false);
+    writeTag(view, fontOffset + sfntHeaderSize, "name");
+    view.setUint32(fontOffset + sfntHeaderSize + 4, 0, false);
+    view.setUint32(fontOffset + sfntHeaderSize + 8, nameTableStart, false);
+    view.setUint32(
+      fontOffset + sfntHeaderSize + 12,
+      nameTable.length,
+      false
+    );
+    bytes.set(nameTable, nameTableStart);
+    fontOffset += sfntSizes[i];
+  }
+
+  return buffer;
+}
+
 const MS_PLATFORM = 3;
 const MS_UNICODE_BMP_ENCODING = 1;
 const JAPANESE = 0x0411;
 const US_ENGLISH = 0x0409;
 const NAME_ID_TYPOGRAPHIC_FAMILY = 16;
 const NAME_ID_FONT_FAMILY = 1;
+const NAME_ID_POSTSCRIPT_NAME = 6;
 
 describe("fontNameTableParser (#496)", () => {
   it("parses a Microsoft platform UTF-16BE Japanese nameID 16 record", () => {
@@ -283,44 +330,83 @@ describe("fontNameTableParser (#496)", () => {
     expect(parseFontNameRecords(new ArrayBuffer(4))).toEqual([]);
   });
 
-  it("handles a trivial TTC/OTC collection by reading its first font's name table, without crashing", () => {
-    const nameTableBytes = buildNameTable([
-      {
-        platformID: MS_PLATFORM,
-        encodingID: MS_UNICODE_BMP_ENCODING,
-        languageID: JAPANESE,
-        nameID: NAME_ID_TYPOGRAPHIC_FAMILY,
-        value: "游ゴシック"
-      }
+  it("selects the matching TTC/OTC face by PostScript nameID 6 instead of reading the first face", () => {
+    const buffer = buildTtcWithFonts([
+      [
+        {
+          platformID: MS_PLATFORM,
+          encodingID: MS_UNICODE_BMP_ENCODING,
+          languageID: US_ENGLISH,
+          nameID: NAME_ID_POSTSCRIPT_NAME,
+          value: "YuGothic-Regular"
+        },
+        {
+          platformID: MS_PLATFORM,
+          encodingID: MS_UNICODE_BMP_ENCODING,
+          languageID: JAPANESE,
+          nameID: NAME_ID_TYPOGRAPHIC_FAMILY,
+          value: "游ゴシック"
+        }
+      ],
+      [
+        {
+          platformID: MS_PLATFORM,
+          encodingID: MS_UNICODE_BMP_ENCODING,
+          languageID: US_ENGLISH,
+          nameID: NAME_ID_POSTSCRIPT_NAME,
+          value: "YuGothicUI-Regular"
+        },
+        {
+          platformID: MS_PLATFORM,
+          encodingID: MS_UNICODE_BMP_ENCODING,
+          languageID: US_ENGLISH,
+          nameID: NAME_ID_FONT_FAMILY,
+          value: "Yu Gothic UI"
+        }
+      ]
     ]);
 
-    // TTC header: 'ttcf', majorVersion, minorVersion, numFonts, offsetTable[0..]
-    const ttcHeaderSize = 16;
-    const sfntHeaderSize = 12;
-    const tableRecordSize = 16;
-    const firstFontOffset = ttcHeaderSize;
-    const nameTableStart = firstFontOffset + sfntHeaderSize + tableRecordSize;
-    const totalSize = nameTableStart + nameTableBytes.length;
+    const records = parseFontNameRecords(buffer, {
+      postscriptName: "YuGothicUI-Regular"
+    });
 
-    const buffer = new ArrayBuffer(totalSize);
-    const view = new DataView(buffer);
-    writeTag(view, 0, "ttcf");
-    view.setUint16(4, 2, false); // majorVersion
-    view.setUint16(6, 0, false); // minorVersion
-    view.setUint32(8, 1, false); // numFonts
-    view.setUint32(12, firstFontOffset, false); // offsetTable[0]
+    expect(records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nameID: NAME_ID_POSTSCRIPT_NAME,
+          value: "YuGothicUI-Regular"
+        }),
+        expect.objectContaining({
+          nameID: NAME_ID_FONT_FAMILY,
+          value: "Yu Gothic UI"
+        })
+      ])
+    );
+    expect(records.some((record) => record.value === "游ゴシック")).toBe(false);
+  });
 
-    view.setUint32(firstFontOffset, 0x00010000, false); // sfntVersion
-    view.setUint16(firstFontOffset + 4, 1, false); // numTables
-    writeTag(view, firstFontOffset + sfntHeaderSize, "name");
-    view.setUint32(firstFontOffset + sfntHeaderSize + 8, nameTableStart, false);
-    view.setUint32(firstFontOffset + sfntHeaderSize + 12, nameTableBytes.length, false);
+  it("returns [] for a TTC/OTC collection when no face matches the supplied PostScript name", () => {
+    const buffer = buildTtcWithFonts([
+      [
+        {
+          platformID: MS_PLATFORM,
+          encodingID: MS_UNICODE_BMP_ENCODING,
+          languageID: US_ENGLISH,
+          nameID: NAME_ID_POSTSCRIPT_NAME,
+          value: "YuGothic-Regular"
+        },
+        {
+          platformID: MS_PLATFORM,
+          encodingID: MS_UNICODE_BMP_ENCODING,
+          languageID: JAPANESE,
+          nameID: NAME_ID_TYPOGRAPHIC_FAMILY,
+          value: "游ゴシック"
+        }
+      ]
+    ]);
 
-    new Uint8Array(buffer).set(nameTableBytes, nameTableStart);
-
-    const records = parseFontNameRecords(buffer);
-    expect(records.length).toBe(1);
-    expect(records[0].value).toBe("游ゴシック");
+    expect(parseFontNameRecords(buffer, { postscriptName: "YuGothicUI-Regular" })).toEqual([]);
+    expect(parseFontNameRecords(buffer)).toEqual([]);
   });
 
   it("returns [] for an unrecognized sfnt version (not a crash)", () => {

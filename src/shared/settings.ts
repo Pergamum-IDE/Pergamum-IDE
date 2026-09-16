@@ -901,10 +901,9 @@ export function resolveEffectiveSettings(
           builtInDefaultSettings.notification.output.enabled
       }
     },
-    // The whole workbench area is applicationOnly (#173, #174): Application
-    // > Default only, no project scope in the chain. language and
-    // statusBar.visible pass straight through (never sparse); fontFamily
-    // still falls through to the catalog default when absent.
+    // Most workbench settings are applicationOnly (#173, #174). The
+    // ADR-0015 UI font list is intentionally project-overridable, matching
+    // the editor/preview list slots.
     workbench: {
       language: applicationSettings.workbench.language,
       statusBar: {

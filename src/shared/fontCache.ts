@@ -88,12 +88,12 @@ export function aggregateFontFamilies(
 /**
  * #496: like `aggregateFontFamilies`, but each face may already carry a
  * `resolvedDisplayName` (from renderer-side `name`-table parsing). Picks
- * the best displayName per family — the first face's resolved name if any,
+ * the best displayName per family from those already-resolved values,
  * upgrading from the `family` fallback the moment a later face for the same
- * family resolves a real localized name.
+ * family carries a real localized name.
  * - Deduplication is still by exact string match on FontData.family, never
  *   by `displayName` — two different families may legitimately share one
- *   localized displayName (e.g. "Yu Gothic" / "Yu Gothic UI" -> "游ゴシック").
+ *   localized displayName, and cache aggregation must not merge them.
  * - `family` is always `FontData.family`, never the localized name — it is
  *   never used as (or derived from) a CSS font-family value.
  * - FontData.fullName is intentionally NOT used.
@@ -105,7 +105,7 @@ export function aggregateFontFamilies(
  * - #496 remediation: `displayName` is guaranteed non-empty. An
  *   empty/whitespace-only `family` is skipped entirely (no cache entry);
  *   an empty/whitespace-only `resolvedDisplayName` always falls back to
- *   `family`, both for the first face setting the baseline and for any
+ *   `family`, both for the first entry setting the baseline and for any
  *   later face attempting to "upgrade" it.
  */
 export function aggregateFontFamiliesWithDisplayNames(

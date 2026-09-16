@@ -16,12 +16,22 @@ export interface FontNameRecord {
   value: string;
 }
 
+export interface ParseFontNameRecordsOptions {
+  /**
+   * `FontData.postscriptName` for the face being resolved. Required to
+   * select the correct face inside TTC/OTC collections; single-font sfnt
+   * files are parsed as before.
+   */
+  postscriptName?: string;
+}
+
 /** Only Microsoft platform (Windows) records are decoded. Macintosh
  * platform records are explicitly out of scope for this issue — the app's
  * target platform is Windows, and the ja/en language IDs this feature
  * needs are Microsoft-platform IDs (0x0411 / 0x0409) anyway; unsupported
  * platform records are just skipped, never guessed at. */
 const MICROSOFT_PLATFORM_ID = 3;
+const NAME_ID_POSTSCRIPT_NAME = 6;
 
 const SFNT_VERSION_TRUETYPE = 0x00010000;
 const SFNT_TAG_OTTO = 0x4f54544f; // 'OTTO' (CFF-flavored OpenType)
@@ -50,13 +60,11 @@ function decodeUtf16Be(view: DataView, offset: number, length: number): string {
   return String.fromCharCode(...codeUnits).trim();
 }
 
-/**
- * Locates the sfnt offset table to actually parse. Handles the trivial TTC
- * case (a collection header pointing at one or more sfnt tables) by using
- * the collection's first font — full multi-face collection support is
- * explicitly out of scope for this issue.
- */
-function resolveSfntOffset(view: DataView): number | null {
+type SfntOffsetResolution =
+  | { kind: "single"; offsets: readonly [number] }
+  | { kind: "collection"; offsets: readonly number[] };
+
+function resolveSfntOffsets(view: DataView): SfntOffsetResolution | null {
   if (view.byteLength < SFNT_HEADER_SIZE) {
     return null;
   }
@@ -69,13 +77,21 @@ function resolveSfntOffset(view: DataView): number | null {
     if (numFonts < 1) {
       return null;
     }
-    const firstOffset = view.getUint32(12, false);
-    if (firstOffset < 0 || firstOffset + SFNT_HEADER_SIZE > view.byteLength) {
+    const offsetTableStart = 12;
+    if (offsetTableStart + numFonts * 4 > view.byteLength) {
       return null;
     }
-    return firstOffset;
+    const offsets: number[] = [];
+    for (let i = 0; i < numFonts; i++) {
+      const offset = view.getUint32(offsetTableStart + i * 4, false);
+      if (offset < 0 || offset + SFNT_HEADER_SIZE > view.byteLength) {
+        return null;
+      }
+      offsets.push(offset);
+    }
+    return { kind: "collection", offsets };
   }
-  return 0;
+  return { kind: "single", offsets: [0] };
 }
 
 function isRecognizedSfntVersion(version: number): boolean {
@@ -114,72 +130,110 @@ function findNameTable(
   return null;
 }
 
+function parseFontNameRecordsAtOffset(
+  view: DataView,
+  sfntOffset: number
+): FontNameRecord[] {
+  const nameTable = findNameTable(view, sfntOffset);
+  if (!nameTable) {
+    return [];
+  }
+
+  const { offset: nameTableOffset } = nameTable;
+  const format = view.getUint16(nameTableOffset, false);
+  if (format !== 0 && format !== 1) {
+    return [];
+  }
+  const count = view.getUint16(nameTableOffset + 2, false);
+  const stringOffset = view.getUint16(nameTableOffset + 4, false);
+  const storageStart = nameTableOffset + stringOffset;
+  const recordsStart = nameTableOffset + NAME_TABLE_HEADER_SIZE;
+
+  const records: FontNameRecord[] = [];
+  for (let i = 0; i < count; i++) {
+    const recordOffset = recordsStart + i * NAME_RECORD_SIZE;
+    if (recordOffset + NAME_RECORD_SIZE > view.byteLength) {
+      break;
+    }
+    const platformID = view.getUint16(recordOffset, false);
+    const encodingID = view.getUint16(recordOffset + 2, false);
+    const languageID = view.getUint16(recordOffset + 4, false);
+    const nameID = view.getUint16(recordOffset + 6, false);
+    const length = view.getUint16(recordOffset + 8, false);
+    const strOffset = view.getUint16(recordOffset + 10, false);
+
+    if (platformID !== MICROSOFT_PLATFORM_ID) {
+      continue;
+    }
+
+    const absoluteOffset = storageStart + strOffset;
+    if (
+      length <= 0 ||
+      length % 2 !== 0 ||
+      absoluteOffset < 0 ||
+      absoluteOffset + length > view.byteLength
+    ) {
+      continue;
+    }
+
+    const value = decodeUtf16Be(view, absoluteOffset, length);
+    if (!value) {
+      continue;
+    }
+
+    records.push({ platformID, encodingID, languageID, nameID, value });
+  }
+
+  return records;
+}
+
+function recordsMatchPostscriptName(
+  records: readonly FontNameRecord[],
+  postscriptName: string
+): boolean {
+  return records.some(
+    (record) =>
+      record.nameID === NAME_ID_POSTSCRIPT_NAME &&
+      record.value === postscriptName
+  );
+}
+
 /**
- * Parses the `name` table out of a font binary (sfnt/TrueType/OpenType, or
- * the first font of a trivially-handled TTC/OTC collection) and returns its
- * Microsoft-platform name records. Returns `[]` for anything malformed,
- * truncated, an unsupported format, or a parse-time exception — this
- * function is safe to call on arbitrary/untrusted bytes.
+ * Parses the `name` table out of a font binary (sfnt/TrueType/OpenType, or a
+ * TTC/OTC collection) and returns its Microsoft-platform name records.
+ *
+ * For TTC/OTC collections, `options.postscriptName` is used to select the
+ * exact face by matching nameID 6. If no face matches (or no PostScript name
+ * is supplied), returns `[]` instead of falling back to the first face.
+ * Returns `[]` for anything malformed, truncated, unsupported, or a
+ * parse-time exception — this function is safe to call on arbitrary bytes.
  */
-export function parseFontNameRecords(buffer: ArrayBuffer): FontNameRecord[] {
+export function parseFontNameRecords(
+  buffer: ArrayBuffer,
+  options: ParseFontNameRecordsOptions = {}
+): FontNameRecord[] {
   try {
     const view = new DataView(buffer);
-    const sfntOffset = resolveSfntOffset(view);
-    if (sfntOffset === null) {
+    const sfntOffsets = resolveSfntOffsets(view);
+    if (sfntOffsets === null) {
       return [];
     }
 
-    const nameTable = findNameTable(view, sfntOffset);
-    if (!nameTable) {
+    if (sfntOffsets.kind === "single") {
+      return parseFontNameRecordsAtOffset(view, sfntOffsets.offsets[0]);
+    }
+
+    const postscriptName = options.postscriptName?.trim();
+    if (!postscriptName) {
       return [];
     }
-
-    const { offset: nameTableOffset } = nameTable;
-    const format = view.getUint16(nameTableOffset, false);
-    if (format !== 0 && format !== 1) {
-      return [];
+    for (const sfntOffset of sfntOffsets.offsets) {
+      const records = parseFontNameRecordsAtOffset(view, sfntOffset);
+      if (recordsMatchPostscriptName(records, postscriptName)) {
+        return records;
+      }
     }
-    const count = view.getUint16(nameTableOffset + 2, false);
-    const stringOffset = view.getUint16(nameTableOffset + 4, false);
-    const storageStart = nameTableOffset + stringOffset;
-    const recordsStart = nameTableOffset + NAME_TABLE_HEADER_SIZE;
-
-    const records: FontNameRecord[] = [];
-    for (let i = 0; i < count; i++) {
-      const recordOffset = recordsStart + i * NAME_RECORD_SIZE;
-      if (recordOffset + NAME_RECORD_SIZE > view.byteLength) {
-        break;
-      }
-      const platformID = view.getUint16(recordOffset, false);
-      const encodingID = view.getUint16(recordOffset + 2, false);
-      const languageID = view.getUint16(recordOffset + 4, false);
-      const nameID = view.getUint16(recordOffset + 6, false);
-      const length = view.getUint16(recordOffset + 8, false);
-      const strOffset = view.getUint16(recordOffset + 10, false);
-
-      if (platformID !== MICROSOFT_PLATFORM_ID) {
-        continue;
-      }
-
-      const absoluteOffset = storageStart + strOffset;
-      if (
-        length <= 0 ||
-        length % 2 !== 0 ||
-        absoluteOffset < 0 ||
-        absoluteOffset + length > view.byteLength
-      ) {
-        continue;
-      }
-
-      const value = decodeUtf16Be(view, absoluteOffset, length);
-      if (!value) {
-        continue;
-      }
-
-      records.push({ platformID, encodingID, languageID, nameID, value });
-    }
-
-    return records;
+    return [];
   } catch {
     return [];
   }

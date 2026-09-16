@@ -14,7 +14,7 @@ import {
   moveSelectedFont,
   removeSelectedFontAt
 } from "../../shared/fontPickerDnd";
-import type { Translate } from "../../shared/i18n";
+import type { Language, Translate } from "../../shared/i18n";
 import { InfoDialog } from "./InfoDialog";
 import gripperIconRaw from "../../../assets/icons/codicons/dialog/gripper.svg?raw";
 
@@ -23,6 +23,7 @@ export interface FontPickerDialogProps {
   readonly slot: FontSlot;
   readonly initialValue?: readonly FontFamilySetting[];
   readonly translate: Translate;
+  readonly uiLanguage?: Language;
   readonly opener?: Element | null;
   readonly onSave: (selectedFonts: FontFamilySetting[]) => void;
   readonly onClose: () => void;
@@ -54,6 +55,14 @@ type DragOverTarget =
   | { pane: "available" };
 
 const MINI_SAMPLE_TEXT = "Aa あア亜 123";
+const AVAILABLE_FONT_FAMILY_COLLATOR = new Intl.Collator("en", {
+  sensitivity: "base",
+  numeric: true
+});
+
+function defaultFixedWidthOnlyForSlot(slot: FontSlot): boolean {
+  return slot === "editor.fontFamilyList";
+}
 
 function selectedRowKey(idx: number): string {
   return `selected-${idx}`;
@@ -63,13 +72,27 @@ function availableRowKey(family: string): string {
   return `available-${family}`;
 }
 
+function sortAvailableFontCandidates(
+  candidates: readonly CachedFontFamily[]
+): CachedFontFamily[] {
+  return candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .sort((a, b) => {
+      const result = AVAILABLE_FONT_FAMILY_COLLATOR.compare(
+        a.candidate.family,
+        b.candidate.family
+      );
+      return result !== 0 ? result : a.index - b.index;
+    })
+    .map(({ candidate }) => candidate);
+}
+
 /**
  * #496 remediation: the identity line shown on every font row. `family` is
  * always the raw CSS-facing name; `displayName` (when present and
  * different from `family`) is the localized name resolved at scan time
  * (#496). Different families can legitimately resolve to the same
- * localized `displayName` (e.g. "Yu Gothic" and "Yu Gothic UI" both ->
- * "游ゴシック") — always leading with `family` keeps those rows
+ * localized `displayName`; always leading with `family` keeps those rows
  * distinguishable. This line never carries a represented-font style; only
  * the mini sample line below it does (see #493's symbol-font-identity fix).
  */
@@ -86,6 +109,7 @@ export function FontPickerDialog({
   slot,
   initialValue = [],
   translate,
+  uiLanguage = "ja",
   opener,
   onSave,
   onClose
@@ -97,6 +121,9 @@ export function FontPickerDialog({
   const [highlightedAvailableFamily, setHighlightedAvailableFamily] =
     useState<CachedFontFamily | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [fixedWidthOnly, setFixedWidthOnly] = useState<boolean>(
+    () => defaultFixedWidthOnlyForSlot(slot)
+  );
   const [cacheState, setCacheState] = useState<FontCacheState>({
     status: "notScanned"
   });
@@ -112,6 +139,7 @@ export function FontPickerDialog({
 
   const dialogId = useId();
   const searchInputId = `${dialogId}-search`;
+  const fixedWidthOnlyInputId = `${dialogId}-fixed-width-only`;
   const sampleInputId = `${dialogId}-sample`;
 
   useEffect(() => {
@@ -120,6 +148,7 @@ export function FontPickerDialog({
       setSelectedIndex(null);
       setHighlightedAvailableFamily(null);
       setSearchQuery("");
+      setFixedWidthOnly(defaultFixedWidthOnlyForSlot(slot));
       setPreviewMode({ kind: "selectedList" });
       setSampleText(translate("fontPicker.sampleText"));
       setArmedRowKey(null);
@@ -144,7 +173,7 @@ export function FontPickerDialog({
           });
       }
     }
-  }, [isOpen, initialValue, translate]);
+  }, [isOpen, initialValue, slot, translate]);
 
   if (!isOpen) {
     return null;
@@ -310,6 +339,8 @@ export function FontPickerDialog({
 
   const cachedFamilies: CachedFontFamily[] =
     cacheState.status === "loaded" ? cacheState.cache.families : [];
+  const showLanguageMismatchWarning =
+    cacheState.status === "loaded" && cacheState.cache.uiLanguage !== uiLanguage;
 
   const selectedFamilyKeys = new Set(
     selectedFonts.map((f) => f.family.toLowerCase())
@@ -317,13 +348,16 @@ export function FontPickerDialog({
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
-  const filteredCandidates = cachedFamilies
-    .filter((candidate) => {
+  const filteredCandidates = sortAvailableFontCandidates(
+    cachedFamilies.filter((candidate) => {
       const key = candidate.family.toLowerCase();
       if (GENERIC_FONT_FAMILIES.has(key)) {
         return false;
       }
       if (selectedFamilyKeys.has(key)) {
+        return false;
+      }
+      if (fixedWidthOnly && candidate.fixedWidth !== "fixed") {
         return false;
       }
       if (!normalizedQuery) {
@@ -334,11 +368,7 @@ export function FontPickerDialog({
         candidate.family.toLowerCase().includes(normalizedQuery)
       );
     })
-    .sort((a, b) =>
-      a.displayName.localeCompare(b.displayName, undefined, {
-        sensitivity: "base"
-      })
-    );
+  );
 
   const genericFallback = FONT_SLOT_GENERIC_FALLBACKS[slot];
 
@@ -351,6 +381,11 @@ export function FontPickerDialog({
     buildFontFamilyCss([font], genericFallback);
 
   const dragHandleLabel = translate("fontPicker.label.dragHandle");
+  const emptyAvailableMessage = fixedWidthOnly
+    ? normalizedQuery
+      ? translate("fontPicker.emptyFilteredAvailable")
+      : translate("fontPicker.emptyFixedWidthAvailable")
+    : translate("fontPicker.emptyAvailable");
 
   return (
     <InfoDialog
@@ -496,6 +531,57 @@ export function FontPickerDialog({
             <div className="fontPickerPaneHeader">
               {translate("fontPicker.label.availableFonts")}
             </div>
+            {showLanguageMismatchWarning ? (
+              <div
+                className="fontPickerNotice fontPickerNotice-warning fontPickerCacheLanguageWarning"
+                role="note"
+              >
+                {translate("fontCache.warning.languageMismatch")}
+              </div>
+            ) : null}
+            <div className="fontPickerFilterRow">
+              <div className="fontPickerSearchGroup">
+                <label htmlFor={searchInputId} className="fontPickerSearchLabel">
+                  {translate("fontPicker.label.search")}
+                </label>
+                <input
+                  id={searchInputId}
+                  className="fontPickerSearchInput settingsTextInput"
+                  type="search"
+                  value={searchQuery}
+                  placeholder={translate("fontPicker.label.search")}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setHighlightedAvailableFamily(null);
+                  }}
+                />
+              </div>
+              <label className="fontPickerFixedWidthToggle">
+                <span className="fontPickerFixedWidthToggleSwitch">
+                  <input
+                    id={fixedWidthOnlyInputId}
+                    className="fontPickerFixedWidthToggleInput"
+                    type="checkbox"
+                    role="switch"
+                    checked={fixedWidthOnly}
+                    aria-checked={fixedWidthOnly}
+                    onChange={(e) => {
+                      setFixedWidthOnly(e.target.checked);
+                      setHighlightedAvailableFamily(null);
+                    }}
+                  />
+                  <span
+                    className="fontPickerFixedWidthToggleTrack"
+                    aria-hidden="true"
+                  >
+                    <span className="fontPickerFixedWidthToggleThumb" />
+                  </span>
+                </span>
+                <span className="fontPickerFixedWidthToggleText">
+                  {translate("fontPicker.label.fixedWidthOnly")}
+                </span>
+              </label>
+            </div>
             {cacheState.status === "notScanned" ? (
               <div className="fontPickerNotice fontPickerNotice-warning">
                 {translate("fontPicker.cacheNotScanned")}
@@ -505,108 +591,90 @@ export function FontPickerDialog({
                 {cacheState.message || translate("fontCache.status.error")}
               </div>
             ) : (
-              <>
-                <div className="fontPickerSearchGroup">
-                  <label htmlFor={searchInputId} className="fontPickerSearchLabel">
-                    {translate("fontPicker.label.search")}
-                  </label>
-                  <input
-                    id={searchInputId}
-                    className="fontPickerSearchInput settingsTextInput"
-                    type="search"
-                    value={searchQuery}
-                    placeholder={translate("fontPicker.label.search")}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setHighlightedAvailableFamily(null);
-                    }}
-                  />
-                </div>
-                <div
-                  className={
-                    dragOverTarget?.pane === "available"
-                      ? "fontPickerAvailableListBox fontPickerListBox-dropTarget"
-                      : "fontPickerAvailableListBox"
-                  }
-                  onDragOver={handleAvailablePaneDragOver}
-                  onDrop={handleAvailablePaneDrop}
-                  onDragLeave={handleAvailablePaneDragLeave}
-                >
-                  {filteredCandidates.length === 0 ? (
-                    <div className="fontPickerEmptyNotice">
-                      {translate("fontPicker.emptyAvailable")}
-                    </div>
-                  ) : (
-                    <ul className="fontPickerAvailableList">
-                      {filteredCandidates.map((candidate) => {
-                        const isActive =
-                          highlightedAvailableFamily?.family === candidate.family;
-                        const rowKey = availableRowKey(candidate.family);
-                        const isDraggingThis =
-                          draggingSource?.kind === "available" &&
-                          draggingSource.family.family === candidate.family;
-                        return (
-                          <li
-                            key={candidate.family}
-                            draggable={armedRowKey === rowKey}
-                            onDragStart={(e) =>
-                              handleRowDragStart(e, rowKey, {
-                                kind: "available",
-                                family: candidate
-                              })
-                            }
-                            onDragEnd={handleRowDragEnd}
+              <div
+                className={
+                  dragOverTarget?.pane === "available"
+                    ? "fontPickerAvailableListBox fontPickerListBox-dropTarget"
+                    : "fontPickerAvailableListBox"
+                }
+                onDragOver={handleAvailablePaneDragOver}
+                onDrop={handleAvailablePaneDrop}
+                onDragLeave={handleAvailablePaneDragLeave}
+              >
+                {filteredCandidates.length === 0 ? (
+                  <div className="fontPickerEmptyNotice">
+                    {emptyAvailableMessage}
+                  </div>
+                ) : (
+                  <ul className="fontPickerAvailableList">
+                    {filteredCandidates.map((candidate) => {
+                      const isActive =
+                        highlightedAvailableFamily?.family === candidate.family;
+                      const rowKey = availableRowKey(candidate.family);
+                      const isDraggingThis =
+                        draggingSource?.kind === "available" &&
+                        draggingSource.family.family === candidate.family;
+                      return (
+                        <li
+                          key={candidate.family}
+                          draggable={armedRowKey === rowKey}
+                          onDragStart={(e) =>
+                            handleRowDragStart(e, rowKey, {
+                              kind: "available",
+                              family: candidate
+                            })
+                          }
+                          onDragEnd={handleRowDragEnd}
+                          className={
+                            isDraggingThis
+                              ? "fontPickerRow fontPickerRow-dragging"
+                              : "fontPickerRow"
+                          }
+                        >
+                          <button
+                            type="button"
+                            className="fontPickerRowGrip"
+                            aria-label={dragHandleLabel}
+                            onMouseDown={() => armRow(rowKey)}
+                            onMouseUp={() => setArmedRowKey(null)}
+                            dangerouslySetInnerHTML={{ __html: gripperIconRaw }}
+                          />
+                          <button
+                            type="button"
                             className={
-                              isDraggingThis
-                                ? "fontPickerRow fontPickerRow-dragging"
-                                : "fontPickerRow"
+                              isActive
+                                ? "fontPickerRowButton fontPickerRowButton-active"
+                                : "fontPickerRowButton"
                             }
+                            aria-pressed={isActive}
+                            onClick={() => handleAvailableRowClick(candidate)}
                           >
-                            <button
-                              type="button"
-                              className="fontPickerRowGrip"
-                              aria-label={dragHandleLabel}
-                              onMouseDown={() => armRow(rowKey)}
-                              onMouseUp={() => setArmedRowKey(null)}
-                              dangerouslySetInnerHTML={{ __html: gripperIconRaw }}
-                            />
-                            <button
-                              type="button"
-                              className={
-                                isActive
-                                  ? "fontPickerRowButton fontPickerRowButton-active"
-                                  : "fontPickerRowButton"
-                              }
-                              aria-pressed={isActive}
-                              onClick={() => handleAvailableRowClick(candidate)}
+                            <span className="fontPickerRowName">
+                              {formatRowIdentity(candidate.family, candidate.displayName)}
+                            </span>
+                            <span
+                              className="fontPickerRowSample"
+                              style={{
+                                fontFamily: buildFontFamilyCss(
+                                  [
+                                    {
+                                      family: candidate.family,
+                                      displayName: candidate.displayName
+                                    }
+                                  ],
+                                  genericFallback
+                                )
+                              }}
                             >
-                              <span className="fontPickerRowName">
-                                {formatRowIdentity(candidate.family, candidate.displayName)}
-                              </span>
-                              <span
-                                className="fontPickerRowSample"
-                                style={{
-                                  fontFamily: buildFontFamilyCss(
-                                    [
-                                      {
-                                        family: candidate.family,
-                                        displayName: candidate.displayName
-                                      }
-                                    ],
-                                    genericFallback
-                                  )
-                                }}
-                              >
-                                {MINI_SAMPLE_TEXT}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              </>
+                              {MINI_SAMPLE_TEXT}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         </div>

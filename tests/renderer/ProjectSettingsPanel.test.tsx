@@ -266,7 +266,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -276,10 +276,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     const textInput = container.querySelector<HTMLInputElement>('input[type="text"]')!;
     expect(textInput).not.toBeNull();
-    expect(textInput.value).toBe("Consolas");
+    expect(textInput.value).toBe("「");
     expect(textInput.disabled).toBe(false);
 
-    // No checkbox, no badge, no reset button for editor font row
+    // No checkbox, no badge, no reset button for an unchanged text row.
     const editorRow = container.querySelectorAll(".settingsItemRow")[0];
     expect(editorRow.querySelector('input[type="checkbox"]')).toBeNull();
     expect(editorRow.querySelector(".projectSettingModifiedBadge")).toBeNull();
@@ -293,10 +293,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -305,7 +305,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const textInput = container.querySelector<HTMLInputElement>('input[type="text"]')!;
-    expect(textInput.value).toBe("Yu Mincho");
+    expect(textInput.value).toBe("『");
     expect(textInput.disabled).toBe(false);
 
     const badge = container.querySelector(".projectSettingModifiedBadge");
@@ -327,7 +327,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -343,7 +343,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         window.HTMLInputElement.prototype,
         "value"
       )?.set;
-      nativeSetter?.call(textInput, "Yu Mincho");
+      nativeSetter?.call(textInput, "『");
       textInput.dispatchEvent(new Event("input", { bubbles: true }));
       textInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -356,7 +356,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
-      set: { "editor.fontFamily": "Yu Mincho" }
+      set: { "editor.paragraphIndent.excludeLeadingCharacters": "『" }
     });
   });
 
@@ -369,10 +369,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -388,7 +388,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         window.HTMLInputElement.prototype,
         "value"
       )?.set;
-      nativeSetter?.call(textInput, "Consolas");
+      nativeSetter?.call(textInput, "「");
       textInput.dispatchEvent(new Event("input", { bubbles: true }));
       textInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -399,7 +399,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
-      remove: ["editor.fontFamily"]
+      remove: ["editor.paragraphIndent.excludeLeadingCharacters"]
     });
   });
 
@@ -412,10 +412,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -432,7 +432,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
-      remove: ["editor.fontFamily"]
+      remove: ["editor.paragraphIndent.excludeLeadingCharacters"]
     });
   });
 
@@ -481,16 +481,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         return originalValidate(key, val);
       });
 
-    const testItems: readonly SettingCatalogItem[] = [
-      {
-        key: "editor.fontFamily",
-        category: "editor",
-        order: 100,
-        labelKey: "settings.editor.fontFamily.label",
-        descriptionKey: "settings.editor.fontFamily.description",
-        control: { kind: "text" },
-        defaultValue: "Consolas"
-      },
+      const testItems: readonly SettingCatalogItem[] = [
+        {
+          key: "editor.paragraphIndent.excludeLeadingCharacters",
+          category: "editor",
+          order: 100,
+          labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+          descriptionKey:
+            "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
+          control: { kind: "text" },
+          defaultValue: ""
+        },
       {
         key: "preview.renderer",
         category: "preview",
@@ -552,16 +553,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
   it("emits remove request when select is changed back to match application setting (requirement 8)", async () => {
     const onSaveSettings = vi.fn(async () => undefined);
 
-    const testItems: readonly SettingCatalogItem[] = [
-      {
-        key: "editor.fontFamily",
-        category: "editor",
-        order: 100,
-        labelKey: "settings.editor.fontFamily.label",
-        descriptionKey: "settings.editor.fontFamily.description",
-        control: { kind: "text" },
-        defaultValue: "Consolas"
-      },
+      const testItems: readonly SettingCatalogItem[] = [
+        {
+          key: "editor.paragraphIndent.excludeLeadingCharacters",
+          category: "editor",
+          order: 100,
+          labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+          descriptionKey:
+            "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
+          control: { kind: "text" },
+          defaultValue: ""
+        },
       {
         key: "preview.renderer",
         category: "preview",
@@ -626,11 +628,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" },
+            editor: {
+              fontFamilyList: [
+                { family: "Yu Mincho", displayName: "Yu Mincho" }
+              ]
+            },
             preview: { renderer: "vertical" as any }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" },
+            editor: {
+              fontFamilyList: [{ family: "Consolas", displayName: "Consolas" }]
+            },
             preview: { renderer: "markdown" }
           },
           isReadOnly: false,
@@ -640,13 +648,13 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings.
-    expect(rows).toHaveLength(23);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row.
+    expect(rows).toHaveLength(22);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
       (r) =>
-        r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamily"
+        r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamilyList"
     )!;
     const previewRow = Array.from(rows).find(
       (r) =>
@@ -698,10 +706,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: true,
           onSaveSettings: async () => undefined
@@ -711,7 +719,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     const textInput = container.querySelector<HTMLInputElement>('input[type="text"]')!;
     expect(textInput.disabled).toBe(true);
-    expect(textInput.value).toBe("Yu Mincho");
+    expect(textInput.value).toBe("『");
 
     const badge = container.querySelector(".projectSettingModifiedBadge");
     expect(badge).not.toBeNull();
@@ -733,10 +741,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -752,7 +760,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         window.HTMLInputElement.prototype,
         "value"
       )?.set;
-      nativeSetter?.call(textInput, "Faulty Font");
+      nativeSetter?.call(textInput, "（");
       textInput.dispatchEvent(new Event("input", { bubbles: true }));
       textInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -762,7 +770,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
-    expect(textInput.value).toBe("Yu Mincho");
+    expect(textInput.value).toBe("『");
 
     const errorEl = container.querySelector(".settingsError");
     expect(errorEl).not.toBeNull();
@@ -777,7 +785,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Initial Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -785,16 +793,16 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Initial Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("「");
 
-    // Application settings change from Initial Font to Updated Font
+    // Application settings change from one inherited value to another.
     act(() => {
       root.render(
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Updated Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -802,7 +810,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Updated Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("『");
     expect(container.querySelector(".projectSettingModifiedBadge")).toBeNull();
   });
 
@@ -813,10 +821,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Project Custom Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Font A" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -824,19 +832,19 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Project Custom Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("『");
     expect(container.querySelector(".projectSettingModifiedBadge")).not.toBeNull();
 
-    // Application settings change to Font B
+    // Application settings change while the Project override remains set.
     act(() => {
       root.render(
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Project Custom Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Font B" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "（" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -844,7 +852,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Project Custom Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("『");
     expect(container.querySelector(".projectSettingModifiedBadge")).not.toBeNull();
   });
 
@@ -860,13 +868,14 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           onSaveSettings: async () => undefined,
           items: [
             {
-              key: "editor.fontFamily",
+              key: "editor.paragraphIndent.excludeLeadingCharacters",
               category: "editor",
               order: 100,
-              labelKey: "settings.editor.fontFamily.label",
-              descriptionKey: "settings.editor.fontFamily.description",
+              labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+              descriptionKey:
+                "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
               control: { kind: "text" },
-              defaultValue: "monospace"
+              defaultValue: ""
             },
             {
               key: "workbench.colorTheme",
@@ -885,7 +894,9 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const rows = container.querySelectorAll(".settingsItemRow");
     // workbench.colorTheme is not applicationWithProjectOverride, so it must be filtered out
     expect(rows).toHaveLength(1);
-    expect(rows[0].textContent).toContain("エディタフォント");
+    expect(rows[0].textContent).toContain(
+      translateJa("settings.editor.paragraphIndent.excludeLeadingCharacters.label")
+    );
   });
 
   // 16. Layout structure aligned with Application Settings
@@ -895,11 +906,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" },
+            editor: {
+              fontFamilyList: [
+                { family: "Yu Mincho", displayName: "Yu Mincho" }
+              ]
+            },
             preview: { renderer: "vertical" as any }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" },
+            editor: {
+              fontFamilyList: [{ family: "Consolas", displayName: "Consolas" }]
+            },
             preview: { renderer: "markdown" }
           },
           isReadOnly: false,
@@ -909,13 +926,13 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings.
-    expect(rows).toHaveLength(23);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row.
+    expect(rows).toHaveLength(22);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
       (r) =>
-        r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamily"
+        r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamilyList"
     )!;
     const previewRow = Array.from(rows).find(
       (r) =>
@@ -935,11 +952,15 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" },
+            editor: {
+              paragraphIndent: { excludeLeadingCharacters: "「" }
+            },
             preview: { renderer: "vertical" as any }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" },
+            editor: {
+              paragraphIndent: { excludeLeadingCharacters: "" }
+            },
             preview: { renderer: "markdown" }
           },
           isReadOnly: false,
@@ -968,7 +989,9 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     // Verify exact sequence of elements inside row:
     // 1. header (label + inline actions) -> 2. control -> 3. description -> 4. key
     const editorRow = Array.from(container.querySelectorAll(".settingsItemRow")).find(
-      (r) => r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamily"
+      (r) =>
+        r.querySelector(".settingsItemKey")?.textContent ===
+        "editor.paragraphIndent.excludeLeadingCharacters"
     )!;
     const childTags = Array.from(editorRow.children).map((el) => ({
       tag: el.tagName.toLowerCase(),
@@ -985,7 +1008,9 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const header = editorRow.querySelector(".settingsItemHeader")!;
     expect(header).not.toBeNull();
     const label = header.querySelector(".settingsItemLabel")!;
-    expect(label.textContent).toBe("エディタフォント");
+    expect(label.textContent).toBe(
+      translateJa("settings.editor.paragraphIndent.excludeLeadingCharacters.label")
+    );
     const actions = header.querySelector(".projectSettingHeaderActions")!;
     expect(actions).not.toBeNull();
     expect(actions.querySelector(".projectSettingResetButton")).not.toBeNull();
@@ -1002,7 +1027,9 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     // 4. Setting key
     const keyEl = editorRow.querySelector("code.settingsItemKey");
-    expect(keyEl?.textContent).toBe("editor.fontFamily");
+    expect(keyEl?.textContent).toBe(
+      "editor.paragraphIndent.excludeLeadingCharacters"
+    );
 
     // Preview row control directly with .settingsSelect and same sequence
     const previewRow = Array.from(
@@ -1110,7 +1137,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
     describe("matchesProjectSettingSearch", () => {
       const eligibleItems = getProjectSettingsUiItems();
-      const editorItem = eligibleItems.find((i) => i.key === "editor.fontFamily")!;
+      const editorItem = eligibleItems.find(
+        (i) => i.key === "editor.fontFamilyList"
+      )!;
       const previewItem = eligibleItems.find((i) => i.key === "preview.renderer")!;
 
       it("matches empty query for any item", () => {
@@ -1135,7 +1164,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       it("matches by translated label", () => {
         expect(
-          matchesProjectSettingSearch(editorItem, "エディタフォント", translateJa)
+          matchesProjectSettingSearch(editorItem, "フォントリスト", translateJa)
         ).toBe(true);
         expect(
           matchesProjectSettingSearch(previewItem, "レンダラー", translateJa)
@@ -1169,7 +1198,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
     describe("matchesProjectSettingCategory", () => {
       const eligibleItems = getProjectSettingsUiItems();
-      const editorItem = eligibleItems.find((i) => i.key === "editor.fontFamily")!;
+      const editorItem = eligibleItems.find(
+        (i) => i.key === "editor.fontFamilyList"
+      )!;
       const previewItem = eligibleItems.find((i) => i.key === "preview.renderer")!;
 
       it("matches 'all' for any item", () => {
@@ -1188,6 +1219,16 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
     describe("filterProjectSettingItems", () => {
       const eligibleItems = getProjectSettingsUiItems();
 
+      it("does not expose legacy single-font settings in Project Settings UI", () => {
+        const keys = eligibleItems.map((item) => item.key);
+
+        expect(keys).not.toContain("workbench.fontFamily");
+        expect(keys).not.toContain("editor.fontFamily");
+        expect(keys).toContain("workbench.uiFontFamilyList");
+        expect(keys).toContain("editor.fontFamilyList");
+        expect(keys).toContain("preview.fontFamilyList");
+      });
+
       it("returns all eligible items when filter is 'all' and query is empty", () => {
         const result = filterProjectSettingItems(
           eligibleItems,
@@ -1197,7 +1238,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         );
         expect(result.map((i) => i.key)).toEqual([
           "workbench.uiFontFamilyList",
-          "editor.fontFamily",
           "editor.fontFamilyList",
           "editor.paragraphIndent.excludeLeadingCharacters",
           "editor.emphasisMark.rule",
@@ -1230,7 +1270,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           translateJa
         );
         expect(editorOnly.map((i) => i.key)).toEqual([
-          "editor.fontFamily",
           "editor.fontFamilyList",
           "editor.paragraphIndent.excludeLeadingCharacters",
           "editor.emphasisMark.rule",
@@ -1274,7 +1313,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         );
         expect(fontMatches.map((i) => i.key)).toEqual([
           "workbench.uiFontFamilyList",
-          "editor.fontFamily",
           "editor.fontFamilyList",
           "preview.fontFamilyList"
         ]);
@@ -1288,7 +1326,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
             "font",
             translateJa
           ).map((i) => i.key)
-        ).toEqual(["editor.fontFamily", "editor.fontFamilyList"]);
+        ).toEqual(["editor.fontFamilyList"]);
 
         expect(
           filterProjectSettingItems(
@@ -1395,7 +1433,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
         "workbench.uiFontFamilyList",
-        "editor.fontFamily",
         "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
@@ -1460,7 +1497,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
-        "editor.fontFamily",
         "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
@@ -1560,7 +1596,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
         "workbench.uiFontFamilyList",
-        "editor.fontFamily",
         "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
@@ -1612,7 +1647,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
         "workbench.uiFontFamilyList",
-        "editor.fontFamily",
         "editor.fontFamilyList",
         "preview.fontFamilyList"
       ]);
@@ -1653,7 +1687,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
         "workbench.uiFontFamilyList",
-        "editor.fontFamily",
         "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
@@ -1758,7 +1791,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       act(() => {
         editorButton.click();
       });
-      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(13);
+      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(12);
 
       const settingInput = container.querySelector<HTMLInputElement>(
         "input.settingsTextInput"
@@ -1803,8 +1836,20 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         root.render(
           <ProjectSettingsPanel
             translate={translateJa}
-            projectSettings={{ editor: { fontFamily: "Yu Mincho" } }}
-            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            projectSettings={{
+              editor: {
+                fontFamilyList: [
+                  { family: "Yu Mincho", displayName: "Yu Mincho" }
+                ]
+              }
+            }}
+            applicationSettings={{
+              editor: {
+                fontFamilyList: [
+                  { family: "Consolas", displayName: "Consolas" }
+                ]
+              }
+            }}
             isReadOnly={false}
             onSaveSettings={vi.fn()}
           />
@@ -1902,7 +1947,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       // 2. Change draft value
       act(() => {
-        changeInputValue(textInput, "Yu Mincho");
+        changeInputValue(textInput, "「『");
       });
 
       expect(onSaveSettings).not.toHaveBeenCalled();
@@ -1923,7 +1968,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       // 4. Blur-save successfully triggers and persists the draft value
       expect(onSaveSettings).toHaveBeenCalledTimes(1);
       expect(onSaveSettings).toHaveBeenCalledWith({
-        set: { "editor.fontFamily": "Yu Mincho" }
+        set: { "editor.paragraphIndent.excludeLeadingCharacters": "「『" }
       });
 
       // Confirm the editor item is filtered out and only preview items are visible

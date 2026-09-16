@@ -257,22 +257,22 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
       selectedCategoryId: "editor"
     });
 
-    expect(controlElement(element, "editor.fontFamily")).toBeDefined();
+    expect(controlElement(element, "editor.fontFamilyList")).toBeDefined();
     expect(() => controlElement(element, "workbench.language")).toThrow();
     expect(() => controlElement(element, "files.newFile.lineEnding")).toThrow();
   });
 
   it("shows label, description, and the internal setting key for an item", () => {
     const markup = renderSettingsPanelView("en", {
-      searchQuery: isolate("editor.fontFamily")
+      searchQuery: isolate("editor.fontFamilyList")
     });
 
-    expect(markup).toContain("Editor font");
+    expect(markup).toContain("Editor Font Family List");
     expect(markup).toContain(
-      "Font family used for Markdown editor body text. Enter an unquoted CSS font-family list."
+      "Ordered list of font families used for the editor."
     );
     expect(markup).toContain("<code");
-    expect(markup).toContain("editor.fontFamily</code>");
+    expect(markup).toContain("editor.fontFamilyList</code>");
   });
 
   it("shows the footer detail Command Palette setting text instead of command-description wording", () => {
@@ -298,7 +298,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
       "settings.workbench.sound.enabled.label",
       "settings.editor.characterCount.exclude.markdownSyntax.label",
       "settings.editor.whitespace.renderIdeographicSpace.label",
-      "settings.editor.fontFamily.label",
+      "settings.editor.fontFamilyList.label",
       "settings.files.newFile.lineEnding.label",
       "settings.files.newFile.lineEnding.option.lf.label",
       "settings.commandPalette.footerDetail.marquee.delay.label",
@@ -438,7 +438,6 @@ describe("SettingsPanelView category behavior (#230)", () => {
     );
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
-      "editor.fontFamily",
       "editor.fontFamilyList",
       "editor.undoHistoryMinDepth",
       "editor.selectionHighlightMode",
@@ -662,7 +661,7 @@ describe("SettingsPanelView search UI (#230)", () => {
       searchQuery: ""
     });
 
-    expect(markup).toContain("settingControl-editor.fontFamily");
+    expect(markup).toContain("settingControl-editor.fontFamilyList");
     expect(markup).not.toContain("settingControl-workbench.language");
   });
 });
@@ -799,7 +798,7 @@ describe("SettingsPanelView switch control polish (#234)", () => {
 
   it("does not wrap non-switch controls in a <label> (only the switch kind changes structurally)", () => {
     const markup = renderSettingsPanelView("en", {
-      searchQuery: isolate("editor.fontFamily")
+      searchQuery: isolate("editor.fontFamilyList")
     });
 
     expect(markup).toContain('<div class="settingsItemHeader">');
@@ -1050,50 +1049,36 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     });
   });
 
-  it("saves immediately when a text setting changes, omitting an empty fontFamily rather than sending an empty string", () => {
-    const settings: ApplicationSettings = {
-      ...defaultApplicationSettings,
-      editor: {
-        ...defaultApplicationSettings.editor,
-        fontFamily: "Fira Code",
-        lineEnding: defaultApplicationSettings.editor.lineEnding
-      }
-    };
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelViewElement("en", {
-      settings,
-      searchQuery: isolate("editor.fontFamily"),
-      onChangeSettings
+  it("does not show legacy single-font settings in Application Settings while keeping structured font lists visible", () => {
+    const appearanceMarkup = renderSettingsPanelView("en", {
+      selectedCategoryId: "appearance"
     });
-    const input = controlElement(element, "editor.fontFamily");
-    const onChange = input.props.onChange as (event: {
-      target: { value: string };
-    }) => void;
-
-    onChange({ target: { value: "   " } });
-
-    expect(onChangeSettings).toHaveBeenCalledWith({
-      documentMap: defaultApplicationSettings.documentMap,
-      imageAttachment: defaultApplicationSettings.imageAttachment,
-      search: defaultApplicationSettings.search,
-      preview: settings.preview,
-      workbench: settings.workbench,
-      commandPalette: settings.commandPalette,
-      editor: {
-        lineEnding: settings.editor.lineEnding,
-        whitespace: settings.editor.whitespace,
-        paragraphIndent: settings.editor.paragraphIndent,
-        characterCount: settings.editor.characterCount,
-        undoHistoryMinDepth: settings.editor.undoHistoryMinDepth,
-        selectionHighlightMode: settings.editor.selectionHighlightMode,
-        findGutterMarkers: settings.editor.findGutterMarkers,
-        captureTabInEditor: settings.editor.captureTabInEditor,
-        fencedCodeIndentUnit: settings.editor.fencedCodeIndentUnit,
-        emphasisMark: settings.editor.emphasisMark,
-        ruby: settings.editor.ruby
-      },
-      files: settings.files
+    const editorMarkup = renderSettingsPanelView("en", {
+      selectedCategoryId: "editor"
     });
+
+    expect(appearanceMarkup).not.toContain("settingControl-workbench.fontFamily");
+    expect(appearanceMarkup).toContain(
+      "settingControl-workbench.uiFontFamilyList"
+    );
+    expect(editorMarkup).not.toContain("settingControl-editor.fontFamily\"");
+    expect(editorMarkup).toContain("settingControl-editor.fontFamilyList");
+
+    const translate = translateFor("en");
+    expect(
+      getVisibleSettingCatalogItems(
+        "workbench.fontFamily",
+        "appearance",
+        translate
+      ).map((item) => item.key)
+    ).toEqual([]);
+    expect(
+      getVisibleSettingCatalogItems(
+        "editor.fontFamily",
+        "editor",
+        translate
+      ).map((item) => item.key)
+    ).toEqual(["editor.fontFamilyList"]);
   });
 
   it("saves paragraph indent excluded leading characters as a free-form text setting, including an empty string", () => {
@@ -1749,7 +1734,7 @@ describe("SettingsPanelView unwired settings clarity (#236)", () => {
 
   it("does not show the unwired notice for a normal wired item", () => {
     const markup = renderSettingsPanelView("en", {
-      searchQuery: isolate("editor.fontFamily")
+      searchQuery: isolate("editor.fontFamilyList")
     });
 
     expect(markup).not.toContain(t("en", "settings.unwiredSettingNotice"));

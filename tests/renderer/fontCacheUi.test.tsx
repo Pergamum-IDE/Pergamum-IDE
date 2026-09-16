@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { FontCacheControl } from "../../src/renderer/FontCacheControl";
+import { FontFamilyListSettingControl } from "../../src/renderer/FontFamilyListSettingControl";
 import type { Translate, TranslationKey } from "../../src/shared/i18n";
 import { enTranslations } from "../../src/shared/i18n/en";
 import { jaTranslations } from "../../src/shared/i18n/ja";
@@ -100,6 +102,163 @@ describe("FontCacheControl UI Integration (#491)", () => {
 
     const scanButton = container.querySelector<HTMLButtonElement>(".fontCacheScanButton");
     expect(scanButton?.textContent).toBe(translateJa("fontCache.button.scan"));
+    expect(scanButton?.querySelector(".fontCacheScanIcon svg")).toBeTruthy();
+  });
+
+  it("does not show the language mismatch warning when cache uiLanguage matches the current UI language", async () => {
+    (window as any).queryLocalFonts = vi.fn();
+    (window as any).pergamum = {
+      fontCache: {
+        load: vi.fn().mockResolvedValue({
+          status: "loaded",
+          cache: {
+            version: 1,
+            scannedAt: "2026-09-16T00:00:00.000Z",
+            uiLanguage: "ja",
+            families: []
+          }
+        }),
+        save: vi.fn()
+      }
+    };
+
+    await act(async () => {
+      root.render(
+        <FontCacheControl
+          id="test-font-cache"
+          translate={translateJa}
+          uiLanguage="ja"
+        />
+      );
+    });
+
+    expect(container.querySelector(".fontCacheLanguageWarning")).toBeNull();
+  });
+
+  it("shows the language mismatch warning without scanning, saving, or rewriting settings", async () => {
+    const queryLocalFontsMock = vi.fn();
+    const saveMock = vi.fn();
+    (window as any).queryLocalFonts = queryLocalFontsMock;
+    (window as any).pergamum = {
+      fontCache: {
+        load: vi.fn().mockResolvedValue({
+          status: "loaded",
+          cache: {
+            version: 1,
+            scannedAt: "2026-09-16T00:00:00.000Z",
+            uiLanguage: "en",
+            families: []
+          }
+        }),
+        save: saveMock
+      }
+    };
+
+    await act(async () => {
+      root.render(
+        <FontCacheControl
+          id="test-font-cache"
+          translate={translateJa}
+          uiLanguage="ja"
+        />
+      );
+    });
+
+    const warning = container.querySelector(".fontCacheLanguageWarning");
+    expect(warning?.textContent).toBe(
+      translateJa("fontCache.warning.languageMismatch")
+    );
+    expect(queryLocalFontsMock).not.toHaveBeenCalled();
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  it("renders font family list controls as summary/choose top row and rescan/status bottom row", async () => {
+    (window as any).pergamum = {
+      fontCache: {
+        load: vi.fn().mockResolvedValue({
+          status: "loaded",
+          cache: {
+            version: 1,
+            scannedAt: "2026-09-16T12:20:00.000Z",
+            uiLanguage: "ja",
+            families: []
+          }
+        }),
+        save: vi.fn()
+      }
+    };
+    const onOpenDialog = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <FontFamilyListSettingControl
+          id="font-list-control"
+          slot="editor.fontFamilyList"
+          value={[{ family: "Yu Gothic", displayName: "游ゴシック" }]}
+          translate={translateJa}
+          uiLanguage="ja"
+          onOpenDialog={onOpenDialog}
+        />
+      );
+    });
+
+    const topRow = container.querySelector(".fontFamilyListSummaryRow");
+    const summary = container.querySelector(".fontFamilyListSummaryText");
+    const chooseButton = container.querySelector(".fontFamilyListChooseButton");
+    const bottomRow = container.querySelector(".fontCacheControlRow");
+    const rescanButton = container.querySelector(".fontCacheScanButton");
+    const statusArea = container.querySelector(".fontCacheStatusArea");
+
+    expect(topRow?.children[0]).toBe(summary);
+    expect(topRow?.children[1]).toBe(chooseButton);
+    expect(summary?.textContent).toBe("Yu Gothic / 游ゴシック");
+    expect(chooseButton?.textContent).toBe(translateJa("fontPicker.button.choose"));
+    expect(bottomRow?.children[0]).toBe(rescanButton);
+    expect(bottomRow?.children[1]).toBe(statusArea);
+    expect(statusArea?.textContent).toContain("最終スキャン:");
+  });
+
+  it("shows a clear generic fallback label for an empty font family list", async () => {
+    (window as any).pergamum = {
+      fontCache: {
+        load: vi.fn().mockResolvedValue({ status: "notScanned" }),
+        save: vi.fn()
+      }
+    };
+
+    await act(async () => {
+      root.render(
+        <FontFamilyListSettingControl
+          id="font-list-control"
+          slot="editor.fontFamilyList"
+          value={[]}
+          translate={translateJa}
+          onOpenDialog={vi.fn()}
+        />
+      );
+    });
+
+    expect(container.querySelector(".fontFamilyListSummaryText")?.textContent).toBe(
+      "標準フォント（monospace）"
+    );
+  });
+
+  it("keeps the font list control CSS ellipsis-capable and left/right aligned", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(styles).toContain(".fontFamilyListSummaryRow {\n  display: grid;");
+    expect(styles).toContain("grid-template-columns: minmax(0, 1fr) auto;");
+    expect(styles).toContain(".fontFamilyListSummaryText");
+    expect(styles).toContain("text-overflow: ellipsis;");
+    expect(styles).toContain(".fontCacheControlRow {\n  display: flex;");
+    expect(styles).toContain("justify-content: space-between;");
+    expect(styles).toContain(".fontCacheStatusArea");
+    expect(styles).toContain("text-align: end;");
+    expect(styles).toContain(".fontCacheScanButton:disabled");
+    expect(styles).toContain("cursor: not-allowed;");
+    expect(styles).toContain("@media (prefers-reduced-motion: no-preference)");
+    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(styles).toContain(".fontCacheScanIcon-spinning");
   });
 
   it("calls queryLocalFonts only when user clicks scan button and updates to loaded status", async () => {
@@ -133,9 +292,100 @@ describe("FontCacheControl UI Integration (#491)", () => {
     expect(saveMock).toHaveBeenCalledTimes(1);
 
     const statusText = container.querySelector(".fontCacheStatusText")?.textContent;
-    expect(statusText).toContain("ローカルフォント: 2 ファミリー");
+    expect(statusText).toContain("最終スキャン:");
 
     expect(scanButton.textContent).toBe(translateJa("fontCache.button.rescan"));
+  });
+
+  it("shows scanning state, disables duplicate scans, and re-enables after success", async () => {
+    let resolveScan!: (fonts: { family: string; fullName: string }[]) => void;
+    const scanPromise = new Promise<{ family: string; fullName: string }[]>(
+      (resolve) => {
+        resolveScan = resolve;
+      }
+    );
+    const queryLocalFontsMock = vi.fn().mockReturnValue(scanPromise);
+    (window as any).queryLocalFonts = queryLocalFontsMock;
+    const saveMock = vi.fn(async (cache) => ({ status: "loaded" as const, cache }));
+    (window as any).pergamum = {
+      fontCache: {
+        load: vi.fn().mockResolvedValue({ status: "notScanned" }),
+        save: saveMock
+      }
+    };
+
+    await act(async () => {
+      root.render(<FontCacheControl id="test-font-cache" translate={translateJa} />);
+    });
+
+    const scanButton = container.querySelector<HTMLButtonElement>(".fontCacheScanButton")!;
+    await act(async () => {
+      scanButton.click();
+      await Promise.resolve();
+    });
+
+    expect(queryLocalFontsMock).toHaveBeenCalledTimes(1);
+    expect(scanButton.disabled).toBe(true);
+    expect(scanButton.textContent).toBe(translateJa("fontCache.button.scanning"));
+    expect(scanButton.classList.contains("fontCacheScanButton-scanning")).toBe(true);
+    expect(
+      scanButton
+        .querySelector(".fontCacheScanIcon")
+        ?.classList.contains("fontCacheScanIcon-spinning")
+    ).toBe(true);
+
+    await act(async () => {
+      scanButton.click();
+      await Promise.resolve();
+    });
+    expect(queryLocalFontsMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveScan([{ family: "Consolas", fullName: "Consolas Regular" }]);
+      await scanPromise;
+      await Promise.resolve();
+    });
+
+    expect(scanButton.disabled).toBe(false);
+    expect(scanButton.textContent).toBe(translateJa("fontCache.button.rescan"));
+    expect(saveMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-enables the scan button and shows the failure state after scan failure", async () => {
+    let rejectScan!: (error: Error) => void;
+    const scanPromise = new Promise<never>((_, reject) => {
+      rejectScan = reject;
+    });
+    (window as any).queryLocalFonts = vi.fn().mockReturnValue(scanPromise);
+    (window as any).pergamum = {
+      fontCache: {
+        load: vi.fn().mockResolvedValue({ status: "notScanned" }),
+        save: vi.fn()
+      }
+    };
+
+    await act(async () => {
+      root.render(<FontCacheControl id="test-font-cache" translate={translateJa} />);
+    });
+
+    const scanButton = container.querySelector<HTMLButtonElement>(".fontCacheScanButton")!;
+    await act(async () => {
+      scanButton.click();
+      await Promise.resolve();
+    });
+
+    expect(scanButton.disabled).toBe(true);
+
+    await act(async () => {
+      rejectScan(new Error("Permission denied"));
+      await scanPromise.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    expect(scanButton.disabled).toBe(false);
+    expect(container.querySelector(".fontCacheStatusText")?.textContent).toBe(
+      "Permission denied"
+    );
   });
 
   it("handles unsupported API safely when queryLocalFonts is missing", async () => {
@@ -256,7 +506,7 @@ describe("FontCacheControl UI Integration (#491)", () => {
 
       expect(saveMock).not.toHaveBeenCalled();
       const statusText = container.querySelector(".fontCacheStatusText")?.textContent;
-      expect(statusText).toContain("ローカルフォント: 1 ファミリー");
+      expect(statusText).toBe("scan failed");
     });
 
     it("does not log the full font list during a scan", async () => {
@@ -308,20 +558,49 @@ describe("FontCacheControl UI Integration (#491)", () => {
       }
     }
 
-    /** Minimal single-font sfnt binary with one Microsoft-platform
-     * Typographic Family (nameID 16) record. Real (not mocked) name-table
-     * parsing/resolution runs against this in these tests — only
-     * `blob()` itself is a test double. */
-    function buildFontBinary(languageID: number, value: string): ArrayBuffer {
-      const encoded = encodeUtf16Be(value);
+    type NameRecordInput = {
+      languageID: number;
+      nameID: number;
+      value: string;
+    };
+
+    function buildNameTable(records: readonly NameRecordInput[]): Uint8Array {
+      const encodedValues = records.map((record) => encodeUtf16Be(record.value));
       const nameHeaderSize = 6;
       const nameRecordSize = 12;
-      const stringOffset = nameHeaderSize + nameRecordSize;
-      const nameTableSize = stringOffset + encoded.length;
+      const stringOffset = nameHeaderSize + records.length * nameRecordSize;
+      const totalStorage = encodedValues.reduce((sum, value) => sum + value.length, 0);
+      const buffer = new ArrayBuffer(stringOffset + totalStorage);
+      const view = new DataView(buffer);
+      const bytes = new Uint8Array(buffer);
+
+      view.setUint16(0, 0, false);
+      view.setUint16(2, records.length, false);
+      view.setUint16(4, stringOffset, false);
+
+      let storageOffset = 0;
+      records.forEach((record, index) => {
+        const recordOffset = nameHeaderSize + index * nameRecordSize;
+        const encoded = encodedValues[index];
+        view.setUint16(recordOffset, 3, false); // platformID: Microsoft
+        view.setUint16(recordOffset + 2, 1, false);
+        view.setUint16(recordOffset + 4, record.languageID, false);
+        view.setUint16(recordOffset + 6, record.nameID, false);
+        view.setUint16(recordOffset + 8, encoded.length, false);
+        view.setUint16(recordOffset + 10, storageOffset, false);
+        bytes.set(encoded, stringOffset + storageOffset);
+        storageOffset += encoded.length;
+      });
+
+      return bytes;
+    }
+
+    function buildSingleFontBinary(records: readonly NameRecordInput[]): ArrayBuffer {
+      const nameTable = buildNameTable(records);
       const sfntHeaderSize = 12;
       const tableRecordSize = 16;
       const nameTableStart = sfntHeaderSize + tableRecordSize;
-      const totalSize = nameTableStart + nameTableSize;
+      const totalSize = nameTableStart + nameTable.length;
 
       const buffer = new ArrayBuffer(totalSize);
       const view = new DataView(buffer);
@@ -329,23 +608,61 @@ describe("FontCacheControl UI Integration (#491)", () => {
       view.setUint16(4, 1, false);
       writeTag(view, sfntHeaderSize, "name");
       view.setUint32(sfntHeaderSize + 8, nameTableStart, false);
-      view.setUint32(sfntHeaderSize + 12, nameTableSize, false);
+      view.setUint32(sfntHeaderSize + 12, nameTable.length, false);
 
-      view.setUint16(nameTableStart, 0, false);
-      view.setUint16(nameTableStart + 2, 1, false);
-      view.setUint16(nameTableStart + 4, stringOffset, false);
-      view.setUint16(nameTableStart + 6, 3, false); // platformID: Microsoft
-      view.setUint16(nameTableStart + 8, 1, false);
-      view.setUint16(nameTableStart + 10, languageID, false);
-      view.setUint16(nameTableStart + 12, 16, false); // nameID: Typographic Family
-      view.setUint16(nameTableStart + 14, encoded.length, false);
-      view.setUint16(nameTableStart + 16, 0, false);
+      new Uint8Array(buffer).set(nameTable, nameTableStart);
+      return buffer;
+    }
 
-      new Uint8Array(buffer).set(encoded, nameTableStart + stringOffset);
+    /** Minimal single-font sfnt binary with one Microsoft-platform
+     * Typographic Family (nameID 16) record. Real (not mocked) name-table
+     * parsing/resolution runs against this in these tests — only
+     * `blob()` itself is a test double. */
+    function buildFontBinary(languageID: number, value: string): ArrayBuffer {
+      return buildSingleFontBinary([{ languageID, nameID: 16, value }]);
+    }
+
+    function buildTtcBinary(fonts: readonly (readonly NameRecordInput[])[]): ArrayBuffer {
+      const nameTables = fonts.map((records) => buildNameTable(records));
+      const ttcHeaderSize = 12 + fonts.length * 4;
+      const sfntHeaderSize = 12;
+      const tableRecordSize = 16;
+      const sfntSizes = nameTables.map(
+        (nameTable) => sfntHeaderSize + tableRecordSize + nameTable.length
+      );
+      const totalSize =
+        ttcHeaderSize + sfntSizes.reduce((sum, size) => sum + size, 0);
+      const buffer = new ArrayBuffer(totalSize);
+      const view = new DataView(buffer);
+      const bytes = new Uint8Array(buffer);
+
+      writeTag(view, 0, "ttcf");
+      view.setUint16(4, 2, false);
+      view.setUint16(6, 0, false);
+      view.setUint32(8, fonts.length, false);
+
+      let fontOffset = ttcHeaderSize;
+      for (let i = 0; i < fonts.length; i++) {
+        const nameTable = nameTables[i];
+        const nameTableStart = fontOffset + sfntHeaderSize + tableRecordSize;
+        view.setUint32(12 + i * 4, fontOffset, false);
+        view.setUint32(fontOffset, 0x00010000, false);
+        view.setUint16(fontOffset + 4, 1, false);
+        writeTag(view, fontOffset + sfntHeaderSize, "name");
+        view.setUint32(fontOffset + sfntHeaderSize + 8, nameTableStart, false);
+        view.setUint32(fontOffset + sfntHeaderSize + 12, nameTable.length, false);
+        bytes.set(nameTable, nameTableStart);
+        fontOffset += sfntSizes[i];
+      }
+
       return buffer;
     }
 
     const JAPANESE = 0x0411;
+    const US_ENGLISH = 0x0409;
+    const NAME_ID_TYPOGRAPHIC_FAMILY = 16;
+    const NAME_ID_FONT_FAMILY = 1;
+    const NAME_ID_POSTSCRIPT_NAME = 6;
 
     function blobOf(buffer: ArrayBuffer) {
       return async () => ({ arrayBuffer: async () => buffer });
@@ -380,6 +697,166 @@ describe("FontCacheControl UI Integration (#491)", () => {
       expect(savedCache.families[0]).toMatchObject({
         family: "Yu Gothic",
         displayName: "游ゴシック"
+      });
+    });
+
+    it("does not leak a TTC sibling's localized name onto a face whose PostScript name resolves to a different family", async () => {
+      const yuGothicCollection = buildTtcBinary([
+        [
+          {
+            languageID: US_ENGLISH,
+            nameID: NAME_ID_POSTSCRIPT_NAME,
+            value: "YuGothic-Regular"
+          },
+          {
+            languageID: JAPANESE,
+            nameID: NAME_ID_TYPOGRAPHIC_FAMILY,
+            value: "游ゴシック"
+          },
+          {
+            languageID: US_ENGLISH,
+            nameID: NAME_ID_FONT_FAMILY,
+            value: "Yu Gothic"
+          }
+        ],
+        [
+          {
+            languageID: US_ENGLISH,
+            nameID: NAME_ID_POSTSCRIPT_NAME,
+            value: "YuGothicUI-Regular"
+          },
+          {
+            languageID: US_ENGLISH,
+            nameID: NAME_ID_FONT_FAMILY,
+            value: "Yu Gothic UI"
+          }
+        ]
+      ]);
+      (window as any).queryLocalFonts = vi.fn().mockResolvedValue([
+        {
+          family: "Yu Gothic",
+          postscriptName: "YuGothic-Regular",
+          blob: blobOf(yuGothicCollection)
+        },
+        {
+          family: "Yu Gothic UI",
+          postscriptName: "YuGothicUI-Regular",
+          blob: blobOf(yuGothicCollection)
+        }
+      ]);
+      const saveMock = vi.fn(async (cache) => ({ status: "loaded" as const, cache }));
+      (window as any).pergamum = {
+        fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }), save: saveMock }
+      };
+
+      await act(async () => {
+        root.render(
+          <FontCacheControl id="test-font-cache" translate={translateJa} uiLanguage="ja" />
+        );
+      });
+      const scanButton = container.querySelector<HTMLButtonElement>(".fontCacheScanButton")!;
+      await act(async () => {
+        scanButton.click();
+      });
+
+      const savedCache = saveMock.mock.calls[0][0];
+      const byFamily = Object.fromEntries(
+        savedCache.families.map((family: { family: string; displayName: string }) => [
+          family.family,
+          family.displayName
+        ])
+      );
+      expect(byFamily["Yu Gothic"]).toBe("游ゴシック");
+      expect(byFamily["Yu Gothic UI"]).toBe("Yu Gothic UI");
+    });
+
+    it("uses all faces in the same family, so a later TTC face can provide the localized family name", async () => {
+      const plainFaceWithoutJapaneseName = {
+        family: "BIZ UDGothic",
+        fullName: "BIZ UDGothic Plain",
+        postscriptName: "BIZUDGothic-Plain",
+        blob: blobOf(
+          buildSingleFontBinary([
+            {
+              languageID: US_ENGLISH,
+              nameID: NAME_ID_POSTSCRIPT_NAME,
+              value: "BIZUDGothic-Plain"
+            },
+            {
+              languageID: US_ENGLISH,
+              nameID: NAME_ID_FONT_FAMILY,
+              value: "BIZ UDGothic"
+            }
+          ])
+        )
+      };
+      const ttcFaceWithJapaneseName = {
+        family: "BIZ UDGothic",
+        fullName: "BIZ UDGothic Regular",
+        postscriptName: "BIZUDGothic-Regular",
+        blob: blobOf(
+          buildTtcBinary([
+            [
+              {
+                languageID: US_ENGLISH,
+                nameID: NAME_ID_POSTSCRIPT_NAME,
+                value: "BIZUDPGothic-Regular"
+              },
+              {
+                languageID: US_ENGLISH,
+                nameID: NAME_ID_FONT_FAMILY,
+                value: "BIZ UDPGothic"
+              },
+              {
+                languageID: JAPANESE,
+                nameID: NAME_ID_FONT_FAMILY,
+                value: "BIZ UDPゴシック"
+              }
+            ],
+            [
+              {
+                languageID: US_ENGLISH,
+                nameID: NAME_ID_POSTSCRIPT_NAME,
+                value: "BIZUDGothic-Regular"
+              },
+              {
+                languageID: US_ENGLISH,
+                nameID: NAME_ID_FONT_FAMILY,
+                value: "BIZ UDGothic"
+              },
+              {
+                languageID: JAPANESE,
+                nameID: NAME_ID_FONT_FAMILY,
+                value: "BIZ UDゴシック"
+              }
+            ]
+          ])
+        )
+      };
+      (window as any).queryLocalFonts = vi.fn().mockResolvedValue([
+        plainFaceWithoutJapaneseName,
+        ttcFaceWithJapaneseName
+      ]);
+      const saveMock = vi.fn(async (cache) => ({ status: "loaded" as const, cache }));
+      (window as any).pergamum = {
+        fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }), save: saveMock }
+      };
+
+      await act(async () => {
+        root.render(
+          <FontCacheControl id="test-font-cache" translate={translateJa} uiLanguage="ja" />
+        );
+      });
+      const scanButton = container.querySelector<HTMLButtonElement>(".fontCacheScanButton")!;
+      await act(async () => {
+        scanButton.click();
+      });
+
+      const savedCache = saveMock.mock.calls[0][0];
+      expect(savedCache.families).toHaveLength(1);
+      expect(savedCache.families[0]).toMatchObject({
+        family: "BIZ UDGothic",
+        displayName: "BIZ UDゴシック"
       });
     });
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   aggregateFontFamiliesWithDisplayNames,
   type FontCache,
@@ -10,8 +10,10 @@ import {
   createCanvasMeasureTextWidth,
   measureFixedWidthForFamilies
 } from "./fontFixedWidthDetection";
-import { resolveLocalizedDisplayName } from "./fontLocalizedDisplayName";
+import { resolveDisplayNameFromFamilyRecords } from "./fontDisplayNameResolver";
+import { resolveFontNameRecords } from "./fontLocalizedDisplayName";
 import type { Language, Translate } from "../shared/i18n";
+import reloadIconRaw from "../../assets/icons/ionicons/dialog/reload-outline.svg?raw";
 
 declare global {
   interface Window {
@@ -46,14 +48,13 @@ function formatScannedDate(isoString: string): string {
 }
 
 /**
- * #496: resolves each raw scanned face's localized displayName, calling
- * `FontData.blob()` only as needed. Faces are processed sequentially (see
- * #495's precedent for sequential-is-fine at this scale), and — since many
- * faces typically share one family (Regular/Bold/Italic/...) — once a
- * family has already resolved a real localized name from an earlier face,
- * later faces of that same family skip their own `blob()`/parse call
- * entirely and just reuse it. This is a meaningful win in practice: a
- * hundred-plus-family scan is commonly several hundred faces, not families.
+ * #496/#497: resolves each raw scanned face's name-table records, then
+ * decides a displayName per family using ADR-0015 F-15 across all faces in
+ * that exact `FontData.family`. Faces are processed sequentially (see #495's
+ * precedent for sequential-is-fine at this scale). We deliberately do not
+ * short-circuit after the first face: a first face without a localized name
+ * must not lock the whole family to the `family` fallback when a later face
+ * has the proper localized family name.
  *
  * Deliberately does NOT build the result via `{ ...font, resolvedDisplayName }`
  * — the real Font Access API's `FontData` exposes `family`/`fullName`/
@@ -68,8 +69,8 @@ async function resolveDisplayNamesForScan(
   rawFonts: readonly RawFontData[],
   uiLanguage: Language
 ): Promise<RawFontDataWithDisplayName[]> {
-  const resolvedByFamily = new Map<string, string>();
   const result: RawFontDataWithDisplayName[] = [];
+  const recordsByFamily = new Map<string, Array<Awaited<ReturnType<typeof resolveFontNameRecords>>>>();
 
   const withResolvedName = (
     font: RawFontData,
@@ -92,18 +93,29 @@ async function resolveDisplayNamesForScan(
       continue;
     }
 
-    const alreadyResolved = resolvedByFamily.get(font.family);
-    if (alreadyResolved && alreadyResolved !== font.family) {
-      result.push(withResolvedName(font, alreadyResolved));
-      continue;
+    const records = await resolveFontNameRecords(font);
+    const familyRecords = recordsByFamily.get(font.family);
+    if (familyRecords) {
+      familyRecords.push(records);
+    } else {
+      recordsByFamily.set(font.family, [records]);
     }
-
-    const resolvedDisplayName = await resolveLocalizedDisplayName(font, uiLanguage);
-    resolvedByFamily.set(font.family, resolvedDisplayName);
-    result.push(withResolvedName(font, resolvedDisplayName));
+    result.push(withResolvedName(font, undefined));
   }
 
-  return result;
+  const displayNameByFamily = new Map<string, string>();
+  for (const [family, familyRecords] of recordsByFamily.entries()) {
+    displayNameByFamily.set(
+      family,
+      resolveDisplayNameFromFamilyRecords(familyRecords, uiLanguage, family)
+    );
+  }
+
+  return result.map((font) =>
+    typeof font.family === "string"
+      ? { ...font, resolvedDisplayName: displayNameByFamily.get(font.family) }
+      : font
+  );
 }
 
 export const FontCacheControl: React.FC<FontCacheControlProps> = ({
@@ -116,6 +128,7 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
     status: "notScanned"
   });
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  const scanInFlightRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -143,23 +156,19 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
   }, []);
 
   const handleScan = async () => {
-    if (isScanning || disabled) {
+    if (scanInFlightRef.current || disabled) {
       return;
     }
 
     if (typeof window.queryLocalFonts !== "function") {
-      setCacheState((prev) => {
-        if (prev.status === "loaded") {
-          return prev;
-        }
-        return {
-          status: "error",
-          message: translate("fontCache.status.unsupported")
-        };
+      setCacheState({
+        status: "error",
+        message: translate("fontCache.status.unsupported")
       });
       return;
     }
 
+    scanInFlightRef.current = true;
     setIsScanning(true);
     try {
       const rawFonts: RawFontData[] = await window.queryLocalFonts();
@@ -190,16 +199,12 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
         setCacheState({ status: "loaded", cache: newCache });
       }
     } catch (err) {
-      setCacheState((prev) => {
-        if (prev.status === "loaded") {
-          return prev;
-        }
-        return {
-          status: "error",
-          message: err instanceof Error ? err.message : translate("fontCache.status.error")
-        };
+      setCacheState({
+        status: "error",
+        message: err instanceof Error ? err.message : translate("fontCache.status.error")
       });
     } finally {
+      scanInFlightRef.current = false;
       setIsScanning(false);
     }
   };
@@ -210,7 +215,6 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
         return translate("fontCache.status.notScanned");
       case "loaded":
         return translate("fontCache.status.loaded", {
-          count: cacheState.cache.families.length,
           date: formatScannedDate(cacheState.cache.scannedAt)
         });
       case "error":
@@ -222,18 +226,48 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
     cacheState.status === "loaded"
       ? translate("fontCache.button.rescan")
       : translate("fontCache.button.scan");
+  const showLanguageMismatchWarning =
+    cacheState.status === "loaded" && cacheState.cache.uiLanguage !== uiLanguage;
+  const scanButtonLabel = isScanning
+    ? translate("fontCache.button.scanning")
+    : buttonLabel;
 
   return (
     <div id={id} className="fontCacheControlGroup">
-      <div className="fontCacheStatusText">{renderStatusText()}</div>
-      <button
-        type="button"
-        className="fontCacheScanButton settingsButton"
-        disabled={disabled || isScanning}
-        onClick={handleScan}
-      >
-        {isScanning ? translate("documentMap.rendering") : buttonLabel}
-      </button>
+      <div className="fontCacheControlRow">
+        <button
+          type="button"
+          className={
+            isScanning
+              ? "fontCacheScanButton fontCacheScanButton-scanning settingsButton"
+              : "fontCacheScanButton settingsButton"
+          }
+          disabled={disabled || isScanning}
+          onClick={handleScan}
+        >
+          <span
+            className={
+              isScanning
+                ? "fontCacheScanIcon fontCacheScanIcon-spinning"
+                : "fontCacheScanIcon"
+            }
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: reloadIconRaw }}
+          />
+          <span>{scanButtonLabel}</span>
+        </button>
+        <div className="fontCacheStatusArea">
+          <div className="fontCacheStatusText">{renderStatusText()}</div>
+          {showLanguageMismatchWarning ? (
+            <div
+              className="fontCacheLanguageWarning fontPickerNotice fontPickerNotice-warning"
+              role="note"
+            >
+              {translate("fontCache.warning.languageMismatch")}
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 };

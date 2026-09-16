@@ -391,15 +391,6 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("workbench.colorTheme")
   },
   {
-    key: "workbench.fontFamily",
-    category: "appearance",
-    order: 200,
-    labelKey: "settings.workbench.fontFamily.label",
-    descriptionKey: "settings.workbench.fontFamily.description",
-    control: { kind: "text" },
-    defaultValue: getCatalogDefaultValue("workbench.fontFamily")
-  },
-  {
     key: "workbench.uiFontFamilyList",
     category: "appearance",
     order: 250,
@@ -407,15 +398,6 @@ export const settingCatalogItems = defineSettingCatalog([
     descriptionKey: "settings.workbench.uiFontFamilyList.description",
     control: { kind: "custom", customKind: "fontFamilyList" },
     defaultValue: getCatalogDefaultValue("workbench.uiFontFamilyList")
-  },
-  {
-    key: "editor.fontFamily",
-    category: "editor",
-    order: 100,
-    labelKey: "settings.editor.fontFamily.label",
-    descriptionKey: "settings.editor.fontFamily.description",
-    control: { kind: "text" },
-    defaultValue: getCatalogDefaultValue("editor.fontFamily")
   },
   {
     key: "editor.fontFamilyList",

@@ -401,7 +401,7 @@ describe("ChoiceDialog structure (#192)", () => {
     expect(markup).toContain("&lt;script&gt;");
   });
 
-  it("renders a dedicated selectable path block with the editor font and safe wrapping", () => {
+  it("renders a dedicated selectable path block with a semantic monospace font and safe wrapping", () => {
     const styles = readFileSync("src/renderer/styles.css", "utf8");
     const bodyCss = cssRuleBlock(styles, ".appDialogBody");
     const messageCss = cssRuleBlock(styles, ".appDialogMessage");
@@ -436,8 +436,9 @@ describe("ChoiceDialog structure (#192)", () => {
     expect(messageCss).toContain("overflow-wrap: anywhere");
     expect(messageCss).toContain("user-select: text");
     expect(pathBlockLabelCss).toContain("font: inherit");
-    expect(pathBlockLabelCss).not.toContain("--pergamum-editor-font-family");
-    expect(pathBlockValueCss).toContain("--pergamum-editor-font-family");
+    expect(pathBlockLabelCss).not.toContain("--pergamum-editor-font-family-list");
+    expect(pathBlockValueCss).not.toContain("--pergamum-editor-font-family-list");
+    expect(pathBlockValueCss).toContain("--app-monospace-font-family");
     expect(pathBlockValueCss).toContain("overflow-wrap: anywhere");
     expect(pathBlockValueCss).toContain("user-select: text");
     expect(pathBlockValueCss).toContain("white-space: pre-wrap");

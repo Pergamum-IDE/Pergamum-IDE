@@ -1,5 +1,8 @@
 import type { RawFontData } from "../shared/fontCache";
-import { parseFontNameRecords } from "./fontNameTableParser";
+import {
+  parseFontNameRecords,
+  type FontNameRecord
+} from "./fontNameTableParser";
 import {
   resolveDisplayNameFromRecords,
   type FontNameUiLanguage
@@ -23,15 +26,23 @@ export async function resolveLocalizedDisplayName(
   uiLanguage: FontNameUiLanguage
 ): Promise<string> {
   const fallback = rawFont.family;
+  const records = await resolveFontNameRecords(rawFont);
+  return resolveDisplayNameFromRecords(records, uiLanguage, fallback);
+}
+
+export async function resolveFontNameRecords(
+  rawFont: RawFontData
+): Promise<FontNameRecord[]> {
   try {
     if (typeof rawFont.blob !== "function") {
-      return fallback;
+      return [];
     }
     const blob = await rawFont.blob();
     const buffer = await blob.arrayBuffer();
-    const records = parseFontNameRecords(buffer);
-    return resolveDisplayNameFromRecords(records, uiLanguage, fallback);
+    return parseFontNameRecords(buffer, {
+      postscriptName: rawFont.postscriptName
+    });
   } catch {
-    return fallback;
+    return [];
   }
 }

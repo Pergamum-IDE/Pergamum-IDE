@@ -29,10 +29,20 @@ export function FontFamilyListSettingControl({
 }: FontFamilyListSettingControlProps): JSX.Element {
   const genericFallback = FONT_SLOT_GENERIC_FALLBACKS[slot];
 
+  const formatSummaryEntry = (font: FontFamilySetting): string => {
+    const displayName = font.displayName?.trim();
+    if (displayName && displayName !== font.family) {
+      return `${font.family} / ${displayName}`;
+    }
+    return font.family;
+  };
+
   const summaryText =
     value && value.length > 0
-      ? value.map((f) => f.displayName || f.family).join(", ")
-      : `(${translate("fontPicker.emptySelection")}: ${genericFallback})`;
+      ? value.map(formatSummaryEntry).join(", ")
+      : translate("fontFamilyList.summary.genericFallback", {
+          fallback: genericFallback
+        });
 
   return (
     <div id={id} className="fontFamilyListControlGroup">

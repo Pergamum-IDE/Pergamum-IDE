@@ -163,7 +163,7 @@ describe("Project Settings command registration & gating (#396)", () => {
 });
 
 describe("Project Settings panel (#396 Slice 3)", () => {
-  it("renders header, description, and editor.fontFamily controls", () => {
+  it("renders header, description, and structured font list controls", () => {
     const rendered = renderToStaticMarkup(
       React.createElement(ProjectSettingsPanel, {
         translate,
@@ -177,8 +177,15 @@ describe("Project Settings panel (#396 Slice 3)", () => {
     expect(rendered).toContain(jaTranslations["settings.project.title"]);
     expect(rendered).toContain(jaTranslations["settings.project.description"]);
     expect(rendered).toContain('class="settingsPanel projectSettingsPanel"');
-    expect(rendered).toContain(jaTranslations["settings.editor.fontFamily.label"]);
-    expect(rendered).toContain("<input");
+    expect(rendered).toContain(
+      jaTranslations["settings.editor.fontFamilyList.label"]
+    );
+    expect(rendered).toContain("fontFamilyListControlGroup");
+    expect(rendered).toContain("fontCacheControlRow");
+    expect(rendered).toContain(jaTranslations["fontPicker.button.choose"]);
+    expect(rendered).not.toContain(
+      jaTranslations["settings.editor.fontFamily.label"]
+    );
   });
 });
 

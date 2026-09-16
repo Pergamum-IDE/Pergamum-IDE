@@ -31,7 +31,6 @@ import {
   SaveDestinationDialog,
   SaveDestinationSettingControl
 } from "./dialog/SaveDestinationDialog";
-import { FontCacheControl } from "./FontCacheControl";
 import { FontFamilyListSettingControl } from "./FontFamilyListSettingControl";
 import { FontPickerDialog } from "./dialog/FontPickerDialog";
 import type { FontFamilySetting, FontSlot } from "../shared/fontSettings";
@@ -1213,6 +1212,7 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
             : []
         }
         translate={props.translate}
+        uiLanguage={props.displayLanguage}
         opener={fontPickerState?.opener}
         onSave={(selectedFonts) => {
           if (fontPickerState) {

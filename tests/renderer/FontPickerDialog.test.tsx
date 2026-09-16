@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { FontPickerDialog } from "../../src/renderer/dialog/FontPickerDialog";
-import type { Translate, TranslationKey } from "../../src/shared/i18n";
+import type { Language, Translate, TranslationKey } from "../../src/shared/i18n";
 import { enTranslations } from "../../src/shared/i18n/en";
 import { jaTranslations } from "../../src/shared/i18n/ja";
-import type { FontFamilySetting } from "../../src/shared/fontSettings";
+import type { FontFamilySetting, FontSlot } from "../../src/shared/fontSettings";
+import type { FontFixedWidthStatus } from "../../src/shared/fontCache";
 
 const translateJa: Translate = (
   key: TranslationKey,
@@ -75,6 +77,20 @@ async function step(fn: () => void): Promise<void> {
   });
 }
 
+async function setSearchValue(
+  input: HTMLInputElement | null,
+  value: string
+): Promise<void> {
+  await step(() => {
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    setter?.call(input, value);
+    input!.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 /** Full gripper-driven drag sequence: mousedown-arm -> dragstart -> dragover
  * -> drop -> dragend, each its own `step()`. `sourceLi`/`targetEl` are the
  * `<li>` / drop-target elements themselves. */
@@ -111,6 +127,13 @@ function names(buttons: HTMLButtonElement[]): (string | null)[] {
   return buttons.map((b) => b.textContent);
 }
 
+type TestCachedFontFamily = {
+  family: string;
+  displayName: string;
+  fixedWidth?: FontFixedWidthStatus;
+  blob?: () => unknown;
+};
+
 describe("FontPickerDialog (#494 D&D-only remediation)", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -131,15 +154,18 @@ describe("FontPickerDialog (#494 D&D-only remediation)", () => {
     delete (window as any).pergamum;
   });
 
-  const loadedCache = (families: { family: string; displayName: string }[]) => ({
+  const loadedCache = (
+    families: TestCachedFontFamily[],
+    uiLanguage: Language = "ja"
+  ) => ({
     fontCache: {
       load: vi.fn().mockResolvedValue({
         status: "loaded",
         cache: {
           version: 1,
           scannedAt: "2026-09-16T12:00:00Z",
-          uiLanguage: "ja",
-          families: families.map((f) => ({ ...f, fixedWidth: "unknown" }))
+          uiLanguage,
+          families: families.map((f) => ({ ...f, fixedWidth: f.fixedWidth ?? "fixed" }))
         }
       })
     }
@@ -147,16 +173,28 @@ describe("FontPickerDialog (#494 D&D-only remediation)", () => {
 
   async function renderDialog(props: {
     initialValue?: FontFamilySetting[];
-    cache?: { family: string; displayName: string }[] | "notScanned" | { status: "error"; message: string };
+    cache?: TestCachedFontFamily[] | "notScanned" | { status: "error"; message: string };
+    slot?: FontSlot;
+    cacheUiLanguage?: Language;
+    uiLanguage?: Language;
     onSave?: (selectedFonts: FontFamilySetting[]) => void;
     onClose?: () => void;
     isOpen?: boolean;
   }): Promise<void> {
-    const { initialValue = [], cache = [], onSave = vi.fn(), onClose = vi.fn(), isOpen = true } = props;
+    const {
+      initialValue = [],
+      cache = [],
+      slot = "editor.fontFamilyList",
+      cacheUiLanguage = "ja",
+      uiLanguage = "ja",
+      onSave = vi.fn(),
+      onClose = vi.fn(),
+      isOpen = true
+    } = props;
     if (cache === "notScanned") {
       (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue({ status: "notScanned" }) } };
     } else if (Array.isArray(cache)) {
-      (window as any).pergamum = loadedCache(cache);
+      (window as any).pergamum = loadedCache(cache, cacheUiLanguage);
     } else {
       (window as any).pergamum = { fontCache: { load: vi.fn().mockResolvedValue(cache) } };
     }
@@ -165,9 +203,10 @@ describe("FontPickerDialog (#494 D&D-only remediation)", () => {
       root.render(
         <FontPickerDialog
           isOpen={isOpen}
-          slot="editor.fontFamilyList"
+          slot={slot}
           initialValue={initialValue}
           translate={translateJa}
+          uiLanguage={uiLanguage}
           onSave={onSave}
           onClose={onClose}
         />
@@ -221,7 +260,330 @@ describe("FontPickerDialog (#494 D&D-only remediation)", () => {
     });
   });
 
+  describe("available font ordering", () => {
+    const availableIdentityNames = () =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>(
+          ".fontPickerPane-available .fontPickerRowName"
+        )
+      ).map((el) => el.textContent);
+
+    it("sorts available fonts by family so sibling fonts stay adjacent", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Yu Mincho", displayName: "游明朝" },
+          { family: "Meiryo UI", displayName: "Meiryo UI" },
+          { family: "Yu Gothic UI", displayName: "Yu Gothic UI" },
+          { family: "Arial", displayName: "Arial" },
+          { family: "Meiryo", displayName: "メイリオ" },
+          { family: "Yu Gothic", displayName: "游ゴシック" }
+        ]
+      });
+
+      const rowNames = availableIdentityNames();
+      expect(rowNames).toEqual([
+        "Arial",
+        "Meiryo / メイリオ",
+        "Meiryo UI",
+        "Yu Gothic / 游ゴシック",
+        "Yu Gothic UI",
+        "Yu Mincho / 游明朝"
+      ]);
+      expect(rowNames.indexOf("Meiryo UI")).toBe(
+        rowNames.indexOf("Meiryo / メイリオ") + 1
+      );
+      expect(rowNames.indexOf("Yu Gothic UI")).toBe(
+        rowNames.indexOf("Yu Gothic / 游ゴシック") + 1
+      );
+    });
+
+    it("uses case-insensitive numeric English-family ordering and preserves source order for equal comparisons", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Font ver10", displayName: "Font ver10" },
+          { family: "biz UDGothic", displayName: "biz UDGothic" },
+          { family: "Font ver3", displayName: "Font ver3" },
+          { family: "BIZ udgothic", displayName: "BIZ udgothic" },
+          { family: "Bahnschrift", displayName: "Bahnschrift" }
+        ]
+      });
+
+      expect(availableIdentityNames()).toEqual([
+        "Bahnschrift",
+        "biz UDGothic",
+        "BIZ udgothic",
+        "Font ver3",
+        "Font ver10"
+      ]);
+    });
+
+    it("keeps the same family ordering after search filtering", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Yu Mincho", displayName: "游明朝" },
+          { family: "Yu Gothic UI", displayName: "Yu Gothic UI" },
+          { family: "Yu Gothic", displayName: "游ゴシック" },
+          { family: "Arial", displayName: "Arial" }
+        ]
+      });
+
+      await setSearchValue(
+        container.querySelector<HTMLInputElement>(".fontPickerSearchInput"),
+        "Yu"
+      );
+
+      expect(availableIdentityNames()).toEqual([
+        "Yu Gothic / 游ゴシック",
+        "Yu Gothic UI",
+        "Yu Mincho / 游明朝"
+      ]);
+    });
+
+    it("does not sort the selected font list; it preserves the user's ordered list", async () => {
+      await renderDialog({
+        initialValue: [
+          { family: "Yu Gothic UI", displayName: "Yu Gothic UI" },
+          { family: "Meiryo", displayName: "メイリオ" }
+        ],
+        cache: [
+          { family: "Arial", displayName: "Arial" },
+          { family: "Yu Gothic", displayName: "游ゴシック" }
+        ]
+      });
+
+      const selectedNames = Array.from(
+        container.querySelectorAll<HTMLElement>(
+          ".fontPickerPane-selected .fontPickerRowName"
+        )
+      ).map((el) => el.textContent);
+      expect(selectedNames).toEqual(["1.Yu Gothic UI", "2.Meiryo / メイリオ"]);
+    });
+  });
+
+  describe("fixed-width-only available-font filter", () => {
+    const toggle = () =>
+      container.querySelector<HTMLInputElement>(".fontPickerFixedWidthToggleInput");
+
+    it("renders the fixed-width-only toggle in the available-font filter row", async () => {
+      await renderDialog({ cache: "notScanned" });
+
+      const filterRow = container.querySelector(".fontPickerFilterRow");
+      const searchInput = container.querySelector(".fontPickerSearchInput");
+      const fixedWidthToggle = toggle();
+      const toggleLabel = container.querySelector(".fontPickerFixedWidthToggle");
+
+      expect(filterRow).toBeTruthy();
+      expect(filterRow?.contains(searchInput)).toBe(true);
+      expect(filterRow?.contains(fixedWidthToggle)).toBe(true);
+      expect(fixedWidthToggle?.type).toBe("checkbox");
+      expect(fixedWidthToggle?.getAttribute("role")).toBe("switch");
+      expect(fixedWidthToggle?.getAttribute("aria-checked")).toBe("true");
+      expect(
+        toggleLabel?.querySelector(".fontPickerFixedWidthToggleSwitch")
+      ).not.toBeNull();
+      expect(
+        toggleLabel?.querySelector(".fontPickerFixedWidthToggleTrack")
+      ).not.toBeNull();
+      expect(
+        toggleLabel?.querySelector(".fontPickerFixedWidthToggleThumb")
+      ).not.toBeNull();
+      expect(toggleLabel?.textContent).toContain(
+        translateJa("fontPicker.label.fixedWidthOnly")
+      );
+    });
+
+    it("initializes the filter ON for the editor font picker", async () => {
+      await renderDialog({ slot: "editor.fontFamilyList", cache: "notScanned" });
+
+      expect(toggle()?.checked).toBe(true);
+    });
+
+    it("initializes the filter OFF for the app UI font picker", async () => {
+      await renderDialog({
+        slot: "workbench.uiFontFamilyList",
+        cache: "notScanned"
+      });
+
+      expect(toggle()?.checked).toBe(false);
+    });
+
+    it("initializes the filter OFF for the preview font picker", async () => {
+      await renderDialog({ slot: "preview.fontFamilyList", cache: "notScanned" });
+
+      expect(toggle()?.checked).toBe(false);
+    });
+
+    it("when ON, shows only fonts confidently classified as fixed-width", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Cascadia Code", displayName: "Cascadia Code", fixedWidth: "fixed" },
+          { family: "Arial", displayName: "Arial", fixedWidth: "proportional" },
+          { family: "Mystery Font", displayName: "Mystery Font", fixedWidth: "unknown" }
+        ]
+      });
+
+      const availableNames = names(availableRowButtons(container));
+      expect(toggle()?.checked).toBe(true);
+      expect(availableNames).toHaveLength(1);
+      expect(availableNames[0]).toContain("Cascadia Code");
+      expect(availableNames.some((name) => name?.includes("Arial"))).toBe(false);
+      expect(availableNames.some((name) => name?.includes("Mystery Font"))).toBe(false);
+    });
+
+    it("when OFF, fixed/proportional/unknown candidates can all be shown", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Cascadia Code", displayName: "Cascadia Code", fixedWidth: "fixed" },
+          { family: "Arial", displayName: "Arial", fixedWidth: "proportional" },
+          { family: "Mystery Font", displayName: "Mystery Font", fixedWidth: "unknown" }
+        ]
+      });
+
+      await step(() => toggle()?.click());
+
+      const availableNames = names(availableRowButtons(container));
+      expect(toggle()?.checked).toBe(false);
+      expect(toggle()?.getAttribute("aria-checked")).toBe("false");
+      expect(availableNames.some((name) => name?.includes("Cascadia Code"))).toBe(true);
+      expect(availableNames.some((name) => name?.includes("Arial"))).toBe(true);
+      expect(availableNames.some((name) => name?.includes("Mystery Font"))).toBe(true);
+    });
+
+    it("combines search and fixed-width filtering with AND semantics", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Cascadia Code", displayName: "Cascadia Code", fixedWidth: "fixed" },
+          { family: "Fira Mono", displayName: "Fira Mono", fixedWidth: "fixed" },
+          { family: "Code Pro", displayName: "Code Pro", fixedWidth: "proportional" },
+          { family: "Code Mystery", displayName: "Code Mystery", fixedWidth: "unknown" }
+        ]
+      });
+
+      await setSearchValue(
+        container.querySelector<HTMLInputElement>(".fontPickerSearchInput"),
+        "Code"
+      );
+
+      const availableNames = names(availableRowButtons(container));
+      expect(toggle()?.checked).toBe(true);
+      expect(availableNames).toHaveLength(1);
+      expect(availableNames[0]).toContain("Cascadia Code");
+      expect(availableNames.some((name) => name?.includes("Fira Mono"))).toBe(false);
+      expect(availableNames.some((name) => name?.includes("Code Pro"))).toBe(false);
+      expect(availableNames.some((name) => name?.includes("Code Mystery"))).toBe(false);
+    });
+
+    it("shows a calm fixed-width empty state when the filter excludes every available font", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Arial", displayName: "Arial", fixedWidth: "proportional" },
+          { family: "Mystery Font", displayName: "Mystery Font", fixedWidth: "unknown" }
+        ]
+      });
+
+      expect(availableRowButtons(container)).toHaveLength(0);
+      expect(
+        container.querySelector(
+          ".fontPickerPane-available .fontPickerEmptyNotice"
+        )?.textContent
+      ).toBe(translateJa("fontPicker.emptyFixedWidthAvailable"));
+    });
+
+    it("reinitializes the dialog-local toggle from the slot each time the dialog opens", async () => {
+      const onSave = vi.fn();
+      const onClose = vi.fn();
+      const cache = [
+        { family: "Cascadia Code", displayName: "Cascadia Code", fixedWidth: "fixed" as const }
+      ];
+      let isOpen = true;
+      let slot: FontSlot = "editor.fontFamilyList";
+
+      const render = async () => {
+        (window as any).pergamum = loadedCache(cache);
+        await act(async () => {
+          root.render(
+            <FontPickerDialog
+              isOpen={isOpen}
+              slot={slot}
+              initialValue={[]}
+              translate={translateJa}
+              onSave={onSave}
+              onClose={onClose}
+            />
+          );
+        });
+      };
+
+      await render();
+      expect(toggle()?.checked).toBe(true);
+      await step(() => toggle()?.click());
+      expect(toggle()?.checked).toBe(false);
+
+      isOpen = false;
+      await render();
+      isOpen = true;
+      await render();
+      expect(toggle()?.checked).toBe(true);
+
+      isOpen = false;
+      await render();
+      slot = "preview.fontFamilyList";
+      isOpen = true;
+      await render();
+      expect(toggle()?.checked).toBe(false);
+    });
+
+    it("toggling the filter does not scan fonts, call FontData.blob(), or save the cache", async () => {
+      const queryLocalFontsMock = vi.fn();
+      const blobMock = vi.fn();
+      (window as any).queryLocalFonts = queryLocalFontsMock;
+      await renderDialog({
+        cache: [
+          {
+            family: "Cascadia Code",
+            displayName: "Cascadia Code",
+            fixedWidth: "fixed",
+            blob: blobMock
+          }
+        ]
+      });
+      const loadMock = (window as any).pergamum.fontCache.load;
+
+      await step(() => toggle()?.click());
+      await step(() => toggle()?.click());
+
+      expect(queryLocalFontsMock).not.toHaveBeenCalled();
+      expect(blobMock).not.toHaveBeenCalled();
+      expect(loadMock).toHaveBeenCalledTimes(1);
+      expect((window as any).pergamum.fontCache).not.toHaveProperty("save");
+    });
+
+    it("keeps the filter row CSS compact without changing font row height semantics", () => {
+      const styles = readFileSync("src/renderer/styles.css", "utf8");
+
+      expect(styles).toContain(".fontPickerFilterRow {\n  display: grid;");
+      expect(styles).toContain("grid-template-columns: minmax(0, 1fr) auto;");
+      expect(styles).toContain(".fontPickerFixedWidthToggleInput");
+      expect(styles).toContain(".fontPickerFixedWidthToggleTrack");
+      expect(styles).toContain(".fontPickerFixedWidthToggleThumb");
+      expect(styles).toContain(".fontPickerRowButton {\n  display: flex;");
+      expect(styles).toContain("min-height: 48px;");
+      expect(styles).not.toContain(".fontPickerRowButton {\n  height: 32px;");
+    });
+  });
+
   describe("font entity rendering", () => {
+    it("keeps the two-line row CSS auto-height, ellipsis-capable, and focus-visible", () => {
+      const styles = readFileSync("src/renderer/styles.css", "utf8");
+
+      expect(styles).toContain(".fontPickerRowButton {\n  display: flex;");
+      expect(styles).toContain("min-height: 48px;");
+      expect(styles).toContain("height: auto;");
+      expect(styles).not.toContain(".fontPickerRowButton {\n  height: 32px;");
+      expect(styles).toContain(".fontPickerRowButton:focus-visible");
+      expect(styles).toContain(".fontPickerRowName {\n  font-family: inherit;");
+    });
+
     it("renders each selected/available font as one stable entity: identity in the normal UI font, mini sample in the represented font, no overlap, no dangerous HTML", async () => {
       await renderDialog({
         initialValue: [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
@@ -975,6 +1337,54 @@ describe("FontPickerDialog (#494 D&D-only remediation)", () => {
       expect(notice?.textContent).toBe("boom");
     });
 
+    it("does not show the language mismatch warning when cache uiLanguage matches the current UI language", async () => {
+      await renderDialog({
+        cache: [{ family: "Yu Gothic", displayName: "游ゴシック" }],
+        cacheUiLanguage: "ja",
+        uiLanguage: "ja"
+      });
+
+      expect(container.querySelector(".fontPickerCacheLanguageWarning")).toBeNull();
+    });
+
+    it("shows the language mismatch warning without scanning, saving, or blocking loaded cache use", async () => {
+      const queryLocalFontsMock = vi.fn();
+      const onSaveMock = vi.fn();
+      (window as any).queryLocalFonts = queryLocalFontsMock;
+      await renderDialog({
+        cache: [{ family: "Yu Gothic", displayName: "游ゴシック" }],
+        cacheUiLanguage: "en",
+        uiLanguage: "ja",
+        onSave: onSaveMock
+      });
+
+      const warning = container.querySelector(".fontPickerCacheLanguageWarning");
+      expect(warning?.textContent).toBe(
+        translateJa("fontCache.warning.languageMismatch")
+      );
+      expect(availableRowButtons(container).length).toBe(1);
+      expect(availableRowButtons(container)[0].textContent).toContain(
+        "Yu Gothic / 游ゴシック"
+      );
+      expect(queryLocalFontsMock).not.toHaveBeenCalled();
+      expect((window as any).pergamum.fontCache).not.toHaveProperty("save");
+      expect(onSaveMock).not.toHaveBeenCalled();
+    });
+
+    it("does not render the local font family count in the dialog", async () => {
+      await renderDialog({
+        cache: [
+          { family: "Yu Gothic", displayName: "游ゴシック" },
+          { family: "Cascadia Code", displayName: "Cascadia Code" }
+        ]
+      });
+
+      expect(container.textContent).not.toContain("2 ファミリー");
+      expect(container.textContent).not.toContain("2 families");
+      expect(container.textContent).not.toContain("ローカルフォント:");
+      expect(container.textContent).not.toContain("Local fonts:");
+    });
+
     it("clicking font rows does not call queryLocalFonts", async () => {
       const queryLocalFontsMock = vi.fn();
       (window as any).queryLocalFonts = queryLocalFontsMock;
@@ -1063,19 +1473,19 @@ describe("FontPickerDialog (#494 D&D-only remediation)", () => {
       expect(name1?.textContent).not.toContain("/");
     });
 
-    it("two different families that resolve to the same localized displayName remain distinguishable", async () => {
+    it("does not append a localized name for a TTC sibling that has no localized family name", async () => {
       await renderDialog({
         cache: [
           { family: "Yu Gothic", displayName: "游ゴシック" },
-          { family: "Yu Gothic UI", displayName: "游ゴシック" }
+          { family: "Yu Gothic UI", displayName: "Yu Gothic UI" }
         ]
       });
       const rowNames = availableRowButtons(container).map(
         (b) => b.querySelector(".fontPickerRowName")?.textContent
       );
       expect(rowNames).toContain("Yu Gothic / 游ゴシック");
-      expect(rowNames).toContain("Yu Gothic UI / 游ゴシック");
-      // Distinct DOM text, not collapsed into one indistinguishable row.
+      expect(rowNames).toContain("Yu Gothic UI");
+      expect(rowNames).not.toContain("Yu Gothic UI / 游ゴシック");
       expect(new Set(rowNames).size).toBe(2);
     });
 

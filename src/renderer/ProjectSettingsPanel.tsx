@@ -45,7 +45,6 @@ import {
   SaveDestinationDialog,
   SaveDestinationSettingControl
 } from "./dialog/SaveDestinationDialog";
-import { FontCacheControl } from "./FontCacheControl";
 import { FontFamilyListSettingControl } from "./FontFamilyListSettingControl";
 import { FontPickerDialog } from "./dialog/FontPickerDialog";
 import {
@@ -1752,6 +1751,7 @@ export function ProjectSettingsPanel({
             : []
         }
         translate={translate}
+        uiLanguage={displayLanguage}
         opener={fontPickerState?.opener}
         onSave={(selectedFonts) => {
           void handleFontPickerApply(selectedFonts);
