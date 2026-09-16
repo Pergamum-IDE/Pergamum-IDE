@@ -641,6 +641,36 @@ function buildNextSettings(
           }
         }
       });
+    case "workbench.uiFontFamilyList":
+      if (!Array.isArray(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          uiFontFamilyList: rawValue as any
+        }
+      });
+    case "editor.fontFamilyList":
+      if (!Array.isArray(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          fontFamilyList: rawValue as any
+        }
+      });
+    case "preview.fontFamilyList":
+      if (!Array.isArray(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        preview: {
+          ...settings.preview,
+          fontFamilyList: rawValue as any
+        }
+      });
   }
 
   const exhaustiveCheck: never = key;
@@ -835,7 +865,7 @@ function SettingControlInput({
           />
         );
       }
-      return <></>;
+      return <div id={controlId} className="settingsCustomControlPlaceholder" />;
   }
 }
 

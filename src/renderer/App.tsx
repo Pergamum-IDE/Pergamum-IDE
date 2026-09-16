@@ -106,7 +106,10 @@ import {
 } from "./characterCount";
 import {
   applyEditorFontFamily,
-  applyWorkbenchFontFamily
+  applyEditorFontFamilyList,
+  applyPreviewFontFamilyList,
+  applyWorkbenchFontFamily,
+  applyWorkbenchUiFontFamilyList
 } from "./workbenchFontFamily";
 import { CommandPalette } from "./CommandPalette";
 import {
@@ -2432,6 +2435,17 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyEditorFontFamily(effectiveSettings.editor.fontFamily);
   }, [effectiveSettings.editor.fontFamily]);
+  useEffect(() => {
+    applyWorkbenchUiFontFamilyList(
+      effectiveSettings.workbench.uiFontFamilyList
+    );
+  }, [effectiveSettings.workbench.uiFontFamilyList]);
+  useEffect(() => {
+    applyEditorFontFamilyList(effectiveSettings.editor.fontFamilyList);
+  }, [effectiveSettings.editor.fontFamilyList]);
+  useEffect(() => {
+    applyPreviewFontFamilyList(effectiveSettings.preview.fontFamilyList);
+  }, [effectiveSettings.preview.fontFamilyList]);
   // #360: ONE Markdown character count, shared by the Status Bar (#259) and
   // the Document Metrics pane, so the two never disagree. It is computed
   // with the #259 algorithm + `editor.characterCount.exclude` settings and

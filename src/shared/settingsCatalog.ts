@@ -66,7 +66,8 @@ export type SettingValueType =
   | "string"
   | "number"
   | "enum"
-  | "dialogueDelimiterPairs";
+  | "dialogueDelimiterPairs"
+  | "fontFamilyList";
 
 /**
  * `fontFamilyName` / `themeName` are allowlist policies (see the character
@@ -160,12 +161,19 @@ export interface DialogueDelimiterPairsSettingEntry<
   readonly defaultValue: readonly DocumentMapDialogueDelimiterPair[];
 }
 
+export interface FontFamilyListSettingEntry<TKey extends string = string>
+  extends CommonSettingFields<TKey> {
+  readonly type: "fontFamilyList";
+  readonly defaultValue: readonly FontFamilySetting[];
+}
+
 export type SettingCatalogEntry =
   | StringSettingEntry
   | EnumSettingEntry
   | NumberSettingEntry
   | BooleanSettingEntry
-  | DialogueDelimiterPairsSettingEntry;
+  | DialogueDelimiterPairsSettingEntry
+  | FontFamilyListSettingEntry;
 
 // ---------------------------------------------------------------------------
 // Cross-module type imports
@@ -176,6 +184,11 @@ import {
   parseDocumentMapDialogueDelimiterPair,
   type DocumentMapDialogueDelimiterPair
 } from "./documentMapSettings";
+import {
+  defaultFontFamilyListSettings,
+  validateFontFamilyList,
+  type FontFamilySetting
+} from "./fontSettings";
 
 // #186: workbench.language's selectable values are owned by i18n, while the
 // catalog remains the owner of the setting's default and metadata.
@@ -349,6 +362,8 @@ function validateEntryValue(
       return validateBooleanValue(value);
     case "dialogueDelimiterPairs":
       return validateDialogueDelimiterPairsValue(value);
+    case "fontFamilyList":
+      return validateFontFamilyList(value);
   }
 }
 
@@ -468,6 +483,17 @@ export function defineDialogueDelimiterPairsSetting<TKey extends string>(
   return finalizeEntry({ type: "dialogueDelimiterPairs", ...input });
 }
 
+export interface DefineFontFamilyListSettingInput<TKey extends string>
+  extends CommonDefineInput<TKey> {
+  defaultValue: readonly FontFamilySetting[];
+}
+
+export function defineFontFamilyListSetting<TKey extends string>(
+  input: DefineFontFamilyListSettingInput<TKey>
+): FontFamilyListSettingEntry<TKey> {
+  return finalizeEntry({ type: "fontFamilyList", ...input });
+}
+
 /**
  * Wraps a catalog entries object, performing the cross-entry integrity
  * checks that a single defineXSetting call can't perform on its own:
@@ -535,6 +561,15 @@ export const settingsCatalog = defineSettingsCatalog({
     descriptionKey: "settings.workbench.fontFamily.description",
     maxLength: 128,
     allowedCharacters: "fontFamilyName",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "workbench.uiFontFamilyList": defineFontFamilyListSetting({
+    key: "workbench.uiFontFamilyList",
+    scope: "applicationWithProjectOverride",
+    defaultValue: defaultFontFamilyListSettings,
+    labelKey: "settings.workbench.uiFontFamilyList.label",
+    descriptionKey: "settings.workbench.uiFontFamilyList.description",
     deprecatedAliases: [],
     migrationNotes: []
   }),
@@ -674,6 +709,15 @@ export const settingsCatalog = defineSettingsCatalog({
     descriptionKey: "settings.editor.fontFamily.description",
     maxLength: 128,
     allowedCharacters: "fontFamilyName",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "editor.fontFamilyList": defineFontFamilyListSetting({
+    key: "editor.fontFamilyList",
+    scope: "applicationWithProjectOverride",
+    defaultValue: defaultFontFamilyListSettings,
+    labelKey: "settings.editor.fontFamilyList.label",
+    descriptionKey: "settings.editor.fontFamilyList.description",
     deprecatedAliases: [],
     migrationNotes: []
   }),
@@ -928,6 +972,15 @@ export const settingsCatalog = defineSettingsCatalog({
     defaultValue: "markdown",
     labelKey: "settings.preview.renderer.label",
     descriptionKey: "settings.preview.renderer.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "preview.fontFamilyList": defineFontFamilyListSetting({
+    key: "preview.fontFamilyList",
+    scope: "applicationWithProjectOverride",
+    defaultValue: defaultFontFamilyListSettings,
+    labelKey: "settings.preview.fontFamilyList.label",
+    descriptionKey: "settings.preview.fontFamilyList.description",
     deprecatedAliases: [],
     migrationNotes: []
   }),

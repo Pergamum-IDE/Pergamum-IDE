@@ -12,6 +12,7 @@ import {
   type RecentProject,
   type SaveApplicationSettingsRequest
 } from "../shared/settings";
+import type { FontFamilySetting } from "../shared/fontSettings";
 import {
   resolveCatalogValue,
   validateCatalogValue
@@ -98,13 +99,28 @@ function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
     };
   }
 
-  return {
+  const preview: ApplicationSettings["preview"] = {
     renderer: resolveCatalogValue("preview.renderer", value.renderer).value,
     updateDelayMs: resolveCatalogValue(
       "preview.updateDelayMs",
       value.updateDelayMs
     ).value
   };
+
+  if (
+    value.fontFamilyList !== undefined &&
+    validateCatalogValue("preview.fontFamilyList", value.fontFamilyList).ok
+  ) {
+    const res = validateCatalogValue(
+      "preview.fontFamilyList",
+      value.fontFamilyList
+    );
+    if (res.ok && res.value !== undefined) {
+      preview.fontFamilyList = res.value as FontFamilySetting[];
+    }
+  }
+
+  return preview;
 }
 
 function readNotificationOutputSettings(
@@ -267,6 +283,23 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     validateCatalogValue("workbench.fontFamily", workbenchValue.fontFamily).ok
   ) {
     workbench.fontFamily = workbenchValue.fontFamily;
+  }
+
+  if (
+    workbenchValue !== undefined &&
+    workbenchValue.uiFontFamilyList !== undefined &&
+    validateCatalogValue(
+      "workbench.uiFontFamilyList",
+      workbenchValue.uiFontFamilyList
+    ).ok
+  ) {
+    const res = validateCatalogValue(
+      "workbench.uiFontFamilyList",
+      workbenchValue.uiFontFamilyList
+    );
+    if (res.ok && res.value !== undefined) {
+      workbench.uiFontFamilyList = res.value as FontFamilySetting[];
+    }
   }
 
   const notification = readWorkbenchNotificationSettings(
@@ -480,28 +513,7 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     ).value
   };
 
-  if (
-    editorValue === undefined ||
-    typeof editorValue.fontFamily !== "string" ||
-    !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
-  ) {
-    return {
-      lineEnding,
-      whitespace,
-      paragraphIndent,
-      characterCount,
-      undoHistoryMinDepth,
-      selectionHighlightMode,
-      findGutterMarkers,
-      captureTabInEditor,
-      fencedCodeIndentUnit,
-      emphasisMark,
-      ruby
-    };
-  }
-
-  return {
-    fontFamily: editorValue.fontFamily,
+  const editor: ApplicationSettings["editor"] = {
     lineEnding,
     whitespace,
     paragraphIndent,
@@ -514,6 +526,30 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
     emphasisMark,
     ruby
   };
+
+  if (
+    editorValue !== undefined &&
+    typeof editorValue.fontFamily === "string" &&
+    validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
+  ) {
+    editor.fontFamily = editorValue.fontFamily;
+  }
+
+  if (
+    editorValue !== undefined &&
+    editorValue.fontFamilyList !== undefined &&
+    validateCatalogValue("editor.fontFamilyList", editorValue.fontFamilyList).ok
+  ) {
+    const res = validateCatalogValue(
+      "editor.fontFamilyList",
+      editorValue.fontFamilyList
+    );
+    if (res.ok && res.value !== undefined) {
+      editor.fontFamilyList = res.value as FontFamilySetting[];
+    }
+  }
+
+  return editor;
 }
 
 function readNewFileSettings(
@@ -862,9 +898,11 @@ function parsePreviewSettingsForWrite(
   }
 
   const keys = Object.keys(value);
+  const hasFontFamilyList = keys.includes("fontFamilyList");
+  const expectedKeyCount = 2 + (hasFontFamilyList ? 1 : 0);
 
   if (
-    keys.length !== 2 ||
+    keys.length !== expectedKeyCount ||
     !keys.includes("renderer") ||
     !keys.includes("updateDelayMs") ||
     value.renderer === undefined ||
@@ -883,10 +921,23 @@ function parsePreviewSettingsForWrite(
     throw new Error("Invalid application settings.");
   }
 
-  return {
+  const preview: ApplicationSettings["preview"] = {
     renderer: rendererResolution.value,
     updateDelayMs: updateDelayMsResolution.value
   };
+
+  if (hasFontFamilyList) {
+    const listRes = resolveCatalogValue(
+      "preview.fontFamilyList",
+      value.fontFamilyList
+    );
+    if (!listRes.ok) {
+      throw new Error("Invalid application settings.");
+    }
+    preview.fontFamilyList = listRes.value as FontFamilySetting[];
+  }
+
+  return preview;
 }
 
 // Same validate-and-reject-the-whole-write style as parsePreviewSettingsForWrite:
@@ -1062,11 +1113,13 @@ function parseWorkbenchSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
+  const hasUiFontFamilyList = keys.includes("uiFontFamilyList");
   const hasNotification = keys.includes("notification");
   const hasNormalizeUnicodeToNfc = keys.includes("normalizeUnicodeToNfc");
   const expectedKeyCount =
     3 +
     (hasFontFamily ? 1 : 0) +
+    (hasUiFontFamilyList ? 1 : 0) +
     (hasNotification ? 1 : 0) +
     (hasNormalizeUnicodeToNfc ? 1 : 0);
 
@@ -1116,6 +1169,17 @@ function parseWorkbenchSettingsForWrite(
     }
 
     workbench.normalizeUnicodeToNfc = normalizeUnicodeToNfcResolution.value;
+  }
+
+  if (hasUiFontFamilyList) {
+    const uiListRes = resolveCatalogValue(
+      "workbench.uiFontFamilyList",
+      value.uiFontFamilyList
+    );
+    if (!uiListRes.ok) {
+      throw new Error("Invalid application settings.");
+    }
+    workbench.uiFontFamilyList = uiListRes.value as FontFamilySetting[];
   }
 
   if (!hasFontFamily) {
@@ -1411,6 +1475,7 @@ function parseEditorSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
+  const hasFontFamilyList = keys.includes("fontFamilyList");
   const hasLineEnding = keys.includes("lineEnding");
   const hasWhitespace = keys.includes("whitespace");
   const hasParagraphIndent = keys.includes("paragraphIndent");
@@ -1424,7 +1489,11 @@ function parseEditorSettingsForWrite(
   const hasRuby = keys.includes("ruby");
 
   const expectedKeyCount =
-    9 + (hasFontFamily ? 1 : 0) + (hasEmphasisMark ? 1 : 0) + (hasRuby ? 1 : 0);
+    9 +
+    (hasFontFamily ? 1 : 0) +
+    (hasFontFamilyList ? 1 : 0) +
+    (hasEmphasisMark ? 1 : 0) +
+    (hasRuby ? 1 : 0);
 
   if (
     !hasLineEnding ||
@@ -1519,31 +1588,7 @@ function parseEditorSettingsForWrite(
     rule: rubyRuleResolution.value
   };
 
-  if (!hasFontFamily) {
-    return {
-      lineEnding,
-      whitespace,
-      paragraphIndent,
-      characterCount,
-      undoHistoryMinDepth,
-      selectionHighlightMode,
-      findGutterMarkers,
-      captureTabInEditor,
-      fencedCodeIndentUnit,
-      emphasisMark,
-      ruby
-    };
-  }
-
-  if (
-    typeof value.fontFamily !== "string" ||
-    !validateCatalogValue("editor.fontFamily", value.fontFamily).ok
-  ) {
-    throw new Error("Invalid application settings.");
-  }
-
-  return {
-    fontFamily: value.fontFamily,
+  const editor: ApplicationSettings["editor"] = {
     lineEnding,
     whitespace,
     paragraphIndent,
@@ -1556,6 +1601,29 @@ function parseEditorSettingsForWrite(
     emphasisMark,
     ruby
   };
+
+  if (hasFontFamily) {
+    if (
+      typeof value.fontFamily !== "string" ||
+      !validateCatalogValue("editor.fontFamily", value.fontFamily).ok
+    ) {
+      throw new Error("Invalid application settings.");
+    }
+    editor.fontFamily = value.fontFamily;
+  }
+
+  if (hasFontFamilyList) {
+    const listRes = resolveCatalogValue(
+      "editor.fontFamilyList",
+      value.fontFamilyList
+    );
+    if (!listRes.ok) {
+      throw new Error("Invalid application settings.");
+    }
+    editor.fontFamilyList = listRes.value as FontFamilySetting[];
+  }
+
+  return editor;
 }
 
 function parseNewFileSettingsForWrite(

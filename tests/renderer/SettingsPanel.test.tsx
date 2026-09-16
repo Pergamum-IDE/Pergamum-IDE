@@ -428,6 +428,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
       "editor.fontFamily",
+      "editor.fontFamilyList",
       "editor.undoHistoryMinDepth",
       "editor.selectionHighlightMode",
       "editor.findGutterMarkers",

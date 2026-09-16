@@ -400,6 +400,15 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("workbench.fontFamily")
   },
   {
+    key: "workbench.uiFontFamilyList",
+    category: "appearance",
+    order: 250,
+    labelKey: "settings.workbench.uiFontFamilyList.label",
+    descriptionKey: "settings.workbench.uiFontFamilyList.description",
+    control: { kind: "custom", customKind: "fontFamilyList" },
+    defaultValue: getCatalogDefaultValue("workbench.uiFontFamilyList")
+  },
+  {
     key: "editor.fontFamily",
     category: "editor",
     order: 100,
@@ -407,6 +416,15 @@ export const settingCatalogItems = defineSettingCatalog([
     descriptionKey: "settings.editor.fontFamily.description",
     control: { kind: "text" },
     defaultValue: getCatalogDefaultValue("editor.fontFamily")
+  },
+  {
+    key: "editor.fontFamilyList",
+    category: "editor",
+    order: 105,
+    labelKey: "settings.editor.fontFamilyList.label",
+    descriptionKey: "settings.editor.fontFamilyList.description",
+    control: { kind: "custom", customKind: "fontFamilyList" },
+    defaultValue: getCatalogDefaultValue("editor.fontFamilyList")
   },
   {
     key: "editor.undoHistoryMinDepth",
@@ -909,6 +927,15 @@ export const settingCatalogItems = defineSettingCatalog([
       ]
     },
     defaultValue: getCatalogDefaultValue("preview.renderer")
+  },
+  {
+    key: "preview.fontFamilyList",
+    category: "preview",
+    order: 105,
+    labelKey: "settings.preview.fontFamilyList.label",
+    descriptionKey: "settings.preview.fontFamilyList.description",
+    control: { kind: "custom", customKind: "fontFamilyList" },
+    defaultValue: getCatalogDefaultValue("preview.fontFamilyList")
   },
   {
     key: "preview.updateDelayMs",

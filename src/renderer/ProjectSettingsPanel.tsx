@@ -861,6 +861,12 @@ export function ProjectSettingsPanelView({
                               onOpenDialog={onOpenImageAttachmentDialog}
                             />
                           );
+                        } else if (
+                          item.control.customKind === "fontFamilyList"
+                        ) {
+                          controlElement = (
+                            <div id={`projectSettingControl-${item.key}`} />
+                          );
                         } else {
                           throw new Error(
                             `Unsupported custom Project Settings control kind: "${item.control.customKind}" for key "${item.key}".`

@@ -145,6 +145,21 @@ export function readSettingValue(
         settings.editor.ruby?.rule ??
         getCatalogDefaultValue("editor.ruby.rule")
       );
+    case "workbench.uiFontFamilyList":
+      return (
+        settings.workbench.uiFontFamilyList ??
+        getCatalogDefaultValue("workbench.uiFontFamilyList")
+      );
+    case "editor.fontFamilyList":
+      return (
+        settings.editor.fontFamilyList ??
+        getCatalogDefaultValue("editor.fontFamilyList")
+      );
+    case "preview.fontFamilyList":
+      return (
+        settings.preview.fontFamilyList ??
+        getCatalogDefaultValue("preview.fontFamilyList")
+      );
   }
 
   const exhaustiveCheck: never = key;
