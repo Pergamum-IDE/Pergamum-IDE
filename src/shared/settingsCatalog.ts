@@ -634,6 +634,15 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "workbench.enablePlainTextDocuments": defineBooleanSetting({
+    key: "workbench.enablePlainTextDocuments",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.workbench.enablePlainTextDocuments.label",
+    descriptionKey: "settings.workbench.enablePlainTextDocuments.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "workbench.sound.enabled": defineBooleanSetting({
     key: "workbench.sound.enabled",
     scope: "applicationOnly",

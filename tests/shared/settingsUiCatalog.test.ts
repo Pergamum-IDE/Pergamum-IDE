@@ -207,6 +207,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.whitespace.renderTab",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
+          "workbench.enablePlainTextDocuments",
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
           "preview.renderer",

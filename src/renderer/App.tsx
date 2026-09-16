@@ -10399,6 +10399,7 @@ export function App(): JSX.Element {
                       error={settingsError}
                       translate={translate}
                       displayLanguage={displayLanguage}
+                      confirmDialog={confirmDialog}
                       onChangeSettings={handleSettingsChangeRequest}
                       onSettingFieldFocus={handleSettingsFieldFocus}
                       onSettingFieldBlur={() => {

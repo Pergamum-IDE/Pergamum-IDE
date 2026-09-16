@@ -289,6 +289,9 @@ export interface ApplicationWorkbenchSettings {
   // #446: sparse, like fontFamily/notification — absence means "use the
   // catalog default (true)"; it is never eagerly written back as the default.
   normalizeUnicodeToNfc?: boolean;
+  // #501: sparse, like fontFamily/notification — absence means "use the
+  // catalog default (false)"; it is never eagerly written back as the default.
+  enablePlainTextDocuments?: boolean;
 }
 
 export interface ApplicationSettings {
@@ -430,6 +433,7 @@ export interface EffectiveWorkbenchSettings {
   uiFontFamilyList: FontFamilySetting[];
   notification: WorkbenchNotificationSettings;
   normalizeUnicodeToNfc: boolean;
+  enablePlainTextDocuments: boolean;
 }
 
 export interface EffectiveCommandPaletteSettings {
@@ -557,6 +561,9 @@ export const builtInDefaultSettings: EffectiveSettings = {
     },
     normalizeUnicodeToNfc: getCatalogDefaultValue(
       "workbench.normalizeUnicodeToNfc"
+    ),
+    enablePlainTextDocuments: getCatalogDefaultValue(
+      "workbench.enablePlainTextDocuments"
     )
   },
   commandPalette: {
@@ -945,7 +952,10 @@ export function resolveEffectiveSettings(
       // omits it.
       normalizeUnicodeToNfc:
         applicationSettings.workbench.normalizeUnicodeToNfc ??
-        builtInDefaultSettings.workbench.normalizeUnicodeToNfc
+        builtInDefaultSettings.workbench.normalizeUnicodeToNfc,
+      enablePlainTextDocuments:
+        applicationSettings.workbench.enablePlainTextDocuments ??
+        builtInDefaultSettings.workbench.enablePlainTextDocuments
     },
     commandPalette: {
       footerDetail: {

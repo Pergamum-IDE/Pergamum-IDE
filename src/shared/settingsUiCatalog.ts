@@ -964,6 +964,15 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")
   },
   {
+    key: "workbench.enablePlainTextDocuments",
+    category: "application",
+    order: 360,
+    labelKey: "settings.workbench.enablePlainTextDocuments.label",
+    descriptionKey: "settings.workbench.enablePlainTextDocuments.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("workbench.enablePlainTextDocuments")
+  },
+  {
     key: "workbench.notification.durationMs",
     category: "application",
     order: 400,

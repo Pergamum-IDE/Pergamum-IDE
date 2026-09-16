@@ -53,6 +53,11 @@ export function readSettingValue(
         settings.workbench.normalizeUnicodeToNfc ??
         getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")
       );
+    case "workbench.enablePlainTextDocuments":
+      return (
+        settings.workbench.enablePlainTextDocuments ??
+        getCatalogDefaultValue("workbench.enablePlainTextDocuments")
+      );
     case "workbench.sound.enabled":
       return settings.workbench.sound.enabled;
     case "workbench.sound.dialog.enabled":

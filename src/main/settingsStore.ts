@@ -324,6 +324,20 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     workbench.normalizeUnicodeToNfc = workbenchValue.normalizeUnicodeToNfc;
   }
 
+  // #501: sparse like fontFamily/notification above — a missing or invalid
+  // on-disk value stays absent, and resolveEffectiveSettings falls through to
+  // the catalog default (false) later.
+  if (
+    workbenchValue !== undefined &&
+    typeof workbenchValue.enablePlainTextDocuments === "boolean" &&
+    validateCatalogValue(
+      "workbench.enablePlainTextDocuments",
+      workbenchValue.enablePlainTextDocuments
+    ).ok
+  ) {
+    workbench.enablePlainTextDocuments = workbenchValue.enablePlainTextDocuments;
+  }
+
   return workbench;
 }
 
@@ -1116,12 +1130,14 @@ function parseWorkbenchSettingsForWrite(
   const hasUiFontFamilyList = keys.includes("uiFontFamilyList");
   const hasNotification = keys.includes("notification");
   const hasNormalizeUnicodeToNfc = keys.includes("normalizeUnicodeToNfc");
+  const hasEnablePlainTextDocuments = keys.includes("enablePlainTextDocuments");
   const expectedKeyCount =
     3 +
     (hasFontFamily ? 1 : 0) +
     (hasUiFontFamilyList ? 1 : 0) +
     (hasNotification ? 1 : 0) +
-    (hasNormalizeUnicodeToNfc ? 1 : 0);
+    (hasNormalizeUnicodeToNfc ? 1 : 0) +
+    (hasEnablePlainTextDocuments ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1169,6 +1185,21 @@ function parseWorkbenchSettingsForWrite(
     }
 
     workbench.normalizeUnicodeToNfc = normalizeUnicodeToNfcResolution.value;
+  }
+
+  // #501: sparse like fontFamily/notification — an invalid value rejects the
+  // whole save request rather than silently dropping just this field.
+  if (hasEnablePlainTextDocuments) {
+    const enablePlainTextDocumentsResolution = resolveCatalogValue(
+      "workbench.enablePlainTextDocuments",
+      value.enablePlainTextDocuments
+    );
+
+    if (!enablePlainTextDocumentsResolution.ok) {
+      throw new Error("Invalid application settings.");
+    }
+
+    workbench.enablePlainTextDocuments = enablePlainTextDocumentsResolution.value;
   }
 
   if (hasUiFontFamilyList) {

@@ -35,6 +35,11 @@ import { FontFamilyListSettingControl } from "./FontFamilyListSettingControl";
 import { FontPickerDialog } from "./dialog/FontPickerDialog";
 import type { FontFamilySetting, FontSlot } from "../shared/fontSettings";
 
+import type {
+  AppConfirmDialogOptions,
+  AppConfirmDialogResult
+} from "./dialog/appDialogTypes";
+
 interface SettingsPanelProps {
   settings: ApplicationSettings;
   isLoading: boolean;
@@ -43,6 +48,9 @@ interface SettingsPanelProps {
   /** #496: the app's current UI language — threaded down to the font
    * picker's local-font scan so it resolves localized display names. */
   displayLanguage?: Language;
+  confirmDialog?: (
+    options: AppConfirmDialogOptions
+  ) => Promise<AppConfirmDialogResult>;
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
   /**
    * #394 Step 2 follow-up: fires when any settings-item control gains focus.
@@ -303,6 +311,13 @@ function buildNextSettings(
         workbench: {
           ...settings.workbench,
           normalizeUnicodeToNfc: Boolean(rawValue)
+        }
+      });
+    case "workbench.enablePlainTextDocuments":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          enablePlainTextDocuments: Boolean(rawValue)
         }
       });
     case "workbench.sound.enabled":
@@ -991,6 +1006,7 @@ export function SettingsPanelView({
   error,
   translate,
   displayLanguage,
+  confirmDialog,
   onChangeSettings,
   onSettingFieldFocus,
   onSettingFieldBlur,
@@ -1021,7 +1037,35 @@ export function SettingsPanelView({
     translate
   );
 
-  function handleChange(item: SettingCatalogItem, rawValue: unknown): void {
+  async function handleChange(
+    item: SettingCatalogItem,
+    rawValue: unknown
+  ): Promise<void> {
+    if (
+      item.key === "workbench.enablePlainTextDocuments" &&
+      Boolean(rawValue) === true
+    ) {
+      const currentValue = readSettingValue(
+        "workbench.enablePlainTextDocuments",
+        settings
+      );
+      if (currentValue !== true && confirmDialog) {
+        const result = await confirmDialog({
+          title: translate("dialog.enablePlainTextDocuments.title"),
+          message: {
+            kind: "plainText",
+            text: translate("dialog.enablePlainTextDocuments.message")
+          },
+          icon: { kind: "question", tooltip: translate("dialog.icon.question") },
+          clipboardText: null,
+          confirmLabel: translate("dialog.enablePlainTextDocuments.confirm"),
+          cancelLabel: translate("dialog.enablePlainTextDocuments.cancel")
+        });
+        if (result !== "confirm") {
+          return;
+        }
+      }
+    }
     handleSettingChange(item, rawValue, settings, onChangeSettings);
   }
 

@@ -420,6 +420,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "workbench.language",
       "workbench.statusBar.visible",
       "workbench.normalizeUnicodeToNfc",
+      "workbench.enablePlainTextDocuments",
       "notification.output.enabled",
       "workbench.notification.durationMs"
     ]);
