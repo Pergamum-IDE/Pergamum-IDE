@@ -1,4 +1,4 @@
-import type { AozoraEmphasisMark } from "./settings";
+import type { AozoraEmphasisMark, EmphasisMarkRule } from "./settings";
 
 /**
  * #484 — shared helpers and validators for emphasis mark notation settings.
@@ -59,3 +59,71 @@ export function sanitizeAozoraEmphasisMark(value: unknown): AozoraEmphasisMark {
   }
   return "sesame";
 }
+
+/**
+ * Preview metadata per emphasis mark rule.
+ */
+export interface EmphasisRulePreviewMeta {
+  readonly defaultSymbol: string;
+  readonly allowSymbolCustomization: boolean;
+}
+
+export const EMPHASIS_RULE_PREVIEW_META: Record<
+  EmphasisMarkRule,
+  EmphasisRulePreviewMeta
+> = {
+  aozora: { defaultSymbol: "﹅", allowSymbolCustomization: true },
+  kakuyomu: { defaultSymbol: "・", allowSymbolCustomization: false },
+  narou: { defaultSymbol: "・", allowSymbolCustomization: true }
+};
+
+/**
+ * Returns the visual preview symbol for an Aozora emphasis mark type.
+ */
+export function getAozoraEmphasisPreviewSymbol(mark: AozoraEmphasisMark): string {
+  switch (mark) {
+    case "sesame":
+      return "﹅";
+    case "whiteSesame":
+      return "﹆";
+    case "circle":
+      return "●";
+    case "whiteCircle":
+      return "○";
+    case "blackTriangle":
+      return "▲";
+    case "whiteTriangle":
+      return "△";
+    case "doubleCircle":
+      return "◎";
+    case "fisheye":
+      return "◉";
+    case "saltire":
+      return "×";
+  }
+}
+
+export interface GetEmphasisMarkPreviewSymbolOptions {
+  readonly rule: EmphasisMarkRule;
+  readonly aozoraMark: AozoraEmphasisMark;
+  readonly narouMarkText: string;
+}
+
+/**
+ * Resolves the visual rendered preview symbol for any emphasis mark rule.
+ */
+export function getEmphasisMarkPreviewSymbol(
+  options: GetEmphasisMarkPreviewSymbolOptions
+): string {
+  switch (options.rule) {
+    case "aozora":
+      return getAozoraEmphasisPreviewSymbol(options.aozoraMark);
+    case "kakuyomu":
+      return EMPHASIS_RULE_PREVIEW_META.kakuyomu.defaultSymbol;
+    case "narou":
+      return validateNarouEmphasisMarkText(options.narouMarkText)
+        ? options.narouMarkText
+        : "";
+  }
+}
+

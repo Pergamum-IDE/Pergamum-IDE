@@ -709,6 +709,8 @@ export const jaTranslations = {
   "emphasisMark.dialog.ruleLabel": "傍点ルール:",
   "emphasisMark.dialog.markSymbolLabel": "傍点記号:",
   "emphasisMark.dialog.previewLabel": "プレビュー:",
+  "emphasisMark.dialog.sourcePreviewLabel": "変換後テキスト:",
+  "emphasisMark.dialog.appliedPreviewLabel": "適用後プレビュー:",
   "emphasisMark.dialog.kakuyomuNote": "カクヨム記法では傍点記号を指定できません。",
   "emphasisMark.dialog.narouInvalidNote": "なろう傍点記号は改行・《・》・｜を含まない1〜8文字で入力してください。",
   "emphasisMark.dialog.cancel": "キャンセル",
