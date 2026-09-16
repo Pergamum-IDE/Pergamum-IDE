@@ -1140,6 +1140,9 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.markdownComments",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.whitespace",
+        "editor.emphasisMark.aozoraMark",
+        "editor.emphasisMark.narouMarkText",
+        "editor.emphasisMark.rule",
         "editor.fencedCodeIndentUnit",
         "editor.findGutterMarkers",
         "editor.fontFamily",
@@ -1238,6 +1241,9 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.characterCount.exclude.markdownComments",
           "editor.characterCount.exclude.markdownSyntax",
           "editor.characterCount.exclude.whitespace",
+          "editor.emphasisMark.aozoraMark",
+          "editor.emphasisMark.narouMarkText",
+          "editor.emphasisMark.rule",
           "editor.fencedCodeIndentUnit",
           "editor.findGutterMarkers",
           "editor.fontFamily",
@@ -1948,6 +1954,44 @@ describe("Settings Catalog Foundation (#150)", () => {
         migrationNotes: []
       });
       expect(getCatalogDefaultValue("editor.captureTabInEditor")).toBe(false);
+    });
+
+    it("defines emphasis mark settings catalog entries (#484)", () => {
+      const ruleEntry = getCatalogEntry("editor.emphasisMark.rule");
+      expect(ruleEntry.type).toBe("enum");
+      if (ruleEntry.type === "enum") {
+        expect(ruleEntry.enumValues).toEqual(["aozora", "kakuyomu", "narou"]);
+      }
+      expect(ruleEntry.defaultValue).toBe("aozora");
+
+      const aozoraEntry = getCatalogEntry("editor.emphasisMark.aozoraMark");
+      expect(aozoraEntry.type).toBe("enum");
+      if (aozoraEntry.type === "enum") {
+        expect(aozoraEntry.enumValues).toEqual([
+          "sesame",
+          "whiteSesame",
+          "circle",
+          "whiteCircle",
+          "blackTriangle",
+          "whiteTriangle",
+          "doubleCircle",
+          "fisheye",
+          "saltire"
+        ]);
+        expect(aozoraEntry.enumValues).not.toContain("blackCircle");
+      }
+      expect(aozoraEntry.defaultValue).toBe("sesame");
+      expect(validateCatalogValue("editor.emphasisMark.aozoraMark", "circle")).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("editor.emphasisMark.aozoraMark", "blackCircle")).toEqual({
+        ok: false,
+        failure: "enumValue"
+      });
+
+      const narouEntry = getCatalogEntry("editor.emphasisMark.narouMarkText");
+      expect(narouEntry.type).toBe("string");
+      expect(narouEntry.defaultValue).toBe("・");
     });
   });
 });

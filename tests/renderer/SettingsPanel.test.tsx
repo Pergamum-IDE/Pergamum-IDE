@@ -434,6 +434,9 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "editor.captureTabInEditor",
       "editor.paragraphIndent.excludeLeadingCharacters",
       "editor.fencedCodeIndentUnit",
+      "editor.emphasisMark.rule",
+      "editor.emphasisMark.aozoraMark",
+      "editor.emphasisMark.narouMarkText",
       "editor.lineEnding.expected",
       "editor.lineEnding.markerGlyph",
       "editor.whitespace.renderIdeographicSpace",
@@ -1072,7 +1075,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         selectionHighlightMode: settings.editor.selectionHighlightMode,
         findGutterMarkers: settings.editor.findGutterMarkers,
         captureTabInEditor: settings.editor.captureTabInEditor,
-        fencedCodeIndentUnit: settings.editor.fencedCodeIndentUnit
+        fencedCodeIndentUnit: settings.editor.fencedCodeIndentUnit,
+        emphasisMark: settings.editor.emphasisMark
       },
       files: settings.files
     });

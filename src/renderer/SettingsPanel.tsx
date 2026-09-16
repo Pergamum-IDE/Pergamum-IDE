@@ -587,6 +587,48 @@ function buildNextSettings(
           }
         }
       });
+    case "editor.emphasisMark.rule":
+      if (typeof rawValue !== "string") {
+        return null;
+      }
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          emphasisMark: {
+            rule: rawValue as any,
+            aozoraMark: settings.editor.emphasisMark?.aozoraMark ?? "whiteSesame",
+            narouMarkText: settings.editor.emphasisMark?.narouMarkText ?? "・"
+          }
+        }
+      });
+    case "editor.emphasisMark.aozoraMark":
+      if (typeof rawValue !== "string") {
+        return null;
+      }
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          emphasisMark: {
+            rule: settings.editor.emphasisMark?.rule ?? "aozora",
+            aozoraMark: rawValue as any,
+            narouMarkText: settings.editor.emphasisMark?.narouMarkText ?? "・"
+          }
+        }
+      });
+    case "editor.emphasisMark.narouMarkText":
+      if (typeof rawValue !== "string") {
+        return null;
+      }
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          emphasisMark: {
+            rule: settings.editor.emphasisMark?.rule ?? "aozora",
+            aozoraMark: settings.editor.emphasisMark?.aozoraMark ?? "whiteSesame",
+            narouMarkText: rawValue
+          }
+        }
+      });
   }
 
   const exhaustiveCheck: never = key;

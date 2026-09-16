@@ -72,6 +72,11 @@ import {
   type MarkdownEditorGlossarySelectionShortcutConfig
 } from "./glossarySelectionShortcutExtension";
 import {
+  publishCurrentEmphasisMarkShortcutConfig,
+  unpublishCurrentEmphasisMarkShortcutConfig,
+  type MarkdownEditorEmphasisMarkShortcutConfig
+} from "./editorEmphasisShortcuts";
+import {
   publishCurrentActiveEditorSelectionAccess,
   unpublishCurrentActiveEditorSelectionAccess
 } from "./find/activeEditorSelectionAccess";
@@ -295,6 +300,7 @@ interface MarkdownEditorProps {
    * whatever config another instance currently has published.
    */
   glossarySelectionShortcut?: MarkdownEditorGlossarySelectionShortcutConfig | null;
+  emphasisMarkShortcut?: MarkdownEditorEmphasisMarkShortcutConfig | null;
   /**
    * #424: a Find-panel-driven "select + reveal this range" request, kept
    * entirely separate from `pendingSelection` (which App owns for Outline /
@@ -547,6 +553,7 @@ export function MarkdownEditor({
   glossaryCompletion,
   activeFind,
   glossarySelectionShortcut,
+  emphasisMarkShortcut,
   extraPendingSelection,
   onExtraPendingSelectionApplied,
   extraFocusRequest,
@@ -867,6 +874,7 @@ export function MarkdownEditor({
       // receives that prop, so its built states always get `false` here and
       // never contain the Ctrl+G keydown handler at all.
       glossarySelectionShortcutEnabled: (glossarySelectionShortcut ?? null) !== null,
+      emphasisMarkShortcutEnabled: (emphasisMarkShortcut ?? null) !== null,
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
       // #411 / #412: only add the broken-image-link lint extension when the
@@ -1023,6 +1031,16 @@ export function MarkdownEditor({
       unpublishCurrentGlossarySelectionShortcutConfig(glossarySelectionShortcut);
     };
   }, [glossarySelectionShortcut]);
+
+  useEffect(() => {
+    if (!emphasisMarkShortcut) {
+      return undefined;
+    }
+    publishCurrentEmphasisMarkShortcutConfig(emphasisMarkShortcut);
+    return () => {
+      unpublishCurrentEmphasisMarkShortcutConfig(emphasisMarkShortcut);
+    };
+  }, [emphasisMarkShortcut]);
 
   // #457: publish this editor's live-selection reader into the module-level
   // slot the Project Search / Replace Ctrl+Shift+F / Ctrl+Shift+H selection

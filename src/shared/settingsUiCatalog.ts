@@ -563,6 +563,89 @@ export const settingCatalogItems = defineSettingCatalog([
     )
   },
   {
+    key: "editor.emphasisMark.rule",
+    category: "editor",
+    order: 160,
+    labelKey: "settings.editor.emphasisMark.rule.label",
+    descriptionKey: "settings.editor.emphasisMark.rule.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "aozora",
+          labelKey: "settings.editor.emphasisMark.rule.option.aozora.label"
+        },
+        {
+          value: "kakuyomu",
+          labelKey: "settings.editor.emphasisMark.rule.option.kakuyomu.label"
+        },
+        {
+          value: "narou",
+          labelKey: "settings.editor.emphasisMark.rule.option.narou.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("editor.emphasisMark.rule")
+  },
+  {
+    key: "editor.emphasisMark.aozoraMark",
+    category: "editor",
+    order: 170,
+    labelKey: "settings.editor.emphasisMark.aozoraMark.label",
+    descriptionKey: "settings.editor.emphasisMark.aozoraMark.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "sesame",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.sesame.label"
+        },
+        {
+          value: "whiteSesame",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.whiteSesame.label"
+        },
+        {
+          value: "circle",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.circle.label"
+        },
+        {
+          value: "whiteCircle",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.whiteCircle.label"
+        },
+        {
+          value: "blackTriangle",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.blackTriangle.label"
+        },
+        {
+          value: "whiteTriangle",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.whiteTriangle.label"
+        },
+        {
+          value: "doubleCircle",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.doubleCircle.label"
+        },
+        {
+          value: "fisheye",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.fisheye.label"
+        },
+        {
+          value: "saltire",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.saltire.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("editor.emphasisMark.aozoraMark")
+  },
+  {
+    key: "editor.emphasisMark.narouMarkText",
+    category: "editor",
+    order: 180,
+    labelKey: "settings.editor.emphasisMark.narouMarkText.label",
+    descriptionKey: "settings.editor.emphasisMark.narouMarkText.description",
+    control: { kind: "text" },
+    defaultValue: getCatalogDefaultValue("editor.emphasisMark.narouMarkText")
+  },
+  {
     // #407: a plain path text field for B1 — the "[path] [Edit]" bespoke
     // control + save-destination dialog is a later slice. applicationWith-
     // ProjectOverride, so it also appears as a Project Settings override row.

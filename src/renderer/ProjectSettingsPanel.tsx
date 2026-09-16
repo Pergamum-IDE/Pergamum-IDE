@@ -209,6 +209,12 @@ export function readProjectSettingValue(
       return settings.search?.nearby?.characterDistance;
     case "search.nearby.paragraphDistance":
       return settings.search?.nearby?.paragraphDistance;
+    case "editor.emphasisMark.rule":
+      return settings.editor?.emphasisMark?.rule;
+    case "editor.emphasisMark.aozoraMark":
+      return settings.editor?.emphasisMark?.aozoraMark;
+    case "editor.emphasisMark.narouMarkText":
+      return settings.editor?.emphasisMark?.narouMarkText;
     default:
       return undefined;
   }

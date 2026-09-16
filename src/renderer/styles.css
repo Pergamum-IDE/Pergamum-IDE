@@ -9031,3 +9031,39 @@ label.settingsItemHeader {
     animation: none;
   }
 }
+
+.emphasisMarkTargetField {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  word-break: break-all;
+}
+
+.emphasisMarkTargetLabel {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.emphasisMarkTargetText {
+  word-break: break-all;
+}
+
+.emphasisMarkPreviewField {
+  margin-top: 12px;
+}
+
+.emphasisMarkPreview {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--app-dialog-border, #d3dae2);
+  border-radius: 4px;
+  background: var(--app-dialog-header-background, #eef3f8);
+  color: var(--app-dialog-foreground, #25313d);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-all;
+  white-space: pre-wrap;
+  min-height: 36px;
+}

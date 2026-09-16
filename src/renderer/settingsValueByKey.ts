@@ -125,6 +125,21 @@ export function readSettingValue(
       return settings.search.nearby.characterDistance;
     case "search.nearby.paragraphDistance":
       return settings.search.nearby.paragraphDistance;
+    case "editor.emphasisMark.rule":
+      return (
+        settings.editor.emphasisMark?.rule ??
+        getCatalogDefaultValue("editor.emphasisMark.rule")
+      );
+    case "editor.emphasisMark.aozoraMark":
+      return (
+        settings.editor.emphasisMark?.aozoraMark ??
+        getCatalogDefaultValue("editor.emphasisMark.aozoraMark")
+      );
+    case "editor.emphasisMark.narouMarkText":
+      return (
+        settings.editor.emphasisMark?.narouMarkText ??
+        getCatalogDefaultValue("editor.emphasisMark.narouMarkText")
+      );
   }
 
   const exhaustiveCheck: never = key;

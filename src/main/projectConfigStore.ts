@@ -144,6 +144,32 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     };
   }
 
+  const emphasisMarkKeys = [
+    ["rule", "editor.emphasisMark.rule"],
+    ["aozoraMark", "editor.emphasisMark.aozoraMark"],
+    ["narouMarkText", "editor.emphasisMark.narouMarkText"]
+  ] as const;
+  let emphasisMark: Record<string, unknown> | undefined;
+  for (const [subKey, fullKey] of emphasisMarkKeys) {
+    const rawVal = value[fullKey];
+    if (rawVal === undefined) {
+      continue;
+    }
+    const validation = validateCatalogValue(fullKey, rawVal);
+    if (validation.ok) {
+      emphasisMark = {
+        ...(emphasisMark ?? {}),
+        [subKey]: validation.value !== undefined ? validation.value : rawVal
+      };
+    }
+  }
+  if (emphasisMark !== undefined) {
+    editor = {
+      ...(editor ?? {}),
+      emphasisMark: emphasisMark as any
+    };
+  }
+
   const rawNewFileLineEnding = value["files.newFile.lineEnding"];
   if (rawNewFileLineEnding !== undefined) {
     const validation = validateCatalogValue(

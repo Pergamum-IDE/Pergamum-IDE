@@ -56,6 +56,7 @@ import {
 } from "./glossaryCompletionExtension";
 import { createActiveFindKeymapExtension } from "./find/activeFindKeymapExtension";
 import { createGlossarySelectionShortcutKeymapExtension } from "./glossarySelectionShortcutExtension";
+import { createEmphasisMarkKeymapExtension } from "./editorEmphasisShortcuts";
 import { createActiveFindGutterMarkerExtension } from "./find/activeFindGutterMarkerExtension";
 import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
@@ -159,6 +160,7 @@ export interface MarkdownEditorDocumentStateOptions {
    * published.
    */
   readonly glossarySelectionShortcutEnabled?: boolean;
+  readonly emphasisMarkShortcutEnabled?: boolean;
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /**
    * #411: when present, adds the broken-image-link lint extension (gutter +
@@ -287,6 +289,9 @@ export function createMarkdownEditorDocumentState(
       // cannot fire there no matter what the module-level slot holds.
       ...(options.glossarySelectionShortcutEnabled
         ? [createGlossarySelectionShortcutKeymapExtension()]
+        : []),
+      ...(options.emphasisMarkShortcutEnabled
+        ? [createEmphasisMarkKeymapExtension()]
         : []),
       // #424 Slice 2: inert until the Find panel dispatches its first
       // "mark all" effect; safe on every document's state.

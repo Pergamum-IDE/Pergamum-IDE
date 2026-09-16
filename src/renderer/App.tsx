@@ -211,6 +211,7 @@ import {
   resetActiveFindSession
 } from "./find/activeFindSessionStore";
 import { createDocumentOpenIdFactory } from "./documentOpenId";
+import { EmphasisMarkDialog } from "./dialog/EmphasisMarkDialog";
 import {
   EditorSurface,
   type DocumentOpenAggregateMetrics,
@@ -889,6 +890,12 @@ export function App(): JSX.Element {
       }
     | null
   >(null);
+  const [emphasisMarkDialogState, setEmphasisMarkDialogState] = useState<{
+    readonly selectedText: string;
+    readonly selection: { readonly from: number; readonly to: number };
+    readonly opener: Element | null;
+  } | null>(null);
+
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
       dialogController.getPendingRequest()
@@ -2930,6 +2937,60 @@ export function App(): JSX.Element {
     () => (key: TranslationKey, values?: TranslationValues) =>
       t(displayLanguage, key, values),
     [displayLanguage]
+  );
+
+  const notifyEmphasisMarkNoSelection = useCallback(() => {
+    notificationController.notify({
+      message: translate("emphasisMark.toast.noSelection")
+    });
+  }, [translate, notificationController]);
+
+  const notifyEmphasisMarkReadOnly = useCallback(() => {
+    notificationController.notify({
+      message: translate("emphasisMark.toast.readOnly")
+    });
+  }, [translate, notificationController]);
+
+  const notifyEmphasisMarkMultiLine = useCallback(() => {
+    notificationController.notify({
+      message: translate("emphasisMark.toast.multiLine")
+    });
+  }, [translate, notificationController]);
+
+  const handleEmphasisMarkShortcut = useCallback(
+    (input: {
+      selectedText: string;
+      selection: { from: number; to: number };
+      opener?: Element | null;
+    }) => {
+      setEmphasisMarkDialogState({
+        selectedText: input.selectedText,
+        selection: input.selection,
+        opener: input.opener ?? null
+      });
+    },
+    []
+  );
+
+  const handleApplyEmphasisMark = useCallback(
+    (replacementText: string) => {
+      if (!emphasisMarkDialogState) {
+        return;
+      }
+      const { selection } = emphasisMarkDialogState;
+      if (selection.from === selection.to) {
+        notifyEmphasisMarkNoSelection();
+        return;
+      }
+      paragraphIndentControllerRef.current?.applyReplaceInBufferChanges([
+        {
+          from: selection.from,
+          to: selection.to,
+          insert: replacementText
+        }
+      ]);
+    },
+    [emphasisMarkDialogState, notifyEmphasisMarkNoSelection]
   );
   const statusBarNumberFormatter = useMemo(
     () => new Intl.NumberFormat(displayLanguage),
@@ -10343,6 +10404,16 @@ export function App(): JSX.Element {
                         onGlossarySelectionShortcut={
                           handleGlossarySelectionShortcut
                         }
+                        onEmphasisMarkShortcut={handleEmphasisMarkShortcut}
+                        notifyEmphasisMarkNoSelection={
+                          notifyEmphasisMarkNoSelection
+                        }
+                        notifyEmphasisMarkReadOnly={
+                          notifyEmphasisMarkReadOnly
+                        }
+                        notifyEmphasisMarkMultiLine={
+                          notifyEmphasisMarkMultiLine
+                        }
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }
@@ -10671,6 +10742,22 @@ export function App(): JSX.Element {
           onUpdate={confirmImageReferenceMoveUpdate}
           onKeep={skipImageReferenceMoveUpdate}
           onCancel={cancelImageReferenceMoveUpdate}
+        />
+      ) : null}
+
+      {emphasisMarkDialogState !== null ? (
+        <EmphasisMarkDialog
+          isOpen={true}
+          selectedText={emphasisMarkDialogState.selectedText}
+          initialRule={effectiveSettings.editor.emphasisMark.rule}
+          initialAozoraMark={effectiveSettings.editor.emphasisMark.aozoraMark}
+          initialNarouMarkText={
+            effectiveSettings.editor.emphasisMark.narouMarkText
+          }
+          opener={emphasisMarkDialogState.opener}
+          translate={translate}
+          onApply={handleApplyEmphasisMark}
+          onClose={() => setEmphasisMarkDialogState(null)}
         />
       ) : null}
 
