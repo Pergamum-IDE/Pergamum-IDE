@@ -97,11 +97,34 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(appSource).toContain("effectiveSettings.editor.fontFamily");
   });
 
-  it("styles.css consumes --pergamum-editor-font-family only for the CodeMirror editor body", () => {
-    const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
+  it("App.tsx applies #497 font-family list slots from effective settings", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
 
-    expect(stylesSource).toContain("--pergamum-editor-font-family");
-    expect(stylesSource).toContain(".editorHost .cm-scroller");
+    expect(appSource).toContain("applyWorkbenchUiFontFamilyList");
+    expect(appSource).toContain("effectiveSettings.workbench.uiFontFamilyList");
+    expect(appSource).toContain("applyEditorFontFamilyList");
+    expect(appSource).toContain("effectiveSettings.editor.fontFamilyList");
+    expect(appSource).toContain("applyPreviewFontFamilyList");
+    expect(appSource).toContain("effectiveSettings.preview.fontFamilyList");
+  });
+
+  it("styles.css consumes #497 slot font variables on the intended surfaces", () => {
+    const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
+    const editorStart = stylesSource.indexOf(".editorHost .cm-scroller");
+    const editorEnd = stylesSource.indexOf("}", editorStart);
+    const editorBlock = stylesSource.slice(editorStart, editorEnd);
+    const previewStart = stylesSource.indexOf(".preview {");
+    const previewEnd = stylesSource.indexOf("}", previewStart);
+    const previewBlock = stylesSource.slice(previewStart, previewEnd);
+
+    expect(stylesSource).toContain("--pergamum-workbench-ui-font-family-list");
+    expect(stylesSource).toContain("--pergamum-editor-font-family-list");
+    expect(stylesSource).toContain("--pergamum-preview-font-family-list");
+    expect(editorBlock).toContain("--pergamum-editor-font-family-list");
+    expect(editorBlock).not.toContain("--pergamum-workbench-ui-font-family-list");
+    expect(editorBlock).not.toContain("--pergamum-preview-font-family-list");
+    expect(previewBlock).toContain("--pergamum-preview-font-family-list");
+    expect(previewBlock).not.toContain("--pergamum-editor-font-family-list");
   });
 
   it("SettingsPanel no longer gates files.newFile.* behind the legacy Advanced Settings toggle (#232)", () => {

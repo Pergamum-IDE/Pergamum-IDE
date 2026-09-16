@@ -1146,6 +1146,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.fencedCodeIndentUnit",
         "editor.findGutterMarkers",
         "editor.fontFamily",
+        "editor.fontFamilyList",
         "editor.lineEnding.expected",
         "editor.lineEnding.markerGlyph",
         "editor.paragraphIndent.excludeLeadingCharacters",
@@ -1248,6 +1249,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.fencedCodeIndentUnit",
           "editor.findGutterMarkers",
           "editor.fontFamily",
+          "editor.fontFamilyList",
           "editor.lineEnding.expected",
           "editor.lineEnding.markerGlyph",
           "editor.paragraphIndent.excludeLeadingCharacters",
@@ -1262,6 +1264,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "files.newFile.lineEnding",
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
+          "preview.fontFamilyList",
           "preview.renderer",
           "preview.updateDelayMs",
           "search.nearby.unit",
@@ -1269,6 +1272,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "search.nearby.paragraphDistance",
           "workbench.colorTheme",
           "workbench.fontFamily",
+          "workbench.uiFontFamilyList",
           "workbench.sound.enabled",
           "workbench.sound.dialog.enabled",
           "workbench.sound.newline.enabled",
@@ -1699,20 +1703,22 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("styles.css consumes the workbench font custom property for UI chrome and the editor font custom property for editor body text", () => {
+    it("styles.css consumes #497 font-list custom properties for UI chrome, editor body text, and preview prose", () => {
       const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
+      const editorStart = stylesSource.indexOf(".editorHost .cm-scroller");
+      const editorEnd = stylesSource.indexOf("}", editorStart);
+      const editorBlock = stylesSource.slice(editorStart, editorEnd);
+      const previewStart = stylesSource.indexOf(".preview {");
+      const previewEnd = stylesSource.indexOf("}", previewStart);
+      const previewBlock = stylesSource.slice(previewStart, previewEnd);
 
-      expect(stylesSource).toContain("--pergamum-workbench-font-family");
-      expect(stylesSource).toContain("--pergamum-editor-font-family");
-      // Regression guard for #173 D-1: the editor body does not consume the
-      // workbench custom property, and preview code blocks keep their
-      // hardcoded monospace stack.
-      expect(stylesSource).not.toContain(
-        ".editorHost .cm-scroller {\n  font-family: var(\n    --pergamum-workbench-font-family"
-      );
-      expect(stylesSource).toContain(
-        ".editorHost .cm-scroller {\n  font-family: var(\n    --pergamum-editor-font-family"
-      );
+      expect(stylesSource).toContain("--pergamum-workbench-ui-font-family-list");
+      expect(stylesSource).toContain("--pergamum-editor-font-family-list");
+      expect(stylesSource).toContain("--pergamum-preview-font-family-list");
+      expect(editorBlock).toContain("--pergamum-editor-font-family-list");
+      expect(editorBlock).not.toContain("--pergamum-workbench-ui-font-family-list");
+      expect(editorBlock).not.toContain("--pergamum-preview-font-family-list");
+      expect(previewBlock).toContain("--pergamum-preview-font-family-list");
       expect(stylesSource).toContain(
         '.preview code {\n  border-radius: 4px;\n  background: #eef3f8;\n  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;'
       );

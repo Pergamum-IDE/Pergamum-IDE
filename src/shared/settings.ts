@@ -3,6 +3,7 @@ import {
   type DocumentMapDialogueDelimiterPair,
   type DocumentMapSettings
 } from "./documentMapSettings";
+import type { FontFamilySetting } from "./fontSettings";
 import type { Language } from "./i18n";
 import {
   getCatalogDefaultValue,
@@ -53,13 +54,8 @@ export type RecordRecentProjectInput = Omit<RecentProject, "lastOpenedAt">;
 
 export interface ApplicationPreviewSettings {
   renderer: PreviewRendererId;
-  /**
-   * #250 follow-up: milliseconds to wait, after editing stops, before
-   * updating the preview. applicationOnly scope — no project override
-   * (unlike `renderer`), so this is always resolved from
-   * ApplicationSettings/the catalog default, never ProjectSettings.
-   */
   updateDelayMs: number;
+  fontFamilyList?: FontFamilySetting[];
 }
 
 export interface WorkbenchStatusBarSettings {
@@ -221,6 +217,7 @@ export interface ApplicationEditorRubyMarkupSettings {
 
 export interface ApplicationEditorSettings {
   fontFamily?: string;
+  fontFamilyList?: FontFamilySetting[];
   lineEnding: ApplicationEditorLineEndingSettings;
   whitespace: ApplicationEditorWhitespaceSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
@@ -285,6 +282,7 @@ export interface ApplicationWorkbenchSettings {
   statusBar: WorkbenchStatusBarSettings;
   sound: WorkbenchSoundSettings;
   fontFamily?: string;
+  uiFontFamilyList?: FontFamilySetting[];
   // #266: sparse, like fontFamily — absence means "use the catalog default";
   // it is never eagerly written back as the default.
   notification?: WorkbenchNotificationSettings;
@@ -326,6 +324,11 @@ export interface SaveApplicationSettingsRequest {
 
 export interface ProjectPreviewSettings {
   renderer?: PreviewRendererId;
+  fontFamilyList?: FontFamilySetting[];
+}
+
+export interface ProjectWorkbenchSettings {
+  uiFontFamilyList?: FontFamilySetting[];
 }
 
 export interface ProjectEditorParagraphIndentSettings {
@@ -360,6 +363,7 @@ export interface ProjectEditorRubySettings {
 
 export interface ProjectEditorSettings {
   fontFamily?: string;
+  fontFamilyList?: FontFamilySetting[];
   paragraphIndent?: ProjectEditorParagraphIndentSettings;
   characterCount?: ProjectEditorCharacterCountSettings;
   lineEnding?: ProjectEditorLineEndingSettings;
@@ -399,6 +403,7 @@ export interface ProjectSearchSettings {
 }
 
 export interface ProjectSettings {
+  workbench?: ProjectWorkbenchSettings;
   editor?: ProjectEditorSettings;
   preview?: ProjectPreviewSettings;
   search?: ProjectSearchSettings;
@@ -410,6 +415,7 @@ export interface ProjectSettings {
 export interface EffectivePreviewSettings {
   renderer: PreviewRendererId;
   updateDelayMs: number;
+  fontFamilyList: FontFamilySetting[];
 }
 
 export interface EffectiveNotificationSettings {
@@ -421,6 +427,7 @@ export interface EffectiveWorkbenchSettings {
   statusBar: WorkbenchStatusBarSettings;
   sound: WorkbenchSoundSettings;
   fontFamily: string;
+  uiFontFamilyList: FontFamilySetting[];
   notification: WorkbenchNotificationSettings;
   normalizeUnicodeToNfc: boolean;
 }
@@ -431,6 +438,7 @@ export interface EffectiveCommandPaletteSettings {
 
 export interface EffectiveEditorSettings {
   fontFamily: string;
+  fontFamilyList: FontFamilySetting[];
   lineEnding: ApplicationEditorLineEndingSettings;
   whitespace: ApplicationEditorWhitespaceSettings;
   paragraphIndent: ApplicationEditorParagraphIndentSettings;
@@ -510,7 +518,8 @@ export function cloneDefaultSearchSettings(): ApplicationSearchSettings {
 export const builtInDefaultSettings: EffectiveSettings = {
   preview: {
     renderer: defaultPreviewRenderer,
-    updateDelayMs: defaultPreviewUpdateDelayMs
+    updateDelayMs: defaultPreviewUpdateDelayMs,
+    fontFamilyList: getCatalogDefaultValue("preview.fontFamilyList")
   },
   notification: {
     output: {
@@ -540,6 +549,7 @@ export const builtInDefaultSettings: EffectiveSettings = {
       }
     },
     fontFamily: getCatalogDefaultValue("workbench.fontFamily"),
+    uiFontFamilyList: getCatalogDefaultValue("workbench.uiFontFamilyList"),
     notification: {
       durationMs: getCatalogDefaultValue(
         "workbench.notification.durationMs"
@@ -564,6 +574,7 @@ export const builtInDefaultSettings: EffectiveSettings = {
   },
   editor: {
     fontFamily: getCatalogDefaultValue("editor.fontFamily"),
+    fontFamilyList: getCatalogDefaultValue("editor.fontFamilyList"),
     lineEnding: {
       expected: getCatalogDefaultValue("editor.lineEnding.expected"),
       markerGlyph: getCatalogDefaultValue("editor.lineEnding.markerGlyph")
@@ -877,7 +888,11 @@ export function resolveEffectiveSettings(
       // applicationOnly (#250 follow-up): no project override, unlike
       // renderer above. Always a concrete value already (resolved through
       // the catalog at settings.json read time), so no fallback needed here.
-      updateDelayMs: applicationSettings.preview.updateDelayMs
+      updateDelayMs: applicationSettings.preview.updateDelayMs,
+      fontFamilyList:
+        projectSettings?.preview?.fontFamilyList ??
+        applicationSettings.preview.fontFamilyList ??
+        builtInDefaultSettings.preview.fontFamilyList
     },
     notification: {
       output: {
@@ -886,10 +901,9 @@ export function resolveEffectiveSettings(
           builtInDefaultSettings.notification.output.enabled
       }
     },
-    // The whole workbench area is applicationOnly (#173, #174): Application
-    // > Default only, no project scope in the chain. language and
-    // statusBar.visible pass straight through (never sparse); fontFamily
-    // still falls through to the catalog default when absent.
+    // Most workbench settings are applicationOnly (#173, #174). The
+    // ADR-0015 UI font list is intentionally project-overridable, matching
+    // the editor/preview list slots.
     workbench: {
       language: applicationSettings.workbench.language,
       statusBar: {
@@ -914,6 +928,10 @@ export function resolveEffectiveSettings(
       fontFamily:
         applicationSettings.workbench.fontFamily ??
         builtInDefaultSettings.workbench.fontFamily,
+      uiFontFamilyList:
+        projectSettings?.workbench?.uiFontFamilyList ??
+        applicationSettings.workbench.uiFontFamilyList ??
+        builtInDefaultSettings.workbench.uiFontFamilyList,
       // #266: applicationOnly, and sparse like fontFamily — fall through to
       // the catalog-backed default when settings.json omits it (or when the
       // read path rejected an invalid on-disk value).
@@ -945,6 +963,10 @@ export function resolveEffectiveSettings(
         projectSettings?.editor?.fontFamily ??
         applicationSettings.editor.fontFamily ??
         builtInDefaultSettings.editor.fontFamily,
+      fontFamilyList:
+        projectSettings?.editor?.fontFamilyList ??
+        applicationSettings.editor.fontFamilyList ??
+        builtInDefaultSettings.editor.fontFamilyList,
       lineEnding: {
         expected:
           projectSettings?.editor?.lineEnding?.expected ??

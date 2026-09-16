@@ -266,7 +266,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -276,10 +276,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     const textInput = container.querySelector<HTMLInputElement>('input[type="text"]')!;
     expect(textInput).not.toBeNull();
-    expect(textInput.value).toBe("Consolas");
+    expect(textInput.value).toBe("「");
     expect(textInput.disabled).toBe(false);
 
-    // No checkbox, no badge, no reset button for editor font row
+    // No checkbox, no badge, no reset button for an unchanged text row.
     const editorRow = container.querySelectorAll(".settingsItemRow")[0];
     expect(editorRow.querySelector('input[type="checkbox"]')).toBeNull();
     expect(editorRow.querySelector(".projectSettingModifiedBadge")).toBeNull();
@@ -293,10 +293,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -305,7 +305,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const textInput = container.querySelector<HTMLInputElement>('input[type="text"]')!;
-    expect(textInput.value).toBe("Yu Mincho");
+    expect(textInput.value).toBe("『");
     expect(textInput.disabled).toBe(false);
 
     const badge = container.querySelector(".projectSettingModifiedBadge");
@@ -327,7 +327,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -343,7 +343,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         window.HTMLInputElement.prototype,
         "value"
       )?.set;
-      nativeSetter?.call(textInput, "Yu Mincho");
+      nativeSetter?.call(textInput, "『");
       textInput.dispatchEvent(new Event("input", { bubbles: true }));
       textInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -356,7 +356,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
-      set: { "editor.fontFamily": "Yu Mincho" }
+      set: { "editor.paragraphIndent.excludeLeadingCharacters": "『" }
     });
   });
 
@@ -369,10 +369,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -388,7 +388,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         window.HTMLInputElement.prototype,
         "value"
       )?.set;
-      nativeSetter?.call(textInput, "Consolas");
+      nativeSetter?.call(textInput, "「");
       textInput.dispatchEvent(new Event("input", { bubbles: true }));
       textInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -399,7 +399,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
-      remove: ["editor.fontFamily"]
+      remove: ["editor.paragraphIndent.excludeLeadingCharacters"]
     });
   });
 
@@ -412,10 +412,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -432,7 +432,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
-      remove: ["editor.fontFamily"]
+      remove: ["editor.paragraphIndent.excludeLeadingCharacters"]
     });
   });
 
@@ -481,16 +481,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         return originalValidate(key, val);
       });
 
-    const testItems: readonly SettingCatalogItem[] = [
-      {
-        key: "editor.fontFamily",
-        category: "editor",
-        order: 100,
-        labelKey: "settings.editor.fontFamily.label",
-        descriptionKey: "settings.editor.fontFamily.description",
-        control: { kind: "text" },
-        defaultValue: "Consolas"
-      },
+      const testItems: readonly SettingCatalogItem[] = [
+        {
+          key: "editor.paragraphIndent.excludeLeadingCharacters",
+          category: "editor",
+          order: 100,
+          labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+          descriptionKey:
+            "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
+          control: { kind: "text" },
+          defaultValue: ""
+        },
       {
         key: "preview.renderer",
         category: "preview",
@@ -552,16 +553,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
   it("emits remove request when select is changed back to match application setting (requirement 8)", async () => {
     const onSaveSettings = vi.fn(async () => undefined);
 
-    const testItems: readonly SettingCatalogItem[] = [
-      {
-        key: "editor.fontFamily",
-        category: "editor",
-        order: 100,
-        labelKey: "settings.editor.fontFamily.label",
-        descriptionKey: "settings.editor.fontFamily.description",
-        control: { kind: "text" },
-        defaultValue: "Consolas"
-      },
+      const testItems: readonly SettingCatalogItem[] = [
+        {
+          key: "editor.paragraphIndent.excludeLeadingCharacters",
+          category: "editor",
+          order: 100,
+          labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+          descriptionKey:
+            "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
+          control: { kind: "text" },
+          defaultValue: ""
+        },
       {
         key: "preview.renderer",
         category: "preview",
@@ -626,11 +628,17 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" },
+            editor: {
+              fontFamilyList: [
+                { family: "Yu Mincho", displayName: "Yu Mincho" }
+              ]
+            },
             preview: { renderer: "vertical" as any }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" },
+            editor: {
+              fontFamilyList: [{ family: "Consolas", displayName: "Consolas" }]
+            },
             preview: { renderer: "markdown" }
           },
           isReadOnly: false,
@@ -640,13 +648,13 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule.
-    expect(rows).toHaveLength(20);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row.
+    expect(rows).toHaveLength(22);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
       (r) =>
-        r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamily"
+        r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamilyList"
     )!;
     const previewRow = Array.from(rows).find(
       (r) =>
@@ -698,10 +706,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: true,
           onSaveSettings: async () => undefined
@@ -711,7 +719,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     const textInput = container.querySelector<HTMLInputElement>('input[type="text"]')!;
     expect(textInput.disabled).toBe(true);
-    expect(textInput.value).toBe("Yu Mincho");
+    expect(textInput.value).toBe("『");
 
     const badge = container.querySelector(".projectSettingModifiedBadge");
     expect(badge).not.toBeNull();
@@ -733,10 +741,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings
@@ -752,7 +760,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         window.HTMLInputElement.prototype,
         "value"
       )?.set;
-      nativeSetter?.call(textInput, "Faulty Font");
+      nativeSetter?.call(textInput, "（");
       textInput.dispatchEvent(new Event("input", { bubbles: true }));
       textInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -762,7 +770,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
-    expect(textInput.value).toBe("Yu Mincho");
+    expect(textInput.value).toBe("『");
 
     const errorEl = container.querySelector(".settingsError");
     expect(errorEl).not.toBeNull();
@@ -777,7 +785,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Initial Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -785,16 +793,16 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Initial Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("「");
 
-    // Application settings change from Initial Font to Updated Font
+    // Application settings change from one inherited value to another.
     act(() => {
       root.render(
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: undefined,
           applicationSettings: {
-            editor: { fontFamily: "Updated Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -802,7 +810,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Updated Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("『");
     expect(container.querySelector(".projectSettingModifiedBadge")).toBeNull();
   });
 
@@ -813,10 +821,10 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Project Custom Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Font A" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "「" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -824,19 +832,19 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Project Custom Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("『");
     expect(container.querySelector(".projectSettingModifiedBadge")).not.toBeNull();
 
-    // Application settings change to Font B
+    // Application settings change while the Project override remains set.
     act(() => {
       root.render(
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Project Custom Font" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "『" } }
           },
           applicationSettings: {
-            editor: { fontFamily: "Font B" }
+            editor: { paragraphIndent: { excludeLeadingCharacters: "（" } }
           },
           isReadOnly: false,
           onSaveSettings: async () => undefined
@@ -844,7 +852,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
       );
     });
 
-    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("Project Custom Font");
+    expect(container.querySelector<HTMLInputElement>('input[type="text"]')!.value).toBe("『");
     expect(container.querySelector(".projectSettingModifiedBadge")).not.toBeNull();
   });
 
@@ -860,13 +868,14 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
           onSaveSettings: async () => undefined,
           items: [
             {
-              key: "editor.fontFamily",
+              key: "editor.paragraphIndent.excludeLeadingCharacters",
               category: "editor",
               order: 100,
-              labelKey: "settings.editor.fontFamily.label",
-              descriptionKey: "settings.editor.fontFamily.description",
+              labelKey: "settings.editor.paragraphIndent.excludeLeadingCharacters.label",
+              descriptionKey:
+                "settings.editor.paragraphIndent.excludeLeadingCharacters.description",
               control: { kind: "text" },
-              defaultValue: "monospace"
+              defaultValue: ""
             },
             {
               key: "workbench.colorTheme",
@@ -885,20 +894,73 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const rows = container.querySelectorAll(".settingsItemRow");
     // workbench.colorTheme is not applicationWithProjectOverride, so it must be filtered out
     expect(rows).toHaveLength(1);
-    expect(rows[0].textContent).toContain("エディタフォント");
+    expect(rows[0].textContent).toContain(
+      translateJa("settings.editor.paragraphIndent.excludeLeadingCharacters.label")
+    );
   });
 
   // 16. Layout structure aligned with Application Settings
+  it("renders rows and handles modified badges and reset", () => {
+    act(() => {
+      root.render(
+        React.createElement(ProjectSettingsPanel, {
+          translate: translateJa,
+          projectSettings: {
+            editor: {
+              fontFamilyList: [
+                { family: "Yu Mincho", displayName: "Yu Mincho" }
+              ]
+            },
+            preview: { renderer: "vertical" as any }
+          },
+          applicationSettings: {
+            editor: {
+              fontFamilyList: [{ family: "Consolas", displayName: "Consolas" }]
+            },
+            preview: { renderer: "markdown" }
+          },
+          isReadOnly: false,
+          onSaveSettings: async () => undefined
+        })
+      );
+    });
+
+    const rows = container.querySelectorAll(".settingsItemRow");
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row.
+    expect(rows).toHaveLength(22);
+
+    // Both should have modified badges
+    const editorRow = Array.from(rows).find(
+      (r) =>
+        r.querySelector(".settingsItemKey")?.textContent === "editor.fontFamilyList"
+    )!;
+    const previewRow = Array.from(rows).find(
+      (r) =>
+        r.querySelector(".settingsItemKey")?.textContent === "preview.renderer"
+    )!;
+    expect(editorRow.querySelector(".projectSettingModifiedBadge")).not.toBeNull();
+    expect(previewRow.querySelector(".projectSettingModifiedBadge")).not.toBeNull();
+
+    // Reset only preview.renderer
+    const previewResetBtn = previewRow.querySelector<HTMLButtonElement>(".projectSettingResetButton")!;
+    expect(previewResetBtn).not.toBeNull();
+  });
+
   it("renders category headings (settingsItemPaneHeading) and matches Application Settings DOM structure", () => {
     act(() => {
       root.render(
         React.createElement(ProjectSettingsPanel, {
           translate: translateJa,
           projectSettings: {
-            editor: { fontFamily: "Yu Mincho" }
+            editor: {
+              paragraphIndent: { excludeLeadingCharacters: "「" }
+            },
+            preview: { renderer: "vertical" as any }
           },
           applicationSettings: {
-            editor: { fontFamily: "Consolas" },
+            editor: {
+              paragraphIndent: { excludeLeadingCharacters: "" }
+            },
             preview: { renderer: "markdown" }
           },
           isReadOnly: false,
@@ -911,22 +973,26 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const headings = container.querySelectorAll<HTMLHeadingElement>(
       "h2.settingsItemPaneHeading"
     );
-    // #407 / #424 Slice 7: "検索・置換" + "画像添付" sit between Editor and Preview.
-    expect(headings).toHaveLength(6);
-    expect(headings[0].textContent).toBe("エディタ");
-    expect(headings[1].textContent).toBe("検索・置換");
-    expect(headings[2].textContent).toBe("画像添付");
-    expect(headings[3].textContent).toBe("プレビュー");
-    expect(headings[4].textContent).toBe("文書マップ");
-    expect(headings[5].textContent).toBe("ファイル");
+    // #407 / #424 Slice 7 / #490: "外観", "検索・置換", "画像添付" sit alongside Editor and Preview.
+    expect(headings).toHaveLength(7);
+    expect(headings[0].textContent).toBe("外観");
+    expect(headings[1].textContent).toBe("エディタ");
+    expect(headings[2].textContent).toBe("検索・置換");
+    expect(headings[3].textContent).toBe("画像添付");
+    expect(headings[4].textContent).toBe("プレビュー");
+    expect(headings[5].textContent).toBe("文書マップ");
+    expect(headings[6].textContent).toBe("ファイル");
 
     // Sections use existing .settingsItemPane class
-    const panes = container.querySelectorAll(".settingsItemPane");
-    expect(panes).toHaveLength(6);
+    expect(container.querySelectorAll(".settingsItemPane")).toHaveLength(7);
 
     // Verify exact sequence of elements inside row:
     // 1. header (label + inline actions) -> 2. control -> 3. description -> 4. key
-    const editorRow = container.querySelectorAll(".settingsItemRow")[0];
+    const editorRow = Array.from(container.querySelectorAll(".settingsItemRow")).find(
+      (r) =>
+        r.querySelector(".settingsItemKey")?.textContent ===
+        "editor.paragraphIndent.excludeLeadingCharacters"
+    )!;
     const childTags = Array.from(editorRow.children).map((el) => ({
       tag: el.tagName.toLowerCase(),
       className: el.className
@@ -942,7 +1008,9 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const header = editorRow.querySelector(".settingsItemHeader")!;
     expect(header).not.toBeNull();
     const label = header.querySelector(".settingsItemLabel")!;
-    expect(label.textContent).toBe("エディタフォント");
+    expect(label.textContent).toBe(
+      translateJa("settings.editor.paragraphIndent.excludeLeadingCharacters.label")
+    );
     const actions = header.querySelector(".projectSettingHeaderActions")!;
     expect(actions).not.toBeNull();
     expect(actions.querySelector(".projectSettingResetButton")).not.toBeNull();
@@ -959,7 +1027,9 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     // 4. Setting key
     const keyEl = editorRow.querySelector("code.settingsItemKey");
-    expect(keyEl?.textContent).toBe("editor.fontFamily");
+    expect(keyEl?.textContent).toBe(
+      "editor.paragraphIndent.excludeLeadingCharacters"
+    );
 
     // Preview row control directly with .settingsSelect and same sequence
     const previewRow = Array.from(
@@ -1008,6 +1078,10 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         );
         expect(categories).toEqual([
           { id: "all", labelKey: "settings.category.all.label" },
+          {
+            id: "appearance",
+            labelKey: "settings.category.appearance.label"
+          },
           { id: "editor", labelKey: "settings.category.editor.label" },
           {
             id: "searchReplace",
@@ -1038,6 +1112,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         );
         expect(categories.map((c) => c.id)).toEqual([
           "all",
+          "appearance",
           "editor",
           "searchReplace",
           "imageAttachment",
@@ -1062,7 +1137,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
     describe("matchesProjectSettingSearch", () => {
       const eligibleItems = getProjectSettingsUiItems();
-      const editorItem = eligibleItems.find((i) => i.key === "editor.fontFamily")!;
+      const editorItem = eligibleItems.find(
+        (i) => i.key === "editor.fontFamilyList"
+      )!;
       const previewItem = eligibleItems.find((i) => i.key === "preview.renderer")!;
 
       it("matches empty query for any item", () => {
@@ -1087,7 +1164,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       it("matches by translated label", () => {
         expect(
-          matchesProjectSettingSearch(editorItem, "エディタフォント", translateJa)
+          matchesProjectSettingSearch(editorItem, "フォントリスト", translateJa)
         ).toBe(true);
         expect(
           matchesProjectSettingSearch(previewItem, "レンダラー", translateJa)
@@ -1121,7 +1198,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
     describe("matchesProjectSettingCategory", () => {
       const eligibleItems = getProjectSettingsUiItems();
-      const editorItem = eligibleItems.find((i) => i.key === "editor.fontFamily")!;
+      const editorItem = eligibleItems.find(
+        (i) => i.key === "editor.fontFamilyList"
+      )!;
       const previewItem = eligibleItems.find((i) => i.key === "preview.renderer")!;
 
       it("matches 'all' for any item", () => {
@@ -1140,6 +1219,16 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
     describe("filterProjectSettingItems", () => {
       const eligibleItems = getProjectSettingsUiItems();
 
+      it("does not expose legacy single-font settings in Project Settings UI", () => {
+        const keys = eligibleItems.map((item) => item.key);
+
+        expect(keys).not.toContain("workbench.fontFamily");
+        expect(keys).not.toContain("editor.fontFamily");
+        expect(keys).toContain("workbench.uiFontFamilyList");
+        expect(keys).toContain("editor.fontFamilyList");
+        expect(keys).toContain("preview.fontFamilyList");
+      });
+
       it("returns all eligible items when filter is 'all' and query is empty", () => {
         const result = filterProjectSettingItems(
           eligibleItems,
@@ -1148,7 +1237,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           translateJa
         );
         expect(result.map((i) => i.key)).toEqual([
-          "editor.fontFamily",
+          "workbench.uiFontFamilyList",
+          "editor.fontFamilyList",
           "editor.paragraphIndent.excludeLeadingCharacters",
           "editor.emphasisMark.rule",
           "editor.emphasisMark.aozoraMark",
@@ -1166,6 +1256,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
           "preview.renderer",
+          "preview.fontFamilyList",
           "documentMap.dialogueDelimiterPairs",
           "files.newFile.lineEnding"
         ]);
@@ -1179,7 +1270,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           translateJa
         );
         expect(editorOnly.map((i) => i.key)).toEqual([
-          "editor.fontFamily",
+          "editor.fontFamilyList",
           "editor.paragraphIndent.excludeLeadingCharacters",
           "editor.emphasisMark.rule",
           "editor.emphasisMark.aozoraMark",
@@ -1199,7 +1290,10 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "",
           translateJa
         );
-        expect(previewOnly.map((i) => i.key)).toEqual(["preview.renderer"]);
+        expect(previewOnly.map((i) => i.key)).toEqual([
+          "preview.renderer",
+          "preview.fontFamilyList"
+        ]);
 
         const filesOnly = filterProjectSettingItems(
           eligibleItems,
@@ -1217,7 +1311,11 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "font",
           translateJa
         );
-        expect(fontMatches.map((i) => i.key)).toEqual(["editor.fontFamily"]);
+        expect(fontMatches.map((i) => i.key)).toEqual([
+          "workbench.uiFontFamilyList",
+          "editor.fontFamilyList",
+          "preview.fontFamilyList"
+        ]);
       });
 
       it("combines category and query using AND logic", () => {
@@ -1228,7 +1326,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
             "font",
             translateJa
           ).map((i) => i.key)
-        ).toEqual(["editor.fontFamily"]);
+        ).toEqual(["editor.fontFamilyList"]);
 
         expect(
           filterProjectSettingItems(
@@ -1236,8 +1334,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
             "preview",
             "font",
             translateJa
-          )
-        ).toEqual([]);
+          ).map((i) => i.key)
+        ).toEqual(["preview.fontFamilyList"]);
       });
     });
 
@@ -1299,14 +1397,15 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      expect(categoryButtons).toHaveLength(7);
+      expect(categoryButtons).toHaveLength(8);
       expect(categoryButtons[0].textContent).toBe("すべて");
-      expect(categoryButtons[1].textContent).toBe("エディタ");
-      expect(categoryButtons[2].textContent).toBe("検索・置換");
-      expect(categoryButtons[3].textContent).toBe("画像添付");
-      expect(categoryButtons[4].textContent).toBe("プレビュー");
-      expect(categoryButtons[5].textContent).toBe("文書マップ");
-      expect(categoryButtons[6].textContent).toBe("ファイル");
+      expect(categoryButtons[1].textContent).toBe("外観");
+      expect(categoryButtons[2].textContent).toBe("エディタ");
+      expect(categoryButtons[3].textContent).toBe("検索・置換");
+      expect(categoryButtons[4].textContent).toBe("画像添付");
+      expect(categoryButtons[5].textContent).toBe("プレビュー");
+      expect(categoryButtons[6].textContent).toBe("文書マップ");
+      expect(categoryButtons[7].textContent).toBe("ファイル");
 
       expect(
         categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
@@ -1320,6 +1419,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll(".settingsItemPaneHeading")
       ).map((h) => h.textContent);
       expect(headings).toEqual([
+        "外観",
         "エディタ",
         "検索・置換",
         "画像添付",
@@ -1332,7 +1432,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
-        "editor.fontFamily",
+        "workbench.uiFontFamilyList",
+        "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
@@ -1350,6 +1451,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "imageAttachment.saveDirectory",
         "imageAttachment.insertMarkdownLink",
         "preview.renderer",
+        "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
         "files.newFile.lineEnding"
       ]);
@@ -1371,14 +1473,21 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
+      const editorButton = categoryButtons.find((b) => b.textContent === "エディタ")!;
+      const searchReplaceButton = categoryButtons.find((b) => b.textContent === "検索・置換")!;
+      const imageAttachmentButton = categoryButtons.find((b) => b.textContent === "画像添付")!;
+      const previewButton = categoryButtons.find((b) => b.textContent === "プレビュー")!;
+      const docMapButton = categoryButtons.find((b) => b.textContent === "文書マップ")!;
+      const filesButton = categoryButtons.find((b) => b.textContent === "ファイル")!;
+      const allButton = categoryButtons.find((b) => b.textContent === "すべて")!;
 
       // Click "エディタ"
       act(() => {
-        categoryButtons[1].click();
+        editorButton.click();
       });
 
       expect(
-        categoryButtons[1].classList.contains("settingsCategoryButtonSelected")
+        editorButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       expect(
         categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
@@ -1388,7 +1497,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
-        "editor.fontFamily",
+        "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
@@ -1404,11 +1513,11 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       // Click "検索・置換" (#424 Slice 7)
       act(() => {
-        categoryButtons[2].click();
+        searchReplaceButton.click();
       });
 
       expect(
-        categoryButtons[2].classList.contains("settingsCategoryButtonSelected")
+        searchReplaceButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
@@ -1421,11 +1530,11 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       // Click "画像添付" (#407)
       act(() => {
-        categoryButtons[3].click();
+        imageAttachmentButton.click();
       });
 
       expect(
-        categoryButtons[3].classList.contains("settingsCategoryButtonSelected")
+        imageAttachmentButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
@@ -1437,24 +1546,24 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       // Click "プレビュー"
       act(() => {
-        categoryButtons[4].click();
+        previewButton.click();
       });
 
       expect(
-        categoryButtons[4].classList.contains("settingsCategoryButtonSelected")
+        previewButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["preview.renderer"]);
+      expect(itemKeys).toEqual(["preview.renderer", "preview.fontFamilyList"]);
 
       // Click "文書マップ"
       act(() => {
-        categoryButtons[5].click();
+        docMapButton.click();
       });
 
       expect(
-        categoryButtons[5].classList.contains("settingsCategoryButtonSelected")
+        docMapButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
@@ -1463,11 +1572,11 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       // Click "ファイル"
       act(() => {
-        categoryButtons[6].click();
+        filesButton.click();
       });
 
       expect(
-        categoryButtons[6].classList.contains("settingsCategoryButtonSelected")
+        filesButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
@@ -1476,17 +1585,18 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       // Click "すべて"
       act(() => {
-        categoryButtons[0].click();
+        allButton.click();
       });
 
       expect(
-        categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
+        allButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
-        "editor.fontFamily",
+        "workbench.uiFontFamilyList",
+        "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
@@ -1504,6 +1614,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "imageAttachment.saveDirectory",
         "imageAttachment.insertMarkdownLink",
         "preview.renderer",
+        "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
         "files.newFile.lineEnding"
       ]);
@@ -1534,7 +1645,11 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       let itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["editor.fontFamily"]);
+      expect(itemKeys).toEqual([
+        "workbench.uiFontFamilyList",
+        "editor.fontFamilyList",
+        "preview.fontFamilyList"
+      ]);
 
       // Type "renderer"
       act(() => {
@@ -1571,7 +1686,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual([
-        "editor.fontFamily",
+        "workbench.uiFontFamilyList",
+        "editor.fontFamilyList",
         "editor.paragraphIndent.excludeLeadingCharacters",
         "editor.emphasisMark.rule",
         "editor.emphasisMark.aozoraMark",
@@ -1589,6 +1705,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "imageAttachment.saveDirectory",
         "imageAttachment.insertMarkdownLink",
         "preview.renderer",
+        "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
         "files.newFile.lineEnding"
       ]);
@@ -1613,15 +1730,17 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
+      const editorButton = categoryButtons.find((b) => b.textContent === "エディタ")!;
+      const previewButton = categoryButtons.find((b) => b.textContent === "プレビュー")!;
 
-      // Select "プレビュー" category
+      // Select "エディタ" category
       act(() => {
-        categoryButtons[2].click();
+        editorButton.click();
       });
 
-      // Type "font" into search
+      // Type "renderer" into search (renderer is in preview category, not editor)
       act(() => {
-        changeInputValue(searchInput, "font");
+        changeInputValue(searchInput, "renderer");
       });
 
       expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(0);
@@ -1629,15 +1748,15 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         translateJa("settings.search.empty")
       );
 
-      // Switch to "エディタ" category while search remains "font"
+      // Switch to "プレビュー" category while search remains "renderer"
       act(() => {
-        categoryButtons[1].click();
+        previewButton.click();
       });
 
       const itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["editor.fontFamily"]);
+      expect(itemKeys).toEqual(["preview.renderer"]);
       expect(container.querySelector(".settingsSearchEmpty")).toBeNull();
     });
 
@@ -1666,8 +1785,11 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         expect(btn.disabled).toBe(false);
       });
 
+      const editorButton = categoryButtons.find(
+        (b) => b.textContent === "エディタ"
+      )!;
       act(() => {
-        categoryButtons[1].click();
+        editorButton.click();
       });
       expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(12);
 
@@ -1714,8 +1836,20 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         root.render(
           <ProjectSettingsPanel
             translate={translateJa}
-            projectSettings={{ editor: { fontFamily: "Yu Mincho" } }}
-            applicationSettings={{ editor: { fontFamily: "Consolas" } }}
+            projectSettings={{
+              editor: {
+                fontFamilyList: [
+                  { family: "Yu Mincho", displayName: "Yu Mincho" }
+                ]
+              }
+            }}
+            applicationSettings={{
+              editor: {
+                fontFamilyList: [
+                  { family: "Consolas", displayName: "Consolas" }
+                ]
+              }
+            }}
             isReadOnly={false}
             onSaveSettings={vi.fn()}
           />
@@ -1730,16 +1864,22 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
 
-      // Switch to "プレビュー" category (hiding editor setting) — index 3
-      // after #407 inserts "画像添付" at index 2.
+      const previewButton = categoryButtons.find(
+        (b) => b.textContent === "プレビュー"
+      )!;
+      const editorButton = categoryButtons.find(
+        (b) => b.textContent === "エディタ"
+      )!;
+
+      // Switch to "プレビュー" category (hiding editor setting)
       act(() => {
-        categoryButtons[3].click();
+        previewButton.click();
       });
       expect(container.querySelectorAll(".projectSettingModifiedBadge")).toHaveLength(0);
 
       // Switch back to "エディタ" category
       act(() => {
-        categoryButtons[1].click();
+        editorButton.click();
       });
       expect(
         container.querySelector(".projectSettingModifiedBadge")?.textContent
@@ -1764,18 +1904,21 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const searchInput = container.querySelector<HTMLInputElement>(
         "input.settingsSearchInput"
       )!;
+
+      act(() => {
+        changeInputValue(searchInput, "font");
+      });
+      expect(onSaveSettings).not.toHaveBeenCalled();
+
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-
+      const previewButton = categoryButtons.find(
+        (b) => b.textContent === "プレビュー"
+      )!;
       act(() => {
-        changeInputValue(searchInput, "test");
+        previewButton.click();
       });
-
-      act(() => {
-        categoryButtons[1].click();
-      });
-
       expect(onSaveSettings).not.toHaveBeenCalled();
     });
 
@@ -1804,7 +1947,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
 
       // 2. Change draft value
       act(() => {
-        changeInputValue(textInput, "Yu Mincho");
+        changeInputValue(textInput, "「『");
       });
 
       expect(onSaveSettings).not.toHaveBeenCalled();
@@ -1813,8 +1956,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      // #407 / #424 Slice 7: [2]="検索・置換", [3]="画像添付"; Preview at index 4.
-      const previewButton = categoryButtons[4];
+      const previewButton = categoryButtons.find(
+        (b) => b.textContent === "プレビュー"
+      )!;
 
       await act(async () => {
         textInput.blur();
@@ -1824,14 +1968,14 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       // 4. Blur-save successfully triggers and persists the draft value
       expect(onSaveSettings).toHaveBeenCalledTimes(1);
       expect(onSaveSettings).toHaveBeenCalledWith({
-        set: { "editor.fontFamily": "Yu Mincho" }
+        set: { "editor.paragraphIndent.excludeLeadingCharacters": "「『" }
       });
 
-      // Confirm the editor item is filtered out and only preview item is visible
+      // Confirm the editor item is filtered out and only preview items are visible
       const itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["preview.renderer"]);
+      expect(itemKeys).toEqual(["preview.renderer", "preview.fontFamilyList"]);
     });
   });
 });

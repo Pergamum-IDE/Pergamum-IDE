@@ -72,6 +72,7 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
     ).map((btn) => btn.textContent);
     expect(categories).toEqual([
       "すべて",
+      "外観",
       "プロジェクト全般",
       "エディタ",
       "検索・置換",
@@ -99,6 +100,7 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
     ).map((btn) => btn.textContent);
     expect(categoriesEn).toEqual([
       "All",
+      "Appearance",
       "General",
       "Editor",
       "Search & Replace",

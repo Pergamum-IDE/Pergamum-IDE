@@ -808,6 +808,115 @@ describe("editor.fontFamily resolution precedence (#396 Slice 3)", () => {
   });
 });
 
+describe("fontFamilyList resolution precedence (#497)", () => {
+  const appUiFont = { family: "App UI", displayName: "Application UI" };
+  const projectUiFont = { family: "Project UI", displayName: "Project UI" };
+  const appEditorFont = {
+    family: "App Editor",
+    displayName: "Application Editor"
+  };
+  const projectEditorFont = {
+    family: "Project Editor",
+    displayName: "Project Editor"
+  };
+  const appPreviewFont = {
+    family: "App Preview",
+    displayName: "Application Preview"
+  };
+  const projectPreviewFont = {
+    family: "Project Preview",
+    displayName: "Project Preview"
+  };
+
+  it("uses Application font-family lists when Project overrides are absent", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        uiFontFamilyList: [appUiFont]
+      },
+      editor: {
+        ...defaultApplicationSettings.editor,
+        fontFamilyList: [appEditorFont]
+      },
+      preview: {
+        ...defaultApplicationSettings.preview,
+        fontFamilyList: [appPreviewFont]
+      }
+    };
+
+    const effective = resolveEffectiveSettings(applicationSettings, undefined);
+
+    expect(effective.workbench.uiFontFamilyList).toEqual([appUiFont]);
+    expect(effective.editor.fontFamilyList).toEqual([appEditorFont]);
+    expect(effective.preview.fontFamilyList).toEqual([appPreviewFont]);
+  });
+
+  it("uses Project font-family list overrides before Application settings", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        uiFontFamilyList: [appUiFont]
+      },
+      editor: {
+        ...defaultApplicationSettings.editor,
+        fontFamilyList: [appEditorFont]
+      },
+      preview: {
+        ...defaultApplicationSettings.preview,
+        fontFamilyList: [appPreviewFont]
+      }
+    };
+    const projectSettings: ProjectSettings = {
+      workbench: { uiFontFamilyList: [projectUiFont] },
+      editor: { fontFamilyList: [projectEditorFont] },
+      preview: { fontFamilyList: [projectPreviewFont] }
+    };
+
+    const effective = resolveEffectiveSettings(
+      applicationSettings,
+      projectSettings
+    );
+
+    expect(effective.workbench.uiFontFamilyList).toEqual([projectUiFont]);
+    expect(effective.editor.fontFamilyList).toEqual([projectEditorFont]);
+    expect(effective.preview.fontFamilyList).toEqual([projectPreviewFont]);
+  });
+
+  it("preserves explicit Project [] font-family list overrides", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        uiFontFamilyList: [appUiFont]
+      },
+      editor: {
+        ...defaultApplicationSettings.editor,
+        fontFamilyList: [appEditorFont]
+      },
+      preview: {
+        ...defaultApplicationSettings.preview,
+        fontFamilyList: [appPreviewFont]
+      }
+    };
+    const projectSettings: ProjectSettings = {
+      workbench: { uiFontFamilyList: [] },
+      editor: { fontFamilyList: [] },
+      preview: { fontFamilyList: [] }
+    };
+
+    const effective = resolveEffectiveSettings(
+      applicationSettings,
+      projectSettings
+    );
+
+    expect(effective.workbench.uiFontFamilyList).toEqual([]);
+    expect(effective.editor.fontFamilyList).toEqual([]);
+    expect(effective.preview.fontFamilyList).toEqual([]);
+  });
+});
+
 describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () => {
   it("resolves falsy Project overrides correctly: Application=true / Project=false and Application=non-empty / Project=''", () => {
     const appSettings: ApplicationSettings = {

@@ -12,8 +12,10 @@ import {
   type ProjectImageAttachmentSettings,
   type ProjectPreviewSettings,
   type ProjectSearchSettings,
-  type ProjectSettings
+  type ProjectSettings,
+  type ProjectWorkbenchSettings
 } from "../shared/settings";
+import type { FontFamilySetting } from "../shared/fontSettings";
 import type { DocumentMapDialogueDelimiterPair } from "../shared/documentMapSettings";
 import {
   getCatalogEntry,
@@ -67,6 +69,7 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     return undefined;
   }
 
+  let workbench: ProjectWorkbenchSettings | undefined;
   let preview: ProjectPreviewSettings | undefined;
   let editor: ProjectEditorSettings | undefined;
   let files: ProjectFilesSettings | undefined;
@@ -74,9 +77,37 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
   let imageAttachment: ProjectImageAttachmentSettings | undefined;
   let search: ProjectSearchSettings | undefined;
 
+  const rawUiFontFamilyList = value["workbench.uiFontFamilyList"];
+  if (rawUiFontFamilyList !== undefined) {
+    const validation = validateCatalogValue(
+      "workbench.uiFontFamilyList",
+      rawUiFontFamilyList
+    );
+    if (validation.ok && validation.value !== undefined) {
+      workbench = {
+        ...(workbench ?? {}),
+        uiFontFamilyList: validation.value as FontFamilySetting[]
+      };
+    }
+  }
+
   const rawRenderer = value["preview.renderer"];
   if (rawRenderer !== undefined && isPreviewRendererId(rawRenderer)) {
-    preview = { renderer: rawRenderer };
+    preview = { ...(preview ?? {}), renderer: rawRenderer };
+  }
+
+  const rawPreviewFontFamilyList = value["preview.fontFamilyList"];
+  if (rawPreviewFontFamilyList !== undefined) {
+    const validation = validateCatalogValue(
+      "preview.fontFamilyList",
+      rawPreviewFontFamilyList
+    );
+    if (validation.ok && validation.value !== undefined) {
+      preview = {
+        ...(preview ?? {}),
+        fontFamilyList: validation.value as FontFamilySetting[]
+      };
+    }
   }
 
   const rawFontFamily = value["editor.fontFamily"];
@@ -84,6 +115,20 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     const validation = validateCatalogValue("editor.fontFamily", rawFontFamily);
     if (validation.ok && typeof rawFontFamily === "string") {
       editor = { ...(editor ?? {}), fontFamily: rawFontFamily };
+    }
+  }
+
+  const rawEditorFontFamilyList = value["editor.fontFamilyList"];
+  if (rawEditorFontFamilyList !== undefined) {
+    const validation = validateCatalogValue(
+      "editor.fontFamilyList",
+      rawEditorFontFamilyList
+    );
+    if (validation.ok && validation.value !== undefined) {
+      editor = {
+        ...(editor ?? {}),
+        fontFamilyList: validation.value as FontFamilySetting[]
+      };
     }
   }
 
@@ -253,6 +298,7 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
   }
 
   if (
+    workbench ||
     preview ||
     editor ||
     files ||
@@ -261,6 +307,7 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     search
   ) {
     return {
+      ...(workbench ? { workbench } : {}),
       ...(preview ? { preview } : {}),
       ...(editor ? { editor } : {}),
       ...(files ? { files } : {}),

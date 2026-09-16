@@ -214,8 +214,19 @@ describe("RecoveryCandidateDialog markup", () => {
     expect(block).toContain(
       "-webkit-mask: var(--recovery-discard-button-icon) center / contain no-repeat"
     );
-    expect(css).not.toContain("recoveryDiscardPendingSpin");
-    expect(css).not.toContain("rotate(360deg)");
+    const recoveryButtonStylesStart = css.indexOf(".recoveryDiscardButton");
+    expect(recoveryButtonStylesStart).toBeGreaterThan(-1);
+    const recoveryButtonStylesEnd = css.indexOf(
+      ".recoveryCandidateDialogFooterContent",
+      recoveryButtonStylesStart
+    );
+    expect(recoveryButtonStylesEnd).toBeGreaterThan(recoveryButtonStylesStart);
+    const recoveryButtonStyles = css.slice(
+      recoveryButtonStylesStart,
+      recoveryButtonStylesEnd
+    );
+    expect(recoveryButtonStyles).not.toContain("recoveryDiscardPendingSpin");
+    expect(recoveryButtonStyles).not.toContain("rotate(360deg)");
   });
 
   it("gives disabled dialog buttons a visible disabled style", () => {

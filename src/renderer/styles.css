@@ -45,9 +45,10 @@
   --notification-toast-shadow: rgba(15, 36, 56, 0.24);
   --notification-toast-close-foreground: #52616f;
   --notification-toast-focus-ring: #7aa7d9;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --pergamum-workbench-ui-font-family-list: sans-serif;
+  --pergamum-editor-font-family-list: monospace;
+  --pergamum-preview-font-family-list: serif;
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -58,6 +59,13 @@
 
 body {
   margin: 0;
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 button {
@@ -110,16 +118,7 @@ button:active {
   padding: 8px 12px;
   border-bottom: 1px solid #d3dae2;
   background: #f2f5f8;
-  font-family: var(
-    --pergamum-workbench-font-family,
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
 .toolbar button:disabled {
@@ -179,18 +178,8 @@ button:active {
   flex-direction: column;
   border-right: 1px solid #c8d2dc;
   background: #edf2f7;
-  /* UI chrome only — #173. Editor/preview body text do not read this
-     custom property; see .editorHost .cm-scroller and .preview below. */
-  font-family: var(
-    --pergamum-workbench-font-family,
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  /* UI chrome only. Editor/preview body text read their own slot variables. */
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
 .activityBarPrimary,
@@ -750,18 +739,118 @@ label.settingsItemHeader {
   height: 30px;
 }
 
+.fontFamilyListControlGroup {
+  display: flex;
+  width: min(100%, 560px);
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fontFamilyListSummaryRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fontFamilyListSummaryText {
+  min-width: 0;
+  overflow: hidden;
+  color: #25313d;
+  font-size: 13px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fontFamilyListChooseButton {
+  white-space: nowrap;
+}
+
+.fontCacheControlGroup {
+  min-width: 0;
+}
+
+.fontCacheControlRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fontCacheScanButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.fontCacheScanButton:disabled {
+  border-color: #cbd5df;
+  background: #f2f5f8;
+  color: #6b7785;
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.fontCacheScanButton:disabled:hover {
+  background: #f2f5f8;
+  color: #6b7785;
+}
+
+.fontCacheScanIcon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.fontCacheScanIcon svg {
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fontCacheScanIcon-spinning {
+    animation: fontCacheReloadSpin 850ms linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fontCacheScanIcon-spinning {
+    animation: none;
+  }
+}
+
+@keyframes fontCacheReloadSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fontCacheStatusArea {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: end;
+}
+
+.fontCacheStatusText {
+  color: #52616f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* #252 follow-up: render the line-ending marker glyph options in the same
    font as the editor, so the user previews the glyph as it will actually
    appear in the editor rather than in the Settings page's UI font. */
 .settingsSelect-editorFont,
 .settingsSelect-editorFont option {
-  font-family: var(
-    --pergamum-editor-font-family,
-    "Cascadia Code",
-    "SFMono-Regular",
-    Consolas,
-    monospace
-  );
+  font-family: var(--pergamum-editor-font-family-list, monospace);
 }
 
 .settingsError {
@@ -989,16 +1078,7 @@ label.settingsItemHeader {
   align-items: stretch;
   border-bottom: 1px solid #d3dae2;
   background: #edf2f7;
-  font-family: var(
-    --pergamum-workbench-font-family,
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
 .documentTabBarTabs {
@@ -1883,16 +1963,7 @@ label.settingsItemHeader {
   flex-direction: column;
   border-right: 1px solid var(--workspace-sidebar-border);
   background: var(--workspace-sidebar-background);
-  font-family: var(
-    --pergamum-workbench-font-family,
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
 .fileExplorerHeader,
@@ -4349,14 +4420,13 @@ label.settingsItemHeader {
 }
 
 .editorHost .cm-scroller {
-  font-family: var(
-    --pergamum-editor-font-family,
-    "Cascadia Code",
-    "SFMono-Regular",
-    Consolas,
-    monospace
-  );
+  font-family: var(--pergamum-editor-font-family-list, monospace);
   line-height: 1.55;
+}
+
+.editorHost .cm-content,
+.editorHost .cm-line {
+  font-family: inherit;
 }
 
 /* #248: visibility decoration markers are display-only annotations drawn
@@ -4500,6 +4570,7 @@ label.settingsItemHeader {
   overflow: auto;
   padding: 24px;
   color: #17212b;
+  font-family: var(--pergamum-preview-font-family-list, serif);
   line-height: 1.65;
   /* #160: isolate the preview subtree's layout/paint from the rest of the
      workbench (editor pane, sidebars) so a huge preview reflow can't force
@@ -5847,16 +5918,7 @@ label.settingsItemHeader {
   color: #52616f;
   font-size: 12px;
   padding: 6px 12px;
-  font-family: var(
-    --pergamum-workbench-font-family,
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
 .statusBarMessage {
@@ -5894,16 +5956,7 @@ label.settingsItemHeader {
   border-radius: 0.5rem;
   background: #ffffff;
   box-shadow: 0 16px 40px rgba(15, 36, 56, 0.24);
-  font-family: var(
-    --pergamum-workbench-font-family,
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif
-  );
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
 .commandPaletteInputRow {
@@ -6059,7 +6112,7 @@ label.settingsItemHeader {
    or the match highlight. */
 .commandPaletteHeadingJumpMarker {
   color: var(--workspace-sidebar-muted-foreground);
-  font-family: var(--editor-font-family, monospace);
+  font-family: inherit;
 }
 
 .commandPaletteItemDisabled .commandPaletteItemPrimary {
@@ -6398,9 +6451,11 @@ label.settingsItemHeader {
   background: #f7f8fa;
   color: var(--app-dialog-foreground);
   font-family: var(
-    --pergamum-editor-font-family,
-    "Cascadia Code",
-    "SFMono-Regular",
+    --app-monospace-font-family,
+    ui-monospace,
+    SFMono-Regular,
+    "SF Mono",
+    Menlo,
     Consolas,
     monospace
   );
@@ -7994,6 +8049,409 @@ label.settingsItemHeader {
 
 .replacePreviewConditionValue.replacePreviewConditionMode {
   font-family: inherit;
+}
+
+/* #493 Font Picker Dialog — two-pane layout. Wider than the base info
+   dialog so the selected/available panes sit side by side; the body itself
+   never scrolls, only the two bounded-height list boxes inside it, so 100+
+   available fonts never make the dialog grow past the viewport. */
+.appInfoDialog.fontPickerDialog {
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
+}
+
+.fontPickerDialog .appInfoDialogBody {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fontPickerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.fontPickerPanes {
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+.fontPickerPane {
+  display: flex;
+  flex: 1 1 50%;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.fontPickerPaneHeader {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.fontPickerPriorityNote {
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.fontPickerSelectedListBox,
+.fontPickerAvailableListBox {
+  min-height: 80px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 6px;
+  background: var(--app-dialog-header-background);
+}
+
+.fontPickerList,
+.fontPickerAvailableList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+}
+
+/* #494: the <li> wrapper is the draggable unit (armed only while its
+   gripper handle is held — see FontPickerDialog's `armedRowKey`), so it
+   holds the handle and the click-to-preview button as two independent
+   sibling controls rather than nesting a button inside a button.
+   #496 remediation: `display: grid` with an explicit `minmax(0, 1fr)` body
+   track — not flex — owns the row's height via `min-height` here (not on
+   the button anymore), so the two-line body is guaranteed the vertical
+   space it needs regardless of which represented font the sample line
+   renders in. `minmax(0, 1fr)` (not a bare `1fr`) is what lets the body's
+   ellipsis actually engage: the grid track's own minimum size would
+   otherwise grow to fit an unbreakable long name/sample and defeat
+   `text-overflow: ellipsis` no matter what the body itself declares. */
+.fontPickerRow {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 2px;
+  min-height: 46px;
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+
+.fontPickerRow-dragging {
+  opacity: 0.4;
+}
+
+.fontPickerRow-dropBefore {
+  box-shadow: inset 0 2px 0 0 var(--app-dialog-icon-info, #2f6fed);
+}
+
+.fontPickerRow-dropAfter {
+  box-shadow: inset 0 -2px 0 0 var(--app-dialog-icon-info, #2f6fed);
+}
+
+.fontPickerListBox-dropTarget {
+  border-color: var(--app-dialog-icon-info, #2f6fed);
+  background: rgba(47, 111, 237, 0.06);
+}
+
+.fontPickerRowGrip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--workspace-sidebar-muted-foreground);
+  cursor: grab;
+}
+
+.fontPickerRowGrip:hover {
+  background: rgba(15, 23, 32, 0.08);
+  color: var(--app-dialog-foreground);
+}
+
+.fontPickerRowGrip:focus-visible,
+.fontPickerRowButton:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
+}
+
+.fontPickerRowGrip svg {
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+/* #496 remediation: the font-entity "body" — a grid item (see `.fontPickerRow`
+   above), not a flex sibling. `min-width: 0` is still required even inside a
+   grid: a grid item's automatic minimum width defaults to its min-content
+   size (the width of its longest unbreakable text) whenever its own
+   `overflow` is `visible`, which would silently defeat the identity/sample
+   lines' ellipsis no matter what those children declare. Row height now
+   lives on `.fontPickerRow` (`min-height`), not here — this element just
+   stacks its two lines and lets the grid center it. */
+.fontPickerRowButton {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 48px;
+  height: auto;
+  gap: 2px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-dialog-foreground);
+  text-align: start;
+  cursor: pointer;
+}
+
+.fontPickerRowButton:hover {
+  background: rgba(15, 23, 32, 0.06);
+}
+
+.fontPickerRowButton-active {
+  border-color: var(--app-dialog-icon-info, #2f6fed);
+  background: rgba(47, 111, 237, 0.1);
+}
+
+/* #494/#496 remediation: long font names/samples ellipsize instead of
+   wrapping (which used to break row height consistency and misalign the
+   grip). The identity line inherits the app UI font; only the mini-sample
+   line is styled with the represented font inline (FontPickerDialog.tsx).
+   #496: each line gets an explicit `line-height`. Without one, the sample
+   line's *represented* font (which can be a CJK or symbol font with very
+   different internal ascent/descent metrics than the UI font) can render
+   its line box taller than the browser's default expectation, overlapping
+   or clipping against the identity line above it — a metrics mismatch, not
+   a stacking-order problem, so it is fixed here in layout, never with
+   `z-index`. */
+.fontPickerRowName,
+.fontPickerRowSample {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.fontPickerRowName {
+  font-family: inherit;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.fontPickerSelectedIndex {
+  margin-inline-end: 4px;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.fontPickerRowSample {
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.fontPickerEmptyNotice {
+  margin: 0;
+  padding: 8px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.fontPickerNotice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fontPickerNotice-warning {
+  color: var(--app-dialog-icon-warning);
+}
+
+.fontPickerNotice-error {
+  color: var(--app-dialog-icon-error);
+}
+
+.fontCacheLanguageWarning,
+.fontPickerCacheLanguageWarning {
+  margin-block-end: 8px;
+}
+
+.fontPickerFilterRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fontPickerSearchGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fontPickerFixedWidthToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  color: var(--app-dialog-foreground);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fontPickerFixedWidthToggleSwitch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  inline-size: 34px;
+  block-size: 18px;
+}
+
+.fontPickerFixedWidthToggleInput {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.fontPickerFixedWidthToggleTrack {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--app-dialog-border, #cbd5df);
+  transition: background 0.15s ease;
+  pointer-events: none;
+}
+
+.fontPickerFixedWidthToggleThumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.fontPickerFixedWidthToggleInput:checked
+  + .fontPickerFixedWidthToggleTrack {
+  background: var(--app-accent, #2f6fed);
+}
+
+.fontPickerFixedWidthToggleInput:checked
+  + .fontPickerFixedWidthToggleTrack
+  .fontPickerFixedWidthToggleThumb {
+  transform: translateX(16px);
+}
+
+.fontPickerFixedWidthToggleInput:focus-visible
+  + .fontPickerFixedWidthToggleTrack {
+  outline: 2px solid var(--app-accent, #2f6fed);
+  outline-offset: 2px;
+}
+
+.fontPickerFixedWidthToggleText {
+  min-width: 0;
+}
+
+/* #494 remediation: this is a sibling of `.fontPickerPanes` (not nested in
+   either pane), so it already spans the dialog's full width structurally;
+   `width: 100%` here is belt-and-braces against the generic
+   `.settingsTextInput` 360px cap (see `.fontPickerSampleInput` below). */
+.fontPickerSampleSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-dialog-border);
+}
+
+.fontPickerSampleLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* #494 remediation: `.settingsTextInput` (shared with regular Settings rows)
+   caps width at `min(100%, 360px)`, which is what constrained the sample
+   input to roughly the left pane's width. Override it back to the full
+   sample section width — this rule is later in the cascade and wins at
+   equal specificity. */
+.fontPickerSampleInput {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  resize: vertical;
+}
+
+.fontPickerSamplePreviewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fontPickerPreviewModeButton {
+  padding: 4px 10px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--app-dialog-foreground);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.fontPickerPreviewModeButton-active {
+  border-color: var(--app-dialog-icon-info, #2f6fed);
+  background: rgba(47, 111, 237, 0.12);
+}
+
+.fontPickerSamplePreview {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+/* #494 remediation: brief explanation that list manipulation is D&D-only
+   now that Add/Remove/Up/Down are gone. Sits above both panes, small and
+   muted so it informs without dominating the dialog. */
+.fontPickerDndCaption {
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 620px) {
+  .fontPickerPanes {
+    flex-direction: column;
+  }
 }
 
 .replacePreviewSummary {

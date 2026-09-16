@@ -165,13 +165,13 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }
     });
 
-    it("registers exactly the #226 + #228 target settings plus #252 editor.lineEnding.*, #259 character count settings, #266 workbench.notification.durationMs, #298 notification.output.enabled, and #394 Step 1 editor.undoHistoryMinDepth, minus the #232-retired workbench.advancedSettings.enabled", () => {
+    it("registers exactly the user-facing Settings UI rows, excluding retired legacy single-font rows", () => {
       expect(settingCatalogItems.map((item) => item.key).sort()).toEqual(
         [
           "notification.output.enabled",
           "workbench.notification.durationMs",
           "workbench.colorTheme",
-          "workbench.fontFamily",
+          "workbench.uiFontFamilyList",
           "workbench.language",
           "workbench.statusBar.visible",
           "workbench.statusBar.characterCount.visible",
@@ -183,7 +183,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "commandPalette.footerDetail.enable",
           "commandPalette.footerDetail.marquee.delay",
           "commandPalette.footerDetail.marquee.speed",
-          "editor.fontFamily",
+          "editor.fontFamilyList",
           "editor.characterCount.exclude.whitespace",
           "editor.characterCount.exclude.lineBreaks",
           "editor.characterCount.exclude.headings",
@@ -210,6 +210,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
           "preview.renderer",
+          "preview.fontFamilyList",
           "preview.updateDelayMs",
           "search.nearby.unit",
           "search.nearby.characterDistance",
@@ -218,17 +219,28 @@ describe("Settings UI Catalog Schema (#226)", () => {
       );
     });
 
-    it("covers every key registered in settingsCatalog.ts across generic and project-specific UI catalogs (#228: no existing Settings UI item is dropped)", () => {
+    it("covers every user-facing key registered in settingsCatalog.ts across generic and project-specific UI catalogs, leaving only compatibility-only legacy single-font keys out", () => {
       const allUiKeys = [
         ...settingCatalogItems.map((item) => item.key),
         ...projectSpecificSettingCatalogItems.map((item) => item.key)
       ];
-      expect(allUiKeys.sort()).toEqual(Object.keys(settingsCatalog).sort());
+      const compatibilityOnlyKeys = new Set([
+        "workbench.fontFamily",
+        "editor.fontFamily"
+      ]);
+      const expectedUiKeys = Object.keys(settingsCatalog).filter(
+        (key) => !compatibilityOnlyKeys.has(key)
+      );
+      expect(allUiKeys.sort()).toEqual(expectedUiKeys.sort());
     });
 
-    it("uses the actual existing settingsCatalog.ts key for the UI font (workbench.fontFamily), not an invented ui.fontFamily key", () => {
+    it("uses the structured UI font list key and does not expose legacy single-font keys", () => {
       expect(getSettingCatalogItem("ui.fontFamily")).toBeUndefined();
-      expect(getSettingCatalogItem("workbench.fontFamily")).toBeDefined();
+      expect(getSettingCatalogItem("workbench.fontFamily")).toBeUndefined();
+      expect(getSettingCatalogItem("editor.fontFamily")).toBeUndefined();
+      expect(getSettingCatalogItem("workbench.uiFontFamilyList")).toBeDefined();
+      expect(getSettingCatalogItem("editor.fontFamilyList")).toBeDefined();
+      expect(getSettingCatalogItem("preview.fontFamilyList")).toBeDefined();
     });
 
     it("no longer registers workbench.advancedSettings.enabled (#232: legacy Advanced Settings gate removed)", () => {
@@ -573,7 +585,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
       ];
       const fixture: readonly SettingCatalogItem[] = [
         {
-          key: "editor.fontFamily",
+          key: "editor.fontFamilyList",
           category: "editor",
           order: 100,
           labelKey: "k",
@@ -584,8 +596,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
         {
           // Ties with workbench.colorTheme below on category + order, so
           // the key tie-break decides — "workbench.colorTheme" sorts
-          // before "workbench.fontFamily" alphabetically.
-          key: "workbench.fontFamily",
+          // before "workbench.uiFontFamilyList" alphabetically.
+          key: "workbench.uiFontFamilyList",
           category: "appearance",
           order: 200,
           labelKey: "k",
@@ -608,8 +620,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
         sortSettingCatalogItems(fixture, categories).map((item) => item.key)
       ).toEqual([
         "workbench.colorTheme",
-        "workbench.fontFamily",
-        "editor.fontFamily"
+        "workbench.uiFontFamilyList",
+        "editor.fontFamilyList"
       ]);
     });
 
@@ -653,22 +665,22 @@ describe("Settings UI Catalog Schema (#226)", () => {
 
   describe("search text generation", () => {
     it("includes the setting key", () => {
-      const item = getSettingCatalogItem("editor.fontFamily");
+      const item = getSettingCatalogItem("editor.fontFamilyList");
 
       if (!item) {
-        throw new Error("expected editor.fontFamily to be registered");
+        throw new Error("expected editor.fontFamilyList to be registered");
       }
 
       expect(buildSettingSearchText(item, translateFor("ja"))).toContain(
-        "editor.fontFamily"
+        "editor.fontFamilyList"
       );
     });
 
     it("includes the resolved label and description, in both languages", () => {
-      const item = getSettingCatalogItem("editor.fontFamily");
+      const item = getSettingCatalogItem("editor.fontFamilyList");
 
       if (!item) {
-        throw new Error("expected editor.fontFamily to be registered");
+        throw new Error("expected editor.fontFamilyList to be registered");
       }
 
       for (const language of languages) {
@@ -680,10 +692,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
     });
 
     it("includes the localized category label", () => {
-      const item = getSettingCatalogItem("editor.fontFamily");
+      const item = getSettingCatalogItem("editor.fontFamilyList");
 
       if (!item) {
-        throw new Error("expected editor.fontFamily to be registered");
+        throw new Error("expected editor.fontFamilyList to be registered");
       }
 
       for (const language of languages) {

@@ -1,11 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applyEditorFontFamily,
+  applyEditorFontFamilyList,
+  applyPreviewFontFamilyList,
   applyWorkbenchFontFamily,
+  applyWorkbenchUiFontFamilyList,
   editorFontFamilyCustomProperty,
+  editorFontFamilyListCustomProperty,
+  previewFontFamilyListCustomProperty,
   resolveSafeEditorFontFamily,
+  resolveSafeEditorFontFamilyList,
+  resolveSafePreviewFontFamilyList,
   resolveSafeWorkbenchFontFamily,
-  workbenchFontFamilyCustomProperty
+  resolveSafeWorkbenchUiFontFamilyList,
+  workbenchFontFamilyCustomProperty,
+  workbenchUiFontFamilyListCustomProperty
 } from "../../src/renderer/workbenchFontFamily";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
@@ -53,6 +62,32 @@ describe("resolveSafeEditorFontFamily (#195 renderer-side defensive sanitization
   });
 });
 
+describe("resolveSafe*FontFamilyList (#497 slot CSS values)", () => {
+  it("resolves empty slot lists to the slot generic fallback only", () => {
+    expect(resolveSafeWorkbenchUiFontFamilyList([])).toBe("sans-serif");
+    expect(resolveSafeEditorFontFamilyList([])).toBe("monospace");
+    expect(resolveSafePreviewFontFamilyList([])).toBe("serif");
+  });
+
+  it("uses family, not localized displayName, when building CSS font-family lists", () => {
+    const css = resolveSafeEditorFontFamilyList([
+      { family: "Yu Gothic", displayName: "游ゴシック" }
+    ]);
+
+    expect(css).toBe('"Yu Gothic", monospace');
+    expect(css).not.toContain("游ゴシック");
+  });
+
+  it("quotes and orders configured families before the slot fallback", () => {
+    expect(
+      resolveSafePreviewFontFamilyList([
+        { family: "Yu Mincho", displayName: "游明朝" },
+        { family: "Georgia", displayName: "Georgia" }
+      ])
+    ).toBe('"Yu Mincho", "Georgia", serif');
+  });
+});
+
 describe("applyWorkbenchFontFamily (#173)", () => {
   it("sets --pergamum-workbench-font-family to a valid value on the given target", () => {
     const target = fakeStyleTarget();
@@ -97,6 +132,50 @@ describe("applyEditorFontFamily (#195)", () => {
     expect(target.setProperty).toHaveBeenCalledWith(
       editorFontFamilyCustomProperty,
       editorCatalogDefault
+    );
+  });
+});
+
+describe("apply*FontFamilyList (#497)", () => {
+  it("sets the workbench UI font-family list custom property", () => {
+    const target = fakeStyleTarget();
+
+    applyWorkbenchUiFontFamilyList(
+      [{ family: "Noto Sans JP", displayName: "Noto Sans JP" }],
+      target
+    );
+
+    expect(target.setProperty).toHaveBeenCalledWith(
+      workbenchUiFontFamilyListCustomProperty,
+      '"Noto Sans JP", sans-serif'
+    );
+  });
+
+  it("sets the editor font-family list custom property", () => {
+    const target = fakeStyleTarget();
+
+    applyEditorFontFamilyList(
+      [{ family: "Cascadia Code", displayName: "Cascadia Code" }],
+      target
+    );
+
+    expect(target.setProperty).toHaveBeenCalledWith(
+      editorFontFamilyListCustomProperty,
+      '"Cascadia Code", monospace'
+    );
+  });
+
+  it("sets the preview font-family list custom property", () => {
+    const target = fakeStyleTarget();
+
+    applyPreviewFontFamilyList(
+      [{ family: "Yu Mincho", displayName: "游明朝" }],
+      target
+    );
+
+    expect(target.setProperty).toHaveBeenCalledWith(
+      previewFontFamilyListCustomProperty,
+      '"Yu Mincho", serif'
     );
   });
 });

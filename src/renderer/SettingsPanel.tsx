@@ -31,12 +31,18 @@ import {
   SaveDestinationDialog,
   SaveDestinationSettingControl
 } from "./dialog/SaveDestinationDialog";
+import { FontFamilyListSettingControl } from "./FontFamilyListSettingControl";
+import { FontPickerDialog } from "./dialog/FontPickerDialog";
+import type { FontFamilySetting, FontSlot } from "../shared/fontSettings";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
   isLoading: boolean;
   error: string | null;
   translate: Translate;
+  /** #496: the app's current UI language — threaded down to the font
+   * picker's local-font scan so it resolves localized display names. */
+  displayLanguage?: Language;
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
   /**
    * #394 Step 2 follow-up: fires when any settings-item control gains focus.
@@ -641,6 +647,36 @@ function buildNextSettings(
           }
         }
       });
+    case "workbench.uiFontFamilyList":
+      if (!Array.isArray(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          uiFontFamilyList: rawValue as any
+        }
+      });
+    case "editor.fontFamilyList":
+      if (!Array.isArray(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        editor: {
+          ...settings.editor,
+          fontFamilyList: rawValue as any
+        }
+      });
+    case "preview.fontFamilyList":
+      if (!Array.isArray(rawValue)) {
+        return null;
+      }
+      return saveRequest(settings, {
+        preview: {
+          ...settings.preview,
+          fontFamilyList: rawValue as any
+        }
+      });
   }
 
   const exhaustiveCheck: never = key;
@@ -735,8 +771,10 @@ interface SettingControlInputProps {
   disabled: boolean;
   labelId: string;
   translate: Translate;
+  displayLanguage?: Language;
   onChange: (rawValue: unknown) => void;
   onOpenSaveDestinationDialog?: (opener?: Element | null) => void;
+  onOpenFontPickerDialog?: (slot: FontSlot, opener?: Element | null) => void;
 }
 
 function SettingControlInput({
@@ -745,8 +783,10 @@ function SettingControlInput({
   disabled,
   labelId,
   translate,
+  displayLanguage,
   onChange,
-  onOpenSaveDestinationDialog
+  onOpenSaveDestinationDialog,
+  onOpenFontPickerDialog
 }: SettingControlInputProps): JSX.Element {
   const control = item.control;
   const controlId = `settingControl-${item.key}`;
@@ -835,7 +875,20 @@ function SettingControlInput({
           />
         );
       }
-      return <></>;
+      if (control.customKind === "fontFamilyList") {
+        return (
+          <FontFamilyListSettingControl
+            id={controlId}
+            slot={item.key as FontSlot}
+            value={Array.isArray(value) ? (value as FontFamilySetting[]) : undefined}
+            disabled={disabled}
+            translate={translate}
+            uiLanguage={displayLanguage}
+            onOpenDialog={(slot, opener) => onOpenFontPickerDialog?.(slot, opener)}
+          />
+        );
+      }
+      return <div id={controlId} className="settingsCustomControlPlaceholder" />;
   }
 }
 
@@ -844,10 +897,12 @@ interface SettingItemRowProps {
   settings: ApplicationSettings;
   isLoading: boolean;
   translate: Translate;
+  displayLanguage?: Language;
   onChange: (item: SettingCatalogItem, rawValue: unknown) => void;
   onFieldFocus?: () => void;
   onFieldBlur?: () => void;
   onOpenSaveDestinationDialog?: (opener?: Element | null) => void;
+  onOpenFontPickerDialog?: (slot: FontSlot, opener?: Element | null) => void;
 }
 
 function SettingItemRow({
@@ -855,10 +910,12 @@ function SettingItemRow({
   settings,
   isLoading,
   translate,
+  displayLanguage,
   onChange,
   onFieldFocus,
   onFieldBlur,
-  onOpenSaveDestinationDialog
+  onOpenSaveDestinationDialog,
+  onOpenFontPickerDialog
 }: SettingItemRowProps): JSX.Element {
   const value = readSettingValue(item.key, settings);
   const disabled = isSettingDisabled(item, settings, isLoading);
@@ -890,8 +947,10 @@ function SettingItemRow({
             disabled={disabled}
             labelId={labelId}
             translate={translate}
+            displayLanguage={displayLanguage}
             onChange={(rawValue) => onChange(item, rawValue)}
             onOpenSaveDestinationDialog={onOpenSaveDestinationDialog}
+            onOpenFontPickerDialog={onOpenFontPickerDialog}
           />
         </div>
       </HeaderTag>
@@ -923,6 +982,7 @@ interface SettingsPanelViewProps extends SettingsPanelProps {
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   onOpenSaveDestinationDialog?: (opener?: Element | null) => void;
+  onOpenFontPickerDialog?: (slot: FontSlot, opener?: Element | null) => void;
 }
 
 export function SettingsPanelView({
@@ -930,6 +990,7 @@ export function SettingsPanelView({
   isLoading,
   error,
   translate,
+  displayLanguage,
   onChangeSettings,
   onSettingFieldFocus,
   onSettingFieldBlur,
@@ -937,7 +998,8 @@ export function SettingsPanelView({
   onSelectCategory,
   searchQuery,
   onSearchQueryChange,
-  onOpenSaveDestinationDialog
+  onOpenSaveDestinationDialog,
+  onOpenFontPickerDialog
 }: SettingsPanelViewProps): JSX.Element {
   // Only categories that currently have at least one registered catalog
   // item are shown in the left pane — settingCategoryCatalog itself keeps
@@ -1050,10 +1112,12 @@ export function SettingsPanelView({
                   settings={settings}
                   isLoading={isLoading}
                   translate={translate}
+                  displayLanguage={displayLanguage}
                   onChange={handleChange}
                   onFieldFocus={onSettingFieldFocus}
                   onFieldBlur={onSettingFieldBlur}
                   onOpenSaveDestinationDialog={onOpenSaveDestinationDialog}
+                  onOpenFontPickerDialog={onOpenFontPickerDialog}
                 />
               ))}
             </div>
@@ -1090,6 +1154,11 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
   const [isDestinationDialogOpen, setIsDestinationDialogOpen] = useState(false);
   const [dialogOpener, setDialogOpener] = useState<Element | null>(null);
 
+  const [fontPickerState, setFontPickerState] = useState<{
+    slot: FontSlot;
+    opener?: Element | null;
+  } | null>(null);
+
   return (
     <>
       <SettingsPanelView
@@ -1104,6 +1173,9 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
         onOpenSaveDestinationDialog={(opener) => {
           setDialogOpener(opener ?? null);
           setIsDestinationDialogOpen(true);
+        }}
+        onOpenFontPickerDialog={(slot, opener) => {
+          setFontPickerState({ slot, opener });
         }}
       />
       <SaveDestinationDialog
@@ -1127,6 +1199,34 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
           }
         }}
         onDismiss={() => setIsDestinationDialogOpen(false)}
+      />
+      <FontPickerDialog
+        isOpen={fontPickerState !== null}
+        slot={fontPickerState?.slot ?? "workbench.uiFontFamilyList"}
+        initialValue={
+          fontPickerState
+            ? (readSettingValue(
+                fontPickerState.slot,
+                props.settings
+              ) as FontFamilySetting[])
+            : []
+        }
+        translate={props.translate}
+        uiLanguage={props.displayLanguage}
+        opener={fontPickerState?.opener}
+        onSave={(selectedFonts) => {
+          if (fontPickerState) {
+            const nextSettings = buildNextSettings(
+              fontPickerState.slot,
+              selectedFonts,
+              props.settings
+            );
+            if (nextSettings) {
+              props.onChangeSettings(nextSettings);
+            }
+          }
+        }}
+        onClose={() => setFontPickerState(null)}
       />
     </>
   );

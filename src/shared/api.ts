@@ -68,6 +68,7 @@ import type { FileExplorerRenameFailureReason } from "./fileExplorerRename";
 import type { Language } from "./i18n";
 import type { AppPlatform } from "./platform";
 import type { RecoveryStoreStatus } from "./recovery";
+import type { FontCache, FontCacheState } from "./fontCache";
 import type {
   RecoveryDocumentPayload,
   RecoveryDocumentWriteResult
@@ -376,6 +377,11 @@ export const DEBUG_LOG_CHANNELS = {
 export const APPLICATION_MENU_CHANNELS = {
   command: "applicationMenu:command",
   setEnablement: "applicationMenu:setEnablement"
+} as const;
+
+export const FONT_CACHE_CHANNELS = {
+  load: "fontCache:load",
+  save: "fontCache:save"
 } as const;
 
 /**
@@ -1275,5 +1281,9 @@ export interface PergamumApi {
    */
   fileSystem: {
     getPathForFile: (file: File) => string;
+  };
+  fontCache: {
+    load: () => Promise<FontCacheState>;
+    save: (cache: FontCache) => Promise<FontCacheState>;
   };
 }
