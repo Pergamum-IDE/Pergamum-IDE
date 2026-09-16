@@ -1031,15 +1031,17 @@ export const settingsCatalog = defineSettingsCatalog({
     key: "editor.emphasisMark.aozoraMark",
     scope: "applicationWithProjectOverride",
     enumValues: [
-      "whiteSesame",
       "sesame",
-      "blackCircle",
+      "whiteSesame",
+      "circle",
       "whiteCircle",
       "blackTriangle",
       "whiteTriangle",
-      "doubleCircle"
+      "doubleCircle",
+      "fisheye",
+      "saltire"
     ],
-    defaultValue: "whiteSesame",
+    defaultValue: "sesame",
     labelKey: "settings.editor.emphasisMark.aozoraMark.label",
     descriptionKey: "settings.editor.emphasisMark.aozoraMark.description",
     deprecatedAliases: [],

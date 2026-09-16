@@ -1,3 +1,5 @@
+import type { AozoraEmphasisMark } from "./settings";
+
 /**
  * #484 — shared helpers and validators for emphasis mark notation settings.
  */
@@ -31,4 +33,29 @@ export function validateNarouEmphasisMarkText(text: string): boolean {
   }
   const len = countGraphemes(text);
   return len >= 1 && len <= 8;
+}
+
+const AOZORA_EMPHASIS_MARKS: readonly string[] = [
+  "sesame",
+  "whiteSesame",
+  "circle",
+  "whiteCircle",
+  "blackTriangle",
+  "whiteTriangle",
+  "doubleCircle",
+  "fisheye",
+  "saltire"
+];
+
+/**
+ * Sanitizes Aozora emphasis mark input, mapping legacy "blackCircle" to "circle".
+ */
+export function sanitizeAozoraEmphasisMark(value: unknown): AozoraEmphasisMark {
+  if (value === "blackCircle") {
+    return "circle";
+  }
+  if (typeof value === "string" && AOZORA_EMPHASIS_MARKS.includes(value)) {
+    return value as AozoraEmphasisMark;
+  }
+  return "sesame";
 }

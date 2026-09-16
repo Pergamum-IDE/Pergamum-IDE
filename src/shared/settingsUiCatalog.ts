@@ -597,16 +597,16 @@ export const settingCatalogItems = defineSettingCatalog([
       kind: "select",
       options: [
         {
-          value: "whiteSesame",
-          labelKey: "settings.editor.emphasisMark.aozoraMark.option.whiteSesame.label"
-        },
-        {
           value: "sesame",
           labelKey: "settings.editor.emphasisMark.aozoraMark.option.sesame.label"
         },
         {
-          value: "blackCircle",
-          labelKey: "settings.editor.emphasisMark.aozoraMark.option.blackCircle.label"
+          value: "whiteSesame",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.whiteSesame.label"
+        },
+        {
+          value: "circle",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.circle.label"
         },
         {
           value: "whiteCircle",
@@ -623,6 +623,14 @@ export const settingCatalogItems = defineSettingCatalog([
         {
           value: "doubleCircle",
           labelKey: "settings.editor.emphasisMark.aozoraMark.option.doubleCircle.label"
+        },
+        {
+          value: "fisheye",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.fisheye.label"
+        },
+        {
+          value: "saltire",
+          labelKey: "settings.editor.emphasisMark.aozoraMark.option.saltire.label"
         }
       ]
     },

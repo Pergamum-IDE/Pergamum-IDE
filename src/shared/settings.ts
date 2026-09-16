@@ -197,13 +197,15 @@ export interface ApplicationEditorCharacterCountSettings {
 export type EmphasisMarkRule = "aozora" | "kakuyomu" | "narou";
 
 export type AozoraEmphasisMark =
-  | "whiteSesame"
   | "sesame"
-  | "blackCircle"
+  | "whiteSesame"
+  | "circle"
   | "whiteCircle"
   | "blackTriangle"
   | "whiteTriangle"
-  | "doubleCircle";
+  | "doubleCircle"
+  | "fisheye"
+  | "saltire";
 
 export interface ApplicationEditorEmphasisMarkSettings {
   rule: EmphasisMarkRule;
@@ -812,7 +814,7 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
           defaultApplicationSettings.editor.emphasisMark?.rule ?? "aozora",
         aozoraMark:
           defaultApplicationSettings.editor.emphasisMark?.aozoraMark ??
-          "whiteSesame",
+          "sesame",
         narouMarkText:
           defaultApplicationSettings.editor.emphasisMark?.narouMarkText ?? "・"
       }

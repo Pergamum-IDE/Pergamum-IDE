@@ -657,7 +657,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       selectionHighlightMode: "smart",
       findGutterMarkers: true,
       captureTabInEditor: false,
-      fencedCodeIndentUnit: "spaces4"
+      fencedCodeIndentUnit: "spaces4",
+      emphasisMark: {
+        rule: "aozora",
+        aozoraMark: "sesame",
+        narouMarkText: "・"
+      }
     });
     expect(written.files).toEqual({
       newFile: {
@@ -1148,6 +1153,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       }),
       validSaveRequest({
         preview: { renderer: "html" as "markdown", updateDelayMs: 10000 }
+      }),
+      validSaveRequest({
+        editor: {
+          ...validSaveRequest().editor,
+          unknownExtraKey: true
+        } as unknown as SaveApplicationSettingsRequest["editor"]
       })
     ]) {
       expect(() =>
@@ -1156,5 +1167,38 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     }
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("#484: accepts save request with editor.emphasisMark present", () => {
+    const req = validSaveRequest({
+      editor: {
+        ...validSaveRequest().editor,
+        emphasisMark: {
+          rule: "narou",
+          aozoraMark: "whiteSesame",
+          narouMarkText: "▲"
+        }
+      }
+    });
+
+    const parsed = parseSaveApplicationSettingsRequest(req);
+    expect(parsed.editor.emphasisMark).toEqual({
+      rule: "narou",
+      aozoraMark: "whiteSesame",
+      narouMarkText: "▲"
+    });
+  });
+
+  it("#484: accepts legacy save request without editor.emphasisMark and populates defaults", () => {
+    const req = validSaveRequest();
+    // Remove emphasisMark to simulate a legacy payload
+    delete (req.editor as { emphasisMark?: unknown }).emphasisMark;
+
+    const parsed = parseSaveApplicationSettingsRequest(req);
+    expect(parsed.editor.emphasisMark).toEqual({
+      rule: "aozora",
+      aozoraMark: "sesame",
+      narouMarkText: "・"
+    });
   });
 });

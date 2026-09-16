@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countGraphemes,
+  sanitizeAozoraEmphasisMark,
   validateNarouEmphasisMarkText
 } from "../../src/shared/emphasisMarkSettings";
 import {
@@ -52,7 +53,7 @@ describe("Emphasis Mark Settings (Slice 1, #484)", () => {
   describe("catalog settings", () => {
     it("has expected defaults for emphasisMark keys", () => {
       expect(getCatalogDefaultValue("editor.emphasisMark.rule")).toBe("aozora");
-      expect(getCatalogDefaultValue("editor.emphasisMark.aozoraMark")).toBe("whiteSesame");
+      expect(getCatalogDefaultValue("editor.emphasisMark.aozoraMark")).toBe("sesame");
       expect(getCatalogDefaultValue("editor.emphasisMark.narouMarkText")).toBe("・");
     });
 
@@ -83,7 +84,7 @@ describe("Emphasis Mark Settings (Slice 1, #484)", () => {
       const appSettings = defaultApplicationSettings;
       const effectiveAppOnly = resolveEffectiveSettings(appSettings, undefined);
       expect(effectiveAppOnly.editor.emphasisMark.rule).toBe("aozora");
-      expect(effectiveAppOnly.editor.emphasisMark.aozoraMark).toBe("whiteSesame");
+      expect(effectiveAppOnly.editor.emphasisMark.aozoraMark).toBe("sesame");
       expect(effectiveAppOnly.editor.emphasisMark.narouMarkText).toBe("・");
 
       const projectOverride = {
@@ -97,8 +98,27 @@ describe("Emphasis Mark Settings (Slice 1, #484)", () => {
 
       const effectiveProject = resolveEffectiveSettings(appSettings, projectOverride);
       expect(effectiveProject.editor.emphasisMark.rule).toBe("narou");
-      expect(effectiveProject.editor.emphasisMark.aozoraMark).toBe("whiteSesame"); // fallback to app/default
+      expect(effectiveProject.editor.emphasisMark.aozoraMark).toBe("sesame");
       expect(effectiveProject.editor.emphasisMark.narouMarkText).toBe("★");
+    });
+  });
+
+  describe("sanitizeAozoraEmphasisMark", () => {
+    it("maps legacy blackCircle to circle", () => {
+      expect(sanitizeAozoraEmphasisMark("blackCircle")).toBe("circle");
+    });
+
+    it("accepts valid official Aozora mark values", () => {
+      expect(sanitizeAozoraEmphasisMark("circle")).toBe("circle");
+      expect(sanitizeAozoraEmphasisMark("fisheye")).toBe("fisheye");
+      expect(sanitizeAozoraEmphasisMark("saltire")).toBe("saltire");
+      expect(sanitizeAozoraEmphasisMark("whiteSesame")).toBe("whiteSesame");
+    });
+
+    it("falls back to sesame for unknown/invalid input", () => {
+      expect(sanitizeAozoraEmphasisMark("invalid")).toBe("sesame");
+      expect(sanitizeAozoraEmphasisMark(null)).toBe("sesame");
+      expect(sanitizeAozoraEmphasisMark(123)).toBe("sesame");
     });
   });
 });

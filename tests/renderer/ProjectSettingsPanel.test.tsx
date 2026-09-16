@@ -640,8 +640,8 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*.
-    expect(rows).toHaveLength(16);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*.
+    expect(rows).toHaveLength(19);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -1150,6 +1150,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         expect(result.map((i) => i.key)).toEqual([
           "editor.fontFamily",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.emphasisMark.rule",
+          "editor.emphasisMark.aozoraMark",
+          "editor.emphasisMark.narouMarkText",
           "editor.lineEnding.expected",
           "editor.characterCount.exclude.whitespace",
           "editor.characterCount.exclude.lineBreaks",
@@ -1177,6 +1180,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         expect(editorOnly.map((i) => i.key)).toEqual([
           "editor.fontFamily",
           "editor.paragraphIndent.excludeLeadingCharacters",
+          "editor.emphasisMark.rule",
+          "editor.emphasisMark.aozoraMark",
+          "editor.emphasisMark.narouMarkText",
           "editor.lineEnding.expected",
           "editor.characterCount.exclude.whitespace",
           "editor.characterCount.exclude.lineBreaks",
@@ -1326,6 +1332,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       expect(itemKeys).toEqual([
         "editor.fontFamily",
         "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.emphasisMark.rule",
+        "editor.emphasisMark.aozoraMark",
+        "editor.emphasisMark.narouMarkText",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1378,6 +1387,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       expect(itemKeys).toEqual([
         "editor.fontFamily",
         "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.emphasisMark.rule",
+        "editor.emphasisMark.aozoraMark",
+        "editor.emphasisMark.narouMarkText",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1472,6 +1484,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       expect(itemKeys).toEqual([
         "editor.fontFamily",
         "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.emphasisMark.rule",
+        "editor.emphasisMark.aozoraMark",
+        "editor.emphasisMark.narouMarkText",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1553,6 +1568,9 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       expect(itemKeys).toEqual([
         "editor.fontFamily",
         "editor.paragraphIndent.excludeLeadingCharacters",
+        "editor.emphasisMark.rule",
+        "editor.emphasisMark.aozoraMark",
+        "editor.emphasisMark.narouMarkText",
         "editor.lineEnding.expected",
         "editor.characterCount.exclude.whitespace",
         "editor.characterCount.exclude.lineBreaks",
@@ -1645,7 +1663,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       act(() => {
         categoryButtons[1].click();
       });
-      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(8);
+      expect(container.querySelectorAll(".settingsItemKey")).toHaveLength(11);
 
       const settingInput = container.querySelector<HTMLInputElement>(
         "input.settingsTextInput"
@@ -3753,6 +3771,156 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
     expect(onSaveSettings).toHaveBeenCalledTimes(1);
     expect(onSaveSettings).toHaveBeenCalledWith({
       remove: ["imageAttachment.saveDirectory"]
+    });
+  });
+
+  describe("emphasis mark settings in ProjectSettingsPanel (#484)", () => {
+    it("renders rows and labels for editor.emphasisMark.rule, editor.emphasisMark.aozoraMark, and editor.emphasisMark.narouMarkText", () => {
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{
+              editor: {
+                emphasisMark: {
+                  rule: "aozora",
+                  aozoraMark: "sesame",
+                  narouMarkText: "・"
+                }
+              }
+            }}
+            isReadOnly={false}
+            onSaveSettings={async () => undefined}
+          />
+        );
+      });
+
+      const rows = Array.from(container.querySelectorAll(".settingsItemRow"));
+      const ruleRow = rows.find(
+        (r) =>
+          r.querySelector(".settingsItemKey")?.textContent ===
+          "editor.emphasisMark.rule"
+      );
+      const aozoraRow = rows.find(
+        (r) =>
+          r.querySelector(".settingsItemKey")?.textContent ===
+          "editor.emphasisMark.aozoraMark"
+      );
+      const narouRow = rows.find(
+        (r) =>
+          r.querySelector(".settingsItemKey")?.textContent ===
+          "editor.emphasisMark.narouMarkText"
+      );
+
+      expect(ruleRow).toBeDefined();
+      expect(ruleRow?.textContent).toContain("傍点ルール");
+
+      expect(aozoraRow).toBeDefined();
+      expect(aozoraRow?.textContent).toContain("青空文庫 傍点記号");
+
+      expect(narouRow).toBeDefined();
+      expect(narouRow?.textContent).toContain("なろう 傍点記号");
+    });
+
+    it("triggers onSaveSettings with set when editor.emphasisMark.rule is changed", async () => {
+      const onSaveSettings = vi.fn(async () => undefined);
+
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={undefined}
+            applicationSettings={{
+              editor: {
+                emphasisMark: {
+                  rule: "aozora",
+                  aozoraMark: "sesame",
+                  narouMarkText: "・"
+                }
+              }
+            }}
+            isReadOnly={false}
+            onSaveSettings={onSaveSettings}
+          />
+        );
+      });
+
+      const ruleRow = Array.from(
+        container.querySelectorAll(".settingsItemRow")
+      ).find(
+        (r) =>
+          r.querySelector(".settingsItemKey")?.textContent ===
+          "editor.emphasisMark.rule"
+      )!;
+      const select = ruleRow.querySelector<HTMLSelectElement>("select")!;
+      expect(select).not.toBeNull();
+      expect(select.value).toBe("aozora");
+
+      await act(async () => {
+        select.value = "narou";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      expect(onSaveSettings).toHaveBeenCalledTimes(1);
+      expect(onSaveSettings).toHaveBeenCalledWith({
+        set: { "editor.emphasisMark.rule": "narou" }
+      });
+    });
+
+    it("triggers onSaveSettings with remove when a modified editor.emphasisMark.aozoraMark is reset", async () => {
+      const onSaveSettings = vi.fn(async () => undefined);
+
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectSettings={{
+              editor: {
+                emphasisMark: {
+                  aozoraMark: "whiteSesame"
+                }
+              }
+            }}
+            applicationSettings={{
+              editor: {
+                emphasisMark: {
+                  rule: "aozora",
+                  aozoraMark: "sesame",
+                  narouMarkText: "・"
+                }
+              }
+            }}
+            isReadOnly={false}
+            onSaveSettings={onSaveSettings}
+          />
+        );
+      });
+
+      const aozoraRow = Array.from(
+        container.querySelectorAll(".settingsItemRow")
+      ).find(
+        (r) =>
+          r.querySelector(".settingsItemKey")?.textContent ===
+          "editor.emphasisMark.aozoraMark"
+      )!;
+      expect(
+        aozoraRow.querySelector(".projectSettingModifiedBadge")
+      ).not.toBeNull();
+
+      const resetBtn = aozoraRow.querySelector<HTMLButtonElement>(
+        ".projectSettingResetButton"
+      )!;
+      expect(resetBtn).not.toBeNull();
+
+      await act(async () => {
+        resetBtn.click();
+      });
+
+      expect(onSaveSettings).toHaveBeenCalledTimes(1);
+      expect(onSaveSettings).toHaveBeenCalledWith({
+        remove: ["editor.emphasisMark.aozoraMark"]
+      });
     });
   });
 });

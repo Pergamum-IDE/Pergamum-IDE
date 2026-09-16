@@ -43,6 +43,7 @@ import {
   type MarkdownEditorParagraphIndentController,
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
+import type { MarkdownEditorEmphasisMarkShortcutConfig } from "./editorEmphasisShortcuts";
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import { useActiveFindShortcuts } from "./editorFindShortcuts";
 import {
@@ -460,6 +461,14 @@ interface EditorSurfaceProps {
   /** #436 Slice 12: Ctrl+G fired in the active Markdown editor, with its
    *  current (primary) selection's RAW text (`""` when empty). */
   onGlossarySelectionShortcut: (selectedText: string) => void;
+  onEmphasisMarkShortcut?: (input: {
+    selectedText: string;
+    selection: { from: number; to: number };
+    opener?: Element | null;
+  }) => void;
+  notifyEmphasisMarkNoSelection?: () => void;
+  notifyEmphasisMarkReadOnly?: () => void;
+  notifyEmphasisMarkMultiLine?: () => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -575,6 +584,10 @@ export function EditorSurface({
   onChangeMarkdownEditorPreviewRatio,
   onChangeMarkdownContent,
   onGlossarySelectionShortcut,
+  onEmphasisMarkShortcut,
+  notifyEmphasisMarkNoSelection,
+  notifyEmphasisMarkReadOnly,
+  notifyEmphasisMarkMultiLine,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -625,6 +638,10 @@ export function EditorSurface({
           readOnly={isProjectOwnedReadOnly}
           onChangeMarkdownContent={onChangeMarkdownContent}
           onGlossarySelectionShortcut={onGlossarySelectionShortcut}
+          onEmphasisMarkShortcut={onEmphasisMarkShortcut}
+          notifyEmphasisMarkNoSelection={notifyEmphasisMarkNoSelection}
+          notifyEmphasisMarkReadOnly={notifyEmphasisMarkReadOnly}
+          notifyEmphasisMarkMultiLine={notifyEmphasisMarkMultiLine}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -694,6 +711,14 @@ interface MarkdownEditorSurfaceProps {
   ) => void;
   /** #436 Slice 12: see EditorSurfaceProps's own doc comment. */
   onGlossarySelectionShortcut: (selectedText: string) => void;
+  onEmphasisMarkShortcut?: (input: {
+    selectedText: string;
+    selection: { from: number; to: number };
+    opener?: Element | null;
+  }) => void;
+  notifyEmphasisMarkNoSelection?: () => void;
+  notifyEmphasisMarkReadOnly?: () => void;
+  notifyEmphasisMarkMultiLine?: () => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -777,6 +802,10 @@ function MarkdownEditorSurface({
   readOnly,
   onChangeMarkdownContent,
   onGlossarySelectionShortcut,
+  onEmphasisMarkShortcut,
+  notifyEmphasisMarkNoSelection,
+  notifyEmphasisMarkReadOnly,
+  notifyEmphasisMarkMultiLine,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -1295,6 +1324,27 @@ function MarkdownEditorSurface({
       [onGlossarySelectionShortcut]
     );
 
+  const emphasisMarkShortcutConfig =
+    useMemo<MarkdownEditorEmphasisMarkShortcutConfig>(
+      () => ({
+        requestOpenEmphasisMarkDialog: (input) => {
+          onEmphasisMarkShortcut?.({
+            ...input,
+            opener: window.document.activeElement
+          });
+        },
+        notifyNoSelection: () => notifyEmphasisMarkNoSelection?.(),
+        notifyReadOnly: () => notifyEmphasisMarkReadOnly?.(),
+        notifyMultiLine: () => notifyEmphasisMarkMultiLine?.()
+      }),
+      [
+        onEmphasisMarkShortcut,
+        notifyEmphasisMarkNoSelection,
+        notifyEmphasisMarkReadOnly,
+        notifyEmphasisMarkMultiLine
+      ]
+    );
+
   const handleFindModeChange = useCallback((mode: ActiveFindPanelMode) => {
     setFindMode(mode);
     // Return focus to the query input (the panel's focus effect handles it).
@@ -1791,6 +1841,7 @@ function MarkdownEditorSurface({
           onChange={onChangeMarkdownContent}
           activeFind={activeFindConfig}
           glossarySelectionShortcut={glossarySelectionShortcutConfig}
+          emphasisMarkShortcut={emphasisMarkShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}

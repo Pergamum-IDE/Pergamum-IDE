@@ -1412,6 +1412,10 @@ function parseEditorSettingsForWrite(
   const hasFindGutterMarkers = keys.includes("findGutterMarkers");
   const hasCaptureTabInEditor = keys.includes("captureTabInEditor");
   const hasFencedCodeIndentUnit = keys.includes("fencedCodeIndentUnit");
+  const hasEmphasisMark = keys.includes("emphasisMark");
+
+  const expectedKeyCount =
+    9 + (hasFontFamily ? 1 : 0) + (hasEmphasisMark ? 1 : 0);
 
   if (
     !hasLineEnding ||
@@ -1423,7 +1427,7 @@ function parseEditorSettingsForWrite(
     !hasFindGutterMarkers ||
     !hasCaptureTabInEditor ||
     !hasFencedCodeIndentUnit ||
-    keys.length !== (hasFontFamily ? 10 : 9)
+    keys.length !== expectedKeyCount
   ) {
     throw new Error("Invalid application settings.");
   }
