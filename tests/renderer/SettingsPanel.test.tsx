@@ -32,6 +32,7 @@ import {
   SettingsPanelView,
   getVisibleSettingCatalogItems
 } from "../../src/renderer/SettingsPanel";
+import { FontCacheControl } from "../../src/renderer/FontCacheControl";
 
 type ElementProps = Record<string, unknown> & {
   children?: React.ReactNode;
@@ -117,12 +118,22 @@ function collectElements(
     // stateless, so a direct call is safe) and recurse into that output
     // instead of into their own (unrelated) children prop.
     if (typeof child.type === "function") {
-      const rendered = (
-        child.type as (props: ElementProps) => React.ReactNode
-      )(child.props);
+      if (child.type === FontCacheControl) {
+        if (predicate(child)) {
+          elements.push(child);
+        }
+        return;
+      }
+      try {
+        const rendered = (
+          child.type as (props: ElementProps) => React.ReactNode
+        )(child.props);
 
-      elements.push(...collectElements(rendered, predicate));
-      return;
+        elements.push(...collectElements(rendered, predicate));
+        return;
+      } catch {
+        // Component uses React hooks and cannot be directly invoked as a plain function
+      }
     }
 
     if (predicate(child)) {

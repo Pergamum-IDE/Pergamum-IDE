@@ -7,6 +7,7 @@ import {
   DEBUG_LOG_CHANNELS,
   EDIT_CHANNELS,
   FILE_CHANNELS,
+  FONT_CACHE_CHANNELS,
   GLOSSARY_CHANNELS,
   IMAGE_ATTACHMENT_CHANNELS,
   MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS,
@@ -396,6 +397,10 @@ const pergamumApi: PergamumApi = {
         return "";
       }
     }
+  },
+  fontCache: {
+    load: () => ipcRenderer.invoke(FONT_CACHE_CHANNELS.load),
+    save: (cache) => ipcRenderer.invoke(FONT_CACHE_CHANNELS.save, cache)
   }
 };
 

@@ -31,6 +31,7 @@ import {
   SaveDestinationDialog,
   SaveDestinationSettingControl
 } from "./dialog/SaveDestinationDialog";
+import { FontCacheControl } from "./FontCacheControl";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
@@ -862,6 +863,15 @@ function SettingControlInput({
             disabled={disabled}
             translate={translate}
             onOpenDialog={onOpenSaveDestinationDialog}
+          />
+        );
+      }
+      if (control.customKind === "fontFamilyList") {
+        return (
+          <FontCacheControl
+            id={controlId}
+            disabled={disabled}
+            translate={translate}
           />
         );
       }

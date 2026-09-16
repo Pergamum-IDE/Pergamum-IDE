@@ -45,6 +45,7 @@ import {
   SaveDestinationDialog,
   SaveDestinationSettingControl
 } from "./dialog/SaveDestinationDialog";
+import { FontCacheControl } from "./FontCacheControl";
 
 export function isProjectSettingsScope(scope: SettingScope): boolean {
   return scope === "applicationWithProjectOverride" || scope === "projectOnly";
@@ -865,7 +866,11 @@ export function ProjectSettingsPanelView({
                           item.control.customKind === "fontFamilyList"
                         ) {
                           controlElement = (
-                            <div id={`projectSettingControl-${item.key}`} />
+                            <FontCacheControl
+                              id={`projectSettingControl-${item.key}`}
+                              disabled={isReadOnly || isSaving}
+                              translate={translate}
+                            />
                           );
                         } else {
                           throw new Error(

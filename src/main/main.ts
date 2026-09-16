@@ -37,6 +37,7 @@ import {
   updateCurrentProjectWindowTitle
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
+import { registerFontCacheIpc } from "./fontCacheIpc";
 import { SESSION_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
 import type { AppPlatform } from "../shared/platform";
 import type { WindowSessionState } from "../shared/session";
@@ -349,6 +350,7 @@ app.whenReady().then(async () => {
       )
   );
   registerSettingsIpc();
+  registerFontCacheIpc();
   registerImageAttachmentIpc();
   // #411: read-only diagnostics for broken project-local image links in the
   // active Markdown editor (renderer extracts links + offsets; main resolves
