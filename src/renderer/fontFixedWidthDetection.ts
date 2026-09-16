@@ -6,6 +6,15 @@ import type { CachedFontFamily, FontFixedWidthStatus } from "../shared/fontCache
  * the renderer only — Canvas 2D `measureText` is a DOM API the main process
  * has no business touching (see fontCacheStore.ts: main only reads/writes/
  * validates the JSON payload it's handed).
+ *
+ * #498 (hardening): fixed-width detection is best-effort. Canvas measurement
+ * cannot reliably prove that every measured glyph came from the target
+ * family rather than glyph fallback (missing Latin/fullwidth glyphs,
+ * script-specific fonts, symbol/decorative fonts, partial coverage, …).
+ * When measurements are fallback-sensitive, non-positive, or otherwise
+ * inconclusive, this module classifies the family as "unknown" rather than
+ * risk a wrong "fixed"/"proportional" call. Full glyph coverage detection is
+ * out of scope — see the #498 issue for the boundary.
  */
 
 const FONT_WIDTH_EPSILON = 0.01;
@@ -22,6 +31,17 @@ export type MeasureTextWidth = (fontCss: string, text: string) => number;
 
 function nearlyEqual(a: number, b: number): boolean {
   return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= FONT_WIDTH_EPSILON;
+}
+
+/**
+ * A measured width is only usable evidence when it's finite AND positive.
+ * `0`/negative widths are just as inconclusive as `NaN`/`Infinity`: a glyph
+ * that measures zero-or-less almost certainly means the probed glyph wasn't
+ * actually rendered from the target family (empty/missing glyph, measurement
+ * error), not that the family genuinely has zero-width characters.
+ */
+function isUsableMeasuredWidth(width: number): boolean {
+  return Number.isFinite(width) && width > 0;
 }
 
 function buildMeasureFontCss(family: string, generic: string): string {
@@ -66,7 +86,7 @@ function probe(
   const i = measure(fontCss, "i");
   const ww = measure(fontCss, "WW");
   const fullW = measure(fontCss, "Ｗ");
-  if (![w, i, ww, fullW].every(Number.isFinite)) {
+  if (![w, i, ww, fullW].every(isUsableMeasuredWidth)) {
     return null;
   }
   return { w, i, ww, fullW };
@@ -83,6 +103,10 @@ function classify(probeResult: RawProbe): FontFixedWidthStatus {
  * rule: `width("W") == width("i")` AND `width("WW") == width("Ｗ")` ⇒
  * `"fixed"`; otherwise `"proportional"`; anything inconclusive ⇒
  * `"unknown"`).
+ *
+ * A probe is only trusted when every measured width is finite AND positive
+ * (`isUsableMeasuredWidth`) — `NaN`/`±Infinity`/zero/negative widths are all
+ * treated as "couldn't measure this glyph" and short-circuit to `"unknown"`.
  *
  * Fallback-font guard: the same four probes are measured twice, once with
  * each of two different trailing generic fallbacks appended to the font

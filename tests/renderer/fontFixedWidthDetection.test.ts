@@ -68,6 +68,35 @@ describe("fontFixedWidthDetection (#495)", () => {
       expect(detectFixedWidth("Broken Font", measure)).toBe("unknown");
     });
 
+    it("returns \"unknown\" when a measurement is Infinity", () => {
+      const measure = stableMeasurer({ W: 10, i: Infinity, WW: 20, Ｗ: 20 });
+      expect(detectFixedWidth("Broken Font", measure)).toBe("unknown");
+    });
+
+    it("returns \"unknown\" when a measurement is -Infinity", () => {
+      const measure = stableMeasurer({ W: 10, i: -Infinity, WW: 20, Ｗ: 20 });
+      expect(detectFixedWidth("Broken Font", measure)).toBe("unknown");
+    });
+
+    it("treats non-positive glyph measurements as inconclusive (zero width)", () => {
+      const measure = stableMeasurer({ W: 10, i: 0, WW: 20, Ｗ: 20 });
+      expect(detectFixedWidth("Broken Font", measure)).toBe("unknown");
+    });
+
+    it("treats non-positive glyph measurements as inconclusive (negative width)", () => {
+      const measure = stableMeasurer({ W: 10, i: -3, WW: 20, Ｗ: 20 });
+      expect(detectFixedWidth("Broken Font", measure)).toBe("unknown");
+    });
+
+    it("returns unknown when glyph fallback measurements are unusable", () => {
+      // Simulate unusable width values such as 0/NaN/Infinity that could
+      // arise from measuring a glyph the target family doesn't cover.
+      for (const unusable of [0, -1, NaN, Infinity, -Infinity]) {
+        const measure = stableMeasurer({ W: 10, i: 10, WW: unusable, Ｗ: 20 });
+        expect(detectFixedWidth("Some Font", measure)).toBe("unknown");
+      }
+    });
+
     it("returns \"unknown\" when there is no canvas context (measurer is null)", () => {
       expect(detectFixedWidth("Any Font", null)).toBe("unknown");
     });
@@ -99,6 +128,17 @@ describe("fontFixedWidthDetection (#495)", () => {
         serif: { W: 10, i: 10, WW: 20, Ｗ: 20 }
       });
       expect(detectFixedWidth("Cascadia Code", measure)).toBe("fixed");
+    });
+
+    it("does not classify confidently when only one fallback stack yields usable measurements", () => {
+      // The monospace stack is fine, but the serif stack returns unusable
+      // (zero) widths — there is no code path that lets a single successful
+      // stack alone produce "fixed"/"proportional".
+      const measure = fallbackDependentMeasurer({
+        monospace: { W: 10, i: 10, WW: 20, Ｗ: 20 },
+        serif: { W: 0, i: 0, WW: 0, Ｗ: 0 }
+      });
+      expect(detectFixedWidth("HalfBroken", measure)).toBe("unknown");
     });
   });
 
@@ -160,6 +200,37 @@ describe("fontFixedWidthDetection (#495)", () => {
     it("returns \"unknown\" for every family when there is no measurer", () => {
       const result = measureFixedWidthForFamilies(baseFamilies, null);
       expect(result.every((f) => f.fixedWidth === "unknown")).toBe(true);
+    });
+
+    it("passes the CSS family (not displayName) to the measurer, even when a localized displayName differs", () => {
+      const familiesWithLocalizedDisplayNames: CachedFontFamily[] = [
+        { family: "MS Gothic", displayName: "ＭＳ ゴシック", fixedWidth: "unknown" }
+      ];
+      const seenFontCss: string[] = [];
+      const measure: MeasureTextWidth = (fontCss) => {
+        seenFontCss.push(fontCss);
+        return 10;
+      };
+      measureFixedWidthForFamilies(familiesWithLocalizedDisplayNames, measure);
+      expect(seenFontCss.length).toBeGreaterThan(0);
+      for (const fontCss of seenFontCss) {
+        expect(fontCss).toContain("MS Gothic");
+        expect(fontCss).not.toContain("ＭＳ ゴシック");
+      }
+    });
+
+    it("localized displayName does not affect the fixed-width classification", () => {
+      const measure = stableMeasurer({ W: 10, i: 10, WW: 20, Ｗ: 20 });
+      const withLocalizedName: CachedFontFamily[] = [
+        { family: "Cascadia Code", displayName: "カスケイディア コード", fixedWidth: "unknown" }
+      ];
+      const withPlainName: CachedFontFamily[] = [
+        { family: "Cascadia Code", displayName: "Cascadia Code", fixedWidth: "unknown" }
+      ];
+      const resultLocalized = measureFixedWidthForFamilies(withLocalizedName, measure);
+      const resultPlain = measureFixedWidthForFamilies(withPlainName, measure);
+      expect(resultLocalized[0].fixedWidth).toBe(resultPlain[0].fixedWidth);
+      expect(resultLocalized[0].fixedWidth).toBe("fixed");
     });
   });
 
