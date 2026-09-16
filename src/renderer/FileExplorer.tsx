@@ -72,6 +72,12 @@ import {
   type FileExplorerDragDropSourceRow
 } from "./FileExplorerDragDropDialog";
 import { FileExplorerCopyCollisionDialog } from "./FileExplorerCopyCollisionDialog";
+import {
+  getFileExplorerEntryKind,
+  isVisibleFileExplorerEntry,
+  type FileExplorerVisibilityOptions
+} from "./fileExplorerVisibility";
+import { getProjectDocumentKind } from "../shared/projectDocumentKind";
 import type {
   CopyEntriesExecutionResult,
   FileExplorerCopyPlan
@@ -183,6 +189,8 @@ interface FileExplorerProps {
   project: PergamumProject | null;
   highlightedRelativePath: string | null;
   translate: Translate;
+  /** #501: optional Plain Text document support flag. Defaults to false. */
+  enablePlainTextDocuments?: boolean;
   /** #307: disable the create toolbar and never attempt a create IPC. */
   readOnly?: boolean;
   clipboardAdapter?: ClipboardAdapter;
@@ -330,6 +338,7 @@ interface FileExplorerViewProps {
   /** #323: visible entry paths, top to bottom — the roving-tabindex order. */
   visibleOrder?: readonly string[];
   highlightedRelativePath: string | null;
+  visibilityOptions?: FileExplorerVisibilityOptions;
   canCreate: boolean;
   /** #327: whether the current multi-selection can be moved (same rule as the
    *  context-menu `Move…`). */
@@ -448,11 +457,17 @@ export function flattenVisibleFileExplorerEntryPaths(input: {
     Record<string, FileExplorerEntry[]>
   >;
   readonly expandedDirectoryPaths: ReadonlySet<string>;
+  readonly options?: FileExplorerVisibilityOptions;
 }): string[] {
+  const options = input.options ?? { enablePlainTextDocuments: false };
   const order: string[] = [];
 
   const walk = (entries: readonly FileExplorerEntry[]): void => {
     for (const entry of entries) {
+      if (!isVisibleFileExplorerEntry(entry, options)) {
+        continue;
+      }
+
       order.push(entry.relativePath);
 
       if (
@@ -508,15 +523,22 @@ function withoutSetEntry<T>(set: ReadonlySet<T>, value: T): Set<T> {
 
 function isFileExplorerEntryVisible(
   entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>,
-  relativePath: string | null
+  relativePath: string | null,
+  options: FileExplorerVisibilityOptions = { enablePlainTextDocuments: false }
 ): boolean {
   if (!relativePath) {
     return true;
   }
 
-  return Object.values(entriesByDirectoryPath).some((entries) =>
-    entries.some((entry) => entry.relativePath === relativePath)
+  const entry = fileExplorerEntryByRelativePath(
+    entriesByDirectoryPath,
+    relativePath
   );
+  if (!entry) {
+    return false;
+  }
+
+  return isVisibleFileExplorerEntry(entry, options);
 }
 
 function fileExplorerEntryByRelativePath(
@@ -787,7 +809,8 @@ function isTxtFileName(name: string): boolean {
 
 export function iconForEntry(
   entry: FileExplorerEntry,
-  expandedDirectoryPaths: ReadonlySet<string>
+  expandedDirectoryPaths: ReadonlySet<string>,
+  options: FileExplorerVisibilityOptions = { enablePlainTextDocuments: false }
 ): { url: string; name: string } {
   if (entry.kind === "folder") {
     return expandedDirectoryPaths.has(entry.relativePath)
@@ -795,14 +818,12 @@ export function iconForEntry(
       : { url: folderIconUrl, name: "folder" };
   }
 
-  // #409: Markdown documents (`.md` / `.markdown`, matching the rest of the
-  // File Explorer's own openable-file rule), Pergamum-recognized image files
-  // (PNG/JPEG/GIF/WebP — shared with #407/#409's `supportedImageAttachment*`
-  // helper, so the explorer never drifts from what Pergamum treats as an
-  // image), and plain `.txt` files each get a distinct icon. Everything else
-  // keeps the generic document icon.
-  if (isProjectMarkdownRelativePath(entry.relativePath)) {
+  const documentKind = getProjectDocumentKind(entry.relativePath, options);
+  if (documentKind === "markdown") {
     return { url: markdownFileIconUrl, name: "markdown" };
+  }
+  if (documentKind === "plainText") {
+    return { url: txtFileIconUrl, name: "txt" };
   }
   if (supportedImageAttachmentFormatForFileName(entry.name) !== null) {
     return { url: imageFileIconUrl, name: "image" };
@@ -818,6 +839,7 @@ export function FileExplorer({
   project,
   highlightedRelativePath,
   translate,
+  enablePlainTextDocuments = false,
   readOnly = false,
   clipboardAdapter = navigatorClipboardAdapter,
   createEntryRequest = null,
@@ -973,6 +995,11 @@ export function FileExplorer({
       )
     : null;
 
+  const visibilityOptions = useMemo<FileExplorerVisibilityOptions>(
+    () => ({ enablePlainTextDocuments }),
+    [enablePlainTextDocuments]
+  );
+
   // #323: the visible entry order — the only order source handed to the #322
   // range functions.
   const rootEntriesForView = entriesByDirectoryPath[rootDirectoryKey] ?? [];
@@ -981,9 +1008,10 @@ export function FileExplorer({
       flattenVisibleFileExplorerEntryPaths({
         rootEntries: rootEntriesForView,
         entriesByDirectoryPath,
-        expandedDirectoryPaths
+        expandedDirectoryPaths,
+        options: visibilityOptions
       }),
-    [rootEntriesForView, entriesByDirectoryPath, expandedDirectoryPaths]
+    [rootEntriesForView, entriesByDirectoryPath, expandedDirectoryPaths, visibilityOptions]
   );
 
   // #323: make `path` the sole selection AND the primary/focused entry.
@@ -3734,6 +3762,7 @@ export function FileExplorer({
         selectedPaths={multiSelection.selected}
         visibleOrder={visibleOrder}
         highlightedRelativePath={project ? highlightedRelativePath : null}
+        visibilityOptions={visibilityOptions}
         canCreate={canCreate}
         canMove={canMoveSelection}
         moveDisabledReasonLabel={
@@ -4324,6 +4353,7 @@ export function FileExplorerView({
   selectedPaths = EMPTY_SELECTED_PATHS,
   visibleOrder = EMPTY_VISIBLE_ORDER,
   highlightedRelativePath,
+  visibilityOptions = { enablePlainTextDocuments: false },
   canCreate,
   canMove = false,
   moveDisabledReasonLabel,
@@ -4369,7 +4399,11 @@ export function FileExplorerView({
     visibleOrder.includes(selectedRelativePath);
   const rootIsTabStop = isRootSelected || !primaryInView;
 
-  const renderEntry = (entry: FileExplorerEntry, depth: number): JSX.Element => {
+  const renderEntry = (entry: FileExplorerEntry, depth: number): JSX.Element | null => {
+    if (!isVisibleFileExplorerEntry(entry, visibilityOptions)) {
+      return null;
+    }
+
     const isExpanded =
       entry.kind === "folder" &&
       expandedDirectoryPaths.has(entry.relativePath);
@@ -4384,7 +4418,7 @@ export function FileExplorerView({
       entry.kind === "file" && isProjectDocumentDirty(entry.relativePath);
     const dropState = dropTargetState(entry.relativePath);
     const isOpenable = isOpenableFileExplorerEntry(entry);
-    const icon = iconForEntry(entry, expandedDirectoryPaths);
+    const icon = iconForEntry(entry, expandedDirectoryPaths, visibilityOptions);
     const childKey = directoryKey(entry.relativePath);
     const childEntries = entriesByDirectoryPath[childKey] ?? [];
 

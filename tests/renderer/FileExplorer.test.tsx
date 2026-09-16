@@ -276,12 +276,15 @@ describe("FileExplorer", () => {
     expect(entryButton("late.markdown").dataset.fileExplorerOpenable).toBe(
       "true"
     );
-    expect(entryButton("late.txt").dataset.fileExplorerOpenable).toBeUndefined();
+    expect(
+      container!.querySelector(
+        '[data-file-explorer-entry-path="late.txt"]'
+      )
+    ).toBeNull();
 
     await act(async () => {
       entryButton("late.md").click();
       entryButton("late.markdown").click();
-      entryButton("late.txt").click();
       await Promise.resolve();
     });
 

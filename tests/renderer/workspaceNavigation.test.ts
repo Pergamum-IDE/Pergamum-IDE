@@ -684,6 +684,7 @@ describe("workspace navigation", () => {
     const onSelectEntry = vi.fn();
     const onActivateDocument = vi.fn();
     const element = FileExplorerView(fileExplorerViewProps({
+      visibilityOptions: { enablePlainTextDocuments: true },
       onSelectEntry,
       onActivateDocument
     }));

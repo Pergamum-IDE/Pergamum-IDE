@@ -392,14 +392,9 @@ describe("#414 File Explorer D&D move — image-reference update hook", () => {
     expect(harness.moveFileExplorerEntries).toHaveBeenCalled();
   });
 
-  it("does not fire for an unsupported image (.svg) drop move", async () => {
-    const harness = await mount();
-    await dragDrop("logo.svg", "Drafts");
-    click(".fileExplorerDragDropMoveButton");
-    await flush();
-
-    expect(harness.onPrepareImageReferenceMoves).not.toHaveBeenCalled();
-    expect(harness.moveFileExplorerEntries).toHaveBeenCalled();
+  it("hides unsupported image (.svg) files from File Explorer", async () => {
+    await mount();
+    expect(document.querySelector('button[title="logo.svg"]')).toBeNull();
   });
 });
 
@@ -541,12 +536,9 @@ describe("#414 P0-1 File Explorer image-file rename — C2 flow", () => {
     expect(harness.onPrepareImageReferenceMoves).not.toHaveBeenCalled();
   });
 
-  it("F2 is unavailable for an unsupported image (.svg)", async () => {
-    const harness = await mount();
-    clickEntry("logo.svg");
-    pressF2();
-    expect(renameDialogInput()).toBeNull();
-    expect(harness.onRenameUnavailable).toHaveBeenCalled();
+  it("hides unsupported image (.svg) from File Explorer", async () => {
+    await mount();
+    expect(document.querySelector('button[title="logo.svg"]')).toBeNull();
   });
 
   it("dry-runs, THEN confirms, THEN renames, THEN applies (update)", async () => {
