@@ -7996,6 +7996,200 @@ label.settingsItemHeader {
   font-family: inherit;
 }
 
+/* #493 Font Picker Dialog — two-pane layout. Wider than the base info
+   dialog so the selected/available panes sit side by side; the body itself
+   never scrolls, only the two bounded-height list boxes inside it, so 100+
+   available fonts never make the dialog grow past the viewport. */
+.appInfoDialog.fontPickerDialog {
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
+}
+
+.fontPickerDialog .appInfoDialogBody {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.fontPickerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.fontPickerPanes {
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+.fontPickerPane {
+  display: flex;
+  flex: 1 1 50%;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.fontPickerPaneHeader {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.fontPickerPriorityNote {
+  margin: 0;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.fontPickerSelectedListBox,
+.fontPickerAvailableListBox {
+  min-height: 80px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 6px;
+  background: var(--app-dialog-header-background);
+}
+
+.fontPickerList,
+.fontPickerAvailableList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+}
+
+.fontPickerRowButton {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-dialog-foreground);
+  text-align: start;
+  cursor: pointer;
+}
+
+.fontPickerRowButton:hover {
+  background: rgba(15, 23, 32, 0.06);
+}
+
+.fontPickerRowButton-active {
+  border-color: var(--app-dialog-icon-info, #2f6fed);
+  background: rgba(47, 111, 237, 0.1);
+}
+
+.fontPickerRowName {
+  font-size: 0.92rem;
+}
+
+.fontPickerSelectedIndex {
+  margin-inline-end: 4px;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.fontPickerRowSample {
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 0.8rem;
+}
+
+.fontPickerPaneActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fontPickerEmptyNotice {
+  margin: 0;
+  padding: 8px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 12px;
+}
+
+.fontPickerNotice {
+  margin: 0;
+  font-size: 12px;
+}
+
+.fontPickerNotice-warning {
+  color: var(--app-dialog-icon-warning);
+}
+
+.fontPickerNotice-error {
+  color: var(--app-dialog-icon-error);
+}
+
+.fontPickerSearchGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fontPickerSampleSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-dialog-border);
+}
+
+.fontPickerSampleLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.fontPickerSampleInput {
+  min-height: 44px;
+  resize: vertical;
+}
+
+.fontPickerSamplePreviewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fontPickerPreviewModeButton {
+  padding: 4px 10px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--app-dialog-foreground);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.fontPickerPreviewModeButton-active {
+  border-color: var(--app-dialog-icon-info, #2f6fed);
+  background: rgba(47, 111, 237, 0.12);
+}
+
+.fontPickerSamplePreview {
+  min-height: 48px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 620px) {
+  .fontPickerPanes {
+    flex-direction: column;
+  }
+}
+
 .replacePreviewSummary {
   margin: 0;
   font-size: 12px;

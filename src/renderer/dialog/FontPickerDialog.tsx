@@ -22,6 +22,18 @@ export interface FontPickerDialogProps {
   readonly onClose: () => void;
 }
 
+/**
+ * Preview-only mode for the sample text area. `selectedList` renders with the
+ * full draft selected-font CSS fallback chain; `singleFamily` is a click-to-
+ * preview override for a single row (selected or available) that never
+ * mutates the draft list or settings. See #493.
+ */
+type SamplePreviewMode =
+  | { kind: "selectedList" }
+  | { kind: "singleFamily"; family: FontFamilySetting };
+
+const MINI_SAMPLE_TEXT = "Aa あア亜 123";
+
 export function FontPickerDialog({
   isOpen,
   slot,
@@ -35,19 +47,29 @@ export function FontPickerDialog({
     () => [...initialValue]
   );
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [highlightedAvailableFamily, setHighlightedAvailableFamily] =
+    useState<CachedFontFamily | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [cacheState, setCacheState] = useState<FontCacheState>({
     status: "notScanned"
   });
+  const [previewMode, setPreviewMode] = useState<SamplePreviewMode>({
+    kind: "selectedList"
+  });
+  const [sampleText, setSampleText] = useState<string>("");
 
   const dialogId = useId();
   const searchInputId = `${dialogId}-search`;
+  const sampleInputId = `${dialogId}-sample`;
 
   useEffect(() => {
     if (isOpen) {
       setSelectedFonts([...initialValue]);
       setSelectedIndex(null);
+      setHighlightedAvailableFamily(null);
       setSearchQuery("");
+      setPreviewMode({ kind: "selectedList" });
+      setSampleText(translate("fontPicker.sampleText"));
 
       const fontCacheApi = window.pergamum?.fontCache;
       if (fontCacheApi?.load) {
@@ -95,6 +117,7 @@ export function FontPickerDialog({
     next[selectedIndex] = temp;
     setSelectedFonts(next);
     setSelectedIndex(prevIndex);
+    setPreviewMode({ kind: "selectedList" });
   };
 
   const handleMoveDown = (): void => {
@@ -112,6 +135,7 @@ export function FontPickerDialog({
     next[selectedIndex] = temp;
     setSelectedFonts(next);
     setSelectedIndex(nextIndex);
+    setPreviewMode({ kind: "selectedList" });
   };
 
   const handleRemove = (): void => {
@@ -125,9 +149,14 @@ export function FontPickerDialog({
     const next = selectedFonts.filter((_, idx) => idx !== selectedIndex);
     setSelectedFonts(next);
     setSelectedIndex(null);
+    setPreviewMode({ kind: "selectedList" });
   };
 
-  const handleAddCandidate = (candidate: CachedFontFamily): void => {
+  const handleAddHighlighted = (): void => {
+    if (!highlightedAvailableFamily) {
+      return;
+    }
+    const candidate = highlightedAvailableFamily;
     const key = candidate.family.toLowerCase();
     if (GENERIC_FONT_FAMILIES.has(key)) {
       return;
@@ -139,6 +168,21 @@ export function FontPickerDialog({
       ...prev,
       { family: candidate.family, displayName: candidate.displayName }
     ]);
+    setHighlightedAvailableFamily(null);
+    setPreviewMode({ kind: "selectedList" });
+  };
+
+  const handleSelectedRowClick = (font: FontFamilySetting, idx: number): void => {
+    setSelectedIndex(idx);
+    setPreviewMode({ kind: "singleFamily", family: font });
+  };
+
+  const handleAvailableRowClick = (candidate: CachedFontFamily): void => {
+    setHighlightedAvailableFamily(candidate);
+    setPreviewMode({
+      kind: "singleFamily",
+      family: { family: candidate.family, displayName: candidate.displayName }
+    });
   };
 
   const cachedFamilies: CachedFontFamily[] =
@@ -173,10 +217,15 @@ export function FontPickerDialog({
       })
     );
 
-  const sampleCss = buildFontFamilyCss(
-    selectedFonts,
-    FONT_SLOT_GENERIC_FALLBACKS[slot]
-  );
+  const genericFallback = FONT_SLOT_GENERIC_FALLBACKS[slot];
+
+  const previewCss =
+    previewMode.kind === "selectedList"
+      ? buildFontFamilyCss(selectedFonts, genericFallback)
+      : buildFontFamilyCss([previewMode.family], genericFallback);
+
+  const rowCssFor = (font: FontFamilySetting): string =>
+    buildFontFamilyCss([font], genericFallback);
 
   return (
     <InfoDialog
@@ -207,133 +256,227 @@ export function FontPickerDialog({
       }
     >
       <div className="fontPickerContent">
-        {/* Selected Fonts Section */}
-        <div className="fontPickerSection">
-          <div className="fontPickerSectionLabel">
-            {translate("fontPicker.label.selectedFonts")}
+        <div className="fontPickerPanes">
+          {/* Left pane: selected / adopted fonts */}
+          <div
+            className="fontPickerPane fontPickerPane-selected"
+            role="group"
+            aria-label={translate("fontPicker.label.selectedFonts")}
+          >
+            <div className="fontPickerPaneHeader">
+              {translate("fontPicker.label.selectedFonts")}
+            </div>
+            <p className="fontPickerPriorityNote">
+              {translate("fontPicker.label.priorityExplanation")}
+            </p>
+            <div className="fontPickerSelectedListBox">
+              {selectedFonts.length === 0 ? (
+                <div className="fontPickerEmptyNotice">
+                  {translate("fontPicker.emptySelection")}
+                </div>
+              ) : (
+                <ul className="fontPickerList">
+                  {selectedFonts.map((font, idx) => {
+                    const isActive = selectedIndex === idx;
+                    return (
+                      <li key={`${font.family}-${idx}`}>
+                        <button
+                          type="button"
+                          className={
+                            isActive
+                              ? "fontPickerRowButton fontPickerRowButton-active"
+                              : "fontPickerRowButton"
+                          }
+                          aria-pressed={isActive}
+                          onClick={() => handleSelectedRowClick(font, idx)}
+                        >
+                          <span className="fontPickerRowName">
+                            <span className="fontPickerSelectedIndex">
+                              {idx + 1}.
+                            </span>
+                            {font.displayName || font.family}
+                          </span>
+                          <span
+                            className="fontPickerRowSample"
+                            style={{ fontFamily: rowCssFor(font) }}
+                          >
+                            {MINI_SAMPLE_TEXT}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="fontPickerPaneActions">
+              <button
+                type="button"
+                className="settingsButton"
+                disabled={selectedIndex === null || selectedIndex <= 0}
+                onClick={handleMoveUp}
+              >
+                {translate("fontPicker.button.moveUp")}
+              </button>
+              <button
+                type="button"
+                className="settingsButton"
+                disabled={
+                  selectedIndex === null ||
+                  selectedIndex < 0 ||
+                  selectedIndex >= selectedFonts.length - 1
+                }
+                onClick={handleMoveDown}
+              >
+                {translate("fontPicker.button.moveDown")}
+              </button>
+              <button
+                type="button"
+                className="settingsButton settingsButton-danger"
+                disabled={
+                  selectedIndex === null ||
+                  selectedIndex < 0 ||
+                  selectedIndex >= selectedFonts.length
+                }
+                onClick={handleRemove}
+              >
+                {translate("fontPicker.button.remove")}
+              </button>
+            </div>
           </div>
-          <div className="fontPickerSelectedList">
-            {selectedFonts.length === 0 ? (
-              <div className="fontPickerEmptyNotice">
-                {translate("fontPicker.emptySelection")}
+
+          {/* Right pane: available / unselected fonts */}
+          <div
+            className="fontPickerPane fontPickerPane-available"
+            role="group"
+            aria-label={translate("fontPicker.label.availableFonts")}
+          >
+            <div className="fontPickerPaneHeader">
+              {translate("fontPicker.label.availableFonts")}
+            </div>
+            {cacheState.status === "notScanned" ? (
+              <div className="fontPickerNotice fontPickerNotice-warning">
+                {translate("fontPicker.cacheNotScanned")}
+              </div>
+            ) : cacheState.status === "error" ? (
+              <div className="fontPickerNotice fontPickerNotice-error">
+                {cacheState.message || translate("fontCache.status.error")}
               </div>
             ) : (
-              <ul className="fontPickerList">
-                {selectedFonts.map((font, idx) => {
-                  const isSelected = selectedIndex === idx;
-                  return (
-                    <li key={`${font.family}-${idx}`}>
-                      <button
-                        type="button"
-                        className={
-                          isSelected
-                            ? "fontPickerListItem fontPickerListItem-selected"
-                            : "fontPickerListItem"
-                        }
-                        onClick={() => setSelectedIndex(idx)}
-                      >
-                        <span className="fontPickerListIndex">{idx + 1}.</span>
-                        <span className="fontPickerListName">
-                          {font.displayName || font.family}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <>
+                <div className="fontPickerSearchGroup">
+                  <label htmlFor={searchInputId} className="fontPickerSearchLabel">
+                    {translate("fontPicker.label.search")}
+                  </label>
+                  <input
+                    id={searchInputId}
+                    className="fontPickerSearchInput settingsTextInput"
+                    type="search"
+                    value={searchQuery}
+                    placeholder={translate("fontPicker.label.search")}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setHighlightedAvailableFamily(null);
+                    }}
+                  />
+                </div>
+                <div className="fontPickerAvailableListBox">
+                  {filteredCandidates.length === 0 ? (
+                    <div className="fontPickerEmptyNotice">
+                      {translate("fontPicker.emptyAvailable")}
+                    </div>
+                  ) : (
+                    <ul className="fontPickerAvailableList">
+                      {filteredCandidates.map((candidate) => {
+                        const isActive =
+                          highlightedAvailableFamily?.family === candidate.family;
+                        return (
+                          <li key={candidate.family}>
+                            <button
+                              type="button"
+                              className={
+                                isActive
+                                  ? "fontPickerRowButton fontPickerRowButton-active"
+                                  : "fontPickerRowButton"
+                              }
+                              aria-pressed={isActive}
+                              onClick={() => handleAvailableRowClick(candidate)}
+                            >
+                              <span className="fontPickerRowName">
+                                {candidate.displayName}
+                              </span>
+                              <span
+                                className="fontPickerRowSample"
+                                style={{
+                                  fontFamily: buildFontFamilyCss(
+                                    [
+                                      {
+                                        family: candidate.family,
+                                        displayName: candidate.displayName
+                                      }
+                                    ],
+                                    genericFallback
+                                  )
+                                }}
+                              >
+                                {MINI_SAMPLE_TEXT}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+                <div className="fontPickerPaneActions">
+                  <button
+                    type="button"
+                    className="settingsButton"
+                    disabled={!highlightedAvailableFamily}
+                    onClick={handleAddHighlighted}
+                  >
+                    {translate("fontPicker.button.add")}
+                  </button>
+                </div>
+              </>
             )}
           </div>
-          <div className="fontPickerSelectedActions">
-            <button
-              type="button"
-              className="settingsButton"
-              disabled={selectedIndex === null || selectedIndex <= 0}
-              onClick={handleMoveUp}
-            >
-              {translate("fontPicker.button.moveUp")}
-            </button>
-            <button
-              type="button"
-              className="settingsButton"
-              disabled={
-                selectedIndex === null ||
-                selectedIndex < 0 ||
-                selectedIndex >= selectedFonts.length - 1
-              }
-              onClick={handleMoveDown}
-            >
-              {translate("fontPicker.button.moveDown")}
-            </button>
-            <button
-              type="button"
-              className="settingsButton settingsButton-danger"
-              disabled={
-                selectedIndex === null ||
-                selectedIndex < 0 ||
-                selectedIndex >= selectedFonts.length
-              }
-              onClick={handleRemove}
-            >
-              {translate("fontPicker.button.remove")}
-            </button>
-          </div>
         </div>
 
-        {/* Candidate Fonts Section */}
-        <div className="fontPickerSection">
-          <div className="fontPickerSectionLabel">
-            {translate("fontPicker.label.addFont")}
-          </div>
-          {cacheState.status === "notScanned" ? (
-            <div className="fontPickerNotice fontPickerNotice-warning">
-              {translate("fontPicker.cacheNotScanned")}
-            </div>
-          ) : cacheState.status === "error" ? (
-            <div className="fontPickerNotice fontPickerNotice-error">
-              {cacheState.message || translate("fontCache.status.error")}
-            </div>
-          ) : (
-            <div className="fontPickerCandidatesContainer">
-              <div className="fontPickerSearchGroup">
-                <label htmlFor={searchInputId} className="fontPickerSearchLabel">
-                  {translate("fontPicker.label.search")}
-                </label>
-                <input
-                  id={searchInputId}
-                  className="fontPickerSearchInput settingsTextInput"
-                  type="search"
-                  value={searchQuery}
-                  placeholder={translate("fontPicker.label.search")}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <ul className="fontPickerCandidateList">
-                {filteredCandidates.map((candidate) => (
-                  <li key={candidate.family}>
-                    <button
-                      type="button"
-                      className="fontPickerCandidateItem"
-                      onClick={() => handleAddCandidate(candidate)}
-                    >
-                      {candidate.displayName}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* Sample Preview Section */}
-        <div className="fontPickerSection">
-          <div className="fontPickerSectionLabel">
-            {translate("fontPicker.label.sample")}
+        {/* Sample section */}
+        <div className="fontPickerSampleSection">
+          <label htmlFor={sampleInputId} className="fontPickerSampleLabel">
+            {translate("fontPicker.label.sampleInput")}
+          </label>
+          <textarea
+            id={sampleInputId}
+            className="fontPickerSampleInput settingsTextInput"
+            rows={2}
+            value={sampleText}
+            onChange={(e) => setSampleText(e.target.value)}
+          />
+          <div className="fontPickerSamplePreviewHeader">
+            <span className="fontPickerSampleLabel">
+              {translate("fontPicker.label.sample")}
+            </span>
+            <button
+              type="button"
+              className={
+                previewMode.kind === "selectedList"
+                  ? "fontPickerPreviewModeButton fontPickerPreviewModeButton-active"
+                  : "fontPickerPreviewModeButton"
+              }
+              aria-pressed={previewMode.kind === "selectedList"}
+              onClick={() => setPreviewMode({ kind: "selectedList" })}
+            >
+              {translate("fontPicker.label.previewSelectedList")}
+            </button>
           </div>
           <div
             className="fontPickerSamplePreview"
-            style={{ fontFamily: sampleCss, fontWeight: 400 }}
+            style={{ fontFamily: previewCss, fontWeight: 400 }}
           >
-            {translate("fontPicker.sampleText")}
+            {sampleText}
           </div>
         </div>
       </div>
