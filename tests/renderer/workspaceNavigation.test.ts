@@ -89,6 +89,11 @@ const rootFileExplorerEntries: FileExplorerEntry[] = [
   },
   {
     kind: "file",
+    name: "cover.png",
+    relativePath: "cover.png"
+  },
+  {
+    kind: "file",
     name: "notes.txt",
     relativePath: "notes.txt"
   }
@@ -680,7 +685,7 @@ describe("workspace navigation", () => {
     expect(onActivateDocument).not.toHaveBeenCalled();
   });
 
-  it("selects non-Markdown files without using the Project document activation path", () => {
+  it("selects non-document asset files without using the Project document activation path", () => {
     const onSelectEntry = vi.fn();
     const onActivateDocument = vi.fn();
     const element = FileExplorerView(fileExplorerViewProps({
@@ -693,7 +698,7 @@ describe("workspace navigation", () => {
       (child) => child.type === "button"
     );
     const nonProjectFileButton = buttons.find(
-      (button) => button.props.title === "notes.txt"
+      (button) => button.props.title === "cover.png"
     );
 
     expect(nonProjectFileButton).toBeDefined();
@@ -701,7 +706,7 @@ describe("workspace navigation", () => {
     expect(typeof onClick).toBe("function");
     (onClick as () => void)();
 
-    expect(onSelectEntry).toHaveBeenCalledWith("notes.txt");
+    expect(onSelectEntry).toHaveBeenCalledWith("cover.png");
     expect(onActivateDocument).not.toHaveBeenCalled();
   });
 

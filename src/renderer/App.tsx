@@ -126,6 +126,7 @@ import {
   currentDocumentWorkingStateEquals,
   currentProjectRelativePath,
   displayName,
+  isMarkdownCurrentDocument,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   prepareCurrentDocumentForMarkdownStorage,
@@ -133,6 +134,7 @@ import {
   updateCurrentDocumentContent,
   type CurrentDocument
 } from "./currentDocument";
+import { isProjectDocumentPath } from "../shared/projectDocumentKind";
 import {
   buildLineEndingBreakSet,
   lineEndingBreakSetToArray,
@@ -1939,7 +1941,9 @@ export function App(): JSX.Element {
     isDebugLogTabActive;
   // #352: the Outline pane shows headings only for an active Markdown editor.
   const activeEditorIsMarkdown =
-    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
+    !isEditorAreaSpecialTabActive &&
+    currentEditor?.kind === "markdown" &&
+    isMarkdownCurrentDocument(currentEditor.document);
 
   // #360: Document Metrics "ファイル情報" — the active Markdown document's
   // backing-file absolute path (a stable string, so this does not churn on
@@ -9560,7 +9564,10 @@ export function App(): JSX.Element {
 
     if (
       !existingDocument &&
-      !isSupportedProjectMarkdownRelativePath(relativePath)
+      !isProjectDocumentPath(relativePath, {
+        enablePlainTextDocuments:
+          effectiveSettings.workbench.enablePlainTextDocuments
+      })
     ) {
       setStatus({ key: "status.projectDocumentNotFound" });
       return;
@@ -10212,6 +10219,9 @@ export function App(): JSX.Element {
                         fileExplorerRefreshDirectoriesRequest
                       }
                       fileExplorerRevealRequest={fileExplorerRevealRequest}
+                      enablePlainTextDocuments={
+                        effectiveSettings.workbench.enablePlainTextDocuments
+                      }
                       translate={translate}
                       onActivateProjectDocument={(relativePath) => {
                         void activateProjectDocument(relativePath);

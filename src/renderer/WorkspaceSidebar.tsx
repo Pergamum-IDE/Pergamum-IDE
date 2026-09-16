@@ -59,6 +59,8 @@ interface WorkspaceSidebarProps {
   /** #355: an explicit "Select in File Explorer" request from a document tab.
    *  Consumed once per token. */
   fileExplorerRevealRequest?: FileExplorerRevealRequest | null;
+  /** #501: optional Plain Text document support flag. Defaults to false. */
+  enablePlainTextDocuments?: boolean;
   translate: Translate;
   onActivateProjectDocument: (relativePath: string) => void;
   onFileExplorerCreateEntryRequestHandled: () => void;
@@ -221,6 +223,7 @@ export function WorkspaceSidebar({
   fileExplorerRenameEntryRequest = null,
   fileExplorerRefreshDirectoriesRequest = null,
   fileExplorerRevealRequest = null,
+  enablePlainTextDocuments = false,
   translate,
   onActivateProjectDocument,
   onFileExplorerCreateEntryRequestHandled,
@@ -283,6 +286,7 @@ export function WorkspaceSidebar({
                 project ? highlightedProjectDocumentRelativePath : null
               }
               readOnly={project?.accessMode.kind === "readOnly"}
+              enablePlainTextDocuments={enablePlainTextDocuments}
               translate={translate}
               createEntryRequest={fileExplorerCreateEntryRequest}
               onCreateEntryRequestHandled={

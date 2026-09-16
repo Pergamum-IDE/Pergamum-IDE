@@ -19,7 +19,9 @@ describe("Markdown Outline wiring (#352)", () => {
     );
     expect(appSource).toContain(
       "const activeEditorIsMarkdown =\n" +
-        '    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";'
+        "    !isEditorAreaSpecialTabActive &&\n" +
+        '    currentEditor?.kind === "markdown" &&\n' +
+        "    isMarkdownCurrentDocument(currentEditor.document);"
     );
   });
 

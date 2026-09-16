@@ -114,6 +114,7 @@ import {
   type FileExplorerRenameFailureReason
 } from "../shared/fileExplorerRename";
 import type { AppPlatform } from "../shared/platform";
+import { isProjectDocumentPath } from "../shared/projectDocumentKind";
 import { firstNonEmptyMarkdownPreviewLine } from "../shared/markdownPreviewLine";
 import {
   isPathEqualOrInsideDirectory,
@@ -1833,6 +1834,11 @@ async function listFileExplorerChildren(
     });
     const visibleEntries: FileExplorerEntry[] = [];
 
+    const settings = await loadSettings();
+    const documentOptions = {
+      enablePlainTextDocuments: settings.workbench.enablePlainTextDocuments ?? false
+    };
+
     for (const entry of entries) {
       if (entry.isSymbolicLink()) {
         continue;
@@ -1858,7 +1864,7 @@ async function listFileExplorerChildren(
         path.relative(resolved.rootPath, entryPath)
       );
 
-      if (entry.isFile() && isProjectMarkdownDocumentPath(relativePath)) {
+      if (entry.isFile() && isProjectDocumentPath(relativePath, documentOptions)) {
         resolved.projectState.documentRelativePaths.add(relativePath);
       }
 
@@ -3125,6 +3131,10 @@ export function registerCurrentProjectDocumentPath(
 async function discoverMarkdownFiles(
   rootPath: string
 ): Promise<ProjectDocument[]> {
+  const settings = await loadSettings();
+  const documentOptions = {
+    enablePlainTextDocuments: settings.workbench.enablePlainTextDocuments ?? false
+  };
   const documents: ProjectDocument[] = [];
 
   async function walk(directoryPath: string): Promise<void> {
@@ -3140,12 +3150,13 @@ async function discoverMarkdownFiles(
         continue;
       }
 
-      if (!entry.isFile() || !isProjectMarkdownDocumentPath(entry.name)) {
+      const relativePath = normalizeRelativePath(path.relative(rootPath, entryPath));
+      if (!entry.isFile() || !isProjectDocumentPath(relativePath, documentOptions)) {
         continue;
       }
 
       documents.push({
-        relativePath: normalizeRelativePath(path.relative(rootPath, entryPath)),
+        relativePath,
         name: entry.name
       });
     }

@@ -194,7 +194,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
         "async function activateProjectDocument("
       );
       const notFoundGuardIndex = body.indexOf(
-        "!isSupportedProjectMarkdownRelativePath(relativePath)"
+        "!isProjectDocumentPath(relativePath,"
       );
       const notFoundGuardEnd = body.indexOf("return;", notFoundGuardIndex);
       const idGenerationIndex = body.indexOf(

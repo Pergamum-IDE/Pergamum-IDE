@@ -30,7 +30,7 @@ describe("markdown image link diagnostics wiring (#411 / #412)", () => {
       "const imageLinkDiagnosticsResolutionContext = useMemo<"
     );
     expect(editorSurfaceSource).toContain(
-      "readOnly ? { kind: \"none\" } : previewImageResolution"
+      "readOnly || !isMarkdown ? { kind: \"none\" } : previewImageResolution"
     );
     expect(editorSurfaceSource).toContain(
       "imageLinkDiagnosticsResolutionContext={"

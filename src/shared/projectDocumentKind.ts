@@ -51,3 +51,12 @@ export function isProjectDocumentPath(
 ): boolean {
   return getProjectDocumentKind(projectRelativePath, options) !== null;
 }
+
+/**
+ * Helper to check whether a given path is a Markdown document path (.md / .markdown).
+ */
+export function isMarkdownPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.endsWith(".md") || lower.endsWith(".markdown");
+}
+

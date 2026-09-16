@@ -21,6 +21,7 @@ import {
   normalizeMarkdownTextForStorage,
   type MarkdownTextStorageNormalizationOptions
 } from "../shared/markdownTextNormalization";
+import { isMarkdownPath } from "../shared/projectDocumentKind";
 
 /**
  * The encoding DETECTED from a document's source file, kept so a later
@@ -240,6 +241,14 @@ export function currentDocumentWorkingStateEquals(
     left.content === right.content &&
     lineEndingBreakSetsEqual(left.lineEndingBreaks, right.lineEndingBreaks)
   );
+}
+
+export function isMarkdownCurrentDocument(document: CurrentDocument): boolean {
+  if (document.kind === "untitled") {
+    return true;
+  }
+  const path = document.kind === "file" ? document.path : document.relativePath;
+  return isMarkdownPath(path);
 }
 
 export function isProjectCurrentDocument(

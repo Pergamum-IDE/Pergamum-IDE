@@ -65,6 +65,7 @@ import {
   type MovedImageFile
 } from "./markdownImageReferenceMoveUpdate";
 import { isSupportedProjectImageFileName } from "./markdownImageReferenceMoveUpdate";
+import { isProjectDocumentPath } from "../shared/projectDocumentKind";
 import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
 import { FileExplorerDeleteDialog } from "./FileExplorerDeleteDialog";
 import {
@@ -650,22 +651,28 @@ function isProjectMarkdownRelativePath(relativePath: string): boolean {
   );
 }
 
-function isOpenableFileExplorerEntry(entry: FileExplorerEntry): boolean {
+function isOpenableFileExplorerEntry(
+  entry: FileExplorerEntry,
+  options: FileExplorerVisibilityOptions
+): boolean {
   return (
     entry.kind === "file" &&
-    isProjectMarkdownRelativePath(entry.relativePath)
+    isProjectDocumentPath(entry.relativePath, options)
   );
 }
 
 /**
- * #414: a file the File Explorer can rename — a project Markdown document, or
+ * #414: a file the File Explorer can rename — a project document, or
  * a supported project image file (`.png` / `.jpg` / `.jpeg` / `.gif` /
  * `.webp`). Image rename is path-only; format conversion is never done.
  */
-function isRenamableFileExplorerEntry(entry: FileExplorerEntry): boolean {
+function isRenamableFileExplorerEntry(
+  entry: FileExplorerEntry,
+  options: FileExplorerVisibilityOptions
+): boolean {
   return (
     entry.kind === "file" &&
-    (isProjectMarkdownRelativePath(entry.relativePath) ||
+    (isProjectDocumentPath(entry.relativePath, options) ||
       isSupportedProjectImageFileName(entry.name))
   );
 }
@@ -1682,7 +1689,7 @@ export function FileExplorer({
       }
 
       if (targetEntry.kind === "file") {
-        if (!isRenamableFileExplorerEntry(targetEntry)) {
+        if (!isRenamableFileExplorerEntry(targetEntry, visibilityOptions)) {
           reportRenameUnavailable("unsupportedExtension");
           return;
         }
@@ -2308,7 +2315,10 @@ export function FileExplorer({
     !isProtectedFileExplorerRelativePath(renameSelectionTarget.relativePath) &&
     !(
       renameSelectionTarget.kind === "file" &&
-      (!isRenamableFileExplorerEntry(renameSelectionTarget) ||
+      (!isRenamableFileExplorerEntry(
+        renameSelectionTarget,
+        visibilityOptions
+      ) ||
         isProjectDocumentDirty(renameSelectionTarget.relativePath))
     ) &&
     !(
@@ -4417,7 +4427,7 @@ export function FileExplorerView({
     const isDirtyFile =
       entry.kind === "file" && isProjectDocumentDirty(entry.relativePath);
     const dropState = dropTargetState(entry.relativePath);
-    const isOpenable = isOpenableFileExplorerEntry(entry);
+    const isOpenable = isOpenableFileExplorerEntry(entry, visibilityOptions);
     const icon = iconForEntry(entry, expandedDirectoryPaths, visibilityOptions);
     const childKey = directoryKey(entry.relativePath);
     const childEntries = entriesByDirectoryPath[childKey] ?? [];

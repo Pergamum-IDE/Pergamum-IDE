@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getProjectDocumentKind,
+  isMarkdownPath,
   isProjectDocumentPath
 } from "../../src/shared/projectDocumentKind";
 
@@ -82,5 +83,13 @@ describe("getProjectDocumentKind (#501 Slice 0)", () => {
       expect(getProjectDocumentKind("file", options)).toBeNull();
       expect(isProjectDocumentPath("image.png", options)).toBe(false);
     }
+  });
+
+  it("identifies Markdown file paths accurately with isMarkdownPath", () => {
+    expect(isMarkdownPath("chapter1.md")).toBe(true);
+    expect(isMarkdownPath("chapter1.markdown")).toBe(true);
+    expect(isMarkdownPath("CHAPTER1.MD")).toBe(true);
+    expect(isMarkdownPath("notes.txt")).toBe(false);
+    expect(isMarkdownPath("image.png")).toBe(false);
   });
 });
