@@ -46,6 +46,13 @@ import {
   SaveDestinationSettingControl
 } from "./dialog/SaveDestinationDialog";
 import { FontCacheControl } from "./FontCacheControl";
+import { FontFamilyListSettingControl } from "./FontFamilyListSettingControl";
+import { FontPickerDialog } from "./dialog/FontPickerDialog";
+import {
+  areFontFamilyListsEqual,
+  type FontFamilySetting,
+  type FontSlot
+} from "../shared/fontSettings";
 
 export function isProjectSettingsScope(scope: SettingScope): boolean {
   return scope === "applicationWithProjectOverride" || scope === "projectOnly";
@@ -218,6 +225,12 @@ export function readProjectSettingValue(
       return settings.editor?.emphasisMark?.narouMarkText;
     case "editor.ruby.rule":
       return settings.editor?.ruby?.rule;
+    case "workbench.uiFontFamilyList":
+      return settings.workbench?.uiFontFamilyList;
+    case "editor.fontFamilyList":
+      return settings.editor?.fontFamilyList;
+    case "preview.fontFamilyList":
+      return settings.preview?.fontFamilyList;
     default:
       return undefined;
   }
@@ -295,6 +308,16 @@ export function isProjectSettingModified(
       inheritedVal as readonly DocumentMapDialogueDelimiterPair[] | undefined
     );
   }
+  if (
+    key === "workbench.uiFontFamilyList" ||
+    key === "editor.fontFamilyList" ||
+    key === "preview.fontFamilyList"
+  ) {
+    return !areFontFamilyListsEqual(
+      projectVal as readonly FontFamilySetting[] | undefined,
+      inheritedVal as readonly FontFamilySetting[] | undefined
+    );
+  }
   // If the persisted override equals the inherited value, normalize presentation as unchanged.
   return projectVal !== inheritedVal;
 }
@@ -309,6 +332,21 @@ export function createDifferentialProjectSettingRequest(
       areDialogueDelimiterPairsEqual(
         newValue as readonly DocumentMapDialogueDelimiterPair[] | undefined,
         inheritedValue as readonly DocumentMapDialogueDelimiterPair[] | undefined
+      )
+    ) {
+      return { remove: [key] };
+    }
+    return { set: { [key]: newValue } };
+  }
+  if (
+    key === "workbench.uiFontFamilyList" ||
+    key === "editor.fontFamilyList" ||
+    key === "preview.fontFamilyList"
+  ) {
+    if (
+      areFontFamilyListsEqual(
+        newValue as readonly FontFamilySetting[] | undefined,
+        inheritedValue as readonly FontFamilySetting[] | undefined
       )
     ) {
       return { remove: [key] };
@@ -538,6 +576,7 @@ export interface ProjectSettingsPanelViewProps {
     value: DocumentMapDialogueDelimiterPair[]
   ) => void;
   onOpenImageAttachmentDialog?: (opener?: Element | null) => void;
+  onOpenFontPickerDialog?: (slot: FontSlot, opener?: Element | null) => void;
 }
 
 function translateI18nKey(translate: Translate, key: string): string {
@@ -571,7 +610,8 @@ export function ProjectSettingsPanelView({
   onNumberChange,
   onSwitchChange,
   onDialoguePairsCommit,
-  onOpenImageAttachmentDialog
+  onOpenImageAttachmentDialog,
+  onOpenFontPickerDialog
 }: ProjectSettingsPanelViewProps): JSX.Element {
   const categoryGroups = groupProjectSettingItemsByCategory(items);
 
@@ -865,11 +905,19 @@ export function ProjectSettingsPanelView({
                         } else if (
                           item.control.customKind === "fontFamilyList"
                         ) {
+                          const fontListValue = Array.isArray(effectiveValue)
+                            ? (effectiveValue as FontFamilySetting[])
+                            : undefined;
                           controlElement = (
-                            <FontCacheControl
+                            <FontFamilyListSettingControl
                               id={`projectSettingControl-${item.key}`}
+                              slot={item.key as FontSlot}
+                              value={fontListValue}
                               disabled={isReadOnly || isSaving}
                               translate={translate}
+                              onOpenDialog={(slot, opener) =>
+                                onOpenFontPickerDialog?.(slot, opener)
+                              }
                             />
                           );
                         } else {
@@ -1050,6 +1098,41 @@ export function ProjectSettingsPanel({
   const [isDestinationDialogOpen, setIsDestinationDialogOpen] =
     useState<boolean>(false);
   const [dialogOpener, setDialogOpener] = useState<Element | null>(null);
+
+  const [fontPickerState, setFontPickerState] = useState<{
+    slot: FontSlot;
+    opener?: Element | null;
+  } | null>(null);
+
+  const handleFontPickerApply = async (
+    selectedFonts: FontFamilySetting[]
+  ): Promise<void> => {
+    if (!fontPickerState || isReadOnly || isSaving) {
+      return;
+    }
+    const key = fontPickerState.slot;
+    const inheritedValue = readInheritedSettingValue(
+      key,
+      applicationSettings,
+      inheritedFontFamily
+    );
+    const request = createDifferentialProjectSettingRequest(
+      key,
+      selectedFonts,
+      inheritedValue
+    );
+
+    setError(null);
+    setIsSaving(true);
+    try {
+      await onSaveSettings(request);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+      setFontPickerState(null);
+    }
+  };
 
   // Clear drafts for keys that are not actively being edited when external props change
   useEffect(() => {
@@ -1610,6 +1693,9 @@ export function ProjectSettingsPanel({
           setDialogOpener(opener ?? null);
           setIsDestinationDialogOpen(true);
         }}
+        onOpenFontPickerDialog={(slot, opener) => {
+          setFontPickerState({ slot, opener });
+        }}
       />
       <SaveDestinationDialog
         isOpen={isDestinationDialogOpen}
@@ -1641,6 +1727,26 @@ export function ProjectSettingsPanel({
           void handleImageAttachmentSave(result);
         }}
         onDismiss={() => setIsDestinationDialogOpen(false)}
+      />
+      <FontPickerDialog
+        isOpen={fontPickerState !== null}
+        slot={fontPickerState?.slot ?? "workbench.uiFontFamilyList"}
+        initialValue={
+          fontPickerState
+            ? ((readEffectiveProjectSettingValue(
+                fontPickerState.slot,
+                projectSettings,
+                applicationSettings,
+                inheritedFontFamily
+              ) as FontFamilySetting[]) ?? [])
+            : []
+        }
+        translate={translate}
+        opener={fontPickerState?.opener}
+        onSave={(selectedFonts) => {
+          void handleFontPickerApply(selectedFonts);
+        }}
+        onClose={() => setFontPickerState(null)}
       />
     </>
   );
