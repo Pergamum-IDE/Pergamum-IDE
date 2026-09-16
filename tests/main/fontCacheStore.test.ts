@@ -64,6 +64,28 @@ describe("fontCacheStore Main Process Persistence (#491)", () => {
     expect(loadResult).toEqual({ status: "loaded", cache: sampleCache });
   });
 
+  // #495: fixedWidth values ("fixed"/"proportional"/"unknown") set by
+  // renderer-side Canvas measurement round-trip through save/load unchanged
+  // — main only persists/validates the JSON, it never measures anything.
+  it("round-trips fixed/proportional/unknown fixedWidth values through save and load", async () => {
+    const mixedCache: FontCache = {
+      version: 1,
+      scannedAt: "2026-09-16T14:30:00.000Z",
+      uiLanguage: "ja",
+      families: [
+        { family: "Cascadia Code", displayName: "Cascadia Code", fixedWidth: "fixed" },
+        { family: "Arial", displayName: "Arial", fixedWidth: "proportional" },
+        { family: "Mystery Font", displayName: "Mystery Font", fixedWidth: "unknown" }
+      ]
+    };
+
+    const saveResult = await saveFontCache(mixedCache, tempUserDataDir);
+    expect(saveResult).toEqual({ status: "loaded", cache: mixedCache });
+
+    const loadResult = await loadFontCache(tempUserDataDir);
+    expect(loadResult).toEqual({ status: "loaded", cache: mixedCache });
+  });
+
   it("rejects invalid cache payload save without corrupting existing valid cache", async () => {
     const validCache: FontCache = {
       version: 1,

@@ -5,6 +5,10 @@ import {
   type FontCacheState,
   type RawFontData
 } from "../shared/fontCache";
+import {
+  createCanvasMeasureTextWidth,
+  measureFixedWidthForFamilies
+} from "./fontFixedWidthDetection";
 import type { Translate } from "../shared/i18n";
 
 declare global {
@@ -91,11 +95,18 @@ export const FontCacheControl: React.FC<FontCacheControlProps> = ({
     try {
       const rawFonts: RawFontData[] = await window.queryLocalFonts();
       const aggregated = aggregateFontFamilies(rawFonts);
+      // #495 (ADR-0015): classify fixed-width vs proportional via Canvas
+      // measurement, once per family, right after the user-triggered scan —
+      // never on startup, Settings open, or font picker open.
+      const measuredFamilies = measureFixedWidthForFamilies(
+        aggregated,
+        createCanvasMeasureTextWidth()
+      );
       const newCache: FontCache = {
         version: 1,
         scannedAt: new Date().toISOString(),
         uiLanguage: "ja",
-        families: aggregated
+        families: measuredFamilies
       };
 
       const fontCacheApi = window.pergamum?.fontCache;

@@ -83,4 +83,27 @@ describe("Font Cache Domain & Aggregation (#491)", () => {
       })
     ).toBe(false);
   });
+
+  // #495: fixedWidth is a 3-value enum ("unknown" | "fixed" | "proportional")
+  // once local font scans start classifying families with Canvas
+  // measurement; validation must accept all three and reject anything else.
+  it("accepts every valid fixedWidth value and rejects anything else", () => {
+    const cacheWith = (fixedWidth: unknown): unknown => ({
+      version: 1,
+      scannedAt: "2026-09-16T14:30:00.000Z",
+      uiLanguage: "ja",
+      families: [{ family: "Cascadia Code", displayName: "Cascadia Code", fixedWidth }]
+    });
+
+    expect(isValidFontCache(cacheWith("unknown"))).toBe(true);
+    expect(isValidFontCache(cacheWith("fixed"))).toBe(true);
+    expect(isValidFontCache(cacheWith("proportional"))).toBe(true);
+
+    expect(isValidFontCache(cacheWith("Fixed"))).toBe(false);
+    expect(isValidFontCache(cacheWith("monospace"))).toBe(false);
+    expect(isValidFontCache(cacheWith(""))).toBe(false);
+    expect(isValidFontCache(cacheWith(null))).toBe(false);
+    expect(isValidFontCache(cacheWith(undefined))).toBe(false);
+    expect(isValidFontCache(cacheWith(1))).toBe(false);
+  });
 });
