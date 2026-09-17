@@ -10,6 +10,18 @@ const markdown = new MarkdownIt({
   linkify: true
 });
 
+/**
+ * #503: inject 1-based source line numbers (`data-source-line`) onto block-level
+ * opening tags so preview scroll synchronization can use anchor-based mapping.
+ */
+markdown.core.ruler.push("source_line_anchors", (state) => {
+  for (const token of state.tokens) {
+    if (token.map && token.nesting >= 0) {
+      token.attrSet("data-source-line", String(token.map[0] + 1));
+    }
+  }
+});
+
 const NO_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext = { kind: "none" };
 
 /**

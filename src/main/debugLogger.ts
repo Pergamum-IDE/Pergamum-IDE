@@ -161,6 +161,16 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "recovery.document.discarded": "info",
   "recovery.document.discard.failed": "error",
   "recovery.report.copied": "debug",
+  "preview.scrollSync.wiring.initialized": "info",
+  "preview.scrollSync.blockMap.built": "debug",
+  "preview.scrollSync.editorToPreview.sampled": "debug",
+  "preview.scrollSync.correction.sampled": "debug",
+  "preview.scrollSync.layoutMetrics.changed": "debug",
+  "preview.scrollSync.previewScroll.suppressed": "debug",
+  "preview.scrollSync.anchors.collected": "debug",
+  "preview.scrollSync.editorScroll.sampled": "debug",
+  "preview.scrollSync.previewScroll.sampled": "debug",
+  "preview.scrollSync.programmaticScroll.suppressed": "debug",
   "app.uncaughtException": "error",
   "app.unhandledRejection": "error"
 };

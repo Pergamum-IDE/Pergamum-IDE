@@ -111,6 +111,16 @@ export const debugLogEventNames = [
   "recovery.document.discarded",
   "recovery.document.discard.failed",
   "recovery.report.copied",
+  "preview.scrollSync.wiring.initialized",
+  "preview.scrollSync.blockMap.built",
+  "preview.scrollSync.editorToPreview.sampled",
+  "preview.scrollSync.correction.sampled",
+  "preview.scrollSync.layoutMetrics.changed",
+  "preview.scrollSync.previewScroll.suppressed",
+  "preview.scrollSync.anchors.collected",
+  "preview.scrollSync.editorScroll.sampled",
+  "preview.scrollSync.previewScroll.sampled",
+  "preview.scrollSync.programmaticScroll.suppressed",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -249,6 +259,9 @@ export const debugLogReasons = [
   "invalidEncoding",
   "unencodableCharacters",
   "locked",
+  "programmatic_scroll_write",
+  "stale_generation",
+  "one_way_sync_disabled",
   "unknown"
 ] as const;
 
@@ -586,6 +599,82 @@ export interface DebugLogDetails {
   /** Opaque per-mount ids (e.g. `"surface-3"`, `"editor-7"`), never a path. */
   activeFindSurfaceInstanceId?: string;
   activeFindEditorInstanceId?: string;
+
+  /** #503 Preview Scroll Sync diagnostics */
+  sourceAxis?: string;
+  targetAxis?: string;
+  editorScrollerMounted?: boolean;
+  previewScrollerMounted?: boolean;
+  syncDirection?: string;
+  direction?: string;
+  anchorCount?: number;
+  blockRefCount?: number;
+  firstAnchorLine?: number | null;
+  lastAnchorLine?: number | null;
+  firstBlockLine?: number | null;
+  lastBlockLine?: number | null;
+  firstAnchorOffset?: number | null;
+  lastAnchorOffset?: number | null;
+  containerScrollHeight?: number;
+  containerClientHeight?: number;
+  containerMaxScrollTop?: number;
+  articleScrollHeight?: number | null;
+  articleOffsetHeight?: number | null;
+  containerTagName?: string;
+  containerClassName?: string;
+  editorScrollTop?: number;
+  editorMaxScrollTop?: number;
+  editorTopSourceLine?: number | null;
+  previewScrollTop?: number;
+  previewMaxScrollTop?: number;
+  previousAnchorLine?: number | null;
+  nextAnchorLine?: number | null;
+  previousAnchorOffset?: number | null;
+  nextAnchorOffset?: number | null;
+  previousAnchorLiveOffset?: number | null;
+  nextAnchorLiveOffset?: number | null;
+  rawComputedPreviewTargetOffset?: number;
+  clampedPreviewTargetOffset?: number;
+  rawTargetOffset?: number;
+  clampedTargetOffset?: number;
+  previewScrollTopBefore?: number;
+  previewScrollTopAfter?: number;
+  previewScrollHeight?: number;
+  previewClientHeight?: number;
+  anchorCacheScrollHeight?: number | null;
+  anchorCacheClientHeight?: number | null;
+  anchorCacheMaxScrollTop?: number | null;
+  sameContainerAsAnchorCollection?: boolean;
+  usedCachedPixelOffset?: boolean;
+  usedLiveMeasurement?: boolean;
+  correctionApplied?: boolean;
+  previousTargetOffset?: number;
+  correctedTargetOffset?: number;
+  delta?: number;
+  previousScrollHeight?: number;
+  currentScrollHeight?: number;
+  previousClientHeight?: number;
+  currentClientHeight?: number;
+  deltaScrollHeight?: number;
+  previewAnchorLine?: number | null;
+  computedPreviewTargetOffset?: number;
+  actualPreviewScrollTopAfterSync?: number;
+  computedEditorTargetLine?: number | null;
+  scheduledGeneration?: number;
+  appliedGeneration?: number;
+  previousAnchorConnected?: boolean;
+  nextAnchorConnected?: boolean;
+  previousAnchorRectTop?: number | null;
+  previewContainerRectTop?: number | null;
+  previewContainerIsConnected?: boolean;
+  blockMapBuildId?: number;
+  blockMapReason?: string;
+  measurementFailed?: boolean;
+  skipReason?: string;
+  suppressedSide?: string;
+  eventSide?: string;
+  generation?: number;
+  remainingFrames?: number;
 
   error?: SanitizedErrorInfo;
 }

@@ -18,6 +18,7 @@ import {
   DEFAULT_EDITOR_SCROLL_ALIGN,
   type EditorScrollAlign
 } from "./editorScrollAlign";
+import type { EditorScrollSyncAdapter } from "./previewScrollSync";
 import type {
   ApplicationEditorWhitespaceSettings,
   ExpectedLineEnding,
@@ -377,6 +378,10 @@ interface MarkdownEditorProps {
    * reads / writes individual entries.
    */
   documentStates?: Map<string, MarkdownEditorDocumentState>;
+  /** #503: callback when the editor view scroller DOM element mounts or unmounts. */
+  onScrollerMount?: (scroller: HTMLElement | null) => void;
+  /** #503: callback when the EditorView scroll-sync adapter mounts or unmounts. */
+  onScrollSyncAdapterMount?: (adapter: EditorScrollSyncAdapter | null) => void;
 }
 
 /**
@@ -573,10 +578,20 @@ export function MarkdownEditor({
   createImageAttachmentPendingId,
   imageLinkDiagnosticsResolutionContext = { kind: "none" },
   formatImageLinkDiagnosticMessage,
-  documentStates: documentStatesProp
+  documentStates: documentStatesProp,
+  onScrollerMount,
+  onScrollSyncAdapterMount
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const onScrollerMountRef = useRef(onScrollerMount);
+  useEffect(() => {
+    onScrollerMountRef.current = onScrollerMount;
+  }, [onScrollerMount]);
+  const onScrollSyncAdapterMountRef = useRef(onScrollSyncAdapterMount);
+  useEffect(() => {
+    onScrollSyncAdapterMountRef.current = onScrollSyncAdapterMount;
+  }, [onScrollSyncAdapterMount]);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   const visibilityCompartmentRef = useRef<Compartment | null>(null);
   // #256: owns the whitespace-marker layer so a runtime Settings change is
@@ -1198,11 +1213,40 @@ export function MarkdownEditor({
     }
 
     viewRef.current = view;
+    onScrollerMountRef.current?.(view.scrollDOM);
+
+    const adapter: EditorScrollSyncAdapter = {
+      scroller: view.scrollDOM,
+      getTopSourceLine: () => {
+        try {
+          const topOffset = view.scrollDOM.scrollTop;
+          const block = view.lineBlockAtHeight(topOffset);
+          return view.state.doc.lineAt(block.from).number;
+        } catch {
+          return null;
+        }
+      },
+      scrollToSourceLine: (targetLine: number) => {
+        try {
+          const totalLines = view.state.doc.lines;
+          const clamped = Math.max(1, Math.min(Math.floor(targetLine), totalLines));
+          const line = view.state.doc.line(clamped);
+          view.dispatch({
+            effects: EditorView.scrollIntoView(line.from, { y: "start" })
+          });
+        } catch {
+          // ignore
+        }
+      }
+    };
+    onScrollSyncAdapterMountRef.current?.(adapter);
 
     // First push once the initial layout has settled.
     scheduleVisibleRangePush();
 
     return () => {
+      onScrollSyncAdapterMountRef.current?.(null);
+      onScrollerMountRef.current?.(null);
       unregisterEditorViewImageAttachmentPasteOptions(view);
       unregisterEditorViewImageLinkDiagnosticsOptions(view);
       // #272: report this editor's final View State (keyed by whatever

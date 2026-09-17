@@ -977,6 +977,9 @@ export function App(): JSX.Element {
       .then((snapshot) => {
         if (!cancelled) {
           setIsDebugModeEnabled(snapshot.enabled);
+          console.info(
+            `[#503 preview-scroll-sync] 2. Renderer received debug mode: ${snapshot.enabled}`
+          );
         }
       })
       .catch(() => {
@@ -10771,6 +10774,7 @@ export function App(): JSX.Element {
                       handleDocumentOpenPreviewFrameObserved
                     }
                         onViewportChanged={handleViewportChanged}
+                        onPreviewScrollSyncEvent={logRendererDebugEvent}
                       />
                   ) : shouldShowWelcome ? (
                     /* #262 / #311 dogfood blocker: with a project open the

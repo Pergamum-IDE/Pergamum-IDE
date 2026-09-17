@@ -6,7 +6,11 @@ import {
   useState,
   type RefObject
 } from "react";
-import type { DebugLogViewportChangeSource } from "../shared/debugLog";
+import type {
+  DebugLogEventName,
+  DebugLogLevel,
+  DebugLogViewportChangeSource
+} from "../shared/debugLog";
 import {
   documentCharCount,
   documentLineCount,
@@ -35,6 +39,25 @@ import {
 } from "./editorLineEndingField";
 import type { PendingMarkdownSelection } from "./pendingMarkdownSelection";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
+import {
+  collectPreviewAnchors,
+  collectPreviewBlockRefs,
+  createScrollSyncGuard,
+  findSurroundingBlockRefs,
+  getLastPreviewScrollSyncDebugDetails,
+  getLiveElementOffset,
+  getMaxScroll,
+  getScrollOffset,
+  setScrollOffset,
+  syncPreviewScroll,
+  syncPreviewScrollWithAnchors,
+  syncPreviewScrollWithBlocks,
+  type BlockMapBuildReason,
+  type EditorScrollSyncAdapter,
+  type PreviewAnchor,
+  type PreviewBlockRef,
+  type PreviewScrollAxis
+} from "./previewScrollSync";
 import {
   MarkdownEditor,
   type MarkdownImageAttachmentPositionController,
@@ -566,6 +589,11 @@ interface EditorSurfaceProps {
    * above).
    */
   onViewportChanged: (details: ViewportSizeDetails) => void;
+  onPreviewScrollSyncEvent?: (input: {
+    level: DebugLogLevel;
+    event: DebugLogEventName;
+    details?: Record<string, unknown>;
+  }) => void;
 }
 
 export function EditorSurface({
@@ -623,7 +651,8 @@ export function EditorSurface({
   onDocumentOpenPreviewDomCommitted,
   onDocumentOpenPreviewDecorationCompleted,
   onDocumentOpenPreviewFrameObserved,
-  onViewportChanged
+  onViewportChanged,
+  onPreviewScrollSyncEvent
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -692,6 +721,7 @@ export function EditorSurface({
             onDocumentOpenPreviewFrameObserved
           }
           onViewportChanged={onViewportChanged}
+          onPreviewScrollSyncEvent={onPreviewScrollSyncEvent}
         />
       );
   }
@@ -802,6 +832,11 @@ interface MarkdownEditorSurfaceProps {
     durationMs: number
   ) => void;
   onViewportChanged: (details: ViewportSizeDetails) => void;
+  onPreviewScrollSyncEvent?: (input: {
+    level: DebugLogLevel;
+    event: DebugLogEventName;
+    details?: Record<string, unknown>;
+  }) => void;
 }
 
 function MarkdownEditorSurface({
@@ -859,8 +894,21 @@ function MarkdownEditorSurface({
   onDocumentOpenPreviewDomCommitted,
   onDocumentOpenPreviewDecorationCompleted,
   onDocumentOpenPreviewFrameObserved,
-  onViewportChanged
+  onViewportChanged,
+  onPreviewScrollSyncEvent
 }: MarkdownEditorSurfaceProps): JSX.Element {
+  const emitScrollSyncLog = useCallback(
+    (input: {
+      level: DebugLogLevel;
+      event: DebugLogEventName;
+      details?: Record<string, unknown>;
+    }) => {
+      console.info(`[#503 preview-scroll-sync] ${input.event}`, input.details);
+      onPreviewScrollSyncEvent?.(input);
+    },
+    [onPreviewScrollSyncEvent]
+  );
+
   const content = currentDocumentContent(document);
   // #253: only converted to a plain array (an O(n) walk of the tracked
   // breaks) when the document identity itself changes — never per
@@ -950,6 +998,353 @@ function MarkdownEditorSurface({
   const reportedDocumentOpenIdRef = useRef<string | null>(null);
   const editorPaneRef = useRef<HTMLElement | null>(null);
   const previewPaneRef = useRef<HTMLElement | null>(null);
+
+  // #503 Preview Scroll Sync Foundation: Markdown Preview is explicitly vertical-axis.
+  const [editorAdapter, setEditorAdapter] = useState<EditorScrollSyncAdapter | null>(null);
+  const editorScroller = editorAdapter?.scroller ?? null;
+  const [previewContainer, setPreviewContainer] = useState<HTMLElement | null>(null);
+  const scrollSyncGuard = useMemo(() => createScrollSyncGuard(), []);
+  const previewScrollAxis: PreviewScrollAxis = "vertical";
+  const previewBlockRefsRef = useRef<PreviewBlockRef[]>([]);
+  const previewAnchorsRef = useRef<PreviewAnchor[]>([]);
+  const editorScrollFrameRef = useRef<number | null>(null);
+  const previewScrollFrameRef = useRef<number | null>(null);
+  const firstEditorScrollFiredRef = useRef(false);
+  const firstPreviewScrollFiredRef = useRef(false);
+  const lastSampledBucketRef = useRef<number | null>(null);
+  const generationRef = useRef(0);
+  const lastEditorScrollTopRef = useRef<number | null>(null);
+
+  const lastPreviewLayoutMetricsRef = useRef<{
+    scrollHeight: number;
+    clientHeight: number;
+  }>({
+    scrollHeight: 0,
+    clientHeight: 0
+  });
+
+  const blockMapBuildIdRef = useRef<number>(0);
+
+  const rebuildBlockMap = useCallback(
+    (container: HTMLElement, reason: BlockMapBuildReason) => {
+      const result = collectPreviewBlockRefs(container, reason);
+      previewBlockRefsRef.current = result.blocks;
+      previewAnchorsRef.current = collectPreviewAnchors(container, previewScrollAxis);
+      blockMapBuildIdRef.current = result.buildId;
+
+      const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
+      lastPreviewLayoutMetricsRef.current = {
+        scrollHeight,
+        clientHeight
+      };
+
+      const details = {
+        blockRefCount: result.blocks.length,
+        firstBlockLine: result.blocks[0]?.line ?? null,
+        lastBlockLine: result.blocks[result.blocks.length - 1]?.line ?? null,
+        usedCachedPixelOffset: false,
+        blockMapBuildId: result.buildId,
+        blockMapReason: reason,
+        reason
+      };
+      emitScrollSyncLog({
+        level: "debug",
+        event: "preview.scrollSync.blockMap.built",
+        details
+      });
+      return result;
+    },
+    [emitScrollSyncLog, previewScrollAxis]
+  );
+
+  const handlePreviewContentCommitted = useCallback(
+    (container: HTMLElement) => {
+      rebuildBlockMap(container, "htmlRegenerated");
+    },
+    [rebuildBlockMap]
+  );
+
+  // #503: Build structural block map (references only, no pixel offsets) when container mounts/remounts.
+  useEffect(() => {
+    if (previewContainer) {
+      rebuildBlockMap(previewContainer, "remount");
+    } else {
+      previewBlockRefsRef.current = [];
+      previewAnchorsRef.current = [];
+      lastPreviewLayoutMetricsRef.current = {
+        scrollHeight: 0,
+        clientHeight: 0
+      };
+    }
+  }, [previewContainer, rebuildBlockMap]);
+
+  useEffect(() => {
+    if (!editorScroller || !previewContainer) {
+      return undefined;
+    }
+
+    const wiringDetails = {
+      sourceAxis: previewScrollAxis,
+      targetAxis: previewScrollAxis,
+      editorScrollerMounted: !!editorScroller,
+      previewScrollerMounted: !!previewContainer,
+      syncDirection: "editorToPreview"
+    };
+    emitScrollSyncLog({
+      level: "info",
+      event: "preview.scrollSync.wiring.initialized",
+      details: wiringDetails
+    });
+
+    const handleEditorScroll = () => {
+      generationRef.current += 1;
+      const currentGen = generationRef.current;
+
+      if (scrollSyncGuard.shouldIgnoreScroll("editor")) {
+        const suppressDetails = {
+          suppressedSide: "editor",
+          eventSide: "editor",
+          reason: "programmatic_scroll_write",
+          generation: currentGen,
+          remainingFrames: 0
+        };
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.scrollSync.programmaticScroll.suppressed",
+          details: suppressDetails
+        });
+        if (editorScrollFrameRef.current !== null) {
+          cancelAnimationFrame(editorScrollFrameRef.current);
+          editorScrollFrameRef.current = null;
+        }
+        return;
+      }
+
+      if (!firstEditorScrollFiredRef.current) {
+        firstEditorScrollFiredRef.current = true;
+      }
+
+      if (editorScrollFrameRef.current !== null) {
+        cancelAnimationFrame(editorScrollFrameRef.current);
+      }
+
+      editorScrollFrameRef.current = requestAnimationFrame(() => {
+        editorScrollFrameRef.current = null;
+        if (
+          currentGen !== generationRef.current ||
+          scrollSyncGuard.isSuppressed("editor")
+        ) {
+          return;
+        }
+
+        // Diagnostic layout metrics change detection
+        const currentScrollHeight = previewContainer.scrollHeight;
+        const currentClientHeight = previewContainer.clientHeight;
+        if (
+          lastPreviewLayoutMetricsRef.current.scrollHeight !== 0 &&
+          (lastPreviewLayoutMetricsRef.current.scrollHeight !== currentScrollHeight ||
+            lastPreviewLayoutMetricsRef.current.clientHeight !== currentClientHeight)
+        ) {
+          emitScrollSyncLog({
+            level: "debug",
+            event: "preview.scrollSync.layoutMetrics.changed",
+            details: {
+              previousScrollHeight: lastPreviewLayoutMetricsRef.current.scrollHeight,
+              currentScrollHeight,
+              previousClientHeight: lastPreviewLayoutMetricsRef.current.clientHeight,
+              currentClientHeight,
+              deltaScrollHeight: currentScrollHeight - lastPreviewLayoutMetricsRef.current.scrollHeight
+            }
+          });
+        }
+        lastPreviewLayoutMetricsRef.current = {
+          scrollHeight: currentScrollHeight,
+          clientHeight: currentClientHeight
+        };
+
+        const topSourceLine = editorAdapter?.getTopSourceLine() ?? undefined;
+        const editorMax = getMaxScroll(editorScroller, previewScrollAxis);
+        const editorCurrent = getScrollOffset(editorScroller, previewScrollAxis);
+        const isEditorAtEnd = editorMax > 0 && editorCurrent >= editorMax - 1;
+        const previewScrollTopBefore = getScrollOffset(previewContainer, previewScrollAxis);
+
+        syncPreviewScrollWithBlocks({
+          source: editorScroller,
+          sourceAxis: previewScrollAxis,
+          sourcePosition: {
+            line: topSourceLine,
+            offset: editorCurrent
+          },
+          target: previewContainer,
+          targetAxis: previewScrollAxis,
+          blocks: previewBlockRefsRef.current,
+          guard: scrollSyncGuard,
+          targetSide: "preview",
+          isEditorAtEnd,
+          onBlockMapRebuilt: (result) => {
+            previewBlockRefsRef.current = result.blocks;
+            blockMapBuildIdRef.current = result.buildId;
+            emitScrollSyncLog({
+              level: "debug",
+              event: "preview.scrollSync.blockMap.built",
+              details: {
+                blockRefCount: result.blocks.length,
+                firstBlockLine: result.blocks[0]?.line ?? null,
+                lastBlockLine: result.blocks[result.blocks.length - 1]?.line ?? null,
+                usedCachedPixelOffset: false,
+                blockMapBuildId: result.buildId,
+                blockMapReason: result.reason,
+                reason: result.reason
+              }
+            });
+          }
+        });
+
+        const debugDetails = getLastPreviewScrollSyncDebugDetails();
+        const previewScrollTopAfter = getScrollOffset(previewContainer, previewScrollAxis);
+        const targetMax = getMaxScroll(previewContainer, previewScrollAxis);
+
+        const previousScrollTop = lastEditorScrollTopRef.current;
+        lastEditorScrollTopRef.current = editorCurrent;
+        const direction =
+          previousScrollTop === null
+            ? "none"
+            : editorCurrent > previousScrollTop
+            ? "down"
+            : editorCurrent < previousScrollTop
+            ? "up"
+            : "none";
+
+        // Diagnostic: emitted on every sync for #503 troubleshooting (do not throttle yet)
+        const sampleDetails = {
+          direction,
+          editorScrollTop: editorCurrent,
+          editorMaxScrollTop: editorMax,
+          editorTopSourceLine: topSourceLine ?? null,
+          previousAnchorLine: debugDetails?.previousAnchorLine ?? null,
+          nextAnchorLine: debugDetails?.nextAnchorLine ?? null,
+          previousAnchorLiveOffset: debugDetails?.previousAnchorLiveOffset ?? null,
+          nextAnchorLiveOffset: debugDetails?.nextAnchorLiveOffset ?? null,
+          previousAnchorConnected: debugDetails?.previousAnchorConnected ?? false,
+          nextAnchorConnected: debugDetails?.nextAnchorConnected ?? false,
+          previousAnchorRectTop: debugDetails?.previousAnchorRectTop ?? null,
+          previewContainerRectTop: debugDetails?.previewContainerRectTop ?? null,
+          previewContainerIsConnected: debugDetails?.previewContainerIsConnected ?? false,
+          blockMapBuildId: debugDetails?.blockMapBuildId ?? blockMapBuildIdRef.current,
+          rawTargetOffset: debugDetails?.rawTargetOffset ?? 0,
+          clampedTargetOffset: debugDetails?.clampedTargetOffset ?? 0,
+          previewScrollTopBefore,
+          previewScrollTopAfter,
+          previewScrollHeight: previewContainer.scrollHeight,
+          previewClientHeight: previewContainer.clientHeight,
+          previewMaxScrollTop: targetMax,
+          generation: currentGen,
+          usedLiveMeasurement: !(debugDetails?.measurementFailed ?? false),
+          usedCachedPixelOffset: false,
+          measurementFailed: debugDetails?.measurementFailed ?? false,
+          skipReason: debugDetails?.skipReason ?? null
+        };
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.scrollSync.editorToPreview.sampled",
+          details: sampleDetails
+        });
+
+        // Only schedule correction pass if measurement did not fail
+        if (!debugDetails?.measurementFailed) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (currentGen !== generationRef.current || !previewContainer) {
+                return;
+              }
+
+              const currentScroll = getScrollOffset(previewContainer, previewScrollAxis);
+              const currentTargetMax = getMaxScroll(previewContainer, previewScrollAxis);
+              let correctedOffset = currentScroll;
+
+              if (isEditorAtEnd) {
+                correctedOffset = currentTargetMax;
+              } else if (typeof topSourceLine === "number") {
+                const { prev, next } = findSurroundingBlockRefs(previewBlockRefsRef.current, topSourceLine);
+                if (prev && next && prev.element.isConnected && next.element.isConnected) {
+                  const prevOff = getLiveElementOffset(prev.element, previewContainer, previewScrollAxis);
+                  if (prev === next || prev.line === next.line) {
+                    correctedOffset = prevOff;
+                  } else {
+                    const nextOff = getLiveElementOffset(next.element, previewContainer, previewScrollAxis);
+                    const frac = (topSourceLine - prev.line) / (next.line - prev.line);
+                    correctedOffset = prevOff + frac * (nextOff - prevOff);
+                  }
+                } else if (prev && !next && prev.element.isConnected) {
+                  correctedOffset = currentTargetMax;
+                } else {
+                  return;
+                }
+              }
+
+              const clampedCorrected = Math.min(currentTargetMax, Math.max(0, correctedOffset));
+              const delta = clampedCorrected - previewScrollTopAfter;
+              const correctionApplied = Math.abs(delta) >= 1;
+
+              if (correctionApplied) {
+                setScrollOffset(previewContainer, previewScrollAxis, clampedCorrected);
+              }
+
+              emitScrollSyncLog({
+                level: "debug",
+                event: "preview.scrollSync.correction.sampled",
+                details: {
+                  correctionApplied,
+                  previousTargetOffset: previewScrollTopAfter,
+                  correctedTargetOffset: clampedCorrected,
+                  delta,
+                  generation: currentGen
+                }
+              });
+            });
+          });
+        }
+      });
+    };
+
+    const handlePreviewScroll = () => {
+      const currentGen = generationRef.current;
+      const isProgrammatic = scrollSyncGuard.shouldIgnoreScroll("preview");
+
+      const suppressDetails = {
+        reason: isProgrammatic ? "programmatic_scroll_write" : "one_way_sync_disabled",
+        generation: currentGen
+      };
+      emitScrollSyncLog({
+        level: "debug",
+        event: "preview.scrollSync.previewScroll.suppressed",
+        details: suppressDetails
+      });
+
+      if (previewScrollFrameRef.current !== null) {
+        cancelAnimationFrame(previewScrollFrameRef.current);
+        previewScrollFrameRef.current = null;
+      }
+    };
+
+    editorScroller.addEventListener("scroll", handleEditorScroll, { passive: true });
+    previewContainer.addEventListener("scroll", handlePreviewScroll, { passive: true });
+
+    return () => {
+      if (editorScrollFrameRef.current !== null) {
+        cancelAnimationFrame(editorScrollFrameRef.current);
+        editorScrollFrameRef.current = null;
+      }
+      if (previewScrollFrameRef.current !== null) {
+        cancelAnimationFrame(previewScrollFrameRef.current);
+        previewScrollFrameRef.current = null;
+      }
+      scrollSyncGuard.reset();
+      editorScroller.removeEventListener("scroll", handleEditorScroll);
+      previewContainer.removeEventListener("scroll", handlePreviewScroll);
+    };
+  }, [editorAdapter, editorScroller, previewContainer, previewScrollAxis, scrollSyncGuard]);
 
   // -------------------------------------------------------------------------
   // #424: active-document Find panel.
@@ -1939,6 +2334,7 @@ function MarkdownEditorSurface({
           soundSettings={soundSettings}
           readOnly={readOnly}
           glossaryCompletion={glossaryCompletion}
+          onScrollSyncAdapterMount={setEditorAdapter}
         />
       </section>
 
@@ -1972,6 +2368,8 @@ function MarkdownEditorSurface({
             onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}
             onPreviewDecorationCompleted={onDocumentOpenPreviewDecorationCompleted}
             onPreviewFrameObserved={onDocumentOpenPreviewFrameObserved}
+            onPreviewContainerMount={setPreviewContainer}
+            onPreviewContentCommitted={handlePreviewContentCommitted}
           />
         </section>
       ) : null}
