@@ -916,14 +916,16 @@ export const jaTranslations = {
   "search.replace.project.allFailure.message": "置換を保存できませんでした。",
   "search.replace.project.fileChanged":
     "置換候補の作成後にファイルが変更されたため、保存しませんでした。",
+  "search.replace.project.unencodableFailure.message":
+    "この文字エンコーディングでは置換を保存できませんでした。\n\n置換後の本文に、現在選択されている文字エンコーディングでは保存できない文字が含まれています。\nファイルを破損しないよう、該当ファイルへの置換は中止しました。\n\nテキストファイルの文字エンコーディングを UTF-8 に変更するか、置換後の文字列を変更してから、もう一度実行してください。",
   "search.replace.preview.openDocs.title": "開いている文書のみ置換",
   "search.replace.preview.openDocs.description":
-    "開いている Markdown 文書のみを対象に置換候補を確認します。\n選択した置換は編集状態として反映され、保存するまでファイルには書き込まれません。",
+    "開いている文書のみを対象に置換候補を確認します。\n選択した置換は編集状態として反映され、保存するまでファイルには書き込まれません。",
   "search.replace.preview.openDocs.noCandidates":
     "開いている文書に置換候補がありません。",
   "search.replace.preview.project.title": "プロジェクト内文書置換",
   "search.replace.preview.project.description":
-    "プロジェクト内の Markdown 文書を直接書き換えて保存します。\n実行前に置換候補を確認し、適用する候補だけを選択してください。",
+    "プロジェクト内の文書を直接書き換えて保存します。\n実行前に置換候補を確認し、適用する候補だけを選択してください。",
   "search.replace.preview.project.destructiveWarning":
     "この操作は選択した置換をファイルに直接保存します。保存後は Pergamum の Undo では戻せません。",
   "search.replace.preview.project.replaceLabel": "置換する",
@@ -956,6 +958,15 @@ export const jaTranslations = {
   "search.replace.preview.rowControlLabel": "この候補の適用・無視",
   "search.replace.preview.applyAsEdits": "選択した置換を編集状態にする",
   "search.replace.preview.applyAndSave": "選択した置換を適用して保存",
+  "search.replace.preview.status.success": "適用成功",
+  "search.replace.preview.status.unencodableCharacters":
+    "この文字エンコーディングでは保存できない文字が含まれているため、このファイルへの置換を保存できませんでした。",
+  "search.replace.preview.status.stalePreview":
+    "設定変更により、このファイルは現在の置換対象から外れています。",
+  "search.replace.preview.status.fileChanged":
+    "プレビュー作成後にファイルが変更されたため、このファイルへの置換を保存できませんでした。",
+  "search.replace.preview.status.saveFailed":
+    "このファイルへの置換を保存できませんでした。",
   "search.replace.unsavedGate.title": "未保存の文書があります",
   "search.replace.unsavedGate.message":
     "プロジェクト内文書置換では、プロジェクト内の Markdown 文書を直接書き換えて保存します。\n未保存の文書がある状態では、編集中の内容とディスク上の内容が相違する可能性があるため実行できません。\n\nお手数ですが、開いている文書を保存または破棄してから、もう一度実行してください。",

@@ -274,3 +274,71 @@ describe("Plain Text Document Support (#501 Slice 3)", () => {
     expect(block).not.toContain("isProjectDocumentPath");
   });
 });
+
+describe("Plain Text Project-wide Replace (#501 Slice 9)", () => {
+  it("gates open document replace targets by textFiles.enablePlainTextDocuments", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = source.indexOf(
+      "function collectOpenDocumentReplaceTargets(): OpenDocumentReplaceTarget[] {"
+    );
+    const end = source.indexOf("function replaceTemplateErrorMessageKey(", start);
+    const block = source.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(block).toContain(
+      "!effectiveSettings.textFiles.enablePlainTextDocuments"
+    );
+    expect(block).toContain("!isMarkdownCurrentDocument(markdownDocument)");
+  });
+
+  it("gates project document replace candidate generation by textFiles.enablePlainTextDocuments", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = source.indexOf(
+      "async function generateProjectReplacePreviewCandidates("
+    );
+    const end = source.indexOf("async function applyProjectReplaceSelection(", start);
+    const block = source.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(block).toContain("isProjectDocumentPath(projectDocument.relativePath, {");
+    expect(block).toContain(
+      "enablePlainTextDocuments:\n            effectiveSettings.textFiles.enablePlainTextDocuments"
+    );
+  });
+
+  it("protects apply-time stale preview and restricts normalizeMarkdownTextForStorage to Markdown files", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = source.indexOf("async function applyProjectReplaceSelection(");
+    const end = source.indexOf(
+      "function syncOpenCleanBuffersAfterProjectReplace(",
+      start
+    );
+    const block = source.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    // Apply-time stale preview check
+    expect(block).toContain("isProjectDocumentPath(relativePath, {");
+    expect(block).toContain(
+      "enablePlainTextDocuments:\n            effectiveSettings.textFiles.enablePlainTextDocuments"
+    );
+    // Markdown-only storage normalization guard
+    expect(block).toContain("isMarkdownPath(relativePath)");
+    expect(block).toContain("normalizeMarkdownTextForStorage(");
+    // Structured save failure check
+    expect(block).toContain('saveResult.kind === "failed"');
+  });
+
+  it("ensures old setting keys remain completely absent from the codebase", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const ipcSource = readFileSync("src/main/projectIpc.ts", "utf8");
+
+    expect(appSource).not.toContain("files.newFile");
+    expect(appSource).not.toContain("workbench.enablePlainTextDocuments");
+    expect(ipcSource).not.toContain("files.newFile");
+    expect(ipcSource).not.toContain("workbench.enablePlainTextDocuments");
+  });
+});
+

@@ -310,7 +310,9 @@ import {
 import { LineEndingDistributionDialog } from "./dialog/LineEndingDistributionDialog";
 import {
   ReplacePreviewDialog,
+  type ReplaceApplyFailureReason,
   type ReplaceApplyResult,
+  type ReplaceFileApplyOutcome,
   type ReplacePreviewCandidate,
   type ReplacePreviewOpenRequest,
   type ReplacePreviewScope
@@ -8885,6 +8887,12 @@ export function App(): JSX.Element {
       if (isReadOnlyProject && markdownDocument.kind === "project") {
         continue;
       }
+      if (
+        !effectiveSettings.textFiles.enablePlainTextDocuments &&
+        !isMarkdownCurrentDocument(markdownDocument)
+      ) {
+        continue;
+      }
       targets.push({
         documentId: serializeEditorId(openDocument.id),
         fileLabel: markdownDocument.name,
@@ -9362,6 +9370,14 @@ export function App(): JSX.Element {
       if (replacePreviewGenerationRef.current !== generation) {
         return;
       }
+      if (
+        !isProjectDocumentPath(projectDocument.relativePath, {
+          enablePlainTextDocuments:
+            effectiveSettings.textFiles.enablePlainTextDocuments
+        })
+      ) {
+        continue;
+      }
       let raw: string;
       try {
         raw = (
@@ -9486,13 +9502,27 @@ export function App(): JSX.Element {
       readonly replacementCount: number;
     };
     const saved: SavedFile[] = [];
+    const fileResults: Record<string, ReplaceFileApplyOutcome> = {};
     let failureFileCount = 0;
     let changedFileCount = 0;
+    let unencodableFailureCount = 0;
 
     for (const [relativePath, edits] of editsByRelativePath) {
+      if (
+        !isProjectDocumentPath(relativePath, {
+          enablePlainTextDocuments:
+            effectiveSettings.textFiles.enablePlainTextDocuments
+        })
+      ) {
+        failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "stalePreview" };
+        continue;
+      }
+
       const base = baseByRelativePath.get(relativePath);
       if (!base) {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "generic" };
         continue;
       }
 
@@ -9503,12 +9533,14 @@ export function App(): JSX.Element {
         ).content;
       } catch {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "generic" };
         continue;
       }
       if (normalizeLineEndings(currentRaw) !== base.baseText) {
         // Changed after the preview was built - do not overwrite it.
         failureFileCount += 1;
         changedFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "fileChanged" };
         continue;
       }
 
@@ -9535,6 +9567,7 @@ export function App(): JSX.Element {
       }
       if (changeSpecs.length === 0) {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "generic" };
         continue;
       }
 
@@ -9552,10 +9585,12 @@ export function App(): JSX.Element {
         nextText,
         lineEndingBreakSetToArray(nextBreaks)
       );
-      const serializedForStorage = normalizeMarkdownTextForStorage(serialized, {
-        normalizeUnicodeToNfc:
-          effectiveSettings.workbench.normalizeUnicodeToNfc
-      });
+      const serializedForStorage = isMarkdownPath(relativePath)
+        ? normalizeMarkdownTextForStorage(serialized, {
+            normalizeUnicodeToNfc:
+              effectiveSettings.workbench.normalizeUnicodeToNfc
+          })
+        : serialized;
       const savedText = normalizeLineEndings(serializedForStorage);
       const savedBreaks = buildLineEndingBreakSet(
         analyzeLineEndings(serializedForStorage)
@@ -9568,13 +9603,23 @@ export function App(): JSX.Element {
         );
         if (saveResult.kind === "failed") {
           failureFileCount += 1;
+          const reason: ReplaceApplyFailureReason =
+            saveResult.reason === "unencodableCharacters"
+              ? "unencodableCharacters"
+              : "saveFailed";
+          if (reason === "unencodableCharacters") {
+            unencodableFailureCount += 1;
+          }
+          fileResults[relativePath] = { kind: "failed", reason };
           continue;
         }
       } catch {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "saveFailed" };
         continue;
       }
 
+      fileResults[relativePath] = { kind: "success" };
       saved.push({
         relativePath,
         nextText: savedText,
@@ -9596,15 +9641,30 @@ export function App(): JSX.Element {
 
     const result: ReplaceApplyResult =
       failureFileCount === 0 && successFileCount > 0
-        ? { kind: "success", replacementCount, fileCount: successFileCount }
+        ? {
+            kind: "success",
+            replacementCount,
+            fileCount: successFileCount,
+            fileResults
+          }
         : successFileCount > 0
-          ? { kind: "partialFailure", successFileCount, failureFileCount }
+          ? {
+              kind: "partialFailure",
+              successFileCount,
+              failureFileCount,
+              fileResults
+            }
           : {
               kind: "allFailure",
               reason:
-                changedFileCount === failureFileCount && changedFileCount > 0
-                  ? "fileChanged"
-                  : "generic"
+                unencodableFailureCount === failureFileCount &&
+                unencodableFailureCount > 0
+                  ? "unencodableCharacters"
+                  : changedFileCount === failureFileCount &&
+                      changedFileCount > 0
+                    ? "fileChanged"
+                    : "generic",
+              fileResults
             };
 
     // Land the result in the (still-open) dialog rather than a stacked

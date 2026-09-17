@@ -614,6 +614,114 @@ describe("ReplacePreviewDialog project-scope applying / completed lifecycle (#38
         ?.textContent
     ).toBe("search.replace.project.fileChanged");
   });
+
+  it("before apply: status column cells exist but are blank (no icon children)", () => {
+    renderDialog({ scope: "projectDocuments" });
+    const rowEls = rows();
+    expect(rowEls.length).toBeGreaterThan(0);
+    for (const rowEl of rowEls) {
+      expect(rowEl.getAttribute("data-status")).toBe("none");
+      const statusCell = rowEl.querySelector(".replacePreviewRowStatus");
+      expect(statusCell).not.toBeNull();
+      expect(statusCell?.children.length).toBe(0);
+    }
+  });
+
+  it("shows per-row status icons and tooltips based on fileResults, and leaves ignored rows status-free", () => {
+    const candidates = [
+      candidate({ id: "a:0", fileId: "a.md", filePath: "a.md" }),
+      candidate({ id: "b:0", fileId: "b.txt", filePath: "b.txt" }),
+      candidate({ id: "c:0", fileId: "c.txt", filePath: "c.txt" })
+    ];
+    const applyResult: ReplaceApplyResult = {
+      kind: "partialFailure",
+      successFileCount: 1,
+      failureFileCount: 1,
+      fileResults: {
+        "a.md": { kind: "success" },
+        "b.txt": { kind: "failed", reason: "unencodableCharacters" }
+      }
+    };
+
+    renderDialog({ scope: "projectDocuments", candidates, applyResult });
+
+    const rowEls = rows();
+
+    // Selected row in a.md -> success icon
+    expect(rowEls[0].getAttribute("data-status")).toBe("success");
+    const successIcon = rowEls[0].querySelector<HTMLElement>(".replacePreviewRowStatusIcon-success");
+    expect(successIcon).not.toBeNull();
+    expect(successIcon?.getAttribute("title")).toBe("search.replace.preview.status.success");
+    expect(successIcon?.style.getPropertyValue("--replace-preview-status-icon")).toMatch(/verified\.svg|data:image\/svg\+xml/);
+
+    // Selected row in b.txt -> failure icon with localized unencodableCharacters tooltip
+    expect(rowEls[1].getAttribute("data-status")).toBe("failed");
+    const failureIcon = rowEls[1].querySelector<HTMLElement>(".replacePreviewRowStatusIcon-failure");
+    expect(failureIcon).not.toBeNull();
+    expect(failureIcon?.getAttribute("title")).toBe("search.replace.preview.status.unencodableCharacters");
+    expect(failureIcon?.style.getPropertyValue("--replace-preview-status-icon")).toMatch(/unverified\.svg|data:image\/svg\+xml/);
+  });
+
+  it("leaves unselected / ignored rows status-free (blank icon) even when fileResults is present for that file", () => {
+    const candidates = [
+      candidate({ id: "a:0", fileId: "a.md", filePath: "a.md" }),
+      candidate({ id: "a:1", fileId: "a.md", filePath: "a.md" })
+    ];
+
+    // First render ready state and set second row to ignore
+    renderDialog({ scope: "projectDocuments", candidates });
+    setRow(1, "ignore");
+
+    // Pass applyResult
+    const applyResult: ReplaceApplyResult = {
+      kind: "success",
+      replacementCount: 1,
+      fileCount: 1,
+      fileResults: {
+        "a.md": { kind: "success" }
+      }
+    };
+    renderDialog({ scope: "projectDocuments", candidates, applyResult });
+
+    const rowEls = rows();
+    // Applied row -> success icon
+    expect(rowEls[0].getAttribute("data-status")).toBe("success");
+    expect(rowEls[0].querySelector(".replacePreviewRowStatusIcon-success")).not.toBeNull();
+
+    // Ignored / unselected row -> status "none", status cell is blank
+    expect(rowEls[1].getAttribute("data-status")).toBe("none");
+    expect(rowEls[1].querySelector(".replacePreviewRowStatus")?.children.length).toBe(0);
+  });
+
+  it("disables row dropdown controls when applying or completed", () => {
+    renderDialog({ scope: "projectDocuments", applying: true });
+    for (const select of container.querySelectorAll<HTMLSelectElement>(".replacePreviewRowControl")) {
+      expect(select.disabled).toBe(true);
+    }
+
+    renderDialog({
+      scope: "projectDocuments",
+      applyResult: { kind: "success", replacementCount: 1, fileCount: 1 }
+    });
+    for (const select of container.querySelectorAll<HTMLSelectElement>(".replacePreviewRowControl")) {
+      expect(select.disabled).toBe(true);
+    }
+  });
+
+  it("shows multiline unencodable failure message at top level when unencodableCharacters occurs", () => {
+    const result: ReplaceApplyResult = {
+      kind: "partialFailure",
+      successFileCount: 1,
+      failureFileCount: 1,
+      fileResults: {
+        "b.txt": { kind: "failed", reason: "unencodableCharacters" }
+      }
+    };
+    renderDialog({ scope: "projectDocuments", applyResult: result });
+    const unencodableNotice = container.querySelector(".replacePreviewApplyResult-unencodableFailure");
+    expect(unencodableNotice).not.toBeNull();
+    expect(unencodableNotice?.textContent).toBe("search.replace.project.unencodableFailure.message");
+  });
 });
 
 describe("ReplacePreviewDialog (#386) continued", () => {
@@ -726,6 +834,18 @@ describe("ReplacePreviewDialog ignore styling & file-group navigation (#386)", (
 
     const content = ruleBody(".replacePreviewContent");
     expect(content).toContain("--replace-preview-after: #1f6b3a");
+  });
+
+  it("configures non-zero size and mask properties for per-row status icons", () => {
+    const statusCol = ruleBody(".replacePreviewRowStatus");
+    expect(statusCol).toContain("width: 16px");
+    expect(statusCol).toContain("height: 16px");
+
+    const icon = ruleBody(".replacePreviewRowStatusIcon");
+    expect(icon).toContain("width: 16px");
+    expect(icon).toContain("height: 16px");
+    expect(icon).toContain("background-color: currentColor");
+    expect(icon).toContain("mask:");
   });
 
   it("hides the file-group nav when there is a single group", () => {

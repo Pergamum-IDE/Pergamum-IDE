@@ -40,6 +40,17 @@ export interface ReplacePreviewOpenRequest {
   readonly searchOptions: ReplacePreviewSearchOptions;
 }
 
+export type ReplaceApplyFailureReason =
+  | "unencodableCharacters"
+  | "stalePreview"
+  | "fileChanged"
+  | "saveFailed"
+  | "generic";
+
+export type ReplaceFileApplyOutcome =
+  | { readonly kind: "success" }
+  | { readonly kind: "failed"; readonly reason: ReplaceApplyFailureReason };
+
 /**
  * #386: the destructive (project) apply's outcome, once it settles. The
  * dialog renders this in place of the "cannot be undone" warning and keeps
@@ -51,17 +62,20 @@ export type ReplaceApplyResult =
       readonly kind: "success";
       readonly replacementCount: number;
       readonly fileCount: number;
+      readonly fileResults?: Record<string, ReplaceFileApplyOutcome>;
     }
   | {
       readonly kind: "partialFailure";
       readonly successFileCount: number;
       readonly failureFileCount: number;
+      readonly fileResults?: Record<string, ReplaceFileApplyOutcome>;
     }
   | {
       readonly kind: "allFailure";
-      /** `fileChanged` when every failure was a base-text mismatch (the file
-       *  changed after the preview was built); `generic` otherwise. */
-      readonly reason: "generic" | "fileChanged";
+      /** `unencodableCharacters` when an unencodable character was rejected;
+       *  `fileChanged` when every failure was a base-text mismatch; `generic` otherwise. */
+      readonly reason: "generic" | "fileChanged" | "unencodableCharacters";
+      readonly fileResults?: Record<string, ReplaceFileApplyOutcome>;
     };
 
 /** One previewed replacement site. Self-contained for rendering. */

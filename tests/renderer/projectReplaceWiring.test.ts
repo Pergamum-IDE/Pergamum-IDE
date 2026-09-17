@@ -11,8 +11,13 @@ const appSource = readFileSync("src/renderer/App.tsx", "utf8");
 function functionBlock(name: string): string {
   const start = appSource.indexOf(`function ${name}(`);
   expect(start).toBeGreaterThan(-1);
-  // Big enough to cover the whole function; the assertions are `toContain`.
-  return appSource.slice(start, start + 6000);
+  const nextFunctionStart = appSource.indexOf("\n  function ", start + 20);
+  const nextAsyncFunctionStart = appSource.indexOf("\n  async function ", start + 20);
+  const nextIndex = Math.min(
+    nextFunctionStart === -1 ? Infinity : nextFunctionStart,
+    nextAsyncFunctionStart === -1 ? Infinity : nextAsyncFunctionStart
+  );
+  return appSource.slice(start, nextIndex !== Infinity ? nextIndex : start + 8000);
 }
 
 describe("openReplacePreviewForProjectDocuments (#386)", () => {

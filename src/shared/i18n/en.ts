@@ -924,14 +924,16 @@ export const enTranslations = {
   "search.replace.project.allFailure.message": "Could not save replacements.",
   "search.replace.project.fileChanged":
     "The file changed after replacement candidates were prepared, so it was not saved.",
+  "search.replace.project.unencodableFailure.message":
+    "The replacement could not be saved with this character encoding.\n\nThe replaced text contains characters that cannot be represented by the currently selected character encoding.\nTo avoid corrupting the file, replacement was canceled for the affected file.\n\nChange the text file encoding to UTF-8, or change the replacement text, then try again.",
   "search.replace.preview.openDocs.title": "Replace in Open Documents",
   "search.replace.preview.openDocs.description":
-    "Preview replacement candidates only in open Markdown documents.\nSelected replacements will be applied as edits and will not be written to files until saved.",
+    "Preview replacement candidates only in open documents.\nSelected replacements will be applied as edits and will not be written to files until saved.",
   "search.replace.preview.openDocs.noCandidates":
     "No replacement candidates were found in open documents.",
   "search.replace.preview.project.title": "Replace in Project",
   "search.replace.preview.project.description":
-    "Directly modifies and saves Markdown documents in the project.\nReview replacement candidates and choose which ones to apply before continuing.",
+    "Project document replace directly rewrites and saves documents in the project.\nReview replacement candidates and choose which ones to apply before continuing.",
   "search.replace.preview.project.destructiveWarning":
     "This operation saves selected replacements directly to files. It cannot be undone with Pergamum Undo after saving.",
   "search.replace.preview.project.replaceLabel": "Replace",
@@ -964,6 +966,15 @@ export const enTranslations = {
   "search.replace.preview.rowControlLabel": "Apply or ignore this candidate",
   "search.replace.preview.applyAsEdits": "Apply selected as edits",
   "search.replace.preview.applyAndSave": "Apply selected and save",
+  "search.replace.preview.status.success": "Applied successfully",
+  "search.replace.preview.status.unencodableCharacters":
+    "This file could not be saved because the replaced text contains characters that cannot be represented by the current character encoding.",
+  "search.replace.preview.status.stalePreview":
+    "This file is no longer included in the current replace targets because settings changed.",
+  "search.replace.preview.status.fileChanged":
+    "This file was modified after the replace preview was generated and could not be saved.",
+  "search.replace.preview.status.saveFailed":
+    "The replacement could not be saved for this file.",
   "search.replace.unsavedGate.title": "There are unsaved documents",
   "search.replace.unsavedGate.message":
     "Replace in Project directly modifies and saves Markdown documents in the project.\nIt cannot run while unsaved documents are open because edited content may differ from the content on disk.\n\nPlease save or discard open documents, then try again.",
