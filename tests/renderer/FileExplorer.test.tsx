@@ -94,7 +94,8 @@ function mountFileExplorer(
     directoryRelativePath: string | null
   ) => Promise<ListFileExplorerChildrenResult>,
   mountedProject: PergamumProject | null = project,
-  onActivateDocument = vi.fn()
+  onActivateDocument = vi.fn(),
+  options: { enablePlainTextDocuments?: boolean } = {}
 ): void {
   Object.defineProperty(window, "pergamum", {
     configurable: true,
@@ -114,6 +115,7 @@ function mountFileExplorer(
         project: mountedProject,
         highlightedRelativePath: null,
         translate,
+        enablePlainTextDocuments: options.enablePlainTextDocuments,
         onActivateDocument
       })
     );
@@ -122,7 +124,8 @@ function mountFileExplorer(
 
 function rerenderFileExplorer(
   mountedProject: PergamumProject | null,
-  onActivateDocument = vi.fn()
+  onActivateDocument = vi.fn(),
+  options: { enablePlainTextDocuments?: boolean } = {}
 ): void {
   act(() => {
     root!.render(
@@ -130,6 +133,7 @@ function rerenderFileExplorer(
         project: mountedProject,
         highlightedRelativePath: null,
         translate,
+        enablePlainTextDocuments: options.enablePlainTextDocuments,
         onActivateDocument
       })
     );
@@ -291,6 +295,82 @@ describe("FileExplorer", () => {
     expect(onActivateDocument).toHaveBeenCalledTimes(2);
     expect(onActivateDocument).toHaveBeenNthCalledWith(1, "late.md");
     expect(onActivateDocument).toHaveBeenNthCalledWith(2, "late.markdown");
+  });
+
+  it("refreshes loaded listings and opens .txt files when Plain Text support is enabled without remounting", async () => {
+    const entriesWithPlainText: FileExplorerEntry[] = [
+      ...rootEntries,
+      {
+        kind: "file",
+        name: "notes.txt",
+        relativePath: "notes.txt"
+      }
+    ];
+    const onActivateDocument = vi.fn();
+    const listFileExplorerChildren = vi
+      .fn()
+      .mockResolvedValueOnce(ok(null, rootEntries))
+      .mockResolvedValueOnce(ok(null, entriesWithPlainText));
+
+    mountFileExplorer(listFileExplorerChildren, project, onActivateDocument, {
+      enablePlainTextDocuments: false
+    });
+    await flushPromises();
+
+    expect(
+      container!.querySelector('[data-file-explorer-entry-path="notes.txt"]')
+    ).toBeNull();
+
+    rerenderFileExplorer(project, onActivateDocument, {
+      enablePlainTextDocuments: true
+    });
+    await flushPromises();
+
+    expect(listFileExplorerChildren).toHaveBeenNthCalledWith(2, null);
+    expect(entryButton("notes.txt").dataset.fileExplorerOpenable).toBe("true");
+
+    await act(async () => {
+      entryButton("notes.txt").click();
+      await Promise.resolve();
+    });
+
+    expect(onActivateDocument).toHaveBeenCalledTimes(1);
+    expect(onActivateDocument).toHaveBeenCalledWith("notes.txt");
+  });
+
+  it("refreshes loaded listings and hides .txt files when Plain Text support is disabled without remounting", async () => {
+    const entriesWithPlainText: FileExplorerEntry[] = [
+      ...rootEntries,
+      {
+        kind: "file",
+        name: "notes.txt",
+        relativePath: "notes.txt"
+      }
+    ];
+    const entriesWithoutPlainText = rootEntries;
+    const onActivateDocument = vi.fn();
+    const listFileExplorerChildren = vi
+      .fn()
+      .mockResolvedValueOnce(ok(null, entriesWithPlainText))
+      .mockResolvedValueOnce(ok(null, entriesWithoutPlainText));
+
+    mountFileExplorer(listFileExplorerChildren, project, onActivateDocument, {
+      enablePlainTextDocuments: true
+    });
+    await flushPromises();
+
+    expect(entryButton("notes.txt").dataset.fileExplorerOpenable).toBe("true");
+
+    rerenderFileExplorer(project, onActivateDocument, {
+      enablePlainTextDocuments: false
+    });
+    await flushPromises();
+
+    expect(listFileExplorerChildren).toHaveBeenNthCalledWith(2, null);
+    expect(
+      container!.querySelector('[data-file-explorer-entry-path="notes.txt"]')
+    ).toBeNull();
+    expect(onActivateDocument).not.toHaveBeenCalled();
   });
 
   it("reloads the selected folder children and keeps the folder expanded", async () => {

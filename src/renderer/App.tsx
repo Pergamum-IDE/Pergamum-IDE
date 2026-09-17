@@ -134,7 +134,7 @@ import {
   updateCurrentDocumentContent,
   type CurrentDocument
 } from "./currentDocument";
-import { isProjectDocumentPath } from "../shared/projectDocumentKind";
+import { isMarkdownPath, isProjectDocumentPath } from "../shared/projectDocumentKind";
 import {
   buildLineEndingBreakSet,
   lineEndingBreakSetToArray,
@@ -2375,13 +2375,13 @@ export function App(): JSX.Element {
   // #420 Step 5: run the bulk text import. The dialog owns *when* (only on an
   // explicit Import click for the importable rows); App fills in the project
   // id and the line-ending policy. New imported `.md` documents inherit the
-  // project's "new file" line ending (`files.newFile.lineEnding`, default
+  // project's Markdown file line ending (`markdownFiles.lineEnding`, default
   // LF). #420 Step 8: normalization is now driven by the dialog's
   // "match line endings to application settings" toggle
   // (`input.normalizeLineEndings`); `targetLineEnding` is still the app
   // setting so a normalized write matches that policy.
   const bulkTextImportNewFileLineEnding =
-    effectiveSettings.files.newFile.lineEnding;
+    effectiveSettings.markdownFiles.lineEnding;
   const bulkTextImportExecute = useCallback(
     async (
       input: BulkTextImportExecuteInput
@@ -9558,21 +9558,29 @@ export function App(): JSX.Element {
       return;
     }
 
-    const existingDocument = activeProject.documents.find(
-      (projectDocument) => projectDocument.relativePath === relativePath
+    const documentId = createProjectDocumentEditorId(
+      relativePath,
+      activeContext
+    );
+    const openDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      documentId
     );
 
     if (
-      !existingDocument &&
+      !openDocument &&
       !isProjectDocumentPath(relativePath, {
         enablePlainTextDocuments:
-          effectiveSettings.workbench.enablePlainTextDocuments
+          effectiveSettings.textFiles.enablePlainTextDocuments
       })
     ) {
       setStatus({ key: "status.projectDocumentNotFound" });
       return;
     }
 
+    const existingDocument = activeProject.documents.find(
+      (projectDocument) => projectDocument.relativePath === relativePath
+    );
     const document =
       existingDocument ?? projectDocumentForRelativePath(relativePath);
     const projectGeneration =
@@ -9596,11 +9604,6 @@ export function App(): JSX.Element {
     });
 
     try {
-      const documentId = createProjectDocumentEditorId(
-        document.relativePath,
-        activeContext
-      );
-
       const didOpen = await completeInstrumentedDocumentOpen(
         documentOpenId,
         startedAt,
@@ -10220,7 +10223,7 @@ export function App(): JSX.Element {
                       }
                       fileExplorerRevealRequest={fileExplorerRevealRequest}
                       enablePlainTextDocuments={
-                        effectiveSettings.workbench.enablePlainTextDocuments
+                        effectiveSettings.textFiles.enablePlainTextDocuments
                       }
                       translate={translate}
                       onActivateProjectDocument={(relativePath) => {
@@ -10443,7 +10446,9 @@ export function App(): JSX.Element {
                           effectiveSettings.preview.updateDelayMs
                         }
                         newFileLineEndingFallback={
-                          effectiveSettings.files.newFile.lineEnding
+                          isMarkdownCurrentDocument(activeDocument.editor.document)
+                            ? effectiveSettings.markdownFiles.lineEnding
+                            : effectiveSettings.textFiles.lineEnding
                         }
                         expectedLineEnding={
                           effectiveSettings.editor.lineEnding.expected
@@ -10627,7 +10632,7 @@ export function App(): JSX.Element {
                           effectiveSettings.editor.lineEnding.expected
                         }
                         newFileLineEndingFallback={
-                          effectiveSettings.files.newFile.lineEnding
+                          effectiveSettings.markdownFiles.lineEnding
                         }
                         whitespaceSettings={effectiveSettings.editor.whitespace}
                         undoHistoryMinDepth={

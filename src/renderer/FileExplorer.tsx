@@ -750,6 +750,22 @@ export function resolveFileExplorerReloadTargets({
   ]);
 }
 
+function resolveFileExplorerVisibilityRefreshTargets({
+  entriesByDirectoryPath,
+  expandedDirectoryPaths
+}: {
+  entriesByDirectoryPath: Readonly<Record<string, FileExplorerEntry[]>>;
+  expandedDirectoryPaths: ReadonlySet<string>;
+}): (string | null)[] {
+  return uniqueReloadTargets([
+    null,
+    ...Object.keys(entriesByDirectoryPath)
+      .filter((key) => key !== rootDirectoryKey)
+      .sort(),
+    ...Array.from(expandedDirectoryPaths).sort()
+  ]);
+}
+
 /**
  * #307: which folder a "New File" / "New Folder" action creates into,
  * as a project-relative path (`null` = project root):
@@ -973,6 +989,9 @@ export function FileExplorer({
     }[];
   } | null>(null);
   const loadGenerationRef = useRef(0);
+  const previousEnablePlainTextDocumentsRef = useRef(
+    enablePlainTextDocuments
+  );
   // #311: the DOM node of the active project document entry (once #309 has
   // revealed it) and the last path we scrolled to, so the scroll fires once
   // per active document and never on every re-render.
@@ -1239,6 +1258,33 @@ export function FileExplorer({
     };
   }, [projectKey, resetProjectTree]);
 
+  useEffect(() => {
+    const previous = previousEnablePlainTextDocumentsRef.current;
+    previousEnablePlainTextDocumentsRef.current = enablePlainTextDocuments;
+
+    if (!hasProject || previous === enablePlainTextDocuments) {
+      return;
+    }
+
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+
+    const targets = resolveFileExplorerVisibilityRefreshTargets({
+      entriesByDirectoryPath,
+      expandedDirectoryPaths
+    });
+
+    for (const target of targets) {
+      void loadDirectoryForGeneration(target, generation);
+    }
+  }, [
+    enablePlainTextDocuments,
+    entriesByDirectoryPath,
+    expandedDirectoryPaths,
+    hasProject,
+    loadDirectoryForGeneration
+  ]);
+
   const reloadCurrentExplorerContext = useCallback(() => {
     if (!hasProject) {
       return;
@@ -1273,7 +1319,8 @@ export function FileExplorer({
 
       return isFileExplorerEntryVisible(
         entriesByDirectoryPath,
-        currentSelection.relativePath
+        currentSelection.relativePath,
+        visibilityOptions
       )
         ? currentSelection
         : null;
@@ -1292,7 +1339,13 @@ export function FileExplorer({
       const kept = new Set<string>();
 
       for (const path of current.selected) {
-        if (isFileExplorerEntryVisible(entriesByDirectoryPath, path)) {
+        if (
+          isFileExplorerEntryVisible(
+            entriesByDirectoryPath,
+            path,
+            visibilityOptions
+          )
+        ) {
           kept.add(path);
         } else {
           changed = true;
@@ -1301,7 +1354,7 @@ export function FileExplorer({
 
       return changed ? { selected: kept, anchor: current.anchor } : current;
     });
-  }, [entriesByDirectoryPath]);
+  }, [entriesByDirectoryPath, visibilityOptions]);
 
   // #309/#355: one pass of the "reveal a project document" walk — lazily
   // load each ancestor folder, then expand the whole chain so the document's

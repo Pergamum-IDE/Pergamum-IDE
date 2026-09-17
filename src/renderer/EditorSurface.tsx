@@ -407,7 +407,7 @@ interface EditorSurfaceProps {
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
   /**
-   * `files.newFile.lineEnding` (#253) — the fallback kind for a brand new
+   * `markdownFiles.lineEnding` / `textFiles.lineEnding` (#253/#501) — the fallback kind for a brand new
    * line break created in a document with no existing tracked breaks at
    * all. Never used to decide an *existing* break's kind or as a save-time
    * conversion target.

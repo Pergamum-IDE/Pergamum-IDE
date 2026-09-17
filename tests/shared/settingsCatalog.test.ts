@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { supportedLanguages } from "../../src/shared/i18n";
+import { TEXT_FILE_ENCODINGS, type TextFileEncoding } from "../../src/shared/textFileEncoding";
 import {
   defineBooleanSetting,
   defineEnumSetting,
@@ -255,11 +256,20 @@ describe("Settings Catalog Foundation (#150)", () => {
         "markdown"
       >();
       expectTypeOf(
-        getCatalogDefaultValue("files.newFile.lineEnding")
+        getCatalogDefaultValue("markdownFiles.lineEnding")
       ).toEqualTypeOf<"lf" | "crlf">();
       expectTypeOf(
-        getCatalogDefaultValue("files.newFile.encoding")
+        getCatalogDefaultValue("markdownFiles.encoding")
       ).toEqualTypeOf<"utf8">();
+      expectTypeOf(
+        getCatalogDefaultValue("textFiles.lineEnding")
+      ).toEqualTypeOf<"lf" | "crlf">();
+      expectTypeOf(
+        getCatalogDefaultValue("textFiles.encoding")
+      ).toEqualTypeOf<TextFileEncoding>();
+      expectTypeOf(
+        getCatalogDefaultValue("textFiles.enablePlainTextDocuments")
+      ).toEqualTypeOf<boolean>();
       expectTypeOf(getCatalogDefaultValue("editor.fontFamily")).toEqualTypeOf<
         string
       >();
@@ -482,21 +492,34 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("accepts both files.newFile.lineEnding values and rejects a third", () => {
+    it("accepts both lineEnding values and rejects a third for markdownFiles and textFiles", () => {
       expect(
-        validateCatalogValue("files.newFile.lineEnding", "lf")
+        validateCatalogValue("markdownFiles.lineEnding", "lf")
       ).toEqual({ ok: true });
       expect(
-        validateCatalogValue("files.newFile.lineEnding", "crlf")
+        validateCatalogValue("markdownFiles.lineEnding", "crlf")
       ).toEqual({ ok: true });
       expect(
-        validateCatalogValue("files.newFile.lineEnding", "cr")
+        validateCatalogValue("markdownFiles.lineEnding", "cr")
+      ).toEqual({ ok: false, failure: "enumValue" });
+
+      expect(
+        validateCatalogValue("textFiles.lineEnding", "lf")
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("textFiles.lineEnding", "crlf")
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("textFiles.lineEnding", "cr")
       ).toEqual({ ok: false, failure: "enumValue" });
     });
 
-    it("rejects an encoding other than utf8", () => {
+    it("validates textFiles.encoding choices", () => {
+      for (const enc of TEXT_FILE_ENCODINGS) {
+        expect(validateCatalogValue("textFiles.encoding", enc)).toEqual({ ok: true });
+      }
       expect(
-        validateCatalogValue("files.newFile.encoding", "shift_jis")
+        validateCatalogValue("textFiles.encoding", "invalid_enc")
       ).toEqual({ ok: false, failure: "enumValue" });
     });
 
@@ -928,7 +951,6 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.statusBar.visible",
         "workbench.statusBar.characterCount.visible",
         "workbench.normalizeUnicodeToNfc",
-        "workbench.enablePlainTextDocuments",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
@@ -945,6 +967,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.headings",
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
+        "textFiles.enablePlainTextDocuments",
         "notification.output.enabled",
         "imageAttachment.insertMarkdownLink"
       ]);
@@ -1001,7 +1024,7 @@ describe("Settings Catalog Foundation (#150)", () => {
 
     it("returns the raw value with source 'raw' and ok:true when it validates", () => {
       expect(
-        resolveCatalogValue("files.newFile.lineEnding", "crlf")
+        resolveCatalogValue("markdownFiles.lineEnding", "crlf")
       ).toEqual({ ok: true, value: "crlf", source: "raw" });
     });
 
@@ -1042,10 +1065,19 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("editor.lineEnding.expected").scope).toBe(
         "applicationWithProjectOverride"
       );
-      expect(getCatalogEntry("files.newFile.lineEnding").scope).toBe(
+      expect(getCatalogEntry("markdownFiles.lineEnding").scope).toBe(
         "applicationWithProjectOverride"
       );
-      expect(getCatalogEntry("files.newFile.encoding").scope).toBe(
+      expect(getCatalogEntry("markdownFiles.encoding").scope).toBe(
+        "applicationOnly"
+      );
+      expect(getCatalogEntry("textFiles.lineEnding").scope).toBe(
+        "applicationWithProjectOverride"
+      );
+      expect(getCatalogEntry("textFiles.encoding").scope).toBe(
+        "applicationOnly"
+      );
+      expect(getCatalogEntry("textFiles.enablePlainTextDocuments").scope).toBe(
         "applicationOnly"
       );
       expect(getCatalogEntry("preview.renderer").scope).toBe(
@@ -1109,7 +1141,7 @@ describe("Settings Catalog Foundation (#150)", () => {
 
     it("gets scope from catalog metadata, not from a key-prefix heuristic (applicationOnly keys under different areas)", () => {
       expect(getCatalogEntry("workbench.fontFamily").scope).toBe(
-        getCatalogEntry("files.newFile.encoding").scope
+        getCatalogEntry("markdownFiles.encoding").scope
       );
       expect(getCatalogEntry("notification.output.enabled").scope).toBe(
         getCatalogEntry("workbench.fontFamily").scope
@@ -1125,7 +1157,8 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getSettingArea("commandPalette.footerDetail.enable")).toBe(
         "commandPalette"
       );
-      expect(getSettingArea("files.newFile.lineEnding")).toBe("files");
+      expect(getSettingArea("markdownFiles.lineEnding")).toBe("markdownFiles");
+      expect(getSettingArea("textFiles.lineEnding")).toBe("textFiles");
       expect(getSettingArea("notification.output.enabled")).toBe(
         "notification"
       );
@@ -1261,8 +1294,11 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.whitespace.renderIdeographicSpace",
           "editor.whitespace.renderOtherUnicodeSpace",
           "editor.whitespace.renderTab",
-          "files.newFile.encoding",
-          "files.newFile.lineEnding",
+          "markdownFiles.encoding",
+          "markdownFiles.lineEnding",
+          "textFiles.enablePlainTextDocuments",
+          "textFiles.encoding",
+          "textFiles.lineEnding",
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
           "preview.fontFamilyList",
@@ -1281,8 +1317,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.language",
           "workbench.statusBar.characterCount.visible",
           "workbench.statusBar.visible",
-          "workbench.normalizeUnicodeToNfc",
-          "workbench.enablePlainTextDocuments"
+          "workbench.normalizeUnicodeToNfc"
         ].sort()
       );
       expect(keys).not.toContain("commandPalette.description.enable");
@@ -1403,17 +1438,30 @@ describe("Settings Catalog Foundation (#150)", () => {
       }
     });
 
-    it("files.newFile.lineEnding's enum values are exactly ['lf', 'crlf']", () => {
-      expect(getCatalogEntry("files.newFile.lineEnding").enumValues).toEqual([
+    it("markdownFiles.lineEnding's enum values are exactly ['lf', 'crlf']", () => {
+      expect(getCatalogEntry("markdownFiles.lineEnding").enumValues).toEqual([
         "lf",
         "crlf"
       ]);
     });
 
-    it("files.newFile.encoding's enum values are exactly ['utf8']", () => {
-      expect(getCatalogEntry("files.newFile.encoding").enumValues).toEqual([
+    it("markdownFiles.encoding's enum values are exactly ['utf8']", () => {
+      expect(getCatalogEntry("markdownFiles.encoding").enumValues).toEqual([
         "utf8"
       ]);
+    });
+
+    it("textFiles.lineEnding's enum values are exactly ['lf', 'crlf']", () => {
+      expect(getCatalogEntry("textFiles.lineEnding").enumValues).toEqual([
+        "lf",
+        "crlf"
+      ]);
+    });
+
+    it("textFiles.encoding's enum values match TEXT_FILE_ENCODINGS", () => {
+      expect(getCatalogEntry("textFiles.encoding").enumValues).toEqual(
+        TEXT_FILE_ENCODINGS
+      );
     });
 
     it("preview.renderer's enum values are exactly ['markdown']", () => {
@@ -1726,7 +1774,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("settingsStore.ts and shared settings now wire editor.fontFamily, files.newFile.*, and sound feedback for Application Settings (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("settingsStore.ts and shared settings now wire editor.fontFamily, Markdown/Text file settings, and sound feedback for Application Settings (#232: workbench.advancedSettings.enabled removed)", () => {
       const settingsStoreSource = readFileSync(
         "src/main/settingsStore.ts",
         "utf8"
@@ -1739,8 +1787,10 @@ describe("Settings Catalog Foundation (#150)", () => {
 
       expect(settingsStoreSource).toMatch(/CatalogValue\("editor\.fontFamily"/);
       expect(settingsStoreSource).toContain("resolveCatalogValue");
-      expect(settingsStoreSource).toContain('"files.newFile.lineEnding"');
-      expect(settingsStoreSource).toContain('"files.newFile.encoding"');
+      expect(settingsStoreSource).toContain('"markdownFiles.lineEnding"');
+      expect(settingsStoreSource).toContain('"markdownFiles.encoding"');
+      expect(settingsStoreSource).toContain('"textFiles.lineEnding"');
+      expect(settingsStoreSource).toContain('"textFiles.encoding"');
       expect(settingsStoreSource).toContain(
         '"editor.paragraphIndent.excludeLeadingCharacters"'
       );
@@ -1768,10 +1818,10 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
       expect(settingsSource).toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
       expect(settingsSource).toContain(
-        'getCatalogDefaultValue("files.newFile.lineEnding")'
+        'getCatalogDefaultValue("markdownFiles.lineEnding")'
       );
       expect(settingsSource).toContain(
-        'getCatalogDefaultValue("files.newFile.encoding")'
+        'getCatalogDefaultValue("markdownFiles.encoding")'
       );
       expect(settingsSource).toContain(
         'getCatalogDefaultValue(\n        "editor.paragraphIndent.excludeLeadingCharacters"\n      )'
@@ -1815,8 +1865,10 @@ describe("Settings Catalog Foundation (#150)", () => {
           "editor.fontFamily",
           "editor.paragraphIndent.excludeLeadingCharacters",
           "workbench.colorTheme",
-          "files.newFile.lineEnding",
-          "files.newFile.encoding",
+          "markdownFiles.lineEnding",
+          "markdownFiles.encoding",
+          "textFiles.lineEnding",
+          "textFiles.encoding",
           "workbench.sound.enabled",
           "workbench.sound.dialog.enabled",
           "workbench.sound.newline.enabled",
@@ -1852,7 +1904,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
 
       for (const applicationSettingsOnlyKey of [
-        "files.newFile.encoding",
+        "markdownFiles.encoding",
+        "textFiles.encoding",
+        "textFiles.enablePlainTextDocuments",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
@@ -1876,7 +1930,8 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
         "editor.lineEnding.expected",
-        "files.newFile.lineEnding",
+        "markdownFiles.lineEnding",
+        "textFiles.lineEnding",
         "documentMap.dialogueDelimiterPairs"
       ]) {
         expect(projectConfigStoreSource).toContain(overrideKey);

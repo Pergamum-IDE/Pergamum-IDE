@@ -4,11 +4,12 @@ import type {
   ExpectedLineEnding,
   FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
-  NewFileEncoding,
+  MarkdownFileEncoding,
   NewFileLineEnding,
   SaveApplicationSettingsRequest,
   SearchNearbyUnit,
-  SelectionHighlightMode
+  SelectionHighlightMode,
+  TextFileEncoding
 } from "../shared/api";
 import type { Language, Translate, TranslationKey } from "../shared/i18n";
 import type { SettingKey } from "../shared/settingsCatalog";
@@ -120,6 +121,11 @@ const characterCountExcludeKeys = new Set<SettingKey>([
   "editor.characterCount.exclude.markdownComments"
 ]);
 
+const textFilesDependentKeys = new Set<SettingKey>([
+  "textFiles.encoding",
+  "textFiles.lineEnding"
+]);
+
 // Presentational only (unit suffix for a number control) — not part of the
 // UI catalog schema, which has no `unit` field on SettingControl.
 const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
@@ -160,7 +166,8 @@ function saveRequest(
     commandPalette: overrides.commandPalette ?? settings.commandPalette,
     editor: overrides.editor ?? settings.editor,
     search: overrides.search ?? settings.search,
-    files: overrides.files ?? settings.files,
+    markdownFiles: overrides.markdownFiles ?? settings.markdownFiles,
+    textFiles: overrides.textFiles ?? settings.textFiles,
     imageAttachment: overrides.imageAttachment ?? settings.imageAttachment,
     documentMap: overrides.documentMap ?? settings.documentMap
   };
@@ -311,13 +318,6 @@ function buildNextSettings(
         workbench: {
           ...settings.workbench,
           normalizeUnicodeToNfc: Boolean(rawValue)
-        }
-      });
-    case "workbench.enablePlainTextDocuments":
-      return saveRequest(settings, {
-        workbench: {
-          ...settings.workbench,
-          enablePlainTextDocuments: Boolean(rawValue)
         }
       });
     case "workbench.sound.enabled":
@@ -502,24 +502,39 @@ function buildNextSettings(
           fencedCodeIndentUnit: rawValue as FencedCodeIndentUnit
         }
       });
-    case "files.newFile.lineEnding":
+    case "markdownFiles.encoding":
       return saveRequest(settings, {
-        files: {
-          ...settings.files,
-          newFile: {
-            ...settings.files.newFile,
-            lineEnding: rawValue as NewFileLineEnding
-          }
+        markdownFiles: {
+          ...settings.markdownFiles,
+          encoding: rawValue as MarkdownFileEncoding
         }
       });
-    case "files.newFile.encoding":
+    case "markdownFiles.lineEnding":
       return saveRequest(settings, {
-        files: {
-          ...settings.files,
-          newFile: {
-            ...settings.files.newFile,
-            encoding: rawValue as NewFileEncoding
-          }
+        markdownFiles: {
+          ...settings.markdownFiles,
+          lineEnding: rawValue as NewFileLineEnding
+        }
+      });
+    case "textFiles.enablePlainTextDocuments":
+      return saveRequest(settings, {
+        textFiles: {
+          ...settings.textFiles,
+          enablePlainTextDocuments: Boolean(rawValue)
+        }
+      });
+    case "textFiles.encoding":
+      return saveRequest(settings, {
+        textFiles: {
+          ...settings.textFiles,
+          encoding: rawValue as TextFileEncoding
+        }
+      });
+    case "textFiles.lineEnding":
+      return saveRequest(settings, {
+        textFiles: {
+          ...settings.textFiles,
+          lineEnding: rawValue as NewFileLineEnding
         }
       });
     case "preview.updateDelayMs":
@@ -738,6 +753,13 @@ function isSettingDisabled(
   if (
     characterCountExcludeKeys.has(item.key) &&
     !settings.workbench.statusBar.characterCount.visible
+  ) {
+    return true;
+  }
+
+  if (
+    textFilesDependentKeys.has(item.key) &&
+    settings.textFiles.enablePlainTextDocuments !== true
   ) {
     return true;
   }
@@ -1041,12 +1063,16 @@ export function SettingsPanelView({
     item: SettingCatalogItem,
     rawValue: unknown
   ): Promise<void> {
+    if (isSettingDisabled(item, settings, isLoading)) {
+      return;
+    }
+
     if (
-      item.key === "workbench.enablePlainTextDocuments" &&
+      item.key === "textFiles.enablePlainTextDocuments" &&
       Boolean(rawValue) === true
     ) {
       const currentValue = readSettingValue(
-        "workbench.enablePlainTextDocuments",
+        "textFiles.enablePlainTextDocuments",
         settings
       );
       if (currentValue !== true && confirmDialog) {
@@ -1060,6 +1086,35 @@ export function SettingsPanelView({
           clipboardText: null,
           confirmLabel: translate("dialog.enablePlainTextDocuments.confirm"),
           cancelLabel: translate("dialog.enablePlainTextDocuments.cancel")
+        });
+        if (result !== "confirm") {
+          return;
+        }
+      }
+    }
+
+    if (
+      item.key === "textFiles.encoding" &&
+      typeof rawValue === "string" &&
+      rawValue !== "utf8"
+    ) {
+      const currentValue = readSettingValue("textFiles.encoding", settings);
+      if (currentValue !== rawValue && confirmDialog) {
+        const encodingLabel = translate(
+          `settings.textFiles.encoding.option.${rawValue}.label` as TranslationKey
+        );
+        const result = await confirmDialog({
+          title: translate("dialog.textFileEncodingChange.title"),
+          message: {
+            kind: "plainText",
+            text: translate("dialog.textFileEncodingChange.message", {
+              encodingLabel
+            })
+          },
+          icon: { kind: "question", tooltip: translate("dialog.icon.question") },
+          clipboardText: null,
+          confirmLabel: translate("dialog.textFileEncodingChange.confirm"),
+          cancelLabel: translate("dialog.textFileEncodingChange.cancel")
         });
         if (result !== "confirm") {
           return;

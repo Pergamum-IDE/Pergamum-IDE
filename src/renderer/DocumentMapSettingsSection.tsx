@@ -32,7 +32,8 @@ function saveRequestWithDocumentMap(
     commandPalette: settings.commandPalette,
     editor: settings.editor,
     search: settings.search,
-    files: settings.files,
+    markdownFiles: settings.markdownFiles,
+    textFiles: settings.textFiles,
     imageAttachment: settings.imageAttachment,
     documentMap
   };

@@ -27,7 +27,7 @@ import {
 } from "../../src/main/settingsStore";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
-const catalogDefault = getCatalogDefaultValue("workbench.enablePlainTextDocuments");
+const catalogDefault = getCatalogDefaultValue("textFiles.enablePlainTextDocuments");
 const defaultSoundSettings = {
   enabled: true,
   dialog: { enabled: true },
@@ -81,63 +81,63 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
   });
 }
 
-describe("settingsStore workbench.enablePlainTextDocuments read path (#501)", () => {
+describe("settingsStore textFiles.enablePlainTextDocuments read path (#501)", () => {
   beforeEach(() => {
     fsMock.readFile.mockReset();
     fsMock.writeFile.mockReset();
     fsMock.mkdir.mockReset();
   });
 
-  it("leaves workbench.enablePlainTextDocuments unset when settings.json is missing", async () => {
+  it("uses the catalog default for textFiles.enablePlainTextDocuments when settings.json is missing", async () => {
     fsMock.readFile.mockRejectedValue(
       Object.assign(new Error("not found"), { code: "ENOENT" })
     );
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.enablePlainTextDocuments).toBeUndefined();
+    expect(settings.textFiles.enablePlainTextDocuments).toBe(false);
   });
 
-  it("leaves workbench.enablePlainTextDocuments unset when the workbench key is missing", async () => {
+  it("leaves textFiles.enablePlainTextDocuments unset when the textFiles key is missing", async () => {
     fsMock.readFile.mockResolvedValue(onDiskSettings({}));
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.enablePlainTextDocuments).toBeUndefined();
+    expect(settings.textFiles.enablePlainTextDocuments).toBeUndefined();
   });
 
   it("passes through an explicit true value from settings.json", async () => {
     fsMock.readFile.mockResolvedValue(
-      onDiskSettings({ workbench: { enablePlainTextDocuments: true } })
+      onDiskSettings({ textFiles: { enablePlainTextDocuments: true } })
     );
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.enablePlainTextDocuments).toBe(true);
+    expect(settings.textFiles.enablePlainTextDocuments).toBe(true);
   });
 
   it("passes through an explicit false value from settings.json", async () => {
     fsMock.readFile.mockResolvedValue(
-      onDiskSettings({ workbench: { enablePlainTextDocuments: false } })
+      onDiskSettings({ textFiles: { enablePlainTextDocuments: false } })
     );
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.enablePlainTextDocuments).toBe(false);
+    expect(settings.textFiles.enablePlainTextDocuments).toBe(false);
   });
 
-  it("rejects a non-boolean workbench.enablePlainTextDocuments value and omits it from ApplicationSettings", async () => {
+  it("falls back to the catalog default for a non-boolean textFiles.enablePlainTextDocuments value", async () => {
     fsMock.readFile.mockResolvedValue(
-      onDiskSettings({ workbench: { enablePlainTextDocuments: "true" } })
+      onDiskSettings({ textFiles: { enablePlainTextDocuments: "true" } })
     );
 
     const settings = await loadSettings();
 
-    expect(settings.workbench.enablePlainTextDocuments).toBeUndefined();
+    expect(settings.textFiles.enablePlainTextDocuments).toBe(false);
   });
 });
 
-describe("settingsStore workbench.enablePlainTextDocuments write path (#501)", () => {
+describe("settingsStore textFiles.enablePlainTextDocuments write path (#501)", () => {
   beforeEach(() => {
     fsMock.readFile.mockReset();
     fsMock.writeFile.mockReset();
@@ -148,7 +148,7 @@ describe("settingsStore workbench.enablePlainTextDocuments write path (#501)", (
 
   it("re-persists an explicit true value as a user override on an unrelated save", async () => {
     fsMock.readFile.mockResolvedValue(
-      onDiskSettings({ workbench: { enablePlainTextDocuments: true } })
+      onDiskSettings({ textFiles: { enablePlainTextDocuments: true } })
     );
 
     await recordRecentProject(recentProjectInput);
@@ -160,10 +160,10 @@ describe("settingsStore workbench.enablePlainTextDocuments write path (#501)", (
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.workbench.enablePlainTextDocuments).toBe(true);
+    expect(written.textFiles.enablePlainTextDocuments).toBe(true);
   });
 
-  it("does not write back the catalog default when workbench.enablePlainTextDocuments was never set on disk", async () => {
+  it("does not write back the catalog default when textFiles.enablePlainTextDocuments was never set on disk", async () => {
     fsMock.readFile.mockResolvedValue(onDiskSettings({}));
 
     await recordRecentProject(recentProjectInput);
@@ -175,18 +175,15 @@ describe("settingsStore workbench.enablePlainTextDocuments write path (#501)", (
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(Object.keys(written.workbench)).not.toContain(
-      "enablePlainTextDocuments"
-    );
+    expect(written.textFiles?.enablePlainTextDocuments).toBeUndefined();
   });
 
-  it("rejects a save request carrying an invalid workbench.enablePlainTextDocuments with 'Invalid application settings.'", () => {
+  it("rejects a save request carrying an invalid textFiles.enablePlainTextDocuments with 'Invalid application settings.'", () => {
     const invalidSaveRequest = {
       workbench: {
         language: "ja",
         statusBar: defaultStatusBarSettings,
-        sound: defaultSoundSettings,
-        enablePlainTextDocuments: "true"
+        sound: defaultSoundSettings
       },
       commandPalette: {
         footerDetail: {
@@ -198,8 +195,14 @@ describe("settingsStore workbench.enablePlainTextDocuments write path (#501)", (
         lineEnding: defaultLineEndingSettings,
         characterCount: defaultCharacterCountSettings
       },
-      files: {
-        newFile: { lineEnding: "lf", encoding: "utf8" }
+      markdownFiles: {
+        lineEnding: "lf",
+        encoding: "utf8"
+      },
+      textFiles: {
+        enablePlainTextDocuments: "true",
+        lineEnding: "lf",
+        encoding: "utf8"
       }
     };
 

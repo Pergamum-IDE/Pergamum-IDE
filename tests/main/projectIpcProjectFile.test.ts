@@ -3022,6 +3022,9 @@ describe("project file IPC foundation", () => {
       )
     );
 
+    // Main returns the directory entries; the renderer FileExplorer applies the
+    // user-visible .txt filtering. With the setting disabled, this listing must
+    // not register the newly discovered .txt as a readable project document.
     expect(rootResult.entries).toEqual([
       {
         kind: "folder",
@@ -3122,6 +3125,80 @@ describe("project file IPC foundation", () => {
     });
     await expect(
       readProjectDocumentHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+  });
+
+  it("keeps registered .txt project-document saves available after Plain Text support is disabled", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, true);
+    const projectFilePath = path.join(projectRootPath, "Plain Text Save.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Plain Text Save"
+    });
+    await created.close();
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), "# Chapter\n");
+    await fs.writeFile(path.join(projectRootPath, "notes.txt"), "notes\n");
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocument
+    );
+    await expect(
+      readProjectDocumentHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.txt",
+      content: "notes\n"
+    });
+
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+    await fs.writeFile(path.join(projectRootPath, "new.txt"), "new\n");
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    const rootResult = expectFileExplorerOk(
+      await listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: null }
+      )
+    );
+
+    expect(rootResult.entries).toEqual([
+      {
+        kind: "file",
+        name: "chapter.md",
+        relativePath: "chapter.md"
+      },
+      {
+        kind: "file",
+        name: "new.txt",
+        relativePath: "new.txt"
+      },
+      {
+        kind: "file",
+        name: "notes.txt",
+        relativePath: "notes.txt"
+      }
+    ]);
+
+    const saveProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.saveProjectDocument
+    );
+    await expect(
+      saveProjectDocumentHandler(
+        { sender: {} },
+        { relativePath: "notes.txt", content: "dirty\n" }
+      )
+    ).resolves.toEqual({ relativePath: "notes.txt" });
+    expect(await fs.readFile(path.join(projectRootPath, "notes.txt"), "utf8"))
+      .toBe("dirty\n");
+
+    await expect(
+      readProjectDocumentHandler({ sender: {} }, { relativePath: "new.txt" })
     ).rejects.toMatchObject({ name: "PergamumFileIoError" });
   });
 
@@ -4968,6 +5045,23 @@ async function writeRecentProjects(
     `${JSON.stringify({
       preview: { renderer: "markdown" },
       recentProjects
+    })}\n`,
+    "utf8"
+  );
+}
+
+async function writePlainTextDocumentSupportSetting(
+  userDataPath: string,
+  enabled: boolean
+): Promise<void> {
+  await fs.writeFile(
+    settingsJsonPath(userDataPath),
+    `${JSON.stringify({
+      textFiles: {
+        enablePlainTextDocuments: enabled,
+        encoding: "utf8",
+        lineEnding: "lf"
+      }
     })}\n`,
     "utf8"
   );

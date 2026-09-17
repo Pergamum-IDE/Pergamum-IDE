@@ -159,7 +159,8 @@ describe("applyChangesToCachedMarkdownEditorDocumentState (#393)", () => {
     });
     const cached: MarkdownEditorDocumentState = {
       state: priorEditTransaction.state,
-      lineEndingField: initial.lineEndingField
+      lineEndingField: initial.lineEndingField,
+      visibilityCompartment: initial.visibilityCompartment
     };
     expect(cached.state.doc.toString()).toBe("hello world");
 

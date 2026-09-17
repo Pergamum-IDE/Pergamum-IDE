@@ -257,18 +257,30 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     ).toBe("Fira Code");
   });
 
-  it("files.newFile defaults derive from the catalog and are concrete application settings", () => {
+  it("markdownFiles and textFiles defaults derive from the catalog and are concrete application settings", () => {
     const defaults = createDefaultApplicationSettings();
 
-    expect(defaults.files.newFile.lineEnding).toBe(
-      getCatalogDefaultValue("files.newFile.lineEnding")
+    expect(defaults.markdownFiles.lineEnding).toBe(
+      getCatalogDefaultValue("markdownFiles.lineEnding")
     );
-    expect(defaults.files.newFile.encoding).toBe(
-      getCatalogDefaultValue("files.newFile.encoding")
+    expect(defaults.markdownFiles.encoding).toBe(
+      getCatalogDefaultValue("markdownFiles.encoding")
+    );
+    expect(defaults.textFiles.lineEnding).toBe(
+      getCatalogDefaultValue("textFiles.lineEnding")
+    );
+    expect(defaults.textFiles.encoding).toBe(
+      getCatalogDefaultValue("textFiles.encoding")
+    );
+    expect(defaults.textFiles.enablePlainTextDocuments).toBe(
+      getCatalogDefaultValue("textFiles.enablePlainTextDocuments")
     );
     expect(
-      resolveEffectiveSettings(defaults, undefined).files.newFile
-    ).toEqual(defaults.files.newFile);
+      resolveEffectiveSettings(defaults, undefined).markdownFiles
+    ).toEqual(defaults.markdownFiles);
+    expect(
+      resolveEffectiveSettings(defaults, undefined).textFiles
+    ).toEqual(defaults.textFiles);
   });
 
   it("paragraph indent defaults derive from the catalog and are concrete application settings", () => {
@@ -379,12 +391,18 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
       editor: { ...defaultApplicationSettings.editor, fontFamily: "Fira Code" },
-      files: { newFile: { lineEnding: "crlf", encoding: "utf8" } }
+      markdownFiles: { lineEnding: "crlf", encoding: "utf8" },
+      textFiles: { enablePlainTextDocuments: true, lineEnding: "crlf", encoding: "utf8" }
     };
     const effective = resolveEffectiveSettings(applicationSettings, {});
 
     expect(effective.editor.fontFamily).toBe("Fira Code");
-    expect(effective.files.newFile).toEqual({
+    expect(effective.markdownFiles).toEqual({
+      lineEnding: "crlf",
+      encoding: "utf8"
+    });
+    expect(effective.textFiles).toEqual({
+      enablePlainTextDocuments: true,
       lineEnding: "crlf",
       encoding: "utf8"
     });
@@ -986,11 +1004,14 @@ describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () 
           expected: "lf"
         }
       },
-      files: {
-        newFile: {
-          lineEnding: "lf",
-          encoding: "utf8"
-        }
+      markdownFiles: {
+        lineEnding: "lf",
+        encoding: "utf8"
+      },
+      textFiles: {
+        enablePlainTextDocuments: false,
+        lineEnding: "lf",
+        encoding: "utf8"
       }
     };
 
@@ -1009,10 +1030,11 @@ describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () 
         },
         lineEnding: { expected: "crlf" }
       },
-      files: {
-        newFile: {
-          lineEnding: "crlf"
-        }
+      markdownFiles: {
+        lineEnding: "crlf"
+      },
+      textFiles: {
+        lineEnding: "crlf"
       }
     };
 
@@ -1027,7 +1049,8 @@ describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () 
     expect(effectiveWithProj.editor.characterCount.exclude.markdownSyntax).toBe(true);
     expect(effectiveWithProj.editor.characterCount.exclude.markdownComments).toBe(true);
     expect(effectiveWithProj.editor.lineEnding.expected).toBe("crlf");
-    expect(effectiveWithProj.files.newFile.lineEnding).toBe("crlf");
+    expect(effectiveWithProj.markdownFiles.lineEnding).toBe("crlf");
+    expect(effectiveWithProj.textFiles.lineEnding).toBe("crlf");
 
     // When Project overrides are removed (undefined), falls back to Application Settings
     const effectiveWithoutProj = resolveEffectiveSettings(appSettings, undefined);
@@ -1050,7 +1073,8 @@ describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () 
       effectiveWithoutProj.editor.characterCount.exclude.markdownComments
     ).toBe(false);
     expect(effectiveWithoutProj.editor.lineEnding.expected).toBe("lf");
-    expect(effectiveWithoutProj.files.newFile.lineEnding).toBe("lf");
+    expect(effectiveWithoutProj.markdownFiles.lineEnding).toBe("lf");
+    expect(effectiveWithoutProj.textFiles.lineEnding).toBe("lf");
   });
 });
 

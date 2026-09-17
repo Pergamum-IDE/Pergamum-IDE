@@ -36,7 +36,7 @@ export const lineEndMarkerUnexpectedClassName =
  * call rather than captured once, so a runtime Settings change is honored
  * on the next decoration recompute without rebuilding this feature or
  * reconfiguring the tracking field itself — the same live-getter pattern
- * #253 uses for `files.newFile.lineEnding`.
+ * #253/#501 uses for Markdown/Text file line-ending fallback settings.
  */
 export function createLineEndingMarkerFeature(
   lineEndingField: StateField<LineEndingBreakSet>,

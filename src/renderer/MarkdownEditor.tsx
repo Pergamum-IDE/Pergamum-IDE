@@ -154,7 +154,7 @@ interface MarkdownEditorProps {
    */
   initialLineEndingBreaks?: readonly LineEndingBreak[];
   /**
-   * `files.newFile.lineEnding` — the fallback kind for a new line break in
+   * `markdownFiles.lineEnding` / `textFiles.lineEnding` — the fallback kind for a new line break in
    * a document with no existing tracked breaks. Not a save-time
    * conversion target.
    */
@@ -666,7 +666,7 @@ export function MarkdownEditor({
     });
   // #253: read fresh by the tracking field's `update()` on every
   // transaction (see createLineEndingTrackingField), so a runtime change
-  // to the effective `files.newFile.lineEnding` setting takes effect for
+  // to the effective Markdown/Text file line-ending setting takes effect for
   // the next new break without needing to recreate the field mid-document.
   const newFileLineEndingFallbackRef = useRef<LineEndingKind>(
     newFileLineEndingFallback
@@ -694,6 +694,9 @@ export function MarkdownEditor({
   // the right field without needing to know about document switching
   // themselves. Swapped, never mutated in place, on every genuine switch.
   const lineEndingFieldRef = useRef<StateField<LineEndingBreakSet> | null>(
+    null
+  );
+  const activeDocumentStateRef = useRef<MarkdownEditorDocumentState | null>(
     null
   );
   const appliedFocusRequestIdRef = useRef<number | null>(null);
@@ -910,17 +913,17 @@ export function MarkdownEditor({
   // never a document edit (no dirty, no undo entry, no selection/caret
   // move).
   function reconcileSettingsEffects(
-    lineEndingField: StateField<LineEndingBreakSet>
+    documentState: MarkdownEditorDocumentState
   ) {
     return [
       readOnlyCompartment.reconfigure(
         readOnlyCompartmentContent(readOnlyRef.current)
       ),
-      visibilityCompartment.reconfigure(
+      documentState.visibilityCompartment.reconfigure(
         createVisibilityExtension(
           createLineEndingVisibilityFeatures(
             markerGlyphRef.current,
-            lineEndingField,
+            documentState.lineEndingField,
             () => expectedLineEndingRef.current,
             () => markerGlyphRef.current
           )
@@ -976,6 +979,22 @@ export function MarkdownEditor({
           documentState: buildDocumentState(docContent, docInitialBreaks),
           wasRestoredFromCache: false
         };
+  }
+
+  function cacheActiveDocumentState(view: EditorView): void {
+    const activeDocumentState = activeDocumentStateRef.current;
+
+    if (!activeDocumentState) {
+      return;
+    }
+
+    const nextDocumentState: MarkdownEditorDocumentState = {
+      ...activeDocumentState,
+      state: view.state,
+      lineEndingField: lineEndingFieldRef.current!
+    };
+    activeDocumentStateRef.current = nextDocumentState;
+    documentStates.set(documentKeyRef.current, nextDocumentState);
   }
 
   useEffect(() => {
@@ -1156,6 +1175,7 @@ export function MarkdownEditor({
       initialLineEndingBreaks
     );
     lineEndingFieldRef.current = resolved.documentState.lineEndingField;
+    activeDocumentStateRef.current = resolved.documentState;
     documentStates.set(documentKeyRef.current, resolved.documentState);
 
     const view = new EditorView({
@@ -1173,7 +1193,7 @@ export function MarkdownEditor({
 
     if (resolved.wasRestoredFromCache) {
       view.dispatch({
-        effects: reconcileSettingsEffects(resolved.documentState.lineEndingField)
+        effects: reconcileSettingsEffects(resolved.documentState)
       });
     }
 
@@ -1208,10 +1228,7 @@ export function MarkdownEditor({
           clearActiveFindGutterMarkersEffect.of(null)
         ]
       });
-      documentStates.set(documentKeyRef.current, {
-        state: view.state,
-        lineEndingField: lineEndingFieldRef.current!
-      });
+      cacheActiveDocumentState(view);
       // #375 Document Map: stop the coalesced viewport push and clear the overlay.
       if (
         visibleRangeFrameRef.current !== null &&
@@ -1384,9 +1401,9 @@ export function MarkdownEditor({
 
   useEffect(() => {
     const view = viewRef.current;
-    const lineEndingField = lineEndingFieldRef.current;
+    const activeDocumentState = activeDocumentStateRef.current;
 
-    if (!view || !lineEndingField) {
+    if (!view || !activeDocumentState) {
       return;
     }
 
@@ -1399,11 +1416,11 @@ export function MarkdownEditor({
     // recreating the EditorView or the #253 tracking field itself (the
     // same StateField instance is passed through unchanged).
     view.dispatch({
-      effects: visibilityCompartment.reconfigure(
+      effects: activeDocumentState.visibilityCompartment.reconfigure(
         createVisibilityExtension(
           createLineEndingVisibilityFeatures(
-            markerGlyph,
-            lineEndingField,
+            markerGlyphRef.current,
+            activeDocumentState.lineEndingField,
             () => expectedLineEndingRef.current,
             () => markerGlyphRef.current
           )
@@ -1553,10 +1570,7 @@ export function MarkdownEditor({
       // #387/#392: cache the OUTGOING document's live EditorState (its full
       // undo history included) under the key it is STILL showing, before
       // that key ref advances below.
-      documentStates.set(documentKeyRef.current, {
-        state: view.state,
-        lineEndingField: lineEndingFieldRef.current!
-      });
+      cacheActiveDocumentState(view);
       documentKeyRef.current = documentKey;
 
       const resolved = resolveDocumentState(
@@ -1566,12 +1580,11 @@ export function MarkdownEditor({
       );
       view.setState(resolved.documentState.state);
       lineEndingFieldRef.current = resolved.documentState.lineEndingField;
+      activeDocumentStateRef.current = resolved.documentState;
 
       if (resolved.wasRestoredFromCache) {
         view.dispatch({
-          effects: reconcileSettingsEffects(
-            resolved.documentState.lineEndingField
-          )
+          effects: reconcileSettingsEffects(resolved.documentState)
         });
       }
 

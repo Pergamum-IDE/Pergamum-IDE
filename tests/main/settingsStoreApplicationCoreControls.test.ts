@@ -133,11 +133,14 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
       }
     },
     editor: {},
-    files: {
-      newFile: {
-        lineEnding: "lf",
-        encoding: "utf8"
-      }
+    markdownFiles: {
+      lineEnding: "lf",
+      encoding: "utf8"
+    },
+    textFiles: {
+      enablePlainTextDocuments: false,
+      lineEnding: "lf",
+      encoding: "utf8"
     },
     recentProjects: [],
     ...overrides
@@ -182,11 +185,14 @@ function validSaveRequest(
         )
       }
     },
-    files: {
-      newFile: {
-        lineEnding: "lf",
-        encoding: "utf8"
-      }
+    markdownFiles: {
+      lineEnding: "lf",
+      encoding: "utf8"
+    },
+    textFiles: {
+      enablePlainTextDocuments: false,
+      lineEnding: "lf",
+      encoding: "utf8"
     },
     imageAttachment: {
       saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
@@ -220,9 +226,14 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       defaultCharacterCountSettings
     );
     expect(settings.editor.fontFamily).toBeUndefined();
-    expect(settings.files.newFile).toEqual({
-      lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
-      encoding: getCatalogDefaultValue("files.newFile.encoding")
+    expect(settings.markdownFiles).toEqual({
+      lineEnding: getCatalogDefaultValue("markdownFiles.lineEnding"),
+      encoding: getCatalogDefaultValue("markdownFiles.encoding")
+    });
+    expect(settings.textFiles).toEqual({
+      enablePlainTextDocuments: getCatalogDefaultValue("textFiles.enablePlainTextDocuments"),
+      lineEnding: getCatalogDefaultValue("textFiles.lineEnding"),
+      encoding: getCatalogDefaultValue("textFiles.encoding")
     });
     expect(settings.commandPalette.footerDetail).toEqual({
       enable: getCatalogDefaultValue("commandPalette.footerDetail.enable"),
@@ -357,11 +368,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           },
           paragraphIndent: { excludeLeadingCharacters: "「『（" }
         },
-        files: {
-          newFile: {
-            lineEnding: "crlf",
-            encoding: "utf8"
-          }
+        markdownFiles: {
+          lineEnding: "crlf",
+          encoding: "utf8"
         },
         commandPalette: {
           footerDetail: {
@@ -391,8 +400,13 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.editor.paragraphIndent).toEqual({
       excludeLeadingCharacters: "「『（"
     });
-    expect(settings.files.newFile).toEqual({
+    expect(settings.markdownFiles).toEqual({
       lineEnding: "crlf",
+      encoding: "utf8"
+    });
+    expect(settings.textFiles).toEqual({
+      enablePlainTextDocuments: false,
+      lineEnding: "lf",
       encoding: "utf8"
     });
     expect(settings.commandPalette.footerDetail).toEqual({
@@ -429,11 +443,14 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           // back to the catalog default, not fail startup.
           undoHistoryMinDepth: 50
         },
-        files: {
-          newFile: {
-            lineEnding: "cr",
-            encoding: "shift_jis"
-          }
+        markdownFiles: {
+          lineEnding: "cr",
+          encoding: "shift_jis"
+        },
+        textFiles: {
+          enablePlainTextDocuments: "yes",
+          lineEnding: "cr",
+          encoding: "unknown"
         },
         commandPalette: {
           footerDetail: {
@@ -460,7 +477,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
       defaultSelectionHighlightMode
     );
     expect(settings.editor.findGutterMarkers).toBe(defaultFindGutterMarkers);
-    expect(settings.files.newFile).toEqual({
+    expect(settings.markdownFiles).toEqual({
+      lineEnding: "lf",
+      encoding: "utf8"
+    });
+    expect(settings.textFiles).toEqual({
+      enablePlainTextDocuments: false,
       lineEnding: "lf",
       encoding: "utf8"
     });
@@ -540,7 +562,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     fsMock.mkdir.mockResolvedValue(undefined);
   });
 
-  it("writes preview/workbench/commandPalette/editor/files settings from the request, while preserving only recent projects from disk (#250 follow-up: preview is now write-through, not preserved)", async () => {
+  it("writes preview/workbench/commandPalette/editor/Markdown/Text file settings from the request, while preserving only recent projects from disk (#250 follow-up: preview is now write-through, not preserved)", async () => {
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({
         recentProjects: [recentProject],
@@ -597,11 +619,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
             marquee: { delay: 3000, speed: 80 }
           }
         },
-        files: {
-          newFile: {
-            lineEnding: "crlf",
-            encoding: "utf8"
-          }
+        markdownFiles: {
+          lineEnding: "crlf",
+          encoding: "utf8"
         }
       })
     );
@@ -667,11 +687,14 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         rule: "aozora"
       }
     });
-    expect(written.files).toEqual({
-      newFile: {
-        lineEnding: "crlf",
-        encoding: "utf8"
-      }
+    expect(written.markdownFiles).toEqual({
+      lineEnding: "crlf",
+      encoding: "utf8"
+    });
+    expect(written.textFiles).toEqual({
+      enablePlainTextDocuments: false,
+      lineEnding: "lf",
+      encoding: "utf8"
     });
   });
 
@@ -1138,11 +1161,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         } as unknown as SaveApplicationSettingsRequest["commandPalette"]
       }),
       validSaveRequest({
-        files: { newFile: { lineEnding: "cr" as "lf", encoding: "utf8" } }
+        markdownFiles: { lineEnding: "cr" as "lf", encoding: "utf8" }
       }),
       validSaveRequest({
-        files: {
-          newFile: { lineEnding: "lf", encoding: "shift_jis" as "utf8" }
+        markdownFiles: {
+          lineEnding: "lf",
+          encoding: "shift_jis" as "utf8"
         }
       }),
       validSaveRequest({

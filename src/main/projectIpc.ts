@@ -1836,7 +1836,7 @@ async function listFileExplorerChildren(
 
     const settings = await loadSettings();
     const documentOptions = {
-      enablePlainTextDocuments: settings.workbench.enablePlainTextDocuments ?? false
+      enablePlainTextDocuments: settings.textFiles.enablePlainTextDocuments ?? false
     };
 
     for (const entry of entries) {
@@ -3133,7 +3133,7 @@ async function discoverMarkdownFiles(
 ): Promise<ProjectDocument[]> {
   const settings = await loadSettings();
   const documentOptions = {
-    enablePlainTextDocuments: settings.workbench.enablePlainTextDocuments ?? false
+    enablePlainTextDocuments: settings.textFiles.enablePlainTextDocuments ?? false
   };
   const documents: ProjectDocument[] = [];
 

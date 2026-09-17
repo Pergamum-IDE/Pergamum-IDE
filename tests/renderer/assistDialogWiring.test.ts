@@ -73,7 +73,7 @@ describe("Assist command dialog wiring (#252/#257)", () => {
     expect(blockerBlock).toContain('"app_modal_open"');
   });
 
-  it("passes editor.lineEnding.expected and markerGlyph settings into EditorSurface, separate from files.newFile.lineEnding", () => {
+  it("passes editor.lineEnding.expected and markerGlyph settings into EditorSurface, separate from new file line-ending settings", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 
     expect(source).toContain(

@@ -1,10 +1,24 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   createFileDocument,
   createProjectDocument,
   createUntitledDocument,
-  isMarkdownCurrentDocument
+  isMarkdownCurrentDocument,
+  updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import {
+  closeOpenEditor,
+  createOpenDocumentsStateWithDocument,
+  documentTabs,
+  findOpenDocument,
+  isOpenDocumentDirty,
+  updateOpenDocument
+} from "../../src/renderer/openDocuments";
+import {
+  createProjectDocumentEditorId,
+  type ActiveProjectContext
+} from "../../src/shared/editorId";
 import {
   getProjectDocumentKind,
   isMarkdownPath,
@@ -55,7 +69,7 @@ describe("Plain Text Document Support (#501 Slice 3)", () => {
     expect(isMarkdownCurrentDocument(projectTxt)).toBe(false);
   });
 
-  it("gates .txt paths based on workbench.enablePlainTextDocuments setting", () => {
+  it("gates .txt paths based on textFiles.enablePlainTextDocuments setting", () => {
     const optionsDisabled = { enablePlainTextDocuments: false };
     const optionsEnabled = { enablePlainTextDocuments: true };
 
@@ -75,5 +89,94 @@ describe("Plain Text Document Support (#501 Slice 3)", () => {
     expect(isMarkdownPath("file.MARKDOWN")).toBe(true);
     expect(isMarkdownPath("file.txt")).toBe(false);
     expect(isMarkdownPath("file.png")).toBe(false);
+  });
+
+  it("keeps an already-open .txt project document tab and dirty state until the tab is explicitly closed", () => {
+    const projectContext: ActiveProjectContext = {
+      rootPath: "C:\\project"
+    };
+    const editorId = createProjectDocumentEditorId(
+      "notes.txt",
+      projectContext
+    );
+    const document = createProjectDocument(
+      { relativePath: "notes.txt", name: "notes.txt" },
+      "saved"
+    );
+    const opened = createOpenDocumentsStateWithDocument(
+      document,
+      projectContext
+    );
+    const dirty = updateOpenDocument(opened, editorId, (currentDocument) =>
+      updateCurrentDocumentContent(
+        currentDocument,
+        "dirty",
+        currentDocument.lineEndingBreaks
+      )
+    );
+
+    expect(findOpenDocument(dirty, editorId)?.editor.document).toMatchObject({
+      kind: "project",
+      relativePath: "notes.txt",
+      content: "dirty",
+      savedContent: "saved"
+    });
+    expect(isOpenDocumentDirty(dirty, editorId)).toBe(true);
+    expect(documentTabs(dirty)).toEqual([
+      {
+        id: editorId,
+        title: "notes.txt",
+        isDirty: true,
+        isExternalMarkdownFile: false
+      }
+    ]);
+
+    const closed = closeOpenEditor(dirty, editorId);
+    expect(findOpenDocument(closed, editorId)).toBeNull();
+    expect(closed.documents).toEqual([]);
+    expect(closed.activeDocumentId).toBeNull();
+  });
+
+  it("gates new .txt project-document opens by current settings while allowing already-open tabs", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = source.indexOf(
+      "async function activateProjectDocument(relativePath: string): Promise<void>"
+    );
+    const end = source.indexOf(
+      "function createProjectSearchReadText",
+      start
+    );
+    const block = source.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(block).toContain(
+      "const documentId = createProjectDocumentEditorId(\n      relativePath,\n      activeContext\n    );"
+    );
+    expect(block).toContain(
+      "const openDocument = findOpenDocument(\n      openDocumentsStateRef.current,\n      documentId\n    );"
+    );
+    expect(block).toContain(
+      "!openDocument &&\n      !isProjectDocumentPath(relativePath, {"
+    );
+    expect(block.indexOf("const openDocument = findOpenDocument")).toBeLessThan(
+      block.indexOf("!openDocument &&")
+    );
+    expect(block.indexOf("!openDocument &&")).toBeLessThan(
+      block.indexOf("window.pergamum.projects.readProjectDocument")
+    );
+  });
+
+  it("does not gate the project-document save path by textFiles.enablePlainTextDocuments", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = source.indexOf("async function saveFile(");
+    const end = source.indexOf("async function readProjectDocument", start);
+    const block = source.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(block).toContain("window.pergamum.projects.saveProjectDocument");
+    expect(block).not.toContain("enablePlainTextDocuments");
+    expect(block).not.toContain("isProjectDocumentPath");
   });
 });

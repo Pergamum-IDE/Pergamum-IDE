@@ -110,11 +110,14 @@ function baseApplicationSettings(
         )
       }
     },
-    files: {
-      newFile: {
-        lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
-        encoding: getCatalogDefaultValue("files.newFile.encoding")
-      }
+    markdownFiles: {
+      lineEnding: getCatalogDefaultValue("markdownFiles.lineEnding"),
+      encoding: getCatalogDefaultValue("markdownFiles.encoding")
+    },
+    textFiles: {
+      enablePlainTextDocuments: getCatalogDefaultValue("textFiles.enablePlainTextDocuments"),
+      lineEnding: getCatalogDefaultValue("textFiles.lineEnding"),
+      encoding: getCatalogDefaultValue("textFiles.encoding")
     },
     imageAttachment: {
       saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),

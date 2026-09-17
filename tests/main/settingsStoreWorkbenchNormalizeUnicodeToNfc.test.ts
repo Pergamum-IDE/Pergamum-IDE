@@ -227,8 +227,14 @@ describe("settingsStore workbench.normalizeUnicodeToNfc write path (#446)", () =
         lineEnding: defaultLineEndingSettings,
         characterCount: defaultCharacterCountSettings
       },
-      files: {
-        newFile: { lineEnding: "lf", encoding: "utf8" }
+      markdownFiles: {
+        lineEnding: "lf",
+        encoding: "utf8"
+      },
+      textFiles: {
+        enablePlainTextDocuments: false,
+        lineEnding: "lf",
+        encoding: "utf8"
       }
     };
 

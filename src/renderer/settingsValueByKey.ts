@@ -53,11 +53,6 @@ export function readSettingValue(
         settings.workbench.normalizeUnicodeToNfc ??
         getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")
       );
-    case "workbench.enablePlainTextDocuments":
-      return (
-        settings.workbench.enablePlainTextDocuments ??
-        getCatalogDefaultValue("workbench.enablePlainTextDocuments")
-      );
     case "workbench.sound.enabled":
       return settings.workbench.sound.enabled;
     case "workbench.sound.dialog.enabled":
@@ -110,10 +105,16 @@ export function readSettingValue(
       return settings.editor.captureTabInEditor;
     case "editor.fencedCodeIndentUnit":
       return settings.editor.fencedCodeIndentUnit;
-    case "files.newFile.lineEnding":
-      return settings.files.newFile.lineEnding;
-    case "files.newFile.encoding":
-      return settings.files.newFile.encoding;
+    case "markdownFiles.encoding":
+      return settings.markdownFiles.encoding;
+    case "markdownFiles.lineEnding":
+      return settings.markdownFiles.lineEnding;
+    case "textFiles.enablePlainTextDocuments":
+      return settings.textFiles.enablePlainTextDocuments;
+    case "textFiles.encoding":
+      return settings.textFiles.encoding;
+    case "textFiles.lineEnding":
+      return settings.textFiles.lineEnding;
     case "preview.renderer":
       return settings.preview.renderer;
     case "preview.updateDelayMs":

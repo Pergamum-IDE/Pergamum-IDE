@@ -648,8 +648,8 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row.
-    expect(rows).toHaveLength(22);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row; #501 adds textFiles.lineEnding.
+    expect(rows).toHaveLength(23);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -926,8 +926,8 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     });
 
     const rows = container.querySelectorAll(".settingsItemRow");
-    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row.
-    expect(rows).toHaveLength(22);
+    // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row; #501 adds textFiles.lineEnding.
+    expect(rows).toHaveLength(23);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -973,18 +973,19 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
     const headings = container.querySelectorAll<HTMLHeadingElement>(
       "h2.settingsItemPaneHeading"
     );
-    // #407 / #424 Slice 7 / #490: "外観", "検索・置換", "画像添付" sit alongside Editor and Preview.
-    expect(headings).toHaveLength(7);
+    // #407 / #424 Slice 7 / #490 / #501: file settings are split into Markdown/Text categories.
+    expect(headings).toHaveLength(8);
     expect(headings[0].textContent).toBe("外観");
     expect(headings[1].textContent).toBe("エディタ");
     expect(headings[2].textContent).toBe("検索・置換");
     expect(headings[3].textContent).toBe("画像添付");
     expect(headings[4].textContent).toBe("プレビュー");
     expect(headings[5].textContent).toBe("文書マップ");
-    expect(headings[6].textContent).toBe("ファイル");
+    expect(headings[6].textContent).toBe("マークダウンファイル");
+    expect(headings[7].textContent).toBe("テキストファイル");
 
     // Sections use existing .settingsItemPane class
-    expect(container.querySelectorAll(".settingsItemPane")).toHaveLength(7);
+    expect(container.querySelectorAll(".settingsItemPane")).toHaveLength(8);
 
     // Verify exact sequence of elements inside row:
     // 1. header (label + inline actions) -> 2. control -> 3. description -> 4. key
@@ -1093,7 +1094,11 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           },
           { id: "preview", labelKey: "settings.category.preview.label" },
           { id: "documentMap", labelKey: "settings.category.documentMap.label" },
-          { id: "files", labelKey: "settings.category.files.label" }
+          {
+            id: "markdownFiles",
+            labelKey: "settings.category.markdownFiles.label"
+          },
+          { id: "textFiles", labelKey: "settings.category.textFiles.label" }
         ]);
       });
 
@@ -1118,7 +1123,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "imageAttachment",
           "preview",
           "documentMap",
-          "files"
+          "markdownFiles",
+          "textFiles"
         ]);
       });
     });
@@ -1258,7 +1264,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "preview.renderer",
           "preview.fontFamilyList",
           "documentMap.dialogueDelimiterPairs",
-          "files.newFile.lineEnding"
+          "markdownFiles.lineEnding",
+          "textFiles.lineEnding"
         ]);
       });
 
@@ -1295,13 +1302,23 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "preview.fontFamilyList"
         ]);
 
-        const filesOnly = filterProjectSettingItems(
+        const markdownFilesOnly = filterProjectSettingItems(
           eligibleItems,
-          "files",
+          "markdownFiles",
           "",
           translateJa
         );
-        expect(filesOnly.map((i) => i.key)).toEqual(["files.newFile.lineEnding"]);
+        expect(markdownFilesOnly.map((i) => i.key)).toEqual([
+          "markdownFiles.lineEnding"
+        ]);
+
+        const textFilesOnly = filterProjectSettingItems(
+          eligibleItems,
+          "textFiles",
+          "",
+          translateJa
+        );
+        expect(textFilesOnly.map((i) => i.key)).toEqual(["textFiles.lineEnding"]);
       });
 
       it("filters by search query alone when category is 'all'", () => {
@@ -1397,7 +1414,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      expect(categoryButtons).toHaveLength(8);
+      expect(categoryButtons).toHaveLength(9);
       expect(categoryButtons[0].textContent).toBe("すべて");
       expect(categoryButtons[1].textContent).toBe("外観");
       expect(categoryButtons[2].textContent).toBe("エディタ");
@@ -1405,7 +1422,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       expect(categoryButtons[4].textContent).toBe("画像添付");
       expect(categoryButtons[5].textContent).toBe("プレビュー");
       expect(categoryButtons[6].textContent).toBe("文書マップ");
-      expect(categoryButtons[7].textContent).toBe("ファイル");
+      expect(categoryButtons[7].textContent).toBe("マークダウンファイル");
+      expect(categoryButtons[8].textContent).toBe("テキストファイル");
 
       expect(
         categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
@@ -1425,7 +1443,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "画像添付",
         "プレビュー",
         "文書マップ",
-        "ファイル"
+        "マークダウンファイル",
+        "テキストファイル"
       ]);
 
       const itemKeys = Array.from(
@@ -1453,7 +1472,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "preview.renderer",
         "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
-        "files.newFile.lineEnding"
+        "markdownFiles.lineEnding",
+        "textFiles.lineEnding"
       ]);
     });
 
@@ -1478,7 +1498,12 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const imageAttachmentButton = categoryButtons.find((b) => b.textContent === "画像添付")!;
       const previewButton = categoryButtons.find((b) => b.textContent === "プレビュー")!;
       const docMapButton = categoryButtons.find((b) => b.textContent === "文書マップ")!;
-      const filesButton = categoryButtons.find((b) => b.textContent === "ファイル")!;
+      const markdownFilesButton = categoryButtons.find(
+        (b) => b.textContent === "マークダウンファイル"
+      )!;
+      const textFilesButton = categoryButtons.find(
+        (b) => b.textContent === "テキストファイル"
+      )!;
       const allButton = categoryButtons.find((b) => b.textContent === "すべて")!;
 
       // Click "エディタ"
@@ -1570,18 +1595,31 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       ).map((k) => k.textContent);
       expect(itemKeys).toEqual(["documentMap.dialogueDelimiterPairs"]);
 
-      // Click "ファイル"
+      // Click "マークダウンファイル"
       act(() => {
-        filesButton.click();
+        markdownFilesButton.click();
       });
 
       expect(
-        filesButton.classList.contains("settingsCategoryButtonSelected")
+        markdownFilesButton.classList.contains("settingsCategoryButtonSelected")
       ).toBe(true);
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual(["files.newFile.lineEnding"]);
+      expect(itemKeys).toEqual(["markdownFiles.lineEnding"]);
+
+      // Click "テキストファイル"
+      act(() => {
+        textFilesButton.click();
+      });
+
+      expect(
+        textFilesButton.classList.contains("settingsCategoryButtonSelected")
+      ).toBe(true);
+      itemKeys = Array.from(
+        container.querySelectorAll(".settingsItemKey")
+      ).map((k) => k.textContent);
+      expect(itemKeys).toEqual(["textFiles.lineEnding"]);
 
       // Click "すべて"
       act(() => {
@@ -1616,7 +1654,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "preview.renderer",
         "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
-        "files.newFile.lineEnding"
+        "markdownFiles.lineEnding",
+        "textFiles.lineEnding"
       ]);
     });
 
@@ -1707,7 +1746,8 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "preview.renderer",
         "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
-        "files.newFile.lineEnding"
+        "markdownFiles.lineEnding",
+        "textFiles.lineEnding"
       ]);
     });
 
@@ -2073,7 +2113,7 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
     it("validateProjectSettingValue handles enum values correctly", () => {
       expect(
         validateProjectSettingValue(
-          "files.newFile.lineEnding",
+          "markdownFiles.lineEnding",
           "crlf",
           "lf"
         )
@@ -2081,7 +2121,7 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
 
       expect(
         validateProjectSettingValue(
-          "files.newFile.lineEnding",
+          "markdownFiles.lineEnding",
           "invalid_ending",
           "lf"
         )
@@ -2466,7 +2506,7 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
   });
 
   describe("line ending select controls and category filtering", () => {
-    it("handles files.newFile.lineEnding select change and differential reset", async () => {
+    it("handles markdownFiles.lineEnding select change and differential reset", async () => {
       const onSaveSettings = vi.fn(async () => undefined);
       act(() => {
         root.render(
@@ -2474,11 +2514,14 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
             translate={translateJa}
             projectSettings={undefined}
             applicationSettings={{
-              files: {
-                newFile: {
-                  lineEnding: "lf",
-                  encoding: "utf8"
-                }
+              markdownFiles: {
+                lineEnding: "lf",
+                encoding: "utf8"
+              },
+              textFiles: {
+                enablePlainTextDocuments: false,
+                lineEnding: "lf",
+                encoding: "utf8"
               }
             }}
             isReadOnly={false}
@@ -2492,7 +2535,7 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
       ).find(
         (r) =>
           r.querySelector(".settingsItemKey")?.textContent ===
-          "files.newFile.lineEnding"
+          "markdownFiles.lineEnding"
       )!;
       const select = filesRow.querySelector<HTMLSelectElement>("select.settingsSelect")!;
       expect(select.value).toBe("lf");
@@ -2505,22 +2548,25 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
 
       expect(onSaveSettings).toHaveBeenCalledTimes(1);
       expect(onSaveSettings).toHaveBeenCalledWith({
-        set: { "files.newFile.lineEnding": "crlf" }
+        set: { "markdownFiles.lineEnding": "crlf" }
       });
     });
 
-    it("filters to 'files' category and displays only files.newFile.lineEnding", () => {
+    it("filters to 'markdownFiles' category and displays only markdownFiles.lineEnding", () => {
       act(() => {
         root.render(
           <ProjectSettingsPanel
             translate={translateJa}
             projectSettings={undefined}
             applicationSettings={{
-              files: {
-                newFile: {
-                  lineEnding: "lf",
-                  encoding: "utf8"
-                }
+              markdownFiles: {
+                lineEnding: "lf",
+                encoding: "utf8"
+              },
+              textFiles: {
+                enablePlainTextDocuments: false,
+                lineEnding: "lf",
+                encoding: "utf8"
               }
             }}
             isReadOnly={false}
@@ -2532,19 +2578,19 @@ describe("ProjectSettingsPanel Slice 7 - Remaining Project Settings scope wiring
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      const filesButton = categoryButtons.find(
-        (b) => b.textContent === "ファイル"
+      const markdownFilesButton = categoryButtons.find(
+        (b) => b.textContent === "マークダウンファイル"
       )!;
-      expect(filesButton).not.toBeNull();
+      expect(markdownFilesButton).not.toBeNull();
 
       act(() => {
-        filesButton.click();
+        markdownFilesButton.click();
       });
 
       const visibleKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(visibleKeys).toEqual(["files.newFile.lineEnding"]);
+      expect(visibleKeys).toEqual(["markdownFiles.lineEnding"]);
     });
   });
 

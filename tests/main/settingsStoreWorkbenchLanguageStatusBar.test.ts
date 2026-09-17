@@ -149,8 +149,11 @@ function saveRequest(
       captureTabInEditor: defaultCaptureTabInEditor,
       fencedCodeIndentUnit: "spaces4"
     },
-    files: {
-      newFile: { lineEnding: "lf", encoding: "utf8" }
+    markdownFiles: {
+      lineEnding: "lf", encoding: "utf8"
+    },
+    textFiles: {
+      enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8"
     },
     imageAttachment: { saveDirectory: "", insertMarkdownLink: true }
   } as SaveApplicationSettingsRequest;
@@ -486,8 +489,11 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         captureTabInEditor: defaultCaptureTabInEditor,
         fencedCodeIndentUnit: "spaces4"
       },
-      files: {
-        newFile: { lineEnding: "lf", encoding: "utf8" }
+      markdownFiles: {
+        lineEnding: "lf", encoding: "utf8"
+      },
+      textFiles: {
+        enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8"
       },
       somethingUnknown: true
     };
@@ -523,8 +529,11 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         captureTabInEditor: defaultCaptureTabInEditor,
         fencedCodeIndentUnit: "spaces4"
       },
-      files: {
-        newFile: { lineEnding: "lf", encoding: "utf8" }
+      markdownFiles: {
+        lineEnding: "lf", encoding: "utf8"
+      },
+      textFiles: {
+        enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8"
       }
     };
 

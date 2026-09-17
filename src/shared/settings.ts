@@ -111,13 +111,21 @@ export interface ApplicationCommandPaletteSettings {
   footerDetail: CommandPaletteFooterDetailSettings;
 }
 
-export type NewFileLineEnding = SettingValueOf<"files.newFile.lineEnding">;
-export type NewFileEncoding = SettingValueOf<"files.newFile.encoding">;
+export type MarkdownFilesEncoding = SettingValueOf<"markdownFiles.encoding">;
+export type MarkdownFilesLineEnding = SettingValueOf<"markdownFiles.lineEnding">;
+export type TextFilesEncoding = SettingValueOf<"textFiles.encoding">;
+export type TextFilesLineEnding = SettingValueOf<"textFiles.lineEnding">;
+export type MarkdownFileEncoding = MarkdownFilesEncoding;
+export type MarkdownFileLineEnding = MarkdownFilesLineEnding;
+export type TextFileEncoding = TextFilesEncoding;
+export type TextFileLineEnding = TextFilesLineEnding;
+export type NewFileEncoding = TextFileEncoding;
+export type NewFileLineEnding = MarkdownFilesLineEnding;
 
 // #252: `expected` is a diagnostic-only setting — what marker/distribution
 // UI treats as "the line ending you expect to see" — never a save-time
 // conversion target. It must stay fully separate from #253's
-// files.newFile.lineEnding (which decides a *new* break's kind) and from
+// markdownFiles.lineEnding/textFiles.lineEnding (which decide a *new* break's kind) and from
 // the per-break kinds actually tracked/saved. `markerGlyph` is one glyph
 // used for every line-ending kind; expected/unexpected is shown via marker
 // variant/styling, not by choosing a different glyph per kind.
@@ -231,15 +239,6 @@ export interface ApplicationEditorSettings {
   ruby?: ApplicationEditorRubyMarkupSettings;
 }
 
-export interface ApplicationNewFileSettings {
-  lineEnding: NewFileLineEnding;
-  encoding: NewFileEncoding;
-}
-
-export interface ApplicationFilesSettings {
-  newFile: ApplicationNewFileSettings;
-}
-
 export type ImageAttachmentSaveDirectory = SettingValueOf<
   "imageAttachment.saveDirectory"
 >;
@@ -289,9 +288,17 @@ export interface ApplicationWorkbenchSettings {
   // #446: sparse, like fontFamily/notification — absence means "use the
   // catalog default (true)"; it is never eagerly written back as the default.
   normalizeUnicodeToNfc?: boolean;
-  // #501: sparse, like fontFamily/notification — absence means "use the
-  // catalog default (false)"; it is never eagerly written back as the default.
+}
+
+export interface ApplicationMarkdownFilesSettings {
+  encoding: MarkdownFilesEncoding;
+  lineEnding: MarkdownFilesLineEnding;
+}
+
+export interface ApplicationTextFilesSettings {
   enablePlainTextDocuments?: boolean;
+  encoding: TextFilesEncoding;
+  lineEnding: TextFilesLineEnding;
 }
 
 export interface ApplicationSettings {
@@ -301,7 +308,8 @@ export interface ApplicationSettings {
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   search: ApplicationSearchSettings;
-  files: ApplicationFilesSettings;
+  markdownFiles: ApplicationMarkdownFilesSettings;
+  textFiles: ApplicationTextFilesSettings;
   imageAttachment: ApplicationImageAttachmentSettings;
   // #375: Document Map draw colours + dialogue delimiter pairs.
   // applicationOnly, always concrete (never sparse).
@@ -320,7 +328,8 @@ export interface SaveApplicationSettingsRequest {
   commandPalette: ApplicationCommandPaletteSettings;
   editor: ApplicationEditorSettings;
   search: ApplicationSearchSettings;
-  files: ApplicationFilesSettings;
+  markdownFiles: ApplicationMarkdownFilesSettings;
+  textFiles: ApplicationTextFilesSettings;
   imageAttachment: ApplicationImageAttachmentSettings;
   documentMap: DocumentMapSettings;
 }
@@ -374,12 +383,12 @@ export interface ProjectEditorSettings {
   ruby?: ProjectEditorRubySettings;
 }
 
-export interface ProjectFilesNewFileSettings {
-  lineEnding?: NewFileLineEnding;
+export interface ProjectMarkdownFilesSettings {
+  lineEnding?: MarkdownFilesLineEnding;
 }
 
-export interface ProjectFilesSettings {
-  newFile?: ProjectFilesNewFileSettings;
+export interface ProjectTextFilesSettings {
+  lineEnding?: TextFilesLineEnding;
 }
 
 export interface ProjectDocumentMapSettings {
@@ -410,7 +419,8 @@ export interface ProjectSettings {
   editor?: ProjectEditorSettings;
   preview?: ProjectPreviewSettings;
   search?: ProjectSearchSettings;
-  files?: ProjectFilesSettings;
+  markdownFiles?: ProjectMarkdownFilesSettings;
+  textFiles?: ProjectTextFilesSettings;
   imageAttachment?: ProjectImageAttachmentSettings;
   documentMap?: ProjectDocumentMapSettings;
 }
@@ -433,7 +443,6 @@ export interface EffectiveWorkbenchSettings {
   uiFontFamilyList: FontFamilySetting[];
   notification: WorkbenchNotificationSettings;
   normalizeUnicodeToNfc: boolean;
-  enablePlainTextDocuments: boolean;
 }
 
 export interface EffectiveCommandPaletteSettings {
@@ -456,8 +465,15 @@ export interface EffectiveEditorSettings {
   ruby: ApplicationEditorRubyMarkupSettings;
 }
 
-export interface EffectiveFilesSettings {
-  newFile: ApplicationNewFileSettings;
+export interface EffectiveMarkdownFilesSettings {
+  encoding: MarkdownFilesEncoding;
+  lineEnding: MarkdownFilesLineEnding;
+}
+
+export interface EffectiveTextFilesSettings {
+  enablePlainTextDocuments: boolean;
+  encoding: TextFilesEncoding;
+  lineEnding: TextFilesLineEnding;
 }
 
 // #407: always concrete after the Project > Application > Built-in chain.
@@ -474,7 +490,8 @@ export interface EffectiveSettings {
   editor: EffectiveEditorSettings;
   /** #424 Slice 7: concrete after Project > Application > Built-in. */
   search: ApplicationSearchSettings;
-  files: EffectiveFilesSettings;
+  markdownFiles: EffectiveMarkdownFilesSettings;
+  textFiles: EffectiveTextFilesSettings;
   imageAttachment: EffectiveImageAttachmentSettings;
   /** #375: applicationOnly, passes straight through (always concrete). */
   documentMap: DocumentMapSettings;
@@ -561,9 +578,6 @@ export const builtInDefaultSettings: EffectiveSettings = {
     },
     normalizeUnicodeToNfc: getCatalogDefaultValue(
       "workbench.normalizeUnicodeToNfc"
-    ),
-    enablePlainTextDocuments: getCatalogDefaultValue(
-      "workbench.enablePlainTextDocuments"
     )
   },
   commandPalette: {
@@ -641,11 +655,16 @@ export const builtInDefaultSettings: EffectiveSettings = {
     }
   },
   search: cloneDefaultSearchSettings(),
-  files: {
-    newFile: {
-      lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
-      encoding: getCatalogDefaultValue("files.newFile.encoding")
-    }
+  markdownFiles: {
+    encoding: getCatalogDefaultValue("markdownFiles.encoding"),
+    lineEnding: getCatalogDefaultValue("markdownFiles.lineEnding")
+  },
+  textFiles: {
+    enablePlainTextDocuments: getCatalogDefaultValue(
+      "textFiles.enablePlainTextDocuments"
+    ),
+    encoding: getCatalogDefaultValue("textFiles.encoding"),
+    lineEnding: getCatalogDefaultValue("textFiles.lineEnding")
   },
   imageAttachment: {
     saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
@@ -749,11 +768,15 @@ export const defaultApplicationSettings: ApplicationSettings = {
     }
   },
   search: cloneDefaultSearchSettings(),
-  files: {
-    newFile: {
-      lineEnding: builtInDefaultSettings.files.newFile.lineEnding,
-      encoding: builtInDefaultSettings.files.newFile.encoding
-    }
+  markdownFiles: {
+    encoding: builtInDefaultSettings.markdownFiles.encoding,
+    lineEnding: builtInDefaultSettings.markdownFiles.lineEnding
+  },
+  textFiles: {
+    enablePlainTextDocuments:
+      builtInDefaultSettings.textFiles.enablePlainTextDocuments,
+    encoding: builtInDefaultSettings.textFiles.encoding,
+    lineEnding: builtInDefaultSettings.textFiles.lineEnding
   },
   imageAttachment: {
     saveDirectory: builtInDefaultSettings.imageAttachment.saveDirectory,
@@ -857,11 +880,15 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       }
     },
     search: cloneDefaultSearchSettings(),
-    files: {
-      newFile: {
-        lineEnding: defaultApplicationSettings.files.newFile.lineEnding,
-        encoding: defaultApplicationSettings.files.newFile.encoding
-      }
+    markdownFiles: {
+      encoding: defaultApplicationSettings.markdownFiles.encoding,
+      lineEnding: defaultApplicationSettings.markdownFiles.lineEnding
+    },
+    textFiles: {
+      enablePlainTextDocuments:
+        defaultApplicationSettings.textFiles.enablePlainTextDocuments,
+      encoding: defaultApplicationSettings.textFiles.encoding,
+      lineEnding: defaultApplicationSettings.textFiles.lineEnding
     },
     imageAttachment: {
       saveDirectory:
@@ -952,10 +979,7 @@ export function resolveEffectiveSettings(
       // omits it.
       normalizeUnicodeToNfc:
         applicationSettings.workbench.normalizeUnicodeToNfc ??
-        builtInDefaultSettings.workbench.normalizeUnicodeToNfc,
-      enablePlainTextDocuments:
-        applicationSettings.workbench.enablePlainTextDocuments ??
-        builtInDefaultSettings.workbench.enablePlainTextDocuments
+        builtInDefaultSettings.workbench.normalizeUnicodeToNfc
     },
     commandPalette: {
       footerDetail: {
@@ -1061,14 +1085,22 @@ export function resolveEffectiveSettings(
           builtInDefaultSettings.search.nearby.paragraphDistance
       }
     },
-    files: {
-      newFile: {
-        lineEnding:
-          projectSettings?.files?.newFile?.lineEnding ??
-          applicationSettings.files.newFile.lineEnding ??
-          builtInDefaultSettings.files.newFile.lineEnding,
-        encoding: applicationSettings.files.newFile.encoding
-      }
+    markdownFiles: {
+      encoding: applicationSettings.markdownFiles.encoding,
+      lineEnding:
+        projectSettings?.markdownFiles?.lineEnding ??
+        applicationSettings.markdownFiles.lineEnding ??
+        builtInDefaultSettings.markdownFiles.lineEnding
+    },
+    textFiles: {
+      enablePlainTextDocuments:
+        applicationSettings.textFiles?.enablePlainTextDocuments ??
+        builtInDefaultSettings.textFiles.enablePlainTextDocuments,
+      encoding: applicationSettings.textFiles.encoding,
+      lineEnding:
+        projectSettings?.textFiles?.lineEnding ??
+        applicationSettings.textFiles.lineEnding ??
+        builtInDefaultSettings.textFiles.lineEnding
     },
     // #407: both keys support the whole Project > Application > Built-in
     // override chain. `saveDirectory`'s built-in default is the empty string

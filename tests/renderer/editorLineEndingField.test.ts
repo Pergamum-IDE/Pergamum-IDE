@@ -168,7 +168,7 @@ describe("createLineEndingTrackingField (#253)", () => {
       expect(newBreak?.kind).toBe("crlf");
     });
 
-    it("falls back to files.newFile.lineEnding when the document has no existing breaks at all", () => {
+    it("falls back to newFile lineEnding when the document has no existing breaks at all", () => {
       let { state, field } = stateWithField("no breaks yet", [], "crlf");
 
       state = dispatch(state, {
@@ -418,9 +418,9 @@ describe("createLineEndingTrackingField (#253)", () => {
     });
   });
 
-  describe("runtime files.newFile.lineEnding fallback changes (#253 review)", () => {
-    it("picks up a Settings change to files.newFile.lineEnding for the next new break in a document with zero existing breaks", () => {
-      // files.newFile.lineEnding = lf, a zero-break document is shown.
+  describe("runtime newFile lineEnding fallback changes (#253 review)", () => {
+    it("picks up a Settings change to newFile lineEnding for the next new break in a document with zero existing breaks", () => {
+      // lineEnding = lf, a zero-break document is shown.
       const fallbackBox: { current: LineEndingKind } = { current: "lf" };
       const { field, extension } = createLineEndingTrackingExtension(
         [],
