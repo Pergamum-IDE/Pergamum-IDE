@@ -5058,14 +5058,15 @@ describe("project file IPC foundation", () => {
     ).resolves.toBeNull();
   });
 
-  it("#372: returns null for a .txt file, a folder, and an unregistered path", async () => {
+  it("#372/#501 slice 10: returns null for a folder, an unregistered path, or a .txt file when Plain Text support is disabled", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
     await fs.writeFile(
       path.join(projectRootPath, "notes.txt"),
       "plain text body\n",
       "utf8"
     );
     await fs.mkdir(path.join(projectRootPath, "Drafts"));
-    await openExplorerProject("Preview Non Markdown");
+    await openExplorerProject("Preview Non Markdown Disabled");
 
     const previewHandler = registeredHandler(
       PROJECT_CHANNELS.readProjectDocumentPreviewLine
@@ -5079,6 +5080,94 @@ describe("project file IPC foundation", () => {
     ).resolves.toBeNull();
     await expect(
       previewHandler({ sender: {} }, { relativePath: "does-not-exist.md" })
+    ).resolves.toBeNull();
+  });
+
+  it("#501 slice 10: returns preview line for .txt file using textFiles.encoding when Plain Text support is enabled", async () => {
+    await writeTextFilesSettings(userDataPath, {
+      enablePlainTextDocuments: true,
+      encoding: "shiftJis"
+    });
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Preview Plain Text.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Preview Plain Text"
+    });
+    await created.close();
+
+    // Shift_JIS text file
+    const sjisBuffer = encodeTextFileContent("第一行目\n第二行目\n", "shiftJis").bytes;
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      sjisBuffer
+    );
+    // UTF-8 Markdown file in same project
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "\n  # Markdown Chapter\n",
+      "utf8"
+    );
+
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    // .txt preview is decoded via textFiles.encoding (shiftJis)
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toBe("第一行目");
+
+    // Markdown preview remains UTF-8, unaffected by shiftJis setting
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "chapter.md" })
+    ).resolves.toBe("# Markdown Chapter");
+
+    // Dynamic settings update: changing textFiles.encoding updates future .txt previews live
+    await writeTextFilesSettings(userDataPath, {
+      enablePlainTextDocuments: true,
+      encoding: "eucJp"
+    });
+    const eucBuffer = encodeTextFileContent("EUC本文\n", "eucJp").bytes;
+    await fs.writeFile(
+      path.join(projectRootPath, "euc_notes.txt"),
+      eucBuffer
+    );
+    // Refresh list of documents
+    const listHandler = registeredHandler(PROJECT_CHANNELS.listProjectDocuments);
+    await listHandler({ sender: {} });
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "euc_notes.txt" })
+    ).resolves.toBe("EUC本文");
+  });
+
+  it("#501 slice 10: returns null for empty or unreadable .txt file without throwing", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, true);
+    await fs.writeFile(
+      path.join(projectRootPath, "empty.txt"),
+      "\r\n\t  \r\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Empty Txt");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "empty.txt" })
     ).resolves.toBeNull();
   });
 

@@ -117,7 +117,10 @@ import {
   type FileExplorerRenameFailureReason
 } from "../shared/fileExplorerRename";
 import type { AppPlatform } from "../shared/platform";
-import { isProjectDocumentPath } from "../shared/projectDocumentKind";
+import {
+  getProjectDocumentKind,
+  isProjectDocumentPath
+} from "../shared/projectDocumentKind";
 import { firstNonEmptyMarkdownPreviewLine } from "../shared/markdownPreviewLine";
 import {
   isPathEqualOrInsideDirectory,
@@ -141,6 +144,7 @@ import {
   type SanitizedFileIoError
 } from "./markdownFileIo";
 import { decodeTextFileBytes, encodeTextFileContent } from "./textFileIo";
+import type { ApplicationSettings } from "../shared/settings";
 import type { TextFileEncoding } from "../shared/textFileEncoding";
 import {
   dryRunTextImport,
@@ -3056,17 +3060,19 @@ function isRecoveryRelatedProjectDocumentPath(relativePath: string): boolean {
  * for a project-local Markdown document — its first non-empty line, trimmed.
  *
  * Safety: the caller-supplied `relativePath` must resolve, through the same
- * project-document-open helper used by `readProjectDocument`
- * ({@link resolveProjectDocumentPath}), to a REGISTERED project-local document
- * inside the active project root — which already rejects path traversal and a
- * non-registered path. On top of that this only ever previews a `.md` /
- * `.markdown` file (never a folder, the `.pergamum` project file, a
- * protected / internal Pergamum data file, a reserved File Explorer segment,
- * or a Recovery-related path), rejects a symlink / Windows junction / reparse
- * point at the final target OR at ANY ancestor directory between the project
- * root and the document's parent, and swallows every read failure — a raw I/O
- * error must never reach the renderer. All of those cases resolve to `null`
- * ("show no preview").
+ * #372 / #501 slice 10: request for the Command Palette file quick open footer
+ * detail preview line.
+ *
+ * #501 slice 10: supports Plain Text (`.txt`) when Plain Text document support
+ * is enabled (`textFiles.enablePlainTextDocuments === true`). `.txt` reads
+ * using `textFiles.encoding`. Markdown (`.md` / `.markdown`) reads as UTF-8
+ * unchanged. Rejects non-project document paths, protected / reserved paths
+ * (including `.recovered.md` / `.recovered.txt` artifacts, or any Recovery-
+ * related path), rejects a symlink / Windows junction / reparse point at the
+ * final target OR at ANY ancestor directory between the project root and the
+ * document's parent, and swallows every read failure — a raw I/O error must
+ * never reach the renderer. All of those cases resolve to `null` ("show no
+ * preview").
  */
 async function readProjectDocumentPreviewLine(
   rawRequest: unknown
@@ -3080,9 +3086,23 @@ async function readProjectDocumentPreviewLine(
   }
 
   const normalized = relativePath.replace(/\\/g, "/");
+  const lower = normalized.toLowerCase();
+
+  let settings: ApplicationSettings | null = null;
+  if (lower.endsWith(".txt")) {
+    try {
+      settings = await loadSettings();
+    } catch {
+      return null;
+    }
+  }
+
+  const kind = getProjectDocumentKind(normalized, {
+    enablePlainTextDocuments: settings?.textFiles.enablePlainTextDocuments ?? false
+  });
 
   if (
-    !isProjectMarkdownDocumentPath(normalized) ||
+    kind === null ||
     pathHasReservedFileExplorerSegment(normalized) ||
     normalized
       .split("/")
@@ -3134,9 +3154,12 @@ async function readProjectDocumentPreviewLine(
     }
 
     const bytes = await fs.readFile(documentPath);
-    const decoded = decodeMarkdownBytes(bytes);
+    const content =
+      kind === "markdown"
+        ? decodeMarkdownBytes(bytes).content
+        : decodeTextFileBytes(bytes, settings?.textFiles.encoding ?? "utf8").content;
 
-    return firstNonEmptyMarkdownPreviewLine(decoded.content);
+    return firstNonEmptyMarkdownPreviewLine(content);
   } catch {
     return null;
   }

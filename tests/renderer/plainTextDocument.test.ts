@@ -342,3 +342,28 @@ describe("Plain Text Project-wide Replace (#501 Slice 9)", () => {
   });
 });
 
+describe("Plain Text Quick Open Preview Lines (#501 Slice 10)", () => {
+  it("threads getProjectDocumentKind and textFiles.encoding through readProjectDocumentPreviewLine in projectIpc.ts", () => {
+    const ipcSource = readFileSync("src/main/projectIpc.ts", "utf8");
+    const start = ipcSource.indexOf("async function readProjectDocumentPreviewLine(");
+    const end = ipcSource.indexOf("export function registerCurrentProjectDocumentPath(", start);
+    const block = ipcSource.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    // Live settings inspection
+    expect(block).toContain("settings = await loadSettings()");
+    // Document kind check using effective setting
+    expect(block).toContain("getProjectDocumentKind(normalized, {");
+    expect(block).toContain("enablePlainTextDocuments: settings?.textFiles.enablePlainTextDocuments");
+    // Plain text encoding-aware decoding via textFiles.encoding
+    expect(block).toContain("kind === \"markdown\"");
+    expect(block).toContain("decodeMarkdownBytes(bytes).content");
+    expect(block).toContain("decodeTextFileBytes(bytes, settings?.textFiles.encoding");
+    // Safe preview line extraction
+    expect(block).toContain("firstNonEmptyMarkdownPreviewLine(content)");
+  });
+});
+
+
