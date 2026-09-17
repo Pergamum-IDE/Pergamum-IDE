@@ -337,6 +337,8 @@ export const enTranslations = {
   "dialog.fileOpenFailed.title": "Could not read file",
   "dialog.fileSaveFailed.message": "Pergamum could not save the file. Your text is still kept in the editor. Check the save location and permissions.",
   "dialog.fileSaveFailed.title": "Could not save file",
+  "dialog.fileSaveFailedEncoding.message": "This document contains characters that cannot be saved with the currently selected character encoding.\n\nSaving could cause part of the text to be lost, so the save was canceled.\n\nChange the text file encoding to UTF-8, or change the unsupported characters, then try saving again.",
+  "dialog.fileSaveFailedEncoding.title": "Cannot save with this character encoding",
   "dialog.glossarySaveFailed.message": "Pergamum could not save the glossary entry.\n\nYour edits are still kept in this tab. Check the entry and try again later.",
   "dialog.glossarySaveFailed.title": "Could not save glossary entry",
   "dialog.readOnlyProjectOpen.lockSetupFailedMessage": "Pergamum could not create a writable lock for this project.\n\nThis may be caused by file system permissions, a syncing folder, or a temporary file operation failure.\n\nYou can open it in read-only mode.\nEditing and normal Save are unavailable, but you can view the contents or save a copy with Save As.\n\nDo you want to open the project?",

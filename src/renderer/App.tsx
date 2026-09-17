@@ -25,6 +25,7 @@ import type {
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
+import { sanitizedFileIoErrorReasonFromMessage } from "../shared/sanitizedFileIoErrorMessage";
 import {
   applicationMenuCommandIds,
   type ApplicationMenuCommandId,
@@ -33,6 +34,7 @@ import {
 import type { CommandContext } from "../shared/commandEnablement";
 import type {
   DebugLogEditorIdKind,
+  DebugLogReason,
   DebugLogSaveTargetKind
 } from "../shared/debugLog";
 import {
@@ -621,6 +623,21 @@ const readOnlyProjectSaveAsChoiceIds = {
 
 function errorMessage(error: unknown, translate: Translate): string {
   return error instanceof Error ? error.message : translate("error.unknown");
+}
+
+// #501 slice 6 remediation: a save failure caused by the currently selected
+// `textFiles.encoding` being unable to represent the document's characters
+// is not a path / permission / disk-space problem, so it must not show the
+// generic save-failure dialog. See sanitizedFileIoErrorMessage.ts for why
+// `.message` (not a thrown error's custom properties) is the only safe way
+// to recover `reason` across the `ipcMain.handle` → `ipcRenderer.invoke`
+// boundary.
+function isUnencodableCharactersSaveError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    sanitizedFileIoErrorReasonFromMessage(error.message) ===
+      "unencodableCharacters"
+  );
 }
 
 function projectOpenStatus(
@@ -5945,6 +5962,43 @@ export function App(): JSX.Element {
     });
   }
 
+  // #501 slice 6 remediation: dedicated dialog for a save rejected because
+  // the selected `textFiles.encoding` cannot represent the document's
+  // characters — the generic save-failure dialog above wrongly implies a
+  // path / permission / disk-space problem.
+  async function showFileSaveFailedEncodingDialog(): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.fileSaveFailedEncoding.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.fileSaveFailedEncoding.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  // #501 slice 6 remediation: shared dispatch between the structured
+  // `saveProjectDocument` failure branch and the generic standalone-save
+  // catch block below — `reason === "unencodableCharacters"` gets the
+  // dedicated encoding dialog, everything else (including `undefined`, for
+  // an unclassified thrown error) gets the generic one.
+  async function showSaveFailureDialogForReason(
+    reason: DebugLogReason | null | undefined
+  ): Promise<void> {
+    if (reason === "unencodableCharacters") {
+      await showFileSaveFailedEncodingDialog();
+    } else {
+      await showFileSaveFailedDialog();
+    }
+  }
+
   function syncActiveMarkdownBufferToSavedDocument(
     documentId: EditorId,
     savedDocument: CurrentDocument,
@@ -6534,6 +6588,36 @@ export function App(): JSX.Element {
                 serializedContentToSave
               );
 
+            // #501 slice 6 remediation: an expected file I/O failure (e.g.
+            // `unencodableCharacters`) comes back as a structured
+            // `{ kind: "failed" }` result, never a thrown Error — a thrown
+            // Error's `.reason` does not reliably survive `ipcMain.handle` →
+            // `ipcRenderer.invoke`, and even `.message` picks up an
+            // Electron-added prefix on this side, so it cannot drive dialog
+            // selection. Nothing about the document / editor state is
+            // mutated below this branch — the tab stays open and dirty.
+            if (savedProjectDocument.kind === "failed") {
+              logRendererDebugEvent({
+                level: "error",
+                event: "save.failed",
+                details: {
+                  editorIdKind,
+                  operation: "save",
+                  result: "failed",
+                  saveTargetKind: "projectDocument",
+                  reason: savedProjectDocument.reason
+                }
+              });
+              setStatus({
+                key: "status.saveFailed",
+                values: { message: savedProjectDocument.message }
+              });
+              await showSaveFailureDialogForReason(
+                savedProjectDocument.reason
+              );
+              return "failed";
+            }
+
             const savedProjectSnapshot =
               markCurrentDocumentSaved(documentToSave);
             const savedProjectOpenState = resolveSavedDocumentForOpenState(
@@ -6722,7 +6806,15 @@ export function App(): JSX.Element {
             key: "status.saveFailed",
             values: { message: errorMessage(error, translate) }
           });
-          await showFileSaveFailedDialog();
+          // Standalone Markdown save never uses a non-UTF-8 encoding, so this
+          // is always the generic dialog in practice; kept for defense in
+          // depth against a future standalone-save failure path that reuses
+          // the same sanitized reason.
+          await showSaveFailureDialogForReason(
+            isUnencodableCharactersSaveError(error)
+              ? "unencodableCharacters"
+              : null
+          );
           return "failed";
         }
       },
@@ -8340,10 +8432,13 @@ export function App(): JSX.Element {
         normalizeUnicodeToNfc:
           effectiveSettings.workbench.normalizeUnicodeToNfc
       });
-      await window.pergamum.projects.saveProjectDocument(
+      const saveResult = await window.pergamum.projects.saveProjectDocument(
         documentProjectRelativePath,
         storageContent
       );
+      if (saveResult.kind === "failed") {
+        return "failed";
+      }
       return "updated";
     } catch {
       return "failed";
@@ -9427,10 +9522,14 @@ export function App(): JSX.Element {
       );
 
       try {
-        await window.pergamum.projects.saveProjectDocument(
+        const saveResult = await window.pergamum.projects.saveProjectDocument(
           relativePath,
           serializedForStorage
         );
+        if (saveResult.kind === "failed") {
+          failureFileCount += 1;
+          continue;
+        }
       } catch {
         failureFileCount += 1;
         continue;

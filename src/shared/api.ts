@@ -1,7 +1,8 @@
 import type {
   ApplicationSettings,
   ProjectSettings,
-  SaveApplicationSettingsRequest
+  SaveApplicationSettingsRequest,
+  TextFileEncoding
 } from "./settings";
 import type {
   CreateGlossaryEntryInput,
@@ -796,10 +797,24 @@ export interface ReadProjectDocumentPreviewLineRequest {
   relativePath: string;
 }
 
+/**
+ * #501 slice 6: a project document can be Markdown (always `utf8`) or Plain
+ * Text (any `TextFileEncoding`), so `encoding` is wider here than
+ * `MarkdownFileReadMetadata.encoding` — which stays `"utf8"`-only for the
+ * standalone Markdown file open/save path.
+ */
+export interface ProjectDocumentReadMetadata {
+  encoding: TextFileEncoding;
+  lineEnding: MarkdownLineEnding;
+  byteLength: number;
+  characterLength: number;
+  hadBom: boolean;
+}
+
 export interface ProjectDocumentContent {
   relativePath: string;
   content: string;
-  metadata: MarkdownFileReadMetadata;
+  metadata: ProjectDocumentReadMetadata;
 }
 
 export interface SaveProjectDocumentRequest {
@@ -807,9 +822,26 @@ export interface SaveProjectDocumentRequest {
   content: string;
 }
 
-export interface SaveProjectDocumentResult {
-  relativePath: string;
-}
+/**
+ * #501 slice 6 remediation: an expected file I/O failure (permission denied,
+ * an encoding that cannot represent the content, ...) is RETURNED as a
+ * structured `reason`, never thrown — a thrown `Error`'s `.reason` /
+ * `.code` do not reliably survive `ipcMain.handle` → `ipcRenderer.invoke`,
+ * and even `.message` picks up an Electron-added
+ * `"Error invoking remote method '...'"` prefix on the renderer side, so a
+ * thrown error cannot be a stable contract for branching UI behavior. This
+ * mirrors the existing `OpenProjectByFilePathResult` / `StartupProjectOpenResult`
+ * `{ kind: "failed"; reason; message }` shape used elsewhere in this file.
+ *
+ * `message` is a FIXED, generic string for every reason (never a sanitized
+ * error's own `.message`, which embeds the reason token itself, e.g.
+ * `"File I/O failed: unencodableCharacters"`) — it exists only for a
+ * human-readable status line. UI behavior (which dialog to show) must branch
+ * on `reason`, never on `message`.
+ */
+export type SaveProjectDocumentResult =
+  | { kind: "saved"; relativePath: string }
+  | { kind: "failed"; reason: DebugLogReason; message: string };
 
 export type ProjectAccessMode =
   | { kind: "readWrite" }

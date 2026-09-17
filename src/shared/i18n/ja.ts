@@ -332,6 +332,8 @@ export const jaTranslations = {
   "dialog.fileOpenFailed.title": "ファイルを読み込めませんでした",
   "dialog.fileSaveFailed.message": "ファイルを保存できませんでした。\n\n編集中の本文はこのタブに保持されています。\n保存先、ファイル名、書き込み権限、空き容量などを確認してください。",
   "dialog.fileSaveFailed.title": "ファイルを保存できませんでした",
+  "dialog.fileSaveFailedEncoding.message": "現在選択されている文字エンコーディングでは保存できない文字が含まれています。\n\nこのまま保存すると本文の一部が失われる可能性があるため、保存を中止しました。\n\nテキストファイルの文字エンコーディングを UTF-8 に変更するか、保存できない文字を変更してから、もう一度保存してください。",
+  "dialog.fileSaveFailedEncoding.title": "この文字エンコーディングでは保存できません",
   "dialog.glossarySaveFailed.message": "語彙を保存できませんでした。\n\n編集中の内容はこのタブに保持されています。入力内容を確認し、時間をおいて再度お試しください。",
   "dialog.glossarySaveFailed.title": "語彙を保存できませんでした",
   "dialog.readOnlyProjectOpen.lockSetupFailedMessage": "このプロジェクトの書き込みロックを作成できませんでした。\n\nファイルシステムの権限、同期中のフォルダ、または一時的なファイル操作の失敗が原因の可能性があります。\n\n読み取り専用で開くことができます。\n編集や通常保存はできませんが、内容を確認したり、別ファイルとして保存したりできます。\n\nプロジェクトを開きますか？",

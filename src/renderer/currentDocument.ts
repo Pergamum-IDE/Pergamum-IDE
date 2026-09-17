@@ -3,6 +3,7 @@ import type {
   MarkdownFileReadMetadata,
   MarkdownLineEnding,
   ProjectDocument,
+  ProjectDocumentReadMetadata,
   WriteMarkdownSavedResult
 } from "../shared/api";
 import { createUuidv7 } from "../shared/uuidv7";
@@ -103,7 +104,7 @@ export interface PreparedCurrentDocumentForMarkdownStorage {
 }
 
 function readEncodingFromMetadata(
-  metadata: MarkdownFileReadMetadata | undefined
+  metadata: MarkdownFileReadMetadata | ProjectDocumentReadMetadata | undefined
 ): DocumentReadEncoding {
   return metadata?.hadBom ? "utf-8-bom" : "utf-8";
 }
@@ -150,7 +151,7 @@ export function createFileDocument(file: MarkdownFile): FileCurrentDocument {
 export function createProjectDocument(
   document: ProjectDocument,
   content: string,
-  metadata?: MarkdownFileReadMetadata
+  metadata?: ProjectDocumentReadMetadata
 ): ProjectCurrentDocument {
   const normalizedContent = normalizeLineEndings(content);
   const breaks = buildLineEndingBreakSet(analyzeLineEndings(content));

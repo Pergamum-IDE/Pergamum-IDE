@@ -247,6 +247,7 @@ export const debugLogReasons = [
   "notFound",
   "invalidPath",
   "invalidEncoding",
+  "unencodableCharacters",
   "locked",
   "unknown"
 ] as const;

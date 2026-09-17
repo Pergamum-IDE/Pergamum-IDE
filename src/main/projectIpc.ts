@@ -23,6 +23,7 @@ import {
   type FileExplorerUnavailableReason,
   type ListFileExplorerChildrenRequest,
   type ListFileExplorerChildrenResult,
+  type MarkdownLineEnding,
   type OpenProjectByFilePathRequest,
   type OpenProjectByFilePathResult,
   type OpenRecentProjectRequest,
@@ -132,10 +133,13 @@ import {
 } from "./debugLogSanitizer";
 import {
   decodeMarkdownBytes,
+  detectMarkdownLineEnding,
   markdownWriteMetadata,
   sanitizedFileIoError,
   type SanitizedFileIoError
 } from "./markdownFileIo";
+import { decodeTextFileBytes, encodeTextFileContent } from "./textFileIo";
+import type { TextFileEncoding } from "../shared/textFileEncoding";
 import {
   dryRunTextImport,
   executeTextImport,
@@ -4223,6 +4227,14 @@ export async function openProjectByFilePath(
   }
 }
 
+// #501 slice 6 remediation: `SaveProjectDocumentResult`'s `{ kind: "failed" }`
+// `message` is this fixed, generic string for EVERY reason — never
+// `sanitizedFileIoError(...).message` (which embeds the reason token, e.g.
+// "File I/O failed: unencodableCharacters") and never document text. The
+// renderer must branch UI behavior on `reason` alone; `message` exists only
+// for a human-readable status line.
+const PROJECT_DOCUMENT_SAVE_FAILED_MESSAGE = "Project document save failed.";
+
 export function registerProjectIpc(
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
@@ -4685,7 +4697,36 @@ export function registerProjectIpc(
         request = parseReadProjectDocumentRequest(rawRequest);
         const documentPath = resolveProjectDocumentPath(request.relativePath);
         const bytes = await fs.readFile(documentPath);
-        const decoded = decodeMarkdownBytes(bytes);
+        // #501 slice 6: Markdown always reads as UTF-8 (unchanged); Plain
+        // Text (`.txt`) reads using the effective `textFiles.encoding` — no
+        // auto-detection, the selected setting is the source of truth. A
+        // decode failure (bytes that are invalid for the selected encoding)
+        // throws `PergamumTextFileEncodingError`, caught below and reported
+        // through the existing read-failure path.
+        let decoded: {
+          content: string;
+          encoding: TextFileEncoding;
+          lineEnding: MarkdownLineEnding;
+          byteLength: number;
+          characterLength: number;
+          hadBom: boolean;
+        };
+
+        if (isProjectMarkdownDocumentPath(request.relativePath)) {
+          decoded = decodeMarkdownBytes(bytes);
+        } else {
+          const settings = await loadSettings();
+          const encoding = settings.textFiles.encoding;
+          const textDecoded = decodeTextFileBytes(bytes, encoding);
+          decoded = {
+            content: textDecoded.content,
+            encoding,
+            lineEnding: detectMarkdownLineEnding(textDecoded.content),
+            byteLength: bytes.byteLength,
+            characterLength: textDecoded.content.length,
+            hadBom: textDecoded.hadBom
+          };
+        }
         const rootPath = requireCurrentProjectRootPath();
         const documentRef = logger.documentRefForKey(
           projectDocumentRefKey(rootPath, request.relativePath)
@@ -4779,13 +4820,43 @@ export function registerProjectIpc(
         assertCurrentProjectDocumentSaveAllowed();
         const documentPath = resolveProjectDocumentPath(request.relativePath);
         assertProjectDocumentSaveTargetAllowed(documentPath);
-        const metadata = markdownWriteMetadata(request.content);
+        // #501 slice 6: Markdown always saves as BOM-less UTF-8 (unchanged);
+        // Plain Text (`.txt`) saves using the effective `textFiles.encoding`.
+        // `encodeTextFileContent` throws `PergamumTextFileEncodingError`
+        // ("unencodableCharacters") when the selected legacy encoding cannot
+        // represent the content — that throw is caught below and reported
+        // through the existing save-failure path, so the write below never
+        // runs and the previous on-disk content is left untouched.
+        let writePayload: string | Uint8Array;
+        let metadata: {
+          encoding: TextFileEncoding;
+          lineEnding: MarkdownLineEnding;
+          byteLength: number;
+          characterLength: number;
+        };
+
+        if (isProjectMarkdownDocumentPath(request.relativePath)) {
+          writePayload = request.content;
+          metadata = markdownWriteMetadata(request.content);
+        } else {
+          const settings = await loadSettings();
+          const encoding = settings.textFiles.encoding;
+          const encoded = encodeTextFileContent(request.content, encoding);
+          writePayload = encoded.bytes;
+          metadata = {
+            encoding,
+            lineEnding: detectMarkdownLineEnding(request.content),
+            byteLength: encoded.bytes.byteLength,
+            characterLength: request.content.length
+          };
+        }
+
         // Crash-safe manuscript write (temp sibling file → fsync → atomic
         // rename). An interrupted save cannot leave the previous good
         // document truncated / half-written; "saved" means the atomic
         // replace completed. Any failure throws here and is reported as a
         // non-cleaning file I/O error below (dirty state is preserved).
-        await writeFileAtomic(documentPath, request.content);
+        await writeFileAtomic(documentPath, writePayload);
         const rootPath = requireCurrentProjectRootPath();
         const documentRef = logger.documentRefForKey(
           projectDocumentRefKey(rootPath, request.relativePath)
@@ -4816,6 +4887,7 @@ export function registerProjectIpc(
         });
 
         return {
+          kind: "saved",
           relativePath: request.relativePath
         };
       } catch (error) {
@@ -4868,7 +4940,19 @@ export function registerProjectIpc(
           }
         });
 
-        throw safeError;
+        // #501 slice 6 remediation: an expected file I/O failure is
+        // RETURNED with its `reason`, never thrown — see
+        // `SaveProjectDocumentResult`'s doc comment in shared/api.ts.
+        // `message` is a fixed, generic string — NOT `safeError.message` —
+        // so it can never carry a technical reason token (e.g.
+        // "unencodableCharacters"), a sanitized-error class name, or any
+        // other internal detail. `reason` alone is the machine-readable
+        // channel; the renderer must branch on it, never on `message`.
+        return {
+          kind: "failed",
+          reason: safeError.reason,
+          message: PROJECT_DOCUMENT_SAVE_FAILED_MESSAGE
+        };
       }
     }
   );
