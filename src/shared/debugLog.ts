@@ -121,6 +121,7 @@ export const debugLogEventNames = [
   "preview.scrollSync.editorScroll.sampled",
   "preview.scrollSync.previewScroll.sampled",
   "preview.scrollSync.programmaticScroll.suppressed",
+  "preview.jumpToSource.requested",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -393,6 +394,22 @@ export const debugLogViewportChangeSources = [
 
 export type DebugLogViewportChangeSource =
   (typeof debugLogViewportChangeSources)[number];
+
+/**
+ * #504 Preview double-click jump-to-source: closed outcome classification
+ * for `preview.jumpToSource.requested`.
+ */
+export const debugLogPreviewJumpToSourceResults = [
+  "jumped",
+  "ignoredTarget",
+  "noSourceLine",
+  "invalidLine",
+  "noEditor",
+  "unknown"
+] as const;
+
+export type DebugLogPreviewJumpToSourceResult =
+  (typeof debugLogPreviewJumpToSourceResults)[number];
 
 /** #384 Search pane: which search mode a `search.*` event describes. */
 export const debugLogSearchModes = ["text", "glossary", "unknown"] as const;
@@ -675,6 +692,18 @@ export interface DebugLogDetails {
   eventSide?: string;
   generation?: number;
   remainingFrames?: number;
+
+  /**
+   * #504 Preview double-click jump-to-source diagnostics
+   * (`preview.jumpToSource.requested`). Never carries document text, HTML,
+   * file paths, or element text — only line numbers derived from
+   * `data-source-line` and a closed result classification.
+   */
+  previewJumpToSourceResult?: DebugLogPreviewJumpToSourceResult;
+  previewJumpToSourceLine?: number | null;
+  previewJumpToSourceTargetLine?: number | null;
+  previewJumpToSourceClamped?: boolean;
+  previewJumpToSourceDocLineCount?: number;
 
   error?: SanitizedErrorInfo;
 }

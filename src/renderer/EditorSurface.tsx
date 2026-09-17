@@ -59,6 +59,11 @@ import {
   type PreviewScrollAxis
 } from "./previewScrollSync";
 import {
+  clampPreviewJumpLine,
+  isPreviewJumpModifierHeld,
+  resolvePreviewJumpTarget
+} from "./previewJumpToSource";
+import {
   MarkdownEditor,
   type MarkdownImageAttachmentPositionController,
   type MarkdownEditorActiveFindConfig,
@@ -1002,6 +1007,14 @@ function MarkdownEditorSurface({
   // #503 Preview Scroll Sync Foundation: Markdown Preview is explicitly vertical-axis.
   const [editorAdapter, setEditorAdapter] = useState<EditorScrollSyncAdapter | null>(null);
   const editorScroller = editorAdapter?.scroller ?? null;
+  // #504: read at dblclick-time rather than closed over by the effect below,
+  // so the jump always targets whichever EditorView is currently bound to
+  // this same EditorSurface's document, without re-attaching the delegated
+  // listener every time the adapter itself changes.
+  const editorAdapterRef = useRef<EditorScrollSyncAdapter | null>(null);
+  useEffect(() => {
+    editorAdapterRef.current = editorAdapter;
+  }, [editorAdapter]);
   const [previewContainer, setPreviewContainer] = useState<HTMLElement | null>(null);
   const scrollSyncGuard = useMemo(() => createScrollSyncGuard(), []);
   const previewScrollAxis: PreviewScrollAxis = "vertical";
@@ -1345,6 +1358,98 @@ function MarkdownEditorSurface({
       previewContainer.removeEventListener("scroll", handlePreviewScroll);
     };
   }, [editorAdapter, editorScroller, previewContainer, previewScrollAxis, scrollSyncGuard]);
+
+  // #504: Preview double-click jump-to-source. One delegated `dblclick`
+  // listener on the preview scroll container — never per-element. Does not
+  // touch the #503 scroll-sync code above; the resulting editor scroll goes
+  // back through that existing editor -> preview sync, as expected (D8).
+  useEffect(() => {
+    if (!previewContainer) {
+      return undefined;
+    }
+
+    const handlePreviewDoubleClick = (event: MouseEvent) => {
+      if (isPreviewJumpModifierHeld(event)) {
+        return;
+      }
+
+      const resolution = resolvePreviewJumpTarget(event.target, previewContainer);
+
+      if (resolution.kind === "ignoredTarget") {
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.jumpToSource.requested",
+          details: { previewJumpToSourceResult: "ignoredTarget" }
+        });
+        return;
+      }
+
+      if (resolution.kind === "noSourceLine") {
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.jumpToSource.requested",
+          details: { previewJumpToSourceResult: "noSourceLine" }
+        });
+        return;
+      }
+
+      if (resolution.kind === "invalidLine") {
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.jumpToSource.requested",
+          details: { previewJumpToSourceResult: "invalidLine" }
+        });
+        return;
+      }
+
+      const sourceLine = resolution.sourceLine;
+      const adapter = editorAdapterRef.current;
+      if (!adapter) {
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.jumpToSource.requested",
+          details: {
+            previewJumpToSourceResult: "noEditor",
+            previewJumpToSourceLine: sourceLine
+          }
+        });
+        return;
+      }
+
+      const docLineCount = adapter.getDocLineCount();
+      const { targetLine, clamped } = clampPreviewJumpLine(sourceLine, docLineCount);
+
+      // Clear the preview's own word selection (from the double-click)
+      // BEFORE focusing the editor — jumpToSourceLine's trailing
+      // view.focus() relocates the single global Selection into the
+      // editor's contenteditable, so checking/clearing it afterward would
+      // already be looking in the wrong place.
+      const selection = window.getSelection();
+      if (selection && previewContainer.contains(selection.anchorNode)) {
+        selection.removeAllRanges();
+      }
+
+      adapter.jumpToSourceLine(targetLine);
+
+      emitScrollSyncLog({
+        level: "info",
+        event: "preview.jumpToSource.requested",
+        details: {
+          previewJumpToSourceResult: "jumped",
+          previewJumpToSourceLine: sourceLine,
+          previewJumpToSourceTargetLine: targetLine,
+          previewJumpToSourceClamped: clamped,
+          previewJumpToSourceDocLineCount: docLineCount
+        }
+      });
+    };
+
+    previewContainer.addEventListener("dblclick", handlePreviewDoubleClick);
+
+    return () => {
+      previewContainer.removeEventListener("dblclick", handlePreviewDoubleClick);
+    };
+  }, [previewContainer, emitScrollSyncLog]);
 
   // -------------------------------------------------------------------------
   // #424: active-document Find panel.

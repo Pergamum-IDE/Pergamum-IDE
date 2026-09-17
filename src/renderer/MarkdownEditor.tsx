@@ -1237,6 +1237,21 @@ export function MarkdownEditor({
         } catch {
           // ignore
         }
+      },
+      getDocLineCount: () => view.state.doc.lines,
+      jumpToSourceLine: (targetLine: number) => {
+        try {
+          const totalLines = view.state.doc.lines;
+          const clamped = Math.max(1, Math.min(Math.floor(targetLine), totalLines));
+          const line = view.state.doc.line(clamped);
+          view.dispatch({
+            selection: { anchor: line.from },
+            effects: EditorView.scrollIntoView(line.from, { y: "center" })
+          });
+          view.focus();
+        } catch {
+          // ignore
+        }
       }
     };
     onScrollSyncAdapterMountRef.current?.(adapter);

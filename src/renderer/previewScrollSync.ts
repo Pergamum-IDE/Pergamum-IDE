@@ -30,6 +30,15 @@ export interface EditorScrollSyncAdapter {
   getTopSourceLine(): number | null;
   /** Scrolls the editor to a 1-based source line number without moving caret/selection. */
   scrollToSourceLine(line: number): void;
+  /** Returns the total number of lines in the document. */
+  getDocLineCount(): number;
+  /**
+   * #504: places a collapsed cursor at the given 1-based source line, scrolls
+   * it to the vertical center of the viewport, and focuses the editor.
+   * Callers are expected to have already clamped `line` to
+   * `[1, getDocLineCount()]`.
+   */
+  jumpToSourceLine(line: number): void;
 }
 
 export interface PreviewScrollSyncDebugDetails {

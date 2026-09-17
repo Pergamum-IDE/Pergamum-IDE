@@ -15,6 +15,7 @@ import {
   debugLogActiveFindModes,
   debugLogPathKinds,
   debugLogPlatforms,
+  debugLogPreviewJumpToSourceResults,
   debugLogReasons,
   debugLogGlossarySearchRelationModes,
   debugLogRecoveryJournalModes,
@@ -44,6 +45,7 @@ import {
   type DebugLogOperation,
   type DebugLogPathKind,
   type DebugLogPlatform,
+  type DebugLogPreviewJumpToSourceResult,
   type DebugLogReason,
   type DebugLogGlossarySearchRelationMode,
   type DebugLogRecoveryJournalMode,
@@ -982,6 +984,35 @@ export function sanitizeDebugLogDetails(
 
         if (activeFindEditorInstanceId) {
           sanitized.activeFindEditorInstanceId = activeFindEditorInstanceId;
+        }
+        break;
+      }
+      case "previewJumpToSourceResult":
+        sanitized.previewJumpToSourceResult =
+          enumOrUnknown<DebugLogPreviewJumpToSourceResult>(
+            debugLogPreviewJumpToSourceResults,
+            value
+          );
+        break;
+      case "previewJumpToSourceLine":
+      case "previewJumpToSourceTargetLine": {
+        const val = sanitizeNullableNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "previewJumpToSourceClamped": {
+        const val = sanitizeBoolean(value);
+        if (val !== undefined) {
+          sanitized.previewJumpToSourceClamped = val;
+        }
+        break;
+      }
+      case "previewJumpToSourceDocLineCount": {
+        const val = sanitizeNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized.previewJumpToSourceDocLineCount = val;
         }
         break;
       }

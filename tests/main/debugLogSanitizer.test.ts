@@ -811,4 +811,77 @@ describe("debug log details sanitizer", () => {
     });
     expect(details).not.toHaveProperty("droppedKeyCount");
   });
+
+  it("#504: accepts preview jump-to-source diagnostic fields for a successful jump", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        previewJumpToSourceResult: "jumped",
+        previewJumpToSourceLine: 42,
+        previewJumpToSourceTargetLine: 42,
+        previewJumpToSourceClamped: false,
+        previewJumpToSourceDocLineCount: 100
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      previewJumpToSourceResult: "jumped",
+      previewJumpToSourceLine: 42,
+      previewJumpToSourceTargetLine: 42,
+      previewJumpToSourceClamped: false,
+      previewJumpToSourceDocLineCount: 100
+    });
+    expect(details).not.toHaveProperty("droppedKeyCount");
+  });
+
+  it("#504: accepts a clamped jump past the document's line count", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        previewJumpToSourceResult: "jumped",
+        previewJumpToSourceLine: 500,
+        previewJumpToSourceTargetLine: 100,
+        previewJumpToSourceClamped: true,
+        previewJumpToSourceDocLineCount: 100
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      previewJumpToSourceResult: "jumped",
+      previewJumpToSourceLine: 500,
+      previewJumpToSourceTargetLine: 100,
+      previewJumpToSourceClamped: true,
+      previewJumpToSourceDocLineCount: 100
+    });
+  });
+
+  it("#504: normalizes an unrecognized preview jump-to-source result instead of dropping the event", () => {
+    const details = sanitizeDebugLogDetails(
+      { previewJumpToSourceResult: "somethingElse" },
+      context()
+    );
+
+    expect(details).toEqual({ previewJumpToSourceResult: "unknown" });
+  });
+
+  it("#504: never carries document text, HTML, file paths, or element text on a jump event", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        previewJumpToSourceResult: "jumped",
+        previewJumpToSourceLine: 3,
+        previewHtml: "<p>吾輩は猫である</p>",
+        elementText: "吾輩は猫である",
+        absolutePath: "C:\\Users\\name\\novel.md"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      previewJumpToSourceResult: "jumped",
+      previewJumpToSourceLine: 3,
+      droppedKeyCount: 3
+    });
+    expect(JSON.stringify(details)).not.toContain("吾輩");
+    expect(JSON.stringify(details)).not.toContain("novel.md");
+  });
 });
