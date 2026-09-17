@@ -26,6 +26,7 @@ import type {
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
 import { sanitizedFileIoErrorReasonFromMessage } from "../shared/sanitizedFileIoErrorMessage";
+import { projectDocumentDiscoverySettingChanged } from "./projectDocumentsRefresh";
 import {
   applicationMenuCommandIds,
   type ApplicationMenuCommandId,
@@ -2467,6 +2468,35 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyPreviewFontFamilyList(effectiveSettings.preview.fontFamilyList);
   }, [effectiveSettings.preview.fontFamilyList]);
+  // #501 slice 8 blocker fix: `project.documents` is otherwise only set once
+  // at project open and patched by specific file operations — it does not
+  // react to `textFiles.enablePlainTextDocuments` changing at runtime, so
+  // Quick Open / Command Palette / Project-wide Search would keep showing a
+  // stale `.txt` set until the project was reopened. Re-discover from main
+  // (same walk as project open) whenever this setting actually changes
+  // while a project is open. Mirrors FileExplorer.tsx's own live re-list
+  // effect for the same setting, but targets the flat `project.documents`
+  // cache instead of a per-directory listing cache.
+  const enablePlainTextDocumentsObservedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const previouslyObserved = enablePlainTextDocumentsObservedRef.current;
+    const current = effectiveSettings.textFiles.enablePlainTextDocuments;
+    enablePlainTextDocumentsObservedRef.current = current;
+
+    if (
+      !project ||
+      !projectDocumentDiscoverySettingChanged(previouslyObserved, current)
+    ) {
+      return;
+    }
+
+    void (async () => {
+      const documents = await window.pergamum.projects.listProjectDocuments();
+      setProject((currentProject) =>
+        currentProject ? { ...currentProject, documents } : currentProject
+      );
+    })();
+  }, [effectiveSettings.textFiles.enablePlainTextDocuments, project]);
   // #360: ONE Markdown character count, shared by the Status Bar (#259) and
   // the Document Metrics pane, so the two never disagree. It is computed
   // with the #259 algorithm + `editor.characterCount.exclude` settings and

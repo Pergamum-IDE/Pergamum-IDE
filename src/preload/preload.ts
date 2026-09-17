@@ -155,6 +155,8 @@ const pergamumApi: PergamumApi = {
       ),
     deleteFileExplorerEntry: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.deleteFileExplorerEntry, request),
+    listProjectDocuments: () =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.listProjectDocuments),
     readProjectDocument: (relativePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
         relativePath

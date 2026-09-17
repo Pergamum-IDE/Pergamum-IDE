@@ -167,6 +167,100 @@ describe("Plain Text Document Support (#501 Slice 3)", () => {
     );
   });
 
+  it("#501 slice 8: Project-wide Search reads a project document through the same textFiles.encoding-aware IPC as a normal open", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = source.indexOf(
+      "function createProjectSearchReadText("
+    );
+    const end = source.indexOf(
+      "// #384 Phase 2: project-wide text search executed for the Search pane."
+    );
+    const block = source.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    // Same IPC Slice 6 wired to decode `.txt` using `textFiles.encoding` and
+    // `.md`/`.markdown` as UTF-8 — no separate, extension-specific search
+    // reader, and no reference to the enablement setting here (the document
+    // would not be in `project.documents` at all if it were gated out).
+    expect(block).toContain(
+      "window.pergamum.projects.readProjectDocument(relativePath)"
+    );
+    expect(block).not.toContain("enablePlainTextDocuments");
+    expect(block).not.toContain("isProjectDocumentPath");
+    expect(block).not.toContain("isMarkdownPath");
+  });
+
+  it("#501 slice 8: runProjectSearch and runProjectGlossarySearch pass project.documents through unfiltered by extension", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const textSearchStart = source.indexOf(
+      "async function runProjectSearch("
+    );
+    const textSearchEnd = source.indexOf(
+      "async function runProjectGlossarySearch(",
+      textSearchStart
+    );
+    const textSearchBlock = source.slice(textSearchStart, textSearchEnd);
+
+    expect(textSearchStart).toBeGreaterThan(-1);
+    expect(textSearchEnd).toBeGreaterThan(textSearchStart);
+    expect(textSearchBlock).toContain("documents: activeProject.documents,");
+
+    const glossarySearchStart = source.indexOf(
+      "async function runProjectGlossarySearch("
+    );
+    const glossarySearchBlock = source.slice(
+      glossarySearchStart,
+      glossarySearchStart + 900
+    );
+
+    expect(glossarySearchStart).toBeGreaterThan(-1);
+    expect(glossarySearchBlock).toContain(
+      "documents: activeProject.documents,"
+    );
+  });
+
+  it("#501 slice 8 blocker fix: refreshes project.documents from main when textFiles.enablePlainTextDocuments changes, without a project reopen", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const importIndex = source.indexOf(
+      'import { projectDocumentDiscoverySettingChanged } from "./projectDocumentsRefresh";'
+    );
+    const effectStart = source.indexOf(
+      "const enablePlainTextDocumentsObservedRef = useRef<boolean | null>(null);"
+    );
+    const effectEnd = source.indexOf(
+      "// #360: ONE Markdown character count",
+      effectStart
+    );
+    const block = source.slice(effectStart, effectEnd);
+
+    expect(importIndex).toBeGreaterThan(-1);
+    expect(effectStart).toBeGreaterThan(-1);
+    expect(effectEnd).toBeGreaterThan(effectStart);
+
+    // Reacts to the LIVE setting value, not a one-time snapshot.
+    expect(block).toContain(
+      "effectiveSettings.textFiles.enablePlainTextDocuments"
+    );
+    // Uses the shared, unit-tested predicate rather than an inline
+    // ad hoc comparison.
+    expect(block).toContain("projectDocumentDiscoverySettingChanged(");
+    // Refreshes from main via the new channel, then folds the result back
+    // into `project.documents` via setProject — never a project reopen /
+    // remount.
+    expect(block).toContain(
+      "window.pergamum.projects.listProjectDocuments()"
+    );
+    expect(block).toContain("setProject((currentProject) =>");
+    expect(block).not.toContain("openProjectByFilePath");
+    expect(block).not.toContain("closeCurrentProject");
+
+    const useEffectDepsIndex = block.indexOf(
+      "}, [effectiveSettings.textFiles.enablePlainTextDocuments, project]);"
+    );
+    expect(useEffectDepsIndex).toBeGreaterThan(-1);
+  });
+
   it("does not gate the project-document save path by textFiles.enablePlainTextDocuments", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const start = source.indexOf("async function saveFile(");

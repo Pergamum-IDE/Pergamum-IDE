@@ -266,6 +266,18 @@ export const PROJECT_CHANNELS = {
   /** #351: delete ONE already-validated project-local entry. The renderer
    *  drives the ordered loop; abort is "stop calling". */
   deleteFileExplorerEntry: "projects:deleteFileExplorerEntry",
+  /**
+   * #501 slice 8 blocker fix: a fresh, full re-discovery of the current
+   * project's documents (same walk as at project open). The renderer's
+   * `project.documents` cache — the source Quick Open / Command Palette /
+   * Project-wide Search read from — is otherwise only patched by specific
+   * file operations and does NOT react to `textFiles.enablePlainTextDocuments`
+   * changing at runtime; the renderer calls this after that setting changes
+   * so `.txt` can appear/disappear from those flows without a project
+   * reopen. Never removes anything from the main-side document allowlist,
+   * only adds — an already-open `.txt` document stays saveable regardless.
+   */
+  listProjectDocuments: "projects:listProjectDocuments",
   readProjectDocument: "projects:readProjectDocument",
   /** #372: first non-empty Markdown line of a project-local document, for the
    *  Command Palette file quick open footer detail preview. */
@@ -1160,6 +1172,11 @@ export interface PergamumApi {
     deleteFileExplorerEntry: (
       request: DeleteFileExplorerEntryRequest
     ) => Promise<DeleteFileExplorerEntryResponse>;
+    /** #501 slice 8 blocker fix: re-discover the current project's documents
+     *  from disk (same walk as project open), reflecting the LIVE
+     *  `textFiles.enablePlainTextDocuments` value. `[]` when no project is
+     *  open. */
+    listProjectDocuments: () => Promise<ProjectDocument[]>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

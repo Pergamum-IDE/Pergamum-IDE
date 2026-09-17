@@ -1507,6 +1507,96 @@ describe("project file IPC foundation", () => {
     ).resolves.toEqual({ relativePath: null });
   });
 
+  it("#501 slice 8 blocker fix: listProjectDocuments re-discovers .txt after textFiles.enablePlainTextDocuments changes, without a project reopen", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Live Discovery.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Live Discovery"
+    });
+    await created.close();
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "# Chapter\n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      "plain notes\n",
+      "utf8"
+    );
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    const openedProject = (await openProjectHandler({ sender: {} })) as {
+      documents: { relativePath: string }[];
+    };
+    // At open time, with the setting off, .txt is not discovered.
+    expect(
+      openedProject.documents.map((document) => document.relativePath)
+    ).toEqual(["chapter.md"]);
+
+    const listProjectDocumentsHandler = registeredHandler(
+      PROJECT_CHANNELS.listProjectDocuments
+    );
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+
+    // Setting flips ON — no project close/reopen happens here, mirroring
+    // the renderer calling this channel right after a live settings change.
+    await writePlainTextDocumentSupportSetting(userDataPath, true);
+
+    const refreshed = (await listProjectDocumentsHandler({ sender: {} })) as {
+      relativePath: string;
+      name: string;
+    }[];
+    expect(refreshed.map((document) => document.relativePath).sort()).toEqual(
+      ["chapter.md", "notes.txt"]
+    );
+
+    // The freshly discovered .txt is now actually readable — not just
+    // listed — because the channel also registers it into the main-side
+    // allowlist.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.txt",
+      content: "plain notes\n"
+    });
+
+    // Setting flips back OFF — a fresh discovery excludes .txt again for
+    // NEW navigation/search purposes...
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+    const refreshedAgain = (await listProjectDocumentsHandler({
+      sender: {}
+    })) as { relativePath: string }[];
+    expect(refreshedAgain.map((document) => document.relativePath)).toEqual([
+      "chapter.md"
+    ]);
+
+    // ...but the already-registered .txt remains readable/saveable (Slice 5
+    // already-open semantics are not affected by this new channel).
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({ relativePath: "notes.txt" });
+  });
+
+  it("#501 slice 8 blocker fix: listProjectDocuments resolves to [] when no project is open", async () => {
+    const listProjectDocumentsHandler = registeredHandler(
+      PROJECT_CHANNELS.listProjectDocuments
+    );
+
+    await expect(
+      listProjectDocumentsHandler({ sender: {} })
+    ).resolves.toEqual([]);
+  });
+
   it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {
     const projectFilePath = path.join(projectRootPath, "Readonly Title.pergamum");
     const titleWindow = createTitleWindowMock();

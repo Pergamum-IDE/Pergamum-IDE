@@ -4720,6 +4720,34 @@ export function registerProjectIpc(
     }
   );
 
+  // #501 slice 8 blocker fix: re-run the SAME full document walk used at
+  // project open, reflecting the LIVE `textFiles.enablePlainTextDocuments`
+  // value — the renderer calls this after that setting changes so `.txt`
+  // can appear/disappear from Quick Open / Command Palette / Project-wide
+  // Search without a project reopen (`project.documents` is otherwise only
+  // set once at open and patched by specific file operations). Every
+  // discovered path is added to `documentRelativePaths` (never removed —
+  // an already-open `.txt` document must stay saveable regardless of the
+  // current setting, per Slice 5 / Slice 7).
+  ipcMain.handle(
+    PROJECT_CHANNELS.listProjectDocuments,
+    async (): Promise<ProjectDocument[]> => {
+      if (!currentProjectState) {
+        return [];
+      }
+
+      const documents = await discoverMarkdownFiles(
+        currentProjectState.rootPath
+      );
+
+      for (const document of documents) {
+        currentProjectState.documentRelativePaths.add(document.relativePath);
+      }
+
+      return documents;
+    }
+  );
+
   ipcMain.handle(
     PROJECT_CHANNELS.readProjectDocument,
     async (
