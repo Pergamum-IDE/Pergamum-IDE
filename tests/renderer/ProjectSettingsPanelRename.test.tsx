@@ -79,7 +79,8 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
       "画像添付",
       "プレビュー",
       "文書マップ",
-      "ファイル"
+      "マークダウンファイル",
+      "テキストファイル"
     ]);
 
     act(() => {
@@ -107,7 +108,8 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
       "Image Attachment",
       "Preview",
       "Document Map",
-      "Files"
+      "Markdown Files",
+      "Text Files"
     ]);
   });
 

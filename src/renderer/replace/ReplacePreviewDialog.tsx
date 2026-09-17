@@ -1,22 +1,71 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import hourglassIconUrl from "../../../assets/icons/ionicons/dialog/hourglass-outline.svg?url";
+import verifiedIconUrl from "../../../assets/icons/codicons/dialog/verified.svg?url";
+import unverifiedIconUrl from "../../../assets/icons/codicons/dialog/unverified.svg?url";
 import type { Translate, TranslationKey } from "../../shared/i18n";
 import { InfoDialog } from "../dialog/InfoDialog";
 import { buildReplacePreviewModeLabel } from "./replacePreviewMode";
 import type {
+  ReplaceApplyFailureReason,
   ReplaceApplyResult,
+  ReplaceFileApplyOutcome,
   ReplacePreviewCandidate,
   ReplacePreviewScope,
   ReplacePreviewSearchOptions
 } from "./replacePreviewTypes";
 
 export type {
+  ReplaceApplyFailureReason,
   ReplaceApplyResult,
+  ReplaceFileApplyOutcome,
   ReplacePreviewCandidate,
   ReplacePreviewScope,
   ReplacePreviewSearchOptions,
   ReplacePreviewOpenRequest
 } from "./replacePreviewTypes";
+
+const verifiedIconStyle = {
+  "--replace-preview-status-icon": `url("${verifiedIconUrl}")`
+} as CSSProperties & { "--replace-preview-status-icon": string };
+
+const unverifiedIconStyle = {
+  "--replace-preview-status-icon": `url("${unverifiedIconUrl}")`
+} as CSSProperties & { "--replace-preview-status-icon": string };
+
+function statusTooltip(
+  translate: Translate,
+  reason: ReplaceApplyFailureReason
+): string {
+  switch (reason) {
+    case "unencodableCharacters":
+      return translate("search.replace.preview.status.unencodableCharacters");
+    case "stalePreview":
+      return translate("search.replace.preview.status.stalePreview");
+    case "fileChanged":
+      return translate("search.replace.preview.status.fileChanged");
+    case "saveFailed":
+    case "generic":
+    default:
+      return translate("search.replace.preview.status.saveFailed");
+  }
+}
+
+function hasUnencodableFailure(result: ReplaceApplyResult): boolean {
+  if (
+    result.kind === "allFailure" &&
+    result.reason === "unencodableCharacters"
+  ) {
+    return true;
+  }
+  if (result.fileResults) {
+    return Object.values(result.fileResults).some(
+      (outcome) =>
+        outcome.kind === "failed" &&
+        outcome.reason === "unencodableCharacters"
+    );
+  }
+  return false;
+}
 
 /**
  * #386 - the reusable Replace Preview Dialog.
@@ -151,17 +200,50 @@ function ReplacePreviewRow({
   translate,
   candidate,
   applied,
+  status,
+  failureReason,
+  disabled,
   onToggle
 }: {
   translate: Translate;
   candidate: ReplacePreviewCandidate;
   applied: boolean;
+  status: "none" | "success" | "failed";
+  failureReason?: ReplaceApplyFailureReason;
+  disabled: boolean;
   onToggle: (id: string, applied: boolean) => void;
 }): JSX.Element {
   const highlighted = applied ? candidate.afterText : candidate.beforeText;
+  const tooltipText =
+    status === "failed" && failureReason
+      ? statusTooltip(translate, failureReason)
+      : status === "success"
+        ? translate("search.replace.preview.status.success")
+        : undefined;
 
   return (
-    <li className="replacePreviewRow" data-applied={applied ? "true" : "false"}>
+    <li
+      className="replacePreviewRow"
+      data-applied={applied ? "true" : "false"}
+      data-status={status}
+    >
+      <span className="replacePreviewRowStatus">
+        {status === "success" ? (
+          <span
+            className="replacePreviewRowStatusIcon replacePreviewRowStatusIcon-success"
+            style={verifiedIconStyle}
+            title={tooltipText}
+            aria-label={tooltipText}
+          />
+        ) : status === "failed" ? (
+          <span
+            className="replacePreviewRowStatusIcon replacePreviewRowStatusIcon-failure"
+            style={unverifiedIconStyle}
+            title={tooltipText}
+            aria-label={tooltipText}
+          />
+        ) : null}
+      </span>
       <span className="replacePreviewRowLocation">
         {candidate.line}:{candidate.column}
       </span>
@@ -182,6 +264,7 @@ function ReplacePreviewRow({
       </span>
       <select
         className="replacePreviewRowControl"
+        disabled={disabled}
         aria-label={translate("search.replace.preview.rowControlLabel")}
         value={applied ? "apply" : "ignore"}
         onChange={(event) =>
@@ -197,6 +280,58 @@ function ReplacePreviewRow({
       </select>
     </li>
   );
+}
+
+function getRowApplyStatus(
+  candidate: ReplacePreviewCandidate,
+  applied: boolean,
+  completed: boolean,
+  applyResult: ReplaceApplyResult | null
+): { status: "none" | "success" | "failed"; failureReason?: ReplaceApplyFailureReason } {
+  if (!completed || !applyResult) {
+    return { status: "none" };
+  }
+  if (!applied) {
+    return { status: "none" };
+  }
+
+  const candidateKeys = [
+    candidate.filePath,
+    candidate.fileId,
+    candidate.documentId
+  ].filter((k): k is string => Boolean(k));
+
+  let outcome: ReplaceFileApplyOutcome | undefined;
+  if (applyResult.fileResults) {
+    for (const key of candidateKeys) {
+      if (applyResult.fileResults[key]) {
+        outcome = applyResult.fileResults[key];
+        break;
+      }
+    }
+  }
+
+  if (outcome) {
+    if (outcome.kind === "success") {
+      return { status: "success" };
+    }
+    return { status: "failed", failureReason: outcome.reason };
+  }
+
+  if (applyResult.kind === "success") {
+    return { status: "success" };
+  }
+  if (applyResult.kind === "allFailure") {
+    const reason =
+      applyResult.reason === "unencodableCharacters"
+        ? "unencodableCharacters"
+        : applyResult.reason === "fileChanged"
+          ? "fileChanged"
+          : "generic";
+    return { status: "failed", failureReason: reason };
+  }
+
+  return { status: "failed", failureReason: "saveFailed" };
 }
 
 export function ReplacePreviewDialog({
@@ -407,26 +542,36 @@ export function ReplacePreviewDialog({
           </p>
         ) : null}
         {applyResult ? (
-          <p
-            className={`replacePreviewApplyResult replacePreviewApplyResult-${applyResult.kind}`}
-            role="status"
-          >
-            {applyResult.kind === "success"
-              ? translate("search.replace.project.savedSummary", {
-                  replacementCount: applyResult.replacementCount,
-                  fileCount: applyResult.fileCount
-                })
-              : applyResult.kind === "partialFailure"
-                ? translate("search.replace.project.partialFailure.message", {
-                    successFileCount: applyResult.successFileCount,
-                    failureFileCount: applyResult.failureFileCount
+          <>
+            <p
+              className={`replacePreviewApplyResult replacePreviewApplyResult-${applyResult.kind}`}
+              role="status"
+            >
+              {applyResult.kind === "success"
+                ? translate("search.replace.project.savedSummary", {
+                    replacementCount: applyResult.replacementCount,
+                    fileCount: applyResult.fileCount
                   })
-                : translate(
-                    applyResult.reason === "fileChanged"
-                      ? "search.replace.project.fileChanged"
-                      : "search.replace.project.allFailure.message"
-                  )}
-          </p>
+                : applyResult.kind === "partialFailure"
+                  ? translate("search.replace.project.partialFailure.message", {
+                      successFileCount: applyResult.successFileCount,
+                      failureFileCount: applyResult.failureFileCount
+                    })
+                  : translate(
+                      applyResult.reason === "fileChanged"
+                        ? "search.replace.project.fileChanged"
+                        : "search.replace.project.allFailure.message"
+                    )}
+            </p>
+            {hasUnencodableFailure(applyResult) ? (
+              <p
+                className="replacePreviewApplyResult replacePreviewApplyResult-unencodableFailure"
+                role="alert"
+              >
+                {translate("search.replace.project.unencodableFailure.message")}
+              </p>
+            ) : null}
+          </>
         ) : null}
 
         <dl className="replacePreviewConditions">
@@ -617,15 +762,27 @@ export function ReplacePreviewDialog({
                           </span>
                         </div>
                         <ul className="replacePreviewRows">
-                          {group.candidates.map((candidate) => (
-                            <ReplacePreviewRow
-                              key={candidate.id}
-                              translate={translate}
-                              candidate={candidate}
-                              applied={isApplied(candidate.id)}
-                              onToggle={toggleRow}
-                            />
-                          ))}
+                          {group.candidates.map((candidate) => {
+                            const applied = isApplied(candidate.id);
+                            const rowStatusInfo = getRowApplyStatus(
+                              candidate,
+                              applied,
+                              completed,
+                              applyResult
+                            );
+                            return (
+                              <ReplacePreviewRow
+                                key={candidate.id}
+                                translate={translate}
+                                candidate={candidate}
+                                applied={applied}
+                                status={rowStatusInfo.status}
+                                failureReason={rowStatusInfo.failureReason}
+                                disabled={applying || completed}
+                                onToggle={toggleRow}
+                              />
+                            );
+                          })}
                         </ul>
                       </li>
                     );

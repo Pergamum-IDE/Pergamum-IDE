@@ -115,10 +115,14 @@ describe("file I/O workflow wiring (#202)", () => {
       saveFileBlock.indexOf("} catch (error) {")
     );
 
-    expect(saveFileBlock).toContain("await showFileSaveFailedDialog();");
+    // #501 slice 6 remediation: the catch block now dispatches through the
+    // shared showSaveFailureDialogForReason helper (which itself calls
+    // showFileSaveFailedDialog for a non-encoding reason) rather than
+    // calling showFileSaveFailedDialog directly.
+    expect(catchBlock).toContain("await showSaveFailureDialogForReason(");
     expect(
-      saveFileBlock.indexOf("await showFileSaveFailedDialog();")
-    ).toBeLessThan(saveFileBlock.indexOf('return "failed";'));
+      catchBlock.indexOf("await showSaveFailureDialogForReason(")
+    ).toBeLessThan(catchBlock.lastIndexOf('return "failed";'));
     expect(catchBlock).not.toContain("markCurrentDocumentSaved");
     expect(catchBlock).not.toContain("applyStandaloneSaveResult");
     expect(dialogBlock).toContain('translate("dialog.fileSaveFailed.title")');
@@ -165,6 +169,140 @@ describe("file I/O workflow wiring (#202)", () => {
     );
     expect(saveFileBlock).toContain("window.pergamum.files.writeMarkdown");
     expect(saveFileBlock).not.toContain("window.pergamum.files.saveMarkdown");
+  });
+
+  it("#501 slice 6 remediation: detects unencodableCharacters via the shared sanitized-message parser", () => {
+    const source = appSource();
+    const helperBlock = sourceBlock(
+      source,
+      "function isUnencodableCharactersSaveError(error: unknown): boolean {",
+      "function projectOpenStatus("
+    );
+
+    expect(source).toContain(
+      'import { sanitizedFileIoErrorReasonFromMessage } from "../shared/sanitizedFileIoErrorMessage";'
+    );
+    expect(helperBlock).toContain(
+      "sanitizedFileIoErrorReasonFromMessage(error.message)"
+    );
+    expect(helperBlock).toContain('"unencodableCharacters"');
+  });
+
+  it("#501 slice 6 remediation: a structured saveProjectDocument failure (not a thrown/caught Error) drives the dialog choice", () => {
+    const source = appSource();
+    const saveFileBlock = sourceBlock(
+      source,
+      "async function saveFile(",
+      "async function readProjectDocument"
+    );
+    const projectSaveBlock = saveFileBlock.slice(
+      saveFileBlock.indexOf(
+        "const savedProjectDocument =\n              await window.pergamum.projects.saveProjectDocument("
+      )
+    );
+    const structuredFailureBlock = projectSaveBlock.slice(
+      projectSaveBlock.indexOf('if (savedProjectDocument.kind === "failed") {'),
+      projectSaveBlock.indexOf("const savedProjectSnapshot =")
+    );
+
+    // The branch reads `.kind` / `.reason` off the RESOLVED result — it must
+    // not be inside (or depend on) the shared `catch (error)` block below,
+    // since that block only ever sees a thrown Error whose message is
+    // mangled by Electron on the way back from `ipcMain.handle`.
+    expect(structuredFailureBlock).not.toEqual("");
+    expect(structuredFailureBlock).toContain(
+      "await showSaveFailureDialogForReason(\n                savedProjectDocument.reason\n              );"
+    );
+    expect(structuredFailureBlock).toContain('return "failed";');
+    expect(
+      saveFileBlock.indexOf('if (savedProjectDocument.kind === "failed") {')
+    ).toBeLessThan(saveFileBlock.indexOf("} catch (error) {"));
+    // No document / editor state mutation on this failure path.
+    expect(structuredFailureBlock).not.toContain("markCurrentDocumentSaved");
+    expect(structuredFailureBlock).not.toContain("replaceSavedDocument");
+    expect(structuredFailureBlock).not.toContain(
+      "retireRecoverySnapshotAfterSave"
+    );
+  });
+
+  it("#501 slice 6 remediation: showSaveFailureDialogForReason shows the encoding dialog only for unencodableCharacters, else the generic one", () => {
+    const source = appSource();
+    const dispatchBlock = sourceBlock(
+      source,
+      "async function showSaveFailureDialogForReason(",
+      "function syncActiveMarkdownBufferToSavedDocument"
+    );
+    const dialogBlock = sourceBlock(
+      source,
+      "async function showFileSaveFailedEncodingDialog()",
+      "async function showSaveFailureDialogForReason("
+    );
+
+    expect(dispatchBlock).toContain('reason === "unencodableCharacters"');
+    const ifIndex = dispatchBlock.indexOf(
+      'if (reason === "unencodableCharacters") {'
+    );
+    const encodingCallIndex = dispatchBlock.indexOf(
+      "await showFileSaveFailedEncodingDialog();"
+    );
+    const elseIndex = dispatchBlock.indexOf("} else {");
+    const genericCallIndex = dispatchBlock.indexOf(
+      "await showFileSaveFailedDialog();"
+    );
+
+    expect(ifIndex).toBeGreaterThan(-1);
+    expect(encodingCallIndex).toBeGreaterThan(ifIndex);
+    expect(elseIndex).toBeGreaterThan(encodingCallIndex);
+    expect(genericCallIndex).toBeGreaterThan(elseIndex);
+
+    expect(dialogBlock).toContain(
+      'translate("dialog.fileSaveFailedEncoding.title")'
+    );
+    expect(dialogBlock).toContain(
+      'translate("dialog.fileSaveFailedEncoding.message")'
+    );
+    expect(dialogBlock).toContain('kind: "error"');
+    expect(dialogBlock).toContain("dismissOnBackdropClick: false");
+    expect(dialogBlock).toContain('confirmLabel: translate("common.ok")');
+    expect(dialogBlock).toContain("cancelLabel: null");
+  });
+
+  it("#501 slice 6 remediation: the shared catch block also routes through showSaveFailureDialogForReason (defense in depth for standalone save)", () => {
+    const source = appSource();
+    const saveFileBlock = sourceBlock(
+      source,
+      "async function saveFile(",
+      "async function readProjectDocument"
+    );
+    const catchBlock = saveFileBlock.slice(
+      saveFileBlock.indexOf("} catch (error) {")
+    );
+
+    expect(catchBlock).toContain("isUnencodableCharactersSaveError(error)");
+    expect(catchBlock).toContain("await showSaveFailureDialogForReason(");
+    // The dispatch call comes first; `isUnencodableCharactersSaveError`
+    // appears as its argument expression.
+    expect(
+      catchBlock.indexOf("await showSaveFailureDialogForReason(")
+    ).toBeLessThan(catchBlock.indexOf("isUnencodableCharactersSaveError(error)"));
+  });
+
+  it("#501 slice 6 remediation: a failed save (either dialog) never marks the document clean or replaces its saved state", () => {
+    const source = appSource();
+    const saveFileBlock = sourceBlock(
+      source,
+      "async function saveFile(",
+      "async function readProjectDocument"
+    );
+    const catchBlock = saveFileBlock.slice(
+      saveFileBlock.indexOf("} catch (error) {")
+    );
+
+    expect(catchBlock).not.toContain("markCurrentDocumentSaved");
+    expect(catchBlock).not.toContain("applyStandaloneSaveResult");
+    expect(catchBlock).not.toContain("replaceSavedDocument");
+    expect(catchBlock).not.toContain("retireRecoverySnapshotAfterSave");
+    expect(catchBlock).toContain('return "failed";');
   });
 
   it("routes untitled Save through the existing Save As target selection path", () => {

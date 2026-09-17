@@ -137,14 +137,17 @@ function saveRequest(
         paragraphDistance: 2
       }
     },
-    files: { newFile: { lineEnding: "lf", encoding: "utf8" } },
+    markdownFiles: { lineEnding: "lf", encoding: "utf8" },
+    textFiles: { enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8" },
     imageAttachment: { saveDirectory: "", insertMarkdownLink: true },
     documentMap: {
       narrationColor: "#000000",
       glossaryFallbackColor: "#ff0000",
       dialogueDelimiterPairs: [
         { open: "「", close: "」", color: "#0000ff" }
-      ]
+      ],
+      adjustTagColorsForVisibility: true,
+      viewportLensOpacity: 0.28
     }
   } as SaveApplicationSettingsRequest;
 }
@@ -302,7 +305,10 @@ describe("settingsStore workbench.notification.durationMs write path (#266)", ()
     expect(() =>
       parseSaveApplicationSettingsRequest(
         saveRequest({
-          notification: { durationMs: 10000, somethingElse: true }
+          workbench: {
+            ...saveRequest({}).workbench,
+            notification: { durationMs: 10000, somethingElse: true } as unknown as { durationMs: number }
+          }
         })
       )
     ).toThrow("Invalid application settings.");

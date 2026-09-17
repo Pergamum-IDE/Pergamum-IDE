@@ -34,7 +34,7 @@ const treeRoot: FileExplorerEntry[] = [
   { kind: "folder", name: "Archive", relativePath: "Archive" },
   { kind: "file", name: "a.md", relativePath: "a.md" },
   { kind: "file", name: "b.md", relativePath: "b.md" },
-  { kind: "file", name: "note.txt", relativePath: "note.txt" }
+  { kind: "file", name: "cover.png", relativePath: "cover.png" }
 ];
 
 let container: HTMLDivElement | null = null;
@@ -285,24 +285,29 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
   it("hands only the Markdown file of a mixed-selection drop to the batch hook", async () => {
     const harness = await mount({ prepareDecision: "proceed" });
     clickEntry("a.md");
-    clickEntry("note.txt", { ctrlKey: true });
+    clickEntry("cover.png", { ctrlKey: true });
     await dragDrop("a.md", "Drafts");
     click(".fileExplorerDragDropMoveButton");
     await flush();
 
     expect(harness.onPrepareMarkdownDocumentMoves).toHaveBeenCalledWith(
       [{ oldProjectRelativePath: "a.md", newProjectRelativePath: "Drafts/a.md" }],
-      []
+      [
+        {
+          oldProjectRelativePath: "cover.png",
+          newProjectRelativePath: "Drafts/cover.png"
+        }
+      ]
     );
     // The move itself still carries the full selection.
     expect(harness.moveFileExplorerEntries).toHaveBeenCalledWith({
-      sourceRelativePaths: ["a.md", "note.txt"],
+      sourceRelativePaths: ["a.md", "cover.png"],
       destinationFolderRelativePath: "Drafts",
       dirtyProjectDocumentRelativePaths: []
     });
     expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
       { oldRelativePath: "a.md", newRelativePath: "Drafts/a.md" },
-      { oldRelativePath: "note.txt", newRelativePath: "Drafts/note.txt" }
+      { oldRelativePath: "cover.png", newRelativePath: "Drafts/cover.png" }
     ]);
   });
 
@@ -335,7 +340,7 @@ describe("#413 File Explorer D&D move — image-link update hook", () => {
 
   it("does not fire the batch hook for a non-Markdown file drop move", async () => {
     const harness = await mount();
-    await dragDrop("note.txt", "Drafts");
+    await dragDrop("cover.png", "Drafts");
     click(".fileExplorerDragDropMoveButton");
     await flush();
 

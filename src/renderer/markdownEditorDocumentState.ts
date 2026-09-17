@@ -84,6 +84,7 @@ import { createTabCaptureKeymapExtension } from "./tabCaptureKeymapExtension";
 export interface MarkdownEditorDocumentState {
   readonly state: EditorState;
   readonly lineEndingField: StateField<LineEndingBreakSet>;
+  readonly visibilityCompartment: Compartment;
 }
 
 /**
@@ -208,12 +209,14 @@ export function readOnlyCompartmentContent(readOnly: boolean): Extension[] {
  * document that has no cached state yet (first-ever switch to it).
  *
  * Compartments are passed in rather than created here: they are shared,
- * editor-instance-wide slots (one `readOnlyCompartment` etc. per
- * `MarkdownEditor` mount, reused across every document's `EditorState` so a
- * live Settings change can `.reconfigure()` whichever document is currently
- * active — see MarkdownEditor.tsx). The `lineEndingField` StateField,
- * in contrast, is created fresh here, once per document: it is that
- * document's own undo-integrated tracked data, not a shared slot.
+ * editor-instance-wide slots for a `MarkdownEditor` mount. The line-ending
+ * marker visibility compartment is also returned with the cached state because
+ * the cached `EditorState` can outlive that mount; restore-time reconfiguration
+ * must address the exact compartment embedded in that state.
+ *
+ * The `lineEndingField` StateField, in contrast, is created fresh here, once
+ * per document: it is that document's own undo-integrated tracked data, not a
+ * shared slot.
  */
 export function createMarkdownEditorDocumentState(
   options: MarkdownEditorDocumentStateOptions
@@ -312,7 +315,11 @@ export function createMarkdownEditorDocumentState(
     ]
   });
 
-  return { state, lineEndingField };
+  return {
+    state,
+    lineEndingField,
+    visibilityCompartment: options.visibilityCompartment
+  };
 }
 
 /** Result of successfully applying changes to a cached document's
@@ -364,7 +371,8 @@ export function applyChangesToCachedMarkdownEditorDocumentState(
   return {
     nextDocumentState: {
       state: nextState,
-      lineEndingField: cached.lineEndingField
+      lineEndingField: cached.lineEndingField,
+      visibilityCompartment: cached.visibilityCompartment
     },
     content: nextState.doc.toString(),
     lineEndingBreaks: nextState.field(cached.lineEndingField)

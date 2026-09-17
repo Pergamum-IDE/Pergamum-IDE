@@ -51,6 +51,30 @@ describe("writeFileAtomic (#272)", () => {
     expect(await fs.readFile(target)).toEqual(Buffer.from(content, "utf8"));
   });
 
+  it("#501 slice 6: writes raw Uint8Array bytes verbatim, never routed through a UTF-8 string encode", async () => {
+    const target = path.join(workDir, "notes.txt");
+    // Shift_JIS bytes for a short Japanese phrase — NOT valid UTF-8 on their
+    // own, so if this ever got coerced through a UTF-8 string write the
+    // on-disk bytes would silently change (e.g. via lossy decode/re-encode).
+    const shiftJisBytes = Uint8Array.from([
+      0x82, 0xa0, 0x82, 0xa2, 0x82, 0xa4, 0x82, 0xa6, 0x82, 0xa8
+    ]);
+    await fs.writeFile(target, "stale utf-8 text that must be fully replaced", "utf8");
+
+    await writeFileAtomic(target, shiftJisBytes);
+
+    expect(new Uint8Array(await fs.readFile(target))).toEqual(shiftJisBytes);
+  });
+
+  it("#501 slice 6: creates the target (and its directory) from Uint8Array bytes alone", async () => {
+    const target = path.join(workDir, "nested", "deep", "notes.txt");
+    const bytes = Uint8Array.from({ length: 256 }, (_v, i) => i);
+
+    await writeFileAtomic(target, bytes);
+
+    expect(new Uint8Array(await fs.readFile(target))).toEqual(bytes);
+  });
+
   it("leaves the previous target intact and no stray temp when the rename fails", async () => {
     const target = path.join(workDir, "file.json");
     await fs.writeFile(target, "GOOD", "utf8");

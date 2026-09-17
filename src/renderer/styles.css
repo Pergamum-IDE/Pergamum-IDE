@@ -8664,11 +8664,37 @@ label.settingsItemHeader {
 
 .replacePreviewRow {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   padding: 4px 8px;
   border-top: 1px solid var(--app-dialog-border);
   font-size: 12px;
+}
+
+.replacePreviewRowStatus {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.replacePreviewRowStatusIcon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  mask: var(--replace-preview-status-icon) center / contain no-repeat;
+  -webkit-mask: var(--replace-preview-status-icon) center / contain no-repeat;
+}
+
+.replacePreviewRowStatusIcon-success {
+  color: var(--replace-preview-status-success, #1f6b3a);
+}
+
+.replacePreviewRowStatusIcon-failure {
+  color: var(--replace-preview-status-failure, #b4232a);
 }
 
 .replacePreviewRowLocation {
@@ -8717,6 +8743,8 @@ label.settingsItemHeader {
     --replace-preview-before-bg: rgba(255, 255, 255, 0.14);
     --replace-preview-after: #a9e0bb;
     --replace-preview-after-bg: rgba(31, 107, 58, 0.3);
+    --replace-preview-status-success: #49b36b;
+    --replace-preview-status-failure: #f85149;
   }
 }
 

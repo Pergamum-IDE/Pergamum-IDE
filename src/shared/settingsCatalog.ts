@@ -46,7 +46,8 @@ export const settingAreas = [
   "preview",
   "commandPalette",
   "quickAccess",
-  "files",
+  "markdownFiles",
+  "textFiles",
   "debug",
   "documentMap",
   // #407: clipboard image attachment — save-directory + Markdown-link toggle.
@@ -193,6 +194,10 @@ import {
 // #186: workbench.language's selectable values are owned by i18n, while the
 // catalog remains the owner of the setting's default and metadata.
 import { defaultLanguage, supportedLanguages, type Language } from "./i18n";
+import {
+  DEFAULT_TEXT_FILE_ENCODING,
+  TEXT_FILE_ENCODINGS
+} from "./textFileEncoding";
 import { validateNarouEmphasisMarkText } from "./emphasisMarkSettings";
 
 // ---------------------------------------------------------------------------
@@ -201,7 +206,7 @@ import { validateNarouEmphasisMarkText } from "./emphasisMarkSettings";
 
 // Dotted segments: {area}.{...}.{property}, at least one dot. Each segment
 // starts with a lowercase letter followed by letters/digits (camelCase),
-// e.g. "workbench.colorTheme" or "files.newFile.lineEnding". No fixed
+// e.g. "workbench.colorTheme" or "markdownFiles.lineEnding". No fixed
 // maximum segment count: ADR-0006 S-11's own worked example
 // ("editor.decorations.lineEndingMarkers.enabled") has more than three
 // segments, so this pattern does not impose an unsupported depth cap.
@@ -775,7 +780,7 @@ export const settingsCatalog = defineSettingsCatalog({
   // #252: diagnostic-only setting for the line-ending marker/distribution
   // UI — never used to decide an existing break's kind, a new break's
   // inherited kind, or a save-time conversion. Kept fully separate from
-  // files.newFile.lineEnding below (#253's new-break fallback).
+  // markdownFiles.lineEnding/textFiles.lineEnding below (#253/#501's new-break fallback).
   "editor.lineEnding.expected": defineEnumSetting({
     key: "editor.lineEnding.expected",
     scope: "applicationWithProjectOverride",
@@ -945,23 +950,52 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
-  "files.newFile.lineEnding": defineEnumSetting({
-    key: "files.newFile.lineEnding",
-    scope: "applicationWithProjectOverride",
-    enumValues: ["lf", "crlf"],
-    defaultValue: "lf",
-    labelKey: "settings.files.newFile.lineEnding.label",
-    descriptionKey: "settings.files.newFile.lineEnding.description",
-    deprecatedAliases: [],
-    migrationNotes: []
-  }),
-  "files.newFile.encoding": defineEnumSetting({
-    key: "files.newFile.encoding",
+  "markdownFiles.encoding": defineEnumSetting({
+    key: "markdownFiles.encoding",
     scope: "applicationOnly",
     enumValues: ["utf8"],
     defaultValue: "utf8",
-    labelKey: "settings.files.newFile.encoding.label",
-    descriptionKey: "settings.files.newFile.encoding.description",
+    labelKey: "settings.markdownFiles.encoding.label",
+    descriptionKey: "settings.markdownFiles.encoding.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "markdownFiles.lineEnding": defineEnumSetting({
+    key: "markdownFiles.lineEnding",
+    scope: "applicationWithProjectOverride",
+    enumValues: ["lf", "crlf"],
+    defaultValue: "lf",
+    labelKey: "settings.markdownFiles.lineEnding.label",
+    descriptionKey: "settings.markdownFiles.lineEnding.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "textFiles.enablePlainTextDocuments": defineBooleanSetting({
+    key: "textFiles.enablePlainTextDocuments",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.textFiles.enablePlainTextDocuments.label",
+    descriptionKey: "settings.textFiles.enablePlainTextDocuments.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "textFiles.encoding": defineEnumSetting({
+    key: "textFiles.encoding",
+    scope: "applicationOnly",
+    enumValues: TEXT_FILE_ENCODINGS,
+    defaultValue: DEFAULT_TEXT_FILE_ENCODING,
+    labelKey: "settings.textFiles.encoding.label",
+    descriptionKey: "settings.textFiles.encoding.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "textFiles.lineEnding": defineEnumSetting({
+    key: "textFiles.lineEnding",
+    scope: "applicationWithProjectOverride",
+    enumValues: ["lf", "crlf"],
+    defaultValue: "lf",
+    labelKey: "settings.textFiles.lineEnding.label",
+    descriptionKey: "settings.textFiles.lineEnding.description",
     deprecatedAliases: [],
     migrationNotes: []
   }),

@@ -202,8 +202,10 @@ export function readProjectSettingValue(
       return settings.editor?.characterCount?.exclude?.markdownComments;
     case "editor.lineEnding.expected":
       return settings.editor?.lineEnding?.expected;
-    case "files.newFile.lineEnding":
-      return settings.files?.newFile?.lineEnding;
+    case "markdownFiles.lineEnding":
+      return settings.markdownFiles?.lineEnding;
+    case "textFiles.lineEnding":
+      return settings.textFiles?.lineEnding;
     case "documentMap.dialogueDelimiterPairs":
       return settings.documentMap?.dialogueDelimiterPairs;
     case "imageAttachment.saveDirectory":

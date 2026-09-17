@@ -134,7 +134,7 @@ function findKindBefore(
  * 1. the existing break that follows the insertion point (in the
  *    pre-edit document), if any
  * 2. else the existing break that precedes it, if any
- * 3. else `fallback` (the effective `files.newFile.lineEnding` setting)
+ * 3. else `fallback` (the effective Markdown/Text file line-ending setting)
  */
 export function inheritedKindForInsertion(
   oldSet: LineEndingBreakSet,
@@ -365,7 +365,7 @@ function removeBreaksDeletedAtChangeStarts(
  *
  * `getNewFileLineEndingFallback` is read fresh on every transaction rather
  * than captured once, so a runtime change to the effective
- * `files.newFile.lineEnding` setting is honored the next time a new break
+ * Markdown/Text file line-ending setting is honored the next time a new break
  * is created in a document with no existing breaks — without needing to
  * recreate this field (which, mid-document, would risk the same
  * create()-then-replay hazard documented on resetLineEndingBreaksEffect

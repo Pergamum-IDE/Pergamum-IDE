@@ -552,29 +552,50 @@ function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
   return editor;
 }
 
-function readNewFileSettings(
+function readMarkdownFilesSettings(
   value: unknown
-): ApplicationSettings["files"]["newFile"] {
-  const newFileValue = isObject(value) ? value : undefined;
+): ApplicationSettings["markdownFiles"] {
+  const markdownFilesValue = isObject(value) ? value : undefined;
 
   return {
-    lineEnding: resolveCatalogValue(
-      "files.newFile.lineEnding",
-      newFileValue?.lineEnding
-    ).value,
     encoding: resolveCatalogValue(
-      "files.newFile.encoding",
-      newFileValue?.encoding
+      "markdownFiles.encoding",
+      markdownFilesValue?.encoding
+    ).value,
+    lineEnding: resolveCatalogValue(
+      "markdownFiles.lineEnding",
+      markdownFilesValue?.lineEnding
     ).value
   };
 }
 
-function readFilesSettings(value: unknown): ApplicationSettings["files"] {
-  const filesValue = isObject(value) ? value : undefined;
+function readTextFilesSettings(
+  value: unknown
+): ApplicationSettings["textFiles"] {
+  const textFilesValue = isObject(value) ? value : undefined;
 
-  return {
-    newFile: readNewFileSettings(filesValue?.newFile)
+  const result: ApplicationSettings["textFiles"] = {
+    encoding: resolveCatalogValue(
+      "textFiles.encoding",
+      textFilesValue?.encoding
+    ).value,
+    lineEnding: resolveCatalogValue(
+      "textFiles.lineEnding",
+      textFilesValue?.lineEnding
+    ).value
   };
+
+  if (
+    textFilesValue !== undefined &&
+    "enablePlainTextDocuments" in textFilesValue
+  ) {
+    result.enablePlainTextDocuments = resolveCatalogValue(
+      "textFiles.enablePlainTextDocuments",
+      textFilesValue.enablePlainTextDocuments
+    ).value;
+  }
+
+  return result;
 }
 
 // #407: applicationWithProjectOverride, but always concrete on the
@@ -638,7 +659,8 @@ function readSettingsValue(value: unknown): ApplicationSettings {
     commandPalette: readCommandPaletteSettings(value.commandPalette),
     editor: readEditorSettings(value.editor),
     search: readSearchSettings(value.search),
-    files: readFilesSettings(value.files),
+    markdownFiles: readMarkdownFilesSettings(value.markdownFiles),
+    textFiles: readTextFilesSettings(value.textFiles),
     imageAttachment: readImageAttachmentSettings(value.imageAttachment),
     documentMap: readDocumentMapSettings(value.documentMap),
     recentProjects: readRecentProjects(value.recentProjects)
@@ -708,7 +730,7 @@ export function parseSaveApplicationSettingsRequest(
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 8 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 9 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -717,7 +739,8 @@ export function parseSaveApplicationSettingsRequest(
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
     !keys.includes("search") ||
-    !keys.includes("files") ||
+    !keys.includes("markdownFiles") ||
+    !keys.includes("textFiles") ||
     !keys.includes("imageAttachment") ||
     !keys.includes("documentMap")
   ) {
@@ -737,7 +760,8 @@ export function parseSaveApplicationSettingsRequest(
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     search: parseSearchSettingsForWrite(value.search),
-    files: parseFilesSettingsForWrite(value.files),
+    markdownFiles: parseMarkdownFilesSettingsForWrite(value.markdownFiles),
+    textFiles: parseTextFilesSettingsForWrite(value.textFiles),
     imageAttachment: parseImageAttachmentSettingsForWrite(
       value.imageAttachment
     ),
@@ -1626,9 +1650,9 @@ function parseEditorSettingsForWrite(
   return editor;
 }
 
-function parseNewFileSettingsForWrite(
+function parseMarkdownFilesSettingsForWrite(
   value: unknown
-): ApplicationSettings["files"]["newFile"] {
+): ApplicationSettings["markdownFiles"] {
   if (!isObject(value)) {
     throw new Error("Invalid application settings.");
   }
@@ -1644,11 +1668,11 @@ function parseNewFileSettingsForWrite(
   }
 
   const lineEndingResolution = resolveCatalogValue(
-    "files.newFile.lineEnding",
+    "markdownFiles.lineEnding",
     value.lineEnding
   );
   const encodingResolution = resolveCatalogValue(
-    "files.newFile.encoding",
+    "markdownFiles.encoding",
     value.encoding
   );
 
@@ -1662,22 +1686,55 @@ function parseNewFileSettingsForWrite(
   };
 }
 
-function parseFilesSettingsForWrite(
+function parseTextFilesSettingsForWrite(
   value: unknown
-): ApplicationSettings["files"] {
+): ApplicationSettings["textFiles"] {
   if (!isObject(value)) {
     throw new Error("Invalid application settings.");
   }
 
   const keys = Object.keys(value);
+  const hasEnablePlainTextDocuments = keys.includes("enablePlainTextDocuments");
+  const expectedKeyCount = 2 + (hasEnablePlainTextDocuments ? 1 : 0);
 
-  if (keys.length !== 1 || !keys.includes("newFile")) {
+  if (
+    keys.length !== expectedKeyCount ||
+    !keys.includes("encoding") ||
+    !keys.includes("lineEnding")
+  ) {
     throw new Error("Invalid application settings.");
   }
 
-  return {
-    newFile: parseNewFileSettingsForWrite(value.newFile)
+  const encodingResolution = resolveCatalogValue(
+    "textFiles.encoding",
+    value.encoding
+  );
+  const lineEndingResolution = resolveCatalogValue(
+    "textFiles.lineEnding",
+    value.lineEnding
+  );
+
+  if (!encodingResolution.ok || !lineEndingResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const textFiles: ApplicationSettings["textFiles"] = {
+    encoding: encodingResolution.value,
+    lineEnding: lineEndingResolution.value
   };
+
+  if (hasEnablePlainTextDocuments) {
+    const enableRes = resolveCatalogValue(
+      "textFiles.enablePlainTextDocuments",
+      value.enablePlainTextDocuments
+    );
+    if (!enableRes.ok) {
+      throw new Error("Invalid application settings.");
+    }
+    textFiles.enablePlainTextDocuments = enableRes.value;
+  }
+
+  return textFiles;
 }
 
 function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
@@ -1687,7 +1744,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 9 + (hasNotification ? 1 : 0);
+  const expectedKeyCount = 10 + (hasNotification ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1696,7 +1753,8 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     !keys.includes("commandPalette") ||
     !keys.includes("editor") ||
     !keys.includes("search") ||
-    !keys.includes("files") ||
+    !keys.includes("markdownFiles") ||
+    !keys.includes("textFiles") ||
     !keys.includes("imageAttachment") ||
     !keys.includes("documentMap") ||
     !keys.includes("recentProjects")
@@ -1717,7 +1775,8 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
     commandPalette: parseCommandPaletteSettingsForWrite(value.commandPalette),
     editor: parseEditorSettingsForWrite(value.editor),
     search: parseSearchSettingsForWrite(value.search),
-    files: parseFilesSettingsForWrite(value.files),
+    markdownFiles: parseMarkdownFilesSettingsForWrite(value.markdownFiles),
+    textFiles: parseTextFilesSettingsForWrite(value.textFiles),
     imageAttachment: parseImageAttachmentSettingsForWrite(
       value.imageAttachment
     ),
@@ -1774,7 +1833,8 @@ export async function saveApplicationSettings(
     workbench: settingsRequest.workbench,
     commandPalette: settingsRequest.commandPalette,
     editor: settingsRequest.editor,
-    files: settingsRequest.files
+    markdownFiles: settingsRequest.markdownFiles,
+    textFiles: settingsRequest.textFiles
   };
 
   if (settingsRequest.notification !== undefined) {

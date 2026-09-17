@@ -8,11 +8,12 @@ import {
   isPreviewRendererId,
   type ProjectDocumentMapSettings,
   type ProjectEditorSettings,
-  type ProjectFilesSettings,
   type ProjectImageAttachmentSettings,
+  type ProjectMarkdownFilesSettings,
   type ProjectPreviewSettings,
   type ProjectSearchSettings,
   type ProjectSettings,
+  type ProjectTextFilesSettings,
   type ProjectWorkbenchSettings
 } from "../shared/settings";
 import type { FontFamilySetting } from "../shared/fontSettings";
@@ -72,7 +73,8 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
   let workbench: ProjectWorkbenchSettings | undefined;
   let preview: ProjectPreviewSettings | undefined;
   let editor: ProjectEditorSettings | undefined;
-  let files: ProjectFilesSettings | undefined;
+  let markdownFiles: ProjectMarkdownFilesSettings | undefined;
+  let textFiles: ProjectTextFilesSettings | undefined;
   let documentMap: ProjectDocumentMapSettings | undefined;
   let imageAttachment: ProjectImageAttachmentSettings | undefined;
   let search: ProjectSearchSettings | undefined;
@@ -215,14 +217,25 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     };
   }
 
-  const rawNewFileLineEnding = value["files.newFile.lineEnding"];
-  if (rawNewFileLineEnding !== undefined) {
+  const rawMarkdownLineEnding = value["markdownFiles.lineEnding"];
+  if (rawMarkdownLineEnding !== undefined) {
     const validation = validateCatalogValue(
-      "files.newFile.lineEnding",
-      rawNewFileLineEnding
+      "markdownFiles.lineEnding",
+      rawMarkdownLineEnding
     );
-    if (validation.ok && typeof rawNewFileLineEnding === "string") {
-      files = { newFile: { lineEnding: rawNewFileLineEnding as any } };
+    if (validation.ok && typeof rawMarkdownLineEnding === "string") {
+      markdownFiles = { lineEnding: rawMarkdownLineEnding as any };
+    }
+  }
+
+  const rawTextLineEnding = value["textFiles.lineEnding"];
+  if (rawTextLineEnding !== undefined) {
+    const validation = validateCatalogValue(
+      "textFiles.lineEnding",
+      rawTextLineEnding
+    );
+    if (validation.ok && typeof rawTextLineEnding === "string") {
+      textFiles = { lineEnding: rawTextLineEnding as any };
     }
   }
 
@@ -301,7 +314,8 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     workbench ||
     preview ||
     editor ||
-    files ||
+    markdownFiles ||
+    textFiles ||
     documentMap ||
     imageAttachment ||
     search
@@ -310,7 +324,8 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
       ...(workbench ? { workbench } : {}),
       ...(preview ? { preview } : {}),
       ...(editor ? { editor } : {}),
-      ...(files ? { files } : {}),
+      ...(markdownFiles ? { markdownFiles } : {}),
+      ...(textFiles ? { textFiles } : {}),
       ...(documentMap ? { documentMap } : {}),
       ...(imageAttachment ? { imageAttachment } : {}),
       ...(search ? { search } : {})

@@ -56,7 +56,8 @@ export type SettingCategory =
   | "imageAttachment"
   | "preview"
   | "documentMap"
-  | "files"
+  | "markdownFiles"
+  | "textFiles"
   | "project"
   | "commands"
   | "sound";
@@ -139,9 +140,14 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     labelKey: "settings.category.documentMap.label"
   },
   {
-    id: "files",
+    id: "markdownFiles",
     order: 500,
-    labelKey: "settings.category.files.label"
+    labelKey: "settings.category.markdownFiles.label"
+  },
+  {
+    id: "textFiles",
+    order: 510,
+    labelKey: "settings.category.textFiles.label"
   },
   {
     id: "commands",
@@ -295,7 +301,7 @@ export interface SettingCatalogItem<TValue = unknown> {
 
   /**
    * Optional warning tied to specific values (e.g. a non-UTF-8
-   * files.newFile.encoding). Warning UI is implemented in a later issue.
+   * textFiles.encoding). Warning UI is implemented in a later issue.
    */
   readonly valueWarning?: SettingValueWarning<TValue>;
 }
@@ -856,42 +862,126 @@ export const settingCatalogItems = defineSettingCatalog([
     )
   },
   {
-    key: "files.newFile.lineEnding",
-    category: "files",
+    key: "markdownFiles.encoding",
+    category: "markdownFiles",
     order: 100,
-    labelKey: "settings.files.newFile.lineEnding.label",
-    descriptionKey: "settings.files.newFile.lineEnding.description",
-    control: {
-      kind: "select",
-      options: [
-        {
-          value: "lf",
-          labelKey: "settings.files.newFile.lineEnding.option.lf.label"
-        },
-        {
-          value: "crlf",
-          labelKey: "settings.files.newFile.lineEnding.option.crlf.label"
-        }
-      ]
-    },
-    defaultValue: getCatalogDefaultValue("files.newFile.lineEnding")
-  },
-  {
-    key: "files.newFile.encoding",
-    category: "files",
-    order: 200,
-    labelKey: "settings.files.newFile.encoding.label",
-    descriptionKey: "settings.files.newFile.encoding.description",
+    labelKey: "settings.markdownFiles.encoding.label",
+    descriptionKey: "settings.markdownFiles.encoding.description",
     control: {
       kind: "select",
       options: [
         {
           value: "utf8",
-          labelKey: "settings.files.newFile.encoding.option.utf8.label"
+          labelKey: "settings.markdownFiles.encoding.option.utf8.label"
         }
       ]
     },
-    defaultValue: getCatalogDefaultValue("files.newFile.encoding")
+    defaultValue: getCatalogDefaultValue("markdownFiles.encoding")
+  },
+  {
+    key: "markdownFiles.lineEnding",
+    category: "markdownFiles",
+    order: 200,
+    labelKey: "settings.markdownFiles.lineEnding.label",
+    descriptionKey: "settings.markdownFiles.lineEnding.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "lf",
+          labelKey: "settings.markdownFiles.lineEnding.option.lf.label"
+        },
+        {
+          value: "crlf",
+          labelKey: "settings.markdownFiles.lineEnding.option.crlf.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("markdownFiles.lineEnding")
+  },
+  {
+    key: "textFiles.enablePlainTextDocuments",
+    category: "textFiles",
+    order: 100,
+    labelKey: "settings.textFiles.enablePlainTextDocuments.label",
+    descriptionKey: "settings.textFiles.enablePlainTextDocuments.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("textFiles.enablePlainTextDocuments")
+  },
+  {
+    key: "textFiles.encoding",
+    category: "textFiles",
+    order: 200,
+    labelKey: "settings.textFiles.encoding.label",
+    descriptionKey: "settings.textFiles.encoding.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "utf8",
+          labelKey: "settings.textFiles.encoding.option.utf8.label"
+        },
+        {
+          value: "utf8Bom",
+          labelKey: "settings.textFiles.encoding.option.utf8Bom.label"
+        },
+        {
+          value: "shiftJis",
+          labelKey: "settings.textFiles.encoding.option.shiftJis.label"
+        },
+        {
+          value: "eucJp",
+          labelKey: "settings.textFiles.encoding.option.eucJp.label"
+        },
+        {
+          value: "iso2022Jp",
+          labelKey: "settings.textFiles.encoding.option.iso2022Jp.label"
+        },
+        {
+          value: "utf16le",
+          labelKey: "settings.textFiles.encoding.option.utf16le.label"
+        },
+        {
+          value: "utf16leBom",
+          labelKey: "settings.textFiles.encoding.option.utf16leBom.label"
+        },
+        {
+          value: "utf16be",
+          labelKey: "settings.textFiles.encoding.option.utf16be.label"
+        },
+        {
+          value: "utf16beBom",
+          labelKey: "settings.textFiles.encoding.option.utf16beBom.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("textFiles.encoding"),
+    valueWarning: {
+      when: (value) => value !== "utf8",
+      severity: "warning",
+      messageKey: "settings.textFiles.encoding.warning.nonUtf8"
+    }
+  },
+  {
+    key: "textFiles.lineEnding",
+    category: "textFiles",
+    order: 300,
+    labelKey: "settings.textFiles.lineEnding.label",
+    descriptionKey: "settings.textFiles.lineEnding.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "lf",
+          labelKey: "settings.textFiles.lineEnding.option.lf.label"
+        },
+        {
+          value: "crlf",
+          labelKey: "settings.textFiles.lineEnding.option.crlf.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("textFiles.lineEnding")
   },
   {
     key: "preview.renderer",

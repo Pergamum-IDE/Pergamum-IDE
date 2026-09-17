@@ -1,8 +1,6 @@
 import type { ProjectDocument } from "../shared/api";
-import {
-  pathHasReservedFileExplorerSegment,
-  SUPPORTED_MARKDOWN_FILE_EXTENSIONS
-} from "../shared/fileExplorerCreate";
+import { pathHasReservedFileExplorerSegment } from "../shared/fileExplorerCreate";
+import { getProjectDocumentKind } from "../shared/projectDocumentKind";
 import { isProtectedPergamumDataFilePath } from "../shared/saveTargetPolicy";
 
 export type ProjectFileQuickOpenMatchKind = "filename" | "relativePath";
@@ -53,13 +51,17 @@ function projectFileQuickOpenDocument(
   };
 }
 
-function projectFileQuickOpenExtension(relativePath: string): string {
-  const filename = relativePath.split("/").pop() ?? relativePath;
-  const dotIndex = filename.lastIndexOf(".");
-
-  return dotIndex > 0 ? filename.slice(dotIndex).toLowerCase() : "";
-}
-
+/**
+ * #501 slice 8: a document reaches this filter only via
+ * `projectFileQuickOpenDocuments` (`project.documents` in `App.tsx`), which
+ * the main process already populates according to the LIVE
+ * `textFiles.enablePlainTextDocuments` setting (see `discoverMarkdownFiles`
+ * / Slice 6) — `.txt` is present there only when that setting is currently
+ * on. So this extension check itself is intentionally NOT settings-gated:
+ * it just recognizes both supported project document kinds (Markdown and
+ * Plain Text) via the shared `getProjectDocumentKind` helper, trusting the
+ * upstream list to already reflect the current setting.
+ */
 export function isProjectFileQuickOpenDocument(
   document: ProjectDocument
 ): boolean {
@@ -68,9 +70,9 @@ export function isProjectFileQuickOpenDocument(
   );
 
   if (
-    !SUPPORTED_MARKDOWN_FILE_EXTENSIONS.includes(
-      projectFileQuickOpenExtension(relativePath)
-    )
+    getProjectDocumentKind(relativePath, {
+      enablePlainTextDocuments: true
+    }) === null
   ) {
     return false;
   }

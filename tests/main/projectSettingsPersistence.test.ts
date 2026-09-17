@@ -157,7 +157,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
           "editor.characterCount.exclude.markdownSyntax": false,
           "editor.characterCount.exclude.markdownComments": false,
           "editor.lineEnding.expected": "crlf",
-          "files.newFile.lineEnding": "lf"
+          "markdownFiles.lineEnding": "lf"
         }
       };
       await fs.writeFile(configPath, JSON.stringify(raw, null, 2), "utf8");
@@ -187,7 +187,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       expect(loaded?.config.settings?.editor?.lineEnding?.expected).toBe(
         "crlf"
       );
-      expect(loaded?.config.settings?.files?.newFile?.lineEnding).toBe("lf");
+      expect(loaded?.config.settings?.markdownFiles?.lineEnding).toBe("lf");
     });
 
     it("loads documentMap.dialogueDelimiterPairs (including empty array []) from pergamum.json", async () => {
@@ -424,7 +424,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
             "editor.paragraphIndent.excludeLeadingCharacters": "",
             "editor.characterCount.exclude.whitespace": false,
             "editor.lineEnding.expected": "crlf",
-            "files.newFile.lineEnding": "lf"
+            "markdownFiles.lineEnding": "lf"
           }
         }
       });
@@ -439,7 +439,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       expect(initialSave.updatedSettings?.editor?.lineEnding?.expected).toBe(
         "crlf"
       );
-      expect(initialSave.updatedSettings?.files?.newFile?.lineEnding).toBe("lf");
+      expect(initialSave.updatedSettings?.markdownFiles?.lineEnding).toBe("lf");
 
       const configPath = path.join(workDir, projectConfigFileName);
       const onDisk = JSON.parse(await fs.readFile(configPath, "utf8"));
@@ -447,7 +447,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
         "editor.paragraphIndent.excludeLeadingCharacters": "",
         "editor.characterCount.exclude.whitespace": false,
         "editor.lineEnding.expected": "crlf",
-        "files.newFile.lineEnding": "lf"
+        "markdownFiles.lineEnding": "lf"
       });
 
       // Now remove one key, update another
@@ -472,13 +472,13 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       expect(
         secondSave.updatedSettings?.editor?.lineEnding?.expected
       ).toBeUndefined();
-      expect(secondSave.updatedSettings?.files?.newFile?.lineEnding).toBe("lf");
+      expect(secondSave.updatedSettings?.markdownFiles?.lineEnding).toBe("lf");
 
       const onDiskAfter = JSON.parse(await fs.readFile(configPath, "utf8"));
       expect(onDiskAfter.settings).toEqual({
         "editor.paragraphIndent.excludeLeadingCharacters": "",
         "editor.characterCount.exclude.whitespace": true,
-        "files.newFile.lineEnding": "lf"
+        "markdownFiles.lineEnding": "lf"
       });
     });
 

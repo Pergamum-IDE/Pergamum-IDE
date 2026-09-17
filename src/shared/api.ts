@@ -1,7 +1,8 @@
 import type {
   ApplicationSettings,
   ProjectSettings,
-  SaveApplicationSettingsRequest
+  SaveApplicationSettingsRequest,
+  TextFileEncoding
 } from "./settings";
 import type {
   CreateGlossaryEntryInput,
@@ -164,8 +165,22 @@ export type {
   ExpectedLineEnding,
   FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
+  MarkdownFileEncoding,
+  MarkdownFileLineEnding,
+  MarkdownFilesEncoding,
+  MarkdownFilesLineEnding,
+  TextFileEncoding,
+  TextFileLineEnding,
+  TextFilesEncoding,
+  TextFilesLineEnding,
   NewFileEncoding,
   NewFileLineEnding,
+  ApplicationMarkdownFilesSettings,
+  ApplicationTextFilesSettings,
+  ProjectMarkdownFilesSettings,
+  ProjectTextFilesSettings,
+  EffectiveMarkdownFilesSettings,
+  EffectiveTextFilesSettings,
   ParagraphIndentExcludeLeadingCharacters,
   PreviewRendererId,
   RecordRecentProjectInput,
@@ -251,6 +266,18 @@ export const PROJECT_CHANNELS = {
   /** #351: delete ONE already-validated project-local entry. The renderer
    *  drives the ordered loop; abort is "stop calling". */
   deleteFileExplorerEntry: "projects:deleteFileExplorerEntry",
+  /**
+   * #501 slice 8 blocker fix: a fresh, full re-discovery of the current
+   * project's documents (same walk as at project open). The renderer's
+   * `project.documents` cache — the source Quick Open / Command Palette /
+   * Project-wide Search read from — is otherwise only patched by specific
+   * file operations and does NOT react to `textFiles.enablePlainTextDocuments`
+   * changing at runtime; the renderer calls this after that setting changes
+   * so `.txt` can appear/disappear from those flows without a project
+   * reopen. Never removes anything from the main-side document allowlist,
+   * only adds — an already-open `.txt` document stays saveable regardless.
+   */
+  listProjectDocuments: "projects:listProjectDocuments",
   readProjectDocument: "projects:readProjectDocument",
   /** #372: first non-empty Markdown line of a project-local document, for the
    *  Command Palette file quick open footer detail preview. */
@@ -275,6 +302,15 @@ export const PROJECT_CHANNELS = {
   /** #422: logical project rename (updates SQLite metadata, not physical files). */
   updateProjectName: "projects:updateProjectName",
   saveProjectDocument: "projects:saveProjectDocument",
+  /**
+   * #501 slice 7: register a file that landed inside the current project
+   * root outside the normal open flow — a Recovery `.recovered<ext>` restore
+   * or a Session Restore continuation tab — as a first-class project
+   * document, so it can be read/saved through the project document IPC. NOT
+   * gated by `textFiles.enablePlainTextDocuments`; see
+   * `isRecoverableProjectDocumentPath`'s doc comment in `projectIpc.ts`.
+   */
+  registerProjectDocumentPath: "projects:registerProjectDocumentPath",
   saveProjectSettings: "projects:saveProjectSettings",
   closeCurrentProject: "projects:closeCurrentProject"
 } as const;
@@ -335,8 +371,9 @@ export const RECOVERY_CHANNELS = {
   evaluateStartupCandidates: "recovery:evaluateStartupCandidates",
   /** #300: mark the current previous-run candidate set as seen. */
   markCandidatesSeen: "recovery:markCandidatesSeen",
-  /** Phase 6-4-4: write selected candidates to `.recovered.md` files
-   *  (atomic). Does NOT delete any Recovery row. */
+  /** Phase 6-4-4: write selected candidates to a fresh `.recovered` sibling
+   *  file each, same extension as the original document (atomic). Does NOT
+   *  delete any Recovery row. */
   restoreCandidates: "recovery:restoreCandidates",
   /** Phase 6-4-4: delete Recovery rows the renderer confirmed it opened
    *  after a successful restore. */
@@ -782,10 +819,24 @@ export interface ReadProjectDocumentPreviewLineRequest {
   relativePath: string;
 }
 
+/**
+ * #501 slice 6: a project document can be Markdown (always `utf8`) or Plain
+ * Text (any `TextFileEncoding`), so `encoding` is wider here than
+ * `MarkdownFileReadMetadata.encoding` — which stays `"utf8"`-only for the
+ * standalone Markdown file open/save path.
+ */
+export interface ProjectDocumentReadMetadata {
+  encoding: TextFileEncoding;
+  lineEnding: MarkdownLineEnding;
+  byteLength: number;
+  characterLength: number;
+  hadBom: boolean;
+}
+
 export interface ProjectDocumentContent {
   relativePath: string;
   content: string;
-  metadata: MarkdownFileReadMetadata;
+  metadata: ProjectDocumentReadMetadata;
 }
 
 export interface SaveProjectDocumentRequest {
@@ -793,8 +844,41 @@ export interface SaveProjectDocumentRequest {
   content: string;
 }
 
-export interface SaveProjectDocumentResult {
-  relativePath: string;
+/**
+ * #501 slice 6 remediation: an expected file I/O failure (permission denied,
+ * an encoding that cannot represent the content, ...) is RETURNED as a
+ * structured `reason`, never thrown — a thrown `Error`'s `.reason` /
+ * `.code` do not reliably survive `ipcMain.handle` → `ipcRenderer.invoke`,
+ * and even `.message` picks up an Electron-added
+ * `"Error invoking remote method '...'"` prefix on the renderer side, so a
+ * thrown error cannot be a stable contract for branching UI behavior. This
+ * mirrors the existing `OpenProjectByFilePathResult` / `StartupProjectOpenResult`
+ * `{ kind: "failed"; reason; message }` shape used elsewhere in this file.
+ *
+ * `message` is a FIXED, generic string for every reason (never a sanitized
+ * error's own `.message`, which embeds the reason token itself, e.g.
+ * `"File I/O failed: unencodableCharacters"`) — it exists only for a
+ * human-readable status line. UI behavior (which dialog to show) must branch
+ * on `reason`, never on `message`.
+ */
+export type SaveProjectDocumentResult =
+  | { kind: "saved"; relativePath: string }
+  | { kind: "failed"; reason: DebugLogReason; message: string };
+
+/**
+ * #501 slice 7: register a project-root-relative-eligible absolute path
+ * (Recovery restore output, or a Session Restore continuation tab) as a
+ * first-class project document. See `PROJECT_CHANNELS.registerProjectDocumentPath`.
+ */
+export interface RegisterProjectDocumentPathRequest {
+  absolutePath: string;
+}
+
+export interface RegisterProjectDocumentPathResult {
+  /** The project-root-relative, forward-slash path, or `null` when
+   *  `absolutePath` is outside the project root or an unsupported
+   *  extension (no project document was registered). */
+  relativePath: string | null;
 }
 
 export type ProjectAccessMode =
@@ -1088,6 +1172,11 @@ export interface PergamumApi {
     deleteFileExplorerEntry: (
       request: DeleteFileExplorerEntryRequest
     ) => Promise<DeleteFileExplorerEntryResponse>;
+    /** #501 slice 8 blocker fix: re-discover the current project's documents
+     *  from disk (same walk as project open), reflecting the LIVE
+     *  `textFiles.enablePlainTextDocuments` value. `[]` when no project is
+     *  open. */
+    listProjectDocuments: () => Promise<ProjectDocument[]>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;
@@ -1129,6 +1218,13 @@ export interface PergamumApi {
       relativePath: string,
       content: string
     ) => Promise<SaveProjectDocumentResult>;
+    /** #501 slice 7: Session Restore continuation for a previously open
+     *  project document (Markdown or Plain Text) not currently in
+     *  `PergamumProject.documents` — e.g. a `.txt` tab restored while
+     *  `textFiles.enablePlainTextDocuments` is off. */
+    registerProjectDocumentPath: (
+      absolutePath: string
+    ) => Promise<RegisterProjectDocumentPathResult>;
     saveProjectSettings: (
       request: UpdateProjectSettingsRequest
     ) => Promise<ProjectSettings | undefined>;
@@ -1187,7 +1283,8 @@ export interface PergamumApi {
     evaluateStartupCandidates: () => Promise<RecoveryStartupPresentationResult>;
     /** #300: persist the currently visible previous-run candidate signature. */
     markCandidatesSeen: () => Promise<RecoveryMarkCandidatesSeenResult>;
-    /** Phase 6-4-4: write selected candidates to `.recovered.md`
+    /** Phase 6-4-4: write selected candidates to a fresh `.recovered`
+     *  sibling file each, same extension as the original document
      *  (atomic). Never deletes a Recovery row. */
     restoreCandidates: (
       request: RecoveryRestoreRequest

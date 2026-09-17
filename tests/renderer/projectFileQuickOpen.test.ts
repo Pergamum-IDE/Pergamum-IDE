@@ -24,17 +24,18 @@ describe("project file quick open candidates (#143)", () => {
     ).toEqual([]);
   });
 
-  it("includes Project .md and .markdown documents", () => {
+  it("includes Project .md, .markdown, and .txt documents", () => {
     const candidates = filterProjectFileQuickOpenCandidates({
       documents: [
         document("chapter-01.md"),
         document("appendix.markdown"),
-        document("notes.txt")
+        document("agenda.txt")
       ],
       query: "a"
     });
 
     expect(candidates.map((candidate) => candidate.document.relativePath)).toEqual([
+      "agenda.txt",
       "appendix.markdown"
     ]);
     expect(
@@ -43,6 +44,27 @@ describe("project file quick open candidates (#143)", () => {
         query: "chapter"
       }).map((candidate) => candidate.document.relativePath)
     ).toEqual(["chapter-01.md"]);
+  });
+
+  it("#501 slice 8: isProjectFileQuickOpenDocument accepts .txt like .md/.markdown", () => {
+    expect(isProjectFileQuickOpenDocument(document("notes.txt"))).toBe(true);
+    expect(isProjectFileQuickOpenDocument(document("chapter.md"))).toBe(true);
+    expect(isProjectFileQuickOpenDocument(document("chapter.markdown"))).toBe(
+      true
+    );
+    // #501 slice 8: this function itself is not settings-gated — it trusts
+    // the upstream `project.documents` list (already gated by
+    // `textFiles.enablePlainTextDocuments`) to decide WHETHER a .txt path is
+    // even offered here. It only recognizes supported extensions and
+    // excludes reserved/protected/internal paths.
+    expect(isProjectFileQuickOpenDocument(document("cover.png"))).toBe(false);
+    expect(isProjectFileQuickOpenDocument(document("notes.rtf"))).toBe(false);
+  });
+
+  it("#501 slice 8: a .txt Recovery-restored file still respects reserved/protected path exclusions", () => {
+    expect(
+      isProjectFileQuickOpenDocument(document(".pergamum_recovery/note.txt"))
+    ).toBe(false);
   });
 
   it("excludes reserved, protected, and internal Project paths", () => {

@@ -32,8 +32,8 @@ export interface AtomicWriteFileSystem {
   ): Promise<string | undefined>;
   writeFile(
     filePath: string,
-    data: string,
-    options: { encoding: "utf8"; flag: "wx" }
+    data: string | Uint8Array,
+    options: { encoding: "utf8"; flag: "wx" } | { flag: "wx" }
   ): Promise<void>;
   rename(sourcePath: string, targetPath: string): Promise<void>;
   rm(filePath: string, options: { force: true }): Promise<void>;
@@ -179,10 +179,15 @@ async function bestEffortSyncDirectory(
  * The final `rename` is retried a bounded number of times on a transient
  * Windows `EPERM` / `EBUSY` (concurrent rename onto the same target, or an
  * AV / indexer holding a handle) — see {@link renameWithRetry}.
+ *
+ * #501 slice 6: `data` also accepts raw bytes (`Uint8Array` / `Buffer`), for
+ * Plain Text documents saved in a non-UTF-8 encoding — the bytes are written
+ * verbatim, never routed through a UTF-8 string write that would corrupt
+ * them.
  */
 export async function writeFileAtomic(
   targetPath: string,
-  data: string,
+  data: string | Uint8Array,
   options: AtomicWriteOptions = {}
 ): Promise<void> {
   const fileSystem = options.fileSystem ?? defaultAtomicWriteFileSystem;
@@ -203,7 +208,13 @@ export async function writeFileAtomic(
     // `wx` — never clobber a leftover temp from another writer; the random
     // suffix makes a real collision astronomically unlikely, and if it does
     // happen we fail loudly rather than corrupt someone else's write.
-    await fileSystem.writeFile(tempPath, data, { encoding: "utf8", flag: "wx" });
+    // A string is written as UTF-8 text; raw bytes are written verbatim —
+    // never coerced through a string encoding step.
+    if (typeof data === "string") {
+      await fileSystem.writeFile(tempPath, data, { encoding: "utf8", flag: "wx" });
+    } else {
+      await fileSystem.writeFile(tempPath, data, { flag: "wx" });
+    }
 
     // Temp-file fsync: MUST succeed before we rename. A failure here throws
     // out to the catch below (temp removed, target untouched).

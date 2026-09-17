@@ -12,9 +12,18 @@ import {
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import { MarkdownEditor } from "../../src/renderer/MarkdownEditor";
+import {
+  lineEndMarkerClassName,
+  lineEndMarkerUnexpectedClassName
+} from "../../src/renderer/editorVisibility/lineEndMarkerFeature";
 import { activeFindGutterMarkerField } from "../../src/renderer/find/activeFindGutterMarkerExtension";
+import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
 import type { MarkdownEditorDocumentState } from "../../src/renderer/markdownEditorDocumentState";
 import { smartSelectionHighlightField } from "../../src/renderer/selectionHighlightExtension";
+import type {
+  ExpectedLineEnding,
+  LineEndingMarkerGlyph
+} from "../../src/shared/settings";
 
 /**
  * #387/#392: per-document EditorState so Undo/Redo history survives a
@@ -43,7 +52,7 @@ afterEach(() => {
 });
 
 interface Harness {
-  render: (props: { documentKey: string; value: string }) => void;
+  render: (props: HarnessRenderProps) => void;
   /** Tears down this MarkdownEditor instance WITHOUT creating a new one -
    *  models leaving to a non-Markdown tab. The shared `documentStates` Map
    *  is untouched (it is owned by the caller, not this component). */
@@ -52,21 +61,32 @@ interface Harness {
    *  genuinely different component instance, matching what React does when
    *  EditorSurface itself is unmounted/remounted) reusing the SAME
    *  `documentStates` Map - models returning to a Markdown tab. */
-  remount: (props: { documentKey: string; value: string }) => void;
+  remount: (props: HarnessRenderProps) => void;
   view: () => EditorView;
   documentStates: Map<string, MarkdownEditorDocumentState>;
 }
 
+interface HarnessRenderProps {
+  documentKey: string;
+  value: string;
+  initialLineEndingBreaks?: ReturnType<typeof analyzeLineEndings>;
+  expectedLineEnding?: ExpectedLineEnding;
+  markerGlyph?: LineEndingMarkerGlyph;
+}
+
 function mount(
-  initial: { documentKey: string; value: string },
+  initial: HarnessRenderProps,
   documentStates: Map<string, MarkdownEditorDocumentState> = new Map()
 ): Harness {
-  function renderProps(props: { documentKey: string; value: string }): void {
+  function renderProps(props: HarnessRenderProps): void {
     act(() => {
       root!.render(
         React.createElement(MarkdownEditor, {
           value: props.value,
           documentKey: props.documentKey,
+          initialLineEndingBreaks: props.initialLineEndingBreaks,
+          expectedLineEnding: props.expectedLineEnding,
+          markerGlyph: props.markerGlyph,
           documentStates,
           onChange: () => undefined
         })
@@ -97,7 +117,7 @@ function mount(
     container?.remove();
   }
 
-  function remount(props: { documentKey: string; value: string }): void {
+  function remount(props: HarnessRenderProps): void {
     freshRoot();
     renderProps(props);
   }
@@ -117,6 +137,17 @@ function typeChange(view: EditorView, from: number, to: number, insert: string):
       annotations: isolateHistory.of("full")
     });
   });
+}
+
+function markerText(): string[] {
+  return Array.from(
+    container!.querySelectorAll(`.${lineEndMarkerClassName}`)
+  ).map((element) => element.textContent ?? "");
+}
+
+function unexpectedMarkerCount(): number {
+  return container!.querySelectorAll(`.${lineEndMarkerUnexpectedClassName}`)
+    .length;
 }
 
 describe("MarkdownEditor per-tab undo history (#387)", () => {
@@ -284,6 +315,34 @@ describe("MarkdownEditor per-tab undo history (#387)", () => {
 });
 
 describe("MarkdownEditor EditorState cache survives unmount/remount (#392)", () => {
+  it("reconfigures line-ending markers after restoring a cached state from a new mount", () => {
+    const raw = "alpha\r\nbeta\r\ngamma";
+    const value = raw.replace(/\r\n|\r/g, "\n");
+    const initialLineEndingBreaks = analyzeLineEndings(raw);
+    const harness = mount({
+      documentKey: "doc:A",
+      value,
+      initialLineEndingBreaks,
+      expectedLineEnding: "lf",
+      markerGlyph: "⏎"
+    });
+
+    expect(markerText()).toEqual(["⏎", "⏎"]);
+    expect(unexpectedMarkerCount()).toBe(2);
+
+    harness.unmount();
+    harness.remount({
+      documentKey: "doc:A",
+      value,
+      initialLineEndingBreaks,
+      expectedLineEnding: "crlf",
+      markerGlyph: "↵"
+    });
+
+    expect(markerText()).toEqual(["↵", "↵"]);
+    expect(unexpectedMarkerCount()).toBe(0);
+  });
+
   it("preserves undo history across an actual unmount and remount of MarkdownEditor itself", () => {
     // Models: A.md open, edit it, navigate to Settings (MarkdownEditor
     // unmounts entirely), come back to A.md (a brand new MarkdownEditor

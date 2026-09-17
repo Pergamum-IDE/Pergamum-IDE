@@ -163,7 +163,7 @@ describe("Bulk text import dialog App wiring (#420 Step 5)", () => {
     expect(executeBlock).toContain('return { ok: false, reason: "noProject" }');
     // targetLineEnding still comes from the existing new-file setting
     expect(executeBlock).toContain(
-      "effectiveSettings.files.newFile.lineEnding"
+      "effectiveSettings.markdownFiles.lineEnding"
     );
     // #420 Step 8: normalization is driven by the dialog's toggle, not hardcoded
     expect(executeBlock).toContain(

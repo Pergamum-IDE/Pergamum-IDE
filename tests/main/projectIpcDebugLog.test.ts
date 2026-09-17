@@ -371,7 +371,7 @@ describe("project IPC debug logging", () => {
       PROJECT_CHANNELS.saveProjectDocument
     );
 
-    await expectSanitizedFileIoRejection(
+    await expectSanitizedFileIoSaveFailure(
       saveProjectDocument(
         { sender: {} },
         {
@@ -471,5 +471,35 @@ async function expectSanitizedFileIoRejection(
 
   for (const text of disallowedText) {
     expect(safeErrorSurface).not.toContain(text);
+  }
+}
+
+// #501 slice 6 remediation: saveProjectDocument RESOLVES a structured
+// `{ kind: "failed", reason, message }` for an expected file I/O failure
+// instead of throwing (see SaveProjectDocumentResult's doc comment in
+// shared/api.ts) — the save-path sibling of expectSanitizedFileIoRejection
+// above, which asserts against a rejection.
+//
+// #501 slice 6 remediation v3: `message` is a FIXED, generic string for
+// every reason (never `sanitizedFileIoError(...).message`, which embeds the
+// reason token) — asserted with `toEqual` here, not `toMatchObject`, so this
+// helper cannot silently accept a technical message creeping back in.
+async function expectSanitizedFileIoSaveFailure(
+  promise: Promise<unknown>,
+  reason: string,
+  disallowedText: readonly string[]
+): Promise<void> {
+  const result = await promise;
+
+  expect(result).toEqual({
+    kind: "failed",
+    reason,
+    message: "Project document save failed."
+  });
+
+  const safeResultSurface = JSON.stringify(result);
+
+  for (const text of disallowedText) {
+    expect(safeResultSurface).not.toContain(text);
   }
 }

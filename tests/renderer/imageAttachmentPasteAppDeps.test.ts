@@ -148,7 +148,8 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
     });
     const cachedDocA: MarkdownEditorDocumentState = {
       state: withMarkerTr.state,
-      lineEndingField: initialDocAState.lineEndingField
+      lineEndingField: initialDocAState.lineEndingField,
+      visibilityCompartment: initialDocAState.visibilityCompartment
     };
 
     const cachedDocumentStates = new Map<string, MarkdownEditorDocumentState>([
@@ -294,7 +295,8 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
     });
     const cachedDocA: MarkdownEditorDocumentState = {
       state: withMarkerTr.state,
-      lineEndingField: initialDocAState.lineEndingField
+      lineEndingField: initialDocAState.lineEndingField,
+      visibilityCompartment: initialDocAState.visibilityCompartment
     };
 
     const cachedDocumentStates = new Map<string, MarkdownEditorDocumentState>([
@@ -443,7 +445,8 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
     });
     const cachedDocA: MarkdownEditorDocumentState = {
       state: delTr.state,
-      lineEndingField: initialDocAState.lineEndingField
+      lineEndingField: initialDocAState.lineEndingField,
+      visibilityCompartment: initialDocAState.visibilityCompartment
     };
 
     const cachedDocumentStates = new Map<string, MarkdownEditorDocumentState>([

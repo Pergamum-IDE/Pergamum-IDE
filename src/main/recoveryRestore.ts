@@ -1,6 +1,7 @@
 /**
  * Phase 6-4-4: writing a Recovery candidate's stored body out to a NEW
- * `.recovered[-N].md` file.
+ * `.recovered[-N]<ext>` file — `<ext>` is whatever extension the original
+ * document had (`.md`, `.markdown`, `.txt`, ...); see {@link resolveRecoveredPath}.
  *
  * Contract (two-phase restore):
  *   - this module ONLY writes files. It NEVER deletes a Recovery row — the
@@ -12,9 +13,16 @@
  *   - the write is atomic (temp → fsync → rename),
  *   - `payload_text` is written verbatim: #286 already stored it with the
  *     document's reconstructed line endings, BOM-less UTF-8. Line endings
- *     and encoding are therefore preserved as far as this phase can.
- *     A UTF-8 BOM is NOT restorable in this phase (never captured, and the
- *     write pipeline never emits one).
+ *     are therefore preserved as far as this phase can. A UTF-8 BOM is NOT
+ *     restorable in this phase (never captured, and the write pipeline
+ *     never emits one).
+ *   - #501 slice 7: this write is ALWAYS BOM-less UTF-8 regardless of the
+ *     original document's kind (Markdown or Plain Text) or its
+ *     `textFiles.encoding` — Recovery has its own fixed encoding contract,
+ *     independent of that per-project-document setting. The renderer's
+ *     restore-then-open flow reads the just-written file back the same way
+ *     (UTF-8), never through the `textFiles.encoding`-aware project-document
+ *     read path, so there is no encoding mismatch.
  */
 
 import { promises as nodeFs } from "node:fs";

@@ -155,6 +155,8 @@ const pergamumApi: PergamumApi = {
       ),
     deleteFileExplorerEntry: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.deleteFileExplorerEntry, request),
+    listProjectDocuments: () =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.listProjectDocuments),
     readProjectDocument: (relativePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
         relativePath
@@ -181,6 +183,10 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectDocument, {
         relativePath,
         content
+      }),
+    registerProjectDocumentPath: (absolutePath) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.registerProjectDocumentPath, {
+        absolutePath
       }),
     saveProjectSettings: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectSettings, request),

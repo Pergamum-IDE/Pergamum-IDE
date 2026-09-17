@@ -144,6 +144,35 @@ describe("recoveryDocumentPayload — identity", () => {
     });
   });
 
+  it("#501 slice 7: a Plain Text (.txt) project document builds a Recovery payload the same as Markdown", () => {
+    const doc = createProjectDocument(
+      { relativePath: "notes.txt", name: "notes.txt" },
+      "plain text body",
+      {
+        encoding: "utf8",
+        lineEnding: "lf",
+        byteLength: 16,
+        characterLength: 16,
+        hadBom: false
+      }
+    );
+    const payload = buildRecoveryDocumentPayload(
+      doc,
+      recoveryBuildContext({ project, activeProjectContext: projectContext })
+    )!;
+
+    expect(payload).toMatchObject({
+      documentKey: "file:C:/Proj/root/notes.txt",
+      // #501 slice 7: Recovery does not distinguish Plain Text from Markdown
+      // at the storage-type level — both are "a file-backed project
+      // document" for Recovery purposes (see recoveryDocument.ts).
+      documentType: "markdown.file",
+      filePath: "C:/Proj/root/notes.txt",
+      projectFilePath: "C:/Proj/root/Proj.pergamum",
+      payloadText: "plain text body"
+    });
+  });
+
   it("maps a BOM'd source to utf-8-bom and mixed/none line endings to unknown", () => {
     const doc = createFileDocument({
       path: "C:/x.md",
@@ -252,6 +281,44 @@ describe("buildRecoveryDirtyDocuments", () => {
     });
     expect(dirty.map((d) => d.documentKey)).toEqual(["file:C:/dirty.md"]);
     expect(dirty[0].payload.payloadText).toBe("edited");
+  });
+
+  it("#501 slice 7: includes a dirty Plain Text (.txt) project document — not Markdown-only", () => {
+    let state = createInitialOpenDocumentsState();
+    const clean = createProjectDocument(
+      { relativePath: "clean.txt", name: "clean.txt" },
+      "clean body"
+    );
+    const dirtyTxt = withContent(
+      createProjectDocument(
+        { relativePath: "notes.txt", name: "notes.txt" },
+        "orig body"
+      ),
+      "edited body"
+    );
+
+    state = openOrActivateEditor(
+      state,
+      createMarkdownCurrentEditor(clean),
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createMarkdownCurrentEditor(dirtyTxt),
+      projectContext
+    );
+
+    const dirty = buildRecoveryDirtyDocuments(state, {
+      project,
+      activeProjectContext: projectContext,
+      normalizeUnicodeToNfc: true
+    });
+
+    expect(dirty.map((d) => d.documentKey)).toEqual([
+      "file:C:/Proj/root/notes.txt"
+    ]);
+    expect(dirty[0].payload.payloadText).toBe("edited body");
+    expect(dirty[0].payload.filePath).toBe("C:/Proj/root/notes.txt");
   });
 
   it("passes Unicode normalization settings through to dirty Markdown payloads", () => {

@@ -25,6 +25,7 @@ import type { Translate } from "../shared/i18n";
 import {
   currentDocumentContent,
   currentProjectRelativePath,
+  isMarkdownCurrentDocument,
   type CurrentDocument
 } from "./currentDocument";
 import type { CurrentEditor } from "./currentEditor";
@@ -406,7 +407,7 @@ interface EditorSurfaceProps {
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
   /**
-   * `files.newFile.lineEnding` (#253) — the fallback kind for a brand new
+   * `markdownFiles.lineEnding` / `textFiles.lineEnding` (#253/#501) — the fallback kind for a brand new
    * line break created in a document with no existing tracked breaks at
    * all. Never used to decide an *existing* break's kind or as a save-time
    * conversion target.
@@ -911,14 +912,15 @@ function MarkdownEditorSurface({
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
   const previewRenderDurationMs = previewRender.durationMs;
+  const isMarkdown = isMarkdownCurrentDocument(document);
   // #411 / #412: broken-image-link diagnostics use the SAME resolution
   // context as the Preview (`sourceFile` for a project document), but are
-  // disabled (`none`) for a read-only document.
+  // disabled (`none`) for a read-only document or non-Markdown (.txt) document.
   const imageLinkDiagnosticsResolutionContext = useMemo<
     ProjectLocalImageResolutionContext
   >(
-    () => (readOnly ? { kind: "none" } : previewImageResolution),
-    [readOnly, previewImageResolution]
+    () => (readOnly || !isMarkdown ? { kind: "none" } : previewImageResolution),
+    [readOnly, isMarkdown, previewImageResolution]
   );
   const formatImageLinkDiagnosticMessage = useCallback(
     (reason: MarkdownImageLinkDiagnosticReason, src: string) =>
@@ -1831,7 +1833,7 @@ function MarkdownEditorSurface({
       aria-label={translate("workspace.markdownWorkspace")}
       ref={workspaceRef}
       style={
-        isNarrow
+        isNarrow || !isMarkdown
           ? undefined
           : {
               gridTemplateColumns: `minmax(0, ${ratio}fr) 6px minmax(0, ${1 - ratio}fr)`
@@ -1940,7 +1942,7 @@ function MarkdownEditorSurface({
         />
       </section>
 
-      {!isNarrow ? (
+      {!isNarrow && isMarkdown ? (
         <div
           className="markdownWorkspaceResizeHandle"
           role="separator"
@@ -1953,24 +1955,26 @@ function MarkdownEditorSurface({
         />
       ) : null}
 
-      <section
-        className="pane"
-        aria-label={translate("workspace.markdownPreview")}
-        ref={previewPaneRef}
-      >
-        <div className="paneHeader">
-          {translate("workspace.preview")}
-        </div>
-        <GlossaryPreviewDecorator
-          previewHtml={previewHtml}
-          surfaceIndex={surfaceIndex}
-          documentOpenId={documentOpenId}
-          previewRenderStartedAt={previewRenderStartedAt}
-          onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}
-          onPreviewDecorationCompleted={onDocumentOpenPreviewDecorationCompleted}
-          onPreviewFrameObserved={onDocumentOpenPreviewFrameObserved}
-        />
-      </section>
+      {isMarkdown ? (
+        <section
+          className="pane"
+          aria-label={translate("workspace.markdownPreview")}
+          ref={previewPaneRef}
+        >
+          <div className="paneHeader">
+            {translate("workspace.preview")}
+          </div>
+          <GlossaryPreviewDecorator
+            previewHtml={previewHtml}
+            surfaceIndex={surfaceIndex}
+            documentOpenId={documentOpenId}
+            previewRenderStartedAt={previewRenderStartedAt}
+            onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}
+            onPreviewDecorationCompleted={onDocumentOpenPreviewDecorationCompleted}
+            onPreviewFrameObserved={onDocumentOpenPreviewFrameObserved}
+          />
+        </section>
+      ) : null}
     </section>
   );
 }

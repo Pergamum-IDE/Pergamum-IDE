@@ -23,6 +23,7 @@ import {
   type FileExplorerUnavailableReason,
   type ListFileExplorerChildrenRequest,
   type ListFileExplorerChildrenResult,
+  type MarkdownLineEnding,
   type OpenProjectByFilePathRequest,
   type OpenProjectByFilePathResult,
   type OpenRecentProjectRequest,
@@ -55,6 +56,8 @@ import {
   type RenameFileExplorerEntryResult,
   type PreflightRenameFileExplorerEntryResult,
   type SaveProjectDocumentRequest,
+  type RegisterProjectDocumentPathRequest,
+  type RegisterProjectDocumentPathResult,
   type SaveProjectDocumentResult,
   type StartupProjectOpenResult,
   type UpdateProjectNameRequest,
@@ -114,6 +117,10 @@ import {
   type FileExplorerRenameFailureReason
 } from "../shared/fileExplorerRename";
 import type { AppPlatform } from "../shared/platform";
+import {
+  getProjectDocumentKind,
+  isProjectDocumentPath
+} from "../shared/projectDocumentKind";
 import { firstNonEmptyMarkdownPreviewLine } from "../shared/markdownPreviewLine";
 import {
   isPathEqualOrInsideDirectory,
@@ -131,10 +138,14 @@ import {
 } from "./debugLogSanitizer";
 import {
   decodeMarkdownBytes,
+  detectMarkdownLineEnding,
   markdownWriteMetadata,
   sanitizedFileIoError,
   type SanitizedFileIoError
 } from "./markdownFileIo";
+import { decodeTextFileBytes, encodeTextFileContent } from "./textFileIo";
+import type { ApplicationSettings } from "../shared/settings";
+import type { TextFileEncoding } from "../shared/textFileEncoding";
 import {
   dryRunTextImport,
   executeTextImport,
@@ -1246,6 +1257,18 @@ function parseSaveProjectDocumentRequest(
   };
 }
 
+function parseRegisterProjectDocumentPathRequest(
+  value: unknown
+): RegisterProjectDocumentPathRequest {
+  if (!isRequestObject(value) || typeof value.absolutePath !== "string") {
+    throw new Error("Invalid register project document path request.");
+  }
+
+  return {
+    absolutePath: value.absolutePath
+  };
+}
+
 function parseDryRunTextImportRequest(
   value: unknown
 ): DryRunTextImportRequest {
@@ -1752,7 +1775,25 @@ function isRenamableProjectFilePath(relativePath: string): boolean {
   );
 }
 
-function normalizedProjectMarkdownDocumentRelativePath(
+/**
+ * #501 slice 7: extensions a Recovery restore (or Session Restore
+ * continuation) may register as a project document — Markdown AND Plain
+ * Text. Deliberately NOT gated by `textFiles.enablePlainTextDocuments`: a
+ * disabled Plain Text setting hides `.txt` from File Explorer and blocks a
+ * *new* open, but it must never cause a `.txt` Recovery snapshot to be
+ * treated as "outside the project" (data-protection continuity, not a new
+ * document open — the same "already-open .txt stays usable" principle
+ * Slice 5 established for save-after-disable).
+ */
+function isRecoverableProjectDocumentPath(relativePath: string): boolean {
+  const extension = path.extname(relativePath).toLowerCase();
+
+  return (
+    extension === ".md" || extension === ".markdown" || extension === ".txt"
+  );
+}
+
+function normalizedRecoverableProjectDocumentRelativePath(
   rootPath: string,
   absolutePath: string
 ): string | null {
@@ -1766,7 +1807,7 @@ function normalizedProjectMarkdownDocumentRelativePath(
     return null;
   }
 
-  if (!isProjectMarkdownDocumentPath(relativePath)) {
+  if (!isRecoverableProjectDocumentPath(relativePath)) {
     return null;
   }
 
@@ -1777,7 +1818,7 @@ function registerProjectDocumentPath(
   projectState: CurrentProjectState,
   absolutePath: string
 ): string | null {
-  const normalized = normalizedProjectMarkdownDocumentRelativePath(
+  const normalized = normalizedRecoverableProjectDocumentRelativePath(
     projectState.rootPath,
     absolutePath
   );
@@ -1833,6 +1874,11 @@ async function listFileExplorerChildren(
     });
     const visibleEntries: FileExplorerEntry[] = [];
 
+    const settings = await loadSettings();
+    const documentOptions = {
+      enablePlainTextDocuments: settings.textFiles.enablePlainTextDocuments ?? false
+    };
+
     for (const entry of entries) {
       if (entry.isSymbolicLink()) {
         continue;
@@ -1858,7 +1904,7 @@ async function listFileExplorerChildren(
         path.relative(resolved.rootPath, entryPath)
       );
 
-      if (entry.isFile() && isProjectMarkdownDocumentPath(relativePath)) {
+      if (entry.isFile() && isProjectDocumentPath(relativePath, documentOptions)) {
         resolved.projectState.documentRelativePaths.add(relativePath);
       }
 
@@ -3014,17 +3060,19 @@ function isRecoveryRelatedProjectDocumentPath(relativePath: string): boolean {
  * for a project-local Markdown document — its first non-empty line, trimmed.
  *
  * Safety: the caller-supplied `relativePath` must resolve, through the same
- * project-document-open helper used by `readProjectDocument`
- * ({@link resolveProjectDocumentPath}), to a REGISTERED project-local document
- * inside the active project root — which already rejects path traversal and a
- * non-registered path. On top of that this only ever previews a `.md` /
- * `.markdown` file (never a folder, the `.pergamum` project file, a
- * protected / internal Pergamum data file, a reserved File Explorer segment,
- * or a Recovery-related path), rejects a symlink / Windows junction / reparse
- * point at the final target OR at ANY ancestor directory between the project
- * root and the document's parent, and swallows every read failure — a raw I/O
- * error must never reach the renderer. All of those cases resolve to `null`
- * ("show no preview").
+ * #372 / #501 slice 10: request for the Command Palette file quick open footer
+ * detail preview line.
+ *
+ * #501 slice 10: supports Plain Text (`.txt`) when Plain Text document support
+ * is enabled (`textFiles.enablePlainTextDocuments === true`). `.txt` reads
+ * using `textFiles.encoding`. Markdown (`.md` / `.markdown`) reads as UTF-8
+ * unchanged. Rejects non-project document paths, protected / reserved paths
+ * (including `.recovered.md` / `.recovered.txt` artifacts, or any Recovery-
+ * related path), rejects a symlink / Windows junction / reparse point at the
+ * final target OR at ANY ancestor directory between the project root and the
+ * document's parent, and swallows every read failure — a raw I/O error must
+ * never reach the renderer. All of those cases resolve to `null` ("show no
+ * preview").
  */
 async function readProjectDocumentPreviewLine(
   rawRequest: unknown
@@ -3038,9 +3086,23 @@ async function readProjectDocumentPreviewLine(
   }
 
   const normalized = relativePath.replace(/\\/g, "/");
+  const lower = normalized.toLowerCase();
+
+  let settings: ApplicationSettings | null = null;
+  if (lower.endsWith(".txt")) {
+    try {
+      settings = await loadSettings();
+    } catch {
+      return null;
+    }
+  }
+
+  const kind = getProjectDocumentKind(normalized, {
+    enablePlainTextDocuments: settings?.textFiles.enablePlainTextDocuments ?? false
+  });
 
   if (
-    !isProjectMarkdownDocumentPath(normalized) ||
+    kind === null ||
     pathHasReservedFileExplorerSegment(normalized) ||
     normalized
       .split("/")
@@ -3092,25 +3154,32 @@ async function readProjectDocumentPreviewLine(
     }
 
     const bytes = await fs.readFile(documentPath);
-    const decoded = decodeMarkdownBytes(bytes);
+    const content =
+      kind === "markdown"
+        ? decodeMarkdownBytes(bytes).content
+        : decodeTextFileBytes(bytes, settings?.textFiles.encoding ?? "utf8").content;
 
-    return firstNonEmptyMarkdownPreviewLine(decoded.content);
+    return firstNonEmptyMarkdownPreviewLine(content);
   } catch {
     return null;
   }
 }
 
 /**
- * #287 follow-up: make a Markdown file that was created inside the current
- * project's root AFTER the project was opened (for example a `.recovered.md`
- * file written next to its origin document) a first-class project document,
- * so it can be read and saved through the project document IPC without
- * reopening the project.
+ * #287 follow-up / #501 slice 7: make a document file (Markdown or, since
+ * Slice 7, Plain Text `.txt`) that was created inside the current project's
+ * root AFTER the project was opened — for example a `.recovered<ext>` file a
+ * Recovery restore wrote next to its origin document — a first-class project
+ * document, so it can be read and saved through the project document IPC
+ * without reopening the project. This registration is intentionally NOT
+ * gated by `textFiles.enablePlainTextDocuments`: it exists for restore /
+ * continuity, not for a brand-new document open (see
+ * `isRecoverableProjectDocumentPath`).
  *
  * Returns the project-root-relative path — forward-slash separated, the same
- * form `discoverMarkdownFiles` produces — when `absolutePath` is a Markdown
- * file inside the open project root; otherwise `null` (no project open, path
- * outside the root, or not a supported Markdown file). Idempotent.
+ * form `discoverMarkdownFiles` produces — when `absolutePath` is a supported
+ * document file inside the open project root; otherwise `null` (no project
+ * open, path outside the root, or an unsupported extension). Idempotent.
  */
 export function registerCurrentProjectDocumentPath(
   absolutePath: string
@@ -3125,6 +3194,10 @@ export function registerCurrentProjectDocumentPath(
 async function discoverMarkdownFiles(
   rootPath: string
 ): Promise<ProjectDocument[]> {
+  const settings = await loadSettings();
+  const documentOptions = {
+    enablePlainTextDocuments: settings.textFiles.enablePlainTextDocuments ?? false
+  };
   const documents: ProjectDocument[] = [];
 
   async function walk(directoryPath: string): Promise<void> {
@@ -3140,12 +3213,13 @@ async function discoverMarkdownFiles(
         continue;
       }
 
-      if (!entry.isFile() || !isProjectMarkdownDocumentPath(entry.name)) {
+      const relativePath = normalizeRelativePath(path.relative(rootPath, entryPath));
+      if (!entry.isFile() || !isProjectDocumentPath(relativePath, documentOptions)) {
         continue;
       }
 
       documents.push({
-        relativePath: normalizeRelativePath(path.relative(rootPath, entryPath)),
+        relativePath,
         name: entry.name
       });
     }
@@ -4212,6 +4286,14 @@ export async function openProjectByFilePath(
   }
 }
 
+// #501 slice 6 remediation: `SaveProjectDocumentResult`'s `{ kind: "failed" }`
+// `message` is this fixed, generic string for EVERY reason — never
+// `sanitizedFileIoError(...).message` (which embeds the reason token, e.g.
+// "File I/O failed: unencodableCharacters") and never document text. The
+// renderer must branch UI behavior on `reason` alone; `message` exists only
+// for a human-readable status line.
+const PROJECT_DOCUMENT_SAVE_FAILED_MESSAGE = "Project document save failed.";
+
 export function registerProjectIpc(
   logger: DebugLogger = getDebugLogger(),
   writeOwnershipManager: ProjectWriteOwnershipManager =
@@ -4661,6 +4743,34 @@ export function registerProjectIpc(
     }
   );
 
+  // #501 slice 8 blocker fix: re-run the SAME full document walk used at
+  // project open, reflecting the LIVE `textFiles.enablePlainTextDocuments`
+  // value — the renderer calls this after that setting changes so `.txt`
+  // can appear/disappear from Quick Open / Command Palette / Project-wide
+  // Search without a project reopen (`project.documents` is otherwise only
+  // set once at open and patched by specific file operations). Every
+  // discovered path is added to `documentRelativePaths` (never removed —
+  // an already-open `.txt` document must stay saveable regardless of the
+  // current setting, per Slice 5 / Slice 7).
+  ipcMain.handle(
+    PROJECT_CHANNELS.listProjectDocuments,
+    async (): Promise<ProjectDocument[]> => {
+      if (!currentProjectState) {
+        return [];
+      }
+
+      const documents = await discoverMarkdownFiles(
+        currentProjectState.rootPath
+      );
+
+      for (const document of documents) {
+        currentProjectState.documentRelativePaths.add(document.relativePath);
+      }
+
+      return documents;
+    }
+  );
+
   ipcMain.handle(
     PROJECT_CHANNELS.readProjectDocument,
     async (
@@ -4674,7 +4784,36 @@ export function registerProjectIpc(
         request = parseReadProjectDocumentRequest(rawRequest);
         const documentPath = resolveProjectDocumentPath(request.relativePath);
         const bytes = await fs.readFile(documentPath);
-        const decoded = decodeMarkdownBytes(bytes);
+        // #501 slice 6: Markdown always reads as UTF-8 (unchanged); Plain
+        // Text (`.txt`) reads using the effective `textFiles.encoding` — no
+        // auto-detection, the selected setting is the source of truth. A
+        // decode failure (bytes that are invalid for the selected encoding)
+        // throws `PergamumTextFileEncodingError`, caught below and reported
+        // through the existing read-failure path.
+        let decoded: {
+          content: string;
+          encoding: TextFileEncoding;
+          lineEnding: MarkdownLineEnding;
+          byteLength: number;
+          characterLength: number;
+          hadBom: boolean;
+        };
+
+        if (isProjectMarkdownDocumentPath(request.relativePath)) {
+          decoded = decodeMarkdownBytes(bytes);
+        } else {
+          const settings = await loadSettings();
+          const encoding = settings.textFiles.encoding;
+          const textDecoded = decodeTextFileBytes(bytes, encoding);
+          decoded = {
+            content: textDecoded.content,
+            encoding,
+            lineEnding: detectMarkdownLineEnding(textDecoded.content),
+            byteLength: bytes.byteLength,
+            characterLength: textDecoded.content.length,
+            hadBom: textDecoded.hadBom
+          };
+        }
         const rootPath = requireCurrentProjectRootPath();
         const documentRef = logger.documentRefForKey(
           projectDocumentRefKey(rootPath, request.relativePath)
@@ -4768,13 +4907,43 @@ export function registerProjectIpc(
         assertCurrentProjectDocumentSaveAllowed();
         const documentPath = resolveProjectDocumentPath(request.relativePath);
         assertProjectDocumentSaveTargetAllowed(documentPath);
-        const metadata = markdownWriteMetadata(request.content);
+        // #501 slice 6: Markdown always saves as BOM-less UTF-8 (unchanged);
+        // Plain Text (`.txt`) saves using the effective `textFiles.encoding`.
+        // `encodeTextFileContent` throws `PergamumTextFileEncodingError`
+        // ("unencodableCharacters") when the selected legacy encoding cannot
+        // represent the content — that throw is caught below and reported
+        // through the existing save-failure path, so the write below never
+        // runs and the previous on-disk content is left untouched.
+        let writePayload: string | Uint8Array;
+        let metadata: {
+          encoding: TextFileEncoding;
+          lineEnding: MarkdownLineEnding;
+          byteLength: number;
+          characterLength: number;
+        };
+
+        if (isProjectMarkdownDocumentPath(request.relativePath)) {
+          writePayload = request.content;
+          metadata = markdownWriteMetadata(request.content);
+        } else {
+          const settings = await loadSettings();
+          const encoding = settings.textFiles.encoding;
+          const encoded = encodeTextFileContent(request.content, encoding);
+          writePayload = encoded.bytes;
+          metadata = {
+            encoding,
+            lineEnding: detectMarkdownLineEnding(request.content),
+            byteLength: encoded.bytes.byteLength,
+            characterLength: request.content.length
+          };
+        }
+
         // Crash-safe manuscript write (temp sibling file → fsync → atomic
         // rename). An interrupted save cannot leave the previous good
         // document truncated / half-written; "saved" means the atomic
         // replace completed. Any failure throws here and is reported as a
         // non-cleaning file I/O error below (dirty state is preserved).
-        await writeFileAtomic(documentPath, request.content);
+        await writeFileAtomic(documentPath, writePayload);
         const rootPath = requireCurrentProjectRootPath();
         const documentRef = logger.documentRefForKey(
           projectDocumentRefKey(rootPath, request.relativePath)
@@ -4805,6 +4974,7 @@ export function registerProjectIpc(
         });
 
         return {
+          kind: "saved",
           relativePath: request.relativePath
         };
       } catch (error) {
@@ -4857,8 +5027,46 @@ export function registerProjectIpc(
           }
         });
 
-        throw safeError;
+        // #501 slice 6 remediation: an expected file I/O failure is
+        // RETURNED with its `reason`, never thrown — see
+        // `SaveProjectDocumentResult`'s doc comment in shared/api.ts.
+        // `message` is a fixed, generic string — NOT `safeError.message` —
+        // so it can never carry a technical reason token (e.g.
+        // "unencodableCharacters"), a sanitized-error class name, or any
+        // other internal detail. `reason` alone is the machine-readable
+        // channel; the renderer must branch on it, never on `message`.
+        return {
+          kind: "failed",
+          reason: safeError.reason,
+          message: PROJECT_DOCUMENT_SAVE_FAILED_MESSAGE
+        };
       }
+    }
+  );
+
+  // #501 slice 7: renderer-callable sibling of `registerCurrentProjectDocumentPath`
+  // (used internally by Recovery restore) — Session Restore continuation for
+  // a previously open project document not currently in
+  // `PergamumProject.documents` (e.g. a `.txt` tab restored while
+  // `textFiles.enablePlainTextDocuments` is off). Deliberately returns
+  // `{ relativePath: null }` rather than throwing for an out-of-root /
+  // unsupported-extension path — this is an ordinary "not applicable"
+  // outcome, not a failure.
+  ipcMain.handle(
+    PROJECT_CHANNELS.registerProjectDocumentPath,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<RegisterProjectDocumentPathResult> => {
+      let request: RegisterProjectDocumentPathRequest;
+
+      try {
+        request = parseRegisterProjectDocumentPathRequest(rawRequest);
+      } catch {
+        return { relativePath: null };
+      }
+
+      return { relativePath: registerCurrentProjectDocumentPath(request.absolutePath) };
     }
   );
 }

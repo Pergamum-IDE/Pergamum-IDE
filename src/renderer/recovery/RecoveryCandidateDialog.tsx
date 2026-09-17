@@ -39,8 +39,9 @@ export interface RecoveryCandidateDialogProps {
   opener: Element | null;
   trapFocus?: boolean;
   onClose: () => void;
-  /** Restore the given rows: parent writes `.recovered.md`, opens each,
-   *  then finalizes (deletes) the rows it opened. */
+  /** Restore the given rows: parent writes a `.recovered` sibling (same
+   *  extension as the original document) for each, opens each, then
+   *  finalizes (deletes) the rows it opened. */
   onRestoreSelected: (recoveryIds: readonly string[]) => Promise<void>;
   /** Discard selected rows after parent-side destructive confirmation. */
   onDiscardSelected: (recoveryIds: readonly string[]) => Promise<void>;

@@ -127,7 +127,7 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(previewBlock).not.toContain("--pergamum-editor-font-family-list");
   });
 
-  it("SettingsPanel no longer gates files.newFile.* behind the legacy Advanced Settings toggle (#232)", () => {
+  it("SettingsPanel no longer gates markdownFiles.* behind the legacy Advanced Settings toggle (#232)", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
@@ -138,8 +138,9 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
       "workbench.advancedSettings.enabled"
     );
     expect(settingsPanelSource).not.toContain("onConfirmEnableAdvancedSettings");
-    expect(settingsPanelSource).toContain('"files.newFile.lineEnding"');
-    expect(settingsPanelSource).toContain('"files.newFile.encoding"');
+    expect(settingsPanelSource).toContain('"markdownFiles.lineEnding"');
+    expect(settingsPanelSource).toContain('"markdownFiles.encoding"');
+    expect(settingsPanelSource).toContain('"textFiles.encoding"');
   });
 
   it("SettingsPanel keeps Command Palette footer detail controls directly editable, with unit suffixes for the marquee number controls, and no advanced gate (#232: catalog-driven)", () => {

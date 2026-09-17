@@ -15,6 +15,11 @@ import {
 import type { DebugLogger } from "../../src/main/debugLogger";
 import { projectConfigFileName } from "../../src/main/projectConfigStore";
 import {
+  decodeTextFileBytes,
+  encodeTextFileContent
+} from "../../src/main/textFileIo";
+import { TEXT_FILE_ENCODINGS } from "../../src/shared/textFileEncoding";
+import {
   createProjectDatabase,
   currentProjectDatabaseSchemaVersion,
   openProjectDatabase,
@@ -1222,7 +1227,7 @@ describe("project file IPC foundation", () => {
     const relativePath = "chapter.md";
     const content = "SECRET_MANUSCRIPT_TEXT_MARKER";
 
-    await expectSanitizedProjectRejection(
+    await expectSanitizedProjectSaveFailure(
       saveProjectDocumentHandler(
         { sender: {} },
         {
@@ -1268,7 +1273,7 @@ describe("project file IPC foundation", () => {
         { sender: {} },
         { relativePath: "chapter.md", content }
       )
-    ).resolves.toEqual({ relativePath: "chapter.md" });
+    ).resolves.toEqual({ kind: "saved", relativePath: "chapter.md" });
 
     // Byte-exact round trip: the previous good file is fully swapped, not
     // appended to, and line endings are untouched.
@@ -1322,10 +1327,10 @@ describe("project file IPC foundation", () => {
         path.join(os.tmpdir(), "outside.recovered.md")
       )
     ).toBeNull();
-    // A non-Markdown path is rejected.
+    // An unsupported extension is rejected.
     expect(
       registerCurrentProjectDocumentPath(
-        path.join(projectRootPath, "notes.txt")
+        path.join(projectRootPath, "notes.rtf")
       )
     ).toBeNull();
 
@@ -1346,7 +1351,7 @@ describe("project file IPC foundation", () => {
         { sender: {} },
         { relativePath: "chapter.recovered.md", content: "# Chapter\nedited\n" }
       )
-    ).resolves.toEqual({ relativePath: "chapter.recovered.md" });
+    ).resolves.toEqual({ kind: "saved", relativePath: "chapter.recovered.md" });
     expect(readFileSync(recoveredAbsolute, "utf8")).toBe("# Chapter\nedited\n");
 
     // Idempotent.
@@ -1365,6 +1370,231 @@ describe("project file IPC foundation", () => {
       relativePath: "appendix.markdown",
       content: "# Appendix\nbody\n"
     });
+  });
+
+  it("#501 slice 7: registerCurrentProjectDocumentPath registers a recovered .txt file even when Plain Text support is disabled", async () => {
+    // Plain Text support OFF for the whole test: registration for Recovery
+    // continuity must not depend on it (only a brand-new File Explorer open
+    // does) — see isRecoverableProjectDocumentPath's doc comment.
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Recovered Txt Registration.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Recovered Txt Registration"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+    const saveHandler = registeredHandler(PROJECT_CHANNELS.saveProjectDocument);
+
+    // Mirrors what a Recovery restore writes: a `.recovered.txt` sibling
+    // created directly on disk, after the project was already open.
+    const recoveredAbsolute = path.join(
+      projectRootPath,
+      "notes.recovered.txt"
+    );
+    await fs.writeFile(recoveredAbsolute, "recovered body\n", "utf8");
+
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.recovered.txt" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+
+    expect(registerCurrentProjectDocumentPath(recoveredAbsolute)).toBe(
+      "notes.recovered.txt"
+    );
+
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.recovered.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.recovered.txt",
+      content: "recovered body\n"
+    });
+
+    await expect(
+      saveHandler(
+        { sender: {} },
+        { relativePath: "notes.recovered.txt", content: "recovered edited\n" }
+      )
+    ).resolves.toEqual({
+      kind: "saved",
+      relativePath: "notes.recovered.txt"
+    });
+    expect(readFileSync(recoveredAbsolute, "utf8")).toBe("recovered edited\n");
+  });
+
+  it("#501 slice 7: registerProjectDocumentPath IPC channel registers a Session Restore continuation .txt tab", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Register Channel.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Register Channel"
+    });
+    await created.close();
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      "session body\n",
+      "utf8"
+    );
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const registerHandler = registeredHandler(
+      PROJECT_CHANNELS.registerProjectDocumentPath
+    );
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+
+    // Outside the project root: not applicable, not an error.
+    await expect(
+      registerHandler(
+        { sender: {} },
+        { absolutePath: path.join(os.tmpdir(), "outside.txt") }
+      )
+    ).resolves.toEqual({ relativePath: null });
+
+    // Unsupported extension: not applicable, not an error.
+    await fs.writeFile(
+      path.join(projectRootPath, "cover.png"),
+      Buffer.from([0]),
+      "binary"
+    );
+    await expect(
+      registerHandler(
+        { sender: {} },
+        { absolutePath: path.join(projectRootPath, "cover.png") }
+      )
+    ).resolves.toEqual({ relativePath: null });
+
+    // A .txt file inside the project root registers even though Plain Text
+    // support is currently off — this channel exists for continuation, not
+    // a new open.
+    await expect(
+      registerHandler(
+        { sender: {} },
+        { absolutePath: path.join(projectRootPath, "notes.txt") }
+      )
+    ).resolves.toEqual({ relativePath: "notes.txt" });
+
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.txt",
+      content: "session body\n"
+    });
+
+    // Malformed request: not applicable, not an error.
+    await expect(
+      registerHandler({ sender: {} }, { absolutePath: 42 })
+    ).resolves.toEqual({ relativePath: null });
+  });
+
+  it("#501 slice 8 blocker fix: listProjectDocuments re-discovers .txt after textFiles.enablePlainTextDocuments changes, without a project reopen", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Live Discovery.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Live Discovery"
+    });
+    await created.close();
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "# Chapter\n",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      "plain notes\n",
+      "utf8"
+    );
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    const openedProject = (await openProjectHandler({ sender: {} })) as {
+      documents: { relativePath: string }[];
+    };
+    // At open time, with the setting off, .txt is not discovered.
+    expect(
+      openedProject.documents.map((document) => document.relativePath)
+    ).toEqual(["chapter.md"]);
+
+    const listProjectDocumentsHandler = registeredHandler(
+      PROJECT_CHANNELS.listProjectDocuments
+    );
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+
+    // Setting flips ON — no project close/reopen happens here, mirroring
+    // the renderer calling this channel right after a live settings change.
+    await writePlainTextDocumentSupportSetting(userDataPath, true);
+
+    const refreshed = (await listProjectDocumentsHandler({ sender: {} })) as {
+      relativePath: string;
+      name: string;
+    }[];
+    expect(refreshed.map((document) => document.relativePath).sort()).toEqual(
+      ["chapter.md", "notes.txt"]
+    );
+
+    // The freshly discovered .txt is now actually readable — not just
+    // listed — because the channel also registers it into the main-side
+    // allowlist.
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.txt",
+      content: "plain notes\n"
+    });
+
+    // Setting flips back OFF — a fresh discovery excludes .txt again for
+    // NEW navigation/search purposes...
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+    const refreshedAgain = (await listProjectDocumentsHandler({
+      sender: {}
+    })) as { relativePath: string }[];
+    expect(refreshedAgain.map((document) => document.relativePath)).toEqual([
+      "chapter.md"
+    ]);
+
+    // ...but the already-registered .txt remains readable/saveable (Slice 5
+    // already-open semantics are not affected by this new channel).
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({ relativePath: "notes.txt" });
+  });
+
+  it("#501 slice 8 blocker fix: listProjectDocuments resolves to [] when no project is open", async () => {
+    const listProjectDocumentsHandler = registeredHandler(
+      PROJECT_CHANNELS.listProjectDocuments
+    );
+
+    await expect(
+      listProjectDocumentsHandler({ sender: {} })
+    ).resolves.toEqual([]);
   });
 
   it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {
@@ -3022,6 +3252,9 @@ describe("project file IPC foundation", () => {
       )
     );
 
+    // Main returns the directory entries; the renderer FileExplorer applies the
+    // user-visible .txt filtering. With the setting disabled, this listing must
+    // not register the newly discovered .txt as a readable project document.
     expect(rootResult.entries).toEqual([
       {
         kind: "folder",
@@ -3123,6 +3356,335 @@ describe("project file IPC foundation", () => {
     await expect(
       readProjectDocumentHandler({ sender: {} }, { relativePath: "notes.txt" })
     ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+  });
+
+  it("keeps registered .txt project-document saves available after Plain Text support is disabled", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, true);
+    const projectFilePath = path.join(projectRootPath, "Plain Text Save.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Plain Text Save"
+    });
+    await created.close();
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), "# Chapter\n");
+    await fs.writeFile(path.join(projectRootPath, "notes.txt"), "notes\n");
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocument
+    );
+    await expect(
+      readProjectDocumentHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.txt",
+      content: "notes\n"
+    });
+
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+    await fs.writeFile(path.join(projectRootPath, "new.txt"), "new\n");
+    const listFileExplorerChildrenHandler = registeredHandler(
+      PROJECT_CHANNELS.listFileExplorerChildren
+    );
+    const rootResult = expectFileExplorerOk(
+      await listFileExplorerChildrenHandler(
+        { sender: {} },
+        { directoryRelativePath: null }
+      )
+    );
+
+    expect(rootResult.entries).toEqual([
+      {
+        kind: "file",
+        name: "chapter.md",
+        relativePath: "chapter.md"
+      },
+      {
+        kind: "file",
+        name: "new.txt",
+        relativePath: "new.txt"
+      },
+      {
+        kind: "file",
+        name: "notes.txt",
+        relativePath: "notes.txt"
+      }
+    ]);
+
+    const saveProjectDocumentHandler = registeredHandler(
+      PROJECT_CHANNELS.saveProjectDocument
+    );
+    await expect(
+      saveProjectDocumentHandler(
+        { sender: {} },
+        { relativePath: "notes.txt", content: "dirty\n" }
+      )
+    ).resolves.toEqual({ kind: "saved", relativePath: "notes.txt" });
+    expect(await fs.readFile(path.join(projectRootPath, "notes.txt"), "utf8"))
+      .toBe("dirty\n");
+
+    await expect(
+      readProjectDocumentHandler({ sender: {} }, { relativePath: "new.txt" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+  });
+
+  for (const encoding of TEXT_FILE_ENCODINGS) {
+    it(`#501 slice 6: readProjectDocument decodes a .txt file encoded as ${encoding}`, async () => {
+      await writeTextFilesSettings(userDataPath, { encoding });
+      const projectFilePath = path.join(
+        projectRootPath,
+        `Encoding Read ${encoding}.pergamum`
+      );
+      const created = await createProjectDatabase({
+        projectFilePath,
+        projectName: `Encoding Read ${encoding}`
+      });
+      await created.close();
+      const content = "吾輩は猫である。\n名前はまだ無い。";
+      const { bytes } = encodeTextFileContent(content, encoding);
+      await fs.writeFile(path.join(projectRootPath, "notes.txt"), bytes);
+      electronMock.showOpenDialog.mockResolvedValue({
+        canceled: false,
+        filePaths: [projectFilePath]
+      });
+      const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+      await openProjectHandler({ sender: {} });
+
+      const readHandler = registeredHandler(
+        PROJECT_CHANNELS.readProjectDocument
+      );
+      const result = (await readHandler(
+        { sender: {} },
+        { relativePath: "notes.txt" }
+      )) as {
+        content: string;
+        metadata: { encoding: string; hadBom: boolean };
+      };
+
+      // Decoded exactly, with no leading BOM character surviving into the
+      // editor content, and the effective setting (not auto-detection) is
+      // what decided the encoding.
+      expect(result.content).toBe(content);
+      expect(result.metadata.encoding).toBe(encoding);
+      expect(result.metadata.hadBom).toBe(encoding.endsWith("Bom"));
+    });
+  }
+
+  for (const encoding of TEXT_FILE_ENCODINGS) {
+    it(`#501 slice 6: saveProjectDocument writes a .txt file encoded as ${encoding}`, async () => {
+      await writeTextFilesSettings(userDataPath, { encoding });
+      const projectFilePath = path.join(
+        projectRootPath,
+        `Encoding Save ${encoding}.pergamum`
+      );
+      const created = await createProjectDatabase({
+        projectFilePath,
+        projectName: `Encoding Save ${encoding}`
+      });
+      await created.close();
+      await fs.writeFile(
+        path.join(projectRootPath, "notes.txt"),
+        "seed\n",
+        "utf8"
+      );
+      electronMock.showOpenDialog.mockResolvedValue({
+        canceled: false,
+        filePaths: [projectFilePath]
+      });
+      const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+      await openProjectHandler({ sender: {} });
+
+      const saveHandler = registeredHandler(
+        PROJECT_CHANNELS.saveProjectDocument
+      );
+      const content = "吾輩は猫である。\n名前はまだ無い。";
+
+      await expect(
+        saveHandler({ sender: {} }, { relativePath: "notes.txt", content })
+      ).resolves.toEqual({ kind: "saved", relativePath: "notes.txt" });
+
+      const savedBytes = await fs.readFile(
+        path.join(projectRootPath, "notes.txt")
+      );
+
+      if (encoding === "utf8Bom") {
+        expect([...savedBytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+      } else if (encoding === "utf8") {
+        expect([...savedBytes.subarray(0, 3)]).not.toEqual([
+          0xef, 0xbb, 0xbf
+        ]);
+      } else if (encoding === "utf16leBom") {
+        expect([...savedBytes.subarray(0, 2)]).toEqual([0xff, 0xfe]);
+      } else if (encoding === "utf16le") {
+        expect([...savedBytes.subarray(0, 2)]).not.toEqual([0xff, 0xfe]);
+      } else if (encoding === "utf16beBom") {
+        expect([...savedBytes.subarray(0, 2)]).toEqual([0xfe, 0xff]);
+      } else if (encoding === "utf16be") {
+        expect([...savedBytes.subarray(0, 2)]).not.toEqual([0xfe, 0xff]);
+      }
+
+      // Round-trip through the same encoding helper confirms the bytes are
+      // actually in that encoding, not UTF-8 bytes mislabeled.
+      const decoded = decodeTextFileBytes(new Uint8Array(savedBytes), encoding);
+      expect(decoded.content).toBe(content);
+    });
+  }
+
+  for (const encoding of ["shiftJis", "eucJp", "iso2022Jp"] as const) {
+    it(`#501 slice 6: saveProjectDocument rejects unencodable characters for ${encoding} without corrupting the file`, async () => {
+      await writeTextFilesSettings(userDataPath, { encoding });
+      const projectFilePath = path.join(
+        projectRootPath,
+        `Encoding Unencodable ${encoding}.pergamum`
+      );
+      const created = await createProjectDatabase({
+        projectFilePath,
+        projectName: `Encoding Unencodable ${encoding}`
+      });
+      await created.close();
+      const originalContent = "original\n";
+      await fs.writeFile(
+        path.join(projectRootPath, "notes.txt"),
+        originalContent,
+        "utf8"
+      );
+      electronMock.showOpenDialog.mockResolvedValue({
+        canceled: false,
+        filePaths: [projectFilePath]
+      });
+      const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+      await openProjectHandler({ sender: {} });
+
+      const saveHandler = registeredHandler(
+        PROJECT_CHANNELS.saveProjectDocument
+      );
+
+      await expectSanitizedProjectSaveFailure(
+        saveHandler(
+          { sender: {} },
+          { relativePath: "notes.txt", content: "emoji 🙂 text" }
+        ) as Promise<unknown>,
+        "unencodableCharacters",
+        [projectRootPath, "🙂"]
+      );
+
+      // No silent "?" replacement, no corruption: the previous good file is
+      // untouched.
+      expect(
+        await fs.readFile(path.join(projectRootPath, "notes.txt"), "utf8")
+      ).toBe(originalContent);
+    });
+  }
+
+  it("#501 slice 6 remediation: saveProjectDocument RESOLVES (never rejects) a structured unencodableCharacters failure with a sanitized, generic message", async () => {
+    // This is the IPC/API boundary regression this remediation targets: the
+    // previous implementation threw a `SanitizedFileIoError` and expected the
+    // renderer to recover `reason` from `error.message`, but a REAL
+    // `ipcRenderer.invoke()` rejection wraps that message in an
+    // Electron-added "Error invoking remote method '...'" prefix, so the
+    // renderer's parser never matched and the generic dialog always won. A
+    // RESOLVED value crosses structured-clone intact, with no such mangling,
+    // so this asserts the promise resolves — never rejects — with `reason`
+    // preserved verbatim. `message` is asserted to be the fixed generic
+    // string, never the reason token, "File I/O failed", or any of the
+    // unencodable document content.
+    await writeTextFilesSettings(userDataPath, { encoding: "shiftJis" });
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Encoding Boundary.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Encoding Boundary"
+    });
+    await created.close();
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      "original\n",
+      "utf8"
+    );
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const saveHandler = registeredHandler(PROJECT_CHANNELS.saveProjectDocument);
+
+    const result = await saveHandler(
+      { sender: {} },
+      { relativePath: "notes.txt", content: "emoji 🙂 text" }
+    );
+
+    expect(result).toEqual({
+      kind: "failed",
+      reason: "unencodableCharacters",
+      message: "Project document save failed."
+    });
+
+    // `reason` is legitimately the string "unencodableCharacters" (the
+    // machine-readable channel) — only `message` (the human-facing status
+    // text) must never carry the reason token, the old "File I/O failed: "
+    // format, or any of the unencodable document content.
+    const message = (result as { message: string }).message;
+    for (const disallowed of [
+      "unencodableCharacters",
+      "File I/O failed",
+      "emoji 🙂 text",
+      "🙂"
+    ]) {
+      expect(message).not.toContain(disallowed);
+    }
+  });
+
+  it("#501 slice 6: Markdown read/save stay UTF-8 even when textFiles.encoding is a legacy encoding", async () => {
+    await writeTextFilesSettings(userDataPath, { encoding: "shiftJis" });
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Markdown Isolation.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Markdown Isolation"
+    });
+    await created.close();
+    const content = "# 吾輩は猫である\n名前はまだ無い。\n";
+    await fs.writeFile(path.join(projectRootPath, "chapter.md"), content, "utf8");
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+    const readResult = (await readHandler(
+      { sender: {} },
+      { relativePath: "chapter.md" }
+    )) as { content: string; metadata: { encoding: string } };
+
+    expect(readResult.content).toBe(content);
+    expect(readResult.metadata.encoding).toBe("utf8");
+
+    const saveHandler = registeredHandler(PROJECT_CHANNELS.saveProjectDocument);
+    const newContent = "# 新しい内容\n本文\n";
+
+    await expect(
+      saveHandler(
+        { sender: {} },
+        { relativePath: "chapter.md", content: newContent }
+      )
+    ).resolves.toEqual({ kind: "saved", relativePath: "chapter.md" });
+
+    const savedBytes = await fs.readFile(path.join(projectRootPath, "chapter.md"));
+
+    expect([...savedBytes.subarray(0, 3)]).not.toEqual([0xef, 0xbb, 0xbf]);
+    expect(Buffer.from(newContent, "utf8").equals(savedBytes)).toBe(true);
   });
 
   it("#344: lists a `.recovered.md` written into the project root after open", async () => {
@@ -4496,14 +5058,15 @@ describe("project file IPC foundation", () => {
     ).resolves.toBeNull();
   });
 
-  it("#372: returns null for a .txt file, a folder, and an unregistered path", async () => {
+  it("#372/#501 slice 10: returns null for a folder, an unregistered path, or a .txt file when Plain Text support is disabled", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
     await fs.writeFile(
       path.join(projectRootPath, "notes.txt"),
       "plain text body\n",
       "utf8"
     );
     await fs.mkdir(path.join(projectRootPath, "Drafts"));
-    await openExplorerProject("Preview Non Markdown");
+    await openExplorerProject("Preview Non Markdown Disabled");
 
     const previewHandler = registeredHandler(
       PROJECT_CHANNELS.readProjectDocumentPreviewLine
@@ -4517,6 +5080,94 @@ describe("project file IPC foundation", () => {
     ).resolves.toBeNull();
     await expect(
       previewHandler({ sender: {} }, { relativePath: "does-not-exist.md" })
+    ).resolves.toBeNull();
+  });
+
+  it("#501 slice 10: returns preview line for .txt file using textFiles.encoding when Plain Text support is enabled", async () => {
+    await writeTextFilesSettings(userDataPath, {
+      enablePlainTextDocuments: true,
+      encoding: "shiftJis"
+    });
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Preview Plain Text.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Preview Plain Text"
+    });
+    await created.close();
+
+    // Shift_JIS text file
+    const sjisBuffer = encodeTextFileContent("第一行目\n第二行目\n", "shiftJis").bytes;
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      sjisBuffer
+    );
+    // UTF-8 Markdown file in same project
+    await fs.writeFile(
+      path.join(projectRootPath, "chapter.md"),
+      "\n  # Markdown Chapter\n",
+      "utf8"
+    );
+
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    // .txt preview is decoded via textFiles.encoding (shiftJis)
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toBe("第一行目");
+
+    // Markdown preview remains UTF-8, unaffected by shiftJis setting
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "chapter.md" })
+    ).resolves.toBe("# Markdown Chapter");
+
+    // Dynamic settings update: changing textFiles.encoding updates future .txt previews live
+    await writeTextFilesSettings(userDataPath, {
+      enablePlainTextDocuments: true,
+      encoding: "eucJp"
+    });
+    const eucBuffer = encodeTextFileContent("EUC本文\n", "eucJp").bytes;
+    await fs.writeFile(
+      path.join(projectRootPath, "euc_notes.txt"),
+      eucBuffer
+    );
+    // Refresh list of documents
+    const listHandler = registeredHandler(PROJECT_CHANNELS.listProjectDocuments);
+    await listHandler({ sender: {} });
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "euc_notes.txt" })
+    ).resolves.toBe("EUC本文");
+  });
+
+  it("#501 slice 10: returns null for empty or unreadable .txt file without throwing", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, true);
+    await fs.writeFile(
+      path.join(projectRootPath, "empty.txt"),
+      "\r\n\t  \r\n",
+      "utf8"
+    );
+    await openExplorerProject("Preview Empty Txt");
+
+    const previewHandler = registeredHandler(
+      PROJECT_CHANNELS.readProjectDocumentPreviewLine
+    );
+
+    await expect(
+      previewHandler({ sender: {} }, { relativePath: "empty.txt" })
     ).resolves.toBeNull();
   });
 
@@ -4973,6 +5624,46 @@ async function writeRecentProjects(
   );
 }
 
+async function writePlainTextDocumentSupportSetting(
+  userDataPath: string,
+  enabled: boolean
+): Promise<void> {
+  await fs.writeFile(
+    settingsJsonPath(userDataPath),
+    `${JSON.stringify({
+      textFiles: {
+        enablePlainTextDocuments: enabled,
+        encoding: "utf8",
+        lineEnding: "lf"
+      }
+    })}\n`,
+    "utf8"
+  );
+}
+
+// #501 slice 6: like writePlainTextDocumentSupportSetting above, but also
+// controls `textFiles.encoding` for live `.txt` read/write I/O tests.
+async function writeTextFilesSettings(
+  userDataPath: string,
+  options: {
+    enablePlainTextDocuments?: boolean;
+    encoding?: string;
+    lineEnding?: string;
+  } = {}
+): Promise<void> {
+  await fs.writeFile(
+    settingsJsonPath(userDataPath),
+    `${JSON.stringify({
+      textFiles: {
+        enablePlainTextDocuments: options.enablePlainTextDocuments ?? true,
+        encoding: options.encoding ?? "utf8",
+        lineEnding: options.lineEnding ?? "lf"
+      }
+    })}\n`,
+    "utf8"
+  );
+}
+
 async function expectSettingsJsonMissing(userDataPath: string): Promise<void> {
   await expect(
     fs.access(settingsJsonPath(userDataPath))
@@ -5004,6 +5695,37 @@ async function expectSanitizedProjectRejection(
 
   for (const text of disallowedText) {
     expect(safeErrorSurface).not.toContain(text);
+  }
+}
+
+// #501 slice 6 remediation: `saveProjectDocument` RETURNS a structured
+// `{ kind: "failed", reason, message }` for an expected file I/O failure
+// instead of throwing (a thrown Error's `.reason` does not reliably survive
+// `ipcMain.handle` → `ipcRenderer.invoke`, and even `.message` picks up an
+// Electron-added prefix on the renderer side) — so this is the save-path
+// sibling of expectSanitizedProjectRejection above, which asserts against a
+// RESOLVED result rather than a rejection.
+// #501 slice 6 remediation v3: `message` is now a FIXED, generic string for
+// every reason — never the reason token itself, never document text — so
+// this asserts `message` exactly (not merely "safe") on top of the existing
+// disallowed-text sweep.
+async function expectSanitizedProjectSaveFailure(
+  promise: Promise<unknown>,
+  reason: string,
+  disallowedText: readonly string[]
+): Promise<void> {
+  const result = await promise;
+
+  expect(result).toEqual({
+    kind: "failed",
+    reason,
+    message: "Project document save failed."
+  });
+
+  const safeResultSurface = JSON.stringify(result);
+
+  for (const text of disallowedText) {
+    expect(safeResultSurface).not.toContain(text);
   }
 }
 

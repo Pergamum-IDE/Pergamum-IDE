@@ -10,6 +10,11 @@ import {
   MarkdownEditor,
   markdownEditorInputSoundEventFromTransactions
 } from "../../src/renderer/MarkdownEditor";
+import {
+  lineEndMarkerClassName,
+  lineEndMarkerUnexpectedClassName
+} from "../../src/renderer/editorVisibility/lineEndMarkerFeature";
+import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
 
 interface FakeTransactionInput {
   docChanged?: boolean;
@@ -74,6 +79,66 @@ describe("MarkdownEditor", () => {
 
     expect(readOnlyMarkup).toContain("editorHost-readOnly");
     expect(readWriteMarkup).not.toContain("editorHost-readOnly");
+  });
+});
+
+describe("MarkdownEditor line-ending rendering settings", () => {
+  let container: HTMLDivElement | null = null;
+  let root: import("react-dom/client").Root | null = null;
+
+  afterEach(() => {
+    if (root) {
+      act(() => root!.unmount());
+      root = null;
+    }
+    container?.remove();
+    container = null;
+  });
+
+  function renderEditor(
+    expectedLineEnding: "lf" | "crlf" | "cr",
+    markerGlyph: "none" | "⏎" | "↵" | "↓"
+  ): void {
+    const raw = "alpha\r\nbeta\r\ngamma";
+
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: raw.replace(/\r\n|\r/g, "\n"),
+          documentKey: "line-ending-settings.md",
+          initialLineEndingBreaks: analyzeLineEndings(raw),
+          expectedLineEnding,
+          markerGlyph,
+          onChange: () => undefined
+        })
+      );
+    });
+  }
+
+  function markerText(): string[] {
+    return Array.from(
+      container!.querySelectorAll(`.${lineEndMarkerClassName}`)
+    ).map((element) => element.textContent ?? "");
+  }
+
+  function unexpectedMarkerCount(): number {
+    return container!.querySelectorAll(`.${lineEndMarkerUnexpectedClassName}`)
+      .length;
+  }
+
+  it("updates the active editor's line-ending markers when rendering settings change without remounting", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    renderEditor("lf", "⏎");
+    expect(markerText()).toEqual(["⏎", "⏎"]);
+    expect(unexpectedMarkerCount()).toBe(2);
+
+    renderEditor("crlf", "↵");
+
+    expect(markerText()).toEqual(["↵", "↵"]);
+    expect(unexpectedMarkerCount()).toBe(0);
   });
 });
 
@@ -253,4 +318,3 @@ describe("MarkdownEditor dynamic tab capture configuration (#476)", () => {
     );
   });
 });
-

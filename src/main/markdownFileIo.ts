@@ -1,6 +1,8 @@
 import { TextDecoder } from "node:util";
 import type { MarkdownLineEnding } from "../shared/api";
 import type { DebugLogReason } from "../shared/debugLog";
+import { sanitizedFileIoErrorMessage } from "../shared/sanitizedFileIoErrorMessage";
+import { PergamumTextFileEncodingError } from "./textFileIo";
 
 export interface DecodedMarkdownContent {
   content: string;
@@ -95,6 +97,12 @@ export function markdownWriteMetadata(
 }
 
 export function fileIoFailureReason(error: unknown): DebugLogReason {
+  if (error instanceof PergamumTextFileEncodingError) {
+    return error.reason === "unencodableCharacters"
+      ? "unencodableCharacters"
+      : "invalidEncoding";
+  }
+
   const code =
     typeof error === "object" &&
     error !== null &&
@@ -128,7 +136,7 @@ export function fileIoFailureReason(error: unknown): DebugLogReason {
 export function sanitizedFileIoError(error: unknown): SanitizedFileIoError {
   const reason = fileIoFailureReason(error);
   const sanitized = new Error(
-    `File I/O failed: ${reason}`
+    sanitizedFileIoErrorMessage(reason)
   ) as SanitizedFileIoError;
 
   sanitized.name = "PergamumFileIoError";

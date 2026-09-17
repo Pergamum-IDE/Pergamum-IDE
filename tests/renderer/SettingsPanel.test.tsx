@@ -229,7 +229,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     expect(labels).toContain("画像添付");
     // #424 Slice 7: "検索・置換" adds another with its own scalar catalog items.
     expect(labels).toContain("検索・置換");
-    expect(labels).toHaveLength(10);
+    expect(labels).toHaveLength(11);
   });
 
   it("shows the '文書マップ' heading only once in the pane body (no duplicate section heading) (#375 fix)", () => {
@@ -259,7 +259,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
 
     expect(controlElement(element, "editor.fontFamilyList")).toBeDefined();
     expect(() => controlElement(element, "workbench.language")).toThrow();
-    expect(() => controlElement(element, "files.newFile.lineEnding")).toThrow();
+    expect(() => controlElement(element, "markdownFiles.lineEnding")).toThrow();
   });
 
   it("shows label, description, and the internal setting key for an item", () => {
@@ -299,8 +299,8 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
       "settings.editor.characterCount.exclude.markdownSyntax.label",
       "settings.editor.whitespace.renderIdeographicSpace.label",
       "settings.editor.fontFamilyList.label",
-      "settings.files.newFile.lineEnding.label",
-      "settings.files.newFile.lineEnding.option.lf.label",
+      "settings.markdownFiles.lineEnding.label",
+      "settings.markdownFiles.lineEnding.option.lf.label",
       "settings.commandPalette.footerDetail.marquee.delay.label",
       "settings.preview.renderer.label"
     ];
@@ -358,7 +358,8 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "Image Attachment",
       "Preview",
       "Document Map",
-      "Files",
+      "Markdown Files",
+      "Text Files",
       "Command Palette",
       "Sound"
     ]);
@@ -366,7 +367,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
 
   it("marks only the selected category's button as current", () => {
     const element = settingsPanelViewElement("en", {
-      selectedCategoryId: "files"
+      selectedCategoryId: "markdownFiles"
     });
     const buttons = collectElements(
       element,
@@ -380,7 +381,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
     expect(current).toHaveLength(1);
     expect(
       React.Children.toArray(current[0]?.props.children).join("")
-    ).toBe("Files");
+    ).toBe("Markdown Files");
   });
 
   it("clicking a category button invokes onSelectCategory with that category's id", () => {
@@ -395,13 +396,13 @@ describe("SettingsPanelView category behavior (#230)", () => {
     );
     const filesButton = buttons.find(
       (button) =>
-        React.Children.toArray(button.props.children).join("") === "Files"
+        React.Children.toArray(button.props.children).join("") === "Markdown Files"
     );
 
     expect(filesButton).toBeDefined();
     (filesButton?.props.onClick as () => void)();
 
-    expect(onSelectCategory).toHaveBeenCalledWith("files");
+    expect(onSelectCategory).toHaveBeenCalledWith("markdownFiles");
   });
 
   it("orders items within the selected category by catalog order (application category)", () => {
@@ -484,9 +485,9 @@ describe("SettingsPanelView category behavior (#230)", () => {
     ]);
   });
 
-  it("orders items within the selected category by catalog order (files category)", () => {
+  it("orders items within the selected category by catalog order (markdownFiles category)", () => {
     const element = settingsPanelViewElement("en", {
-      selectedCategoryId: "files"
+      selectedCategoryId: "markdownFiles"
     });
     const keyElements = collectElements(
       element,
@@ -497,8 +498,8 @@ describe("SettingsPanelView category behavior (#230)", () => {
     );
 
     expect(keyElements.map((el) => el.props.children)).toEqual([
-      "files.newFile.lineEnding",
-      "files.newFile.encoding"
+      "markdownFiles.encoding",
+      "markdownFiles.lineEnding"
     ]);
   });
 
@@ -536,12 +537,12 @@ describe("getVisibleSettingCatalogItems search behavior (#230)", () => {
 
   it("finds a setting by its internal key", () => {
     const items = getVisibleSettingCatalogItems(
-      "files.newFile.lineEnding",
+      "markdownFiles.lineEnding",
       "application",
       translate
     );
 
-    expect(items.map((item) => item.key)).toEqual(["files.newFile.lineEnding"]);
+    expect(items.map((item) => item.key)).toEqual(["markdownFiles.lineEnding"]);
   });
 
   it("finds a setting by its localized label", () => {
@@ -575,7 +576,11 @@ describe("getVisibleSettingCatalogItems search behavior (#230)", () => {
     // #252 added editor.lineEnding.expected, which also has a "crlf" option
     // value — both settings legitimately match this query now.
     expect(items.map((item) => item.key).sort()).toEqual(
-      ["editor.lineEnding.expected", "files.newFile.lineEnding"].sort()
+      [
+        "editor.lineEnding.expected",
+        "markdownFiles.lineEnding",
+        "textFiles.lineEnding"
+      ].sort()
     );
   });
 
@@ -586,13 +591,13 @@ describe("getVisibleSettingCatalogItems search behavior (#230)", () => {
       translate
     );
 
-    expect(items.map((item) => item.key)).toContain("files.newFile.encoding");
+    expect(items.map((item) => item.key)).toContain("markdownFiles.encoding");
   });
 
   it("trims whitespace and matches case-insensitively", () => {
     const items = getVisibleSettingCatalogItems(
       "  WORKBENCH.LANGUAGE  ",
-      "files",
+      "markdownFiles",
       translate
     );
 
@@ -600,11 +605,11 @@ describe("getVisibleSettingCatalogItems search behavior (#230)", () => {
   });
 
   it("returns the selected category's items, in catalog order, for an empty query", () => {
-    const items = getVisibleSettingCatalogItems("", "files", translate);
+    const items = getVisibleSettingCatalogItems("", "markdownFiles", translate);
 
     expect(items.map((item) => item.key)).toEqual([
-      "files.newFile.lineEnding",
-      "files.newFile.encoding"
+      "markdownFiles.encoding",
+      "markdownFiles.lineEnding"
     ]);
   });
 
@@ -730,7 +735,7 @@ describe("SettingsPanelView search input polish (#234)", () => {
     expect(
       getVisibleSettingCatalogItems(
         "  WORKBENCH.LANGUAGE  ",
-        "files",
+        "markdownFiles",
         translate
       ).map((item) => item.key)
     ).toEqual(["workbench.language"]);
@@ -882,7 +887,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       },
       commandPalette: defaultApplicationSettings.commandPalette,
       editor: defaultApplicationSettings.editor,
-      files: defaultApplicationSettings.files
+      markdownFiles: defaultApplicationSettings.markdownFiles,
+      textFiles: defaultApplicationSettings.textFiles
     });
   });
 
@@ -916,7 +922,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       },
       commandPalette: defaultApplicationSettings.commandPalette,
       editor: defaultApplicationSettings.editor,
-      files: defaultApplicationSettings.files
+      markdownFiles: defaultApplicationSettings.markdownFiles,
+      textFiles: defaultApplicationSettings.textFiles
     });
   });
 
@@ -942,7 +949,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       workbench: defaultApplicationSettings.workbench,
       commandPalette: defaultApplicationSettings.commandPalette,
       editor: defaultApplicationSettings.editor,
-      files: defaultApplicationSettings.files
+      markdownFiles: defaultApplicationSettings.markdownFiles,
+      textFiles: defaultApplicationSettings.textFiles
     });
   });
 
@@ -979,7 +987,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
           }
         }
       },
-      files: defaultApplicationSettings.files
+      markdownFiles: defaultApplicationSettings.markdownFiles,
+      textFiles: defaultApplicationSettings.textFiles
     });
   });
 
@@ -1015,19 +1024,20 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
           renderAsciiSpace: true
         }
       },
-      files: settings.files
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
     });
   });
 
-  it("saves immediately when a select setting changes (files.newFile.lineEnding is directly editable, no advanced gate — #232)", () => {
+  it("saves immediately when a select setting changes (markdownFiles.lineEnding is directly editable, no advanced gate — #232)", () => {
     const settings: ApplicationSettings = defaultApplicationSettings;
     const onChangeSettings = vi.fn();
     const element = settingsPanelViewElement("en", {
       settings,
-      searchQuery: isolate("files.newFile.lineEnding"),
+      searchQuery: isolate("markdownFiles.lineEnding"),
       onChangeSettings
     });
-    const select = controlElement(element, "files.newFile.lineEnding");
+    const select = controlElement(element, "markdownFiles.lineEnding");
     const onChange = select.props.onChange as (event: {
       target: { value: string };
     }) => void;
@@ -1042,10 +1052,11 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
       editor: settings.editor,
-      files: {
-        ...settings.files,
-        newFile: { ...settings.files.newFile, lineEnding: "crlf" }
-      }
+      markdownFiles: {
+        ...settings.markdownFiles,
+        lineEnding: "crlf"
+      },
+      textFiles: settings.textFiles
     });
   });
 
@@ -1116,7 +1127,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         ...settings.editor,
         paragraphIndent: { excludeLeadingCharacters: "" }
       },
-      files: settings.files
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
     });
 
     onChange({ target: { value: "「『（〖" } });
@@ -1132,7 +1144,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         ...settings.editor,
         paragraphIndent: { excludeLeadingCharacters: "「『（〖" }
       },
-      files: settings.files
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
     });
   });
 
@@ -1171,7 +1184,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         ...settings.editor,
         selectionHighlightMode: "smart"
       },
-      files: settings.files
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
     });
 
     (findGutterMarkers.props.onChange as (event: {
@@ -1189,7 +1203,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         ...settings.editor,
         findGutterMarkers: true
       },
-      files: settings.files
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
     });
   });
 
@@ -1228,7 +1243,8 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
         }
       },
       editor: settings.editor,
-      files: settings.files
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
     });
   });
 
@@ -1365,17 +1381,62 @@ describe("SettingsPanelView restart-required focus/blur wiring (#394 Step 2 foll
 });
 
 describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () => {
-  it("files.newFile.lineEnding and files.newFile.encoding are directly editable — no advanced gate", () => {
+  it("markdownFiles.lineEnding and markdownFiles.encoding are directly editable — no advanced gate", () => {
     const element = settingsPanelViewElement("en", {
-      selectedCategoryId: "files"
+      selectedCategoryId: "markdownFiles"
     });
 
     expect(
-      controlElement(element, "files.newFile.lineEnding").props.disabled
+      controlElement(element, "markdownFiles.lineEnding").props.disabled
     ).toBe(false);
     expect(
-      controlElement(element, "files.newFile.encoding").props.disabled
+      controlElement(element, "markdownFiles.encoding").props.disabled
     ).toBe(false);
+  });
+
+  it("disables Text Files encoding and line ending while plain text documents are disabled, preserving their stored values", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      textFiles: {
+        enablePlainTextDocuments: false,
+        encoding: "shiftJis",
+        lineEnding: "crlf"
+      }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "textFiles"
+    });
+
+    const encoding = controlElement(element, "textFiles.encoding");
+    const lineEnding = controlElement(element, "textFiles.lineEnding");
+
+    expect(encoding.props.disabled).toBe(true);
+    expect(encoding.props.value).toBe("shiftJis");
+    expect(lineEnding.props.disabled).toBe(true);
+    expect(lineEnding.props.value).toBe("crlf");
+  });
+
+  it("enables Text Files encoding and line ending when plain text documents are enabled", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      textFiles: {
+        enablePlainTextDocuments: true,
+        encoding: "shiftJis",
+        lineEnding: "crlf"
+      }
+    };
+    const element = settingsPanelViewElement("en", {
+      settings,
+      selectedCategoryId: "textFiles"
+    });
+
+    expect(controlElement(element, "textFiles.encoding").props.disabled).toBe(
+      false
+    );
+    expect(controlElement(element, "textFiles.lineEnding").props.disabled).toBe(
+      false
+    );
   });
 
   it("commandPalette.footerDetail.enable is directly editable — no advanced gate", () => {
@@ -1653,7 +1714,8 @@ describe("SettingsPanelView preview.updateDelayMs (#250 follow-up)", () => {
       workbench: settings.workbench,
       commandPalette: settings.commandPalette,
       editor: settings.editor,
-      files: settings.files
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
     });
   });
 });
@@ -1781,7 +1843,7 @@ describe("SettingsPanelView unwired settings clarity (#236)", () => {
 describe("SettingsPanelView non-goals guard (#230)", () => {
   it("does not implement an advanced-settings display filter — advanced items remain listed regardless of the advanced toggle", () => {
     const element = settingsPanelViewElement("en", {
-      selectedCategoryId: "files"
+      selectedCategoryId: "markdownFiles"
     });
     const keyElements = collectElements(
       element,
@@ -1792,10 +1854,10 @@ describe("SettingsPanelView non-goals guard (#230)", () => {
     );
 
     expect(keyElements.map((el) => el.props.children)).toContain(
-      "files.newFile.lineEnding"
+      "markdownFiles.lineEnding"
     );
     expect(keyElements.map((el) => el.props.children)).toContain(
-      "files.newFile.encoding"
+      "markdownFiles.encoding"
     );
   });
 
@@ -1832,9 +1894,9 @@ describe("line-ending marker glyph select renders in the editor font (#252 follo
 
   it("does not apply the editor-font class to an unrelated select control", () => {
     const element = settingsPanelViewElement("en", {
-      searchQuery: isolate("files.newFile.lineEnding")
+      searchQuery: isolate("markdownFiles.lineEnding")
     });
-    const select = controlElement(element, "files.newFile.lineEnding");
+    const select = controlElement(element, "markdownFiles.lineEnding");
 
     expect(select.props.className).not.toContain("settingsSelect-editorFont");
   });
@@ -2018,7 +2080,8 @@ describe("SettingsPanel image attachment save destination workflow (#407 B2 reme
     expect(passedPayload.preview).toBeDefined();
     expect(passedPayload.workbench).toBeDefined();
     expect(passedPayload.editor).toBeDefined();
-    expect(passedPayload.files).toBeDefined();
+    expect(passedPayload.markdownFiles).toBeDefined();
+    expect(passedPayload.textFiles).toBeDefined();
   });
 
   it("allows setting path back to empty string to reset to unspecified", () => {

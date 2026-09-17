@@ -190,15 +190,18 @@ describe("Project Settings consumers integration (#396 Slice 7)", () => {
     });
   });
 
-  describe("line ending settings consumers (files.newFile.lineEnding and editor.lineEnding.expected)", () => {
-    it("resolves files.newFile.lineEnding and editor.lineEnding.expected through effective settings", () => {
+  describe("line ending settings consumers (markdownFiles.lineEnding, textFiles.lineEnding, and editor.lineEnding.expected)", () => {
+    it("resolves markdownFiles.lineEnding and textFiles.lineEnding through effective settings", () => {
       const appSettings: ApplicationSettings = {
         ...defaultApplicationSettings,
-        files: {
-          newFile: {
-            lineEnding: "lf",
-            encoding: "utf8"
-          }
+        markdownFiles: {
+          lineEnding: "lf",
+          encoding: "utf8"
+        },
+        textFiles: {
+          enablePlainTextDocuments: false,
+          lineEnding: "lf",
+          encoding: "utf8"
         },
         editor: {
           ...defaultApplicationSettings.editor,
@@ -210,10 +213,11 @@ describe("Project Settings consumers integration (#396 Slice 7)", () => {
       };
 
       const projectSettings: ProjectSettings = {
-        files: {
-          newFile: {
-            lineEnding: "crlf"
-          }
+        markdownFiles: {
+          lineEnding: "crlf"
+        },
+        textFiles: {
+          lineEnding: "crlf"
         },
         editor: {
           lineEnding: {
@@ -223,12 +227,14 @@ describe("Project Settings consumers integration (#396 Slice 7)", () => {
       };
 
       const effective = resolveEffectiveSettings(appSettings, projectSettings);
-      expect(effective.files.newFile.lineEnding).toBe("crlf");
+      expect(effective.markdownFiles.lineEnding).toBe("crlf");
+      expect(effective.textFiles.lineEnding).toBe("crlf");
       expect(effective.editor.lineEnding.expected).toBe("crlf");
 
       // When project settings are cleared / undefined, returns to application settings
       const cleared = resolveEffectiveSettings(appSettings, undefined);
-      expect(cleared.files.newFile.lineEnding).toBe("lf");
+      expect(cleared.markdownFiles.lineEnding).toBe("lf");
+      expect(cleared.textFiles.lineEnding).toBe("lf");
       expect(cleared.editor.lineEnding.expected).toBe("lf");
     });
   });

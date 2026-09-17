@@ -5,6 +5,7 @@ import {
   getCatalogEntry,
   settingsCatalog
 } from "../../src/shared/settingsCatalog";
+import { TEXT_FILE_ENCODINGS } from "../../src/shared/textFileEncoding";
 import {
   buildSettingSearchText,
   getSettingCategoryCatalogItem,
@@ -77,7 +78,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "imageAttachment",
         "preview",
         "documentMap",
-        "files",
+        "markdownFiles",
+        "textFiles",
         "commands",
         "sound"
       ]);
@@ -94,7 +96,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
     });
 
     it("getSettingCategoryCatalogItem finds a known id and returns undefined for an unknown one", () => {
-      expect(getSettingCategoryCatalogItem("files")?.id).toBe("files");
+      expect(getSettingCategoryCatalogItem("markdownFiles")?.id).toBe("markdownFiles");
       expect(
         getSettingCategoryCatalogItem(
           "nonexistent" as SettingCategoryCatalogItem["id"]
@@ -205,8 +207,11 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "editor.whitespace.renderIdeographicSpace",
           "editor.whitespace.renderOtherUnicodeSpace",
           "editor.whitespace.renderTab",
-          "files.newFile.lineEnding",
-          "files.newFile.encoding",
+          "markdownFiles.encoding",
+          "markdownFiles.lineEnding",
+          "textFiles.enablePlainTextDocuments",
+          "textFiles.encoding",
+          "textFiles.lineEnding",
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
           "preview.renderer",
@@ -256,8 +261,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
     });
 
     it("select controls list the values actually accepted by settingsCatalog.ts", () => {
-      const lineEnding = getSettingCatalogItem("files.newFile.lineEnding");
-      const encoding = getSettingCatalogItem("files.newFile.encoding");
+      const lineEnding = getSettingCatalogItem("markdownFiles.lineEnding");
+      const encoding = getSettingCatalogItem("markdownFiles.encoding");
+      const textEncoding = getSettingCatalogItem("textFiles.encoding");
+      const textLineEnding = getSettingCatalogItem("textFiles.lineEnding");
       const renderer = getSettingCatalogItem("preview.renderer");
       const language = getSettingCatalogItem("workbench.language");
       const expectedLineEnding = getSettingCatalogItem(
@@ -271,6 +278,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
       if (
         lineEnding?.control.kind !== "select" ||
         encoding?.control.kind !== "select" ||
+        textEncoding?.control.kind !== "select" ||
+        textLineEnding?.control.kind !== "select" ||
         renderer?.control.kind !== "select" ||
         language?.control.kind !== "select" ||
         expectedLineEnding?.control.kind !== "select" ||
@@ -285,6 +294,13 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "crlf"
       ]);
       expect(encoding.control.options.map((o) => o.value)).toEqual(["utf8"]);
+      expect(textLineEnding.control.options.map((o) => o.value)).toEqual([
+        "lf",
+        "crlf"
+      ]);
+      expect(textEncoding.control.options.map((o) => o.value)).toEqual(
+        TEXT_FILE_ENCODINGS
+      );
       expect(renderer.control.options.map((o) => o.value)).toEqual([
         "markdown"
       ]);
@@ -710,10 +726,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
     });
 
     it("a select setting's search text includes every option's value and localized label", () => {
-      const item = getSettingCatalogItem("files.newFile.lineEnding");
+      const item = getSettingCatalogItem("markdownFiles.lineEnding");
 
       if (!item || item.control.kind !== "select") {
-        throw new Error("expected files.newFile.lineEnding select control");
+        throw new Error("expected markdownFiles.lineEnding select control");
       }
 
       for (const language of languages) {
@@ -853,26 +869,48 @@ describe("Settings UI Catalog Schema (#226)", () => {
       const warning: SettingValueWarning<string> = {
         when: (value) => value !== "utf8",
         severity: "warning",
-        messageKey: "settings.files.newFile.encoding.label"
+        messageKey: "settings.markdownFiles.encoding.label"
       };
 
       expect(warning.when("shift_jis")).toBe(true);
       expect(warning.when("utf8")).toBe(false);
     });
 
-    it("no initial catalog item declares a valueWarning yet (reserved for the future non-UTF-8 warning issue)", () => {
+    it("only textFiles.encoding declares a valueWarning for non-UTF-8 choices", () => {
       for (const item of settingCatalogItems) {
-        expect("valueWarning" in item ? item.valueWarning : undefined).toBeUndefined();
+        const warning =
+          "valueWarning" in item ? item.valueWarning : undefined;
+        if (item.key === "textFiles.encoding") {
+          expect(warning).toBeDefined();
+          expect(warning?.severity).toBe("warning");
+          expect(warning?.messageKey).toBe(
+            "settings.textFiles.encoding.warning.nonUtf8"
+          );
+        } else {
+          expect(warning).toBeUndefined();
+        }
+      }
+    });
+
+    it("textFiles.encoding warning is false for utf8 and true for every non-utf8 encoding", () => {
+      const item = getSettingCatalogItem("textFiles.encoding");
+
+      if (!item?.valueWarning) {
+        throw new Error("expected textFiles.encoding valueWarning");
+      }
+
+      for (const encoding of TEXT_FILE_ENCODINGS) {
+        expect(item.valueWarning.when(encoding)).toBe(encoding !== "utf8");
       }
     });
 
     it("buildSettingSearchText never resolves or includes a valueWarning's messageKey", () => {
       const item: SettingCatalogItem<unknown> = {
-        key: "files.newFile.encoding",
-        category: "files",
+        key: "markdownFiles.encoding",
+        category: "markdownFiles",
         order: 200,
-        labelKey: "settings.files.newFile.encoding.label",
-        descriptionKey: "settings.files.newFile.encoding.description",
+        labelKey: "settings.markdownFiles.encoding.label",
+        descriptionKey: "settings.markdownFiles.encoding.description",
         control: { kind: "select", options: [] },
         defaultValue: "utf8",
         valueWarning: {

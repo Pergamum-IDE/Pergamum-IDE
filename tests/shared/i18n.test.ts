@@ -430,7 +430,8 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.application.section.general",
         "settings.application.section.appearance",
         "settings.application.section.editor",
-        "settings.application.section.files",
+        "settings.application.section.markdownFiles",
+        "settings.application.section.textFiles",
         "settings.application.section.commandPalette",
         "settings.application.section.sound"
       ] as const) {
@@ -536,14 +537,38 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.editor.selectionHighlightMode.option.smart.description",
         "settings.editor.findGutterMarkers.label",
         "settings.editor.findGutterMarkers.description",
-        "settings.files.newFile.lineEnding.label",
-        "settings.files.newFile.lineEnding.description",
-        "settings.files.newFile.encoding.label",
-        "settings.files.newFile.encoding.description"
+        "settings.markdownFiles.lineEnding.label",
+        "settings.markdownFiles.lineEnding.description",
+        "settings.markdownFiles.encoding.label",
+        "settings.markdownFiles.encoding.description",
+        "settings.textFiles.enablePlainTextDocuments.label",
+        "settings.textFiles.enablePlainTextDocuments.description",
+        "settings.textFiles.lineEnding.label",
+        "settings.textFiles.lineEnding.description",
+        "settings.textFiles.encoding.label",
+        "settings.textFiles.encoding.description",
+        "settings.textFiles.encoding.warning.nonUtf8"
       ] as const) {
         expect(t(language, key).length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("defines Text Files setting labels and descriptions for ja and en", () => {
+    expect(t("ja", "settings.category.textFiles.label")).toBe("テキストファイル");
+    expect(t("en", "settings.category.textFiles.label")).toBe("Text Files");
+    expect(t("ja", "settings.textFiles.encoding.label")).toContain(
+      "テキストファイル"
+    );
+    expect(t("en", "settings.textFiles.encoding.label")).toContain(
+      "text file"
+    );
+    expect(t("ja", "settings.textFiles.lineEnding.label")).toContain(
+      "テキストファイル"
+    );
+    expect(t("en", "settings.textFiles.lineEnding.label")).toContain(
+      "text file"
+    );
   });
 
   it("uses footer detail wording for Command Palette footer settings in Japanese and English", () => {

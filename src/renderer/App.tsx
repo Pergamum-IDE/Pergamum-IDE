@@ -25,6 +25,8 @@ import type {
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
+import { sanitizedFileIoErrorReasonFromMessage } from "../shared/sanitizedFileIoErrorMessage";
+import { projectDocumentDiscoverySettingChanged } from "./projectDocumentsRefresh";
 import {
   applicationMenuCommandIds,
   type ApplicationMenuCommandId,
@@ -33,6 +35,7 @@ import {
 import type { CommandContext } from "../shared/commandEnablement";
 import type {
   DebugLogEditorIdKind,
+  DebugLogReason,
   DebugLogSaveTargetKind
 } from "../shared/debugLog";
 import {
@@ -126,6 +129,7 @@ import {
   currentDocumentWorkingStateEquals,
   currentProjectRelativePath,
   displayName,
+  isMarkdownCurrentDocument,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   prepareCurrentDocumentForMarkdownStorage,
@@ -133,6 +137,7 @@ import {
   updateCurrentDocumentContent,
   type CurrentDocument
 } from "./currentDocument";
+import { isMarkdownPath, isProjectDocumentPath } from "../shared/projectDocumentKind";
 import {
   buildLineEndingBreakSet,
   lineEndingBreakSetToArray,
@@ -305,7 +310,9 @@ import {
 import { LineEndingDistributionDialog } from "./dialog/LineEndingDistributionDialog";
 import {
   ReplacePreviewDialog,
+  type ReplaceApplyFailureReason,
   type ReplaceApplyResult,
+  type ReplaceFileApplyOutcome,
   type ReplacePreviewCandidate,
   type ReplacePreviewOpenRequest,
   type ReplacePreviewScope
@@ -619,6 +626,21 @@ const readOnlyProjectSaveAsChoiceIds = {
 
 function errorMessage(error: unknown, translate: Translate): string {
   return error instanceof Error ? error.message : translate("error.unknown");
+}
+
+// #501 slice 6 remediation: a save failure caused by the currently selected
+// `textFiles.encoding` being unable to represent the document's characters
+// is not a path / permission / disk-space problem, so it must not show the
+// generic save-failure dialog. See sanitizedFileIoErrorMessage.ts for why
+// `.message` (not a thrown error's custom properties) is the only safe way
+// to recover `reason` across the `ipcMain.handle` → `ipcRenderer.invoke`
+// boundary.
+function isUnencodableCharactersSaveError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    sanitizedFileIoErrorReasonFromMessage(error.message) ===
+      "unencodableCharacters"
+  );
 }
 
 function projectOpenStatus(
@@ -1222,7 +1244,7 @@ export function App(): JSX.Element {
   const fileExplorerRenameRequestSeqRef = useRef(0);
   const [fileExplorerRenameEntryRequest, setFileExplorerRenameEntryRequest] =
     useState<FileExplorerRenameEntryRequest | null>(null);
-  // #344: after a Recovery restore writes `.recovered.md` files straight to
+  // #344: after a Recovery restore writes `.recovered` files straight to
   // disk, ask the File Explorer to re-list the directories they landed in so
   // its cached listing is not left stale.
   const fileExplorerRefreshDirectoriesRequestSeqRef = useRef(0);
@@ -1939,7 +1961,9 @@ export function App(): JSX.Element {
     isDebugLogTabActive;
   // #352: the Outline pane shows headings only for an active Markdown editor.
   const activeEditorIsMarkdown =
-    !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown";
+    !isEditorAreaSpecialTabActive &&
+    currentEditor?.kind === "markdown" &&
+    isMarkdownCurrentDocument(currentEditor.document);
 
   // #360: Document Metrics "ファイル情報" — the active Markdown document's
   // backing-file absolute path (a stable string, so this does not churn on
@@ -2371,13 +2395,13 @@ export function App(): JSX.Element {
   // #420 Step 5: run the bulk text import. The dialog owns *when* (only on an
   // explicit Import click for the importable rows); App fills in the project
   // id and the line-ending policy. New imported `.md` documents inherit the
-  // project's "new file" line ending (`files.newFile.lineEnding`, default
+  // project's Markdown file line ending (`markdownFiles.lineEnding`, default
   // LF). #420 Step 8: normalization is now driven by the dialog's
   // "match line endings to application settings" toggle
   // (`input.normalizeLineEndings`); `targetLineEnding` is still the app
   // setting so a normalized write matches that policy.
   const bulkTextImportNewFileLineEnding =
-    effectiveSettings.files.newFile.lineEnding;
+    effectiveSettings.markdownFiles.lineEnding;
   const bulkTextImportExecute = useCallback(
     async (
       input: BulkTextImportExecuteInput
@@ -2446,6 +2470,35 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyPreviewFontFamilyList(effectiveSettings.preview.fontFamilyList);
   }, [effectiveSettings.preview.fontFamilyList]);
+  // #501 slice 8 blocker fix: `project.documents` is otherwise only set once
+  // at project open and patched by specific file operations — it does not
+  // react to `textFiles.enablePlainTextDocuments` changing at runtime, so
+  // Quick Open / Command Palette / Project-wide Search would keep showing a
+  // stale `.txt` set until the project was reopened. Re-discover from main
+  // (same walk as project open) whenever this setting actually changes
+  // while a project is open. Mirrors FileExplorer.tsx's own live re-list
+  // effect for the same setting, but targets the flat `project.documents`
+  // cache instead of a per-directory listing cache.
+  const enablePlainTextDocumentsObservedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const previouslyObserved = enablePlainTextDocumentsObservedRef.current;
+    const current = effectiveSettings.textFiles.enablePlainTextDocuments;
+    enablePlainTextDocumentsObservedRef.current = current;
+
+    if (
+      !project ||
+      !projectDocumentDiscoverySettingChanged(previouslyObserved, current)
+    ) {
+      return;
+    }
+
+    void (async () => {
+      const documents = await window.pergamum.projects.listProjectDocuments();
+      setProject((currentProject) =>
+        currentProject ? { ...currentProject, documents } : currentProject
+      );
+    })();
+  }, [effectiveSettings.textFiles.enablePlainTextDocuments, project]);
   // #360: ONE Markdown character count, shared by the Status Bar (#259) and
   // the Document Metrics pane, so the two never disagree. It is computed
   // with the #259 algorithm + `editor.characterCount.exclude` settings and
@@ -4697,13 +4750,23 @@ export function App(): JSX.Element {
         continue;
       }
       try {
+        // #501 slice 7: Recovery always writes its `.recovered<ext>` output
+        // as BOM-less UTF-8 — for BOTH Markdown and Plain Text documents,
+        // independent of the project's current `textFiles.encoding` (see
+        // recoveryRestore.ts's doc comment). So the just-written file is
+        // read back the same way Recovery wrote it, via the generic
+        // UTF-8 file reader — NEVER through `readProjectDocument`'s
+        // Slice 6 `textFiles.encoding`-aware decode, which could otherwise
+        // try to decode this UTF-8 output as e.g. Shift_JIS and corrupt it.
+        const recoveredFile = await window.pergamum.files.readMarkdownFile(
+          written.writtenPath
+        );
+
         if (written.projectRelativePath && project && activeProjectContext) {
           // #287 follow-up: the recovered file landed inside the open
-          // project root — open it as a project-owned Markdown document so
-          // the tab is not flagged as an external / project-outside file.
-          const projectFile = await window.pergamum.projects.readProjectDocument(
-            written.projectRelativePath
-          );
+          // project root — open it as a project-owned document (Markdown or
+          // Plain Text) so the tab is not flagged as an external /
+          // project-outside file.
           await openDocument(
             createProjectDocument(
               {
@@ -4712,15 +4775,12 @@ export function App(): JSX.Element {
                   written.projectRelativePath.split("/").pop() ??
                   written.projectRelativePath
               },
-              projectFile.content,
-              projectFile.metadata
+              recoveredFile.content,
+              recoveredFile.metadata
             )
           );
         } else {
-          const file = await window.pergamum.files.readMarkdownFile(
-            written.writtenPath
-          );
-          await openDocument(createFileDocument(file));
+          await openDocument(createFileDocument(recoveredFile));
         }
         openedIds.push(written.recoveryId);
       } catch (error) {
@@ -4743,7 +4803,7 @@ export function App(): JSX.Element {
       }
     }
 
-    // #344: the restore wrote each `.recovered.md` straight to disk, bypassing
+    // #344: the restore wrote each `.recovered` file straight to disk, bypassing
     // the File Explorer's own create flow, so its cached listing for those
     // directories is now stale. Ask it to re-list every directory a restored
     // project file landed in (`null` = project root) so the tree — and the
@@ -5941,6 +6001,43 @@ export function App(): JSX.Element {
     });
   }
 
+  // #501 slice 6 remediation: dedicated dialog for a save rejected because
+  // the selected `textFiles.encoding` cannot represent the document's
+  // characters — the generic save-failure dialog above wrongly implies a
+  // path / permission / disk-space problem.
+  async function showFileSaveFailedEncodingDialog(): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.fileSaveFailedEncoding.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.fileSaveFailedEncoding.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  // #501 slice 6 remediation: shared dispatch between the structured
+  // `saveProjectDocument` failure branch and the generic standalone-save
+  // catch block below — `reason === "unencodableCharacters"` gets the
+  // dedicated encoding dialog, everything else (including `undefined`, for
+  // an unclassified thrown error) gets the generic one.
+  async function showSaveFailureDialogForReason(
+    reason: DebugLogReason | null | undefined
+  ): Promise<void> {
+    if (reason === "unencodableCharacters") {
+      await showFileSaveFailedEncodingDialog();
+    } else {
+      await showFileSaveFailedDialog();
+    }
+  }
+
   function syncActiveMarkdownBufferToSavedDocument(
     documentId: EditorId,
     savedDocument: CurrentDocument,
@@ -6530,6 +6627,36 @@ export function App(): JSX.Element {
                 serializedContentToSave
               );
 
+            // #501 slice 6 remediation: an expected file I/O failure (e.g.
+            // `unencodableCharacters`) comes back as a structured
+            // `{ kind: "failed" }` result, never a thrown Error — a thrown
+            // Error's `.reason` does not reliably survive `ipcMain.handle` →
+            // `ipcRenderer.invoke`, and even `.message` picks up an
+            // Electron-added prefix on this side, so it cannot drive dialog
+            // selection. Nothing about the document / editor state is
+            // mutated below this branch — the tab stays open and dirty.
+            if (savedProjectDocument.kind === "failed") {
+              logRendererDebugEvent({
+                level: "error",
+                event: "save.failed",
+                details: {
+                  editorIdKind,
+                  operation: "save",
+                  result: "failed",
+                  saveTargetKind: "projectDocument",
+                  reason: savedProjectDocument.reason
+                }
+              });
+              setStatus({
+                key: "status.saveFailed",
+                values: { message: savedProjectDocument.message }
+              });
+              await showSaveFailureDialogForReason(
+                savedProjectDocument.reason
+              );
+              return "failed";
+            }
+
             const savedProjectSnapshot =
               markCurrentDocumentSaved(documentToSave);
             const savedProjectOpenState = resolveSavedDocumentForOpenState(
@@ -6718,7 +6845,15 @@ export function App(): JSX.Element {
             key: "status.saveFailed",
             values: { message: errorMessage(error, translate) }
           });
-          await showFileSaveFailedDialog();
+          // Standalone Markdown save never uses a non-UTF-8 encoding, so this
+          // is always the generic dialog in practice; kept for defense in
+          // depth against a future standalone-save failure path that reuses
+          // the same sanitized reason.
+          await showSaveFailureDialogForReason(
+            isUnencodableCharactersSaveError(error)
+              ? "unencodableCharacters"
+              : null
+          );
           return "failed";
         }
       },
@@ -7633,6 +7768,9 @@ export function App(): JSX.Element {
       (await window.pergamum.projects.readProjectDocument(relativePath)).content,
     readMarkdownFile: (filePath) =>
       window.pergamum.files.readMarkdownFile(filePath),
+    registerProjectDocumentPath: async (absolutePath) =>
+      (await window.pergamum.projects.registerProjectDocumentPath(absolutePath))
+        .relativePath,
     applyRestoredEnvironment: (env) => applyRestoredEnvironment(env),
     adoptSessionId: (sessionId) => {
       setRendererSessionId(sessionId);
@@ -8336,10 +8474,13 @@ export function App(): JSX.Element {
         normalizeUnicodeToNfc:
           effectiveSettings.workbench.normalizeUnicodeToNfc
       });
-      await window.pergamum.projects.saveProjectDocument(
+      const saveResult = await window.pergamum.projects.saveProjectDocument(
         documentProjectRelativePath,
         storageContent
       );
+      if (saveResult.kind === "failed") {
+        return "failed";
+      }
       return "updated";
     } catch {
       return "failed";
@@ -8744,6 +8885,12 @@ export function App(): JSX.Element {
       }
       const markdownDocument = openDocument.editor.document;
       if (isReadOnlyProject && markdownDocument.kind === "project") {
+        continue;
+      }
+      if (
+        !effectiveSettings.textFiles.enablePlainTextDocuments &&
+        !isMarkdownCurrentDocument(markdownDocument)
+      ) {
         continue;
       }
       targets.push({
@@ -9223,6 +9370,14 @@ export function App(): JSX.Element {
       if (replacePreviewGenerationRef.current !== generation) {
         return;
       }
+      if (
+        !isProjectDocumentPath(projectDocument.relativePath, {
+          enablePlainTextDocuments:
+            effectiveSettings.textFiles.enablePlainTextDocuments
+        })
+      ) {
+        continue;
+      }
       let raw: string;
       try {
         raw = (
@@ -9347,13 +9502,27 @@ export function App(): JSX.Element {
       readonly replacementCount: number;
     };
     const saved: SavedFile[] = [];
+    const fileResults: Record<string, ReplaceFileApplyOutcome> = {};
     let failureFileCount = 0;
     let changedFileCount = 0;
+    let unencodableFailureCount = 0;
 
     for (const [relativePath, edits] of editsByRelativePath) {
+      if (
+        !isProjectDocumentPath(relativePath, {
+          enablePlainTextDocuments:
+            effectiveSettings.textFiles.enablePlainTextDocuments
+        })
+      ) {
+        failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "stalePreview" };
+        continue;
+      }
+
       const base = baseByRelativePath.get(relativePath);
       if (!base) {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "generic" };
         continue;
       }
 
@@ -9364,12 +9533,14 @@ export function App(): JSX.Element {
         ).content;
       } catch {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "generic" };
         continue;
       }
       if (normalizeLineEndings(currentRaw) !== base.baseText) {
         // Changed after the preview was built - do not overwrite it.
         failureFileCount += 1;
         changedFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "fileChanged" };
         continue;
       }
 
@@ -9396,6 +9567,7 @@ export function App(): JSX.Element {
       }
       if (changeSpecs.length === 0) {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "generic" };
         continue;
       }
 
@@ -9413,25 +9585,41 @@ export function App(): JSX.Element {
         nextText,
         lineEndingBreakSetToArray(nextBreaks)
       );
-      const serializedForStorage = normalizeMarkdownTextForStorage(serialized, {
-        normalizeUnicodeToNfc:
-          effectiveSettings.workbench.normalizeUnicodeToNfc
-      });
+      const serializedForStorage = isMarkdownPath(relativePath)
+        ? normalizeMarkdownTextForStorage(serialized, {
+            normalizeUnicodeToNfc:
+              effectiveSettings.workbench.normalizeUnicodeToNfc
+          })
+        : serialized;
       const savedText = normalizeLineEndings(serializedForStorage);
       const savedBreaks = buildLineEndingBreakSet(
         analyzeLineEndings(serializedForStorage)
       );
 
       try {
-        await window.pergamum.projects.saveProjectDocument(
+        const saveResult = await window.pergamum.projects.saveProjectDocument(
           relativePath,
           serializedForStorage
         );
+        if (saveResult.kind === "failed") {
+          failureFileCount += 1;
+          const reason: ReplaceApplyFailureReason =
+            saveResult.reason === "unencodableCharacters"
+              ? "unencodableCharacters"
+              : "saveFailed";
+          if (reason === "unencodableCharacters") {
+            unencodableFailureCount += 1;
+          }
+          fileResults[relativePath] = { kind: "failed", reason };
+          continue;
+        }
       } catch {
         failureFileCount += 1;
+        fileResults[relativePath] = { kind: "failed", reason: "saveFailed" };
         continue;
       }
 
+      fileResults[relativePath] = { kind: "success" };
       saved.push({
         relativePath,
         nextText: savedText,
@@ -9453,15 +9641,30 @@ export function App(): JSX.Element {
 
     const result: ReplaceApplyResult =
       failureFileCount === 0 && successFileCount > 0
-        ? { kind: "success", replacementCount, fileCount: successFileCount }
+        ? {
+            kind: "success",
+            replacementCount,
+            fileCount: successFileCount,
+            fileResults
+          }
         : successFileCount > 0
-          ? { kind: "partialFailure", successFileCount, failureFileCount }
+          ? {
+              kind: "partialFailure",
+              successFileCount,
+              failureFileCount,
+              fileResults
+            }
           : {
               kind: "allFailure",
               reason:
-                changedFileCount === failureFileCount && changedFileCount > 0
-                  ? "fileChanged"
-                  : "generic"
+                unencodableFailureCount === failureFileCount &&
+                unencodableFailureCount > 0
+                  ? "unencodableCharacters"
+                  : changedFileCount === failureFileCount &&
+                      changedFileCount > 0
+                    ? "fileChanged"
+                    : "generic",
+              fileResults
             };
 
     // Land the result in the (still-open) dialog rather than a stacked
@@ -9554,18 +9757,29 @@ export function App(): JSX.Element {
       return;
     }
 
-    const existingDocument = activeProject.documents.find(
-      (projectDocument) => projectDocument.relativePath === relativePath
+    const documentId = createProjectDocumentEditorId(
+      relativePath,
+      activeContext
+    );
+    const openDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      documentId
     );
 
     if (
-      !existingDocument &&
-      !isSupportedProjectMarkdownRelativePath(relativePath)
+      !openDocument &&
+      !isProjectDocumentPath(relativePath, {
+        enablePlainTextDocuments:
+          effectiveSettings.textFiles.enablePlainTextDocuments
+      })
     ) {
       setStatus({ key: "status.projectDocumentNotFound" });
       return;
     }
 
+    const existingDocument = activeProject.documents.find(
+      (projectDocument) => projectDocument.relativePath === relativePath
+    );
     const document =
       existingDocument ?? projectDocumentForRelativePath(relativePath);
     const projectGeneration =
@@ -9589,11 +9803,6 @@ export function App(): JSX.Element {
     });
 
     try {
-      const documentId = createProjectDocumentEditorId(
-        document.relativePath,
-        activeContext
-      );
-
       const didOpen = await completeInstrumentedDocumentOpen(
         documentOpenId,
         startedAt,
@@ -10212,6 +10421,9 @@ export function App(): JSX.Element {
                         fileExplorerRefreshDirectoriesRequest
                       }
                       fileExplorerRevealRequest={fileExplorerRevealRequest}
+                      enablePlainTextDocuments={
+                        effectiveSettings.textFiles.enablePlainTextDocuments
+                      }
                       translate={translate}
                       onActivateProjectDocument={(relativePath) => {
                         void activateProjectDocument(relativePath);
@@ -10399,6 +10611,7 @@ export function App(): JSX.Element {
                       error={settingsError}
                       translate={translate}
                       displayLanguage={displayLanguage}
+                      confirmDialog={confirmDialog}
                       onChangeSettings={handleSettingsChangeRequest}
                       onSettingFieldFocus={handleSettingsFieldFocus}
                       onSettingFieldBlur={() => {
@@ -10432,7 +10645,9 @@ export function App(): JSX.Element {
                           effectiveSettings.preview.updateDelayMs
                         }
                         newFileLineEndingFallback={
-                          effectiveSettings.files.newFile.lineEnding
+                          isMarkdownCurrentDocument(activeDocument.editor.document)
+                            ? effectiveSettings.markdownFiles.lineEnding
+                            : effectiveSettings.textFiles.lineEnding
                         }
                         expectedLineEnding={
                           effectiveSettings.editor.lineEnding.expected
@@ -10616,7 +10831,7 @@ export function App(): JSX.Element {
                           effectiveSettings.editor.lineEnding.expected
                         }
                         newFileLineEndingFallback={
-                          effectiveSettings.files.newFile.lineEnding
+                          effectiveSettings.markdownFiles.lineEnding
                         }
                         whitespaceSettings={effectiveSettings.editor.whitespace}
                         undoHistoryMinDepth={
