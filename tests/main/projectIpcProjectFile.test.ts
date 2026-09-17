@@ -1327,10 +1327,10 @@ describe("project file IPC foundation", () => {
         path.join(os.tmpdir(), "outside.recovered.md")
       )
     ).toBeNull();
-    // A non-Markdown path is rejected.
+    // An unsupported extension is rejected.
     expect(
       registerCurrentProjectDocumentPath(
-        path.join(projectRootPath, "notes.txt")
+        path.join(projectRootPath, "notes.rtf")
       )
     ).toBeNull();
 
@@ -1370,6 +1370,141 @@ describe("project file IPC foundation", () => {
       relativePath: "appendix.markdown",
       content: "# Appendix\nbody\n"
     });
+  });
+
+  it("#501 slice 7: registerCurrentProjectDocumentPath registers a recovered .txt file even when Plain Text support is disabled", async () => {
+    // Plain Text support OFF for the whole test: registration for Recovery
+    // continuity must not depend on it (only a brand-new File Explorer open
+    // does) — see isRecoverableProjectDocumentPath's doc comment.
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Recovered Txt Registration.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Recovered Txt Registration"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+    const saveHandler = registeredHandler(PROJECT_CHANNELS.saveProjectDocument);
+
+    // Mirrors what a Recovery restore writes: a `.recovered.txt` sibling
+    // created directly on disk, after the project was already open.
+    const recoveredAbsolute = path.join(
+      projectRootPath,
+      "notes.recovered.txt"
+    );
+    await fs.writeFile(recoveredAbsolute, "recovered body\n", "utf8");
+
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.recovered.txt" })
+    ).rejects.toMatchObject({ name: "PergamumFileIoError" });
+
+    expect(registerCurrentProjectDocumentPath(recoveredAbsolute)).toBe(
+      "notes.recovered.txt"
+    );
+
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.recovered.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.recovered.txt",
+      content: "recovered body\n"
+    });
+
+    await expect(
+      saveHandler(
+        { sender: {} },
+        { relativePath: "notes.recovered.txt", content: "recovered edited\n" }
+      )
+    ).resolves.toEqual({
+      kind: "saved",
+      relativePath: "notes.recovered.txt"
+    });
+    expect(readFileSync(recoveredAbsolute, "utf8")).toBe("recovered edited\n");
+  });
+
+  it("#501 slice 7: registerProjectDocumentPath IPC channel registers a Session Restore continuation .txt tab", async () => {
+    await writePlainTextDocumentSupportSetting(userDataPath, false);
+
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Register Channel.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Register Channel"
+    });
+    await created.close();
+    await fs.writeFile(
+      path.join(projectRootPath, "notes.txt"),
+      "session body\n",
+      "utf8"
+    );
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const registerHandler = registeredHandler(
+      PROJECT_CHANNELS.registerProjectDocumentPath
+    );
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+
+    // Outside the project root: not applicable, not an error.
+    await expect(
+      registerHandler(
+        { sender: {} },
+        { absolutePath: path.join(os.tmpdir(), "outside.txt") }
+      )
+    ).resolves.toEqual({ relativePath: null });
+
+    // Unsupported extension: not applicable, not an error.
+    await fs.writeFile(
+      path.join(projectRootPath, "cover.png"),
+      Buffer.from([0]),
+      "binary"
+    );
+    await expect(
+      registerHandler(
+        { sender: {} },
+        { absolutePath: path.join(projectRootPath, "cover.png") }
+      )
+    ).resolves.toEqual({ relativePath: null });
+
+    // A .txt file inside the project root registers even though Plain Text
+    // support is currently off — this channel exists for continuation, not
+    // a new open.
+    await expect(
+      registerHandler(
+        { sender: {} },
+        { absolutePath: path.join(projectRootPath, "notes.txt") }
+      )
+    ).resolves.toEqual({ relativePath: "notes.txt" });
+
+    await expect(
+      readHandler({ sender: {} }, { relativePath: "notes.txt" })
+    ).resolves.toMatchObject({
+      relativePath: "notes.txt",
+      content: "session body\n"
+    });
+
+    // Malformed request: not applicable, not an error.
+    await expect(
+      registerHandler({ sender: {} }, { absolutePath: 42 })
+    ).resolves.toEqual({ relativePath: null });
   });
 
   it("confirmReadOnlyProjectOpen updates the window title with the readOnly status suffix", async () => {

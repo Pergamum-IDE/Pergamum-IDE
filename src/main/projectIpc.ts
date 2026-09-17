@@ -56,6 +56,8 @@ import {
   type RenameFileExplorerEntryResult,
   type PreflightRenameFileExplorerEntryResult,
   type SaveProjectDocumentRequest,
+  type RegisterProjectDocumentPathRequest,
+  type RegisterProjectDocumentPathResult,
   type SaveProjectDocumentResult,
   type StartupProjectOpenResult,
   type UpdateProjectNameRequest,
@@ -1251,6 +1253,18 @@ function parseSaveProjectDocumentRequest(
   };
 }
 
+function parseRegisterProjectDocumentPathRequest(
+  value: unknown
+): RegisterProjectDocumentPathRequest {
+  if (!isRequestObject(value) || typeof value.absolutePath !== "string") {
+    throw new Error("Invalid register project document path request.");
+  }
+
+  return {
+    absolutePath: value.absolutePath
+  };
+}
+
 function parseDryRunTextImportRequest(
   value: unknown
 ): DryRunTextImportRequest {
@@ -1757,7 +1771,25 @@ function isRenamableProjectFilePath(relativePath: string): boolean {
   );
 }
 
-function normalizedProjectMarkdownDocumentRelativePath(
+/**
+ * #501 slice 7: extensions a Recovery restore (or Session Restore
+ * continuation) may register as a project document — Markdown AND Plain
+ * Text. Deliberately NOT gated by `textFiles.enablePlainTextDocuments`: a
+ * disabled Plain Text setting hides `.txt` from File Explorer and blocks a
+ * *new* open, but it must never cause a `.txt` Recovery snapshot to be
+ * treated as "outside the project" (data-protection continuity, not a new
+ * document open — the same "already-open .txt stays usable" principle
+ * Slice 5 established for save-after-disable).
+ */
+function isRecoverableProjectDocumentPath(relativePath: string): boolean {
+  const extension = path.extname(relativePath).toLowerCase();
+
+  return (
+    extension === ".md" || extension === ".markdown" || extension === ".txt"
+  );
+}
+
+function normalizedRecoverableProjectDocumentRelativePath(
   rootPath: string,
   absolutePath: string
 ): string | null {
@@ -1771,7 +1803,7 @@ function normalizedProjectMarkdownDocumentRelativePath(
     return null;
   }
 
-  if (!isProjectMarkdownDocumentPath(relativePath)) {
+  if (!isRecoverableProjectDocumentPath(relativePath)) {
     return null;
   }
 
@@ -1782,7 +1814,7 @@ function registerProjectDocumentPath(
   projectState: CurrentProjectState,
   absolutePath: string
 ): string | null {
-  const normalized = normalizedProjectMarkdownDocumentRelativePath(
+  const normalized = normalizedRecoverableProjectDocumentRelativePath(
     projectState.rootPath,
     absolutePath
   );
@@ -3111,16 +3143,20 @@ async function readProjectDocumentPreviewLine(
 }
 
 /**
- * #287 follow-up: make a Markdown file that was created inside the current
- * project's root AFTER the project was opened (for example a `.recovered.md`
- * file written next to its origin document) a first-class project document,
- * so it can be read and saved through the project document IPC without
- * reopening the project.
+ * #287 follow-up / #501 slice 7: make a document file (Markdown or, since
+ * Slice 7, Plain Text `.txt`) that was created inside the current project's
+ * root AFTER the project was opened — for example a `.recovered<ext>` file a
+ * Recovery restore wrote next to its origin document — a first-class project
+ * document, so it can be read and saved through the project document IPC
+ * without reopening the project. This registration is intentionally NOT
+ * gated by `textFiles.enablePlainTextDocuments`: it exists for restore /
+ * continuity, not for a brand-new document open (see
+ * `isRecoverableProjectDocumentPath`).
  *
  * Returns the project-root-relative path — forward-slash separated, the same
- * form `discoverMarkdownFiles` produces — when `absolutePath` is a Markdown
- * file inside the open project root; otherwise `null` (no project open, path
- * outside the root, or not a supported Markdown file). Idempotent.
+ * form `discoverMarkdownFiles` produces — when `absolutePath` is a supported
+ * document file inside the open project root; otherwise `null` (no project
+ * open, path outside the root, or an unsupported extension). Idempotent.
  */
 export function registerCurrentProjectDocumentPath(
   absolutePath: string
@@ -4954,6 +4990,32 @@ export function registerProjectIpc(
           message: PROJECT_DOCUMENT_SAVE_FAILED_MESSAGE
         };
       }
+    }
+  );
+
+  // #501 slice 7: renderer-callable sibling of `registerCurrentProjectDocumentPath`
+  // (used internally by Recovery restore) — Session Restore continuation for
+  // a previously open project document not currently in
+  // `PergamumProject.documents` (e.g. a `.txt` tab restored while
+  // `textFiles.enablePlainTextDocuments` is off). Deliberately returns
+  // `{ relativePath: null }` rather than throwing for an out-of-root /
+  // unsupported-extension path — this is an ordinary "not applicable"
+  // outcome, not a failure.
+  ipcMain.handle(
+    PROJECT_CHANNELS.registerProjectDocumentPath,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<RegisterProjectDocumentPathResult> => {
+      let request: RegisterProjectDocumentPathRequest;
+
+      try {
+        request = parseRegisterProjectDocumentPathRequest(rawRequest);
+      } catch {
+        return { relativePath: null };
+      }
+
+      return { relativePath: registerCurrentProjectDocumentPath(request.absolutePath) };
     }
   );
 }

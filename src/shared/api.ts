@@ -290,6 +290,15 @@ export const PROJECT_CHANNELS = {
   /** #422: logical project rename (updates SQLite metadata, not physical files). */
   updateProjectName: "projects:updateProjectName",
   saveProjectDocument: "projects:saveProjectDocument",
+  /**
+   * #501 slice 7: register a file that landed inside the current project
+   * root outside the normal open flow — a Recovery `.recovered<ext>` restore
+   * or a Session Restore continuation tab — as a first-class project
+   * document, so it can be read/saved through the project document IPC. NOT
+   * gated by `textFiles.enablePlainTextDocuments`; see
+   * `isRecoverableProjectDocumentPath`'s doc comment in `projectIpc.ts`.
+   */
+  registerProjectDocumentPath: "projects:registerProjectDocumentPath",
   saveProjectSettings: "projects:saveProjectSettings",
   closeCurrentProject: "projects:closeCurrentProject"
 } as const;
@@ -350,8 +359,9 @@ export const RECOVERY_CHANNELS = {
   evaluateStartupCandidates: "recovery:evaluateStartupCandidates",
   /** #300: mark the current previous-run candidate set as seen. */
   markCandidatesSeen: "recovery:markCandidatesSeen",
-  /** Phase 6-4-4: write selected candidates to `.recovered.md` files
-   *  (atomic). Does NOT delete any Recovery row. */
+  /** Phase 6-4-4: write selected candidates to a fresh `.recovered` sibling
+   *  file each, same extension as the original document (atomic). Does NOT
+   *  delete any Recovery row. */
   restoreCandidates: "recovery:restoreCandidates",
   /** Phase 6-4-4: delete Recovery rows the renderer confirmed it opened
    *  after a successful restore. */
@@ -843,6 +853,22 @@ export type SaveProjectDocumentResult =
   | { kind: "saved"; relativePath: string }
   | { kind: "failed"; reason: DebugLogReason; message: string };
 
+/**
+ * #501 slice 7: register a project-root-relative-eligible absolute path
+ * (Recovery restore output, or a Session Restore continuation tab) as a
+ * first-class project document. See `PROJECT_CHANNELS.registerProjectDocumentPath`.
+ */
+export interface RegisterProjectDocumentPathRequest {
+  absolutePath: string;
+}
+
+export interface RegisterProjectDocumentPathResult {
+  /** The project-root-relative, forward-slash path, or `null` when
+   *  `absolutePath` is outside the project root or an unsupported
+   *  extension (no project document was registered). */
+  relativePath: string | null;
+}
+
 export type ProjectAccessMode =
   | { kind: "readWrite" }
   | { kind: "readOnly"; reason: "writeLockUnavailable" };
@@ -1175,6 +1201,13 @@ export interface PergamumApi {
       relativePath: string,
       content: string
     ) => Promise<SaveProjectDocumentResult>;
+    /** #501 slice 7: Session Restore continuation for a previously open
+     *  project document (Markdown or Plain Text) not currently in
+     *  `PergamumProject.documents` — e.g. a `.txt` tab restored while
+     *  `textFiles.enablePlainTextDocuments` is off. */
+    registerProjectDocumentPath: (
+      absolutePath: string
+    ) => Promise<RegisterProjectDocumentPathResult>;
     saveProjectSettings: (
       request: UpdateProjectSettingsRequest
     ) => Promise<ProjectSettings | undefined>;
@@ -1233,7 +1266,8 @@ export interface PergamumApi {
     evaluateStartupCandidates: () => Promise<RecoveryStartupPresentationResult>;
     /** #300: persist the currently visible previous-run candidate signature. */
     markCandidatesSeen: () => Promise<RecoveryMarkCandidatesSeenResult>;
-    /** Phase 6-4-4: write selected candidates to `.recovered.md`
+    /** Phase 6-4-4: write selected candidates to a fresh `.recovered`
+     *  sibling file each, same extension as the original document
      *  (atomic). Never deletes a Recovery row. */
     restoreCandidates: (
       request: RecoveryRestoreRequest

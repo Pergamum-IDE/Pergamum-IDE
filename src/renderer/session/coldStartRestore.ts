@@ -113,6 +113,18 @@ export interface ColdStartRestoreDeps {
     relativePath: string
   ) => Promise<string>;
   readonly readMarkdownFile: (filePath: string) => Promise<MarkdownFile>;
+  /**
+   * #501 slice 7: register `absolutePath` as a project document when it is
+   * not (yet) in the restored `PergamumProject.documents` — e.g. a `.txt`
+   * tab the Session recorded while `textFiles.enablePlainTextDocuments` is
+   * currently off. Returns the project-root-relative path on success, or
+   * `null` when `absolutePath` is outside the project root / an unsupported
+   * extension. This is session-continuation, never gated by that setting
+   * (see `isRecoverableProjectDocumentPath`'s doc comment in `projectIpc.ts`).
+   */
+  readonly registerProjectDocumentPath: (
+    absolutePath: string
+  ) => Promise<string | null>;
 
   /** Apply the assembled working environment into renderer state. */
   readonly applyRestoredEnvironment: (env: RestoredEnvironment) => void;
@@ -172,6 +184,13 @@ function basename(value: string): string {
   return parts[parts.length - 1] || value;
 }
 
+function joinProjectRelativePath(
+  rootPath: string,
+  relativePath: string
+): string {
+  return `${rootPath.replace(/[\\/]+$/, "")}/${relativePath}`;
+}
+
 interface BuiltEditor {
   readonly openDocument: OpenDocument;
   readonly sessionIdentity: SessionEditorIdentity;
@@ -208,9 +227,25 @@ async function buildRestoredEditor(
         (document) => document.relativePath === editor.relativePath
       );
 
+      // #501 slice 7: `project.documents` is a File-Explorer-time snapshot
+      // gated by `textFiles.enablePlainTextDocuments` — a `.txt` tab that
+      // was open when the Session was saved can be legitimately absent from
+      // it today (setting since turned off) without the FILE itself being
+      // gone. Session Restore is continuation, not a new open, so try
+      // registering it before giving up (never gated by that setting; see
+      // `registerProjectDocumentPath`'s doc comment).
       if (!isKnownDocument) {
-        deps.notifyEditorSkipped(basename(editor.relativePath));
-        return null;
+        const registeredRelativePath = await deps.registerProjectDocumentPath(
+          joinProjectRelativePath(
+            activeProjectContext.rootPath,
+            editor.relativePath
+          )
+        );
+
+        if (registeredRelativePath === null) {
+          deps.notifyEditorSkipped(basename(editor.relativePath));
+          return null;
+        }
       }
 
       let content: string;

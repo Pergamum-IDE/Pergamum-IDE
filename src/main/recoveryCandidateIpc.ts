@@ -4,8 +4,9 @@
  *   recovery:listCandidates              — list rows for the dialog
  *   recovery:evaluateStartupCandidates   — decide auto-show vs reminder
  *   recovery:markCandidatesSeen          — persist the current seen set
- *   recovery:restoreCandidates           — write `.recovered.md` files (atomic).
- *                                          NEVER deletes a Recovery row.
+ *   recovery:restoreCandidates           — write `.recovered` files (same
+ *                                          extension as the original document,
+ *                                          atomic). NEVER deletes a Recovery row.
  *   recovery:finalizeRestoredCandidates  — delete rows the renderer opened
  *   recovery:discardCandidates           — delete rows after the destructive
  *                                          confirmation

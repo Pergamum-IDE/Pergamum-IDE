@@ -265,7 +265,11 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     const readIdx = restoreFn.indexOf(
       "window.pergamum.files.readMarkdownFile("
     );
-    const openIdx = restoreFn.indexOf("await openDocument(createFileDocument(file))");
+    // #501 slice 7: both branches now open from the SAME already-read
+    // `recoveredFile` — there is a single open call per branch
+    // (createProjectDocument or createFileDocument), not one fixed
+    // "await openDocument(createFileDocument(file))" call site.
+    const openIdx = restoreFn.indexOf("await openDocument(");
     const finalizeIdx = restoreFn.indexOf(
       "window.pergamum.recovery.finalizeRestoredCandidates({"
     );
@@ -349,31 +353,34 @@ describe("Recovery candidate dialog wiring (#287)", () => {
       appSource.indexOf("async function handleRecoveryRestoreSelected"),
       appSource.indexOf("async function getRecoveryReportTextForDialog")
     );
+    // #501 slice 7: Recovery's own output is ALWAYS UTF-8 regardless of
+    // document kind (Markdown or Plain Text) or `textFiles.encoding`, so
+    // BOTH branches read the just-written file the same way, via the
+    // generic UTF-8 file reader — never through `readProjectDocument`'s
+    // `textFiles.encoding`-aware decode, which could otherwise misdecode
+    // Recovery's UTF-8 output. The read happens ONCE, before the branch.
+    const readIdx = restoreFn.indexOf(
+      "window.pergamum.files.readMarkdownFile("
+    );
     // The project-owned branch is gated on the main-supplied
     // projectRelativePath plus an actually-open project.
     const branchIdx = restoreFn.indexOf(
       "written.projectRelativePath && project && activeProjectContext"
     );
-    const projectReadIdx = restoreFn.indexOf(
-      "window.pergamum.projects.readProjectDocument("
-    );
     const projectOpenIdx = restoreFn.indexOf("createProjectDocument(");
-    const standaloneReadIdx = restoreFn.indexOf(
-      "window.pergamum.files.readMarkdownFile("
-    );
     const standaloneOpenIdx = restoreFn.indexOf(
-      "await openDocument(createFileDocument(file))"
+      "await openDocument(createFileDocument(recoveredFile))"
     );
 
-    expect(branchIdx).toBeGreaterThan(-1);
-    expect(projectReadIdx).toBeGreaterThan(branchIdx);
-    expect(projectOpenIdx).toBeGreaterThan(projectReadIdx);
+    expect(readIdx).toBeGreaterThan(-1);
+    expect(branchIdx).toBeGreaterThan(readIdx);
+    expect(projectOpenIdx).toBeGreaterThan(branchIdx);
     // The standalone open remains the else branch, after the project branch.
-    expect(standaloneReadIdx).toBeGreaterThan(projectOpenIdx);
-    expect(standaloneOpenIdx).toBeGreaterThan(standaloneReadIdx);
-    // The project read is handed the project-root-relative path verbatim.
-    expect(restoreFn).toMatch(
-      /readProjectDocument\(\s*written\.projectRelativePath\s*\)/
+    expect(standaloneOpenIdx).toBeGreaterThan(projectOpenIdx);
+    expect(restoreFn).not.toContain("window.pergamum.projects.readProjectDocument(");
+    // Both branches reuse the SAME already-read content/metadata.
+    expect(restoreFn).toContain(
+      "recoveredFile.content,\n              recoveredFile.metadata"
     );
   });
 

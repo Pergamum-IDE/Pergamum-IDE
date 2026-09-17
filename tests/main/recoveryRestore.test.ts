@@ -41,6 +41,44 @@ describe("resolveRecoveredPath", () => {
       await resolveRecoveredPath("/x/draft", existsFromSet([]))
     ).toBe(path.join("/x", "draft.recovered.md"));
   });
+
+  it("#501 slice 7: preserves .txt (never falls back to .md) for a Plain Text document", async () => {
+    const resolved = await resolveRecoveredPath(
+      "/novel/notes.txt",
+      existsFromSet([])
+    );
+    expect(resolved).toBe(path.join("/novel", "notes.recovered.txt"));
+    expect(resolved.endsWith(".recovered.md")).toBe(false);
+  });
+
+  it("#501 slice 7: preserves .markdown for a long-extension Markdown document", async () => {
+    expect(
+      await resolveRecoveredPath("/novel/chapter.markdown", existsFromSet([]))
+    ).toBe(path.join("/novel", "chapter.recovered.markdown"));
+  });
+
+  it("#501 slice 7: keeps a multi-dot .txt stem intact", async () => {
+    expect(
+      await resolveRecoveredPath("/x/draft.v1.txt", existsFromSet([]))
+    ).toBe(path.join("/x", "draft.v1.recovered.txt"));
+  });
+
+  it("#501 slice 7: walks -2, -3, … for .txt exactly like .md", async () => {
+    const resolved = await resolveRecoveredPath(
+      "/novel/notes.txt",
+      existsFromSet([
+        path.join("/novel", "notes.recovered.txt"),
+        path.join("/novel", "notes.recovered-2.txt")
+      ])
+    );
+    expect(resolved).toBe(path.join("/novel", "notes.recovered-3.txt"));
+  });
+
+  it("#501 slice 7: preserves an uppercase .TXT extension's case", async () => {
+    expect(
+      await resolveRecoveredPath("/novel/NOTES.TXT", existsFromSet([]))
+    ).toBe(path.join("/novel", "NOTES.recovered.TXT"));
+  });
 });
 
 function row(overrides: Partial<RecoveryRestoreRow> = {}): RecoveryRestoreRow {
@@ -182,6 +220,37 @@ describe("restoreRecoveryRow", () => {
     });
     expect(result.writtenPath).toBe(
       path.join("/novel", "chapter-03.recovered.md")
+    );
+  });
+
+  it("#501 slice 7: restores a Plain Text (.txt) row to a fresh .recovered.txt file, never .recovered.md", async () => {
+    const writeFileAtomic = vi.fn(async () => undefined);
+    const fs: RecoveryRestoreFileSystem = {
+      exists: existsFromSet(["/novel/notes.txt"]),
+      writeFileAtomic
+    };
+
+    const result = await restoreRecoveryRow(
+      row({
+        displayName: "notes.txt",
+        filePath: "/novel/notes.txt",
+        payloadText: "plain text recovered body"
+      }),
+      { fileSystem: fs }
+    );
+
+    expect(result).toEqual({
+      recoveryId: "rec-1",
+      status: "written",
+      writtenPath: path.join("/novel", "notes.recovered.txt"),
+      displayName: "notes.txt",
+      // #501 slice 7: Recovery does not have a distinct Plain Text
+      // documentType — see recoveryDocument.ts.
+      documentType: "markdown.file"
+    });
+    expect(writeFileAtomic).toHaveBeenCalledWith(
+      path.join("/novel", "notes.recovered.txt"),
+      "plain text recovered body"
     );
   });
 });

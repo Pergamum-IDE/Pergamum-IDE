@@ -1241,7 +1241,7 @@ export function App(): JSX.Element {
   const fileExplorerRenameRequestSeqRef = useRef(0);
   const [fileExplorerRenameEntryRequest, setFileExplorerRenameEntryRequest] =
     useState<FileExplorerRenameEntryRequest | null>(null);
-  // #344: after a Recovery restore writes `.recovered.md` files straight to
+  // #344: after a Recovery restore writes `.recovered` files straight to
   // disk, ask the File Explorer to re-list the directories they landed in so
   // its cached listing is not left stale.
   const fileExplorerRefreshDirectoriesRequestSeqRef = useRef(0);
@@ -4718,13 +4718,23 @@ export function App(): JSX.Element {
         continue;
       }
       try {
+        // #501 slice 7: Recovery always writes its `.recovered<ext>` output
+        // as BOM-less UTF-8 — for BOTH Markdown and Plain Text documents,
+        // independent of the project's current `textFiles.encoding` (see
+        // recoveryRestore.ts's doc comment). So the just-written file is
+        // read back the same way Recovery wrote it, via the generic
+        // UTF-8 file reader — NEVER through `readProjectDocument`'s
+        // Slice 6 `textFiles.encoding`-aware decode, which could otherwise
+        // try to decode this UTF-8 output as e.g. Shift_JIS and corrupt it.
+        const recoveredFile = await window.pergamum.files.readMarkdownFile(
+          written.writtenPath
+        );
+
         if (written.projectRelativePath && project && activeProjectContext) {
           // #287 follow-up: the recovered file landed inside the open
-          // project root — open it as a project-owned Markdown document so
-          // the tab is not flagged as an external / project-outside file.
-          const projectFile = await window.pergamum.projects.readProjectDocument(
-            written.projectRelativePath
-          );
+          // project root — open it as a project-owned document (Markdown or
+          // Plain Text) so the tab is not flagged as an external /
+          // project-outside file.
           await openDocument(
             createProjectDocument(
               {
@@ -4733,15 +4743,12 @@ export function App(): JSX.Element {
                   written.projectRelativePath.split("/").pop() ??
                   written.projectRelativePath
               },
-              projectFile.content,
-              projectFile.metadata
+              recoveredFile.content,
+              recoveredFile.metadata
             )
           );
         } else {
-          const file = await window.pergamum.files.readMarkdownFile(
-            written.writtenPath
-          );
-          await openDocument(createFileDocument(file));
+          await openDocument(createFileDocument(recoveredFile));
         }
         openedIds.push(written.recoveryId);
       } catch (error) {
@@ -4764,7 +4771,7 @@ export function App(): JSX.Element {
       }
     }
 
-    // #344: the restore wrote each `.recovered.md` straight to disk, bypassing
+    // #344: the restore wrote each `.recovered` file straight to disk, bypassing
     // the File Explorer's own create flow, so its cached listing for those
     // directories is now stale. Ask it to re-list every directory a restored
     // project file landed in (`null` = project root) so the tree — and the
@@ -7729,6 +7736,9 @@ export function App(): JSX.Element {
       (await window.pergamum.projects.readProjectDocument(relativePath)).content,
     readMarkdownFile: (filePath) =>
       window.pergamum.files.readMarkdownFile(filePath),
+    registerProjectDocumentPath: async (absolutePath) =>
+      (await window.pergamum.projects.registerProjectDocumentPath(absolutePath))
+        .relativePath,
     applyRestoredEnvironment: (env) => applyRestoredEnvironment(env),
     adoptSessionId: (sessionId) => {
       setRendererSessionId(sessionId);

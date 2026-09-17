@@ -112,6 +112,7 @@ function harness(
     }),
     readProjectDocumentContent: vi.fn(() => Promise.resolve("body\n")),
     readMarkdownFile: vi.fn(() => Promise.resolve(MD_FILE)),
+    registerProjectDocumentPath: vi.fn(() => Promise.resolve(null)),
     applyRestoredEnvironment: (env) => {
       // record the adoption order relative to apply
       applied.push(env);
@@ -241,6 +242,78 @@ describe("runColdStartRestore (#274)", () => {
 
     expect(h.applied[0].openDocuments.documents).toHaveLength(1);
     expect(h.skipped).toEqual(["missing.md"]);
+  });
+
+  it("#501 slice 7: a .txt tab already known in project.documents restores through the normal read, no registration attempt", async () => {
+    const projectWithTxt: PergamumProject = {
+      ...PROJECT,
+      documents: [
+        ...PROJECT.documents,
+        { relativePath: "notes.txt", name: "notes.txt" }
+      ]
+    };
+    const registerProjectDocumentPath = vi.fn(() => Promise.resolve(null));
+    const h = harness(
+      okPayload([
+        record({ projectContext: withProject, editors: [pm("notes.txt", 0)] })
+      ]),
+      {
+        resolveProjectOpenResult: () => Promise.resolve(projectWithTxt),
+        registerProjectDocumentPath
+      }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
+    expect(h.skipped).toEqual([]);
+    expect(registerProjectDocumentPath).not.toHaveBeenCalled();
+  });
+
+  it("#501 slice 7: a .txt tab NOT in project.documents (e.g. Plain Text support currently off) restores via registerProjectDocumentPath continuation", async () => {
+    const registerProjectDocumentPath = vi.fn(() =>
+      Promise.resolve("notes.txt")
+    );
+    const readProjectDocumentContent = vi.fn(() =>
+      Promise.resolve("plain text body\n")
+    );
+    const h = harness(
+      okPayload([
+        record({ projectContext: withProject, editors: [pm("notes.txt", 0)] })
+      ]),
+      { registerProjectDocumentPath, readProjectDocumentContent }
+    );
+    await runColdStartRestore(h.deps);
+
+    // Registered with the project-root-joined absolute path.
+    expect(registerProjectDocumentPath).toHaveBeenCalledWith(
+      "/w/Book/notes.txt"
+    );
+    expect(readProjectDocumentContent).toHaveBeenCalledWith("notes.txt");
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
+    expect(h.applied[0].openDocuments.documents[0].id.kind).toBe(
+      "projectDocument"
+    );
+    expect(h.skipped).toEqual([]);
+  });
+
+  it("#501 slice 7: a .txt tab whose registration fails (file actually gone) is skipped, not crashed", async () => {
+    const registerProjectDocumentPath = vi.fn(() => Promise.resolve(null));
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0), pm("notes.txt", 1)]
+        })
+      ]),
+      { registerProjectDocumentPath }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(registerProjectDocumentPath).toHaveBeenCalledWith(
+      "/w/Book/notes.txt"
+    );
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
+    expect(h.skipped).toEqual(["notes.txt"]);
   });
 
   it("a missing standalone Markdown skips only that editor", async () => {
