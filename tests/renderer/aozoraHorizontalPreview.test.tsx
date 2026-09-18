@@ -577,4 +577,178 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
       expect(mdHtml).toContain("※［＃1-14-2］");
     });
   });
+
+  describe("9. Aozora target-specified and typed emphasis mark annotations (#512)", () => {
+    it("1-2. 文字［＃「文字」に傍点］ renders with standard emphasis mark", () => {
+      const source = "これは大切［＃「大切」に傍点］な言葉です。";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<p data-source-line="1">これは<span class="aozora-bouten">大切</span>な言葉です。</p>'
+      );
+    });
+
+    it("3. 黒ゴマ傍点 renders with ﹅ mark", () => {
+      const source = "文字［＃「文字」に黒ゴマ傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;﹅&#39;;">文字</span>'
+      );
+    });
+
+    it("4. 白ゴマ傍点 renders with ﹆ mark", () => {
+      const source = "文字［＃「文字」に白ゴマ傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;﹆&#39;;">文字</span>'
+      );
+    });
+
+    it("5. 丸傍点 and 黒丸傍点 render with ● mark", () => {
+      const source1 = "文字［＃「文字」に丸傍点］";
+      const html1 = aozoraPreviewRenderer.render(source1);
+      expect(html1).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;●&#39;;">文字</span>'
+      );
+
+      const source2 = "文字［＃「文字」に黒丸傍点］";
+      const html2 = aozoraPreviewRenderer.render(source2);
+      expect(html2).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;●&#39;;">文字</span>'
+      );
+    });
+
+    it("6. 白丸傍点 renders with ○ mark", () => {
+      const source = "文字［＃「文字」に白丸傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;○&#39;;">文字</span>'
+      );
+    });
+
+    it("7. 黒三角傍点 renders with ▲ mark", () => {
+      const source = "文字［＃「文字」に黒三角傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;▲&#39;;">文字</span>'
+      );
+    });
+
+    it("8. 白三角傍点 renders with △ mark", () => {
+      const source = "文字［＃「文字」に白三角傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;△&#39;;">文字</span>'
+      );
+    });
+
+    it("9. 二重丸傍点 renders with ◎ mark", () => {
+      const source = "文字［＃「文字」に二重丸傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;◎&#39;;">文字</span>'
+      );
+    });
+
+    it("10. 蛇の目傍点 renders with ◉ mark", () => {
+      const source = "文字［＃「文字」に蛇の目傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;◉&#39;;">文字</span>'
+      );
+    });
+
+    it("11. ばつ傍点 renders with × mark", () => {
+      const source = "文字［＃「文字」にばつ傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;×&#39;;">文字</span>'
+      );
+    });
+
+    it("12-13. raw annotation does NOT remain and surrounding text is preserved", () => {
+      const source = "前文大切［＃「大切」に白丸傍点］後文";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<p data-source-line="1">前文<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;○&#39;;">大切</span>後文</p>'
+      );
+      expect(html).not.toContain("［＃「");
+      expect(html).not.toContain("］");
+    });
+
+    it("14. strips annotation safely when TARGET does NOT match preceding text", () => {
+      const source = "これは大事［＃「大切」に傍点］な言葉です。";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<p data-source-line="1">これは大事な言葉です。</p>'
+      );
+      expect(html).not.toContain("［＃");
+      expect(html).not.toContain("大切");
+    });
+
+    it("15. handles multiple target-specified bouten annotations in the same line", () => {
+      const source = "前文A［＃「A」に傍点］中文B［＃「B」に白丸傍点］後文";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '前文<span class="aozora-bouten">A</span>中文<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;○&#39;;">B</span>後文'
+      );
+    });
+
+    it("16. handles TARGET containing gaiji-replaced character if preceding text matches", () => {
+      const source = "本文※［＃1-14-2］［＃「※［＃1-14-2］」に黒ゴマ傍点］続き";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<p data-source-line="1">本文<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;﹅&#39;;">𠀋</span>続き</p>'
+      );
+    });
+
+    it("17. maintains safe HTML escaping for target-specified bouten text", () => {
+      const source = "文字<script>alert(1)</script>［＃「文字<script>alert(1)</script>」に傍点］";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain(
+        '<span class="aozora-bouten">文字&lt;script&gt;alert(1)&lt;/script&gt;</span>'
+      );
+      expect(html).not.toContain("<script>");
+    });
+
+    it("18-19. preserves enclosed bouten (standard & typed)", () => {
+      const stdSource = "［＃傍点］標準文字［＃傍点終わり］";
+      const stdHtml = aozoraPreviewRenderer.render(stdSource);
+      expect(stdHtml).toContain('<span class="aozora-bouten">標準文字</span>');
+
+      const typedSource = "［＃白丸傍点］白丸文字［＃白丸傍点終わり］";
+      const typedHtml = aozoraPreviewRenderer.render(typedSource);
+      expect(typedHtml).toContain(
+        '<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;○&#39;;">白丸文字</span>'
+      );
+    });
+
+    it("20-24. preserves ruby, gaiji, heading, page-break, data-source-line, and other renderers", () => {
+      const rubySource = "｜親文字《るび》［＃「親文字」に傍点］";
+      const rubyHtml = aozoraPreviewRenderer.render(rubySource);
+      expect(rubyHtml).toContain("<ruby>親文字<rt>るび</rt></ruby>");
+
+      const lineBreakSource = "一行目［＃「一行目」に傍点］\n\n三行目";
+      const lineBreakHtml = aozoraPreviewRenderer.render(lineBreakSource);
+      expect(lineBreakHtml).toContain('<p data-source-line="1">');
+      expect(lineBreakHtml).toContain('<p data-source-line="3">');
+
+      const mdSource = "文字［＃「文字」に傍点］";
+      const mdHtml = markdownPreviewRenderer.render(mdSource);
+      expect(mdHtml).toContain("文字［＃「文字」に傍点］");
+    });
+  });
 });
