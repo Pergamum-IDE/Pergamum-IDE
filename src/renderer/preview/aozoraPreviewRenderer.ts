@@ -52,6 +52,10 @@ function parseRubyInText(text: string): RubyTextChunk[] {
 
     const rubyText = text.slice(openIndex + 1, closeIndex);
     if (rubyText.length === 0 || /[\r\n《》｜|]/.test(rubyText)) {
+      result.push({
+        type: "text",
+        content: text.slice(pos, openIndex + 1)
+      });
       pos = openIndex + 1;
       continue;
     }

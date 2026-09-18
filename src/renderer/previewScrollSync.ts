@@ -351,6 +351,257 @@ export function getLiveElementOffset(
   return Math.max(0, relativeOffset);
 }
 
+/**
+ * Live-measures a block element's document-space progress (distance from container right edge)
+ * for vertical preview layout.
+ */
+export function getLiveElementVerticalProgress(
+  element: Element,
+  container: HTMLElement
+): number {
+  const containerRect = container.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  const currentScrollLeft = container.scrollLeft;
+  const progress = (containerRect.right - elementRect.right) - currentScrollLeft;
+  return Math.max(0, progress);
+}
+
+export interface ComputeVerticalScrollLeftOptions {
+  topSourceLine: number;
+  blocks: readonly PreviewBlockRef[];
+  container: HTMLElement;
+  isEditorAtEnd?: boolean;
+}
+
+export interface VerticalScrollSyncResult {
+  targetScrollLeft: number;
+  clampedScrollLeft: number;
+  minScrollLeft: number;
+  maxScrollLeft: number;
+  targetProgress: number;
+  prevBlockLine: number | null;
+  nextBlockLine: number | null;
+  fraction: number;
+}
+
+/**
+ * #515: Computes target scrollLeft for Editor -> Vertical Preview sync
+ * using binary search block mapping and line-ratio interpolation along the
+ * vertical preview progress axis.
+ */
+export function computeVerticalScrollLeftForLine(
+  options: ComputeVerticalScrollLeftOptions
+): VerticalScrollSyncResult | null {
+  const { topSourceLine, blocks, container, isEditorAtEnd } = options;
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  const scrollWidth = container.scrollWidth;
+  const clientWidth = container.clientWidth;
+  const maxScrollLeft = 0;
+  const minScrollLeft = Math.min(0, -(scrollWidth - clientWidth));
+
+  if (isEditorAtEnd) {
+    return {
+      targetScrollLeft: minScrollLeft,
+      clampedScrollLeft: minScrollLeft,
+      minScrollLeft,
+      maxScrollLeft,
+      targetProgress: Math.abs(minScrollLeft),
+      prevBlockLine: blocks[blocks.length - 1]?.line ?? null,
+      nextBlockLine: null,
+      fraction: 1.0
+    };
+  }
+
+  const { prev, next } = findSurroundingBlockRefs(blocks, topSourceLine);
+
+  let targetProgress = 0;
+  let fraction = 0;
+
+  if (prev && next) {
+    const prevProgress = getLiveElementVerticalProgress(prev.element, container);
+    if (prev === next || prev.line === next.line) {
+      targetProgress = prevProgress;
+      fraction = 0;
+    } else {
+      const nextProgress = getLiveElementVerticalProgress(next.element, container);
+      fraction = Math.min(1, Math.max(0, (topSourceLine - prev.line) / (next.line - prev.line)));
+      targetProgress = prevProgress + fraction * (nextProgress - prevProgress);
+    }
+  } else if (prev && !next) {
+    targetProgress = getLiveElementVerticalProgress(prev.element, container);
+    fraction = 1.0;
+  } else if (!prev && next) {
+    targetProgress = 0;
+    fraction = 0.0;
+  }
+
+  const rawTargetLeft = -targetProgress;
+  const targetScrollLeft = rawTargetLeft === 0 ? 0 : rawTargetLeft;
+  const clampedScrollLeft = Math.min(maxScrollLeft, Math.max(minScrollLeft, targetScrollLeft));
+
+  return {
+    targetScrollLeft,
+    clampedScrollLeft,
+    minScrollLeft,
+    maxScrollLeft,
+    targetProgress,
+    prevBlockLine: prev?.line ?? null,
+    nextBlockLine: next?.line ?? null,
+    fraction
+  };
+}
+
+export interface ComputeSourceLineForVerticalScrollLeftOptions {
+  scrollLeft: number;
+  blocks: readonly PreviewBlockRef[];
+  container: HTMLElement;
+  viewportBias?: number;
+}
+
+export interface VerticalPreviewToEditorResult {
+  targetLine: number;
+  prevBlockLine: number | null;
+  nextBlockLine: number | null;
+  fraction: number;
+  currentProgress: number;
+}
+
+/**
+ * #517: Estimates corresponding source line for Vertical Preview -> Editor sync
+ * based on preview.scrollLeft and vertical progress axis interpolation.
+ */
+export function computeSourceLineForVerticalScrollLeft(
+  options: ComputeSourceLineForVerticalScrollLeftOptions
+): VerticalPreviewToEditorResult | null {
+  const { scrollLeft, blocks, container, viewportBias = 0 } = options;
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  const currentProgress = Math.max(0, -scrollLeft + viewportBias);
+
+  if (blocks.length === 1) {
+    return {
+      targetLine: blocks[0].line,
+      prevBlockLine: blocks[0].line,
+      nextBlockLine: null,
+      fraction: 0,
+      currentProgress
+    };
+  }
+
+  const firstProgress = getLiveElementVerticalProgress(blocks[0].element, container);
+  if (currentProgress <= firstProgress) {
+    return {
+      targetLine: blocks[0].line,
+      prevBlockLine: null,
+      nextBlockLine: blocks[0].line,
+      fraction: 0,
+      currentProgress
+    };
+  }
+
+  const lastProgress = getLiveElementVerticalProgress(blocks[blocks.length - 1].element, container);
+  if (currentProgress >= lastProgress) {
+    return {
+      targetLine: blocks[blocks.length - 1].line,
+      prevBlockLine: blocks[blocks.length - 1].line,
+      nextBlockLine: null,
+      fraction: 1.0,
+      currentProgress
+    };
+  }
+
+  let low = 0;
+  let high = blocks.length - 1;
+  let foundIndex = 0;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const midProgress = getLiveElementVerticalProgress(blocks[mid].element, container);
+    if (midProgress <= currentProgress) {
+      foundIndex = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const prev = blocks[foundIndex];
+  const next = blocks[foundIndex + 1] ?? prev;
+
+  const prevProgress = getLiveElementVerticalProgress(prev.element, container);
+  const nextProgress = next ? getLiveElementVerticalProgress(next.element, container) : prevProgress;
+
+  if (prev === next || prev.line === next.line || nextProgress <= prevProgress) {
+    return {
+      targetLine: prev.line,
+      prevBlockLine: prev.line,
+      nextBlockLine: next?.line ?? null,
+      fraction: 0,
+      currentProgress
+    };
+  }
+
+  const fraction = Math.min(1, Math.max(0, (currentProgress - prevProgress) / (nextProgress - prevProgress)));
+  const targetLine = Math.round(prev.line + fraction * (next.line - prev.line));
+
+  return {
+    targetLine,
+    prevBlockLine: prev.line,
+    nextBlockLine: next.line,
+    fraction,
+    currentProgress
+  };
+}
+
+/**
+ * #516: Normalizes WheelEvent delta values into pixel offsets based on deltaMode.
+ * deltaMode 0: pixel (direct)
+ * deltaMode 1: line (approx. 40px per line)
+ * deltaMode 2: page (container clientWidth/pageSize)
+ */
+export function normalizeWheelDelta(
+  delta: number,
+  deltaMode: number,
+  pageSize: number = 500
+): number {
+  if (deltaMode === 1) {
+    return delta * 40;
+  }
+  if (deltaMode === 2) {
+    return delta * pageSize;
+  }
+  return delta;
+}
+
+export interface ComputeVerticalWheelScrollLeftOptions {
+  currentScrollLeft: number;
+  delta: number;
+  scrollWidth: number;
+  clientWidth: number;
+}
+
+/**
+ * #516: Computes next scrollLeft for vertical preview wheel scroll,
+ * clamping within [-(scrollWidth - clientWidth), 0].
+ */
+export function computeVerticalWheelScrollLeft(
+  options: ComputeVerticalWheelScrollLeftOptions
+): number {
+  const { currentScrollLeft, delta, scrollWidth, clientWidth } = options;
+  const minScrollLeft = Math.min(0, -(scrollWidth - clientWidth));
+  const maxScrollLeft = 0;
+
+  const targetScrollLeft = currentScrollLeft - delta;
+  const clamped = Math.min(maxScrollLeft, Math.max(minScrollLeft, targetScrollLeft));
+
+  return clamped === 0 ? 0 : clamped;
+}
+
 export interface SyncPreviewScrollWithBlocksOptions {
   source: PreviewScrollTarget;
   sourceAxis: PreviewScrollAxis;

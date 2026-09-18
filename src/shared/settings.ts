@@ -22,7 +22,39 @@ export type PreviewRendererId =
   | "markdown"
   | "narouHorizontal"
   | "kakuyomuHorizontal"
-  | "aozoraHorizontal";
+  | "aozoraHorizontal"
+  | "narouVertical"
+  | "kakuyomuVertical"
+  | "aozoraVertical";
+
+export function isVerticalPreviewRenderer(renderer?: PreviewRendererId): boolean {
+  return (
+    renderer === "narouVertical" ||
+    renderer === "kakuyomuVertical" ||
+    renderer === "aozoraVertical"
+  );
+}
+
+export function isKakuyomuPreviewRenderer(renderer?: PreviewRendererId): boolean {
+  return (
+    renderer === "kakuyomuHorizontal" ||
+    renderer === "kakuyomuVertical"
+  );
+}
+
+export function isNarouPreviewRenderer(renderer?: PreviewRendererId): boolean {
+  return (
+    renderer === "narouHorizontal" ||
+    renderer === "narouVertical"
+  );
+}
+
+export function isAozoraPreviewRenderer(renderer?: PreviewRendererId): boolean {
+  return (
+    renderer === "aozoraHorizontal" ||
+    renderer === "aozoraVertical"
+  );
+}
 
 export interface RecentProject {
   /**

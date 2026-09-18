@@ -4667,7 +4667,8 @@ label.settingsItemHeader {
 }
 
 /* #507: Narou-like horizontal novel preview renderer styling */
-.preview--narou-horizontal {
+.preview--narou-horizontal,
+.preview--narou-vertical {
   line-height: 1.9;
   letter-spacing: 0.02em;
   word-break: break-word;
@@ -4679,7 +4680,12 @@ label.settingsItemHeader {
   margin-right: auto;
 }
 
-.preview--narou-horizontal p {
+.preview--narou-vertical > * {
+  max-height: 42em;
+}
+
+.preview--narou-horizontal p,
+.preview--narou-vertical p {
   margin-top: 0;
   margin-bottom: 1.2em;
   white-space: pre-wrap;
@@ -4690,33 +4696,45 @@ label.settingsItemHeader {
 .preview--narou-horizontal h3,
 .preview--narou-horizontal h4,
 .preview--narou-horizontal h5,
-.preview--narou-horizontal h6 {
+.preview--narou-horizontal h6,
+.preview--narou-vertical h1,
+.preview--narou-vertical h2,
+.preview--narou-vertical h3,
+.preview--narou-vertical h4,
+.preview--narou-vertical h5,
+.preview--narou-vertical h6 {
   margin-top: 1.5em;
   margin-bottom: 0.8em;
   white-space: pre-wrap;
 }
 
-.preview--narou-horizontal ruby {
+.preview--narou-horizontal ruby,
+.preview--narou-vertical ruby {
   ruby-position: over;
   -webkit-ruby-position: over;
 }
 
-.preview--narou-horizontal rt {
+.preview--narou-horizontal rt,
+.preview--narou-vertical rt {
   font-size: 0.55em;
   line-height: 1;
 }
 
 .preview--narou-horizontal [style*="text-emphasis"],
 .preview--narou-horizontal .emphasis-mark,
-.preview--narou-horizontal [data-emphasis-mark] {
+.preview--narou-horizontal [data-emphasis-mark],
+.preview--narou-vertical [style*="text-emphasis"],
+.preview--narou-vertical .emphasis-mark,
+.preview--narou-vertical [data-emphasis-mark] {
   text-emphasis-style: var(--narou-emphasis-mark-symbol, '・');
   text-emphasis-position: over right;
   -webkit-text-emphasis-style: var(--narou-emphasis-mark-symbol, '・');
-  -webkit-text-emphasis-position: over right;
+  -webkit-text-emphasis-position: over;
 }
 
 /* #508: Kakuyomu-like horizontal novel preview renderer styling */
-.preview--kakuyomu-horizontal {
+.preview--kakuyomu-horizontal,
+.preview--kakuyomu-vertical {
   line-height: 1.9;
   letter-spacing: 0.02em;
   word-break: break-word;
@@ -4728,7 +4746,12 @@ label.settingsItemHeader {
   margin-right: auto;
 }
 
-.preview--kakuyomu-horizontal p {
+.preview--kakuyomu-vertical > * {
+  max-height: 42em;
+}
+
+.preview--kakuyomu-horizontal p,
+.preview--kakuyomu-vertical p {
   margin-top: 0;
   margin-bottom: 1.2em;
   white-space: pre-wrap;
@@ -4739,18 +4762,26 @@ label.settingsItemHeader {
 .preview--kakuyomu-horizontal h3,
 .preview--kakuyomu-horizontal h4,
 .preview--kakuyomu-horizontal h5,
-.preview--kakuyomu-horizontal h6 {
+.preview--kakuyomu-horizontal h6,
+.preview--kakuyomu-vertical h1,
+.preview--kakuyomu-vertical h2,
+.preview--kakuyomu-vertical h3,
+.preview--kakuyomu-vertical h4,
+.preview--kakuyomu-vertical h5,
+.preview--kakuyomu-vertical h6 {
   margin-top: 1.5em;
   margin-bottom: 0.8em;
   white-space: pre-wrap;
 }
 
-.preview--kakuyomu-horizontal ruby {
+.preview--kakuyomu-horizontal ruby,
+.preview--kakuyomu-vertical ruby {
   ruby-position: over;
   -webkit-ruby-position: over;
 }
 
-.preview--kakuyomu-horizontal rt {
+.preview--kakuyomu-horizontal rt,
+.preview--kakuyomu-vertical rt {
   font-size: 0.55em;
   line-height: 1;
 }
@@ -4758,15 +4789,20 @@ label.settingsItemHeader {
 .preview--kakuyomu-horizontal [style*="text-emphasis"],
 .preview--kakuyomu-horizontal .emphasis-mark,
 .preview--kakuyomu-horizontal [data-emphasis-mark],
-.preview--kakuyomu-horizontal .novel-emphasis {
+.preview--kakuyomu-horizontal .novel-emphasis,
+.preview--kakuyomu-vertical [style*="text-emphasis"],
+.preview--kakuyomu-vertical .emphasis-mark,
+.preview--kakuyomu-vertical [data-emphasis-mark],
+.preview--kakuyomu-vertical .novel-emphasis {
   text-emphasis-style: "・";
   text-emphasis-position: over right;
   -webkit-text-emphasis-style: "・";
-  -webkit-text-emphasis-position: over right;
+  -webkit-text-emphasis-position: over;
 }
 
 /* #509: Aozora Bunko-like horizontal novel preview renderer styling */
-.preview--aozora-horizontal {
+.preview--aozora-horizontal,
+.preview--aozora-vertical {
   line-height: 1.8;
   letter-spacing: 0.01em;
   word-break: break-word;
@@ -4778,7 +4814,12 @@ label.settingsItemHeader {
   margin-right: auto;
 }
 
-.preview--aozora-horizontal p {
+.preview--aozora-vertical > * {
+  max-height: 42em;
+}
+
+.preview--aozora-horizontal p,
+.preview--aozora-vertical p {
   margin-top: 0;
   margin-bottom: 1.2em;
   white-space: pre-wrap;
@@ -4789,24 +4830,33 @@ label.settingsItemHeader {
 .preview--aozora-horizontal h3,
 .preview--aozora-horizontal h4,
 .preview--aozora-horizontal h5,
-.preview--aozora-horizontal h6 {
+.preview--aozora-horizontal h6,
+.preview--aozora-vertical h1,
+.preview--aozora-vertical h2,
+.preview--aozora-vertical h3,
+.preview--aozora-vertical h4,
+.preview--aozora-vertical h5,
+.preview--aozora-vertical h6 {
   margin-top: 1.6em;
   margin-bottom: 0.8em;
   font-weight: bold;
   white-space: pre-wrap;
 }
 
-.preview--aozora-horizontal ruby {
+.preview--aozora-horizontal ruby,
+.preview--aozora-vertical ruby {
   ruby-position: over;
   -webkit-ruby-position: over;
 }
 
-.preview--aozora-horizontal rt {
+.preview--aozora-horizontal rt,
+.preview--aozora-vertical rt {
   font-size: 0.55em;
   line-height: 1;
 }
 
-.preview--aozora-horizontal .aozora-bouten {
+.preview--aozora-horizontal .aozora-bouten,
+.preview--aozora-vertical .aozora-bouten {
   text-emphasis-style: var(--aozora-bouten-mark, "・");
   text-emphasis-position: over right;
   -webkit-text-emphasis-style: var(--aozora-bouten-mark, "・");
@@ -4826,6 +4876,27 @@ label.settingsItemHeader {
   border-top: 1px dashed var(--border-color, #a0a8b0);
   margin-top: 2em;
   margin-bottom: 2em;
+}
+
+/* #514: Vertical novel preview renderer styling */
+.preview--narou-vertical,
+.preview--kakuyomu-vertical,
+.preview--aozora-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: 1.5em 2em;
+  box-sizing: border-box;
+}
+
+.preview--aozora-vertical .aozora-indent {
+  padding-top: var(--aozora-indent, 1em);
+}
+
+.preview--aozora-vertical .aozora-page-break {
+  border: none;
+  border-right: 1px dashed var(--border-color, #a0a8b0);
+  margin-right: 2em;
+  margin-left: 2em;
 }
 
 /*

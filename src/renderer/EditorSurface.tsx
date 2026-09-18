@@ -16,15 +16,17 @@ import {
   documentLineCount,
   documentMaxLineLength
 } from "../shared/documentMetrics";
-import type {
-  ApplicationEditorWhitespaceSettings,
-  ExpectedLineEnding,
-  FencedCodeIndentUnit,
-  LineEndingMarkerGlyph,
-  NewFileLineEnding,
-  PreviewRendererId,
-  SelectionHighlightMode,
-  WorkbenchSoundSettings
+import {
+  isAozoraPreviewRenderer,
+  isVerticalPreviewRenderer,
+  type ApplicationEditorWhitespaceSettings,
+  type ExpectedLineEnding,
+  type FencedCodeIndentUnit,
+  type LineEndingMarkerGlyph,
+  type NewFileLineEnding,
+  type PreviewRendererId,
+  type SelectionHighlightMode,
+  type WorkbenchSoundSettings
 } from "../shared/settings";
 import type { Translate } from "../shared/i18n";
 import {
@@ -44,6 +46,9 @@ import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
   collectPreviewAnchors,
   collectPreviewBlockRefs,
+  computeSourceLineForVerticalScrollLeft,
+  computeVerticalScrollLeftForLine,
+  computeVerticalWheelScrollLeft,
   createScrollSyncGuard,
   findSurroundingBlockRefs,
   findTargetLineForScrollTop,
@@ -51,6 +56,7 @@ import {
   getLiveElementOffset,
   getMaxScroll,
   getScrollOffset,
+  normalizeWheelDelta,
   setScrollOffset,
   syncPreviewScroll,
   syncPreviewScrollWithAnchors,
@@ -418,12 +424,14 @@ export function useMemoizedPreviewRender(
   return useMemo(() => {
     const startedAt = performance.now();
     const html =
-      previewRenderer === "aozoraHorizontal"
+      isAozoraPreviewRenderer(previewRenderer)
         ? aozoraPreviewRenderer.render(previewSourceContent, {
-            projectLocalImageResolution
+            projectLocalImageResolution,
+            previewRenderer
           })
         : markdownPreviewRenderer.render(previewSourceContent, {
-            projectLocalImageResolution
+            projectLocalImageResolution,
+            previewRenderer
           });
 
     return { html, startedAt, durationMs: performance.now() - startedAt };
@@ -1028,7 +1036,7 @@ function MarkdownEditorSurface({
   const [aozoraCleanText, setAozoraCleanText] = useState<string | null>(null);
 
   useEffect(() => {
-    if (previewRenderer !== "aozoraHorizontal" || isMarkdown || isDirty) {
+    if (!isAozoraPreviewRenderer(previewRenderer) || isMarkdown || isDirty) {
       setAozoraCleanText(null);
       return;
     }
@@ -1069,7 +1077,7 @@ function MarkdownEditorSurface({
   }, [previewRenderer, isMarkdown, isDirty, documentKey, document]);
 
   const effectivePreviewSourceContent =
-    previewRenderer === "aozoraHorizontal" &&
+    isAozoraPreviewRenderer(previewRenderer) &&
     !isMarkdown &&
     !isDirty &&
     aozoraCleanText !== null
@@ -1280,6 +1288,12 @@ function MarkdownEditorSurface({
   }, [previewContainer, rebuildBlockMap]);
 
   useEffect(() => {
+    if (previewContainer) {
+      previewContainer.scrollTo({ top: 0, left: 0 });
+    }
+  }, [previewRenderer, previewContainer]);
+
+  useEffect(() => {
     if (!editorScroller || !previewContainer) {
       return undefined;
     }
@@ -1307,7 +1321,10 @@ function MarkdownEditorSurface({
       // off: do nothing at all for this scroll event (the separate
       // scrollEvent.classified diagnostic below already reports why).
       const leaderForThisDirection = scrollLeaderTrackerRef.current?.getLeader() ?? "editor";
-      if (leaderForThisDirection !== "editor" || !isSyncScrollEditorToPreviewEnabled) {
+      if (
+        leaderForThisDirection !== "editor" ||
+        !isSyncScrollEditorToPreviewEnabled
+      ) {
         return;
       }
 
@@ -1345,6 +1362,66 @@ function MarkdownEditorSurface({
           currentGen !== generationRef.current ||
           scrollSyncGuard.isSuppressed("editor")
         ) {
+          return;
+        }
+
+        if (isVerticalPreviewRenderer(previewRenderer)) {
+          const topSourceLine = editorAdapter?.getTopSourceLine() ?? undefined;
+          if (typeof topSourceLine !== "number") {
+            return;
+          }
+
+          let blocks = previewBlockRefsRef.current;
+          if (blocks.length === 0 && previewContainer) {
+            const result = collectPreviewBlockRefs(previewContainer, "initialRender");
+            blocks = result.blocks;
+            previewBlockRefsRef.current = blocks;
+          }
+
+          const editorMax = getMaxScroll(editorScroller, previewScrollAxis);
+          const editorCurrent = getScrollOffset(editorScroller, previewScrollAxis);
+          const isEditorAtEnd = editorMax > 0 && editorCurrent >= editorMax - 1;
+
+          const syncResult = computeVerticalScrollLeftForLine({
+            topSourceLine,
+            blocks,
+            container: previewContainer,
+            isEditorAtEnd
+          });
+
+          if (!syncResult) {
+            return;
+          }
+
+          scrollSyncGuard.setSuppressed("preview", true);
+          const previewScrollBefore = previewContainer.scrollLeft;
+          previewContainer.scrollLeft = syncResult.clampedScrollLeft;
+          const previewScrollAfter = previewContainer.scrollLeft;
+
+          if (isDebugModeEnabled) {
+            emitScrollSyncLog({
+              level: "debug",
+              event: "preview.scrollSync.editorToPreview.sampled",
+              details: {
+                topSourceLine,
+                targetLine: syncResult.prevBlockLine ?? topSourceLine,
+                editorCurrent,
+                editorMax,
+                targetScrollTopBefore: previewScrollBefore,
+                targetScrollTopAfter: syncResult.clampedScrollLeft,
+                previewScrollTopBefore: previewScrollBefore,
+                previewScrollTopAfter: previewScrollAfter,
+                previewScrollHeight: previewContainer.scrollWidth,
+                previewClientHeight: previewContainer.clientWidth,
+                previewMaxScrollTop: syncResult.minScrollLeft,
+                generation: currentGen,
+                usedLiveMeasurement: true,
+                usedCachedPixelOffset: false,
+                measurementFailed: false,
+                skipReason: null
+              }
+            });
+          }
           return;
         }
 
@@ -1746,9 +1823,43 @@ function MarkdownEditorSurface({
       reportPreviewScrollLeaderChange(tracker.setLeader(pane, "keydown"));
     };
 
+    const handlePreviewVerticalWheel = (event: WheelEvent) => {
+      if (!isVerticalPreviewRenderer(previewRenderer)) {
+        return;
+      }
+
+      const rawDelta =
+        Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      if (rawDelta === 0) {
+        return;
+      }
+
+      const pageSize = previewContainer.clientWidth || 500;
+      const normalizedDelta = normalizeWheelDelta(rawDelta, event.deltaMode, pageSize);
+
+      const nextScrollLeft = computeVerticalWheelScrollLeft({
+        currentScrollLeft: previewContainer.scrollLeft,
+        delta: normalizedDelta,
+        scrollWidth: previewContainer.scrollWidth,
+        clientWidth: previewContainer.clientWidth
+      });
+
+      if (nextScrollLeft !== previewContainer.scrollLeft) {
+        previewContainer.scrollLeft = nextScrollLeft;
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+      }
+    };
+
     const captureOptions: AddEventListenerOptions = {
       capture: true,
       passive: true
+    };
+
+    const nonPassiveCaptureOptions: AddEventListenerOptions = {
+      capture: true,
+      passive: false
     };
 
     editorScroller.addEventListener("wheel", editorWheel, captureOptions);
@@ -1765,6 +1876,7 @@ function MarkdownEditorSurface({
     editorScroller.addEventListener("focusin", editorFocusIn, captureOptions);
 
     previewContainer.addEventListener("wheel", previewWheel, captureOptions);
+    previewContainer.addEventListener("wheel", handlePreviewVerticalWheel, nonPassiveCaptureOptions);
     previewContainer.addEventListener(
       "pointerdown",
       previewPointerDown,
@@ -1813,6 +1925,11 @@ function MarkdownEditorSurface({
         "wheel",
         previewWheel,
         captureOptions
+      );
+      previewContainer.removeEventListener(
+        "wheel",
+        handlePreviewVerticalWheel,
+        nonPassiveCaptureOptions
       );
       previewContainer.removeEventListener(
         "pointerdown",
@@ -2020,6 +2137,70 @@ function MarkdownEditorSurface({
                   currentGen !== previewToEditorGenerationRef.current
                     ? "staleGeneration"
                     : "measurementFailed"
+              }
+            });
+          }
+          return;
+        }
+
+        if (isVerticalPreviewRenderer(previewRenderer)) {
+          let blocks = previewBlockRefsRef.current;
+          if (blocks.length === 0 && previewContainer) {
+            const result = collectPreviewBlockRefs(previewContainer, "initialRender");
+            blocks = result.blocks;
+            previewBlockRefsRef.current = blocks;
+          }
+
+          const docLineCount = adapter.getDocLineCount();
+          const editorTopSourceLineBefore = adapter.getTopSourceLine();
+          const minScrollLeft = Math.min(0, -(previewContainer.scrollWidth - previewContainer.clientWidth));
+          const currentScrollLeft = previewContainer.scrollLeft;
+
+          let targetLine: number | null = null;
+          let skippedReason: "sameLine" | "measurementFailed" | null = null;
+
+          if (minScrollLeft < 0 && currentScrollLeft <= minScrollLeft + 1) {
+            targetLine = docLineCount;
+          } else if (currentScrollLeft >= 0) {
+            targetLine = 1;
+          } else {
+            const syncResult = computeSourceLineForVerticalScrollLeft({
+              scrollLeft: currentScrollLeft,
+              blocks,
+              container: previewContainer
+            });
+            if (syncResult) {
+              targetLine = syncResult.targetLine;
+            } else {
+              skippedReason = "measurementFailed";
+            }
+          }
+
+          if (
+            skippedReason === null &&
+            targetLine !== null &&
+            editorTopSourceLineBefore !== null &&
+            targetLine === editorTopSourceLineBefore
+          ) {
+            skippedReason = "sameLine";
+          }
+
+          if (skippedReason === null && targetLine !== null) {
+            adapter.scrollToSourceLine(targetLine);
+          }
+
+          if (isDebugModeEnabled) {
+            emitScrollSyncLog({
+              level: "debug",
+              event: "preview.scrollSync.previewToEditor.sampled",
+              details: {
+                previewScrollTop: currentScrollLeft,
+                targetBlockLine: targetLine,
+                targetBlockLiveOffset: currentScrollLeft,
+                editorTopSourceLineBefore,
+                editorTopSourceLineAfter: adapter.getTopSourceLine(),
+                generation: currentGen,
+                previewToEditorSkippedReason: skippedReason
               }
             });
           }

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { supportedLanguages } from "../../src/shared/i18n";
+import type { PreviewRendererId } from "../../src/shared/settings";
 import { TEXT_FILE_ENCODINGS, type TextFileEncoding } from "../../src/shared/textFileEncoding";
 import {
   defineBooleanSetting,
@@ -252,9 +253,7 @@ describe("Settings Catalog Foundation (#150)", () => {
 
   describe("type safety", () => {
     it("infers literal/primitive value types from getCatalogDefaultValue", () => {
-      expectTypeOf(getCatalogDefaultValue("preview.renderer")).toEqualTypeOf<
-        "markdown" | "narouHorizontal" | "kakuyomuHorizontal" | "aozoraHorizontal"
-      >();
+      expectTypeOf(getCatalogDefaultValue("preview.renderer")).toEqualTypeOf<PreviewRendererId>();
       expectTypeOf(
         getCatalogDefaultValue("markdownFiles.lineEnding")
       ).toEqualTypeOf<"lf" | "crlf">();
@@ -312,9 +311,7 @@ describe("Settings Catalog Foundation (#150)", () => {
     it("resolveCatalogValue's value type matches SettingValueOf, not unknown", () => {
       const result = resolveCatalogValue("preview.renderer", "markdown");
 
-      expectTypeOf(result.value).toEqualTypeOf<
-        "markdown" | "narouHorizontal" | "kakuyomuHorizontal" | "aozoraHorizontal"
-      >();
+      expectTypeOf(result.value).toEqualTypeOf<PreviewRendererId>();
     });
   });
 
@@ -1486,12 +1483,15 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("preview.renderer's enum values are exactly ['markdown', 'narouHorizontal', 'kakuyomuHorizontal', 'aozoraHorizontal']", () => {
+    it("preview.renderer's enum values are exactly ['markdown', 'narouHorizontal', 'kakuyomuHorizontal', 'aozoraHorizontal', 'narouVertical', 'kakuyomuVertical', 'aozoraVertical']", () => {
       expect(getCatalogEntry("preview.renderer").enumValues).toEqual([
         "markdown",
         "narouHorizontal",
         "kakuyomuHorizontal",
-        "aozoraHorizontal"
+        "aozoraHorizontal",
+        "narouVertical",
+        "kakuyomuVertical",
+        "aozoraVertical"
       ]);
     });
 

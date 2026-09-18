@@ -308,7 +308,10 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "markdown",
         "narouHorizontal",
         "kakuyomuHorizontal",
-        "aozoraHorizontal"
+        "aozoraHorizontal",
+        "narouVertical",
+        "kakuyomuVertical",
+        "aozoraVertical"
       ]);
       expect(language.control.options.map((o) => o.value)).toEqual([
         "ja",
