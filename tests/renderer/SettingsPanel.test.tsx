@@ -1676,7 +1676,13 @@ describe("SettingsPanelView preview.updateDelayMs (#250 follow-up)", () => {
   it("shows the stored value and the ms unit, with min/max/step wired from the catalog", () => {
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      preview: { renderer: "markdown", updateDelayMs: 10000 }
+      preview: {
+        renderer: "markdown",
+        updateDelayMs: 10000,
+        syncScrollEditorToPreview: true,
+        syncScrollPreviewToEditor: true,
+        doubleClickJumpToEditor: true
+      }
     };
     const element = settingsPanelViewElement("en", {
       settings,

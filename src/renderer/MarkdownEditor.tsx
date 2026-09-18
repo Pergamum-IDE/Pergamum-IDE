@@ -1,4 +1,9 @@
 import { EditorView } from "@codemirror/view";
+import {
+  isPreviewToEditorScrollSyncTransaction,
+  previewToEditorScrollSyncAnnotation,
+  transactionRequestsScrollIntoView
+} from "./previewScrollSyncAnnotation";
 import { useEffect, useRef } from "react";
 import {
   Compartment,
@@ -382,6 +387,17 @@ interface MarkdownEditorProps {
   onScrollerMount?: (scroller: HTMLElement | null) => void;
   /** #503: callback when the EditorView scroll-sync adapter mounts or unmounts. */
   onScrollSyncAdapterMount?: (adapter: EditorScrollSyncAdapter | null) => void;
+  /**
+   * #505 Phase 1: fired when a dispatched transaction carries an
+   * `EditorView.scrollIntoView(...)` effect — an editor-internal jump
+   * (incremental find, Quick Open, outline, restoreViewState, #504's own
+   * jump, ...) — so it can take editor leadership in the preview<->editor
+   * scroll-sync leader tracker. NOT fired for a transaction carrying the
+   * #505 preview -> editor sync's own annotation (see
+   * previewScrollSyncAnnotation.ts) — that one must not take leadership, or
+   * the sync direction would invert into a feedback loop.
+   */
+  onEditorScrollIntoViewTransaction?: () => void;
 }
 
 /**
@@ -580,7 +596,8 @@ export function MarkdownEditor({
   formatImageLinkDiagnosticMessage,
   documentStates: documentStatesProp,
   onScrollerMount,
-  onScrollSyncAdapterMount
+  onScrollSyncAdapterMount,
+  onEditorScrollIntoViewTransaction
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -592,6 +609,13 @@ export function MarkdownEditor({
   useEffect(() => {
     onScrollSyncAdapterMountRef.current = onScrollSyncAdapterMount;
   }, [onScrollSyncAdapterMount]);
+  const onEditorScrollIntoViewTransactionRef = useRef(
+    onEditorScrollIntoViewTransaction
+  );
+  useEffect(() => {
+    onEditorScrollIntoViewTransactionRef.current =
+      onEditorScrollIntoViewTransaction;
+  }, [onEditorScrollIntoViewTransaction]);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   const visibilityCompartmentRef = useRef<Compartment | null>(null);
   // #256: owns the whitespace-marker layer so a runtime Settings change is
@@ -809,6 +833,20 @@ export function MarkdownEditor({
     lineEndingField: StateField<LineEndingBreakSet>
   ) {
     return EditorView.updateListener.of((update) => {
+      // #505 Phase 1: an editor-internal jump (incremental find, Quick
+      // Open, outline, restoreViewState, #504's own jump, ...) takes editor
+      // leadership too — EXCEPT our own preview -> editor sync write, which
+      // must not (see previewToEditorScrollSyncAnnotation's doc comment).
+      for (const tr of update.transactions) {
+        if (isPreviewToEditorScrollSyncTransaction(tr)) {
+          continue;
+        }
+        if (transactionRequestsScrollIntoView(tr)) {
+          onEditorScrollIntoViewTransactionRef.current?.();
+          break;
+        }
+      }
+
       const soundEvent = readOnlyRef.current
         ? null
         : markdownEditorInputSoundEventFromTransactions(update.transactions);
@@ -1232,7 +1270,12 @@ export function MarkdownEditor({
           const clamped = Math.max(1, Math.min(Math.floor(targetLine), totalLines));
           const line = view.state.doc.line(clamped);
           view.dispatch({
-            effects: EditorView.scrollIntoView(line.from, { y: "start" })
+            effects: EditorView.scrollIntoView(line.from, { y: "start" }),
+            // #505 Phase 1: this IS the preview -> editor sync write — must
+            // carry this annotation so the update listener above does not
+            // treat it as an editor-internal jump and steal leadership back
+            // (which would invert the sync direction into a feedback loop).
+            annotations: previewToEditorScrollSyncAnnotation.of(true)
           });
         } catch {
           // ignore

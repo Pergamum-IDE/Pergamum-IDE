@@ -122,6 +122,9 @@ export const debugLogEventNames = [
   "preview.scrollSync.previewScroll.sampled",
   "preview.scrollSync.programmaticScroll.suppressed",
   "preview.jumpToSource.requested",
+  "preview.scrollSync.leader.changed",
+  "preview.scrollSync.scrollEvent.classified",
+  "preview.scrollSync.previewToEditor.sampled",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -396,6 +399,76 @@ export type DebugLogViewportChangeSource =
   (typeof debugLogViewportChangeSources)[number];
 
 /**
+ * #505 Phase 0: which pane a preview<->editor scroll-sync diagnostic is
+ * about.
+ */
+export const debugLogPreviewScrollSyncPanes = [
+  "editor",
+  "preview",
+  "unknown"
+] as const;
+
+export type DebugLogPreviewScrollSyncPane =
+  (typeof debugLogPreviewScrollSyncPanes)[number];
+
+/** #505 Phase 0: the input-based scroll-sync "leader" tracker's state. */
+export const debugLogPreviewScrollLeaderStates = [
+  "editor",
+  "preview",
+  "none",
+  "unknown"
+] as const;
+
+export type DebugLogPreviewScrollLeaderState =
+  (typeof debugLogPreviewScrollLeaderStates)[number];
+
+/** #505 Phase 0: what caused a leader acquisition/renewal/release/expiry. */
+export const debugLogPreviewScrollLeaderTriggers = [
+  "wheel",
+  "keydown",
+  "pointerdown",
+  "touchstart",
+  "pointerup",
+  "pointercancel",
+  "expired",
+  "unknown"
+] as const;
+
+export type DebugLogPreviewScrollLeaderTrigger =
+  (typeof debugLogPreviewScrollLeaderTriggers)[number];
+
+/**
+ * #505 Phase 0: closed classification for a scroll event on either pane.
+ * `disabledBySetting` is reserved for the later gating phase — Phase 0 only
+ * ever emits the first three.
+ */
+export const debugLogPreviewScrollEventReasons = [
+  "leader",
+  "follower",
+  "noLeader",
+  "disabledBySetting",
+  "unknown"
+] as const;
+
+export type DebugLogPreviewScrollEventReason =
+  (typeof debugLogPreviewScrollEventReasons)[number];
+
+/**
+ * #505 Phase 1: closed reason a `preview.scrollSync.previewToEditor.sampled`
+ * event's write was skipped. `null` (not a member here — handled specially
+ * by the sanitizer) means the write was NOT skipped.
+ */
+export const debugLogPreviewToEditorSkippedReasons = [
+  "sameLine",
+  "staleGeneration",
+  "measurementFailed",
+  "unknown"
+] as const;
+
+export type DebugLogPreviewToEditorSkippedReason =
+  (typeof debugLogPreviewToEditorSkippedReasons)[number];
+
+/**
  * #504 Preview double-click jump-to-source: closed outcome classification
  * for `preview.jumpToSource.requested`.
  */
@@ -405,6 +478,11 @@ export const debugLogPreviewJumpToSourceResults = [
   "noSourceLine",
   "invalidLine",
   "noEditor",
+  // #505 Phase 1: preview.doubleClickJumpToEditor is off.
+  "disabledBySetting",
+  // #505 Phase 1: a modifier key was held — an event is emitted even though
+  // no jump happens (Phase 0 silently did nothing here).
+  "modifierHeld",
   "unknown"
 ] as const;
 
@@ -704,6 +782,38 @@ export interface DebugLogDetails {
   previewJumpToSourceTargetLine?: number | null;
   previewJumpToSourceClamped?: boolean;
   previewJumpToSourceDocLineCount?: number;
+
+  /**
+   * #505 Phase 1 leader tracking + scroll event classification
+   * (`preview.scrollSync.leader.changed` /
+   * `preview.scrollSync.scrollEvent.classified`). `previewScrollEventPropagated`
+   * now reflects a REAL gating decision, not a dry run. Never carries
+   * document text, HTML, or a file path.
+   */
+  previewScrollLeader?: DebugLogPreviewScrollLeaderState;
+  previewScrollLeaderTrigger?: DebugLogPreviewScrollLeaderTrigger;
+  previewScrollEventPane?: DebugLogPreviewScrollSyncPane;
+  previewScrollEventReason?: DebugLogPreviewScrollEventReason;
+  previewScrollEventPropagated?: boolean;
+  previewScrollEventScrollTop?: number;
+  /** scrollTop change since the previous scroll event on that pane; can be negative. */
+  previewScrollEventDeltaSinceLastEvent?: number;
+  /** Preview pane only. `null` when no programmatic write has happened yet. */
+  previewScrollEventMsSinceLastProgrammaticWrite?: number | null;
+
+  /**
+   * #505 Phase 1 preview -> editor sync (`preview.scrollSync.
+   * previewToEditor.sampled`), issue Design §2-§5. Reuses the existing
+   * `previewScrollTop` field above (#503) — same meaning, this direction
+   * just reads rather than writes it. Never carries document text, HTML, or
+   * a file path.
+   */
+  targetBlockLine?: number | null;
+  targetBlockLiveOffset?: number | null;
+  editorTopSourceLineBefore?: number | null;
+  editorTopSourceLineAfter?: number | null;
+  /** `null` means the write was NOT skipped. */
+  previewToEditorSkippedReason?: DebugLogPreviewToEditorSkippedReason | null;
 
   error?: SanitizedErrorInfo;
 }

@@ -10640,6 +10640,16 @@ export function App(): JSX.Element {
                   ) : activeDocument ? (
                     <EditorSurface
                         editor={activeDocument.editor}
+                        isDebugModeEnabled={isDebugModeEnabled}
+                        isSyncScrollEditorToPreviewEnabled={
+                          effectiveSettings.preview.syncScrollEditorToPreview
+                        }
+                        isSyncScrollPreviewToEditorEnabled={
+                          effectiveSettings.preview.syncScrollPreviewToEditor
+                        }
+                        isDoubleClickJumpToEditorEnabled={
+                          effectiveSettings.preview.doubleClickJumpToEditor
+                        }
                         activeDocumentKey={serializeEditorId(
                           activeDocument.id
                         )}

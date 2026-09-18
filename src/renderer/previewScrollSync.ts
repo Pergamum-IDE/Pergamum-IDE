@@ -887,3 +887,63 @@ export function createScrollSyncGuard(): ScrollSyncGuard {
     }
   };
 }
+
+export interface PreviewToEditorTargetResult {
+  /** The `data-source-line` of the target block, or `null` if `blocks` is empty. */
+  targetLine: number | null;
+  /** The target block's live-measured offset, or `null` if `blocks` is empty. */
+  targetBlockLiveOffset: number | null;
+}
+
+/**
+ * #505 Phase 1, issue Design §2: binary search over the block map for the
+ * LAST block whose top edge is at or above `scrollTop` — that block's
+ * `data-source-line` becomes the editor's target line. Every comparison
+ * live-measures via `getLiveElementOffset` (`getBoundingClientRect()`
+ * underneath) — pixel offsets are never cached, exactly like the other
+ * (editor -> preview) direction in this module.
+ *
+ * `blocks` must already be sorted by ascending line (as
+ * `collectPreviewBlockRefs` produces them), which for a normal top-to-bottom
+ * document also means ascending visual/DOM offset — binary search relies on
+ * that correspondence.
+ *
+ * When `scrollTop` is above every block's live offset (at or near the very
+ * top of the document), falls back to the first block — "treat the top the
+ * same way" as the end-clamping in issue Design §5. The symmetric "past the
+ * last block" case falls out of the binary search itself: every comparison
+ * succeeds, converging on the last index.
+ */
+export function findTargetLineForScrollTop(
+  blocks: readonly PreviewBlockRef[],
+  container: HTMLElement,
+  scrollTop: number,
+  axis: PreviewScrollAxis
+): PreviewToEditorTargetResult {
+  if (blocks.length === 0) {
+    return { targetLine: null, targetBlockLiveOffset: null };
+  }
+
+  let low = 0;
+  let high = blocks.length - 1;
+  let resultIndex = -1;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const liveOffset = getLiveElementOffset(blocks[mid].element, container, axis);
+
+    if (liveOffset <= scrollTop) {
+      resultIndex = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const target = resultIndex === -1 ? blocks[0] : blocks[resultIndex];
+
+  return {
+    targetLine: target.line,
+    targetBlockLiveOffset: getLiveElementOffset(target.element, container, axis)
+  };
+}

@@ -56,6 +56,10 @@ export interface ApplicationPreviewSettings {
   renderer: PreviewRendererId;
   updateDelayMs: number;
   fontFamilyList?: FontFamilySetting[];
+  /** #505 Phase 1: applicationOnly, defaults true, applied live. */
+  syncScrollEditorToPreview: boolean;
+  syncScrollPreviewToEditor: boolean;
+  doubleClickJumpToEditor: boolean;
 }
 
 export interface WorkbenchStatusBarSettings {
@@ -429,6 +433,9 @@ export interface EffectivePreviewSettings {
   renderer: PreviewRendererId;
   updateDelayMs: number;
   fontFamilyList: FontFamilySetting[];
+  syncScrollEditorToPreview: boolean;
+  syncScrollPreviewToEditor: boolean;
+  doubleClickJumpToEditor: boolean;
 }
 
 export interface EffectiveNotificationSettings {
@@ -540,7 +547,16 @@ export const builtInDefaultSettings: EffectiveSettings = {
   preview: {
     renderer: defaultPreviewRenderer,
     updateDelayMs: defaultPreviewUpdateDelayMs,
-    fontFamilyList: getCatalogDefaultValue("preview.fontFamilyList")
+    fontFamilyList: getCatalogDefaultValue("preview.fontFamilyList"),
+    syncScrollEditorToPreview: getCatalogDefaultValue(
+      "preview.syncScrollEditorToPreview"
+    ),
+    syncScrollPreviewToEditor: getCatalogDefaultValue(
+      "preview.syncScrollPreviewToEditor"
+    ),
+    doubleClickJumpToEditor: getCatalogDefaultValue(
+      "preview.doubleClickJumpToEditor"
+    )
   },
   notification: {
     output: {
@@ -685,7 +701,13 @@ export const builtInDefaultSettings: EffectiveSettings = {
 export const defaultApplicationSettings: ApplicationSettings = {
   preview: {
     renderer: builtInDefaultSettings.preview.renderer,
-    updateDelayMs: builtInDefaultSettings.preview.updateDelayMs
+    updateDelayMs: builtInDefaultSettings.preview.updateDelayMs,
+    syncScrollEditorToPreview:
+      builtInDefaultSettings.preview.syncScrollEditorToPreview,
+    syncScrollPreviewToEditor:
+      builtInDefaultSettings.preview.syncScrollPreviewToEditor,
+    doubleClickJumpToEditor:
+      builtInDefaultSettings.preview.doubleClickJumpToEditor
   },
   workbench: {
     language: builtInDefaultSettings.workbench.language,
@@ -791,7 +813,13 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
   return {
     preview: {
       renderer: defaultApplicationSettings.preview.renderer,
-      updateDelayMs: defaultApplicationSettings.preview.updateDelayMs
+      updateDelayMs: defaultApplicationSettings.preview.updateDelayMs,
+      syncScrollEditorToPreview:
+        defaultApplicationSettings.preview.syncScrollEditorToPreview,
+      syncScrollPreviewToEditor:
+        defaultApplicationSettings.preview.syncScrollPreviewToEditor,
+      doubleClickJumpToEditor:
+        defaultApplicationSettings.preview.doubleClickJumpToEditor
     },
     workbench: {
       language: defaultApplicationSettings.workbench.language,
@@ -926,7 +954,15 @@ export function resolveEffectiveSettings(
       fontFamilyList:
         projectSettings?.preview?.fontFamilyList ??
         applicationSettings.preview.fontFamilyList ??
-        builtInDefaultSettings.preview.fontFamilyList
+        builtInDefaultSettings.preview.fontFamilyList,
+      // #505 Phase 1: applicationOnly, like updateDelayMs above — no
+      // project override.
+      syncScrollEditorToPreview:
+        applicationSettings.preview.syncScrollEditorToPreview,
+      syncScrollPreviewToEditor:
+        applicationSettings.preview.syncScrollPreviewToEditor,
+      doubleClickJumpToEditor:
+        applicationSettings.preview.doubleClickJumpToEditor
     },
     notification: {
       output: {

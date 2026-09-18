@@ -1033,6 +1033,37 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  // #505 Phase 1: independent on/off switches for each scroll-sync
+  // direction plus the double-click jump, all applicationOnly (like
+  // preview.updateDelayMs above) and applied live — the handler reads the
+  // setting on every scroll/click, no remount needed.
+  "preview.syncScrollEditorToPreview": defineBooleanSetting({
+    key: "preview.syncScrollEditorToPreview",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.preview.syncScrollEditorToPreview.label",
+    descriptionKey: "settings.preview.syncScrollEditorToPreview.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "preview.syncScrollPreviewToEditor": defineBooleanSetting({
+    key: "preview.syncScrollPreviewToEditor",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.preview.syncScrollPreviewToEditor.label",
+    descriptionKey: "settings.preview.syncScrollPreviewToEditor.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "preview.doubleClickJumpToEditor": defineBooleanSetting({
+    key: "preview.doubleClickJumpToEditor",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.preview.doubleClickJumpToEditor.label",
+    descriptionKey: "settings.preview.doubleClickJumpToEditor.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   // #266: how long an information NotificationToast stays on screen before it
   // auto-dismisses. applicationOnly (a user-scope tuning knob, like the
   // Command Palette marquee timings and preview.updateDelayMs above). Named

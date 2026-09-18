@@ -44,6 +44,7 @@ import {
   collectPreviewBlockRefs,
   createScrollSyncGuard,
   findSurroundingBlockRefs,
+  findTargetLineForScrollTop,
   getLastPreviewScrollSyncDebugDetails,
   getLiveElementOffset,
   getMaxScroll,
@@ -63,6 +64,15 @@ import {
   isPreviewJumpModifierHeld,
   resolvePreviewJumpTarget
 } from "./previewJumpToSource";
+import {
+  attributeKeydownPane,
+  classifyPreviewScrollEvent,
+  createPreviewScrollLeaderTracker,
+  type PreviewScrollLeaderInputTrigger,
+  type PreviewScrollLeaderResult,
+  type PreviewScrollLeaderTracker,
+  type PreviewScrollSyncPane
+} from "./previewScrollLeaderTracker";
 import {
   MarkdownEditor,
   type MarkdownImageAttachmentPositionController,
@@ -417,6 +427,23 @@ export function useMemoizedPreviewRender(
 interface EditorSurfaceProps {
   editor: CurrentEditor;
   /**
+   * #505 Phase 0: gates the (high-frequency, per-scroll-event)
+   * `preview.scrollSync.scrollEvent.classified` diagnostic's layout reads —
+   * see that effect for why this needs an actual flag rather than emitting
+   * unconditionally like #503's lower-frequency diagnostics do.
+   */
+  isDebugModeEnabled: boolean;
+  /**
+   * #505 Phase 1: `preview.syncScrollEditorToPreview` /
+   * `preview.syncScrollPreviewToEditor` / `preview.doubleClickJumpToEditor` —
+   * each direction's write (and the double-click jump) is gated
+   * independently and applied live (no remount). Leader tracking itself
+   * runs regardless of these settings; only the writes are gated.
+   */
+  isSyncScrollEditorToPreviewEnabled: boolean;
+  isSyncScrollPreviewToEditorEnabled: boolean;
+  isDoubleClickJumpToEditorEnabled: boolean;
+  /**
    * Stable identity of the active tab (#250) — used only to know when the
    * user has switched to a *different* open document, so a debounced
    * preview update in flight for the previous one is never applied after
@@ -603,6 +630,10 @@ interface EditorSurfaceProps {
 
 export function EditorSurface({
   editor,
+  isDebugModeEnabled,
+  isSyncScrollEditorToPreviewEnabled,
+  isSyncScrollPreviewToEditorEnabled,
+  isDoubleClickJumpToEditorEnabled,
   activeDocumentKey,
   documentStates,
   previewUpdateDelayMs,
@@ -664,6 +695,10 @@ export function EditorSurface({
       return (
         <MarkdownEditorSurface
           document={editor.document}
+          isDebugModeEnabled={isDebugModeEnabled}
+          isSyncScrollEditorToPreviewEnabled={isSyncScrollEditorToPreviewEnabled}
+          isSyncScrollPreviewToEditorEnabled={isSyncScrollPreviewToEditorEnabled}
+          isDoubleClickJumpToEditorEnabled={isDoubleClickJumpToEditorEnabled}
           documentKey={activeDocumentKey}
           documentStates={documentStates}
           previewUpdateDelayMs={previewUpdateDelayMs}
@@ -734,6 +769,12 @@ export function EditorSurface({
 
 interface MarkdownEditorSurfaceProps {
   document: CurrentDocument;
+  /** #505 Phase 0: see EditorSurfaceProps's own doc comment. */
+  isDebugModeEnabled: boolean;
+  /** #505 Phase 1: see EditorSurfaceProps's own doc comment. */
+  isSyncScrollEditorToPreviewEnabled: boolean;
+  isSyncScrollPreviewToEditorEnabled: boolean;
+  isDoubleClickJumpToEditorEnabled: boolean;
   documentKey: string;
   /** #392: see EditorSurfaceProps's own doc comment. */
   documentStates?: Map<string, MarkdownEditorDocumentState>;
@@ -846,6 +887,10 @@ interface MarkdownEditorSurfaceProps {
 
 function MarkdownEditorSurface({
   document,
+  isDebugModeEnabled,
+  isSyncScrollEditorToPreviewEnabled,
+  isSyncScrollPreviewToEditorEnabled,
+  isDoubleClickJumpToEditorEnabled,
   documentKey,
   documentStates,
   previewUpdateDelayMs,
@@ -1028,6 +1073,72 @@ function MarkdownEditorSurface({
   const generationRef = useRef(0);
   const lastEditorScrollTopRef = useRef<number | null>(null);
 
+  // #505 Phase 1: input-based STICKY leader tracking + scroll event
+  // classification. One tracker instance per mounted surface — never shared
+  // globally. Starts (and resets) to "editor"; see the reset effect below.
+  const scrollLeaderTrackerRef = useRef<PreviewScrollLeaderTracker | null>(
+    null
+  );
+  if (!scrollLeaderTrackerRef.current) {
+    scrollLeaderTrackerRef.current = createPreviewScrollLeaderTracker();
+  }
+  const lastPaneScrollTopRef = useRef<{
+    editor: number | null;
+    preview: number | null;
+  }>({ editor: null, preview: null });
+  // Best-effort marker of the last time #503's editor->preview sync actually
+  // changed the preview's scrollTop (see the `previewScrollTopBefore !==
+  // previewScrollTopAfter` check below) — read-only tap, no change to #503's
+  // own write logic/control flow.
+  const previewLastProgrammaticWriteAtRef = useRef<number | null>(null);
+  // #505 Phase 1: rAF coalescing refs — raw "scroll" events can fire more
+  // than once per animation frame during a pointer drag (a well-known,
+  // unthrottled native behavior), which is exactly what produced Phase 0's
+  // duplicate scrollEvent.classified logs at the same timestamp with
+  // deltaSinceLastEvent: 0. #503's OWN listener already guards against this
+  // with requestAnimationFrame + a generation counter (see handleEditorScroll
+  // above) — these give the classification and preview->editor effects the
+  // same protection, as their own, separate rAF slots.
+  const classificationEditorFrameRef = useRef<number | null>(null);
+  const classificationPreviewFrameRef = useRef<number | null>(null);
+  const previewToEditorGenerationRef = useRef(0);
+  const previewToEditorFrameRef = useRef<number | null>(null);
+
+  const reportPreviewScrollLeaderChange = useCallback(
+    (result: PreviewScrollLeaderResult) => {
+      if (result.changed) {
+        emitScrollSyncLog({
+          level: "info",
+          event: "preview.scrollSync.leader.changed",
+          details: {
+            previewScrollLeader: result.leader,
+            previewScrollLeaderTrigger: result.trigger
+          }
+        });
+      }
+    },
+    [emitScrollSyncLog]
+  );
+
+  // #505 Phase 1: editor-internal jumps (incremental find, Quick Open,
+  // outline, restoreViewState, #504's own jump, ...) move the editor without
+  // a keystroke scrolling it — they must take editor leadership too, or a
+  // sticky preview leader would silently swallow the resulting editor
+  // scroll's classification. MarkdownEditor.tsx calls this from its update
+  // listener for any transaction with an EditorView.scrollIntoView effect,
+  // EXCEPT one carrying the #505 preview->editor sync annotation (see
+  // previewScrollSyncAnnotation.ts) — that exception is what keeps this
+  // one-directional instead of a feedback loop.
+  const handleEditorScrollIntoViewTransaction = useCallback(() => {
+    const tracker = scrollLeaderTrackerRef.current;
+    if (!tracker) {
+      return;
+    }
+    reportPreviewScrollLeaderChange(
+      tracker.setLeader("editor", "editorTransactionScrollIntoView")
+    );
+  }, [reportPreviewScrollLeaderChange]);
+
   const lastPreviewLayoutMetricsRef = useRef<{
     scrollHeight: number;
     clientHeight: number;
@@ -1113,6 +1224,16 @@ function MarkdownEditorSurface({
     const handleEditorScroll = () => {
       generationRef.current += 1;
       const currentGen = generationRef.current;
+
+      // #505 Phase 1: editor -> preview stays exactly as it was (#503) —
+      // this is the only change, an early gate before any of that logic
+      // runs. Not the editor's turn to lead, or the direction is turned
+      // off: do nothing at all for this scroll event (the separate
+      // scrollEvent.classified diagnostic below already reports why).
+      const leaderForThisDirection = scrollLeaderTrackerRef.current?.getLeader() ?? "editor";
+      if (leaderForThisDirection !== "editor" || !isSyncScrollEditorToPreviewEnabled) {
+        return;
+      }
 
       if (scrollSyncGuard.shouldIgnoreScroll("editor")) {
         const suppressDetails = {
@@ -1217,6 +1338,12 @@ function MarkdownEditorSurface({
         const debugDetails = getLastPreviewScrollSyncDebugDetails();
         const previewScrollTopAfter = getScrollOffset(previewContainer, previewScrollAxis);
         const targetMax = getMaxScroll(previewContainer, previewScrollAxis);
+
+        // #505 Phase 0: read-only tap, not a change to the write above — see
+        // previewLastProgrammaticWriteAtRef's own comment.
+        if (previewScrollTopBefore !== previewScrollTopAfter) {
+          previewLastProgrammaticWriteAtRef.current = performance.now();
+        }
 
         const previousScrollTop = lastEditorScrollTopRef.current;
         lastEditorScrollTopRef.current = editorCurrent;
@@ -1357,7 +1484,14 @@ function MarkdownEditorSurface({
       editorScroller.removeEventListener("scroll", handleEditorScroll);
       previewContainer.removeEventListener("scroll", handlePreviewScroll);
     };
-  }, [editorAdapter, editorScroller, previewContainer, previewScrollAxis, scrollSyncGuard]);
+  }, [
+    editorAdapter,
+    editorScroller,
+    previewContainer,
+    previewScrollAxis,
+    scrollSyncGuard,
+    isSyncScrollEditorToPreviewEnabled
+  ]);
 
   // #504: Preview double-click jump-to-source. One delegated `dblclick`
   // listener on the preview scroll container — never per-element. Does not
@@ -1369,7 +1503,21 @@ function MarkdownEditorSurface({
     }
 
     const handlePreviewDoubleClick = (event: MouseEvent) => {
+      if (!isDoubleClickJumpToEditorEnabled) {
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.jumpToSource.requested",
+          details: { previewJumpToSourceResult: "disabledBySetting" }
+        });
+        return;
+      }
+
       if (isPreviewJumpModifierHeld(event)) {
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.jumpToSource.requested",
+          details: { previewJumpToSourceResult: "modifierHeld" }
+        });
         return;
       }
 
@@ -1449,7 +1597,445 @@ function MarkdownEditorSurface({
     return () => {
       previewContainer.removeEventListener("dblclick", handlePreviewDoubleClick);
     };
-  }, [previewContainer, emitScrollSyncLog]);
+  }, [previewContainer, emitScrollSyncLog, isDoubleClickJumpToEditorEnabled]);
+
+  // #505 Phase 1: input-based STICKY leader tracking. Capture-phase,
+  // passive listeners on each pane's own scroll container (plus ONE
+  // document-level keydown listener — see below) so an inner handler can
+  // never swallow them first. Never calls preventDefault/stopPropagation and
+  // must not change any existing behavior — this is purely additive
+  // observation alongside #503's own listeners, not a replacement for them.
+  useEffect(() => {
+    if (!editorScroller || !previewContainer) {
+      return undefined;
+    }
+
+    const tracker = scrollLeaderTrackerRef.current;
+    if (!tracker) {
+      return undefined;
+    }
+
+    // NOT the global `document`: this component's own `document` prop (a
+    // CurrentDocument) shadows it. `ownerDocument` is the actual DOM
+    // Document regardless of that naming collision.
+    const ownerDocument = editorScroller.ownerDocument;
+
+    function makeInputHandler(
+      pane: PreviewScrollSyncPane,
+      trigger: PreviewScrollLeaderInputTrigger
+    ) {
+      return () => {
+        reportPreviewScrollLeaderChange(tracker!.setLeader(pane, trigger));
+      };
+    }
+
+    const editorWheel = makeInputHandler("editor", "wheel");
+    const editorTouchStart = makeInputHandler("editor", "touchstart");
+    const editorFocusIn = makeInputHandler("editor", "focusin");
+    const editorPointerDown = () => {
+      tracker.notePointerDownPane("editor");
+      makeInputHandler("editor", "pointerdown")();
+    };
+
+    const previewWheel = makeInputHandler("preview", "wheel");
+    const previewTouchStart = makeInputHandler("preview", "touchstart");
+    const previewFocusIn = makeInputHandler("preview", "focusin");
+    const previewPointerDown = () => {
+      tracker.notePointerDownPane("preview");
+      makeInputHandler("preview", "pointerdown")();
+    };
+
+    // #505 Phase 1 decision: a keydown is attributed by
+    // document.activeElement's pane, else the pane of the last pointerdown,
+    // else the leader is left unchanged — see attributeKeydownPane. This
+    // MUST be a single document-level, capture-phase listener rather than
+    // one per pane container: many scroll-driving keys (PageDown on the
+    // preview, for instance) fire while focus sits somewhere that is not
+    // inside either pane's own scroll container at all.
+    const handleDocumentKeydown = () => {
+      const activeElement = ownerDocument.activeElement;
+      const activeElementPane: PreviewScrollSyncPane | null =
+        activeElement && editorScroller.contains(activeElement)
+          ? "editor"
+          : activeElement && previewContainer.contains(activeElement)
+          ? "preview"
+          : null;
+      const pane = attributeKeydownPane(
+        activeElementPane,
+        tracker.getLastPointerDownPane()
+      );
+      if (pane === null) {
+        return;
+      }
+      reportPreviewScrollLeaderChange(tracker.setLeader(pane, "keydown"));
+    };
+
+    const captureOptions: AddEventListenerOptions = {
+      capture: true,
+      passive: true
+    };
+
+    editorScroller.addEventListener("wheel", editorWheel, captureOptions);
+    editorScroller.addEventListener(
+      "pointerdown",
+      editorPointerDown,
+      captureOptions
+    );
+    editorScroller.addEventListener(
+      "touchstart",
+      editorTouchStart,
+      captureOptions
+    );
+    editorScroller.addEventListener("focusin", editorFocusIn, captureOptions);
+
+    previewContainer.addEventListener("wheel", previewWheel, captureOptions);
+    previewContainer.addEventListener(
+      "pointerdown",
+      previewPointerDown,
+      captureOptions
+    );
+    previewContainer.addEventListener(
+      "touchstart",
+      previewTouchStart,
+      captureOptions
+    );
+    previewContainer.addEventListener(
+      "focusin",
+      previewFocusIn,
+      captureOptions
+    );
+
+    ownerDocument.addEventListener(
+      "keydown",
+      handleDocumentKeydown,
+      captureOptions
+    );
+
+    return () => {
+      editorScroller.removeEventListener(
+        "wheel",
+        editorWheel,
+        captureOptions
+      );
+      editorScroller.removeEventListener(
+        "pointerdown",
+        editorPointerDown,
+        captureOptions
+      );
+      editorScroller.removeEventListener(
+        "touchstart",
+        editorTouchStart,
+        captureOptions
+      );
+      editorScroller.removeEventListener(
+        "focusin",
+        editorFocusIn,
+        captureOptions
+      );
+
+      previewContainer.removeEventListener(
+        "wheel",
+        previewWheel,
+        captureOptions
+      );
+      previewContainer.removeEventListener(
+        "pointerdown",
+        previewPointerDown,
+        captureOptions
+      );
+      previewContainer.removeEventListener(
+        "touchstart",
+        previewTouchStart,
+        captureOptions
+      );
+      previewContainer.removeEventListener(
+        "focusin",
+        previewFocusIn,
+        captureOptions
+      );
+
+      ownerDocument.removeEventListener(
+        "keydown",
+        handleDocumentKeydown,
+        captureOptions
+      );
+    };
+  }, [editorScroller, previewContainer, reportPreviewScrollLeaderChange]);
+
+  // #505 Phase 1: reset the leader to "editor" on document open / tab
+  // switch (also the tracker's initial value, covering app start).
+  // documentOpenId is #152's per-open correlation id — non-null exactly
+  // while an open sequence (a fresh file read) is in flight, which is how
+  // this distinguishes "document open" from "switched to an already-open
+  // tab" for the trigger label; both need the identical leader reset.
+  const previousDocumentKeyForLeaderResetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (previousDocumentKeyForLeaderResetRef.current === documentKey) {
+      return;
+    }
+    previousDocumentKeyForLeaderResetRef.current = documentKey;
+    const tracker = scrollLeaderTrackerRef.current;
+    if (!tracker) {
+      return;
+    }
+    reportPreviewScrollLeaderChange(
+      tracker.reset(documentOpenId !== null ? "documentOpen" : "tabSwitch")
+    );
+  }, [documentKey, documentOpenId, reportPreviewScrollLeaderChange]);
+
+  // #505 Phase 1: scroll event classification — now gates the REAL writes
+  // (both directions), not a dry run. Separate, additive "scroll" listeners
+  // on the SAME containers #503 already listens on; this never calls
+  // preventDefault/stopPropagation and cannot affect #503's own listeners.
+  // Each pane's own rAF coalescing avoids the Phase 0 duplicate-log bug (see
+  // classificationEditorFrameRef's comment above) — this is diagnostics
+  // only, so coalescing to "once per rendered frame" loses nothing real.
+  useEffect(() => {
+    if (!editorScroller || !previewContainer) {
+      return undefined;
+    }
+
+    const tracker = scrollLeaderTrackerRef.current;
+    if (!tracker) {
+      return undefined;
+    }
+
+    function classifyAndLog(pane: PreviewScrollSyncPane, container: HTMLElement) {
+      const leader = tracker!.getLeader();
+      const writeEnabled =
+        pane === "editor"
+          ? isSyncScrollEditorToPreviewEnabled
+          : isSyncScrollPreviewToEditorEnabled;
+      const classification = classifyPreviewScrollEvent(pane, leader, writeEnabled);
+
+      // No layout reads at all when nobody can observe the diagnostic —
+      // this fires on every scroll event, including during momentum
+      // scrolling, so the gate must come before any of them.
+      if (!isDebugModeEnabled) {
+        return;
+      }
+
+      const scrollTop = getScrollOffset(container, previewScrollAxis);
+      const lastScrollTop = lastPaneScrollTopRef.current[pane];
+      lastPaneScrollTopRef.current[pane] = scrollTop;
+      const deltaSinceLastEvent =
+        lastScrollTop === null ? 0 : scrollTop - lastScrollTop;
+
+      emitScrollSyncLog({
+        level: "debug",
+        event: "preview.scrollSync.scrollEvent.classified",
+        details: {
+          previewScrollEventPane: pane,
+          previewScrollLeader: classification.leader,
+          previewScrollEventPropagated: classification.propagated,
+          previewScrollEventReason: classification.reason,
+          previewScrollEventScrollTop: scrollTop,
+          previewScrollEventDeltaSinceLastEvent: deltaSinceLastEvent,
+          ...(pane === "preview"
+            ? {
+                previewScrollEventMsSinceLastProgrammaticWrite:
+                  previewLastProgrammaticWriteAtRef.current === null
+                    ? null
+                    : Math.round(
+                        performance.now() -
+                          previewLastProgrammaticWriteAtRef.current
+                      )
+              }
+            : {})
+        }
+      });
+    }
+
+    const handleEditorScrollForClassification = () => {
+      if (classificationEditorFrameRef.current !== null) {
+        cancelAnimationFrame(classificationEditorFrameRef.current);
+      }
+      classificationEditorFrameRef.current = requestAnimationFrame(() => {
+        classificationEditorFrameRef.current = null;
+        classifyAndLog("editor", editorScroller);
+      });
+    };
+    const handlePreviewScrollForClassification = () => {
+      if (classificationPreviewFrameRef.current !== null) {
+        cancelAnimationFrame(classificationPreviewFrameRef.current);
+      }
+      classificationPreviewFrameRef.current = requestAnimationFrame(() => {
+        classificationPreviewFrameRef.current = null;
+        classifyAndLog("preview", previewContainer);
+      });
+    };
+
+    editorScroller.addEventListener(
+      "scroll",
+      handleEditorScrollForClassification,
+      { passive: true }
+    );
+    previewContainer.addEventListener(
+      "scroll",
+      handlePreviewScrollForClassification,
+      { passive: true }
+    );
+
+    return () => {
+      if (classificationEditorFrameRef.current !== null) {
+        cancelAnimationFrame(classificationEditorFrameRef.current);
+        classificationEditorFrameRef.current = null;
+      }
+      if (classificationPreviewFrameRef.current !== null) {
+        cancelAnimationFrame(classificationPreviewFrameRef.current);
+        classificationPreviewFrameRef.current = null;
+      }
+      editorScroller.removeEventListener(
+        "scroll",
+        handleEditorScrollForClassification
+      );
+      previewContainer.removeEventListener(
+        "scroll",
+        handlePreviewScrollForClassification
+      );
+    };
+  }, [
+    editorScroller,
+    previewContainer,
+    previewScrollAxis,
+    isDebugModeEnabled,
+    isSyncScrollEditorToPreviewEnabled,
+    isSyncScrollPreviewToEditorEnabled,
+    emitScrollSyncLog
+  ]);
+
+  // #505 Phase 1, issue Design §2-§5: preview -> editor scroll sync — the
+  // new direction. Line-granularity only; #503's editor -> preview stays
+  // completely untouched by this effect.
+  useEffect(() => {
+    if (!editorScroller || !previewContainer) {
+      return undefined;
+    }
+
+    const handlePreviewScrollForSync = () => {
+      const tracker = scrollLeaderTrackerRef.current;
+      if (
+        !tracker ||
+        tracker.getLeader() !== "preview" ||
+        !isSyncScrollPreviewToEditorEnabled
+      ) {
+        return;
+      }
+
+      previewToEditorGenerationRef.current += 1;
+      const currentGen = previewToEditorGenerationRef.current;
+
+      if (previewToEditorFrameRef.current !== null) {
+        cancelAnimationFrame(previewToEditorFrameRef.current);
+      }
+
+      previewToEditorFrameRef.current = requestAnimationFrame(() => {
+        previewToEditorFrameRef.current = null;
+
+        const adapter = editorAdapterRef.current;
+        if (currentGen !== previewToEditorGenerationRef.current || !adapter) {
+          if (isDebugModeEnabled) {
+            emitScrollSyncLog({
+              level: "debug",
+              event: "preview.scrollSync.previewToEditor.sampled",
+              details: {
+                generation: currentGen,
+                previewToEditorSkippedReason:
+                  currentGen !== previewToEditorGenerationRef.current
+                    ? "staleGeneration"
+                    : "measurementFailed"
+              }
+            });
+          }
+          return;
+        }
+
+        const scrollTop = getScrollOffset(previewContainer, previewScrollAxis);
+        const targetMax = getMaxScroll(previewContainer, previewScrollAxis);
+        const docLineCount = adapter.getDocLineCount();
+        const editorTopSourceLineBefore = adapter.getTopSourceLine();
+
+        let targetLine: number | null;
+        let targetBlockLiveOffset: number | null = null;
+        let skippedReason: "sameLine" | "measurementFailed" | null = null;
+
+        if (targetMax > 0 && scrollTop >= targetMax - 1) {
+          // Issue Design §5: preview at max scroll -> editor to max scroll.
+          targetLine = docLineCount;
+        } else if (scrollTop <= 0) {
+          // Issue Design §5, symmetric: preview at the top -> editor to the top.
+          targetLine = 1;
+        } else {
+          const result = findTargetLineForScrollTop(
+            previewBlockRefsRef.current,
+            previewContainer,
+            scrollTop,
+            previewScrollAxis
+          );
+          targetLine = result.targetLine;
+          targetBlockLiveOffset = result.targetBlockLiveOffset;
+          if (targetLine === null) {
+            skippedReason = "measurementFailed";
+          }
+        }
+
+        if (
+          skippedReason === null &&
+          targetLine !== null &&
+          editorTopSourceLineBefore !== null &&
+          targetLine === editorTopSourceLineBefore
+        ) {
+          skippedReason = "sameLine";
+        }
+
+        if (skippedReason === null && targetLine !== null) {
+          adapter.scrollToSourceLine(targetLine);
+        }
+
+        if (!isDebugModeEnabled) {
+          return;
+        }
+
+        emitScrollSyncLog({
+          level: "debug",
+          event: "preview.scrollSync.previewToEditor.sampled",
+          details: {
+            previewScrollTop: scrollTop,
+            targetBlockLine: targetLine,
+            targetBlockLiveOffset,
+            editorTopSourceLineBefore,
+            editorTopSourceLineAfter: adapter.getTopSourceLine(),
+            generation: currentGen,
+            previewToEditorSkippedReason: skippedReason
+          }
+        });
+      });
+    };
+
+    previewContainer.addEventListener(
+      "scroll",
+      handlePreviewScrollForSync,
+      { passive: true }
+    );
+
+    return () => {
+      if (previewToEditorFrameRef.current !== null) {
+        cancelAnimationFrame(previewToEditorFrameRef.current);
+        previewToEditorFrameRef.current = null;
+      }
+      previewContainer.removeEventListener(
+        "scroll",
+        handlePreviewScrollForSync
+      );
+    };
+  }, [
+    editorScroller,
+    previewContainer,
+    previewScrollAxis,
+    isSyncScrollPreviewToEditorEnabled,
+    isDebugModeEnabled,
+    emitScrollSyncLog
+  ]);
 
   // -------------------------------------------------------------------------
   // #424: active-document Find panel.
@@ -2440,6 +3026,7 @@ function MarkdownEditorSurface({
           readOnly={readOnly}
           glossaryCompletion={glossaryCompletion}
           onScrollSyncAdapterMount={setEditorAdapter}
+          onEditorScrollIntoViewTransaction={handleEditorScrollIntoViewTransaction}
         />
       </section>
 

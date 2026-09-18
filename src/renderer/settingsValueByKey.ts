@@ -119,6 +119,12 @@ export function readSettingValue(
       return settings.preview.renderer;
     case "preview.updateDelayMs":
       return settings.preview.updateDelayMs;
+    case "preview.syncScrollEditorToPreview":
+      return settings.preview.syncScrollEditorToPreview;
+    case "preview.syncScrollPreviewToEditor":
+      return settings.preview.syncScrollPreviewToEditor;
+    case "preview.doubleClickJumpToEditor":
+      return settings.preview.doubleClickJumpToEditor;
     case "documentMap.dialogueDelimiterPairs":
       return settings.documentMap.dialogueDelimiterPairs;
     case "imageAttachment.saveDirectory":

@@ -16,6 +16,11 @@ import {
   debugLogPathKinds,
   debugLogPlatforms,
   debugLogPreviewJumpToSourceResults,
+  debugLogPreviewScrollEventReasons,
+  debugLogPreviewScrollLeaderStates,
+  debugLogPreviewScrollLeaderTriggers,
+  debugLogPreviewScrollSyncPanes,
+  debugLogPreviewToEditorSkippedReasons,
   debugLogReasons,
   debugLogGlossarySearchRelationModes,
   debugLogRecoveryJournalModes,
@@ -46,6 +51,11 @@ import {
   type DebugLogPathKind,
   type DebugLogPlatform,
   type DebugLogPreviewJumpToSourceResult,
+  type DebugLogPreviewScrollEventReason,
+  type DebugLogPreviewScrollLeaderState,
+  type DebugLogPreviewScrollLeaderTrigger,
+  type DebugLogPreviewScrollSyncPane,
+  type DebugLogPreviewToEditorSkippedReason,
   type DebugLogReason,
   type DebugLogGlossarySearchRelationMode,
   type DebugLogRecoveryJournalMode,
@@ -1016,6 +1026,89 @@ export function sanitizeDebugLogDetails(
         }
         break;
       }
+      case "previewScrollLeader":
+        sanitized.previewScrollLeader =
+          enumOrUnknown<DebugLogPreviewScrollLeaderState>(
+            debugLogPreviewScrollLeaderStates,
+            value
+          );
+        break;
+      case "previewScrollLeaderTrigger":
+        sanitized.previewScrollLeaderTrigger =
+          enumOrUnknown<DebugLogPreviewScrollLeaderTrigger>(
+            debugLogPreviewScrollLeaderTriggers,
+            value
+          );
+        break;
+      case "previewScrollEventPane":
+        sanitized.previewScrollEventPane =
+          enumOrUnknown<DebugLogPreviewScrollSyncPane>(
+            debugLogPreviewScrollSyncPanes,
+            value
+          );
+        break;
+      case "previewScrollEventReason":
+        sanitized.previewScrollEventReason =
+          enumOrUnknown<DebugLogPreviewScrollEventReason>(
+            debugLogPreviewScrollEventReasons,
+            value
+          );
+        break;
+      case "previewScrollEventPropagated": {
+        const val = sanitizeBoolean(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventPropagated = val;
+        }
+        break;
+      }
+      case "previewScrollEventScrollTop": {
+        const val = sanitizeNonNegativeNumber(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventScrollTop = val;
+        }
+        break;
+      }
+      case "previewScrollEventDeltaSinceLastEvent": {
+        const val = sanitizeFiniteNumber(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventDeltaSinceLastEvent = val;
+        }
+        break;
+      }
+      case "previewScrollEventMsSinceLastProgrammaticWrite": {
+        const val = sanitizeNullableNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventMsSinceLastProgrammaticWrite = val;
+        }
+        break;
+      }
+      case "targetBlockLine":
+      case "editorTopSourceLineBefore":
+      case "editorTopSourceLineAfter": {
+        const val = sanitizeNullableNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "targetBlockLiveOffset": {
+        const val = sanitizeNullableNonNegativeNumber(value);
+        if (val !== undefined) {
+          sanitized.targetBlockLiveOffset = val;
+        }
+        break;
+      }
+      case "previewToEditorSkippedReason":
+        if (value === null) {
+          sanitized.previewToEditorSkippedReason = null;
+        } else {
+          sanitized.previewToEditorSkippedReason =
+            enumOrUnknown<DebugLogPreviewToEditorSkippedReason>(
+              debugLogPreviewToEditorSkippedReasons,
+              value
+            );
+        }
+        break;
       case "error":
         sanitized.error = sanitizeErrorForDebugLog(value);
         break;

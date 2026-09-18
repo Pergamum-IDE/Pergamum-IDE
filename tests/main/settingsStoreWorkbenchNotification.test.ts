@@ -109,7 +109,13 @@ function saveRequest(
   workbench: Record<string, unknown>
 ): SaveApplicationSettingsRequest {
   return {
-    preview: { renderer: "markdown", updateDelayMs: 10000 },
+    preview: {
+      renderer: "markdown",
+      updateDelayMs: 10000,
+      syncScrollEditorToPreview: true,
+      syncScrollPreviewToEditor: true,
+      doubleClickJumpToEditor: true
+    },
     workbench: {
       language: "ja",
       statusBar: defaultStatusBarSettings,

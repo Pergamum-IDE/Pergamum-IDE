@@ -104,6 +104,10 @@ function baseProps(
 
   return {
     editor: createMarkdownCurrentEditor(doc),
+    isDebugModeEnabled: false,
+    isSyncScrollEditorToPreviewEnabled: true,
+    isSyncScrollPreviewToEditorEnabled: true,
+    isDoubleClickJumpToEditorEnabled: true,
     activeDocumentKey: documentKey,
     previewUpdateDelayMs: 0,
     newFileLineEndingFallback: "lf",
@@ -476,6 +480,29 @@ describe("EditorSurface preview double-click jump-to-source (#504)", () => {
     expect(domSelection.rangeCount).toBe(1);
   });
 
+  it("#505 Phase 1: does nothing and preserves the preview's text selection when doubleClickJumpToEditor is disabled", () => {
+    const surface = mount(DOC_CONTENT, "doc-jump-disabled", {
+      isDoubleClickJumpToEditorEnabled: false
+    });
+    const paragraph = requireEl(
+      surface.preview().querySelector('p[data-source-line="3"]')
+    );
+    const range = document.createRange();
+    range.selectNodeContents(paragraph.firstChild!);
+    const domSelection = window.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(range);
+    const initialHead = surface.view().state.selection.main.head;
+
+    dblclick(paragraph);
+
+    expect(surface.view().state.selection.main.head).toBe(initialHead);
+    expect(domSelection.rangeCount).toBe(1);
+    expect(surface.events.at(-1)).toMatchObject({
+      details: { previewJumpToSourceResult: "disabledBySetting" }
+    });
+  });
+
   it.each([
     ["ctrlKey", { ctrlKey: true }],
     ["shiftKey", { shiftKey: true }],
@@ -489,17 +516,15 @@ describe("EditorSurface preview double-click jump-to-source (#504)", () => {
         surface.preview().querySelector('p[data-source-line="3"]')
       );
       const initialHead = surface.view().state.selection.main.head;
-      // Mounting itself emits unrelated preview.scrollSync.* diagnostics
-      // (blockMap.built, wiring.initialized) — baseline against those rather
-      // than assuming an empty array.
-      const eventCountBeforeClick = surface.events.length;
 
       dblclick(paragraph, modifierInit);
 
       expect(surface.view().state.selection.main.head).toBe(initialHead);
-      // The modifier gate runs before any resolution/logging — no NEW
-      // diagnostic event at all, not even an "ignoredTarget"/"noEditor" one.
-      expect(surface.events.length).toBe(eventCountBeforeClick);
+      // #505 Phase 1 (issue diagnostics change): the modifier gate now
+      // emits an event too, rather than silently doing nothing.
+      expect(surface.events.at(-1)).toMatchObject({
+        details: { previewJumpToSourceResult: "modifierHeld" }
+      });
     }
   );
 

@@ -172,6 +172,9 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "preview.scrollSync.previewScroll.sampled": "debug",
   "preview.scrollSync.programmaticScroll.suppressed": "debug",
   "preview.jumpToSource.requested": "debug",
+  "preview.scrollSync.leader.changed": "info",
+  "preview.scrollSync.scrollEvent.classified": "debug",
+  "preview.scrollSync.previewToEditor.sampled": "debug",
   "app.uncaughtException": "error",
   "app.unhandledRejection": "error"
 };

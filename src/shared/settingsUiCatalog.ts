@@ -1024,6 +1024,33 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("preview.updateDelayMs")
   },
   {
+    key: "preview.syncScrollEditorToPreview",
+    category: "preview",
+    order: 300,
+    labelKey: "settings.preview.syncScrollEditorToPreview.label",
+    descriptionKey: "settings.preview.syncScrollEditorToPreview.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("preview.syncScrollEditorToPreview")
+  },
+  {
+    key: "preview.syncScrollPreviewToEditor",
+    category: "preview",
+    order: 310,
+    labelKey: "settings.preview.syncScrollPreviewToEditor.label",
+    descriptionKey: "settings.preview.syncScrollPreviewToEditor.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("preview.syncScrollPreviewToEditor")
+  },
+  {
+    key: "preview.doubleClickJumpToEditor",
+    category: "preview",
+    order: 320,
+    labelKey: "settings.preview.doubleClickJumpToEditor.label",
+    descriptionKey: "settings.preview.doubleClickJumpToEditor.description",
+    control: { kind: "switch" },
+    defaultValue: getCatalogDefaultValue("preview.doubleClickJumpToEditor")
+  },
+  {
     key: "workbench.language",
     category: "application",
     order: 200,
