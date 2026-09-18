@@ -20,7 +20,9 @@ import { GlossaryPreviewDecorator, type GlossaryPreviewDecoratorProps } from "..
 import { t } from "../../src/shared/i18n";
 import {
   computeVerticalScrollLeftForLine,
+  computeVerticalWheelScrollLeft,
   getLiveElementVerticalProgress,
+  normalizeWheelDelta,
   type PreviewBlockRef
 } from "../../src/renderer/previewScrollSync";
 
@@ -307,6 +309,65 @@ describe("Vertical novel preview renderer MVP (#514)", () => {
 
       for (const renderer of horizontalRenderers) {
         expect(isVerticalPreviewRenderer(renderer)).toBe(false);
+      }
+    });
+  });
+
+  describe("8. Vertical preview wheel scroll handling (#516)", () => {
+    it("1. normalizeWheelDelta handles pixel (0), line (1), and page (2) modes", () => {
+      expect(normalizeWheelDelta(10, 0, 500)).toBe(10);
+      expect(normalizeWheelDelta(2, 1, 500)).toBe(80); // 2 lines * 40px
+      expect(normalizeWheelDelta(1, 2, 600)).toBe(600); // 1 page * clientWidth (600px)
+    });
+
+    it("2. wheel down (delta > 0) advances scrollLeft toward negative direction", () => {
+      const currentScrollLeft = 0;
+      const nextScrollLeft = computeVerticalWheelScrollLeft({
+        currentScrollLeft,
+        delta: 100,
+        scrollWidth: 2000,
+        clientWidth: 500
+      });
+
+      expect(nextScrollLeft).toBe(-100);
+    });
+
+    it("3. wheel up (delta < 0) moves scrollLeft back toward 0", () => {
+      const currentScrollLeft = -300;
+      const nextScrollLeft = computeVerticalWheelScrollLeft({
+        currentScrollLeft,
+        delta: -100,
+        scrollWidth: 2000,
+        clientWidth: 500
+      });
+
+      expect(nextScrollLeft).toBe(-200);
+    });
+
+    it("4. clamps scrollLeft to max 0 (start) and min -(scrollWidth - clientWidth) (end)", () => {
+      // Clamps to 0 when wheeling up past start
+      const pastStart = computeVerticalWheelScrollLeft({
+        currentScrollLeft: -50,
+        delta: -200,
+        scrollWidth: 2000,
+        clientWidth: 500
+      });
+      expect(pastStart).toBe(0);
+
+      // Clamps to -(2000 - 500) = -1500 when wheeling down past end
+      const pastEnd = computeVerticalWheelScrollLeft({
+        currentScrollLeft: -1400,
+        delta: 500,
+        scrollWidth: 2000,
+        clientWidth: 500
+      });
+      expect(pastEnd).toBe(-1500);
+    });
+
+    it("5. confirms all 3 vertical renderers (narouVertical, kakuyomuVertical, aozoraVertical) trigger vertical wheel logic", () => {
+      const verticalRenderers: PreviewRendererId[] = ["narouVertical", "kakuyomuVertical", "aozoraVertical"];
+      for (const renderer of verticalRenderers) {
+        expect(isVerticalPreviewRenderer(renderer)).toBe(true);
       }
     });
   });

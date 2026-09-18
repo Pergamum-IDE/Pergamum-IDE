@@ -454,6 +454,50 @@ export function computeVerticalScrollLeftForLine(
   };
 }
 
+/**
+ * #516: Normalizes WheelEvent delta values into pixel offsets based on deltaMode.
+ * deltaMode 0: pixel (direct)
+ * deltaMode 1: line (approx. 40px per line)
+ * deltaMode 2: page (container clientWidth/pageSize)
+ */
+export function normalizeWheelDelta(
+  delta: number,
+  deltaMode: number,
+  pageSize: number = 500
+): number {
+  if (deltaMode === 1) {
+    return delta * 40;
+  }
+  if (deltaMode === 2) {
+    return delta * pageSize;
+  }
+  return delta;
+}
+
+export interface ComputeVerticalWheelScrollLeftOptions {
+  currentScrollLeft: number;
+  delta: number;
+  scrollWidth: number;
+  clientWidth: number;
+}
+
+/**
+ * #516: Computes next scrollLeft for vertical preview wheel scroll,
+ * clamping within [-(scrollWidth - clientWidth), 0].
+ */
+export function computeVerticalWheelScrollLeft(
+  options: ComputeVerticalWheelScrollLeftOptions
+): number {
+  const { currentScrollLeft, delta, scrollWidth, clientWidth } = options;
+  const minScrollLeft = Math.min(0, -(scrollWidth - clientWidth));
+  const maxScrollLeft = 0;
+
+  const targetScrollLeft = currentScrollLeft - delta;
+  const clamped = Math.min(maxScrollLeft, Math.max(minScrollLeft, targetScrollLeft));
+
+  return clamped === 0 ? 0 : clamped;
+}
+
 export interface SyncPreviewScrollWithBlocksOptions {
   source: PreviewScrollTarget;
   sourceAxis: PreviewScrollAxis;

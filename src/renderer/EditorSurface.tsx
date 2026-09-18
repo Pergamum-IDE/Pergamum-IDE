@@ -47,6 +47,7 @@ import {
   collectPreviewAnchors,
   collectPreviewBlockRefs,
   computeVerticalScrollLeftForLine,
+  computeVerticalWheelScrollLeft,
   createScrollSyncGuard,
   findSurroundingBlockRefs,
   findTargetLineForScrollTop,
@@ -54,6 +55,7 @@ import {
   getLiveElementOffset,
   getMaxScroll,
   getScrollOffset,
+  normalizeWheelDelta,
   setScrollOffset,
   syncPreviewScroll,
   syncPreviewScrollWithAnchors,
@@ -1820,9 +1822,43 @@ function MarkdownEditorSurface({
       reportPreviewScrollLeaderChange(tracker.setLeader(pane, "keydown"));
     };
 
+    const handlePreviewVerticalWheel = (event: WheelEvent) => {
+      if (!isVerticalPreviewRenderer(previewRenderer)) {
+        return;
+      }
+
+      const rawDelta =
+        Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      if (rawDelta === 0) {
+        return;
+      }
+
+      const pageSize = previewContainer.clientWidth || 500;
+      const normalizedDelta = normalizeWheelDelta(rawDelta, event.deltaMode, pageSize);
+
+      const nextScrollLeft = computeVerticalWheelScrollLeft({
+        currentScrollLeft: previewContainer.scrollLeft,
+        delta: normalizedDelta,
+        scrollWidth: previewContainer.scrollWidth,
+        clientWidth: previewContainer.clientWidth
+      });
+
+      if (nextScrollLeft !== previewContainer.scrollLeft) {
+        previewContainer.scrollLeft = nextScrollLeft;
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+      }
+    };
+
     const captureOptions: AddEventListenerOptions = {
       capture: true,
       passive: true
+    };
+
+    const nonPassiveCaptureOptions: AddEventListenerOptions = {
+      capture: true,
+      passive: false
     };
 
     editorScroller.addEventListener("wheel", editorWheel, captureOptions);
@@ -1839,6 +1875,7 @@ function MarkdownEditorSurface({
     editorScroller.addEventListener("focusin", editorFocusIn, captureOptions);
 
     previewContainer.addEventListener("wheel", previewWheel, captureOptions);
+    previewContainer.addEventListener("wheel", handlePreviewVerticalWheel, nonPassiveCaptureOptions);
     previewContainer.addEventListener(
       "pointerdown",
       previewPointerDown,
@@ -1887,6 +1924,11 @@ function MarkdownEditorSurface({
         "wheel",
         previewWheel,
         captureOptions
+      );
+      previewContainer.removeEventListener(
+        "wheel",
+        handlePreviewVerticalWheel,
+        nonPassiveCaptureOptions
       );
       previewContainer.removeEventListener(
         "pointerdown",
