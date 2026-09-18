@@ -107,6 +107,16 @@ function allSourceText(): string {
  * editorTabShortcuts.ts / App.tsx (#480) is the same category of exception:
  * the Alt+Left / Alt+Right document tab switching shortcut listener, scoped with
  * strict text-input and modal guards.
+ *
+ * EditorSurface.tsx (#505 Phase 0) is a DIFFERENT category from all of the
+ * above: its capture-phase `keydown` listeners on the editor/preview scroll
+ * containers never handle, intercept, or execute a shortcut — they only
+ * check `event.key` against a fixed scroll-key set (PageUp/PageDown/Home/
+ * End/Arrows/Space) to renew the input-based preview<->editor scroll-sync
+ * "leader" tracker (a diagnostic-only classification in this phase). They
+ * are passive, never call preventDefault/stopPropagation, and cannot
+ * compete with or shadow the Command Palette / native-edit-command
+ * delegation this guard protects.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -125,7 +135,8 @@ const onKeyDownExemptFileNames = new Set([
   "ActiveFindGlossarySelect.tsx",
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
-  "App.tsx"
+  "App.tsx",
+  "EditorSurface.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {

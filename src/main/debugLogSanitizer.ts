@@ -15,6 +15,12 @@ import {
   debugLogActiveFindModes,
   debugLogPathKinds,
   debugLogPlatforms,
+  debugLogPreviewJumpToSourceResults,
+  debugLogPreviewScrollEventReasons,
+  debugLogPreviewScrollLeaderStates,
+  debugLogPreviewScrollLeaderTriggers,
+  debugLogPreviewScrollSyncPanes,
+  debugLogPreviewToEditorSkippedReasons,
   debugLogReasons,
   debugLogGlossarySearchRelationModes,
   debugLogRecoveryJournalModes,
@@ -44,6 +50,12 @@ import {
   type DebugLogOperation,
   type DebugLogPathKind,
   type DebugLogPlatform,
+  type DebugLogPreviewJumpToSourceResult,
+  type DebugLogPreviewScrollEventReason,
+  type DebugLogPreviewScrollLeaderState,
+  type DebugLogPreviewScrollLeaderTrigger,
+  type DebugLogPreviewScrollSyncPane,
+  type DebugLogPreviewToEditorSkippedReason,
   type DebugLogReason,
   type DebugLogGlossarySearchRelationMode,
   type DebugLogRecoveryJournalMode,
@@ -125,6 +137,10 @@ function sanitizeNonNegativeNumber(value: unknown): number | undefined {
     : undefined;
 }
 
+function sanitizeFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function sanitizePositiveInteger(value: unknown): number | undefined {
   const integer = sanitizeNonNegativeInteger(value);
 
@@ -145,6 +161,24 @@ function sanitizeIsoTimestamp(value: unknown): string | undefined {
 
 function sanitizeBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function sanitizeNullableNonNegativeInteger(
+  value: unknown
+): number | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  return sanitizeNonNegativeInteger(value);
+}
+
+function sanitizeNullableNonNegativeNumber(
+  value: unknown
+): number | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  return sanitizeNonNegativeNumber(value);
 }
 
 /**
@@ -963,9 +997,237 @@ export function sanitizeDebugLogDetails(
         }
         break;
       }
+      case "previewJumpToSourceResult":
+        sanitized.previewJumpToSourceResult =
+          enumOrUnknown<DebugLogPreviewJumpToSourceResult>(
+            debugLogPreviewJumpToSourceResults,
+            value
+          );
+        break;
+      case "previewJumpToSourceLine":
+      case "previewJumpToSourceTargetLine": {
+        const val = sanitizeNullableNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "previewJumpToSourceClamped": {
+        const val = sanitizeBoolean(value);
+        if (val !== undefined) {
+          sanitized.previewJumpToSourceClamped = val;
+        }
+        break;
+      }
+      case "previewJumpToSourceDocLineCount": {
+        const val = sanitizeNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized.previewJumpToSourceDocLineCount = val;
+        }
+        break;
+      }
+      case "previewScrollLeader":
+        sanitized.previewScrollLeader =
+          enumOrUnknown<DebugLogPreviewScrollLeaderState>(
+            debugLogPreviewScrollLeaderStates,
+            value
+          );
+        break;
+      case "previewScrollLeaderTrigger":
+        sanitized.previewScrollLeaderTrigger =
+          enumOrUnknown<DebugLogPreviewScrollLeaderTrigger>(
+            debugLogPreviewScrollLeaderTriggers,
+            value
+          );
+        break;
+      case "previewScrollEventPane":
+        sanitized.previewScrollEventPane =
+          enumOrUnknown<DebugLogPreviewScrollSyncPane>(
+            debugLogPreviewScrollSyncPanes,
+            value
+          );
+        break;
+      case "previewScrollEventReason":
+        sanitized.previewScrollEventReason =
+          enumOrUnknown<DebugLogPreviewScrollEventReason>(
+            debugLogPreviewScrollEventReasons,
+            value
+          );
+        break;
+      case "previewScrollEventPropagated": {
+        const val = sanitizeBoolean(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventPropagated = val;
+        }
+        break;
+      }
+      case "previewScrollEventScrollTop": {
+        const val = sanitizeNonNegativeNumber(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventScrollTop = val;
+        }
+        break;
+      }
+      case "previewScrollEventDeltaSinceLastEvent": {
+        const val = sanitizeFiniteNumber(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventDeltaSinceLastEvent = val;
+        }
+        break;
+      }
+      case "previewScrollEventMsSinceLastProgrammaticWrite": {
+        const val = sanitizeNullableNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized.previewScrollEventMsSinceLastProgrammaticWrite = val;
+        }
+        break;
+      }
+      case "targetBlockLine":
+      case "editorTopSourceLineBefore":
+      case "editorTopSourceLineAfter": {
+        const val = sanitizeNullableNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "targetBlockLiveOffset": {
+        const val = sanitizeNullableNonNegativeNumber(value);
+        if (val !== undefined) {
+          sanitized.targetBlockLiveOffset = val;
+        }
+        break;
+      }
+      case "previewToEditorSkippedReason":
+        if (value === null) {
+          sanitized.previewToEditorSkippedReason = null;
+        } else {
+          sanitized.previewToEditorSkippedReason =
+            enumOrUnknown<DebugLogPreviewToEditorSkippedReason>(
+              debugLogPreviewToEditorSkippedReasons,
+              value
+            );
+        }
+        break;
       case "error":
         sanitized.error = sanitizeErrorForDebugLog(value);
         break;
+      case "sourceAxis":
+      case "targetAxis":
+      case "syncDirection":
+      case "direction":
+      case "suppressedSide":
+      case "eventSide":
+      case "containerTagName":
+      case "containerClassName":
+      case "blockMapReason":
+      case "skipReason": {
+        const val = sanitizeSafeCode(value);
+        if (val) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "editorScrollerMounted":
+      case "previewScrollerMounted":
+      case "sameContainerAsAnchorCollection":
+      case "usedCachedPixelOffset":
+      case "usedLiveMeasurement":
+      case "correctionApplied":
+      case "previousAnchorConnected":
+      case "nextAnchorConnected":
+      case "previewContainerIsConnected":
+      case "measurementFailed": {
+        const val = sanitizeBoolean(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "anchorCount":
+      case "blockRefCount":
+      case "scheduledGeneration":
+      case "appliedGeneration":
+      case "generation":
+      case "remainingFrames":
+      case "blockMapBuildId": {
+        const val = sanitizeNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "firstAnchorLine":
+      case "lastAnchorLine":
+      case "firstBlockLine":
+      case "lastBlockLine":
+      case "editorTopSourceLine":
+      case "previousAnchorLine":
+      case "nextAnchorLine":
+      case "previewAnchorLine":
+      case "computedEditorTargetLine": {
+        const val = sanitizeNullableNonNegativeInteger(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "firstAnchorOffset":
+      case "lastAnchorOffset":
+      case "previousAnchorOffset":
+      case "nextAnchorOffset":
+      case "previousAnchorLiveOffset":
+      case "nextAnchorLiveOffset":
+      case "previousAnchorRectTop":
+      case "previewContainerRectTop":
+      case "articleScrollHeight":
+      case "articleOffsetHeight":
+      case "anchorCacheScrollHeight":
+      case "anchorCacheClientHeight":
+      case "anchorCacheMaxScrollTop": {
+        const val = sanitizeNullableNonNegativeNumber(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "delta":
+      case "deltaScrollHeight": {
+        const val = sanitizeFiniteNumber(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
+      case "editorScrollTop":
+      case "editorMaxScrollTop":
+      case "previewScrollTop":
+      case "previewMaxScrollTop":
+      case "computedPreviewTargetOffset":
+      case "actualPreviewScrollTopAfterSync":
+      case "containerScrollHeight":
+      case "containerClientHeight":
+      case "containerMaxScrollTop":
+      case "rawComputedPreviewTargetOffset":
+      case "clampedPreviewTargetOffset":
+      case "rawTargetOffset":
+      case "clampedTargetOffset":
+      case "previousTargetOffset":
+      case "correctedTargetOffset":
+      case "previousScrollHeight":
+      case "currentScrollHeight":
+      case "previousClientHeight":
+      case "currentClientHeight":
+      case "previewScrollTopBefore":
+      case "previewScrollTopAfter":
+      case "previewScrollHeight":
+      case "previewClientHeight": {
+        const val = sanitizeNonNegativeNumber(value);
+        if (val !== undefined) {
+          sanitized[key] = val;
+        }
+        break;
+      }
       default:
         droppedKeyCount += 1;
         break;

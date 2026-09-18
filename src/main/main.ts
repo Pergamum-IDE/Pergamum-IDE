@@ -91,6 +91,9 @@ let sessionStoreController: SessionStoreController | null = null;
 let coldStartPayload: ColdStartRestorePayload | null = null;
 let coldStartWebContentsId: number | null = null;
 const pergamumDebugMode = parseDebugModeFromArgv(process.argv);
+console.info(
+  `[#503 preview-scroll-sync] 1. Main process recognized debug mode: ${pergamumDebugMode}`
+);
 // #272: one process-run identity for the lifetime of this Pergamum process.
 const instanceRunId = createUuidv7();
 

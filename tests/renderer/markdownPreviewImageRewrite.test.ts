@@ -101,7 +101,7 @@ describe("markdownPreviewRenderer project-local image rewrite (#409)", () => {
       "# Title\n\nText",
       sourceFile("chapter01.md")
     );
-    expect(html).toContain("<h1>Title</h1>");
+    expect(html).toMatch(/<h1[^>]*>Title<\/h1>/);
   });
 
   // #409 P2: the #407 link generator wraps paths with spaces / risky chars in

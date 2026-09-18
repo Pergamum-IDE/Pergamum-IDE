@@ -127,7 +127,13 @@ function saveRequest(
   workbench: Record<string, unknown>
 ): SaveApplicationSettingsRequest {
   return {
-    preview: { renderer: "markdown", updateDelayMs: 10000 },
+    preview: {
+      renderer: "markdown",
+      updateDelayMs: 10000,
+      syncScrollEditorToPreview: true,
+      syncScrollPreviewToEditor: true,
+      doubleClickJumpToEditor: true
+    },
     workbench: {
       sound: defaultSoundSettings,
       ...workbench
@@ -458,7 +464,10 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     expect(written.recentProjects).toEqual([recentProject]);
     expect(written.preview).toEqual({
       renderer: "markdown",
-      updateDelayMs: 10000
+      updateDelayMs: 10000,
+      syncScrollEditorToPreview: true,
+      syncScrollPreviewToEditor: true,
+      doubleClickJumpToEditor: true
     });
     expect(written.workbench.fontFamily).toBe("Fira Code");
     expect(written.workbench.sound).toEqual(defaultSoundSettings);

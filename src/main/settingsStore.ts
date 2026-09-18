@@ -95,7 +95,19 @@ function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
     return {
       renderer: resolveCatalogValue("preview.renderer", undefined).value,
       updateDelayMs: resolveCatalogValue("preview.updateDelayMs", undefined)
-        .value
+        .value,
+      syncScrollEditorToPreview: resolveCatalogValue(
+        "preview.syncScrollEditorToPreview",
+        undefined
+      ).value,
+      syncScrollPreviewToEditor: resolveCatalogValue(
+        "preview.syncScrollPreviewToEditor",
+        undefined
+      ).value,
+      doubleClickJumpToEditor: resolveCatalogValue(
+        "preview.doubleClickJumpToEditor",
+        undefined
+      ).value
     };
   }
 
@@ -104,6 +116,18 @@ function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
     updateDelayMs: resolveCatalogValue(
       "preview.updateDelayMs",
       value.updateDelayMs
+    ).value,
+    syncScrollEditorToPreview: resolveCatalogValue(
+      "preview.syncScrollEditorToPreview",
+      value.syncScrollEditorToPreview
+    ).value,
+    syncScrollPreviewToEditor: resolveCatalogValue(
+      "preview.syncScrollPreviewToEditor",
+      value.syncScrollPreviewToEditor
+    ).value,
+    doubleClickJumpToEditor: resolveCatalogValue(
+      "preview.doubleClickJumpToEditor",
+      value.doubleClickJumpToEditor
     ).value
   };
 
@@ -923,14 +947,20 @@ function parsePreviewSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamilyList = keys.includes("fontFamilyList");
-  const expectedKeyCount = 2 + (hasFontFamilyList ? 1 : 0);
+  const expectedKeyCount = 5 + (hasFontFamilyList ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
     !keys.includes("renderer") ||
     !keys.includes("updateDelayMs") ||
+    !keys.includes("syncScrollEditorToPreview") ||
+    !keys.includes("syncScrollPreviewToEditor") ||
+    !keys.includes("doubleClickJumpToEditor") ||
     value.renderer === undefined ||
-    value.updateDelayMs === undefined
+    value.updateDelayMs === undefined ||
+    value.syncScrollEditorToPreview === undefined ||
+    value.syncScrollPreviewToEditor === undefined ||
+    value.doubleClickJumpToEditor === undefined
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -940,14 +970,35 @@ function parsePreviewSettingsForWrite(
     "preview.updateDelayMs",
     value.updateDelayMs
   );
+  const syncScrollEditorToPreviewResolution = resolveCatalogValue(
+    "preview.syncScrollEditorToPreview",
+    value.syncScrollEditorToPreview
+  );
+  const syncScrollPreviewToEditorResolution = resolveCatalogValue(
+    "preview.syncScrollPreviewToEditor",
+    value.syncScrollPreviewToEditor
+  );
+  const doubleClickJumpToEditorResolution = resolveCatalogValue(
+    "preview.doubleClickJumpToEditor",
+    value.doubleClickJumpToEditor
+  );
 
-  if (!rendererResolution.ok || !updateDelayMsResolution.ok) {
+  if (
+    !rendererResolution.ok ||
+    !updateDelayMsResolution.ok ||
+    !syncScrollEditorToPreviewResolution.ok ||
+    !syncScrollPreviewToEditorResolution.ok ||
+    !doubleClickJumpToEditorResolution.ok
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   const preview: ApplicationSettings["preview"] = {
     renderer: rendererResolution.value,
-    updateDelayMs: updateDelayMsResolution.value
+    updateDelayMs: updateDelayMsResolution.value,
+    syncScrollEditorToPreview: syncScrollEditorToPreviewResolution.value,
+    syncScrollPreviewToEditor: syncScrollPreviewToEditorResolution.value,
+    doubleClickJumpToEditor: doubleClickJumpToEditorResolution.value
   };
 
   if (hasFontFamilyList) {

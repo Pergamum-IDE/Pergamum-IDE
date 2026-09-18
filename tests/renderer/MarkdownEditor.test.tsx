@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -139,6 +140,101 @@ describe("MarkdownEditor line-ending rendering settings", () => {
 
     expect(markerText()).toEqual(["↵", "↵"]);
     expect(unexpectedMarkerCount()).toBe(0);
+  });
+});
+
+describe("MarkdownEditor EditorScrollSyncAdapter.jumpToSourceLine (#504)", () => {
+  let container: HTMLDivElement | null = null;
+  let root: import("react-dom/client").Root | null = null;
+
+  afterEach(() => {
+    if (root) {
+      act(() => root!.unmount());
+      root = null;
+    }
+    container?.remove();
+    container = null;
+  });
+
+  function mountAndCaptureAdapter() {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let capturedAdapter: import("../../src/renderer/previewScrollSync").EditorScrollSyncAdapter | null =
+      null;
+
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: "line one\nline two\nline three\nline four\nline five",
+          onChange: () => undefined,
+          onScrollSyncAdapterMount: (adapter) => {
+            capturedAdapter = adapter;
+          }
+        })
+      );
+    });
+
+    if (!capturedAdapter) {
+      throw new Error("expected onScrollSyncAdapterMount to fire with an adapter");
+    }
+    return capturedAdapter as import("../../src/renderer/previewScrollSync").EditorScrollSyncAdapter;
+  }
+
+  it("reports the document's total line count", () => {
+    const adapter = mountAndCaptureAdapter();
+
+    expect(adapter.getDocLineCount()).toBe(5);
+  });
+
+  it("places a collapsed cursor on the target line and focuses the editor", () => {
+    const adapter = mountAndCaptureAdapter();
+
+    act(() => {
+      adapter.jumpToSourceLine(3);
+    });
+
+    const editorContentElement = container!.querySelector(
+      '[contenteditable="true"]'
+    ) as HTMLElement | null;
+    expect(editorContentElement).not.toBeNull();
+    expect(document.activeElement).toBe(editorContentElement);
+
+    const domSelection = window.getSelection();
+    const anchorNode = domSelection?.anchorNode ?? null;
+    const anchorElement =
+      anchorNode instanceof Element ? anchorNode : anchorNode?.parentElement ?? null;
+    const activeLine = anchorElement?.closest(".cm-line") ?? null;
+    expect(activeLine?.textContent).toBe("line three");
+    expect(domSelection?.isCollapsed).toBe(true);
+  });
+
+  it("clamps defensively when asked to jump past the last line", () => {
+    const adapter = mountAndCaptureAdapter();
+
+    expect(() => adapter.jumpToSourceLine(999)).not.toThrow();
+  });
+
+  // jsdom/happy-dom has no real layout engine, so EditorView.scrollIntoView's
+  // target scroll position can't be observed behaviorally (per #504's own
+  // instructions: "do not assert scroll positions"). This is the one place
+  // that still checks source text rather than behavior, specifically to
+  // guard that jumpToSourceLine centers the target line (D3) and is a
+  // distinct code path from #503's scrollToSourceLine (which aligns to the
+  // top, for continuous scroll-sync rather than a one-shot jump).
+  it("centers the target line on scroll, distinct from #503's top-aligning scrollToSourceLine", () => {
+    const markdownEditorSource = readFileSync(
+      "src/renderer/MarkdownEditor.tsx",
+      "utf8"
+    );
+
+    expect(markdownEditorSource).toContain(
+      'EditorView.scrollIntoView(line.from, { y: "center" })'
+    );
+    expect(markdownEditorSource).toContain(
+      'EditorView.scrollIntoView(line.from, { y: "start" })'
+    );
   });
 });
 

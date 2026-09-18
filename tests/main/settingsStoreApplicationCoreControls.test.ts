@@ -120,7 +120,7 @@ const recentProject = {
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
-    preview: { renderer: "markdown", updateDelayMs: 10000 },
+    preview: { renderer: "markdown", updateDelayMs: 10000, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true },
     workbench: {
       language: "ja",
       statusBar: { visible: true },
@@ -151,7 +151,13 @@ function validSaveRequest(
   overrides: Partial<SaveApplicationSettingsRequest> = {}
 ): SaveApplicationSettingsRequest {
   return {
-    preview: { renderer: "markdown", updateDelayMs: 10000 },
+    preview: {
+      renderer: "markdown",
+      updateDelayMs: 10000,
+      syncScrollEditorToPreview: true,
+      syncScrollPreviewToEditor: true,
+      doubleClickJumpToEditor: true
+    },
     workbench: {
       language: "ja",
       statusBar: defaultStatusBarSettings,
@@ -248,7 +254,16 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     });
     expect(settings.preview).toEqual({
       renderer: getCatalogDefaultValue("preview.renderer"),
-      updateDelayMs: getCatalogDefaultValue("preview.updateDelayMs")
+      updateDelayMs: getCatalogDefaultValue("preview.updateDelayMs"),
+      syncScrollEditorToPreview: getCatalogDefaultValue(
+        "preview.syncScrollEditorToPreview"
+      ),
+      syncScrollPreviewToEditor: getCatalogDefaultValue(
+        "preview.syncScrollPreviewToEditor"
+      ),
+      doubleClickJumpToEditor: getCatalogDefaultValue(
+        "preview.doubleClickJumpToEditor"
+      )
     });
     // #375 Task Q/R: Document Map defaults — dark-grey narration, red fallback,
     // one grey 「」 pair, tag-colour visibility adjustment ON, 0.28 lens opacity.
@@ -634,7 +649,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
 
     expect(written.preview).toEqual({
       renderer: "markdown",
-      updateDelayMs: 10000
+      updateDelayMs: 10000,
+      syncScrollEditorToPreview: true,
+      syncScrollPreviewToEditor: true,
+      doubleClickJumpToEditor: true
     });
     expect(written.recentProjects).toEqual([recentProject]);
     expect(written.commandPalette).toEqual({
@@ -700,12 +718,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
 
   it("writes a changed preview.updateDelayMs to settings.json (#250 follow-up: the user setting is genuinely persisted, not silently dropped)", async () => {
     fsMock.readFile.mockResolvedValue(
-      onDiskSettings({ preview: { renderer: "markdown", updateDelayMs: 10000 } })
+      onDiskSettings({ preview: { renderer: "markdown", updateDelayMs: 10000, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true } })
     );
 
     await saveApplicationSettings(
       validSaveRequest({
-        preview: { renderer: "markdown", updateDelayMs: 10000 }
+        preview: { renderer: "markdown", updateDelayMs: 10000, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true }
       })
     );
 
@@ -717,7 +735,10 @@ describe("settingsStore Application Settings core controls write path (#195)", (
 
     expect(written.preview).toEqual({
       renderer: "markdown",
-      updateDelayMs: 10000
+      updateDelayMs: 10000,
+      syncScrollEditorToPreview: true,
+      syncScrollPreviewToEditor: true,
+      doubleClickJumpToEditor: true
     });
   });
 
@@ -885,12 +906,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
 
   it("writes preview.updateDelayMs of 0 (explicit 'don't wait') to settings.json", async () => {
     fsMock.readFile.mockResolvedValue(
-      onDiskSettings({ preview: { renderer: "markdown", updateDelayMs: 10000 } })
+      onDiskSettings({ preview: { renderer: "markdown", updateDelayMs: 10000, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true } })
     );
 
     await saveApplicationSettings(
       validSaveRequest({
-        preview: { renderer: "markdown", updateDelayMs: 0 }
+        preview: { renderer: "markdown", updateDelayMs: 0, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true }
       })
     );
 
@@ -900,7 +921,13 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.preview).toEqual({ renderer: "markdown", updateDelayMs: 0 });
+    expect(written.preview).toEqual({
+      renderer: "markdown",
+      updateDelayMs: 0,
+      syncScrollEditorToPreview: true,
+      syncScrollPreviewToEditor: true,
+      doubleClickJumpToEditor: true
+    });
   });
 
   it("#375: writes documentMap (dialogue-pair colour / narration / toggle / lens opacity) from the save request instead of dropping it", async () => {
@@ -1170,16 +1197,16 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         }
       }),
       validSaveRequest({
-        preview: { renderer: "markdown", updateDelayMs: -1 }
+        preview: { renderer: "markdown", updateDelayMs: -1, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true }
       }),
       validSaveRequest({
-        preview: { renderer: "markdown", updateDelayMs: 600001 }
+        preview: { renderer: "markdown", updateDelayMs: 600001, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true }
       }),
       validSaveRequest({
-        preview: { renderer: "markdown", updateDelayMs: 150.5 }
+        preview: { renderer: "markdown", updateDelayMs: 150.5, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true }
       }),
       validSaveRequest({
-        preview: { renderer: "html" as "markdown", updateDelayMs: 10000 }
+        preview: { renderer: "html" as "markdown", updateDelayMs: 10000, syncScrollEditorToPreview: true, syncScrollPreviewToEditor: true, doubleClickJumpToEditor: true }
       }),
       validSaveRequest({
         editor: {

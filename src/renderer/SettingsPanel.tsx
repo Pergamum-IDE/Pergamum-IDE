@@ -545,6 +545,27 @@ function buildNextSettings(
       return saveRequest(settings, {
         preview: { ...settings.preview, updateDelayMs: rawValue }
       });
+    case "preview.syncScrollEditorToPreview":
+      return saveRequest(settings, {
+        preview: {
+          ...settings.preview,
+          syncScrollEditorToPreview: Boolean(rawValue)
+        }
+      });
+    case "preview.syncScrollPreviewToEditor":
+      return saveRequest(settings, {
+        preview: {
+          ...settings.preview,
+          syncScrollPreviewToEditor: Boolean(rawValue)
+        }
+      });
+    case "preview.doubleClickJumpToEditor":
+      return saveRequest(settings, {
+        preview: {
+          ...settings.preview,
+          doubleClickJumpToEditor: Boolean(rawValue)
+        }
+      });
     case "documentMap.dialogueDelimiterPairs":
       if (!Array.isArray(rawValue)) {
         return null;

@@ -40,6 +40,10 @@ interface GlossaryPreviewDecoratorProps {
    * what this proxy does and does not guarantee.
    */
   onPreviewFrameObserved: (documentOpenId: string, durationMs: number) => void;
+  /** #503: callback when the preview container element mounts or unmounts. */
+  onPreviewContainerMount?: (container: HTMLElement | null) => void;
+  /** #503: callback when preview HTML is committed into DOM. */
+  onPreviewContentCommitted?: (container: HTMLElement) => void;
 }
 
 interface PreviewDecorationStats {
@@ -146,9 +150,17 @@ export function GlossaryPreviewDecorator({
   previewRenderStartedAt,
   onPreviewDomCommitted,
   onPreviewDecorationCompleted,
-  onPreviewFrameObserved
+  onPreviewFrameObserved,
+  onPreviewContainerMount,
+  onPreviewContentCommitted
 }: GlossaryPreviewDecoratorProps): JSX.Element {
   const previewRef = useRef<HTMLElement | null>(null);
+  const onPreviewContainerMountRef = useRef(onPreviewContainerMount);
+  const onPreviewContentCommittedRef = useRef(onPreviewContentCommitted);
+  useLayoutEffect(() => {
+    onPreviewContainerMountRef.current = onPreviewContainerMount;
+    onPreviewContentCommittedRef.current = onPreviewContentCommitted;
+  }, [onPreviewContainerMount, onPreviewContentCommitted]);
   // Guards against React StrictMode's dev-only double layout-effect
   // invocation, and against re-firing for the same open on a later,
   // unrelated re-run of this effect — mirrors the reportedDocumentOpenIdRef
@@ -172,11 +184,12 @@ export function GlossaryPreviewDecorator({
   useLayoutEffect(() => {
     const previewElement = previewRef.current;
 
+    onPreviewContainerMountRef.current?.(previewElement);
     if (!previewElement) {
       return;
     }
-
     previewElement.innerHTML = previewHtml;
+    onPreviewContentCommittedRef.current?.(previewElement);
 
     // Proxy measurement (#154): React's own commit timing isn't directly
     // observable, so this layout effect firing — which runs synchronously

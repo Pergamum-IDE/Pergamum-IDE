@@ -697,4 +697,191 @@ describe("debug log details sanitizer", () => {
     // only the valid field survives
     expect(details).toEqual({ activeFindMode: "search" });
   });
+
+  it("#503: passes through all preview scroll sync diagnostic fields without dropping keys", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        editorTopSourceLine: 120,
+        previousAnchorLine: 110,
+        nextAnchorLine: 130,
+        previousAnchorOffset: 1500,
+        nextAnchorOffset: 2000,
+        rawComputedPreviewTargetOffset: 1750,
+        clampedPreviewTargetOffset: 1750,
+        computedPreviewTargetOffset: 1750,
+        actualPreviewScrollTopAfterSync: 1750,
+        anchorCount: 15,
+        firstAnchorLine: 1,
+        lastAnchorLine: 1500,
+        firstAnchorOffset: 24,
+        lastAnchorOffset: 3807663,
+        containerScrollHeight: 3807700,
+        containerClientHeight: 1000,
+        containerMaxScrollTop: 3806700,
+        articleScrollHeight: 3807700,
+        articleOffsetHeight: 3807700,
+        containerTagName: "ARTICLE",
+        containerClassName: "preview",
+        previewScrollTopBefore: 1700,
+        previewScrollTopAfter: 1750,
+        previewScrollHeight: 3807700,
+        previewClientHeight: 1000,
+        anchorCacheScrollHeight: 3807700,
+        anchorCacheClientHeight: 1000,
+        anchorCacheMaxScrollTop: 3806700,
+        sameContainerAsAnchorCollection: true,
+        sourceAxis: "vertical",
+        targetAxis: "vertical",
+        scheduledGeneration: 4,
+        appliedGeneration: 4,
+        suppressedSide: "preview",
+        eventSide: "preview",
+        reason: "programmatic_scroll_write"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      editorTopSourceLine: 120,
+      previousAnchorLine: 110,
+      nextAnchorLine: 130,
+      previousAnchorOffset: 1500,
+      nextAnchorOffset: 2000,
+      rawComputedPreviewTargetOffset: 1750,
+      clampedPreviewTargetOffset: 1750,
+      computedPreviewTargetOffset: 1750,
+      actualPreviewScrollTopAfterSync: 1750,
+      anchorCount: 15,
+      firstAnchorLine: 1,
+      lastAnchorLine: 1500,
+      firstAnchorOffset: 24,
+      lastAnchorOffset: 3807663,
+      containerScrollHeight: 3807700,
+      containerClientHeight: 1000,
+      containerMaxScrollTop: 3806700,
+      articleScrollHeight: 3807700,
+      articleOffsetHeight: 3807700,
+      containerTagName: "ARTICLE",
+      containerClassName: "preview",
+      previewScrollTopBefore: 1700,
+      previewScrollTopAfter: 1750,
+      previewScrollHeight: 3807700,
+      previewClientHeight: 1000,
+      anchorCacheScrollHeight: 3807700,
+      anchorCacheClientHeight: 1000,
+      anchorCacheMaxScrollTop: 3806700,
+      sameContainerAsAnchorCollection: true,
+      sourceAxis: "vertical",
+      targetAxis: "vertical",
+      scheduledGeneration: 4,
+      appliedGeneration: 4,
+      suppressedSide: "preview",
+      eventSide: "preview",
+      reason: "programmatic_scroll_write"
+    });
+    expect(details).not.toHaveProperty("droppedKeyCount");
+  });
+
+  it("preserves new #503 Task 1 & 2 diagnostic fields without dropping keys", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        previousAnchorConnected: true,
+        nextAnchorConnected: false,
+        previousAnchorRectTop: 123.45,
+        previewContainerRectTop: 0,
+        previewContainerIsConnected: true,
+        blockMapBuildId: 42,
+        blockMapReason: "htmlRegenerated",
+        measurementFailed: true,
+        skipReason: "stale_anchor_ref_disconnected"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      previousAnchorConnected: true,
+      nextAnchorConnected: false,
+      previousAnchorRectTop: 123.45,
+      previewContainerRectTop: 0,
+      previewContainerIsConnected: true,
+      blockMapBuildId: 42,
+      blockMapReason: "htmlRegenerated",
+      measurementFailed: true,
+      skipReason: "stale_anchor_ref_disconnected"
+    });
+    expect(details).not.toHaveProperty("droppedKeyCount");
+  });
+
+  it("#504: accepts preview jump-to-source diagnostic fields for a successful jump", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        previewJumpToSourceResult: "jumped",
+        previewJumpToSourceLine: 42,
+        previewJumpToSourceTargetLine: 42,
+        previewJumpToSourceClamped: false,
+        previewJumpToSourceDocLineCount: 100
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      previewJumpToSourceResult: "jumped",
+      previewJumpToSourceLine: 42,
+      previewJumpToSourceTargetLine: 42,
+      previewJumpToSourceClamped: false,
+      previewJumpToSourceDocLineCount: 100
+    });
+    expect(details).not.toHaveProperty("droppedKeyCount");
+  });
+
+  it("#504: accepts a clamped jump past the document's line count", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        previewJumpToSourceResult: "jumped",
+        previewJumpToSourceLine: 500,
+        previewJumpToSourceTargetLine: 100,
+        previewJumpToSourceClamped: true,
+        previewJumpToSourceDocLineCount: 100
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      previewJumpToSourceResult: "jumped",
+      previewJumpToSourceLine: 500,
+      previewJumpToSourceTargetLine: 100,
+      previewJumpToSourceClamped: true,
+      previewJumpToSourceDocLineCount: 100
+    });
+  });
+
+  it("#504: normalizes an unrecognized preview jump-to-source result instead of dropping the event", () => {
+    const details = sanitizeDebugLogDetails(
+      { previewJumpToSourceResult: "somethingElse" },
+      context()
+    );
+
+    expect(details).toEqual({ previewJumpToSourceResult: "unknown" });
+  });
+
+  it("#504: never carries document text, HTML, file paths, or element text on a jump event", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        previewJumpToSourceResult: "jumped",
+        previewJumpToSourceLine: 3,
+        previewHtml: "<p>吾輩は猫である</p>",
+        elementText: "吾輩は猫である",
+        absolutePath: "C:\\Users\\name\\novel.md"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      previewJumpToSourceResult: "jumped",
+      previewJumpToSourceLine: 3,
+      droppedKeyCount: 3
+    });
+    expect(JSON.stringify(details)).not.toContain("吾輩");
+    expect(JSON.stringify(details)).not.toContain("novel.md");
+  });
 });

@@ -802,6 +802,20 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqual({ ok: false, failure: "typeMismatch" });
     });
 
+    it("#505 Phase 1: the 3 preview scroll-sync / jump settings are applicationOnly booleans, all defaulting to true", () => {
+      for (const key of [
+        "preview.syncScrollEditorToPreview",
+        "preview.syncScrollPreviewToEditor",
+        "preview.doubleClickJumpToEditor"
+      ] as const) {
+        const entry = getCatalogEntry(key);
+        expect(entry.type).toBe("boolean");
+        expect(entry.scope).toBe("applicationOnly");
+        expect(entry.defaultValue).toBe(true);
+        expect(getCatalogDefaultValue(key)).toBe(true);
+      }
+    });
+
     it("validates preview.updateDelayMs as a finite integer from 0 to 600000, defaulting to 10000 (#250 follow-up)", () => {
       const entry = getCatalogEntry("preview.updateDelayMs");
 
@@ -942,7 +956,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       }
     });
 
-    it("workbench.statusBar.visible (#174), character count (#259), NFC normalization (#446), sound feedback (#200), command palette footer details (#370), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
+    it("workbench.statusBar.visible (#174), character count (#259), NFC normalization (#446), sound feedback (#200), command palette footer details (#370), preview scroll sync + double-click jump (#505 Phase 1), and notification output (#298) are the production boolean entries (#232: workbench.advancedSettings.enabled removed)", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
@@ -968,6 +982,9 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.characterCount.exclude.markdownSyntax",
         "editor.characterCount.exclude.markdownComments",
         "textFiles.enablePlainTextDocuments",
+        "preview.syncScrollEditorToPreview",
+        "preview.syncScrollPreviewToEditor",
+        "preview.doubleClickJumpToEditor",
         "notification.output.enabled",
         "imageAttachment.insertMarkdownLink"
       ]);
@@ -1301,8 +1318,11 @@ describe("Settings Catalog Foundation (#150)", () => {
           "textFiles.lineEnding",
           "imageAttachment.saveDirectory",
           "imageAttachment.insertMarkdownLink",
+          "preview.doubleClickJumpToEditor",
           "preview.fontFamilyList",
           "preview.renderer",
+          "preview.syncScrollEditorToPreview",
+          "preview.syncScrollPreviewToEditor",
           "preview.updateDelayMs",
           "search.nearby.unit",
           "search.nearby.characterDistance",

@@ -289,7 +289,7 @@ describe("GlossaryEditor (#375)", () => {
 
     const markup = render(draft);
 
-    expect(markup).toContain("<h1>見出し</h1>");
+    expect(markup).toMatch(/<h1[^>]*>見出し<\/h1>/);
     expect(markup).not.toContain("# 見出し");
   });
 

@@ -14,7 +14,16 @@ function baseApplicationSettings(
   return {
     preview: {
       renderer: getCatalogDefaultValue("preview.renderer"),
-      updateDelayMs: getCatalogDefaultValue("preview.updateDelayMs")
+      updateDelayMs: getCatalogDefaultValue("preview.updateDelayMs"),
+      syncScrollEditorToPreview: getCatalogDefaultValue(
+        "preview.syncScrollEditorToPreview"
+      ),
+      syncScrollPreviewToEditor: getCatalogDefaultValue(
+        "preview.syncScrollPreviewToEditor"
+      ),
+      doubleClickJumpToEditor: getCatalogDefaultValue(
+        "preview.doubleClickJumpToEditor"
+      )
     },
     workbench: {
       language: getCatalogDefaultValue("workbench.language"),
