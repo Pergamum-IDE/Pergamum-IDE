@@ -253,7 +253,7 @@ describe("Settings Catalog Foundation (#150)", () => {
   describe("type safety", () => {
     it("infers literal/primitive value types from getCatalogDefaultValue", () => {
       expectTypeOf(getCatalogDefaultValue("preview.renderer")).toEqualTypeOf<
-        "markdown"
+        "markdown" | "narouHorizontal"
       >();
       expectTypeOf(
         getCatalogDefaultValue("markdownFiles.lineEnding")
@@ -312,7 +312,9 @@ describe("Settings Catalog Foundation (#150)", () => {
     it("resolveCatalogValue's value type matches SettingValueOf, not unknown", () => {
       const result = resolveCatalogValue("preview.renderer", "markdown");
 
-      expectTypeOf(result.value).toEqualTypeOf<"markdown">();
+      expectTypeOf(result.value).toEqualTypeOf<
+        "markdown" | "narouHorizontal"
+      >();
     });
   });
 
@@ -1484,9 +1486,10 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("preview.renderer's enum values are exactly ['markdown']", () => {
+    it("preview.renderer's enum values are exactly ['markdown', 'narouHorizontal']", () => {
       expect(getCatalogEntry("preview.renderer").enumValues).toEqual([
-        "markdown"
+        "markdown",
+        "narouHorizontal"
       ]);
     });
 

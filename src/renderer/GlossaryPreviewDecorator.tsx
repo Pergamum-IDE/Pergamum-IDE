@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import type { PreviewRendererId } from "../shared/api";
 import {
   isAmbiguousGlossarySurfaceTextMatch,
   type GlossarySurfaceIndex
@@ -12,6 +13,7 @@ import {
 interface GlossaryPreviewDecoratorProps {
   previewHtml: string;
   surfaceIndex: GlossarySurfaceIndex;
+  previewRenderer?: PreviewRendererId;
   /** In-flight document-open correlation id (#152), or null when idle. */
   documentOpenId: string | null;
   /**
@@ -146,6 +148,7 @@ function decoratePreviewContainer(
 export function GlossaryPreviewDecorator({
   previewHtml,
   surfaceIndex,
+  previewRenderer = "markdown",
   documentOpenId,
   previewRenderStartedAt,
   onPreviewDomCommitted,
@@ -287,5 +290,10 @@ export function GlossaryPreviewDecorator({
     // documentOpenId after handleDocumentOpenMeasured — see comment above.
   }, [previewHtml, surfaceIndex]);
 
-  return <article className="preview" ref={previewRef} />;
+  const isNarouHorizontal = previewRenderer === "narouHorizontal";
+  const className = isNarouHorizontal
+    ? "preview preview--narou-horizontal"
+    : "preview";
+
+  return <article className={className} ref={previewRef} />;
 }

@@ -305,7 +305,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
         TEXT_FILE_ENCODINGS
       );
       expect(renderer.control.options.map((o) => o.value)).toEqual([
-        "markdown"
+        "markdown",
+        "narouHorizontal"
       ]);
       expect(language.control.options.map((o) => o.value)).toEqual([
         "ja",

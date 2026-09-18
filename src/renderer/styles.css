@@ -4666,6 +4666,55 @@ label.settingsItemHeader {
   contain-intrinsic-size: auto 120px;
 }
 
+/* #507: Narou-like horizontal novel preview renderer styling */
+.preview--narou-horizontal {
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  word-break: break-word;
+}
+
+.preview--narou-horizontal > * {
+  max-width: 42em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.preview--narou-horizontal p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+  white-space: pre-wrap;
+}
+
+.preview--narou-horizontal h1,
+.preview--narou-horizontal h2,
+.preview--narou-horizontal h3,
+.preview--narou-horizontal h4,
+.preview--narou-horizontal h5,
+.preview--narou-horizontal h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  white-space: pre-wrap;
+}
+
+.preview--narou-horizontal ruby {
+  ruby-position: over;
+  -webkit-ruby-position: over;
+}
+
+.preview--narou-horizontal rt {
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+.preview--narou-horizontal [style*="text-emphasis"],
+.preview--narou-horizontal .emphasis-mark,
+.preview--narou-horizontal [data-emphasis-mark] {
+  text-emphasis-style: filled sesame;
+  text-emphasis-position: over right;
+  -webkit-text-emphasis-style: filled sesame;
+  -webkit-text-emphasis-position: over right;
+}
+
 /*
  * #375 PoC: body-text matches are still marked so readers can see which
  * surfaces resolve to a glossary entry, but there is no hover card / tooltip

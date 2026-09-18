@@ -995,6 +995,10 @@ export const settingCatalogItems = defineSettingCatalog([
         {
           value: "markdown",
           labelKey: "settings.preview.renderer.option.markdown.label"
+        },
+        {
+          value: "narouHorizontal",
+          labelKey: "settings.preview.renderer.option.narouHorizontal.label"
         }
       ]
     },

@@ -22,6 +22,7 @@ import type {
   FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
   NewFileLineEnding,
+  PreviewRendererId,
   SelectionHighlightMode,
   WorkbenchSoundSettings
 } from "../shared/settings";
@@ -459,6 +460,8 @@ interface EditorSurfaceProps {
    * doc comment.
    */
   documentStates?: Map<string, MarkdownEditorDocumentState>;
+  /** `preview.renderer` (#507). */
+  previewRenderer?: PreviewRendererId;
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
   /**
@@ -636,6 +639,7 @@ export function EditorSurface({
   isDoubleClickJumpToEditorEnabled,
   activeDocumentKey,
   documentStates,
+  previewRenderer,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -701,6 +705,7 @@ export function EditorSurface({
           isDoubleClickJumpToEditorEnabled={isDoubleClickJumpToEditorEnabled}
           documentKey={activeDocumentKey}
           documentStates={documentStates}
+          previewRenderer={previewRenderer}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
@@ -778,6 +783,7 @@ interface MarkdownEditorSurfaceProps {
   documentKey: string;
   /** #392: see EditorSurfaceProps's own doc comment. */
   documentStates?: Map<string, MarkdownEditorDocumentState>;
+  previewRenderer?: PreviewRendererId;
   previewUpdateDelayMs: number;
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
@@ -893,6 +899,7 @@ function MarkdownEditorSurface({
   isDoubleClickJumpToEditorEnabled,
   documentKey,
   documentStates,
+  previewRenderer,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -3055,6 +3062,7 @@ function MarkdownEditorSurface({
           <GlossaryPreviewDecorator
             previewHtml={previewHtml}
             surfaceIndex={surfaceIndex}
+            previewRenderer={previewRenderer}
             documentOpenId={documentOpenId}
             previewRenderStartedAt={previewRenderStartedAt}
             onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}

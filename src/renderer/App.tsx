@@ -10654,6 +10654,7 @@ export function App(): JSX.Element {
                           activeDocument.id
                         )}
                         documentStates={markdownEditorDocumentStatesRef.current}
+                        previewRenderer={effectiveSettings.preview.renderer}
                         previewUpdateDelayMs={
                           effectiveSettings.preview.updateDelayMs
                         }
