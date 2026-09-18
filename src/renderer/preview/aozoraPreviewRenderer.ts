@@ -1,5 +1,9 @@
 import type { PreviewRenderer, PreviewRenderOptions } from "./previewRenderer";
 import { replaceAozoraGaijiInText } from "./aozoraGaijiResolver";
+import {
+  getAozoraBoutenMark,
+  replaceAozoraTargetBoutenInText
+} from "./aozoraBoutenMap";
 
 function isKanjiCodePoint(codePoint: number): boolean {
   return (
@@ -140,15 +144,25 @@ function parseRubyInText(text: string): RubyTextChunk[] {
 function processInlineContent(rawText: string): string {
   const gaijiResolved = replaceAozoraGaijiInText(rawText);
   const escaped = escapeHtml(gaijiResolved);
+  const targetBoutenResolved = replaceAozoraTargetBoutenInText(escaped);
 
   // 1. Ruby parsing
-  const rubyChunks = parseRubyInText(escaped);
+  const rubyChunks = parseRubyInText(targetBoutenResolved);
   let html = rubyChunks.map((chunk) => chunk.content).join("");
 
-  // 2. Bouten parsing: ［＃傍点］...［＃傍点終わり］
+  // 2. Enclosed bouten parsing: ［＃KIND傍点］...［＃KIND傍点終わり］
   html = html.replace(
-    /［＃傍点］([\s\S]*?)［＃傍点終わり］/g,
-    '<span class="aozora-bouten">$1</span>'
+    /［＃([^］]*傍点)］([\s\S]*?)［＃\1終わり］/g,
+    (fullMatch, kind: string, content: string) => {
+      const mark = getAozoraBoutenMark(kind);
+      if (!mark) {
+        return fullMatch;
+      }
+      if (mark === "・") {
+        return `<span class="aozora-bouten">${content}</span>`;
+      }
+      return `<span class="aozora-bouten" style="--aozora-bouten-mark: &#39;${mark}&#39;;">${content}</span>`;
+    }
   );
 
   // 3. Bold parsing: ［＃太字］...［＃太字終わり］

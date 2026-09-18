@@ -4807,9 +4807,9 @@ label.settingsItemHeader {
 }
 
 .preview--aozora-horizontal .aozora-bouten {
-  text-emphasis-style: "・";
+  text-emphasis-style: var(--aozora-bouten-mark, "・");
   text-emphasis-position: over right;
-  -webkit-text-emphasis-style: "・";
+  -webkit-text-emphasis-style: var(--aozora-bouten-mark, "・");
   -webkit-text-emphasis-position: over right;
 }
 
