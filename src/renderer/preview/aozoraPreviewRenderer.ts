@@ -1,4 +1,5 @@
 import type { PreviewRenderer, PreviewRenderOptions } from "./previewRenderer";
+import { replaceAozoraGaijiInText } from "./aozoraGaijiResolver";
 
 function isKanjiCodePoint(codePoint: number): boolean {
   return (
@@ -137,7 +138,8 @@ function parseRubyInText(text: string): RubyTextChunk[] {
  * And strips remaining unsupported annotations (［＃...］, ※［＃...］).
  */
 function processInlineContent(rawText: string): string {
-  const escaped = escapeHtml(rawText);
+  const gaijiResolved = replaceAozoraGaijiInText(rawText);
+  const escaped = escapeHtml(gaijiResolved);
 
   // 1. Ruby parsing
   const rubyChunks = parseRubyInText(escaped);

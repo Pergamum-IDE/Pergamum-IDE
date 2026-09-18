@@ -14,6 +14,10 @@ import {
   type PreviewRendererId
 } from "../../src/shared/settings";
 import { aozoraPreviewRenderer } from "../../src/renderer/preview/aozoraPreviewRenderer";
+import {
+  resolveAozoraGaiji,
+  replaceAozoraGaijiInText
+} from "../../src/renderer/preview/aozoraGaijiResolver";
 import { markdownPreviewRenderer } from "../../src/renderer/preview/markdownPreviewRenderer";
 import { GlossaryPreviewDecorator } from "../../src/renderer/GlossaryPreviewDecorator";
 import { isMarkdownCurrentDocument, createFileDocument, type CurrentDocument } from "../../src/renderer/currentDocument";
@@ -455,6 +459,122 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
 
       act(() => root.unmount());
       container.remove();
+    });
+  });
+
+  describe("8. JIS X 0213 gaiji replacement (#510)", () => {
+    it("1. resolveAozoraGaiji resolves known codes directly from map", () => {
+      expect(resolveAozoraGaiji("1-48-1")).toBe("弌");
+      expect(resolveAozoraGaiji("1-14-2")).toBe("𠀋");
+      expect(resolveAozoraGaiji("2-1-1")).toBe("𠂉");
+      expect(resolveAozoraGaiji("1-4-87")).toBe("か゚");
+      expect(resolveAozoraGaiji("1-99-99")).toBeNull();
+    });
+
+    it("2. replaces 第2水準 gaiji annotation with mapped character (e.g. 1-48-1)", () => {
+      const source = "本文※［＃「一」の異体字、第2水準1-48-1］続き";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">本文弌続き</p>');
+      expect(html).not.toContain("第2水準");
+      expect(html).not.toContain("1-48-1");
+    });
+
+    it("3. replaces 第3水準 gaiji annotation with mapped character (e.g. 1-14-2)", () => {
+      const source = "本文※［＃何らかの説明、第3水準1-14-2］続き";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">本文𠀋続き</p>');
+      expect(html).not.toContain("第3水準");
+      expect(html).not.toContain("1-14-2");
+    });
+
+    it("4. replaces plain men-ku-ten gaiji annotation without 第N水準 prefix (e.g. 1-14-2)", () => {
+      const source = "本文※［＃何らかの説明、1-14-2］続き";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">本文𠀋続き</p>');
+    });
+
+    it("5. replaces 第4水準 gaiji annotation with mapped character (e.g. 2-1-1)", () => {
+      const source = "本文※［＃説明、第4水準2-1-1］続き";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">本文𠂉続き</p>');
+      expect(html).not.toContain("第4水準");
+      expect(html).not.toContain("2-1-1");
+    });
+
+    it("6. strips unknown men-ku-ten code annotation safely without raw noise", () => {
+      const source = "本文※［＃未知のコード、第3水準1-99-99］続き";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">本文続き</p>');
+      expect(html).not.toContain("1-99-99");
+      expect(html).not.toContain("未知のコード");
+    });
+
+    it("7. strips descriptive-only gaiji annotation without men-ku-ten code", () => {
+      const source = "本文※［＃「てへん＋劣」］続き";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">本文続き</p>');
+      expect(html).not.toContain("てへん＋劣");
+    });
+
+    it("8-9. raw supported and unsupported gaiji annotations do NOT remain in preview HTML", () => {
+      const source = "前※［＃説明、1-14-2］中※［＃説明のみ］後";
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">前𠀋中後</p>');
+      expect(html).not.toContain("※［＃");
+      expect(html).not.toContain("］");
+    });
+
+    it("10. handles non-BMP mapped character (surrogate pair) correctly", () => {
+      const text = replaceAozoraGaijiInText("※［＃1-14-2］");
+      expect(text).toBe("𠀋");
+      expect(text.length).toBe(2); // surrogate pair
+
+      const html = aozoraPreviewRenderer.render("※［＃1-14-2］");
+      expect(html).toContain('<p data-source-line="1">𠀋</p>');
+    });
+
+    it("11. handles multi-codepoint mapped character (combining char) correctly", () => {
+      const text = replaceAozoraGaijiInText("※［＃1-4-87］");
+      expect(text).toBe("か゚");
+
+      const html = aozoraPreviewRenderer.render("※［＃1-4-87］");
+      expect(html).toContain('<p data-source-line="1">か゚</p>');
+    });
+
+    it("12. prevents HTML injection via gaiji description or payload", () => {
+      const source = '本文※［＃<script>alert("hack")</script>、1-14-2］続き';
+      const html = aozoraPreviewRenderer.render(source);
+
+      expect(html).toContain('<p data-source-line="1">本文𠀋続き</p>');
+      expect(html).not.toContain("<script>");
+
+      const unknownSource = '本文※［＃<script>alert("hack")</script>］続き';
+      const unknownHtml = aozoraPreviewRenderer.render(unknownSource);
+
+      expect(unknownHtml).toContain('<p data-source-line="1">本文続き</p>');
+      expect(unknownHtml).not.toContain("<script>");
+    });
+
+    it("13-18. preserves existing ruby, bouten, heading, page-break, data-source-line, and other renderers", () => {
+      const rubySource = "｜親文字※［＃1-14-2］《るび》";
+      const rubyHtml = aozoraPreviewRenderer.render(rubySource);
+      expect(rubyHtml).toContain("<ruby>親文字𠀋<rt>るび</rt></ruby>");
+
+      const boutenSource = "［＃傍点］※［＃1-14-2］［＃傍点終わり］";
+      const boutenHtml = aozoraPreviewRenderer.render(boutenSource);
+      expect(boutenHtml).toContain('<span class="aozora-bouten">𠀋</span>');
+
+      const mdSource = "｜藁苞《わらづと》と※［＃1-14-2］";
+      const mdHtml = markdownPreviewRenderer.render(mdSource);
+      expect(mdHtml).toContain("<ruby>藁苞<rt>わらづと</rt></ruby>");
+      expect(mdHtml).toContain("※［＃1-14-2］");
     });
   });
 });

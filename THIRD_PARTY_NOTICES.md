@@ -8,6 +8,7 @@ assets bundled with Pergamum. It covers:
 - SVG Repo icons
 - Codicons icons
 - Typewriter sounds
+- Character Mapping Data
 
 ## Feather icons
 
@@ -104,3 +105,19 @@ Pergamum usage:
 - keypress sound: `typewriter1.wav`, `typewriter2.wav`, `typewriter3.wav`, `typewriter4.wav`, `typewriter5.wav`, `typewriter6.wav`, `typewriter7.wav`
 
 CC0 does not require attribution as a license condition, but Pergamum records this source for traceability.
+
+## x0213.org Character Mapping Data
+
+Pergamum includes a generated character mapping dataset derived from reference data published by x0213.org.
+
+The generated dataset is used by Pergamum's Aozora Bunko-like preview renderer to map JIS X 0213 men-ku-ten codes to Unicode strings for supported gaiji replacement.
+
+Included materials may include:
+
+- the original reference text obtained from x0213.org
+- conversion scripts used to generate Pergamum's JSON mapping data
+- generated JSON mapping data for use by Pergamum
+
+Pergamum gratefully acknowledges x0213.org for publishing and maintaining the reference data that made this functionality possible.
+
+The generated mapping data represents factual character-code mapping information. Pergamum does not claim copyright over the original x0213.org reference data.
