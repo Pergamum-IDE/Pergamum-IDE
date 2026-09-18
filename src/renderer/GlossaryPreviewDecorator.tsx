@@ -1,5 +1,8 @@
 import { useLayoutEffect, useRef } from "react";
-import type { PreviewRendererId } from "../shared/api";
+import {
+  isNarouPreviewRenderer,
+  type PreviewRendererId
+} from "../shared/settings";
 import {
   isAmbiguousGlossarySurfaceTextMatch,
   type GlossarySurfaceIndex
@@ -10,7 +13,7 @@ import {
   shouldSkipGlossarySurfaceDecorationTextNode
 } from "./glossarySurfaceDecoration";
 
-interface GlossaryPreviewDecoratorProps {
+export interface GlossaryPreviewDecoratorProps {
   previewHtml: string;
   surfaceIndex: GlossarySurfaceIndex;
   previewRenderer?: PreviewRendererId;
@@ -292,19 +295,24 @@ export function GlossaryPreviewDecorator({
     // documentOpenId after handleDocumentOpenMeasured — see comment above.
   }, [previewHtml, surfaceIndex]);
 
-  const isNarouHorizontal = previewRenderer === "narouHorizontal";
-  const isKakuyomuHorizontal = previewRenderer === "kakuyomuHorizontal";
-  const isAozoraHorizontal = previewRenderer === "aozoraHorizontal";
-  const className = isAozoraHorizontal
-    ? "preview preview--aozora-horizontal"
-    : isKakuyomuHorizontal
-    ? "preview preview--kakuyomu-horizontal"
-    : isNarouHorizontal
-    ? "preview preview--narou-horizontal"
-    : "preview";
+  const isNarou = isNarouPreviewRenderer(previewRenderer);
+  const className =
+    previewRenderer === "aozoraHorizontal"
+      ? "preview preview--aozora-horizontal"
+      : previewRenderer === "aozoraVertical"
+      ? "preview preview--aozora-vertical"
+      : previewRenderer === "kakuyomuHorizontal"
+      ? "preview preview--kakuyomu-horizontal"
+      : previewRenderer === "kakuyomuVertical"
+      ? "preview preview--kakuyomu-vertical"
+      : previewRenderer === "narouHorizontal"
+      ? "preview preview--narou-horizontal"
+      : previewRenderer === "narouVertical"
+      ? "preview preview--narou-vertical"
+      : "preview";
 
   const markSymbol = narouMarkText && narouMarkText.trim() ? narouMarkText.trim() : "・";
-  const style = isNarouHorizontal
+  const style = isNarou
     ? ({ "--narou-emphasis-mark-symbol": JSON.stringify(markSymbol) } as React.CSSProperties)
     : undefined;
 

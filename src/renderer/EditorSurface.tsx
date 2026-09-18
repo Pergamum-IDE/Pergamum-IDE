@@ -16,15 +16,17 @@ import {
   documentLineCount,
   documentMaxLineLength
 } from "../shared/documentMetrics";
-import type {
-  ApplicationEditorWhitespaceSettings,
-  ExpectedLineEnding,
-  FencedCodeIndentUnit,
-  LineEndingMarkerGlyph,
-  NewFileLineEnding,
-  PreviewRendererId,
-  SelectionHighlightMode,
-  WorkbenchSoundSettings
+import {
+  isAozoraPreviewRenderer,
+  isVerticalPreviewRenderer,
+  type ApplicationEditorWhitespaceSettings,
+  type ExpectedLineEnding,
+  type FencedCodeIndentUnit,
+  type LineEndingMarkerGlyph,
+  type NewFileLineEnding,
+  type PreviewRendererId,
+  type SelectionHighlightMode,
+  type WorkbenchSoundSettings
 } from "../shared/settings";
 import type { Translate } from "../shared/i18n";
 import {
@@ -418,12 +420,14 @@ export function useMemoizedPreviewRender(
   return useMemo(() => {
     const startedAt = performance.now();
     const html =
-      previewRenderer === "aozoraHorizontal"
+      isAozoraPreviewRenderer(previewRenderer)
         ? aozoraPreviewRenderer.render(previewSourceContent, {
-            projectLocalImageResolution
+            projectLocalImageResolution,
+            previewRenderer
           })
         : markdownPreviewRenderer.render(previewSourceContent, {
-            projectLocalImageResolution
+            projectLocalImageResolution,
+            previewRenderer
           });
 
     return { html, startedAt, durationMs: performance.now() - startedAt };
@@ -1028,7 +1032,7 @@ function MarkdownEditorSurface({
   const [aozoraCleanText, setAozoraCleanText] = useState<string | null>(null);
 
   useEffect(() => {
-    if (previewRenderer !== "aozoraHorizontal" || isMarkdown || isDirty) {
+    if (!isAozoraPreviewRenderer(previewRenderer) || isMarkdown || isDirty) {
       setAozoraCleanText(null);
       return;
     }
@@ -1069,7 +1073,7 @@ function MarkdownEditorSurface({
   }, [previewRenderer, isMarkdown, isDirty, documentKey, document]);
 
   const effectivePreviewSourceContent =
-    previewRenderer === "aozoraHorizontal" &&
+    isAozoraPreviewRenderer(previewRenderer) &&
     !isMarkdown &&
     !isDirty &&
     aozoraCleanText !== null
@@ -1280,6 +1284,12 @@ function MarkdownEditorSurface({
   }, [previewContainer, rebuildBlockMap]);
 
   useEffect(() => {
+    if (previewContainer) {
+      previewContainer.scrollTo({ top: 0, left: 0 });
+    }
+  }, [previewRenderer, previewContainer]);
+
+  useEffect(() => {
     if (!editorScroller || !previewContainer) {
       return undefined;
     }
@@ -1307,7 +1317,24 @@ function MarkdownEditorSurface({
       // off: do nothing at all for this scroll event (the separate
       // scrollEvent.classified diagnostic below already reports why).
       const leaderForThisDirection = scrollLeaderTrackerRef.current?.getLeader() ?? "editor";
-      if (leaderForThisDirection !== "editor" || !isSyncScrollEditorToPreviewEnabled) {
+      if (
+        leaderForThisDirection !== "editor" ||
+        !isSyncScrollEditorToPreviewEnabled ||
+        isVerticalPreviewRenderer(previewRenderer)
+      ) {
+        if (isVerticalPreviewRenderer(previewRenderer) && isDebugModeEnabled) {
+          emitScrollSyncLog({
+            level: "debug",
+            event: "preview.scrollSync.programmaticScroll.suppressed",
+            details: {
+              suppressedSide: "preview",
+              eventSide: "editor",
+              reason: "disabledByVerticalRenderer",
+              generation: currentGen,
+              remainingFrames: 0
+            }
+          });
+        }
         return;
       }
 
@@ -1993,8 +2020,22 @@ function MarkdownEditorSurface({
       if (
         !tracker ||
         tracker.getLeader() !== "preview" ||
-        !isSyncScrollPreviewToEditorEnabled
+        !isSyncScrollPreviewToEditorEnabled ||
+        isVerticalPreviewRenderer(previewRenderer)
       ) {
+        if (isVerticalPreviewRenderer(previewRenderer) && isDebugModeEnabled) {
+          emitScrollSyncLog({
+            level: "debug",
+            event: "preview.scrollSync.programmaticScroll.suppressed",
+            details: {
+              suppressedSide: "editor",
+              eventSide: "preview",
+              reason: "disabledByVerticalRenderer",
+              generation: previewToEditorGenerationRef.current + 1,
+              remainingFrames: 0
+            }
+          });
+        }
         return;
       }
 

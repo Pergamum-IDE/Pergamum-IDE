@@ -1006,7 +1006,10 @@ export const settingsCatalog = defineSettingsCatalog({
       "markdown",
       "narouHorizontal",
       "kakuyomuHorizontal",
-      "aozoraHorizontal"
+      "aozoraHorizontal",
+      "narouVertical",
+      "kakuyomuVertical",
+      "aozoraVertical"
     ],
     defaultValue: "markdown",
     labelKey: "settings.preview.renderer.label",

@@ -1007,6 +1007,18 @@ export const settingCatalogItems = defineSettingCatalog([
         {
           value: "aozoraHorizontal",
           labelKey: "settings.preview.renderer.option.aozoraHorizontal.label"
+        },
+        {
+          value: "narouVertical",
+          labelKey: "settings.preview.renderer.option.narouVertical.label"
+        },
+        {
+          value: "kakuyomuVertical",
+          labelKey: "settings.preview.renderer.option.kakuyomuVertical.label"
+        },
+        {
+          value: "aozoraVertical",
+          labelKey: "settings.preview.renderer.option.aozoraVertical.label"
         }
       ]
     },

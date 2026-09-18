@@ -4,6 +4,11 @@ import {
   resolveProjectLocalImageSrc,
   type ProjectLocalImageResolutionContext
 } from "../../shared/projectLocalImageLink";
+import {
+  isKakuyomuPreviewRenderer,
+  isNarouPreviewRenderer,
+  type PreviewRendererId
+} from "../../shared/settings";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -46,14 +51,23 @@ interface RubyTextChunk {
 }
 
 /**
- * Parses Aozora / Narou-style ruby notation in a plain text string.
+ * Parses Aozora / Narou / Kakuyomu-style ruby notation in a plain text string.
  * Supports explicit ruby base markers (｜親文字《ルビ》 / |親文字《ルビ》)
  * and implicit ruby base (contiguous Kanji run immediately preceding 《ルビ》).
+ * Supports Kakuyomu emphasis notation (《《...》》) when Kakuyomu/Narou renderer family is active.
  */
-function parseRubyInText(text: string): RubyTextChunk[] {
+function parseRubyInText(
+  text: string,
+  previewRenderer?: PreviewRendererId
+): RubyTextChunk[] {
   const result: RubyTextChunk[] = [];
   let pos = 0;
   const max = text.length;
+
+  const isKakuyomu = isKakuyomuPreviewRenderer(previewRenderer);
+  const isNarou = isNarouPreviewRenderer(previewRenderer);
+  // Default/unspecified or Kakuyomu/Narou renderer allows Kakuyomu emphasis 《《...》》
+  const allowKakuyomuEmphasis = isKakuyomu || isNarou || !previewRenderer;
 
   while (pos < max) {
     const openIndex = text.indexOf("《", pos);
@@ -62,7 +76,7 @@ function parseRubyInText(text: string): RubyTextChunk[] {
     }
 
     // Check 0: Kakuyomu emphasis notation 《《...》》
-    if (text.startsWith("《《", openIndex)) {
+    if (allowKakuyomuEmphasis && text.startsWith("《《", openIndex)) {
       const closeDouble = text.indexOf("》》", openIndex + 2);
       if (closeDouble > openIndex + 2) {
         const emphasisContent = text.slice(openIndex + 2, closeDouble);
@@ -94,6 +108,10 @@ function parseRubyInText(text: string): RubyTextChunk[] {
 
     const rubyText = text.slice(openIndex + 1, closeIndex);
     if (rubyText.length === 0 || /[\r\n《》｜|]/.test(rubyText)) {
+      result.push({
+        type: "text",
+        content: text.slice(pos, openIndex + 1)
+      });
       pos = openIndex + 1;
       continue;
     }
@@ -182,6 +200,9 @@ function parseRubyInText(text: string): RubyTextChunk[] {
  */
 markdown.core.ruler.push("aozora_ruby_transform", (state) => {
   const Token = state.Token;
+  const env = state.env as { previewRenderer?: PreviewRendererId } | undefined;
+  const previewRenderer = env?.previewRenderer;
+
   for (const blockToken of state.tokens) {
     if (blockToken.type !== "inline" || !blockToken.children) {
       continue;
@@ -194,7 +215,7 @@ markdown.core.ruler.push("aozora_ruby_transform", (state) => {
         continue;
       }
 
-      const chunks = parseRubyInText(child.content);
+      const chunks = parseRubyInText(child.content, previewRenderer);
       for (const chunk of chunks) {
         if (chunk.type === "text") {
           const t = new Token("text", "", 0);
@@ -284,6 +305,7 @@ export const markdownPreviewRenderer: PreviewRenderer = {
   render: (content, options) =>
     markdown.render(content, {
       projectLocalImageResolution:
-        options?.projectLocalImageResolution ?? NO_IMAGE_RESOLUTION
+        options?.projectLocalImageResolution ?? NO_IMAGE_RESOLUTION,
+      previewRenderer: options?.previewRenderer
     })
 };

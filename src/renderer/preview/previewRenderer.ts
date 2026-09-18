@@ -1,4 +1,5 @@
 import type { ProjectLocalImageResolutionContext } from "../../shared/projectLocalImageLink";
+import type { PreviewRendererId } from "../../shared/settings";
 
 export interface PreviewRenderOptions {
   /**
@@ -17,6 +18,7 @@ export interface PreviewRenderOptions {
    * union makes the surface's intent explicit.
    */
   readonly projectLocalImageResolution?: ProjectLocalImageResolutionContext;
+  readonly previewRenderer?: PreviewRendererId;
 }
 
 export interface PreviewRenderer {
