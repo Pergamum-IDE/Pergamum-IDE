@@ -462,6 +462,8 @@ interface EditorSurfaceProps {
   documentStates?: Map<string, MarkdownEditorDocumentState>;
   /** `preview.renderer` (#507). */
   previewRenderer?: PreviewRendererId;
+  /** `editor.emphasisMark.narouMarkText` (#507). */
+  narouMarkText?: string;
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
   previewUpdateDelayMs: number;
   /**
@@ -640,6 +642,7 @@ export function EditorSurface({
   activeDocumentKey,
   documentStates,
   previewRenderer,
+  narouMarkText,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -706,6 +709,7 @@ export function EditorSurface({
           documentKey={activeDocumentKey}
           documentStates={documentStates}
           previewRenderer={previewRenderer}
+          narouMarkText={narouMarkText}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
@@ -784,6 +788,7 @@ interface MarkdownEditorSurfaceProps {
   /** #392: see EditorSurfaceProps's own doc comment. */
   documentStates?: Map<string, MarkdownEditorDocumentState>;
   previewRenderer?: PreviewRendererId;
+  narouMarkText?: string;
   previewUpdateDelayMs: number;
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
@@ -900,6 +905,7 @@ function MarkdownEditorSurface({
   documentKey,
   documentStates,
   previewRenderer,
+  narouMarkText,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
   expectedLineEnding,
@@ -3063,6 +3069,7 @@ function MarkdownEditorSurface({
             previewHtml={previewHtml}
             surfaceIndex={surfaceIndex}
             previewRenderer={previewRenderer}
+            narouMarkText={narouMarkText}
             documentOpenId={documentOpenId}
             previewRenderStartedAt={previewRenderStartedAt}
             onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}

@@ -4709,9 +4709,9 @@ label.settingsItemHeader {
 .preview--narou-horizontal [style*="text-emphasis"],
 .preview--narou-horizontal .emphasis-mark,
 .preview--narou-horizontal [data-emphasis-mark] {
-  text-emphasis-style: filled sesame;
+  text-emphasis-style: var(--narou-emphasis-mark-symbol, '・');
   text-emphasis-position: over right;
-  -webkit-text-emphasis-style: filled sesame;
+  -webkit-text-emphasis-style: var(--narou-emphasis-mark-symbol, '・');
   -webkit-text-emphasis-position: over right;
 }
 

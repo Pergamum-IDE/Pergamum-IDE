@@ -153,6 +153,37 @@ describe("Narou-like horizontal novel preview (#507)", () => {
       });
       container.remove();
     });
+
+    it("passes narouMarkText as --narou-emphasis-mark-symbol CSS variable on narouHorizontal preview article", () => {
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      act(() => {
+        root.render(
+          <GlossaryPreviewDecorator
+            previewHtml="<p>　吾輩は猫である。</p>"
+            surfaceIndex={{ entries: [] }}
+            previewRenderer="narouHorizontal"
+            narouMarkText="●"
+            documentOpenId={null}
+            previewRenderStartedAt={performance.now()}
+            onPreviewDomCommitted={() => {}}
+            onPreviewDecorationCompleted={() => {}}
+            onPreviewFrameObserved={() => {}}
+          />
+        );
+      });
+
+      const article = container.querySelector("article") as HTMLElement;
+      expect(article).not.toBeNull();
+      expect(article.style.getPropertyValue("--narou-emphasis-mark-symbol")).toBe('"●"');
+
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
   });
 
   describe("3. Feature compatibility: data-source-line, double-click jump, scroll sync", () => {

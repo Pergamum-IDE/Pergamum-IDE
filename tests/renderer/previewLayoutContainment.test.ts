@@ -63,7 +63,7 @@ describe("preview layout containment mitigation (#160)", () => {
 
   it("does not change the preview container's element/class or GlossaryPreviewDecorator's DOM-writing logic — mitigation is CSS-only", () => {
     expect(glossaryPreviewDecoratorSource).toContain(
-      '<article className={className} ref={previewRef} />'
+      '<article className={className} style={style} ref={previewRef} />'
     );
     expect(glossaryPreviewDecoratorSource).toContain(
       "previewElement.innerHTML = previewHtml;"

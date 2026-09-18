@@ -10655,6 +10655,9 @@ export function App(): JSX.Element {
                         )}
                         documentStates={markdownEditorDocumentStatesRef.current}
                         previewRenderer={effectiveSettings.preview.renderer}
+                        narouMarkText={
+                          effectiveSettings.editor.emphasisMark.narouMarkText
+                        }
                         previewUpdateDelayMs={
                           effectiveSettings.preview.updateDelayMs
                         }

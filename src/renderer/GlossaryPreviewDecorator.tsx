@@ -14,6 +14,7 @@ interface GlossaryPreviewDecoratorProps {
   previewHtml: string;
   surfaceIndex: GlossarySurfaceIndex;
   previewRenderer?: PreviewRendererId;
+  narouMarkText?: string;
   /** In-flight document-open correlation id (#152), or null when idle. */
   documentOpenId: string | null;
   /**
@@ -149,6 +150,7 @@ export function GlossaryPreviewDecorator({
   previewHtml,
   surfaceIndex,
   previewRenderer = "markdown",
+  narouMarkText,
   documentOpenId,
   previewRenderStartedAt,
   onPreviewDomCommitted,
@@ -295,5 +297,10 @@ export function GlossaryPreviewDecorator({
     ? "preview preview--narou-horizontal"
     : "preview";
 
-  return <article className={className} ref={previewRef} />;
+  const markSymbol = narouMarkText && narouMarkText.trim() ? narouMarkText.trim() : "・";
+  const style = isNarouHorizontal
+    ? ({ "--narou-emphasis-mark-symbol": JSON.stringify(markSymbol) } as React.CSSProperties)
+    : undefined;
+
+  return <article className={className} style={style} ref={previewRef} />;
 }
