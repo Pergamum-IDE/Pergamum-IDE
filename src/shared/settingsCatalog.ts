@@ -1002,7 +1002,12 @@ export const settingsCatalog = defineSettingsCatalog({
   "preview.renderer": defineEnumSetting({
     key: "preview.renderer",
     scope: "applicationWithProjectOverride",
-    enumValues: ["markdown"],
+    enumValues: [
+      "markdown",
+      "narouHorizontal",
+      "kakuyomuHorizontal",
+      "aozoraHorizontal"
+    ],
     defaultValue: "markdown",
     labelKey: "settings.preview.renderer.label",
     descriptionKey: "settings.preview.renderer.description",

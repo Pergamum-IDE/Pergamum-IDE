@@ -18,7 +18,11 @@ export type SettingsCategory =
   | "preview"
   | "project";
 
-export type PreviewRendererId = "markdown";
+export type PreviewRendererId =
+  | "markdown"
+  | "narouHorizontal"
+  | "kakuyomuHorizontal"
+  | "aozoraHorizontal";
 
 export interface RecentProject {
   /**

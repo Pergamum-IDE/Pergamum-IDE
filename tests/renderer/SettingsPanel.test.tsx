@@ -1766,8 +1766,8 @@ describe("SettingsPanelView language options (#230: catalog-driven, not language
 });
 
 describe("SettingsPanelView unwired settings clarity (#236)", () => {
-  it("keeps workbench.colorTheme and preview.renderer visible and rendered", () => {
-    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+  it("keeps workbench.colorTheme visible and rendered", () => {
+    for (const key of ["workbench.colorTheme"] as const) {
       const element = settingsPanelViewElement("en", {
         searchQuery: isolate(key)
       });
@@ -1776,8 +1776,8 @@ describe("SettingsPanelView unwired settings clarity (#236)", () => {
     }
   });
 
-  it("keeps workbench.colorTheme and preview.renderer controls disabled", () => {
-    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+  it("keeps workbench.colorTheme control disabled", () => {
+    for (const key of ["workbench.colorTheme"] as const) {
       const element = settingsPanelViewElement("en", {
         searchQuery: isolate(key)
       });
@@ -1787,7 +1787,7 @@ describe("SettingsPanelView unwired settings clarity (#236)", () => {
   });
 
   it("shows the localized planned-for-future-version notice for unwired items, in ja and en", () => {
-    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+    for (const key of ["workbench.colorTheme"] as const) {
       const markupEn = renderSettingsPanelView("en", {
         searchQuery: isolate(key)
       });
@@ -1828,7 +1828,7 @@ describe("SettingsPanelView unwired settings clarity (#236)", () => {
   });
 
   it("does not introduce save behavior for unwired settings even if a change handler were invoked", () => {
-    for (const key of ["workbench.colorTheme", "preview.renderer"] as const) {
+    for (const key of ["workbench.colorTheme"] as const) {
       const onChangeSettings = vi.fn();
       const element = settingsPanelViewElement("en", {
         searchQuery: isolate(key),

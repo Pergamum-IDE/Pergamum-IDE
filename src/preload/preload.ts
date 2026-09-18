@@ -72,7 +72,9 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(FILE_CHANNELS.writeMarkdown, {
         path: filePath,
         content
-      })
+      }),
+    readAozoraTextFile: (filePath) =>
+      ipcRenderer.invoke(FILE_CHANNELS.readAozoraTextFile, { path: filePath })
   },
   projects: {
     createProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.createProject),
@@ -159,6 +161,10 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(PROJECT_CHANNELS.listProjectDocuments),
     readProjectDocument: (relativePath) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
+        relativePath
+      }),
+    readProjectDocumentAozora: (relativePath) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocumentAozora, {
         relativePath
       }),
     readProjectDocumentPreviewLine: (relativePath) =>

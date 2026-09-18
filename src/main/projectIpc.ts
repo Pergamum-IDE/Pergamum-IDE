@@ -4894,6 +4894,20 @@ export function registerProjectIpc(
   );
 
   ipcMain.handle(
+    PROJECT_CHANNELS.readProjectDocumentAozora,
+    async (_event, rawRequest: unknown): Promise<string> => {
+      const relativePath =
+        typeof rawRequest === "object" && rawRequest !== null && "relativePath" in rawRequest
+          ? String((rawRequest as { relativePath: unknown }).relativePath)
+          : String(rawRequest);
+      const documentPath = resolveProjectDocumentPath(relativePath);
+      const bytes = await fs.readFile(documentPath);
+      const decoder = new TextDecoder("shift_jis");
+      return decoder.decode(bytes);
+    }
+  );
+
+  ipcMain.handle(
     PROJECT_CHANNELS.saveProjectDocument,
     async (
       _event,

@@ -351,7 +351,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
         "const startedAt = performance.now();"
       );
       expect(editorSurfaceSource).toContain(
-        "const html = markdownPreviewRenderer.render(previewSourceContent, {"
+        "markdownPreviewRenderer.render(previewSourceContent, {"
       );
       expect(editorSurfaceSource).toContain(
         "durationMs: performance.now() - startedAt"
@@ -359,7 +359,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       // #409: the hook now also takes the previewed document's
       // project-relative path (for project-local image link rewriting).
       expect(editorSurfaceSource).toContain(
-        "const previewRender = useMemoizedPreviewRender(\n    previewSourceContent,"
+        "const previewRender = useMemoizedPreviewRender(\n    effectivePreviewSourceContent,"
       );
       expect(editorSurfaceSource).toContain(
         "const previewHtml = previewRender.html;"
@@ -394,7 +394,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       // resolution context — the discriminant kind plus (for `sourceFile`)
       // the previewed document's project-relative path.
       expect(hookBody).toContain(
-        "}, [previewSourceContent, resolutionKind, resolutionSourcePath]);"
+        "}, [previewSourceContent, resolutionKind, resolutionSourcePath, previewRenderer]);"
       );
     });
 

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import type { PreviewRendererId } from "../shared/api";
 import {
   isAmbiguousGlossarySurfaceTextMatch,
   type GlossarySurfaceIndex
@@ -12,6 +13,8 @@ import {
 interface GlossaryPreviewDecoratorProps {
   previewHtml: string;
   surfaceIndex: GlossarySurfaceIndex;
+  previewRenderer?: PreviewRendererId;
+  narouMarkText?: string;
   /** In-flight document-open correlation id (#152), or null when idle. */
   documentOpenId: string | null;
   /**
@@ -146,6 +149,8 @@ function decoratePreviewContainer(
 export function GlossaryPreviewDecorator({
   previewHtml,
   surfaceIndex,
+  previewRenderer = "markdown",
+  narouMarkText,
   documentOpenId,
   previewRenderStartedAt,
   onPreviewDomCommitted,
@@ -287,5 +292,21 @@ export function GlossaryPreviewDecorator({
     // documentOpenId after handleDocumentOpenMeasured — see comment above.
   }, [previewHtml, surfaceIndex]);
 
-  return <article className="preview" ref={previewRef} />;
+  const isNarouHorizontal = previewRenderer === "narouHorizontal";
+  const isKakuyomuHorizontal = previewRenderer === "kakuyomuHorizontal";
+  const isAozoraHorizontal = previewRenderer === "aozoraHorizontal";
+  const className = isAozoraHorizontal
+    ? "preview preview--aozora-horizontal"
+    : isKakuyomuHorizontal
+    ? "preview preview--kakuyomu-horizontal"
+    : isNarouHorizontal
+    ? "preview preview--narou-horizontal"
+    : "preview";
+
+  const markSymbol = narouMarkText && narouMarkText.trim() ? narouMarkText.trim() : "・";
+  const style = isNarouHorizontal
+    ? ({ "--narou-emphasis-mark-symbol": JSON.stringify(markSymbol) } as React.CSSProperties)
+    : undefined;
+
+  return <article className={className} style={style} ref={previewRef} />;
 }

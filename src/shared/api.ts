@@ -221,7 +221,8 @@ export const FILE_CHANNELS = {
   statMarkdownFile: "files:statMarkdownFile",
   saveMarkdown: "files:saveMarkdown",
   selectMarkdownSavePath: "files:selectMarkdownSavePath",
-  writeMarkdown: "files:writeMarkdown"
+  writeMarkdown: "files:writeMarkdown",
+  readAozoraTextFile: "files:readAozoraTextFile"
 } as const;
 
 export const PROJECT_CHANNELS = {
@@ -279,6 +280,7 @@ export const PROJECT_CHANNELS = {
    */
   listProjectDocuments: "projects:listProjectDocuments",
   readProjectDocument: "projects:readProjectDocument",
+  readProjectDocumentAozora: "projects:readProjectDocumentAozora",
   /** #372: first non-empty Markdown line of a project-local document, for the
    *  Command Palette file quick open footer detail preview. */
   readProjectDocumentPreviewLine: "projects:readProjectDocumentPreviewLine",
@@ -1111,6 +1113,7 @@ export interface PergamumApi {
       path: string,
       content: string
     ) => Promise<WriteMarkdownResult>;
+    readAozoraTextFile: (filePath: string) => Promise<string>;
   };
   projects: {
     createProject: () => Promise<ProjectOpenResult>;
@@ -1180,6 +1183,7 @@ export interface PergamumApi {
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;
+    readProjectDocumentAozora: (relativePath: string) => Promise<string>;
     /**
      * #372: the first non-empty Markdown line of a project-local document,
      * trimmed, for the Command Palette file quick open footer detail preview.

@@ -26,6 +26,7 @@ import {
   type SettingSearchTranslate
 } from "../shared/settingsUiCatalog";
 import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
+import { isPreviewRendererId } from "../shared/settings";
 import { DocumentMapSettingsSection } from "./DocumentMapSettingsSection";
 import { readSettingValue } from "./settingsValueByKey";
 import {
@@ -98,8 +99,7 @@ function normalizeSearchQuery(query: string): string {
 // settings.json/store change outside this issue's scope, so both render
 // read-only here rather than gaining new persistence wiring.
 const unwiredKeys = new Set<SettingKey>([
-  "workbench.colorTheme",
-  "preview.renderer"
+  "workbench.colorTheme"
 ]);
 
 const footerDetailMarqueeKeys = new Set<SettingKey>([
@@ -191,8 +191,16 @@ function buildNextSettings(
 ): SaveApplicationSettingsRequest | null {
   switch (key) {
     case "workbench.colorTheme":
-    case "preview.renderer":
       return null;
+    case "preview.renderer":
+      return isPreviewRendererId(rawValue)
+        ? saveRequest(settings, {
+            preview: {
+              ...settings.preview,
+              renderer: rawValue
+            }
+          })
+        : null;
     case "workbench.fontFamily":
       return saveRequest(settings, {
         workbench: withFontFamily(

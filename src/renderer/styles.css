@@ -4666,6 +4666,168 @@ label.settingsItemHeader {
   contain-intrinsic-size: auto 120px;
 }
 
+/* #507: Narou-like horizontal novel preview renderer styling */
+.preview--narou-horizontal {
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  word-break: break-word;
+}
+
+.preview--narou-horizontal > * {
+  max-width: 42em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.preview--narou-horizontal p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+  white-space: pre-wrap;
+}
+
+.preview--narou-horizontal h1,
+.preview--narou-horizontal h2,
+.preview--narou-horizontal h3,
+.preview--narou-horizontal h4,
+.preview--narou-horizontal h5,
+.preview--narou-horizontal h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  white-space: pre-wrap;
+}
+
+.preview--narou-horizontal ruby {
+  ruby-position: over;
+  -webkit-ruby-position: over;
+}
+
+.preview--narou-horizontal rt {
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+.preview--narou-horizontal [style*="text-emphasis"],
+.preview--narou-horizontal .emphasis-mark,
+.preview--narou-horizontal [data-emphasis-mark] {
+  text-emphasis-style: var(--narou-emphasis-mark-symbol, '・');
+  text-emphasis-position: over right;
+  -webkit-text-emphasis-style: var(--narou-emphasis-mark-symbol, '・');
+  -webkit-text-emphasis-position: over right;
+}
+
+/* #508: Kakuyomu-like horizontal novel preview renderer styling */
+.preview--kakuyomu-horizontal {
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  word-break: break-word;
+}
+
+.preview--kakuyomu-horizontal > * {
+  max-width: 42em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.preview--kakuyomu-horizontal p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+  white-space: pre-wrap;
+}
+
+.preview--kakuyomu-horizontal h1,
+.preview--kakuyomu-horizontal h2,
+.preview--kakuyomu-horizontal h3,
+.preview--kakuyomu-horizontal h4,
+.preview--kakuyomu-horizontal h5,
+.preview--kakuyomu-horizontal h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  white-space: pre-wrap;
+}
+
+.preview--kakuyomu-horizontal ruby {
+  ruby-position: over;
+  -webkit-ruby-position: over;
+}
+
+.preview--kakuyomu-horizontal rt {
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+.preview--kakuyomu-horizontal [style*="text-emphasis"],
+.preview--kakuyomu-horizontal .emphasis-mark,
+.preview--kakuyomu-horizontal [data-emphasis-mark],
+.preview--kakuyomu-horizontal .novel-emphasis {
+  text-emphasis-style: "・";
+  text-emphasis-position: over right;
+  -webkit-text-emphasis-style: "・";
+  -webkit-text-emphasis-position: over right;
+}
+
+/* #509: Aozora Bunko-like horizontal novel preview renderer styling */
+.preview--aozora-horizontal {
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  word-break: break-word;
+}
+
+.preview--aozora-horizontal > * {
+  max-width: 42em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.preview--aozora-horizontal p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+  white-space: pre-wrap;
+}
+
+.preview--aozora-horizontal h1,
+.preview--aozora-horizontal h2,
+.preview--aozora-horizontal h3,
+.preview--aozora-horizontal h4,
+.preview--aozora-horizontal h5,
+.preview--aozora-horizontal h6 {
+  margin-top: 1.6em;
+  margin-bottom: 0.8em;
+  font-weight: bold;
+  white-space: pre-wrap;
+}
+
+.preview--aozora-horizontal ruby {
+  ruby-position: over;
+  -webkit-ruby-position: over;
+}
+
+.preview--aozora-horizontal rt {
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+.preview--aozora-horizontal .aozora-bouten {
+  text-emphasis-style: "・";
+  text-emphasis-position: over right;
+  -webkit-text-emphasis-style: "・";
+  -webkit-text-emphasis-position: over right;
+}
+
+.preview--aozora-horizontal .aozora-indent {
+  padding-left: var(--aozora-indent, 1em);
+}
+
+.preview--aozora-horizontal .aozora-align-right {
+  text-align: right;
+}
+
+.preview--aozora-horizontal .aozora-page-break {
+  border: none;
+  border-top: 1px dashed var(--border-color, #a0a8b0);
+  margin-top: 2em;
+  margin-bottom: 2em;
+}
+
 /*
  * #375 PoC: body-text matches are still marked so readers can see which
  * surfaces resolve to a glossary entry, but there is no hover card / tooltip
