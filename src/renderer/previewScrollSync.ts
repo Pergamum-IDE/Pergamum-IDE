@@ -454,6 +454,110 @@ export function computeVerticalScrollLeftForLine(
   };
 }
 
+export interface ComputeSourceLineForVerticalScrollLeftOptions {
+  scrollLeft: number;
+  blocks: readonly PreviewBlockRef[];
+  container: HTMLElement;
+  viewportBias?: number;
+}
+
+export interface VerticalPreviewToEditorResult {
+  targetLine: number;
+  prevBlockLine: number | null;
+  nextBlockLine: number | null;
+  fraction: number;
+  currentProgress: number;
+}
+
+/**
+ * #517: Estimates corresponding source line for Vertical Preview -> Editor sync
+ * based on preview.scrollLeft and vertical progress axis interpolation.
+ */
+export function computeSourceLineForVerticalScrollLeft(
+  options: ComputeSourceLineForVerticalScrollLeftOptions
+): VerticalPreviewToEditorResult | null {
+  const { scrollLeft, blocks, container, viewportBias = 0 } = options;
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  const currentProgress = Math.max(0, -scrollLeft + viewportBias);
+
+  if (blocks.length === 1) {
+    return {
+      targetLine: blocks[0].line,
+      prevBlockLine: blocks[0].line,
+      nextBlockLine: null,
+      fraction: 0,
+      currentProgress
+    };
+  }
+
+  const firstProgress = getLiveElementVerticalProgress(blocks[0].element, container);
+  if (currentProgress <= firstProgress) {
+    return {
+      targetLine: blocks[0].line,
+      prevBlockLine: null,
+      nextBlockLine: blocks[0].line,
+      fraction: 0,
+      currentProgress
+    };
+  }
+
+  const lastProgress = getLiveElementVerticalProgress(blocks[blocks.length - 1].element, container);
+  if (currentProgress >= lastProgress) {
+    return {
+      targetLine: blocks[blocks.length - 1].line,
+      prevBlockLine: blocks[blocks.length - 1].line,
+      nextBlockLine: null,
+      fraction: 1.0,
+      currentProgress
+    };
+  }
+
+  let low = 0;
+  let high = blocks.length - 1;
+  let foundIndex = 0;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const midProgress = getLiveElementVerticalProgress(blocks[mid].element, container);
+    if (midProgress <= currentProgress) {
+      foundIndex = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const prev = blocks[foundIndex];
+  const next = blocks[foundIndex + 1] ?? prev;
+
+  const prevProgress = getLiveElementVerticalProgress(prev.element, container);
+  const nextProgress = next ? getLiveElementVerticalProgress(next.element, container) : prevProgress;
+
+  if (prev === next || prev.line === next.line || nextProgress <= prevProgress) {
+    return {
+      targetLine: prev.line,
+      prevBlockLine: prev.line,
+      nextBlockLine: next?.line ?? null,
+      fraction: 0,
+      currentProgress
+    };
+  }
+
+  const fraction = Math.min(1, Math.max(0, (currentProgress - prevProgress) / (nextProgress - prevProgress)));
+  const targetLine = Math.round(prev.line + fraction * (next.line - prev.line));
+
+  return {
+    targetLine,
+    prevBlockLine: prev.line,
+    nextBlockLine: next.line,
+    fraction,
+    currentProgress
+  };
+}
+
 /**
  * #516: Normalizes WheelEvent delta values into pixel offsets based on deltaMode.
  * deltaMode 0: pixel (direct)

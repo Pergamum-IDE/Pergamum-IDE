@@ -46,6 +46,7 @@ import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import {
   collectPreviewAnchors,
   collectPreviewBlockRefs,
+  computeSourceLineForVerticalScrollLeft,
   computeVerticalScrollLeftForLine,
   computeVerticalWheelScrollLeft,
   createScrollSyncGuard,
@@ -2109,22 +2110,8 @@ function MarkdownEditorSurface({
       if (
         !tracker ||
         tracker.getLeader() !== "preview" ||
-        !isSyncScrollPreviewToEditorEnabled ||
-        isVerticalPreviewRenderer(previewRenderer)
+        !isSyncScrollPreviewToEditorEnabled
       ) {
-        if (isVerticalPreviewRenderer(previewRenderer) && isDebugModeEnabled) {
-          emitScrollSyncLog({
-            level: "debug",
-            event: "preview.scrollSync.programmaticScroll.suppressed",
-            details: {
-              suppressedSide: "editor",
-              eventSide: "preview",
-              reason: "disabledByVerticalRenderer",
-              generation: previewToEditorGenerationRef.current + 1,
-              remainingFrames: 0
-            }
-          });
-        }
         return;
       }
 
@@ -2150,6 +2137,70 @@ function MarkdownEditorSurface({
                   currentGen !== previewToEditorGenerationRef.current
                     ? "staleGeneration"
                     : "measurementFailed"
+              }
+            });
+          }
+          return;
+        }
+
+        if (isVerticalPreviewRenderer(previewRenderer)) {
+          let blocks = previewBlockRefsRef.current;
+          if (blocks.length === 0 && previewContainer) {
+            const result = collectPreviewBlockRefs(previewContainer, "initialRender");
+            blocks = result.blocks;
+            previewBlockRefsRef.current = blocks;
+          }
+
+          const docLineCount = adapter.getDocLineCount();
+          const editorTopSourceLineBefore = adapter.getTopSourceLine();
+          const minScrollLeft = Math.min(0, -(previewContainer.scrollWidth - previewContainer.clientWidth));
+          const currentScrollLeft = previewContainer.scrollLeft;
+
+          let targetLine: number | null = null;
+          let skippedReason: "sameLine" | "measurementFailed" | null = null;
+
+          if (minScrollLeft < 0 && currentScrollLeft <= minScrollLeft + 1) {
+            targetLine = docLineCount;
+          } else if (currentScrollLeft >= 0) {
+            targetLine = 1;
+          } else {
+            const syncResult = computeSourceLineForVerticalScrollLeft({
+              scrollLeft: currentScrollLeft,
+              blocks,
+              container: previewContainer
+            });
+            if (syncResult) {
+              targetLine = syncResult.targetLine;
+            } else {
+              skippedReason = "measurementFailed";
+            }
+          }
+
+          if (
+            skippedReason === null &&
+            targetLine !== null &&
+            editorTopSourceLineBefore !== null &&
+            targetLine === editorTopSourceLineBefore
+          ) {
+            skippedReason = "sameLine";
+          }
+
+          if (skippedReason === null && targetLine !== null) {
+            adapter.scrollToSourceLine(targetLine);
+          }
+
+          if (isDebugModeEnabled) {
+            emitScrollSyncLog({
+              level: "debug",
+              event: "preview.scrollSync.previewToEditor.sampled",
+              details: {
+                previewScrollTop: currentScrollLeft,
+                targetBlockLine: targetLine,
+                targetBlockLiveOffset: currentScrollLeft,
+                editorTopSourceLineBefore,
+                editorTopSourceLineAfter: adapter.getTopSourceLine(),
+                generation: currentGen,
+                previewToEditorSkippedReason: skippedReason
               }
             });
           }

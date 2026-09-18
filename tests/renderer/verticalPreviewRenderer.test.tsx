@@ -19,6 +19,7 @@ import { markdownPreviewRenderer } from "../../src/renderer/preview/markdownPrev
 import { GlossaryPreviewDecorator, type GlossaryPreviewDecoratorProps } from "../../src/renderer/GlossaryPreviewDecorator";
 import { t } from "../../src/shared/i18n";
 import {
+  computeSourceLineForVerticalScrollLeft,
   computeVerticalScrollLeftForLine,
   computeVerticalWheelScrollLeft,
   getLiveElementVerticalProgress,
@@ -365,6 +366,72 @@ describe("Vertical novel preview renderer MVP (#514)", () => {
     });
 
     it("5. confirms all 3 vertical renderers (narouVertical, kakuyomuVertical, aozoraVertical) trigger vertical wheel logic", () => {
+      const verticalRenderers: PreviewRendererId[] = ["narouVertical", "kakuyomuVertical", "aozoraVertical"];
+      for (const renderer of verticalRenderers) {
+        expect(isVerticalPreviewRenderer(renderer)).toBe(true);
+      }
+    });
+  });
+
+  describe("9. Vertical Preview -> Editor scroll sync (#517)", () => {
+    it("1. computeSourceLineForVerticalScrollLeft interpolates target line from scrollLeft progress", () => {
+      const container = document.createElement("div");
+      Object.defineProperty(container, "scrollWidth", { value: 2000, configurable: true });
+      Object.defineProperty(container, "clientWidth", { value: 500, configurable: true });
+
+      const block1 = document.createElement("p");
+      const block2 = document.createElement("p");
+
+      container.getBoundingClientRect = () => ({ right: 1000, left: 500, top: 0, bottom: 500, width: 500, height: 500, x: 500, y: 0, toJSON: () => {} });
+      block1.getBoundingClientRect = () => ({ right: 1000, left: 800, top: 0, bottom: 100, width: 200, height: 100, x: 800, y: 0, toJSON: () => {} });
+      block2.getBoundingClientRect = () => ({ right: 400, left: 200, top: 0, bottom: 100, width: 200, height: 100, x: 200, y: 0, toJSON: () => {} });
+
+      const blocks: PreviewBlockRef[] = [
+        { line: 10, element: block1 },
+        { line: 30, element: block2 }
+      ];
+
+      // scrollLeft = 0 (document start) -> targetLine = 10
+      const resStart = computeSourceLineForVerticalScrollLeft({ scrollLeft: 0, blocks, container });
+      expect(resStart).not.toBeNull();
+      expect(resStart?.targetLine).toBe(10);
+
+      // scrollLeft = -300 (progress = 300, midpoint between 0 and 600) -> fraction 0.5 -> targetLine = 20
+      const resMid = computeSourceLineForVerticalScrollLeft({ scrollLeft: -300, blocks, container });
+      expect(resMid).not.toBeNull();
+      expect(resMid?.fraction).toBe(0.5);
+      expect(resMid?.targetLine).toBe(20);
+
+      // scrollLeft = -600 (at block2 progress 600) -> targetLine = 30
+      const resEnd = computeSourceLineForVerticalScrollLeft({ scrollLeft: -600, blocks, container });
+      expect(resEnd).not.toBeNull();
+      expect(resEnd?.targetLine).toBe(30);
+    });
+
+    it("2. clamps targetLine to first block line when before start and last block line when past end", () => {
+      const container = document.createElement("div");
+      const block1 = document.createElement("p");
+      const block2 = document.createElement("p");
+
+      container.getBoundingClientRect = () => ({ right: 1000, left: 500, top: 0, bottom: 500, width: 500, height: 500, x: 500, y: 0, toJSON: () => {} });
+      block1.getBoundingClientRect = () => ({ right: 900, left: 700, top: 0, bottom: 100, width: 200, height: 100, x: 700, y: 0, toJSON: () => {} });
+      block2.getBoundingClientRect = () => ({ right: 300, left: 100, top: 0, bottom: 100, width: 200, height: 100, x: 100, y: 0, toJSON: () => {} });
+
+      const blocks: PreviewBlockRef[] = [
+        { line: 5, element: block1 },
+        { line: 50, element: block2 }
+      ];
+
+      // Before start progress (currentProgress = 0, firstProgress = 100)
+      const resBefore = computeSourceLineForVerticalScrollLeft({ scrollLeft: 0, blocks, container });
+      expect(resBefore?.targetLine).toBe(5);
+
+      // Past end progress (currentProgress = 1500, lastProgress = 700)
+      const resPast = computeSourceLineForVerticalScrollLeft({ scrollLeft: -1500, blocks, container });
+      expect(resPast?.targetLine).toBe(50);
+    });
+
+    it("3. verifies all 3 vertical renderers (narouVertical, kakuyomuVertical, aozoraVertical) enable Vertical Preview -> Editor sync", () => {
       const verticalRenderers: PreviewRendererId[] = ["narouVertical", "kakuyomuVertical", "aozoraVertical"];
       for (const renderer of verticalRenderers) {
         expect(isVerticalPreviewRenderer(renderer)).toBe(true);
