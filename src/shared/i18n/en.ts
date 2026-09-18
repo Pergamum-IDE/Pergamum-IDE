@@ -1442,6 +1442,7 @@ export const enTranslations = {
   "settings.preview.renderer.label": "Preview renderer",
   "settings.preview.renderer.option.markdown.label": "Markdown",
   "settings.preview.renderer.option.narouHorizontal.label": "Narou-like Horizontal",
+  "settings.preview.renderer.option.kakuyomuHorizontal.label": "Kakuyomu-like Horizontal",
   "settings.preview.updateDelayMs.description": "Delay before updating the preview after editing stops. Lower values make the preview follow edits more quickly, but may reduce editing responsiveness in long documents.",
   "settings.preview.updateDelayMs.label": "Preview update delay",
   "settings.preview.syncScrollEditorToPreview.description": "When you scroll the editor, follow the same position in the preview.",

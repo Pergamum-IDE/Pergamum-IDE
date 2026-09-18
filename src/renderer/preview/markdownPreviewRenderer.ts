@@ -61,6 +61,31 @@ function parseRubyInText(text: string): RubyTextChunk[] {
       break;
     }
 
+    // Check 0: Kakuyomu emphasis notation 《《...》》
+    if (text.startsWith("《《", openIndex)) {
+      const closeDouble = text.indexOf("》》", openIndex + 2);
+      if (closeDouble > openIndex + 2) {
+        const emphasisContent = text.slice(openIndex + 2, closeDouble);
+        if (
+          emphasisContent.length > 0 &&
+          !/[\r\n《》｜|]/.test(emphasisContent)
+        ) {
+          if (openIndex > pos) {
+            result.push({
+              type: "text",
+              content: text.slice(pos, openIndex)
+            });
+          }
+          result.push({
+            type: "html_inline",
+            content: `<span class="emphasis-mark">${escapeHtml(emphasisContent)}</span>`
+          });
+          pos = closeDouble + 2;
+          continue;
+        }
+      }
+    }
+
     const closeIndex = text.indexOf("》", openIndex + 1);
     if (closeIndex === -1) {
       pos = openIndex + 1;

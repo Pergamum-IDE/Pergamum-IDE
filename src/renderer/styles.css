@@ -4715,6 +4715,56 @@ label.settingsItemHeader {
   -webkit-text-emphasis-position: over right;
 }
 
+/* #508: Kakuyomu-like horizontal novel preview renderer styling */
+.preview--kakuyomu-horizontal {
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  word-break: break-word;
+}
+
+.preview--kakuyomu-horizontal > * {
+  max-width: 42em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.preview--kakuyomu-horizontal p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+  white-space: pre-wrap;
+}
+
+.preview--kakuyomu-horizontal h1,
+.preview--kakuyomu-horizontal h2,
+.preview--kakuyomu-horizontal h3,
+.preview--kakuyomu-horizontal h4,
+.preview--kakuyomu-horizontal h5,
+.preview--kakuyomu-horizontal h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  white-space: pre-wrap;
+}
+
+.preview--kakuyomu-horizontal ruby {
+  ruby-position: over;
+  -webkit-ruby-position: over;
+}
+
+.preview--kakuyomu-horizontal rt {
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+.preview--kakuyomu-horizontal [style*="text-emphasis"],
+.preview--kakuyomu-horizontal .emphasis-mark,
+.preview--kakuyomu-horizontal [data-emphasis-mark],
+.preview--kakuyomu-horizontal .novel-emphasis {
+  text-emphasis-style: "・";
+  text-emphasis-position: over right;
+  -webkit-text-emphasis-style: "・";
+  -webkit-text-emphasis-position: over right;
+}
+
 /*
  * #375 PoC: body-text matches are still marked so readers can see which
  * surfaces resolve to a glossary entry, but there is no hover card / tooltip

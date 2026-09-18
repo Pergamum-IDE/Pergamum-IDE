@@ -999,6 +999,10 @@ export const settingCatalogItems = defineSettingCatalog([
         {
           value: "narouHorizontal",
           labelKey: "settings.preview.renderer.option.narouHorizontal.label"
+        },
+        {
+          value: "kakuyomuHorizontal",
+          labelKey: "settings.preview.renderer.option.kakuyomuHorizontal.label"
         }
       ]
     },
