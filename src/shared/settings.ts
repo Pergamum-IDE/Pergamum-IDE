@@ -21,7 +21,8 @@ export type SettingsCategory =
 export type PreviewRendererId =
   | "markdown"
   | "narouHorizontal"
-  | "kakuyomuHorizontal";
+  | "kakuyomuHorizontal"
+  | "aozoraHorizontal";
 
 export interface RecentProject {
   /**

@@ -4765,6 +4765,69 @@ label.settingsItemHeader {
   -webkit-text-emphasis-position: over right;
 }
 
+/* #509: Aozora Bunko-like horizontal novel preview renderer styling */
+.preview--aozora-horizontal {
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  word-break: break-word;
+}
+
+.preview--aozora-horizontal > * {
+  max-width: 42em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.preview--aozora-horizontal p {
+  margin-top: 0;
+  margin-bottom: 1.2em;
+  white-space: pre-wrap;
+}
+
+.preview--aozora-horizontal h1,
+.preview--aozora-horizontal h2,
+.preview--aozora-horizontal h3,
+.preview--aozora-horizontal h4,
+.preview--aozora-horizontal h5,
+.preview--aozora-horizontal h6 {
+  margin-top: 1.6em;
+  margin-bottom: 0.8em;
+  font-weight: bold;
+  white-space: pre-wrap;
+}
+
+.preview--aozora-horizontal ruby {
+  ruby-position: over;
+  -webkit-ruby-position: over;
+}
+
+.preview--aozora-horizontal rt {
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+.preview--aozora-horizontal .aozora-bouten {
+  text-emphasis-style: "・";
+  text-emphasis-position: over right;
+  -webkit-text-emphasis-style: "・";
+  -webkit-text-emphasis-position: over right;
+}
+
+.preview--aozora-horizontal .aozora-indent {
+  padding-left: var(--aozora-indent, 1em);
+}
+
+.preview--aozora-horizontal .aozora-align-right {
+  text-align: right;
+}
+
+.preview--aozora-horizontal .aozora-page-break {
+  border: none;
+  border-top: 1px dashed var(--border-color, #a0a8b0);
+  margin-top: 2em;
+  margin-bottom: 2em;
+}
+
 /*
  * #375 PoC: body-text matches are still marked so readers can see which
  * surfaces resolve to a glossary entry, but there is no hover card / tooltip

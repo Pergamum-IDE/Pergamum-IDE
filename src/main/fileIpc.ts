@@ -738,4 +738,17 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
       }
     }
   );
+
+  ipcMain.handle(
+    FILE_CHANNELS.readAozoraTextFile,
+    async (_event, rawRequest: unknown): Promise<string> => {
+      const filePath =
+        typeof rawRequest === "object" && rawRequest !== null && "path" in rawRequest
+          ? String((rawRequest as { path: unknown }).path)
+          : String(rawRequest);
+      const bytes = await fs.readFile(filePath);
+      const decoder = new TextDecoder("shift_jis");
+      return decoder.decode(bytes);
+    }
+  );
 }

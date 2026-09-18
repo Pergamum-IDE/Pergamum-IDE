@@ -30,6 +30,7 @@ import type { Translate } from "../shared/i18n";
 import {
   currentDocumentContent,
   currentProjectRelativePath,
+  isCurrentDocumentDirty,
   isMarkdownCurrentDocument,
   type CurrentDocument
 } from "./currentDocument";
@@ -124,6 +125,7 @@ import type { ProjectLocalImageResolutionContext } from "../shared/projectLocalI
 import type { EditorViewState } from "./editorViewState";
 import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
+import { aozoraPreviewRenderer } from "./preview/aozoraPreviewRenderer";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
@@ -405,7 +407,8 @@ export function useMemoizedPreviewRender(
   // primitives below, not the object identity.
   projectLocalImageResolution: ProjectLocalImageResolutionContext = {
     kind: "none"
-  }
+  },
+  previewRenderer: PreviewRendererId = "markdown"
 ): PreviewRenderResult {
   const resolutionKind = projectLocalImageResolution.kind;
   const resolutionSourcePath =
@@ -414,15 +417,20 @@ export function useMemoizedPreviewRender(
       : "";
   return useMemo(() => {
     const startedAt = performance.now();
-    const html = markdownPreviewRenderer.render(previewSourceContent, {
-      projectLocalImageResolution
-    });
+    const html =
+      previewRenderer === "aozoraHorizontal"
+        ? aozoraPreviewRenderer.render(previewSourceContent, {
+            projectLocalImageResolution
+          })
+        : markdownPreviewRenderer.render(previewSourceContent, {
+            projectLocalImageResolution
+          });
 
     return { html, startedAt, durationMs: performance.now() - startedAt };
     // projectLocalImageResolution is reconstructed from the two primitives
     // it keys on; adding it as a dep would re-run on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewSourceContent, resolutionKind, resolutionSourcePath]);
+  }, [previewSourceContent, resolutionKind, resolutionSourcePath, previewRenderer]);
 }
 
 interface EditorSurfaceProps {
@@ -1013,17 +1021,72 @@ function MarkdownEditorSurface({
         : { kind: "none" },
     [previewSourceProjectRelativePath]
   );
+  const isMarkdown = isMarkdownCurrentDocument(document);
+  const isPreviewAvailable = isMarkdown || previewRenderer !== "markdown";
+  const isDirty = isCurrentDocumentDirty(document);
+
+  const [aozoraCleanText, setAozoraCleanText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (previewRenderer !== "aozoraHorizontal" || isMarkdown || isDirty) {
+      setAozoraCleanText(null);
+      return;
+    }
+
+    let canceled = false;
+    async function loadAozoraCleanText() {
+      try {
+        let text: string | null = null;
+        if (
+          document.kind === "file" &&
+          document.path &&
+          window.pergamum?.files?.readAozoraTextFile
+        ) {
+          text = await window.pergamum.files.readAozoraTextFile(document.path);
+        } else if (
+          document.kind === "project" &&
+          document.relativePath &&
+          window.pergamum?.projects?.readProjectDocumentAozora
+        ) {
+          text = await window.pergamum.projects.readProjectDocumentAozora(
+            document.relativePath
+          );
+        }
+        if (!canceled && text !== null) {
+          setAozoraCleanText(text);
+        }
+      } catch {
+        if (!canceled) {
+          setAozoraCleanText(null);
+        }
+      }
+    }
+
+    loadAozoraCleanText();
+    return () => {
+      canceled = true;
+    };
+  }, [previewRenderer, isMarkdown, isDirty, documentKey, document]);
+
+  const effectivePreviewSourceContent =
+    previewRenderer === "aozoraHorizontal" &&
+    !isMarkdown &&
+    !isDirty &&
+    aozoraCleanText !== null
+      ? aozoraCleanText
+      : previewSourceContent;
+
   // #250 follow-up: see useMemoizedPreviewRender above — markdown-it only
   // re-runs when previewSourceContent changes, not on every keystroke
   // rerender of this component.
   const previewRender = useMemoizedPreviewRender(
-    previewSourceContent,
-    previewImageResolution
+    effectivePreviewSourceContent,
+    previewImageResolution,
+    previewRenderer
   );
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
   const previewRenderDurationMs = previewRender.durationMs;
-  const isMarkdown = isMarkdownCurrentDocument(document);
   // #411 / #412: broken-image-link diagnostics use the SAME resolution
   // context as the Preview (`sourceFile` for a project document), but are
   // disabled (`none`) for a read-only document or non-Markdown (.txt) document.
@@ -2932,7 +2995,7 @@ function MarkdownEditorSurface({
       aria-label={translate("workspace.markdownWorkspace")}
       ref={workspaceRef}
       style={
-        isNarrow || !isMarkdown
+        isNarrow || !isPreviewAvailable
           ? undefined
           : {
               gridTemplateColumns: `minmax(0, ${ratio}fr) 6px minmax(0, ${1 - ratio}fr)`
@@ -3043,7 +3106,7 @@ function MarkdownEditorSurface({
         />
       </section>
 
-      {!isNarrow && isMarkdown ? (
+      {!isNarrow && isPreviewAvailable ? (
         <div
           className="markdownWorkspaceResizeHandle"
           role="separator"
@@ -3056,7 +3119,7 @@ function MarkdownEditorSurface({
         />
       ) : null}
 
-      {isMarkdown ? (
+      {isPreviewAvailable ? (
         <section
           className="pane"
           aria-label={translate("workspace.markdownPreview")}

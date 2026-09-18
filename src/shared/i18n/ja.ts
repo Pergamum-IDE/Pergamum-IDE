@@ -1441,6 +1441,7 @@ export const jaTranslations = {
   "settings.preview.renderer.option.markdown.label": "Markdown",
   "settings.preview.renderer.option.narouHorizontal.label": "小説家になろう風・横書き",
   "settings.preview.renderer.option.kakuyomuHorizontal.label": "カクヨム風・横書き",
+  "settings.preview.renderer.option.aozoraHorizontal.label": "青空文庫風・横書き",
   "settings.preview.updateDelayMs.description": "編集が止まってからプレビューを更新するまでの待機時間です。値を小さくするとプレビューが素早く追従しますが、長い文書では編集中の応答性が低下する場合があります。",
   "settings.preview.updateDelayMs.label": "プレビュー更新待機時間",
   "settings.preview.syncScrollEditorToPreview.description": "エディタをスクロールしたとき、プレビューを同じ箇所まで追従させます。",

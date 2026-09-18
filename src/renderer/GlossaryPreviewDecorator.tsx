@@ -294,7 +294,10 @@ export function GlossaryPreviewDecorator({
 
   const isNarouHorizontal = previewRenderer === "narouHorizontal";
   const isKakuyomuHorizontal = previewRenderer === "kakuyomuHorizontal";
-  const className = isKakuyomuHorizontal
+  const isAozoraHorizontal = previewRenderer === "aozoraHorizontal";
+  const className = isAozoraHorizontal
+    ? "preview preview--aozora-horizontal"
+    : isKakuyomuHorizontal
     ? "preview preview--kakuyomu-horizontal"
     : isNarouHorizontal
     ? "preview preview--narou-horizontal"
