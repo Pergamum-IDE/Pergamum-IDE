@@ -11,7 +11,9 @@
   "description": "An open-source IDE for novelists.",
   "main": ".vite/build/main.js",
   "scripts": {
-    "review": "node scripts/review-local.mjs",
+    "review": "node scripts/review-local.mjs --backend openai --prompt-file scripts/reviewer-prompt-bonsai.md",
+    "review:bonsai": "node scripts/review-local.mjs --backend openai --prompt-file scripts/reviewer-prompt-bonsai.md",
+    "review:qwen": "node scripts/review-local.mjs --compact",
     "dev": "electron-forge start",
     "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.tests.json",
     "test": "vitest run",

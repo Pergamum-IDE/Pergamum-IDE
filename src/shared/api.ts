@@ -325,7 +325,8 @@ export const LIFECYCLE_CHANNELS = {
 
 export const SETTINGS_CHANNELS = {
   getSettings: "settings:getSettings",
-  saveSettings: "settings:saveSettings"
+  saveSettings: "settings:saveSettings",
+  exportJson: "settings:exportJson"
 } as const;
 
 export const IMAGE_ATTACHMENT_CHANNELS = {
@@ -580,6 +581,20 @@ export interface UpdateProjectSettingsRequest {
   readonly set?: Record<string, unknown>;
   readonly remove?: readonly string[];
 }
+
+export interface ExportSettingsJsonRequest {
+  readonly defaultFileName: string;
+  readonly json: string;
+}
+
+export type ExportSettingsJsonResult =
+  | {
+      readonly ok: true;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
 
 export interface ProjectDocument {
   relativePath: string;
@@ -1245,6 +1260,9 @@ export interface PergamumApi {
     saveSettings: (
       settings: SaveApplicationSettingsRequest
     ) => Promise<ApplicationSettings>;
+    exportJson: (
+      request: ExportSettingsJsonRequest
+    ) => Promise<ExportSettingsJsonResult>;
   };
   /**
    * #272: continuous Session persistence (the "write it out" side only —

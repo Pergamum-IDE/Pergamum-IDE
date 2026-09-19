@@ -54,6 +54,7 @@ interface SettingsPanelProps {
     options: AppConfirmDialogOptions
   ) => Promise<AppConfirmDialogResult>;
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
+  onExportSettings?: () => void | Promise<void>;
   /**
    * #394 Step 2 follow-up: fires when any settings-item control gains focus.
    * The caller uses this to snapshot settings for a later restart-required
@@ -843,6 +844,43 @@ interface SettingControlInputProps {
   onOpenFontPickerDialog?: (slot: FontSlot, opener?: Element | null) => void;
 }
 
+interface SettingsExportSectionProps {
+  translate: Translate;
+  disabled: boolean;
+  onExportSettings?: () => void | Promise<void>;
+}
+
+function SettingsExportSection({
+  translate,
+  disabled,
+  onExportSettings
+}: SettingsExportSectionProps): JSX.Element {
+  return (
+    <div className="settingsItemList">
+      <div className="settingsItemRow settingsExportRow">
+        <div className="settingsItemHeader">
+          <span className="settingsItemLabel">
+            {translate("settings.export.action.label")}
+          </span>
+          <button
+            type="button"
+            className="settingsExportButton"
+            disabled={disabled || !onExportSettings}
+            onClick={() => {
+              void onExportSettings?.();
+            }}
+          >
+            {translate("settings.export.button")}
+          </button>
+        </div>
+        <p className="settingsDescription">
+          {translate("settings.export.action.description")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function SettingControlInput({
   item,
   value,
@@ -1059,6 +1097,7 @@ export function SettingsPanelView({
   displayLanguage,
   confirmDialog,
   onChangeSettings,
+  onExportSettings,
   onSettingFieldFocus,
   onSettingFieldBlur,
   selectedCategoryId,
@@ -1079,6 +1118,7 @@ export function SettingsPanelView({
   ).filter(
     (category) =>
       category.id === "documentMap" ||
+      category.id === "export" ||
       settingCatalogItems.some((item) => item.category === category.id)
   );
   const isSearching = normalizeSearchQuery(searchQuery).length > 0;
@@ -1260,6 +1300,13 @@ export function SettingsPanelView({
               isLoading={isLoading}
               translate={translate}
               onChangeSettings={onChangeSettings}
+            />
+          ) : null}
+          {!isSearching && selectedCategoryId === "export" ? (
+            <SettingsExportSection
+              translate={translate}
+              disabled={isLoading}
+              onExportSettings={onExportSettings}
             />
           ) : null}
         </div>

@@ -433,7 +433,8 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.application.section.markdownFiles",
         "settings.application.section.textFiles",
         "settings.application.section.commandPalette",
-        "settings.application.section.sound"
+        "settings.application.section.sound",
+        "settings.application.section.export"
       ] as const) {
         expect(t(language, key).length).toBeGreaterThan(0);
       }
@@ -557,6 +558,14 @@ describe("Application Settings core control translations (#195)", () => {
   it("defines Text Files setting labels and descriptions for ja and en", () => {
     expect(t("ja", "settings.category.textFiles.label")).toBe("テキストファイル");
     expect(t("en", "settings.category.textFiles.label")).toBe("Text Files");
+    expect(t("ja", "settings.category.export.label")).toBe("エクスポート");
+    expect(t("en", "settings.category.export.label")).toBe("Export");
+    expect(
+      t("ja", "status.settingsExportFailed", { message: "File I/O failed" })
+    ).toBe("設定をエクスポートできませんでした: File I/O failed");
+    expect(
+      t("en", "status.settingsExportFailed", { message: "File I/O failed" })
+    ).toBe("Failed to export settings: File I/O failed");
     expect(t("ja", "settings.textFiles.encoding.label")).toContain(
       "テキストファイル"
     );

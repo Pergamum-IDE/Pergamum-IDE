@@ -80,7 +80,8 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
       "プレビュー",
       "文書マップ",
       "マークダウンファイル",
-      "テキストファイル"
+      "テキストファイル",
+      "エクスポート"
     ]);
 
     act(() => {
@@ -109,7 +110,8 @@ describe("ProjectSettingsPanel project name editing (#422)", () => {
       "Preview",
       "Document Map",
       "Markdown Files",
-      "Text Files"
+      "Text Files",
+      "Export"
     ]);
   });
 
