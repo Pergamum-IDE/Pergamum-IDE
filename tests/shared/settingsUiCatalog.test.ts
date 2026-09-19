@@ -68,7 +68,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
       }).toThrow(/duplicate id/);
     });
 
-    it("registers the Settings UI categories, with sound after commands and no legacy advanced category (#232)", () => {
+    it("registers the Settings UI categories, with export after sound and no legacy advanced category (#232)", () => {
       expect(settingCategoryCatalog.map((category) => category.id)).toEqual([
         "application",
         "appearance",
@@ -81,7 +81,8 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "markdownFiles",
         "textFiles",
         "commands",
-        "sound"
+        "sound",
+        "export"
       ]);
     });
 

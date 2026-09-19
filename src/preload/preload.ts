@@ -202,7 +202,9 @@ const pergamumApi: PergamumApi = {
   settings: {
     getSettings: () => ipcRenderer.invoke(SETTINGS_CHANNELS.getSettings),
     saveSettings: (settings) =>
-      ipcRenderer.invoke(SETTINGS_CHANNELS.saveSettings, settings)
+      ipcRenderer.invoke(SETTINGS_CHANNELS.saveSettings, settings),
+    exportJson: (request) =>
+      ipcRenderer.invoke(SETTINGS_CHANNELS.exportJson, request)
   },
   session: {
     persist: (snapshot) =>

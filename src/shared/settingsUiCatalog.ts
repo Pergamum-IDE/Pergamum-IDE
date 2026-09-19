@@ -60,7 +60,8 @@ export type SettingCategory =
   | "textFiles"
   | "project"
   | "commands"
-  | "sound";
+  | "sound"
+  | "export";
 
 export interface SettingCategoryCatalogItem {
   readonly id: SettingCategory;
@@ -161,6 +162,11 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     id: "sound",
     order: 800,
     labelKey: "settings.category.sound.label"
+  },
+  {
+    id: "export",
+    order: 900,
+    labelKey: "settings.category.export.label"
   }
 ] satisfies readonly SettingCategoryCatalogItem[]);
 

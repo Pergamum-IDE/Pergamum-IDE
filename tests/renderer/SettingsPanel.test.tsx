@@ -58,6 +58,9 @@ interface SettingsPanelViewOptions {
   onSettingFieldBlur?: Parameters<
     typeof SettingsPanelView
   >[0]["onSettingFieldBlur"];
+  onExportSettings?: Parameters<
+    typeof SettingsPanelView
+  >[0]["onExportSettings"];
   selectedCategoryId?: SettingCategory;
   onSelectCategory?: (id: SettingCategory) => void;
   searchQuery?: string;
@@ -74,6 +77,7 @@ function settingsPanelViewElement(
     error: options.error ?? null,
     translate: translateFor(currentUiLanguage),
     onChangeSettings: options.onChangeSettings ?? (() => undefined),
+    onExportSettings: options.onExportSettings,
     onSettingFieldFocus: options.onSettingFieldFocus,
     onSettingFieldBlur: options.onSettingFieldBlur,
     selectedCategoryId: options.selectedCategoryId ?? "application",
@@ -208,7 +212,7 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     }
   });
 
-  it("does not show a category in the left pane when it has no registered catalog items (project, advanced), except the bespoke Document Map category", () => {
+  it("does not show a category in the left pane when it has no registered catalog items (project, advanced), except bespoke categories", () => {
     const element = settingsPanelViewElement("ja");
     const buttons = collectElements(
       element,
@@ -225,11 +229,37 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     expect(labels).not.toContain("詳細設定");
     // "文書マップ" has no scalar catalog items but is force-kept (#375 Task Q).
     expect(labels).toContain("文書マップ");
+    // #521: "エクスポート" is an action category without scalar catalog items.
+    expect(labels).toContain("エクスポート");
     // #407: "画像添付" adds a category with its own scalar catalog items.
     expect(labels).toContain("画像添付");
     // #424 Slice 7: "検索・置換" adds another with its own scalar catalog items.
     expect(labels).toContain("検索・置換");
-    expect(labels).toHaveLength(11);
+    expect(labels).toHaveLength(12);
+  });
+
+  it("renders the Application Settings export category and invokes the export handler", () => {
+    const onExportSettings = vi.fn();
+    const element = settingsPanelViewElement("ja", {
+      selectedCategoryId: "export",
+      onExportSettings
+    });
+    const markup = renderToStaticMarkup(element);
+
+    expect(markup).toContain("設定をJSONとしてエクスポート");
+    expect(markup).toContain("エクスポート");
+
+    const exportButton = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        typeof child.props.className === "string" &&
+        child.props.className.includes("settingsExportButton")
+    )[0];
+
+    expect(exportButton).toBeDefined();
+    (exportButton.props.onClick as () => void)();
+    expect(onExportSettings).toHaveBeenCalledTimes(1);
   });
 
   it("shows the '文書マップ' heading only once in the pane body (no duplicate section heading) (#375 fix)", () => {
@@ -361,7 +391,8 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "Markdown Files",
       "Text Files",
       "Command Palette",
-      "Sound"
+      "Sound",
+      "Export"
     ]);
   });
 

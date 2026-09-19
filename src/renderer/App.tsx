@@ -26,6 +26,7 @@ import type {
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
 import { sanitizedFileIoErrorReasonFromMessage } from "../shared/sanitizedFileIoErrorMessage";
+import { sanitizedFileIoErrorMessage } from "../shared/sanitizedFileIoErrorMessage";
 import { projectDocumentDiscoverySettingChanged } from "./projectDocumentsRefresh";
 import {
   applicationMenuCommandIds,
@@ -84,6 +85,12 @@ import {
   type EffectiveImageAttachmentSettings,
   type ProjectSettings
 } from "../shared/settings";
+import {
+  APPLICATION_SETTINGS_EXPORT_DEFAULT_FILE_NAME,
+  createApplicationSettingsExportJson,
+  createProjectSettingsExportJson,
+  projectSettingsExportDefaultFileName
+} from "../shared/settingsExport";
 import { isPathEqualOrInsideDirectory } from "../shared/saveTargetPolicy";
 import { ActivityBar } from "./ActivityBar";
 import {
@@ -462,7 +469,10 @@ import type {
   NotificationToastPlacement
 } from "./notification/notificationController";
 import { SettingsPanel } from "./SettingsPanel";
-import { ProjectSettingsPanel } from "./ProjectSettingsPanel";
+import {
+  ProjectSettingsPanel,
+  type ProjectSettingsExportContext
+} from "./ProjectSettingsPanel";
 import {
   SaveDestinationDialog,
   type SaveDestinationDialogResult
@@ -629,6 +639,35 @@ const readOnlyProjectSaveAsChoiceIds = {
 
 function errorMessage(error: unknown, translate: Translate): string {
   return error instanceof Error ? error.message : translate("error.unknown");
+}
+
+function settingsExportErrorMessage(error: unknown, translate: Translate): string {
+  if (!(error instanceof Error)) {
+    return translate("error.unknown");
+  }
+
+  const candidates = [
+    error.message,
+    ...error.message.split("Error: ").slice(1)
+  ];
+  for (const candidate of candidates) {
+    const reason = sanitizedFileIoErrorReasonFromMessage(candidate);
+    if (reason !== null) {
+      return sanitizedFileIoErrorMessage(reason);
+    }
+  }
+
+  return translate("error.unknown");
+}
+
+function settingsExportFailedStatus(
+  error: unknown,
+  translate: Translate
+): StatusMessage {
+  return {
+    key: "status.settingsExportFailed",
+    values: { message: settingsExportErrorMessage(error, translate) }
+  };
 }
 
 // #501 slice 6 remediation: a save failure caused by the currently selected
@@ -10297,6 +10336,63 @@ export function App(): JSX.Element {
     return updatedSettings;
   }
 
+  async function handleExportApplicationSettings(): Promise<void> {
+    const exportJson = window.pergamum?.settings?.exportJson;
+    if (!exportJson) {
+      setStatus(
+        settingsExportFailedStatus(
+          new Error("Settings export is unavailable."),
+          translate
+        )
+      );
+      return;
+    }
+
+    try {
+      const result = await exportJson({
+        defaultFileName: APPLICATION_SETTINGS_EXPORT_DEFAULT_FILE_NAME,
+        json: createApplicationSettingsExportJson(settings)
+      });
+
+      if (!result.ok && result.reason === "canceled") {
+        return;
+      }
+    } catch (error) {
+      setStatus(settingsExportFailedStatus(error, translate));
+    }
+  }
+
+  async function handleExportProjectSettings(
+    exportContext?: ProjectSettingsExportContext
+  ): Promise<void> {
+    const exportJson = window.pergamum?.settings?.exportJson;
+    const projectName = exportContext?.projectName ?? project?.name;
+    const projectSettings =
+      exportContext?.projectSettings ?? project?.config?.settings;
+    if (!exportJson || !projectName) {
+      setStatus(
+        settingsExportFailedStatus(
+          new Error("Project settings export is unavailable."),
+          translate
+        )
+      );
+      return;
+    }
+
+    try {
+      const result = await exportJson({
+        defaultFileName: projectSettingsExportDefaultFileName(projectName),
+        json: createProjectSettingsExportJson(projectName, projectSettings)
+      });
+
+      if (!result.ok && result.reason === "canceled") {
+        return;
+      }
+    } catch (error) {
+      setStatus(settingsExportFailedStatus(error, translate));
+    }
+  }
+
   async function handleUpdateProjectName(
     name: string
   ): Promise<UpdateProjectNameResult> {
@@ -10765,6 +10861,7 @@ export function App(): JSX.Element {
                       displayLanguage={displayLanguage}
                       confirmDialog={confirmDialog}
                       onChangeSettings={handleSettingsChangeRequest}
+                      onExportSettings={handleExportApplicationSettings}
                       onSettingFieldFocus={handleSettingsFieldFocus}
                       onSettingFieldBlur={() => {
                         void handleSettingsFieldBlur();
@@ -10781,6 +10878,7 @@ export function App(): JSX.Element {
                       isReadOnly={project?.accessMode?.kind === "readOnly"}
                       onSaveSettings={handleSaveProjectSettings}
                       onUpdateProjectName={handleUpdateProjectName}
+                      onExportSettings={handleExportProjectSettings}
                     />
                   ) : isDebugLogTabActive ? (
                     <section className="debugLogTab">

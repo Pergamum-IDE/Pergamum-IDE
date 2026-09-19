@@ -149,13 +149,19 @@ export function getEligibleProjectSettingCategories(
   eligibleItems: readonly SettingCatalogItem[],
   translate: Translate,
   categories: readonly SettingCategoryCatalogItem[] = settingCategoryCatalog,
-  options?: { readonly includeProjectCategory?: boolean }
+  options?: {
+    readonly includeProjectCategory?: boolean;
+    readonly includeExportCategory?: boolean;
+  }
 ): readonly ProjectSettingCategoryItem[] {
   const categoryIds = new Set<SettingCategory>(
     eligibleItems.map((item) => item.category)
   );
   if (options?.includeProjectCategory) {
     categoryIds.add("project");
+  }
+  if (options?.includeExportCategory) {
+    categoryIds.add("export");
   }
 
   const sortedCategories = sortSettingCategoryCatalog(
@@ -581,6 +587,7 @@ export interface ProjectSettingsPanelViewProps {
   ) => void;
   onOpenImageAttachmentDialog?: (opener?: Element | null) => void;
   onOpenFontPickerDialog?: (slot: FontSlot, opener?: Element | null) => void;
+  onExportSettings?: () => void | Promise<void>;
 }
 
 function translateI18nKey(translate: Translate, key: string): string {
@@ -616,7 +623,8 @@ export function ProjectSettingsPanelView({
   onSwitchChange,
   onDialoguePairsCommit,
   onOpenImageAttachmentDialog,
-  onOpenFontPickerDialog
+  onOpenFontPickerDialog,
+  onExportSettings
 }: ProjectSettingsPanelViewProps): JSX.Element {
   const categoryGroups = groupProjectSettingItemsByCategory(items);
 
@@ -637,6 +645,19 @@ export function ProjectSettingsPanelView({
 
   const shouldShowProjectGeneralPane =
     isProjectCategorySelected && matchesProjectNameSearch;
+  const isExportCategorySelected = selectedCategoryId === "export";
+  const matchesExportSearch =
+    normalizedSearch.length === 0 ||
+    "export".includes(normalizedSearch) ||
+    "json".includes(normalizedSearch) ||
+    "エクスポート".toLowerCase().includes(normalizedSearch) ||
+    translate("settings.export.action.label")
+      .toLowerCase()
+      .includes(normalizedSearch) ||
+    translate("settings.export.action.description")
+      .toLowerCase()
+      .includes(normalizedSearch);
+  const shouldShowExportPane = isExportCategorySelected && matchesExportSearch;
 
   return (
     <section
@@ -709,7 +730,7 @@ export function ProjectSettingsPanelView({
         </nav>
 
         <div className="projectSettingsContent">
-          {!shouldShowProjectGeneralPane && items.length === 0 ? (
+          {!shouldShowProjectGeneralPane && !shouldShowExportPane && items.length === 0 ? (
             <p className="settingsSearchEmpty">
               {translate("settings.search.empty")}
             </p>
@@ -789,6 +810,39 @@ export function ProjectSettingsPanelView({
                         {translate("settings.project.name.description")}
                       </p>
                       <code className="settingsItemKey">project.name</code>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {shouldShowExportPane ? (
+                <div
+                  key="export"
+                  className="settingsItemPane"
+                  data-settings-category="export"
+                >
+                  <h2 className="settingsItemPaneHeading">
+                    {translate("settings.category.export.label")}
+                  </h2>
+                  <div className="settingsItemList">
+                    <div className="settingsItemRow settingsExportRow">
+                      <div className="settingsItemHeader">
+                        <span className="settingsItemLabel">
+                          {translate("settings.export.action.label")}
+                        </span>
+                        <button
+                          type="button"
+                          className="settingsExportButton"
+                          disabled={isSaving || !onExportSettings}
+                          onClick={() => {
+                            void onExportSettings?.();
+                          }}
+                        >
+                          {translate("settings.export.button")}
+                        </button>
+                      </div>
+                      <p className="settingsDescription">
+                        {translate("settings.export.action.description")}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -968,6 +1022,11 @@ export function ProjectSettingsPanelView({
 const defaultProjectSettingsUiItems: readonly SettingCatalogItem[] =
   getProjectSettingsUiItems();
 
+export interface ProjectSettingsExportContext {
+  readonly projectName: string | undefined;
+  readonly projectSettings: ProjectSettings | undefined;
+}
+
 export interface ProjectSettingsPanelProps {
   translate: Translate;
   /** #496: the app's current UI language — threaded down to the font
@@ -985,6 +1044,9 @@ export interface ProjectSettingsPanelProps {
   onUpdateProjectName?: (
     name: string
   ) => Promise<UpdateProjectNameResult>;
+  onExportSettings?: (
+    context: ProjectSettingsExportContext
+  ) => void | Promise<void>;
   items?: readonly SettingCatalogItem[];
 }
 
@@ -998,6 +1060,7 @@ export function ProjectSettingsPanel({
   isReadOnly,
   onSaveSettings,
   onUpdateProjectName,
+  onExportSettings,
   items: propsItems
 }: ProjectSettingsPanelProps): JSX.Element {
   const catalogItems = propsItems ?? defaultProjectSettingsUiItems;
@@ -1608,7 +1671,10 @@ export function ProjectSettingsPanel({
     eligibleItems,
     translate,
     settingCategoryCatalog,
-    { includeProjectCategory: projectName !== undefined }
+    {
+      includeProjectCategory: projectName !== undefined,
+      includeExportCategory: true
+    }
   );
 
   const filteredItems = filterProjectSettingItems(
@@ -1707,6 +1773,11 @@ export function ProjectSettingsPanel({
         onOpenFontPickerDialog={(slot, opener) => {
           setFontPickerState({ slot, opener });
         }}
+        onExportSettings={
+          onExportSettings
+            ? () => onExportSettings({ projectName, projectSettings })
+            : undefined
+        }
       />
       <SaveDestinationDialog
         isOpen={isDestinationDialogOpen}

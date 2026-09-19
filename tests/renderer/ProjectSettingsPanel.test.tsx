@@ -1414,7 +1414,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       const categoryButtons = Array.from(
         container.querySelectorAll<HTMLButtonElement>("button.settingsCategoryButton")
       );
-      expect(categoryButtons).toHaveLength(9);
+      expect(categoryButtons).toHaveLength(10);
       expect(categoryButtons[0].textContent).toBe("すべて");
       expect(categoryButtons[1].textContent).toBe("外観");
       expect(categoryButtons[2].textContent).toBe("エディタ");
@@ -1424,6 +1424,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       expect(categoryButtons[6].textContent).toBe("文書マップ");
       expect(categoryButtons[7].textContent).toBe("マークダウンファイル");
       expect(categoryButtons[8].textContent).toBe("テキストファイル");
+      expect(categoryButtons[9].textContent).toBe("エクスポート");
 
       expect(
         categoryButtons[0].classList.contains("settingsCategoryButtonSelected")
@@ -1475,6 +1476,67 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "markdownFiles.lineEnding",
         "textFiles.lineEnding"
       ]);
+    });
+
+    it("renders the Project Settings export category and invokes the export handler with current project settings", () => {
+      const onExportSettings = vi.fn();
+      const projectSettings: ProjectSettings = {
+        preview: { renderer: "kakuyomuHorizontal" },
+        editor: {
+          paragraphIndent: {
+            excludeLeadingCharacters: "「"
+          }
+        }
+      };
+      const applicationSettings = {
+        preview: { renderer: "markdown" as const },
+        editor: { fontFamily: "Consolas" }
+      };
+
+      act(() => {
+        root.render(
+          <ProjectSettingsPanel
+            translate={translateJa}
+            projectName="迷子たちと千年領主"
+            projectSettings={projectSettings}
+            applicationSettings={applicationSettings}
+            isReadOnly={false}
+            onSaveSettings={vi.fn()}
+            onExportSettings={onExportSettings}
+          />
+        );
+      });
+
+      const exportCategoryButton = Array.from(
+        container.querySelectorAll<HTMLButtonElement>(
+          "button.settingsCategoryButton"
+        )
+      ).find((button) => button.textContent === "エクスポート");
+      expect(exportCategoryButton).toBeDefined();
+
+      act(() => {
+        exportCategoryButton!.click();
+      });
+
+      expect(container.textContent).toContain("設定をJSONとしてエクスポート");
+      const exportButton = container.querySelector<HTMLButtonElement>(
+        "button.settingsExportButton"
+      );
+      expect(exportButton).not.toBeNull();
+
+      act(() => {
+        exportButton!.click();
+      });
+
+      expect(onExportSettings).toHaveBeenCalledTimes(1);
+      expect(onExportSettings).toHaveBeenCalledWith({
+        projectName: "迷子たちと千年領主",
+        projectSettings
+      });
+      expect(onExportSettings.mock.calls[0][0]).not.toHaveProperty(
+        "applicationSettings"
+      );
+      expect(container.textContent).not.toContain("インポート");
     });
 
     it("filters items when clicking a category button", () => {
