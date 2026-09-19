@@ -133,7 +133,10 @@ export interface ColdStartRestoreDeps {
   /** Release the held Session persistence — cold start is done.
    *  `sessionWasRestored` tells the host whether a `setState`-driven
    *  re-persist is already coming (true) or it should flush now (false). */
-  readonly finishColdStart: (sessionWasRestored: boolean) => void;
+  readonly finishColdStart: (
+    sessionWasRestored: boolean,
+    allEditorsFailed?: boolean
+  ) => void;
 
   /**
    * Route a Markdown launch target into the (already-applied) working
@@ -360,6 +363,11 @@ interface SelectedSessionRestoreOutcome {
    * the Session recorded, so it must still be opened the ordinary way.
    */
   readonly projectContextRestoreFailed: boolean;
+  /**
+   * True when the Session carried saved editors (`editors.length > 0`) but
+   * every editor failed to read / restore (`built.length === 0`).
+   */
+  readonly allEditorsFailed: boolean;
 }
 
 async function restoreSelectedSession(
@@ -430,7 +438,9 @@ async function restoreSelectedSession(
   deps.applyRestoredEnvironment({ project, openDocuments, pendingViewStates });
 
   return {
-    projectContextRestoreFailed: record.projectContext !== null && projectOutcome.failed
+    projectContextRestoreFailed:
+      record.projectContext !== null && projectOutcome.failed,
+    allEditorsFailed: record.editors.length > 0 && built.length === 0
   };
 }
 
@@ -451,6 +461,7 @@ export async function runColdStartRestore(
 
   const { read, launchTarget } = payload;
   let sessionWasRestored = false;
+  let allEditorsFailed = false;
 
   try {
     if (read.kind === "manifestUnavailable") {
@@ -494,6 +505,7 @@ export async function runColdStartRestore(
 
     const outcome = await restoreSelectedSession(selection.session, deps);
     sessionWasRestored = true;
+    allEditorsFailed = outcome.allEditorsFailed;
 
     // Launch target integration AFTER restore. The host routes the Markdown
     // target in a follow-up effect (fresh state).
@@ -529,7 +541,7 @@ export async function runColdStartRestore(
     // A `.pergamum` that matched and restored cleanly needs nothing
     // further — its project is already restored, no duplicate is created.
   } finally {
-    deps.finishColdStart(sessionWasRestored);
+    deps.finishColdStart(sessionWasRestored, allEditorsFailed);
   }
 }
 

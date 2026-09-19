@@ -15,6 +15,9 @@
  * No cold-start restore, no launch routing — #272 is the write-out side.
  */
 
+import fs from "node:fs";
+import path from "node:path";
+import { app, shell } from "electron";
 import { SESSION_CHANNELS } from "../shared/api";
 import {
   isSessionId,
@@ -26,6 +29,7 @@ import {
 import {
   isSessionStorageFailure,
   sessionStorageFailureReason,
+  SessionStorageFailureError,
   type SessionStorageFailureReason
 } from "../shared/sessionPersistenceFailure";
 import type { SessionStore } from "./sessionStore";
@@ -103,8 +107,13 @@ export interface CreateSessionStoreControllerOptions {
    * own window-driven re-persist loop after this.
    */
   readonly onSessionStorageFailure?: (
-    reason: SessionStorageFailureReason
+    reason: SessionStorageFailureReason,
+    error?: unknown
   ) => void;
+  readonly isDebugMode?: boolean;
+  readonly logDebug?: (event: string, details?: Record<string, unknown>) => void;
+  readonly getUserDataPath?: () => string;
+  readonly openPath?: (fullPath: string) => Promise<string>;
 }
 
 export interface SessionStoreController {
@@ -207,6 +216,11 @@ export function createSessionStoreController(
     mainDrivenPersistSuspended = true;
   }
 
+  let failureInjectionState: {
+    reason: SessionStorageFailureReason;
+    remainingFlushes: number;
+  } | null = null;
+
   function persistSnapshot(snapshot: RendererSessionSnapshot): Promise<void> {
     return enqueueWrite(async () => {
       // #272 (review Blocker 2): re-check at ACTUAL execution time, not only
@@ -217,6 +231,42 @@ export function createSessionStoreController(
       // so a later persist still runs normally.
       if (stoppedSessionIds.has(snapshot.sessionId)) {
         return;
+      }
+
+      if (
+        options.isDebugMode &&
+        failureInjectionState &&
+        failureInjectionState.remainingFlushes > 0
+      ) {
+        failureInjectionState.remainingFlushes -= 1;
+        const currentReason = failureInjectionState.reason;
+        const remaining = failureInjectionState.remainingFlushes;
+
+        if (remaining <= 0) {
+          failureInjectionState = null;
+        }
+
+        options.logDebug?.("debug.session.failureInjected", {
+          reason: currentReason,
+          remainingFlushes: remaining
+        });
+
+        let detail: string | undefined;
+        if (currentReason === "lockUnavailable") {
+          const nowMs = Date.now();
+          detail = JSON.stringify({
+            dirMtimeMs: nowMs,
+            markerCount: 1,
+            markers: [
+              {
+                pid: 99999,
+                acquiredAt: nowMs - 30_000
+              }
+            ]
+          });
+        }
+
+        throw new SessionStorageFailureError(currentReason, detail);
       }
 
       const record = enrich(snapshot);
@@ -330,7 +380,8 @@ export function createSessionStoreController(
           if (!storageFailureNotified) {
             storageFailureNotified = true;
             options.onSessionStorageFailure?.(
-              sessionStorageFailureReason(error)
+              sessionStorageFailureReason(error),
+              error
             );
           }
           return;
@@ -354,6 +405,25 @@ export function createSessionStoreController(
     attachedWindow = null;
   }
 
+  async function handleOpenSessionsFolder(): Promise<boolean> {
+    try {
+      const userDataPath = options.getUserDataPath
+        ? options.getUserDataPath()
+        : app.getPath("userData");
+      const sessionsDir = path.join(userDataPath, "sessions");
+
+      if (!fs.existsSync(sessionsDir)) {
+        return false;
+      }
+
+      const openFn = options.openPath ?? shell.openPath;
+      const errorMsg = await openFn(sessionsDir);
+      return !errorMsg;
+    } catch {
+      return false;
+    }
+  }
+
   return {
     registerIpc() {
       options.ipcMain.handle(
@@ -365,6 +435,39 @@ export function createSessionStoreController(
         SESSION_CHANNELS.dropSessionFromRestoreSet,
         (_event: unknown, rawRequest: unknown) =>
           handleDropSessionFromRestoreSet(rawRequest)
+      );
+      options.ipcMain.handle(
+        SESSION_CHANNELS.openSessionsFolder,
+        () => handleOpenSessionsFolder()
+      );
+      options.ipcMain.handle(
+        SESSION_CHANNELS.injectFailure,
+        (_event: unknown, rawRequest: unknown) => {
+          if (!options.isDebugMode) {
+            return Promise.resolve();
+          }
+          if (
+            isRecord(rawRequest) &&
+            typeof rawRequest.reason === "string" &&
+            typeof rawRequest.count === "number"
+          ) {
+            failureInjectionState = {
+              reason: rawRequest.reason as SessionStorageFailureReason,
+              remainingFlushes: rawRequest.count
+            };
+          }
+          return Promise.resolve();
+        }
+      );
+      options.ipcMain.handle(
+        SESSION_CHANNELS.clearInjection,
+        () => {
+          if (!options.isDebugMode) {
+            return Promise.resolve();
+          }
+          failureInjectionState = null;
+          return Promise.resolve();
+        }
       );
     },
     attachWindow(window) {

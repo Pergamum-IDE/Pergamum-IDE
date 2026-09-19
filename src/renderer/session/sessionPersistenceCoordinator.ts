@@ -39,6 +39,16 @@ export const SESSION_PERSISTENCE_SLOW_IO_THRESHOLD_MS = 8_000;
 
 export type SessionPersistenceState = "active" | "suspended";
 
+export function isTransientSessionStorageFailureReason(
+  reason: SessionStorageFailureReason
+): boolean {
+  return (
+    reason === "lockUnavailable" ||
+    reason === "ioError" ||
+    reason === "slowIo"
+  );
+}
+
 const SLOW_IO_SENTINEL = Symbol("session-persistence-slow-io");
 
 export interface SessionPersistenceTransport {
@@ -80,7 +90,13 @@ export interface SessionPersistenceCoordinatorOptions {
    * Error notification and stops expecting continuous persistence for the
    * rest of the run. Never called for transient logical conditions.
    */
-  readonly onSuspended?: (reason: SessionStorageFailureReason) => void;
+  readonly onSuspended?: (
+    reason: SessionStorageFailureReason,
+    details?: { consecutiveFailures?: number; error?: unknown }
+  ) => void;
+  readonly onResumed?: () => void;
+  readonly transientRetryIntervalMs?: number;
+  readonly preSuspendTransientRetryIntervalMs?: number;
   /**
    * #274: when true, the coordinator holds ALL automatic persistence
    * (continuous flushes, view-state-dirty nudges) until
@@ -94,6 +110,8 @@ export interface SessionPersistenceCoordinatorOptions {
 
 const DEFAULT_DEBOUNCE_MS = 400;
 const DEFAULT_MAX_DEFER_MS = 2_000;
+const DEFAULT_TRANSIENT_RETRY_INTERVAL_MS = 60_000;
+export const DEFAULT_PRE_SUSPEND_TRANSIENT_RETRY_INTERVAL_MS = 2_000;
 
 const defaultScheduler: SessionPersistenceScheduler = {
   schedule: (callback, delayMs) => setTimeout(callback, delayMs),
@@ -109,17 +127,27 @@ export class SessionPersistenceCoordinator {
   private readonly debounceMs: number;
   private readonly maxDeferMs: number;
   private readonly slowIoThresholdMs: number;
-  private readonly onSuspended?: (reason: SessionStorageFailureReason) => void;
+  private readonly transientRetryIntervalMs: number;
+  private readonly preSuspendTransientRetryIntervalMs: number;
+  private readonly onSuspended?: (
+    reason: SessionStorageFailureReason,
+    details?: { consecutiveFailures?: number; error?: unknown }
+  ) => void;
+  private readonly onResumed?: () => void;
 
   private readonly viewStateCache = new Map<string, EditorViewState>();
   private inputs: SessionSnapshotInputs | null = null;
   private timerHandle: unknown = null;
+  private retryTimerHandle: unknown = null;
+  private preSuspendRetryTimerHandle: unknown = null;
   private firstPendingChangeAt: number | null = null;
   private lastPersistedSerialization: string | null = null;
   private stopped = false;
-  /** ACTIVE → SUSPENDED is one-way for this coordinator instance. A new
-   *  coordinator (next app run) starts ACTIVE again. */
+  /** ACTIVE → SUSPENDED is reversible if background transient retry succeeds. */
   private suspended = false;
+  private suspendedReason: SessionStorageFailureReason | null = null;
+  private consecutiveTransientFailures = 0;
+  private lastTransientReason: SessionStorageFailureReason | null = null;
   private flushInFlight: Promise<void> = Promise.resolve();
   /** A `transport.persist` that outran the slow-I/O threshold and may still
    *  be running. We never issue a new automatic write while this is set. */
@@ -130,6 +158,8 @@ export class SessionPersistenceCoordinator {
   /** #274: once any snapshot has been persisted, `adoptSessionId` is
    *  refused — a later id change would orphan the record already written. */
   private hasPersisted = false;
+  /** #519: suppress flushing an empty session snapshot right after a restore where all editors failed. */
+  private suppressEmptyRestoreFlush = false;
 
   constructor(options: SessionPersistenceCoordinatorOptions) {
     this.sessionId = options.sessionId;
@@ -141,7 +171,13 @@ export class SessionPersistenceCoordinator {
     this.maxDeferMs = options.maxDeferMs ?? DEFAULT_MAX_DEFER_MS;
     this.slowIoThresholdMs =
       options.slowIoThresholdMs ?? SESSION_PERSISTENCE_SLOW_IO_THRESHOLD_MS;
+    this.transientRetryIntervalMs =
+      options.transientRetryIntervalMs ?? DEFAULT_TRANSIENT_RETRY_INTERVAL_MS;
+    this.preSuspendTransientRetryIntervalMs =
+      options.preSuspendTransientRetryIntervalMs ??
+      DEFAULT_PRE_SUSPEND_TRANSIENT_RETRY_INTERVAL_MS;
     this.onSuspended = options.onSuspended;
+    this.onResumed = options.onResumed;
     this.coldStartDeferred = options.deferInitialFlush ?? false;
   }
 
@@ -175,12 +211,17 @@ export class SessionPersistenceCoordinator {
    * nothing was restored, pass `scheduleNow: true` so the current (fresh /
    * launch-target) state is still persisted.
    */
-  resolveColdStartRestore(options: { scheduleNow?: boolean } = {}): void {
+  resolveColdStartRestore(
+    options: { scheduleNow?: boolean; allEditorsFailed?: boolean } = {}
+  ): void {
     if (!this.coldStartDeferred) {
       return;
     }
 
     this.coldStartDeferred = false;
+    if (options.allEditorsFailed === true) {
+      this.suppressEmptyRestoreFlush = true;
+    }
 
     if (
       options.scheduleNow === true &&
@@ -195,24 +236,130 @@ export class SessionPersistenceCoordinator {
   /**
    * Move to SUSPENDED because Session persistence cannot proceed safely
    * (e.g. the main process reported a storage failure for a write the
-   * renderer was not awaiting). Idempotent; fires `onSuspended` once.
+   * renderer was not awaiting).
    */
-  suspendFromStorageFailure(reason: SessionStorageFailureReason): void {
-    this.suspend(reason);
+  suspendFromStorageFailure(
+    reason: SessionStorageFailureReason,
+    error?: unknown
+  ): void {
+    this.handleStorageFailure(reason, error);
   }
 
-  private suspend(reason: SessionStorageFailureReason): void {
+  private handleStorageFailure(
+    reason: SessionStorageFailureReason,
+    error?: unknown
+  ): void {
+    if (this.suspended) {
+      if (this.suspendedReason !== reason) {
+        this.suspendedReason = reason;
+        try {
+          this.onSuspended?.(reason, {
+            consecutiveFailures: this.consecutiveTransientFailures || 1,
+            error
+          });
+        } catch {
+          // A failing notification callback must not wedge the coordinator.
+        }
+      }
+      return;
+    }
+
+    const isTransient = isTransientSessionStorageFailureReason(reason);
+    if (isTransient) {
+      if (this.lastTransientReason === reason) {
+        this.consecutiveTransientFailures += 1;
+      } else {
+        this.consecutiveTransientFailures = 1;
+        this.lastTransientReason = reason;
+      }
+
+      if (this.consecutiveTransientFailures < 3) {
+        this.startPreSuspendRetryTimer();
+        return;
+      }
+    }
+
+    this.suspend(reason, error);
+  }
+
+  private suspend(reason: SessionStorageFailureReason, error?: unknown): void {
     if (this.suspended) {
       return;
     }
 
     this.suspended = true;
+    this.suspendedReason = reason;
     this.clearTimer();
+    this.stopPreSuspendRetryTimer();
 
     try {
-      this.onSuspended?.(reason);
+      this.onSuspended?.(reason, {
+        consecutiveFailures: this.consecutiveTransientFailures || 1,
+        error
+      });
     } catch {
       // A failing notification callback must not wedge the coordinator.
+    }
+
+    const isTransient = isTransientSessionStorageFailureReason(reason);
+    if (isTransient) {
+      this.startTransientRetryTimer();
+    }
+  }
+
+  private startPreSuspendRetryTimer(): void {
+    this.stopPreSuspendRetryTimer();
+    this.preSuspendRetryTimerHandle = this.scheduler.schedule(() => {
+      this.preSuspendRetryTimerHandle = null;
+      void this.attemptPreSuspendRetry();
+    }, this.preSuspendTransientRetryIntervalMs);
+  }
+
+  private stopPreSuspendRetryTimer(): void {
+    if (this.preSuspendRetryTimerHandle !== null) {
+      this.scheduler.cancel(this.preSuspendRetryTimerHandle);
+      this.preSuspendRetryTimerHandle = null;
+    }
+  }
+
+  private async attemptPreSuspendRetry(): Promise<void> {
+    if (this.stopped || this.suspended || !this.inputs) {
+      return;
+    }
+
+    try {
+      await this.persistCurrentInputs({ mode: "ordinary", isRetry: true });
+    } catch {
+      // Re-handled by handleStorageFailure on error catch
+    }
+  }
+
+  private startTransientRetryTimer(): void {
+    this.stopTransientRetryTimer();
+    this.retryTimerHandle = this.scheduler.schedule(() => {
+      this.retryTimerHandle = null;
+      void this.attemptTransientRetry();
+    }, this.transientRetryIntervalMs);
+  }
+
+  private stopTransientRetryTimer(): void {
+    if (this.retryTimerHandle !== null) {
+      this.scheduler.cancel(this.retryTimerHandle);
+      this.retryTimerHandle = null;
+    }
+  }
+
+  private async attemptTransientRetry(): Promise<void> {
+    if (this.stopped || !this.suspended || !this.inputs) {
+      return;
+    }
+
+    try {
+      await this.persistCurrentInputs({ mode: "ordinary", isRetry: true });
+    } catch {
+      if (this.suspended) {
+        this.startTransientRetryTimer();
+      }
     }
   }
 
@@ -232,9 +379,17 @@ export class SessionPersistenceCoordinator {
     this.inputs = inputs;
     this.pruneViewStateCache(inputs);
 
+    if (inputs.editors.length > 0) {
+      this.suppressEmptyRestoreFlush = false;
+    }
+
     // #274: while cold-start restore is in flight the inputs are retained
     // but no flush is scheduled — `resolveColdStartRestore()` releases it.
     if (this.coldStartDeferred) {
+      return;
+    }
+
+    if (this.suppressEmptyRestoreFlush && inputs.editors.length === 0) {
       return;
     }
 
@@ -393,6 +548,8 @@ export class SessionPersistenceCoordinator {
   dispose(): void {
     this.stopped = true;
     this.clearTimer();
+    this.stopTransientRetryTimer();
+    this.stopPreSuspendRetryTimer();
   }
 
   private pruneViewStateCache(inputs: SessionSnapshotInputs): void {
@@ -430,6 +587,14 @@ export class SessionPersistenceCoordinator {
     }
   }
 
+  private shouldSuppressEmptyRestoreFlush(): boolean {
+    return (
+      this.suppressEmptyRestoreFlush &&
+      this.inputs !== null &&
+      this.inputs.editors.length === 0
+    );
+  }
+
   private runFlush(): Promise<void> {
     this.flushInFlight = this.flushInFlight
       .catch(() => undefined)
@@ -442,52 +607,31 @@ export class SessionPersistenceCoordinator {
    * Capture the active editor's View State (the one place SHA-256 runs),
    * build the snapshot from the current inputs + cache, and persist it if
    * it differs from what is already durable.
-   *
-   * `mode`:
-   *   - `"ordinary"` — automatic continuous persistence. Skips entirely
-   *     (no I/O) when the coordinator is SUSPENDED, INCLUDING the case where
-   *     it was queued on `flushInFlight` before the suspension and only now
-   *     reaches the front of the chain. Failures are handled (SUSPEND on
-   *     storage-class / slow) and then swallowed.
-   *   - `"durableCommit"` — an explicit lifecycle commit boundary
-   *     (`commitNow`). Runs even when SUSPENDED. A storage-class / slow
-   *     failure still SUSPENDS and additionally REJECTS, so the caller
-   *     (explicit Project Close, non-final Window Close) declines rather
-   *     than pretending durability was achieved.
-   *
-   * Failure classification:
-   *   - a persist that does not settle within `slowIoThresholdMs`: hung
-   *     storage op → SUSPEND, keep a handle on the still in-flight promise
-   *     (never assume it was cancelled), issue no other write.
-   *   - a storage-class rejection (`SessionStorageFailureError` / an
-   *     IPC-flattened one): SUSPEND.
-   *   - a transient logical rejection (unresolved Project identity): left
-   *     for the next change to retry — NOT a suspension.
    */
   private async persistCurrentInputs(options: {
     mode: "ordinary" | "durableCommit";
+    isRetry?: boolean;
   }): Promise<void> {
     const isDurableCommit = options.mode === "durableCommit";
+    const isRetry = options.isRetry === true;
 
     if (this.stopped || !this.inputs) {
       return;
     }
 
-    // Ordinary continuous persistence must not run once SUSPENDED — not even
-    // a flush that was already queued on the chain before the transition —
-    // nor while cold-start restore is still holding automatic persistence.
-    if (!isDurableCommit && (this.suspended || this.coldStartDeferred)) {
+    if (!isDurableCommit && !isRetry && (this.suspended || this.coldStartDeferred)) {
       return;
     }
 
-    // Never run two Session writes concurrently: if a prior write went slow
-    // and may still be running, wait for it (bounded again by the slow
-    // threshold) before issuing a new one.
+    if (!isDurableCommit && this.shouldSuppressEmptyRestoreFlush()) {
+      return;
+    }
+
     if (this.slowInFlightPersist) {
       const settledOrSlow = await this.raceSlowIo(this.slowInFlightPersist);
 
       if (settledOrSlow === SLOW_IO_SENTINEL) {
-        this.suspend("slowIo");
+        this.handleStorageFailure("slowIo");
         if (isDurableCommit) {
           throw new SessionStorageFailureError("slowIo");
         }
@@ -497,9 +641,7 @@ export class SessionPersistenceCoordinator {
       this.slowInFlightPersist = null;
     }
 
-    // Re-check: a suspension may have landed while we awaited the slow
-    // in-flight write above.
-    if (!isDurableCommit && this.suspended) {
+    if (!isDurableCommit && !isRetry && this.suspended) {
       return;
     }
 
@@ -522,6 +664,18 @@ export class SessionPersistenceCoordinator {
     const serialization = JSON.stringify(snapshot);
 
     if (serialization === this.lastPersistedSerialization) {
+      if (this.suspended && isRetry) {
+        this.suspended = false;
+        this.suspendedReason = null;
+        this.consecutiveTransientFailures = 0;
+        this.lastTransientReason = null;
+        this.stopTransientRetryTimer();
+        try {
+          this.onResumed?.();
+        } catch {
+          // ignore
+        }
+      }
       return;
     }
 
@@ -531,9 +685,12 @@ export class SessionPersistenceCoordinator {
     try {
       raced = await this.raceSlowIo(persistPromise);
     } catch (error) {
-      // The persist itself rejected before the slow timer fired.
       if (isSessionStorageFailure(error)) {
-        this.suspend(sessionStorageFailureReason(error));
+        const reason = sessionStorageFailureReason(error);
+        this.handleStorageFailure(reason, error);
+        if (this.suspended && isTransientSessionStorageFailureReason(reason)) {
+          this.startTransientRetryTimer();
+        }
       }
       if (isDurableCommit) {
         throw error;
@@ -542,13 +699,11 @@ export class SessionPersistenceCoordinator {
     }
 
     if (raced === SLOW_IO_SENTINEL) {
-      // The write is taking too long. It may still be running — keep a
-      // handle so a later flush waits on it, and DO NOT assume it is gone.
       this.slowInFlightPersist = persistPromise.then(
         () => undefined,
         () => undefined
       );
-      this.suspend("slowIo");
+      this.handleStorageFailure("slowIo");
       if (isDurableCommit) {
         throw new SessionStorageFailureError("slowIo");
       }
@@ -557,6 +712,20 @@ export class SessionPersistenceCoordinator {
 
     this.lastPersistedSerialization = serialization;
     this.hasPersisted = true;
+    this.consecutiveTransientFailures = 0;
+    this.lastTransientReason = null;
+    this.stopPreSuspendRetryTimer();
+
+    if (this.suspended) {
+      this.suspended = false;
+      this.suspendedReason = null;
+      this.stopTransientRetryTimer();
+      try {
+        this.onResumed?.();
+      } catch {
+        // ignore
+      }
+    }
   }
 
   /**

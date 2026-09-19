@@ -861,4 +861,38 @@ describe("isFinishedSessionDataFileName (#272)", () => {
       isFinishedSessionDataFileName("abc.json.pergamum-tmp-xyz")
     ).toBe(false);
   });
+
+  it("sweeps orphan temp files older than 24 hours under sessions/data/", async () => {
+    const dataDir = path.join(sessionsDir, "data");
+    await fs.mkdir(dataDir, { recursive: true });
+
+    const freshTemp = path.join(dataDir, "s1.json.pergamum-tmp-fresh");
+    const oldTemp = path.join(dataDir, "s2.json.pergamum-tmp-old");
+    const normalFile = path.join(dataDir, "s3.json");
+
+    await fs.writeFile(freshTemp, "fresh", "utf8");
+    await fs.writeFile(oldTemp, "old", "utf8");
+    await fs.writeFile(normalFile, "normal", "utf8");
+
+    const now = new Date();
+    const oldTime = new Date(now.getTime() - 25 * 60 * 60 * 1000); // 25h old
+    await fs.utimes(oldTemp, oldTime, oldTime);
+
+    let loggedEvent = "";
+    let loggedCount = 0;
+
+    const { sweepOrphanTempFiles } = await import("../../src/main/sessionStore");
+    const swept = await sweepOrphanTempFiles(dataDir, () => now, (evt, details) => {
+      loggedEvent = evt;
+      loggedCount = details.sweptCount as number;
+    });
+
+    expect(swept).toBe(1);
+    expect(loggedEvent).toBe("session.tempFiles.swept");
+    expect(loggedCount).toBe(1);
+
+    await expect(fs.stat(oldTemp)).rejects.toThrow();
+    await expect(fs.stat(freshTemp)).resolves.toBeDefined();
+    await expect(fs.stat(normalFile)).resolves.toBeDefined();
+  });
 });

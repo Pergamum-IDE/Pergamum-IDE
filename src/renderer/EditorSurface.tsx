@@ -982,7 +982,6 @@ function MarkdownEditorSurface({
       event: DebugLogEventName;
       details?: Record<string, unknown>;
     }) => {
-      console.info(`[#503 preview-scroll-sync] ${input.event}`, input.details);
       onPreviewScrollSyncEvent?.(input);
     },
     [onPreviewScrollSyncEvent]

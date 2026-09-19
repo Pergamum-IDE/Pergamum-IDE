@@ -346,7 +346,11 @@ export const SESSION_CHANNELS = {
   getColdStartRestore: "session:getColdStartRestore",
   /** main → renderer: a storage-class Session persistence failure occurred
    *  for a write the renderer was not awaiting (window-driven re-persist). */
-  storageFailure: "session:storageFailure"
+  storageFailure: "session:storageFailure",
+  /** #519 debug-only: renderer → main, inject a failure for testing. */
+  injectFailure: "session:injectFailure",
+  clearInjection: "session:clearInjection",
+  openSessionsFolder: "session:openSessionsFolder"
 } as const;
 
 export const RECOVERY_CHANNELS = {
@@ -1263,6 +1267,10 @@ export interface PergamumApi {
     onStorageFailure: (
       callback: (reason: string) => void
     ) => () => void;
+    /** #519 debug-only: inject session persistence failure for testing. */
+    injectFailure: (reason: string, count: number) => Promise<void>;
+    clearInjection: () => Promise<void>;
+    openSessionsFolder: () => Promise<boolean>;
   };
   /**
    * Phase 6-4-2: read-only view of the Recovery Store (app `userData`-side

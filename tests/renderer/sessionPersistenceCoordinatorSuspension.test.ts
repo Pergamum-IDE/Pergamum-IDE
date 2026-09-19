@@ -7,8 +7,11 @@ import {
 import type { SessionSnapshotInputs } from "../../src/renderer/session/sessionSnapshot";
 import type { RendererSessionSnapshot } from "../../src/shared/session";
 import {
+  formatSessionPersistenceTechnicalInfo,
+  parseSessionLockFailureDetails,
   SessionStorageFailureError,
-  SESSION_STORAGE_FAILURE_CODE
+  SESSION_STORAGE_FAILURE_CODE,
+  type SessionStorageFailureReason
 } from "../../src/shared/sessionPersistenceFailure";
 
 const SESSION_ID = "session-1";
@@ -63,6 +66,10 @@ function inputs(filePath: string, order = 0): SessionSnapshotInputs {
 function setup(options?: {
   persist?: (s: RendererSessionSnapshot) => void | Promise<void>;
   slowIoThresholdMs?: number;
+  onSuspended?: (
+    reason: SessionStorageFailureReason,
+    details?: { consecutiveFailures?: number; error?: unknown }
+  ) => void;
 }) {
   const scheduler = manualScheduler();
   const suspensions: string[] = [];
@@ -81,7 +88,10 @@ function setup(options?: {
     },
     captureActiveEditorViewState: () => null,
     scheduler,
-    onSuspended: (reason) => suspensions.push(reason),
+    onSuspended: (reason, details) => {
+      suspensions.push(reason);
+      options?.onSuspended?.(reason, details);
+    },
     slowIoThresholdMs: options?.slowIoThresholdMs
   });
 
@@ -105,25 +115,176 @@ describe("SessionPersistenceCoordinator — SUSPENDED on storage failure (#272 P
     expect(suspensions).toEqual(["diskFull"]);
   });
 
-  it("after SUSPENDED, continuous persistence stops — repeated updates cause no I/O and no more callbacks", async () => {
-    const { coordinator, scheduler, suspensions, persistArgs } = setup({
-      persist: () => Promise.reject(new SessionStorageFailureError("ioError"))
+  it("transient storage failures require 3 consecutive failures before moving ACTIVE → SUSPENDED", async () => {
+    let failCount = 0;
+    const { coordinator, scheduler, suspensions } = setup({
+      persist: () => {
+        failCount += 1;
+        return Promise.reject(new SessionStorageFailureError("lockUnavailable"));
+      }
     });
 
-    coordinator.updateSessionInputs(inputs("/a.md"));
+    expect(coordinator.getState()).toBe("active");
+
+    // Failure 1 (user input)
+    coordinator.updateSessionInputs(inputs("/a.md", 1));
     scheduler.flush();
     await tick();
-    expect(persistArgs).toHaveLength(1);
+    expect(coordinator.getState()).toBe("active");
+    expect(suspensions).toEqual([]);
+    expect(scheduler.pendingDelay()).toBe(2000); // Pre-SUSPENDED retry timer scheduled
 
-    for (let i = 0; i < 30; i += 1) {
-      coordinator.updateSessionInputs(inputs("/a.md", i));
-    }
+    // Failure 2 (timer retry without user input)
+    scheduler.flush();
+    await tick();
+    expect(coordinator.getState()).toBe("active");
+    expect(suspensions).toEqual([]);
+    expect(scheduler.pendingDelay()).toBe(2000);
+
+    // Failure 3 -> SUSPENDED (timer retry without user input)
+    scheduler.flush();
+    await tick();
+    expect(coordinator.getState()).toBe("suspended");
+    expect(suspensions).toEqual(["lockUnavailable"]);
+  });
+
+  it("resets strike counter and stops pre-SUSPENDED retry timer when a retry succeeds before SUSPENDED", async () => {
+    let failCount = 0;
+    const { coordinator, scheduler, suspensions } = setup({
+      persist: () => {
+        failCount += 1;
+        if (failCount === 1) {
+          return Promise.reject(new SessionStorageFailureError("lockUnavailable"));
+        }
+        return Promise.resolve();
+      }
+    });
+
+    coordinator.updateSessionInputs(inputs("/a.md", 1));
     scheduler.flush();
     await tick();
 
-    expect(persistArgs).toHaveLength(1);
-    expect(suspensions).toEqual(["ioError"]);
+    expect(failCount).toBe(1);
+    expect(coordinator.getState()).toBe("active");
+    expect(scheduler.pendingDelay()).toBe(2000);
+
+    // Pre-SUSPENDED retry timer fires, second write succeeds
+    coordinator.updateSessionInputs(inputs("/b.md", 2));
+    scheduler.flush();
+    await tick();
+
+    expect(failCount).toBe(2);
+    expect(coordinator.getState()).toBe("active");
+    expect(suspensions).toEqual([]);
     expect(scheduler.pendingDelay()).toBeNull();
+  });
+
+  it("treats slowIo as a transient error requiring 3 consecutive failures before moving ACTIVE → SUSPENDED", async () => {
+    let failCount = 0;
+    const { coordinator, scheduler, suspensions } = setup({
+      persist: () => {
+        failCount += 1;
+        return Promise.reject(new SessionStorageFailureError("slowIo"));
+      }
+    });
+
+    expect(coordinator.getState()).toBe("active");
+
+    // Failure 1 (user input) — keeps ACTIVE, schedules pre-SUSPENDED retry
+    coordinator.updateSessionInputs(inputs("/a.md", 1));
+    scheduler.flush();
+    await tick();
+    expect(coordinator.getState()).toBe("active");
+    expect(suspensions).toEqual([]);
+    expect(scheduler.pendingDelay()).toBe(2000);
+
+    // Failure 2 (timer retry)
+    scheduler.flush();
+    await tick();
+    expect(coordinator.getState()).toBe("active");
+    expect(suspensions).toEqual([]);
+    expect(scheduler.pendingDelay()).toBe(2000);
+
+    // Failure 3 -> SUSPENDED
+    scheduler.flush();
+    await tick();
+    expect(coordinator.getState()).toBe("suspended");
+    expect(suspensions).toEqual(["slowIo"]);
+  });
+
+  it("resets slowIo strike counter when a write succeeds before 3 failures", async () => {
+    let failCount = 0;
+    const { coordinator, scheduler, suspensions } = setup({
+      persist: () => {
+        failCount += 1;
+        if (failCount === 1) {
+          return Promise.reject(new SessionStorageFailureError("slowIo"));
+        }
+        return Promise.resolve();
+      }
+    });
+
+    coordinator.updateSessionInputs(inputs("/slow.md", 1));
+    scheduler.flush();
+    await tick();
+
+    expect(failCount).toBe(1);
+    expect(coordinator.getState()).toBe("active");
+    expect(scheduler.pendingDelay()).toBe(2000);
+
+    // Retry succeeds
+    coordinator.updateSessionInputs(inputs("/recovered.md", 2));
+    scheduler.flush();
+    await tick();
+
+    expect(failCount).toBe(2);
+    expect(coordinator.getState()).toBe("active");
+    expect(suspensions).toEqual([]);
+    expect(scheduler.pendingDelay()).toBeNull();
+  });
+
+  it("recovers SUSPENDED → ACTIVE when background transient retry succeeds", async () => {
+    let fail = true;
+    const scheduler = manualScheduler();
+    const suspensions: string[] = [];
+    let recoveredCount = 0;
+
+    const coordinator = new SessionPersistenceCoordinator({
+      sessionId: SESSION_ID,
+      transport: {
+        persist: () =>
+          fail
+            ? Promise.reject(new SessionStorageFailureError("lockUnavailable"))
+            : Promise.resolve(),
+        dropFromRestoreSet: () => undefined
+      },
+      captureActiveEditorViewState: () => null,
+      scheduler,
+      onSuspended: (r) => suspensions.push(r),
+      onResumed: () => {
+        recoveredCount += 1;
+      },
+      transientRetryIntervalMs: 1_000
+    });
+
+    // Cause 3 failures to trigger suspension
+    for (let i = 1; i <= 3; i++) {
+      coordinator.updateSessionInputs(inputs("/a.md", i));
+      scheduler.flush();
+      await tick();
+    }
+    expect(coordinator.getState()).toBe("suspended");
+    expect(suspensions).toEqual(["lockUnavailable"]);
+
+    // Fix the transient issue
+    fail = false;
+
+    // Fast-forward retry timer (1000ms)
+    scheduler.flush();
+    await tick();
+
+    expect(coordinator.getState()).toBe("active");
+    expect(recoveredCount).toBe(1);
   });
 
   it("onSuspended fires exactly once across repeated failures", async () => {
@@ -175,12 +336,15 @@ describe("SessionPersistenceCoordinator — SUSPENDED on storage failure (#272 P
     expect(suspensions).toEqual(["permissionDenied"]);
   });
 
-  it("suspendFromStorageFailure() (main-driven) suspends; idempotent", () => {
+  it("suspendFromStorageFailure() (main-driven) suspends; idempotent for same reason, notifies on reason change", () => {
     const { coordinator, suspensions } = setup();
     coordinator.suspendFromStorageFailure("diskFull");
-    coordinator.suspendFromStorageFailure("ioError");
+    coordinator.suspendFromStorageFailure("diskFull");
     expect(coordinator.getState()).toBe("suspended");
     expect(suspensions).toEqual(["diskFull"]);
+
+    coordinator.suspendFromStorageFailure("ioError");
+    expect(suspensions).toEqual(["diskFull", "ioError"]);
   });
 
   it("commitNow STILL runs while SUSPENDED and still rejects on storage failure", async () => {
@@ -268,7 +432,22 @@ describe("SessionPersistenceCoordinator — slow I/O detection (#272 PO decision
     expect(persistCount).toBe(1);
     expect(coordinator.getState()).toBe("active");
 
-    scheduler.flush(); // slow-I/O timer fires
+    // Strike 1
+    scheduler.flush(); // 1st slow-I/O timer fires (strike 1/3)
+    await tick();
+    expect(coordinator.getState()).toBe("active");
+
+    // Strike 2
+    scheduler.flush(); // preSuspendRetryTimer fires → attemptPreSuspendRetry
+    await tick();
+    scheduler.flush(); // 2nd slow-I/O timer fires (strike 2/3)
+    await tick();
+    expect(coordinator.getState()).toBe("active");
+
+    // Strike 3
+    scheduler.flush(); // preSuspendRetryTimer fires → attemptPreSuspendRetry
+    await tick();
+    scheduler.flush(); // 3rd slow-I/O timer fires (strike 3/3 → SUSPENDED)
     await tick();
 
     expect(coordinator.getState()).toBe("suspended");
@@ -283,8 +462,10 @@ describe("SessionPersistenceCoordinator — slow I/O detection (#272 PO decision
 
     resolveSlowBox.current?.();
     await tick();
-    expect(coordinator.getState()).toBe("suspended");
-    expect(persistCount).toBe(1);
+    scheduler.flush();
+    await tick();
+    expect(coordinator.getState()).toBe("active"); // recovered after in-flight slow write succeeded
+    expect(persistCount).toBe(2); // debounced inputs flushed after recovery
   });
 
   it("commitNow does not run concurrently with a slow in-flight write; it waits, then reflects the outcome", async () => {
@@ -312,9 +493,20 @@ describe("SessionPersistenceCoordinator — slow I/O detection (#272 PO decision
     });
 
     coordinator.updateSessionInputs(inputs("/slow.md"));
-    scheduler.flush();
+    scheduler.flush(); // debounce → persist starts
     await tick();
-    scheduler.flush(); // slow-io → SUSPENDED, in-flight promise retained
+    // Strike 1
+    scheduler.flush(); // 1st slow-io
+    await tick();
+    // Strike 2
+    scheduler.flush(); // preSuspendRetryTimer
+    await tick();
+    scheduler.flush(); // 2nd slow-io
+    await tick();
+    // Strike 3
+    scheduler.flush(); // preSuspendRetryTimer
+    await tick();
+    scheduler.flush(); // 3rd slow-io → SUSPENDED, in-flight promise retained
     await tick();
     expect(coordinator.getState()).toBe("suspended");
     expect(persistArgs).toEqual(["/slow.md"]);
@@ -333,4 +525,167 @@ describe("SessionPersistenceCoordinator — slow I/O detection (#272 PO decision
     resolveSlowBox.current?.();
     await tick();
   });
+
+  it("passes the rejected Error object to onSuspended in details.error when moving ACTIVE → SUSPENDED", async () => {
+    let capturedDetails:
+      | { consecutiveFailures?: number; error?: unknown }
+      | undefined;
+    const persistError = new SessionStorageFailureError(
+      "lockUnavailable",
+      JSON.stringify({
+        dirMtimeMs: 1726710900000,
+        markerCount: 1,
+        markers: [{ pid: 99999, acquiredAt: 1726710900000 }]
+      })
+    );
+
+    const { coordinator, scheduler } = setup({
+      persist: () => Promise.reject(persistError),
+      onSuspended: (_reason, details) => {
+        capturedDetails = details;
+      }
+    });
+
+    coordinator.updateSessionInputs(inputs("/a.md", 1));
+    scheduler.flush();
+    await tick(); // 1st failure
+
+    scheduler.flush();
+    await tick(); // 2nd failure
+
+    scheduler.flush();
+    await tick(); // 3rd failure → SUSPENDED
+
+    expect(coordinator.getState()).toBe("suspended");
+    expect(capturedDetails).toBeDefined();
+    expect(capturedDetails?.consecutiveFailures).toBe(3);
+    expect(capturedDetails?.error).toBe(persistError);
+  });
+
+  it("end-to-end: passes Main error through Coordinator to onSuspended and formats lock diagnostics in copy technical info", async () => {
+    const mainIpcError = new Error(
+      `Error invoking remote method 'session:persistSession': Error: PERGAMUM_SESSION_STORAGE_FAILURE:lockUnavailable: ${JSON.stringify({
+        lockDirPath: "C:\\secret\\sessions\\manifest.lock",
+        dirMtimeMs: 1726710900000,
+        markerCount: 1,
+        markers: [
+          {
+            token: "secret-token",
+            pid: 99999,
+            hostname: "secret-pc",
+            acquiredAt: 1726710900000
+          }
+        ]
+      })}`
+    );
+
+    let suspendedReason: string | undefined;
+    let suspendedDetails: { consecutiveFailures?: number; error?: unknown } | undefined;
+
+    const { coordinator, scheduler } = setup({
+      persist: () => Promise.reject(mainIpcError),
+      onSuspended: (reason, details) => {
+        suspendedReason = reason;
+        suspendedDetails = details;
+      }
+    });
+
+    coordinator.updateSessionInputs(inputs("/doc.md", 1));
+    scheduler.flush();
+    await tick(); // 1st failure
+    scheduler.flush();
+    await tick(); // 2nd failure
+    scheduler.flush();
+    await tick(); // 3rd failure → SUSPENDED
+
+    expect(coordinator.getState()).toBe("suspended");
+    expect(suspendedReason).toBe("lockUnavailable");
+    expect(suspendedDetails?.error).toBe(mainIpcError);
+
+    // Replicate App.tsx showSessionPersistenceSuspendedDialog formatting:
+    const lockDetails = suspendedDetails?.error
+      ? parseSessionLockFailureDetails(suspendedDetails.error)
+      : null;
+
+    const technicalInfo = formatSessionPersistenceTechnicalInfo({
+      timestamp: "2026-09-19T11:00:00.000Z",
+      appVersion: "0.80.0",
+      reason: "lockUnavailable",
+      consecutiveFailures: suspendedDetails?.consecutiveFailures ?? 1,
+      lockDetails
+    });
+
+    expect(technicalInfo).toContain("Pergamum Session Persistence Failure");
+    expect(technicalInfo).toContain("Reason: lockUnavailable");
+    expect(technicalInfo).toContain("Consecutive Failures: 3");
+    expect(technicalInfo).toContain("Lock Dir mtime: 2024-09-19T01:55:00.000Z (1726710900000)");
+    expect(technicalInfo).toContain("Marker Count: 1");
+    expect(technicalInfo).toContain("Marker #1: pid=99999, acquiredAt=2024-09-19T01:55:00.000Z (1726710900000)");
+
+    // Sensitive info excluded
+    expect(technicalInfo).not.toContain("secret-pc");
+    expect(technicalInfo).not.toContain("manifest.lock");
+    expect(technicalInfo).not.toContain("secret-token");
+  });
+
+  it("end-to-end: non-lockUnavailable failures propagate error but omit lock diagnostics lines from technical info", async () => {
+    const mainIpcError = new Error(
+      "Error invoking remote method 'session:persistSession': Error: PERGAMUM_SESSION_STORAGE_FAILURE:manifestNotMutable: present manifest cannot be safely overwritten"
+    );
+
+    let suspendedReason: string | undefined;
+    let suspendedDetails: { consecutiveFailures?: number; error?: unknown } | undefined;
+
+    const { coordinator, scheduler } = setup({
+      persist: () => Promise.reject(mainIpcError),
+      onSuspended: (reason, details) => {
+        suspendedReason = reason;
+        suspendedDetails = details;
+      }
+    });
+
+    coordinator.updateSessionInputs(inputs("/doc.md", 1));
+    scheduler.flush();
+    await tick();
+
+    expect(coordinator.getState()).toBe("suspended");
+    expect(suspendedReason).toBe("manifestNotMutable");
+    expect(suspendedDetails?.error).toBe(mainIpcError);
+
+    const lockDetails = suspendedDetails?.error
+      ? parseSessionLockFailureDetails(suspendedDetails.error)
+      : null;
+
+    const technicalInfo = formatSessionPersistenceTechnicalInfo({
+      timestamp: "2026-09-19T11:00:00.000Z",
+      appVersion: "0.80.0",
+      reason: "manifestNotMutable",
+      consecutiveFailures: suspendedDetails?.consecutiveFailures ?? 1,
+      lockDetails
+    });
+
+    expect(technicalInfo).toContain("Reason: manifestNotMutable");
+    expect(technicalInfo).toContain("Consecutive Failures: 1");
+    expect(technicalInfo).not.toContain("Lock Dir mtime");
+    expect(technicalInfo).not.toContain("Marker Count");
+    expect(technicalInfo).not.toContain("Marker #");
+  });
+
+  it("notifies onSuspended again if a DIFFERENT failure code occurs while already suspended (without needing onResumed)", () => {
+    const { coordinator, suspensions } = setup();
+
+    coordinator.suspendFromStorageFailure("manifestNotMutable");
+    expect(coordinator.getState()).toBe("suspended");
+    expect(suspensions).toEqual(["manifestNotMutable"]);
+
+    // Subsequent failure with same reason while suspended -> suppressed
+    coordinator.suspendFromStorageFailure("manifestNotMutable");
+    expect(suspensions).toEqual(["manifestNotMutable"]);
+
+    // Subsequent failure with different reason while suspended -> notifies new reason
+    coordinator.suspendFromStorageFailure("diskFull");
+    expect(coordinator.getState()).toBe("suspended");
+    expect(suspensions).toEqual(["manifestNotMutable", "diskFull"]);
+  });
 });
+

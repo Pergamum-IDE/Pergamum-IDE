@@ -35,7 +35,7 @@ describe("cold-start Markdown focus wiring (#280)", () => {
   });
 
   it("arms the policy only for a restored Session, not ordinary startup fallback", () => {
-    const finishColdStart = sourceBlock("finishColdStart: (sessionWasRestored)");
+    const finishColdStart = sourceBlock("finishColdStart:");
 
     expect(finishColdStart).toContain(
       "setColdStartMarkdownFocusArmed(sessionWasRestored)"

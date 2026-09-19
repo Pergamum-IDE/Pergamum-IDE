@@ -4804,7 +4804,20 @@ export function registerProjectIpc(
         } else {
           const settings = await loadSettings();
           const encoding = settings.textFiles.encoding;
-          const textDecoded = decodeTextFileBytes(bytes, encoding);
+          let textDecoded: ReturnType<typeof decodeTextFileBytes>;
+          try {
+            textDecoded = decodeTextFileBytes(bytes, encoding);
+          } catch (err) {
+            if (encoding === "utf8" || encoding === "utf8Bom") {
+              try {
+                textDecoded = decodeTextFileBytes(bytes, "shiftJis");
+              } catch {
+                throw err;
+              }
+            } else {
+              throw err;
+            }
+          }
           decoded = {
             content: textDecoded.content,
             encoding,

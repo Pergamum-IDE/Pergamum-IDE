@@ -16,7 +16,9 @@ export const CORE_COMMAND_DOMAINS = [
   "assist",
   // #287: Document Recovery — listing / restoring / discarding unsaved
   // working-copy content from the app-userData Recovery Store.
-  "recovery"
+  "recovery",
+  // #519: debug-only persistence / log commands
+  "debug"
 ] as const;
 
 export type CoreCommandDomain = (typeof CORE_COMMAND_DOMAINS)[number];

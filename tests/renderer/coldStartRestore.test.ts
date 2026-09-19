@@ -76,6 +76,7 @@ interface Harness {
   applied: RestoredEnvironment[];
   adopted: string[];
   finished: boolean[];
+  finishedAllEditorsFailed: Array<boolean | undefined>;
   routedMarkdown: RoutedMarkdown[];
   rejectedRoutes: StartupMarkdownRejectedRoute[];
   skipped: string[];
@@ -91,6 +92,7 @@ function harness(
   const applied: RestoredEnvironment[] = [];
   const adopted: string[] = [];
   const finished: boolean[] = [];
+  const finishedAllEditorsFailed: Array<boolean | undefined> = [];
   const routedMarkdown: RoutedMarkdown[] = [];
   const rejectedRoutes: StartupMarkdownRejectedRoute[] = [];
   const skipped: string[] = [];
@@ -118,7 +120,10 @@ function harness(
       applied.push(env);
     },
     adoptSessionId: (id) => adopted.push(id),
-    finishColdStart: (restored) => finished.push(restored),
+    finishColdStart: (restored, allEditorsFailed) => {
+      finished.push(restored);
+      finishedAllEditorsFailed.push(allEditorsFailed);
+    },
     routeMarkdownLaunchTarget: (filePath, scope) =>
       routedMarkdown.push({ filePath, scope }),
     notifyStartupMarkdownRejected: (route) => rejectedRoutes.push(route),
@@ -135,6 +140,7 @@ function harness(
     applied,
     adopted,
     finished,
+    finishedAllEditorsFailed,
     routedMarkdown,
     rejectedRoutes,
     skipped,
@@ -332,6 +338,23 @@ describe("runColdStartRestore (#274)", () => {
 
     expect(h.applied[0].openDocuments.documents).toHaveLength(1);
     expect(h.skipped).toEqual(["gone.md"]);
+  });
+
+  it("reports allEditorsFailed when every restored editor is skipped (#519)", async () => {
+    const h = harness(
+      okPayload([
+        record({ editors: [sm("/w/x/a.txt", 0), sm("/w/x/b.txt", 1)] })
+      ]),
+      {
+        readMarkdownFile: () => Promise.reject(new Error("invalidEncoding"))
+      }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].openDocuments.documents).toEqual([]);
+    expect(h.skipped).toEqual(["a.txt", "b.txt"]);
+    expect(h.finished).toEqual([true]);
+    expect(h.finishedAllEditorsFailed).toEqual([true]);
   });
 
   it("untitled editors are never reopened and never block others", async () => {

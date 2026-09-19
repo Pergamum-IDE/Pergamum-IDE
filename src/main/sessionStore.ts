@@ -162,6 +162,46 @@ export interface CreateSessionStoreOptions {
    * processes sharing one `userData` cannot lose a membership update.
    */
   readonly manifestLock?: SessionManifestLock;
+  readonly logDebug?: (event: string, details: Record<string, unknown>) => void;
+}
+
+const TEMP_FILE_SWEEP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export async function sweepOrphanTempFiles(
+  dataDirectory: string,
+  now: () => Date,
+  logDebug?: (event: string, details: Record<string, unknown>) => void
+): Promise<number> {
+  let entries: string[];
+  try {
+    entries = await nodeFs.readdir(dataDirectory);
+  } catch {
+    return 0;
+  }
+
+  const nowMs = now().getTime();
+  let sweptCount = 0;
+
+  for (const name of entries) {
+    if (isAtomicWriteTempFileName(name)) {
+      const filePath = path.join(dataDirectory, name);
+      try {
+        const st = await nodeFs.stat(filePath);
+        if (nowMs - st.mtimeMs > TEMP_FILE_SWEEP_MAX_AGE_MS) {
+          await nodeFs.rm(filePath, { force: true });
+          sweptCount += 1;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  if (sweptCount > 0) {
+    logDebug?.("session.tempFiles.swept", { sweptCount });
+  }
+
+  return sweptCount;
 }
 
 function nodeErrorCode(error: unknown): string | undefined {
@@ -204,7 +244,8 @@ export function createSessionStore(
       lockFilePath: path.join(
         options.baseDirectory,
         SESSION_MANIFEST_LOCK_DIRECTORY_NAME
-      )
+      ),
+      logDebug: options.logDebug
     });
   const manifestPath = path.join(
     options.baseDirectory,
@@ -214,6 +255,8 @@ export function createSessionStore(
     options.baseDirectory,
     SESSION_DATA_DIRECTORY_NAME
   );
+
+  void sweepOrphanTempFiles(dataDirectory, now, options.logDebug);
 
   function dataFilePath(sessionId: string): string {
     return path.join(dataDirectory, sessionDataFileName(sessionId));

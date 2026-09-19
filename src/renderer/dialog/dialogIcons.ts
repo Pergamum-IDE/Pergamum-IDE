@@ -3,6 +3,7 @@ import warningIconRaw from "../../../assets/icons/feather/dialog/alert-circle.sv
 import errorIconRaw from "../../../assets/icons/feather/dialog/x-circle.svg?raw";
 import questionIconRaw from "../../../assets/icons/feather/dialog/help-circle.svg?raw";
 import clipboardIconRaw from "../../../assets/icons/feather/dialog/clipboard.svg?raw";
+import checkSquareIconRaw from "../../../assets/icons/feather/dialog/check-square.svg?raw";
 import alertTriangleIconRaw from "../../../assets/icons/feather/global/alert-triangle.svg?raw";
 import type {
   AppDialogChoiceIconKind,
@@ -34,3 +35,4 @@ export const dialogChoiceIconSvgByKind: Record<
 };
 
 export const dialogCopyButtonIconSvg = clipboardIconRaw;
+export const dialogCopiedButtonIconSvg = checkSquareIconRaw;

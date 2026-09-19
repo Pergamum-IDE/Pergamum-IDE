@@ -20,6 +20,7 @@ import { registerProjectSettingsCommands } from "../../src/renderer/projectSetti
 import { registerRecoveryCommands } from "../../src/renderer/recovery/recoveryCommands";
 import { registerUtilityWindowCommands } from "../../src/renderer/utilityWindowCommands";
 import { registerWorkspaceCommands } from "../../src/renderer/workspaceCommands";
+import { registerSessionDebugCommands } from "../../src/renderer/sessionDebugCommands";
 
 // This guard matches `register*Commands` by name. A registration function
 // named outside that convention will not be detected, so new command
@@ -291,6 +292,10 @@ function buildCoreCommandRegistry(): CommandRegistry {
         "Open Project Replace from Selection"
     }
   );
+  registerSessionDebugCommands(registry, {
+    injectFailure: () => undefined,
+    clearInjection: () => undefined
+  });
 
   return registry;
 }

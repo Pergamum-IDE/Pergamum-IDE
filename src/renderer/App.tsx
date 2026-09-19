@@ -257,6 +257,12 @@ import { buildImageAttachmentPasteProjectSettingsRequest } from "./imageAttachme
 import { createUuidv7 } from "../shared/uuidv7";
 import { buildSessionSnapshotInputs } from "./session/sessionSnapshot";
 import { SessionPersistenceCoordinator } from "./session/sessionPersistenceCoordinator";
+import {
+  formatSessionPersistenceTechnicalInfo,
+  isSessionStorageFailure,
+  parseSessionLockFailureDetails,
+  type SessionStorageFailureReason
+} from "../shared/sessionPersistenceFailure";
 import { RecoveryPayloadCoordinator } from "./recovery/recoveryPayloadCoordinator";
 import {
   buildRecoveryDirtyDocuments,
@@ -278,10 +284,6 @@ import {
   type StartupMarkdownRejectedRoute
 } from "./session/coldStartRestore";
 import { runExplicitProjectCloseCommit } from "./explicitProjectCloseCommit";
-import {
-  isSessionStorageFailure,
-  type SessionStorageFailureReason
-} from "../shared/sessionPersistenceFailure";
 import {
   createContextMenuInteractionIdFactory,
   delegatedContextSurfaceFromDocument,
@@ -503,6 +505,7 @@ import {
   debugLogCommandIds,
   registerDebugLogCommands
 } from "./debugLogCommands";
+import { registerSessionDebugCommands } from "./sessionDebugCommands";
 import {
   createProjectSettingsCommandTitles,
   projectSettingsCommandIds,
@@ -977,9 +980,6 @@ export function App(): JSX.Element {
       .then((snapshot) => {
         if (!cancelled) {
           setIsDebugModeEnabled(snapshot.enabled);
-          console.info(
-            `[#503 preview-scroll-sync] 2. Renderer received debug mode: ${snapshot.enabled}`
-          );
         }
       })
       .catch(() => {
@@ -1554,8 +1554,14 @@ export function App(): JSX.Element {
   // ACTIVE → SUSPENDED. Ref-indirected so the coordinator (created once)
   // always reaches the current handler.
   const sessionPersistenceSuspendedHandlerRef = useRef<
-    (reason: SessionStorageFailureReason) => void
+    (
+      reason: SessionStorageFailureReason,
+      details?: { consecutiveFailures?: number; error?: unknown }
+    ) => void
   >(() => undefined);
+  const sessionPersistenceRecoveredHandlerRef = useRef<() => void>(
+    () => undefined
+  );
   // Re-attempts the deferred suspension Error dialog whenever dialogs go
   // idle (called from the dialog-controller subscription).
   const presentSessionPersistenceSuspendedDialogIfIdleRef = useRef<
@@ -1570,13 +1576,16 @@ export function App(): JSX.Element {
       sessionId: rendererSessionId,
       // #274: hold automatic persistence until cold-start restore resolves.
       deferInitialFlush: true,
+      transientRetryIntervalMs: isDebugModeEnabled ? 2_000 : undefined,
       transport: {
         persist: (snapshot) => window.pergamum.session.persist(snapshot),
         dropFromRestoreSet: (sessionId) =>
           window.pergamum.session.dropFromRestoreSet(sessionId)
       },
-      onSuspended: (reason) =>
-        sessionPersistenceSuspendedHandlerRef.current(reason),
+      onSuspended: (reason, details) =>
+        sessionPersistenceSuspendedHandlerRef.current(reason, details),
+      onResumed: () =>
+        sessionPersistenceRecoveredHandlerRef.current(),
       captureActiveEditorViewState: () => {
         const state = openDocumentsStateRef.current;
         const active = activeOpenDocument(state);
@@ -2376,10 +2385,17 @@ export function App(): JSX.Element {
   // — SUSPENDS the coordinator so it stops ordinary continuous persistence.
   useEffect(
     () =>
-      window.pergamum.session.onStorageFailure((reason) => {
-        sessionPersistence.suspendFromStorageFailure(
-          reason as SessionStorageFailureReason
-        );
+      window.pergamum.session.onStorageFailure((payload) => {
+        const reason = (
+          typeof payload === "string"
+            ? payload
+            : (payload as { reason?: string })?.reason
+        ) as SessionStorageFailureReason;
+        const errorDetail =
+          typeof payload === "object" && payload !== null && "errorDetail" in payload
+            ? (payload as { errorDetail: unknown }).errorDetail
+            : undefined;
+        sessionPersistence.suspendFromStorageFailure(reason, errorDetail);
       }),
     [sessionPersistence]
   );
@@ -3344,6 +3360,11 @@ export function App(): JSX.Element {
         },
         createDebugLogCommandTitles(translate)
       );
+      registerSessionDebugCommands(registry, {
+        injectFailure: (reason, count) =>
+          window.pergamum.session.injectFailure(reason, count),
+        clearInjection: () => window.pergamum.session.clearInjection()
+      });
     }
     registerProjectSettingsCommands(
       registry,
@@ -6159,23 +6180,118 @@ export function App(): JSX.Element {
    */
   const sessionPersistenceSuspendedDialogOwedRef = useRef(false);
   const sessionPersistenceSuspendedDialogShownRef = useRef(false);
+  const sessionPersistenceSuspendedReasonRef = useRef<SessionStorageFailureReason | null>(null);
+  const sessionPersistenceSuspendedDetailsRef = useRef<{
+    readonly reason: SessionStorageFailureReason;
+    readonly consecutiveFailures: number;
+    readonly error?: unknown;
+    readonly timestamp: string;
+  } | null>(null);
 
   async function showSessionPersistenceSuspendedDialog(): Promise<void> {
-    await confirmDialog({
-      title: translate("dialog.sessionPersistenceSuspended.title"),
-      message: {
-        kind: "plainText",
-        text: translate("dialog.sessionPersistenceSuspended.message")
-      },
-      icon: {
-        kind: "error",
-        tooltip: translate("dialog.icon.error")
-      },
-      clipboardText: null,
-      dismissOnBackdropClick: false,
-      confirmLabel: translate("common.ok"),
-      cancelLabel: null
+    const details = sessionPersistenceSuspendedDetailsRef.current;
+    const reason = details?.reason ?? sessionPersistenceSuspendedReasonRef.current;
+    const effectiveReason: SessionStorageFailureReason = reason ?? "writeFailed";
+
+    const header = translate("dialog.sessionPersistenceSuspended.header");
+    const footer = translate("dialog.sessionPersistenceSuspended.footer");
+    const reasonKey = `dialog.sessionPersistenceSuspended.reason.${effectiveReason}` as const;
+    const reasonDescription = translate(reasonKey);
+    const text = `${header}\n\n${reasonDescription}\n\n${footer}\n\n[Code: ${effectiveReason}]`;
+
+    let appVersion = "0.80.0";
+    try {
+      const appInfo = await window.pergamum.appInfo.getAppInfo();
+      if (appInfo?.version) {
+        appVersion = appInfo.version;
+      }
+    } catch {
+      // fallback
+    }
+
+    const lockDetails = details?.error
+      ? parseSessionLockFailureDetails(details.error)
+      : null;
+
+    const technicalInfo = formatSessionPersistenceTechnicalInfo({
+      timestamp: details?.timestamp ?? new Date().toISOString(),
+      appVersion,
+      reason: effectiveReason,
+      consecutiveFailures: details?.consecutiveFailures ?? 1,
+      lockDetails
     });
+
+    const showOpenSessionsFolder =
+      effectiveReason === "manifestNotMutable" ||
+      effectiveReason === "permissionDenied";
+
+    try {
+      if (showOpenSessionsFolder) {
+        const result = await choiceDialog({
+          title: translate("dialog.sessionPersistenceSuspended.title"),
+          message: {
+            kind: "plainText",
+            text
+          },
+          icon: {
+            kind: "error",
+            tooltip: translate("dialog.icon.error")
+          },
+          clipboardText: technicalInfo,
+          clipboardTextTitle: translate("dialog.copyTechnicalInfo"),
+          dismissOnBackdropClick: false,
+          choices: [
+            {
+              id: "openSessionsFolder",
+              label: translate("dialog.sessionPersistenceSuspended.openSessionsFolder"),
+              role: "neutral"
+            },
+            {
+              id: "ok",
+              label: translate("common.ok"),
+              role: "primary"
+            }
+          ],
+          primaryChoiceId: "ok"
+        });
+
+        if (result.kind === "chosen" && result.id === "openSessionsFolder") {
+          void window.pergamum.session.openSessionsFolder();
+        }
+      } else {
+        await confirmDialog({
+          title: translate("dialog.sessionPersistenceSuspended.title"),
+          message: {
+            kind: "plainText",
+            text
+          },
+          icon: {
+            kind: "error",
+            tooltip: translate("dialog.icon.error")
+          },
+          clipboardText: technicalInfo,
+          clipboardTextTitle: translate("dialog.copyTechnicalInfo"),
+          dismissOnBackdropClick: false,
+          confirmLabel: translate("common.ok"),
+          cancelLabel: null
+        });
+      }
+    } catch (error) {
+      console.error("[SessionPersistenceSuspendedDialog] Failed to present dialog:", error);
+      logRendererDebugEvent({
+        level: "error",
+        event: "session.persistence.suspended",
+        details: {
+          reason: effectiveReason,
+          consecutiveFailures: details?.consecutiveFailures ?? 1,
+          operation: "session_persistence",
+          result: "failed"
+        }
+      });
+      throw error;
+    } finally {
+      sessionPersistenceSuspendedDialogShownRef.current = false;
+    }
   }
 
   function presentSessionPersistenceSuspendedDialogIfIdle(): void {
@@ -6195,8 +6311,9 @@ export function App(): JSX.Element {
     sessionPersistenceSuspendedDialogOwedRef.current = false;
     sessionPersistenceSuspendedDialogShownRef.current = true;
 
-    void showSessionPersistenceSuspendedDialog().catch(() => {
-      // Could not present after all (a modal opened in the same tick).
+    void showSessionPersistenceSuspendedDialog().catch((error) => {
+      console.error("[SessionPersistenceSuspendedDialog] Error during presentation:", error);
+      // Could not present after all (a modal opened in the same tick or dialog failed).
       // Re-arm and try again when dialogs are next idle.
       sessionPersistenceSuspendedDialogShownRef.current = false;
       sessionPersistenceSuspendedDialogOwedRef.current = true;
@@ -6204,8 +6321,30 @@ export function App(): JSX.Element {
   }
 
   function handleSessionPersistenceSuspended(
-    _reason: SessionStorageFailureReason
+    reason: SessionStorageFailureReason,
+    details?: { consecutiveFailures?: number; error?: unknown }
   ): void {
+    const consecutiveFailures = details?.consecutiveFailures ?? 1;
+    const error = details?.error;
+    const timestamp = new Date().toISOString();
+
+    sessionPersistenceSuspendedDetailsRef.current = {
+      reason,
+      consecutiveFailures,
+      error,
+      timestamp
+    };
+    sessionPersistenceSuspendedReasonRef.current = reason;
+    logRendererDebugEvent({
+      level: "warn",
+      event: "session.persistence.suspended",
+      details: {
+        reason,
+        consecutiveFailures,
+        operation: "session_persistence",
+        result: "suspended"
+      }
+    });
     if (
       sessionPersistenceSuspendedDialogShownRef.current ||
       sessionPersistenceSuspendedDialogOwedRef.current
@@ -6218,6 +6357,12 @@ export function App(): JSX.Element {
   }
   sessionPersistenceSuspendedHandlerRef.current =
     handleSessionPersistenceSuspended;
+  sessionPersistenceRecoveredHandlerRef.current = () => {
+    sessionPersistenceSuspendedDialogShownRef.current = false;
+    sessionPersistenceSuspendedDialogOwedRef.current = false;
+    sessionPersistenceSuspendedReasonRef.current = null;
+    sessionPersistenceSuspendedDetailsRef.current = null;
+  };
   presentSessionPersistenceSuspendedDialogIfIdleRef.current =
     presentSessionPersistenceSuspendedDialogIfIdle;
 
@@ -7779,9 +7924,13 @@ export function App(): JSX.Element {
       setRendererSessionId(sessionId);
       sessionPersistence.adoptSessionId(sessionId);
     },
-    finishColdStart: (sessionWasRestored) => {
+    finishColdStart: (
+      sessionWasRestored: boolean,
+      allEditorsFailed?: boolean
+    ) => {
       sessionPersistence.resolveColdStartRestore({
-        scheduleNow: !sessionWasRestored
+        scheduleNow: !sessionWasRestored,
+        allEditorsFailed
       });
       setColdStartMarkdownFocusArmed(sessionWasRestored);
     },

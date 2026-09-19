@@ -636,6 +636,27 @@ describe("file IPC", () => {
       }
     );
 
+    it("decodes Shift_JIS .txt file via readMarkdownFile fallback (#519)", async () => {
+      const logger = buildLoggerMock();
+      const rawPath = "C:\\Novel\\wagahai.txt";
+      const iconv = await import("iconv-lite");
+      const sjisBuffer = iconv.encode("吾輩は猫である", "shift_jis");
+
+      fsMock.readFile.mockResolvedValue(sjisBuffer);
+
+      const readMarkdown = registeredHandler(
+        FILE_CHANNELS.readMarkdownFile,
+        logger as unknown as DebugLogger
+      );
+
+      const result = (await readMarkdown(
+        { sender: {} },
+        { path: rawPath }
+      )) as { content: string };
+
+      expect(result.content).toBe("吾輩は猫である");
+    });
+
     it("includes documentOpenId on the existing document.open.failed event when the read fails", async () => {
       const logger = buildLoggerMock();
       const rawPath = "C:\\Novel\\catfood.md";

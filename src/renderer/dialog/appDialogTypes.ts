@@ -98,6 +98,7 @@ export interface AppChoiceDialogOptions {
   readonly actionOrderPolicy?: AppChoiceDialogActionOrderPolicy;
   readonly dismissOnBackdropClick?: boolean;
   readonly clipboardText?: string | null;
+  readonly clipboardTextTitle?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +160,7 @@ type AppConfirmDialogBaseOptions = {
   message: AppDialogMessage;
   icon: AppDialogIcon;
   clipboardText: string | null;
+  clipboardTextTitle?: string;
   cancelLabel?: string | null;
   /**
    * Whether clicking the backdrop resolves `"cancel"` (#184 follow-up).

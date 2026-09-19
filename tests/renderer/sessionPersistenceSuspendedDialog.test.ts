@@ -72,8 +72,133 @@ describe("session persistence SUSPENDED Error dialog — displayed once (#272 re
     const body = functionBody("showSessionPersistenceSuspendedDialog");
     expect(body).toMatch(/kind:\s*"error"/);
     expect(body).toContain("dialog.sessionPersistenceSuspended.title");
-    expect(body).toContain("dialog.sessionPersistenceSuspended.message");
     // Not downgraded to a toast / warning.
     expect(body).not.toMatch(/notify|toast|warning/i);
   });
+
+  it("constructs unique message text per failure code and presents openSessionsFolder choice only for manifestNotMutable and permissionDenied", () => {
+    const body = functionBody("showSessionPersistenceSuspendedDialog");
+    expect(body).toContain("dialog.sessionPersistenceSuspended.header");
+    expect(body).toContain("dialog.sessionPersistenceSuspended.footer");
+    expect(body).toContain("dialog.sessionPersistenceSuspended.reason.");
+
+    // Button visibility check
+    expect(body).toContain('effectiveReason === "manifestNotMutable"');
+    expect(body).toContain('effectiveReason === "permissionDenied"');
+    expect(body).toContain("choiceDialog(");
+    expect(body).toContain("openSessionsFolder");
+    expect(body).toContain("confirmDialog(");
+    expect(body).toContain("window.pergamum.session.openSessionsFolder()");
+  });
+
+  it("resets shownRef in finally block when showSessionPersistenceSuspendedDialog completes (confirmDialog or choiceDialog closed)", () => {
+    const body = functionBody("showSessionPersistenceSuspendedDialog");
+    expect(body).toContain("finally {");
+    expect(body).toContain("sessionPersistenceSuspendedDialogShownRef.current = false");
+  });
 });
+
+// ---------------------------------------------------------------------------
+// Actual DOM Rendering & Choice Validation Tests (#519)
+// ---------------------------------------------------------------------------
+
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ChoiceDialog } from "../../src/renderer/dialog/ChoiceDialog";
+import { DialogController } from "../../src/renderer/dialog/dialogController";
+import {
+  validateChoiceDialogOptions,
+  type AppChoiceDialogOptions
+} from "../../src/renderer/dialog/appDialogTypes";
+import { t, type Translate } from "../../src/shared/i18n";
+import type { ClipboardAdapter } from "../../src/renderer/dialog/clipboardAdapter";
+
+const translateJa: Translate = (key, values) => t("ja", key, values);
+const noopClipboardAdapter: ClipboardAdapter = {
+  writeText: () => Promise.resolve()
+};
+
+function buildSessionPersistenceSuspendedChoiceOptions(
+  reason: "manifestNotMutable" | "permissionDenied"
+): AppChoiceDialogOptions {
+  const header = translateJa("dialog.sessionPersistenceSuspended.header");
+  const footer = translateJa("dialog.sessionPersistenceSuspended.footer");
+  const reasonKey = `dialog.sessionPersistenceSuspended.reason.${reason}` as const;
+  const reasonDescription = translateJa(reasonKey);
+  const text = `${header}\n\n${reasonDescription}\n\n${footer}\n\n[Code: ${reason}]`;
+
+  return {
+    title: translateJa("dialog.sessionPersistenceSuspended.title"),
+    message: {
+      kind: "plainText",
+      text
+    },
+    icon: {
+      kind: "error",
+      tooltip: translateJa("dialog.icon.error")
+    },
+    clipboardText: "Technical Info Mock",
+    clipboardTextTitle: translateJa("dialog.copyTechnicalInfo"),
+    dismissOnBackdropClick: false,
+    choices: [
+      {
+        id: "openSessionsFolder",
+        label: translateJa("dialog.sessionPersistenceSuspended.openSessionsFolder"),
+        role: "neutral"
+      },
+      {
+        id: "ok",
+        label: translateJa("common.ok"),
+        role: "primary"
+      }
+    ],
+    primaryChoiceId: "ok"
+  };
+}
+
+describe("session persistence choiceDialog actual rendering & validation (#519)", () => {
+  it("validates choiceDialog options for manifestNotMutable and permissionDenied without throwing invalidChoiceDialogOptions", () => {
+    const manifestOptions = buildSessionPersistenceSuspendedChoiceOptions("manifestNotMutable");
+    const permOptions = buildSessionPersistenceSuspendedChoiceOptions("permissionDenied");
+
+    expect(() => validateChoiceDialogOptions(manifestOptions)).not.toThrow();
+    expect(() => validateChoiceDialogOptions(permOptions)).not.toThrow();
+  });
+
+  it("renders ChoiceDialog component markup correctly for manifestNotMutable suspension", () => {
+    const options = buildSessionPersistenceSuspendedChoiceOptions("manifestNotMutable");
+    const markup = renderToStaticMarkup(
+      React.createElement(ChoiceDialog, {
+        options,
+        platform: "windows",
+        translate: translateJa,
+        clipboardAdapter: noopClipboardAdapter,
+        opener: null,
+        onResult: () => undefined
+      })
+    );
+
+    // Header title
+    expect(markup).toContain("作業情報の自動保存を停止しました");
+    // Action buttons
+    expect(markup).toContain("セッションフォルダを開く");
+    expect(markup).toContain("OK");
+    // Technical info copy button
+    expect(markup).toContain("技術情報をコピー");
+  });
+
+  it("successfully registers and resolves choice request in DialogController for manifestNotMutable options", async () => {
+    const controller = new DialogController();
+    const options = buildSessionPersistenceSuspendedChoiceOptions("manifestNotMutable");
+
+    const choicePromise = controller.choice(options);
+    expect(controller.getPendingRequest()?.kind).toBe("choice");
+
+    controller.resolve({ kind: "chosen", id: "openSessionsFolder" });
+    const result = await choicePromise;
+
+    expect(result).toEqual({ kind: "chosen", id: "openSessionsFolder" });
+    expect(controller.getPendingRequest()).toBeNull();
+  });
+});
+

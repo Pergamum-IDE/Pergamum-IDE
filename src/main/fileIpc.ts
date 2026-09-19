@@ -35,9 +35,12 @@ import {
 } from "./debugLogSanitizer";
 import {
   decodeMarkdownBytes,
+  detectMarkdownLineEnding,
   markdownWriteMetadata,
   sanitizedFileIoError
 } from "./markdownFileIo";
+import { loadSettings } from "./settingsStore";
+import { decodeTextFileBytes, type DecodeTextFileBytesResult } from "./textFileIo";
 import {
   currentActiveProjectFilePath,
   currentProjectRootPath,
@@ -396,7 +399,45 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
         const readStartedAt = Date.now();
         const bytes = await fs.readFile(filePath);
-        const decoded = decodeMarkdownBytes(bytes);
+        let decoded: {
+          content: string;
+          encoding: "utf8";
+          lineEnding: ReturnType<typeof detectMarkdownLineEnding>;
+          byteLength: number;
+          characterLength: number;
+          hadBom: boolean;
+        };
+
+        if (filePath.toLowerCase().endsWith(".txt")) {
+          const settings = await loadSettings();
+          const encoding = settings?.textFiles?.encoding ?? "utf8";
+          let textDecoded: DecodeTextFileBytesResult;
+
+          try {
+            textDecoded = decodeTextFileBytes(bytes, encoding);
+          } catch (err) {
+            if (encoding === "utf8" || encoding === "utf8Bom") {
+              try {
+                textDecoded = decodeTextFileBytes(bytes, "shiftJis");
+              } catch {
+                throw err;
+              }
+            } else {
+              throw err;
+            }
+          }
+
+          decoded = {
+            content: textDecoded.content,
+            encoding: "utf8" as const,
+            lineEnding: detectMarkdownLineEnding(textDecoded.content),
+            byteLength: bytes.byteLength,
+            characterLength: textDecoded.content.length,
+            hadBom: textDecoded.hadBom
+          };
+        } else {
+          decoded = decodeMarkdownBytes(bytes);
+        }
         const readDurationMs = durationSince(readStartedAt);
 
         // Isolates pure file-read + UTF-8 decode cost (#152), excluding the
@@ -474,7 +515,45 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         filePath = parseReadMarkdownFileRequest(rawRequest).path;
 
         const bytes = await fs.readFile(filePath);
-        const decoded = decodeMarkdownBytes(bytes);
+        let decoded: {
+          content: string;
+          encoding: "utf8";
+          lineEnding: ReturnType<typeof detectMarkdownLineEnding>;
+          byteLength: number;
+          characterLength: number;
+          hadBom: boolean;
+        };
+
+        if (filePath.toLowerCase().endsWith(".txt")) {
+          const settings = await loadSettings();
+          const encoding = settings?.textFiles?.encoding ?? "utf8";
+          let textDecoded: DecodeTextFileBytesResult;
+
+          try {
+            textDecoded = decodeTextFileBytes(bytes, encoding);
+          } catch (err) {
+            if (encoding === "utf8" || encoding === "utf8Bom") {
+              try {
+                textDecoded = decodeTextFileBytes(bytes, "shiftJis");
+              } catch {
+                throw err;
+              }
+            } else {
+              throw err;
+            }
+          }
+
+          decoded = {
+            content: textDecoded.content,
+            encoding: "utf8" as const,
+            lineEnding: detectMarkdownLineEnding(textDecoded.content),
+            byteLength: bytes.byteLength,
+            characterLength: textDecoded.content.length,
+            hadBom: textDecoded.hadBom
+          };
+        } else {
+          decoded = decodeMarkdownBytes(bytes);
+        }
 
         logger.log({
           level: "debug",

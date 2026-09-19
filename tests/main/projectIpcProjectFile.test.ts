@@ -3474,6 +3474,41 @@ describe("project file IPC foundation", () => {
     });
   }
 
+  it("#519: readProjectDocument falls back to Shift_JIS for .txt when UTF-8 decode fails", async () => {
+    await writeTextFilesSettings(userDataPath, { encoding: "utf8" });
+    const projectFilePath = path.join(
+      projectRootPath,
+      "Encoding Restore Fallback.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Encoding Restore Fallback"
+    });
+    await created.close();
+    const content = "吾輩は猫である。\n名前はまだ無い。";
+    const { bytes } = encodeTextFileContent(content, "shiftJis");
+    await fs.writeFile(path.join(projectRootPath, "notes.txt"), bytes);
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const readHandler = registeredHandler(PROJECT_CHANNELS.readProjectDocument);
+    const result = (await readHandler(
+      { sender: {} },
+      { relativePath: "notes.txt" }
+    )) as {
+      content: string;
+      metadata: { encoding: string; hadBom: boolean };
+    };
+
+    expect(result.content).toBe(content);
+    expect(result.metadata.encoding).toBe("utf8");
+    expect(result.metadata.hadBom).toBe(false);
+  });
+
   for (const encoding of TEXT_FILE_ENCODINGS) {
     it(`#501 slice 6: saveProjectDocument writes a .txt file encoded as ${encoding}`, async () => {
       await writeTextFilesSettings(userDataPath, { encoding });
