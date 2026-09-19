@@ -8200,11 +8200,11 @@ label.settingsItemHeader {
   min-width: 0;
 }
 
-/* #523 Slice 1: confirmation shell only. The list is read-only for now; the
-   handle cell is a visual placeholder until reorder is implemented later. */
+/* #523 Slice 2: confirmation shell with read-only row details. The gripper is
+   still visual only; reorder belongs to a later slice. */
 .appInfoDialog.exportConfirmationDialog {
-  width: min(760px, calc(100vw - 32px));
-  max-width: 760px;
+  width: min(980px, calc(100vw - 32px));
+  max-width: 980px;
 }
 
 .exportConfirmationDialog .appInfoDialogBody {
@@ -8258,6 +8258,7 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogTable {
   width: 100%;
+  min-width: 860px;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 0.86rem;
@@ -8284,19 +8285,38 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogTable th:first-child,
 .exportConfirmationDialogTable td:first-child {
-  width: 40px;
+  width: 34px;
   padding-inline: 0;
   text-align: center;
 }
 
 .exportConfirmationDialogTable th:nth-child(2),
 .exportConfirmationDialogTable td:nth-child(2) {
-  width: 32%;
+  width: 38px;
+  padding-inline: 4px;
+  text-align: center;
+}
+
+.exportConfirmationDialogTable th:nth-child(3),
+.exportConfirmationDialogTable td:nth-child(3) {
+  width: 18%;
 }
 
 .exportConfirmationDialogTable th:nth-child(4),
 .exportConfirmationDialogTable td:nth-child(4) {
-  width: 96px;
+  width: 20%;
+}
+
+.exportConfirmationDialogTable th:nth-child(7),
+.exportConfirmationDialogTable td:nth-child(7) {
+  width: 88px;
+  text-align: end;
+}
+
+.exportConfirmationDialogTable th:nth-child(8),
+.exportConfirmationDialogTable td:nth-child(8) {
+  width: 76px;
+  text-align: center;
 }
 
 .exportConfirmationDialogTable tbody tr:last-child td {
@@ -8305,12 +8325,32 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogHandle {
   color: var(--workspace-sidebar-muted-foreground);
-  font-size: 1rem;
   line-height: 1;
 }
 
+.exportConfirmationDialogHandleIcon,
+.exportConfirmationDialogKindIcon {
+  inline-size: 16px;
+  block-size: 16px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.exportConfirmationDialogHandleIcon {
+  opacity: 0.75;
+}
+
+.exportConfirmationDialogKindIcon {
+  opacity: 0.92;
+}
+
+.exportConfirmationDialogKindIconCell {
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
 .exportConfirmationDialogParentPath,
-.exportConfirmationDialogFileName {
+.exportConfirmationDialogFileName,
+.exportConfirmationDialogPreview {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -8318,8 +8358,68 @@ label.settingsItemHeader {
 }
 
 .exportConfirmationDialogParentPath,
-.exportConfirmationDialogKind {
+.exportConfirmationDialogCharacterCount {
   color: var(--workspace-sidebar-muted-foreground);
+}
+
+.exportConfirmationDialogIncludeSwitch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 40px;
+  block-size: 22px;
+  cursor: pointer;
+}
+
+.exportConfirmationDialogIncludeInput {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.exportConfirmationDialogIncludeTrack {
+  position: relative;
+  display: inline-block;
+  inline-size: 36px;
+  block-size: 20px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 999px;
+  background: var(--workspace-sidebar-divider);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.exportConfirmationDialogIncludeThumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 32, 0.28);
+  transition: inset-inline-start 120ms ease;
+}
+
+.exportConfirmationDialogIncludeInput:checked
+  + .exportConfirmationDialogIncludeTrack {
+  border-color: var(--app-dialog-confirm-background);
+  background: var(--app-dialog-confirm-background);
+}
+
+.exportConfirmationDialogIncludeInput:checked
+  + .exportConfirmationDialogIncludeTrack
+  .exportConfirmationDialogIncludeThumb {
+  inset-inline-start: 18px;
+}
+
+.exportConfirmationDialogIncludeInput:focus-visible
+  + .exportConfirmationDialogIncludeTrack {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
 }
 
 /* #386 Replace Preview Dialog — reused for both replace scopes. Preview only:

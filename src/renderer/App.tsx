@@ -10419,7 +10419,10 @@ export function App(): JSX.Element {
         origin,
         {
           listFileExplorerChildren:
-            window.pergamum.projects.listFileExplorerChildren
+            window.pergamum.projects.listFileExplorerChildren,
+          readProjectDocumentContent: async (relativePath) =>
+            (await window.pergamum.projects.readProjectDocument(relativePath))
+              .content
         },
         {
           enablePlainTextDocuments:

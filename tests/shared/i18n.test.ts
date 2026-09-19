@@ -591,6 +591,18 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("en", "export.confirmation.candidateCount", { count: 3 })).toBe(
       "3 files"
     );
+    expect(t("ja", "export.confirmation.includedLabel")).toBe("採用:");
+    expect(t("en", "export.confirmation.includedLabel")).toBe("Included:");
+    expect(
+      t("ja", "export.confirmation.totalCharacterCount", { count: "1,234" })
+    ).toBe("1,234字");
+    expect(
+      t("en", "export.confirmation.totalCharacterCount", { count: "1,234" })
+    ).toBe("1,234 chars");
+    expect(t("ja", "export.confirmation.previewStartHeader")).toBe("出だし");
+    expect(t("ja", "export.confirmation.previewEndHeader")).toBe("終わり");
+    expect(t("ja", "export.confirmation.characterCountHeader")).toBe("文字数");
+    expect(t("ja", "export.confirmation.includeHeader")).toBe("採用");
     expect(t("ja", "export.confirmation.empty")).toBe(
       "エクスポート可能な文書がありません。"
     );

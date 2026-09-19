@@ -5,8 +5,11 @@ import type {
 } from "../../src/shared/api";
 import {
   collectExportCandidatesFromOrigin,
+  createExportCandidateTextDetails,
+  createExportPreviewText,
   exportDocumentKindForPath,
   isExportableDocumentForExport,
+  summarizeExportCandidates,
   type CollectExportCandidatesDeps
 } from "../../src/renderer/exportCandidates";
 
@@ -36,9 +39,11 @@ function ok(
 }
 
 function depsFor(
-  entriesByDirectory: Record<string, readonly FileExplorerEntry[]>
+  entriesByDirectory: Record<string, readonly FileExplorerEntry[]>,
+  textByRelativePath: Record<string, string> = {}
 ): CollectExportCandidatesDeps & {
   readonly listFileExplorerChildren: ReturnType<typeof vi.fn>;
+  readonly readProjectDocumentContent: ReturnType<typeof vi.fn>;
 } {
   return {
     listFileExplorerChildren: vi.fn(
@@ -49,11 +54,15 @@ function depsFor(
           directoryRelativePath,
           entriesByDirectory[directoryRelativePath ?? ""] ?? []
         )
+    ),
+    readProjectDocumentContent: vi.fn(
+      async (relativePath: string): Promise<string> =>
+        textByRelativePath[relativePath] ?? ""
     )
   };
 }
 
-describe("export candidate collection (#523 Slice 1)", () => {
+describe("export candidate collection (#523)", () => {
   it("collects project-root candidates in File Explorer visible depth-first order", async () => {
     const deps = depsFor({
       "": [
@@ -73,6 +82,12 @@ describe("export candidate collection (#523 Slice 1)", () => {
         file("First/Nested/image.jpg"),
         file("First/Nested/raw.csv")
       ]
+    }, {
+      "First/01_Encounter.md": "吾輩は猫である。名前はまだない。",
+      "First/Nested/03_Memo.txt": "plain text memo",
+      "First/02_Escape.markdown": "逃げる。",
+      "root.md": "root body",
+      "notes.txt": "notes body"
     });
 
     const candidates = await collectExportCandidatesFromOrigin(
@@ -87,41 +102,68 @@ describe("export candidate collection (#523 Slice 1)", () => {
         filePath: "First/01_Encounter.md",
         parentPath: "First",
         fileName: "01_Encounter.md",
-        kind: "markdown"
+        kind: "markdown",
+        previewStart: "吾輩は猫である。名前",
+        previewEnd: "る。名前はまだない。",
+        characterCount: 16,
+        included: true
       },
       {
         documentKey: "First/Nested/03_Memo.txt",
         filePath: "First/Nested/03_Memo.txt",
         parentPath: "First/Nested",
         fileName: "03_Memo.txt",
-        kind: "text"
+        kind: "text",
+        previewStart: "plain text",
+        previewEnd: " text memo",
+        characterCount: 15,
+        included: true
       },
       {
         documentKey: "First/02_Escape.markdown",
         filePath: "First/02_Escape.markdown",
         parentPath: "First",
         fileName: "02_Escape.markdown",
-        kind: "markdown"
+        kind: "markdown",
+        previewStart: "逃げる。",
+        previewEnd: "逃げる。",
+        characterCount: 4,
+        included: true
       },
       {
         documentKey: "root.md",
         filePath: "root.md",
         parentPath: "",
         fileName: "root.md",
-        kind: "markdown"
+        kind: "markdown",
+        previewStart: "root body",
+        previewEnd: "root body",
+        characterCount: 9,
+        included: true
       },
       {
         documentKey: "notes.txt",
         filePath: "notes.txt",
         parentPath: "",
         fileName: "notes.txt",
-        kind: "text"
+        kind: "text",
+        previewStart: "notes body",
+        previewEnd: "notes body",
+        characterCount: 10,
+        included: true
       }
     ]);
     expect(deps.listFileExplorerChildren.mock.calls).toEqual([
       [null],
       ["First"],
       ["First/Nested"]
+    ]);
+    expect(deps.readProjectDocumentContent.mock.calls).toEqual([
+      ["First/01_Encounter.md"],
+      ["First/Nested/03_Memo.txt"],
+      ["First/02_Escape.markdown"],
+      ["root.md"],
+      ["notes.txt"]
     ]);
   });
 
@@ -130,6 +172,9 @@ describe("export candidate collection (#523 Slice 1)", () => {
       "": [file("root.md")],
       First: [folder("First/Nested"), file("First/01.md")],
       "First/Nested": [file("First/Nested/02.markdown")]
+    }, {
+      "First/01.md": "one",
+      "First/Nested/02.markdown": "two"
     });
 
     const candidates = await collectExportCandidatesFromOrigin(
@@ -149,7 +194,12 @@ describe("export candidate collection (#523 Slice 1)", () => {
   });
 
   it("returns one item for an exportable file origin", async () => {
-    const deps = depsFor({});
+    const deps = depsFor(
+      {},
+      {
+        "Drafts/scene.markdown": "Scene body"
+      }
+    );
 
     await expect(
       collectExportCandidatesFromOrigin(
@@ -163,10 +213,17 @@ describe("export candidate collection (#523 Slice 1)", () => {
         filePath: "Drafts/scene.markdown",
         parentPath: "Drafts",
         fileName: "scene.markdown",
-        kind: "markdown"
+        kind: "markdown",
+        previewStart: "Scene body",
+        previewEnd: "Scene body",
+        characterCount: 10,
+        included: true
       }
     ]);
     expect(deps.listFileExplorerChildren).not.toHaveBeenCalled();
+    expect(deps.readProjectDocumentContent).toHaveBeenCalledWith(
+      "Drafts/scene.markdown"
+    );
   });
 
   it("returns an empty list for a non-exportable file origin", async () => {
@@ -180,6 +237,7 @@ describe("export candidate collection (#523 Slice 1)", () => {
       )
     ).resolves.toEqual([]);
     expect(deps.listFileExplorerChildren).not.toHaveBeenCalled();
+    expect(deps.readProjectDocumentContent).not.toHaveBeenCalled();
   });
 
   it("includes .txt only when plain text documents are enabled", () => {
@@ -208,5 +266,60 @@ describe("export candidate collection (#523 Slice 1)", () => {
         enablePlainTextDocuments: true
       })
     ).toBe(false);
+  });
+
+  it("creates one-line previews, character count, and included default from document text", () => {
+    expect(createExportPreviewText("  alpha\nbeta\r\ngamma  ", "start")).toBe(
+      "alpha beta"
+    );
+    expect(createExportPreviewText("  alpha\nbeta\r\ngamma  ", "end")).toBe(
+      "beta gamma"
+    );
+    expect(createExportCandidateTextDetails("😀\nabc")).toEqual({
+      previewStart: "😀 abc",
+      previewEnd: "😀 abc",
+      characterCount: 5,
+      included: true
+    });
+  });
+
+  it("uses safe preview placeholders for empty documents", () => {
+    expect(createExportCandidateTextDetails(" \n\t ")).toEqual({
+      previewStart: "—",
+      previewEnd: "—",
+      characterCount: 4,
+      included: true
+    });
+  });
+
+  it("summarizes candidate count and included character totals", () => {
+    const first = {
+      documentKey: "a.md",
+      filePath: "a.md",
+      parentPath: "",
+      fileName: "a.md",
+      kind: "markdown" as const,
+      previewStart: "a",
+      previewEnd: "a",
+      characterCount: 10,
+      included: true
+    };
+    const second = {
+      documentKey: "b.md",
+      filePath: "b.md",
+      parentPath: "",
+      fileName: "b.md",
+      kind: "markdown" as const,
+      previewStart: "b",
+      previewEnd: "b",
+      characterCount: 20,
+      included: false
+    };
+
+    expect(summarizeExportCandidates([first, second])).toEqual({
+      candidateCount: 2,
+      includedCount: 1,
+      includedCharacterCount: 10
+    });
   });
 });

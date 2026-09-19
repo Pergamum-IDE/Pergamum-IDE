@@ -17,6 +17,10 @@ export interface ExportCandidateListItem {
   readonly parentPath: string;
   readonly fileName: string;
   readonly kind: ExportDocumentKind;
+  readonly previewStart: string;
+  readonly previewEnd: string;
+  readonly characterCount: number;
+  readonly included: boolean;
 }
 
 export interface CollectExportCandidatesOptions {
@@ -27,7 +31,19 @@ export interface CollectExportCandidatesDeps {
   readonly listFileExplorerChildren: (
     directoryRelativePath: string | null
   ) => Promise<ListFileExplorerChildrenResult>;
+  readonly readProjectDocumentContent: (
+    relativePath: string
+  ) => Promise<string>;
 }
+
+export interface ExportCandidateSummary {
+  readonly candidateCount: number;
+  readonly includedCount: number;
+  readonly includedCharacterCount: number;
+}
+
+export const EXPORT_PREVIEW_LENGTH = 10;
+export const EXPORT_PREVIEW_EMPTY_PLACEHOLDER = "—";
 
 function normalizeProjectRelativePath(relativePath: string): string {
   return relativePath.replace(/\\/g, "/");
@@ -45,6 +61,41 @@ function fileNameFor(relativePath: string): string {
   const slashIndex = normalized.lastIndexOf("/");
 
   return slashIndex === -1 ? normalized : normalized.slice(slashIndex + 1);
+}
+
+export function normalizeExportPreviewText(text: string): string {
+  return text.replace(/\s+/gu, " ").trim();
+}
+
+export function createExportPreviewText(
+  text: string,
+  edge: "start" | "end",
+  length = EXPORT_PREVIEW_LENGTH
+): string {
+  const normalized = normalizeExportPreviewText(text);
+  if (normalized.length === 0) {
+    return EXPORT_PREVIEW_EMPTY_PLACEHOLDER;
+  }
+
+  const characters = Array.from(normalized);
+  const previewCharacters =
+    edge === "start"
+      ? characters.slice(0, length)
+      : characters.slice(Math.max(0, characters.length - length));
+
+  return previewCharacters.join("");
+}
+
+export function createExportCandidateTextDetails(text: string): Pick<
+  ExportCandidateListItem,
+  "previewStart" | "previewEnd" | "characterCount" | "included"
+> {
+  return {
+    previewStart: createExportPreviewText(text, "start"),
+    previewEnd: createExportPreviewText(text, "end"),
+    characterCount: Array.from(text).length,
+    included: true
+  };
 }
 
 export function exportDocumentKindForPath(
@@ -74,10 +125,11 @@ export function isExportableDocumentForExport(
   return exportDocumentKindForPath(relativePath, options) !== null;
 }
 
-function candidateFromRelativePath(
+async function candidateFromRelativePath(
   relativePath: string,
+  deps: CollectExportCandidatesDeps,
   options: CollectExportCandidatesOptions
-): ExportCandidateListItem | null {
+): Promise<ExportCandidateListItem | null> {
   const filePath = normalizeProjectRelativePath(relativePath);
   const kind = exportDocumentKindForPath(filePath, options);
 
@@ -85,12 +137,15 @@ function candidateFromRelativePath(
     return null;
   }
 
+  const text = await deps.readProjectDocumentContent(filePath);
+
   return {
     documentKey: filePath,
     filePath,
     parentPath: parentPathFor(filePath),
     fileName: fileNameFor(filePath),
-    kind
+    kind,
+    ...createExportCandidateTextDetails(text)
   };
 }
 
@@ -116,7 +171,11 @@ export async function flattenExportCandidatesInExplorerOrder(
       continue;
     }
 
-    const candidate = candidateFromRelativePath(entry.relativePath, options);
+    const candidate = await candidateFromRelativePath(
+      entry.relativePath,
+      deps,
+      options
+    );
     if (candidate !== null) {
       candidates.push(candidate);
     }
@@ -131,7 +190,11 @@ export async function collectExportCandidatesFromOrigin(
   options: CollectExportCandidatesOptions
 ): Promise<ExportCandidateListItem[]> {
   if (origin.kind === "file") {
-    const candidate = candidateFromRelativePath(origin.filePath, options);
+    const candidate = await candidateFromRelativePath(
+      origin.filePath,
+      deps,
+      options
+    );
     return candidate === null ? [] : [candidate];
   }
 
@@ -144,4 +207,23 @@ export async function collectExportCandidatesFromOrigin(
   }
 
   return flattenExportCandidatesInExplorerOrder(result.entries, deps, options);
+}
+
+export function summarizeExportCandidates(
+  candidates: readonly ExportCandidateListItem[]
+): ExportCandidateSummary {
+  return candidates.reduce<ExportCandidateSummary>(
+    (summary, candidate) => ({
+      candidateCount: summary.candidateCount + 1,
+      includedCount: summary.includedCount + (candidate.included ? 1 : 0),
+      includedCharacterCount:
+        summary.includedCharacterCount +
+        (candidate.included ? candidate.characterCount : 0)
+    }),
+    {
+      candidateCount: 0,
+      includedCount: 0,
+      includedCharacterCount: 0
+    }
+  );
 }
