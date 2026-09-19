@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatSessionPersistenceTechnicalInfo,
   isSessionStorageFailure,
+  parseSessionLockFailureDetails,
   SESSION_STORAGE_FAILURE_CODE,
   SessionStorageFailureError,
   sessionStorageFailureReason,
@@ -96,5 +98,66 @@ describe("session persistence storage-failure taxonomy (#272 PO decision)", () =
 
     const already = new SessionStorageFailureError("lockUnavailable");
     expect(toSessionStorageFailureError(already)).toBe(already);
+  });
+
+  it("parses lock failure details from IPC error message while excluding hostname and file path", () => {
+    const errorWithDetails = new Error(
+      `PERGAMUM_SESSION_STORAGE_FAILURE:lockUnavailable: Could not acquire lock (${JSON.stringify({
+        lockDirPath: "C:\\secret\\sessions\\manifest.lock",
+        dirMtimeMs: 1726710900000,
+        markerCount: 1,
+        markers: [
+          {
+            token: "secret-token",
+            pid: 22600,
+            hostname: "secret-pc",
+            acquiredAt: 1726710900000
+          }
+        ]
+      })})`
+    );
+
+    const parsed = parseSessionLockFailureDetails(errorWithDetails);
+    expect(parsed).toEqual({
+      dirMtimeMs: 1726710900000,
+      markerCount: 1,
+      markers: [
+        {
+          pid: 22600,
+          acquiredAt: 1726710900000
+        }
+      ]
+    });
+  });
+
+  it("formats comprehensive technical info for clipboard without exposing hostname or file paths", () => {
+    const formatted = formatSessionPersistenceTechnicalInfo({
+      timestamp: "2026-09-19T10:12:26.123Z",
+      appVersion: "0.80.0",
+      reason: "lockUnavailable",
+      consecutiveFailures: 3,
+      lockDetails: {
+        dirMtimeMs: 1726710900000,
+        markerCount: 1,
+        markers: [
+          {
+            pid: 22600,
+            acquiredAt: 1726710900000
+          }
+        ]
+      }
+    });
+
+    expect(formatted).toContain("Pergamum Session Persistence Failure");
+    expect(formatted).toContain("Timestamp: 2026-09-19T10:12:26.123Z");
+    expect(formatted).toContain("App Version: 0.80.0");
+    expect(formatted).toContain("Reason: lockUnavailable");
+    expect(formatted).toContain("Consecutive Failures: 3");
+    expect(formatted).toContain("Lock Dir mtime: 2024-09-19T01:55:00.000Z (1726710900000)");
+    expect(formatted).toContain("Marker Count: 1");
+    expect(formatted).toContain("Marker #1: pid=22600, acquiredAt=2024-09-19T01:55:00.000Z (1726710900000)");
+    expect(formatted).not.toContain("secret");
+    expect(formatted).not.toContain("hostname");
+    expect(formatted).not.toContain("path");
   });
 });

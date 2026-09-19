@@ -290,14 +290,16 @@ describe("ConfirmDialog clipboard copy button (#182 D-9)", () => {
     expect(markup).toContain('title="エラー詳細をコピー"');
   });
 
-  it("the copy button's accessible label and tooltip use dialog.copyErrorDetails (en)", () => {
+  it("the copy button's accessible label and tooltip use clipboardTextTitle when provided", () => {
     const markup = renderDialog({
-      options: baseOptions({ clipboardText: "error: boom" }),
-      translate: translateEn
+      options: baseOptions({
+        clipboardText: "tech info",
+        clipboardTextTitle: "技術情報をコピー"
+      })
     });
 
-    expect(markup).toContain('aria-label="Copy details"');
-    expect(markup).toContain('title="Copy details"');
+    expect(markup).toContain('aria-label="技術情報をコピー"');
+    expect(markup).toContain('title="技術情報をコピー"');
   });
 
   it("the copy button appears before the confirm/cancel action group in DOM order", () => {

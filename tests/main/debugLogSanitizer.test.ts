@@ -99,6 +99,25 @@ describe("debug log details sanitizer", () => {
     });
   });
 
+  it("accepts session persistence diagnostic details without dropping or converting to unknown", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        reason: "manifestNotMutable",
+        consecutiveFailures: 2,
+        operation: "session_persistence",
+        result: "suspended"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      reason: "manifestNotMutable",
+      consecutiveFailures: 2,
+      operation: "session_persistence",
+      result: "suspended"
+    });
+  });
+
   it("accepts only safe IME diagnostic booleans", () => {
     const details = sanitizeDebugLogDetails(
       {

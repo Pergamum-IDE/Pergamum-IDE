@@ -125,6 +125,9 @@ export const debugLogEventNames = [
   "preview.scrollSync.leader.changed",
   "preview.scrollSync.scrollEvent.classified",
   "preview.scrollSync.previewToEditor.sampled",
+  "session.manifestLock.reclaimed",
+  "session.persistence.suspended",
+  "debug.session.failureInjected",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -162,6 +165,7 @@ export const debugLogOperations = [
   "navigate",
   "initialize",
   "command",
+  "session_persistence",
   "unknown"
 ] as const;
 
@@ -196,6 +200,7 @@ export const debugLogResults = [
   "failed",
   "cancelled",
   "ignored",
+  "suspended",
   "unknown"
 ] as const;
 
@@ -266,6 +271,16 @@ export const debugLogReasons = [
   "programmatic_scroll_write",
   "stale_generation",
   "one_way_sync_disabled",
+  "manifestNotMutable",
+  "diskFull",
+  "lockUnavailableStreak",
+  "slowIoStreak",
+  "lockUnavailable",
+  "slowIo",
+  "corruptSessionData",
+  "quotaExceeded",
+  "sessionStorageDisabled",
+  "writeFailed",
   "unknown"
 ] as const;
 
@@ -814,6 +829,8 @@ export interface DebugLogDetails {
   editorTopSourceLineAfter?: number | null;
   /** `null` means the write was NOT skipped. */
   previewToEditorSkippedReason?: DebugLogPreviewToEditorSkippedReason | null;
+
+  consecutiveFailures?: number;
 
   error?: SanitizedErrorInfo;
 }

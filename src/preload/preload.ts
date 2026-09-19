@@ -227,7 +227,13 @@ const pergamumApi: PergamumApi = {
       return () => {
         ipcRenderer.off(SESSION_CHANNELS.storageFailure, listener);
       };
-    }
+    },
+    injectFailure: (reason, count) =>
+      ipcRenderer.invoke(SESSION_CHANNELS.injectFailure, { reason, count }),
+    clearInjection: () =>
+      ipcRenderer.invoke(SESSION_CHANNELS.clearInjection),
+    openSessionsFolder: () =>
+      ipcRenderer.invoke(SESSION_CHANNELS.openSessionsFolder)
   },
   recovery: {
     getStoreStatus: () =>

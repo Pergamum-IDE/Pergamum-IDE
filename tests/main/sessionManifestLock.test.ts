@@ -121,7 +121,7 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
     await expect(fs.access(lockDir)).rejects.toThrow();
   });
 
-  // --- The lock is NEVER inspected, judged, or force-broken -------------
+  // --- Fresh locks are preserved and not force-broken -------------
 
   it("held lock → bounded wait → FAIL; owner's lock left completely untouched", async () => {
     await plantMarker({
@@ -139,7 +139,7 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
     expect((await markerFiles()).length).toBe(1);
   });
 
-  it("marker-less lock dir → FAIL; dir never force-deleted", async () => {
+  it("fresh marker-less lock dir → FAIL; dir preserved when not stale", async () => {
     await fs.mkdir(lockDir, { recursive: true });
 
     await expect(
@@ -149,7 +149,7 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
     await expect(fs.stat(lockDir)).resolves.toBeDefined();
   });
 
-  it("broken / unreadable marker → FAIL; marker untouched", async () => {
+  it("fresh broken / unreadable marker → FAIL; marker untouched when not stale", async () => {
     await fs.mkdir(lockDir, { recursive: true });
     await fs.writeFile(
       path.join(lockDir, "owner.bbbbbbbb-0000-7000-8000-000000000000.json"),
@@ -170,22 +170,153 @@ describe("createFsSessionManifestLock — degradation over takeover (#272 PO dec
     ).toBe("not json at all");
   });
 
-  it("old-looking marker (any age) → FAIL; never treated as reclaimable residue", async () => {
+  it("reclaims a stale lock with an old acquiredAt timestamp and acquires successfully", async () => {
+    const debugEvents: Array<{ event: string; details: Record<string, unknown> }> = [];
+    const nowMs = 1_000_000_000;
+    const staleAcquiredAt = nowMs - 40_000; // 40 seconds ago > 30s default staleAfterMs
+
     await plantMarker({
       token: "aaaaaaaa-0000-7000-8000-000000000000",
       pid: 999_999,
-      hostname: "some-machine-that-crashed-long-ago"
+      hostname: "some-machine-that-crashed-long-ago",
+      acquiredAt: staleAcquiredAt
     });
-    // Backdate the whole lock dir far into the past.
-    const longAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    await fs.utimes(lockDir, longAgo, longAgo);
 
+    const result = await lock({
+      now: () => nowMs,
+      staleAfterMs: 30_000,
+      acquireTimeoutMs: 100,
+      retryDelayMs: 5,
+      logDebug: (event, details) => debugEvents.push({ event, details })
+    }).run(async () => "reclaimed");
+
+    expect(result).toBe("reclaimed");
+    expect(debugEvents).toHaveLength(1);
+    expect(debugEvents[0].event).toBe("session.manifestLock.reclaimed");
+  });
+
+  it("does NOT reclaim a lock with a recent acquiredAt timestamp", async () => {
+    const startMs = 1_000_000_000;
+    const recentAcquiredAt = startMs - 5_000; // 5 seconds ago < 30s staleAfterMs
+
+    await plantMarker({
+      token: "aaaaaaaa-0000-7000-8000-000000000000",
+      pid: 4242,
+      hostname: "live-host",
+      acquiredAt: recentAcquiredAt
+    });
+
+    let currentNow = startMs;
     await expect(
-      lock({ acquireTimeoutMs: 50, retryDelayMs: 5 }).run(async () => undefined)
+      lock({
+        now: () => {
+          currentNow += 10;
+          return currentNow;
+        },
+        staleAfterMs: 30_000,
+        acquireTimeoutMs: 50,
+        retryDelayMs: 5
+      }).run(async () => undefined)
     ).rejects.toBeInstanceOf(SessionManifestLockUnavailableError);
 
     expect((await markerFiles()).length).toBe(1);
-    await expect(fs.stat(lockDir)).resolves.toBeDefined();
+  });
+
+  it("reclaims a legacy marker (no acquiredAt) when lock dir mtime is older than staleAfterMs", async () => {
+    const nowMs = 1_000_000_000;
+    await plantMarker({
+      token: "aaaaaaaa-0000-7000-8000-000000000000",
+      pid: 1234,
+      hostname: "crashed-host"
+    });
+
+    // Set lockDir mtime to 60s ago
+    const longAgo = new Date(nowMs - 60_000);
+    await fs.utimes(lockDir, longAgo, longAgo);
+
+    const result = await lock({
+      now: () => nowMs,
+      staleAfterMs: 30_000,
+      acquireTimeoutMs: 100,
+      retryDelayMs: 5
+    }).run(async () => "legacy-reclaimed");
+
+    expect(result).toBe("legacy-reclaimed");
+  });
+
+  it("does NOT reclaim a legacy marker when lock dir mtime is recent", async () => {
+    const startMs = Date.now();
+    await plantMarker({
+      token: "aaaaaaaa-0000-7000-8000-000000000000",
+      pid: 1234,
+      hostname: "live-host"
+    });
+
+    let currentNow = startMs;
+    await expect(
+      lock({
+        now: () => {
+          currentNow += 10;
+          return currentNow;
+        },
+        staleAfterMs: 30_000,
+        acquireTimeoutMs: 50,
+        retryDelayMs: 5
+      }).run(async () => undefined)
+    ).rejects.toBeInstanceOf(SessionManifestLockUnavailableError);
+  });
+
+  it("reclaims an unreadable marker file when lock dir mtime is older than staleAfterMs", async () => {
+    const nowMs = 1_000_000_000;
+    await fs.mkdir(lockDir, { recursive: true });
+    await fs.writeFile(
+      path.join(lockDir, "owner.bbbbbbbb-0000-7000-8000-000000000000.json"),
+      "broken json",
+      "utf8"
+    );
+
+    const longAgo = new Date(nowMs - 60_000);
+    await fs.utimes(lockDir, longAgo, longAgo);
+
+    const result = await lock({
+      now: () => nowMs,
+      staleAfterMs: 30_000,
+      acquireTimeoutMs: 100,
+      retryDelayMs: 5
+    }).run(async () => "broken-reclaimed");
+
+    expect(result).toBe("broken-reclaimed");
+  });
+
+  it("does NOT reclaim if multiple markers are present and at least one is recent", async () => {
+    const startMs = 1_000_000_000;
+    await fs.mkdir(lockDir, { recursive: true });
+
+    // Old marker
+    await fs.writeFile(
+      path.join(lockDir, "owner.aaaaaaaa-0000-7000-8000-000000000000.json"),
+      JSON.stringify({ token: "aaaaaaaa-0000-7000-8000-000000000000", acquiredAt: startMs - 100_000 }),
+      "utf8"
+    );
+    // Recent marker
+    await fs.writeFile(
+      path.join(lockDir, "owner.bbbbbbbb-0000-7000-8000-000000000000.json"),
+      JSON.stringify({ token: "bbbbbbbb-0000-7000-8000-000000000000", acquiredAt: startMs - 5_000 }),
+      "utf8"
+    );
+
+    let currentNow = startMs;
+    await expect(
+      lock({
+        now: () => {
+          currentNow += 10;
+          return currentNow;
+        },
+        staleAfterMs: 30_000,
+        acquireTimeoutMs: 50,
+        retryDelayMs: 5
+      }).run(async () => undefined)
+    ).rejects.toBeInstanceOf(SessionManifestLockUnavailableError);
   });
 
   it("a fresh, actively held lock → contender times out (does not steal it)", async () => {

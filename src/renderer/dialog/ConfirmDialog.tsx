@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent
 } from "react";
@@ -21,7 +22,11 @@ import {
   performClipboardCopy,
   type ClipboardAdapter
 } from "./clipboardAdapter";
-import { dialogCopyButtonIconSvg, dialogIconSvgByKind } from "./dialogIcons";
+import {
+  dialogCopiedButtonIconSvg,
+  dialogCopyButtonIconSvg,
+  dialogIconSvgByKind
+} from "./dialogIcons";
 import { DialogMessage } from "./DialogMessage";
 
 export interface ConfirmDialogProps {
@@ -67,6 +72,9 @@ function focusableElementsIn(container: HTMLElement): HTMLElement[] {
  * conflict with the D-7 prohibition (which is specifically about dialog
  * message content).
  */
+type TechnicalInfoCopyState = "idle" | "copied" | "failed";
+const TECHNICAL_INFO_COPY_FEEDBACK_MS = 5000;
+
 export function ConfirmDialog({
   options,
   actionOrder,
@@ -78,8 +86,16 @@ export function ConfirmDialog({
   const tone = confirmDialogTone(options);
   const isDestructive = tone === "destructive";
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const [copyFailed, setCopyFailed] = useState(false);
+  const [copyState, setCopyState] = useState<TechnicalInfoCopyState>("idle");
   const [isCopying, setIsCopying] = useState(false);
+  const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearCopyFeedbackTimer(): void {
+    if (copyFeedbackTimerRef.current !== null) {
+      clearTimeout(copyFeedbackTimerRef.current);
+      copyFeedbackTimerRef.current = null;
+    }
+  }
 
   const confirmLabel = options.confirmLabel ?? translate("common.ok");
   const cancelLabel =
@@ -89,11 +105,9 @@ export function ConfirmDialog({
   const clipboardText = options.clipboardText;
   const hasCopyButton = Boolean(clipboardText);
 
-  // Focus restore (D-16): return focus to the opener on close, if it still
-  // exists. Deliberately does not also capture focus here — see the
-  // `opener` prop doc comment above.
   useEffect(() => {
     return () => {
+      clearCopyFeedbackTimer();
       if (
         opener instanceof HTMLElement &&
         typeof document !== "undefined" &&
@@ -144,9 +158,23 @@ export function ConfirmDialog({
     }
 
     setIsCopying(true);
-    const result = await performClipboardCopy(clipboardAdapter, clipboardText);
-    setIsCopying(false);
-    setCopyFailed(!result.ok);
+    let copySucceeded = false;
+    try {
+      const result = await performClipboardCopy(clipboardAdapter, clipboardText);
+      copySucceeded = result.ok;
+    } catch {
+      copySucceeded = false;
+    } finally {
+      setIsCopying(false);
+    }
+
+    clearCopyFeedbackTimer();
+    const nextState = copySucceeded ? "copied" : "failed";
+    setCopyState(nextState);
+    copyFeedbackTimerRef.current = setTimeout(() => {
+      copyFeedbackTimerRef.current = null;
+      setCopyState("idle");
+    }, TECHNICAL_INFO_COPY_FEEDBACK_MS);
   }
 
   const confirmButton = (
@@ -186,6 +214,15 @@ export function ConfirmDialog({
 
   const titleId = "appDialogTitle";
   const messageId = "appDialogMessage";
+
+  const isCopied = copyState === "copied";
+  const copyFailed = copyState === "failed";
+  const copyButtonTitle = isCopied
+    ? translate("dialog.about.copyTechnicalInfoCopied")
+    : options.clipboardTextTitle ?? translate("dialog.copyErrorDetails");
+  const copyButtonIconSvg = isCopied
+    ? dialogCopiedButtonIconSvg
+    : dialogCopyButtonIconSvg;
 
   return (
     <div
@@ -231,18 +268,28 @@ export function ConfirmDialog({
           <DialogMessage id={messageId} message={options.message} />
         </div>
         <div className="appDialogFooter">
-          <div className="appDialogFooterCopy">
+          <div className="appDialogFooterCopy" style={{ position: "relative" }}>
             {hasCopyButton ? (
               <button
                 type="button"
                 className="appDialogCopyButton"
-                aria-label={translate("dialog.copyErrorDetails")}
-                title={translate("dialog.copyErrorDetails")}
+                aria-label={copyButtonTitle}
+                title={copyButtonTitle}
+                disabled={isCopying}
                 onClick={() => {
                   void handleCopyClick();
                 }}
-                dangerouslySetInnerHTML={{ __html: dialogCopyButtonIconSvg }}
+                dangerouslySetInnerHTML={{ __html: copyButtonIconSvg }}
               />
+            ) : null}
+            {isCopied ? (
+              <span
+                className="appDialogCopyToast appDialogCopyToast-copied"
+                role="status"
+                aria-live="polite"
+              >
+                {translate("dialog.about.copyTechnicalInfoCopied")}
+              </span>
             ) : null}
             {copyFailed ? (
               <span className="appDialogCopyFailure" role="alert">

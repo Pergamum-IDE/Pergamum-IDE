@@ -91,9 +91,6 @@ let sessionStoreController: SessionStoreController | null = null;
 let coldStartPayload: ColdStartRestorePayload | null = null;
 let coldStartWebContentsId: number | null = null;
 const pergamumDebugMode = parseDebugModeFromArgv(process.argv);
-console.info(
-  `[#503 preview-scroll-sync] 1. Main process recognized debug mode: ${pergamumDebugMode}`
-);
 // #272: one process-run identity for the lifetime of this Pergamum process.
 const instanceRunId = createUuidv7();
 
@@ -374,15 +371,25 @@ app.whenReady().then(async () => {
     ipcMain,
     sessionStore,
     instanceRunId,
+    isDebugMode: pergamumDebugMode,
+    logDebug: (event, details) => {
+      debugLogger.log({
+        level: "warn",
+        event,
+        details
+      });
+    },
     getMainWindow: () => mainWindow,
     getCurrentProjectId: () => currentProjectId(),
     getCurrentProjectFilePath: () => currentActiveProjectFilePath(),
     // A storage-class failure on a window-driven re-persist: tell the
     // renderer coordinator to SUSPEND (it shows the single Error dialog).
-    onSessionStorageFailure: (reason) => {
+    onSessionStorageFailure: (reason, error) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(SESSION_CHANNELS.storageFailure, {
-          reason
+          reason,
+          errorDetail:
+            error instanceof Error ? error.message : String(error ?? "")
         });
       }
     }

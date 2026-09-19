@@ -219,8 +219,12 @@ export function ChoiceDialog({
               <button
                 type="button"
                 className="appDialogCopyButton"
-                aria-label={translate("dialog.copyErrorDetails")}
-                title={translate("dialog.copyErrorDetails")}
+                aria-label={
+                  options.clipboardTextTitle ?? translate("dialog.copyErrorDetails")
+                }
+                title={
+                  options.clipboardTextTitle ?? translate("dialog.copyErrorDetails")
+                }
                 onClick={() => {
                   void handleCopyClick();
                 }}

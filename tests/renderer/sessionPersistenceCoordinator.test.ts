@@ -787,4 +787,26 @@ describe("SessionPersistenceCoordinator — ordinary vs durableCommit modes (#27
     // The durable commit ran despite SUSPENDED.
     expect(persistCalls.length).toBe(callsAfterSuspend + 1);
   });
+
+  it("suppresses empty session flush when all restored editors fail (#519)", async () => {
+    const scheduler = manualScheduler();
+    const transport = recordingTransport();
+    const coordinator = new SessionPersistenceCoordinator({
+      sessionId: SESSION_ID,
+      transport,
+      captureActiveEditorViewState: () => null,
+      scheduler,
+      deferInitialFlush: true
+    });
+
+    coordinator.updateSessionInputs(inputs([]));
+    coordinator.resolveColdStartRestore({
+      scheduleNow: true,
+      allEditorsFailed: true
+    });
+    scheduler.flush();
+    await tick();
+
+    expect(transport.persisted).toHaveLength(0);
+  });
 });

@@ -665,6 +665,14 @@ export function sanitizeDebugLogDetails(
         }
         break;
       }
+      case "consecutiveFailures": {
+        const consecutiveFailures = sanitizeNonNegativeInteger(value);
+
+        if (consecutiveFailures !== undefined) {
+          sanitized.consecutiveFailures = consecutiveFailures;
+        }
+        break;
+      }
       case "previewNodeCount": {
         const previewNodeCount = sanitizeNonNegativeInteger(value);
 

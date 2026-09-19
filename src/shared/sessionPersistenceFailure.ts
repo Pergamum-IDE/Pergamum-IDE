@@ -107,8 +107,21 @@ export function toSessionStorageFailureError(
     return error;
   }
 
-  const detail =
+  let detail =
     error instanceof Error ? error.message : String(error ?? "unknown");
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "details" in error &&
+    (error as { details: unknown }).details
+  ) {
+    try {
+      detail += ` (${JSON.stringify((error as { details: unknown }).details)})`;
+    } catch {
+      // ignore
+    }
+  }
 
   return new SessionStorageFailureError(
     sessionStorageFailureReasonFromError(error),
@@ -165,4 +178,124 @@ export function sessionStorageFailureReason(
   }
 
   return "writeFailed";
+}
+
+export interface SessionLockMarkerInfo {
+  readonly pid?: number;
+  readonly acquiredAt?: number;
+}
+
+export interface SessionLockFailureDetails {
+  readonly dirMtimeMs?: number;
+  readonly markerCount?: number;
+  readonly markers?: readonly SessionLockMarkerInfo[];
+}
+
+export function parseSessionLockFailureDetails(
+  error: unknown
+): SessionLockFailureDetails | null {
+  if (!error) {
+    return null;
+  }
+
+  let rawObj: unknown = null;
+
+  if (typeof error === "object" && error !== null && "details" in error) {
+    rawObj = (error as { details: unknown }).details;
+  }
+
+  if (!rawObj) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+        ? error
+        : "";
+    const openBrace = message.indexOf("{");
+    const closeBrace = message.lastIndexOf("}");
+    if (openBrace >= 0 && closeBrace > openBrace) {
+      try {
+        rawObj = JSON.parse(message.slice(openBrace, closeBrace + 1));
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  if (typeof rawObj !== "object" || rawObj === null) {
+    return null;
+  }
+
+  const obj = rawObj as Record<string, unknown>;
+  const dirMtimeMs =
+    typeof obj.dirMtimeMs === "number" ? obj.dirMtimeMs : undefined;
+  const markerCount =
+    typeof obj.markerCount === "number" ? obj.markerCount : undefined;
+
+  let markers: SessionLockMarkerInfo[] | undefined;
+  if (Array.isArray(obj.markers)) {
+    markers = obj.markers.map((m: unknown) => {
+      if (typeof m === "object" && m !== null) {
+        const item = m as Record<string, unknown>;
+        return {
+          pid: typeof item.pid === "number" ? item.pid : undefined,
+          acquiredAt:
+            typeof item.acquiredAt === "number" ? item.acquiredAt : undefined
+        };
+      }
+      return {};
+    });
+  }
+
+  return {
+    dirMtimeMs,
+    markerCount,
+    markers
+  };
+}
+
+export interface FormatSessionPersistenceTechnicalInfoInput {
+  readonly timestamp: string;
+  readonly appVersion: string;
+  readonly reason: SessionStorageFailureReason;
+  readonly consecutiveFailures: number;
+  readonly lockDetails?: SessionLockFailureDetails | null;
+}
+
+export function formatSessionPersistenceTechnicalInfo(
+  input: FormatSessionPersistenceTechnicalInfoInput
+): string {
+  const lines = [
+    "Pergamum Session Persistence Failure",
+    `Timestamp: ${input.timestamp}`,
+    `App Version: ${input.appVersion}`,
+    `Reason: ${input.reason}`,
+    `Consecutive Failures: ${input.consecutiveFailures}`
+  ];
+
+  if (input.reason === "lockUnavailable" && input.lockDetails) {
+    const { dirMtimeMs, markerCount, markers } = input.lockDetails;
+
+    if (dirMtimeMs !== undefined) {
+      const dirMtimeIso = new Date(dirMtimeMs).toISOString();
+      lines.push(`Lock Dir mtime: ${dirMtimeIso} (${dirMtimeMs})`);
+    }
+
+    if (markerCount !== undefined) {
+      lines.push(`Marker Count: ${markerCount}`);
+    }
+
+    if (markers && markers.length > 0) {
+      markers.forEach((m, idx) => {
+        const pidStr = m.pid !== undefined ? `pid=${m.pid}` : "pid=unknown";
+        const acqStr =
+          m.acquiredAt !== undefined
+            ? `acquiredAt=${new Date(m.acquiredAt).toISOString()} (${m.acquiredAt})`
+            : "acquiredAt=unknown";
+        lines.push(`Marker #${idx + 1}: ${pidStr}, ${acqStr}`);
+      });
+    }
+  }
+
+  return lines.join("\n");
 }

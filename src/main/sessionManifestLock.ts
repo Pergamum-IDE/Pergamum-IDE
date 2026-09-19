@@ -1,47 +1,6 @@
 /**
- * #272 (PO decision — degradation over takeover): cross-process
- * serialization for `<userData>/sessions/manifest.json` read-modify-write.
- *
- * The `SessionStore`'s in-memory promise queue only orders mutations within
- * one process. Two Pergamum processes sharing the same `userData` could
- * both read the manifest, both append a different sessionId, and one write
- * would clobber the other — a silent orphan. This lock prevents that.
- *
- * Protocol (directory + per-owner marker file):
- *
- *   - the atomic primitive is `mkdir(<lock>)` (EEXIST ⇒ held by someone).
- *   - the acquirer then writes ONE marker file `owner.<token>.json` inside,
- *     carrying `{ token, pid, hostname }`. The marker exists ONLY as
- *     release-time ownership proof: RELEASE removes `owner.<ourToken>.json`
- *     by name and then `rmdir`s the lock dir if it is now empty. A holder
- *     can never touch a *different* owner's marker.
- *
- * There is deliberately NO runtime lock reclamation of any kind. A lock
- * that is held is NEVER force-broken — not on marker age, not on a
- * "seemingly dead" pid, not on hostname, not on a missing / unreadable
- * marker. An HDD / USB / VM / Defender scan / synced FS / transient I/O
- * stall can make a genuinely live owner slow, and an ABA race (owner B
- * reclaims what looks like a dead lock, acquires a fresh one; owner C,
- * having made the same stale judgment a moment earlier, then deletes B's
- * fresh lock) can silently corrupt the restore set. So if the lock dir
- * exists (`mkdir` → `EEXIST`), or Windows reports it as transiently
- * contended (`mkdir` → `EPERM`: another instance mid-`mkdir`/`rmdir` on the
- * same path, or an AV / indexer holding a handle), we simply wait a bounded
- * time: if the current owner releases normally we take it and continue; if
- * the wait times out we FAIL — `SessionManifestLockUnavailableError` when
- * the lock was genuinely held (`EEXIST`), or the raw permission error when a
- * lock location we could never even create keeps failing (`EPERM`,
- * classified `permissionDenied` upstream) — and the caller degrades Session
- * persistence to SUSPENDED. Every other `mkdir` error (ENOSPC, EIO, EACCES,
- * EROFS, ...) is a real fault and fails fast. Pergamum is the flat-tyre
- * warning light, not the tyre-repair shop.
- *
- * The acquire-failing side deletes NOTHING belonging to the existing
- * owner — a marker-less dir, a broken marker, an old-looking marker and a
- * seemingly-dead pid are all just "a lock I cannot safely acquire" →
- * bounded wait → SUSPENDED.
- *
- * Only `manifest.json` membership goes through here.
+ * #272 cross-process serialization for `<userData>/sessions/manifest.json`.
+ * #519 stale lock reclamation & lock diagnostics.
  */
 
 import { randomUUID } from "node:crypto";
@@ -55,9 +14,12 @@ export interface SessionManifestLock {
 }
 
 export class SessionManifestLockUnavailableError extends Error {
-  constructor() {
+  readonly details?: Record<string, unknown>;
+
+  constructor(details?: Record<string, unknown>) {
     super("Could not acquire the session manifest lock.");
     this.name = "SessionManifestLockUnavailableError";
+    this.details = details;
   }
 }
 
@@ -73,6 +35,9 @@ export interface ManifestLockFileSystem {
   ): Promise<void>;
   rm(targetPath: string, options: { force?: boolean }): Promise<void>;
   rmdir(dirPath: string): Promise<void>;
+  readdir?(dirPath: string): Promise<string[]>;
+  readFile?(filePath: string, encoding: "utf8"): Promise<string>;
+  stat?(targetPath: string): Promise<{ mtimeMs: number }>;
 }
 
 export interface CreateFsSessionManifestLockOptions {
@@ -84,19 +49,24 @@ export interface CreateFsSessionManifestLockOptions {
   readonly retryDelayMs?: number;
   /** Bounded wait before giving up and failing (→ SUSPENDED). */
   readonly acquireTimeoutMs?: number;
+  /** Duration in ms after which an unreleased lock is considered stale and reclaimable. Default 30,000ms. */
+  readonly staleAfterMs?: number;
   readonly pid?: () => number;
   readonly hostname?: () => string;
   readonly createToken?: () => string;
+  readonly logDebug?: (event: string, details: Record<string, unknown>) => void;
 }
 
 interface ManifestLockMarker {
   readonly token: string;
   readonly pid: number;
   readonly hostname: string;
+  readonly acquiredAt: number;
 }
 
 const DEFAULT_RETRY_DELAY_MS = 25;
 const DEFAULT_ACQUIRE_TIMEOUT_MS = 10_000;
+const DEFAULT_STALE_AFTER_MS = 30_000;
 
 const MARKER_PREFIX = "owner.";
 const MARKER_SUFFIX = ".json";
@@ -125,9 +95,11 @@ export function createFsSessionManifestLock(
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
   const acquireTimeoutMs =
     options.acquireTimeoutMs ?? DEFAULT_ACQUIRE_TIMEOUT_MS;
+  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
   const pid = options.pid ?? (() => process.pid);
   const hostname = options.hostname ?? (() => os.hostname());
   const createToken = options.createToken ?? (() => randomUUID());
+  const logDebug = options.logDebug;
 
   const lockDirPath = options.lockFilePath;
   const lockParentPath = path.dirname(lockDirPath);
@@ -136,14 +108,33 @@ export function createFsSessionManifestLock(
     return path.join(lockDirPath, `${MARKER_PREFIX}${token}${MARKER_SUFFIX}`);
   }
 
+  async function fsReaddir(dirPath: string): Promise<string[]> {
+    if (fileSystem.readdir) {
+      return fileSystem.readdir(dirPath);
+    }
+    return nodeFs.readdir(dirPath);
+  }
+
+  async function fsReadFile(filePath: string): Promise<string> {
+    if (fileSystem.readFile) {
+      return fileSystem.readFile(filePath, "utf8");
+    }
+    return nodeFs.readFile(filePath, "utf8");
+  }
+
+  async function fsStat(targetPath: string): Promise<{ mtimeMs: number }> {
+    if (fileSystem.stat) {
+      return fileSystem.stat(targetPath);
+    }
+    return nodeFs.stat(targetPath);
+  }
+
   async function writeOurMarker(token: string): Promise<void> {
-    // `pid` / `hostname` are written purely as human-facing diagnostics for
-    // anyone inspecting a leftover lock by hand. Nothing in this module ever
-    // reads them back — acquisition never inspects the current owner.
     const marker: ManifestLockMarker = {
       token,
       pid: pid(),
-      hostname: hostname()
+      hostname: hostname(),
+      acquiredAt: now()
     };
 
     await fileSystem.writeFile(markerPath(token), JSON.stringify(marker), {
@@ -152,9 +143,155 @@ export function createFsSessionManifestLock(
     });
   }
 
+  interface MarkerInspection {
+    readonly fileName: string;
+    readonly token?: string;
+    readonly pid?: number;
+    readonly hostname?: string;
+    readonly acquiredAt?: number;
+    readonly isStale: boolean;
+    readonly raw?: string;
+  }
+
+  interface LockInspection {
+    readonly exists: boolean;
+    readonly dirMtimeMs?: number;
+    readonly markers: readonly MarkerInspection[];
+    readonly isStale: boolean;
+  }
+
+  async function inspectLock(): Promise<LockInspection> {
+    let dirMtimeMs: number | undefined;
+    try {
+      const st = await fsStat(lockDirPath);
+      dirMtimeMs = st.mtimeMs;
+    } catch {
+      return { exists: false, markers: [], isStale: false };
+    }
+
+    let entries: string[] = [];
+    try {
+      entries = await fsReaddir(lockDirPath);
+    } catch {
+      return { exists: true, dirMtimeMs, markers: [], isStale: false };
+    }
+
+    const markerFiles = entries.filter(
+      (name) => name.startsWith(MARKER_PREFIX) && name.endsWith(MARKER_SUFFIX)
+    );
+
+    const currentTime = now();
+    const dirAgeMs = dirMtimeMs !== undefined ? currentTime - dirMtimeMs : 0;
+    const isDirStale = dirAgeMs > staleAfterMs;
+
+    if (markerFiles.length === 0) {
+      return {
+        exists: true,
+        dirMtimeMs,
+        markers: [],
+        isStale: isDirStale
+      };
+    }
+
+    const inspections: MarkerInspection[] = [];
+    let hasFreshMarker = false;
+
+    for (const fileName of markerFiles) {
+      let raw: string | undefined;
+      let parsed: unknown;
+      try {
+        raw = await fsReadFile(path.join(lockDirPath, fileName));
+        parsed = JSON.parse(raw);
+      } catch {
+        // Unreadable or malformed JSON
+      }
+
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "acquiredAt" in parsed &&
+        typeof (parsed as { acquiredAt: unknown }).acquiredAt === "number"
+      ) {
+        const p = parsed as ManifestLockMarker;
+        const ageMs = currentTime - p.acquiredAt;
+        const markerIsStale = ageMs > staleAfterMs;
+        if (!markerIsStale) {
+          hasFreshMarker = true;
+        }
+        inspections.push({
+          fileName,
+          token: p.token,
+          pid: p.pid,
+          hostname: p.hostname,
+          acquiredAt: p.acquiredAt,
+          isStale: markerIsStale,
+          raw
+        });
+      } else {
+        // Legacy or unreadable marker: rely on dir mtime
+        if (!isDirStale) {
+          hasFreshMarker = true;
+        }
+        inspections.push({
+          fileName,
+          isStale: isDirStale,
+          raw
+        });
+      }
+    }
+
+    return {
+      exists: true,
+      dirMtimeMs,
+      markers: inspections,
+      isStale: !hasFreshMarker
+    };
+  }
+
+  async function tryReclaim(inspection: LockInspection): Promise<boolean> {
+    if (!inspection.isStale) {
+      return false;
+    }
+
+    // Unlink stale marker files
+    for (const marker of inspection.markers) {
+      try {
+        await fileSystem.rm(path.join(lockDirPath, marker.fileName), {
+          force: true
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    // Attempt to rmdir the lock directory
+    try {
+      await fileSystem.rmdir(lockDirPath);
+    } catch {
+      // If rmdir fails (e.g. non-empty due to concurrent write), abort reclaim
+      return false;
+    }
+
+    logDebug?.("session.manifestLock.reclaimed", {
+      lockDirPath,
+      dirMtimeMs: inspection.dirMtimeMs,
+      markerCount: inspection.markers.length,
+      markers: inspection.markers.map((m) => ({
+        fileName: m.fileName,
+        token: m.token,
+        pid: m.pid,
+        hostname: m.hostname,
+        acquiredAt: m.acquiredAt
+      }))
+    });
+
+    return true;
+  }
+
   async function acquire(): Promise<string> {
     const deadline = now() + acquireTimeoutMs;
     const token = createToken();
+    let reclaimedInThisAcquire = false;
 
     await fileSystem.mkdir(lockParentPath, { recursive: true });
 
@@ -163,28 +300,35 @@ export function createFsSessionManifestLock(
         await fileSystem.mkdir(lockDirPath);
       } catch (error) {
         const code = nodeErrorCode(error);
-        // `EEXIST` — the lock dir exists, someone holds it.
-        // `EPERM`  — Windows returns this (NOT `EEXIST`) when the lock dir is
-        //   in a transient state: another instance is mid-`mkdir` / `rmdir`
-        //   on the SAME path, or an AV / indexer momentarily holds a handle
-        //   on it. That is "cannot acquire right now, retry within the
-        //   bounded window", never a hard stop.
-        // Everything else (ENOSPC, EIO, EACCES, EROFS, ...) is a real fault
-        //   and still fails fast.
         if (code !== "EEXIST" && code !== "EPERM") {
           throw error;
         }
 
-        // Held / contended. We NEVER inspect, judge, or break it: no PID
-        // probe, no hostname check, no marker-age check, no rm. We wait a
-        // bounded time for a normal release, then FAIL so the caller
-        // SUSPENDS Session persistence — surfacing whichever condition was
-        // still blocking us at the deadline: `EEXIST` → lock unavailable;
-        // a lingering `EPERM` → the raw permission error (a genuinely
-        // unwritable lock location, classified `permissionDenied` upstream).
+        if (!reclaimedInThisAcquire && code === "EEXIST") {
+          const inspection = await inspectLock();
+          if (inspection.isStale) {
+            reclaimedInThisAcquire = true;
+            const reclaimed = await tryReclaim(inspection);
+            if (reclaimed) {
+              continue;
+            }
+          }
+        }
+
         if (now() >= deadline) {
           if (code === "EEXIST") {
-            throw new SessionManifestLockUnavailableError();
+            const inspection = await inspectLock();
+            throw new SessionManifestLockUnavailableError({
+              lockDirPath,
+              dirMtimeMs: inspection.dirMtimeMs,
+              markerCount: inspection.markers.length,
+              markers: inspection.markers.map((m) => ({
+                token: m.token,
+                pid: m.pid,
+                hostname: m.hostname,
+                acquiredAt: m.acquiredAt
+              }))
+            });
           }
           throw error;
         }
@@ -193,13 +337,11 @@ export function createFsSessionManifestLock(
         continue;
       }
 
-      // We just created the (empty) lock dir → we own it. Stamp it with our
-      // marker as release-time proof.
+      // We just created the (empty) lock dir → we own it.
       try {
         await writeOurMarker(token);
         return token;
       } catch {
-        // Only our own fresh, empty dir is touched here.
         await release(token);
 
         if (now() >= deadline) {
@@ -215,14 +357,13 @@ export function createFsSessionManifestLock(
     try {
       await fileSystem.rm(markerPath(token), { force: true });
     } catch {
-      // best effort — we only ever remove our OWN marker, by name.
+      // best effort
     }
 
     try {
       await fileSystem.rmdir(lockDirPath);
     } catch {
-      // Not empty (a newer owner is present) or already gone — either is
-      // fine; we never recursively remove another owner's lock.
+      // Not empty or already gone
     }
   }
 
