@@ -8,8 +8,12 @@ import {
   createExportCandidateTextDetails,
   createExportPreviewText,
   exportDocumentKindForPath,
+  getFolderIncludeState,
+  groupExportCandidatesByParentPath,
   isExportableDocumentForExport,
+  mergeExportCandidateIncludedStates,
   summarizeExportCandidates,
+  toggleFolderIncluded,
   type CollectExportCandidatesDeps
 } from "../../src/renderer/exportCandidates";
 
@@ -62,6 +66,30 @@ function depsFor(
   };
 }
 
+function candidate(
+  filePath: string,
+  characterCount: number,
+  included = true
+) {
+  const parts = filePath.split("/");
+  const fileName = parts[parts.length - 1] ?? filePath;
+  const parentPath = parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+
+  return {
+    documentKey: filePath,
+    filePath,
+    parentPath,
+    fileName,
+    kind: fileName.endsWith(".txt") ? ("text" as const) : ("markdown" as const),
+    previewStart: fileName,
+    previewEnd: fileName,
+    previewStartHover: fileName,
+    previewEndHover: fileName,
+    characterCount,
+    included
+  };
+}
+
 describe("export candidate collection (#523)", () => {
   it("collects project-root candidates in File Explorer visible depth-first order", async () => {
     const deps = depsFor({
@@ -103,8 +131,10 @@ describe("export candidate collection (#523)", () => {
         parentPath: "First",
         fileName: "01_Encounter.md",
         kind: "markdown",
-        previewStart: "吾輩は猫である。名前",
-        previewEnd: "る。名前はまだない。",
+        previewStart: "吾輩は猫である。名前…",
+        previewEnd: "…る。名前はまだない。",
+        previewStartHover: "吾輩は猫である。名前はまだない。",
+        previewEndHover: "吾輩は猫である。名前はまだない。",
         characterCount: 16,
         included: true
       },
@@ -114,8 +144,10 @@ describe("export candidate collection (#523)", () => {
         parentPath: "First/Nested",
         fileName: "03_Memo.txt",
         kind: "text",
-        previewStart: "plain text",
-        previewEnd: " text memo",
+        previewStart: "plain text…",
+        previewEnd: "… text memo",
+        previewStartHover: "plain text memo",
+        previewEndHover: "plain text memo",
         characterCount: 15,
         included: true
       },
@@ -127,6 +159,8 @@ describe("export candidate collection (#523)", () => {
         kind: "markdown",
         previewStart: "逃げる。",
         previewEnd: "逃げる。",
+        previewStartHover: "逃げる。",
+        previewEndHover: "逃げる。",
         characterCount: 4,
         included: true
       },
@@ -138,6 +172,8 @@ describe("export candidate collection (#523)", () => {
         kind: "markdown",
         previewStart: "root body",
         previewEnd: "root body",
+        previewStartHover: "root body",
+        previewEndHover: "root body",
         characterCount: 9,
         included: true
       },
@@ -149,6 +185,8 @@ describe("export candidate collection (#523)", () => {
         kind: "text",
         previewStart: "notes body",
         previewEnd: "notes body",
+        previewStartHover: "notes body",
+        previewEndHover: "notes body",
         characterCount: 10,
         included: true
       }
@@ -216,6 +254,8 @@ describe("export candidate collection (#523)", () => {
         kind: "markdown",
         previewStart: "Scene body",
         previewEnd: "Scene body",
+        previewStartHover: "Scene body",
+        previewEndHover: "Scene body",
         characterCount: 10,
         included: true
       }
@@ -270,14 +310,36 @@ describe("export candidate collection (#523)", () => {
 
   it("creates one-line previews, character count, and included default from document text", () => {
     expect(createExportPreviewText("  alpha\nbeta\r\ngamma  ", "start")).toBe(
-      "alpha beta"
+      "alpha beta…"
     );
     expect(createExportPreviewText("  alpha\nbeta\r\ngamma  ", "end")).toBe(
-      "beta gamma"
+      "…beta gamma"
     );
+    expect(createExportPreviewText("0123456789abcdef", "start")).toBe(
+      "0123456789…"
+    );
+    expect(createExportPreviewText("0123456789abcdef", "end")).toBe(
+      "…6789abcdef"
+    );
+    expect(createExportPreviewText("abcdefghijklmnopqrstuvwxyz", "start", 20)).toBe(
+      "abcdefghijklmnopqrst…"
+    );
+    expect(createExportPreviewText("abcdefghijklmnopqrstuvwxyz", "end", 20)).toBe(
+      "…ghijklmnopqrstuvwxyz"
+    );
+    expect(createExportCandidateTextDetails("abcdefghijklmnopqrstuvwxyz")).toEqual({
+      previewStart: "abcdefghij…",
+      previewEnd: "…qrstuvwxyz",
+      previewStartHover: "abcdefghijklmnopqrst…",
+      previewEndHover: "…ghijklmnopqrstuvwxyz",
+      characterCount: 26,
+      included: true
+    });
     expect(createExportCandidateTextDetails("😀\nabc")).toEqual({
       previewStart: "😀 abc",
       previewEnd: "😀 abc",
+      previewStartHover: "😀 abc",
+      previewEndHover: "😀 abc",
       characterCount: 5,
       included: true
     });
@@ -287,39 +349,111 @@ describe("export candidate collection (#523)", () => {
     expect(createExportCandidateTextDetails(" \n\t ")).toEqual({
       previewStart: "—",
       previewEnd: "—",
+      previewStartHover: "—",
+      previewEndHover: "—",
       characterCount: 4,
       included: true
     });
   });
 
   it("summarizes candidate count and included character totals", () => {
-    const first = {
-      documentKey: "a.md",
-      filePath: "a.md",
-      parentPath: "",
-      fileName: "a.md",
-      kind: "markdown" as const,
-      previewStart: "a",
-      previewEnd: "a",
-      characterCount: 10,
-      included: true
-    };
-    const second = {
-      documentKey: "b.md",
-      filePath: "b.md",
-      parentPath: "",
-      fileName: "b.md",
-      kind: "markdown" as const,
-      previewStart: "b",
-      previewEnd: "b",
-      characterCount: 20,
-      included: false
-    };
+    const first = candidate("a.md", 10, true);
+    const second = candidate("b.md", 20, false);
 
     expect(summarizeExportCandidates([first, second])).toEqual({
       candidateCount: 2,
       includedCount: 1,
       includedCharacterCount: 10
     });
+  });
+
+  it("groups candidates by parent path in first-appearance order", () => {
+    const candidates = [
+      candidate("First/01.md", 10, true),
+      candidate("Second/01.md", 20, false),
+      candidate("First/02.md", 30, true),
+      candidate("root.md", 40, true)
+    ];
+
+    const groups = groupExportCandidatesByParentPath(candidates, ".");
+
+    expect(groups.map((group) => group.parentPath)).toEqual([
+      "First",
+      "Second",
+      ""
+    ]);
+    expect(groups[0].items.map((item) => item.filePath)).toEqual([
+      "First/01.md",
+      "First/02.md"
+    ]);
+    expect(groups[0]).toMatchObject({
+      label: "First",
+      totalFileCount: 2,
+      includedFileCount: 2,
+      includedCharacterCount: 40,
+      includeState: "on"
+    });
+    expect(groups[1]).toMatchObject({
+      totalFileCount: 1,
+      includedFileCount: 0,
+      includedCharacterCount: 0,
+      includeState: "off"
+    });
+    expect(groups[2]).toMatchObject({
+      label: ".",
+      totalFileCount: 1,
+      includedFileCount: 1,
+      includedCharacterCount: 40,
+      includeState: "on"
+    });
+  });
+
+  it("derives folder include states", () => {
+    expect(getFolderIncludeState(3, 3)).toBe("on");
+    expect(getFolderIncludeState(3, 0)).toBe("off");
+    expect(getFolderIncludeState(3, 2)).toBe("mixed");
+    expect(getFolderIncludeState(0, 0)).toBe("off");
+  });
+
+  it("toggles folder include state for ON, OFF, and MIXED groups", () => {
+    const allOn = [candidate("First/01.md", 10), candidate("First/02.md", 20)];
+    expect(toggleFolderIncluded(allOn, "First").map((item) => item.included))
+      .toEqual([false, false]);
+
+    const allOff = [
+      candidate("First/01.md", 10, false),
+      candidate("First/02.md", 20, false)
+    ];
+    expect(toggleFolderIncluded(allOff, "First").map((item) => item.included))
+      .toEqual([true, true]);
+
+    const mixed = [
+      candidate("First/01.md", 10, true),
+      candidate("First/02.md", 20, false)
+    ];
+    expect(toggleFolderIncluded(mixed, "First").map((item) => item.included))
+      .toEqual([true, true]);
+  });
+
+  it("preserves included state by filePath when reloading candidates", () => {
+    const previous = [
+      candidate("First/01.md", 10, false),
+      candidate("First/removed.md", 20, true)
+    ];
+    const next = [
+      candidate("First/01.md", 15, true),
+      candidate("First/new.md", 30, true)
+    ];
+
+    expect(
+      mergeExportCandidateIncludedStates(next, previous).map((item) => ({
+        filePath: item.filePath,
+        included: item.included,
+        characterCount: item.characterCount
+      }))
+    ).toEqual([
+      { filePath: "First/01.md", included: false, characterCount: 15 },
+      { filePath: "First/new.md", included: true, characterCount: 30 }
+    ]);
   });
 });

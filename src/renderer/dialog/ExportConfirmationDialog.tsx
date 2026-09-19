@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import gripperIconUrl from "../../../assets/icons/codicons/dialog/gripper.svg?url";
+import folderIconUrl from "../../../assets/icons/codicons/explorer/folder.svg?url";
+import chevronDownIconUrl from "../../../assets/icons/feather/glossary/chevrons-down.svg?url";
+import chevronRightIconUrl from "../../../assets/icons/feather/glossary/chevrons-right.svg?url";
 import markdownFileIconUrl from "../../../assets/icons/svgrepo/explorer/markdown-svgrepo-com.svg?url";
 import textFileIconUrl from "../../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
 import type { Translate } from "../../shared/i18n";
 import type {
   ExportCandidateListItem,
+  ExportCandidateFolderGroup,
   ExportDocumentKind,
   ExportOrigin
 } from "../exportCandidates";
-import { summarizeExportCandidates } from "../exportCandidates";
+import {
+  groupExportCandidatesByParentPath,
+  mergeExportCandidateIncludedStates,
+  summarizeExportCandidates,
+  toggleFolderIncluded
+} from "../exportCandidates";
 import { InfoDialog } from "./InfoDialog";
 
 export interface ExportConfirmationDialogProps {
@@ -17,6 +26,9 @@ export interface ExportConfirmationDialogProps {
   readonly candidates: readonly ExportCandidateListItem[];
   readonly translate: Translate;
   readonly opener: Element | null;
+  readonly onReloadCandidates: () => Promise<
+    readonly ExportCandidateListItem[] | null
+  >;
   readonly onClose: () => void;
 }
 
@@ -53,22 +65,59 @@ function formatInteger(value: number): string {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+function formatCharacterCount(value: number, translate: Translate): string {
+  return translate("export.confirmation.totalCharacterCount", {
+    count: formatInteger(value)
+  });
+}
+
+function folderIncludedText(
+  group: ExportCandidateFolderGroup,
+  translate: Translate
+): string {
+  const values = {
+    included: group.includedFileCount,
+    total: group.totalFileCount
+  };
+
+  return translate(
+    group.includeState === "mixed"
+      ? "export.confirmation.folderIncludedMixed"
+      : "export.confirmation.folderIncluded",
+    values
+  );
+}
+
 export function ExportConfirmationDialog({
   origin,
   projectName,
   candidates,
   translate,
   opener,
+  onReloadCandidates,
   onClose
 }: ExportConfirmationDialogProps): JSX.Element {
   const title = translate("export.confirmation.title");
   const [rows, setRows] = useState<readonly ExportCandidateListItem[]>(() =>
     candidates.map((candidate) => ({ ...candidate }))
   );
+  const [collapsedParentPaths, setCollapsedParentPaths] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const [isReloading, setIsReloading] = useState(false);
   const summary = useMemo(() => summarizeExportCandidates(rows), [rows]);
+  const groups = useMemo(
+    () =>
+      groupExportCandidatesByParentPath(
+        rows,
+        translate("export.confirmation.projectRootParent")
+      ),
+    [rows, translate]
+  );
 
   useEffect(() => {
     setRows(candidates.map((candidate) => ({ ...candidate })));
+    setCollapsedParentPaths(new Set());
   }, [candidates]);
 
   function setCandidateIncluded(documentKey: string, included: boolean): void {
@@ -81,6 +130,54 @@ export function ExportConfirmationDialog({
     );
   }
 
+  function toggleGroupCollapsed(parentPath: string): void {
+    setCollapsedParentPaths((current) => {
+      const next = new Set(current);
+      if (next.has(parentPath)) {
+        next.delete(parentPath);
+      } else {
+        next.add(parentPath);
+      }
+      return next;
+    });
+  }
+
+  function handleFolderIncludedToggle(parentPath: string): void {
+    setRows((current) => toggleFolderIncluded(current, parentPath));
+  }
+
+  async function handleReload(): Promise<void> {
+    if (isReloading) {
+      return;
+    }
+
+    setIsReloading(true);
+    try {
+      const reloadedCandidates = await onReloadCandidates();
+      if (reloadedCandidates === null) {
+        return;
+      }
+
+      setRows((current) =>
+        mergeExportCandidateIncludedStates(reloadedCandidates, current)
+      );
+      const nextParentPaths = new Set(
+        reloadedCandidates.map((candidate) => candidate.parentPath)
+      );
+      setCollapsedParentPaths((current) => {
+        const next = new Set<string>();
+        for (const parentPath of current) {
+          if (nextParentPaths.has(parentPath)) {
+            next.add(parentPath);
+          }
+        }
+        return next;
+      });
+    } finally {
+      setIsReloading(false);
+    }
+  }
+
   return (
     <InfoDialog
       title={title}
@@ -88,18 +185,31 @@ export function ExportConfirmationDialog({
       opener={opener}
       onClose={onClose}
       footer={
-        <div className="appDialogActions">
-          <button type="button" className="appDialogButton" onClick={onClose}>
-            {translate("common.cancel")}
-          </button>
+        <div className="exportConfirmationDialogFooter">
           <button
             type="button"
-            className="appDialogButton appDialogButton-confirm"
-            disabled={true}
-            aria-disabled="true"
+            className="appDialogButton"
+            disabled={isReloading}
+            aria-disabled={isReloading}
+            onClick={() => {
+              void handleReload();
+            }}
           >
-            {translate("export.confirmation.primary")}
+            {translate("export.confirmation.reload")}
           </button>
+          <div className="appDialogActions">
+            <button type="button" className="appDialogButton" onClick={onClose}>
+              {translate("common.cancel")}
+            </button>
+            <button
+              type="button"
+              className="appDialogButton appDialogButton-confirm"
+              disabled={true}
+              aria-disabled="true"
+            >
+              {translate("export.confirmation.primary")}
+            </button>
+          </div>
         </div>
       }
     >
@@ -146,9 +256,7 @@ export function ExportConfirmationDialog({
             className="exportConfirmationDialogSummaryValue"
             data-export-confirmation-summary="character-count"
           >
-            {translate("export.confirmation.totalCharacterCount", {
-              count: formatInteger(summary.includedCharacterCount)
-            })}
+            {formatCharacterCount(summary.includedCharacterCount, translate)}
           </span>
         </div>
       </div>
@@ -193,91 +301,200 @@ export function ExportConfirmationDialog({
               </tr>
             </thead>
             <tbody>
-              {rows.map((candidate) => (
-                <tr
-                  key={candidate.documentKey}
-                  data-export-candidate-file-path={candidate.filePath}
-                  data-export-candidate-included={
-                    candidate.included ? "true" : "false"
-                  }
-                >
-                  <td
-                    className="exportConfirmationDialogHandle"
-                    aria-hidden="true"
+              {groups.flatMap((group) => {
+                const isCollapsed = collapsedParentPaths.has(group.parentPath);
+                const folderRows = [
+                  <tr
+                    key={`folder:${group.parentPath}`}
+                    className="exportConfirmationDialogFolderRow"
+                    data-export-folder-parent-path={group.parentPath}
+                    data-export-folder-include-state={group.includeState}
                   >
-                    <img
-                      className="exportConfirmationDialogHandleIcon"
-                      src={gripperIconUrl}
-                      alt=""
-                    />
-                  </td>
-                  <td
-                    className="exportConfirmationDialogKindIconCell"
-                    title={kindLabel(candidate.kind, translate)}
-                  >
-                    <img
-                      className="exportConfirmationDialogKindIcon"
-                      src={kindIconUrl(candidate.kind)}
-                      alt=""
+                    <td
+                      className="exportConfirmationDialogHandle"
                       aria-hidden="true"
-                    />
-                    <span className="srOnly">
-                      {kindLabel(candidate.kind, translate)}
-                    </span>
-                  </td>
-                  <td className="exportConfirmationDialogParentPath">
-                    {candidate.parentPath ||
-                      translate("export.confirmation.projectRootParent")}
-                  </td>
-                  <td className="exportConfirmationDialogFileName">
-                    {candidate.fileName}
-                  </td>
-                  <td
-                    className="exportConfirmationDialogPreview"
-                    title={candidate.previewStart}
-                  >
-                    {candidate.previewStart}
-                  </td>
-                  <td
-                    className="exportConfirmationDialogPreview"
-                    title={candidate.previewEnd}
-                  >
-                    {candidate.previewEnd}
-                  </td>
-                  <td className="exportConfirmationDialogCharacterCount">
-                    {formatInteger(candidate.characterCount)}
-                  </td>
-                  <td className="exportConfirmationDialogInclude">
-                    <label className="exportConfirmationDialogIncludeSwitch">
-                      <input
-                        className="exportConfirmationDialogIncludeInput"
-                        type="checkbox"
-                        role="switch"
-                        checked={candidate.included}
-                        aria-label={translate(
-                          "export.confirmation.includeToggleLabel",
-                          { fileName: candidate.fileName }
-                        )}
-                        data-export-include-toggle-file-path={
-                          candidate.filePath
-                        }
-                        onChange={(event) =>
-                          setCandidateIncluded(
-                            candidate.documentKey,
-                            event.currentTarget.checked
-                          )
-                        }
+                    >
+                      <img
+                        className="exportConfirmationDialogHandleIcon"
+                        src={gripperIconUrl}
+                        alt=""
                       />
-                      <span
-                        className="exportConfirmationDialogIncludeTrack"
+                    </td>
+                    <td
+                      className="exportConfirmationDialogFolderMain"
+                      colSpan={5}
+                    >
+                      <button
+                        type="button"
+                        className="exportConfirmationDialogFolderToggle"
+                        aria-expanded={!isCollapsed}
+                        aria-label={translate(
+                          isCollapsed
+                            ? "export.confirmation.expandFolder"
+                            : "export.confirmation.collapseFolder",
+                          { folder: group.label }
+                        )}
+                        data-export-folder-collapse-parent-path={
+                          group.parentPath
+                        }
+                        onClick={() => toggleGroupCollapsed(group.parentPath)}
+                      >
+                        <img
+                          className="exportConfirmationDialogFolderChevron"
+                          src={
+                            isCollapsed
+                              ? chevronRightIconUrl
+                              : chevronDownIconUrl
+                          }
+                          alt=""
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <img
+                        className="exportConfirmationDialogFolderIcon"
+                        src={folderIconUrl}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                      <span className="exportConfirmationDialogFolderLabel">
+                        {group.label}
+                      </span>
+                      <span className="exportConfirmationDialogFolderSummary">
+                        {folderIncludedText(group, translate)}
+                      </span>
+                    </td>
+                    <td className="exportConfirmationDialogCharacterCount">
+                      {formatCharacterCount(
+                        group.includedCharacterCount,
+                        translate
+                      )}
+                    </td>
+                    <td className="exportConfirmationDialogInclude exportConfirmationDialogIncludeCell">
+                      <label className="exportConfirmationDialogIncludeSwitch">
+                        <input
+                          className="exportConfirmationDialogIncludeInput"
+                          type="checkbox"
+                          role="switch"
+                          checked={group.includeState !== "off"}
+                          aria-label={translate(
+                            "export.confirmation.folderIncludeToggleLabel",
+                            { folder: group.label }
+                          )}
+                          data-export-folder-toggle-parent-path={
+                            group.parentPath
+                          }
+                          data-export-folder-include-state={group.includeState}
+                          onChange={() =>
+                            handleFolderIncludedToggle(group.parentPath)
+                          }
+                        />
+                        <span
+                          className="exportConfirmationDialogIncludeTrack"
+                          aria-hidden="true"
+                        >
+                          <span className="exportConfirmationDialogIncludeThumb" />
+                        </span>
+                      </label>
+                    </td>
+                  </tr>
+                ];
+
+                if (isCollapsed) {
+                  return folderRows;
+                }
+
+                return folderRows.concat(
+                  group.items.map((candidate) => (
+                    <tr
+                      key={candidate.documentKey}
+                      className="exportConfirmationDialogRow"
+                      data-export-candidate-file-path={candidate.filePath}
+                      data-export-candidate-included={
+                        candidate.included ? "true" : "false"
+                      }
+                    >
+                      <td
+                        className="exportConfirmationDialogHandle"
                         aria-hidden="true"
                       >
-                        <span className="exportConfirmationDialogIncludeThumb" />
-                      </span>
-                    </label>
-                  </td>
-                </tr>
-              ))}
+                        <img
+                          className="exportConfirmationDialogHandleIcon"
+                          src={gripperIconUrl}
+                          alt=""
+                        />
+                      </td>
+                      <td
+                        className="exportConfirmationDialogKindIconCell"
+                        title={kindLabel(candidate.kind, translate)}
+                      >
+                        <img
+                          className="exportConfirmationDialogKindIcon"
+                          src={kindIconUrl(candidate.kind)}
+                          alt=""
+                          aria-hidden="true"
+                        />
+                        <span className="srOnly">
+                          {kindLabel(candidate.kind, translate)}
+                        </span>
+                      </td>
+                      <td className="exportConfirmationDialogParentPath">
+                        {candidate.parentPath ||
+                          translate("export.confirmation.projectRootParent")}
+                      </td>
+                      <td className="exportConfirmationDialogFileName">
+                        {candidate.fileName}
+                      </td>
+                      <td
+                        className="exportConfirmationDialogPreview exportConfirmationDialogPreviewStart"
+                        title={candidate.previewStartHover}
+                      >
+                        {candidate.previewStart}
+                      </td>
+                      <td
+                        className="exportConfirmationDialogPreview exportConfirmationDialogPreviewEnd"
+                        title={candidate.previewEndHover}
+                      >
+                        {candidate.previewEnd}
+                      </td>
+                      <td className="exportConfirmationDialogCharacterCount">
+                        {formatCharacterCount(
+                          candidate.characterCount,
+                          translate
+                        )}
+                      </td>
+                      <td className="exportConfirmationDialogInclude exportConfirmationDialogIncludeCell">
+                        <label className="exportConfirmationDialogIncludeSwitch">
+                          <input
+                            className="exportConfirmationDialogIncludeInput"
+                            type="checkbox"
+                            role="switch"
+                            checked={candidate.included}
+                            aria-label={translate(
+                              "export.confirmation.includeToggleLabel",
+                              { fileName: candidate.fileName }
+                            )}
+                            data-export-include-toggle-file-path={
+                              candidate.filePath
+                            }
+                            onChange={(event) =>
+                              setCandidateIncluded(
+                                candidate.documentKey,
+                                event.currentTarget.checked
+                              )
+                            }
+                          />
+                          <span
+                            className="exportConfirmationDialogIncludeTrack"
+                            aria-hidden="true"
+                          >
+                            <span className="exportConfirmationDialogIncludeThumb" />
+                          </span>
+                        </label>
+                      </td>
+                    </tr>
+                  ))
+                );
+              })}
             </tbody>
           </table>
         </div>

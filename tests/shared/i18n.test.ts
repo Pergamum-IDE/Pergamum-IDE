@@ -595,7 +595,7 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("en", "export.confirmation.includedLabel")).toBe("Included:");
     expect(
       t("ja", "export.confirmation.totalCharacterCount", { count: "1,234" })
-    ).toBe("1,234字");
+    ).toBe("1,234文字");
     expect(
       t("en", "export.confirmation.totalCharacterCount", { count: "1,234" })
     ).toBe("1,234 chars");
@@ -603,6 +603,22 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("ja", "export.confirmation.previewEndHeader")).toBe("終わり");
     expect(t("ja", "export.confirmation.characterCountHeader")).toBe("文字数");
     expect(t("ja", "export.confirmation.includeHeader")).toBe("採用");
+    expect(t("ja", "export.confirmation.reload")).toBe("リロード");
+    expect(
+      t("ja", "export.confirmation.folderIncluded", {
+        included: 2,
+        total: 3
+      })
+    ).toBe("採用 2/3");
+    expect(
+      t("ja", "export.confirmation.folderIncludedMixed", {
+        included: 1,
+        total: 3
+      })
+    ).toBe("一部 1/3");
+    expect(
+      t("en", "export.confirmation.expandFolder", { folder: "Drafts" })
+    ).toBe("Expand Drafts");
     expect(t("ja", "export.confirmation.empty")).toBe(
       "エクスポート可能な文書がありません。"
     );

@@ -10403,17 +10403,10 @@ export function App(): JSX.Element {
     }
   }
 
-  async function handleFileExplorerExport(origin: ExportOrigin): Promise<void> {
-    const sourceProject = projectRef.current;
-
-    if (!sourceProject) {
-      setStatus({
-        key: "status.commandFailed",
-        values: { message: translate("error.unknown") }
-      });
-      return;
-    }
-
+  async function collectFileExplorerExportCandidates(
+    origin: ExportOrigin,
+    sourceProject: PergamumProject
+  ): Promise<readonly ExportCandidateListItem[] | null> {
     try {
       const candidates = await collectExportCandidatesFromOrigin(
         origin,
@@ -10431,16 +10424,54 @@ export function App(): JSX.Element {
       );
 
       if (projectRef.current !== sourceProject) {
-        return;
+        return null;
       }
 
-      setExportConfirmationState({ origin, candidates });
+      return candidates;
     } catch {
       setStatus({
         key: "status.commandFailed",
         values: { message: translate("error.unknown") }
       });
+      return null;
     }
+  }
+
+  async function handleFileExplorerExport(origin: ExportOrigin): Promise<void> {
+    const sourceProject = projectRef.current;
+
+    if (!sourceProject) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: translate("error.unknown") }
+      });
+      return;
+    }
+
+    const candidates = await collectFileExplorerExportCandidates(
+      origin,
+      sourceProject
+    );
+
+    if (candidates !== null) {
+      setExportConfirmationState({ origin, candidates });
+    }
+  }
+
+  async function handleReloadFileExplorerExportCandidates(
+    origin: ExportOrigin
+  ): Promise<readonly ExportCandidateListItem[] | null> {
+    const sourceProject = projectRef.current;
+
+    if (!sourceProject) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: translate("error.unknown") }
+      });
+      return null;
+    }
+
+    return collectFileExplorerExportCandidates(origin, sourceProject);
   }
 
   async function handleUpdateProjectName(
@@ -11260,6 +11291,11 @@ export function App(): JSX.Element {
           candidates={exportConfirmationState.candidates}
           translate={translate}
           opener={null}
+          onReloadCandidates={() =>
+            handleReloadFileExplorerExportCandidates(
+              exportConfirmationState.origin
+            )
+          }
           onClose={() => setExportConfirmationState(null)}
         />
       ) : null}

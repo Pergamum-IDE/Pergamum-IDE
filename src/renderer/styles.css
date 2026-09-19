@@ -8200,8 +8200,8 @@ label.settingsItemHeader {
   min-width: 0;
 }
 
-/* #523 Slice 2: confirmation shell with read-only row details. The gripper is
-   still visual only; reorder belongs to a later slice. */
+/* #523 export confirmation. The grippers are visual only; reorder belongs to a
+   later slice. */
 .appInfoDialog.exportConfirmationDialog {
   width: min(980px, calc(100vw - 32px));
   max-width: 980px;
@@ -8309,8 +8309,9 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogTable th:nth-child(7),
 .exportConfirmationDialogTable td:nth-child(7) {
-  width: 88px;
+  width: 112px;
   text-align: end;
+  white-space: nowrap;
 }
 
 .exportConfirmationDialogTable th:nth-child(8),
@@ -8323,13 +8324,26 @@ label.settingsItemHeader {
   border-block-end: 0;
 }
 
+.exportConfirmationDialogFooter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  inline-size: 100%;
+}
+
+.exportConfirmationDialogFooter .appDialogActions {
+  margin-inline-start: auto;
+}
+
 .exportConfirmationDialogHandle {
   color: var(--workspace-sidebar-muted-foreground);
   line-height: 1;
 }
 
 .exportConfirmationDialogHandleIcon,
-.exportConfirmationDialogKindIcon {
+.exportConfirmationDialogKindIcon,
+.exportConfirmationDialogFolderIcon,
+.exportConfirmationDialogFolderChevron {
   inline-size: 16px;
   block-size: 16px;
   display: inline-block;
@@ -8348,6 +8362,67 @@ label.settingsItemHeader {
   color: var(--workspace-sidebar-muted-foreground);
 }
 
+.exportConfirmationDialogFolderRow td {
+  background: var(--app-dialog-header-background);
+}
+
+.exportConfirmationDialogTable td.exportConfirmationDialogFolderMain {
+  min-width: 0;
+  text-align: start;
+}
+
+.exportConfirmationDialogFolderToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  margin-inline-end: 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-dialog-foreground);
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.exportConfirmationDialogFolderToggle:hover {
+  border-color: var(--app-dialog-border);
+  background: #fff;
+}
+
+.exportConfirmationDialogFolderToggle:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
+}
+
+.exportConfirmationDialogFolderIcon {
+  margin-inline-end: 6px;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.exportConfirmationDialogFolderLabel {
+  display: inline-block;
+  min-width: 0;
+  max-width: min(280px, 42vw);
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.exportConfirmationDialogFolderSummary {
+  display: inline-block;
+  margin-inline-start: 12px;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .exportConfirmationDialogParentPath,
 .exportConfirmationDialogFileName,
 .exportConfirmationDialogPreview {
@@ -8357,9 +8432,26 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
+.exportConfirmationDialogPreviewEnd {
+  text-overflow: clip;
+}
+
 .exportConfirmationDialogParentPath,
 .exportConfirmationDialogCharacterCount {
   color: var(--workspace-sidebar-muted-foreground);
+}
+
+.exportConfirmationDialogTable td.exportConfirmationDialogCharacterCount,
+.exportConfirmationDialogRow .exportConfirmationDialogCharacterCount,
+.exportConfirmationDialogFolderRow .exportConfirmationDialogCharacterCount {
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.exportConfirmationDialogTable td.exportConfirmationDialogIncludeCell {
+  text-align: center;
+  white-space: nowrap;
 }
 
 .exportConfirmationDialogIncludeSwitch {
@@ -8408,6 +8500,12 @@ label.settingsItemHeader {
   + .exportConfirmationDialogIncludeTrack {
   border-color: var(--app-dialog-confirm-background);
   background: var(--app-dialog-confirm-background);
+}
+
+.exportConfirmationDialogIncludeInput[data-export-folder-include-state="mixed"]
+  + .exportConfirmationDialogIncludeTrack {
+  border-color: var(--app-dialog-icon-warning);
+  background: var(--app-dialog-warning-header-background);
 }
 
 .exportConfirmationDialogIncludeInput:checked

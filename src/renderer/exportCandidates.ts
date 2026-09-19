@@ -19,6 +19,8 @@ export interface ExportCandidateListItem {
   readonly kind: ExportDocumentKind;
   readonly previewStart: string;
   readonly previewEnd: string;
+  readonly previewStartHover: string;
+  readonly previewEndHover: string;
   readonly characterCount: number;
   readonly included: boolean;
 }
@@ -42,7 +44,20 @@ export interface ExportCandidateSummary {
   readonly includedCharacterCount: number;
 }
 
+export type ExportCandidateFolderIncludeState = "on" | "off" | "mixed";
+
+export interface ExportCandidateFolderGroup {
+  readonly parentPath: string;
+  readonly label: string;
+  readonly items: readonly ExportCandidateListItem[];
+  readonly totalFileCount: number;
+  readonly includedFileCount: number;
+  readonly includedCharacterCount: number;
+  readonly includeState: ExportCandidateFolderIncludeState;
+}
+
 export const EXPORT_PREVIEW_LENGTH = 10;
+export const EXPORT_PREVIEW_HOVER_LENGTH = 20;
 export const EXPORT_PREVIEW_EMPTY_PLACEHOLDER = "—";
 
 function normalizeProjectRelativePath(relativePath: string): string {
@@ -73,26 +88,42 @@ export function createExportPreviewText(
   length = EXPORT_PREVIEW_LENGTH
 ): string {
   const normalized = normalizeExportPreviewText(text);
-  if (normalized.length === 0) {
+  const characters = Array.from(normalized);
+  if (characters.length === 0) {
     return EXPORT_PREVIEW_EMPTY_PLACEHOLDER;
   }
 
-  const characters = Array.from(normalized);
-  const previewCharacters =
-    edge === "start"
-      ? characters.slice(0, length)
-      : characters.slice(Math.max(0, characters.length - length));
+  if (characters.length <= length) {
+    return characters.join("");
+  }
 
-  return previewCharacters.join("");
+  return edge === "start"
+    ? `${characters.slice(0, length).join("")}…`
+    : `…${characters.slice(-length).join("")}`;
 }
 
 export function createExportCandidateTextDetails(text: string): Pick<
   ExportCandidateListItem,
-  "previewStart" | "previewEnd" | "characterCount" | "included"
+  | "previewStart"
+  | "previewEnd"
+  | "previewStartHover"
+  | "previewEndHover"
+  | "characterCount"
+  | "included"
 > {
   return {
     previewStart: createExportPreviewText(text, "start"),
     previewEnd: createExportPreviewText(text, "end"),
+    previewStartHover: createExportPreviewText(
+      text,
+      "start",
+      EXPORT_PREVIEW_HOVER_LENGTH
+    ),
+    previewEndHover: createExportPreviewText(
+      text,
+      "end",
+      EXPORT_PREVIEW_HOVER_LENGTH
+    ),
     characterCount: Array.from(text).length,
     included: true
   };
@@ -226,4 +257,103 @@ export function summarizeExportCandidates(
       includedCharacterCount: 0
     }
   );
+}
+
+export function getFolderIncludeState(
+  totalFileCount: number,
+  includedFileCount: number
+): ExportCandidateFolderIncludeState {
+  if (totalFileCount === 0 || includedFileCount === 0) {
+    return "off";
+  }
+
+  return includedFileCount === totalFileCount ? "on" : "mixed";
+}
+
+export function calculateFolderSummary(
+  parentPath: string,
+  label: string,
+  items: readonly ExportCandidateListItem[]
+): ExportCandidateFolderGroup {
+  const includedFileCount = items.filter((item) => item.included).length;
+  const includedCharacterCount = items.reduce(
+    (total, item) => total + (item.included ? item.characterCount : 0),
+    0
+  );
+
+  return {
+    parentPath,
+    label,
+    items,
+    totalFileCount: items.length,
+    includedFileCount,
+    includedCharacterCount,
+    includeState: getFolderIncludeState(items.length, includedFileCount)
+  };
+}
+
+export function groupExportCandidatesByParentPath(
+  candidates: readonly ExportCandidateListItem[],
+  projectRootLabel: string
+): readonly ExportCandidateFolderGroup[] {
+  const groups = new Map<string, ExportCandidateListItem[]>();
+
+  for (const candidate of candidates) {
+    const items = groups.get(candidate.parentPath);
+    if (items) {
+      items.push(candidate);
+    } else {
+      groups.set(candidate.parentPath, [candidate]);
+    }
+  }
+
+  return Array.from(groups.entries()).map(([parentPath, items]) =>
+    calculateFolderSummary(
+      parentPath,
+      parentPath === "" ? projectRootLabel : parentPath,
+      items
+    )
+  );
+}
+
+export function setFolderIncluded(
+  candidates: readonly ExportCandidateListItem[],
+  parentPath: string,
+  included: boolean
+): readonly ExportCandidateListItem[] {
+  return candidates.map((candidate) =>
+    candidate.parentPath === parentPath ? { ...candidate, included } : candidate
+  );
+}
+
+export function toggleFolderIncluded(
+  candidates: readonly ExportCandidateListItem[],
+  parentPath: string
+): readonly ExportCandidateListItem[] {
+  const items = candidates.filter((candidate) => candidate.parentPath === parentPath);
+  const group = calculateFolderSummary(parentPath, parentPath, items);
+
+  return setFolderIncluded(
+    candidates,
+    parentPath,
+    group.includeState === "on" ? false : true
+  );
+}
+
+export function mergeExportCandidateIncludedStates(
+  nextCandidates: readonly ExportCandidateListItem[],
+  previousCandidates: readonly ExportCandidateListItem[]
+): readonly ExportCandidateListItem[] {
+  const previousIncludedByFilePath = new Map(
+    previousCandidates.map((candidate) => [
+      candidate.filePath,
+      candidate.included
+    ])
+  );
+
+  return nextCandidates.map((candidate) => ({
+    ...candidate,
+    included:
+      previousIncludedByFilePath.get(candidate.filePath) ?? candidate.included
+  }));
 }
