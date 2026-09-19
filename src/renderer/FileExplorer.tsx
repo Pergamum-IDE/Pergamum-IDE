@@ -130,6 +130,7 @@ import {
   toggleFileExplorerSelection,
   type FileExplorerSelectionState
 } from "./fileExplorerSelectionState";
+import type { ExportOrigin } from "./exportCandidates";
 
 /**
  * #311: an external request (from the Command Palette) to open the same
@@ -294,6 +295,7 @@ interface FileExplorerProps {
    *  actually removed. The host closes any open editors for them (Recovery
    *  rows are left intact — ADR-0011 DEL-14) and refreshes. */
   onEntriesDeleted?: (deletedRelativePaths: readonly string[]) => void;
+  onExportFromFileExplorer?: (origin: ExportOrigin) => void;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -884,6 +886,7 @@ export function FileExplorer({
   dirtyProjectDocumentRelativePaths = EMPTY_STRING_LIST,
   onMoveResultMessage,
   onEntriesDeleted,
+  onExportFromFileExplorer,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
   const [entriesByDirectoryPath, setEntriesByDirectoryPath] = useState<
@@ -925,6 +928,7 @@ export function FileExplorer({
   const [contextMenu, setContextMenu] = useState<{
     readonly x: number;
     readonly y: number;
+    readonly exportOrigin: ExportOrigin;
     readonly createTarget:
       | { readonly kind: "root" }
       | { readonly kind: "folder"; readonly relativePath: string }
@@ -2592,8 +2596,19 @@ export function FileExplorer({
           : entry.kind === "folder"
             ? ({ kind: "folder", relativePath: entry.relativePath } as const)
             : null;
+      const exportOrigin: ExportOrigin =
+        entry === null
+          ? { kind: "projectRoot" }
+          : entry.kind === "folder"
+            ? { kind: "folder", folderPath: entry.relativePath }
+            : { kind: "file", filePath: entry.relativePath };
 
-      setContextMenu({ x: event.clientX, y: event.clientY, createTarget });
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        exportOrigin,
+        createTarget
+      });
     },
     []
   );
@@ -3923,6 +3938,21 @@ export function FileExplorer({
                   );
                 })
               : null}
+            <button
+              type="button"
+              role="menuitem"
+              className="fileExplorerContextMenuItem"
+              data-file-explorer-context-command="export"
+              disabled={!onExportFromFileExplorer}
+              aria-disabled={!onExportFromFileExplorer}
+              onClick={() => {
+                const origin = contextMenu.exportOrigin;
+                closeContextMenu();
+                onExportFromFileExplorer?.(origin);
+              }}
+            >
+              {translate("explorer.contextMenu.export")}
+            </button>
             <button
               type="button"
               role="menuitem"

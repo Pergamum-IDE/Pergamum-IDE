@@ -580,6 +580,25 @@ describe("Application Settings core control translations (#195)", () => {
     );
   });
 
+  it("defines File Explorer export confirmation labels for ja and en", () => {
+    expect(t("ja", "explorer.contextMenu.export")).toBe("エクスポート...");
+    expect(t("en", "explorer.contextMenu.export")).toBe("Export...");
+    expect(t("ja", "export.confirmation.title")).toBe("エクスポート確認");
+    expect(t("en", "export.confirmation.title")).toBe("Export Confirmation");
+    expect(t("ja", "export.confirmation.candidateCount", { count: 3 })).toBe(
+      "3ファイル"
+    );
+    expect(t("en", "export.confirmation.candidateCount", { count: 3 })).toBe(
+      "3 files"
+    );
+    expect(t("ja", "export.confirmation.empty")).toBe(
+      "エクスポート可能な文書がありません。"
+    );
+    expect(t("en", "export.confirmation.empty")).toBe(
+      "No exportable documents found."
+    );
+  });
+
   it("uses footer detail wording for Command Palette footer settings in Japanese and English", () => {
     expect(t("ja", "settings.commandPalette.footerDetail.enable.label")).toBe(
       "フッター詳細を表示"

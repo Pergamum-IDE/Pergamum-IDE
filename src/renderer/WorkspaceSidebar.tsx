@@ -42,6 +42,7 @@ import type {
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import type { EditorScrollAlign } from "./editorScrollAlign";
 import type { SidebarMode } from "./sidebarMode";
+import type { ExportOrigin } from "./exportCandidates";
 
 interface WorkspaceSidebarProps {
   mode: SidebarMode;
@@ -113,6 +114,7 @@ interface WorkspaceSidebarProps {
    *  the Move routes. */
   fileExplorerDirtyProjectDocumentRelativePaths?: readonly string[];
   onFileExplorerMoveResultMessage?: (message: string) => void;
+  onFileExplorerExport?: (origin: ExportOrigin) => void;
   /**
    * #436: open an existing glossary entry for editing (Glossary side pane row
    * "…"). Routes to the bottom Glossary Entry Editor Pane in edit mode.
@@ -242,6 +244,7 @@ export function WorkspaceSidebar({
   onFileExplorerRenameUnavailable,
   fileExplorerDirtyProjectDocumentRelativePaths,
   onFileExplorerMoveResultMessage,
+  onFileExplorerExport,
   onActivateGlossaryEntry,
   onOpenGlossaryCreateEntryPane,
   glossaryActiveDocumentContent,
@@ -321,6 +324,7 @@ export function WorkspaceSidebar({
                 fileExplorerDirtyProjectDocumentRelativePaths
               }
               onMoveResultMessage={onFileExplorerMoveResultMessage}
+              onExportFromFileExplorer={onFileExplorerExport}
               onActivateDocument={onActivateProjectDocument}
             />
           }

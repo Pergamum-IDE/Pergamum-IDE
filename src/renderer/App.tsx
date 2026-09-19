@@ -103,6 +103,7 @@ import {
   type BulkTextImportDryRunInput,
   type BulkTextImportExecuteInput
 } from "./dialog/BulkTextImportDialog";
+import { ExportConfirmationDialog } from "./dialog/ExportConfirmationDialog";
 import type { TextImportFolderListing } from "./dialog/TextImportDestinationPicker";
 import {
   applicationCommandIds,
@@ -551,6 +552,11 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import {
+  collectExportCandidatesFromOrigin,
+  type ExportCandidateListItem,
+  type ExportOrigin
+} from "./exportCandidates";
 import type { SearchPaneTab } from "./SearchSidebar";
 import {
   isUsableSelectedText,
@@ -1299,6 +1305,10 @@ export function App(): JSX.Element {
   const fileExplorerRevealRequestSeqRef = useRef(0);
   const [fileExplorerRevealRequest, setFileExplorerRevealRequest] =
     useState<FileExplorerRevealRequest | null>(null);
+  const [exportConfirmationState, setExportConfirmationState] = useState<{
+    readonly origin: ExportOrigin;
+    readonly candidates: readonly ExportCandidateListItem[];
+  } | null>(null);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -10393,6 +10403,43 @@ export function App(): JSX.Element {
     }
   }
 
+  async function handleFileExplorerExport(origin: ExportOrigin): Promise<void> {
+    const sourceProject = projectRef.current;
+
+    if (!sourceProject) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: translate("error.unknown") }
+      });
+      return;
+    }
+
+    try {
+      const candidates = await collectExportCandidatesFromOrigin(
+        origin,
+        {
+          listFileExplorerChildren:
+            window.pergamum.projects.listFileExplorerChildren
+        },
+        {
+          enablePlainTextDocuments:
+            effectiveSettings.textFiles.enablePlainTextDocuments
+        }
+      );
+
+      if (projectRef.current !== sourceProject) {
+        return;
+      }
+
+      setExportConfirmationState({ origin, candidates });
+    } catch {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: translate("error.unknown") }
+      });
+    }
+  }
+
   async function handleUpdateProjectName(
     name: string
   ): Promise<UpdateProjectNameResult> {
@@ -10723,6 +10770,9 @@ export function App(): JSX.Element {
                           key: "status.fileExplorerMoveResult",
                           values: { message }
                         });
+                      }}
+                      onFileExplorerExport={(origin) => {
+                        void handleFileExplorerExport(origin);
                       }}
                       onActivateGlossaryEntry={(entryId) => {
                         executeUiCommand(
@@ -11197,6 +11247,17 @@ export function App(): JSX.Element {
           translate={translate}
           opener={lineEndingDistributionDialogOpenerRef.current}
           onClose={closeLineEndingDistributionDialog}
+        />
+      ) : null}
+
+      {exportConfirmationState ? (
+        <ExportConfirmationDialog
+          origin={exportConfirmationState.origin}
+          projectName={project?.name ?? null}
+          candidates={exportConfirmationState.candidates}
+          translate={translate}
+          opener={null}
+          onClose={() => setExportConfirmationState(null)}
         />
       ) : null}
 
