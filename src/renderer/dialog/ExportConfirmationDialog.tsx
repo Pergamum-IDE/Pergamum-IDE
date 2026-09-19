@@ -10,11 +10,15 @@ import type {
   ExportCandidateListItem,
   ExportCandidateFolderGroup,
   ExportDocumentKind,
-  ExportOrigin
+  ExportOrigin,
+  HeadingRemovalLevel
 } from "../exportCandidates";
 import {
+  HEADING_REMOVAL_LEVELS,
   groupExportCandidatesByParentPath,
+  isHeadingRemovalLevel,
   mergeExportCandidateIncludedStates,
+  recalculateExportCandidateMetadata,
   summarizeExportCandidates,
   toggleFolderIncluded
 } from "../exportCandidates";
@@ -88,6 +92,33 @@ function folderIncludedText(
   );
 }
 
+function headingRemovalOptionLabel(
+  level: HeadingRemovalLevel,
+  translate: Translate
+): string {
+  switch (level) {
+    case 0:
+      return translate("export.confirmation.headingRemoval.none");
+    case 1:
+      return translate("export.confirmation.headingRemoval.level1");
+    case 2:
+      return translate("export.confirmation.headingRemoval.level2");
+    case 3:
+      return translate("export.confirmation.headingRemoval.level3");
+    case 4:
+      return translate("export.confirmation.headingRemoval.level4");
+    case 5:
+      return translate("export.confirmation.headingRemoval.level5");
+    case 6:
+      return translate("export.confirmation.headingRemoval.level6");
+  }
+}
+
+function parseHeadingRemovalLevel(value: string): HeadingRemovalLevel {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && isHeadingRemovalLevel(parsed) ? parsed : 0;
+}
+
 export function ExportConfirmationDialog({
   origin,
   projectName,
@@ -101,6 +132,8 @@ export function ExportConfirmationDialog({
   const [rows, setRows] = useState<readonly ExportCandidateListItem[]>(() =>
     candidates.map((candidate) => ({ ...candidate }))
   );
+  const [headingRemovalLevel, setHeadingRemovalLevel] =
+    useState<HeadingRemovalLevel>(0);
   const [collapsedParentPaths, setCollapsedParentPaths] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -146,6 +179,14 @@ export function ExportConfirmationDialog({
     setRows((current) => toggleFolderIncluded(current, parentPath));
   }
 
+  function handleHeadingRemovalLevelChange(value: string): void {
+    const nextLevel = parseHeadingRemovalLevel(value);
+    setHeadingRemovalLevel(nextLevel);
+    setRows((current) =>
+      recalculateExportCandidateMetadata(current, nextLevel)
+    );
+  }
+
   async function handleReload(): Promise<void> {
     if (isReloading) {
       return;
@@ -159,7 +200,10 @@ export function ExportConfirmationDialog({
       }
 
       setRows((current) =>
-        mergeExportCandidateIncludedStates(reloadedCandidates, current)
+        recalculateExportCandidateMetadata(
+          mergeExportCandidateIncludedStates(reloadedCandidates, current),
+          headingRemovalLevel
+        )
       );
       const nextParentPaths = new Set(
         reloadedCandidates.map((candidate) => candidate.parentPath)
@@ -259,6 +303,26 @@ export function ExportConfirmationDialog({
             {formatCharacterCount(summary.includedCharacterCount, translate)}
           </span>
         </div>
+      </div>
+      <div className="exportConfirmationDialogControls">
+        <label className="exportConfirmationDialogControl">
+          <span className="exportConfirmationDialogControlLabel">
+            {translate("export.confirmation.headingRemoval.label")}
+          </span>
+          <select
+            className="exportConfirmationDialogSelect"
+            value={headingRemovalLevel}
+            onChange={(event) =>
+              handleHeadingRemovalLevelChange(event.currentTarget.value)
+            }
+          >
+            {HEADING_REMOVAL_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {headingRemovalOptionLabel(level, translate)}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {rows.length === 0 ? (

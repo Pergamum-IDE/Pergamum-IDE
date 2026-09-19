@@ -8240,6 +8240,31 @@ label.settingsItemHeader {
   user-select: text;
 }
 
+.exportConfirmationDialogControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.exportConfirmationDialogControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.exportConfirmationDialogControlLabel {
+  color: var(--workspace-sidebar-muted-foreground);
+  white-space: nowrap;
+}
+
+.exportConfirmationDialogSelect {
+  min-inline-size: 160px;
+  max-inline-size: min(240px, 48vw);
+}
+
 .exportConfirmationDialogEmpty {
   margin: 0;
   color: var(--workspace-sidebar-muted-foreground);

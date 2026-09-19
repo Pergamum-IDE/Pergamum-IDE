@@ -4,6 +4,7 @@ import type {
   ListFileExplorerChildrenResult
 } from "../../src/shared/api";
 import {
+  applyHeadingRemoval,
   collectExportCandidatesFromOrigin,
   createExportCandidateTextDetails,
   createExportPreviewText,
@@ -12,6 +13,7 @@ import {
   groupExportCandidatesByParentPath,
   isExportableDocumentForExport,
   mergeExportCandidateIncludedStates,
+  recalculateExportCandidateMetadata,
   summarizeExportCandidates,
   toggleFolderIncluded,
   type CollectExportCandidatesDeps
@@ -81,6 +83,7 @@ function candidate(
     parentPath,
     fileName,
     kind: fileName.endsWith(".txt") ? ("text" as const) : ("markdown" as const),
+    rawText: filePath,
     previewStart: fileName,
     previewEnd: fileName,
     previewStartHover: fileName,
@@ -131,6 +134,7 @@ describe("export candidate collection (#523)", () => {
         parentPath: "First",
         fileName: "01_Encounter.md",
         kind: "markdown",
+        rawText: "吾輩は猫である。名前はまだない。",
         previewStart: "吾輩は猫である。名前…",
         previewEnd: "…る。名前はまだない。",
         previewStartHover: "吾輩は猫である。名前はまだない。",
@@ -144,6 +148,7 @@ describe("export candidate collection (#523)", () => {
         parentPath: "First/Nested",
         fileName: "03_Memo.txt",
         kind: "text",
+        rawText: "plain text memo",
         previewStart: "plain text…",
         previewEnd: "… text memo",
         previewStartHover: "plain text memo",
@@ -157,6 +162,7 @@ describe("export candidate collection (#523)", () => {
         parentPath: "First",
         fileName: "02_Escape.markdown",
         kind: "markdown",
+        rawText: "逃げる。",
         previewStart: "逃げる。",
         previewEnd: "逃げる。",
         previewStartHover: "逃げる。",
@@ -170,6 +176,7 @@ describe("export candidate collection (#523)", () => {
         parentPath: "",
         fileName: "root.md",
         kind: "markdown",
+        rawText: "root body",
         previewStart: "root body",
         previewEnd: "root body",
         previewStartHover: "root body",
@@ -183,6 +190,7 @@ describe("export candidate collection (#523)", () => {
         parentPath: "",
         fileName: "notes.txt",
         kind: "text",
+        rawText: "notes body",
         previewStart: "notes body",
         previewEnd: "notes body",
         previewStartHover: "notes body",
@@ -252,6 +260,7 @@ describe("export candidate collection (#523)", () => {
         parentPath: "Drafts",
         fileName: "scene.markdown",
         kind: "markdown",
+        rawText: "Scene body",
         previewStart: "Scene body",
         previewEnd: "Scene body",
         previewStartHover: "Scene body",
@@ -353,6 +362,111 @@ describe("export candidate collection (#523)", () => {
       previewEndHover: "—",
       characterCount: 4,
       included: true
+    });
+  });
+
+  it("removes Markdown ATX headings up to the selected level", () => {
+    const text = [
+      "# H1",
+      "## H2",
+      "### H3",
+      "#### H4",
+      "##### H5",
+      "###### H6",
+      "####### not a heading",
+      "本文 # タグ",
+      "foo # bar"
+    ].join("\n");
+
+    expect(applyHeadingRemoval(text, 0)).toBe(text);
+    expect(applyHeadingRemoval(text, 1)).toBe(
+      [
+        "## H2",
+        "### H3",
+        "#### H4",
+        "##### H5",
+        "###### H6",
+        "####### not a heading",
+        "本文 # タグ",
+        "foo # bar"
+      ].join("\n")
+    );
+    expect(applyHeadingRemoval(text, 2)).toBe(
+      [
+        "### H3",
+        "#### H4",
+        "##### H5",
+        "###### H6",
+        "####### not a heading",
+        "本文 # タグ",
+        "foo # bar"
+      ].join("\n")
+    );
+    expect(applyHeadingRemoval(text, 6)).toBe(
+      ["####### not a heading", "本文 # タグ", "foo # bar"].join("\n")
+    );
+  });
+
+  it("recalculates Markdown previews and counts from heading-removed text", () => {
+    const rawText = "# Title\nabcdefghijklmnop";
+    const [updated] = recalculateExportCandidateMetadata(
+      [
+        {
+          ...candidate("First/01.md", 24, false),
+          rawText
+        }
+      ],
+      1
+    );
+
+    expect(updated).toMatchObject({
+      previewStart: "abcdefghij…",
+      previewEnd: "…ghijklmnop",
+      previewStartHover: "abcdefghijklmnop",
+      previewEndHover: "abcdefghijklmnop",
+      characterCount: 16,
+      included: false
+    });
+  });
+
+  it("keeps .txt documents unaffected by Markdown heading removal", () => {
+    const rawText = "# H1\nbody";
+
+    expect(createExportCandidateTextDetails(rawText, "text", 6)).toEqual({
+      previewStart: "# H1 body",
+      previewEnd: "# H1 body",
+      previewStartHover: "# H1 body",
+      previewEndHover: "# H1 body",
+      characterCount: 9,
+      included: true
+    });
+  });
+
+  it("updates folder and overall totals after heading removal recalculation", () => {
+    const recalculated = recalculateExportCandidateMetadata(
+      [
+        {
+          ...candidate("First/01.md", 24, true),
+          rawText: "# Title\nabcdefghijklmnop"
+        },
+        {
+          ...candidate("First/02.md", 10, false),
+          rawText: "# Off\nbody"
+        }
+      ],
+      1
+    );
+
+    expect(summarizeExportCandidates(recalculated)).toEqual({
+      candidateCount: 2,
+      includedCount: 1,
+      includedCharacterCount: 16
+    });
+    expect(groupExportCandidatesByParentPath(recalculated, ".")[0]).toMatchObject({
+      totalFileCount: 2,
+      includedFileCount: 1,
+      includedCharacterCount: 16,
+      includeState: "mixed"
     });
   });
 

@@ -6,7 +6,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { t, type Translate } from "../../src/shared/i18n";
 import { ExportConfirmationDialog } from "../../src/renderer/dialog/ExportConfirmationDialog";
-import type { ExportCandidateListItem } from "../../src/renderer/exportCandidates";
+import {
+  createExportCandidateTextDetails,
+  type ExportCandidateListItem,
+  type ExportDocumentKind
+} from "../../src/renderer/exportCandidates";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,6 +37,7 @@ const candidates = [
     parentPath: "First",
     fileName: "01.md",
     kind: "markdown" as const,
+    rawText: "吾輩は猫である。名前はまだない。",
     previewStart: "吾輩は猫で",
     previewEnd: "まだない。",
     previewStartHover: "吾輩は猫である。名前はまだない。",
@@ -46,6 +51,7 @@ const candidates = [
     parentPath: "First",
     fileName: "notes.txt",
     kind: "text" as const,
+    rawText: "plain text",
     previewStart: "plain text",
     previewEnd: "text memo",
     previewStartHover: "plain text",
@@ -63,6 +69,7 @@ const groupedCandidates = [
     parentPath: "Second",
     fileName: "01.md",
     kind: "markdown" as const,
+    rawText: "second",
     previewStart: "second",
     previewEnd: "second",
     previewStartHover: "second",
@@ -71,6 +78,28 @@ const groupedCandidates = [
     included: true
   }
 ] as const satisfies readonly ExportCandidateListItem[];
+
+function candidateWithText(
+  filePath: string,
+  kind: ExportDocumentKind,
+  rawText: string,
+  included = true
+): ExportCandidateListItem {
+  const parts = filePath.split("/");
+  const fileName = parts[parts.length - 1] ?? filePath;
+  const parentPath = parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+
+  return {
+    documentKey: filePath,
+    filePath,
+    parentPath,
+    fileName,
+    kind,
+    rawText,
+    ...createExportCandidateTextDetails(rawText, kind),
+    included
+  };
+}
 
 function mountDialog(options: {
   candidates?: readonly ExportCandidateListItem[];
@@ -146,6 +175,12 @@ function buttonByText(text: string): HTMLButtonElement {
   return button;
 }
 
+function headingRemovalSelect(): HTMLSelectElement {
+  return container!.querySelector<HTMLSelectElement>(
+    ".exportConfirmationDialogSelect"
+  )!;
+}
+
 describe("ExportConfirmationDialog (#523)", () => {
   it("labels the project root origin with the project name when available", () => {
     const markup = renderToStaticMarkup(
@@ -187,6 +222,9 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(markup).toContain("10 chars");
     expect(markup).toContain("5 chars");
     expect(markup).toContain("Reload");
+    expect(markup).toContain("Remove headings");
+    expect(markup).toContain("Do not remove");
+    expect(markup).toContain("Remove H1-H6");
     expect(markup).toContain("Included 2/2");
     expect(markup).toContain("01.md");
     expect(markup).toContain("notes.txt");
@@ -290,10 +328,59 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(folderRow("First").textContent).toContain("Included 2/2");
   });
 
+  it("recalculates previews and totals when heading removal changes", () => {
+    mountDialog({
+      candidates: [
+        candidateWithText("First/heading.md", "markdown", "# Title\nabcdefghijklmnop"),
+        candidateWithText("First/notes.txt", "text", "# Text heading\nbody")
+      ]
+    });
+
+    expect(candidateRow("First/heading.md")!.textContent).toContain(
+      "# Title ab…"
+    );
+    expect(summary("character-count")).toBe("43 chars");
+
+    act(() => {
+      const select = headingRemovalSelect();
+      select.value = "1";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(candidateRow("First/heading.md")!.textContent).toContain(
+      "abcdefghij…"
+    );
+    expect(candidateRow("First/heading.md")!.textContent).toContain("16 chars");
+    expect(candidateRow("First/notes.txt")!.textContent).toContain(
+      "# Text hea…"
+    );
+    expect(summary("character-count")).toBe("35 chars");
+    expect(folderRow("First").textContent).toContain("35 chars");
+
+    act(() => includeToggle("First/heading.md").click());
+    act(() => folderCollapseButton("First").click());
+    act(() => {
+      const select = headingRemovalSelect();
+      select.value = "2";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(candidateRow("First/heading.md")).toBeNull();
+    expect(summary("character-count")).toBe("19 chars");
+
+    act(() => folderCollapseButton("First").click());
+
+    expect(includeToggle("First/heading.md").checked).toBe(false);
+    expect(candidateRow("First/heading.md")!.textContent).toContain(
+      "abcdefghij…"
+    );
+  });
+
   it("reload preserves existing included state and adds new files included", async () => {
     const onReloadCandidates = vi.fn(async () => [
       {
         ...candidates[0],
+        rawText: "# Updated\nupdated body",
         previewStart: "updated",
         previewEnd: "updated",
         previewStartHover: "updated hover",
@@ -307,6 +394,7 @@ describe("ExportConfirmationDialog (#523)", () => {
         parentPath: "First",
         fileName: "new.md",
         kind: "markdown" as const,
+        rawText: "newtext",
         previewStart: "new",
         previewEnd: "new",
         previewStartHover: "new",
@@ -318,6 +406,11 @@ describe("ExportConfirmationDialog (#523)", () => {
     mountDialog({ onReloadCandidates });
 
     act(() => includeToggle("First/01.md").click());
+    act(() => {
+      const select = headingRemovalSelect();
+      select.value = "1";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
     await act(async () => {
       buttonByText("Reload").click();
@@ -328,6 +421,9 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(onReloadCandidates).toHaveBeenCalledTimes(1);
     expect(candidateRow("First/notes.txt")).toBeNull();
     expect(candidateRow("First/new.md")).not.toBeNull();
+    expect(headingRemovalSelect().value).toBe("1");
+    expect(candidateRow("First/01.md")!.textContent).toContain("updated bo…");
+    expect(candidateRow("First/01.md")!.textContent).not.toContain("# Updated");
     expect(includeToggle("First/01.md").checked).toBe(false);
     expect(includeToggle("First/new.md").checked).toBe(true);
     expect(summary("candidate-count")).toBe("2 files");

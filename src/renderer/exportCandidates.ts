@@ -17,6 +17,7 @@ export interface ExportCandidateListItem {
   readonly parentPath: string;
   readonly fileName: string;
   readonly kind: ExportDocumentKind;
+  readonly rawText: string;
   readonly previewStart: string;
   readonly previewEnd: string;
   readonly previewStartHover: string;
@@ -45,6 +46,7 @@ export interface ExportCandidateSummary {
 }
 
 export type ExportCandidateFolderIncludeState = "on" | "off" | "mixed";
+export type HeadingRemovalLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface ExportCandidateFolderGroup {
   readonly parentPath: string;
@@ -59,6 +61,7 @@ export interface ExportCandidateFolderGroup {
 export const EXPORT_PREVIEW_LENGTH = 10;
 export const EXPORT_PREVIEW_HOVER_LENGTH = 20;
 export const EXPORT_PREVIEW_EMPTY_PLACEHOLDER = "—";
+export const HEADING_REMOVAL_LEVELS = [0, 1, 2, 3, 4, 5, 6] as const;
 
 function normalizeProjectRelativePath(relativePath: string): string {
   return relativePath.replace(/\\/g, "/");
@@ -102,7 +105,87 @@ export function createExportPreviewText(
     : `…${characters.slice(-length).join("")}`;
 }
 
-export function createExportCandidateTextDetails(text: string): Pick<
+export function isHeadingRemovalLevel(
+  value: number
+): value is HeadingRemovalLevel {
+  return HEADING_REMOVAL_LEVELS.includes(value as HeadingRemovalLevel);
+}
+
+function lineTextWithoutEnding(line: string): string {
+  return line.replace(/(?:\r\n|\r|\n)$/u, "");
+}
+
+function splitLinesWithEndings(text: string): string[] {
+  const lines = text.match(/[^\r\n]*(?:\r\n|\r|\n|$)/gu) ?? [];
+
+  return lines.filter((line, index) => line.length > 0 || index < lines.length - 1);
+}
+
+function atxHeadingLevel(line: string): HeadingRemovalLevel | null {
+  const match = /^(#{1,6})(?:\s+|$)/u.exec(lineTextWithoutEnding(line));
+  if (!match) {
+    return null;
+  }
+
+  const level = match[1].length;
+  return isHeadingRemovalLevel(level) ? level : null;
+}
+
+export function applyHeadingRemoval(
+  text: string,
+  headingRemovalLevel: HeadingRemovalLevel
+): string {
+  if (headingRemovalLevel === 0) {
+    return text;
+  }
+
+  return splitLinesWithEndings(text)
+    .filter((line) => {
+      const level = atxHeadingLevel(line);
+      return level === null || level > headingRemovalLevel;
+    })
+    .join("");
+}
+
+export function createExportCandidateMetadata(
+  rawText: string,
+  kind: ExportDocumentKind,
+  headingRemovalLevel: HeadingRemovalLevel = 0
+): Pick<
+  ExportCandidateListItem,
+  | "previewStart"
+  | "previewEnd"
+  | "previewStartHover"
+  | "previewEndHover"
+  | "characterCount"
+> {
+  const effectiveText =
+    kind === "markdown"
+      ? applyHeadingRemoval(rawText, headingRemovalLevel)
+      : rawText;
+
+  return {
+    previewStart: createExportPreviewText(effectiveText, "start"),
+    previewEnd: createExportPreviewText(effectiveText, "end"),
+    previewStartHover: createExportPreviewText(
+      effectiveText,
+      "start",
+      EXPORT_PREVIEW_HOVER_LENGTH
+    ),
+    previewEndHover: createExportPreviewText(
+      effectiveText,
+      "end",
+      EXPORT_PREVIEW_HOVER_LENGTH
+    ),
+    characterCount: Array.from(effectiveText).length
+  };
+}
+
+export function createExportCandidateTextDetails(
+  text: string,
+  kind: ExportDocumentKind = "markdown",
+  headingRemovalLevel: HeadingRemovalLevel = 0
+): Pick<
   ExportCandidateListItem,
   | "previewStart"
   | "previewEnd"
@@ -112,21 +195,23 @@ export function createExportCandidateTextDetails(text: string): Pick<
   | "included"
 > {
   return {
-    previewStart: createExportPreviewText(text, "start"),
-    previewEnd: createExportPreviewText(text, "end"),
-    previewStartHover: createExportPreviewText(
-      text,
-      "start",
-      EXPORT_PREVIEW_HOVER_LENGTH
-    ),
-    previewEndHover: createExportPreviewText(
-      text,
-      "end",
-      EXPORT_PREVIEW_HOVER_LENGTH
-    ),
-    characterCount: Array.from(text).length,
+    ...createExportCandidateMetadata(text, kind, headingRemovalLevel),
     included: true
   };
+}
+
+export function recalculateExportCandidateMetadata(
+  candidates: readonly ExportCandidateListItem[],
+  headingRemovalLevel: HeadingRemovalLevel
+): readonly ExportCandidateListItem[] {
+  return candidates.map((candidate) => ({
+    ...candidate,
+    ...createExportCandidateMetadata(
+      candidate.rawText,
+      candidate.kind,
+      headingRemovalLevel
+    )
+  }));
 }
 
 export function exportDocumentKindForPath(
@@ -176,7 +261,8 @@ async function candidateFromRelativePath(
     parentPath: parentPathFor(filePath),
     fileName: fileNameFor(filePath),
     kind,
-    ...createExportCandidateTextDetails(text)
+    rawText: text,
+    ...createExportCandidateTextDetails(text, kind)
   };
 }
 

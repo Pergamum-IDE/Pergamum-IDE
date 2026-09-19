@@ -604,6 +604,21 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("ja", "export.confirmation.characterCountHeader")).toBe("文字数");
     expect(t("ja", "export.confirmation.includeHeader")).toBe("採用");
     expect(t("ja", "export.confirmation.reload")).toBe("リロード");
+    expect(t("ja", "export.confirmation.headingRemoval.label")).toBe(
+      "見出し削除"
+    );
+    expect(t("ja", "export.confirmation.headingRemoval.none")).toBe(
+      "削除しない"
+    );
+    expect(t("ja", "export.confirmation.headingRemoval.level6")).toBe(
+      "H1〜H6 を削除"
+    );
+    expect(t("en", "export.confirmation.headingRemoval.label")).toBe(
+      "Remove headings"
+    );
+    expect(t("en", "export.confirmation.headingRemoval.level6")).toBe(
+      "Remove H1-H6"
+    );
     expect(
       t("ja", "export.confirmation.folderIncluded", {
         included: 2,
