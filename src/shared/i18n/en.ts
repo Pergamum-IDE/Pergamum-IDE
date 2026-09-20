@@ -468,10 +468,17 @@ export const enTranslations = {
   "export.confirmation.format.label": "Export format",
   "export.confirmation.format.txtUtf8": "TXT (UTF-8)",
   "export.confirmation.format.htmlCombined": "HTML (Combined)",
+  "export.confirmation.format.pdfCombined": "PDF (Combined)",
   "export.confirmation.txtUtf8.note":
     "TXT (UTF-8) export removes formatting other than ruby and emphasis-dot notation.",
   "export.confirmation.htmlCombined.note":
     "Combines included files into one HTML document in current display order.",
+  "export.confirmation.pdfCombined.note":
+    "Combines included files into one PDF document in current display order.",
+  "export.confirmation.pdfCombined.fontWarning":
+    "Configured fonts are not guaranteed to render identically in all PDF viewers.",
+  "export.confirmation.pdfCombined.externalImageWarning":
+    "The export target contains {count} image reference(s) outside this computer. These images will not be embedded in the PDF.",
   "export.confirmation.imageAssetFolder.label": "Image asset folder name",
   "export.confirmation.imageAssetFolder.note":
     "Images outside the project folder will not be exported.",
@@ -1628,6 +1635,10 @@ export const enTranslations = {
   "status.exportHtmlCombinedSucceededWithWarnings":
     "Exported HTML with image warnings.",
   "status.exportHtmlCombinedFailed": "Failed to export HTML: {message}",
+  "status.exportPdfCombinedSucceeded": "Exported PDF.",
+  "status.exportPdfCombinedSucceededWithWarnings":
+    "Exported PDF with image warnings.",
+  "status.exportPdfCombinedFailed": "Failed to export PDF: {message}",
   "status.exportNoIncludedDocuments": "No included documents.",
   "status.soundPlaybackFailed": "Warning: Could not play sound",
   "status.withDetail": "{status}; {detail}",

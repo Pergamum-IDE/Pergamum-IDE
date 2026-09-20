@@ -15,6 +15,8 @@ import type { Translate } from "../../shared/i18n";
 import type {
   ExportHtmlCombinedRequest,
   ExportHtmlCombinedResult,
+  ExportPdfCombinedRequest,
+  ExportPdfCombinedResult,
   ExportTxtUtf8Result
 } from "../../shared/api";
 import type {
@@ -44,9 +46,11 @@ import {
   reorderFolderGroup
 } from "../exportDialogOrder";
 import {
+  countExternalImageReferences,
   generateCombinedHtml,
   htmlExportDefaultFileName
 } from "../exportHtml";
+import { pdfExportDefaultFileName } from "../exportPdf";
 import {
   DEFAULT_EXPORT_BODY_NOTATION,
   DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
@@ -54,6 +58,7 @@ import {
   DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
   EXPORT_BODY_NOTATIONS,
   HTML_COMBINED_EXPORT_FORMAT,
+  PDF_COMBINED_EXPORT_FORMAT,
   TXT_UTF8_EXPORT_FORMAT,
   validateImageAssetFolderName,
   type ExportBodyNotation,
@@ -83,6 +88,9 @@ export interface ExportConfirmationDialogProps {
   readonly onExportHtmlCombined?: (
     request: ExportHtmlCombinedRequest
   ) => Promise<ExportHtmlCombinedResult>;
+  readonly onExportPdfCombined?: (
+    request: ExportPdfCombinedRequest
+  ) => Promise<ExportPdfCombinedResult>;
   readonly loadAozoraText: (relativePath: string) => Promise<string>;
   readonly onExportUnavailable: () => void;
   readonly onExportFailed: (error: unknown) => void;
@@ -206,8 +214,9 @@ function exportFormatLabel(format: ExportFormat, translate: Translate): string {
       return translate("export.confirmation.format.txtUtf8");
     case "htmlCombined":
       return translate("export.confirmation.format.htmlCombined");
+    case "pdfCombined":
     case "pdf":
-      return "PDF";
+      return translate("export.confirmation.format.pdfCombined");
     case "docx":
       return "DOCX";
   }
@@ -271,6 +280,7 @@ export function ExportConfirmationDialog({
   onConfirmDiscardReload,
   onExportTxt,
   onExportHtmlCombined,
+  onExportPdfCombined,
   loadAozoraText,
   onExportUnavailable,
   onExportFailed,
@@ -321,9 +331,27 @@ export function ExportConfirmationDialog({
   );
   const isTxtUtf8Export = exportFormat === TXT_UTF8_EXPORT_FORMAT;
   const isHtmlCombinedExport = exportFormat === HTML_COMBINED_EXPORT_FORMAT;
+  const isPdfCombinedExport = exportFormat === PDF_COMBINED_EXPORT_FORMAT;
   const isValidImageAssetFolderName = isHtmlCombinedExport
     ? validateImageAssetFolderName(imageAssetFolderName)
     : true;
+
+  const externalImageCount = useMemo(() => {
+    if (!isPdfCombinedExport) {
+      return 0;
+    }
+    const includedCandidateDocuments = orderedRows
+      .filter((row) => row.included)
+      .map((row) => ({
+        filePath: row.filePath,
+        parentPath: row.parentPath,
+        fileName: row.fileName,
+        kind: row.kind,
+        text: row.rawText,
+        rawText: row.rawText
+      }));
+    return countExternalImageReferences(includedCandidateDocuments, headingRemovalLevel);
+  }, [isPdfCombinedExport, orderedRows, headingRemovalLevel]);
 
   const effectiveIncludeFileStructureToc =
     isTxtUtf8Export ? false : includeFileStructureToc;
@@ -516,6 +544,46 @@ export function ExportConfirmationDialog({
 
         const result = await onExportHtmlCombined({
           defaultFileName: htmlExportDefaultFileName(origin, projectName),
+          htmlContent,
+          imageAssets,
+          projectRootPath: null
+        });
+
+        if (result.ok) {
+          setLastExportedPath(result.outputPath);
+        }
+      } catch (error) {
+        onExportFailed(error);
+      } finally {
+        setIsExporting(false);
+      }
+      return;
+    }
+
+    if (exportFormat === PDF_COMBINED_EXPORT_FORMAT && onExportPdfCombined) {
+      setIsExporting(true);
+      try {
+        const assembly = createExportAssembly(orderedRows, {
+          format: PDF_COMBINED_EXPORT_FORMAT,
+          bodyNotation,
+          headingRemovalLevel,
+          appendFileStructureToc: effectiveIncludeFileStructureToc,
+          imageAssetFolderName,
+          projectName,
+          aozoraTextByFilePath: await aozoraTextByFilePathFor(includedRows)
+        });
+
+        if (assembly.documents.length === 0) {
+          onExportUnavailable();
+          return;
+        }
+
+        const { htmlContent, imageAssets } = generateCombinedHtml(assembly, {
+          isPdf: true
+        });
+
+        const result = await onExportPdfCombined({
+          defaultFileName: pdfExportDefaultFileName(origin, projectName),
           htmlContent,
           imageAssets,
           projectRootPath: null
@@ -842,7 +910,10 @@ export function ExportConfirmationDialog({
             onChange={(event) => {
               const nextFormat = event.currentTarget.value as ExportFormat;
               setExportFormat(nextFormat);
-              if (nextFormat === HTML_COMBINED_EXPORT_FORMAT) {
+              if (
+                nextFormat === HTML_COMBINED_EXPORT_FORMAT ||
+                nextFormat === PDF_COMBINED_EXPORT_FORMAT
+              ) {
                 setIncludeFileStructureToc(true);
               }
             }}
@@ -852,6 +923,9 @@ export function ExportConfirmationDialog({
             </option>
             <option value={HTML_COMBINED_EXPORT_FORMAT}>
               {exportFormatLabel(HTML_COMBINED_EXPORT_FORMAT, translate)}
+            </option>
+            <option value={PDF_COMBINED_EXPORT_FORMAT}>
+              {exportFormatLabel(PDF_COMBINED_EXPORT_FORMAT, translate)}
             </option>
           </select>
         </label>
@@ -885,6 +959,26 @@ export function ExportConfirmationDialog({
             {!isValidImageAssetFolderName ? (
               <span className="exportConfirmationDialogErrorNote">
                 {translate("export.confirmation.imageAssetFolder.invalid")}
+              </span>
+            ) : null}
+          </>
+        ) : null}
+        {isPdfCombinedExport ? (
+          <>
+            <span className="exportConfirmationDialogControlNote">
+              {translate("export.confirmation.pdfCombined.note")}
+            </span>
+            <span className="exportConfirmationDialogControlNote">
+              {translate("export.confirmation.pdfCombined.fontWarning")}
+            </span>
+            {externalImageCount > 0 ? (
+              <span
+                className="exportConfirmationDialogErrorNote"
+                data-export-pdf-external-image-warning="true"
+              >
+                {translate("export.confirmation.pdfCombined.externalImageWarning", {
+                  count: externalImageCount
+                })}
               </span>
             ) : null}
           </>

@@ -5,7 +5,7 @@ import type {
   HeadingRemovalLevel
 } from "./exportCandidates";
 
-export type ExportFormat = "txtUtf8" | "htmlCombined" | "pdf" | "docx";
+export type ExportFormat = "txtUtf8" | "htmlCombined" | "pdfCombined" | "pdf" | "docx";
 
 export type ExportBodyNotation =
   | "markdown"
@@ -15,6 +15,7 @@ export type ExportBodyNotation =
 
 export const TXT_UTF8_EXPORT_FORMAT = "txtUtf8" satisfies ExportFormat;
 export const HTML_COMBINED_EXPORT_FORMAT = "htmlCombined" satisfies ExportFormat;
+export const PDF_COMBINED_EXPORT_FORMAT = "pdfCombined" satisfies ExportFormat;
 
 export const DEFAULT_EXPORT_BODY_NOTATION =
   "markdown" satisfies ExportBodyNotation;

@@ -121,6 +121,7 @@ function mountDialog(options: {
   onConfirmDiscardReload?: () => Promise<boolean>;
   onExportTxt?: ExportConfirmationDialogProps["onExportTxt"];
   onExportHtmlCombined?: ExportConfirmationDialogProps["onExportHtmlCombined"];
+  onExportPdfCombined?: ExportConfirmationDialogProps["onExportPdfCombined"];
   loadAozoraText?: ExportConfirmationDialogProps["loadAozoraText"];
   onExportUnavailable?: ExportConfirmationDialogProps["onExportUnavailable"];
   onExportFailed?: ExportConfirmationDialogProps["onExportFailed"];
@@ -142,6 +143,7 @@ function mountDialog(options: {
         }
         onExportTxt={options.onExportTxt ?? noopExportTxt}
         onExportHtmlCombined={options.onExportHtmlCombined}
+        onExportPdfCombined={options.onExportPdfCombined}
         loadAozoraText={options.loadAozoraText ?? noopLoadAozoraText}
         onExportUnavailable={
           options.onExportUnavailable ?? noopExportUnavailable
@@ -935,5 +937,83 @@ describe("ExportConfirmationDialog (#523)", () => {
     );
     expect(lastPathEl).not.toBeNull();
     expect(lastPathEl?.textContent).toContain("Saved to: C:\\export\\manuscript.html");
+  });
+
+  it("supports PDF combined export options, font warning, and external image warning (#523 Slice 8)", async () => {
+    const pdfCandidates: ExportCandidateListItem[] = [
+      {
+        documentKey: "First/01.md",
+        filePath: "First/01.md",
+        parentPath: "First",
+        fileName: "01.md",
+        kind: "markdown",
+        rawText: "# Chapter 1\n![External](https://example.com/image.png)",
+        previewStart: "# Chapter 1",
+        previewEnd: "image.png)",
+        previewStartHover: "# Chapter 1",
+        previewEndHover: "image.png)",
+        characterCount: 30,
+        included: true
+      }
+    ];
+
+    const onExportPdfCombined = vi.fn(async () => ({
+      ok: true as const,
+      outputPath: "C:\\export\\manuscript.pdf",
+      warningCount: 1
+    }));
+
+    mountDialog({ candidates: pdfCandidates, onExportPdfCombined });
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      select.value = "pdfCombined";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const notes = container!.querySelectorAll(
+      ".exportConfirmationDialogControlNote"
+    );
+    const notesText = Array.from(notes).map((n) => n.textContent).join(" ");
+    expect(notesText).toContain("Combines included files into one PDF document");
+    expect(notesText).toContain("Configured fonts are not guaranteed to render identically");
+
+    const externalWarning = container!.querySelector(
+      "[data-export-pdf-external-image-warning='true']"
+    );
+    expect(externalWarning).not.toBeNull();
+    expect(externalWarning?.textContent).toContain("contains 1 image reference(s) outside this computer");
+
+    const assetFolderInput = container!.querySelector<HTMLInputElement>(
+      "input[data-export-image-asset-folder-input='true']"
+    );
+    expect(assetFolderInput).toBeNull();
+
+    const tocInput = container!.querySelector<HTMLInputElement>(
+      "input[data-export-file-structure-toc-toggle='true']"
+    );
+    expect(tocInput?.disabled).toBe(false);
+    expect(tocInput?.checked).toBe(true);
+
+    const confirmBtn = container!.querySelector<HTMLButtonElement>(
+      ".appDialogButton-confirm"
+    );
+    expect(confirmBtn?.disabled).toBe(false);
+
+    await act(async () => {
+      confirmBtn!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onExportPdfCombined).toHaveBeenCalledTimes(1);
+
+    const lastPathEl = container!.querySelector(
+      ".exportConfirmationDialogLastExportPath"
+    );
+    expect(lastPathEl).not.toBeNull();
+    expect(lastPathEl?.textContent).toContain("Saved to: C:\\export\\manuscript.pdf");
   });
 });

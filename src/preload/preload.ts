@@ -78,7 +78,9 @@ const pergamumApi: PergamumApi = {
     exportTxtUtf8: (request) =>
       ipcRenderer.invoke(FILE_CHANNELS.exportTxtUtf8, request),
     exportHtmlCombined: (request) =>
-      ipcRenderer.invoke(FILE_CHANNELS.exportHtmlCombined, request)
+      ipcRenderer.invoke(FILE_CHANNELS.exportHtmlCombined, request),
+    exportPdfCombined: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.exportPdfCombined, request)
   },
   projects: {
     createProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.createProject),

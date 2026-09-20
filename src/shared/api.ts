@@ -224,7 +224,8 @@ export const FILE_CHANNELS = {
   writeMarkdown: "files:writeMarkdown",
   readAozoraTextFile: "files:readAozoraTextFile",
   exportTxtUtf8: "files:exportTxtUtf8",
-  exportHtmlCombined: "files:exportHtmlCombined"
+  exportHtmlCombined: "files:exportHtmlCombined",
+  exportPdfCombined: "files:exportPdfCombined"
 } as const;
 
 export const PROJECT_CHANNELS = {
@@ -626,6 +627,24 @@ export interface ExportHtmlCombinedRequest {
 }
 
 export type ExportHtmlCombinedResult =
+  | {
+      readonly ok: true;
+      readonly outputPath: string;
+      readonly warningCount: number;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export interface ExportPdfCombinedRequest {
+  readonly defaultFileName: string;
+  readonly htmlContent: string;
+  readonly imageAssets: readonly ExportImageAssetCopyItem[];
+  readonly projectRootPath: string | null;
+}
+
+export type ExportPdfCombinedResult =
   | {
       readonly ok: true;
       readonly outputPath: string;
@@ -1179,6 +1198,9 @@ export interface PergamumApi {
     exportHtmlCombined: (
       request: ExportHtmlCombinedRequest
     ) => Promise<ExportHtmlCombinedResult>;
+    exportPdfCombined: (
+      request: ExportPdfCombinedRequest
+    ) => Promise<ExportPdfCombinedResult>;
   };
   projects: {
     createProject: () => Promise<ProjectOpenResult>;

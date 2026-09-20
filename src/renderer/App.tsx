@@ -24,6 +24,8 @@ import type {
   UpdateProjectSettingsRequest,
   ExportHtmlCombinedRequest,
   ExportHtmlCombinedResult,
+  ExportPdfCombinedRequest,
+  ExportPdfCombinedResult,
   ExportTxtUtf8Result
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
@@ -10582,6 +10584,30 @@ export function App(): JSX.Element {
     return result;
   }
 
+  async function handleExportConfirmationPdfCombinedExport(
+    request: ExportPdfCombinedRequest
+  ): Promise<ExportPdfCombinedResult> {
+    const exportPdfCombined = window.pergamum?.files?.exportPdfCombined;
+    if (!exportPdfCombined) {
+      throw new Error("PDF export is unavailable.");
+    }
+
+    const result = await exportPdfCombined({
+      ...request,
+      projectRootPath: project?.rootPath ?? null
+    });
+
+    if (result.ok) {
+      if (result.warningCount > 0) {
+        setStatus({ key: "status.exportPdfCombinedSucceededWithWarnings" });
+      } else {
+        setStatus({ key: "status.exportPdfCombinedSucceeded" });
+      }
+    }
+
+    return result;
+  }
+
   function handleExportConfirmationUnavailable(): void {
     setStatus({ key: "status.exportNoIncludedDocuments" });
   }
@@ -11415,6 +11441,7 @@ export function App(): JSX.Element {
           onConfirmDiscardReload={confirmExportConfirmationReloadDiscard}
           onExportTxt={handleExportConfirmationTxtExport}
           onExportHtmlCombined={handleExportConfirmationHtmlCombinedExport}
+          onExportPdfCombined={handleExportConfirmationPdfCombinedExport}
           loadAozoraText={(relativePath) =>
             window.pergamum.projects.readProjectDocumentAozora(relativePath)
           }

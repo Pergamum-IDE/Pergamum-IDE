@@ -1,6 +1,9 @@
 import MarkdownIt from "markdown-it";
 import type { ExportImageAssetCopyItem } from "../shared/api";
-import { extractProjectLocalImageLinks } from "../shared/markdownImageLinkExtraction";
+import {
+  extractProjectLocalImageLinks,
+  scanMarkdownImageLinks
+} from "../shared/markdownImageLinkExtraction";
 import {
   resolveProjectLocalImageSrc,
   type ProjectLocalImageResolutionContext
@@ -18,6 +21,42 @@ import type {
   ExportBodyNotation,
   ExportFormat
 } from "./exportTypes";
+
+export function isNetworkExternalImageSrc(src: string): boolean {
+  const value = src.trim();
+  if (value.length === 0) {
+    return false;
+  }
+  if (value.startsWith("//")) {
+    return true;
+  }
+  return /^(?:https?|ftp|ws|wss):/i.test(value);
+}
+
+export function countExternalImageReferences(
+  documents: readonly ExportAssemblyDocument[],
+  headingRemovalLevel: HeadingRemovalLevel
+): number {
+  let count = 0;
+
+  for (const doc of documents) {
+    if (doc.kind !== "markdown") {
+      continue;
+    }
+
+    const rawText = doc.rawText || doc.text;
+    const headingProcessed = applyHeadingRemoval(rawText, headingRemovalLevel);
+    const matches = scanMarkdownImageLinks(headingProcessed);
+
+    for (const match of matches) {
+      if (isNetworkExternalImageSrc(match.src)) {
+        count += 1;
+      }
+    }
+  }
+
+  return count;
+}
 
 export function escapeHtmlText(str: string): string {
   return str
@@ -43,6 +82,28 @@ const markdownParser = new MarkdownIt({
   html: false,
   linkify: true
 });
+
+const pdfMarkdownParser = new MarkdownIt({
+  html: false,
+  linkify: true
+});
+
+const defaultPdfImageRender =
+  pdfMarkdownParser.renderer.rules.image ||
+  function (tokens, idx, options, _env, self) {
+    return self.renderToken(tokens, idx, options);
+  };
+
+pdfMarkdownParser.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const src = String(token.attrGet("src") ?? "");
+  if (isNetworkExternalImageSrc(src)) {
+    const alt = token.content || "";
+    const label = alt ? `[画像: ${escapeHtmlText(alt)}]` : "[画像]";
+    return `<span class="pergamum-export-image-placeholder">${label}</span>`;
+  }
+  return defaultPdfImageRender(tokens, idx, options, env, self);
+};
 
 function isKanjiCodePoint(codePoint: number): boolean {
   return (
@@ -224,7 +285,8 @@ export function renderDocumentToHtml(
   doc: ExportAssemblyDocument,
   bodyNotation: ExportBodyNotation,
   headingRemovalLevel: HeadingRemovalLevel,
-  imageAssetFolderName: string
+  imageAssetFolderName: string,
+  options?: { isPdf?: boolean }
 ): {
   readonly bodyHtml: string;
   readonly assets: readonly ExportImageAssetCopyItem[];
@@ -247,7 +309,8 @@ export function renderDocumentToHtml(
         imageAssetFolderName
       );
 
-    const renderedHtml = markdownParser.render(modifiedMarkdownText);
+    const parser = options?.isPdf ? pdfMarkdownParser : markdownParser;
+    const renderedHtml = parser.render(modifiedMarkdownText);
     return { bodyHtml: renderedHtml, assets };
   }
 
@@ -346,7 +409,8 @@ export interface CombinedHtmlResult {
 }
 
 export function generateCombinedHtml(
-  assembly: ExportAssembly
+  assembly: ExportAssembly,
+  options?: { isPdf?: boolean }
 ): CombinedHtmlResult {
   const titleText = assembly.projectName
     ? escapeHtmlText(assembly.projectName)
@@ -362,7 +426,8 @@ export function generateCombinedHtml(
       doc,
       assembly.bodyNotation,
       assembly.headingRemovalLevel,
-      assembly.imageAssetFolderName
+      assembly.imageAssetFolderName,
+      options
     );
 
     for (const asset of assets) {
@@ -387,6 +452,58 @@ export function generateCombinedHtml(
     ? generateFileStructureTocHtml(assembly.documents)
     : "";
 
+  const styleRules = options?.isPdf
+    ? [
+        `    @page {`,
+        `      size: A4;`,
+        `      margin: 20mm;`,
+        `    }`,
+        `    body {`,
+        `      font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", serif;`,
+        `      font-size: 10.5pt;`,
+        `      line-height: 1.8;`,
+        `      color: #000000;`,
+        `      background-color: #ffffff;`,
+        `      margin: 0;`,
+        `      padding: 0;`,
+        `    }`,
+        `    .pergamum-export-document {`,
+        `      break-after: page;`,
+        `      page-break-after: always;`,
+        `    }`,
+        `    .pergamum-export-document:last-child {`,
+        `      break-after: auto;`,
+        `      page-break-after: auto;`,
+        `    }`,
+        `    .pergamum-export-file-structure {`,
+        `      break-before: page;`,
+        `      page-break-before: always;`,
+        `    }`,
+        `    .emphasis-mark {`,
+        `      text-emphasis-style: sesame;`,
+        `      -webkit-text-emphasis-style: sesame;`,
+        `    }`,
+        `    .pergamum-export-image-placeholder {`,
+        `      color: #666666;`,
+        `      font-size: 0.9em;`,
+        `      font-style: italic;`,
+        `    }`,
+        `    img {`,
+        `      max-width: 100%;`,
+        `      height: auto;`,
+        `    }`
+      ].join("\n")
+    : [
+        `    .pergamum-export-file-structure {`,
+        `      break-before: page;`,
+        `      page-break-before: always;`,
+        `    }`,
+        `    .emphasis-mark {`,
+        `      text-emphasis-style: sesame;`,
+        `      -webkit-text-emphasis-style: sesame;`,
+        `    }`
+      ].join("\n");
+
   const htmlContent = [
     `<!doctype html>`,
     `<html lang="ja">`,
@@ -394,14 +511,7 @@ export function generateCombinedHtml(
     `  <meta charset="utf-8">`,
     `  <title>${titleText}</title>`,
     `  <style>`,
-    `    .pergamum-export-file-structure {`,
-    `      break-before: page;`,
-    `      page-break-before: always;`,
-    `    }`,
-    `    .emphasis-mark {`,
-    `      text-emphasis-style: sesame;`,
-    `      -webkit-text-emphasis-style: sesame;`,
-    `    }`,
+    styleRules,
     `  </style>`,
     `</head>`,
     `<body>`,

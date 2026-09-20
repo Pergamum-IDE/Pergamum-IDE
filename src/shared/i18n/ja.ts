@@ -463,10 +463,17 @@ export const jaTranslations = {
   "export.confirmation.format.label": "エクスポート形式",
   "export.confirmation.format.txtUtf8": "TXT（UTF-8）",
   "export.confirmation.format.htmlCombined": "HTML（全てを結合）",
+  "export.confirmation.format.pdfCombined": "PDF（全てを結合）",
   "export.confirmation.txtUtf8.note":
     "※ TXT（UTF-8）出力は、ルビ・傍点以外の書式を削除して出力します。",
   "export.confirmation.htmlCombined.note":
     "※ 採用ファイルを現在の並び順で1つのHTMLに結合して出力します。",
+  "export.confirmation.pdfCombined.note":
+    "※ 採用ファイルを現在の並び順で1つのPDFに結合して出力します。",
+  "export.confirmation.pdfCombined.fontWarning":
+    "※ フォントを指定してもPDF表示環境で再現されるとは限りません。",
+  "export.confirmation.pdfCombined.externalImageWarning":
+    "出力対象にこのコンピュータ外の画像が {count} 件含まれています。これらの画像はPDFに埋め込まれません。",
   "export.confirmation.imageAssetFolder.label": "画像ファイルフォルダ名",
   "export.confirmation.imageAssetFolder.note":
     "※ プロジェクトフォルダ外の画像は出力対象外です。",
@@ -1624,6 +1631,10 @@ export const jaTranslations = {
   "status.exportHtmlCombinedSucceededWithWarnings":
     "HTMLを書き出しました。一部の画像は出力対象外または未解決です。",
   "status.exportHtmlCombinedFailed": "HTMLの書き出しに失敗しました: {message}",
+  "status.exportPdfCombinedSucceeded": "PDFを書き出しました。",
+  "status.exportPdfCombinedSucceededWithWarnings":
+    "PDFを書き出しました。一部の画像は出力対象外または未解決です。",
+  "status.exportPdfCombinedFailed": "PDFの書き出しに失敗しました: {message}",
   "status.exportNoIncludedDocuments": "採用されている文書がありません。",
   "status.soundPlaybackFailed": "警告: 音声を再生できません",
   "status.withDetail": "{status}（{detail}）",

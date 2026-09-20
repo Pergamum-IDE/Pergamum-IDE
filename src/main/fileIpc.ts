@@ -7,11 +7,14 @@ import {
   type SaveDialogOptions
 } from "electron";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   FILE_CHANNELS,
   type ExportHtmlCombinedRequest,
   type ExportHtmlCombinedResult,
+  type ExportPdfCombinedRequest,
+  type ExportPdfCombinedResult,
   type ExportTxtUtf8Request,
   type ExportTxtUtf8Result,
   type MarkdownFile,
@@ -1134,6 +1137,238 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         });
 
         throw safeError;
+      }
+    }
+  );
+
+  function ensurePdfExtension(targetPath: string): string {
+    return targetPath.toLowerCase().endsWith(".pdf")
+      ? targetPath
+      : `${targetPath}.pdf`;
+  }
+
+  function parseExportPdfCombinedRequest(
+    raw: unknown
+  ): ExportPdfCombinedRequest {
+    if (typeof raw !== "object" || raw === null) {
+      throw new Error("Invalid request: expected object");
+    }
+    const obj = raw as Record<string, unknown>;
+    if (
+      typeof obj.defaultFileName !== "string" ||
+      typeof obj.htmlContent !== "string"
+    ) {
+      throw new Error(
+        "Invalid request: missing defaultFileName or htmlContent"
+      );
+    }
+    const imageAssets = Array.isArray(obj.imageAssets)
+      ? obj.imageAssets.map((item: unknown) => {
+          const assetObj = (item as Record<string, unknown>) ?? {};
+          return {
+            sourceProjectRelativePath: String(
+              assetObj.sourceProjectRelativePath ?? ""
+            ),
+            outputRelativePath: String(assetObj.outputRelativePath ?? "")
+          };
+        })
+      : [];
+    return {
+      defaultFileName: obj.defaultFileName,
+      htmlContent: obj.htmlContent,
+      imageAssets,
+      projectRootPath:
+        typeof obj.projectRootPath === "string" ? obj.projectRootPath : null
+    };
+  }
+
+  ipcMain.handle(
+    FILE_CHANNELS.exportPdfCombined,
+    async (
+      event,
+      rawRequest: unknown
+    ): Promise<ExportPdfCombinedResult> => {
+      const startedAt = Date.now();
+      let request: ExportPdfCombinedRequest | null = null;
+      let finalPath: string | null = null;
+      let tempDir: string | null = null;
+      let pdfWindow: BrowserWindow | null = null;
+
+      try {
+        request = parseExportPdfCombinedRequest(rawRequest);
+        const owner = parentWindow(event);
+        const options: SaveDialogOptions = {
+          title: "Export PDF (Combined)",
+          defaultPath: request.defaultFileName,
+          filters: [{ name: "PDF (*.pdf)", extensions: ["pdf"] }]
+        };
+        const selected = owner
+          ? await dialog.showSaveDialog(owner, options)
+          : await dialog.showSaveDialog(options);
+
+        if (selected.canceled || !selected.filePath) {
+          return { ok: false, reason: "canceled" };
+        }
+
+        finalPath = ensurePdfExtension(selected.filePath);
+        const targetClassification =
+          await classifyStandaloneSaveTarget(finalPath);
+        if (targetClassification.kind === "rejected") {
+          throw new Error(
+            `PDF export target rejected: ${targetClassification.reason}`
+          );
+        }
+
+        tempDir = await fs.mkdtemp(
+          path.join(os.tmpdir(), "pergamum-pdf-export-")
+        );
+        const tempHtmlPath = path.join(tempDir, "index.html");
+        await writeFileAtomic(tempHtmlPath, request.htmlContent);
+
+        let warningCount = 0;
+
+        for (const item of request.imageAssets) {
+          try {
+            if (!item.sourceProjectRelativePath || !item.outputRelativePath) {
+              warningCount += 1;
+              continue;
+            }
+
+            if (request.projectRootPath) {
+              const sourceAbs = path.resolve(
+                request.projectRootPath,
+                item.sourceProjectRelativePath
+              );
+              if (!isSubPath(request.projectRootPath, sourceAbs)) {
+                warningCount += 1;
+                continue;
+              }
+
+              try {
+                await fs.stat(sourceAbs);
+              } catch {
+                warningCount += 1;
+                continue;
+              }
+
+              const destAbs = path.resolve(tempDir, item.outputRelativePath);
+              if (!isSubPath(tempDir, destAbs)) {
+                warningCount += 1;
+                continue;
+              }
+
+              await fs.mkdir(path.dirname(destAbs), { recursive: true });
+              await fs.copyFile(sourceAbs, destAbs);
+            } else {
+              warningCount += 1;
+            }
+          } catch {
+            warningCount += 1;
+          }
+        }
+
+        pdfWindow = new BrowserWindow({
+          show: false,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true,
+            webSecurity: true,
+            images: true
+          }
+        });
+
+        pdfWindow.webContents.session.webRequest.onBeforeRequest(
+          { urls: ["*://*/*"] },
+          (details, callback) => {
+            const url = details.url;
+            if (url.startsWith("file://")) {
+              callback({ cancel: false });
+            } else {
+              callback({ cancel: true });
+            }
+          }
+        );
+
+        pdfWindow.webContents.on("will-navigate", (navEvent, url) => {
+          if (!url.startsWith("file://")) {
+            navEvent.preventDefault();
+          }
+        });
+
+        await pdfWindow.loadFile(tempHtmlPath);
+
+        const pdfBuffer = await pdfWindow.webContents.printToPDF({
+          pageSize: "A4",
+          landscape: false,
+          printBackground: true,
+          displayHeaderFooter: false,
+          margins: {
+            top: 0.79,
+            bottom: 0.79,
+            left: 0.79,
+            right: 0.79
+          }
+        });
+
+        await writeFileAtomic(finalPath, pdfBuffer);
+
+        logger.log({
+          level: "debug",
+          event: "export.pdf.succeeded",
+          details: {
+            documentRef: logger.documentRefForKey(finalPath),
+            editorIdKind: "file",
+            saveTargetKind: "unknown",
+            pathKind: "unknown",
+            extension: debugLogExtensionForPath(finalPath),
+            pathDepth: debugLogPathDepth(finalPath),
+            byteLength: pdfBuffer.length,
+            operation: "write",
+            result: "succeeded",
+            warningCount,
+            durationMs: durationSince(startedAt)
+          }
+        });
+
+        return { ok: true, outputPath: finalPath, warningCount };
+      } catch (error) {
+        const safeError = sanitizedFileIoError(error);
+
+        logger.log({
+          level: "error",
+          event: "export.pdf.failed",
+          details: {
+            ...(finalPath
+              ? { documentRef: logger.documentRefForKey(finalPath) }
+              : {}),
+            editorIdKind: "file",
+            saveTargetKind: "unknown",
+            pathKind: "unknown",
+            extension: finalPath
+              ? debugLogExtensionForPath(finalPath)
+              : ".pdf",
+            pathDepth: finalPath ? debugLogPathDepth(finalPath) : undefined,
+            operation: "write",
+            result: "failed",
+            reason: safeError.reason,
+            durationMs: durationSince(startedAt),
+            error: safeError
+          }
+        });
+
+        throw safeError;
+      } finally {
+        if (pdfWindow && !pdfWindow.isDestroyed()) {
+          pdfWindow.destroy();
+        }
+        if (tempDir) {
+          try {
+            await fs.rm(tempDir, { recursive: true, force: true });
+          } catch {
+            // ignore temp dir cleanup failure
+          }
+        }
       }
     }
   );
