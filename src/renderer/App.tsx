@@ -10474,6 +10474,34 @@ export function App(): JSX.Element {
     return collectFileExplorerExportCandidates(origin, sourceProject);
   }
 
+  async function confirmExportConfirmationReloadDiscard(): Promise<boolean> {
+    try {
+      const result = await confirmDialog({
+        title: translate("export.confirmation.reloadDiscard.title"),
+        message: {
+          kind: "plainText",
+          text: translate("export.confirmation.reloadDiscard.message")
+        },
+        icon: {
+          kind: "warning",
+          tooltip: translate("export.confirmation.reloadDiscard.title")
+        },
+        clipboardText: null,
+        cancelLabel: translate("common.cancel"),
+        tone: "destructive",
+        confirmLabel: translate("export.confirmation.reloadDiscard.confirm")
+      });
+
+      return result === "confirm";
+    } catch (error) {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return false;
+      }
+
+      throw error;
+    }
+  }
+
   async function handleUpdateProjectName(
     name: string
   ): Promise<UpdateProjectNameResult> {
@@ -11296,6 +11324,7 @@ export function App(): JSX.Element {
               exportConfirmationState.origin
             )
           }
+          onConfirmDiscardReload={confirmExportConfirmationReloadDiscard}
           onClose={() => setExportConfirmationState(null)}
         />
       ) : null}

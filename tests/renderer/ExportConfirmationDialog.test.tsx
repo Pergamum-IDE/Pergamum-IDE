@@ -16,6 +16,7 @@ import {
 
 const translate: Translate = (key, values) => t("en", key, values);
 const noopReload = vi.fn(async () => null);
+const noopConfirmDiscardReload = vi.fn(async () => true);
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -106,6 +107,7 @@ function mountDialog(options: {
   onReloadCandidates?: () => Promise<
     readonly ExportCandidateListItem[] | null
   >;
+  onConfirmDiscardReload?: () => Promise<boolean>;
 } = {}): void {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -119,6 +121,9 @@ function mountDialog(options: {
         translate={translate}
         opener={null}
         onReloadCandidates={options.onReloadCandidates ?? noopReload}
+        onConfirmDiscardReload={
+          options.onConfirmDiscardReload ?? noopConfirmDiscardReload
+        }
         onClose={vi.fn()}
       />
     );
@@ -163,6 +168,65 @@ function candidateRow(filePath: string): HTMLElement | null {
   );
 }
 
+function dirtyIcon(): HTMLElement | null {
+  return container!.querySelector<HTMLElement>(
+    ".exportConfirmationDialogDirtyIcon"
+  );
+}
+
+function folderDragHandle(parentPath: string): HTMLElement {
+  return container!.querySelector<HTMLElement>(
+    `[data-export-folder-drag-handle-parent-path="${parentPath}"]`
+  )!;
+}
+
+function fileDragHandle(filePath: string): HTMLElement {
+  return container!.querySelector<HTMLElement>(
+    `[data-export-file-drag-handle-file-path="${filePath}"]`
+  )!;
+}
+
+function dispatchDragStart(element: HTMLElement): void {
+  act(() => {
+    element.dispatchEvent(
+      new Event("dragstart", { bubbles: true, cancelable: true })
+    );
+  });
+}
+
+function dispatchDragOver(element: HTMLElement): void {
+  act(() => {
+    element.dispatchEvent(
+      new Event("dragover", { bubbles: true, cancelable: true })
+    );
+  });
+}
+
+function dispatchDrop(element: HTMLElement): void {
+  act(() => {
+    element.dispatchEvent(
+      new Event("dragover", { bubbles: true, cancelable: true })
+    );
+    element.dispatchEvent(
+      new Event("drop", { bubbles: true, cancelable: true })
+    );
+  });
+}
+
+function renderedFolderOrder(): readonly string[] {
+  return Array.from(
+    container!.querySelectorAll<HTMLElement>("[data-export-folder-parent-path]")
+  ).map((row) => row.dataset.exportFolderParentPath ?? "");
+}
+
+function renderedFileOrder(): readonly string[] {
+  return Array.from(
+    container!.querySelectorAll<HTMLElement>(
+      "[data-export-candidate-file-path]"
+    )
+  ).map((row) => row.dataset.exportCandidateFilePath ?? "");
+}
+
 function buttonByText(text: string): HTMLButtonElement {
   const button = Array.from(
     container!.querySelectorAll<HTMLButtonElement>("button")
@@ -191,6 +255,7 @@ describe("ExportConfirmationDialog (#523)", () => {
         translate={translate}
         opener={null}
         onReloadCandidates={noopReload}
+        onConfirmDiscardReload={noopConfirmDiscardReload}
         onClose={vi.fn()}
       />
     );
@@ -207,6 +272,7 @@ describe("ExportConfirmationDialog (#523)", () => {
         translate={translate}
         opener={null}
         onReloadCandidates={noopReload}
+        onConfirmDiscardReload={noopConfirmDiscardReload}
         onClose={vi.fn()}
       />
     );
@@ -225,6 +291,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(markup).toContain("Remove headings");
     expect(markup).toContain("Do not remove");
     expect(markup).toContain("Remove H1-H6");
+    expect(markup).toContain("Does not affect source document files.");
     expect(markup).toContain("Included 2/2");
     expect(markup).toContain("01.md");
     expect(markup).toContain("notes.txt");
@@ -249,6 +316,7 @@ describe("ExportConfirmationDialog (#523)", () => {
         translate={translate}
         opener={null}
         onReloadCandidates={noopReload}
+        onConfirmDiscardReload={noopConfirmDiscardReload}
         onClose={vi.fn()}
       />
     );
@@ -264,19 +332,19 @@ describe("ExportConfirmationDialog (#523)", () => {
 
     expect(summary("candidate-count")).toBe("2 files");
     expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("15 chars");
+    expect(summary("character-count")).toBe("26 chars");
 
     act(() => includeToggle("First/01.md").click());
 
     expect(summary("candidate-count")).toBe("2 files");
     expect(summary("included-count")).toBe("1 files");
-    expect(summary("character-count")).toBe("5 chars");
+    expect(summary("character-count")).toBe("10 chars");
     expect(folderRow("First").textContent).toContain("Some 1/2");
 
     act(() => includeToggle("First/01.md").click());
 
     expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("15 chars");
+    expect(summary("character-count")).toBe("26 chars");
     expect(folderRow("First").textContent).toContain("Included 2/2");
   });
 
@@ -285,7 +353,7 @@ describe("ExportConfirmationDialog (#523)", () => {
 
     expect(candidateRow("First/01.md")).not.toBeNull();
     expect(summary("included-count")).toBe("3 files");
-    expect(summary("character-count")).toBe("35 chars");
+    expect(summary("character-count")).toBe("32 chars");
 
     act(() => folderCollapseButton("First").click());
 
@@ -293,7 +361,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(candidateRow("First/notes.txt")).toBeNull();
     expect(folderRow("First")).not.toBeNull();
     expect(summary("included-count")).toBe("3 files");
-    expect(summary("character-count")).toBe("35 chars");
+    expect(summary("character-count")).toBe("32 chars");
 
     act(() => folderCollapseButton("First").click());
 
@@ -316,7 +384,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(includeToggle("First/01.md").checked).toBe(true);
     expect(includeToggle("First/notes.txt").checked).toBe(true);
     expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("15 chars");
+    expect(summary("character-count")).toBe("26 chars");
 
     act(() => includeToggle("First/01.md").click());
     expect(folderRow("First").textContent).toContain("Some 1/2");
@@ -326,6 +394,104 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(includeToggle("First/01.md").checked).toBe(true);
     expect(includeToggle("First/notes.txt").checked).toBe(true);
     expect(folderRow("First").textContent).toContain("Included 2/2");
+  });
+
+  it("shows and hides the dirty title icon for include and heading changes", () => {
+    mountDialog();
+
+    expect(dirtyIcon()).toBeNull();
+
+    act(() => includeToggle("First/01.md").click());
+
+    expect(dirtyIcon()?.getAttribute("title")).toBe("Modified");
+
+    act(() => includeToggle("First/01.md").click());
+
+    expect(dirtyIcon()).toBeNull();
+
+    act(() => {
+      const select = headingRemovalSelect();
+      select.value = "1";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(dirtyIcon()).not.toBeNull();
+
+    act(() => {
+      const select = headingRemovalSelect();
+      select.value = "0";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(dirtyIcon()).toBeNull();
+  });
+
+  it("reorders folder groups by dragging the folder gripper", () => {
+    mountDialog({ candidates: groupedCandidates });
+
+    expect(renderedFolderOrder()).toEqual(["First", "Second"]);
+
+    dispatchDragStart(folderDragHandle("Second"));
+    expect(folderRow("Second").dataset.exportDragging).toBe("true");
+    expect(candidateRow("Second/01.md")?.dataset.exportFolderDragSubdued).toBe(
+      "true"
+    );
+    dispatchDragOver(folderRow("First"));
+    expect(folderRow("First").dataset.exportDropTarget).toBe("true");
+    dispatchDrop(folderRow("First"));
+
+    expect(renderedFolderOrder()).toEqual(["Second", "First"]);
+    expect(dirtyIcon()).not.toBeNull();
+    expect(folderRow("Second").dataset.exportOrderDirty).toBe("true");
+    expect(folderRow("First").dataset.exportOrderDirty).toBe("true");
+
+    dispatchDragStart(folderDragHandle("First"));
+    dispatchDrop(folderRow("Second"));
+
+    expect(renderedFolderOrder()).toEqual(["First", "Second"]);
+    expect(dirtyIcon()).toBeNull();
+  });
+
+  it("reorders file rows within the same folder by dragging the row gripper", () => {
+    mountDialog({ candidates: groupedCandidates });
+
+    expect(renderedFileOrder()).toEqual([
+      "First/01.md",
+      "First/notes.txt",
+      "Second/01.md"
+    ]);
+
+    dispatchDragStart(fileDragHandle("First/notes.txt"));
+    expect(candidateRow("First/notes.txt")?.dataset.exportDragging).toBe(
+      "true"
+    );
+    dispatchDragOver(candidateRow("First/01.md")!);
+    expect(candidateRow("First/01.md")?.dataset.exportDropTarget).toBe("true");
+    dispatchDrop(candidateRow("First/01.md")!);
+
+    expect(renderedFileOrder()).toEqual([
+      "First/notes.txt",
+      "First/01.md",
+      "Second/01.md"
+    ]);
+    expect(dirtyIcon()).not.toBeNull();
+    expect(candidateRow("First/notes.txt")?.dataset.exportOrderDirty).toBe(
+      "true"
+    );
+    expect(candidateRow("First/01.md")?.dataset.exportOrderDirty).toBe("true");
+    expect(candidateRow("Second/01.md")?.dataset.exportOrderDirty).toBe(
+      "false"
+    );
+
+    dispatchDragStart(fileDragHandle("First/01.md"));
+    dispatchDrop(candidateRow("First/notes.txt")!);
+
+    expect(renderedFileOrder()).toEqual([
+      "First/01.md",
+      "First/notes.txt",
+      "Second/01.md"
+    ]);
+    expect(dirtyIcon()).toBeNull();
   });
 
   it("recalculates previews and totals when heading removal changes", () => {
@@ -376,7 +542,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     );
   });
 
-  it("reload preserves existing included state and adds new files included", async () => {
+  it("reloads immediately without confirmation when the dialog is clean", async () => {
     const onReloadCandidates = vi.fn(async () => [
       {
         ...candidates[0],
@@ -403,7 +569,76 @@ describe("ExportConfirmationDialog (#523)", () => {
         included: true
       }
     ]);
-    mountDialog({ onReloadCandidates });
+    const onConfirmDiscardReload = vi.fn(async () => false);
+    mountDialog({ onReloadCandidates, onConfirmDiscardReload });
+
+    await act(async () => {
+      buttonByText("Reload").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onConfirmDiscardReload).not.toHaveBeenCalled();
+    expect(onReloadCandidates).toHaveBeenCalledTimes(1);
+    expect(candidateRow("First/notes.txt")).toBeNull();
+    expect(candidateRow("First/new.md")).not.toBeNull();
+    expect(headingRemovalSelect().value).toBe("0");
+    expect(includeToggle("First/01.md").checked).toBe(true);
+    expect(includeToggle("First/new.md").checked).toBe(true);
+    expect(summary("candidate-count")).toBe("2 files");
+    expect(summary("included-count")).toBe("2 files");
+    expect(summary("character-count")).toBe("29 chars");
+    expect(dirtyIcon()).toBeNull();
+  });
+
+  it("cancels dirty reload confirmation without changing dialog state", async () => {
+    const onReloadCandidates = vi.fn(async () => [candidates[0]]);
+    const onConfirmDiscardReload = vi.fn(async () => false);
+    mountDialog({ onReloadCandidates, onConfirmDiscardReload });
+
+    act(() => includeToggle("First/01.md").click());
+
+    await act(async () => {
+      buttonByText("Reload").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onConfirmDiscardReload).toHaveBeenCalledTimes(1);
+    expect(onReloadCandidates).not.toHaveBeenCalled();
+    expect(includeToggle("First/01.md").checked).toBe(false);
+    expect(dirtyIcon()).not.toBeNull();
+  });
+
+  it("confirms dirty reload and discards dialog edits", async () => {
+    const onReloadCandidates = vi.fn(async () => [
+      {
+        ...candidates[0],
+        rawText: "# Updated\nupdated body",
+        previewStart: "updated",
+        previewEnd: "updated",
+        previewStartHover: "updated hover",
+        previewEndHover: "updated hover",
+        characterCount: 12,
+        included: true
+      },
+      {
+        documentKey: "First/new.md",
+        filePath: "First/new.md",
+        parentPath: "First",
+        fileName: "new.md",
+        kind: "markdown" as const,
+        rawText: "newtext",
+        previewStart: "new",
+        previewEnd: "new",
+        previewStartHover: "new",
+        previewEndHover: "new",
+        characterCount: 7,
+        included: true
+      }
+    ]);
+    const onConfirmDiscardReload = vi.fn(async () => true);
+    mountDialog({ onReloadCandidates, onConfirmDiscardReload });
 
     act(() => includeToggle("First/01.md").click());
     act(() => {
@@ -418,16 +653,17 @@ describe("ExportConfirmationDialog (#523)", () => {
       await Promise.resolve();
     });
 
+    expect(onConfirmDiscardReload).toHaveBeenCalledTimes(1);
     expect(onReloadCandidates).toHaveBeenCalledTimes(1);
     expect(candidateRow("First/notes.txt")).toBeNull();
     expect(candidateRow("First/new.md")).not.toBeNull();
-    expect(headingRemovalSelect().value).toBe("1");
-    expect(candidateRow("First/01.md")!.textContent).toContain("updated bo…");
-    expect(candidateRow("First/01.md")!.textContent).not.toContain("# Updated");
-    expect(includeToggle("First/01.md").checked).toBe(false);
+    expect(headingRemovalSelect().value).toBe("0");
+    expect(candidateRow("First/01.md")!.textContent).toContain("# Updated");
+    expect(includeToggle("First/01.md").checked).toBe(true);
     expect(includeToggle("First/new.md").checked).toBe(true);
     expect(summary("candidate-count")).toBe("2 files");
-    expect(summary("included-count")).toBe("1 files");
-    expect(summary("character-count")).toBe("7 chars");
+    expect(summary("included-count")).toBe("2 files");
+    expect(summary("character-count")).toBe("29 chars");
+    expect(dirtyIcon()).toBeNull();
   });
 });

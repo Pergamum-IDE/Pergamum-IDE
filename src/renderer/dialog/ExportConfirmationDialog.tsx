@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent as ReactDragEvent
+} from "react";
 import gripperIconUrl from "../../../assets/icons/codicons/dialog/gripper.svg?url";
 import folderIconUrl from "../../../assets/icons/codicons/explorer/folder.svg?url";
 import chevronDownIconUrl from "../../../assets/icons/feather/glossary/chevrons-down.svg?url";
 import chevronRightIconUrl from "../../../assets/icons/feather/glossary/chevrons-right.svg?url";
+import editIconUrl from "../../../assets/icons/feather/global/edit-2.svg?url";
 import markdownFileIconUrl from "../../../assets/icons/svgrepo/explorer/markdown-svgrepo-com.svg?url";
 import textFileIconUrl from "../../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
 import type { Translate } from "../../shared/i18n";
@@ -22,6 +28,16 @@ import {
   summarizeExportCandidates,
   toggleFolderIncluded
 } from "../exportCandidates";
+import {
+  applyExportDialogOrder,
+  createInitialExportDialogState,
+  createOrderStateFromCandidates,
+  getOrderDirtyFiles,
+  getOrderDirtyGroups,
+  isExportDialogDirty,
+  reorderFileWithinGroup,
+  reorderFolderGroup
+} from "../exportDialogOrder";
 import { InfoDialog } from "./InfoDialog";
 
 export interface ExportConfirmationDialogProps {
@@ -33,7 +49,36 @@ export interface ExportConfirmationDialogProps {
   readonly onReloadCandidates: () => Promise<
     readonly ExportCandidateListItem[] | null
   >;
+  readonly onConfirmDiscardReload: () => Promise<boolean>;
   readonly onClose: () => void;
+}
+
+type ExportDialogDragState =
+  | { readonly kind: "folder"; readonly parentPath: string }
+  | {
+      readonly kind: "file";
+      readonly parentPath: string;
+      readonly filePath: string;
+    };
+
+type ExportDialogDropTarget =
+  | { readonly kind: "folder"; readonly parentPath: string }
+  | {
+      readonly kind: "file";
+      readonly parentPath: string;
+      readonly filePath: string;
+    };
+
+function classNames(
+  ...values: readonly (string | false | null | undefined)[]
+): string {
+  return values.filter(Boolean).join(" ");
+}
+
+function cloneCandidates(
+  candidates: readonly ExportCandidateListItem[]
+): readonly ExportCandidateListItem[] {
+  return candidates.map((candidate) => ({ ...candidate }));
 }
 
 function originLabel(
@@ -119,6 +164,32 @@ function parseHeadingRemovalLevel(value: string): HeadingRemovalLevel {
   return Number.isInteger(parsed) && isHeadingRemovalLevel(parsed) ? parsed : 0;
 }
 
+function dropTargetsEqual(
+  first: ExportDialogDropTarget | null,
+  second: ExportDialogDropTarget | null
+): boolean {
+  if (first === second) {
+    return true;
+  }
+
+  if (first === null || second === null || first.kind !== second.kind) {
+    return false;
+  }
+
+  if (first.kind === "folder") {
+    return first.parentPath === second.parentPath;
+  }
+
+  if (second.kind !== "file") {
+    return false;
+  }
+
+  return (
+    first.parentPath === second.parentPath &&
+    first.filePath === second.filePath
+  );
+}
+
 export function ExportConfirmationDialog({
   origin,
   projectName,
@@ -126,31 +197,78 @@ export function ExportConfirmationDialog({
   translate,
   opener,
   onReloadCandidates,
+  onConfirmDiscardReload,
   onClose
 }: ExportConfirmationDialogProps): JSX.Element {
   const title = translate("export.confirmation.title");
   const [rows, setRows] = useState<readonly ExportCandidateListItem[]>(() =>
-    candidates.map((candidate) => ({ ...candidate }))
+    cloneCandidates(candidates)
   );
   const [headingRemovalLevel, setHeadingRemovalLevel] =
     useState<HeadingRemovalLevel>(0);
+  const [orderState, setOrderState] = useState(() =>
+    createOrderStateFromCandidates(candidates)
+  );
+  const [initialState, setInitialState] = useState(() =>
+    createInitialExportDialogState(candidates, 0)
+  );
   const [collapsedParentPaths, setCollapsedParentPaths] = useState<
     ReadonlySet<string>
   >(() => new Set());
   const [isReloading, setIsReloading] = useState(false);
-  const summary = useMemo(() => summarizeExportCandidates(rows), [rows]);
+  const [dragState, setDragState] = useState<ExportDialogDragState | null>(
+    null
+  );
+  const [dropTarget, setDropTarget] =
+    useState<ExportDialogDropTarget | null>(null);
+  const orderedRows = useMemo(
+    () => applyExportDialogOrder(rows, orderState),
+    [orderState, rows]
+  );
+  const isDirty = useMemo(
+    () =>
+      isExportDialogDirty({
+        orderState,
+        candidates: rows,
+        headingRemovalLevel,
+        initialState
+      }),
+    [headingRemovalLevel, initialState, orderState, rows]
+  );
+  const orderDirtyGroups = useMemo(
+    () => getOrderDirtyGroups(orderState, initialState.orderState),
+    [initialState, orderState]
+  );
+  const orderDirtyFiles = useMemo(
+    () => getOrderDirtyFiles(orderState, initialState.orderState),
+    [initialState, orderState]
+  );
+  const summary = useMemo(
+    () => summarizeExportCandidates(orderedRows),
+    [orderedRows]
+  );
   const groups = useMemo(
     () =>
       groupExportCandidatesByParentPath(
-        rows,
+        orderedRows,
         translate("export.confirmation.projectRootParent")
       ),
-    [rows, translate]
+    [orderedRows, translate]
   );
 
   useEffect(() => {
-    setRows(candidates.map((candidate) => ({ ...candidate })));
+    const nextRows = recalculateExportCandidateMetadata(
+      cloneCandidates(candidates),
+      0
+    );
+    const nextOrderState = createOrderStateFromCandidates(nextRows);
+    setRows(nextRows);
+    setOrderState(nextOrderState);
+    setInitialState(createInitialExportDialogState(nextRows, 0));
+    setHeadingRemovalLevel(0);
     setCollapsedParentPaths(new Set());
+    setDragState(null);
+    setDropTarget(null);
   }, [candidates]);
 
   function setCandidateIncluded(documentKey: string, included: boolean): void {
@@ -187,8 +305,142 @@ export function ExportConfirmationDialog({
     );
   }
 
+  function handleFolderDragStart(
+    event: ReactDragEvent<HTMLElement>,
+    parentPath: string
+  ): void {
+    setDragState({ kind: "folder", parentPath });
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", parentPath);
+    }
+  }
+
+  function handleFileDragStart(
+    event: ReactDragEvent<HTMLElement>,
+    candidate: ExportCandidateListItem
+  ): void {
+    setDragState({
+      kind: "file",
+      parentPath: candidate.parentPath,
+      filePath: candidate.filePath
+    });
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", candidate.filePath);
+    }
+  }
+
+  function handleDragEnd(): void {
+    setDragState(null);
+    setDropTarget(null);
+  }
+
+  function updateDropTarget(next: ExportDialogDropTarget | null): void {
+    setDropTarget((current) =>
+      dropTargetsEqual(current, next) ? current : next
+    );
+  }
+
+  function handleDropTargetDragLeave(
+    event: ReactDragEvent<HTMLTableRowElement>
+  ): void {
+    const relatedTarget = event.relatedTarget;
+    if (
+      relatedTarget instanceof Node &&
+      event.currentTarget.contains(relatedTarget)
+    ) {
+      return;
+    }
+
+    updateDropTarget(null);
+  }
+
+  function handleFolderDragOver(
+    event: ReactDragEvent<HTMLTableRowElement>,
+    targetParentPath: string
+  ): void {
+    if (
+      dragState?.kind === "folder" &&
+      dragState.parentPath !== targetParentPath
+    ) {
+      event.preventDefault();
+      updateDropTarget({ kind: "folder", parentPath: targetParentPath });
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+    } else if (dragState?.kind === "folder") {
+      updateDropTarget(null);
+    }
+  }
+
+  function handleFolderDrop(
+    event: ReactDragEvent<HTMLTableRowElement>,
+    targetParentPath: string
+  ): void {
+    if (dragState?.kind !== "folder") {
+      return;
+    }
+
+    event.preventDefault();
+    setOrderState((current) =>
+      reorderFolderGroup(current, dragState.parentPath, targetParentPath)
+    );
+    setDragState(null);
+    setDropTarget(null);
+  }
+
+  function handleFileDragOver(
+    event: ReactDragEvent<HTMLTableRowElement>,
+    targetCandidate: ExportCandidateListItem
+  ): void {
+    if (
+      dragState?.kind === "file" &&
+      dragState.parentPath === targetCandidate.parentPath &&
+      dragState.filePath !== targetCandidate.filePath
+    ) {
+      event.preventDefault();
+      updateDropTarget({
+        kind: "file",
+        parentPath: targetCandidate.parentPath,
+        filePath: targetCandidate.filePath
+      });
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+    } else if (dragState?.kind === "file") {
+      updateDropTarget(null);
+    }
+  }
+
+  function handleFileDrop(
+    event: ReactDragEvent<HTMLTableRowElement>,
+    targetCandidate: ExportCandidateListItem
+  ): void {
+    if (dragState?.kind !== "file") {
+      return;
+    }
+
+    event.preventDefault();
+    setOrderState((current) =>
+      reorderFileWithinGroup(
+        current,
+        dragState.parentPath,
+        dragState.filePath,
+        targetCandidate.parentPath,
+        targetCandidate.filePath
+      )
+    );
+    setDragState(null);
+    setDropTarget(null);
+  }
+
   async function handleReload(): Promise<void> {
     if (isReloading) {
+      return;
+    }
+
+    if (isDirty && !(await onConfirmDiscardReload())) {
       return;
     }
 
@@ -199,12 +451,20 @@ export function ExportConfirmationDialog({
         return;
       }
 
-      setRows((current) =>
-        recalculateExportCandidateMetadata(
-          mergeExportCandidateIncludedStates(reloadedCandidates, current),
-          headingRemovalLevel
-        )
+      const nextHeadingRemovalLevel = isDirty ? 0 : headingRemovalLevel;
+      const nextRows = recalculateExportCandidateMetadata(
+        isDirty
+          ? reloadedCandidates
+          : mergeExportCandidateIncludedStates(reloadedCandidates, rows),
+        nextHeadingRemovalLevel
       );
+      const nextOrderState = createOrderStateFromCandidates(nextRows);
+      setRows(nextRows);
+      setOrderState(nextOrderState);
+      setInitialState(
+        createInitialExportDialogState(nextRows, nextHeadingRemovalLevel)
+      );
+      setHeadingRemovalLevel(nextHeadingRemovalLevel);
       const nextParentPaths = new Set(
         reloadedCandidates.map((candidate) => candidate.parentPath)
       );
@@ -227,6 +487,18 @@ export function ExportConfirmationDialog({
       title={title}
       className="exportConfirmationDialog"
       opener={opener}
+      titleAccessory={
+        isDirty ? (
+          <span
+            className="exportConfirmationDialogDirtyIcon"
+            role="img"
+            aria-label={translate("export.confirmation.modified")}
+            title={translate("export.confirmation.modified")}
+          >
+            <img src={editIconUrl} alt="" aria-hidden="true" />
+          </span>
+        ) : null
+      }
       onClose={onClose}
       footer={
         <div className="exportConfirmationDialogFooter">
@@ -323,6 +595,9 @@ export function ExportConfirmationDialog({
             ))}
           </select>
         </label>
+        <span className="exportConfirmationDialogControlNote">
+          {translate("export.confirmation.headingRemoval.note")}
+        </span>
       </div>
 
       {rows.length === 0 ? (
@@ -367,22 +642,67 @@ export function ExportConfirmationDialog({
             <tbody>
               {groups.flatMap((group) => {
                 const isCollapsed = collapsedParentPaths.has(group.parentPath);
+                const isGroupOrderDirty = orderDirtyGroups.has(
+                  group.parentPath
+                );
+                const isGroupDragging =
+                  dragState?.kind === "folder" &&
+                  dragState.parentPath === group.parentPath;
+                const isGroupDropTarget =
+                  dropTarget?.kind === "folder" &&
+                  dropTarget.parentPath === group.parentPath;
                 const folderRows = [
                   <tr
                     key={`folder:${group.parentPath}`}
-                    className="exportConfirmationDialogFolderRow"
+                    className={classNames(
+                      "exportConfirmationDialogFolderRow",
+                      isGroupOrderDirty &&
+                        "exportConfirmationDialogOrderDirty",
+                      isGroupDragging && "exportConfirmationDialogDragging",
+                      isGroupDropTarget && "exportConfirmationDialogDropTarget"
+                    )}
                     data-export-folder-parent-path={group.parentPath}
                     data-export-folder-include-state={group.includeState}
+                    data-export-dragging={isGroupDragging ? "true" : "false"}
+                    data-export-drop-target={
+                      isGroupDropTarget ? "true" : "false"
+                    }
+                    data-export-order-dirty={
+                      isGroupOrderDirty ? "true" : "false"
+                    }
+                    onDragOver={(event) =>
+                      handleFolderDragOver(event, group.parentPath)
+                    }
+                    onDrop={(event) => handleFolderDrop(event, group.parentPath)}
+                    onDragLeave={handleDropTargetDragLeave}
                   >
-                    <td
-                      className="exportConfirmationDialogHandle"
-                      aria-hidden="true"
-                    >
-                      <img
-                        className="exportConfirmationDialogHandleIcon"
-                        src={gripperIconUrl}
-                        alt=""
-                      />
+                    <td className="exportConfirmationDialogHandle">
+                      <span
+                        className="exportConfirmationDialogDragHandle"
+                        draggable={true}
+                        aria-label={translate(
+                          "export.confirmation.folderDragHandleLabel",
+                          { folder: group.label }
+                        )}
+                        title={translate(
+                          "export.confirmation.folderDragHandleLabel",
+                          { folder: group.label }
+                        )}
+                        data-export-folder-drag-handle-parent-path={
+                          group.parentPath
+                        }
+                        onDragStart={(event) =>
+                          handleFolderDragStart(event, group.parentPath)
+                        }
+                        onDragEnd={handleDragEnd}
+                      >
+                        <img
+                          className="exportConfirmationDialogHandleIcon"
+                          src={gripperIconUrl}
+                          alt=""
+                          aria-hidden="true"
+                        />
+                      </span>
                     </td>
                     <td
                       className="exportConfirmationDialogFolderMain"
@@ -468,95 +788,151 @@ export function ExportConfirmationDialog({
                 }
 
                 return folderRows.concat(
-                  group.items.map((candidate) => (
-                    <tr
-                      key={candidate.documentKey}
-                      className="exportConfirmationDialogRow"
-                      data-export-candidate-file-path={candidate.filePath}
-                      data-export-candidate-included={
-                        candidate.included ? "true" : "false"
-                      }
-                    >
-                      <td
-                        className="exportConfirmationDialogHandle"
-                        aria-hidden="true"
-                      >
-                        <img
-                          className="exportConfirmationDialogHandleIcon"
-                          src={gripperIconUrl}
-                          alt=""
-                        />
-                      </td>
-                      <td
-                        className="exportConfirmationDialogKindIconCell"
-                        title={kindLabel(candidate.kind, translate)}
-                      >
-                        <img
-                          className="exportConfirmationDialogKindIcon"
-                          src={kindIconUrl(candidate.kind)}
-                          alt=""
-                          aria-hidden="true"
-                        />
-                        <span className="srOnly">
-                          {kindLabel(candidate.kind, translate)}
-                        </span>
-                      </td>
-                      <td className="exportConfirmationDialogParentPath">
-                        {candidate.parentPath ||
-                          translate("export.confirmation.projectRootParent")}
-                      </td>
-                      <td className="exportConfirmationDialogFileName">
-                        {candidate.fileName}
-                      </td>
-                      <td
-                        className="exportConfirmationDialogPreview exportConfirmationDialogPreviewStart"
-                        title={candidate.previewStartHover}
-                      >
-                        {candidate.previewStart}
-                      </td>
-                      <td
-                        className="exportConfirmationDialogPreview exportConfirmationDialogPreviewEnd"
-                        title={candidate.previewEndHover}
-                      >
-                        {candidate.previewEnd}
-                      </td>
-                      <td className="exportConfirmationDialogCharacterCount">
-                        {formatCharacterCount(
-                          candidate.characterCount,
-                          translate
+                  group.items.map((candidate) => {
+                    const isFileOrderDirty = orderDirtyFiles.has(
+                      candidate.filePath
+                    );
+                    const isFileDragging =
+                      dragState?.kind === "file" &&
+                      dragState.filePath === candidate.filePath;
+                    const isFileDropTarget =
+                      dropTarget?.kind === "file" &&
+                      dropTarget.filePath === candidate.filePath;
+                    const isDraggedFolderChild =
+                      dragState?.kind === "folder" &&
+                      dragState.parentPath === candidate.parentPath;
+                    return (
+                      <tr
+                        key={candidate.documentKey}
+                        className={classNames(
+                          "exportConfirmationDialogRow",
+                          isFileOrderDirty &&
+                            "exportConfirmationDialogOrderDirty",
+                          isFileDragging && "exportConfirmationDialogDragging",
+                          isFileDropTarget &&
+                            "exportConfirmationDialogDropTarget",
+                          isDraggedFolderChild &&
+                            "exportConfirmationDialogFolderDragSubdued"
                         )}
-                      </td>
-                      <td className="exportConfirmationDialogInclude exportConfirmationDialogIncludeCell">
-                        <label className="exportConfirmationDialogIncludeSwitch">
-                          <input
-                            className="exportConfirmationDialogIncludeInput"
-                            type="checkbox"
-                            role="switch"
-                            checked={candidate.included}
+                        data-export-candidate-file-path={candidate.filePath}
+                        data-export-candidate-included={
+                          candidate.included ? "true" : "false"
+                        }
+                        data-export-dragging={isFileDragging ? "true" : "false"}
+                        data-export-drop-target={
+                          isFileDropTarget ? "true" : "false"
+                        }
+                        data-export-folder-drag-subdued={
+                          isDraggedFolderChild ? "true" : "false"
+                        }
+                        data-export-order-dirty={
+                          isFileOrderDirty ? "true" : "false"
+                        }
+                        onDragOver={(event) =>
+                          handleFileDragOver(event, candidate)
+                        }
+                        onDrop={(event) => handleFileDrop(event, candidate)}
+                        onDragLeave={handleDropTargetDragLeave}
+                      >
+                        <td className="exportConfirmationDialogHandle">
+                          <span
+                            className="exportConfirmationDialogDragHandle"
+                            draggable={true}
                             aria-label={translate(
-                              "export.confirmation.includeToggleLabel",
+                              "export.confirmation.fileDragHandleLabel",
                               { fileName: candidate.fileName }
                             )}
-                            data-export-include-toggle-file-path={
+                            title={translate(
+                              "export.confirmation.fileDragHandleLabel",
+                              { fileName: candidate.fileName }
+                            )}
+                            data-export-file-drag-handle-file-path={
                               candidate.filePath
                             }
-                            onChange={(event) =>
-                              setCandidateIncluded(
-                                candidate.documentKey,
-                                event.currentTarget.checked
-                              )
+                            onDragStart={(event) =>
+                              handleFileDragStart(event, candidate)
                             }
-                          />
-                          <span
-                            className="exportConfirmationDialogIncludeTrack"
-                            aria-hidden="true"
+                            onDragEnd={handleDragEnd}
                           >
-                            <span className="exportConfirmationDialogIncludeThumb" />
+                            <img
+                              className="exportConfirmationDialogHandleIcon"
+                              src={gripperIconUrl}
+                              alt=""
+                              aria-hidden="true"
+                            />
                           </span>
-                        </label>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td
+                          className="exportConfirmationDialogKindIconCell"
+                          title={kindLabel(candidate.kind, translate)}
+                        >
+                          <img
+                            className="exportConfirmationDialogKindIcon"
+                            src={kindIconUrl(candidate.kind)}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                          <span className="srOnly">
+                            {kindLabel(candidate.kind, translate)}
+                          </span>
+                        </td>
+                        <td className="exportConfirmationDialogParentPath">
+                          {candidate.parentPath ||
+                            translate("export.confirmation.projectRootParent")}
+                        </td>
+                        <td className="exportConfirmationDialogFileName">
+                          {candidate.fileName}
+                        </td>
+                        <td
+                          className="exportConfirmationDialogPreview exportConfirmationDialogPreviewStart"
+                          title={candidate.previewStartHover}
+                        >
+                          {candidate.previewStart}
+                        </td>
+                        <td
+                          className="exportConfirmationDialogPreview exportConfirmationDialogPreviewEnd"
+                          title={candidate.previewEndHover}
+                        >
+                          {candidate.previewEnd}
+                        </td>
+                        <td className="exportConfirmationDialogCharacterCount">
+                          {formatCharacterCount(
+                            candidate.characterCount,
+                            translate
+                          )}
+                        </td>
+                        <td className="exportConfirmationDialogInclude exportConfirmationDialogIncludeCell">
+                          <label className="exportConfirmationDialogIncludeSwitch">
+                            <input
+                              className="exportConfirmationDialogIncludeInput"
+                              type="checkbox"
+                              role="switch"
+                              checked={candidate.included}
+                              aria-label={translate(
+                                "export.confirmation.includeToggleLabel",
+                                { fileName: candidate.fileName }
+                              )}
+                              data-export-include-toggle-file-path={
+                                candidate.filePath
+                              }
+                              onChange={(event) =>
+                                setCandidateIncluded(
+                                  candidate.documentKey,
+                                  event.currentTarget.checked
+                                )
+                              }
+                            />
+                            <span
+                              className="exportConfirmationDialogIncludeTrack"
+                              aria-hidden="true"
+                            >
+                              <span className="exportConfirmationDialogIncludeThumb" />
+                            </span>
+                          </label>
+                        </td>
+                      </tr>
+                    );
+                  })
                 );
               })}
             </tbody>

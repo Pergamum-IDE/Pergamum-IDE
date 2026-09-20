@@ -619,6 +619,27 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("en", "export.confirmation.headingRemoval.level6")).toBe(
       "Remove H1-H6"
     );
+    expect(t("ja", "export.confirmation.modified")).toBe("変更があります");
+    expect(t("en", "export.confirmation.modified")).toBe("Modified");
+    expect(t("ja", "export.confirmation.reloadDiscard.message")).toBe(
+      "編集内容を破棄して読み込み直します。よろしいですか？"
+    );
+    expect(t("en", "export.confirmation.reloadDiscard.confirm")).toBe(
+      "Discard and Reload"
+    );
+    expect(t("ja", "export.confirmation.headingRemoval.note")).toBe(
+      "※ 本文ファイルには影響しません。"
+    );
+    expect(
+      t("ja", "export.confirmation.folderDragHandleLabel", {
+        folder: "本文"
+      })
+    ).toBe("本文を並べ替え");
+    expect(
+      t("en", "export.confirmation.fileDragHandleLabel", {
+        fileName: "01.md"
+      })
+    ).toBe("Reorder 01.md");
     expect(
       t("ja", "export.confirmation.folderIncluded", {
         included: 2,

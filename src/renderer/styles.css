@@ -8200,8 +8200,7 @@ label.settingsItemHeader {
   min-width: 0;
 }
 
-/* #523 export confirmation. The grippers are visual only; reorder belongs to a
-   later slice. */
+/* #523 export confirmation. Reorder edits stay local to the dialog state. */
 .appInfoDialog.exportConfirmationDialog {
   width: min(980px, calc(100vw - 32px));
   max-width: 980px;
@@ -8257,6 +8256,14 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogControlLabel {
   color: var(--workspace-sidebar-muted-foreground);
+  white-space: nowrap;
+}
+
+.exportConfirmationDialogControlNote {
+  align-self: center;
+  color: var(--workspace-sidebar-muted-foreground);
+  font-size: 0.78rem;
+  line-height: 1.4;
   white-space: nowrap;
 }
 
@@ -8360,9 +8367,42 @@ label.settingsItemHeader {
   margin-inline-start: auto;
 }
 
+.exportConfirmationDialogDirtyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 18px;
+  block-size: 18px;
+  color: var(--app-dialog-icon-warning);
+}
+
+.exportConfirmationDialogDirtyIcon img {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
 .exportConfirmationDialogHandle {
   color: var(--workspace-sidebar-muted-foreground);
   line-height: 1;
+}
+
+.exportConfirmationDialogDragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  min-block-size: 24px;
+  border-radius: 4px;
+  cursor: grab;
+}
+
+.exportConfirmationDialogDragHandle:active {
+  cursor: grabbing;
+}
+
+.exportConfirmationDialogDragHandle:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
 }
 
 .exportConfirmationDialogHandleIcon,
@@ -8389,6 +8429,50 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogFolderRow td {
   background: var(--app-dialog-header-background);
+}
+
+.exportConfirmationDialogRow:hover td {
+  background: var(--app-dialog-button-hover-background, #f6f8fa);
+}
+
+.exportConfirmationDialogFolderRow:hover td {
+  background: #fff;
+}
+
+.exportConfirmationDialogRow.exportConfirmationDialogOrderDirty td,
+.exportConfirmationDialogFolderRow.exportConfirmationDialogOrderDirty td {
+  background: var(--app-dialog-warning-header-background);
+}
+
+.exportConfirmationDialogRow.exportConfirmationDialogDragging td,
+.exportConfirmationDialogFolderRow.exportConfirmationDialogDragging td {
+  background: #eef5fd;
+  opacity: 0.82;
+  box-shadow: inset 0 0 0 1px var(--app-dialog-focus-ring);
+}
+
+.exportConfirmationDialogRow.exportConfirmationDialogFolderDragSubdued td {
+  opacity: 0.58;
+}
+
+.exportConfirmationDialogRow.exportConfirmationDialogDropTarget td,
+.exportConfirmationDialogFolderRow.exportConfirmationDialogDropTarget td {
+  box-shadow: inset 0 3px 0 var(--app-dialog-focus-ring);
+}
+
+.exportConfirmationDialogRow.exportConfirmationDialogOrderDirty td:first-child,
+.exportConfirmationDialogFolderRow.exportConfirmationDialogOrderDirty
+  td:first-child {
+  box-shadow: inset 3px 0 var(--app-dialog-icon-warning);
+}
+
+.exportConfirmationDialogRow.exportConfirmationDialogOrderDirty.exportConfirmationDialogDropTarget
+  td:first-child,
+.exportConfirmationDialogFolderRow.exportConfirmationDialogOrderDirty.exportConfirmationDialogDropTarget
+  td:first-child {
+  box-shadow:
+    inset 0 3px 0 var(--app-dialog-focus-ring),
+    inset 3px 0 var(--app-dialog-icon-warning);
 }
 
 .exportConfirmationDialogTable td.exportConfirmationDialogFolderMain {
