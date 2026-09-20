@@ -21,7 +21,7 @@ const translate: Translate = (key, values) => t("en", key, values);
 const noopReload = vi.fn(async () => null);
 const noopConfirmDiscardReload = vi.fn(async () => true);
 const noopExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
-  async () => ({ ok: true })
+  async () => ({ ok: true, outputPath: "C:\\export\\manuscript.txt" })
 );
 const noopLoadAozoraText = vi.fn<
   ExportConfirmationDialogProps["loadAozoraText"]
@@ -120,6 +120,7 @@ function mountDialog(options: {
   >;
   onConfirmDiscardReload?: () => Promise<boolean>;
   onExportTxt?: ExportConfirmationDialogProps["onExportTxt"];
+  onExportHtmlCombined?: ExportConfirmationDialogProps["onExportHtmlCombined"];
   loadAozoraText?: ExportConfirmationDialogProps["loadAozoraText"];
   onExportUnavailable?: ExportConfirmationDialogProps["onExportUnavailable"];
   onExportFailed?: ExportConfirmationDialogProps["onExportFailed"];
@@ -140,6 +141,7 @@ function mountDialog(options: {
           options.onConfirmDiscardReload ?? noopConfirmDiscardReload
         }
         onExportTxt={options.onExportTxt ?? noopExportTxt}
+        onExportHtmlCombined={options.onExportHtmlCombined}
         loadAozoraText={options.loadAozoraText ?? noopLoadAozoraText}
         onExportUnavailable={
           options.onExportUnavailable ?? noopExportUnavailable
@@ -508,7 +510,7 @@ describe("ExportConfirmationDialog (#523)", () => {
 
   it("exports included rows as TXT with the current dialog state", async () => {
     const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
-      async () => ({ ok: true })
+      async () => ({ ok: true, outputPath: "C:\\export\\manuscript.txt" })
     );
     mountDialog({ onExportTxt });
 
@@ -562,7 +564,7 @@ describe("ExportConfirmationDialog (#523)", () => {
 
   it("uses Aozora project reads when exporting with Aozora body notation", async () => {
     const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
-      async () => ({ ok: true })
+      async () => ({ ok: true, outputPath: "C:\\export\\manuscript.txt" })
     );
     const loadAozoraText = vi.fn<
       ExportConfirmationDialogProps["loadAozoraText"]
@@ -597,7 +599,7 @@ describe("ExportConfirmationDialog (#523)", () => {
 
   it("does not export and reports a safe message when no files are included", async () => {
     const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
-      async () => ({ ok: true })
+      async () => ({ ok: true, outputPath: "C:\\export\\manuscript.txt" })
     );
     const onExportUnavailable = vi.fn();
     mountDialog({ onExportTxt, onExportUnavailable });
@@ -859,5 +861,79 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(summary("included-count")).toBe("2 files");
     expect(summary("character-count")).toBe("29 chars");
     expect(dirtyIcon()).toBeNull();
+  });
+
+  it("supports HTML combined export options and exposes last saved path in footer (#523 Slice 7)", async () => {
+    const onExportHtmlCombined = vi.fn(async () => ({
+      ok: true as const,
+      outputPath: "C:\\export\\manuscript.html",
+      warningCount: 0
+    }));
+
+    mountDialog({ onExportHtmlCombined });
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      select.value = "htmlCombined";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const note = container!.querySelector(
+      ".exportConfirmationDialogControlNote"
+    );
+    expect(note?.textContent).toContain(
+      "Combines included files into one HTML document"
+    );
+
+    const assetFolderInput = container!.querySelector<HTMLInputElement>(
+      "input[data-export-image-asset-folder-input='true']"
+    );
+    expect(assetFolderInput).not.toBeNull();
+    expect(assetFolderInput?.value).toBe("exports.assets");
+
+    const tocInput = container!.querySelector<HTMLInputElement>(
+      "input[data-export-file-structure-toc-toggle='true']"
+    );
+    expect(tocInput?.disabled).toBe(false);
+    expect(tocInput?.checked).toBe(true);
+
+    function setInputValue(input: HTMLInputElement, value: string): void {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    act(() => {
+      setInputValue(assetFolderInput!, "invalid/folder");
+    });
+
+    const confirmBtn = container!.querySelector<HTMLButtonElement>(
+      ".appDialogButton-confirm"
+    );
+    expect(confirmBtn?.disabled).toBe(true);
+
+    act(() => {
+      setInputValue(assetFolderInput!, "custom.assets");
+    });
+    expect(confirmBtn?.disabled).toBe(false);
+
+    await act(async () => {
+      confirmBtn!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onExportHtmlCombined).toHaveBeenCalledTimes(1);
+
+    const lastPathEl = container!.querySelector(
+      ".exportConfirmationDialogLastExportPath"
+    );
+    expect(lastPathEl).not.toBeNull();
+    expect(lastPathEl?.textContent).toContain("Saved to: C:\\export\\manuscript.html");
   });
 });

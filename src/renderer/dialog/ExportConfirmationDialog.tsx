@@ -12,7 +12,11 @@ import editIconUrl from "../../../assets/icons/feather/global/edit-2.svg?url";
 import markdownFileIconUrl from "../../../assets/icons/svgrepo/explorer/markdown-svgrepo-com.svg?url";
 import textFileIconUrl from "../../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
 import type { Translate } from "../../shared/i18n";
-import type { ExportTxtUtf8Result } from "../../shared/api";
+import type {
+  ExportHtmlCombinedRequest,
+  ExportHtmlCombinedResult,
+  ExportTxtUtf8Result
+} from "../../shared/api";
 import type {
   ExportCandidateListItem,
   ExportCandidateFolderGroup,
@@ -40,16 +44,25 @@ import {
   reorderFolderGroup
 } from "../exportDialogOrder";
 import {
+  generateCombinedHtml,
+  htmlExportDefaultFileName
+} from "../exportHtml";
+import {
   DEFAULT_EXPORT_BODY_NOTATION,
   DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+  DEFAULT_IMAGE_ASSET_FOLDER_NAME,
   DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
   EXPORT_BODY_NOTATIONS,
+  HTML_COMBINED_EXPORT_FORMAT,
   TXT_UTF8_EXPORT_FORMAT,
-  createExportAssembly,
-  txtExportDefaultFileName,
+  validateImageAssetFolderName,
   type ExportBodyNotation,
   type ExportDialogOptionsState,
-  type ExportFormat,
+  type ExportFormat
+} from "../exportTypes";
+import {
+  createExportAssembly,
+  txtExportDefaultFileName,
   type ExportTxtExecutionRequest
 } from "../exportTxt";
 import { InfoDialog } from "./InfoDialog";
@@ -67,6 +80,9 @@ export interface ExportConfirmationDialogProps {
   readonly onExportTxt: (
     request: ExportTxtExecutionRequest
   ) => Promise<ExportTxtUtf8Result>;
+  readonly onExportHtmlCombined?: (
+    request: ExportHtmlCombinedRequest
+  ) => Promise<ExportHtmlCombinedResult>;
   readonly loadAozoraText: (relativePath: string) => Promise<string>;
   readonly onExportUnavailable: () => void;
   readonly onExportFailed: (error: unknown) => void;
@@ -188,8 +204,8 @@ function exportFormatLabel(format: ExportFormat, translate: Translate): string {
   switch (format) {
     case "txtUtf8":
       return translate("export.confirmation.format.txtUtf8");
-    case "html":
-      return "HTML";
+    case "htmlCombined":
+      return translate("export.confirmation.format.htmlCombined");
     case "pdf":
       return "PDF";
     case "docx":
@@ -254,6 +270,7 @@ export function ExportConfirmationDialog({
   onReloadCandidates,
   onConfirmDiscardReload,
   onExportTxt,
+  onExportHtmlCombined,
   loadAozoraText,
   onExportUnavailable,
   onExportFailed,
@@ -274,6 +291,10 @@ export function ExportConfirmationDialog({
   const [includeFileStructureToc, setIncludeFileStructureToc] = useState(
     DEFAULT_INCLUDE_FILE_STRUCTURE_TOC
   );
+  const [imageAssetFolderName, setImageAssetFolderName] = useState<string>(
+    DEFAULT_IMAGE_ASSET_FOLDER_NAME
+  );
+  const [lastExportedPath, setLastExportedPath] = useState<string | null>(null);
   const [orderState, setOrderState] = useState(() =>
     createOrderStateFromCandidates(candidates)
   );
@@ -299,6 +320,11 @@ export function ExportConfirmationDialog({
     [orderState, rows]
   );
   const isTxtUtf8Export = exportFormat === TXT_UTF8_EXPORT_FORMAT;
+  const isHtmlCombinedExport = exportFormat === HTML_COMBINED_EXPORT_FORMAT;
+  const isValidImageAssetFolderName = isHtmlCombinedExport
+    ? validateImageAssetFolderName(imageAssetFolderName)
+    : true;
+
   const effectiveIncludeFileStructureToc =
     isTxtUtf8Export ? false : includeFileStructureToc;
   const fileStructureTocTooltip = translate(
@@ -310,9 +336,10 @@ export function ExportConfirmationDialog({
     () => ({
       exportFormat,
       bodyNotation,
-      includeFileStructureToc: effectiveIncludeFileStructureToc
+      includeFileStructureToc: effectiveIncludeFileStructureToc,
+      imageAssetFolderName
     }),
-    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat]
+    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat, imageAssetFolderName]
   );
   const isDirty = useMemo(
     () =>
@@ -359,6 +386,8 @@ export function ExportConfirmationDialog({
     setExportFormat(TXT_UTF8_EXPORT_FORMAT);
     setBodyNotation(DEFAULT_EXPORT_BODY_NOTATION);
     setIncludeFileStructureToc(DEFAULT_INCLUDE_FILE_STRUCTURE_TOC);
+    setImageAssetFolderName(DEFAULT_IMAGE_ASSET_FOLDER_NAME);
+    setLastExportedPath(null);
     setCollapsedParentPaths(new Set());
     setDragState(null);
     setDropTarget(null);
@@ -430,34 +459,80 @@ export function ExportConfirmationDialog({
       return;
     }
 
-    if (exportFormat !== TXT_UTF8_EXPORT_FORMAT) {
-      onExportFailed(new Error("Unsupported export format."));
+    if (exportFormat === TXT_UTF8_EXPORT_FORMAT) {
+      setIsExporting(true);
+      try {
+        const assembly = createExportAssembly(orderedRows, {
+          format: TXT_UTF8_EXPORT_FORMAT,
+          bodyNotation,
+          headingRemovalLevel,
+          aozoraTextByFilePath: await aozoraTextByFilePathFor(includedRows)
+        });
+
+        if (assembly.documents.length === 0) {
+          onExportUnavailable();
+          return;
+        }
+
+        const result = await onExportTxt({
+          assembly,
+          defaultFileName: txtExportDefaultFileName(origin, projectName)
+        });
+
+        if (result.ok) {
+          setLastExportedPath(result.outputPath);
+        }
+      } catch (error) {
+        onExportFailed(error);
+      } finally {
+        setIsExporting(false);
+      }
       return;
     }
 
-    setIsExporting(true);
-    try {
-      const assembly = createExportAssembly(orderedRows, {
-        format: TXT_UTF8_EXPORT_FORMAT,
-        bodyNotation,
-        headingRemovalLevel,
-        aozoraTextByFilePath: await aozoraTextByFilePathFor(includedRows)
-      });
-
-      if (assembly.documents.length === 0) {
-        onExportUnavailable();
+    if (exportFormat === HTML_COMBINED_EXPORT_FORMAT && onExportHtmlCombined) {
+      if (!validateImageAssetFolderName(imageAssetFolderName)) {
         return;
       }
 
-      await onExportTxt({
-        assembly,
-        defaultFileName: txtExportDefaultFileName(origin, projectName)
-      });
-    } catch (error) {
-      onExportFailed(error);
-    } finally {
-      setIsExporting(false);
+      setIsExporting(true);
+      try {
+        const assembly = createExportAssembly(orderedRows, {
+          format: HTML_COMBINED_EXPORT_FORMAT,
+          bodyNotation,
+          headingRemovalLevel,
+          appendFileStructureToc: effectiveIncludeFileStructureToc,
+          imageAssetFolderName,
+          projectName,
+          aozoraTextByFilePath: await aozoraTextByFilePathFor(includedRows)
+        });
+
+        if (assembly.documents.length === 0) {
+          onExportUnavailable();
+          return;
+        }
+
+        const { htmlContent, imageAssets } = generateCombinedHtml(assembly);
+
+        const result = await onExportHtmlCombined({
+          defaultFileName: htmlExportDefaultFileName(origin, projectName),
+          htmlContent,
+          imageAssets,
+          projectRootPath: null
+        });
+
+        if (result.ok) {
+          setLastExportedPath(result.outputPath);
+        }
+      } catch (error) {
+        onExportFailed(error);
+      } finally {
+        setIsExporting(false);
+      }
+      return;
     }
+
+    onExportFailed(new Error("Unsupported export format."));
   }
 
   function handleFolderDragStart(
@@ -600,6 +675,7 @@ export function ExportConfirmationDialog({
     }
 
     setIsReloading(true);
+    setLastExportedPath(null);
     try {
       const reloadedCandidates = await onReloadCandidates();
       if (reloadedCandidates === null) {
@@ -667,6 +743,16 @@ export function ExportConfirmationDialog({
       onClose={onClose}
       footer={
         <div className="exportConfirmationDialogFooter">
+          {lastExportedPath ? (
+            <div
+              className="exportConfirmationDialogLastExportPath"
+              title={lastExportedPath}
+            >
+              {translate("export.confirmation.lastSavedPath", {
+                path: lastExportedPath
+              })}
+            </div>
+          ) : null}
           <button
             type="button"
             className="appDialogButton"
@@ -685,8 +771,8 @@ export function ExportConfirmationDialog({
             <button
               type="button"
               className="appDialogButton appDialogButton-confirm"
-              disabled={isExporting}
-              aria-disabled={isExporting}
+              disabled={isExporting || !isValidImageAssetFolderName}
+              aria-disabled={isExporting || !isValidImageAssetFolderName}
               onClick={() => {
                 void handleExport();
               }}
@@ -753,12 +839,19 @@ export function ExportConfirmationDialog({
             className="exportConfirmationDialogSelect"
             value={exportFormat}
             data-export-format-select="true"
-            onChange={(event) =>
-              setExportFormat(event.currentTarget.value as ExportFormat)
-            }
+            onChange={(event) => {
+              const nextFormat = event.currentTarget.value as ExportFormat;
+              setExportFormat(nextFormat);
+              if (nextFormat === HTML_COMBINED_EXPORT_FORMAT) {
+                setIncludeFileStructureToc(true);
+              }
+            }}
           >
             <option value={TXT_UTF8_EXPORT_FORMAT}>
               {exportFormatLabel(TXT_UTF8_EXPORT_FORMAT, translate)}
+            </option>
+            <option value={HTML_COMBINED_EXPORT_FORMAT}>
+              {exportFormatLabel(HTML_COMBINED_EXPORT_FORMAT, translate)}
             </option>
           </select>
         </label>
@@ -766,6 +859,35 @@ export function ExportConfirmationDialog({
           <span className="exportConfirmationDialogControlNote">
             {translate("export.confirmation.txtUtf8.note")}
           </span>
+        ) : null}
+        {isHtmlCombinedExport ? (
+          <>
+            <span className="exportConfirmationDialogControlNote">
+              {translate("export.confirmation.htmlCombined.note")}
+            </span>
+            <label className="exportConfirmationDialogControl">
+              <span className="exportConfirmationDialogControlLabel">
+                {translate("export.confirmation.imageAssetFolder.label")}
+              </span>
+              <input
+                type="text"
+                className="exportConfirmationDialogInput"
+                value={imageAssetFolderName}
+                data-export-image-asset-folder-input="true"
+                onChange={(event) =>
+                  setImageAssetFolderName(event.currentTarget.value)
+                }
+              />
+            </label>
+            <span className="exportConfirmationDialogControlNote">
+              {translate("export.confirmation.imageAssetFolder.note")}
+            </span>
+            {!isValidImageAssetFolderName ? (
+              <span className="exportConfirmationDialogErrorNote">
+                {translate("export.confirmation.imageAssetFolder.invalid")}
+              </span>
+            ) : null}
+          </>
         ) : null}
         <label className="exportConfirmationDialogControl">
           <span className="exportConfirmationDialogControlLabel">

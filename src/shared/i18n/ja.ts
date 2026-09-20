@@ -462,8 +462,17 @@ export const jaTranslations = {
   "export.confirmation.headingRemoval.note": "※ 本文ファイルには影響しません。",
   "export.confirmation.format.label": "エクスポート形式",
   "export.confirmation.format.txtUtf8": "TXT（UTF-8）",
+  "export.confirmation.format.htmlCombined": "HTML（全てを結合）",
   "export.confirmation.txtUtf8.note":
     "※ TXT（UTF-8）出力は、ルビ・傍点以外の書式を削除して出力します。",
+  "export.confirmation.htmlCombined.note":
+    "※ 採用ファイルを現在の並び順で1つのHTMLに結合して出力します。",
+  "export.confirmation.imageAssetFolder.label": "画像ファイルフォルダ名",
+  "export.confirmation.imageAssetFolder.note":
+    "※ プロジェクトフォルダ外の画像は出力対象外です。",
+  "export.confirmation.imageAssetFolder.invalid":
+    "画像ファイルフォルダ名には、パス区切りを含まないフォルダ名を指定してください。",
+  "export.confirmation.lastSavedPath": "保存先: {path}",
   "export.confirmation.bodyNotation.prefix": "本文を",
   "export.confirmation.bodyNotation.suffix": "として解釈する",
   "export.confirmation.bodyNotation.markdown": "Markdown 書式",
@@ -1611,6 +1620,10 @@ export const jaTranslations = {
   "status.settingsSaved": "設定を保存しました",
   "status.exportTxtUtf8Succeeded": "TXT（UTF-8）を書き出しました。",
   "status.exportTxtUtf8Failed": "TXT（UTF-8）を書き出せませんでした: {message}",
+  "status.exportHtmlCombinedSucceeded": "HTMLを書き出しました。",
+  "status.exportHtmlCombinedSucceededWithWarnings":
+    "HTMLを書き出しました。一部の画像は出力対象外または未解決です。",
+  "status.exportHtmlCombinedFailed": "HTMLの書き出しに失敗しました: {message}",
   "status.exportNoIncludedDocuments": "採用されている文書がありません。",
   "status.soundPlaybackFailed": "警告: 音声を再生できません",
   "status.withDetail": "{status}（{detail}）",

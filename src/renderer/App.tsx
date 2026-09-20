@@ -22,6 +22,8 @@ import type {
   SaveWorkingCopyOutcome,
   UpdateProjectNameResult,
   UpdateProjectSettingsRequest,
+  ExportHtmlCombinedRequest,
+  ExportHtmlCombinedResult,
   ExportTxtUtf8Result
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
@@ -10556,6 +10558,30 @@ export function App(): JSX.Element {
     return result;
   }
 
+  async function handleExportConfirmationHtmlCombinedExport(
+    request: ExportHtmlCombinedRequest
+  ): Promise<ExportHtmlCombinedResult> {
+    const exportHtmlCombined = window.pergamum?.files?.exportHtmlCombined;
+    if (!exportHtmlCombined) {
+      throw new Error("HTML export is unavailable.");
+    }
+
+    const result = await exportHtmlCombined({
+      ...request,
+      projectRootPath: project?.rootPath ?? null
+    });
+
+    if (result.ok) {
+      if (result.warningCount > 0) {
+        setStatus({ key: "status.exportHtmlCombinedSucceededWithWarnings" });
+      } else {
+        setStatus({ key: "status.exportHtmlCombinedSucceeded" });
+      }
+    }
+
+    return result;
+  }
+
   function handleExportConfirmationUnavailable(): void {
     setStatus({ key: "status.exportNoIncludedDocuments" });
   }
@@ -11388,6 +11414,7 @@ export function App(): JSX.Element {
           }
           onConfirmDiscardReload={confirmExportConfirmationReloadDiscard}
           onExportTxt={handleExportConfirmationTxtExport}
+          onExportHtmlCombined={handleExportConfirmationHtmlCombinedExport}
           loadAozoraText={(relativePath) =>
             window.pergamum.projects.readProjectDocumentAozora(relativePath)
           }

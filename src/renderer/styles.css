@@ -8378,6 +8378,30 @@ label.settingsItemHeader {
   inline-size: 100%;
 }
 
+.exportConfirmationDialogLastExportPath {
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-inline-size: 50%;
+}
+
+.exportConfirmationDialogInput {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  background-color: var(--color-bg-input, #fff);
+  color: var(--color-text-main, #333);
+}
+
+.exportConfirmationDialogErrorNote {
+  font-size: 12px;
+  color: var(--color-text-danger, #d9534f);
+}
+
 .exportConfirmationDialogFooter .appDialogActions {
   margin-inline-start: auto;
 }

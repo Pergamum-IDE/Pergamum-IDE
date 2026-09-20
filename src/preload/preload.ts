@@ -76,7 +76,9 @@ const pergamumApi: PergamumApi = {
     readAozoraTextFile: (filePath) =>
       ipcRenderer.invoke(FILE_CHANNELS.readAozoraTextFile, { path: filePath }),
     exportTxtUtf8: (request) =>
-      ipcRenderer.invoke(FILE_CHANNELS.exportTxtUtf8, request)
+      ipcRenderer.invoke(FILE_CHANNELS.exportTxtUtf8, request),
+    exportHtmlCombined: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.exportHtmlCombined, request)
   },
   projects: {
     createProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.createProject),

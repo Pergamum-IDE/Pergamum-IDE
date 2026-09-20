@@ -7,46 +7,31 @@ import {
   type HeadingRemovalLevel
 } from "./exportCandidates";
 import { replaceAozoraGaijiInText } from "./preview/aozoraGaijiResolver";
+import {
+  DEFAULT_EXPORT_BODY_NOTATION,
+  DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+  DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
+  EXPORT_BODY_NOTATIONS,
+  TXT_UTF8_EXPORT_FORMAT,
+  type ExportAssembly,
+  type ExportAssemblyDocument,
+  type ExportBodyNotation,
+  type ExportDialogOptionsState,
+  type ExportFormat
+} from "./exportTypes";
 
-export type ExportFormat = "txtUtf8" | "html" | "pdf" | "docx";
-
-export type ExportBodyNotation =
-  | "markdown"
-  | "aozora"
-  | "narou"
-  | "kakuyomu";
-
-export const TXT_UTF8_EXPORT_FORMAT = "txtUtf8" satisfies ExportFormat;
-export const DEFAULT_EXPORT_BODY_NOTATION =
-  "markdown" satisfies ExportBodyNotation;
-export const DEFAULT_INCLUDE_FILE_STRUCTURE_TOC = false;
-export const EXPORT_BODY_NOTATIONS = [
-  "markdown",
-  "aozora",
-  "narou",
-  "kakuyomu"
-] as const satisfies readonly ExportBodyNotation[];
-
-export interface ExportDialogOptionsState {
-  readonly exportFormat: ExportFormat;
-  readonly bodyNotation: ExportBodyNotation;
-  readonly includeFileStructureToc: boolean;
-}
-
-export interface ExportAssemblyDocument {
-  readonly filePath: string;
-  readonly parentPath: string;
-  readonly fileName: string;
-  readonly kind: ExportDocumentKind;
-  readonly text: string;
-}
-
-export interface ExportAssembly {
-  readonly format: typeof TXT_UTF8_EXPORT_FORMAT;
-  readonly bodyNotation: ExportBodyNotation;
-  readonly headingRemovalLevel: HeadingRemovalLevel;
-  readonly documents: readonly ExportAssemblyDocument[];
-}
+export {
+  DEFAULT_EXPORT_BODY_NOTATION,
+  DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+  DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
+  EXPORT_BODY_NOTATIONS,
+  TXT_UTF8_EXPORT_FORMAT,
+  type ExportAssembly,
+  type ExportAssemblyDocument,
+  type ExportBodyNotation,
+  type ExportDialogOptionsState,
+  type ExportFormat
+};
 
 export interface ExportTxtExecutionRequest {
   readonly assembly: ExportAssembly;
@@ -54,17 +39,14 @@ export interface ExportTxtExecutionRequest {
 }
 
 export interface CreateExportAssemblyOptions {
-  readonly format: typeof TXT_UTF8_EXPORT_FORMAT;
+  readonly format: ExportFormat;
   readonly bodyNotation: ExportBodyNotation;
   readonly headingRemovalLevel: HeadingRemovalLevel;
+  readonly appendFileStructureToc?: boolean;
+  readonly imageAssetFolderName?: string;
+  readonly projectName?: string | null;
   readonly aozoraTextByFilePath?: Readonly<Record<string, string>>;
 }
-
-export const DEFAULT_EXPORT_DIALOG_OPTIONS_STATE: ExportDialogOptionsState = {
-  exportFormat: TXT_UTF8_EXPORT_FORMAT,
-  bodyNotation: DEFAULT_EXPORT_BODY_NOTATION,
-  includeFileStructureToc: DEFAULT_INCLUDE_FILE_STRUCTURE_TOC
-};
 
 function normalizeLineEndings(text: string): string {
   return text.replace(/\r\n?/g, "\n");
@@ -151,6 +133,9 @@ export function createExportAssembly(
     format: options.format,
     bodyNotation: options.bodyNotation,
     headingRemovalLevel: options.headingRemovalLevel,
+    appendFileStructureToc: options.appendFileStructureToc ?? false,
+    imageAssetFolderName: options.imageAssetFolderName ?? "exports.assets",
+    projectName: options.projectName ?? null,
     documents: candidatesInExportOrder
       .filter((candidate) => candidate.included)
       .map((candidate) => {
@@ -165,6 +150,7 @@ export function createExportAssembly(
           parentPath: candidate.parentPath,
           fileName: candidate.fileName,
           kind: candidate.kind,
+          rawText,
           text: createTxtExportDocumentText(
             rawText,
             candidate.kind,

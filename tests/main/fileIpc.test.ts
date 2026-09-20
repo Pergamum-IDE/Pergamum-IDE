@@ -423,7 +423,7 @@ describe("file IPC", () => {
           content
         }
       )
-    ).resolves.toEqual({ ok: true });
+    ).resolves.toEqual({ ok: true, outputPath: "D:\\Exports\\Novel.txt" });
 
     expect(electronMock.showSaveDialog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -502,6 +502,38 @@ describe("file IPC", () => {
       expect(JSON.stringify(entry)).not.toContain(rawPath);
       expect(JSON.stringify(entry)).not.toContain(content);
     }
+  });
+
+  it("writes a combined HTML export and copies valid project-internal image assets", async () => {
+    const logger = buildLoggerMock();
+    const exportPath = "D:\\Exports\\manuscript.html";
+    const content = "<!doctype html><html></html>";
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: exportPath
+    });
+
+    const exportHtmlCombined = registeredHandler(
+      FILE_CHANNELS.exportHtmlCombined,
+      logger as unknown as DebugLogger
+    );
+
+    await expect(
+      exportHtmlCombined(
+        { sender: {} },
+        {
+          defaultFileName: "manuscript.html",
+          htmlContent: content,
+          imageAssets: [],
+          projectRootPath: "C:\\Project"
+        }
+      )
+    ).resolves.toEqual({ ok: true, outputPath: "D:\\Exports\\manuscript.html", warningCount: 0 });
+
+    expect(atomicWriteMock.writeFileAtomic).toHaveBeenCalledWith(
+      "D:\\Exports\\manuscript.html",
+      content
+    );
   });
 
   it("logs standalone Markdown write failure as a non-cleaning file I/O failure", async () => {

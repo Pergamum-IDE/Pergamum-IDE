@@ -467,8 +467,17 @@ export const enTranslations = {
     "Does not affect source document files.",
   "export.confirmation.format.label": "Export format",
   "export.confirmation.format.txtUtf8": "TXT (UTF-8)",
+  "export.confirmation.format.htmlCombined": "HTML (Combined)",
   "export.confirmation.txtUtf8.note":
     "TXT (UTF-8) export removes formatting other than ruby and emphasis-dot notation.",
+  "export.confirmation.htmlCombined.note":
+    "Combines included files into one HTML document in current display order.",
+  "export.confirmation.imageAssetFolder.label": "Image asset folder name",
+  "export.confirmation.imageAssetFolder.note":
+    "Images outside the project folder will not be exported.",
+  "export.confirmation.imageAssetFolder.invalid":
+    "Please specify a folder name without path separators.",
+  "export.confirmation.lastSavedPath": "Saved to: {path}",
   "export.confirmation.bodyNotation.prefix": "Interpret body as",
   "export.confirmation.bodyNotation.suffix": "",
   "export.confirmation.bodyNotation.markdown": "Markdown",
@@ -1615,6 +1624,10 @@ export const enTranslations = {
   "status.settingsSaved": "Settings saved",
   "status.exportTxtUtf8Succeeded": "Exported TXT (UTF-8).",
   "status.exportTxtUtf8Failed": "Failed to export TXT (UTF-8): {message}",
+  "status.exportHtmlCombinedSucceeded": "Exported HTML.",
+  "status.exportHtmlCombinedSucceededWithWarnings":
+    "Exported HTML with image warnings.",
+  "status.exportHtmlCombinedFailed": "Failed to export HTML: {message}",
   "status.exportNoIncludedDocuments": "No included documents.",
   "status.soundPlaybackFailed": "Warning: Could not play sound",
   "status.withDetail": "{status}; {detail}",

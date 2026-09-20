@@ -655,8 +655,14 @@ describe("Application Settings core control translations (#195)", () => {
     expect(t("ja", "export.confirmation.format.txtUtf8")).toBe(
       "TXT（UTF-8）"
     );
+    expect(t("ja", "export.confirmation.format.htmlCombined")).toBe(
+      "HTML（全てを結合）"
+    );
     expect(t("ja", "export.confirmation.txtUtf8.note")).toBe(
       "※ TXT（UTF-8）出力は、ルビ・傍点以外の書式を削除して出力します。"
+    );
+    expect(t("ja", "export.confirmation.htmlCombined.note")).toBe(
+      "※ 採用ファイルを現在の並び順で1つのHTMLに結合して出力します。"
     );
     expect(t("ja", "export.confirmation.bodyNotation.prefix")).toBe("本文を");
     expect(t("ja", "export.confirmation.bodyNotation.suffix")).toBe(

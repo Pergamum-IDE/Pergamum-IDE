@@ -10,6 +10,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   FILE_CHANNELS,
+  type ExportHtmlCombinedRequest,
+  type ExportHtmlCombinedResult,
   type ExportTxtUtf8Request,
   type ExportTxtUtf8Result,
   type MarkdownFile,
@@ -912,7 +914,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           }
         });
 
-        return { ok: true };
+        return { ok: true, outputPath: filePath };
       } catch (error) {
         const safeError = sanitizedFileIoError(error);
 
@@ -951,6 +953,188 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
       const bytes = await fs.readFile(filePath);
       const decoder = new TextDecoder("shift_jis");
       return decoder.decode(bytes);
+    }
+  );
+
+  function ensureHtmlExtension(targetPath: string): string {
+    return targetPath.toLowerCase().endsWith(".html")
+      ? targetPath
+      : `${targetPath}.html`;
+  }
+
+  function parseExportHtmlCombinedRequest(
+    raw: unknown
+  ): ExportHtmlCombinedRequest {
+    if (typeof raw !== "object" || raw === null) {
+      throw new Error("Invalid request: expected object");
+    }
+    const obj = raw as Record<string, unknown>;
+    if (
+      typeof obj.defaultFileName !== "string" ||
+      typeof obj.htmlContent !== "string"
+    ) {
+      throw new Error(
+        "Invalid request: missing defaultFileName or htmlContent"
+      );
+    }
+    const imageAssets = Array.isArray(obj.imageAssets)
+      ? obj.imageAssets.map((item: unknown) => {
+          const assetObj = (item as Record<string, unknown>) ?? {};
+          return {
+            sourceProjectRelativePath: String(
+              assetObj.sourceProjectRelativePath ?? ""
+            ),
+            outputRelativePath: String(assetObj.outputRelativePath ?? "")
+          };
+        })
+      : [];
+    return {
+      defaultFileName: obj.defaultFileName,
+      htmlContent: obj.htmlContent,
+      imageAssets,
+      projectRootPath:
+        typeof obj.projectRootPath === "string" ? obj.projectRootPath : null
+    };
+  }
+
+  function isSubPath(parent: string, child: string): boolean {
+    const relative = path.relative(parent, child);
+    return !relative.startsWith("..") && !path.isAbsolute(relative);
+  }
+
+  ipcMain.handle(
+    FILE_CHANNELS.exportHtmlCombined,
+    async (
+      event,
+      rawRequest: unknown
+    ): Promise<ExportHtmlCombinedResult> => {
+      const startedAt = Date.now();
+      let request: ExportHtmlCombinedRequest | null = null;
+      let finalPath: string | null = null;
+
+      try {
+        request = parseExportHtmlCombinedRequest(rawRequest);
+        const owner = parentWindow(event);
+        const options: SaveDialogOptions = {
+          title: "Export HTML (Combined)",
+          defaultPath: request.defaultFileName,
+          filters: [{ name: "HTML (*.html)", extensions: ["html"] }]
+        };
+        const selected = owner
+          ? await dialog.showSaveDialog(owner, options)
+          : await dialog.showSaveDialog(options);
+
+        if (selected.canceled || !selected.filePath) {
+          return { ok: false, reason: "canceled" };
+        }
+
+        finalPath = ensureHtmlExtension(selected.filePath);
+        const targetClassification =
+          await classifyStandaloneSaveTarget(finalPath);
+        if (targetClassification.kind === "rejected") {
+          throw new Error(
+            `HTML export target rejected: ${targetClassification.reason}`
+          );
+        }
+
+        await writeFileAtomic(finalPath, request.htmlContent);
+
+        const exportDir = path.dirname(finalPath);
+        let warningCount = 0;
+
+        for (const item of request.imageAssets) {
+          try {
+            if (!item.sourceProjectRelativePath || !item.outputRelativePath) {
+              warningCount += 1;
+              continue;
+            }
+
+            if (request.projectRootPath) {
+              const sourceAbs = path.resolve(
+                request.projectRootPath,
+                item.sourceProjectRelativePath
+              );
+              if (!isSubPath(request.projectRootPath, sourceAbs)) {
+                warningCount += 1;
+                continue;
+              }
+
+              try {
+                await fs.stat(sourceAbs);
+              } catch {
+                warningCount += 1;
+                continue;
+              }
+
+              const destAbs = path.resolve(exportDir, item.outputRelativePath);
+              if (!isSubPath(exportDir, destAbs)) {
+                warningCount += 1;
+                continue;
+              }
+
+              await fs.mkdir(path.dirname(destAbs), { recursive: true });
+              await fs.copyFile(sourceAbs, destAbs);
+            } else {
+              warningCount += 1;
+            }
+          } catch {
+            warningCount += 1;
+          }
+        }
+
+        logger.log({
+          level: "debug",
+          event: "export.html.succeeded",
+          details: {
+            documentRef: logger.documentRefForKey(finalPath),
+            editorIdKind: "file",
+            saveTargetKind: "unknown",
+            pathKind: "unknown",
+            extension: debugLogExtensionForPath(finalPath),
+            pathDepth: debugLogPathDepth(finalPath),
+            lineCount: debugLogLineCount(request.htmlContent),
+            lineEndingKind: debugLogLineEndingKind(request.htmlContent),
+            sizeBucket: debugLogSizeBucket(
+              Buffer.byteLength(request.htmlContent, "utf8")
+            ),
+            byteLength: Buffer.byteLength(request.htmlContent, "utf8"),
+            characterLength: request.htmlContent.length,
+            encodingAssumption: "utf8",
+            operation: "write",
+            result: "succeeded",
+            warningCount,
+            durationMs: durationSince(startedAt)
+          }
+        });
+
+        return { ok: true, outputPath: finalPath, warningCount };
+      } catch (error) {
+        const safeError = sanitizedFileIoError(error);
+
+        logger.log({
+          level: "error",
+          event: "export.html.failed",
+          details: {
+            ...(finalPath
+              ? { documentRef: logger.documentRefForKey(finalPath) }
+              : {}),
+            editorIdKind: "file",
+            saveTargetKind: "unknown",
+            pathKind: "unknown",
+            extension: finalPath
+              ? debugLogExtensionForPath(finalPath)
+              : ".html",
+            pathDepth: finalPath ? debugLogPathDepth(finalPath) : undefined,
+            operation: "write",
+            result: "failed",
+            reason: safeError.reason,
+            durationMs: durationSince(startedAt),
+            error: safeError
+          }
+        });
+
+        throw safeError;
+      }
     }
   );
 }
