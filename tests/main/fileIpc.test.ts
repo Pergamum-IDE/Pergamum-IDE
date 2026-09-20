@@ -403,6 +403,107 @@ describe("file IPC", () => {
     }
   });
 
+  it("exports TXT UTF-8 through the save dialog and atomic writer", async () => {
+    const logger = buildLoggerMock();
+    const content = "吾輩は猫である\n名前はまだない";
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: "D:\\Exports\\Novel"
+    });
+    const exportTxtUtf8 = registeredHandler(
+      FILE_CHANNELS.exportTxtUtf8,
+      logger as unknown as DebugLogger
+    );
+
+    await expect(
+      exportTxtUtf8(
+        { sender: {} },
+        {
+          defaultFileName: "Novel.txt",
+          content
+        }
+      )
+    ).resolves.toEqual({ ok: true });
+
+    expect(electronMock.showSaveDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultPath: "Novel.txt",
+        filters: [{ name: "TXT（UTF-8）", extensions: ["txt"] }]
+      })
+    );
+    expect(atomicWriteMock.writeFileAtomic).toHaveBeenCalledWith(
+      "D:\\Exports\\Novel.txt",
+      content
+    );
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+
+    for (const [entry] of logger.log.mock.calls) {
+      expect(JSON.stringify(entry)).not.toContain("D:\\Exports\\Novel");
+      expect(JSON.stringify(entry)).not.toContain(content);
+    }
+  });
+
+  it("does not write a TXT export when the save dialog is canceled", async () => {
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: true,
+      filePath: undefined
+    });
+    const exportTxtUtf8 = registeredHandler(FILE_CHANNELS.exportTxtUtf8);
+
+    await expect(
+      exportTxtUtf8(
+        { sender: {} },
+        {
+          defaultFileName: "Novel.txt",
+          content: "content"
+        }
+      )
+    ).resolves.toEqual({ ok: false, reason: "canceled" });
+
+    expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("throws a sanitized TXT export write failure without exposing the raw path or content", async () => {
+    const logger = buildLoggerMock();
+    const rawPath = "D:\\Exports\\secret.txt";
+    const content = "SECRET_EXPORT_TEXT_MARKER";
+    const writeError = Object.assign(
+      new Error(`EPERM: operation not permitted, open '${rawPath}'`),
+      { code: "EPERM", path: rawPath }
+    );
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: rawPath
+    });
+    atomicWriteMock.writeFileAtomic.mockRejectedValue(writeError);
+    const exportTxtUtf8 = registeredHandler(
+      FILE_CHANNELS.exportTxtUtf8,
+      logger as unknown as DebugLogger
+    );
+
+    await expectSanitizedFileIoRejection(
+      exportTxtUtf8(
+        { sender: {} },
+        {
+          defaultFileName: "Novel.txt",
+          content
+        }
+      ) as Promise<unknown>,
+      "permissionDenied",
+      [rawPath, content]
+    );
+
+    expect(atomicWriteMock.writeFileAtomic).toHaveBeenCalledWith(
+      rawPath,
+      content
+    );
+    for (const [entry] of logger.log.mock.calls) {
+      expect(JSON.stringify(entry)).not.toContain(rawPath);
+      expect(JSON.stringify(entry)).not.toContain(content);
+    }
+  });
+
   it("logs standalone Markdown write failure as a non-cleaning file I/O failure", async () => {
     const logger = buildLoggerMock();
     const rawPath = "D:\\Outside\\secret-draft.md";

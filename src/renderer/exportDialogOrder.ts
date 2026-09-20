@@ -2,6 +2,10 @@ import type {
   ExportCandidateListItem,
   HeadingRemovalLevel
 } from "./exportCandidates";
+import {
+  DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+  type ExportDialogOptionsState
+} from "./exportTxt";
 
 export interface ExportDialogOrderState {
   readonly groupOrder: readonly string[];
@@ -12,6 +16,7 @@ export interface ExportDialogInitialState {
   readonly orderState: ExportDialogOrderState;
   readonly includedByFilePath: Readonly<Record<string, boolean>>;
   readonly headingRemovalLevel: HeadingRemovalLevel;
+  readonly optionsState: ExportDialogOptionsState;
 }
 
 export function createOrderStateFromCandidates(
@@ -41,12 +46,15 @@ export function includedStateFromCandidates(
 
 export function createInitialExportDialogState(
   candidates: readonly ExportCandidateListItem[],
-  headingRemovalLevel: HeadingRemovalLevel
+  headingRemovalLevel: HeadingRemovalLevel,
+  optionsState: ExportDialogOptionsState =
+    DEFAULT_EXPORT_DIALOG_OPTIONS_STATE
 ): ExportDialogInitialState {
   return {
     orderState: createOrderStateFromCandidates(candidates),
     includedByFilePath: includedStateFromCandidates(candidates),
-    headingRemovalLevel
+    headingRemovalLevel,
+    optionsState
   };
 }
 
@@ -221,12 +229,27 @@ export function isHeadingRemovalDirty(
   return current !== initial;
 }
 
+export function isExportDialogOptionsDirty(
+  current: ExportDialogOptionsState,
+  initial: ExportDialogOptionsState
+): boolean {
+  return (
+    current.exportFormat !== initial.exportFormat ||
+    current.bodyNotation !== initial.bodyNotation ||
+    current.includeFileStructureToc !== initial.includeFileStructureToc
+  );
+}
+
 export function isExportDialogDirty(input: {
   readonly orderState: ExportDialogOrderState;
   readonly candidates: readonly ExportCandidateListItem[];
   readonly headingRemovalLevel: HeadingRemovalLevel;
+  readonly optionsState?: ExportDialogOptionsState;
   readonly initialState: ExportDialogInitialState;
 }): boolean {
+  const optionsState =
+    input.optionsState ?? DEFAULT_EXPORT_DIALOG_OPTIONS_STATE;
+
   return (
     isExportDialogOrderDirty(input.orderState, input.initialState.orderState) ||
     isIncludeStateDirty(
@@ -236,7 +259,8 @@ export function isExportDialogDirty(input: {
     isHeadingRemovalDirty(
       input.headingRemovalLevel,
       input.initialState.headingRemovalLevel
-    )
+    ) ||
+    isExportDialogOptionsDirty(optionsState, input.initialState.optionsState)
   );
 }
 

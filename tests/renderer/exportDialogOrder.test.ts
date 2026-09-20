@@ -10,6 +10,7 @@ import {
   createOrderStateFromCandidates,
   getOrderDirtyFiles,
   getOrderDirtyGroups,
+  isExportDialogOptionsDirty,
   isExportDialogDirty,
   isExportDialogOrderDirty,
   isHeadingRemovalDirty,
@@ -17,6 +18,10 @@ import {
   reorderFileWithinGroup,
   reorderFolderGroup
 } from "../../src/renderer/exportDialogOrder";
+import {
+  DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+  type ExportDialogOptionsState
+} from "../../src/renderer/exportTxt";
 
 function candidate(
   filePath: string,
@@ -52,11 +57,13 @@ function dialogDirty(input: {
   readonly currentCandidates?: readonly ExportCandidateListItem[];
   readonly headingRemovalLevel?: HeadingRemovalLevel;
   readonly orderState?: ReturnType<typeof createOrderStateFromCandidates>;
+  readonly optionsState?: ExportDialogOptionsState;
 }): boolean {
   return isExportDialogDirty({
     orderState: input.orderState ?? createOrderStateFromCandidates(candidates),
     candidates: input.currentCandidates ?? candidates,
     headingRemovalLevel: input.headingRemovalLevel ?? 0,
+    optionsState: input.optionsState ?? DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
     initialState: createInitialExportDialogState(candidates, 0)
   });
 }
@@ -163,6 +170,24 @@ describe("exportDialogOrder (#523)", () => {
     expect(dialogDirty({ headingRemovalLevel: 0 })).toBe(false);
   });
 
+  it("marks export option changes dirty and clears them when restored", () => {
+    const changedOptions = {
+      ...DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+      bodyNotation: "aozora" as const
+    };
+
+    expect(
+      isExportDialogOptionsDirty(
+        changedOptions,
+        DEFAULT_EXPORT_DIALOG_OPTIONS_STATE
+      )
+    ).toBe(true);
+    expect(dialogDirty({ optionsState: changedOptions })).toBe(true);
+    expect(
+      dialogDirty({ optionsState: DEFAULT_EXPORT_DIALOG_OPTIONS_STATE })
+    ).toBe(false);
+  });
+
   it("is dirty if any tracked state differs and clean only when all match", () => {
     const orderState = reorderFolderGroup(
       createOrderStateFromCandidates(candidates),
@@ -178,9 +203,21 @@ describe("exportDialogOrder (#523)", () => {
     expect(dialogDirty({ headingRemovalLevel: 2 })).toBe(true);
     expect(
       dialogDirty({
+        optionsState: {
+          ...DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+          bodyNotation: "narou"
+        }
+      })
+    ).toBe(true);
+    expect(
+      dialogDirty({
         orderState,
         currentCandidates: changedCandidates,
-        headingRemovalLevel: 2
+        headingRemovalLevel: 2,
+        optionsState: {
+          ...DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+          bodyNotation: "kakuyomu"
+        }
       })
     ).toBe(true);
     expect(dialogDirty({})).toBe(false);

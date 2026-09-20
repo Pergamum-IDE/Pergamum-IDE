@@ -12,6 +12,7 @@ import editIconUrl from "../../../assets/icons/feather/global/edit-2.svg?url";
 import markdownFileIconUrl from "../../../assets/icons/svgrepo/explorer/markdown-svgrepo-com.svg?url";
 import textFileIconUrl from "../../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
 import type { Translate } from "../../shared/i18n";
+import type { ExportTxtUtf8Result } from "../../shared/api";
 import type {
   ExportCandidateListItem,
   ExportCandidateFolderGroup,
@@ -38,6 +39,19 @@ import {
   reorderFileWithinGroup,
   reorderFolderGroup
 } from "../exportDialogOrder";
+import {
+  DEFAULT_EXPORT_BODY_NOTATION,
+  DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
+  DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
+  EXPORT_BODY_NOTATIONS,
+  TXT_UTF8_EXPORT_FORMAT,
+  createExportAssembly,
+  txtExportDefaultFileName,
+  type ExportBodyNotation,
+  type ExportDialogOptionsState,
+  type ExportFormat,
+  type ExportTxtExecutionRequest
+} from "../exportTxt";
 import { InfoDialog } from "./InfoDialog";
 
 export interface ExportConfirmationDialogProps {
@@ -50,6 +64,12 @@ export interface ExportConfirmationDialogProps {
     readonly ExportCandidateListItem[] | null
   >;
   readonly onConfirmDiscardReload: () => Promise<boolean>;
+  readonly onExportTxt: (
+    request: ExportTxtExecutionRequest
+  ) => Promise<ExportTxtUtf8Result>;
+  readonly loadAozoraText: (relativePath: string) => Promise<string>;
+  readonly onExportUnavailable: () => void;
+  readonly onExportFailed: (error: unknown) => void;
   readonly onClose: () => void;
 }
 
@@ -164,6 +184,41 @@ function parseHeadingRemovalLevel(value: string): HeadingRemovalLevel {
   return Number.isInteger(parsed) && isHeadingRemovalLevel(parsed) ? parsed : 0;
 }
 
+function exportFormatLabel(format: ExportFormat, translate: Translate): string {
+  switch (format) {
+    case "txtUtf8":
+      return translate("export.confirmation.format.txtUtf8");
+    case "html":
+      return "HTML";
+    case "pdf":
+      return "PDF";
+    case "docx":
+      return "DOCX";
+  }
+}
+
+function bodyNotationLabel(
+  notation: ExportBodyNotation,
+  translate: Translate
+): string {
+  switch (notation) {
+    case "markdown":
+      return translate("export.confirmation.bodyNotation.markdown");
+    case "aozora":
+      return translate("export.confirmation.bodyNotation.aozora");
+    case "narou":
+      return translate("export.confirmation.bodyNotation.narou");
+    case "kakuyomu":
+      return translate("export.confirmation.bodyNotation.kakuyomu");
+  }
+}
+
+function parseExportBodyNotation(value: string): ExportBodyNotation {
+  return EXPORT_BODY_NOTATIONS.includes(value as ExportBodyNotation)
+    ? (value as ExportBodyNotation)
+    : DEFAULT_EXPORT_BODY_NOTATION;
+}
+
 function dropTargetsEqual(
   first: ExportDialogDropTarget | null,
   second: ExportDialogDropTarget | null
@@ -198,6 +253,10 @@ export function ExportConfirmationDialog({
   opener,
   onReloadCandidates,
   onConfirmDiscardReload,
+  onExportTxt,
+  loadAozoraText,
+  onExportUnavailable,
+  onExportFailed,
   onClose
 }: ExportConfirmationDialogProps): JSX.Element {
   const title = translate("export.confirmation.title");
@@ -206,11 +265,24 @@ export function ExportConfirmationDialog({
   );
   const [headingRemovalLevel, setHeadingRemovalLevel] =
     useState<HeadingRemovalLevel>(0);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(
+    TXT_UTF8_EXPORT_FORMAT
+  );
+  const [bodyNotation, setBodyNotation] = useState<ExportBodyNotation>(
+    DEFAULT_EXPORT_BODY_NOTATION
+  );
+  const [includeFileStructureToc, setIncludeFileStructureToc] = useState(
+    DEFAULT_INCLUDE_FILE_STRUCTURE_TOC
+  );
   const [orderState, setOrderState] = useState(() =>
     createOrderStateFromCandidates(candidates)
   );
   const [initialState, setInitialState] = useState(() =>
-    createInitialExportDialogState(candidates, 0)
+    createInitialExportDialogState(
+      candidates,
+      0,
+      DEFAULT_EXPORT_DIALOG_OPTIONS_STATE
+    )
   );
   const [collapsedParentPaths, setCollapsedParentPaths] = useState<
     ReadonlySet<string>
@@ -221,9 +293,26 @@ export function ExportConfirmationDialog({
   );
   const [dropTarget, setDropTarget] =
     useState<ExportDialogDropTarget | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const orderedRows = useMemo(
     () => applyExportDialogOrder(rows, orderState),
     [orderState, rows]
+  );
+  const isTxtUtf8Export = exportFormat === TXT_UTF8_EXPORT_FORMAT;
+  const effectiveIncludeFileStructureToc =
+    isTxtUtf8Export ? false : includeFileStructureToc;
+  const fileStructureTocTooltip = translate(
+    isTxtUtf8Export
+      ? "export.confirmation.fileStructureToc.disabledForTxt"
+      : "export.confirmation.fileStructureToc.tooltip"
+  );
+  const optionsState: ExportDialogOptionsState = useMemo(
+    () => ({
+      exportFormat,
+      bodyNotation,
+      includeFileStructureToc: effectiveIncludeFileStructureToc
+    }),
+    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat]
   );
   const isDirty = useMemo(
     () =>
@@ -231,9 +320,10 @@ export function ExportConfirmationDialog({
         orderState,
         candidates: rows,
         headingRemovalLevel,
+        optionsState,
         initialState
       }),
-    [headingRemovalLevel, initialState, orderState, rows]
+    [headingRemovalLevel, initialState, optionsState, orderState, rows]
   );
   const orderDirtyGroups = useMemo(
     () => getOrderDirtyGroups(orderState, initialState.orderState),
@@ -266,6 +356,9 @@ export function ExportConfirmationDialog({
     setOrderState(nextOrderState);
     setInitialState(createInitialExportDialogState(nextRows, 0));
     setHeadingRemovalLevel(0);
+    setExportFormat(TXT_UTF8_EXPORT_FORMAT);
+    setBodyNotation(DEFAULT_EXPORT_BODY_NOTATION);
+    setIncludeFileStructureToc(DEFAULT_INCLUDE_FILE_STRUCTURE_TOC);
     setCollapsedParentPaths(new Set());
     setDragState(null);
     setDropTarget(null);
@@ -303,6 +396,68 @@ export function ExportConfirmationDialog({
     setRows((current) =>
       recalculateExportCandidateMetadata(current, nextLevel)
     );
+  }
+
+  function handleBodyNotationChange(value: string): void {
+    setBodyNotation(parseExportBodyNotation(value));
+  }
+
+  async function aozoraTextByFilePathFor(
+    includedRows: readonly ExportCandidateListItem[]
+  ): Promise<Readonly<Record<string, string>> | undefined> {
+    if (bodyNotation !== "aozora") {
+      return undefined;
+    }
+
+    const entries = await Promise.all(
+      includedRows.map(async (candidate) => [
+        candidate.filePath,
+        await loadAozoraText(candidate.filePath)
+      ] as const)
+    );
+
+    return Object.fromEntries(entries);
+  }
+
+  async function handleExport(): Promise<void> {
+    if (isExporting) {
+      return;
+    }
+
+    const includedRows = orderedRows.filter((candidate) => candidate.included);
+    if (includedRows.length === 0) {
+      onExportUnavailable();
+      return;
+    }
+
+    if (exportFormat !== TXT_UTF8_EXPORT_FORMAT) {
+      onExportFailed(new Error("Unsupported export format."));
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const assembly = createExportAssembly(orderedRows, {
+        format: TXT_UTF8_EXPORT_FORMAT,
+        bodyNotation,
+        headingRemovalLevel,
+        aozoraTextByFilePath: await aozoraTextByFilePathFor(includedRows)
+      });
+
+      if (assembly.documents.length === 0) {
+        onExportUnavailable();
+        return;
+      }
+
+      await onExportTxt({
+        assembly,
+        defaultFileName: txtExportDefaultFileName(origin, projectName)
+      });
+    } catch (error) {
+      onExportFailed(error);
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   function handleFolderDragStart(
@@ -452,6 +607,9 @@ export function ExportConfirmationDialog({
       }
 
       const nextHeadingRemovalLevel = isDirty ? 0 : headingRemovalLevel;
+      const nextOptionsState = isDirty
+        ? DEFAULT_EXPORT_DIALOG_OPTIONS_STATE
+        : optionsState;
       const nextRows = recalculateExportCandidateMetadata(
         isDirty
           ? reloadedCandidates
@@ -462,9 +620,16 @@ export function ExportConfirmationDialog({
       setRows(nextRows);
       setOrderState(nextOrderState);
       setInitialState(
-        createInitialExportDialogState(nextRows, nextHeadingRemovalLevel)
+        createInitialExportDialogState(
+          nextRows,
+          nextHeadingRemovalLevel,
+          nextOptionsState
+        )
       );
       setHeadingRemovalLevel(nextHeadingRemovalLevel);
+      setExportFormat(nextOptionsState.exportFormat);
+      setBodyNotation(nextOptionsState.bodyNotation);
+      setIncludeFileStructureToc(nextOptionsState.includeFileStructureToc);
       const nextParentPaths = new Set(
         reloadedCandidates.map((candidate) => candidate.parentPath)
       );
@@ -520,8 +685,11 @@ export function ExportConfirmationDialog({
             <button
               type="button"
               className="appDialogButton appDialogButton-confirm"
-              disabled={true}
-              aria-disabled="true"
+              disabled={isExporting}
+              aria-disabled={isExporting}
+              onClick={() => {
+                void handleExport();
+              }}
             >
               {translate("export.confirmation.primary")}
             </button>
@@ -579,11 +747,56 @@ export function ExportConfirmationDialog({
       <div className="exportConfirmationDialogControls">
         <label className="exportConfirmationDialogControl">
           <span className="exportConfirmationDialogControlLabel">
+            {translate("export.confirmation.format.label")}
+          </span>
+          <select
+            className="exportConfirmationDialogSelect"
+            value={exportFormat}
+            data-export-format-select="true"
+            onChange={(event) =>
+              setExportFormat(event.currentTarget.value as ExportFormat)
+            }
+          >
+            <option value={TXT_UTF8_EXPORT_FORMAT}>
+              {exportFormatLabel(TXT_UTF8_EXPORT_FORMAT, translate)}
+            </option>
+          </select>
+        </label>
+        {isTxtUtf8Export ? (
+          <span className="exportConfirmationDialogControlNote">
+            {translate("export.confirmation.txtUtf8.note")}
+          </span>
+        ) : null}
+        <label className="exportConfirmationDialogControl">
+          <span className="exportConfirmationDialogControlLabel">
+            {translate("export.confirmation.bodyNotation.prefix")}
+          </span>
+          <select
+            className="exportConfirmationDialogSelect"
+            value={bodyNotation}
+            data-export-body-notation-select="true"
+            onChange={(event) =>
+              handleBodyNotationChange(event.currentTarget.value)
+            }
+          >
+            {EXPORT_BODY_NOTATIONS.map((notation) => (
+              <option key={notation} value={notation}>
+                {bodyNotationLabel(notation, translate)}
+              </option>
+            ))}
+          </select>
+          <span className="exportConfirmationDialogControlLabel">
+            {translate("export.confirmation.bodyNotation.suffix")}
+          </span>
+        </label>
+        <label className="exportConfirmationDialogControl">
+          <span className="exportConfirmationDialogControlLabel">
             {translate("export.confirmation.headingRemoval.label")}
           </span>
           <select
             className="exportConfirmationDialogSelect"
             value={headingRemovalLevel}
+            data-export-heading-removal-select="true"
             onChange={(event) =>
               handleHeadingRemovalLevelChange(event.currentTarget.value)
             }
@@ -598,6 +811,36 @@ export function ExportConfirmationDialog({
         <span className="exportConfirmationDialogControlNote">
           {translate("export.confirmation.headingRemoval.note")}
         </span>
+        <label
+          className="exportConfirmationDialogControl exportConfirmationDialogTocControl"
+          title={fileStructureTocTooltip}
+        >
+          <span className="exportConfirmationDialogControlLabel">
+            {translate("export.confirmation.fileStructureToc.label")}
+          </span>
+          <span className="exportConfirmationDialogIncludeSwitch">
+            <input
+              className="exportConfirmationDialogIncludeInput"
+              type="checkbox"
+              role="switch"
+              aria-label={translate(
+                "export.confirmation.fileStructureToc.label"
+              )}
+              data-export-file-structure-toc-toggle="true"
+              checked={effectiveIncludeFileStructureToc}
+              disabled={isTxtUtf8Export}
+              onChange={(event) =>
+                setIncludeFileStructureToc(event.currentTarget.checked)
+              }
+            />
+            <span
+              className="exportConfirmationDialogIncludeTrack"
+              aria-hidden="true"
+            >
+              <span className="exportConfirmationDialogIncludeThumb" />
+            </span>
+          </span>
+        </label>
       </div>
 
       {rows.length === 0 ? (

@@ -465,6 +465,22 @@ export const enTranslations = {
   "export.confirmation.reloadDiscard.confirm": "Discard and Reload",
   "export.confirmation.headingRemoval.note":
     "Does not affect source document files.",
+  "export.confirmation.format.label": "Export format",
+  "export.confirmation.format.txtUtf8": "TXT (UTF-8)",
+  "export.confirmation.txtUtf8.note":
+    "TXT (UTF-8) export removes formatting other than ruby and emphasis-dot notation.",
+  "export.confirmation.bodyNotation.prefix": "Interpret body as",
+  "export.confirmation.bodyNotation.suffix": "",
+  "export.confirmation.bodyNotation.markdown": "Markdown",
+  "export.confirmation.bodyNotation.aozora": "Aozora Bunko",
+  "export.confirmation.bodyNotation.narou": "Narou",
+  "export.confirmation.bodyNotation.kakuyomu": "Kakuyomu",
+  "export.confirmation.fileStructureToc.label":
+    "Append file structure table of contents",
+  "export.confirmation.fileStructureToc.tooltip":
+    "Append the current included files and order as a table of contents at the end of the exported document.",
+  "export.confirmation.fileStructureToc.disabledForTxt":
+    "TXT (UTF-8) export cannot append a file structure table of contents.",
   "export.confirmation.folderDragHandleLabel": "Reorder {folder}",
   "export.confirmation.fileDragHandleLabel": "Reorder {fileName}",
   "export.confirmation.primary": "Export",
@@ -1597,6 +1613,9 @@ export const enTranslations = {
   "status.settingsExportFailed": "Failed to export settings: {message}",
   "status.settingsSaveFailed": "Settings save failed: {message}",
   "status.settingsSaved": "Settings saved",
+  "status.exportTxtUtf8Succeeded": "Exported TXT (UTF-8).",
+  "status.exportTxtUtf8Failed": "Failed to export TXT (UTF-8): {message}",
+  "status.exportNoIncludedDocuments": "No included documents.",
   "status.soundPlaybackFailed": "Warning: Could not play sound",
   "status.withDetail": "{status}; {detail}",
   "tabs.closeTab": "Close tab",

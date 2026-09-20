@@ -21,7 +21,8 @@ import type {
   LifecycleWindowCloseRequest,
   SaveWorkingCopyOutcome,
   UpdateProjectNameResult,
-  UpdateProjectSettingsRequest
+  UpdateProjectSettingsRequest,
+  ExportTxtUtf8Result
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
@@ -104,6 +105,10 @@ import {
   type BulkTextImportExecuteInput
 } from "./dialog/BulkTextImportDialog";
 import { ExportConfirmationDialog } from "./dialog/ExportConfirmationDialog";
+import {
+  createTxtUtf8ExportText,
+  type ExportTxtExecutionRequest
+} from "./exportTxt";
 import type { TextImportFolderListing } from "./dialog/TextImportDestinationPicker";
 import {
   applicationCommandIds,
@@ -673,6 +678,35 @@ function settingsExportFailedStatus(
   return {
     key: "status.settingsExportFailed",
     values: { message: settingsExportErrorMessage(error, translate) }
+  };
+}
+
+function txtExportErrorMessage(error: unknown, translate: Translate): string {
+  if (!(error instanceof Error)) {
+    return translate("error.unknown");
+  }
+
+  const candidates = [
+    error.message,
+    ...error.message.split("Error: ").slice(1)
+  ];
+  for (const candidate of candidates) {
+    const reason = sanitizedFileIoErrorReasonFromMessage(candidate);
+    if (reason !== null) {
+      return sanitizedFileIoErrorMessage(reason);
+    }
+  }
+
+  return translate("error.unknown");
+}
+
+function txtExportFailedStatus(
+  error: unknown,
+  translate: Translate
+): StatusMessage {
+  return {
+    key: "status.exportTxtUtf8Failed",
+    values: { message: txtExportErrorMessage(error, translate) }
   };
 }
 
@@ -10502,6 +10536,34 @@ export function App(): JSX.Element {
     }
   }
 
+  async function handleExportConfirmationTxtExport(
+    request: ExportTxtExecutionRequest
+  ): Promise<ExportTxtUtf8Result> {
+    const exportTxtUtf8 = window.pergamum?.files?.exportTxtUtf8;
+    if (!exportTxtUtf8) {
+      throw new Error("TXT export is unavailable.");
+    }
+
+    const result = await exportTxtUtf8({
+      defaultFileName: request.defaultFileName,
+      content: createTxtUtf8ExportText(request.assembly)
+    });
+
+    if (result.ok) {
+      setStatus({ key: "status.exportTxtUtf8Succeeded" });
+    }
+
+    return result;
+  }
+
+  function handleExportConfirmationUnavailable(): void {
+    setStatus({ key: "status.exportNoIncludedDocuments" });
+  }
+
+  function handleExportConfirmationFailed(error: unknown): void {
+    setStatus(txtExportFailedStatus(error, translate));
+  }
+
   async function handleUpdateProjectName(
     name: string
   ): Promise<UpdateProjectNameResult> {
@@ -11325,6 +11387,12 @@ export function App(): JSX.Element {
             )
           }
           onConfirmDiscardReload={confirmExportConfirmationReloadDiscard}
+          onExportTxt={handleExportConfirmationTxtExport}
+          loadAozoraText={(relativePath) =>
+            window.pergamum.projects.readProjectDocumentAozora(relativePath)
+          }
+          onExportUnavailable={handleExportConfirmationUnavailable}
+          onExportFailed={handleExportConfirmationFailed}
           onClose={() => setExportConfirmationState(null)}
         />
       ) : null}

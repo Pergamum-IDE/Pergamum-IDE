@@ -5,7 +5,10 @@ import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { t, type Translate } from "../../src/shared/i18n";
-import { ExportConfirmationDialog } from "../../src/renderer/dialog/ExportConfirmationDialog";
+import {
+  ExportConfirmationDialog,
+  type ExportConfirmationDialogProps
+} from "../../src/renderer/dialog/ExportConfirmationDialog";
 import {
   createExportCandidateTextDetails,
   type ExportCandidateListItem,
@@ -17,6 +20,14 @@ import {
 const translate: Translate = (key, values) => t("en", key, values);
 const noopReload = vi.fn(async () => null);
 const noopConfirmDiscardReload = vi.fn(async () => true);
+const noopExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
+  async () => ({ ok: true })
+);
+const noopLoadAozoraText = vi.fn<
+  ExportConfirmationDialogProps["loadAozoraText"]
+>(async () => "");
+const noopExportUnavailable = vi.fn();
+const noopExportFailed = vi.fn();
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -108,6 +119,10 @@ function mountDialog(options: {
     readonly ExportCandidateListItem[] | null
   >;
   onConfirmDiscardReload?: () => Promise<boolean>;
+  onExportTxt?: ExportConfirmationDialogProps["onExportTxt"];
+  loadAozoraText?: ExportConfirmationDialogProps["loadAozoraText"];
+  onExportUnavailable?: ExportConfirmationDialogProps["onExportUnavailable"];
+  onExportFailed?: ExportConfirmationDialogProps["onExportFailed"];
 } = {}): void {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -124,6 +139,12 @@ function mountDialog(options: {
         onConfirmDiscardReload={
           options.onConfirmDiscardReload ?? noopConfirmDiscardReload
         }
+        onExportTxt={options.onExportTxt ?? noopExportTxt}
+        loadAozoraText={options.loadAozoraText ?? noopLoadAozoraText}
+        onExportUnavailable={
+          options.onExportUnavailable ?? noopExportUnavailable
+        }
+        onExportFailed={options.onExportFailed ?? noopExportFailed}
         onClose={vi.fn()}
       />
     );
@@ -241,7 +262,25 @@ function buttonByText(text: string): HTMLButtonElement {
 
 function headingRemovalSelect(): HTMLSelectElement {
   return container!.querySelector<HTMLSelectElement>(
-    ".exportConfirmationDialogSelect"
+    `[data-export-heading-removal-select="true"]`
+  )!;
+}
+
+function bodyNotationSelect(): HTMLSelectElement {
+  return container!.querySelector<HTMLSelectElement>(
+    `[data-export-body-notation-select="true"]`
+  )!;
+}
+
+function fileStructureTocToggle(): HTMLInputElement {
+  return container!.querySelector<HTMLInputElement>(
+    `[data-export-file-structure-toc-toggle="true"]`
+  )!;
+}
+
+function fileStructureTocControl(): HTMLElement {
+  return fileStructureTocToggle().closest<HTMLElement>(
+    ".exportConfirmationDialogTocControl"
   )!;
 }
 
@@ -256,6 +295,10 @@ describe("ExportConfirmationDialog (#523)", () => {
         opener={null}
         onReloadCandidates={noopReload}
         onConfirmDiscardReload={noopConfirmDiscardReload}
+        onExportTxt={noopExportTxt}
+        loadAozoraText={noopLoadAozoraText}
+        onExportUnavailable={noopExportUnavailable}
+        onExportFailed={noopExportFailed}
         onClose={vi.fn()}
       />
     );
@@ -273,6 +316,10 @@ describe("ExportConfirmationDialog (#523)", () => {
         opener={null}
         onReloadCandidates={noopReload}
         onConfirmDiscardReload={noopConfirmDiscardReload}
+        onExportTxt={noopExportTxt}
+        loadAozoraText={noopLoadAozoraText}
+        onExportUnavailable={noopExportUnavailable}
+        onExportFailed={noopExportFailed}
         onClose={vi.fn()}
       />
     );
@@ -287,6 +334,19 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(markup).toContain("15 chars");
     expect(markup).toContain("10 chars");
     expect(markup).toContain("5 chars");
+    expect(markup).toContain("Export format");
+    expect(markup).toContain("TXT (UTF-8)");
+    expect(markup).toContain(
+      "TXT (UTF-8) export removes formatting other than ruby and emphasis-dot notation."
+    );
+    expect(markup).toContain("Interpret body as");
+    expect(markup).toContain("Aozora Bunko");
+    expect(markup).toContain("Narou");
+    expect(markup).toContain("Kakuyomu");
+    expect(markup).toContain("Append file structure table of contents");
+    expect(markup).toContain(
+      "TXT (UTF-8) export cannot append a file structure table of contents."
+    );
     expect(markup).toContain("Reload");
     expect(markup).toContain("Remove headings");
     expect(markup).toContain("Do not remove");
@@ -317,6 +377,10 @@ describe("ExportConfirmationDialog (#523)", () => {
         opener={null}
         onReloadCandidates={noopReload}
         onConfirmDiscardReload={noopConfirmDiscardReload}
+        onExportTxt={noopExportTxt}
+        loadAozoraText={noopLoadAozoraText}
+        onExportUnavailable={noopExportUnavailable}
+        onExportFailed={noopExportFailed}
         onClose={vi.fn()}
       />
     );
@@ -424,6 +488,130 @@ describe("ExportConfirmationDialog (#523)", () => {
     });
 
     expect(dirtyIcon()).toBeNull();
+
+    act(() => {
+      const select = bodyNotationSelect();
+      select.value = "aozora";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(dirtyIcon()).not.toBeNull();
+
+    act(() => {
+      const select = bodyNotationSelect();
+      select.value = "markdown";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(dirtyIcon()).toBeNull();
+  });
+
+  it("exports included rows as TXT with the current dialog state", async () => {
+    const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
+      async () => ({ ok: true })
+    );
+    mountDialog({ onExportTxt });
+
+    expect(fileStructureTocToggle().disabled).toBe(true);
+    expect(fileStructureTocToggle().checked).toBe(false);
+    expect(fileStructureTocToggle().getAttribute("role")).toBe("switch");
+    expect(fileStructureTocControl().getAttribute("title")).toBe(
+      "TXT (UTF-8) export cannot append a file structure table of contents."
+    );
+    const tocChildren = Array.from(fileStructureTocControl().children);
+    expect(tocChildren[0]?.classList.contains(
+      "exportConfirmationDialogControlLabel"
+    )).toBe(true);
+    expect(tocChildren[1]?.classList.contains(
+      "exportConfirmationDialogIncludeSwitch"
+    )).toBe(true);
+
+    await act(async () => {
+      buttonByText("Export").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onExportTxt).toHaveBeenCalledTimes(1);
+    const request = onExportTxt.mock.calls[0]?.[0];
+    expect(request).toMatchObject({
+      defaultFileName: "First.txt",
+      assembly: {
+        format: "txtUtf8",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: [
+          {
+            filePath: "First/01.md",
+            parentPath: "First",
+            fileName: "01.md",
+            kind: "markdown",
+            text: "吾輩は猫である。名前はまだない。"
+          },
+          {
+            filePath: "First/notes.txt",
+            parentPath: "First",
+            fileName: "notes.txt",
+            kind: "text",
+            text: "plain text"
+          }
+        ]
+      }
+    });
+  });
+
+  it("uses Aozora project reads when exporting with Aozora body notation", async () => {
+    const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
+      async () => ({ ok: true })
+    );
+    const loadAozoraText = vi.fn<
+      ExportConfirmationDialogProps["loadAozoraText"]
+    >(async (relativePath) =>
+      relativePath.endsWith(".txt") ? "※［＃1-14-2］" : "｜吾輩《わがはい》"
+    );
+    mountDialog({ onExportTxt, loadAozoraText });
+
+    act(() => {
+      const select = bodyNotationSelect();
+      select.value = "aozora";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      buttonByText("Export").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(loadAozoraText).toHaveBeenCalledWith("First/01.md");
+    expect(loadAozoraText).toHaveBeenCalledWith("First/notes.txt");
+    const request = onExportTxt.mock.calls[0]?.[0];
+    expect(request?.assembly).toMatchObject({
+      bodyNotation: "aozora",
+      documents: [
+        { filePath: "First/01.md", text: "｜吾輩《わがはい》" },
+        { filePath: "First/notes.txt", text: "𠀋" }
+      ]
+    });
+  });
+
+  it("does not export and reports a safe message when no files are included", async () => {
+    const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
+      async () => ({ ok: true })
+    );
+    const onExportUnavailable = vi.fn();
+    mountDialog({ onExportTxt, onExportUnavailable });
+
+    act(() => folderToggle("First").click());
+
+    await act(async () => {
+      buttonByText("Export").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onExportUnavailable).toHaveBeenCalledTimes(1);
+    expect(onExportTxt).not.toHaveBeenCalled();
   });
 
   it("reorders folder groups by dragging the folder gripper", () => {
@@ -646,6 +834,11 @@ describe("ExportConfirmationDialog (#523)", () => {
       select.value = "1";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    act(() => {
+      const select = bodyNotationSelect();
+      select.value = "aozora";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
 
     await act(async () => {
       buttonByText("Reload").click();
@@ -658,6 +851,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(candidateRow("First/notes.txt")).toBeNull();
     expect(candidateRow("First/new.md")).not.toBeNull();
     expect(headingRemovalSelect().value).toBe("0");
+    expect(bodyNotationSelect().value).toBe("markdown");
     expect(candidateRow("First/01.md")!.textContent).toContain("# Updated");
     expect(includeToggle("First/01.md").checked).toBe(true);
     expect(includeToggle("First/new.md").checked).toBe(true);

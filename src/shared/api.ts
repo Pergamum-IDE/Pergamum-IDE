@@ -222,7 +222,8 @@ export const FILE_CHANNELS = {
   saveMarkdown: "files:saveMarkdown",
   selectMarkdownSavePath: "files:selectMarkdownSavePath",
   writeMarkdown: "files:writeMarkdown",
-  readAozoraTextFile: "files:readAozoraTextFile"
+  readAozoraTextFile: "files:readAozoraTextFile",
+  exportTxtUtf8: "files:exportTxtUtf8"
 } as const;
 
 export const PROJECT_CHANNELS = {
@@ -588,6 +589,20 @@ export interface ExportSettingsJsonRequest {
 }
 
 export type ExportSettingsJsonResult =
+  | {
+      readonly ok: true;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export interface ExportTxtUtf8Request {
+  readonly defaultFileName: string;
+  readonly content: string;
+}
+
+export type ExportTxtUtf8Result =
   | {
       readonly ok: true;
     }
@@ -1133,6 +1148,9 @@ export interface PergamumApi {
       content: string
     ) => Promise<WriteMarkdownResult>;
     readAozoraTextFile: (filePath: string) => Promise<string>;
+    exportTxtUtf8: (
+      request: ExportTxtUtf8Request
+    ) => Promise<ExportTxtUtf8Result>;
   };
   projects: {
     createProject: () => Promise<ProjectOpenResult>;

@@ -8267,6 +8267,21 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
+.exportConfirmationDialogTocControl {
+  gap: 6px;
+}
+
+.exportConfirmationDialogTocControl .exportConfirmationDialogIncludeSwitch {
+  flex: 0 0 auto;
+}
+
+.exportConfirmationDialogTocControl
+  .exportConfirmationDialogIncludeInput:disabled
+  + .exportConfirmationDialogIncludeTrack {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .exportConfirmationDialogSelect {
   min-inline-size: 160px;
   max-inline-size: min(240px, 48vw);

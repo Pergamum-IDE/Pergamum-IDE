@@ -10,6 +10,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   FILE_CHANNELS,
+  type ExportTxtUtf8Request,
+  type ExportTxtUtf8Result,
   type MarkdownFile,
   type MarkdownFileStat,
   type SaveMarkdownRequest,
@@ -51,6 +53,13 @@ const markdownFilters = [
   {
     name: "Markdown",
     extensions: ["md", "markdown", "mdown", "mkd"]
+  }
+];
+
+const txtUtf8Filters = [
+  {
+    name: "TXT（UTF-8）",
+    extensions: ["txt"]
   }
 ];
 
@@ -152,12 +161,38 @@ function parseWriteMarkdownRequest(value: unknown): WriteMarkdownRequest {
   };
 }
 
+function parseExportTxtUtf8Request(value: unknown): ExportTxtUtf8Request {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("defaultFileName" in value) ||
+    typeof value.defaultFileName !== "string" ||
+    value.defaultFileName.trim().length === 0 ||
+    /[\\/]/u.test(value.defaultFileName) ||
+    !("content" in value) ||
+    typeof value.content !== "string"
+  ) {
+    throw new Error("Invalid TXT export request.");
+  }
+
+  return {
+    defaultFileName: ensureTxtExtension(value.defaultFileName.trim()),
+    content: value.content
+  };
+}
+
 function ensureMarkdownExtension(filePath: string): string {
   if (path.extname(filePath)) {
     return filePath;
   }
 
   return `${filePath}.md`;
+}
+
+function ensureTxtExtension(filePath: string): string {
+  return path.extname(filePath).toLowerCase() === ".txt"
+    ? filePath
+    : `${filePath}.txt`;
 }
 
 function nodePlatformToAppPlatform(platform: NodeJS.Platform): AppPlatform {
@@ -805,6 +840,94 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
               : undefined,
             characterLength: request ? content.length : undefined,
             encodingAssumption: request ? "utf8" : undefined,
+            operation: "write",
+            result: "failed",
+            reason: safeError.reason,
+            durationMs: durationSince(startedAt),
+            error: safeError
+          }
+        });
+
+        throw safeError;
+      }
+    }
+  );
+
+  ipcMain.handle(
+    FILE_CHANNELS.exportTxtUtf8,
+    async (
+      event,
+      rawRequest: unknown
+    ): Promise<ExportTxtUtf8Result> => {
+      const startedAt = Date.now();
+      let request: ExportTxtUtf8Request | null = null;
+      let filePath: string | null = null;
+
+      try {
+        request = parseExportTxtUtf8Request(rawRequest);
+        const owner = parentWindow(event);
+        const options: SaveDialogOptions = {
+          title: "Export TXT (UTF-8)",
+          defaultPath: request.defaultFileName,
+          filters: txtUtf8Filters
+        };
+        const selected = owner
+          ? await dialog.showSaveDialog(owner, options)
+          : await dialog.showSaveDialog(options);
+
+        if (selected.canceled || !selected.filePath) {
+          return { ok: false, reason: "canceled" };
+        }
+
+        filePath = ensureTxtExtension(selected.filePath);
+        const targetClassification =
+          await classifyStandaloneSaveTarget(filePath);
+        if (targetClassification.kind === "rejected") {
+          throw new Error(`TXT export target rejected: ${targetClassification.reason}`);
+        }
+
+        await writeFileAtomic(filePath, request.content);
+
+        logger.log({
+          level: "debug",
+          event: "export.txt.succeeded",
+          details: {
+            documentRef: logger.documentRefForKey(filePath),
+            editorIdKind: "file",
+            saveTargetKind: "unknown",
+            pathKind: "unknown",
+            extension: debugLogExtensionForPath(filePath),
+            pathDepth: debugLogPathDepth(filePath),
+            lineCount: debugLogLineCount(request.content),
+            lineEndingKind: debugLogLineEndingKind(request.content),
+            sizeBucket: debugLogSizeBucket(
+              Buffer.byteLength(request.content, "utf8")
+            ),
+            byteLength: Buffer.byteLength(request.content, "utf8"),
+            characterLength: request.content.length,
+            encodingAssumption: "utf8",
+            operation: "write",
+            result: "succeeded",
+            durationMs: durationSince(startedAt)
+          }
+        });
+
+        return { ok: true };
+      } catch (error) {
+        const safeError = sanitizedFileIoError(error);
+
+        logger.log({
+          level: "error",
+          event: "export.txt.failed",
+          details: {
+            ...(filePath
+              ? { documentRef: logger.documentRefForKey(filePath) }
+              : {}),
+            editorIdKind: "file",
+            saveTargetKind: "unknown",
+            pathKind: "unknown",
+            extension: filePath ? debugLogExtensionForPath(filePath) : ".txt",
+            pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
             operation: "write",
             result: "failed",
             reason: safeError.reason,
