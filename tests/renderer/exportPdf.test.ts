@@ -5,7 +5,13 @@ import {
   isNetworkExternalImageSrc,
   renderDocumentToHtml
 } from "../../src/renderer/exportHtml";
-import { pdfExportDefaultFileName } from "../../src/renderer/exportPdf";
+import {
+  escapeCssFontFamily,
+  extractPdfFontNames,
+  inspectPdfFonts,
+  normalizeFontNameForMatch,
+  pdfExportDefaultFileName
+} from "../../src/renderer/exportPdf";
 import type {
   ExportAssembly,
   ExportAssemblyDocument
@@ -130,5 +136,91 @@ describe("exportPdf (#523 Slice 8)", () => {
         "吾輩は猫である"
       )
     ).toBe("chapter1.pdf");
+  });
+
+  describe("font inspection and escaping (#523 Slice 9)", () => {
+    it("escapes dangerous characters in font family names for CSS", () => {
+      expect(escapeCssFontFamily("MS Mincho; body { color: red; }")).toBe(
+        "MS Mincho body  color: red"
+      );
+      expect(escapeCssFontFamily("   Yu Gothic\n  ")).toBe("Yu Gothic");
+    });
+
+    it("normalizes font names for matching", () => {
+      expect(normalizeFontNameForMatch("ABCDEF+MS-Mincho-Bold")).toBe("msmincho");
+      expect(normalizeFontNameForMatch("IPA Mincho Regular")).toBe("ipamincho");
+    });
+
+    it("extracts font names from PDF buffer", () => {
+      const buf = Buffer.from(
+        "1 0 obj\n/Type /Font\n/BaseFont /ABCDEF+MS-Mincho\n/FontName /Helvetica-Bold\n/FontFamily (Yu Gothic)\nendobj",
+        "latin1"
+      );
+      const names = extractPdfFontNames(buf);
+      expect(names).toEqual(["ABCDEF+MS-Mincho", "Helvetica-Bold", "Yu Gothic"]);
+    });
+
+    it("inspects PDF fonts and returns confirmed status when all fonts match requested", () => {
+      const buf = Buffer.from(
+        "/BaseFont /ABCDEF+MS-Mincho\n/FontName /MS-Mincho-Bold",
+        "latin1"
+      );
+      const result = inspectPdfFonts(buf, "MS Mincho");
+      expect(result.status).toBe("confirmed");
+      expect(result.requestedFontFamily).toBe("MS Mincho");
+      expect(result.matchedFonts).toEqual(["ABCDEF+MS-Mincho", "MS-Mincho-Bold"]);
+    });
+
+    it("inspects PDF fonts and returns partial status when requested font is matched along with fallback fonts", () => {
+      const buf = Buffer.from(
+        "/BaseFont /ABCDEF+MS-Mincho\n/FontName /Helvetica",
+        "latin1"
+      );
+      const result = inspectPdfFonts(buf, "MS Mincho");
+      expect(result.status).toBe("partial");
+      expect(result.matchedFonts).toEqual(["ABCDEF+MS-Mincho"]);
+    });
+
+    it("inspects PDF fonts and returns notConfirmed status when requested font is not detected", () => {
+      const buf = Buffer.from("/BaseFont /Helvetica\n/FontName /Times", "latin1");
+      const result = inspectPdfFonts(buf, "MS Mincho");
+      expect(result.status).toBe("notConfirmed");
+      expect(result.matchedFonts).toEqual([]);
+    });
+
+    it("returns skipped status when no requested font family is provided", () => {
+      const buf = Buffer.from("/BaseFont /Helvetica", "latin1");
+      const resultNull = inspectPdfFonts(buf, null);
+      expect(resultNull.status).toBe("skipped");
+
+      const resultEmpty = inspectPdfFonts(buf, "   ");
+      expect(resultEmpty.status).toBe("skipped");
+    });
+
+    it("embeds requested font family into generated PDF CSS", () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "doc.md",
+          parentPath: "",
+          fileName: "doc.md",
+          kind: "markdown",
+          text: "Sample",
+          rawText: "Sample"
+        }
+      ];
+      const assembly: ExportAssembly = {
+        format: "pdfCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Test",
+        pdfFontFamily: "Yu Mincho"
+      };
+
+      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: true });
+      expect(htmlContent).toContain('font-family: "Yu Mincho"');
+    });
   });
 });

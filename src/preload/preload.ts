@@ -79,6 +79,8 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(FILE_CHANNELS.exportTxtUtf8, request),
     exportHtmlCombined: (request) =>
       ipcRenderer.invoke(FILE_CHANNELS.exportHtmlCombined, request),
+    selectPdfSavePath: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.selectPdfSavePath, request),
     exportPdfCombined: (request) =>
       ipcRenderer.invoke(FILE_CHANNELS.exportPdfCombined, request)
   },

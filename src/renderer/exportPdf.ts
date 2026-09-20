@@ -1,6 +1,13 @@
 import { sanitizeJsonFileNameStem } from "../shared/settingsExport";
 import type { ExportOrigin } from "./exportCandidates";
 
+export {
+  escapeCssFontFamily,
+  extractPdfFontNames,
+  inspectPdfFonts,
+  normalizeFontNameForMatch
+} from "../shared/pdfFontInspection";
+
 export function pdfExportDefaultFileName(
   origin: ExportOrigin,
   projectName: string | null

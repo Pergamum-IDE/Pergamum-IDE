@@ -479,6 +479,13 @@ export const enTranslations = {
     "Configured fonts are not guaranteed to render identically in all PDF viewers.",
   "export.confirmation.pdfCombined.externalImageWarning":
     "The export target contains {count} image reference(s) outside this computer. These images will not be embedded in the PDF.",
+  "export.confirmation.pdfFont.label": "PDF body font",
+  "export.confirmation.pdfFont.default": "PDF default",
+  "export.confirmation.pdfLoaderText": "Generating PDF…",
+  "export.confirmation.pdfFontStatus.confirmed": "Font: Confirmed",
+  "export.confirmation.pdfFontStatus.partial": "Font: Partial fallback",
+  "export.confirmation.pdfFontStatus.notConfirmed": "Font: Unconfirmed",
+  "export.confirmation.pdfFontStatus.skipped": "Font: PDF default",
   "export.confirmation.imageAssetFolder.label": "Image asset folder name",
   "export.confirmation.imageAssetFolder.note":
     "Images outside the project folder will not be exported.",
@@ -1636,6 +1643,12 @@ export const enTranslations = {
     "Exported HTML with image warnings.",
   "status.exportHtmlCombinedFailed": "Failed to export HTML: {message}",
   "status.exportPdfCombinedSucceeded": "Exported PDF.",
+  "status.exportPdfCombinedSucceededConfirmed":
+    "Exported PDF. Confirmed specified font.",
+  "status.exportPdfCombinedSucceededPartial":
+    "Exported PDF. Specified font detected, but fallback fonts are also included.",
+  "status.exportPdfCombinedSucceededNotConfirmed":
+    "Exported PDF. Could not confirm specified font.",
   "status.exportPdfCombinedSucceededWithWarnings":
     "Exported PDF with image warnings.",
   "status.exportPdfCombinedFailed": "Failed to export PDF: {message}",

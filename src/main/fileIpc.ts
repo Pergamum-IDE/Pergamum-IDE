@@ -15,6 +15,8 @@ import {
   type ExportHtmlCombinedResult,
   type ExportPdfCombinedRequest,
   type ExportPdfCombinedResult,
+  type SelectPdfSavePathRequest,
+  type SelectPdfSavePathResult,
   type ExportTxtUtf8Request,
   type ExportTxtUtf8Result,
   type MarkdownFile,
@@ -31,6 +33,7 @@ import {
   isPathEqualOrInsideDirectory,
   isProtectedPergamumDataFilePath
 } from "../shared/saveTargetPolicy";
+import { inspectPdfFonts } from "../shared/pdfFontInspection";
 import { writeFileAtomic } from "./atomicFileWrite";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
@@ -1174,13 +1177,52 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         })
       : [];
     return {
+      targetPath:
+        typeof obj.targetPath === "string" && obj.targetPath.trim().length > 0
+          ? obj.targetPath.trim()
+          : null,
       defaultFileName: obj.defaultFileName,
       htmlContent: obj.htmlContent,
       imageAssets,
       projectRootPath:
-        typeof obj.projectRootPath === "string" ? obj.projectRootPath : null
+        typeof obj.projectRootPath === "string" ? obj.projectRootPath : null,
+      pdfFontFamily:
+        typeof obj.pdfFontFamily === "string" ? obj.pdfFontFamily : null
     };
   }
+
+  ipcMain.handle(
+    FILE_CHANNELS.selectPdfSavePath,
+    async (
+      event,
+      rawRequest: unknown
+    ): Promise<SelectPdfSavePathResult> => {
+      const defaultFileName =
+        typeof rawRequest === "object" &&
+        rawRequest !== null &&
+        "defaultFileName" in rawRequest &&
+        typeof (rawRequest as { defaultFileName?: unknown }).defaultFileName ===
+          "string"
+          ? (rawRequest as { defaultFileName: string }).defaultFileName
+          : "export.pdf";
+
+      const owner = parentWindow(event);
+      const options: SaveDialogOptions = {
+        title: "Export PDF (Combined)",
+        defaultPath: defaultFileName,
+        filters: [{ name: "PDF (*.pdf)", extensions: ["pdf"] }]
+      };
+      const selected = owner
+        ? await dialog.showSaveDialog(owner, options)
+        : await dialog.showSaveDialog(options);
+
+      if (selected.canceled || !selected.filePath) {
+        return { ok: false, reason: "canceled" };
+      }
+
+      return { ok: true, filePath: ensurePdfExtension(selected.filePath) };
+    }
+  );
 
   ipcMain.handle(
     FILE_CHANNELS.exportPdfCombined,
@@ -1196,21 +1238,25 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
       try {
         request = parseExportPdfCombinedRequest(rawRequest);
-        const owner = parentWindow(event);
-        const options: SaveDialogOptions = {
-          title: "Export PDF (Combined)",
-          defaultPath: request.defaultFileName,
-          filters: [{ name: "PDF (*.pdf)", extensions: ["pdf"] }]
-        };
-        const selected = owner
-          ? await dialog.showSaveDialog(owner, options)
-          : await dialog.showSaveDialog(options);
+        if (request.targetPath) {
+          finalPath = ensurePdfExtension(request.targetPath);
+        } else {
+          const owner = parentWindow(event);
+          const options: SaveDialogOptions = {
+            title: "Export PDF (Combined)",
+            defaultPath: request.defaultFileName,
+            filters: [{ name: "PDF (*.pdf)", extensions: ["pdf"] }]
+          };
+          const selected = owner
+            ? await dialog.showSaveDialog(owner, options)
+            : await dialog.showSaveDialog(options);
 
-        if (selected.canceled || !selected.filePath) {
-          return { ok: false, reason: "canceled" };
+          if (selected.canceled || !selected.filePath) {
+            return { ok: false, reason: "canceled" };
+          }
+          finalPath = ensurePdfExtension(selected.filePath);
         }
 
-        finalPath = ensurePdfExtension(selected.filePath);
         const targetClassification =
           await classifyStandaloneSaveTarget(finalPath);
         if (targetClassification.kind === "rejected") {
@@ -1313,6 +1359,11 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
         await writeFileAtomic(finalPath, pdfBuffer);
 
+        const fontInspection = inspectPdfFonts(
+          pdfBuffer,
+          request.pdfFontFamily
+        );
+
         logger.log({
           level: "debug",
           event: "export.pdf.succeeded",
@@ -1331,7 +1382,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           }
         });
 
-        return { ok: true, outputPath: finalPath, warningCount };
+        return { ok: true, outputPath: finalPath, warningCount, fontInspection };
       } catch (error) {
         const safeError = sanitizedFileIoError(error);
 

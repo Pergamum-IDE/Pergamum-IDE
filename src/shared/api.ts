@@ -225,6 +225,7 @@ export const FILE_CHANNELS = {
   readAozoraTextFile: "files:readAozoraTextFile",
   exportTxtUtf8: "files:exportTxtUtf8",
   exportHtmlCombined: "files:exportHtmlCombined",
+  selectPdfSavePath: "files:selectPdfSavePath",
   exportPdfCombined: "files:exportPdfCombined"
 } as const;
 
@@ -637,11 +638,41 @@ export type ExportHtmlCombinedResult =
       readonly reason: "canceled";
     };
 
+export type PdfFontInspectionStatus =
+  | "confirmed"
+  | "partial"
+  | "notConfirmed"
+  | "skipped";
+
+export interface PdfFontInspectionResult {
+  readonly status: PdfFontInspectionStatus;
+  readonly requestedFontFamily?: string;
+  readonly detectedFonts: readonly string[];
+  readonly matchedFonts?: readonly string[];
+  readonly message?: string;
+}
+
+export interface SelectPdfSavePathRequest {
+  readonly defaultFileName: string;
+}
+
+export type SelectPdfSavePathResult =
+  | {
+      readonly ok: true;
+      readonly filePath: string;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
 export interface ExportPdfCombinedRequest {
+  readonly targetPath?: string | null;
   readonly defaultFileName: string;
   readonly htmlContent: string;
   readonly imageAssets: readonly ExportImageAssetCopyItem[];
   readonly projectRootPath: string | null;
+  readonly pdfFontFamily?: string | null;
 }
 
 export type ExportPdfCombinedResult =
@@ -649,6 +680,7 @@ export type ExportPdfCombinedResult =
       readonly ok: true;
       readonly outputPath: string;
       readonly warningCount: number;
+      readonly fontInspection?: PdfFontInspectionResult;
     }
   | {
       readonly ok: false;
@@ -1198,6 +1230,9 @@ export interface PergamumApi {
     exportHtmlCombined: (
       request: ExportHtmlCombinedRequest
     ) => Promise<ExportHtmlCombinedResult>;
+    selectPdfSavePath: (
+      request: SelectPdfSavePathRequest
+    ) => Promise<SelectPdfSavePathResult>;
     exportPdfCombined: (
       request: ExportPdfCombinedRequest
     ) => Promise<ExportPdfCombinedResult>;

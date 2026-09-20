@@ -121,6 +121,7 @@ function mountDialog(options: {
   onConfirmDiscardReload?: () => Promise<boolean>;
   onExportTxt?: ExportConfirmationDialogProps["onExportTxt"];
   onExportHtmlCombined?: ExportConfirmationDialogProps["onExportHtmlCombined"];
+  onSelectPdfSavePath?: ExportConfirmationDialogProps["onSelectPdfSavePath"];
   onExportPdfCombined?: ExportConfirmationDialogProps["onExportPdfCombined"];
   loadAozoraText?: ExportConfirmationDialogProps["loadAozoraText"];
   onExportUnavailable?: ExportConfirmationDialogProps["onExportUnavailable"];
@@ -143,6 +144,7 @@ function mountDialog(options: {
         }
         onExportTxt={options.onExportTxt ?? noopExportTxt}
         onExportHtmlCombined={options.onExportHtmlCombined}
+        onSelectPdfSavePath={options.onSelectPdfSavePath}
         onExportPdfCombined={options.onExportPdfCombined}
         loadAozoraText={options.loadAozoraText ?? noopLoadAozoraText}
         onExportUnavailable={
@@ -1015,5 +1017,266 @@ describe("ExportConfirmationDialog (#523)", () => {
     );
     expect(lastPathEl).not.toBeNull();
     expect(lastPathEl?.textContent).toContain("Saved to: C:\\export\\manuscript.pdf");
+  });
+
+  it("supports PDF font picker, font inspection status, and dirty state (#523 Slice 9)", async () => {
+    const pdfCandidates: ExportCandidateListItem[] = [
+      {
+        documentKey: "First/01.md",
+        filePath: "First/01.md",
+        parentPath: "First",
+        fileName: "01.md",
+        kind: "markdown",
+        rawText: "# Chapter 1",
+        previewStart: "# Chapter 1",
+        previewEnd: "# Chapter 1",
+        previewStartHover: "# Chapter 1",
+        previewEndHover: "# Chapter 1",
+        characterCount: 10,
+        included: true
+      }
+    ];
+
+    const onExportPdfCombined = vi.fn(async () => ({
+      ok: true as const,
+      outputPath: "C:\\export\\manuscript.pdf",
+      warningCount: 0,
+      fontInspection: {
+        status: "confirmed" as const,
+        requestedFontFamily: "MS Mincho",
+        detectedFonts: ["MS-Mincho"],
+        matchedFonts: ["MS-Mincho"]
+      }
+    }));
+
+    (window as any).pergamum = {
+      fontCache: {
+        load: async () => ({
+          status: "loaded" as const,
+          cache: {
+            version: 1 as const,
+            scannedAt: "2026-01-01",
+            uiLanguage: "ja",
+            families: [
+              { family: "MS Mincho", displayName: "ＭＳ 明朝", fixedWidth: "unknown" as const }
+            ]
+          }
+        })
+      }
+    };
+
+    mountDialog({ candidates: pdfCandidates, onExportPdfCombined });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      select.value = "pdfCombined";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const fontSelect = container!.querySelector<HTMLSelectElement>(
+      "select[data-export-pdf-font-select='true']"
+    );
+    expect(fontSelect).not.toBeNull();
+    expect(fontSelect?.value).toBe("");
+
+    act(() => {
+      fontSelect!.value = "MS Mincho";
+      fontSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const dirtyIcon = container!.querySelector(
+      ".exportConfirmationDialogDirtyIcon"
+    );
+    expect(dirtyIcon).not.toBeNull();
+
+    const confirmBtn = container!.querySelector<HTMLButtonElement>(
+      ".appDialogButton-confirm"
+    );
+    await act(async () => {
+      confirmBtn!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onExportPdfCombined).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pdfFontFamily: "MS Mincho"
+      })
+    );
+
+    const fontStatusEl = container!.querySelector(
+      ".exportConfirmationDialogFontStatus"
+    );
+    expect(fontStatusEl).not.toBeNull();
+    expect(fontStatusEl?.getAttribute("data-export-pdf-font-status")).toBe(
+      "confirmed"
+    );
+  });
+
+  it("renders font options with font family styling and preserves selection when switching formats (#523 Slice 9 follow-up)", async () => {
+    const pdfCandidates: ExportCandidateListItem[] = [
+      {
+        documentKey: "01.md",
+        filePath: "01.md",
+        parentPath: "",
+        fileName: "01.md",
+        kind: "markdown",
+        rawText: "# Ch 1",
+        previewStart: "# Ch 1",
+        previewEnd: "# Ch 1",
+        previewStartHover: "# Ch 1",
+        previewEndHover: "# Ch 1",
+        characterCount: 5,
+        included: true
+      }
+    ];
+
+    (window as any).pergamum = {
+      fontCache: {
+        load: async () => ({
+          status: "loaded" as const,
+          cache: {
+            version: 1 as const,
+            scannedAt: "2026-01-01",
+            uiLanguage: "ja",
+            families: [
+              { family: "Yu Gothic", displayName: "游ゴシック", fixedWidth: "unknown" as const },
+              { family: "MS Mincho", displayName: "ＭＳ 明朝", fixedWidth: "unknown" as const }
+            ]
+          }
+        })
+      }
+    };
+
+    mountDialog({ candidates: pdfCandidates });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      select.value = "pdfCombined";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const fontSelect = container!.querySelector<HTMLSelectElement>(
+      "select[data-export-pdf-font-select='true']"
+    );
+    expect(fontSelect).not.toBeNull();
+
+    const options = fontSelect!.querySelectorAll("option");
+    expect(options).toHaveLength(3);
+    expect(options[0].value).toBe("");
+    expect(options[0].textContent).toBe(
+      translate("export.confirmation.pdfFont.default")
+    );
+    expect(options[1].style.fontFamily).toContain("Yu Gothic");
+    expect(options[2].style.fontFamily).toContain("MS Mincho");
+
+    act(() => {
+      fontSelect!.value = "Yu Gothic";
+      fontSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(fontSelect!.value).toBe("Yu Gothic");
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      select.value = "txtUtf8";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(
+      container!.querySelector("select[data-export-pdf-font-select='true']")
+    ).toBeNull();
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      select.value = "pdfCombined";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const fontSelectRestored = container!.querySelector<HTMLSelectElement>(
+      "select[data-export-pdf-font-select='true']"
+    );
+    expect(fontSelectRestored?.value).toBe("Yu Gothic");
+  });
+
+  it("handles loader display ordering and save path selection cancellation (#523 Slice 9 follow-up)", async () => {
+    const pdfCandidates: ExportCandidateListItem[] = [
+      {
+        documentKey: "01.md",
+        filePath: "01.md",
+        parentPath: "",
+        fileName: "01.md",
+        kind: "markdown",
+        rawText: "# Ch 1",
+        previewStart: "# Ch 1",
+        previewEnd: "# Ch 1",
+        previewStartHover: "# Ch 1",
+        previewEndHover: "# Ch 1",
+        characterCount: 5,
+        included: true
+      }
+    ];
+
+    const onSelectPdfSavePath = vi.fn(async () => {
+      const backdropBeforeSelection = container!.querySelector(
+        "[data-export-pdf-blocking-backdrop='true']"
+      );
+      expect(backdropBeforeSelection).toBeNull();
+      return { ok: false as const, reason: "canceled" as const };
+    });
+
+    const onExportPdfCombined = vi.fn(async () => ({
+      ok: true as const,
+      outputPath: "C:\\export\\out.pdf",
+      warningCount: 0
+    }));
+
+    mountDialog({
+      candidates: pdfCandidates,
+      onSelectPdfSavePath,
+      onExportPdfCombined
+    });
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      select.value = "pdfCombined";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const confirmBtn = container!.querySelector<HTMLButtonElement>(
+      ".appDialogButton-confirm"
+    );
+
+    await act(async () => {
+      confirmBtn!.click();
+      await Promise.resolve();
+    });
+
+    expect(onSelectPdfSavePath).toHaveBeenCalledTimes(1);
+    expect(onExportPdfCombined).not.toHaveBeenCalled();
+
+    expect(
+      container!.querySelector("[data-export-pdf-blocking-backdrop='true']")
+    ).toBeNull();
+    expect(
+      container!.querySelector(".exportConfirmationDialogLastExportPath")
+    ).toBeNull();
   });
 });

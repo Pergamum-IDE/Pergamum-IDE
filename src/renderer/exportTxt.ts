@@ -44,6 +44,7 @@ export interface CreateExportAssemblyOptions {
   readonly headingRemovalLevel: HeadingRemovalLevel;
   readonly appendFileStructureToc?: boolean;
   readonly imageAssetFolderName?: string;
+  readonly pdfFontFamily?: string | null;
   readonly projectName?: string | null;
   readonly aozoraTextByFilePath?: Readonly<Record<string, string>>;
 }
@@ -135,6 +136,7 @@ export function createExportAssembly(
     headingRemovalLevel: options.headingRemovalLevel,
     appendFileStructureToc: options.appendFileStructureToc ?? false,
     imageAssetFolderName: options.imageAssetFolderName ?? "exports.assets",
+    pdfFontFamily: options.pdfFontFamily ?? null,
     projectName: options.projectName ?? null,
     documents: candidatesInExportOrder
       .filter((candidate) => candidate.included)

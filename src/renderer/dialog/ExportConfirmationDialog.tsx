@@ -11,14 +11,19 @@ import chevronRightIconUrl from "../../../assets/icons/feather/glossary/chevrons
 import editIconUrl from "../../../assets/icons/feather/global/edit-2.svg?url";
 import markdownFileIconUrl from "../../../assets/icons/svgrepo/explorer/markdown-svgrepo-com.svg?url";
 import textFileIconUrl from "../../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
+import parchmentRollLoaderUrl from "../../../assets/parchment-roll-loader-220h.gif?url";
 import type { Translate } from "../../shared/i18n";
 import type {
   ExportHtmlCombinedRequest,
   ExportHtmlCombinedResult,
   ExportPdfCombinedRequest,
   ExportPdfCombinedResult,
-  ExportTxtUtf8Result
+  ExportTxtUtf8Result,
+  PdfFontInspectionResult,
+  SelectPdfSavePathRequest,
+  SelectPdfSavePathResult
 } from "../../shared/api";
+import { buildFontFamilyCss } from "../../shared/fontSettings";
 import type {
   ExportCandidateListItem,
   ExportCandidateFolderGroup,
@@ -88,6 +93,9 @@ export interface ExportConfirmationDialogProps {
   readonly onExportHtmlCombined?: (
     request: ExportHtmlCombinedRequest
   ) => Promise<ExportHtmlCombinedResult>;
+  readonly onSelectPdfSavePath?: (
+    request: SelectPdfSavePathRequest
+  ) => Promise<SelectPdfSavePathResult>;
   readonly onExportPdfCombined?: (
     request: ExportPdfCombinedRequest
   ) => Promise<ExportPdfCombinedResult>;
@@ -244,6 +252,22 @@ function parseExportBodyNotation(value: string): ExportBodyNotation {
     : DEFAULT_EXPORT_BODY_NOTATION;
 }
 
+function fontInspectionStatusLabel(
+  inspection: PdfFontInspectionResult,
+  translate: Translate
+): string {
+  switch (inspection.status) {
+    case "confirmed":
+      return translate("export.confirmation.pdfFontStatus.confirmed");
+    case "partial":
+      return translate("export.confirmation.pdfFontStatus.partial");
+    case "notConfirmed":
+      return translate("export.confirmation.pdfFontStatus.notConfirmed");
+    case "skipped":
+      return translate("export.confirmation.pdfFontStatus.skipped");
+  }
+}
+
 function dropTargetsEqual(
   first: ExportDialogDropTarget | null,
   second: ExportDialogDropTarget | null
@@ -280,6 +304,7 @@ export function ExportConfirmationDialog({
   onConfirmDiscardReload,
   onExportTxt,
   onExportHtmlCombined,
+  onSelectPdfSavePath,
   onExportPdfCombined,
   loadAozoraText,
   onExportUnavailable,
@@ -304,6 +329,28 @@ export function ExportConfirmationDialog({
   const [imageAssetFolderName, setImageAssetFolderName] = useState<string>(
     DEFAULT_IMAGE_ASSET_FOLDER_NAME
   );
+  const [pdfFontFamily, setPdfFontFamily] = useState<string | null>(null);
+  const [fontInspection, setFontInspection] = useState<PdfFontInspectionResult | null>(null);
+  const [cachedFontFamilies, setCachedFontFamilies] = useState<
+    readonly { family: string; displayName: string }[]
+  >([]);
+
+  useEffect(() => {
+    const fontCacheApi = window.pergamum?.fontCache;
+    if (fontCacheApi?.load) {
+      fontCacheApi
+        .load()
+        .then((state) => {
+          if (state && state.status === "loaded" && state.cache?.families) {
+            setCachedFontFamilies(state.cache.families);
+          }
+        })
+        .catch(() => {
+          // ignore font cache load error
+        });
+    }
+  }, []);
+
   const [lastExportedPath, setLastExportedPath] = useState<string | null>(null);
   const [orderState, setOrderState] = useState(() =>
     createOrderStateFromCandidates(candidates)
@@ -365,9 +412,10 @@ export function ExportConfirmationDialog({
       exportFormat,
       bodyNotation,
       includeFileStructureToc: effectiveIncludeFileStructureToc,
-      imageAssetFolderName
+      imageAssetFolderName,
+      pdfFontFamily
     }),
-    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat, imageAssetFolderName]
+    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat, imageAssetFolderName, pdfFontFamily]
   );
   const isDirty = useMemo(
     () =>
@@ -561,6 +609,19 @@ export function ExportConfirmationDialog({
     }
 
     if (exportFormat === PDF_COMBINED_EXPORT_FORMAT && onExportPdfCombined) {
+      let targetPath: string | null = null;
+      if (onSelectPdfSavePath) {
+        const savePathResult = await onSelectPdfSavePath({
+          defaultFileName: pdfExportDefaultFileName(origin, projectName)
+        });
+
+        if (!savePathResult || !savePathResult.ok || !savePathResult.filePath) {
+          return;
+        }
+
+        targetPath = savePathResult.filePath;
+      }
+
       setIsExporting(true);
       try {
         const assembly = createExportAssembly(orderedRows, {
@@ -569,6 +630,7 @@ export function ExportConfirmationDialog({
           headingRemovalLevel,
           appendFileStructureToc: effectiveIncludeFileStructureToc,
           imageAssetFolderName,
+          pdfFontFamily,
           projectName,
           aozoraTextByFilePath: await aozoraTextByFilePathFor(includedRows)
         });
@@ -583,14 +645,19 @@ export function ExportConfirmationDialog({
         });
 
         const result = await onExportPdfCombined({
+          targetPath,
           defaultFileName: pdfExportDefaultFileName(origin, projectName),
           htmlContent,
           imageAssets,
-          projectRootPath: null
+          projectRootPath: null,
+          pdfFontFamily
         });
 
         if (result.ok) {
           setLastExportedPath(result.outputPath);
+          if (result.fontInspection) {
+            setFontInspection(result.fontInspection);
+          }
         }
       } catch (error) {
         onExportFailed(error);
@@ -811,6 +878,14 @@ export function ExportConfirmationDialog({
       onClose={onClose}
       footer={
         <div className="exportConfirmationDialogFooter">
+          {fontInspection ? (
+            <div
+              className="exportConfirmationDialogFontStatus"
+              data-export-pdf-font-status={fontInspection.status}
+            >
+              {fontInspectionStatusLabel(fontInspection, translate)}
+            </div>
+          ) : null}
           {lastExportedPath ? (
             <div
               className="exportConfirmationDialogLastExportPath"
@@ -968,6 +1043,43 @@ export function ExportConfirmationDialog({
             <span className="exportConfirmationDialogControlNote">
               {translate("export.confirmation.pdfCombined.note")}
             </span>
+            <label className="exportConfirmationDialogControl">
+              <span className="exportConfirmationDialogControlLabel">
+                {translate("export.confirmation.pdfFont.label")}
+              </span>
+              <select
+                className="exportConfirmationDialogSelect"
+                value={pdfFontFamily ?? ""}
+                data-export-pdf-font-select="true"
+                style={{
+                  fontFamily: pdfFontFamily
+                    ? buildFontFamilyCss([{ family: pdfFontFamily }], "serif")
+                    : "inherit"
+                }}
+                onChange={(event) => {
+                  const val = event.currentTarget.value;
+                  setPdfFontFamily(val.length > 0 ? val : null);
+                }}
+              >
+                <option value="" style={{ fontFamily: "inherit" }}>
+                  {translate("export.confirmation.pdfFont.default")}
+                </option>
+                {cachedFontFamilies.map((font) => (
+                  <option
+                    key={font.family}
+                    value={font.family}
+                    style={{
+                      fontFamily: buildFontFamilyCss(
+                        [{ family: font.family, displayName: font.displayName }],
+                        "serif"
+                      )
+                    }}
+                  >
+                    {font.displayName ? `${font.displayName} (${font.family})` : font.family}
+                  </option>
+                ))}
+              </select>
+            </label>
             <span className="exportConfirmationDialogControlNote">
               {translate("export.confirmation.pdfCombined.fontWarning")}
             </span>
@@ -1398,6 +1510,23 @@ export function ExportConfirmationDialog({
           </table>
         </div>
       )}
+      {isExporting && isPdfCombinedExport ? (
+        <div
+          className="exportPdfBlockingBackdrop"
+          data-export-pdf-blocking-backdrop="true"
+        >
+          <div className="exportPdfLoaderCard">
+            <img
+              src={parchmentRollLoaderUrl}
+              alt=""
+              className="exportPdfLoaderImage"
+            />
+            <div className="exportPdfLoaderText">
+              {translate("export.confirmation.pdfLoaderText")}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </InfoDialog>
   );
 }

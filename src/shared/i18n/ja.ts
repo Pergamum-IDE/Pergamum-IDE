@@ -474,6 +474,13 @@ export const jaTranslations = {
     "※ フォントを指定してもPDF表示環境で再現されるとは限りません。",
   "export.confirmation.pdfCombined.externalImageWarning":
     "出力対象にこのコンピュータ外の画像が {count} 件含まれています。これらの画像はPDFに埋め込まれません。",
+  "export.confirmation.pdfFont.label": "PDF本文フォント",
+  "export.confirmation.pdfFont.default": "PDF既定",
+  "export.confirmation.pdfLoaderText": "PDF生成中…",
+  "export.confirmation.pdfFontStatus.confirmed": "フォント: 適用確認済み",
+  "export.confirmation.pdfFontStatus.partial": "フォント: 一部代替あり",
+  "export.confirmation.pdfFontStatus.notConfirmed": "フォント: 適用未確認",
+  "export.confirmation.pdfFontStatus.skipped": "フォント: PDF既定",
   "export.confirmation.imageAssetFolder.label": "画像ファイルフォルダ名",
   "export.confirmation.imageAssetFolder.note":
     "※ プロジェクトフォルダ外の画像は出力対象外です。",
@@ -1632,6 +1639,12 @@ export const jaTranslations = {
     "HTMLを書き出しました。一部の画像は出力対象外または未解決です。",
   "status.exportHtmlCombinedFailed": "HTMLの書き出しに失敗しました: {message}",
   "status.exportPdfCombinedSucceeded": "PDFを書き出しました。",
+  "status.exportPdfCombinedSucceededConfirmed":
+    "PDFを書き出しました。指定フォントの適用を確認しました。",
+  "status.exportPdfCombinedSucceededPartial":
+    "PDFを書き出しました。指定フォントは検出されましたが、代替フォントも含まれています。",
+  "status.exportPdfCombinedSucceededNotConfirmed":
+    "PDFを書き出しました。指定フォントの適用は確認できませんでした。",
   "status.exportPdfCombinedSucceededWithWarnings":
     "PDFを書き出しました。一部の画像は出力対象外または未解決です。",
   "status.exportPdfCombinedFailed": "PDFの書き出しに失敗しました: {message}",

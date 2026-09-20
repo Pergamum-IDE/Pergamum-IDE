@@ -21,6 +21,7 @@ import type {
   ExportBodyNotation,
   ExportFormat
 } from "./exportTypes";
+import { escapeCssFontFamily } from "./exportPdf";
 
 export function isNetworkExternalImageSrc(src: string): boolean {
   const value = src.trim();
@@ -452,6 +453,13 @@ export function generateCombinedHtml(
     ? generateFileStructureTocHtml(assembly.documents)
     : "";
 
+  const customFont = assembly.pdfFontFamily
+    ? escapeCssFontFamily(assembly.pdfFontFamily)
+    : "";
+  const fontFamilyCss = customFont
+    ? `"${customFont}", "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", serif`
+    : `"Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", serif`;
+
   const styleRules = options?.isPdf
     ? [
         `    @page {`,
@@ -459,7 +467,7 @@ export function generateCombinedHtml(
         `      margin: 20mm;`,
         `    }`,
         `    body {`,
-        `      font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", serif;`,
+        `      font-family: ${fontFamilyCss};`,
         `      font-size: 10.5pt;`,
         `      line-height: 1.8;`,
         `      color: #000000;`,

@@ -26,6 +26,8 @@ import type {
   ExportHtmlCombinedResult,
   ExportPdfCombinedRequest,
   ExportPdfCombinedResult,
+  SelectPdfSavePathRequest,
+  SelectPdfSavePathResult,
   ExportTxtUtf8Result
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
@@ -10584,6 +10586,16 @@ export function App(): JSX.Element {
     return result;
   }
 
+  async function handleExportConfirmationSelectPdfSavePath(
+    request: SelectPdfSavePathRequest
+  ): Promise<SelectPdfSavePathResult> {
+    const selectPdfSavePath = window.pergamum?.files?.selectPdfSavePath;
+    if (!selectPdfSavePath) {
+      throw new Error("PDF save path selection is unavailable.");
+    }
+    return selectPdfSavePath(request);
+  }
+
   async function handleExportConfirmationPdfCombinedExport(
     request: ExportPdfCombinedRequest
   ): Promise<ExportPdfCombinedResult> {
@@ -10600,6 +10612,12 @@ export function App(): JSX.Element {
     if (result.ok) {
       if (result.warningCount > 0) {
         setStatus({ key: "status.exportPdfCombinedSucceededWithWarnings" });
+      } else if (result.fontInspection?.status === "confirmed") {
+        setStatus({ key: "status.exportPdfCombinedSucceededConfirmed" });
+      } else if (result.fontInspection?.status === "partial") {
+        setStatus({ key: "status.exportPdfCombinedSucceededPartial" });
+      } else if (result.fontInspection?.status === "notConfirmed") {
+        setStatus({ key: "status.exportPdfCombinedSucceededNotConfirmed" });
       } else {
         setStatus({ key: "status.exportPdfCombinedSucceeded" });
       }
@@ -11441,6 +11459,7 @@ export function App(): JSX.Element {
           onConfirmDiscardReload={confirmExportConfirmationReloadDiscard}
           onExportTxt={handleExportConfirmationTxtExport}
           onExportHtmlCombined={handleExportConfirmationHtmlCombinedExport}
+          onSelectPdfSavePath={handleExportConfirmationSelectPdfSavePath}
           onExportPdfCombined={handleExportConfirmationPdfCombinedExport}
           loadAozoraText={(relativePath) =>
             window.pergamum.projects.readProjectDocumentAozora(relativePath)

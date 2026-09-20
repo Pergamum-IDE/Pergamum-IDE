@@ -35,6 +35,7 @@ export interface ExportDialogOptionsState {
   readonly bodyNotation: ExportBodyNotation;
   readonly includeFileStructureToc: boolean;
   readonly imageAssetFolderName: string;
+  readonly pdfFontFamily: string | null;
 }
 
 export interface ExportAssemblyDocument {
@@ -54,13 +55,15 @@ export interface ExportAssembly {
   readonly appendFileStructureToc: boolean;
   readonly imageAssetFolderName: string;
   readonly projectName: string | null;
+  readonly pdfFontFamily?: string | null;
 }
 
 export const DEFAULT_EXPORT_DIALOG_OPTIONS_STATE: ExportDialogOptionsState = {
   exportFormat: TXT_UTF8_EXPORT_FORMAT,
   bodyNotation: DEFAULT_EXPORT_BODY_NOTATION,
   includeFileStructureToc: DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
-  imageAssetFolderName: DEFAULT_IMAGE_ASSET_FOLDER_NAME
+  imageAssetFolderName: DEFAULT_IMAGE_ASSET_FOLDER_NAME,
+  pdfFontFamily: null
 };
 
 export function validateImageAssetFolderName(folderName: string): boolean {
