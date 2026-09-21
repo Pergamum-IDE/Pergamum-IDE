@@ -327,10 +327,16 @@ describe("exportPdf (#523 Slice 8)", () => {
       const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
 
       expect(htmlContent).toContain(
-        '<section id="pergamum-export-doc-001" class="pergamum-export-document" data-file-path="manuscript/001_intro.md" data-parent-path="manuscript">'
+        '<section class="pergamum-export-document" data-file-path="manuscript/001_intro.md" data-parent-path="manuscript">'
       );
       expect(htmlContent).toContain(
-        '<section id="pergamum-export-doc-002" class="pergamum-export-document" data-file-path="manuscript/002_chapter1.md" data-parent-path="manuscript">'
+        '<span id="pergamum-export-doc-001" class="pergamum-export-document-anchor" aria-hidden="true"></span>'
+      );
+      expect(htmlContent).toContain(
+        '<section class="pergamum-export-document" data-file-path="manuscript/002_chapter1.md" data-parent-path="manuscript">'
+      );
+      expect(htmlContent).toContain(
+        '<span id="pergamum-export-doc-002" class="pergamum-export-document-anchor" aria-hidden="true"></span>'
       );
 
       expect(htmlContent).toContain(
@@ -385,7 +391,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       );
 
       expect(horizontalHtml).toContain(
-        '<section id="pergamum-export-doc-001" class="pergamum-export-document"'
+        '<span id="pergamum-export-doc-001" class="pergamum-export-document-anchor" aria-hidden="true"></span>'
       );
       expect(horizontalHtml).toContain(
         '<li><a href="#pergamum-export-doc-001"><code>ch1.md</code></a></li>'
@@ -395,7 +401,7 @@ describe("exportPdf (#523 Slice 8)", () => {
         '<body class="pergamum-export-pdf-vertical">'
       );
       expect(verticalHtml).toContain(
-        '<section id="pergamum-export-doc-001" class="pergamum-export-document"'
+        '<span id="pergamum-export-doc-001" class="pergamum-export-document-anchor" aria-hidden="true"></span>'
       );
       expect(verticalHtml).toContain(
         '<li><a href="#pergamum-export-doc-001"><code>ch1.md</code></a></li>'

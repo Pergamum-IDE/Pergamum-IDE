@@ -463,9 +463,10 @@ export function generateCombinedHtml(
 
     docSections.push(
       [
-        `<section id="${docId}" class="pergamum-export-document" data-file-path="${escapeHtmlAttr(
+        `<section class="pergamum-export-document" data-file-path="${escapeHtmlAttr(
           doc.filePath
         )}" data-parent-path="${escapeHtmlAttr(doc.parentPath)}">`,
+        `  <span id="${docId}" class="pergamum-export-document-anchor" aria-hidden="true"></span>`,
         bodyHtml,
         `</section>`
       ].join("\n")
@@ -526,6 +527,14 @@ export function generateCombinedHtml(
         `      break-after: auto;`,
         `      page-break-after: auto;`,
         `    }`,
+        `    .pergamum-export-document-anchor {`,
+        `      display: block;`,
+        `      width: 1px;`,
+        `      height: 1px;`,
+        `      overflow: hidden;`,
+        `      opacity: 0;`,
+        `      pointer-events: none;`,
+        `    }`,
         `    .pergamum-export-file-structure {`,
         `      break-before: page;`,
         `      page-break-before: always;`,
@@ -545,6 +554,14 @@ export function generateCombinedHtml(
         `    }`
       ].join("\n")
     : [
+        `    .pergamum-export-document-anchor {`,
+        `      display: block;`,
+        `      width: 1px;`,
+        `      height: 1px;`,
+        `      overflow: hidden;`,
+        `      opacity: 0;`,
+        `      pointer-events: none;`,
+        `    }`,
         `    .pergamum-export-file-structure {`,
         `      break-before: page;`,
         `      page-break-before: always;`,
