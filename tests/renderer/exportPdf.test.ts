@@ -292,4 +292,150 @@ describe("exportPdf (#523 Slice 8)", () => {
       expect(htmlContent).toContain('font-family: "Yu Mincho"');
     });
   });
+
+  describe("TOC internal anchor links (#523 Slice 13)", () => {
+    it("generates sequential zero-padded IDs for document sections and links TOC entries to them", () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "manuscript/001_intro.md",
+          parentPath: "manuscript",
+          fileName: "001_intro.md",
+          kind: "markdown",
+          text: "Intro text",
+          rawText: "# Intro"
+        },
+        {
+          filePath: "manuscript/002_chapter1.md",
+          parentPath: "manuscript",
+          fileName: "002_chapter1.md",
+          kind: "markdown",
+          text: "Chapter 1 text",
+          rawText: "# Chapter 1"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "htmlCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: true,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Novel"
+      };
+
+      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+
+      expect(htmlContent).toContain(
+        '<section id="pergamum-export-doc-001" class="pergamum-export-document" data-file-path="manuscript/001_intro.md" data-parent-path="manuscript">'
+      );
+      expect(htmlContent).toContain(
+        '<section id="pergamum-export-doc-002" class="pergamum-export-document" data-file-path="manuscript/002_chapter1.md" data-parent-path="manuscript">'
+      );
+
+      expect(htmlContent).toContain(
+        '<li><a href="#pergamum-export-doc-001"><code>manuscript/001_intro.md</code></a></li>'
+      );
+      expect(htmlContent).toContain(
+        '<li><a href="#pergamum-export-doc-002"><code>manuscript/002_chapter1.md</code></a></li>'
+      );
+    });
+
+    it("preserves TOC links for both PDF horizontal and PDF vertical export", () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "ch1.md",
+          parentPath: "",
+          fileName: "ch1.md",
+          kind: "markdown",
+          text: "Chapter 1",
+          rawText: "Chapter 1"
+        }
+      ];
+
+      const horizontalAssembly: ExportAssembly = {
+        format: "pdfCombined",
+        pdfWritingMode: "horizontal",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: true,
+        imageAssetFolderName: "exports.assets",
+        projectName: "PDF Horizontal"
+      };
+
+      const verticalAssembly: ExportAssembly = {
+        format: "pdfCombined",
+        pdfWritingMode: "vertical-rl",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: true,
+        imageAssetFolderName: "exports.assets",
+        projectName: "PDF Vertical"
+      };
+
+      const { htmlContent: horizontalHtml } = generateCombinedHtml(
+        horizontalAssembly,
+        { isPdf: true, pdfWritingMode: "horizontal" }
+      );
+      const { htmlContent: verticalHtml } = generateCombinedHtml(
+        verticalAssembly,
+        { isPdf: true, pdfWritingMode: "vertical-rl" }
+      );
+
+      expect(horizontalHtml).toContain(
+        '<section id="pergamum-export-doc-001" class="pergamum-export-document"'
+      );
+      expect(horizontalHtml).toContain(
+        '<li><a href="#pergamum-export-doc-001"><code>ch1.md</code></a></li>'
+      );
+
+      expect(verticalHtml).toContain(
+        '<body class="pergamum-export-pdf-vertical">'
+      );
+      expect(verticalHtml).toContain(
+        '<section id="pergamum-export-doc-001" class="pergamum-export-document"'
+      );
+      expect(verticalHtml).toContain(
+        '<li><a href="#pergamum-export-doc-001"><code>ch1.md</code></a></li>'
+      );
+      // TOC is inside main.pergamum-export inside body.pergamum-export-pdf-vertical
+      expect(verticalHtml).toContain(
+        '<section class="pergamum-export-file-structure">'
+      );
+    });
+
+    it("escapes special characters in file paths for TOC links and attributes", () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: 'folder & test/<special> "file".md',
+          parentPath: "folder & test",
+          fileName: '<special> "file".md',
+          kind: "markdown",
+          text: "Content",
+          rawText: "Content"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "htmlCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: true,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Escape Test"
+      };
+
+      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+
+      expect(htmlContent).toContain(
+        'data-file-path="folder &amp; test/&lt;special&gt; &quot;file&quot;.md"'
+      );
+      expect(htmlContent).toContain(
+        '<li><a href="#pergamum-export-doc-001"><code>folder &amp; test/&lt;special&gt; "file".md</code></a></li>'
+      );
+    });
+  });
 });

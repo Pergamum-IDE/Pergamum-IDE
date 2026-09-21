@@ -339,15 +339,26 @@ export function generateFileStructureTocHtml(
     return "";
   }
 
+  const docIdByFilePath = new Map<string, string>();
+  for (let index = 0; index < documents.length; index += 1) {
+    const docIndexStr = String(index + 1).padStart(3, "0");
+    docIdByFilePath.set(
+      documents[index].filePath,
+      `pergamum-export-doc-${docIndexStr}`
+    );
+  }
+
   interface TocTreeNode {
     name: string;
     children: Map<string, TocTreeNode>;
     filePath?: string;
+    docId?: string;
   }
 
   const rootNodes = new Map<string, TocTreeNode>();
 
   for (const doc of documents) {
+    const docId = docIdByFilePath.get(doc.filePath);
     const normalizedPath = doc.filePath.replace(/\\/g, "/");
     const segments = normalizedPath.split("/").filter(Boolean);
 
@@ -367,6 +378,7 @@ export function generateFileStructureTocHtml(
 
       if (isFile) {
         node.filePath = doc.filePath;
+        node.docId = docId;
       } else {
         currentMap = node.children;
       }
@@ -380,9 +392,11 @@ export function generateFileStructureTocHtml(
 
     const items: string[] = [];
     for (const node of nodes.values()) {
-      if (node.filePath) {
+      if (node.filePath && node.docId) {
+        const displayPath = escapeHtmlText(node.filePath.replace(/\\/g, "/"));
+        const hrefAttr = escapeHtmlAttr(`#${node.docId}`);
         items.push(
-          `<li><code>${escapeHtmlText(node.filePath.replace(/\\/g, "/"))}</code></li>`
+          `<li><a href="${hrefAttr}"><code>${displayPath}</code></a></li>`
         );
       } else {
         const childrenHtml = renderTreeNodes(node.children);
@@ -427,7 +441,11 @@ export function generateCombinedHtml(
 
   const docSections: string[] = [];
 
-  for (const doc of assembly.documents) {
+  for (let i = 0; i < assembly.documents.length; i += 1) {
+    const doc = assembly.documents[i];
+    const docIndexStr = String(i + 1).padStart(3, "0");
+    const docId = `pergamum-export-doc-${docIndexStr}`;
+
     const { bodyHtml, assets } = renderDocumentToHtml(
       doc,
       assembly.bodyNotation,
@@ -445,7 +463,7 @@ export function generateCombinedHtml(
 
     docSections.push(
       [
-        `<section class="pergamum-export-document" data-file-path="${escapeHtmlAttr(
+        `<section id="${docId}" class="pergamum-export-document" data-file-path="${escapeHtmlAttr(
           doc.filePath
         )}" data-parent-path="${escapeHtmlAttr(doc.parentPath)}">`,
         bodyHtml,

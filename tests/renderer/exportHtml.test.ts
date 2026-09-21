@@ -47,7 +47,7 @@ describe("exportHtml (#523 Slice 7)", () => {
     expect(htmlContent).toContain("<!doctype html>");
     expect(htmlContent).toContain("<title>迷子たち &amp; 千年領主</title>");
     expect(htmlContent).toContain(
-      '<section class="pergamum-export-document" data-file-path="chapter1.md" data-parent-path="">'
+      '<section id="pergamum-export-doc-001" class="pergamum-export-document" data-file-path="chapter1.md" data-parent-path="">'
     );
     expect(htmlContent).toContain("<h1>Chapter 1</h1>");
     expect(htmlContent).not.toContain(
