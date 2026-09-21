@@ -50,11 +50,19 @@ interface RubyTextChunk {
   content: string;
 }
 
+function isNarouRubyReading(text: string): boolean {
+  if (text.length === 0) {
+    return false;
+  }
+  return /^[\u3040-\u309F\u30A0-\u30FF\u30FC\u30FB\s]+$/u.test(text);
+}
+
 /**
  * Parses Aozora / Narou / Kakuyomu-style ruby notation in a plain text string.
  * Supports explicit ruby base markers (｜親文字《ルビ》 / |親文字《ルビ》)
  * and implicit ruby base (contiguous Kanji run immediately preceding 《ルビ》).
  * Supports Kakuyomu emphasis notation (《《...》》) when Kakuyomu/Narou renderer family is active.
+ * Supports Narou shorthand ruby (漢字（かんじ） / 漢字(かんじ)) and escape markers (|（ / ｜（ / |( / ｜() when Narou renderer is active.
  */
 function parseRubyInText(
   text: string,
@@ -70,117 +78,232 @@ function parseRubyInText(
   const allowKakuyomuEmphasis = isKakuyomu || isNarou || !previewRenderer;
 
   while (pos < max) {
-    const openIndex = text.indexOf("《", pos);
-    if (openIndex === -1) {
+    const openExplicit = text.indexOf("《", pos);
+    let openParen = -1;
+
+    if (isNarou) {
+      const openFullParen = text.indexOf("（", pos);
+      const openHalfParen = text.indexOf("(", pos);
+
+      if (openFullParen !== -1 && openHalfParen !== -1) {
+        openParen = Math.min(openFullParen, openHalfParen);
+      } else if (openFullParen !== -1) {
+        openParen = openFullParen;
+      } else if (openHalfParen !== -1) {
+        openParen = openHalfParen;
+      }
+    }
+
+    let nextTokenIndex = -1;
+    let nextTokenType: "explicit" | "paren" = "explicit";
+
+    if (openExplicit !== -1 && openParen !== -1) {
+      if (openExplicit <= openParen) {
+        nextTokenIndex = openExplicit;
+        nextTokenType = "explicit";
+      } else {
+        nextTokenIndex = openParen;
+        nextTokenType = "paren";
+      }
+    } else if (openExplicit !== -1) {
+      nextTokenIndex = openExplicit;
+      nextTokenType = "explicit";
+    } else if (openParen !== -1) {
+      nextTokenIndex = openParen;
+      nextTokenType = "paren";
+    } else {
       break;
     }
 
-    // Check 0: Kakuyomu emphasis notation 《《...》》
-    if (allowKakuyomuEmphasis && text.startsWith("《《", openIndex)) {
-      const closeDouble = text.indexOf("》》", openIndex + 2);
-      if (closeDouble > openIndex + 2) {
-        const emphasisContent = text.slice(openIndex + 2, closeDouble);
-        if (
-          emphasisContent.length > 0 &&
-          !/[\r\n《》｜|]/.test(emphasisContent)
-        ) {
-          if (openIndex > pos) {
+    if (nextTokenType === "explicit") {
+      const openIndex = nextTokenIndex;
+
+      // Check 0: Kakuyomu emphasis notation 《《...》》
+      if (allowKakuyomuEmphasis && text.startsWith("《《", openIndex)) {
+        const closeDouble = text.indexOf("》》", openIndex + 2);
+        if (closeDouble > openIndex + 2) {
+          const emphasisContent = text.slice(openIndex + 2, closeDouble);
+          if (
+            emphasisContent.length > 0 &&
+            !/[\r\n《》｜|]/.test(emphasisContent)
+          ) {
+            if (openIndex > pos) {
+              result.push({
+                type: "text",
+                content: text.slice(pos, openIndex)
+              });
+            }
             result.push({
-              type: "text",
-              content: text.slice(pos, openIndex)
+              type: "html_inline",
+              content: `<span class="emphasis-mark">${escapeHtml(emphasisContent)}</span>`
             });
+            pos = closeDouble + 2;
+            continue;
           }
+        }
+      }
+
+      const closeIndex = text.indexOf("》", openIndex + 1);
+      if (closeIndex === -1) {
+        pos = openIndex + 1;
+        continue;
+      }
+
+      const rubyText = text.slice(openIndex + 1, closeIndex);
+      if (rubyText.length === 0 || /[\r\n《》｜|]/.test(rubyText)) {
+        result.push({
+          type: "text",
+          content: text.slice(pos, openIndex + 1)
+        });
+        pos = openIndex + 1;
+        continue;
+      }
+
+      let matchStart = -1;
+      let baseText = "";
+
+      // Check 1: Explicit ruby base marker (｜ or |) before openIndex
+      const explicit1 = text.lastIndexOf("｜", openIndex - 1);
+      const explicit2 = text.lastIndexOf("|", openIndex - 1);
+      const explicitMarkerPos = Math.max(explicit1, explicit2);
+
+      if (explicitMarkerPos >= pos) {
+        const candidateBase = text.slice(explicitMarkerPos + 1, openIndex);
+        if (candidateBase.length > 0 && !/[\r\n》｜|]/.test(candidateBase)) {
+          matchStart = explicitMarkerPos;
+          baseText = candidateBase;
+        }
+      }
+
+      // Check 2: Implicit ruby base (contiguous Kanji run immediately preceding openIndex)
+      if (matchStart === -1) {
+        let kanjiStart = openIndex;
+        while (kanjiStart > pos) {
+          let prevPos = kanjiStart - 1;
+          if (
+            prevPos > pos &&
+            text.charCodeAt(prevPos) >= 0xdc00 &&
+            text.charCodeAt(prevPos) <= 0xdfff &&
+            text.charCodeAt(prevPos - 1) >= 0xd800 &&
+            text.charCodeAt(prevPos - 1) <= 0xdbff
+          ) {
+            prevPos -= 1;
+          }
+          const cp = text.codePointAt(prevPos);
+          if (cp === undefined || !isKanjiCodePoint(cp)) {
+            break;
+          }
+          kanjiStart = prevPos;
+        }
+
+        if (kanjiStart < openIndex) {
+          matchStart = kanjiStart;
+          baseText = text.slice(kanjiStart, openIndex);
+        }
+      }
+
+      if (matchStart === -1) {
+        result.push({
+          type: "text",
+          content: text.slice(pos, openIndex + 1)
+        });
+        pos = openIndex + 1;
+        continue;
+      }
+
+      if (matchStart > pos) {
+        result.push({
+          type: "text",
+          content: text.slice(pos, matchStart)
+        });
+      }
+
+      result.push({
+        type: "html_inline",
+        content: `<ruby>${escapeHtml(baseText)}<rt>${escapeHtml(rubyText)}</rt></ruby>`
+      });
+
+      pos = closeIndex + 1;
+      continue;
+    }
+
+    if (nextTokenType === "paren") {
+      const openParenIndex = nextTokenIndex;
+      const parenChar = text[openParenIndex];
+      const closeParenChar = parenChar === "（" ? "）" : ")";
+
+      // Check escape marker: |（, ｜（, |(, ｜(
+      if (
+        openParenIndex > pos &&
+        (text[openParenIndex - 1] === "|" || text[openParenIndex - 1] === "｜")
+      ) {
+        if (openParenIndex - 1 > pos) {
           result.push({
-            type: "html_inline",
-            content: `<span class="emphasis-mark">${escapeHtml(emphasisContent)}</span>`
+            type: "text",
+            content: text.slice(pos, openParenIndex - 1)
           });
-          pos = closeDouble + 2;
-          continue;
         }
+        result.push({
+          type: "text",
+          content: parenChar
+        });
+        pos = openParenIndex + 1;
+        continue;
       }
-    }
 
-    const closeIndex = text.indexOf("》", openIndex + 1);
-    if (closeIndex === -1) {
-      pos = openIndex + 1;
-      continue;
-    }
-
-    const rubyText = text.slice(openIndex + 1, closeIndex);
-    if (rubyText.length === 0 || /[\r\n《》｜|]/.test(rubyText)) {
-      result.push({
-        type: "text",
-        content: text.slice(pos, openIndex + 1)
-      });
-      pos = openIndex + 1;
-      continue;
-    }
-
-    let matchStart = -1;
-    let baseText = "";
-
-    // Check 1: Explicit ruby base marker (｜ or |) before openIndex
-    const explicit1 = text.lastIndexOf("｜", openIndex - 1);
-    const explicit2 = text.lastIndexOf("|", openIndex - 1);
-    const explicitMarkerPos = Math.max(explicit1, explicit2);
-
-    if (explicitMarkerPos >= pos) {
-      const candidateBase = text.slice(explicitMarkerPos + 1, openIndex);
-      if (candidateBase.length > 0 && !/[\r\n》｜|]/.test(candidateBase)) {
-        matchStart = explicitMarkerPos;
-        baseText = candidateBase;
-      }
-    }
-
-    // Check 2: Implicit ruby base (contiguous Kanji run immediately preceding openIndex)
-    if (matchStart === -1) {
-      let kanjiStart = openIndex;
-      while (kanjiStart > pos) {
-        let prevPos = kanjiStart - 1;
+      const closeParenIndex = text.indexOf(closeParenChar, openParenIndex + 1);
+      if (closeParenIndex !== -1) {
+        const rubyCandidate = text.slice(openParenIndex + 1, closeParenIndex);
         if (
-          prevPos > pos &&
-          text.charCodeAt(prevPos) >= 0xdc00 &&
-          text.charCodeAt(prevPos) <= 0xdfff &&
-          text.charCodeAt(prevPos - 1) >= 0xd800 &&
-          text.charCodeAt(prevPos - 1) <= 0xdbff
+          !/[\r\n|｜《》()]/.test(rubyCandidate) &&
+          isNarouRubyReading(rubyCandidate)
         ) {
-          prevPos -= 1;
+          let kanjiStart = openParenIndex;
+          while (kanjiStart > pos) {
+            let prevPos = kanjiStart - 1;
+            if (
+              prevPos > pos &&
+              text.charCodeAt(prevPos) >= 0xdc00 &&
+              text.charCodeAt(prevPos) <= 0xdfff &&
+              text.charCodeAt(prevPos - 1) >= 0xd800 &&
+              text.charCodeAt(prevPos - 1) <= 0xdbff
+            ) {
+              prevPos -= 1;
+            }
+            const cp = text.codePointAt(prevPos);
+            if (cp === undefined || !isKanjiCodePoint(cp)) {
+              break;
+            }
+            kanjiStart = prevPos;
+          }
+
+          if (kanjiStart < openParenIndex) {
+            if (kanjiStart > pos) {
+              result.push({
+                type: "text",
+                content: text.slice(pos, kanjiStart)
+              });
+            }
+
+            const baseText = text.slice(kanjiStart, openParenIndex);
+            result.push({
+              type: "html_inline",
+              content: `<ruby>${escapeHtml(baseText)}<rt>${escapeHtml(rubyCandidate)}</rt></ruby>`
+            });
+
+            pos = closeParenIndex + 1;
+            continue;
+          }
         }
-        const cp = text.codePointAt(prevPos);
-        if (cp === undefined || !isKanjiCodePoint(cp)) {
-          break;
-        }
-        kanjiStart = prevPos;
       }
 
-      if (kanjiStart < openIndex) {
-        matchStart = kanjiStart;
-        baseText = text.slice(kanjiStart, openIndex);
-      }
-    }
-
-    if (matchStart === -1) {
       result.push({
         type: "text",
-        content: text.slice(pos, openIndex + 1)
+        content: text.slice(pos, openParenIndex + 1)
       });
-      pos = openIndex + 1;
+      pos = openParenIndex + 1;
       continue;
     }
-
-    if (matchStart > pos) {
-      result.push({
-        type: "text",
-        content: text.slice(pos, matchStart)
-      });
-    }
-
-    result.push({
-      type: "html_inline",
-      content: `<ruby>${escapeHtml(baseText)}<rt>${escapeHtml(rubyText)}</rt></ruby>`
-    });
-
-    pos = closeIndex + 1;
   }
 
   if (pos < max) {
@@ -202,6 +325,7 @@ markdown.core.ruler.push("aozora_ruby_transform", (state) => {
   const Token = state.Token;
   const env = state.env as { previewRenderer?: PreviewRendererId } | undefined;
   const previewRenderer = env?.previewRenderer;
+  const isNarou = isNarouPreviewRenderer(previewRenderer);
 
   for (const blockToken of state.tokens) {
     if (blockToken.type !== "inline" || !blockToken.children) {
@@ -210,7 +334,11 @@ markdown.core.ruler.push("aozora_ruby_transform", (state) => {
 
     const newChildren: typeof blockToken.children = [];
     for (const child of blockToken.children) {
-      if (child.type !== "text" || !child.content.includes("《")) {
+      const hasRubyTrigger =
+        child.content.includes("《") ||
+        (isNarou &&
+          (child.content.includes("（") || child.content.includes("(")));
+      if (child.type !== "text" || !hasRubyTrigger) {
         newChildren.push(child);
         continue;
       }

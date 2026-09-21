@@ -128,6 +128,11 @@ export function createTxtExportDocumentText(
     return normalizeAozoraForTxt(headingProcessed);
   }
 
+  if (bodyNotation === "narou") {
+    const escapeRemoved = headingProcessed.replace(/(?:\||｜)(?=[（(])/g, "");
+    return stripMarkdownForTxt(escapeRemoved);
+  }
+
   return stripMarkdownForTxt(headingProcessed);
 }
 
