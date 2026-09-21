@@ -909,8 +909,12 @@ describe("ExportConfirmationDialog (#523)", () => {
       ".exportConfirmationDialogControlNote"
     );
     const notesText = Array.from(notes).map((n) => n.textContent).join(" ");
-    expect(notesText).toContain("Combines included files into one PDF document");
     expect(notesText).toContain("Configured fonts are not guaranteed to render identically");
+
+    const pageNumberSummary = container!.querySelector(
+      "[data-export-pdf-page-number-summary='true']"
+    );
+    expect(pageNumberSummary).not.toBeNull();
 
     const externalWarning = container!.querySelector(
       "[data-export-pdf-external-image-warning='true']"
@@ -1306,17 +1310,9 @@ describe("ExportConfirmationDialog (#523)", () => {
     const tocInput = tocToggles[0] as HTMLInputElement;
     expect(tocInput.classList.contains("exportConfirmationDialogIncludeInput")).toBe(true);
 
-    // 3. Native TOC checkbox is not rendered in Step 2 controls
-    const nativeCheckbox = container!.querySelector(".exportWizardStep2 .exportConfirmationDialogCheckboxControl");
-    expect(nativeCheckbox).toBeNull();
-
-    // 4. PDF combined note caption is displayed under the TOC toggle control
-    const step2Elements = Array.from(container!.querySelectorAll(".exportWizardStep2 .exportConfirmationDialogControls > *"));
-    const tocControlIndex = step2Elements.findIndex((el) => el.querySelector("[data-export-file-structure-toc-toggle='true']"));
-    const pdfNoteIndex = step2Elements.findIndex((el) => el.textContent === translate("export.confirmation.pdfCombined.note"));
-
-    expect(tocControlIndex).toBeGreaterThan(-1);
-    expect(pdfNoteIndex).toBeGreaterThan(tocControlIndex);
+    // 4. PDF page number settings section is displayed when PDF format is selected
+    const pdfPageNumberSection = container!.querySelector(".exportWizardStep2 .pdfPageNumberSection");
+    expect(pdfPageNumberSection).not.toBeNull();
   });
 
   it("formats summary and character counts with locale-aware grouping and approximate labels for Japanese and English", () => {

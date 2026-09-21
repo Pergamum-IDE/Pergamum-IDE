@@ -10621,3 +10621,50 @@ label.settingsItemHeader {
   gap: 8px;
 }
 
+/* #523 PDF Page Number Settings styles */
+.pdfPageNumberSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pdfPageNumberSummaryRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pdfPageNumberSummaryText {
+  flex: 1;
+  font-size: 13px;
+  color: var(--app-dialog-foreground, #25313d);
+}
+
+.pdfPageNumberChooseButton {
+  flex: 0 0 auto;
+}
+
+.pdfPageNumberSettingsContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.pdfPageNumberSettingsRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdfPageNumberSettingsLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-dialog-foreground, #25313d);
+}
+
+.pdfPageNumberSettingsSelect {
+  width: 100%;
+}
+

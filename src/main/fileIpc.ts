@@ -38,6 +38,10 @@ import {
   isProtectedPergamumDataFilePath
 } from "../shared/saveTargetPolicy";
 import { inspectPdfFonts } from "../shared/pdfFontInspection";
+import {
+  buildPdfHeaderFooterTemplates,
+  type PdfPageNumberSettings
+} from "../shared/pdfPageNumbering";
 import { writeFileAtomic } from "./atomicFileWrite";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
@@ -1227,6 +1231,20 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           };
         })
       : [];
+    const pdfPageNumberSettings =
+      typeof obj.pdfPageNumberSettings === "object" &&
+      obj.pdfPageNumberSettings !== null
+        ? ({
+            position: String(
+              (obj.pdfPageNumberSettings as Record<string, unknown>).position ??
+                "none"
+            ),
+            format: String(
+              (obj.pdfPageNumberSettings as Record<string, unknown>).format ?? "none"
+            )
+          } as PdfPageNumberSettings)
+        : null;
+
     return {
       targetPath:
         typeof obj.targetPath === "string" && obj.targetPath.trim().length > 0
@@ -1239,6 +1257,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         typeof obj.projectRootPath === "string" ? obj.projectRootPath : null,
       pdfFontFamily:
         typeof obj.pdfFontFamily === "string" ? obj.pdfFontFamily : null,
+      pdfPageNumberSettings,
       allowOverwrite: obj.allowOverwrite === true
     };
   }
@@ -1410,11 +1429,17 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
         await pdfWindow.loadFile(tempHtmlPath);
 
+        const headerFooterTemplates = buildPdfHeaderFooterTemplates(
+          request.pdfPageNumberSettings
+        );
+
         const pdfBuffer = await pdfWindow.webContents.printToPDF({
           pageSize: "A4",
           landscape: false,
           printBackground: true,
-          displayHeaderFooter: false,
+          displayHeaderFooter: headerFooterTemplates.displayHeaderFooter,
+          headerTemplate: headerFooterTemplates.headerTemplate,
+          footerTemplate: headerFooterTemplates.footerTemplate,
           margins: {
             top: 0.79,
             bottom: 0.79,

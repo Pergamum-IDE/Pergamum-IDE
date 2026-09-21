@@ -4,6 +4,7 @@ import type {
   SaveApplicationSettingsRequest,
   TextFileEncoding
 } from "./settings";
+import type { PdfPageNumberSettings } from "./pdfPageNumbering";
 import type {
   CreateGlossaryEntryInput,
   CreateGlossaryTagInput,
@@ -706,6 +707,7 @@ export interface ExportPdfCombinedRequest {
   readonly imageAssets: readonly ExportImageAssetCopyItem[];
   readonly projectRootPath: string | null;
   readonly pdfFontFamily?: string | null;
+  readonly pdfPageNumberSettings?: PdfPageNumberSettings | null;
   readonly allowOverwrite?: boolean;
 }
 

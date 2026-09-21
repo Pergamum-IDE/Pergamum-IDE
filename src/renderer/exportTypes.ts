@@ -4,6 +4,8 @@ import type {
   ExportOrigin,
   HeadingRemovalLevel
 } from "./exportCandidates";
+import type { PdfPageNumberSettings } from "../shared/pdfPageNumbering";
+import { DEFAULT_PDF_PAGE_NUMBER_SETTINGS } from "../shared/pdfPageNumbering";
 
 export type ExportFormat = "txtUtf8" | "htmlCombined" | "pdfCombined" | "pdf" | "docx";
 
@@ -36,6 +38,7 @@ export interface ExportDialogOptionsState {
   readonly includeFileStructureToc: boolean;
   readonly imageAssetFolderName: string;
   readonly pdfFontFamily: string | null;
+  readonly pdfPageNumberSettings: PdfPageNumberSettings;
 }
 
 export interface ExportAssemblyDocument {
@@ -56,6 +59,7 @@ export interface ExportAssembly {
   readonly imageAssetFolderName: string;
   readonly projectName: string | null;
   readonly pdfFontFamily?: string | null;
+  readonly pdfPageNumberSettings?: PdfPageNumberSettings | null;
 }
 
 export const DEFAULT_EXPORT_DIALOG_OPTIONS_STATE: ExportDialogOptionsState = {
@@ -63,7 +67,8 @@ export const DEFAULT_EXPORT_DIALOG_OPTIONS_STATE: ExportDialogOptionsState = {
   bodyNotation: DEFAULT_EXPORT_BODY_NOTATION,
   includeFileStructureToc: DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
   imageAssetFolderName: DEFAULT_IMAGE_ASSET_FOLDER_NAME,
-  pdfFontFamily: null
+  pdfFontFamily: null,
+  pdfPageNumberSettings: DEFAULT_PDF_PAGE_NUMBER_SETTINGS
 };
 
 export type ExportWizardStep =

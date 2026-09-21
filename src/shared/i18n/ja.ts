@@ -470,8 +470,6 @@ export const jaTranslations = {
     "※ TXT（UTF-8）出力は、ルビ・傍点以外の書式を削除して出力します。",
   "export.confirmation.htmlCombined.note":
     "※ 採用ファイルを現在の並び順で1つのHTMLに結合して出力します。",
-  "export.confirmation.pdfCombined.note":
-    "※ 採用ファイルを現在の並び順で1つのPDFに結合して出力します。",
   "export.confirmation.pdfCombined.fontWarning":
     "※ フォントを指定してもPDF表示環境で再現されるとは限りません。",
   "export.confirmation.pdfCombined.externalImageWarning":
@@ -542,6 +540,23 @@ export const jaTranslations = {
   "export.wizard.resultWarningsCount": "{count}件",
   "export.wizard.invalidFileName":
     "ファイル名に使用できない文字が含まれているか、空欄です。",
+  "export.wizard.pdfPageSettingsTitle": "PDFページ設定",
+  "export.wizard.pdfPageSettingsLabel": "PDFページ設定",
+  "export.wizard.pdfPageSettingsButton": "PDFページ設定...",
+  "export.wizard.pdfPageNumberPositionLabel": "ページ番号位置",
+  "export.wizard.pdfPageNumberFormatLabel": "ページ番号書式",
+  "export.wizard.pdfPageNumberNone": "ページ番号なし",
+  "export.wizard.pdfPagePosition.none": "なし",
+  "export.wizard.pdfPagePosition.topLeft": "左上",
+  "export.wizard.pdfPagePosition.topCenter": "中上",
+  "export.wizard.pdfPagePosition.topRight": "右上",
+  "export.wizard.pdfPagePosition.bottomLeft": "左下",
+  "export.wizard.pdfPagePosition.bottomCenter": "中下",
+  "export.wizard.pdfPagePosition.bottomRight": "右下",
+  "export.wizard.pdfPageFormat.none": "なし",
+  "export.wizard.pdfPageFormat.dash": "- <num> -",
+  "export.wizard.pdfPageFormat.p": "P. <num>",
+  "export.wizard.pdfPageFormat.page": "Page. <num>",
   "explorer.dnd.dialog.title": "操作の確認",
   "explorer.dnd.dialog.intro": "以下の {count} 個の項目を操作します。",
   "explorer.dnd.dialog.destinationLabel": "移動先 / コピー先:",

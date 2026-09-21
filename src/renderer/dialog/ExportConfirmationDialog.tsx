@@ -96,6 +96,12 @@ import {
 } from "../exportTxt";
 import { InfoDialog } from "./InfoDialog";
 import { FontPickerDialog } from "./FontPickerDialog";
+import { PdfPageNumberSettingsDialog } from "./PdfPageNumberSettingsDialog";
+import {
+  DEFAULT_PDF_PAGE_NUMBER_SETTINGS,
+  formatPdfPageNumberSummaryText,
+  type PdfPageNumberSettings
+} from "../../shared/pdfPageNumbering";
 
 export interface ExportConfirmationDialogProps {
   readonly origin: ExportOrigin;
@@ -339,6 +345,12 @@ export function ExportConfirmationDialog({
   const [isFontPickerOpen, setIsFontPickerOpen] = useState(false);
   const pdfFontPickerOpenerRef = useRef<HTMLButtonElement | null>(null);
 
+  const [pdfPageNumberSettings, setPdfPageNumberSettings] =
+    useState<PdfPageNumberSettings>(DEFAULT_PDF_PAGE_NUMBER_SETTINGS);
+  const [isPdfPageNumberSettingsOpen, setIsPdfPageNumberSettingsOpen] =
+    useState(false);
+  const pdfPageNumberSettingsOpenerRef = useRef<HTMLButtonElement | null>(null);
+
   const pdfFontFamily = useMemo(() => {
     if (pdfFontFamilyList.length === 0) {
       return null;
@@ -487,9 +499,10 @@ export function ExportConfirmationDialog({
       bodyNotation,
       includeFileStructureToc: effectiveIncludeFileStructureToc,
       imageAssetFolderName,
-      pdfFontFamily
+      pdfFontFamily,
+      pdfPageNumberSettings
     }),
-    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat, imageAssetFolderName, pdfFontFamily]
+    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat, imageAssetFolderName, pdfFontFamily, pdfPageNumberSettings]
   );
   const isDirty = useMemo(
     () =>
@@ -713,6 +726,7 @@ export function ExportConfirmationDialog({
           imageAssets,
           projectRootPath: null,
           pdfFontFamily: pdfFontFamilyList.length > 0 ? pdfFontFamilyList[0].family : null,
+          pdfPageNumberSettings,
           allowOverwrite
         });
 
@@ -901,7 +915,8 @@ export function ExportConfirmationDialog({
         bodyNotation,
         includeFileStructureToc: effectiveIncludeFileStructureToc,
         imageAssetFolderName,
-        pdfFontFamily
+        pdfFontFamily,
+        pdfPageNumberSettings
       };
 
       setRows(mergedRows);
@@ -1272,9 +1287,31 @@ export function ExportConfirmationDialog({
                 )}
 
                 {isPdfCombinedExport && (
-                  <span className="exportConfirmationDialogControlNote">
-                    {translate("export.confirmation.pdfCombined.note")}
-                  </span>
+                  <div className="pdfPageNumberSection">
+                    <label className="exportConfirmationDialogControlLabel">
+                      {translate("export.wizard.pdfPageSettingsLabel")}
+                    </label>
+                    <div className="pdfPageNumberSummaryRow">
+                      <span
+                        className="pdfPageNumberSummaryText"
+                        data-export-pdf-page-number-summary="true"
+                      >
+                        {formatPdfPageNumberSummaryText(
+                          pdfPageNumberSettings,
+                          translate
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        ref={pdfPageNumberSettingsOpenerRef}
+                        className="settingsButton pdfPageNumberChooseButton"
+                        data-export-pdf-page-number-settings-button="true"
+                        onClick={() => setIsPdfPageNumberSettingsOpen(true)}
+                      >
+                        {translate("export.wizard.pdfPageSettingsButton")}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -1847,6 +1884,17 @@ export function ExportConfirmationDialog({
             setIsFontPickerOpen(false);
           }}
           onClose={() => setIsFontPickerOpen(false)}
+        />
+      )}
+
+      {isPdfPageNumberSettingsOpen && (
+        <PdfPageNumberSettingsDialog
+          isOpen={isPdfPageNumberSettingsOpen}
+          initialSettings={pdfPageNumberSettings}
+          translate={translate}
+          opener={pdfPageNumberSettingsOpenerRef.current}
+          onApply={(newSettings) => setPdfPageNumberSettings(newSettings)}
+          onClose={() => setIsPdfPageNumberSettingsOpen(false)}
         />
       )}
 

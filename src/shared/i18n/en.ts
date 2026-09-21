@@ -475,8 +475,6 @@ export const enTranslations = {
     "TXT (UTF-8) export removes formatting other than ruby and emphasis-dot notation.",
   "export.confirmation.htmlCombined.note":
     "Combines included files into one HTML document in current display order.",
-  "export.confirmation.pdfCombined.note":
-    "Combines included files into one PDF document in current display order.",
   "export.confirmation.pdfCombined.fontWarning":
     "Configured fonts are not guaranteed to render identically in all PDF viewers.",
   "export.confirmation.pdfCombined.externalImageWarning":
@@ -547,6 +545,23 @@ export const enTranslations = {
   "export.wizard.resultWarningsCount": "{count}",
   "export.wizard.invalidFileName":
     "File name contains invalid characters or is empty.",
+  "export.wizard.pdfPageSettingsTitle": "PDF Page Number Settings",
+  "export.wizard.pdfPageSettingsLabel": "PDF Page Settings",
+  "export.wizard.pdfPageSettingsButton": "PDF Page Settings...",
+  "export.wizard.pdfPageNumberPositionLabel": "Page Number Position",
+  "export.wizard.pdfPageNumberFormatLabel": "Page Number Format",
+  "export.wizard.pdfPageNumberNone": "No page numbers",
+  "export.wizard.pdfPagePosition.none": "None",
+  "export.wizard.pdfPagePosition.topLeft": "Top-left",
+  "export.wizard.pdfPagePosition.topCenter": "Top-center",
+  "export.wizard.pdfPagePosition.topRight": "Top-right",
+  "export.wizard.pdfPagePosition.bottomLeft": "Bottom-left",
+  "export.wizard.pdfPagePosition.bottomCenter": "Bottom-center",
+  "export.wizard.pdfPagePosition.bottomRight": "Bottom-right",
+  "export.wizard.pdfPageFormat.none": "None",
+  "export.wizard.pdfPageFormat.dash": "- <num> -",
+  "export.wizard.pdfPageFormat.p": "P. <num>",
+  "export.wizard.pdfPageFormat.page": "Page. <num>",
   "explorer.dnd.dialog.title": "Confirm operation",
   "explorer.dnd.dialog.intro": "{count} item(s) will be processed.",
   "explorer.dnd.dialog.destinationLabel": "Move / Copy destination:",
