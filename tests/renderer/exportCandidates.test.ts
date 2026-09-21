@@ -135,8 +135,8 @@ describe("export candidate collection (#523)", () => {
         fileName: "01_Encounter.md",
         kind: "markdown",
         rawText: "吾輩は猫である。名前はまだない。",
-        previewStart: "吾輩は猫である。名前…",
-        previewEnd: "…る。名前はまだない。",
+        previewStart: "吾輩は猫である。名前はまだない…",
+        previewEnd: "…輩は猫である。名前はまだない。",
         previewStartHover: "吾輩は猫である。名前はまだない。",
         previewEndHover: "吾輩は猫である。名前はまだない。",
         characterCount: 16,
@@ -149,8 +149,8 @@ describe("export candidate collection (#523)", () => {
         fileName: "03_Memo.txt",
         kind: "text",
         rawText: "plain text memo",
-        previewStart: "plain text…",
-        previewEnd: "… text memo",
+        previewStart: "plain text memo",
+        previewEnd: "plain text memo",
         previewStartHover: "plain text memo",
         previewEndHover: "plain text memo",
         characterCount: 15,
@@ -319,16 +319,16 @@ describe("export candidate collection (#523)", () => {
 
   it("creates one-line previews, character count, and included default from document text", () => {
     expect(createExportPreviewText("  alpha\nbeta\r\ngamma  ", "start")).toBe(
-      "alpha beta…"
+      "alpha beta gamm…"
     );
     expect(createExportPreviewText("  alpha\nbeta\r\ngamma  ", "end")).toBe(
-      "…beta gamma"
+      "…lpha beta gamma"
     );
-    expect(createExportPreviewText("0123456789abcdef", "start")).toBe(
-      "0123456789…"
+    expect(createExportPreviewText("01234567890123456789abcdef", "start")).toBe(
+      "012345678901234…"
     );
-    expect(createExportPreviewText("0123456789abcdef", "end")).toBe(
-      "…6789abcdef"
+    expect(createExportPreviewText("01234567890123456789abcdef", "end")).toBe(
+      "…123456789abcdef"
     );
     expect(createExportPreviewText("abcdefghijklmnopqrstuvwxyz", "start", 20)).toBe(
       "abcdefghijklmnopqrst…"
@@ -337,8 +337,8 @@ describe("export candidate collection (#523)", () => {
       "…ghijklmnopqrstuvwxyz"
     );
     expect(createExportCandidateTextDetails("abcdefghijklmnopqrstuvwxyz")).toEqual({
-      previewStart: "abcdefghij…",
-      previewEnd: "…qrstuvwxyz",
+      previewStart: "abcdefghijklmno…",
+      previewEnd: "…lmnopqrstuvwxyz",
       previewStartHover: "abcdefghijklmnopqrst…",
       previewEndHover: "…ghijklmnopqrstuvwxyz",
       characterCount: 26,
@@ -420,8 +420,8 @@ describe("export candidate collection (#523)", () => {
     );
 
     expect(updated).toMatchObject({
-      previewStart: "abcdefghij…",
-      previewEnd: "…ghijklmnop",
+      previewStart: "abcdefghijklmno…",
+      previewEnd: "…bcdefghijklmnop",
       previewStartHover: "abcdefghijklmnop",
       previewEndHover: "abcdefghijklmnop",
       characterCount: 16,
@@ -569,5 +569,11 @@ describe("export candidate collection (#523)", () => {
       { filePath: "First/01.md", included: false, characterCount: 15 },
       { filePath: "First/new.md", included: true, characterCount: 30 }
     ]);
+  });
+
+  it("truncates export preview text to default 15 characters", () => {
+    const text20 = "一二三四五六七八九十１２３４５６７８９０";
+    expect(createExportPreviewText(text20, "start")).toBe("一二三四五六七八九十１２３４５…");
+    expect(createExportPreviewText(text20, "end")).toBe("…六七八九十１２３４５６７８９０");
   });
 });

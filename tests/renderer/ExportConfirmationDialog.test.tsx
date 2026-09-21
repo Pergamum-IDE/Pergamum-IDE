@@ -21,13 +21,25 @@ const translate: Translate = (key, values) => t("en", key, values);
 const noopReload = vi.fn(async () => null);
 const noopConfirmDiscardReload = vi.fn(async () => true);
 const noopExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
-  async () => ({ ok: true, outputPath: "C:\\export\\manuscript.txt" })
+  async () => ({ ok: true, outputPath: "C:\\Users\\User\\Documents\\First.txt" })
 );
 const noopLoadAozoraText = vi.fn<
   ExportConfirmationDialogProps["loadAozoraText"]
 >(async () => "");
 const noopExportUnavailable = vi.fn();
 const noopExportFailed = vi.fn();
+const noopGetDocumentsPath = vi.fn<
+  NonNullable<ExportConfirmationDialogProps["onGetDocumentsPath"]>
+>(async () => ({ path: "C:\\Users\\User\\Documents" }));
+const noopCheckFileExists = vi.fn<
+  NonNullable<ExportConfirmationDialogProps["onCheckFileExists"]>
+>(async () => ({ exists: false }));
+const noopSelectExportFolder = vi.fn<
+  NonNullable<ExportConfirmationDialogProps["onSelectExportFolder"]>
+>(async (req) => ({
+  ok: true,
+  folderPath: req?.defaultPath ?? "C:\\Users\\User\\Documents"
+}));
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -126,6 +138,9 @@ function mountDialog(options: {
   loadAozoraText?: ExportConfirmationDialogProps["loadAozoraText"];
   onExportUnavailable?: ExportConfirmationDialogProps["onExportUnavailable"];
   onExportFailed?: ExportConfirmationDialogProps["onExportFailed"];
+  onSelectExportFolder?: ExportConfirmationDialogProps["onSelectExportFolder"];
+  onGetDocumentsPath?: ExportConfirmationDialogProps["onGetDocumentsPath"];
+  onCheckFileExists?: ExportConfirmationDialogProps["onCheckFileExists"];
 } = {}): void {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -151,16 +166,19 @@ function mountDialog(options: {
           options.onExportUnavailable ?? noopExportUnavailable
         }
         onExportFailed={options.onExportFailed ?? noopExportFailed}
+        onSelectExportFolder={options.onSelectExportFolder ?? noopSelectExportFolder}
+        onGetDocumentsPath={options.onGetDocumentsPath ?? noopGetDocumentsPath}
+        onCheckFileExists={options.onCheckFileExists ?? noopCheckFileExists}
         onClose={vi.fn()}
       />
     );
   });
 }
 
-function summary(kind: string): string {
+function summaryText(): string {
   return (
     container!.querySelector<HTMLElement>(
-      `[data-export-confirmation-summary="${kind}"]`
+      `[data-export-confirmation-summary="summary"]`
     )?.textContent ?? ""
   );
 }
@@ -199,6 +217,18 @@ function dirtyIcon(): HTMLElement | null {
   return container!.querySelector<HTMLElement>(
     ".exportConfirmationDialogDirtyIcon"
   );
+}
+
+function tableReloadButton(): HTMLButtonElement {
+  return container!.querySelector<HTMLButtonElement>(
+    `[data-export-table-reload-button="true"]`
+  )!;
+}
+
+function closeButton(): HTMLButtonElement {
+  return container!.querySelector<HTMLButtonElement>(
+    `[data-export-close-button="true"]`
+  )!;
 }
 
 function folderDragHandle(parentPath: string): HTMLElement {
@@ -266,6 +296,15 @@ function buttonByText(text: string): HTMLButtonElement {
   return button;
 }
 
+function setSelectValue(select: HTMLSelectElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLSelectElement.prototype,
+    "value"
+  )?.set;
+  setter?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function headingRemovalSelect(): HTMLSelectElement {
   return container!.querySelector<HTMLSelectElement>(
     `[data-export-heading-removal-select="true"]`
@@ -278,16 +317,25 @@ function bodyNotationSelect(): HTMLSelectElement {
   )!;
 }
 
-function fileStructureTocToggle(): HTMLInputElement {
+function fileStructureTocToggle(): HTMLInputElement | null {
   return container!.querySelector<HTMLInputElement>(
     `[data-export-file-structure-toc-toggle="true"]`
-  )!;
+  );
 }
 
-function fileStructureTocControl(): HTMLElement {
-  return fileStructureTocToggle().closest<HTMLElement>(
-    ".exportConfirmationDialogTocControl"
-  )!;
+function navigateToStep2(): void {
+  const btn = buttonByText(translate("export.wizard.goToOutputFormat"));
+  act(() => btn.click());
+}
+
+function navigateToStep3(): void {
+  const btn = buttonByText(translate("export.wizard.goToOutputDestination"));
+  act(() => btn.click());
+}
+
+function executeExportClick(): void {
+  const btn = buttonByText(translate("export.wizard.executeExport"));
+  act(() => btn.click());
 }
 
 describe("ExportConfirmationDialog (#523)", () => {
@@ -312,7 +360,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(markup).toContain("Project root (Novel)");
   });
 
-  it("renders the origin, candidate count, and flat candidate list", () => {
+  it("renders the origin, candidate count, and flat candidate list in Step 1", () => {
     const markup = renderToStaticMarkup(
       <ExportConfirmationDialog
         origin={{ kind: "folder", folderPath: "First" }}
@@ -333,31 +381,15 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(markup).toContain("Export Confirmation");
     expect(markup).toContain("Target:");
     expect(markup).toContain("First");
-    expect(markup).toContain("Candidates:");
-    expect(markup).toContain("2 files");
-    expect(markup).toContain("Included:");
-    expect(markup).toContain("Total characters:");
-    expect(markup).toContain("15 chars");
+    expect(markup).toContain("Approx. characters: 15  Included/candidates: 2/2 files");
     expect(markup).toContain("10 chars");
     expect(markup).toContain("5 chars");
-    expect(markup).toContain("Export format");
-    expect(markup).toContain("TXT (UTF-8)");
-    expect(markup).toContain(
-      "TXT (UTF-8) export removes formatting other than ruby and emphasis-dot notation."
-    );
-    expect(markup).toContain("Interpret body as");
+    expect(markup).toContain("Source text interpretation");
+    expect(markup).toContain("Interpretation result preview");
     expect(markup).toContain("Aozora Bunko");
     expect(markup).toContain("Narou");
     expect(markup).toContain("Kakuyomu");
-    expect(markup).toContain("Append file structure table of contents");
-    expect(markup).toContain(
-      "TXT (UTF-8) export cannot append a file structure table of contents."
-    );
     expect(markup).toContain("Reload");
-    expect(markup).toContain("Remove headings");
-    expect(markup).toContain("Do not remove");
-    expect(markup).toContain("Remove H1-H6");
-    expect(markup).toContain("Does not affect source document files.");
     expect(markup).toContain("Included 2/2");
     expect(markup).toContain("01.md");
     expect(markup).toContain("notes.txt");
@@ -370,7 +402,6 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(markup).toContain("exportConfirmationDialogPreviewEnd");
     expect(markup).toContain("exportConfirmationDialogRow");
     expect(markup).toContain("exportConfirmationDialogIncludeCell");
-    expect(markup).toContain("disabled=\"\"");
   });
 
   it("renders a safe empty state", () => {
@@ -392,7 +423,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     );
 
     expect(markup).toContain("assets/cover.png");
-    expect(markup).toContain("0 files");
+    expect(markup).toContain("Approx. characters: 0  Included/candidates: 0/0 files");
     expect(markup).toContain("No exportable documents found.");
     expect(markup).not.toContain("<tbody>");
   });
@@ -400,21 +431,16 @@ describe("ExportConfirmationDialog (#523)", () => {
   it("updates included count and total characters when a row is toggled", () => {
     mountDialog();
 
-    expect(summary("candidate-count")).toBe("2 files");
-    expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("26 chars");
+    expect(summaryText()).toBe("Approx. characters: 15  Included/candidates: 2/2 files");
 
     act(() => includeToggle("First/01.md").click());
 
-    expect(summary("candidate-count")).toBe("2 files");
-    expect(summary("included-count")).toBe("1 files");
-    expect(summary("character-count")).toBe("10 chars");
+    expect(summaryText()).toBe("Approx. characters: 5  Included/candidates: 1/2 files");
     expect(folderRow("First").textContent).toContain("Some 1/2");
 
     act(() => includeToggle("First/01.md").click());
 
-    expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("26 chars");
+    expect(summaryText()).toBe("Approx. characters: 15  Included/candidates: 2/2 files");
     expect(folderRow("First").textContent).toContain("Included 2/2");
   });
 
@@ -422,16 +448,14 @@ describe("ExportConfirmationDialog (#523)", () => {
     mountDialog({ candidates: groupedCandidates });
 
     expect(candidateRow("First/01.md")).not.toBeNull();
-    expect(summary("included-count")).toBe("3 files");
-    expect(summary("character-count")).toBe("32 chars");
+    expect(summaryText()).toBe("Approx. characters: 35  Included/candidates: 3/3 files");
 
     act(() => folderCollapseButton("First").click());
 
     expect(candidateRow("First/01.md")).toBeNull();
     expect(candidateRow("First/notes.txt")).toBeNull();
     expect(folderRow("First")).not.toBeNull();
-    expect(summary("included-count")).toBe("3 files");
-    expect(summary("character-count")).toBe("32 chars");
+    expect(summaryText()).toBe("Approx. characters: 35  Included/candidates: 3/3 files");
 
     act(() => folderCollapseButton("First").click());
 
@@ -446,15 +470,13 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(includeToggle("First/01.md").checked).toBe(false);
     expect(includeToggle("First/notes.txt").checked).toBe(false);
     expect(folderRow("First").textContent).toContain("Included 0/2");
-    expect(summary("included-count")).toBe("0 files");
-    expect(summary("character-count")).toBe("0 chars");
+    expect(summaryText()).toBe("Approx. characters: 0  Included/candidates: 0/2 files");
 
     act(() => folderToggle("First").click());
 
     expect(includeToggle("First/01.md").checked).toBe(true);
     expect(includeToggle("First/notes.txt").checked).toBe(true);
-    expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("26 chars");
+    expect(summaryText()).toBe("Approx. characters: 15  Included/candidates: 2/2 files");
 
     act(() => includeToggle("First/01.md").click());
     expect(folderRow("First").textContent).toContain("Some 1/2");
@@ -466,74 +488,38 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(folderRow("First").textContent).toContain("Included 2/2");
   });
 
-  it("shows and hides the dirty title icon for include and heading changes", () => {
+  it("tracks candidate list dirty state and enables/disables reload button", () => {
     mountDialog();
 
     expect(dirtyIcon()).toBeNull();
+    expect(tableReloadButton().disabled).toBe(true);
 
     act(() => includeToggle("First/01.md").click());
 
-    expect(dirtyIcon()?.getAttribute("title")).toBe("Modified");
+    expect(tableReloadButton().disabled).toBe(false);
 
     act(() => includeToggle("First/01.md").click());
 
-    expect(dirtyIcon()).toBeNull();
-
-    act(() => {
-      const select = headingRemovalSelect();
-      select.value = "1";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(dirtyIcon()).not.toBeNull();
-
-    act(() => {
-      const select = headingRemovalSelect();
-      select.value = "0";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(dirtyIcon()).toBeNull();
-
-    act(() => {
-      const select = bodyNotationSelect();
-      select.value = "aozora";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(dirtyIcon()).not.toBeNull();
-
-    act(() => {
-      const select = bodyNotationSelect();
-      select.value = "markdown";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    expect(dirtyIcon()).toBeNull();
+    expect(tableReloadButton().disabled).toBe(true);
   });
 
   it("exports included rows as TXT with the current dialog state", async () => {
     const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
-      async () => ({ ok: true, outputPath: "C:\\export\\manuscript.txt" })
+      async () => ({ ok: true, outputPath: "C:\\Users\\User\\Documents\\First.txt" })
     );
     mountDialog({ onExportTxt });
 
-    expect(fileStructureTocToggle().disabled).toBe(true);
-    expect(fileStructureTocToggle().checked).toBe(false);
-    expect(fileStructureTocToggle().getAttribute("role")).toBe("switch");
-    expect(fileStructureTocControl().getAttribute("title")).toBe(
-      "TXT (UTF-8) export cannot append a file structure table of contents."
-    );
-    const tocChildren = Array.from(fileStructureTocControl().children);
-    expect(tocChildren[0]?.classList.contains(
-      "exportConfirmationDialogControlLabel"
-    )).toBe(true);
-    expect(tocChildren[1]?.classList.contains(
-      "exportConfirmationDialogIncludeSwitch"
-    )).toBe(true);
+    // Move to Step 2
+    navigateToStep2();
+
+    // In TXT export, TOC toggle is not available
+    expect(fileStructureTocToggle()).toBeNull();
+
+    // Move to Step 3
+    navigateToStep3();
 
     await act(async () => {
-      buttonByText("Export").click();
+      executeExportClick();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -541,7 +527,9 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(onExportTxt).toHaveBeenCalledTimes(1);
     const request = onExportTxt.mock.calls[0]?.[0];
     expect(request).toMatchObject({
-      defaultFileName: "First.txt",
+      targetPath: expect.stringMatching(/Novel\.txt$/),
+      allowOverwrite: false,
+      defaultFileName: "Novel",
       assembly: {
         format: "txtUtf8",
         bodyNotation: "markdown",
@@ -568,7 +556,7 @@ describe("ExportConfirmationDialog (#523)", () => {
 
   it("uses Aozora project reads when exporting with Aozora body notation", async () => {
     const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
-      async () => ({ ok: true, outputPath: "C:\\export\\manuscript.txt" })
+      async () => ({ ok: true, outputPath: "C:\\Users\\User\\Documents\\First.txt" })
     );
     const loadAozoraText = vi.fn<
       ExportConfirmationDialogProps["loadAozoraText"]
@@ -578,13 +566,14 @@ describe("ExportConfirmationDialog (#523)", () => {
     mountDialog({ onExportTxt, loadAozoraText });
 
     act(() => {
-      const select = bodyNotationSelect();
-      select.value = "aozora";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(bodyNotationSelect(), "aozora");
     });
 
+    navigateToStep2();
+    navigateToStep3();
+
     await act(async () => {
-      buttonByText("Export").click();
+      executeExportClick();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -610,8 +599,11 @@ describe("ExportConfirmationDialog (#523)", () => {
 
     act(() => folderToggle("First").click());
 
+    navigateToStep2();
+    navigateToStep3();
+
     await act(async () => {
-      buttonByText("Export").click();
+      executeExportClick();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -635,7 +627,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     dispatchDrop(folderRow("First"));
 
     expect(renderedFolderOrder()).toEqual(["Second", "First"]);
-    expect(dirtyIcon()).not.toBeNull();
+    expect(tableReloadButton().disabled).toBe(false);
     expect(folderRow("Second").dataset.exportOrderDirty).toBe("true");
     expect(folderRow("First").dataset.exportOrderDirty).toBe("true");
 
@@ -643,7 +635,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     dispatchDrop(folderRow("Second"));
 
     expect(renderedFolderOrder()).toEqual(["First", "Second"]);
-    expect(dirtyIcon()).toBeNull();
+    expect(tableReloadButton().disabled).toBe(true);
   });
 
   it("reorders file rows within the same folder by dragging the row gripper", () => {
@@ -668,7 +660,7 @@ describe("ExportConfirmationDialog (#523)", () => {
       "First/01.md",
       "Second/01.md"
     ]);
-    expect(dirtyIcon()).not.toBeNull();
+    expect(tableReloadButton().disabled).toBe(false);
     expect(candidateRow("First/notes.txt")?.dataset.exportOrderDirty).toBe(
       "true"
     );
@@ -685,7 +677,7 @@ describe("ExportConfirmationDialog (#523)", () => {
       "First/notes.txt",
       "Second/01.md"
     ]);
-    expect(dirtyIcon()).toBeNull();
+    expect(tableReloadButton().disabled).toBe(true);
   });
 
   it("recalculates previews and totals when heading removal changes", () => {
@@ -697,114 +689,44 @@ describe("ExportConfirmationDialog (#523)", () => {
     });
 
     expect(candidateRow("First/heading.md")!.textContent).toContain(
-      "# Title ab…"
+      "# Title abcdefg…"
     );
-    expect(summary("character-count")).toBe("43 chars");
+    expect(summaryText()).toContain("Approx. characters: 43");
+
+    navigateToStep2();
 
     act(() => {
-      const select = headingRemovalSelect();
-      select.value = "1";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(headingRemovalSelect(), "1");
     });
 
     expect(candidateRow("First/heading.md")!.textContent).toContain(
-      "abcdefghij…"
+      "abcdefghijklmno…"
     );
     expect(candidateRow("First/heading.md")!.textContent).toContain("16 chars");
     expect(candidateRow("First/notes.txt")!.textContent).toContain(
-      "# Text hea…"
+      "# Text heading …"
     );
-    expect(summary("character-count")).toBe("35 chars");
+    expect(summaryText()).toContain("Approx. characters: 35");
     expect(folderRow("First").textContent).toContain("35 chars");
 
     act(() => includeToggle("First/heading.md").click());
     act(() => folderCollapseButton("First").click());
     act(() => {
-      const select = headingRemovalSelect();
-      select.value = "2";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(headingRemovalSelect(), "2");
     });
 
     expect(candidateRow("First/heading.md")).toBeNull();
-    expect(summary("character-count")).toBe("19 chars");
+    expect(summaryText()).toContain("Approx. characters: 19");
 
     act(() => folderCollapseButton("First").click());
 
     expect(includeToggle("First/heading.md").checked).toBe(false);
     expect(candidateRow("First/heading.md")!.textContent).toContain(
-      "abcdefghij…"
+      "abcdefghijklmno…"
     );
   });
 
-  it("reloads immediately without confirmation when the dialog is clean", async () => {
-    const onReloadCandidates = vi.fn(async () => [
-      {
-        ...candidates[0],
-        rawText: "# Updated\nupdated body",
-        previewStart: "updated",
-        previewEnd: "updated",
-        previewStartHover: "updated hover",
-        previewEndHover: "updated hover",
-        characterCount: 12,
-        included: true
-      },
-      {
-        documentKey: "First/new.md",
-        filePath: "First/new.md",
-        parentPath: "First",
-        fileName: "new.md",
-        kind: "markdown" as const,
-        rawText: "newtext",
-        previewStart: "new",
-        previewEnd: "new",
-        previewStartHover: "new",
-        previewEndHover: "new",
-        characterCount: 7,
-        included: true
-      }
-    ]);
-    const onConfirmDiscardReload = vi.fn(async () => false);
-    mountDialog({ onReloadCandidates, onConfirmDiscardReload });
-
-    await act(async () => {
-      buttonByText("Reload").click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(onConfirmDiscardReload).not.toHaveBeenCalled();
-    expect(onReloadCandidates).toHaveBeenCalledTimes(1);
-    expect(candidateRow("First/notes.txt")).toBeNull();
-    expect(candidateRow("First/new.md")).not.toBeNull();
-    expect(headingRemovalSelect().value).toBe("0");
-    expect(includeToggle("First/01.md").checked).toBe(true);
-    expect(includeToggle("First/new.md").checked).toBe(true);
-    expect(summary("candidate-count")).toBe("2 files");
-    expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("29 chars");
-    expect(dirtyIcon()).toBeNull();
-  });
-
-  it("cancels dirty reload confirmation without changing dialog state", async () => {
-    const onReloadCandidates = vi.fn(async () => [candidates[0]]);
-    const onConfirmDiscardReload = vi.fn(async () => false);
-    mountDialog({ onReloadCandidates, onConfirmDiscardReload });
-
-    act(() => includeToggle("First/01.md").click());
-
-    await act(async () => {
-      buttonByText("Reload").click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(onConfirmDiscardReload).toHaveBeenCalledTimes(1);
-    expect(onReloadCandidates).not.toHaveBeenCalled();
-    expect(includeToggle("First/01.md").checked).toBe(false);
-    expect(dirtyIcon()).not.toBeNull();
-  });
-
-  it("confirms dirty reload and discards dialog edits", async () => {
+  it("reloads after confirmation when candidate list is dirty", async () => {
     const onReloadCandidates = vi.fn(async () => [
       {
         ...candidates[0],
@@ -834,20 +756,14 @@ describe("ExportConfirmationDialog (#523)", () => {
     const onConfirmDiscardReload = vi.fn(async () => true);
     mountDialog({ onReloadCandidates, onConfirmDiscardReload });
 
+    expect(tableReloadButton().disabled).toBe(true);
+
     act(() => includeToggle("First/01.md").click());
-    act(() => {
-      const select = headingRemovalSelect();
-      select.value = "1";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    act(() => {
-      const select = bodyNotationSelect();
-      select.value = "aozora";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+
+    expect(tableReloadButton().disabled).toBe(false);
 
     await act(async () => {
-      buttonByText("Reload").click();
+      tableReloadButton().click();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -856,32 +772,47 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(onReloadCandidates).toHaveBeenCalledTimes(1);
     expect(candidateRow("First/notes.txt")).toBeNull();
     expect(candidateRow("First/new.md")).not.toBeNull();
-    expect(headingRemovalSelect().value).toBe("0");
-    expect(bodyNotationSelect().value).toBe("markdown");
-    expect(candidateRow("First/01.md")!.textContent).toContain("# Updated");
-    expect(includeToggle("First/01.md").checked).toBe(true);
+    expect(includeToggle("First/01.md").checked).toBe(false);
     expect(includeToggle("First/new.md").checked).toBe(true);
-    expect(summary("candidate-count")).toBe("2 files");
-    expect(summary("included-count")).toBe("2 files");
-    expect(summary("character-count")).toBe("29 chars");
-    expect(dirtyIcon()).toBeNull();
+    expect(summaryText()).toBe("Approx. characters: 7  Included/candidates: 1/2 files");
+    expect(tableReloadButton().disabled).toBe(true);
   });
 
-  it("supports HTML combined export options and exposes last saved path in footer (#523 Slice 7)", async () => {
+  it("cancels dirty reload confirmation without changing dialog state", async () => {
+    const onReloadCandidates = vi.fn(async () => [candidates[0]]);
+    const onConfirmDiscardReload = vi.fn(async () => false);
+    mountDialog({ onReloadCandidates, onConfirmDiscardReload });
+
+    act(() => includeToggle("First/01.md").click());
+
+    await act(async () => {
+      tableReloadButton().click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onConfirmDiscardReload).toHaveBeenCalledTimes(1);
+    expect(onReloadCandidates).not.toHaveBeenCalled();
+    expect(includeToggle("First/01.md").checked).toBe(false);
+    expect(tableReloadButton().disabled).toBe(false);
+  });
+
+  it("supports HTML combined export options and exposes output result card (#523 Slice 7 & Slice 10)", async () => {
     const onExportHtmlCombined = vi.fn(async () => ({
       ok: true as const,
-      outputPath: "C:\\export\\manuscript.html",
+      outputPath: "C:\\Users\\User\\Documents\\First.html",
       warningCount: 0
     }));
 
     mountDialog({ onExportHtmlCombined });
 
+    navigateToStep2();
+
     act(() => {
       const select = container!.querySelector<HTMLSelectElement>(
         "select[data-export-format-select='true']"
       )!;
-      select.value = "htmlCombined";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(select, "htmlCombined");
     });
 
     const note = container!.querySelector(
@@ -897,9 +828,7 @@ describe("ExportConfirmationDialog (#523)", () => {
     expect(assetFolderInput).not.toBeNull();
     expect(assetFolderInput?.value).toBe("exports.assets");
 
-    const tocInput = container!.querySelector<HTMLInputElement>(
-      "input[data-export-file-structure-toc-toggle='true']"
-    );
+    const tocInput = fileStructureTocToggle();
     expect(tocInput?.disabled).toBe(false);
     expect(tocInput?.checked).toBe(true);
 
@@ -916,32 +845,32 @@ describe("ExportConfirmationDialog (#523)", () => {
       setInputValue(assetFolderInput!, "invalid/folder");
     });
 
-    const confirmBtn = container!.querySelector<HTMLButtonElement>(
-      ".appDialogButton-confirm"
-    );
-    expect(confirmBtn?.disabled).toBe(true);
+    const nextBtn = buttonByText(translate("export.wizard.goToOutputDestination"));
+    expect(nextBtn.disabled).toBe(true);
 
     act(() => {
       setInputValue(assetFolderInput!, "custom.assets");
     });
-    expect(confirmBtn?.disabled).toBe(false);
+    expect(nextBtn.disabled).toBe(false);
+
+    navigateToStep3();
 
     await act(async () => {
-      confirmBtn!.click();
+      executeExportClick();
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(onExportHtmlCombined).toHaveBeenCalledTimes(1);
 
-    const lastPathEl = container!.querySelector(
-      ".exportConfirmationDialogLastExportPath"
+    const savedPathEl = container!.querySelector(
+      "[data-export-result-path]"
     );
-    expect(lastPathEl).not.toBeNull();
-    expect(lastPathEl?.textContent).toContain("Saved to: C:\\export\\manuscript.html");
+    expect(savedPathEl).not.toBeNull();
+    expect(savedPathEl?.textContent).toContain("C:\\Users\\User\\Documents\\First.html");
   });
 
-  it("supports PDF combined export options, font warning, and external image warning (#523 Slice 8)", async () => {
+  it("supports PDF combined export options, font warning, and external image warning (#523 Slice 8 & Slice 10)", async () => {
     const pdfCandidates: ExportCandidateListItem[] = [
       {
         documentKey: "First/01.md",
@@ -961,18 +890,19 @@ describe("ExportConfirmationDialog (#523)", () => {
 
     const onExportPdfCombined = vi.fn(async () => ({
       ok: true as const,
-      outputPath: "C:\\export\\manuscript.pdf",
+      outputPath: "C:\\Users\\User\\Documents\\First.pdf",
       warningCount: 1
     }));
 
     mountDialog({ candidates: pdfCandidates, onExportPdfCombined });
 
+    navigateToStep2();
+
     act(() => {
       const select = container!.querySelector<HTMLSelectElement>(
         "select[data-export-format-select='true']"
       )!;
-      select.value = "pdfCombined";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(select, "pdfCombined");
     });
 
     const notes = container!.querySelectorAll(
@@ -993,33 +923,28 @@ describe("ExportConfirmationDialog (#523)", () => {
     );
     expect(assetFolderInput).toBeNull();
 
-    const tocInput = container!.querySelector<HTMLInputElement>(
-      "input[data-export-file-structure-toc-toggle='true']"
-    );
+    const tocInput = fileStructureTocToggle();
     expect(tocInput?.disabled).toBe(false);
     expect(tocInput?.checked).toBe(true);
 
-    const confirmBtn = container!.querySelector<HTMLButtonElement>(
-      ".appDialogButton-confirm"
-    );
-    expect(confirmBtn?.disabled).toBe(false);
+    navigateToStep3();
 
     await act(async () => {
-      confirmBtn!.click();
+      executeExportClick();
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(onExportPdfCombined).toHaveBeenCalledTimes(1);
 
-    const lastPathEl = container!.querySelector(
-      ".exportConfirmationDialogLastExportPath"
+    const savedPathEl = container!.querySelector(
+      "[data-export-result-path]"
     );
-    expect(lastPathEl).not.toBeNull();
-    expect(lastPathEl?.textContent).toContain("Saved to: C:\\export\\manuscript.pdf");
+    expect(savedPathEl).not.toBeNull();
+    expect(savedPathEl?.textContent).toContain("C:\\Users\\User\\Documents\\First.pdf");
   });
 
-  it("supports PDF font picker, font inspection status, and dirty state (#523 Slice 9)", async () => {
+  it("supports PDF font candidate picker dialog button, font inspection status, and result display (#523 Slice 9 & Slice 10)", async () => {
     const pdfCandidates: ExportCandidateListItem[] = [
       {
         documentKey: "First/01.md",
@@ -1039,7 +964,7 @@ describe("ExportConfirmationDialog (#523)", () => {
 
     const onExportPdfCombined = vi.fn(async () => ({
       ok: true as const,
-      outputPath: "C:\\export\\manuscript.pdf",
+      outputPath: "C:\\Users\\User\\Documents\\First.pdf",
       warningCount: 0,
       fontInspection: {
         status: "confirmed" as const,
@@ -1071,55 +996,48 @@ describe("ExportConfirmationDialog (#523)", () => {
       await Promise.resolve();
     });
 
+    navigateToStep2();
+
     act(() => {
       const select = container!.querySelector<HTMLSelectElement>(
         "select[data-export-format-select='true']"
       )!;
-      select.value = "pdfCombined";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(select, "pdfCombined");
     });
 
-    const fontSelect = container!.querySelector<HTMLSelectElement>(
-      "select[data-export-pdf-font-select='true']"
+    const editFontBtn = container!.querySelector<HTMLButtonElement>(
+      "button[data-export-pdf-font-picker-button='true']"
     );
-    expect(fontSelect).not.toBeNull();
-    expect(fontSelect?.value).toBe("");
+    expect(editFontBtn).not.toBeNull();
 
     act(() => {
-      fontSelect!.value = "MS Mincho";
-      fontSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+      editFontBtn!.click();
     });
 
-    const dirtyIcon = container!.querySelector(
-      ".exportConfirmationDialogDirtyIcon"
-    );
-    expect(dirtyIcon).not.toBeNull();
+    // FontPickerDialog should open
+    const fontPickerModal = document.querySelector(".appDialogBackdrop");
+    expect(fontPickerModal).not.toBeNull();
 
-    const confirmBtn = container!.querySelector<HTMLButtonElement>(
-      ".appDialogButton-confirm"
-    );
+    navigateToStep3();
+
     await act(async () => {
-      confirmBtn!.click();
+      executeExportClick();
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(onExportPdfCombined).toHaveBeenCalledWith(
       expect.objectContaining({
-        pdfFontFamily: "MS Mincho"
+        targetPath: expect.stringMatching(/Novel\.pdf$/),
+        allowOverwrite: false
       })
     );
 
-    const fontStatusEl = container!.querySelector(
-      ".exportConfirmationDialogFontStatus"
-    );
-    expect(fontStatusEl).not.toBeNull();
-    expect(fontStatusEl?.getAttribute("data-export-pdf-font-status")).toBe(
-      "confirmed"
-    );
+    const savedPathEl = container!.querySelector("[data-export-result-path]");
+    expect(savedPathEl).not.toBeNull();
   });
 
-  it("renders font options with font family styling and preserves selection when switching formats (#523 Slice 9 follow-up)", async () => {
+  it("opens FontPickerDialog for PDF font candidate selection and preserves font section when switching formats (#523 Slice 9 follow-up & Slice 10)", async () => {
     const pdfCandidates: ExportCandidateListItem[] = [
       {
         documentKey: "01.md",
@@ -1160,123 +1078,323 @@ describe("ExportConfirmationDialog (#523)", () => {
       await Promise.resolve();
     });
 
-    act(() => {
-      const select = container!.querySelector<HTMLSelectElement>(
-        "select[data-export-format-select='true']"
-      )!;
-      select.value = "pdfCombined";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    const fontSelect = container!.querySelector<HTMLSelectElement>(
-      "select[data-export-pdf-font-select='true']"
-    );
-    expect(fontSelect).not.toBeNull();
-
-    const options = fontSelect!.querySelectorAll("option");
-    expect(options).toHaveLength(3);
-    expect(options[0].value).toBe("");
-    expect(options[0].textContent).toBe(
-      translate("export.confirmation.pdfFont.default")
-    );
-    expect(options[1].style.fontFamily).toContain("Yu Gothic");
-    expect(options[2].style.fontFamily).toContain("MS Mincho");
-
-    act(() => {
-      fontSelect!.value = "Yu Gothic";
-      fontSelect!.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(fontSelect!.value).toBe("Yu Gothic");
+    navigateToStep2();
 
     act(() => {
       const select = container!.querySelector<HTMLSelectElement>(
         "select[data-export-format-select='true']"
       )!;
-      select.value = "txtUtf8";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(select, "pdfCombined");
+    });
+
+    const editFontBtn = container!.querySelector<HTMLButtonElement>(
+      "button[data-export-pdf-font-picker-button='true']"
+    );
+    expect(editFontBtn).not.toBeNull();
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      setSelectValue(select, "txtUtf8");
     });
 
     expect(
-      container!.querySelector("select[data-export-pdf-font-select='true']")
+      container!.querySelector("button[data-export-pdf-font-picker-button='true']")
     ).toBeNull();
 
     act(() => {
       const select = container!.querySelector<HTMLSelectElement>(
         "select[data-export-format-select='true']"
       )!;
-      select.value = "pdfCombined";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
+      setSelectValue(select, "pdfCombined");
     });
 
-    const fontSelectRestored = container!.querySelector<HTMLSelectElement>(
-      "select[data-export-pdf-font-select='true']"
+    const editFontBtnRestored = container!.querySelector<HTMLButtonElement>(
+      "button[data-export-pdf-font-picker-button='true']"
     );
-    expect(fontSelectRestored?.value).toBe("Yu Gothic");
+    expect(editFontBtnRestored).not.toBeNull();
   });
 
-  it("handles loader display ordering and save path selection cancellation (#523 Slice 9 follow-up)", async () => {
-    const pdfCandidates: ExportCandidateListItem[] = [
-      {
-        documentKey: "01.md",
-        filePath: "01.md",
-        parentPath: "",
-        fileName: "01.md",
-        kind: "markdown",
-        rawText: "# Ch 1",
-        previewStart: "# Ch 1",
-        previewEnd: "# Ch 1",
-        previewStartHover: "# Ch 1",
-        previewEndHover: "# Ch 1",
-        characterCount: 5,
-        included: true
-      }
-    ];
+  it("navigates through all 4 wizard steps and allows reconfiguring (#523 Slice 10)", async () => {
+    mountDialog();
 
-    const onSelectPdfSavePath = vi.fn(async () => {
-      const backdropBeforeSelection = container!.querySelector(
-        "[data-export-pdf-blocking-backdrop='true']"
-      );
-      expect(backdropBeforeSelection).toBeNull();
-      return { ok: false as const, reason: "canceled" as const };
-    });
+    // Step 1 check
+    expect(container!.querySelector("[data-export-body-notation-select='true']")).not.toBeNull();
+    expect(container!.querySelector("[data-export-format-select='true']")).toBeNull();
 
-    const onExportPdfCombined = vi.fn(async () => ({
-      ok: true as const,
-      outputPath: "C:\\export\\out.pdf",
-      warningCount: 0
-    }));
+    // Step 1 -> Step 2
+    navigateToStep2();
+    expect(container!.querySelector("[data-export-body-notation-select='true']")).toBeNull();
+    expect(container!.querySelector("[data-export-format-select='true']")).not.toBeNull();
+    expect(container!.querySelector("[data-export-file-name-input='true']")).toBeNull();
 
-    mountDialog({
-      candidates: pdfCandidates,
-      onSelectPdfSavePath,
-      onExportPdfCombined
-    });
+    // Step 2 -> Step 3
+    navigateToStep3();
+    expect(container!.querySelector("[data-export-format-select='true']")).toBeNull();
+    expect(container!.querySelector("[data-export-file-name-input='true']")).not.toBeNull();
 
-    act(() => {
-      const select = container!.querySelector<HTMLSelectElement>(
-        "select[data-export-format-select='true']"
-      )!;
-      select.value = "pdfCombined";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    const confirmBtn = container!.querySelector<HTMLButtonElement>(
-      ".appDialogButton-confirm"
-    );
-
+    // Step 3 export execution -> Step 4
     await act(async () => {
-      confirmBtn!.click();
+      executeExportClick();
+      await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(onSelectPdfSavePath).toHaveBeenCalledTimes(1);
-    expect(onExportPdfCombined).not.toHaveBeenCalled();
+    expect(container!.querySelector("[data-export-result-path]")).not.toBeNull();
 
-    expect(
-      container!.querySelector("[data-export-pdf-blocking-backdrop='true']")
-    ).toBeNull();
-    expect(
-      container!.querySelector(".exportConfirmationDialogLastExportPath")
-    ).toBeNull();
+    // Step 4 -> Reconfigure (returns to Step 1)
+    act(() => {
+      buttonByText(translate("export.wizard.reexport")).click();
+    });
+
+    expect(container!.querySelector("[data-export-body-notation-select='true']")).not.toBeNull();
+    expect(container!.querySelector("[data-export-result-path]")).toBeNull();
+  });
+
+  it("locks candidate list during Step 3 and unlocks when returning to Step 2 (#523 Slice 10)", () => {
+    mountDialog();
+
+    expect(includeToggle("First/01.md").disabled).toBe(false);
+    expect(fileDragHandle("First/01.md").getAttribute("draggable")).toBe("true");
+
+    navigateToStep2();
+    expect(includeToggle("First/01.md").disabled).toBe(false);
+
+    navigateToStep3();
+    expect(includeToggle("First/01.md").disabled).toBe(true);
+    expect(folderToggle("First").disabled).toBe(true);
+    expect(fileDragHandle("First/01.md").getAttribute("draggable")).toBe("false");
+    expect(tableReloadButton().disabled).toBe(true);
+
+    // Go back to Step 2
+    act(() => {
+      buttonByText(translate("export.wizard.backToOutputFormat")).click();
+    });
+
+    expect(includeToggle("First/01.md").disabled).toBe(false);
+    expect(fileDragHandle("First/01.md").getAttribute("draggable")).toBe("true");
+    expect(tableReloadButton().disabled).toBe(true);
+  });
+
+  it("handles overwrite confirmation modal when target file exists (#523 Slice 10)", async () => {
+    const onExportTxt = vi.fn<ExportConfirmationDialogProps["onExportTxt"]>(
+      async () => ({ ok: true, outputPath: "C:\\Users\\User\\Documents\\First.txt" })
+    );
+    const onCheckFileExists = vi.fn<
+      NonNullable<ExportConfirmationDialogProps["onCheckFileExists"]>
+    >(async () => ({ exists: true }));
+
+    mountDialog({ onExportTxt, onCheckFileExists });
+
+    navigateToStep2();
+    navigateToStep3();
+
+    // Click export -> shows overwrite modal prompt
+    await act(async () => {
+      executeExportClick();
+      await Promise.resolve();
+    });
+
+    expect(onExportTxt).not.toHaveBeenCalled();
+    const overwriteModal = container!.querySelector("[data-export-overwrite-modal='true']");
+    expect(overwriteModal).not.toBeNull();
+
+    // Click overwrite confirmation button
+    await act(async () => {
+      buttonByText(translate("export.wizard.overwriteConfirmButton")).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onExportTxt).toHaveBeenCalledTimes(1);
+    expect(onExportTxt.mock.calls[0]?.[0]?.allowOverwrite).toBe(true);
+  });
+
+  it("dynamically updates extension label in Step 3 based on selected format (#523 Slice 10)", () => {
+    mountDialog();
+
+    navigateToStep2();
+    setSelectValue(container!.querySelector<HTMLSelectElement>("select[data-export-format-select='true']")!, "txtUtf8");
+    navigateToStep3();
+    expect(container!.querySelector("[data-export-fixed-extension='true']")?.textContent).toBe(".txt");
+
+    // Back to Step 2 & select HTML
+    act(() => { buttonByText(translate("export.wizard.backToOutputFormat")).click(); });
+    setSelectValue(container!.querySelector<HTMLSelectElement>("select[data-export-format-select='true']")!, "htmlCombined");
+    navigateToStep3();
+    expect(container!.querySelector("[data-export-fixed-extension='true']")?.textContent).toBe(".html");
+
+    // Back to Step 2 & select PDF
+    act(() => { buttonByText(translate("export.wizard.backToOutputFormat")).click(); });
+    setSelectValue(container!.querySelector<HTMLSelectElement>("select[data-export-format-select='true']")!, "pdfCombined");
+    navigateToStep3();
+    expect(container!.querySelector("[data-export-fixed-extension='true']")?.textContent).toBe(".pdf");
+  });
+
+  it("verifies all Slice 10 UI polish specifications", async () => {
+    mountDialog();
+
+    // 1. Table top-left reload button
+    const reloadBtn = tableReloadButton();
+    expect(reloadBtn).not.toBeNull();
+    expect(reloadBtn.getAttribute("title")).toBe("Reload");
+    expect(reloadBtn.disabled).toBe(true);
+    expect(dirtyIcon()).toBeNull();
+
+    // 2. Dirty state enables reload button
+    act(() => includeToggle("First/01.md").click());
+    expect(reloadBtn.disabled).toBe(false);
+
+    // 3. Hover full file name / folder name in title attribute
+    const fileCell = candidateRow("First/01.md")?.querySelector(".exportConfirmationDialogNameCell");
+    expect(fileCell?.getAttribute("title")).toBe("01.md");
+    const folderCell = folderRow("First").querySelector(".exportConfirmationDialogNameCell");
+    expect(folderCell?.getAttribute("title")).toBe("First");
+
+    // 4. Stable wizard container
+    expect(container!.querySelector(".exportWizardContainer")).not.toBeNull();
+
+    // 5. Footer navigation controls per step
+    // Step 1
+    const footerLeft = container!.querySelector(".exportConfirmationDialogFooterLeft");
+    const footerRight = container!.querySelector(".appDialogActions");
+    expect(footerLeft?.textContent).toContain("Cancel");
+    expect(footerRight?.textContent).toContain("Specify output format →");
+
+    // Step 2
+    navigateToStep2();
+    expect(footerLeft?.textContent).toContain("← Back to source interpretation");
+    expect(footerRight?.textContent).toContain("Specify destination →");
+    expect(footerLeft?.textContent).not.toContain("Cancel");
+    expect(footerRight?.textContent).not.toContain("Cancel");
+
+    // Step 3
+    navigateToStep3();
+    expect(footerLeft?.textContent).toContain("← Back");
+    expect(footerRight?.textContent).toContain("Export");
+    expect(footerLeft?.textContent).not.toContain("Cancel");
+    expect(footerRight?.textContent).not.toContain("Cancel");
+
+    // 6. Top-right close button × functionality
+    const topCloseBtn = closeButton();
+    expect(topCloseBtn).not.toBeNull();
+    expect(topCloseBtn.getAttribute("title")).toBe("Cancel");
+  });
+
+  it("verifies Step 2 layout follow-up fixes (single heading removal dropdown, PDF caption under TOC toggle, single TOC toggle slider, no native TOC checkbox)", () => {
+    mountDialog();
+
+    navigateToStep2();
+
+    // Select PDF format
+    setSelectValue(container!.querySelector<HTMLSelectElement>("select[data-export-format-select='true']")!, "pdfCombined");
+
+    // 1. Heading removal select is present exactly ONCE and is right under export format select
+    const headingRemovalSelects = container!.querySelectorAll("select[data-export-heading-removal-select='true']");
+    expect(headingRemovalSelects.length).toBe(1);
+
+    const controlRows = Array.from(container!.querySelectorAll(".exportWizardStep2 .exportConfirmationDialogControlRow"));
+    expect(controlRows.length).toBeGreaterThanOrEqual(2);
+    expect(controlRows[0]?.querySelector("select[data-export-format-select='true']")).not.toBeNull();
+    expect(controlRows[1]?.querySelector("select[data-export-heading-removal-select='true']")).not.toBeNull();
+
+    // 2. Output file structure TOC option is present exactly ONCE and is a toggle slider
+    const tocToggles = container!.querySelectorAll("[data-export-file-structure-toc-toggle='true']");
+    expect(tocToggles.length).toBe(1);
+
+    const tocInput = tocToggles[0] as HTMLInputElement;
+    expect(tocInput.classList.contains("exportConfirmationDialogIncludeInput")).toBe(true);
+
+    // 3. Native TOC checkbox is not rendered in Step 2 controls
+    const nativeCheckbox = container!.querySelector(".exportWizardStep2 .exportConfirmationDialogCheckboxControl");
+    expect(nativeCheckbox).toBeNull();
+
+    // 4. PDF combined note caption is displayed under the TOC toggle control
+    const step2Elements = Array.from(container!.querySelectorAll(".exportWizardStep2 .exportConfirmationDialogControls > *"));
+    const tocControlIndex = step2Elements.findIndex((el) => el.querySelector("[data-export-file-structure-toc-toggle='true']"));
+    const pdfNoteIndex = step2Elements.findIndex((el) => el.textContent === translate("export.confirmation.pdfCombined.note"));
+
+    expect(tocControlIndex).toBeGreaterThan(-1);
+    expect(pdfNoteIndex).toBeGreaterThan(tocControlIndex);
+  });
+
+  it("formats summary and character counts with locale-aware grouping and approximate labels for Japanese and English", () => {
+    const largeCandidates = [
+      candidateWithText("First/01.md", "markdown", "a".repeat(1112440)),
+      candidateWithText("First/02.md", "markdown", "b".repeat(12672), false)
+    ];
+
+    // Test Japanese formatting
+    const jaTranslate: Translate = (key, values) => t("ja", key, values);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root!.render(
+        <ExportConfirmationDialog
+          origin={{ kind: "folder", folderPath: "First" }}
+          projectName="Novel"
+          candidates={largeCandidates}
+          translate={jaTranslate}
+          uiLanguage="ja"
+          opener={null}
+          onReloadCandidates={noopReload}
+          onConfirmDiscardReload={noopConfirmDiscardReload}
+          onExportTxt={noopExportTxt}
+          loadAozoraText={noopLoadAozoraText}
+          onExportUnavailable={noopExportUnavailable}
+          onExportFailed={noopExportFailed}
+          onClose={vi.fn()}
+        />
+      );
+    });
+
+    const jaSummaryText = container.querySelector("[data-export-confirmation-summary='summary']")?.textContent;
+    expect(jaSummaryText).toBe("合計文字数：1,112,440文字（概算）　採用/候補：1/2ファイル");
+
+    const jaHeader = container.querySelector("th.exportConfirmationDialogCountCell")?.textContent;
+    expect(jaHeader).toBe("文字数（概算）");
+
+    const jaCountCell = container.querySelector("[data-export-candidate-file-path='First/01.md'] td.exportConfirmationDialogCharacterCount")?.textContent;
+    expect(jaCountCell).toBe("1,112,440文字");
+
+    act(() => root!.unmount());
+    root = null;
+    container.remove();
+    container = null;
+
+    // Test English formatting
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root!.render(
+        <ExportConfirmationDialog
+          origin={{ kind: "folder", folderPath: "First" }}
+          projectName="Novel"
+          candidates={largeCandidates}
+          translate={translate}
+          uiLanguage="en"
+          opener={null}
+          onReloadCandidates={noopReload}
+          onConfirmDiscardReload={noopConfirmDiscardReload}
+          onExportTxt={noopExportTxt}
+          loadAozoraText={noopLoadAozoraText}
+          onExportUnavailable={noopExportUnavailable}
+          onExportFailed={noopExportFailed}
+          onClose={vi.fn()}
+        />
+      );
+    });
+
+    const enSummaryText = container.querySelector("[data-export-confirmation-summary='summary']")?.textContent;
+    expect(enSummaryText).toBe("Approx. characters: 1,112,440  Included/candidates: 1/2 files");
+
+    const enHeader = container.querySelector("th.exportConfirmationDialogCountCell")?.textContent;
+    expect(enHeader).toBe("Characters (approx.)");
+
+    const enCountCell = container.querySelector("[data-export-candidate-file-path='First/01.md'] td.exportConfirmationDialogCharacterCount")?.textContent;
+    expect(enCountCell).toBe("1,112,440 chars");
   });
 });

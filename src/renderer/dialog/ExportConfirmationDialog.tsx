@@ -1,6 +1,8 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent as ReactDragEvent
 } from "react";
@@ -11,19 +13,31 @@ import chevronRightIconUrl from "../../../assets/icons/feather/glossary/chevrons
 import editIconUrl from "../../../assets/icons/feather/global/edit-2.svg?url";
 import markdownFileIconUrl from "../../../assets/icons/svgrepo/explorer/markdown-svgrepo-com.svg?url";
 import textFileIconUrl from "../../../assets/icons/svgrepo/explorer/document-svgrepo-com.svg?url";
+import reloadIconUrl from "../../../assets/icons/ionicons/dialog/reload-outline.svg?url";
+import closeXIconUrl from "../../../assets/icons/feather/global/close-x.svg?url";
 import parchmentRollLoaderUrl from "../../../assets/parchment-roll-loader-220h.gif?url";
-import type { Translate } from "../../shared/i18n";
+import {
+  defaultLanguage,
+  formatLocalizedNumber,
+  type Language,
+  type Translate
+} from "../../shared/i18n";
 import type {
+  CheckFileExistsRequest,
+  CheckFileExistsResult,
   ExportHtmlCombinedRequest,
   ExportHtmlCombinedResult,
   ExportPdfCombinedRequest,
   ExportPdfCombinedResult,
   ExportTxtUtf8Result,
+  GetDocumentsPathResult,
   PdfFontInspectionResult,
+  SelectExportFolderRequest,
+  SelectExportFolderResult,
   SelectPdfSavePathRequest,
   SelectPdfSavePathResult
 } from "../../shared/api";
-import { buildFontFamilyCss } from "../../shared/fontSettings";
+import { buildFontFamilyCss, type FontFamilySetting } from "../../shared/fontSettings";
 import type {
   ExportCandidateListItem,
   ExportCandidateFolderGroup,
@@ -47,6 +61,8 @@ import {
   getOrderDirtyFiles,
   getOrderDirtyGroups,
   isExportDialogDirty,
+  isExportDialogOrderDirty,
+  isIncludeStateDirty,
   reorderFileWithinGroup,
   reorderFolderGroup
 } from "../exportDialogOrder";
@@ -65,10 +81,13 @@ import {
   HTML_COMBINED_EXPORT_FORMAT,
   PDF_COMBINED_EXPORT_FORMAT,
   TXT_UTF8_EXPORT_FORMAT,
+  getFixedExtensionForFormat,
+  sanitizeFileName,
   validateImageAssetFolderName,
   type ExportBodyNotation,
   type ExportDialogOptionsState,
-  type ExportFormat
+  type ExportFormat,
+  type ExportWizardStep
 } from "../exportTypes";
 import {
   createExportAssembly,
@@ -76,12 +95,14 @@ import {
   type ExportTxtExecutionRequest
 } from "../exportTxt";
 import { InfoDialog } from "./InfoDialog";
+import { FontPickerDialog } from "./FontPickerDialog";
 
 export interface ExportConfirmationDialogProps {
   readonly origin: ExportOrigin;
   readonly projectName: string | null;
   readonly candidates: readonly ExportCandidateListItem[];
   readonly translate: Translate;
+  readonly uiLanguage?: Language;
   readonly opener: Element | null;
   readonly onReloadCandidates: () => Promise<
     readonly ExportCandidateListItem[] | null
@@ -99,6 +120,13 @@ export interface ExportConfirmationDialogProps {
   readonly onExportPdfCombined?: (
     request: ExportPdfCombinedRequest
   ) => Promise<ExportPdfCombinedResult>;
+  readonly onSelectExportFolder?: (
+    request?: SelectExportFolderRequest
+  ) => Promise<SelectExportFolderResult>;
+  readonly onGetDocumentsPath?: () => Promise<GetDocumentsPathResult>;
+  readonly onCheckFileExists?: (
+    request: CheckFileExistsRequest
+  ) => Promise<CheckFileExistsResult>;
   readonly loadAozoraText: (relativePath: string) => Promise<string>;
   readonly onExportUnavailable: () => void;
   readonly onExportFailed: (error: unknown) => void;
@@ -127,66 +155,9 @@ function classNames(
   return values.filter(Boolean).join(" ");
 }
 
-function cloneCandidates(
-  candidates: readonly ExportCandidateListItem[]
-): readonly ExportCandidateListItem[] {
-  return candidates.map((candidate) => ({ ...candidate }));
-}
-
-function originLabel(
-  origin: ExportOrigin,
-  projectName: string | null,
-  translate: Translate
-): string {
-  switch (origin.kind) {
-    case "projectRoot":
-      return projectName
-        ? `${translate("export.confirmation.origin.projectRoot")} (${projectName})`
-        : translate("export.confirmation.origin.projectRoot");
-    case "folder":
-      return origin.folderPath;
-    case "file":
-      return origin.filePath;
-  }
-}
-
-function kindLabel(kind: ExportDocumentKind, translate: Translate): string {
-  return translate(
-    kind === "markdown"
-      ? "export.confirmation.kind.markdown"
-      : "export.confirmation.kind.text"
-  );
-}
-
-function kindIconUrl(kind: ExportDocumentKind): string {
-  return kind === "markdown" ? markdownFileIconUrl : textFileIconUrl;
-}
-
-function formatInteger(value: number): string {
-  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-function formatCharacterCount(value: number, translate: Translate): string {
-  return translate("export.confirmation.totalCharacterCount", {
-    count: formatInteger(value)
-  });
-}
-
-function folderIncludedText(
-  group: ExportCandidateFolderGroup,
-  translate: Translate
-): string {
-  const values = {
-    included: group.includedFileCount,
-    total: group.totalFileCount
-  };
-
-  return translate(
-    group.includeState === "mixed"
-      ? "export.confirmation.folderIncludedMixed"
-      : "export.confirmation.folderIncluded",
-    values
-  );
+function parseHeadingRemovalLevel(value: string): HeadingRemovalLevel {
+  const parsed = Number.parseInt(value, 10);
+  return isHeadingRemovalLevel(parsed) ? parsed : 0;
 }
 
 function headingRemovalOptionLabel(
@@ -208,41 +179,8 @@ function headingRemovalOptionLabel(
       return translate("export.confirmation.headingRemoval.level5");
     case 6:
       return translate("export.confirmation.headingRemoval.level6");
-  }
-}
-
-function parseHeadingRemovalLevel(value: string): HeadingRemovalLevel {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && isHeadingRemovalLevel(parsed) ? parsed : 0;
-}
-
-function exportFormatLabel(format: ExportFormat, translate: Translate): string {
-  switch (format) {
-    case "txtUtf8":
-      return translate("export.confirmation.format.txtUtf8");
-    case "htmlCombined":
-      return translate("export.confirmation.format.htmlCombined");
-    case "pdfCombined":
-    case "pdf":
-      return translate("export.confirmation.format.pdfCombined");
-    case "docx":
-      return "DOCX";
-  }
-}
-
-function bodyNotationLabel(
-  notation: ExportBodyNotation,
-  translate: Translate
-): string {
-  switch (notation) {
-    case "markdown":
-      return translate("export.confirmation.bodyNotation.markdown");
-    case "aozora":
-      return translate("export.confirmation.bodyNotation.aozora");
-    case "narou":
-      return translate("export.confirmation.bodyNotation.narou");
-    case "kakuyomu":
-      return translate("export.confirmation.bodyNotation.kakuyomu");
+    default:
+      return translate("export.confirmation.headingRemoval.none");
   }
 }
 
@@ -252,46 +190,109 @@ function parseExportBodyNotation(value: string): ExportBodyNotation {
     : DEFAULT_EXPORT_BODY_NOTATION;
 }
 
-function fontInspectionStatusLabel(
-  inspection: PdfFontInspectionResult,
+function exportFormatLabel(
+  format: ExportFormat,
   translate: Translate
 ): string {
-  switch (inspection.status) {
-    case "confirmed":
-      return translate("export.confirmation.pdfFontStatus.confirmed");
-    case "partial":
-      return translate("export.confirmation.pdfFontStatus.partial");
-    case "notConfirmed":
-      return translate("export.confirmation.pdfFontStatus.notConfirmed");
-    case "skipped":
-      return translate("export.confirmation.pdfFontStatus.skipped");
+  switch (format) {
+    case TXT_UTF8_EXPORT_FORMAT:
+      return translate("export.confirmation.format.txtUtf8");
+    case HTML_COMBINED_EXPORT_FORMAT:
+      return translate("export.confirmation.format.htmlCombined");
+    case PDF_COMBINED_EXPORT_FORMAT:
+      return translate("export.confirmation.format.pdfCombined");
+    default:
+      return "";
   }
 }
 
-function dropTargetsEqual(
-  first: ExportDialogDropTarget | null,
-  second: ExportDialogDropTarget | null
-): boolean {
-  if (first === second) {
-    return true;
+function formatPdfFontResultText(
+  selectedFonts: readonly FontFamilySetting[],
+  fontInspection: PdfFontInspectionResult | undefined,
+  translate: Translate
+): string {
+  if (!selectedFonts || selectedFonts.length === 0) {
+    return translate("export.confirmation.pdfFont.default");
   }
 
-  if (first === null || second === null || first.kind !== second.kind) {
-    return false;
-  }
+  const primaryFont = selectedFonts[0];
+  const firstFamily =
+    primaryFont?.displayName?.trim() || primaryFont?.family || "";
+  const summaryText =
+    selectedFonts.length > 1
+      ? translate("export.wizard.fontSummaryOther", { first: firstFamily })
+      : firstFamily;
 
-  if (first.kind === "folder") {
-    return first.parentPath === second.parentPath;
+  const status = fontInspection?.status ?? "skipped";
+  switch (status) {
+    case "confirmed":
+      return translate("export.wizard.fontStatusConfirmed", {
+        font: summaryText
+      });
+    case "partial":
+      return translate("export.wizard.fontStatusPartial", {
+        font: summaryText
+      });
+    case "notConfirmed":
+      return translate("export.wizard.fontStatusNotConfirmed", {
+        font: summaryText
+      });
+    case "skipped":
+    default:
+      return translate("export.confirmation.pdfFont.default");
   }
+}
 
-  if (second.kind !== "file") {
-    return false;
+function renderInterpretationPreviewSample(bodyNotation: ExportBodyNotation): JSX.Element {
+  switch (bodyNotation) {
+    case "aozora":
+      return (
+        <div className="exportInterpretationPreviewSample">
+          <span>青空文庫形式（例: ｜吾輩《わがはい》は猫である）</span>
+        </div>
+      );
+    case "narou":
+      return (
+        <div className="exportInterpretationPreviewSample">
+          <span>なろう形式（例: ｜吾輩《わがはい》は猫である）</span>
+        </div>
+      );
+    case "kakuyomu":
+      return (
+        <div className="exportInterpretationPreviewSample">
+          <span>カクヨム形式（例: 《《強調》》、｜漢字《ルビ》）</span>
+        </div>
+      );
+    case "markdown":
+    default:
+      return (
+        <div className="exportInterpretationPreviewSample">
+          <span>Markdown標準（ルビ・傍点記法を変換）</span>
+        </div>
+      );
   }
+}
 
-  return (
-    first.parentPath === second.parentPath &&
-    first.filePath === second.filePath
-  );
+function cloneCandidates(
+  candidates: readonly ExportCandidateListItem[]
+): ExportCandidateListItem[] {
+  return candidates.map((candidate) => ({ ...candidate }));
+}
+
+function buildOutputPath(
+  folderPath: string,
+  fileName: string,
+  extension: string
+): string {
+  const sanitized = sanitizeFileName(fileName);
+  const base = sanitized.endsWith(extension) ? sanitized : `${sanitized}${extension}`;
+  if (!folderPath || folderPath.trim().length === 0) {
+    return base;
+  }
+  const isWindows = folderPath.includes("\\");
+  const sep = isWindows ? "\\" : "/";
+  const cleanFolder = folderPath.replace(/[\\/]+$/u, "");
+  return `${cleanFolder}${sep}${base}`;
 }
 
 export function ExportConfirmationDialog({
@@ -299,6 +300,7 @@ export function ExportConfirmationDialog({
   projectName,
   candidates,
   translate,
+  uiLanguage,
   opener,
   onReloadCandidates,
   onConfirmDiscardReload,
@@ -306,12 +308,14 @@ export function ExportConfirmationDialog({
   onExportHtmlCombined,
   onSelectPdfSavePath,
   onExportPdfCombined,
+  onSelectExportFolder,
+  onGetDocumentsPath,
+  onCheckFileExists,
   loadAozoraText,
   onExportUnavailable,
   onExportFailed,
   onClose
 }: ExportConfirmationDialogProps): JSX.Element {
-  const title = translate("export.confirmation.title");
   const [rows, setRows] = useState<readonly ExportCandidateListItem[]>(() =>
     cloneCandidates(candidates)
   );
@@ -329,27 +333,79 @@ export function ExportConfirmationDialog({
   const [imageAssetFolderName, setImageAssetFolderName] = useState<string>(
     DEFAULT_IMAGE_ASSET_FOLDER_NAME
   );
-  const [pdfFontFamily, setPdfFontFamily] = useState<string | null>(null);
-  const [fontInspection, setFontInspection] = useState<PdfFontInspectionResult | null>(null);
-  const [cachedFontFamilies, setCachedFontFamilies] = useState<
-    readonly { family: string; displayName: string }[]
+  const [pdfFontFamilyList, setPdfFontFamilyList] = useState<
+    readonly FontFamilySetting[]
   >([]);
+  const [isFontPickerOpen, setIsFontPickerOpen] = useState(false);
+  const pdfFontPickerOpenerRef = useRef<HTMLButtonElement | null>(null);
+
+  const pdfFontFamily = useMemo(() => {
+    if (pdfFontFamilyList.length === 0) {
+      return null;
+    }
+    return buildFontFamilyCss(pdfFontFamilyList);
+  }, [pdfFontFamilyList]);
+
+  const pdfFontSummaryText = useMemo(() => {
+    if (pdfFontFamilyList.length === 0) {
+      return translate("export.confirmation.pdfFont.default");
+    }
+    return pdfFontFamilyList
+      .map((font) => {
+        const displayName = font.displayName?.trim();
+        if (displayName && displayName !== font.family) {
+          return `${font.family} / ${displayName}`;
+        }
+        return font.family;
+      })
+      .join(", ");
+  }, [pdfFontFamilyList, translate]);
+
+  const [fontInspection, setFontInspection] = useState<PdfFontInspectionResult | null>(null);
+
+  const [wizardStep, setWizardStep] =
+    useState<ExportWizardStep>("sourceInterpretation");
+  const [destinationFolder, setDestinationFolder] = useState<string>("");
+
+  const defaultBaseName = useMemo(() => {
+    if (projectName && projectName.trim().length > 0) {
+      return sanitizeFileName(projectName);
+    }
+    if (origin.kind === "file") {
+      const parts = origin.filePath.split(/[\\/]/);
+      const last = parts[parts.length - 1] ?? "";
+      const base = last.replace(/\.[^.]+$/, "");
+      return sanitizeFileName(base || "Untitled");
+    }
+    if (origin.kind === "folder") {
+      const parts = origin.folderPath.split(/[\\/]/);
+      const last = parts[parts.length - 1] ?? "";
+      return sanitizeFileName(last || "Untitled");
+    }
+    return "Untitled";
+  }, [origin, projectName]);
+
+  const [fileName, setFileName] = useState<string>(defaultBaseName);
+  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
+  const [exportResultInfo, setExportResultInfo] = useState<{
+    savedPath: string;
+    warningCount?: number;
+    fontInspection?: PdfFontInspectionResult;
+  } | null>(null);
 
   useEffect(() => {
-    const fontCacheApi = window.pergamum?.fontCache;
-    if (fontCacheApi?.load) {
-      fontCacheApi
-        .load()
-        .then((state) => {
-          if (state && state.status === "loaded" && state.cache?.families) {
-            setCachedFontFamilies(state.cache.families);
+    if (!destinationFolder && onGetDocumentsPath) {
+      onGetDocumentsPath()
+        .then((res) => {
+          if (res && res.path) {
+            setDestinationFolder(res.path);
           }
         })
         .catch(() => {
-          // ignore font cache load error
+          // ignore fallback
         });
     }
-  }, []);
+  }, [destinationFolder, onGetDocumentsPath]);
 
   const [lastExportedPath, setLastExportedPath] = useState<string | null>(null);
   const [orderState, setOrderState] = useState(() =>
@@ -382,6 +438,24 @@ export function ExportConfirmationDialog({
   const isValidImageAssetFolderName = isHtmlCombinedExport
     ? validateImageAssetFolderName(imageAssetFolderName)
     : true;
+
+  const isListLocked =
+    wizardStep === "outputDestination" || wizardStep === "result";
+
+  const isValidFileName =
+    sanitizeFileName(fileName) === fileName.trim() &&
+    fileName.trim().length > 0 &&
+    !/[\\/]/u.test(fileName);
+
+  const fullOutputPath = useMemo(
+    () =>
+      buildOutputPath(
+        destinationFolder,
+        fileName,
+        getFixedExtensionForFormat(exportFormat)
+      ),
+    [destinationFolder, fileName, exportFormat]
+  );
 
   const externalImageCount = useMemo(() => {
     if (!isPdfCombinedExport) {
@@ -428,6 +502,12 @@ export function ExportConfirmationDialog({
       }),
     [headingRemovalLevel, initialState, optionsState, orderState, rows]
   );
+  const isCandidateListDirty = useMemo(
+    () =>
+      isExportDialogOrderDirty(orderState, initialState.orderState) ||
+      isIncludeStateDirty(rows, initialState.includedByFilePath),
+    [initialState, orderState, rows]
+  );
   const orderDirtyGroups = useMemo(
     () => getOrderDirtyGroups(orderState, initialState.orderState),
     [initialState, orderState]
@@ -449,37 +529,33 @@ export function ExportConfirmationDialog({
     [orderedRows, translate]
   );
 
-  useEffect(() => {
-    const nextRows = recalculateExportCandidateMetadata(
-      cloneCandidates(candidates),
-      0
-    );
-    const nextOrderState = createOrderStateFromCandidates(nextRows);
-    setRows(nextRows);
-    setOrderState(nextOrderState);
-    setInitialState(createInitialExportDialogState(nextRows, 0));
-    setHeadingRemovalLevel(0);
-    setExportFormat(TXT_UTF8_EXPORT_FORMAT);
-    setBodyNotation(DEFAULT_EXPORT_BODY_NOTATION);
-    setIncludeFileStructureToc(DEFAULT_INCLUDE_FILE_STRUCTURE_TOC);
-    setImageAssetFolderName(DEFAULT_IMAGE_ASSET_FOLDER_NAME);
-    setLastExportedPath(null);
-    setCollapsedParentPaths(new Set());
-    setDragState(null);
-    setDropTarget(null);
-  }, [candidates]);
+  const targetLabel = useMemo(() => {
+    if (origin.kind === "file") {
+      return origin.filePath;
+    }
 
-  function setCandidateIncluded(documentKey: string, included: boolean): void {
+    if (origin.kind === "folder") {
+      return origin.folderPath;
+    }
+
+    return projectName && projectName.trim().length > 0
+      ? `${translate("export.confirmation.origin.projectRoot")} (${projectName})`
+      : translate("export.confirmation.origin.projectRoot");
+  }, [origin, projectName, translate]);
+
+  function handleToggleRowIncluded(filePath: string): void {
+    if (isListLocked) return;
     setRows((current) =>
       current.map((candidate) =>
-        candidate.documentKey === documentKey
-          ? { ...candidate, included }
+        candidate.filePath === filePath
+          ? { ...candidate, included: !candidate.included }
           : candidate
       )
     );
   }
 
-  function toggleGroupCollapsed(parentPath: string): void {
+  function handleToggleFolderCollapse(parentPath: string): void {
+    if (isListLocked) return;
     setCollapsedParentPaths((current) => {
       const next = new Set(current);
       if (next.has(parentPath)) {
@@ -491,7 +567,8 @@ export function ExportConfirmationDialog({
     });
   }
 
-  function handleFolderIncludedToggle(parentPath: string): void {
+  function handleToggleFolderIncluded(parentPath: string): void {
+    if (isListLocked) return;
     setRows((current) => toggleFolderIncluded(current, parentPath));
   }
 
@@ -524,7 +601,10 @@ export function ExportConfirmationDialog({
     return Object.fromEntries(entries);
   }
 
-  async function handleExport(): Promise<void> {
+  async function executeActualExport(
+    fullPath: string,
+    allowOverwrite: boolean
+  ): Promise<void> {
     if (isExporting) {
       return;
     }
@@ -535,9 +615,13 @@ export function ExportConfirmationDialog({
       return;
     }
 
-    if (exportFormat === TXT_UTF8_EXPORT_FORMAT) {
-      setIsExporting(true);
-      try {
+    setIsExporting(true);
+    try {
+      let resultPath = fullPath;
+      let warningCount = 0;
+      let resultFontInspection: PdfFontInspectionResult | undefined;
+
+      if (exportFormat === TXT_UTF8_EXPORT_FORMAT) {
         const assembly = createExportAssembly(orderedRows, {
           format: TXT_UTF8_EXPORT_FORMAT,
           bodyNotation,
@@ -552,27 +636,22 @@ export function ExportConfirmationDialog({
 
         const result = await onExportTxt({
           assembly,
-          defaultFileName: txtExportDefaultFileName(origin, projectName)
+          defaultFileName: fileName,
+          targetPath: fullPath,
+          allowOverwrite
         });
 
         if (result.ok) {
-          setLastExportedPath(result.outputPath);
+          resultPath = result.outputPath;
+        } else {
+          if (result.reason === "canceled") return;
+          throw new Error("TXT export failed.");
         }
-      } catch (error) {
-        onExportFailed(error);
-      } finally {
-        setIsExporting(false);
-      }
-      return;
-    }
+      } else if (exportFormat === HTML_COMBINED_EXPORT_FORMAT && onExportHtmlCombined) {
+        if (!validateImageAssetFolderName(imageAssetFolderName)) {
+          return;
+        }
 
-    if (exportFormat === HTML_COMBINED_EXPORT_FORMAT && onExportHtmlCombined) {
-      if (!validateImageAssetFolderName(imageAssetFolderName)) {
-        return;
-      }
-
-      setIsExporting(true);
-      try {
         const assembly = createExportAssembly(orderedRows, {
           format: HTML_COMBINED_EXPORT_FORMAT,
           bodyNotation,
@@ -591,39 +670,22 @@ export function ExportConfirmationDialog({
         const { htmlContent, imageAssets } = generateCombinedHtml(assembly);
 
         const result = await onExportHtmlCombined({
-          defaultFileName: htmlExportDefaultFileName(origin, projectName),
+          defaultFileName: fileName,
           htmlContent,
           imageAssets,
-          projectRootPath: null
+          projectRootPath: null,
+          targetPath: fullPath,
+          allowOverwrite
         });
 
         if (result.ok) {
-          setLastExportedPath(result.outputPath);
+          resultPath = result.outputPath;
+          warningCount = result.warningCount;
+        } else {
+          if (result.reason === "canceled") return;
+          throw new Error("HTML export failed.");
         }
-      } catch (error) {
-        onExportFailed(error);
-      } finally {
-        setIsExporting(false);
-      }
-      return;
-    }
-
-    if (exportFormat === PDF_COMBINED_EXPORT_FORMAT && onExportPdfCombined) {
-      let targetPath: string | null = null;
-      if (onSelectPdfSavePath) {
-        const savePathResult = await onSelectPdfSavePath({
-          defaultFileName: pdfExportDefaultFileName(origin, projectName)
-        });
-
-        if (!savePathResult || !savePathResult.ok || !savePathResult.filePath) {
-          return;
-        }
-
-        targetPath = savePathResult.filePath;
-      }
-
-      setIsExporting(true);
-      try {
+      } else if (exportFormat === PDF_COMBINED_EXPORT_FORMAT && onExportPdfCombined) {
         const assembly = createExportAssembly(orderedRows, {
           format: PDF_COMBINED_EXPORT_FORMAT,
           bodyNotation,
@@ -645,35 +707,49 @@ export function ExportConfirmationDialog({
         });
 
         const result = await onExportPdfCombined({
-          targetPath,
-          defaultFileName: pdfExportDefaultFileName(origin, projectName),
+          targetPath: fullPath,
+          defaultFileName: fileName,
           htmlContent,
           imageAssets,
           projectRootPath: null,
-          pdfFontFamily
+          pdfFontFamily: pdfFontFamilyList.length > 0 ? pdfFontFamilyList[0].family : null,
+          allowOverwrite
         });
 
         if (result.ok) {
-          setLastExportedPath(result.outputPath);
-          if (result.fontInspection) {
-            setFontInspection(result.fontInspection);
-          }
+          resultPath = result.outputPath;
+          warningCount = result.warningCount;
+          resultFontInspection = result.fontInspection;
+        } else {
+          if (result.reason === "canceled") return;
+          throw new Error("PDF export failed.");
         }
-      } catch (error) {
-        onExportFailed(error);
-      } finally {
-        setIsExporting(false);
+      } else {
+        throw new Error("Unsupported export format.");
       }
-      return;
-    }
 
-    onExportFailed(new Error("Unsupported export format."));
+      setLastExportedPath(resultPath);
+      if (resultFontInspection) {
+        setFontInspection(resultFontInspection);
+      }
+      setExportResultInfo({
+        savedPath: resultPath,
+        warningCount,
+        fontInspection: resultFontInspection
+      });
+      setWizardStep("result");
+    } catch (error) {
+      onExportFailed(error);
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   function handleFolderDragStart(
     event: ReactDragEvent<HTMLElement>,
     parentPath: string
   ): void {
+    if (isListLocked) return;
     setDragState({ kind: "folder", parentPath });
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = "move";
@@ -685,6 +761,7 @@ export function ExportConfirmationDialog({
     event: ReactDragEvent<HTMLElement>,
     candidate: ExportCandidateListItem
   ): void {
+    if (isListLocked) return;
     setDragState({
       kind: "file",
       parentPath: candidate.parentPath,
@@ -703,141 +780,140 @@ export function ExportConfirmationDialog({
 
   function updateDropTarget(next: ExportDialogDropTarget | null): void {
     setDropTarget((current) =>
-      dropTargetsEqual(current, next) ? current : next
+      current &&
+      current.kind === next?.kind &&
+      current.parentPath === next?.parentPath &&
+      ("filePath" in current ? current.filePath : undefined) ===
+        ("filePath" in (next ?? {})
+          ? (next as { filePath?: string }).filePath
+          : undefined)
+        ? current
+        : next
     );
   }
 
-  function handleDropTargetDragLeave(
-    event: ReactDragEvent<HTMLTableRowElement>
+  function handleDragOverFolder(
+    event: ReactDragEvent<HTMLElement>,
+    parentPath: string
   ): void {
-    const relatedTarget = event.relatedTarget;
-    if (
-      relatedTarget instanceof Node &&
-      event.currentTarget.contains(relatedTarget)
-    ) {
-      return;
-    }
-
-    updateDropTarget(null);
-  }
-
-  function handleFolderDragOver(
-    event: ReactDragEvent<HTMLTableRowElement>,
-    targetParentPath: string
-  ): void {
-    if (
-      dragState?.kind === "folder" &&
-      dragState.parentPath !== targetParentPath
-    ) {
+    if (isListLocked) return;
+    if (dragState?.kind === "folder" && dragState.parentPath !== parentPath) {
       event.preventDefault();
-      updateDropTarget({ kind: "folder", parentPath: targetParentPath });
       if (event.dataTransfer) {
         event.dataTransfer.dropEffect = "move";
       }
-    } else if (dragState?.kind === "folder") {
-      updateDropTarget(null);
+      updateDropTarget({ kind: "folder", parentPath });
     }
   }
 
-  function handleFolderDrop(
-    event: ReactDragEvent<HTMLTableRowElement>,
+  function handleDragOverFile(
+    event: ReactDragEvent<HTMLElement>,
+    candidate: ExportCandidateListItem
+  ): void {
+    if (isListLocked) return;
+    if (
+      dragState?.kind === "file" &&
+      dragState.parentPath === candidate.parentPath &&
+      dragState.filePath !== candidate.filePath
+    ) {
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "move";
+      }
+      updateDropTarget({
+        kind: "file",
+        parentPath: candidate.parentPath,
+        filePath: candidate.filePath
+      });
+    }
+  }
+
+  function handleDropFolder(
+    event: ReactDragEvent<HTMLElement>,
     targetParentPath: string
   ): void {
-    if (dragState?.kind !== "folder") {
-      return;
+    if (isListLocked) return;
+    if (dragState?.kind === "folder" && dragState.parentPath !== targetParentPath) {
+      event.preventDefault();
+      setOrderState((current) =>
+        reorderFolderGroup(current, dragState.parentPath, targetParentPath)
+      );
     }
-
-    event.preventDefault();
-    setOrderState((current) =>
-      reorderFolderGroup(current, dragState.parentPath, targetParentPath)
-    );
-    setDragState(null);
-    setDropTarget(null);
+    handleDragEnd();
   }
 
-  function handleFileDragOver(
-    event: ReactDragEvent<HTMLTableRowElement>,
+  function handleDropFile(
+    event: ReactDragEvent<HTMLElement>,
     targetCandidate: ExportCandidateListItem
   ): void {
+    if (isListLocked) return;
     if (
       dragState?.kind === "file" &&
       dragState.parentPath === targetCandidate.parentPath &&
       dragState.filePath !== targetCandidate.filePath
     ) {
       event.preventDefault();
-      updateDropTarget({
-        kind: "file",
-        parentPath: targetCandidate.parentPath,
-        filePath: targetCandidate.filePath
-      });
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = "move";
+      setOrderState((current) =>
+        reorderFileWithinGroup(
+          current,
+          dragState.parentPath,
+          dragState.filePath,
+          targetCandidate.parentPath,
+          targetCandidate.filePath
+        )
+      );
+    }
+    handleDragEnd();
+  }
+
+  async function handleReloadCandidates(): Promise<void> {
+    if (isListLocked || isReloading || isExporting) {
+      return;
+    }
+
+    if (isCandidateListDirty) {
+      const confirmed = await onConfirmDiscardReload();
+      if (!confirmed) {
+        return;
       }
-    } else if (dragState?.kind === "file") {
-      updateDropTarget(null);
-    }
-  }
-
-  function handleFileDrop(
-    event: ReactDragEvent<HTMLTableRowElement>,
-    targetCandidate: ExportCandidateListItem
-  ): void {
-    if (dragState?.kind !== "file") {
-      return;
-    }
-
-    event.preventDefault();
-    setOrderState((current) =>
-      reorderFileWithinGroup(
-        current,
-        dragState.parentPath,
-        dragState.filePath,
-        targetCandidate.parentPath,
-        targetCandidate.filePath
-      )
-    );
-    setDragState(null);
-    setDropTarget(null);
-  }
-
-  async function handleReload(): Promise<void> {
-    if (isReloading) {
-      return;
-    }
-
-    if (isDirty && !(await onConfirmDiscardReload())) {
-      return;
     }
 
     setIsReloading(true);
-    setLastExportedPath(null);
     try {
       const reloadedCandidates = await onReloadCandidates();
       if (reloadedCandidates === null) {
         return;
       }
 
-      const nextHeadingRemovalLevel = isDirty ? 0 : headingRemovalLevel;
-      const nextOptionsState = isDirty
-        ? DEFAULT_EXPORT_DIALOG_OPTIONS_STATE
-        : optionsState;
       const nextRows = recalculateExportCandidateMetadata(
-        isDirty
-          ? reloadedCandidates
-          : mergeExportCandidateIncludedStates(reloadedCandidates, rows),
-        nextHeadingRemovalLevel
+        cloneCandidates(reloadedCandidates),
+        headingRemovalLevel
       );
-      const nextOrderState = createOrderStateFromCandidates(nextRows);
-      setRows(nextRows);
+
+      const mergedRows = mergeExportCandidateIncludedStates(
+        nextRows,
+        rows
+      );
+
+      const nextOrderState = createOrderStateFromCandidates(mergedRows);
+      const nextOptionsState: ExportDialogOptionsState = {
+        exportFormat,
+        bodyNotation,
+        includeFileStructureToc: effectiveIncludeFileStructureToc,
+        imageAssetFolderName,
+        pdfFontFamily
+      };
+
+      setRows(mergedRows);
       setOrderState(nextOrderState);
       setInitialState(
         createInitialExportDialogState(
-          nextRows,
-          nextHeadingRemovalLevel,
+          mergedRows,
+          headingRemovalLevel,
           nextOptionsState
         )
       );
-      setHeadingRemovalLevel(nextHeadingRemovalLevel);
+      setHeadingRemovalLevel(headingRemovalLevel);
       setExportFormat(nextOptionsState.exportFormat);
       setBodyNotation(nextOptionsState.bodyNotation);
       setIncludeFileStructureToc(nextOptionsState.includeFileStructureToc);
@@ -858,659 +934,923 @@ export function ExportConfirmationDialog({
     }
   }
 
-  return (
-    <InfoDialog
-      title={title}
-      className="exportConfirmationDialog"
-      opener={opener}
-      titleAccessory={
-        isDirty ? (
-          <span
-            className="exportConfirmationDialogDirtyIcon"
-            role="img"
-            aria-label={translate("export.confirmation.modified")}
-            title={translate("export.confirmation.modified")}
-          >
-            <img src={editIconUrl} alt="" aria-hidden="true" />
-          </span>
-        ) : null
-      }
-      onClose={onClose}
-      footer={
-        <div className="exportConfirmationDialogFooter">
-          {fontInspection ? (
-            <div
-              className="exportConfirmationDialogFontStatus"
-              data-export-pdf-font-status={fontInspection.status}
-            >
-              {fontInspectionStatusLabel(fontInspection, translate)}
-            </div>
-          ) : null}
-          {lastExportedPath ? (
-            <div
-              className="exportConfirmationDialogLastExportPath"
-              title={lastExportedPath}
-            >
-              {translate("export.confirmation.lastSavedPath", {
-                path: lastExportedPath
-              })}
-            </div>
-          ) : null}
-          <button
-            type="button"
-            className="appDialogButton"
-            disabled={isReloading}
-            aria-disabled={isReloading}
-            onClick={() => {
-              void handleReload();
-            }}
-          >
-            {translate("export.confirmation.reload")}
-          </button>
-          <div className="appDialogActions">
-            <button type="button" className="appDialogButton" onClick={onClose}>
-              {translate("common.cancel")}
-            </button>
-            <button
-              type="button"
-              className="appDialogButton appDialogButton-confirm"
-              disabled={isExporting || !isValidImageAssetFolderName}
-              aria-disabled={isExporting || !isValidImageAssetFolderName}
-              onClick={() => {
-                void handleExport();
-              }}
-            >
-              {translate("export.confirmation.primary")}
-            </button>
-          </div>
-        </div>
-      }
+  const closeButton = (
+    <button
+      type="button"
+      className="appDialogCloseButton"
+      disabled={isExporting}
+      title={translate("common.cancel")}
+      aria-label={translate("common.cancel")}
+      data-export-close-button="true"
+      onClick={onClose}
     >
-      <div className="exportConfirmationDialogSummary">
-        <div className="exportConfirmationDialogSummaryRow">
-          <span className="exportConfirmationDialogSummaryLabel">
-            {translate("export.confirmation.targetLabel")}
-          </span>
-          <span className="exportConfirmationDialogSummaryValue">
-            {originLabel(origin, projectName, translate)}
-          </span>
-        </div>
-        <div className="exportConfirmationDialogSummaryRow">
-          <span className="exportConfirmationDialogSummaryLabel">
-            {translate("export.confirmation.candidatesLabel")}
-          </span>
-          <span
-            className="exportConfirmationDialogSummaryValue"
-            data-export-confirmation-summary="candidate-count"
-          >
-            {translate("export.confirmation.candidateCount", {
-              count: summary.candidateCount
-            })}
-          </span>
-        </div>
-        <div className="exportConfirmationDialogSummaryRow">
-          <span className="exportConfirmationDialogSummaryLabel">
-            {translate("export.confirmation.includedLabel")}
-          </span>
-          <span
-            className="exportConfirmationDialogSummaryValue"
-            data-export-confirmation-summary="included-count"
-          >
-            {translate("export.confirmation.includedCount", {
-              count: summary.includedCount
-            })}
-          </span>
-        </div>
-        <div className="exportConfirmationDialogSummaryRow">
-          <span className="exportConfirmationDialogSummaryLabel">
-            {translate("export.confirmation.totalCharactersLabel")}
-          </span>
-          <span
-            className="exportConfirmationDialogSummaryValue"
-            data-export-confirmation-summary="character-count"
-          >
-            {formatCharacterCount(summary.includedCharacterCount, translate)}
-          </span>
-        </div>
-      </div>
-      <div className="exportConfirmationDialogControls">
-        <label className="exportConfirmationDialogControl">
-          <span className="exportConfirmationDialogControlLabel">
-            {translate("export.confirmation.format.label")}
-          </span>
-          <select
-            className="exportConfirmationDialogSelect"
-            value={exportFormat}
-            data-export-format-select="true"
-            onChange={(event) => {
-              const nextFormat = event.currentTarget.value as ExportFormat;
-              setExportFormat(nextFormat);
-              if (
-                nextFormat === HTML_COMBINED_EXPORT_FORMAT ||
-                nextFormat === PDF_COMBINED_EXPORT_FORMAT
-              ) {
-                setIncludeFileStructureToc(true);
-              }
-            }}
-          >
-            <option value={TXT_UTF8_EXPORT_FORMAT}>
-              {exportFormatLabel(TXT_UTF8_EXPORT_FORMAT, translate)}
-            </option>
-            <option value={HTML_COMBINED_EXPORT_FORMAT}>
-              {exportFormatLabel(HTML_COMBINED_EXPORT_FORMAT, translate)}
-            </option>
-            <option value={PDF_COMBINED_EXPORT_FORMAT}>
-              {exportFormatLabel(PDF_COMBINED_EXPORT_FORMAT, translate)}
-            </option>
-          </select>
-        </label>
-        {isTxtUtf8Export ? (
-          <span className="exportConfirmationDialogControlNote">
-            {translate("export.confirmation.txtUtf8.note")}
-          </span>
-        ) : null}
-        {isHtmlCombinedExport ? (
-          <>
-            <span className="exportConfirmationDialogControlNote">
-              {translate("export.confirmation.htmlCombined.note")}
-            </span>
-            <label className="exportConfirmationDialogControl">
-              <span className="exportConfirmationDialogControlLabel">
-                {translate("export.confirmation.imageAssetFolder.label")}
-              </span>
-              <input
-                type="text"
-                className="exportConfirmationDialogInput"
-                value={imageAssetFolderName}
-                data-export-image-asset-folder-input="true"
-                onChange={(event) =>
-                  setImageAssetFolderName(event.currentTarget.value)
-                }
-              />
-            </label>
-            <span className="exportConfirmationDialogControlNote">
-              {translate("export.confirmation.imageAssetFolder.note")}
-            </span>
-            {!isValidImageAssetFolderName ? (
-              <span className="exportConfirmationDialogErrorNote">
-                {translate("export.confirmation.imageAssetFolder.invalid")}
-              </span>
-            ) : null}
-          </>
-        ) : null}
-        {isPdfCombinedExport ? (
-          <>
-            <span className="exportConfirmationDialogControlNote">
-              {translate("export.confirmation.pdfCombined.note")}
-            </span>
-            <label className="exportConfirmationDialogControl">
-              <span className="exportConfirmationDialogControlLabel">
-                {translate("export.confirmation.pdfFont.label")}
-              </span>
-              <select
-                className="exportConfirmationDialogSelect"
-                value={pdfFontFamily ?? ""}
-                data-export-pdf-font-select="true"
-                style={{
-                  fontFamily: pdfFontFamily
-                    ? buildFontFamilyCss([{ family: pdfFontFamily }], "serif")
-                    : "inherit"
-                }}
-                onChange={(event) => {
-                  const val = event.currentTarget.value;
-                  setPdfFontFamily(val.length > 0 ? val : null);
-                }}
-              >
-                <option value="" style={{ fontFamily: "inherit" }}>
-                  {translate("export.confirmation.pdfFont.default")}
-                </option>
-                {cachedFontFamilies.map((font) => (
-                  <option
-                    key={font.family}
-                    value={font.family}
-                    style={{
-                      fontFamily: buildFontFamilyCss(
-                        [{ family: font.family, displayName: font.displayName }],
-                        "serif"
-                      )
-                    }}
-                  >
-                    {font.displayName ? `${font.displayName} (${font.family})` : font.family}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="exportConfirmationDialogControlNote">
-              {translate("export.confirmation.pdfCombined.fontWarning")}
-            </span>
-            {externalImageCount > 0 ? (
-              <span
-                className="exportConfirmationDialogErrorNote"
-                data-export-pdf-external-image-warning="true"
-              >
-                {translate("export.confirmation.pdfCombined.externalImageWarning", {
-                  count: externalImageCount
-                })}
-              </span>
-            ) : null}
-          </>
-        ) : null}
-        <label className="exportConfirmationDialogControl">
-          <span className="exportConfirmationDialogControlLabel">
-            {translate("export.confirmation.bodyNotation.prefix")}
-          </span>
-          <select
-            className="exportConfirmationDialogSelect"
-            value={bodyNotation}
-            data-export-body-notation-select="true"
-            onChange={(event) =>
-              handleBodyNotationChange(event.currentTarget.value)
-            }
-          >
-            {EXPORT_BODY_NOTATIONS.map((notation) => (
-              <option key={notation} value={notation}>
-                {bodyNotationLabel(notation, translate)}
-              </option>
-            ))}
-          </select>
-          <span className="exportConfirmationDialogControlLabel">
-            {translate("export.confirmation.bodyNotation.suffix")}
-          </span>
-        </label>
-        <label className="exportConfirmationDialogControl">
-          <span className="exportConfirmationDialogControlLabel">
-            {translate("export.confirmation.headingRemoval.label")}
-          </span>
-          <select
-            className="exportConfirmationDialogSelect"
-            value={headingRemovalLevel}
-            data-export-heading-removal-select="true"
-            onChange={(event) =>
-              handleHeadingRemovalLevelChange(event.currentTarget.value)
-            }
-          >
-            {HEADING_REMOVAL_LEVELS.map((level) => (
-              <option key={level} value={level}>
-                {headingRemovalOptionLabel(level, translate)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="exportConfirmationDialogControlNote">
-          {translate("export.confirmation.headingRemoval.note")}
-        </span>
-        <label
-          className="exportConfirmationDialogControl exportConfirmationDialogTocControl"
-          title={fileStructureTocTooltip}
-        >
-          <span className="exportConfirmationDialogControlLabel">
-            {translate("export.confirmation.fileStructureToc.label")}
-          </span>
-          <span className="exportConfirmationDialogIncludeSwitch">
-            <input
-              className="exportConfirmationDialogIncludeInput"
-              type="checkbox"
-              role="switch"
-              aria-label={translate(
-                "export.confirmation.fileStructureToc.label"
-              )}
-              data-export-file-structure-toc-toggle="true"
-              checked={effectiveIncludeFileStructureToc}
-              disabled={isTxtUtf8Export}
-              onChange={(event) =>
-                setIncludeFileStructureToc(event.currentTarget.checked)
-              }
-            />
-            <span
-              className="exportConfirmationDialogIncludeTrack"
-              aria-hidden="true"
-            >
-              <span className="exportConfirmationDialogIncludeThumb" />
-            </span>
-          </span>
-        </label>
-      </div>
+      <img src={closeXIconUrl} alt="" className="appDialogCloseIcon" />
+    </button>
+  );
 
-      {rows.length === 0 ? (
-        <p className="exportConfirmationDialogEmpty">
-          {translate("export.confirmation.empty")}
-        </p>
-      ) : (
-        <div className="exportConfirmationDialogTableWrap">
-          <table className="exportConfirmationDialogTable">
-            <thead>
-              <tr>
-                <th scope="col">
-                  <span className="srOnly">
-                    {translate("export.confirmation.handleHeader")}
+  return (
+    <>
+      <InfoDialog
+        className="exportConfirmationDialog"
+        title={translate("export.confirmation.title")}
+        titleAccessory={closeButton}
+        opener={opener}
+        onClose={onClose}
+        footer={
+          <div className="exportConfirmationDialogFooter">
+            <div className="exportConfirmationDialogFooterLeft">
+              {wizardStep === "sourceInterpretation" && (
+                <button type="button" className="appDialogButton" onClick={onClose}>
+                  {translate("common.cancel")}
+                </button>
+              )}
+
+              {wizardStep === "outputFormat" && (
+                <button
+                  type="button"
+                  className="appDialogButton"
+                  onClick={() => setWizardStep("sourceInterpretation")}
+                >
+                  {translate("export.wizard.backToSourceInterpretation")}
+                </button>
+              )}
+
+              {wizardStep === "outputDestination" && (
+                <button
+                  type="button"
+                  className="appDialogButton"
+                  onClick={() => setWizardStep("outputFormat")}
+                >
+                  {translate("export.wizard.backToOutputFormat")}
+                </button>
+              )}
+
+              {wizardStep === "result" && (
+                <button
+                  type="button"
+                  className="appDialogButton"
+                  data-export-reexport-button="true"
+                  onClick={() => {
+                    setWizardStep("sourceInterpretation");
+                    setExportResultInfo(null);
+                  }}
+                >
+                  {translate("export.wizard.reexport")}
+                </button>
+              )}
+            </div>
+
+            <div className="appDialogActions">
+              {wizardStep === "sourceInterpretation" && (
+                <button
+                  type="button"
+                  className="appDialogButton appDialogButton-confirm"
+                  onClick={() => setWizardStep("outputFormat")}
+                >
+                  {translate("export.wizard.goToOutputFormat")}
+                </button>
+              )}
+
+              {wizardStep === "outputFormat" && (
+                <button
+                  type="button"
+                  className="appDialogButton appDialogButton-confirm"
+                  disabled={!isValidImageAssetFolderName}
+                  onClick={() => setWizardStep("outputDestination")}
+                >
+                  {translate("export.wizard.goToOutputDestination")}
+                </button>
+              )}
+
+              {wizardStep === "outputDestination" && (
+                <button
+                  type="button"
+                  className="appDialogButton appDialogButton-confirm"
+                  disabled={!isValidFileName || !isValidImageAssetFolderName || isExporting}
+                  data-export-execute-button="true"
+                  onClick={async () => {
+                    if (!isValidFileName) return;
+                    const fullPath = buildOutputPath(
+                      destinationFolder,
+                      fileName,
+                      getFixedExtensionForFormat(exportFormat)
+                    );
+                    if (onCheckFileExists) {
+                      const res = await onCheckFileExists({ filePath: fullPath });
+                      if (res.exists) {
+                        setShowOverwriteConfirm(true);
+                        return;
+                      }
+                    }
+                    void executeActualExport(fullPath, false);
+                  }}
+                >
+                  {translate("export.wizard.executeExport")}
+                </button>
+              )}
+
+              {wizardStep === "result" && (
+                <button
+                  type="button"
+                  className="appDialogButton appDialogButton-confirm"
+                  onClick={onClose}
+                >
+                  {translate("export.wizard.close")}
+                </button>
+              )}
+            </div>
+          </div>
+        }
+      >
+        <div className="exportWizardContainer">
+          {wizardStep === "sourceInterpretation" && (
+            <div className="exportWizardStep exportWizardStep1">
+              <div className="exportWizardStepHeader">
+                <h3>{translate("export.wizard.sourceInterpretation")}</h3>
+              </div>
+              <div className="exportConfirmationDialogControls">
+                <label className="exportConfirmationDialogControl">
+                  <span className="exportConfirmationDialogControlLabel">
+                    {translate("export.wizard.sourceInterpretation")}
                   </span>
-                </th>
-                <th scope="col">
-                  <span className="srOnly">
-                    {translate("export.confirmation.kindHeader")}
-                  </span>
-                </th>
-                <th scope="col">
-                  {translate("export.confirmation.parentPathHeader")}
-                </th>
-                <th scope="col">
-                  {translate("export.confirmation.fileNameHeader")}
-                </th>
-                <th scope="col">
-                  {translate("export.confirmation.previewStartHeader")}
-                </th>
-                <th scope="col">
-                  {translate("export.confirmation.previewEndHeader")}
-                </th>
-                <th scope="col">
-                  {translate("export.confirmation.characterCountHeader")}
-                </th>
-                <th scope="col">
-                  {translate("export.confirmation.includeHeader")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.flatMap((group) => {
-                const isCollapsed = collapsedParentPaths.has(group.parentPath);
-                const isGroupOrderDirty = orderDirtyGroups.has(
-                  group.parentPath
-                );
-                const isGroupDragging =
-                  dragState?.kind === "folder" &&
-                  dragState.parentPath === group.parentPath;
-                const isGroupDropTarget =
-                  dropTarget?.kind === "folder" &&
-                  dropTarget.parentPath === group.parentPath;
-                const folderRows = [
-                  <tr
-                    key={`folder:${group.parentPath}`}
-                    className={classNames(
-                      "exportConfirmationDialogFolderRow",
-                      isGroupOrderDirty &&
-                        "exportConfirmationDialogOrderDirty",
-                      isGroupDragging && "exportConfirmationDialogDragging",
-                      isGroupDropTarget && "exportConfirmationDialogDropTarget"
-                    )}
-                    data-export-folder-parent-path={group.parentPath}
-                    data-export-folder-include-state={group.includeState}
-                    data-export-dragging={isGroupDragging ? "true" : "false"}
-                    data-export-drop-target={
-                      isGroupDropTarget ? "true" : "false"
-                    }
-                    data-export-order-dirty={
-                      isGroupOrderDirty ? "true" : "false"
-                    }
-                    onDragOver={(event) =>
-                      handleFolderDragOver(event, group.parentPath)
-                    }
-                    onDrop={(event) => handleFolderDrop(event, group.parentPath)}
-                    onDragLeave={handleDropTargetDragLeave}
+                  <select
+                    className="exportConfirmationDialogSelect"
+                    value={bodyNotation}
+                    data-export-body-notation-select="true"
+                    onChange={(e) => handleBodyNotationChange(e.currentTarget.value)}
                   >
-                    <td className="exportConfirmationDialogHandle">
-                      <span
-                        className="exportConfirmationDialogDragHandle"
-                        draggable={true}
-                        aria-label={translate(
-                          "export.confirmation.folderDragHandleLabel",
-                          { folder: group.label }
-                        )}
-                        title={translate(
-                          "export.confirmation.folderDragHandleLabel",
-                          { folder: group.label }
-                        )}
-                        data-export-folder-drag-handle-parent-path={
-                          group.parentPath
+                    <option value="markdown">
+                      {translate("export.confirmation.bodyNotation.markdown")}
+                    </option>
+                    <option value="aozora">
+                      {translate("export.confirmation.bodyNotation.aozora")}
+                    </option>
+                    <option value="narou">
+                      {translate("export.confirmation.bodyNotation.narou")}
+                    </option>
+                    <option value="kakuyomu">
+                      {translate("export.confirmation.bodyNotation.kakuyomu")}
+                    </option>
+                  </select>
+                </label>
+
+                <div className="exportInterpretationPreviewBox">
+                  <div className="exportInterpretationPreviewHeader">
+                    {translate("export.wizard.interpretationPreview")}
+                  </div>
+                  {renderInterpretationPreviewSample(bodyNotation)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {wizardStep === "outputFormat" && (
+            <div className="exportWizardStep exportWizardStep2">
+              <div className="exportWizardStepHeader">
+                <h3>{translate("export.wizard.outputFormat")}</h3>
+              </div>
+              <div className="exportConfirmationDialogControls">
+                <div className="exportConfirmationDialogControlRow">
+                  <label className="exportConfirmationDialogControl">
+                    <span className="exportConfirmationDialogControlLabel">
+                      {translate("export.confirmation.format.label")}
+                    </span>
+                    <select
+                      className="exportConfirmationDialogSelect"
+                      value={exportFormat}
+                      data-export-format-select="true"
+                      onChange={(e) => {
+                        const nextFormat = e.currentTarget.value as ExportFormat;
+                        setExportFormat(nextFormat);
+                        if (
+                          nextFormat === HTML_COMBINED_EXPORT_FORMAT ||
+                          nextFormat === PDF_COMBINED_EXPORT_FORMAT
+                        ) {
+                          setIncludeFileStructureToc(true);
                         }
-                        onDragStart={(event) =>
-                          handleFolderDragStart(event, group.parentPath)
-                        }
-                        onDragEnd={handleDragEnd}
-                      >
-                        <img
-                          className="exportConfirmationDialogHandleIcon"
-                          src={gripperIconUrl}
-                          alt=""
-                          aria-hidden="true"
-                        />
-                      </span>
-                    </td>
-                    <td
-                      className="exportConfirmationDialogFolderMain"
-                      colSpan={5}
+                      }}
                     >
-                      <button
-                        type="button"
-                        className="exportConfirmationDialogFolderToggle"
-                        aria-expanded={!isCollapsed}
-                        aria-label={translate(
-                          isCollapsed
-                            ? "export.confirmation.expandFolder"
-                            : "export.confirmation.collapseFolder",
-                          { folder: group.label }
-                        )}
-                        data-export-folder-collapse-parent-path={
-                          group.parentPath
-                        }
-                        onClick={() => toggleGroupCollapsed(group.parentPath)}
-                      >
-                        <img
-                          className="exportConfirmationDialogFolderChevron"
-                          src={
-                            isCollapsed
-                              ? chevronRightIconUrl
-                              : chevronDownIconUrl
-                          }
-                          alt=""
-                          aria-hidden="true"
-                        />
-                      </button>
-                      <img
-                        className="exportConfirmationDialogFolderIcon"
-                        src={folderIconUrl}
-                        alt=""
-                        aria-hidden="true"
-                      />
-                      <span className="exportConfirmationDialogFolderLabel">
-                        {group.label}
-                      </span>
-                      <span className="exportConfirmationDialogFolderSummary">
-                        {folderIncludedText(group, translate)}
-                      </span>
-                    </td>
-                    <td className="exportConfirmationDialogCharacterCount">
-                      {formatCharacterCount(
-                        group.includedCharacterCount,
-                        translate
-                      )}
-                    </td>
-                    <td className="exportConfirmationDialogInclude exportConfirmationDialogIncludeCell">
-                      <label className="exportConfirmationDialogIncludeSwitch">
+                      <option value={TXT_UTF8_EXPORT_FORMAT}>
+                        {exportFormatLabel(TXT_UTF8_EXPORT_FORMAT, translate)}
+                      </option>
+                      <option value={HTML_COMBINED_EXPORT_FORMAT}>
+                        {exportFormatLabel(HTML_COMBINED_EXPORT_FORMAT, translate)}
+                      </option>
+                      <option value={PDF_COMBINED_EXPORT_FORMAT}>
+                        {exportFormatLabel(PDF_COMBINED_EXPORT_FORMAT, translate)}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="exportConfirmationDialogControlRow">
+                  <label className="exportConfirmationDialogControl">
+                    <span className="exportConfirmationDialogControlLabel">
+                      {translate("export.confirmation.headingRemoval.label")}
+                    </span>
+                    <select
+                      className="exportConfirmationDialogSelect"
+                      value={headingRemovalLevel.toString()}
+                      data-export-heading-removal-select="true"
+                      onChange={(e) => handleHeadingRemovalLevelChange(e.currentTarget.value)}
+                    >
+                      {HEADING_REMOVAL_LEVELS.map((level) => (
+                        <option key={level} value={level.toString()}>
+                          {headingRemovalOptionLabel(level, translate)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {isTxtUtf8Export && (
+                  <span className="exportConfirmationDialogControlNote">
+                    {translate("export.confirmation.txtUtf8.note")}
+                  </span>
+                )}
+
+                {isHtmlCombinedExport && (
+                  <>
+                    <span className="exportConfirmationDialogControlNote">
+                      {translate("export.confirmation.htmlCombined.note")}
+                    </span>
+                    <div className="exportConfirmationDialogControlRow">
+                      <label className="exportConfirmationDialogControl">
+                        <span className="exportConfirmationDialogControlLabel">
+                          {translate("export.confirmation.imageAssetFolder.label")}
+                        </span>
                         <input
-                          className="exportConfirmationDialogIncludeInput"
-                          type="checkbox"
-                          role="switch"
-                          checked={group.includeState !== "off"}
-                          aria-label={translate(
-                            "export.confirmation.folderIncludeToggleLabel",
-                            { folder: group.label }
-                          )}
-                          data-export-folder-toggle-parent-path={
-                            group.parentPath
-                          }
-                          data-export-folder-include-state={group.includeState}
-                          onChange={() =>
-                            handleFolderIncludedToggle(group.parentPath)
-                          }
+                          type="text"
+                          className="exportConfirmationDialogInput"
+                          value={imageAssetFolderName}
+                          data-export-image-asset-folder-input="true"
+                          onChange={(e) => setImageAssetFolderName(e.currentTarget.value)}
                         />
+                      </label>
+                    </div>
+                    <span className="exportConfirmationDialogControlNote">
+                      {translate("export.confirmation.imageAssetFolder.note")}
+                    </span>
+                    {!isValidImageAssetFolderName && (
+                      <span className="exportConfirmationDialogErrorNote">
+                        {translate("export.confirmation.imageAssetFolder.invalid")}
+                      </span>
+                    )}
+                  </>
+                )}
+
+                {isPdfCombinedExport && (
+                  <>
+                    <div className="exportWizardFontSection">
+                      <label className="exportConfirmationDialogControlLabel">
+                        {translate("export.wizard.pdfFontCandidatesLabel")}
+                      </label>
+                      <div className="fontFamilyListSummaryRow">
                         <span
-                          className="exportConfirmationDialogIncludeTrack"
-                          aria-hidden="true"
+                          className="fontFamilyListSummaryText"
+                          title={pdfFontSummaryText}
+                          data-export-pdf-font-summary="true"
                         >
+                          {pdfFontSummaryText}
+                        </span>
+                        <button
+                          type="button"
+                          ref={pdfFontPickerOpenerRef}
+                          className="settingsButton fontFamilyListChooseButton"
+                          data-export-pdf-font-picker-button="true"
+                          onClick={() => setIsFontPickerOpen(true)}
+                        >
+                          {translate("export.wizard.editPdfFontCandidates")}
+                        </button>
+                      </div>
+                    </div>
+                    <span className="exportConfirmationDialogControlNote">
+                      {translate("export.wizard.pdfFontFallbackNote")}
+                    </span>
+                    <span className="exportConfirmationDialogControlNote">
+                      {translate("export.confirmation.pdfCombined.fontWarning")}
+                    </span>
+                    {externalImageCount > 0 && (
+                      <span
+                        className="exportConfirmationDialogErrorNote"
+                        data-export-pdf-external-image-warning="true"
+                      >
+                        {translate("export.confirmation.pdfCombined.externalImageWarning", {
+                          count: externalImageCount
+                        })}
+                      </span>
+                    )}
+                  </>
+                )}
+
+                {(isHtmlCombinedExport || isPdfCombinedExport) && (
+                  <div className="exportConfirmationDialogControlRow">
+                    <label className="exportConfirmationDialogControl exportConfirmationDialogTocControl">
+                      <span
+                        className="exportConfirmationDialogControlLabel"
+                        title={fileStructureTocTooltip}
+                      >
+                        {translate("export.confirmation.fileStructureToc.label")}
+                      </span>
+                      <label
+                        className="exportConfirmationDialogIncludeSwitch"
+                        title={fileStructureTocTooltip}
+                      >
+                        <input
+                          type="checkbox"
+                          className="exportConfirmationDialogIncludeInput"
+                          checked={includeFileStructureToc}
+                          data-export-file-structure-toc-toggle="true"
+                          onChange={(e) => setIncludeFileStructureToc(e.currentTarget.checked)}
+                        />
+                        <span className="exportConfirmationDialogIncludeTrack">
                           <span className="exportConfirmationDialogIncludeThumb" />
                         </span>
                       </label>
-                    </td>
-                  </tr>
-                ];
+                    </label>
+                  </div>
+                )}
 
-                if (isCollapsed) {
-                  return folderRows;
-                }
+                {isPdfCombinedExport && (
+                  <span className="exportConfirmationDialogControlNote">
+                    {translate("export.confirmation.pdfCombined.note")}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
-                return folderRows.concat(
-                  group.items.map((candidate) => {
-                    const isFileOrderDirty = orderDirtyFiles.has(
-                      candidate.filePath
-                    );
-                    const isFileDragging =
-                      dragState?.kind === "file" &&
-                      dragState.filePath === candidate.filePath;
-                    const isFileDropTarget =
-                      dropTarget?.kind === "file" &&
-                      dropTarget.filePath === candidate.filePath;
-                    const isDraggedFolderChild =
-                      dragState?.kind === "folder" &&
-                      dragState.parentPath === candidate.parentPath;
-                    return (
-                      <tr
-                        key={candidate.documentKey}
-                        className={classNames(
-                          "exportConfirmationDialogRow",
-                          isFileOrderDirty &&
-                            "exportConfirmationDialogOrderDirty",
-                          isFileDragging && "exportConfirmationDialogDragging",
-                          isFileDropTarget &&
-                            "exportConfirmationDialogDropTarget",
-                          isDraggedFolderChild &&
-                            "exportConfirmationDialogFolderDragSubdued"
-                        )}
-                        data-export-candidate-file-path={candidate.filePath}
-                        data-export-candidate-included={
-                          candidate.included ? "true" : "false"
-                        }
-                        data-export-dragging={isFileDragging ? "true" : "false"}
-                        data-export-drop-target={
-                          isFileDropTarget ? "true" : "false"
-                        }
-                        data-export-folder-drag-subdued={
-                          isDraggedFolderChild ? "true" : "false"
-                        }
-                        data-export-order-dirty={
-                          isFileOrderDirty ? "true" : "false"
-                        }
-                        onDragOver={(event) =>
-                          handleFileDragOver(event, candidate)
-                        }
-                        onDrop={(event) => handleFileDrop(event, candidate)}
-                        onDragLeave={handleDropTargetDragLeave}
+          {wizardStep === "outputDestination" && (
+            <div className="exportWizardStep exportWizardStep3">
+              <div className="exportWizardStepHeader">
+                <h3>{translate("export.wizard.outputPath")}</h3>
+              </div>
+              <div className="exportConfirmationDialogControls">
+                <div className="exportWizardFolderRow">
+                  <label className="exportConfirmationDialogControl">
+                    <span className="exportConfirmationDialogControlLabel">
+                      {translate("export.wizard.outputDestinationFolder")}
+                    </span>
+                    <div className="exportWizardInputWithButton">
+                      <input
+                        type="text"
+                        className="exportConfirmationDialogInput"
+                        value={destinationFolder}
+                        data-export-destination-folder-input="true"
+                        readOnly
+                      />
+                      <button
+                        type="button"
+                        className="appDialogButton"
+                        data-export-browse-folder-button="true"
+                        onClick={async () => {
+                          if (onSelectExportFolder) {
+                            const res = await onSelectExportFolder({
+                              defaultPath: destinationFolder
+                            });
+                            if (res.ok && res.folderPath) {
+                              setDestinationFolder(res.folderPath);
+                            }
+                          }
+                        }}
                       >
-                        <td className="exportConfirmationDialogHandle">
-                          <span
-                            className="exportConfirmationDialogDragHandle"
-                            draggable={true}
-                            aria-label={translate(
-                              "export.confirmation.fileDragHandleLabel",
-                              { fileName: candidate.fileName }
-                            )}
-                            title={translate(
-                              "export.confirmation.fileDragHandleLabel",
-                              { fileName: candidate.fileName }
-                            )}
-                            data-export-file-drag-handle-file-path={
-                              candidate.filePath
-                            }
-                            onDragStart={(event) =>
-                              handleFileDragStart(event, candidate)
-                            }
-                            onDragEnd={handleDragEnd}
-                          >
-                            <img
-                              className="exportConfirmationDialogHandleIcon"
-                              src={gripperIconUrl}
-                              alt=""
-                              aria-hidden="true"
-                            />
-                          </span>
-                        </td>
-                        <td
-                          className="exportConfirmationDialogKindIconCell"
-                          title={kindLabel(candidate.kind, translate)}
-                        >
-                          <img
-                            className="exportConfirmationDialogKindIcon"
-                            src={kindIconUrl(candidate.kind)}
-                            alt=""
-                            aria-hidden="true"
-                          />
-                          <span className="srOnly">
-                            {kindLabel(candidate.kind, translate)}
-                          </span>
-                        </td>
-                        <td className="exportConfirmationDialogParentPath">
-                          {candidate.parentPath ||
-                            translate("export.confirmation.projectRootParent")}
-                        </td>
-                        <td className="exportConfirmationDialogFileName">
-                          {candidate.fileName}
-                        </td>
-                        <td
-                          className="exportConfirmationDialogPreview exportConfirmationDialogPreviewStart"
-                          title={candidate.previewStartHover}
-                        >
-                          {candidate.previewStart}
-                        </td>
-                        <td
-                          className="exportConfirmationDialogPreview exportConfirmationDialogPreviewEnd"
-                          title={candidate.previewEndHover}
-                        >
-                          {candidate.previewEnd}
-                        </td>
-                        <td className="exportConfirmationDialogCharacterCount">
-                          {formatCharacterCount(
-                            candidate.characterCount,
-                            translate
+                        {translate("export.wizard.browseFolder")}
+                      </button>
+                    </div>
+                  </label>
+                </div>
+
+                <label className="exportConfirmationDialogControl">
+                  <span className="exportConfirmationDialogControlLabel">
+                    {translate("export.wizard.fileName")}
+                  </span>
+                  <div className="exportWizardFileNameRow">
+                    <input
+                      type="text"
+                      className="exportConfirmationDialogInput"
+                      value={fileName}
+                      data-export-file-name-input="true"
+                      onChange={(e) => setFileName(e.currentTarget.value)}
+                    />
+                    <span
+                      className="exportWizardFixedExtension"
+                      data-export-fixed-extension="true"
+                    >
+                      {getFixedExtensionForFormat(exportFormat)}
+                    </span>
+                  </div>
+                </label>
+
+                {!isValidFileName && (
+                  <span className="exportConfirmationDialogErrorNote">
+                    {translate("export.wizard.invalidFileName")}
+                  </span>
+                )}
+
+                <div className="exportWizardFullPathDisplay">
+                  <span className="exportWizardFullPathLabel">
+                    {translate("export.wizard.outputPath")}:
+                  </span>
+                  <span
+                    className="exportWizardFullPathValue"
+                    data-export-full-output-path={fullOutputPath}
+                  >
+                    {fullOutputPath}
+                  </span>
+                </div>
+              </div>
+
+              {showOverwriteConfirm && (
+                <div
+                  className="exportOverwriteConfirmModal"
+                  data-export-overwrite-modal="true"
+                >
+                  <div className="exportOverwriteConfirmContent">
+                    <p className="exportOverwriteConfirmMessage">
+                      {translate("export.wizard.overwriteConfirmMessage")}
+                    </p>
+                    <div className="exportOverwriteConfirmActions">
+                      <button
+                        type="button"
+                        className="appDialogButton"
+                        data-export-overwrite-cancel="true"
+                        onClick={() => setShowOverwriteConfirm(false)}
+                      >
+                        {translate("common.cancel")}
+                      </button>
+                      <button
+                        type="button"
+                        className="appDialogButton appDialogButton-confirm"
+                        data-export-overwrite-confirm="true"
+                        onClick={() => {
+                          setShowOverwriteConfirm(false);
+                          const fullPath = buildOutputPath(
+                            destinationFolder,
+                            fileName,
+                            getFixedExtensionForFormat(exportFormat)
+                          );
+                          void executeActualExport(fullPath, true);
+                        }}
+                      >
+                        {translate("export.wizard.overwriteConfirmButton")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {wizardStep === "result" && (
+            <div className="exportWizardStep exportWizardStep4" data-export-result-step="true">
+              <div className="exportWizardStepHeader">
+                <h3>{translate("export.wizard.resultSavedPath")}</h3>
+              </div>
+              <div className="exportWizardResultCard">
+                <div className="exportWizardResultRow">
+                  <span className="exportWizardResultLabel">
+                    {translate("export.wizard.resultSavedPath")}:
+                  </span>
+                  <span
+                    className="exportWizardResultValue"
+                    data-export-saved-path="true"
+                    data-export-result-path={exportResultInfo?.savedPath}
+                  >
+                    {exportResultInfo?.savedPath}
+                  </span>
+                </div>
+                {isPdfCombinedExport && (
+                  <div className="exportWizardResultRow">
+                    <span className="exportWizardResultLabel">
+                      {translate("export.wizard.resultFont")}:
+                    </span>
+                    <span
+                      className="exportWizardResultValue"
+                      data-export-pdf-font-status={exportResultInfo?.fontInspection?.status}
+                    >
+                      {formatPdfFontResultText(
+                        pdfFontFamilyList,
+                        exportResultInfo?.fontInspection,
+                        translate
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="exportWizardResultRow">
+                  <span className="exportWizardResultLabel">
+                    {translate("export.wizard.resultWarnings")}:
+                  </span>
+                  <span className="exportWizardResultValue">
+                    {typeof exportResultInfo?.warningCount === "number" && exportResultInfo.warningCount > 0
+                      ? translate("export.wizard.resultWarningsCount", { count: exportResultInfo.warningCount })
+                      : translate("export.wizard.resultWarningsNone")}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="exportConfirmationDialogOverview">
+            <div className="exportConfirmationDialogHeader">
+              <span className="exportConfirmationDialogLabel">
+                {translate("export.confirmation.targetLabel")}
+              </span>
+              <span className="exportConfirmationDialogValue">{targetLabel}</span>
+            </div>
+
+            <div className="exportConfirmationDialogStats">
+              <span
+                className="exportConfirmationDialogStatValue"
+                data-export-confirmation-summary="summary"
+              >
+                {translate("export.confirmation.summary", {
+                  totalCharacters: formatLocalizedNumber(
+                    summary.includedCharacterCount,
+                    uiLanguage ?? defaultLanguage
+                  ),
+                  included: formatLocalizedNumber(
+                    summary.includedCount,
+                    uiLanguage ?? defaultLanguage
+                  ),
+                  candidates: formatLocalizedNumber(
+                    summary.candidateCount,
+                    uiLanguage ?? defaultLanguage
+                  )
+                })}
+              </span>
+            </div>
+          </div>
+
+          <div className="exportConfirmationDialogTableWrap">
+            {rows.length === 0 ? (
+              <div className="exportConfirmationDialogEmpty">
+                {translate("export.confirmation.empty")}
+              </div>
+            ) : (
+              <table className="exportConfirmationDialogTable">
+                <thead>
+                  <tr>
+                    <th className="exportConfirmationDialogHandleCell">
+                      <button
+                        type="button"
+                        className="exportConfirmationDialogReloadButton"
+                        disabled={
+                          isListLocked ||
+                          isReloading ||
+                          isExporting ||
+                          !isCandidateListDirty
+                        }
+                        title={translate("export.confirmation.reload")}
+                        aria-label={translate("export.confirmation.reload")}
+                        data-export-table-reload-button="true"
+                        onClick={() => void handleReloadCandidates()}
+                      >
+                        <img
+                          src={reloadIconUrl}
+                          alt=""
+                          className="exportConfirmationDialogReloadIcon"
+                        />
+                      </button>
+                    </th>
+                    <th className="exportConfirmationDialogIncludeCell">
+                      {translate("export.confirmation.includeHeader")}
+                    </th>
+                    <th className="exportConfirmationDialogNameCell">
+                      {translate("export.confirmation.fileNameHeader")}
+                    </th>
+                    <th className="exportConfirmationDialogPreviewCell">
+                      {translate("export.confirmation.previewStartHeader")}
+                    </th>
+                    <th className="exportConfirmationDialogPreviewCell">
+                      {translate("export.confirmation.previewEndHeader")}
+                    </th>
+                    <th className="exportConfirmationDialogCountCell">
+                      {translate("export.confirmation.characterCountHeader")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((group) => {
+                    const isCollapsed = collapsedParentPaths.has(group.parentPath);
+                    const isFolderOrderDirty = orderDirtyGroups.has(group.parentPath);
+
+                    return (
+                      <Fragment key={group.parentPath || "__project_root__"}>
+                        <tr
+                          className={classNames(
+                            "exportConfirmationDialogRow",
+                            "exportConfirmationDialogFolderRow",
+                            dropTarget?.kind === "folder" &&
+                              dropTarget.parentPath === group.parentPath &&
+                              "exportConfirmationDialogDropTarget"
                           )}
-                        </td>
-                        <td className="exportConfirmationDialogInclude exportConfirmationDialogIncludeCell">
-                          <label className="exportConfirmationDialogIncludeSwitch">
-                            <input
-                              className="exportConfirmationDialogIncludeInput"
-                              type="checkbox"
-                              role="switch"
-                              checked={candidate.included}
-                              aria-label={translate(
-                                "export.confirmation.includeToggleLabel",
-                                { fileName: candidate.fileName }
-                              )}
-                              data-export-include-toggle-file-path={
-                                candidate.filePath
-                              }
-                              onChange={(event) =>
-                                setCandidateIncluded(
-                                  candidate.documentKey,
-                                  event.currentTarget.checked
-                                )
-                              }
-                            />
+                          data-export-folder-parent-path={group.parentPath}
+                          data-export-dragging={
+                            dragState?.kind === "folder" &&
+                            dragState.parentPath === group.parentPath
+                          }
+                          data-export-drop-target={
+                            dropTarget?.kind === "folder" &&
+                            dropTarget.parentPath === group.parentPath
+                          }
+                          data-export-order-dirty={isFolderOrderDirty ? "true" : "false"}
+                          onDragOver={(e) => handleDragOverFolder(e, group.parentPath)}
+                          onDrop={(e) => handleDropFolder(e, group.parentPath)}
+                        >
+                          <td className="exportConfirmationDialogHandleCell">
                             <span
-                              className="exportConfirmationDialogIncludeTrack"
-                              aria-hidden="true"
+                              className="exportConfirmationDialogHandle"
+                              draggable={!isListLocked}
+                              data-export-folder-drag-handle-parent-path={
+                                group.parentPath
+                              }
+                              title={translate(
+                                "export.confirmation.folderDragHandleLabel",
+                                { folder: group.label }
+                              )}
+                              onDragStart={(e) =>
+                                handleFolderDragStart(e, group.parentPath)
+                              }
+                              onDragEnd={handleDragEnd}
                             >
-                              <span className="exportConfirmationDialogIncludeThumb" />
+                              <img
+                                src={gripperIconUrl}
+                                alt=""
+                                className="exportConfirmationDialogHandleIcon"
+                              />
                             </span>
-                          </label>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="exportConfirmationDialogIncludeCell">
+                            <label
+                              className="exportConfirmationDialogIncludeSwitch"
+                              title={translate(
+                                "export.confirmation.folderIncludeToggleLabel",
+                                { folder: group.label }
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                className="exportConfirmationDialogIncludeInput"
+                                checked={group.includeState === "on"}
+                                ref={(el) => {
+                                  if (el) {
+                                    el.indeterminate = group.includeState === "mixed";
+                                  }
+                                }}
+                                disabled={isListLocked}
+                                data-export-folder-include-state={group.includeState}
+                                data-export-folder-toggle-parent-path={
+                                  group.parentPath
+                                }
+                                onChange={() =>
+                                  handleToggleFolderIncluded(group.parentPath)
+                                }
+                              />
+                              <span className="exportConfirmationDialogIncludeTrack">
+                                <span className="exportConfirmationDialogIncludeThumb" />
+                              </span>
+                            </label>
+                          </td>
+                          <td
+                            className="exportConfirmationDialogNameCell"
+                            colSpan={3}
+                            title={group.label}
+                          >
+                            <div className="exportConfirmationDialogFolderName">
+                              <button
+                                type="button"
+                                className="exportConfirmationDialogFolderToggle"
+                                disabled={isListLocked}
+                                data-export-folder-collapse-parent-path={
+                                  group.parentPath
+                                }
+                                onClick={() =>
+                                  handleToggleFolderCollapse(group.parentPath)
+                                }
+                              >
+                                <img
+                                  src={
+                                    isCollapsed
+                                      ? chevronRightIconUrl
+                                      : chevronDownIconUrl
+                                  }
+                                  alt=""
+                                  className="exportConfirmationDialogChevronIcon"
+                                />
+                              </button>
+                              <img
+                                src={folderIconUrl}
+                                alt=""
+                                className="exportConfirmationDialogFolderIcon"
+                              />
+                              <span
+                                className="exportConfirmationDialogFolderLabel"
+                                title={group.label}
+                              >
+                                {group.label}
+                              </span>
+                              <span className="exportConfirmationDialogFolderStats">
+                                {group.includeState === "on"
+                                  ? translate(
+                                      "export.confirmation.folderIncluded",
+                                      {
+                                        included: group.totalFileCount,
+                                        total: group.totalFileCount
+                                      }
+                                    )
+                                  : group.includeState === "off"
+                                    ? translate(
+                                        "export.confirmation.folderIncluded",
+                                        {
+                                          included: 0,
+                                          total: group.totalFileCount
+                                        }
+                                      )
+                                    : translate(
+                                        "export.confirmation.folderIncludedMixed",
+                                        {
+                                          included: group.includedFileCount,
+                                          total: group.totalFileCount
+                                        }
+                                      )}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="exportConfirmationDialogCountCell exportConfirmationDialogCharacterCount">
+                            {translate("export.confirmation.totalCharacterCount", {
+                              count: formatLocalizedNumber(
+                                group.includedCharacterCount,
+                                uiLanguage ?? defaultLanguage
+                              )
+                            })}
+                          </td>
+                        </tr>
+
+                        {!isCollapsed &&
+                          group.items.map((candidate) => {
+                            const isFileOrderDirty = orderDirtyFiles.has(
+                              candidate.filePath
+                            );
+                            const isSubduedByFolderDrag =
+                              dragState?.kind === "folder" &&
+                              dragState.parentPath === candidate.parentPath;
+
+                            return (
+                              <tr
+                                key={candidate.documentKey}
+                                className={classNames(
+                                  "exportConfirmationDialogRow",
+                                  "exportConfirmationDialogCandidateRow",
+                                  !candidate.included &&
+                                    "exportConfirmationDialogRow-excluded",
+                                  dropTarget?.kind === "file" &&
+                                    dropTarget.filePath === candidate.filePath &&
+                                    "exportConfirmationDialogDropTarget"
+                                )}
+                                data-export-candidate-file-path={
+                                  candidate.filePath
+                                }
+                                data-export-dragging={
+                                  dragState?.kind === "file" &&
+                                  dragState.filePath === candidate.filePath
+                                }
+                                data-export-drop-target={
+                                  dropTarget?.kind === "file" &&
+                                  dropTarget.filePath === candidate.filePath
+                                }
+                                data-export-order-dirty={
+                                  isFileOrderDirty ? "true" : "false"
+                                }
+                                data-export-folder-drag-subdued={
+                                  isSubduedByFolderDrag ? "true" : "false"
+                                }
+                                onDragOver={(e) =>
+                                  handleDragOverFile(e, candidate)
+                                }
+                                onDrop={(e) => handleDropFile(e, candidate)}
+                              >
+                                <td className="exportConfirmationDialogHandleCell">
+                                  <span
+                                    className="exportConfirmationDialogHandle"
+                                    draggable={!isListLocked}
+                                    data-export-file-drag-handle-file-path={
+                                      candidate.filePath
+                                    }
+                                    title={translate(
+                                      "export.confirmation.fileDragHandleLabel",
+                                      { fileName: candidate.fileName }
+                                    )}
+                                    onDragStart={(e) =>
+                                      handleFileDragStart(e, candidate)
+                                    }
+                                    onDragEnd={handleDragEnd}
+                                  >
+                                    <img
+                                      src={gripperIconUrl}
+                                      alt=""
+                                      className="exportConfirmationDialogHandleIcon"
+                                    />
+                                  </span>
+                                </td>
+                                <td className="exportConfirmationDialogIncludeCell">
+                                  <label
+                                    className="exportConfirmationDialogIncludeSwitch"
+                                    title={translate(
+                                      "export.confirmation.includeToggleLabel",
+                                      { fileName: candidate.fileName }
+                                    )}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="exportConfirmationDialogIncludeInput"
+                                      checked={candidate.included}
+                                      disabled={isListLocked}
+                                      data-export-include-toggle-file-path={
+                                        candidate.filePath
+                                      }
+                                      onChange={() =>
+                                        handleToggleRowIncluded(candidate.filePath)
+                                      }
+                                    />
+                                    <span className="exportConfirmationDialogIncludeTrack">
+                                      <span className="exportConfirmationDialogIncludeThumb" />
+                                    </span>
+                                  </label>
+                                </td>
+                                <td
+                                  className="exportConfirmationDialogNameCell"
+                                  title={candidate.fileName}
+                                >
+                                  <div className="exportConfirmationDialogDocumentName">
+                                    <img
+                                      src={
+                                        candidate.kind === "markdown"
+                                          ? markdownFileIconUrl
+                                          : textFileIconUrl
+                                      }
+                                      alt=""
+                                      className="exportConfirmationDialogKindIcon"
+                                    />
+                                    <span>{candidate.fileName}</span>
+                                  </div>
+                                </td>
+                                <td
+                                  className="exportConfirmationDialogPreviewCell"
+                                  title={candidate.previewStartHover}
+                                >
+                                  <span className="exportConfirmationDialogPreviewStart">
+                                    {candidate.previewStart}
+                                  </span>
+                                </td>
+                                <td
+                                  className="exportConfirmationDialogPreviewCell"
+                                  title={candidate.previewEndHover}
+                                >
+                                  <span className="exportConfirmationDialogPreviewEnd">
+                                    {candidate.previewEnd}
+                                  </span>
+                                </td>
+                                <td className="exportConfirmationDialogCountCell exportConfirmationDialogCharacterCount">
+                                  {translate(
+                                    "export.confirmation.totalCharacterCount",
+                                    {
+                                      count: formatLocalizedNumber(
+                                        candidate.characterCount,
+                                        uiLanguage ?? defaultLanguage
+                                      )
+                                    }
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </Fragment>
                     );
-                  })
-                );
-              })}
-            </tbody>
-          </table>
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
+      </InfoDialog>
+
+      {isFontPickerOpen && (
+        <FontPickerDialog
+          isOpen={isFontPickerOpen}
+          slot="preview.fontFamilyList"
+          initialValue={pdfFontFamilyList}
+          translate={translate}
+          uiLanguage={uiLanguage}
+          opener={pdfFontPickerOpenerRef.current}
+          onSave={(selectedFonts) => {
+            setPdfFontFamilyList(selectedFonts);
+            setIsFontPickerOpen(false);
+          }}
+          onClose={() => setIsFontPickerOpen(false)}
+        />
       )}
-      {isExporting && isPdfCombinedExport ? (
+
+      {isExporting && isPdfCombinedExport && (
         <div
           className="exportPdfBlockingBackdrop"
           data-export-pdf-blocking-backdrop="true"
@@ -1522,11 +1862,11 @@ export function ExportConfirmationDialog({
               className="exportPdfLoaderImage"
             />
             <div className="exportPdfLoaderText">
-              {translate("export.confirmation.pdfLoaderText")}
+              {translate("export.wizard.loaderPdf")}
             </div>
           </div>
         </div>
-      ) : null}
-    </InfoDialog>
+      )}
+    </>
   );
 }

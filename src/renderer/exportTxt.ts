@@ -36,6 +36,8 @@ export {
 export interface ExportTxtExecutionRequest {
   readonly assembly: ExportAssembly;
   readonly defaultFileName: string;
+  readonly targetPath?: string | null;
+  readonly allowOverwrite?: boolean;
 }
 
 export interface CreateExportAssemblyOptions {

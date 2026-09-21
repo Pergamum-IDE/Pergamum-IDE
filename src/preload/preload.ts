@@ -82,7 +82,13 @@ const pergamumApi: PergamumApi = {
     selectPdfSavePath: (request) =>
       ipcRenderer.invoke(FILE_CHANNELS.selectPdfSavePath, request),
     exportPdfCombined: (request) =>
-      ipcRenderer.invoke(FILE_CHANNELS.exportPdfCombined, request)
+      ipcRenderer.invoke(FILE_CHANNELS.exportPdfCombined, request),
+    selectExportFolder: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.selectExportFolder, request),
+    getDocumentsPath: () =>
+      ipcRenderer.invoke(FILE_CHANNELS.getDocumentsPath),
+    checkFileExists: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.checkFileExists, request)
   },
   projects: {
     createProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.createProject),

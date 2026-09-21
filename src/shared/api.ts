@@ -226,7 +226,10 @@ export const FILE_CHANNELS = {
   exportTxtUtf8: "files:exportTxtUtf8",
   exportHtmlCombined: "files:exportHtmlCombined",
   selectPdfSavePath: "files:selectPdfSavePath",
-  exportPdfCombined: "files:exportPdfCombined"
+  exportPdfCombined: "files:exportPdfCombined",
+  selectExportFolder: "files:selectExportFolder",
+  getDocumentsPath: "files:getDocumentsPath",
+  checkFileExists: "files:checkFileExists"
 } as const;
 
 export const PROJECT_CHANNELS = {
@@ -600,9 +603,37 @@ export type ExportSettingsJsonResult =
       readonly reason: "canceled";
     };
 
+export interface SelectExportFolderRequest {
+  readonly defaultPath?: string | null;
+}
+
+export type SelectExportFolderResult =
+  | {
+      readonly ok: true;
+      readonly folderPath: string;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export interface GetDocumentsPathResult {
+  readonly path: string;
+}
+
+export interface CheckFileExistsRequest {
+  readonly filePath: string;
+}
+
+export interface CheckFileExistsResult {
+  readonly exists: boolean;
+}
+
 export interface ExportTxtUtf8Request {
   readonly defaultFileName: string;
   readonly content: string;
+  readonly targetPath?: string | null;
+  readonly allowOverwrite?: boolean;
 }
 
 export type ExportTxtUtf8Result =
@@ -625,6 +656,8 @@ export interface ExportHtmlCombinedRequest {
   readonly htmlContent: string;
   readonly imageAssets: readonly ExportImageAssetCopyItem[];
   readonly projectRootPath: string | null;
+  readonly targetPath?: string | null;
+  readonly allowOverwrite?: boolean;
 }
 
 export type ExportHtmlCombinedResult =
@@ -673,6 +706,7 @@ export interface ExportPdfCombinedRequest {
   readonly imageAssets: readonly ExportImageAssetCopyItem[];
   readonly projectRootPath: string | null;
   readonly pdfFontFamily?: string | null;
+  readonly allowOverwrite?: boolean;
 }
 
 export type ExportPdfCombinedResult =
@@ -1236,6 +1270,13 @@ export interface PergamumApi {
     exportPdfCombined: (
       request: ExportPdfCombinedRequest
     ) => Promise<ExportPdfCombinedResult>;
+    selectExportFolder: (
+      request?: SelectExportFolderRequest
+    ) => Promise<SelectExportFolderResult>;
+    getDocumentsPath: () => Promise<GetDocumentsPathResult>;
+    checkFileExists: (
+      request: CheckFileExistsRequest
+    ) => Promise<CheckFileExistsResult>;
   };
   projects: {
     createProject: () => Promise<ProjectOpenResult>;

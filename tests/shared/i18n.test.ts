@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatLocalizedNumber,
+  getNumberFormatLocale,
   languageDefinitions,
   supportedLanguages,
   t
@@ -28,6 +30,18 @@ describe("supported UI languages (#186)", () => {
         (language) => languageDefinitions[language].nativeName
       )
     ).toEqual(["日本語", "English"]);
+  });
+
+  it("exposes numberFormatLocale and formats numbers using locale-aware grouping", () => {
+    expect(languageDefinitions.ja.numberFormatLocale).toBe("ja-JP");
+    expect(languageDefinitions.en.numberFormatLocale).toBe("en-US");
+    expect(getNumberFormatLocale("ja")).toBe("ja-JP");
+    expect(getNumberFormatLocale("en")).toBe("en-US");
+
+    expect(formatLocalizedNumber(1112440, "ja")).toBe("1,112,440");
+    expect(formatLocalizedNumber(1112440, "en")).toBe("1,112,440");
+    expect(t("ja", "common.numberFormatLocale")).toBe("ja-JP");
+    expect(t("en", "common.numberFormatLocale")).toBe("en-US");
   });
 });
 
@@ -603,7 +617,8 @@ describe("Application Settings core control translations (#195)", () => {
     ).toBe("1,234 chars");
     expect(t("ja", "export.confirmation.previewStartHeader")).toBe("出だし");
     expect(t("ja", "export.confirmation.previewEndHeader")).toBe("終わり");
-    expect(t("ja", "export.confirmation.characterCountHeader")).toBe("文字数");
+    expect(t("ja", "export.confirmation.characterCountHeader")).toBe("文字数（概算）");
+    expect(t("en", "export.confirmation.characterCountHeader")).toBe("Characters (approx.)");
     expect(t("ja", "export.confirmation.includeHeader")).toBe("採用");
     expect(t("ja", "export.confirmation.reload")).toBe("リロード");
     expect(t("ja", "export.confirmation.headingRemoval.label")).toBe(

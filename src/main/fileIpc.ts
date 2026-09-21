@@ -1,4 +1,5 @@
 import {
+  app,
   BrowserWindow,
   dialog,
   ipcMain,
@@ -11,20 +12,23 @@ import os from "node:os";
 import path from "node:path";
 import {
   FILE_CHANNELS,
+  type CheckFileExistsResult,
   type ExportHtmlCombinedRequest,
   type ExportHtmlCombinedResult,
   type ExportPdfCombinedRequest,
   type ExportPdfCombinedResult,
-  type SelectPdfSavePathRequest,
-  type SelectPdfSavePathResult,
   type ExportTxtUtf8Request,
   type ExportTxtUtf8Result,
+  type GetDocumentsPathResult,
   type MarkdownFile,
   type MarkdownFileStat,
   type SaveMarkdownRequest,
   type SaveMarkdownResult,
+  type SelectExportFolderResult,
   type SelectMarkdownSavePathRequest,
   type SelectMarkdownSavePathResult,
+  type SelectPdfSavePathRequest,
+  type SelectPdfSavePathResult,
   type WriteMarkdownRequest,
   type WriteMarkdownResult
 } from "../shared/api";
@@ -176,16 +180,22 @@ function parseExportTxtUtf8Request(value: unknown): ExportTxtUtf8Request {
     !("defaultFileName" in value) ||
     typeof value.defaultFileName !== "string" ||
     value.defaultFileName.trim().length === 0 ||
-    /[\\/]/u.test(value.defaultFileName) ||
     !("content" in value) ||
     typeof value.content !== "string"
   ) {
     throw new Error("Invalid TXT export request.");
   }
 
+  const obj = value as Record<string, unknown>;
+
   return {
     defaultFileName: ensureTxtExtension(value.defaultFileName.trim()),
-    content: value.content
+    content: value.content,
+    targetPath:
+      typeof obj.targetPath === "string" && obj.targetPath.trim().length > 0
+        ? obj.targetPath.trim()
+        : null,
+    allowOverwrite: obj.allowOverwrite === true
   };
 }
 
@@ -873,25 +883,42 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
       try {
         request = parseExportTxtUtf8Request(rawRequest);
-        const owner = parentWindow(event);
-        const options: SaveDialogOptions = {
-          title: "Export TXT (UTF-8)",
-          defaultPath: request.defaultFileName,
-          filters: txtUtf8Filters
-        };
-        const selected = owner
-          ? await dialog.showSaveDialog(owner, options)
-          : await dialog.showSaveDialog(options);
+        if (request.targetPath) {
+          filePath = ensureTxtExtension(request.targetPath);
+        } else {
+          const owner = parentWindow(event);
+          const options: SaveDialogOptions = {
+            title: "Export TXT (UTF-8)",
+            defaultPath: request.defaultFileName,
+            filters: txtUtf8Filters
+          };
+          const selected = owner
+            ? await dialog.showSaveDialog(owner, options)
+            : await dialog.showSaveDialog(options);
 
-        if (selected.canceled || !selected.filePath) {
-          return { ok: false, reason: "canceled" };
+          if (selected.canceled || !selected.filePath) {
+            return { ok: false, reason: "canceled" };
+          }
+
+          filePath = ensureTxtExtension(selected.filePath);
         }
 
-        filePath = ensureTxtExtension(selected.filePath);
         const targetClassification =
           await classifyStandaloneSaveTarget(filePath);
         if (targetClassification.kind === "rejected") {
           throw new Error(`TXT export target rejected: ${targetClassification.reason}`);
+        }
+
+        let fileExists = false;
+        try {
+          await fs.stat(filePath);
+          fileExists = true;
+        } catch {
+          fileExists = false;
+        }
+
+        if (fileExists && request.allowOverwrite !== true) {
+          throw new Error(`Target file already exists and allowOverwrite is not true: ${filePath}`);
         }
 
         await writeFileAtomic(filePath, request.content);
@@ -999,7 +1026,12 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
       htmlContent: obj.htmlContent,
       imageAssets,
       projectRootPath:
-        typeof obj.projectRootPath === "string" ? obj.projectRootPath : null
+        typeof obj.projectRootPath === "string" ? obj.projectRootPath : null,
+      targetPath:
+        typeof obj.targetPath === "string" && obj.targetPath.trim().length > 0
+          ? obj.targetPath.trim()
+          : null,
+      allowOverwrite: obj.allowOverwrite === true
     };
   }
 
@@ -1020,26 +1052,45 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
       try {
         request = parseExportHtmlCombinedRequest(rawRequest);
-        const owner = parentWindow(event);
-        const options: SaveDialogOptions = {
-          title: "Export HTML (Combined)",
-          defaultPath: request.defaultFileName,
-          filters: [{ name: "HTML (*.html)", extensions: ["html"] }]
-        };
-        const selected = owner
-          ? await dialog.showSaveDialog(owner, options)
-          : await dialog.showSaveDialog(options);
+        if (request.targetPath) {
+          finalPath = ensureHtmlExtension(request.targetPath);
+        } else {
+          const owner = parentWindow(event);
+          const options: SaveDialogOptions = {
+            title: "Export HTML (Combined)",
+            defaultPath: request.defaultFileName,
+            filters: [{ name: "HTML (*.html)", extensions: ["html"] }]
+          };
+          const selected = owner
+            ? await dialog.showSaveDialog(owner, options)
+            : await dialog.showSaveDialog(options);
 
-        if (selected.canceled || !selected.filePath) {
-          return { ok: false, reason: "canceled" };
+          if (selected.canceled || !selected.filePath) {
+            return { ok: false, reason: "canceled" };
+          }
+
+          finalPath = ensureHtmlExtension(selected.filePath);
         }
 
-        finalPath = ensureHtmlExtension(selected.filePath);
         const targetClassification =
           await classifyStandaloneSaveTarget(finalPath);
         if (targetClassification.kind === "rejected") {
           throw new Error(
             `HTML export target rejected: ${targetClassification.reason}`
+          );
+        }
+
+        let fileExists = false;
+        try {
+          await fs.stat(finalPath);
+          fileExists = true;
+        } catch {
+          fileExists = false;
+        }
+
+        if (fileExists && request.allowOverwrite !== true) {
+          throw new Error(
+            `Target file already exists and allowOverwrite is not true: ${finalPath}`
           );
         }
 
@@ -1187,7 +1238,8 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
       projectRootPath:
         typeof obj.projectRootPath === "string" ? obj.projectRootPath : null,
       pdfFontFamily:
-        typeof obj.pdfFontFamily === "string" ? obj.pdfFontFamily : null
+        typeof obj.pdfFontFamily === "string" ? obj.pdfFontFamily : null,
+      allowOverwrite: obj.allowOverwrite === true
     };
   }
 
@@ -1262,6 +1314,20 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         if (targetClassification.kind === "rejected") {
           throw new Error(
             `PDF export target rejected: ${targetClassification.reason}`
+          );
+        }
+
+        let fileExists = false;
+        try {
+          await fs.stat(finalPath);
+          fileExists = true;
+        } catch {
+          fileExists = false;
+        }
+
+        if (fileExists && request.allowOverwrite !== true) {
+          throw new Error(
+            `Target file already exists and allowOverwrite is not true: ${finalPath}`
           );
         }
 
@@ -1420,6 +1486,63 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             // ignore temp dir cleanup failure
           }
         }
+      }
+    }
+  );
+
+  ipcMain.handle(
+    FILE_CHANNELS.selectExportFolder,
+    async (event, rawRequest: unknown): Promise<SelectExportFolderResult> => {
+      const owner = parentWindow(event);
+      const defaultPath =
+        typeof rawRequest === "object" &&
+        rawRequest !== null &&
+        "defaultPath" in rawRequest &&
+        typeof (rawRequest as { defaultPath?: unknown }).defaultPath === "string"
+          ? (rawRequest as { defaultPath: string }).defaultPath
+          : undefined;
+
+      const options: OpenDialogOptions = {
+        title: "Select Export Folder",
+        properties: ["openDirectory"],
+        ...(defaultPath ? { defaultPath } : {})
+      };
+      const result = owner
+        ? await dialog.showOpenDialog(owner, options)
+        : await dialog.showOpenDialog(options);
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { ok: false, reason: "canceled" };
+      }
+
+      return { ok: true, folderPath: result.filePaths[0] };
+    }
+  );
+
+  ipcMain.handle(
+    FILE_CHANNELS.getDocumentsPath,
+    async (): Promise<GetDocumentsPathResult> => {
+      return { path: app.getPath("documents") };
+    }
+  );
+
+  ipcMain.handle(
+    FILE_CHANNELS.checkFileExists,
+    async (_event, rawRequest: unknown): Promise<CheckFileExistsResult> => {
+      if (
+        typeof rawRequest !== "object" ||
+        rawRequest === null ||
+        !("filePath" in rawRequest) ||
+        typeof (rawRequest as { filePath: unknown }).filePath !== "string"
+      ) {
+        return { exists: false };
+      }
+      const targetPath = (rawRequest as { filePath: string }).filePath;
+      try {
+        await fs.stat(targetPath);
+        return { exists: true };
+      } catch {
+        return { exists: false };
       }
     }
   );

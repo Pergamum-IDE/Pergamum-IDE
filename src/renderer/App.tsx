@@ -10552,7 +10552,9 @@ export function App(): JSX.Element {
 
     const result = await exportTxtUtf8({
       defaultFileName: request.defaultFileName,
-      content: createTxtUtf8ExportText(request.assembly)
+      content: createTxtUtf8ExportText(request.assembly),
+      targetPath: request.targetPath,
+      allowOverwrite: request.allowOverwrite
     });
 
     if (result.ok) {
@@ -11461,6 +11463,13 @@ export function App(): JSX.Element {
           onExportHtmlCombined={handleExportConfirmationHtmlCombinedExport}
           onSelectPdfSavePath={handleExportConfirmationSelectPdfSavePath}
           onExportPdfCombined={handleExportConfirmationPdfCombinedExport}
+          onSelectExportFolder={(req) =>
+            window.pergamum.files.selectExportFolder(req)
+          }
+          onGetDocumentsPath={() => window.pergamum.files.getDocumentsPath()}
+          onCheckFileExists={(req) =>
+            window.pergamum.files.checkFileExists(req)
+          }
           loadAozoraText={(relativePath) =>
             window.pergamum.projects.readProjectDocumentAozora(relativePath)
           }

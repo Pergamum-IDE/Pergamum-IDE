@@ -17,10 +17,12 @@ export type Translate = (
 export const languageDefinitions = {
   ja: {
     nativeName: "日本語",
+    numberFormatLocale: "ja-JP",
     translations: jaTranslations
   },
   en: {
     nativeName: "English",
+    numberFormatLocale: "en-US",
     translations: enTranslations
   }
 } as const;
@@ -28,6 +30,21 @@ export const languageDefinitions = {
 export type Language = keyof typeof languageDefinitions;
 
 export const defaultLanguage: Language = "ja";
+
+export function getNumberFormatLocale(language: Language): string {
+  return (
+    languageDefinitions[language]?.numberFormatLocale ??
+    languageDefinitions[defaultLanguage].numberFormatLocale
+  );
+}
+
+export function formatLocalizedNumber(
+  value: number,
+  language: Language = defaultLanguage
+): string {
+  const locale = getNumberFormatLocale(language);
+  return new Intl.NumberFormat(locale).format(value);
+}
 
 // Object.keys cannot express non-empty objects, but languageDefinitions is the
 // closed set above and must stay non-empty for the UI language setting enum.

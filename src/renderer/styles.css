@@ -8241,9 +8241,16 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogControls {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   min-width: 0;
+}
+
+.exportConfirmationDialogControlRow {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .exportConfirmationDialogControl {
@@ -8260,11 +8267,11 @@ label.settingsItemHeader {
 }
 
 .exportConfirmationDialogControlNote {
-  align-self: center;
+  display: block;
+  width: 100%;
   color: var(--workspace-sidebar-muted-foreground);
   font-size: 0.78rem;
   line-height: 1.4;
-  white-space: nowrap;
 }
 
 .exportConfirmationDialogTocControl {
@@ -8296,8 +8303,9 @@ label.settingsItemHeader {
 .exportConfirmationDialogTableWrap {
   min-width: 0;
   min-height: 0;
-  max-block-size: min(52vh, 480px);
-  overflow: auto;
+  max-block-size: min(48vh, 420px);
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--app-dialog-border);
   border-radius: 6px;
   background: #fff;
@@ -8305,7 +8313,7 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogTable {
   width: 100%;
-  min-width: 860px;
+  inline-size: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 0.86rem;
@@ -8332,39 +8340,40 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogTable th:first-child,
 .exportConfirmationDialogTable td:first-child {
-  width: 34px;
+  width: 32px;
   padding-inline: 0;
   text-align: center;
 }
 
 .exportConfirmationDialogTable th:nth-child(2),
 .exportConfirmationDialogTable td:nth-child(2) {
-  width: 38px;
+  width: 40px;
   padding-inline: 4px;
   text-align: center;
 }
 
 .exportConfirmationDialogTable th:nth-child(3),
 .exportConfirmationDialogTable td:nth-child(3) {
-  width: 18%;
+  width: 25%;
 }
 
 .exportConfirmationDialogTable th:nth-child(4),
 .exportConfirmationDialogTable td:nth-child(4) {
-  width: 20%;
+  width: 30%;
 }
 
-.exportConfirmationDialogTable th:nth-child(7),
-.exportConfirmationDialogTable td:nth-child(7) {
-  width: 112px;
+.exportConfirmationDialogTable th:nth-child(5),
+.exportConfirmationDialogTable td:nth-child(5) {
+  width: 30%;
+}
+
+.exportConfirmationDialogTable th:nth-child(6),
+.exportConfirmationDialogTable td:nth-child(6) {
+  width: 15%;
   text-align: end;
   white-space: nowrap;
-}
-
-.exportConfirmationDialogTable th:nth-child(8),
-.exportConfirmationDialogTable td:nth-child(8) {
-  width: 76px;
-  text-align: center;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .exportConfirmationDialogTable tbody tr:last-child td {
@@ -8374,8 +8383,14 @@ label.settingsItemHeader {
 .exportConfirmationDialogFooter {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
   inline-size: 100%;
+}
+
+.exportConfirmationDialogFooterLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .exportConfirmationDialogLastExportPath {
@@ -8514,19 +8529,22 @@ label.settingsItemHeader {
     inset 3px 0 var(--app-dialog-icon-warning);
 }
 
-.exportConfirmationDialogTable td.exportConfirmationDialogFolderMain {
+.exportConfirmationDialogFolderName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  text-align: start;
 }
 
 .exportConfirmationDialogFolderToggle {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   inline-size: 24px;
   block-size: 24px;
+  flex: 0 0 24px;
   padding: 0;
-  margin-inline-end: 4px;
+  margin-inline-end: 2px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
@@ -8546,7 +8564,8 @@ label.settingsItemHeader {
 }
 
 .exportConfirmationDialogFolderIcon {
-  margin-inline-end: 6px;
+  flex: 0 0 auto;
+  margin-inline-end: 2px;
   color: var(--workspace-sidebar-muted-foreground);
 }
 
@@ -8561,9 +8580,10 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
+.exportConfirmationDialogFolderStats,
 .exportConfirmationDialogFolderSummary {
   display: inline-block;
-  margin-inline-start: 12px;
+  margin-inline-start: 8px;
   color: var(--workspace-sidebar-muted-foreground);
   font-size: 0.8rem;
   font-weight: 700;
@@ -8571,6 +8591,10 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
+.exportConfirmationDialogDocumentName,
+.exportConfirmationDialogDocumentName span,
+.exportConfirmationDialogPreviewStart,
+.exportConfirmationDialogPreviewEnd,
 .exportConfirmationDialogParentPath,
 .exportConfirmationDialogFileName,
 .exportConfirmationDialogPreview {
@@ -8589,11 +8613,16 @@ label.settingsItemHeader {
   color: var(--workspace-sidebar-muted-foreground);
 }
 
+.exportConfirmationDialogTable td.exportConfirmationDialogCountCell,
 .exportConfirmationDialogTable td.exportConfirmationDialogCharacterCount,
 .exportConfirmationDialogRow .exportConfirmationDialogCharacterCount,
-.exportConfirmationDialogFolderRow .exportConfirmationDialogCharacterCount {
+.exportConfirmationDialogFolderRow .exportConfirmationDialogCharacterCount,
+.exportConfirmationDialogCountCell,
+.exportConfirmationDialogCharacterCountCell {
   text-align: end;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
   font-variant-numeric: tabular-nums;
 }
 
@@ -10444,5 +10473,151 @@ label.settingsItemHeader {
   font-size: 15px;
   font-weight: 600;
   color: var(--app-dialog-foreground, #25313d);
+}
+
+/* #523 Slice 10 follow-up: Export Wizard Layout and Modal CSS */
+.exportWizardStepActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.exportWizardButton-right {
+  margin-left: auto;
+}
+
+.exportWizardButton-left {
+  margin-right: auto;
+}
+
+.exportWizardFontSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.exportOverwriteConfirmModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  pointer-events: auto;
+}
+
+.exportOverwriteConfirmContent {
+  background: var(--app-dialog-background, #ffffff);
+  border: 1px solid var(--app-dialog-border, #d3dae2);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.exportOverwriteConfirmMessage {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--app-dialog-foreground, #25313d);
+}
+
+.exportOverwriteConfirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* #523 Slice 10 UI Polish: Export Wizard Height Stability, Table Reload Button, Close Button & Footer Navigation */
+.exportWizardContainer {
+  min-block-size: 260px;
+}
+
+.exportWizardStep {
+  min-block-size: 260px;
+}
+
+.exportConfirmationDialogReloadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-dialog-foreground, #25313d);
+  cursor: pointer;
+}
+
+.exportConfirmationDialogReloadButton:hover:not(:disabled) {
+  background: var(--app-dialog-hover, #e9eef4);
+  border-color: var(--app-dialog-border, #d3dae2);
+}
+
+.exportConfirmationDialogReloadButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.exportConfirmationDialogReloadIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.appDialogCloseButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-inline-start: auto;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-dialog-header-foreground, inherit);
+  cursor: pointer;
+}
+
+.appDialogCloseButton:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.appDialogCloseButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.appDialogCloseIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.exportConfirmationDialogFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.exportConfirmationDialogFooterLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 

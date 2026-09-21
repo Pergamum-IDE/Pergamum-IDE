@@ -58,7 +58,7 @@ export interface ExportCandidateFolderGroup {
   readonly includeState: ExportCandidateFolderIncludeState;
 }
 
-export const EXPORT_PREVIEW_LENGTH = 10;
+export const EXPORT_PREVIEW_LENGTH = 15;
 export const EXPORT_PREVIEW_HOVER_LENGTH = 20;
 export const EXPORT_PREVIEW_EMPTY_PLACEHOLDER = "—";
 export const HEADING_REMOVAL_LEVELS = [0, 1, 2, 3, 4, 5, 6] as const;

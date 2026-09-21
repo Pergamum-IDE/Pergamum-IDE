@@ -66,6 +66,34 @@ export const DEFAULT_EXPORT_DIALOG_OPTIONS_STATE: ExportDialogOptionsState = {
   pdfFontFamily: null
 };
 
+export type ExportWizardStep =
+  | "sourceInterpretation"
+  | "outputFormat"
+  | "outputDestination"
+  | "result";
+
+export function sanitizeFileName(name: string): string {
+  if (!name) return "Untitled";
+  let sanitized = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
+  sanitized = sanitized.replace(/[. ]+$/, "");
+  if (!sanitized) return "Untitled";
+  return sanitized;
+}
+
+export function getFixedExtensionForFormat(format: ExportFormat): string {
+  switch (format) {
+    case "txtUtf8":
+      return ".txt";
+    case "htmlCombined":
+      return ".html";
+    case "pdfCombined":
+    case "pdf":
+      return ".pdf";
+    default:
+      return ".txt";
+  }
+}
+
 export function validateImageAssetFolderName(folderName: string): boolean {
   const trimmed = folderName.trim();
   if (!trimmed) {
