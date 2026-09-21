@@ -83,4 +83,101 @@ describe("Markdown Preview Aozora/Narou ruby notation parsing (#507)", () => {
       expect(result).not.toContain("<ruby>");
     });
   });
+
+  describe("Narou shorthand ruby and escape markers in preview (#525 Slice 15)", () => {
+    it("renders 漢字（かんじ） and 漢字(かんじ) as ruby in Narou horizontal preview", () => {
+      const fullParen = markdownPreviewRenderer.render("漢字（かんじ）", {
+        previewRenderer: "narouHorizontal"
+      });
+      const halfParen = markdownPreviewRenderer.render("漢字(かんじ)", {
+        previewRenderer: "narouHorizontal"
+      });
+
+      expect(fullParen).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
+      expect(halfParen).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
+    });
+
+    it("renders 漢字（かんじ） and 漢字(かんじ) as ruby in Narou vertical preview", () => {
+      const fullParen = markdownPreviewRenderer.render("漢字（かんじ）", {
+        previewRenderer: "narouVertical"
+      });
+      const halfParen = markdownPreviewRenderer.render("漢字(かんじ)", {
+        previewRenderer: "narouVertical"
+      });
+
+      expect(fullParen).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
+      expect(halfParen).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
+    });
+
+    it("uses contiguous Kanji run as parent text (東京都（とうきょうと）)", () => {
+      const result = markdownPreviewRenderer.render("東京都（とうきょうと）", {
+        previewRenderer: "narouHorizontal"
+      });
+      expect(result).toContain("<ruby>東京都<rt>とうきょうと</rt></ruby>");
+    });
+
+    it("does not convert non-reading content inside parentheses (東京（本社）)", () => {
+      const result = markdownPreviewRenderer.render("東京（本社）", {
+        previewRenderer: "narouHorizontal"
+      });
+      expect(result).not.toContain("<ruby>");
+      expect(result).toContain("東京（本社）");
+    });
+
+    it("removes escape markers before parentheses and renders normal text in Narou previews", () => {
+      const cases = [
+        "漢字|（これは無視）",
+        "漢字｜（これは無視）",
+        "漢字|(これは無視)",
+        "漢字｜(これは無視)"
+      ];
+
+      for (const input of cases) {
+        const horizResult = markdownPreviewRenderer.render(input, {
+          previewRenderer: "narouHorizontal"
+        });
+        const vertResult = markdownPreviewRenderer.render(input, {
+          previewRenderer: "narouVertical"
+        });
+
+        expect(horizResult).not.toContain("<ruby>");
+        expect(horizResult).not.toContain("|");
+        expect(horizResult).not.toContain("｜");
+        expect(horizResult).toMatch(/漢字[（(]これは無視[）)]/);
+
+        expect(vertResult).not.toContain("<ruby>");
+        expect(vertResult).not.toContain("|");
+        expect(vertResult).not.toContain("｜");
+        expect(vertResult).toMatch(/漢字[（(]これは無視[）)]/);
+      }
+    });
+
+    it("preserves explicit ruby syntax |漢字《かんじ》 and ｜漢字《かんじ》", () => {
+      const halfPipe = markdownPreviewRenderer.render("|漢字《かんじ》", {
+        previewRenderer: "narouHorizontal"
+      });
+      const fullPipe = markdownPreviewRenderer.render("｜漢字《かんじ》", {
+        previewRenderer: "narouVertical"
+      });
+
+      expect(halfPipe).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
+      expect(fullPipe).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
+    });
+
+    it("does not convert shorthand ruby for other preview renderers (markdown, aozora, kakuyomu)", () => {
+      const markdownRes = markdownPreviewRenderer.render("漢字（かんじ）", {
+        previewRenderer: "markdown"
+      });
+      const aozoraRes = markdownPreviewRenderer.render("漢字（かんじ）", {
+        previewRenderer: "aozoraHorizontal"
+      });
+      const kakuyomuRes = markdownPreviewRenderer.render("漢字（かんじ）", {
+        previewRenderer: "kakuyomuHorizontal"
+      });
+
+      expect(markdownRes).not.toContain("<ruby>");
+      expect(aozoraRes).not.toContain("<ruby>");
+      expect(kakuyomuRes).not.toContain("<ruby>");
+    });
+  });
 });
