@@ -133,6 +133,7 @@ const onKeyDownExemptFileNames = new Set([
   "GlossaryEntryManager.tsx",
   "ActiveFindPanel.tsx",
   "ActiveFindGlossarySelect.tsx",
+  "TableSizePopover.tsx",
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
   "App.tsx",

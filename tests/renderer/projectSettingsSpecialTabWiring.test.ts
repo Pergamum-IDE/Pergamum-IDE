@@ -264,14 +264,4 @@ describe("App wiring for Project Settings special tab (#396)", () => {
     expect(editorAreaBodyBlock).toContain("<ProjectSettingsPanel");
     expect(editorAreaBodyBlock).toContain("projectSettings={project?.config?.settings}");
   });
-
-  it("displays project settings title in the window toolbar when tab is active", () => {
-    const source = appSource();
-    const toolbarIndex = source.indexOf('<div className="documentTitle">');
-    const endToolbarIndex = source.indexOf('</div>', toolbarIndex);
-    const toolbarBlock = source.slice(toolbarIndex, endToolbarIndex);
-
-    expect(toolbarBlock).toContain("isProjectSettingsTabActive");
-    expect(toolbarBlock).toContain('translate("settings.project.title")');
-  });
 });

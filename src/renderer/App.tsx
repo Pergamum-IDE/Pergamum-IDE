@@ -245,6 +245,7 @@ import {
   type DocumentOpenAggregateMetrics,
   type ViewportSizeDetails
 } from "./EditorSurface";
+import { EditorToolbar } from "./components/EditorToolbar";
 import type {
   MarkdownEditorFocusRequest,
   MarkdownImageAttachmentPositionController,
@@ -10766,81 +10767,15 @@ export function App(): JSX.Element {
       onBlurCapture={handleAppBlurCapture}
       onContextMenuCapture={handleContextMenuCapture}
     >
-      <header className="toolbar">
-        <div className="documentTitle">
-          <span>
-            {isGlossaryTagManagerTabActive
-              ? translate("glossary.tagManager.title")
-              : isGlossaryEntryManagerTabActive
-                ? translate("glossary.entryManager.title")
-                : isProjectSettingsTabActive
-                  ? translate("settings.project.title")
-                  : isDebugLogTabActive
-                    ? translate("debugLog.title")
-                    : isSettingsTabActive
-                      ? translate("settings.application.title")
-                      : currentEditor
-                        ? currentEditorTitle(currentEditor)
-                        : ""}
-          </span>
-          {!isEditorAreaSpecialTabActive && isDirty ? (
-            <span className="dirtyIndicator">
-              {translate("document.unsaved")}
-            </span>
-          ) : null}
-          {project ? (
-            <span className="projectName">
-              {translate("project.label", { name: project.name })}
-            </span>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={() =>
-            executeUiCommand(applicationCommandIds.openProject, {
-              source: "toolbar"
-            })
-          }
-        >
-          {translate("toolbar.openProject")}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            executeUiCommand(editorCommandIds.openMarkdownDocument, {
-              source: "toolbar"
-            })
-          }
-        >
-          {translate("common.open")}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            executeUiCommand(editorCommandIds.saveDocument, {
-              source: "toolbar"
-            })
-          }
-          disabled={
-            !commandRegistry.isEnabledForContext(
-              editorCommandIds.saveDocument,
-              commandContext
-            )
-          }
-        >
-          {translate("common.save")}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            executeUiCommand(applicationCommandIds.toggleRecentProjects, {
-              source: "toolbar"
-            })
-          }
-        >
-          {translate("toolbar.recentProjects")}
-        </button>
-      </header>
+      <EditorToolbar
+        canInsertTable={
+          activeMarkdownDocument !== null && !isReadOnlyProjectOwnedEditor
+        }
+        onInsertTable={(columns, rows) => {
+          paragraphIndentControllerRef.current?.insertTable?.(columns, rows);
+        }}
+        translate={translate}
+      />
 
       <section className="appBody">
         <ActivityBar

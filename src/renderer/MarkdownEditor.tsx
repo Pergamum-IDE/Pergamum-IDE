@@ -40,6 +40,7 @@ import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMa
 import { documentSwitchTransactionSpec } from "./editorLineEndingField";
 import type { LineEndingBreakSet } from "./editorLineEndingField";
 import type { LineEndingBreak, LineEndingKind } from "./lineEndingTracking";
+import { generateMarkdownTable } from "../shared/markdownTableGenerator";
 import {
   playMarkdownEditorInputSound,
   type MarkdownEditorInputSoundEvent,
@@ -434,6 +435,10 @@ export interface MarkdownEditorParagraphIndentController {
     fullText: string,
     breaks: LineEndingBreakSet
   ): boolean;
+  /**
+   * #527: Inserts a GFM Markdown table skeleton at current editor selection/cursor.
+   */
+  insertTable(columns: number, rows: number): boolean;
 }
 
 export interface MarkdownEditorViewStateController {
@@ -1403,6 +1408,58 @@ export function MarkdownEditor({
         view.dispatch(
           documentSwitchTransactionSpec(view.state.doc.length, fullText, breaks)
         );
+        return true;
+      },
+      insertTable: (columns: number, rows: number): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const selection = view.state.selection.main;
+        const { from, to } = selection;
+        const doc = view.state.doc;
+        const docLength = doc.length;
+
+        const tableText = generateMarkdownTable(columns, rows);
+
+        let leadingLines = "";
+        if (from > 0) {
+          const charBefore = doc.sliceString(from - 1, from);
+          if (charBefore !== "\n") {
+            leadingLines = "\n\n";
+          } else {
+            const char2Before = from >= 2 ? doc.sliceString(from - 2, from - 1) : "";
+            if (char2Before !== "\n") {
+              leadingLines = "\n";
+            }
+          }
+        }
+
+        let trailingLines = "";
+        if (to < docLength) {
+          const charAfter = doc.sliceString(to, to + 1);
+          if (charAfter !== "\n") {
+            trailingLines = "\n\n";
+          } else {
+            const char2After = to + 2 <= docLength ? doc.sliceString(to + 1, to + 2) : "";
+            if (char2After !== "\n") {
+              trailingLines = "\n";
+            }
+          }
+        }
+
+        const insertText = leadingLines + tableText + trailingLines;
+        const firstHeaderCellOffset = 2;
+        const targetCursorPos = from + leadingLines.length + firstHeaderCellOffset;
+
+        view.dispatch({
+          changes: { from, to, insert: insertText },
+          selection: { anchor: targetCursorPos },
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
         return true;
       }
     };

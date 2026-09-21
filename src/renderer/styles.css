@@ -10668,3 +10668,123 @@ label.settingsItemHeader {
   width: 100%;
 }
 
+/* #527 Editor Toolbar */
+.editorToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding-block: 4px;
+  padding-inline: 12px;
+  border-bottom: 1px solid #d3dae2;
+  background: #f2f5f8;
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
+}
+
+.editorToolbarGroup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.editorToolbarItem {
+  position: relative;
+}
+
+.editorToolbarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 32px;
+  block-size: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #24292e;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editorToolbarButton:hover:not(:disabled) {
+  background: #e1e4e8;
+  border-color: #d1d5da;
+}
+
+.editorToolbarButton:active:not(:disabled) {
+  background: #d1d5da;
+}
+
+.editorToolbarButton:disabled {
+  color: #a3aab1;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.editorToolbarButtonIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.editorToolbarButtonIcon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+/* Table size popover styling */
+.tableSizePopover {
+  position: absolute;
+  top: 100%;
+  inset-inline-start: 0;
+  margin-block-start: 4px;
+  padding: 8px;
+  border: 1px solid #c8d1d9;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  user-select: none;
+}
+
+.tableSizePopoverLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #444d56;
+  text-align: center;
+  margin-block-end: 6px;
+}
+
+.tableSizePopoverGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tableSizePopoverRow {
+  display: flex;
+  gap: 3px;
+}
+
+.tableSizePopoverCell {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #d1d5da;
+  border-radius: 2px;
+  background-color: #f6f8fa;
+  cursor: pointer;
+}
+
+.tableSizePopoverCell.isSelected {
+  background-color: #0366d6;
+  border-color: #0366d6;
+}
+
+
