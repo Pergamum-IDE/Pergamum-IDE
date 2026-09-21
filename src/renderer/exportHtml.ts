@@ -116,90 +116,184 @@ function isKanjiCodePoint(codePoint: number): boolean {
   );
 }
 
+function isNarouRubyReading(text: string): boolean {
+  if (text.length === 0) {
+    return false;
+  }
+  return /^[\u3040-\u309F\u30A0-\u30FF\u30FC\u30FB\s]+$/u.test(text);
+}
+
 function parseRubyAndEmphasisToHtml(
   text: string,
-  options: { allowKakuyomuEmphasis: boolean }
+  options: {
+    allowKakuyomuEmphasis: boolean;
+    allowNarouShorthandRuby?: boolean;
+  }
 ): string {
   let result = "";
   let pos = 0;
   const max = text.length;
 
   while (pos < max) {
-    const openIndex = text.indexOf("《", pos);
-    if (openIndex === -1) {
+    const openExplicit = text.indexOf("《", pos);
+    let openParen = -1;
+
+    if (options.allowNarouShorthandRuby) {
+      const openFullParen = text.indexOf("（", pos);
+      const openHalfParen = text.indexOf("(", pos);
+
+      if (openFullParen !== -1 && openHalfParen !== -1) {
+        openParen = Math.min(openFullParen, openHalfParen);
+      } else if (openFullParen !== -1) {
+        openParen = openFullParen;
+      } else if (openHalfParen !== -1) {
+        openParen = openHalfParen;
+      }
+    }
+
+    let nextTokenIndex = -1;
+    let nextTokenType: "explicit" | "paren" = "explicit";
+
+    if (openExplicit !== -1 && openParen !== -1) {
+      if (openExplicit <= openParen) {
+        nextTokenIndex = openExplicit;
+        nextTokenType = "explicit";
+      } else {
+        nextTokenIndex = openParen;
+        nextTokenType = "paren";
+      }
+    } else if (openExplicit !== -1) {
+      nextTokenIndex = openExplicit;
+      nextTokenType = "explicit";
+    } else if (openParen !== -1) {
+      nextTokenIndex = openParen;
+      nextTokenType = "paren";
+    } else {
       result += escapeHtmlText(text.slice(pos));
       break;
     }
 
-    if (options.allowKakuyomuEmphasis && text.startsWith("《《", openIndex)) {
-      const closeDouble = text.indexOf("》》", openIndex + 2);
-      if (closeDouble > openIndex + 2) {
-        const emphasisContent = text.slice(openIndex + 2, closeDouble);
-        if (
-          emphasisContent.length > 0 &&
-          !/[\r\n《》｜|]/.test(emphasisContent)
-        ) {
-          result += escapeHtmlText(text.slice(pos, openIndex));
-          result += `<span class="emphasis-mark">${escapeHtmlText(emphasisContent)}</span>`;
-          pos = closeDouble + 2;
+    if (nextTokenType === "explicit") {
+      const openIndex = nextTokenIndex;
+      if (options.allowKakuyomuEmphasis && text.startsWith("《《", openIndex)) {
+        const closeDouble = text.indexOf("》》", openIndex + 2);
+        if (closeDouble > openIndex + 2) {
+          const emphasisContent = text.slice(openIndex + 2, closeDouble);
+          if (
+            emphasisContent.length > 0 &&
+            !/[\r\n《》｜|]/.test(emphasisContent)
+          ) {
+            result += escapeHtmlText(text.slice(pos, openIndex));
+            result += `<span class="emphasis-mark">${escapeHtmlText(emphasisContent)}</span>`;
+            pos = closeDouble + 2;
+            continue;
+          }
+        }
+      }
+
+      const closeIndex = text.indexOf("》", openIndex + 1);
+      if (closeIndex === -1) {
+        result += escapeHtmlText(text.slice(pos));
+        break;
+      }
+
+      const rubyText = text.slice(openIndex + 1, closeIndex);
+
+      let baseStart = -1;
+      let pipeCharLength = 0;
+      for (let index = openIndex - 1; index >= pos; index -= 1) {
+        const char = text[index];
+        if (char === "｜" || char === "|") {
+          baseStart = index;
+          pipeCharLength = 1;
+          break;
+        }
+        if (text[index] === "\n" || text[index] === "\r") {
+          break;
+        }
+      }
+
+      if (baseStart !== -1) {
+        const baseText = text.slice(baseStart + pipeCharLength, openIndex);
+        if (baseText.length > 0) {
+          result += escapeHtmlText(text.slice(pos, baseStart));
+          result += `<ruby>${escapeHtmlText(baseText)}<rt>${escapeHtmlText(rubyText)}</rt></ruby>`;
+          pos = closeIndex + 1;
           continue;
         }
       }
-    }
 
-    const closeIndex = text.indexOf("》", openIndex + 1);
-    if (closeIndex === -1) {
-      result += escapeHtmlText(text.slice(pos));
-      break;
-    }
-
-    const rubyText = text.slice(openIndex + 1, closeIndex);
-
-    let baseStart = -1;
-    let pipeCharLength = 0;
-    for (let index = openIndex - 1; index >= pos; index -= 1) {
-      const char = text[index];
-      if (char === "｜" || char === "|") {
-        baseStart = index;
-        pipeCharLength = 1;
-        break;
+      let kanjiStart = openIndex;
+      while (kanjiStart > pos) {
+        const prevChar = text.slice(kanjiStart - 1, kanjiStart);
+        const codePoint = prevChar.codePointAt(0);
+        if (codePoint !== undefined && isKanjiCodePoint(codePoint)) {
+          kanjiStart -= prevChar.length;
+        } else {
+          break;
+        }
       }
-      if (text[index] === "\n" || text[index] === "\r") {
-        break;
-      }
-    }
 
-    if (baseStart !== -1) {
-      const baseText = text.slice(baseStart + pipeCharLength, openIndex);
-      if (baseText.length > 0) {
-        result += escapeHtmlText(text.slice(pos, baseStart));
+      if (kanjiStart < openIndex) {
+        const baseText = text.slice(kanjiStart, openIndex);
+        result += escapeHtmlText(text.slice(pos, kanjiStart));
         result += `<ruby>${escapeHtmlText(baseText)}<rt>${escapeHtmlText(rubyText)}</rt></ruby>`;
         pos = closeIndex + 1;
         continue;
       }
-    }
 
-    let kanjiStart = openIndex;
-    while (kanjiStart > pos) {
-      const prevChar = text.slice(kanjiStart - 1, kanjiStart);
-      const codePoint = prevChar.codePointAt(0);
-      if (codePoint !== undefined && isKanjiCodePoint(codePoint)) {
-        kanjiStart -= prevChar.length;
-      } else {
-        break;
-      }
-    }
-
-    if (kanjiStart < openIndex) {
-      const baseText = text.slice(kanjiStart, openIndex);
-      result += escapeHtmlText(text.slice(pos, kanjiStart));
-      result += `<ruby>${escapeHtmlText(baseText)}<rt>${escapeHtmlText(rubyText)}</rt></ruby>`;
+      result += escapeHtmlText(text.slice(pos, closeIndex + 1));
       pos = closeIndex + 1;
       continue;
     }
 
-    result += escapeHtmlText(text.slice(pos, closeIndex + 1));
-    pos = closeIndex + 1;
+    if (nextTokenType === "paren") {
+      const openParenIndex = nextTokenIndex;
+      const parenChar = text[openParenIndex];
+      const closeParenChar = parenChar === "（" ? "）" : ")";
+
+      if (
+        openParenIndex > pos &&
+        (text[openParenIndex - 1] === "|" || text[openParenIndex - 1] === "｜")
+      ) {
+        result += escapeHtmlText(text.slice(pos, openParenIndex - 1));
+        result += escapeHtmlText(parenChar);
+        pos = openParenIndex + 1;
+        continue;
+      }
+
+      const closeParenIndex = text.indexOf(closeParenChar, openParenIndex + 1);
+      if (closeParenIndex !== -1) {
+        const rubyCandidate = text.slice(openParenIndex + 1, closeParenIndex);
+        if (
+          !/[\r\n|｜《》()]/.test(rubyCandidate) &&
+          isNarouRubyReading(rubyCandidate)
+        ) {
+          let kanjiStart = openParenIndex;
+          while (kanjiStart > pos) {
+            const prevChar = text.slice(kanjiStart - 1, kanjiStart);
+            const codePoint = prevChar.codePointAt(0);
+            if (codePoint !== undefined && isKanjiCodePoint(codePoint)) {
+              kanjiStart -= prevChar.length;
+            } else {
+              break;
+            }
+          }
+
+          if (kanjiStart < openParenIndex) {
+            const baseText = text.slice(kanjiStart, openParenIndex);
+            result += escapeHtmlText(text.slice(pos, kanjiStart));
+            result += `<ruby>${escapeHtmlText(baseText)}<rt>${escapeHtmlText(rubyCandidate)}</rt></ruby>`;
+            pos = closeParenIndex + 1;
+            continue;
+          }
+        }
+      }
+
+      result += escapeHtmlText(text.slice(pos, openParenIndex + 1));
+      pos = openParenIndex + 1;
+      continue;
+    }
   }
 
   return result;
@@ -207,7 +301,10 @@ function parseRubyAndEmphasisToHtml(
 
 function convertProseToHtmlParagraphs(
   text: string,
-  options: { allowKakuyomuEmphasis: boolean }
+  options: {
+    allowKakuyomuEmphasis: boolean;
+    allowNarouShorthandRuby?: boolean;
+  }
 ): string {
   const normalized = normalizeLineEndings(text);
   const paragraphs = normalized.split(/\n{2,}/u);
@@ -326,8 +423,10 @@ export function renderDocumentToHtml(
 
   const allowKakuyomuEmphasis =
     bodyNotation === "kakuyomu" || bodyNotation === "narou";
+  const allowNarouShorthandRuby = bodyNotation === "narou";
   const bodyHtml = convertProseToHtmlParagraphs(headingProcessed, {
-    allowKakuyomuEmphasis
+    allowKakuyomuEmphasis,
+    allowNarouShorthandRuby
   });
   return { bodyHtml, assets: [] };
 }
