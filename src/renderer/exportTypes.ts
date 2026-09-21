@@ -4,10 +4,12 @@ import type {
   ExportOrigin,
   HeadingRemovalLevel
 } from "./exportCandidates";
-import type { PdfPageNumberSettings } from "../shared/pdfPageNumbering";
+import type { PdfPageNumberSettings, PdfWritingMode } from "../shared/pdfPageNumbering";
 import { DEFAULT_PDF_PAGE_NUMBER_SETTINGS } from "../shared/pdfPageNumbering";
 
 export type ExportFormat = "txtUtf8" | "htmlCombined" | "pdfCombined" | "pdf" | "docx";
+
+export type { PdfWritingMode };
 
 export type ExportBodyNotation =
   | "markdown"
@@ -18,6 +20,8 @@ export type ExportBodyNotation =
 export const TXT_UTF8_EXPORT_FORMAT = "txtUtf8" satisfies ExportFormat;
 export const HTML_COMBINED_EXPORT_FORMAT = "htmlCombined" satisfies ExportFormat;
 export const PDF_COMBINED_EXPORT_FORMAT = "pdfCombined" satisfies ExportFormat;
+
+export const DEFAULT_PDF_WRITING_MODE = "horizontal" satisfies PdfWritingMode;
 
 export const DEFAULT_EXPORT_BODY_NOTATION =
   "markdown" satisfies ExportBodyNotation;
@@ -34,6 +38,7 @@ export const EXPORT_BODY_NOTATIONS = [
 
 export interface ExportDialogOptionsState {
   readonly exportFormat: ExportFormat;
+  readonly pdfWritingMode: PdfWritingMode;
   readonly bodyNotation: ExportBodyNotation;
   readonly includeFileStructureToc: boolean;
   readonly imageAssetFolderName: string;
@@ -60,10 +65,12 @@ export interface ExportAssembly {
   readonly projectName: string | null;
   readonly pdfFontFamily?: string | null;
   readonly pdfPageNumberSettings?: PdfPageNumberSettings | null;
+  readonly pdfWritingMode?: PdfWritingMode;
 }
 
 export const DEFAULT_EXPORT_DIALOG_OPTIONS_STATE: ExportDialogOptionsState = {
   exportFormat: TXT_UTF8_EXPORT_FORMAT,
+  pdfWritingMode: DEFAULT_PDF_WRITING_MODE,
   bodyNotation: DEFAULT_EXPORT_BODY_NOTATION,
   includeFileStructureToc: DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
   imageAssetFolderName: DEFAULT_IMAGE_ASSET_FOLDER_NAME,

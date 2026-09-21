@@ -1245,6 +1245,9 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           } as PdfPageNumberSettings)
         : null;
 
+    const pdfWritingMode =
+      obj.pdfWritingMode === "vertical-rl" ? "vertical-rl" : "horizontal";
+
     return {
       targetPath:
         typeof obj.targetPath === "string" && obj.targetPath.trim().length > 0
@@ -1258,6 +1261,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
       pdfFontFamily:
         typeof obj.pdfFontFamily === "string" ? obj.pdfFontFamily : null,
       pdfPageNumberSettings,
+      pdfWritingMode,
       allowOverwrite: obj.allowOverwrite === true
     };
   }
@@ -1435,7 +1439,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
         const pdfBuffer = await pdfWindow.webContents.printToPDF({
           pageSize: "A4",
-          landscape: false,
+          landscape: request.pdfWritingMode === "vertical-rl",
           printBackground: true,
           displayHeaderFooter: headerFooterTemplates.displayHeaderFooter,
           headerTemplate: headerFooterTemplates.headerTemplate,

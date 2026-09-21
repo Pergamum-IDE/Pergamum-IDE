@@ -114,8 +114,77 @@ describe("exportPdf (#523 Slice 8)", () => {
 
     expect(htmlContent).toContain("@page {");
     expect(htmlContent).toContain("size: A4;");
+    expect(htmlContent).not.toContain("size: A4 landscape;");
     expect(htmlContent).toContain("break-after: page;");
+    expect(htmlContent).not.toContain("class=\"pergamum-export-pdf-vertical\"");
     expect(htmlContent).toContain(".pergamum-export-image-placeholder");
+  });
+
+  it("generates combined HTML with A4 landscape and vertical writing CSS when pdfWritingMode is vertical-rl", () => {
+    const docs: ExportAssemblyDocument[] = [
+      {
+        filePath: "chapter1.md",
+        parentPath: "",
+        fileName: "chapter1.md",
+        kind: "markdown",
+        text: "Chapter 1 text",
+        rawText: "# Chapter 1"
+      }
+    ];
+
+    const assembly: ExportAssembly = {
+      format: "pdfCombined",
+      pdfWritingMode: "vertical-rl",
+      bodyNotation: "markdown",
+      headingRemovalLevel: 0,
+      documents: docs,
+      appendFileStructureToc: true,
+      imageAssetFolderName: "exports.assets",
+      projectName: "PDF Vertical Novel"
+    };
+
+    const { htmlContent } = generateCombinedHtml(assembly, {
+      isPdf: true,
+      pdfWritingMode: "vertical-rl"
+    });
+
+    expect(htmlContent).toContain("@page {");
+    expect(htmlContent).toContain("size: A4 landscape;");
+    expect(htmlContent).toContain('<body class="pergamum-export-pdf-vertical">');
+    expect(htmlContent).toContain("writing-mode: vertical-rl;");
+    expect(htmlContent).toContain("text-orientation: mixed;");
+    expect(htmlContent).toContain("line-break: strict;");
+    expect(htmlContent).toContain("出力ファイル構造目次");
+  });
+
+  it("does not add vertical writing styles to non-PDF HTML export", () => {
+    const docs: ExportAssemblyDocument[] = [
+      {
+        filePath: "chapter1.md",
+        parentPath: "",
+        fileName: "chapter1.md",
+        kind: "markdown",
+        text: "Chapter 1 text",
+        rawText: "# Chapter 1"
+      }
+    ];
+
+    const assembly: ExportAssembly = {
+      format: "htmlCombined",
+      pdfWritingMode: "vertical-rl",
+      bodyNotation: "markdown",
+      headingRemovalLevel: 0,
+      documents: docs,
+      appendFileStructureToc: false,
+      imageAssetFolderName: "exports.assets",
+      projectName: "HTML Novel"
+    };
+
+    const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+
+    expect(htmlContent).not.toContain("size: A4 landscape;");
+    expect(htmlContent).not.toContain('class="pergamum-export-pdf-vertical"');
+    expect(htmlContent).not.toContain("writing-mode: vertical-rl;");
   });
 
   it("computes PDF default file name correctly", () => {

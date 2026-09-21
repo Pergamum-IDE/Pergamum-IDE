@@ -1,5 +1,7 @@
 import type { Translate } from "./i18n";
 
+export type PdfWritingMode = "horizontal" | "vertical-rl";
+
 export type PdfPageNumberPosition =
   | "none"
   | "top-left"

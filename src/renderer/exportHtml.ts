@@ -19,7 +19,8 @@ import type {
   ExportAssembly,
   ExportAssemblyDocument,
   ExportBodyNotation,
-  ExportFormat
+  ExportFormat,
+  PdfWritingMode
 } from "./exportTypes";
 import { escapeCssFontFamily } from "./exportPdf";
 
@@ -411,11 +412,15 @@ export interface CombinedHtmlResult {
 
 export function generateCombinedHtml(
   assembly: ExportAssembly,
-  options?: { isPdf?: boolean }
+  options?: { isPdf?: boolean; pdfWritingMode?: PdfWritingMode }
 ): CombinedHtmlResult {
   const titleText = assembly.projectName
     ? escapeHtmlText(assembly.projectName)
     : "Pergamum Export";
+
+  const pdfWritingMode =
+    options?.pdfWritingMode ?? assembly.pdfWritingMode ?? "horizontal";
+  const isVertical = options?.isPdf === true && pdfWritingMode === "vertical-rl";
 
   const allAssets: ExportImageAssetCopyItem[] = [];
   const seenAssets = new Set<string>();
@@ -463,7 +468,7 @@ export function generateCombinedHtml(
   const styleRules = options?.isPdf
     ? [
         `    @page {`,
-        `      size: A4;`,
+        `      size: ${isVertical ? "A4 landscape" : "A4"};`,
         `      margin: 20mm;`,
         `    }`,
         `    body {`,
@@ -475,6 +480,26 @@ export function generateCombinedHtml(
         `      margin: 0;`,
         `      padding: 0;`,
         `    }`,
+        ...(isVertical
+          ? [
+              `    body.pergamum-export-pdf-vertical {`,
+              `      writing-mode: vertical-rl;`,
+              `      -webkit-writing-mode: vertical-rl;`,
+              `      text-orientation: mixed;`,
+              `      -webkit-text-orientation: mixed;`,
+              `      line-break: strict;`,
+              `    }`,
+              `    body.pergamum-export-pdf-vertical .pergamum-export {`,
+              `      writing-mode: vertical-rl;`,
+              `      -webkit-writing-mode: vertical-rl;`,
+              `      text-orientation: mixed;`,
+              `      -webkit-text-orientation: mixed;`,
+              `    }`,
+              `    body.pergamum-export-pdf-vertical p {`,
+              `      line-height: 1.8;`,
+              `    }`
+            ]
+          : []),
         `    .pergamum-export-document {`,
         `      break-after: page;`,
         `      page-break-after: always;`,
@@ -522,7 +547,7 @@ export function generateCombinedHtml(
     styleRules,
     `  </style>`,
     `</head>`,
-    `<body>`,
+    `<body${isVertical ? ' class="pergamum-export-pdf-vertical"' : ""}>`,
     `  <main class="pergamum-export">`,
     docSections.join("\n\n"),
     tocHtml ? `\n${tocHtml}` : "",

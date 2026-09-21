@@ -888,7 +888,9 @@ describe("ExportConfirmationDialog (#523)", () => {
       }
     ];
 
-    const onExportPdfCombined = vi.fn(async () => ({
+    const onExportPdfCombined = vi.fn<
+      NonNullable<ExportConfirmationDialogProps["onExportPdfCombined"]>
+    >(async () => ({
       ok: true as const,
       outputPath: "C:\\Users\\User\\Documents\\First.pdf",
       warningCount: 1
@@ -905,11 +907,19 @@ describe("ExportConfirmationDialog (#523)", () => {
       setSelectValue(select, "pdfCombined");
     });
 
+    const optionsText = Array.from(
+      container!.querySelectorAll("select[data-export-format-select='true'] option")
+    ).map((opt) => opt.textContent);
+
+    expect(optionsText).toContain(translate("export.confirmation.format.pdfCombinedHorizontal"));
+    expect(optionsText).toContain(translate("export.confirmation.format.pdfCombinedVertical"));
+
     const notes = container!.querySelectorAll(
       ".exportConfirmationDialogControlNote"
     );
     const notesText = Array.from(notes).map((n) => n.textContent).join(" ");
     expect(notesText).toContain("Configured fonts are not guaranteed to render identically");
+    expect(notesText).toContain("Combines included files into one PDF document");
 
     const pageNumberSummary = container!.querySelector(
       "[data-export-pdf-page-number-summary='true']"
@@ -940,12 +950,74 @@ describe("ExportConfirmationDialog (#523)", () => {
     });
 
     expect(onExportPdfCombined).toHaveBeenCalledTimes(1);
+    expect(onExportPdfCombined.mock.calls[0]?.[0]?.pdfWritingMode).toBe("horizontal");
 
     const savedPathEl = container!.querySelector(
       "[data-export-result-path]"
     );
     expect(savedPathEl).not.toBeNull();
     expect(savedPathEl?.textContent).toContain("C:\\Users\\User\\Documents\\First.pdf");
+  });
+
+  it("supports PDF vertical writing mode with A4 landscape and vertical note caption (#523 Slice 12)", async () => {
+    const pdfCandidates: ExportCandidateListItem[] = [
+      {
+        documentKey: "chapter1.md",
+        filePath: "chapter1.md",
+        parentPath: "",
+        fileName: "chapter1.md",
+        kind: "markdown",
+        rawText: "# Chapter 1\nVertical novel text",
+        previewStart: "# Chapter 1",
+        previewEnd: "text",
+        previewStartHover: "# Chapter 1",
+        previewEndHover: "text",
+        characterCount: 30,
+        included: true
+      }
+    ];
+
+    const onExportPdfCombined = vi.fn<
+      NonNullable<ExportConfirmationDialogProps["onExportPdfCombined"]>
+    >(async () => ({
+      ok: true as const,
+      outputPath: "C:\\Users\\User\\Documents\\First.pdf",
+      warningCount: 0
+    }));
+
+    mountDialog({ candidates: pdfCandidates, onExportPdfCombined });
+
+    navigateToStep2();
+
+    act(() => {
+      const select = container!.querySelector<HTMLSelectElement>(
+        "select[data-export-format-select='true']"
+      )!;
+      setSelectValue(select, "pdfCombined:vertical-rl");
+    });
+
+    const pdfNote = container!.querySelector("[data-export-pdf-note='true']");
+    expect(pdfNote?.textContent).toContain(translate("export.confirmation.pdfCombined.noteVertical"));
+
+    const fontPickerBtn = container!.querySelector("[data-export-pdf-font-picker-button='true']");
+    expect(fontPickerBtn).not.toBeNull();
+
+    const pageNumberBtn = container!.querySelector("[data-export-pdf-page-number-settings-button='true']");
+    expect(pageNumberBtn).not.toBeNull();
+
+    const tocInput = fileStructureTocToggle();
+    expect(tocInput).not.toBeNull();
+
+    navigateToStep3();
+
+    await act(async () => {
+      executeExportClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onExportPdfCombined).toHaveBeenCalledTimes(1);
+    expect(onExportPdfCombined.mock.calls[0]?.[0]?.pdfWritingMode).toBe("vertical-rl");
   });
 
   it("supports PDF font candidate picker dialog button, font inspection status, and result display (#523 Slice 9 & Slice 10)", async () => {

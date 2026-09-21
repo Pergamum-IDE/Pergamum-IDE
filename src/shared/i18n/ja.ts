@@ -466,10 +466,16 @@ export const jaTranslations = {
   "export.confirmation.format.txtUtf8": "TXT（UTF-8）",
   "export.confirmation.format.htmlCombined": "HTML（全てを結合）",
   "export.confirmation.format.pdfCombined": "PDF（全てを結合）",
+  "export.confirmation.format.pdfCombinedHorizontal": "PDF横書き（全てを結合）",
+  "export.confirmation.format.pdfCombinedVertical": "PDF縦書き（全てを結合）",
   "export.confirmation.txtUtf8.note":
     "※ TXT（UTF-8）出力は、ルビ・傍点以外の書式を削除して出力します。",
   "export.confirmation.htmlCombined.note":
     "※ 採用ファイルを現在の並び順で1つのHTMLに結合して出力します。",
+  "export.confirmation.pdfCombined.noteHorizontal":
+    "※ 採用ファイルを現在の並び順で1つのPDFに結合して出力します。",
+  "export.confirmation.pdfCombined.noteVertical":
+    "※ 採用ファイルを現在の並び順で1つの縦書きPDFに結合して出力します。",
   "export.confirmation.pdfCombined.fontWarning":
     "※ フォントを指定してもPDF表示環境で再現されるとは限りません。",
   "export.confirmation.pdfCombined.externalImageWarning":

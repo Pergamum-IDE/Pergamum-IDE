@@ -17,7 +17,8 @@ import {
   type ExportAssemblyDocument,
   type ExportBodyNotation,
   type ExportDialogOptionsState,
-  type ExportFormat
+  type ExportFormat,
+  type PdfWritingMode
 } from "./exportTypes";
 
 export {
@@ -30,7 +31,8 @@ export {
   type ExportAssemblyDocument,
   type ExportBodyNotation,
   type ExportDialogOptionsState,
-  type ExportFormat
+  type ExportFormat,
+  type PdfWritingMode
 };
 
 export interface ExportTxtExecutionRequest {
@@ -47,6 +49,7 @@ export interface CreateExportAssemblyOptions {
   readonly appendFileStructureToc?: boolean;
   readonly imageAssetFolderName?: string;
   readonly pdfFontFamily?: string | null;
+  readonly pdfWritingMode?: PdfWritingMode;
   readonly projectName?: string | null;
   readonly aozoraTextByFilePath?: Readonly<Record<string, string>>;
 }
@@ -139,6 +142,7 @@ export function createExportAssembly(
     appendFileStructureToc: options.appendFileStructureToc ?? false,
     imageAssetFolderName: options.imageAssetFolderName ?? "exports.assets",
     pdfFontFamily: options.pdfFontFamily ?? null,
+    pdfWritingMode: options.pdfWritingMode,
     projectName: options.projectName ?? null,
     documents: candidatesInExportOrder
       .filter((candidate) => candidate.included)

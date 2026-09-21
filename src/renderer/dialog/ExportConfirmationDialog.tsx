@@ -77,6 +77,7 @@ import {
   DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
   DEFAULT_IMAGE_ASSET_FOLDER_NAME,
   DEFAULT_INCLUDE_FILE_STRUCTURE_TOC,
+  DEFAULT_PDF_WRITING_MODE,
   EXPORT_BODY_NOTATIONS,
   HTML_COMBINED_EXPORT_FORMAT,
   PDF_COMBINED_EXPORT_FORMAT,
@@ -87,7 +88,8 @@ import {
   type ExportBodyNotation,
   type ExportDialogOptionsState,
   type ExportFormat,
-  type ExportWizardStep
+  type ExportWizardStep,
+  type PdfWritingMode
 } from "../exportTypes";
 import {
   createExportAssembly,
@@ -330,6 +332,9 @@ export function ExportConfirmationDialog({
   const [exportFormat, setExportFormat] = useState<ExportFormat>(
     TXT_UTF8_EXPORT_FORMAT
   );
+  const [pdfWritingMode, setPdfWritingMode] = useState<PdfWritingMode>(
+    DEFAULT_PDF_WRITING_MODE
+  );
   const [bodyNotation, setBodyNotation] = useState<ExportBodyNotation>(
     DEFAULT_EXPORT_BODY_NOTATION
   );
@@ -496,13 +501,14 @@ export function ExportConfirmationDialog({
   const optionsState: ExportDialogOptionsState = useMemo(
     () => ({
       exportFormat,
+      pdfWritingMode,
       bodyNotation,
       includeFileStructureToc: effectiveIncludeFileStructureToc,
       imageAssetFolderName,
       pdfFontFamily,
       pdfPageNumberSettings
     }),
-    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat, imageAssetFolderName, pdfFontFamily, pdfPageNumberSettings]
+    [bodyNotation, effectiveIncludeFileStructureToc, exportFormat, imageAssetFolderName, pdfFontFamily, pdfPageNumberSettings, pdfWritingMode]
   );
   const isDirty = useMemo(
     () =>
@@ -706,6 +712,7 @@ export function ExportConfirmationDialog({
           appendFileStructureToc: effectiveIncludeFileStructureToc,
           imageAssetFolderName,
           pdfFontFamily,
+          pdfWritingMode,
           projectName,
           aozoraTextByFilePath: await aozoraTextByFilePathFor(includedRows)
         });
@@ -716,7 +723,8 @@ export function ExportConfirmationDialog({
         }
 
         const { htmlContent, imageAssets } = generateCombinedHtml(assembly, {
-          isPdf: true
+          isPdf: true,
+          pdfWritingMode
         });
 
         const result = await onExportPdfCombined({
@@ -727,6 +735,7 @@ export function ExportConfirmationDialog({
           projectRootPath: null,
           pdfFontFamily: pdfFontFamilyList.length > 0 ? pdfFontFamilyList[0].family : null,
           pdfPageNumberSettings,
+          pdfWritingMode,
           allowOverwrite
         });
 
@@ -912,6 +921,7 @@ export function ExportConfirmationDialog({
       const nextOrderState = createOrderStateFromCandidates(mergedRows);
       const nextOptionsState: ExportDialogOptionsState = {
         exportFormat,
+        pdfWritingMode,
         bodyNotation,
         includeFileStructureToc: effectiveIncludeFileStructureToc,
         imageAssetFolderName,
@@ -1132,27 +1142,48 @@ export function ExportConfirmationDialog({
                     </span>
                     <select
                       className="exportConfirmationDialogSelect"
-                      value={exportFormat}
+                      value={
+                        isPdfCombinedExport
+                          ? pdfWritingMode === "vertical-rl"
+                            ? "pdfCombined:vertical-rl"
+                            : PDF_COMBINED_EXPORT_FORMAT
+                          : exportFormat
+                      }
                       data-export-format-select="true"
                       onChange={(e) => {
-                        const nextFormat = e.currentTarget.value as ExportFormat;
-                        setExportFormat(nextFormat);
-                        if (
-                          nextFormat === HTML_COMBINED_EXPORT_FORMAT ||
-                          nextFormat === PDF_COMBINED_EXPORT_FORMAT
+                        const val = e.currentTarget.value;
+                        if (val === TXT_UTF8_EXPORT_FORMAT) {
+                          setExportFormat(TXT_UTF8_EXPORT_FORMAT);
+                          setPdfWritingMode("horizontal");
+                        } else if (val === HTML_COMBINED_EXPORT_FORMAT) {
+                          setExportFormat(HTML_COMBINED_EXPORT_FORMAT);
+                          setPdfWritingMode("horizontal");
+                          setIncludeFileStructureToc(true);
+                        } else if (
+                          val === PDF_COMBINED_EXPORT_FORMAT ||
+                          val === "pdfCombined:horizontal"
                         ) {
+                          setExportFormat(PDF_COMBINED_EXPORT_FORMAT);
+                          setPdfWritingMode("horizontal");
+                          setIncludeFileStructureToc(true);
+                        } else if (val === "pdfCombined:vertical-rl") {
+                          setExportFormat(PDF_COMBINED_EXPORT_FORMAT);
+                          setPdfWritingMode("vertical-rl");
                           setIncludeFileStructureToc(true);
                         }
                       }}
                     >
                       <option value={TXT_UTF8_EXPORT_FORMAT}>
-                        {exportFormatLabel(TXT_UTF8_EXPORT_FORMAT, translate)}
+                        {translate("export.confirmation.format.txtUtf8")}
                       </option>
                       <option value={HTML_COMBINED_EXPORT_FORMAT}>
-                        {exportFormatLabel(HTML_COMBINED_EXPORT_FORMAT, translate)}
+                        {translate("export.confirmation.format.htmlCombined")}
                       </option>
                       <option value={PDF_COMBINED_EXPORT_FORMAT}>
-                        {exportFormatLabel(PDF_COMBINED_EXPORT_FORMAT, translate)}
+                        {translate("export.confirmation.format.pdfCombinedHorizontal")}
+                      </option>
+                      <option value="pdfCombined:vertical-rl">
+                        {translate("export.confirmation.format.pdfCombinedVertical")}
                       </option>
                     </select>
                   </label>
@@ -1312,6 +1343,16 @@ export function ExportConfirmationDialog({
                       </button>
                     </div>
                   </div>
+                )}
+
+                {isPdfCombinedExport && (
+                  <span className="exportConfirmationDialogControlNote" data-export-pdf-note="true">
+                    {translate(
+                      pdfWritingMode === "vertical-rl"
+                        ? "export.confirmation.pdfCombined.noteVertical"
+                        : "export.confirmation.pdfCombined.noteHorizontal"
+                    )}
+                  </span>
                 )}
               </div>
             </div>

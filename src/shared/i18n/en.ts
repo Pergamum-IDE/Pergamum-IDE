@@ -471,10 +471,16 @@ export const enTranslations = {
   "export.confirmation.format.txtUtf8": "TXT (UTF-8)",
   "export.confirmation.format.htmlCombined": "HTML (Combined)",
   "export.confirmation.format.pdfCombined": "PDF (Combined)",
+  "export.confirmation.format.pdfCombinedHorizontal": "PDF Horizontal (Combined)",
+  "export.confirmation.format.pdfCombinedVertical": "PDF Vertical (Combined)",
   "export.confirmation.txtUtf8.note":
     "TXT (UTF-8) export removes formatting other than ruby and emphasis-dot notation.",
   "export.confirmation.htmlCombined.note":
     "Combines included files into one HTML document in current display order.",
+  "export.confirmation.pdfCombined.noteHorizontal":
+    "Combines included files into one PDF document in current display order.",
+  "export.confirmation.pdfCombined.noteVertical":
+    "Combines included files into one vertical PDF document in current display order.",
   "export.confirmation.pdfCombined.fontWarning":
     "Configured fonts are not guaranteed to render identically in all PDF viewers.",
   "export.confirmation.pdfCombined.externalImageWarning":

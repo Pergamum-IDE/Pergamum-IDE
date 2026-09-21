@@ -4,7 +4,10 @@ import type {
   SaveApplicationSettingsRequest,
   TextFileEncoding
 } from "./settings";
-import type { PdfPageNumberSettings } from "./pdfPageNumbering";
+import type {
+  PdfPageNumberSettings,
+  PdfWritingMode
+} from "./pdfPageNumbering";
 import type {
   CreateGlossaryEntryInput,
   CreateGlossaryTagInput,
@@ -708,6 +711,7 @@ export interface ExportPdfCombinedRequest {
   readonly projectRootPath: string | null;
   readonly pdfFontFamily?: string | null;
   readonly pdfPageNumberSettings?: PdfPageNumberSettings | null;
+  readonly pdfWritingMode?: PdfWritingMode | null;
   readonly allowOverwrite?: boolean;
 }
 
