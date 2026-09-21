@@ -23,6 +23,8 @@ export interface InfoDialogProps {
   /** Optional node rendered before the title inside the header — typically an
    *  `appDialogIcon` span. Ignored when `hideVisualTitle` is set. */
   headerIcon?: ReactNode;
+  /** Optional node rendered after the title inside the header. */
+  titleAccessory?: ReactNode;
   /**
    * Enables backdrop dismissal for non-destructive, lightweight dialogs.
    * Defaults to false so existing confirmation and warning dialogs keep their
@@ -65,6 +67,7 @@ export function InfoDialog({
   className,
   role = "dialog",
   headerIcon,
+  titleAccessory,
   dismissOnBackdropClick = false,
   trapFocus = true,
   onClose
@@ -155,6 +158,7 @@ export function InfoDialog({
           <div className="appDialogHeader appInfoDialogHeader">
             {headerIcon ?? null}
             {titleHeading}
+            {titleAccessory ?? null}
           </div>
         )}
         <div id={bodyId} className="appDialogBody appInfoDialogBody">

@@ -2,7 +2,8 @@
 import {
   acceptCompletion,
   completionStatus,
-  currentCompletions
+  currentCompletions,
+  selectedCompletionIndex
 } from "@codemirror/autocomplete";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -39,6 +40,8 @@ function glossaryEntry(value: string): GlossaryEntry {
 }
 
 let view: EditorView | null = null;
+
+const CODEMIRROR_COMPLETION_INTERACTION_DELAY_MS = 90;
 
 afterEach(() => {
   view?.destroy();
@@ -94,9 +97,52 @@ function ctrlSpaceKeydown(isComposing: boolean): KeyboardEvent {
 
 async function waitForCompletionToSettle(): Promise<void> {
   // completionConfig.updateSyncTime (100ms default) debounces the source's
-  // resolved options into the active/selectable state - real time, not a
-  // microtask tick.
+  // resolved options - real time, not a microtask tick. This fixed wait is
+  // only for negative assertions where no popup should appear.
   await new Promise((resolve) => setTimeout(resolve, 150));
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForCompletionState(
+  predicate: () => boolean,
+  label: string
+): Promise<void> {
+  const deadline = Date.now() + 1000;
+
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
+async function waitForActiveCompletion(testView: EditorView): Promise<void> {
+  await waitForCompletionState(
+    () => completionStatus(testView.state) === "active",
+    "active completion"
+  );
+}
+
+async function waitForCompletionLabels(
+  testView: EditorView,
+  labels: readonly string[]
+): Promise<void> {
+  await waitForCompletionState(
+    () =>
+      completionStatus(testView.state) === "active" &&
+      (selectedCompletionIndex(testView.state) ?? -1) >= 0 &&
+      JSON.stringify(currentCompletions(testView.state).map((c) => c.label)) ===
+      JSON.stringify(labels),
+    `completion labels ${JSON.stringify(labels)}`
+  );
+  await wait(CODEMIRROR_COMPLETION_INTERACTION_DELAY_MS);
 }
 
 describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", () => {
@@ -109,7 +155,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     testView.contentDOM.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
 
-    await waitForCompletionToSettle();
+    await waitForActiveCompletion(testView);
     expect(completionStatus(testView.state)).toBe("active");
   });
 
@@ -119,7 +165,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["第一", "第二"]);
 
     expect(currentCompletions(testView.state).map((c) => c.label)).toEqual([
       "第一",
@@ -135,7 +181,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["オーダー"]);
 
     expect(currentCompletions(testView.state).map((c) => c.label)).toEqual([
       "オーダー"
@@ -153,7 +199,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["オーダー", "ジャンヌ"]);
     expect(currentCompletions(testView.state).map((c) => c.label)).toEqual([
       "オーダー",
       "ジャンヌ"
@@ -166,7 +212,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
       selection: EditorSelection.single(1),
       userEvent: "input.type"
     });
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["オーダー"]);
 
     expect(completionStatus(testView.state)).toBe("active");
     expect(currentCompletions(testView.state).map((c) => c.label)).toEqual([
@@ -193,7 +239,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["別表記"]);
 
     acceptCompletion(testView);
     expect(testView.state.doc.toString()).toBe("別表記");
@@ -205,7 +251,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["表記"]);
 
     const [completion] = currentCompletions(testView.state);
     expect(completion.label).toBe("表記");
@@ -227,7 +273,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     const testView = createTestView({ config: { entries: [entry] } });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["シズク", "迷子"]);
 
     const completions = currentCompletions(testView.state);
     const representative = completions.find((c) => c.label === "シズク");
@@ -295,7 +341,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     testView.contentDOM.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
 
-    await waitForCompletionToSettle();
+    await waitForActiveCompletion(testView);
     expect(completionStatus(testView.state)).toBe("active");
   });
 
@@ -330,7 +376,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["オーダ"]);
 
     expect(currentCompletions(testView.state).map((c) => c.label)).toEqual([
       "オーダ"
@@ -351,7 +397,7 @@ describe("createGlossaryCompletionExtension - trigger and IME safety (#390)", ()
     });
 
     testView.contentDOM.dispatchEvent(ctrlSpaceKeydown(false));
-    await waitForCompletionToSettle();
+    await waitForCompletionLabels(testView, ["メイド服", "メイドさん"]);
 
     expect(currentCompletions(testView.state).map((c) => c.label)).toEqual([
       "メイド服",

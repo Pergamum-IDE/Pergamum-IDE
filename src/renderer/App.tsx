@@ -21,7 +21,14 @@ import type {
   LifecycleWindowCloseRequest,
   SaveWorkingCopyOutcome,
   UpdateProjectNameResult,
-  UpdateProjectSettingsRequest
+  UpdateProjectSettingsRequest,
+  ExportHtmlCombinedRequest,
+  ExportHtmlCombinedResult,
+  ExportPdfCombinedRequest,
+  ExportPdfCombinedResult,
+  SelectPdfSavePathRequest,
+  SelectPdfSavePathResult,
+  ExportTxtUtf8Result
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
@@ -103,6 +110,11 @@ import {
   type BulkTextImportDryRunInput,
   type BulkTextImportExecuteInput
 } from "./dialog/BulkTextImportDialog";
+import { ExportConfirmationDialog } from "./dialog/ExportConfirmationDialog";
+import {
+  createTxtUtf8ExportText,
+  type ExportTxtExecutionRequest
+} from "./exportTxt";
 import type { TextImportFolderListing } from "./dialog/TextImportDestinationPicker";
 import {
   applicationCommandIds,
@@ -551,6 +563,11 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import {
+  collectExportCandidatesFromOrigin,
+  type ExportCandidateListItem,
+  type ExportOrigin
+} from "./exportCandidates";
 import type { SearchPaneTab } from "./SearchSidebar";
 import {
   isUsableSelectedText,
@@ -667,6 +684,35 @@ function settingsExportFailedStatus(
   return {
     key: "status.settingsExportFailed",
     values: { message: settingsExportErrorMessage(error, translate) }
+  };
+}
+
+function txtExportErrorMessage(error: unknown, translate: Translate): string {
+  if (!(error instanceof Error)) {
+    return translate("error.unknown");
+  }
+
+  const candidates = [
+    error.message,
+    ...error.message.split("Error: ").slice(1)
+  ];
+  for (const candidate of candidates) {
+    const reason = sanitizedFileIoErrorReasonFromMessage(candidate);
+    if (reason !== null) {
+      return sanitizedFileIoErrorMessage(reason);
+    }
+  }
+
+  return translate("error.unknown");
+}
+
+function txtExportFailedStatus(
+  error: unknown,
+  translate: Translate
+): StatusMessage {
+  return {
+    key: "status.exportTxtUtf8Failed",
+    values: { message: txtExportErrorMessage(error, translate) }
   };
 }
 
@@ -1299,6 +1345,10 @@ export function App(): JSX.Element {
   const fileExplorerRevealRequestSeqRef = useRef(0);
   const [fileExplorerRevealRequest, setFileExplorerRevealRequest] =
     useState<FileExplorerRevealRequest | null>(null);
+  const [exportConfirmationState, setExportConfirmationState] = useState<{
+    readonly origin: ExportOrigin;
+    readonly candidates: readonly ExportCandidateListItem[];
+  } | null>(null);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -10393,6 +10443,199 @@ export function App(): JSX.Element {
     }
   }
 
+  async function collectFileExplorerExportCandidates(
+    origin: ExportOrigin,
+    sourceProject: PergamumProject
+  ): Promise<readonly ExportCandidateListItem[] | null> {
+    try {
+      const candidates = await collectExportCandidatesFromOrigin(
+        origin,
+        {
+          listFileExplorerChildren:
+            window.pergamum.projects.listFileExplorerChildren,
+          readProjectDocumentContent: async (relativePath) =>
+            (await window.pergamum.projects.readProjectDocument(relativePath))
+              .content
+        },
+        {
+          enablePlainTextDocuments:
+            effectiveSettings.textFiles.enablePlainTextDocuments
+        }
+      );
+
+      if (projectRef.current !== sourceProject) {
+        return null;
+      }
+
+      return candidates;
+    } catch {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: translate("error.unknown") }
+      });
+      return null;
+    }
+  }
+
+  async function handleFileExplorerExport(origin: ExportOrigin): Promise<void> {
+    const sourceProject = projectRef.current;
+
+    if (!sourceProject) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: translate("error.unknown") }
+      });
+      return;
+    }
+
+    const candidates = await collectFileExplorerExportCandidates(
+      origin,
+      sourceProject
+    );
+
+    if (candidates !== null) {
+      setExportConfirmationState({ origin, candidates });
+    }
+  }
+
+  async function handleReloadFileExplorerExportCandidates(
+    origin: ExportOrigin
+  ): Promise<readonly ExportCandidateListItem[] | null> {
+    const sourceProject = projectRef.current;
+
+    if (!sourceProject) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: translate("error.unknown") }
+      });
+      return null;
+    }
+
+    return collectFileExplorerExportCandidates(origin, sourceProject);
+  }
+
+  async function confirmExportConfirmationReloadDiscard(): Promise<boolean> {
+    try {
+      const result = await confirmDialog({
+        title: translate("export.confirmation.reloadDiscard.title"),
+        message: {
+          kind: "plainText",
+          text: translate("export.confirmation.reloadDiscard.message")
+        },
+        icon: {
+          kind: "warning",
+          tooltip: translate("export.confirmation.reloadDiscard.title")
+        },
+        clipboardText: null,
+        cancelLabel: translate("common.cancel"),
+        tone: "destructive",
+        confirmLabel: translate("export.confirmation.reloadDiscard.confirm")
+      });
+
+      return result === "confirm";
+    } catch (error) {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return false;
+      }
+
+      throw error;
+    }
+  }
+
+  async function handleExportConfirmationTxtExport(
+    request: ExportTxtExecutionRequest
+  ): Promise<ExportTxtUtf8Result> {
+    const exportTxtUtf8 = window.pergamum?.files?.exportTxtUtf8;
+    if (!exportTxtUtf8) {
+      throw new Error("TXT export is unavailable.");
+    }
+
+    const result = await exportTxtUtf8({
+      defaultFileName: request.defaultFileName,
+      content: createTxtUtf8ExportText(request.assembly),
+      targetPath: request.targetPath,
+      allowOverwrite: request.allowOverwrite
+    });
+
+    if (result.ok) {
+      setStatus({ key: "status.exportTxtUtf8Succeeded" });
+    }
+
+    return result;
+  }
+
+  async function handleExportConfirmationHtmlCombinedExport(
+    request: ExportHtmlCombinedRequest
+  ): Promise<ExportHtmlCombinedResult> {
+    const exportHtmlCombined = window.pergamum?.files?.exportHtmlCombined;
+    if (!exportHtmlCombined) {
+      throw new Error("HTML export is unavailable.");
+    }
+
+    const result = await exportHtmlCombined({
+      ...request,
+      projectRootPath: project?.rootPath ?? null
+    });
+
+    if (result.ok) {
+      if (result.warningCount > 0) {
+        setStatus({ key: "status.exportHtmlCombinedSucceededWithWarnings" });
+      } else {
+        setStatus({ key: "status.exportHtmlCombinedSucceeded" });
+      }
+    }
+
+    return result;
+  }
+
+  async function handleExportConfirmationSelectPdfSavePath(
+    request: SelectPdfSavePathRequest
+  ): Promise<SelectPdfSavePathResult> {
+    const selectPdfSavePath = window.pergamum?.files?.selectPdfSavePath;
+    if (!selectPdfSavePath) {
+      throw new Error("PDF save path selection is unavailable.");
+    }
+    return selectPdfSavePath(request);
+  }
+
+  async function handleExportConfirmationPdfCombinedExport(
+    request: ExportPdfCombinedRequest
+  ): Promise<ExportPdfCombinedResult> {
+    const exportPdfCombined = window.pergamum?.files?.exportPdfCombined;
+    if (!exportPdfCombined) {
+      throw new Error("PDF export is unavailable.");
+    }
+
+    const result = await exportPdfCombined({
+      ...request,
+      projectRootPath: project?.rootPath ?? null
+    });
+
+    if (result.ok) {
+      if (result.warningCount > 0) {
+        setStatus({ key: "status.exportPdfCombinedSucceededWithWarnings" });
+      } else if (result.fontInspection?.status === "confirmed") {
+        setStatus({ key: "status.exportPdfCombinedSucceededConfirmed" });
+      } else if (result.fontInspection?.status === "partial") {
+        setStatus({ key: "status.exportPdfCombinedSucceededPartial" });
+      } else if (result.fontInspection?.status === "notConfirmed") {
+        setStatus({ key: "status.exportPdfCombinedSucceededNotConfirmed" });
+      } else {
+        setStatus({ key: "status.exportPdfCombinedSucceeded" });
+      }
+    }
+
+    return result;
+  }
+
+  function handleExportConfirmationUnavailable(): void {
+    setStatus({ key: "status.exportNoIncludedDocuments" });
+  }
+
+  function handleExportConfirmationFailed(error: unknown): void {
+    setStatus(txtExportFailedStatus(error, translate));
+  }
+
   async function handleUpdateProjectName(
     name: string
   ): Promise<UpdateProjectNameResult> {
@@ -10723,6 +10966,9 @@ export function App(): JSX.Element {
                           key: "status.fileExplorerMoveResult",
                           values: { message }
                         });
+                      }}
+                      onFileExplorerExport={(origin) => {
+                        void handleFileExplorerExport(origin);
                       }}
                       onActivateGlossaryEntry={(entryId) => {
                         executeUiCommand(
@@ -11197,6 +11443,39 @@ export function App(): JSX.Element {
           translate={translate}
           opener={lineEndingDistributionDialogOpenerRef.current}
           onClose={closeLineEndingDistributionDialog}
+        />
+      ) : null}
+
+      {exportConfirmationState ? (
+        <ExportConfirmationDialog
+          origin={exportConfirmationState.origin}
+          projectName={project?.name ?? null}
+          candidates={exportConfirmationState.candidates}
+          translate={translate}
+          opener={null}
+          onReloadCandidates={() =>
+            handleReloadFileExplorerExportCandidates(
+              exportConfirmationState.origin
+            )
+          }
+          onConfirmDiscardReload={confirmExportConfirmationReloadDiscard}
+          onExportTxt={handleExportConfirmationTxtExport}
+          onExportHtmlCombined={handleExportConfirmationHtmlCombinedExport}
+          onSelectPdfSavePath={handleExportConfirmationSelectPdfSavePath}
+          onExportPdfCombined={handleExportConfirmationPdfCombinedExport}
+          onSelectExportFolder={(req) =>
+            window.pergamum.files.selectExportFolder(req)
+          }
+          onGetDocumentsPath={() => window.pergamum.files.getDocumentsPath()}
+          onCheckFileExists={(req) =>
+            window.pergamum.files.checkFileExists(req)
+          }
+          loadAozoraText={(relativePath) =>
+            window.pergamum.projects.readProjectDocumentAozora(relativePath)
+          }
+          onExportUnavailable={handleExportConfirmationUnavailable}
+          onExportFailed={handleExportConfirmationFailed}
+          onClose={() => setExportConfirmationState(null)}
         />
       ) : null}
 

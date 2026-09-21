@@ -5,6 +5,10 @@ import type {
   TextFileEncoding
 } from "./settings";
 import type {
+  PdfPageNumberSettings,
+  PdfWritingMode
+} from "./pdfPageNumbering";
+import type {
   CreateGlossaryEntryInput,
   CreateGlossaryTagInput,
   GlossaryEntry,
@@ -222,7 +226,14 @@ export const FILE_CHANNELS = {
   saveMarkdown: "files:saveMarkdown",
   selectMarkdownSavePath: "files:selectMarkdownSavePath",
   writeMarkdown: "files:writeMarkdown",
-  readAozoraTextFile: "files:readAozoraTextFile"
+  readAozoraTextFile: "files:readAozoraTextFile",
+  exportTxtUtf8: "files:exportTxtUtf8",
+  exportHtmlCombined: "files:exportHtmlCombined",
+  selectPdfSavePath: "files:selectPdfSavePath",
+  exportPdfCombined: "files:exportPdfCombined",
+  selectExportFolder: "files:selectExportFolder",
+  getDocumentsPath: "files:getDocumentsPath",
+  checkFileExists: "files:checkFileExists"
 } as const;
 
 export const PROJECT_CHANNELS = {
@@ -590,6 +601,126 @@ export interface ExportSettingsJsonRequest {
 export type ExportSettingsJsonResult =
   | {
       readonly ok: true;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export interface SelectExportFolderRequest {
+  readonly defaultPath?: string | null;
+}
+
+export type SelectExportFolderResult =
+  | {
+      readonly ok: true;
+      readonly folderPath: string;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export interface GetDocumentsPathResult {
+  readonly path: string;
+}
+
+export interface CheckFileExistsRequest {
+  readonly filePath: string;
+}
+
+export interface CheckFileExistsResult {
+  readonly exists: boolean;
+}
+
+export interface ExportTxtUtf8Request {
+  readonly defaultFileName: string;
+  readonly content: string;
+  readonly targetPath?: string | null;
+  readonly allowOverwrite?: boolean;
+}
+
+export type ExportTxtUtf8Result =
+  | {
+      readonly ok: true;
+      readonly outputPath: string;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export interface ExportImageAssetCopyItem {
+  readonly sourceProjectRelativePath: string;
+  readonly outputRelativePath: string;
+}
+
+export interface ExportHtmlCombinedRequest {
+  readonly defaultFileName: string;
+  readonly htmlContent: string;
+  readonly imageAssets: readonly ExportImageAssetCopyItem[];
+  readonly projectRootPath: string | null;
+  readonly targetPath?: string | null;
+  readonly allowOverwrite?: boolean;
+}
+
+export type ExportHtmlCombinedResult =
+  | {
+      readonly ok: true;
+      readonly outputPath: string;
+      readonly warningCount: number;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export type PdfFontInspectionStatus =
+  | "confirmed"
+  | "partial"
+  | "notConfirmed"
+  | "skipped";
+
+export interface PdfFontInspectionResult {
+  readonly status: PdfFontInspectionStatus;
+  readonly requestedFontFamily?: string;
+  readonly detectedFonts: readonly string[];
+  readonly matchedFonts?: readonly string[];
+  readonly message?: string;
+}
+
+export interface SelectPdfSavePathRequest {
+  readonly defaultFileName: string;
+}
+
+export type SelectPdfSavePathResult =
+  | {
+      readonly ok: true;
+      readonly filePath: string;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "canceled";
+    };
+
+export interface ExportPdfCombinedRequest {
+  readonly targetPath?: string | null;
+  readonly defaultFileName: string;
+  readonly htmlContent: string;
+  readonly imageAssets: readonly ExportImageAssetCopyItem[];
+  readonly projectRootPath: string | null;
+  readonly pdfFontFamily?: string | null;
+  readonly pdfPageNumberSettings?: PdfPageNumberSettings | null;
+  readonly pdfWritingMode?: PdfWritingMode | null;
+  readonly allowOverwrite?: boolean;
+}
+
+export type ExportPdfCombinedResult =
+  | {
+      readonly ok: true;
+      readonly outputPath: string;
+      readonly warningCount: number;
+      readonly fontInspection?: PdfFontInspectionResult;
     }
   | {
       readonly ok: false;
@@ -1133,6 +1264,25 @@ export interface PergamumApi {
       content: string
     ) => Promise<WriteMarkdownResult>;
     readAozoraTextFile: (filePath: string) => Promise<string>;
+    exportTxtUtf8: (
+      request: ExportTxtUtf8Request
+    ) => Promise<ExportTxtUtf8Result>;
+    exportHtmlCombined: (
+      request: ExportHtmlCombinedRequest
+    ) => Promise<ExportHtmlCombinedResult>;
+    selectPdfSavePath: (
+      request: SelectPdfSavePathRequest
+    ) => Promise<SelectPdfSavePathResult>;
+    exportPdfCombined: (
+      request: ExportPdfCombinedRequest
+    ) => Promise<ExportPdfCombinedResult>;
+    selectExportFolder: (
+      request?: SelectExportFolderRequest
+    ) => Promise<SelectExportFolderResult>;
+    getDocumentsPath: () => Promise<GetDocumentsPathResult>;
+    checkFileExists: (
+      request: CheckFileExistsRequest
+    ) => Promise<CheckFileExistsResult>;
   };
   projects: {
     createProject: () => Promise<ProjectOpenResult>;

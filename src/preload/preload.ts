@@ -74,7 +74,21 @@ const pergamumApi: PergamumApi = {
         content
       }),
     readAozoraTextFile: (filePath) =>
-      ipcRenderer.invoke(FILE_CHANNELS.readAozoraTextFile, { path: filePath })
+      ipcRenderer.invoke(FILE_CHANNELS.readAozoraTextFile, { path: filePath }),
+    exportTxtUtf8: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.exportTxtUtf8, request),
+    exportHtmlCombined: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.exportHtmlCombined, request),
+    selectPdfSavePath: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.selectPdfSavePath, request),
+    exportPdfCombined: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.exportPdfCombined, request),
+    selectExportFolder: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.selectExportFolder, request),
+    getDocumentsPath: () =>
+      ipcRenderer.invoke(FILE_CHANNELS.getDocumentsPath),
+    checkFileExists: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.checkFileExists, request)
   },
   projects: {
     createProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.createProject),

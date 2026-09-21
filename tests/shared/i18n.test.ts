@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatLocalizedNumber,
+  getNumberFormatLocale,
   languageDefinitions,
   supportedLanguages,
   t
@@ -28,6 +30,18 @@ describe("supported UI languages (#186)", () => {
         (language) => languageDefinitions[language].nativeName
       )
     ).toEqual(["日本語", "English"]);
+  });
+
+  it("exposes numberFormatLocale and formats numbers using locale-aware grouping", () => {
+    expect(languageDefinitions.ja.numberFormatLocale).toBe("ja-JP");
+    expect(languageDefinitions.en.numberFormatLocale).toBe("en-US");
+    expect(getNumberFormatLocale("ja")).toBe("ja-JP");
+    expect(getNumberFormatLocale("en")).toBe("en-US");
+
+    expect(formatLocalizedNumber(1112440, "ja")).toBe("1,112,440");
+    expect(formatLocalizedNumber(1112440, "en")).toBe("1,112,440");
+    expect(t("ja", "common.numberFormatLocale")).toBe("ja-JP");
+    expect(t("en", "common.numberFormatLocale")).toBe("en-US");
   });
 });
 
@@ -577,6 +591,152 @@ describe("Application Settings core control translations (#195)", () => {
     );
     expect(t("en", "settings.textFiles.lineEnding.label")).toContain(
       "text file"
+    );
+  });
+
+  it("defines File Explorer export confirmation labels for ja and en", () => {
+    expect(t("ja", "explorer.contextMenu.export")).toBe("エクスポート...");
+    expect(t("en", "explorer.contextMenu.export")).toBe("Export...");
+    expect(t("ja", "export.confirmation.title")).toBe(
+      "エクスポート確認ダイアログ"
+    );
+    expect(t("en", "export.confirmation.title")).toBe("Export Confirmation");
+    expect(t("ja", "export.confirmation.candidateCount", { count: 3 })).toBe(
+      "3ファイル"
+    );
+    expect(t("en", "export.confirmation.candidateCount", { count: 3 })).toBe(
+      "3 files"
+    );
+    expect(t("ja", "export.confirmation.includedLabel")).toBe("採用:");
+    expect(t("en", "export.confirmation.includedLabel")).toBe("Included:");
+    expect(
+      t("ja", "export.confirmation.totalCharacterCount", { count: "1,234" })
+    ).toBe("1,234文字");
+    expect(
+      t("en", "export.confirmation.totalCharacterCount", { count: "1,234" })
+    ).toBe("1,234 chars");
+    expect(t("ja", "export.confirmation.previewStartHeader")).toBe("出だし");
+    expect(t("ja", "export.confirmation.previewEndHeader")).toBe("終わり");
+    expect(t("ja", "export.confirmation.characterCountHeader")).toBe("文字数（概算）");
+    expect(t("en", "export.confirmation.characterCountHeader")).toBe("Characters (approx.)");
+    expect(t("ja", "export.confirmation.includeHeader")).toBe("採用");
+    expect(t("ja", "export.confirmation.reload")).toBe("リロード");
+    expect(t("ja", "export.confirmation.headingRemoval.label")).toBe(
+      "見出し削除"
+    );
+    expect(t("ja", "export.confirmation.headingRemoval.none")).toBe(
+      "削除しない"
+    );
+    expect(t("ja", "export.confirmation.headingRemoval.level6")).toBe(
+      "H1〜H6 を削除"
+    );
+    expect(t("en", "export.confirmation.headingRemoval.label")).toBe(
+      "Remove headings"
+    );
+    expect(t("en", "export.confirmation.headingRemoval.level6")).toBe(
+      "Remove H1-H6"
+    );
+    expect(t("en", "export.confirmation.format.label")).toBe("Export format");
+    expect(t("en", "export.confirmation.format.txtUtf8")).toBe("TXT (UTF-8)");
+    expect(t("en", "export.confirmation.bodyNotation.aozora")).toBe(
+      "Aozora Bunko"
+    );
+    expect(t("en", "export.confirmation.bodyNotation.kakuyomu")).toBe(
+      "Kakuyomu"
+    );
+    expect(t("en", "export.confirmation.fileStructureToc.label")).toBe(
+      "Append file structure table of contents"
+    );
+    expect(t("en", "export.confirmation.fileStructureToc.disabledForTxt")).toBe(
+      "TXT (UTF-8) export cannot append a file structure table of contents."
+    );
+    expect(
+      t("en", "status.exportTxtUtf8Failed", { message: "File I/O failed" })
+    ).toBe("Failed to export TXT (UTF-8): File I/O failed");
+    expect(t("ja", "export.confirmation.modified")).toBe("変更があります");
+    expect(t("en", "export.confirmation.modified")).toBe("Modified");
+    expect(t("ja", "export.confirmation.reloadDiscard.message")).toBe(
+      "編集内容を破棄して読み込み直します。よろしいですか？"
+    );
+    expect(t("en", "export.confirmation.reloadDiscard.confirm")).toBe(
+      "Discard and Reload"
+    );
+    expect(t("ja", "export.confirmation.headingRemoval.note")).toBe(
+      "※ 本文ファイルには影響しません。"
+    );
+    expect(t("ja", "export.confirmation.format.label")).toBe(
+      "エクスポート形式"
+    );
+    expect(t("ja", "export.confirmation.format.txtUtf8")).toBe(
+      "TXT（UTF-8）"
+    );
+    expect(t("ja", "export.confirmation.format.htmlCombined")).toBe(
+      "HTML（全てを結合）"
+    );
+    expect(t("ja", "export.confirmation.txtUtf8.note")).toBe(
+      "※ TXT（UTF-8）出力は、ルビ・傍点以外の書式を削除して出力します。"
+    );
+    expect(t("ja", "export.confirmation.htmlCombined.note")).toBe(
+      "※ 採用ファイルを現在の並び順で1つのHTMLに結合して出力します。"
+    );
+    expect(t("ja", "export.confirmation.bodyNotation.prefix")).toBe("本文を");
+    expect(t("ja", "export.confirmation.bodyNotation.suffix")).toBe(
+      "として解釈する"
+    );
+    expect(t("ja", "export.confirmation.bodyNotation.aozora")).toBe(
+      "青空文庫 書式"
+    );
+    expect(t("ja", "export.confirmation.bodyNotation.narou")).toBe(
+      "小説家になろう 書式"
+    );
+    expect(t("ja", "export.confirmation.fileStructureToc.label")).toBe(
+      "出力ファイル構造目次を末尾に付ける"
+    );
+    expect(t("ja", "export.confirmation.fileStructureToc.tooltip")).toBe(
+      "現在の採用ファイルと並び順を、エクスポート文書の末尾に目次として追加します。"
+    );
+    expect(t("ja", "export.confirmation.fileStructureToc.disabledForTxt")).toBe(
+      "TXT（UTF-8）出力では、出力ファイル構造目次は付けられません。"
+    );
+    expect(t("ja", "status.exportTxtUtf8Succeeded")).toBe(
+      "TXT（UTF-8）を書き出しました。"
+    );
+    expect(
+      t("ja", "status.exportTxtUtf8Failed", { message: "File I/O failed" })
+    ).toBe("TXT（UTF-8）を書き出せませんでした: File I/O failed");
+    expect(t("ja", "status.exportNoIncludedDocuments")).toBe(
+      "採用されている文書がありません。"
+    );
+    expect(
+      t("ja", "export.confirmation.folderDragHandleLabel", {
+        folder: "本文"
+      })
+    ).toBe("本文を並べ替え");
+    expect(
+      t("en", "export.confirmation.fileDragHandleLabel", {
+        fileName: "01.md"
+      })
+    ).toBe("Reorder 01.md");
+    expect(
+      t("ja", "export.confirmation.folderIncluded", {
+        included: 2,
+        total: 3
+      })
+    ).toBe("採用 2/3");
+    expect(
+      t("ja", "export.confirmation.folderIncludedMixed", {
+        included: 1,
+        total: 3
+      })
+    ).toBe("一部 1/3");
+    expect(
+      t("en", "export.confirmation.expandFolder", { folder: "Drafts" })
+    ).toBe("Expand Drafts");
+    expect(t("ja", "export.confirmation.empty")).toBe(
+      "エクスポート可能な文書がありません。"
+    );
+    expect(t("en", "export.confirmation.empty")).toBe(
+      "No exportable documents found."
     );
   });
 
