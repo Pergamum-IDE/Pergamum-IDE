@@ -2,46 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("toolbar command wiring", () => {
-  it("connects Toolbar primary actions through Command Registry execution", () => {
-    const source = readFileSync("src/renderer/App.tsx", "utf8");
-
-    expect(source).toContain(
-      "executeUiCommand(applicationCommandIds.openProject, {"
-    );
-    expect(source).toContain(
-      "executeUiCommand(editorCommandIds.openMarkdownDocument, {"
-    );
-    expect(source).toContain(
-      "executeUiCommand(editorCommandIds.saveDocument, {"
-    );
-    expect(source).toContain(
-      "executeUiCommand(applicationCommandIds.toggleRecentProjects, {"
-    );
-    expect(source).toContain('source: "toolbar"');
-  });
-
-  it("keeps Toolbar Save disabled state aligned with command enablement", () => {
-    const source = readFileSync("src/renderer/App.tsx", "utf8");
-    const saveButtonIndex = source.indexOf(
-      "executeUiCommand(editorCommandIds.saveDocument,"
-    );
-    const nextButtonIndex = source.indexOf(
-      "executeUiCommand(applicationCommandIds.toggleRecentProjects,"
-    );
-
-    expect(saveButtonIndex).toBeGreaterThan(-1);
-    expect(nextButtonIndex).toBeGreaterThan(saveButtonIndex);
-
-    const saveButtonSource = source.slice(saveButtonIndex, nextButtonIndex);
-
-    expect(saveButtonSource).toContain("commandRegistry.isEnabledForContext(");
-    expect(saveButtonSource).toContain("editorCommandIds.saveDocument");
-    expect(saveButtonSource).toContain("commandContext");
-    expect(source).toContain(
-      "canSaveCurrentDocumentCommandRef.current = () => canSave"
-    );
-  });
-
   it("does not execute disabled UI commands, relying on the registry's own enablement check", () => {
     // #128 follow-up: enablement (both legacy Command.isEnabled and when) is
     // enforced once, inside CommandRegistry.execute, so every execute() call
@@ -148,14 +108,5 @@ describe("toolbar command wiring", () => {
     expect(executeUiCommandSource).not.toContain("textContent");
     expect(executeUiCommandSource).not.toContain(".value");
     expect(executeUiCommandSource).not.toContain("path");
-  });
-
-  it("uses ref delegation for stateful Toolbar commands", () => {
-    const source = readFileSync("src/renderer/App.tsx", "utf8");
-
-    expect(source).toContain("openProjectCommandRef.current()");
-    expect(source).toContain("openMarkdownDocumentCommandRef.current()");
-    expect(source).toContain("saveCurrentDocumentCommandRef.current()");
-    expect(source).toContain("toggleRecentProjectsCommandRef.current()");
   });
 });

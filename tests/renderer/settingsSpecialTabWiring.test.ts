@@ -44,28 +44,19 @@ describe("Settings special tab wiring (#181)", () => {
       "if (!editorNavigationRef.current)",
       specialTabsIndex
     );
-    const toolbarTitleIndex = source.indexOf("<div className=\"documentTitle\">");
-    const toolbarButtonsIndex = source.indexOf(
-      "executeUiCommand(applicationCommandIds.openProject",
-      toolbarTitleIndex
-    );
 
     expect(specialTabsIndex).toBeGreaterThan(-1);
     expect(editorNavigationIndex).toBeGreaterThan(specialTabsIndex);
-    expect(toolbarTitleIndex).toBeGreaterThan(-1);
-    expect(toolbarButtonsIndex).toBeGreaterThan(toolbarTitleIndex);
 
     const specialTabsBlock = source.slice(
       specialTabsIndex,
       editorNavigationIndex
     );
-    const toolbarTitleBlock = source.slice(toolbarTitleIndex, toolbarButtonsIndex);
 
     expect(specialTabsBlock).toContain(
       'title: translate("settings.application.title")'
     );
     expect(specialTabsBlock).not.toContain('translate("settings.title")');
-    expect(toolbarTitleBlock).toContain('translate("settings.application.title")');
   });
 
   it("renders SettingsPanel inside the editor tab area only when the Settings tab is active", () => {

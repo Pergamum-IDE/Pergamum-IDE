@@ -1736,6 +1736,8 @@ export const jaTranslations = {
   "tabs.externalMarkdownFile": "注意：プロジェクト外のファイルです",
   "tabs.openDocuments": "開いている文書",
   "tabs.unsaved": "未保存",
+  "toolbar.insertTable": "表を挿入",
+  "toolbar.tableGridLabel": "{cols} x {rows}",
   "toolbar.openProject": "プロジェクトを開く",
   "toolbar.recentProjects": "最近のプロジェクト",
   "toolbar.settings": "設定",

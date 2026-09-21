@@ -1740,6 +1740,8 @@ export const enTranslations = {
   "tabs.externalMarkdownFile": "This file is outside the project",
   "tabs.openDocuments": "Open documents",
   "tabs.unsaved": "Unsaved",
+  "toolbar.insertTable": "Insert table",
+  "toolbar.tableGridLabel": "{cols} x {rows}",
   "toolbar.openProject": "Open Project",
   "toolbar.recentProjects": "Recent Projects",
   "toolbar.settings": "Settings",
