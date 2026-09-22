@@ -67,6 +67,8 @@ export function readSettingValue(
       return settings.commandPalette.footerDetail.marquee.delay;
     case "commandPalette.footerDetail.marquee.speed":
       return settings.commandPalette.footerDetail.marquee.speed;
+    case "commandPalette.launchAnimation.durationMs":
+      return settings.commandPalette.launchAnimation.durationMs;
     case "editor.fontFamily":
       return (
         settings.editor.fontFamily ?? getCatalogDefaultValue("editor.fontFamily")

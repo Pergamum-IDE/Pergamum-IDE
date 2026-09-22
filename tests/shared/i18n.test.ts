@@ -522,6 +522,8 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.commandPalette.footerDetail.marquee.delay.description",
         "settings.commandPalette.footerDetail.marquee.speed.label",
         "settings.commandPalette.footerDetail.marquee.speed.description",
+        "settings.commandPalette.launchAnimation.durationMs.label",
+        "settings.commandPalette.launchAnimation.durationMs.description",
         "settings.unit.ms",
         "settings.unit.pxPerSecond",
         "settings.editor.fontFamily.label",
@@ -757,6 +759,12 @@ describe("Application Settings core control translations (#195)", () => {
     ).toBe(
       "Show descriptions or previews for the selected Command Palette candidate in the footer."
     );
+    expect(
+      t("ja", "settings.commandPalette.launchAnimation.durationMs.label")
+    ).toBe("コマンドパレット起動アニメーション時間");
+    expect(
+      t("en", "settings.commandPalette.launchAnimation.durationMs.label")
+    ).toBe("Command palette launch animation duration");
   });
 
   it("#372: drops the unused reserved file-mode key and re-words file quick open no-results", () => {

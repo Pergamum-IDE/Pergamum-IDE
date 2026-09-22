@@ -1568,6 +1568,8 @@ export const enTranslations = {
   "settings.commandPalette.footerDetail.marquee.delay.label": "Footer detail marquee delay",
   "settings.commandPalette.footerDetail.marquee.speed.description": "Scrolling speed for long footer details.",
   "settings.commandPalette.footerDetail.marquee.speed.label": "Footer detail marquee speed",
+  "settings.commandPalette.launchAnimation.durationMs.description": "Sets the launch animation duration when opening the command palette from the toolbar command box. Set to 0 to disable the animation.",
+  "settings.commandPalette.launchAnimation.durationMs.label": "Command palette launch animation duration",
   "settings.workbench.statusBar.visible.description": "Toggles the status bar at the bottom of the window.",
   "settings.workbench.statusBar.visible.label": "Status bar",
   "settings.workbench.statusBar.characterCount.visible.description": "Show the current Markdown document's character count in the status bar.",

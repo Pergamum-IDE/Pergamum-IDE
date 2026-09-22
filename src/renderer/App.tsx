@@ -11199,6 +11199,10 @@ export function App(): JSX.Element {
         canTogglePreview={isPreviewEligible}
         isPreviewVisible={layout.markdownEditorPreview.visible}
         onTogglePreview={handleTogglePreviewVisible}
+        isCommandPaletteOpen={isCommandPaletteOpen}
+        commandPaletteLaunchAnimationDurationMs={
+          effectiveSettings.commandPalette.launchAnimation.durationMs
+        }
         onOpenCommandPalette={openCommandPaletteWithPrefix}
         translate={translate}
       />

@@ -6240,6 +6240,24 @@ label.settingsItemHeader {
   outline: none;
 }
 
+.commandPaletteLaunchMeasure {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.commandPaletteLaunchMeasureInput {
+  flex: 1;
+  min-width: 0;
+  block-size: 1.625rem;
+}
+
 .commandPaletteCloseButton {
   height: 1.625rem;
   border: 0;
@@ -10958,4 +10976,62 @@ label.settingsItemHeader {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.commandPaletteLaunchGhost {
+  position: fixed;
+  z-index: 80;
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid #c8d1d9;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #6a737d;
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
+  pointer-events: none;
+  transition:
+    transform var(--command-palette-launch-animation-duration, 200ms) ease-out,
+    opacity var(--command-palette-launch-animation-duration, 200ms) ease-out,
+    box-shadow var(--command-palette-launch-animation-duration, 200ms) ease-out;
+  transform-origin: top left;
+  will-change: transform, opacity, box-shadow;
+}
+
+.commandPaletteLaunchGhostPrefix {
+  display: inline-flex;
+  min-inline-size: 28px;
+  align-items: center;
+  justify-content: center;
+  border-inline-end: 1px solid #d3dae2;
+  background: #f2f5f8;
+  color: #444d56;
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.commandPaletteLaunchGhostPrefixEmpty {
+  color: #a3aab1;
+  font-size: 10px;
+}
+
+.commandPaletteLaunchGhostPlaceholder {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  overflow: hidden;
+  padding-inline: 8px;
+  color: #a3aab1;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commandPaletteLaunchGhost {
+    transition: none;
+    animation: none;
+  }
 }

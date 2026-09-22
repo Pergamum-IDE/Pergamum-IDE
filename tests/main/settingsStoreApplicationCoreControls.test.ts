@@ -130,6 +130,11 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
       footerDetail: {
         enable: true,
         marquee: { delay: 2000, speed: 40 }
+      },
+      launchAnimation: {
+        durationMs: getCatalogDefaultValue(
+          "commandPalette.launchAnimation.durationMs"
+        )
       }
     },
     editor: {},
@@ -167,6 +172,11 @@ function validSaveRequest(
       footerDetail: {
         enable: true,
         marquee: { delay: 2000, speed: 40 }
+      },
+      launchAnimation: {
+        durationMs: getCatalogDefaultValue(
+          "commandPalette.launchAnimation.durationMs"
+        )
       }
     },
     editor: {
@@ -248,6 +258,11 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           "commandPalette.footerDetail.marquee.speed"
         )
       }
+    });
+    expect(settings.commandPalette.launchAnimation).toEqual({
+      durationMs: getCatalogDefaultValue(
+        "commandPalette.launchAnimation.durationMs"
+      )
     });
     expect(settings.preview).toEqual({
       renderer: getCatalogDefaultValue("preview.renderer"),
@@ -388,6 +403,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           footerDetail: {
             enable: false,
             marquee: { delay: 3000, speed: 80 }
+          },
+          launchAnimation: {
+            durationMs: 500
           }
         }
       })
@@ -424,6 +442,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.commandPalette.footerDetail).toEqual({
       enable: false,
       marquee: { delay: 3000, speed: 80 }
+    });
+    expect(settings.commandPalette.launchAnimation).toEqual({
+      durationMs: 500
     });
   });
 
@@ -468,6 +489,9 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
           footerDetail: {
             enable: "yes",
             marquee: { delay: -1, speed: 0 }
+          },
+          launchAnimation: {
+            durationMs: "slow"
           }
         }
       })
@@ -501,6 +525,33 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.commandPalette.footerDetail).toEqual({
       enable: true,
       marquee: { delay: 2000, speed: 40 }
+    });
+    expect(settings.commandPalette.launchAnimation).toEqual({
+      durationMs: getCatalogDefaultValue(
+        "commandPalette.launchAnimation.durationMs"
+      )
+    });
+  });
+
+  it("normalizes Command Palette launch animation duration values when loading", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        commandPalette: {
+          footerDetail: {
+            enable: true,
+            marquee: { delay: 2000, speed: 40 }
+          },
+          launchAnimation: {
+            durationMs: 550
+          }
+        }
+      })
+    );
+
+    const settings = await loadSettings();
+
+    expect(settings.commandPalette.launchAnimation).toEqual({
+      durationMs: 600
     });
   });
 
@@ -582,6 +633,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: false,
             marquee: { delay: 3000, speed: 80 }
+          },
+          launchAnimation: {
+            durationMs: 500
           }
         }
       })
@@ -629,6 +683,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: false,
             marquee: { delay: 3000, speed: 80 }
+          },
+          launchAnimation: {
+            durationMs: 500
           }
         },
         markdownFiles: {
@@ -656,6 +713,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       footerDetail: {
         enable: false,
         marquee: { delay: 3000, speed: 80 }
+      },
+      launchAnimation: {
+        durationMs: 500
       }
     });
     expect(written.workbench).toEqual({
@@ -736,6 +796,31 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       syncScrollEditorToPreview: true,
       syncScrollPreviewToEditor: true,
       doubleClickJumpToEditor: true
+    });
+  });
+
+  it("normalizes commandPalette.launchAnimation.durationMs before writing settings.json", async () => {
+    fsMock.readFile.mockResolvedValue(onDiskSettings({}));
+
+    await saveApplicationSettings(
+      validSaveRequest({
+        commandPalette: {
+          ...validSaveRequest().commandPalette,
+          launchAnimation: {
+            durationMs: 150
+          }
+        }
+      })
+    );
+
+    const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
+      string,
+      string
+    ];
+    const written = JSON.parse(writtenContent);
+
+    expect(written.commandPalette.launchAnimation).toEqual({
+      durationMs: 200
     });
   });
 
@@ -1129,6 +1214,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: "yes" as unknown as boolean,
             marquee: { delay: 2000, speed: 40 }
+          },
+          launchAnimation: {
+            durationMs: 200
           }
         }
       }),
@@ -1137,6 +1225,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: true,
             marquee: { delay: -1, speed: 40 }
+          },
+          launchAnimation: {
+            durationMs: 200
           }
         }
       }),
@@ -1145,6 +1236,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: true,
             marquee: { delay: 10001, speed: 40 }
+          },
+          launchAnimation: {
+            durationMs: 200
           }
         }
       }),
@@ -1153,6 +1247,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: true,
             marquee: { delay: 1.5, speed: 40 }
+          },
+          launchAnimation: {
+            durationMs: 200
           }
         }
       }),
@@ -1161,6 +1258,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: true,
             marquee: { delay: 2000, speed: 0 }
+          },
+          launchAnimation: {
+            durationMs: 200
           }
         }
       }),
@@ -1169,6 +1269,9 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           footerDetail: {
             enable: true,
             marquee: { delay: 2000, speed: 1001 }
+          },
+          launchAnimation: {
+            durationMs: 200
           }
         }
       }),

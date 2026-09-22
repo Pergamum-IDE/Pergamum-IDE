@@ -53,6 +53,11 @@ function baseApplicationSettings(
             "commandPalette.footerDetail.marquee.speed"
           )
         }
+      },
+      launchAnimation: {
+        durationMs: getCatalogDefaultValue(
+          "commandPalette.launchAnimation.durationMs"
+        )
       }
     },
     editor: {

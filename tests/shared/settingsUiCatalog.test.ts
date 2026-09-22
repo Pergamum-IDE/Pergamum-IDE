@@ -186,6 +186,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "commandPalette.footerDetail.enable",
           "commandPalette.footerDetail.marquee.delay",
           "commandPalette.footerDetail.marquee.speed",
+          "commandPalette.launchAnimation.durationMs",
           "editor.fontFamilyList",
           "editor.characterCount.exclude.whitespace",
           "editor.characterCount.exclude.lineBreaks",
@@ -386,6 +387,27 @@ describe("Settings UI Catalog Schema (#226)", () => {
       expect(speed.control).toMatchObject({
         min: speedRange.min,
         max: speedRange.max
+      });
+    });
+
+    it("commandPalette launch animation duration is a number control with min/max from settingsCatalog.ts and a UI step of 100", () => {
+      const item = getSettingCatalogItem(
+        "commandPalette.launchAnimation.durationMs"
+      );
+
+      if (item?.control.kind !== "number") {
+        throw new Error("Expected a number control.");
+      }
+
+      const range = getCatalogEntry(
+        "commandPalette.launchAnimation.durationMs"
+      ).numericRange;
+
+      expect(item.category).toBe("commands");
+      expect(item.control).toMatchObject({
+        min: range.min,
+        max: range.max,
+        step: 100
       });
     });
 
@@ -756,6 +778,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "commandPalette.footerDetail.enable",
         "commandPalette.footerDetail.marquee.delay",
         "commandPalette.footerDetail.marquee.speed",
+        "commandPalette.launchAnimation.durationMs",
         "editor.whitespace.renderIdeographicSpace",
         "editor.whitespace.renderAsciiSpace",
         "editor.whitespace.renderTab",

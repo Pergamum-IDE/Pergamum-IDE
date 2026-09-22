@@ -214,8 +214,8 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     ).toBe(getCatalogDefaultValue("editor.fontFamily"));
   });
 
-  it("commandPalette.footerDetail defaults derive from the catalog and are concrete application settings", () => {
-    const expected = {
+  it("commandPalette defaults derive from the catalog and are concrete application settings", () => {
+    const expectedFooterDetail = {
       enable: getCatalogDefaultValue("commandPalette.footerDetail.enable"),
       marquee: {
         delay: getCatalogDefaultValue(
@@ -226,18 +226,38 @@ describe("Application Settings core defaults and effective settings (#195)", () 
         )
       }
     };
+    const expectedLaunchAnimation = {
+      durationMs: getCatalogDefaultValue(
+        "commandPalette.launchAnimation.durationMs"
+      )
+    };
 
-    expect(builtInDefaultSettings.commandPalette.footerDetail).toEqual(expected);
+    expect(builtInDefaultSettings.commandPalette.footerDetail).toEqual(
+      expectedFooterDetail
+    );
     expect(defaultApplicationSettings.commandPalette.footerDetail).toEqual(
-      expected
+      expectedFooterDetail
     );
     expect(createDefaultApplicationSettings().commandPalette.footerDetail).toEqual(
-      expected
+      expectedFooterDetail
     );
     expect(
       resolveEffectiveSettings(defaultApplicationSettings, undefined)
         .commandPalette.footerDetail
-    ).toEqual(expected);
+    ).toEqual(expectedFooterDetail);
+    expect(builtInDefaultSettings.commandPalette.launchAnimation).toEqual(
+      expectedLaunchAnimation
+    );
+    expect(defaultApplicationSettings.commandPalette.launchAnimation).toEqual(
+      expectedLaunchAnimation
+    );
+    expect(
+      createDefaultApplicationSettings().commandPalette.launchAnimation
+    ).toEqual(expectedLaunchAnimation);
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined)
+        .commandPalette.launchAnimation
+    ).toEqual(expectedLaunchAnimation);
     expect(builtInDefaultSettings.commandPalette).not.toHaveProperty(
       "description"
     );

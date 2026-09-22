@@ -1566,6 +1566,8 @@ export const jaTranslations = {
   "settings.commandPalette.footerDetail.marquee.delay.label": "フッター詳細スクロール開始までの待機時間",
   "settings.commandPalette.footerDetail.marquee.speed.description": "フッター詳細が長い場合のスクロール速度です。",
   "settings.commandPalette.footerDetail.marquee.speed.label": "フッター詳細スクロール速度",
+  "settings.commandPalette.launchAnimation.durationMs.description": "ツールバーのコマンドボックスからコマンドパレットを開くときのアニメーション時間を設定します。0 にするとアニメーションを無効にします。",
+  "settings.commandPalette.launchAnimation.durationMs.label": "コマンドパレット起動アニメーション時間",
   "settings.workbench.statusBar.visible.description": "画面下部のステータスバー表示を切り替えます。",
   "settings.workbench.statusBar.visible.label": "ステータスバー",
   "settings.workbench.statusBar.characterCount.visible.description": "Markdown文書の文字数をステータスバーに表示します。",

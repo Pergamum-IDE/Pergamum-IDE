@@ -27,6 +27,7 @@ import {
   type SettingKey
 } from "./settingsCatalog";
 import { supportedLanguages, type Language } from "./i18n";
+import { COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_STEP_MS } from "./commandPaletteLaunchAnimationSettings";
 
 // ---------------------------------------------------------------------------
 // i18n key alias
@@ -372,6 +373,9 @@ const commandPaletteFooterDetailMarqueeDelayRange = getCatalogEntry(
 ).numericRange;
 const commandPaletteFooterDetailMarqueeSpeedRange = getCatalogEntry(
   "commandPalette.footerDetail.marquee.speed"
+).numericRange;
+const commandPaletteLaunchAnimationDurationRange = getCatalogEntry(
+  "commandPalette.launchAnimation.durationMs"
 ).numericRange;
 const previewUpdateDelayRange = getCatalogEntry(
   "preview.updateDelayMs"
@@ -1202,6 +1206,23 @@ export const settingCatalogItems = defineSettingCatalog([
     },
     defaultValue: getCatalogDefaultValue(
       "commandPalette.footerDetail.marquee.speed"
+    )
+  },
+  {
+    key: "commandPalette.launchAnimation.durationMs",
+    category: "commands",
+    order: 400,
+    labelKey: "settings.commandPalette.launchAnimation.durationMs.label",
+    descriptionKey:
+      "settings.commandPalette.launchAnimation.durationMs.description",
+    control: {
+      kind: "number",
+      min: commandPaletteLaunchAnimationDurationRange.min,
+      max: commandPaletteLaunchAnimationDurationRange.max,
+      step: COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_STEP_MS
+    },
+    defaultValue: getCatalogDefaultValue(
+      "commandPalette.launchAnimation.durationMs"
     )
   }
 ] satisfies readonly SettingCatalogItem[]);

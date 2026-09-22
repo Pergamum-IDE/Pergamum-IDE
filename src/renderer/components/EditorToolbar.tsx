@@ -62,6 +62,8 @@ export interface EditorToolbarProps {
    *  `aria-pressed` state. */
   isPreviewVisible: boolean;
   onTogglePreview: () => void;
+  isCommandPaletteOpen: boolean;
+  commandPaletteLaunchAnimationDurationMs: number;
   /**
    * #542: Open the existing central Command Palette with the given initial
    * prefix. Use `""` for file mode (project file quick open) — the caller
@@ -97,6 +99,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   canTogglePreview,
   isPreviewVisible,
   onTogglePreview,
+  isCommandPaletteOpen,
+  commandPaletteLaunchAnimationDurationMs,
   onOpenCommandPalette,
   translate
 }) => {
@@ -134,6 +138,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
     <header className="editorToolbar">
       <ToolbarCommandBox
         onOpenCommandPalette={onOpenCommandPalette}
+        isCommandPaletteOpen={isCommandPaletteOpen}
+        launchAnimationDurationMs={commandPaletteLaunchAnimationDurationMs}
         translate={translate}
       />
 
