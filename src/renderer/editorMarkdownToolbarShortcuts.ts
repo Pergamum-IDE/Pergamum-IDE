@@ -30,6 +30,10 @@ export interface MarkdownEditorToolbarShortcutConfig {
     selectedText: string,
     opener: Element | null
   ) => void;
+  /** #531 Ctrl+Shift+L */
+  readonly insertHorizontalRule: () => void;
+  /** #531 Ctrl+Shift+B */
+  readonly insertCodeBlock: () => void;
 }
 
 let currentMarkdownToolbarShortcutConfig: MarkdownEditorToolbarShortcutConfig | null =
@@ -58,7 +62,9 @@ type MarkdownToolbarShortcutTrigger =
   | "italic"
   | "strikethrough"
   | "heading"
-  | "link";
+  | "link"
+  | "horizontalRule"
+  | "codeBlock";
 
 function matchMarkdownToolbarShortcutTrigger(
   event: KeyboardEvent
@@ -70,7 +76,16 @@ function matchMarkdownToolbarShortcutTrigger(
   const key = event.key.toLowerCase();
 
   if (event.shiftKey) {
-    return key === "x" ? "strikethrough" : null;
+    switch (key) {
+      case "x":
+        return "strikethrough";
+      case "l":
+        return "horizontalRule";
+      case "b":
+        return "codeBlock";
+      default:
+        return null;
+    }
   }
 
   switch (key) {
@@ -138,6 +153,12 @@ export function createMarkdownToolbarShortcutKeymapExtension(input?: {
             break;
           case "heading":
             config.requestOpenHeadingSelector();
+            break;
+          case "horizontalRule":
+            config.insertHorizontalRule();
+            break;
+          case "codeBlock":
+            config.insertCodeBlock();
             break;
           case "link": {
             const selection = view.state.selection.main;

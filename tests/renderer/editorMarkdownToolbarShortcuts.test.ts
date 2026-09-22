@@ -52,6 +52,8 @@ function createConfig(
     applyStrikethrough: vi.fn(),
     requestOpenHeadingSelector: vi.fn(),
     requestOpenLinkDialog: vi.fn(),
+    insertHorizontalRule: vi.fn(),
+    insertCodeBlock: vi.fn(),
     ...overrides
   };
 }
@@ -135,6 +137,42 @@ describe("createMarkdownToolbarShortcutKeymapExtension", () => {
     v.contentDOM.dispatchEvent(event);
     expect(config.requestOpenHeadingSelector).toHaveBeenCalledOnce();
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Ctrl+Shift+L calls insertHorizontalRule", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "l", shiftKey: true });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.insertHorizontalRule).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Ctrl+Shift+B calls insertCodeBlock", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "b", shiftKey: true });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.insertCodeBlock).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Ctrl+L (without Shift) still calls requestOpenHeadingSelector, not insertHorizontalRule", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "l" });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.requestOpenHeadingSelector).toHaveBeenCalledOnce();
+    expect(config.insertHorizontalRule).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+B (without Shift) still calls applyBold, not insertCodeBlock", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "b" });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.applyBold).toHaveBeenCalledOnce();
+    expect(config.insertCodeBlock).not.toHaveBeenCalled();
   });
 
   it("Ctrl+K calls requestOpenLinkDialog with the current selection text", () => {
