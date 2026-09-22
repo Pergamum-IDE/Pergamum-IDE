@@ -34,7 +34,11 @@ import type {
   SelectionHighlightMode,
   WorkbenchSoundSettings
 } from "../shared/settings";
-import { fencedCodeIndentUnitFacet } from "./indentCommands";
+import {
+  fencedCodeIndentUnitFacet,
+  indentCommand,
+  outdentCommand
+} from "./indentCommands";
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
 import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
@@ -47,6 +51,10 @@ import { applyHeadingToLine } from "../shared/markdownHeadingMarkup";
 import { buildMarkdownLink } from "../shared/markdownLinkMarkup";
 import { buildFencedCodeBlock } from "../shared/markdownCodeBlockMarkup";
 import { buildHorizontalRuleInsertion } from "../shared/markdownHorizontalRuleMarkup";
+import {
+  applyMarkdownListToLines,
+  type MarkdownListKind
+} from "../shared/markdownListMarkup";
 import {
   playMarkdownEditorInputSound,
   type MarkdownEditorInputSoundEvent,
@@ -501,6 +509,22 @@ export interface MarkdownEditorParagraphIndentController {
    * `insertTable`.
    */
   insertCodeBlock(): boolean;
+  /**
+   * #533: applies (or, for a same-type touched selection, removes) a
+   * Markdown list marker on every line touched by the current primary
+   * selection (a single line when the selection is empty). See
+   * `src/shared/markdownListMarkup.ts` for the exact recognition/toggle
+   * rules.
+   */
+  applyList(kind: MarkdownListKind): boolean;
+  /**
+   * #533: the Indent / Outdent toolbar buttons' entry point. Calls the
+   * existing `Mod+]` / `Mod+[` command functions directly
+   * (`indentCommands.ts`) rather than reimplementing their Markdown-aware
+   * per-context logic (list sink/lift, blockquote, fenced code, ...).
+   */
+  indent(): boolean;
+  outdent(): boolean;
 }
 
 export interface MarkdownEditorViewStateController {
@@ -1711,6 +1735,78 @@ export function MarkdownEditor({
         });
 
         return true;
+      },
+      applyList: (kind: MarkdownListKind): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const { from, to } = view.state.selection.main;
+        const doc = view.state.doc;
+        const firstLineNumber = doc.lineAt(from).number;
+        const lastLineNumber = doc.lineAt(to).number;
+
+        const lineNumbers: number[] = [];
+        for (let n = firstLineNumber; n <= lastLineNumber; n++) {
+          lineNumbers.push(n);
+        }
+
+        const originalLines = lineNumbers.map((n) => doc.line(n).text);
+        const newLines = applyMarkdownListToLines(originalLines, kind);
+
+        const changes: ChangeSpec[] = [];
+        // Explicit cursor override only for the one case the pure helper's
+        // doc comment calls out by position (single blank line, no
+        // selection): CodeMirror's default change-mapping of a caret sitting
+        // exactly at the start of a replaced empty range is ambiguous, so
+        // leaving it to auto-map risks landing the cursor BEFORE the new
+        // marker instead of after it. Every other case (real body text, or a
+        // multi-line selection) auto-maps through `changes` correctly, same
+        // as `applyHeading` above.
+        let cursorOverride: number | null = null;
+
+        lineNumbers.forEach((n, i) => {
+          if (newLines[i] === originalLines[i]) {
+            return;
+          }
+          const line = doc.line(n);
+          changes.push({ from: line.from, to: line.to, insert: newLines[i] });
+          if (lineNumbers.length === 1 && originalLines[i].trim().length === 0) {
+            cursorOverride = line.from + newLines[i].length;
+          }
+        });
+
+        if (changes.length === 0) {
+          return true;
+        }
+
+        view.dispatch({
+          changes,
+          ...(cursorOverride !== null
+            ? { selection: { anchor: cursorOverride } }
+            : {}),
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
+        return true;
+      },
+      indent: (): boolean => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        // `indentCommand` itself reads `EditorState.readOnly` — no separate
+        // `readOnlyRef` guard needed here.
+        return indentCommand(view);
+      },
+      outdent: (): boolean => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        return outdentCommand(view);
       }
     };
 

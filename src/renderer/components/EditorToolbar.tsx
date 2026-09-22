@@ -1,6 +1,7 @@
 import { useState, type FC, type MouseEvent as ReactMouseEvent } from "react";
 import type { Translate } from "../../shared/i18n";
 import type { HeadingLevel } from "../../shared/markdownHeadingMarkup";
+import type { MarkdownListKind } from "../../shared/markdownListMarkup";
 import { TableSizePopover } from "./TableSizePopover";
 import { HeadingLevelPopover } from "./HeadingLevelPopover";
 import headingIconRaw from "../../../assets/icons/pergamum/toolbar/heading.svg?raw";
@@ -13,6 +14,11 @@ import codeBlockIconRaw from "../../../assets/icons/codicons/toolbar/code.svg?ra
 import tableIconRaw from "../../../assets/icons/codicons/toolbar/table.svg?raw";
 import rubyIconRaw from "../../../assets/icons/pergamum/toolbar/ruby.svg?raw";
 import emphasisIconRaw from "../../../assets/icons/pergamum/toolbar/emphasis.svg?raw";
+import listUnorderedIconRaw from "../../../assets/icons/codicons/toolbar/list-unordered.svg?raw";
+import listOrderedIconRaw from "../../../assets/icons/codicons/toolbar/list-ordered.svg?raw";
+import checklistIconRaw from "../../../assets/icons/codicons/toolbar/checklist.svg?raw";
+import outdentIconRaw from "../../../assets/icons/svgrepo/toolbar/outdent.svg?raw";
+import indentIconRaw from "../../../assets/icons/svgrepo/toolbar/indent.svg?raw";
 
 export interface EditorToolbarProps {
   /** #529: shared enable gate for Heading / Bold / Italic / Strikethrough /
@@ -26,6 +32,9 @@ export interface EditorToolbarProps {
   onToggleHeadingSelector: () => void;
   onCloseHeadingSelector: () => void;
   onSelectHeadingLevel: (level: HeadingLevel) => void;
+  onApplyList: (kind: MarkdownListKind) => void;
+  onOutdent: () => void;
+  onIndent: () => void;
   onOpenLinkDialog: (opener: Element) => void;
   onInsertHorizontalRule: () => void;
   onInsertCodeBlock: () => void;
@@ -49,6 +58,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   onToggleHeadingSelector,
   onCloseHeadingSelector,
   onSelectHeadingLevel,
+  onApplyList,
+  onOutdent,
+  onIndent,
   onOpenLinkDialog,
   onInsertHorizontalRule,
   onInsertCodeBlock,
@@ -159,6 +171,90 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             <span
               className="editorToolbarButtonIcon"
               dangerouslySetInnerHTML={{ __html: strikeIconRaw }}
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="editorToolbarSeparator" role="separator" aria-orientation="vertical" />
+
+      <div className="editorToolbarGroup">
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canUseMarkdownToolbarCommands}
+            onClick={() => onApplyList("unordered")}
+            aria-label={translate("toolbar.unorderedList")}
+            title={translate("toolbar.unorderedList")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: listUnorderedIconRaw }}
+            />
+          </button>
+        </div>
+
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canUseMarkdownToolbarCommands}
+            onClick={() => onApplyList("ordered")}
+            aria-label={translate("toolbar.orderedList")}
+            title={translate("toolbar.orderedList")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: listOrderedIconRaw }}
+            />
+          </button>
+        </div>
+
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canUseMarkdownToolbarCommands}
+            onClick={() => onApplyList("checklist")}
+            aria-label={translate("toolbar.checklist")}
+            title={translate("toolbar.checklist")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: checklistIconRaw }}
+            />
+          </button>
+        </div>
+
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!hasEditableTextLikeDocument}
+            onClick={onOutdent}
+            aria-label={translate("toolbar.outdent")}
+            title={translate("toolbar.outdent")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: outdentIconRaw }}
+            />
+          </button>
+        </div>
+
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!hasEditableTextLikeDocument}
+            onClick={onIndent}
+            aria-label={translate("toolbar.indent")}
+            title={translate("toolbar.indent")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: indentIconRaw }}
             />
           </button>
         </div>
