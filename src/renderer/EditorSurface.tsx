@@ -533,6 +533,10 @@ interface EditorSurfaceProps {
   isProjectOwnedReadOnly: boolean;
   markdownEditorPreviewRatio: number;
   onChangeMarkdownEditorPreviewRatio: (ratio: number) => void;
+  /** #541: user-toggled Preview pane visibility — combined with this
+   *  document/renderer's own eligibility to decide whether the pane
+   *  actually renders. */
+  previewVisible: boolean;
   onChangeMarkdownContent: (
     content: string,
     lineEndingBreaks: LineEndingBreakSet
@@ -682,6 +686,7 @@ export function EditorSurface({
   isProjectOwnedReadOnly,
   markdownEditorPreviewRatio,
   onChangeMarkdownEditorPreviewRatio,
+  previewVisible,
   onChangeMarkdownContent,
   onGlossarySelectionShortcut,
   onEmphasisMarkShortcut,
@@ -778,6 +783,7 @@ export function EditorSurface({
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
           onChangeRatio={onChangeMarkdownEditorPreviewRatio}
+          previewVisible={previewVisible}
           documentOpenId={documentOpenId}
           onDocumentOpenPreviewRenderStarted={
             onDocumentOpenPreviewRenderStarted
@@ -885,6 +891,7 @@ interface MarkdownEditorSurfaceProps {
   onPendingSelectionApplied: () => void;
   ratio: number;
   onChangeRatio: (ratio: number) => void;
+  previewVisible: boolean;
   documentOpenId: string | null;
   onDocumentOpenPreviewRenderStarted: (
     documentOpenId: string,
@@ -975,6 +982,7 @@ function MarkdownEditorSurface({
   onPendingSelectionApplied,
   ratio,
   onChangeRatio,
+  previewVisible,
   documentOpenId,
   onDocumentOpenPreviewRenderStarted,
   onDocumentOpenPreviewRendered,
@@ -1037,7 +1045,14 @@ function MarkdownEditorSurface({
     [previewSourceProjectRelativePath]
   );
   const isMarkdown = isMarkdownCurrentDocument(document);
-  const isPreviewAvailable = isMarkdown || previewRenderer !== "markdown";
+  // #541: folds the user-toggled Preview visibility into the same flag that
+  // already fully gates pane rendering below (grid columns, resize handle,
+  // and the pane itself) — a hidden-by-toggle Preview behaves exactly like
+  // an unavailable-for-this-document Preview (no DOM, so scroll sync simply
+  // has nothing to attach to, same as the existing `.txt` + Markdown
+  // renderer case).
+  const isPreviewAvailable =
+    (isMarkdown || previewRenderer !== "markdown") && previewVisible;
   const isDirty = isCurrentDocumentDirty(document);
 
   const [aozoraCleanText, setAozoraCleanText] = useState<string | null>(null);
@@ -3183,11 +3198,20 @@ function MarkdownEditorSurface({
       aria-label={translate("workspace.markdownWorkspace")}
       ref={workspaceRef}
       style={
-        isNarrow || !isPreviewAvailable
-          ? undefined
-          : {
-              gridTemplateColumns: `minmax(0, ${ratio}fr) 6px minmax(0, ${1 - ratio}fr)`
-            }
+        // #541 follow-up: when Preview isn't rendered at all (ineligible for
+        // this document, or user-toggled off), force a single grid track in
+        // BOTH axes so the editor pane fills the whole workspace. Leaving
+        // this `undefined` here would fall back to `.workspace`'s own
+        // default two-column (or, narrow, two-row) CSS grid, which still
+        // reserves a second track for a Preview pane that no longer exists
+        // in the DOM — an empty blank region on the right / below.
+        !isPreviewAvailable
+          ? { gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: "minmax(0, 1fr)" }
+          : isNarrow
+            ? undefined
+            : {
+                gridTemplateColumns: `minmax(0, ${ratio}fr) 6px minmax(0, ${1 - ratio}fr)`
+              }
       }
     >
       <section

@@ -86,6 +86,8 @@ export interface RestoredEnvironment {
   readonly openDocuments: OpenDocumentsState;
   /** serializedEditorId → persisted #273 View State (opaque plain data). */
   readonly pendingViewStates: ReadonlyMap<string, unknown>;
+  /** #541 follow-up: the saved Preview-pane visibility. */
+  readonly previewVisible: boolean;
 }
 
 export interface ColdStartRestoreDeps {
@@ -435,7 +437,12 @@ async function restoreSelectedSession(
     nextUntitledId: 1
   };
 
-  deps.applyRestoredEnvironment({ project, openDocuments, pendingViewStates });
+  deps.applyRestoredEnvironment({
+    project,
+    openDocuments,
+    pendingViewStates,
+    previewVisible: record.previewVisible
+  });
 
   return {
     projectContextRestoreFailed:

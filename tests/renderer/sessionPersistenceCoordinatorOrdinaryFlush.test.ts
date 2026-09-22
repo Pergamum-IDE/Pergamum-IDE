@@ -55,7 +55,8 @@ function inputs(filePath: string, order = 0): SessionSnapshotInputs {
         viewStateKey: `key:${filePath}`
       }
     ],
-    activeEditor: null
+    activeEditor: null,
+    previewVisible: true
   };
 }
 

@@ -20,6 +20,7 @@ import listOrderedIconRaw from "../../../assets/icons/codicons/toolbar/list-orde
 import checklistIconRaw from "../../../assets/icons/codicons/toolbar/checklist.svg?raw";
 import outdentIconRaw from "../../../assets/icons/svgrepo/toolbar/outdent.svg?raw";
 import indentIconRaw from "../../../assets/icons/svgrepo/toolbar/indent.svg?raw";
+import togglePreviewIconRaw from "../../../assets/icons/codicons/toolbar/layout-sidebar-right-off.svg?raw";
 
 export interface EditorToolbarProps {
   /** #529: shared enable gate for Heading / Bold / Italic / Strikethrough /
@@ -51,6 +52,14 @@ export interface EditorToolbarProps {
   hasEditableTextLikeDocument: boolean;
   onOpenRubyDialog: (opener: Element) => void;
   onOpenEmphasisDialog: (opener: Element) => void;
+  /** #541: whether Preview is applicable at all for the current
+   *  document/renderer — independent of `isPreviewVisible`, since the
+   *  button must stay clickable while Preview is currently hidden. */
+  canTogglePreview: boolean;
+  /** #541: current Preview pane visibility — drives the button's
+   *  `aria-pressed` state. */
+  isPreviewVisible: boolean;
+  onTogglePreview: () => void;
   translate: Translate;
 }
 
@@ -76,6 +85,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   hasEditableTextLikeDocument,
   onOpenRubyDialog,
   onOpenEmphasisDialog,
+  canTogglePreview,
+  isPreviewVisible,
+  onTogglePreview,
   translate
 }) => {
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState<boolean>(false);
@@ -399,6 +411,27 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             <span
               className="editorToolbarButtonIcon"
               dangerouslySetInnerHTML={{ __html: emphasisIconRaw }}
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="editorToolbarSeparator" role="separator" aria-orientation="vertical" />
+
+      <div className="editorToolbarGroup">
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canTogglePreview}
+            aria-pressed={isPreviewVisible}
+            onClick={onTogglePreview}
+            aria-label={translate("toolbar.togglePreview")}
+            title={translate("toolbar.togglePreview")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: togglePreviewIconRaw }}
             />
           </button>
         </div>

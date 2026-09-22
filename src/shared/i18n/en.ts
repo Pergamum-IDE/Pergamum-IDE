@@ -1777,6 +1777,7 @@ export const enTranslations = {
   "toolbar.settings": "Settings",
   "toolbar.strikethrough": "Strikethrough",
   "toolbar.tableGridLabel": "{cols} x {rows}",
+  "toolbar.togglePreview": "Toggle preview",
   "toolbar.unorderedList": "Unordered list",
   "utilityWindow.close": "Close Utility Window",
   "utilityWindow.label": "Utility Window",

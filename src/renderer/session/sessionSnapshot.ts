@@ -50,6 +50,8 @@ export interface SessionSnapshotInputs {
   } | null;
   readonly editors: readonly SessionEditorInput[];
   readonly activeEditor: SessionEditorIdentity | null;
+  /** #541 follow-up: see `SessionRecord.previewVisible`. */
+  readonly previewVisible: boolean;
 }
 
 function sessionEditorFromOpenEditor(
@@ -103,7 +105,8 @@ function sessionEditorFromOpenEditor(
 export function buildSessionSnapshotInputs(
   sessionId: string,
   project: PergamumProject | null,
-  openDocumentsState: OpenDocumentsState
+  openDocumentsState: OpenDocumentsState,
+  previewVisible: boolean
 ): SessionSnapshotInputs {
   const active = activeOpenDocument(openDocumentsState);
   const editors: SessionEditorInput[] = [];
@@ -136,7 +139,8 @@ export function buildSessionSnapshotInputs(
         }
       : null,
     editors,
-    activeEditor
+    activeEditor,
+    previewVisible
   };
 }
 
@@ -164,7 +168,8 @@ export function buildRendererSessionSnapshot(
     sessionId: inputs.sessionId,
     projectContext: inputs.projectContext,
     editors,
-    activeEditor: inputs.activeEditor
+    activeEditor: inputs.activeEditor,
+    previewVisible: inputs.previewVisible
   };
 }
 

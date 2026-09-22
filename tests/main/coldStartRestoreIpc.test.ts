@@ -31,7 +31,8 @@ const record: SessionRecord = {
   projectContext: null,
   window: null,
   editors: [],
-  activeEditor: null
+  activeEditor: null,
+  previewVisible: true
 };
 
 const okRead: ColdStartRestoreRead = {

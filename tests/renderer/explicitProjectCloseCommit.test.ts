@@ -154,7 +154,8 @@ describe("end-to-end: Project Close SUCCESS ⇒ durable Session is post-close (#
         viewStateKey: null
       }
     ],
-    activeEditor: null
+    activeEditor: null,
+    previewVisible: true
   };
 
   function coordinatorWith(persist: (s: RendererSessionSnapshot) => Promise<void>) {

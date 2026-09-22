@@ -134,7 +134,8 @@ const snapshot: RendererSessionSnapshot = {
       viewState: null
     }
   ],
-  activeEditor: { kind: "projectMarkdown", relativePath: "01.md" }
+  activeEditor: { kind: "projectMarkdown", relativePath: "01.md" },
+  previewVisible: true
 };
 
 const noProjectSnapshot: RendererSessionSnapshot = {
@@ -148,7 +149,8 @@ const noProjectSnapshot: RendererSessionSnapshot = {
       viewState: null
     }
   ],
-  activeEditor: { kind: "standaloneMarkdown", filePath: "/x.md" }
+  activeEditor: { kind: "standaloneMarkdown", filePath: "/x.md" },
+  previewVisible: true
 };
 
 function setup(

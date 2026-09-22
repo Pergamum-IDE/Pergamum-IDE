@@ -1773,6 +1773,7 @@ export const jaTranslations = {
   "toolbar.settings": "設定",
   "toolbar.strikethrough": "取消線",
   "toolbar.tableGridLabel": "{cols} x {rows}",
+  "toolbar.togglePreview": "プレビューを切り替え",
   "toolbar.unorderedList": "非オーダーリスト",
   "utilityWindow.close": "支援ウィンドウを閉じる",
   "utilityWindow.label": "支援ウィンドウ",

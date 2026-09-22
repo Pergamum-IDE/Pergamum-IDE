@@ -10724,6 +10724,17 @@ label.settingsItemHeader {
   opacity: 0.6;
 }
 
+/* #541: pressed/active state for toggle-style toolbar buttons (e.g. Preview). */
+.editorToolbarButton[aria-pressed="true"] {
+  background: #d1d9e6;
+  border-color: #a8b6cc;
+  color: #0b5fff;
+}
+
+.editorToolbarButton[aria-pressed="true"]:hover:not(:disabled) {
+  background: #c3cee0;
+}
+
 .editorToolbarButtonIcon {
   display: inline-flex;
   align-items: center;

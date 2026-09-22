@@ -62,6 +62,9 @@ function defaultProps(
     hasEditableTextLikeDocument: true,
     onOpenRubyDialog: vi.fn(),
     onOpenEmphasisDialog: vi.fn(),
+    canTogglePreview: true,
+    isPreviewVisible: true,
+    onTogglePreview: vi.fn(),
     translate: mockTranslate,
     ...overrides
   };
@@ -97,7 +100,8 @@ const BUTTON_ORDER = [
   "画像を挿入",
   "表を挿入",
   "ルビ",
-  "傍点"
+  "傍点",
+  "プレビューを切り替え"
 ];
 
 describe("EditorToolbar", () => {
@@ -111,11 +115,11 @@ describe("EditorToolbar", () => {
     );
   });
 
-  it("renders five visual separators between the command groups", () => {
+  it("renders six visual separators between the command groups", () => {
     renderToolbar();
     expect(
       container.querySelectorAll(".editorToolbarSeparator")
-    ).toHaveLength(5);
+    ).toHaveLength(6);
   });
 
   it("every button is icon-only with aria-label and title, no visible text", () => {
@@ -285,6 +289,31 @@ describe("EditorToolbar", () => {
 
     act(() => emphasis.click());
     expect(props.onOpenEmphasisDialog).toHaveBeenCalledWith(emphasis);
+  });
+
+  it("Preview button calls onTogglePreview when clicked", () => {
+    const props = renderToolbar();
+    const buttons = toolbarButtons();
+    const preview = buttons[16];
+
+    act(() => preview.click());
+    expect(props.onTogglePreview).toHaveBeenCalledOnce();
+  });
+
+  it("Preview button reflects isPreviewVisible via aria-pressed", () => {
+    renderToolbar({ isPreviewVisible: true });
+    expect(toolbarButtons()[16].getAttribute("aria-pressed")).toBe("true");
+
+    renderToolbar({ isPreviewVisible: false });
+    expect(toolbarButtons()[16].getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("Preview button is disabled when canTogglePreview is false, independent of other gates", () => {
+    renderToolbar({ canTogglePreview: false });
+    const buttons = toolbarButtons();
+    expect(buttons[16].disabled).toBe(true);
+    // Other commands stay enabled (still passed as true here).
+    expect(buttons[0].disabled).toBe(false);
   });
 
   it("Heading button calls onToggleHeadingSelector when clicked", () => {

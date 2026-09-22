@@ -27,6 +27,10 @@ export interface WorkbenchSidebarLayoutState {
 
 export interface WorkbenchMarkdownEditorPreviewLayoutState {
   ratio: number;
+  /** #541: user-toggled Preview pane visibility (Ctrl+P / toolbar button).
+   *  Session-local only, like the rest of `WorkbenchLayoutState` — not
+   *  persisted to `pergamum.json` or Session. */
+  visible: boolean;
 }
 
 export interface WorkbenchUtilityWindowLayoutState {
@@ -48,7 +52,8 @@ export function createInitialWorkbenchLayoutState(): WorkbenchLayoutState {
       width: SIDEBAR_DEFAULT_WIDTH
     },
     markdownEditorPreview: {
-      ratio: MARKDOWN_EDITOR_PREVIEW_DEFAULT_RATIO
+      ratio: MARKDOWN_EDITOR_PREVIEW_DEFAULT_RATIO,
+      visible: true
     },
     utilityWindow: {
       open: false,

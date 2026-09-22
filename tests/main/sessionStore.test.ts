@@ -54,6 +54,7 @@ function record(
     window: null,
     editors: [],
     activeEditor: null,
+    previewVisible: true,
     ...overrides
   };
 }

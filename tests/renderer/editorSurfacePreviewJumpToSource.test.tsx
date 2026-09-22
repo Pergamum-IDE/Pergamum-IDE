@@ -141,6 +141,7 @@ function baseProps(
     isProjectOwnedReadOnly: false,
     markdownEditorPreviewRatio: 0.5,
     onChangeMarkdownEditorPreviewRatio: noop,
+    previewVisible: true,
     onChangeMarkdownContent: noop,
     onGlossarySelectionShortcut: noop,
     onParagraphIndentControllerChange: noop,

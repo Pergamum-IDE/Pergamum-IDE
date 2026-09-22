@@ -43,7 +43,13 @@ function transport(): SessionPersistenceTransport & {
 }
 
 function inputs(sessionId: string): SessionSnapshotInputs {
-  return { sessionId, projectContext: null, editors: [], activeEditor: null };
+  return {
+    sessionId,
+    projectContext: null,
+    editors: [],
+    activeEditor: null,
+    previewVisible: true
+  };
 }
 
 describe("SessionPersistenceCoordinator cold-start defer (#274)", () => {
