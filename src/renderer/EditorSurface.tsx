@@ -1053,14 +1053,11 @@ function MarkdownEditorSurface({
     [previewSourceProjectRelativePath]
   );
   const isMarkdown = isMarkdownCurrentDocument(document);
-  // #541: folds the user-toggled Preview visibility into the same flag that
-  // already fully gates pane rendering below (grid columns, resize handle,
-  // and the pane itself) — a hidden-by-toggle Preview behaves exactly like
-  // an unavailable-for-this-document Preview (no DOM, so scroll sync simply
-  // has nothing to attach to, same as the existing `.txt` + Markdown
-  // renderer case).
-  const isPreviewAvailable =
-    (isMarkdown || previewRenderer !== "markdown") && previewVisible;
+  // #548: Preview availability is controlled by the user-visible toggle, not
+  // by document extension or renderer choice. A `.txt` document rendered with
+  // the Markdown renderer intentionally follows the existing renderer's
+  // behavior instead of introducing a plain-text-specific renderer here.
+  const isPreviewAvailable = previewVisible;
   const isDirty = isCurrentDocumentDirty(document);
 
   const [aozoraCleanText, setAozoraCleanText] = useState<string | null>(null);

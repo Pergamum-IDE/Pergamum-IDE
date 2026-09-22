@@ -90,6 +90,7 @@ import {
   builtInDefaultSettings,
   resolveEffectiveSettings,
   type EffectiveImageAttachmentSettings,
+  type PreviewRendererId,
   type ProjectSettings
 } from "../shared/settings";
 import {
@@ -1144,6 +1145,8 @@ export function App(): JSX.Element {
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
     createInitialWorkbenchLayoutState
   );
+  const [selectedPreviewRenderer, setSelectedPreviewRenderer] =
+    useState<PreviewRendererId>(builtInDefaultSettings.preview.renderer);
   // #436 Phase 8-0 PoC: the bottom pane that replaces the former Utility
   // Window. Ephemeral React state — NOT persisted to the session. Its height
   // (Slice 6 remediation) is likewise renderer-memory only, but survives
@@ -2424,6 +2427,12 @@ export function App(): JSX.Element {
     () => resolveEffectiveSettings(settings, project?.config?.settings),
     [settings, project?.config?.settings]
   );
+  // #548: toolbar renderer selection is temporary UI state. Reset it whenever
+  // the active project/default renderer changes, but never write it back to
+  // Application Settings, Project Settings, or Session.
+  useEffect(() => {
+    setSelectedPreviewRenderer(effectiveSettings.preview.renderer);
+  }, [effectiveSettings.preview.renderer, project?.activeProjectFilePath]);
   // #272: recomputed whenever the Project or the open-editor set changes.
   // Cheap (no serialization / hashing) — the coordinator debounces and
   // captures Editor View State at most once per flush.
@@ -2832,17 +2841,12 @@ export function App(): JSX.Element {
   // document (the attachment folder itself is always project-relative).
   const canInsertImage =
     canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";
-  // #541: mirrors EditorSurface.tsx's own `isPreviewAvailable` eligibility
-  // check (`isMarkdown || previewRenderer !== "markdown"`) — Preview is not
-  // Markdown-only, since `.txt` documents can use a non-Markdown preview
-  // renderer (Narou/Kakuyomu/Aozora style). Deliberately independent of
-  // `layout.markdownEditorPreview.visible`: the toolbar button must stay
-  // enabled/clickable even while Preview is currently hidden.
+  // #548: Preview availability is no longer gated by document extension or
+  // renderer choice. The toggle controls only pane visibility; the renderer
+  // dropdown controls how the current text-like document is interpreted.
   const isPreviewEligible =
     !isEditorAreaSpecialTabActive &&
-    activeMarkdownDocument !== null &&
-    (isMarkdownCurrentDocument(activeMarkdownDocument) ||
-      effectiveSettings.preview.renderer !== "markdown");
+    activeMarkdownDocument !== null;
   const canSave =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -11199,6 +11203,9 @@ export function App(): JSX.Element {
         canTogglePreview={isPreviewEligible}
         isPreviewVisible={layout.markdownEditorPreview.visible}
         onTogglePreview={handleTogglePreviewVisible}
+        selectedPreviewRenderer={selectedPreviewRenderer}
+        defaultPreviewRenderer={effectiveSettings.preview.renderer}
+        onSelectPreviewRenderer={setSelectedPreviewRenderer}
         isCommandPaletteOpen={isCommandPaletteOpen}
         commandPaletteLaunchAnimationDurationMs={
           effectiveSettings.commandPalette.launchAnimation.durationMs
@@ -11512,7 +11519,7 @@ export function App(): JSX.Element {
                           activeDocument.id
                         )}
                         documentStates={markdownEditorDocumentStatesRef.current}
-                        previewRenderer={effectiveSettings.preview.renderer}
+                        previewRenderer={selectedPreviewRenderer}
                         narouMarkText={
                           effectiveSettings.editor.emphasisMark.narouMarkText
                         }

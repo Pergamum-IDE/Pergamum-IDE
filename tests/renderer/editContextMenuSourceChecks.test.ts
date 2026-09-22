@@ -123,6 +123,11 @@ function allSourceText(): string {
  * popover, scoped to that popover while it is open — not a document-level/
  * global shortcut listener.
  *
+ * PreviewRendererDropdown.tsx (#548) is a toolbar-scoped listbox widget. Its
+ * `onKeyDown` handles only the dropdown's own Arrow/Home/End/Enter/Escape
+ * navigation while the renderer menu is open, and does not implement editor
+ * shortcuts or native edit commands.
+ *
  * globalKeyboardShortcuts.ts (#541) is the same category as
  * editorTabShortcuts.ts: a small, reusable app-wide shortcut registry
  * (Ctrl+P Preview toggle, with more shortcuts expected to register through
@@ -149,6 +154,7 @@ const onKeyDownExemptFileNames = new Set([
   "ActiveFindGlossarySelect.tsx",
   "TableSizePopover.tsx",
   "HeadingLevelPopover.tsx",
+  "PreviewRendererDropdown.tsx",
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
   "globalKeyboardShortcuts.ts",

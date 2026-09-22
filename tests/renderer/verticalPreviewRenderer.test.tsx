@@ -134,21 +134,27 @@ describe("Vertical novel preview renderer MVP (#514)", () => {
   });
 
   describe("4. .txt document preview availability rules", () => {
-    it("1. isPreviewAvailable logic returns true for vertical renderers on .txt files", () => {
+    it("1. #548: isPreviewAvailable logic returns true for vertical renderers on .txt files", () => {
       const isMarkdown = false;
       const renderers: PreviewRendererId[] = ["narouVertical", "kakuyomuVertical", "aozoraVertical"];
 
       for (const renderer of renderers) {
-        const isPreviewAvailable = isMarkdown || renderer !== "markdown";
+        const previewVisible = true;
+        const isPreviewAvailable = previewVisible;
+        expect(isMarkdown).toBe(false);
+        expect(renderer).not.toBe("markdown");
         expect(isPreviewAvailable).toBe(true);
       }
     });
 
-    it("2. isPreviewAvailable returns false for .txt files when renderer is markdown", () => {
+    it("2. #548: isPreviewAvailable returns true for .txt files when renderer is markdown", () => {
       const isMarkdown = false;
       const renderer: PreviewRendererId = "markdown";
-      const isPreviewAvailable = isMarkdown || renderer !== "markdown";
-      expect(isPreviewAvailable).toBe(false);
+      const previewVisible = true;
+      const isPreviewAvailable = previewVisible;
+      expect(isMarkdown).toBe(false);
+      expect(renderer).toBe("markdown");
+      expect(isPreviewAvailable).toBe(true);
     });
   });
 

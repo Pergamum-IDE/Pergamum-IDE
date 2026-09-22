@@ -1785,6 +1785,8 @@ export const enTranslations = {
   "toolbar.strikethrough": "Strikethrough",
   "toolbar.tableGridLabel": "{cols} x {rows}",
   "toolbar.togglePreview": "Toggle preview",
+  "toolbar.previewRenderer.defaultDescription": "Default preview renderer: {renderer}",
+  "toolbar.previewRenderer.defaultIndicator": "Default",
   "toolbar.commandBox.cycleMode": "Cycle command box mode",
   "toolbar.commandBox.placeholder.commands": "Type a command...",
   "toolbar.commandBox.placeholder.projectFiles": "Open file...",
