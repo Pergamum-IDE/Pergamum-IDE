@@ -2784,6 +2784,17 @@ export function App(): JSX.Element {
   // non-Markdown (.txt) document.
   const canUseMarkdownToolbarCommands =
     activeEditorIsMarkdown && !isReadOnlyProjectOwnedEditor;
+  // #531: shared enable gate for the Ruby / Emphasis Mark toolbar buttons —
+  // deliberately looser than `canUseMarkdownToolbarCommands` above, since the
+  // existing Ctrl+R / Ctrl+. shortcuts already work on `.txt` documents
+  // (their keymap extensions are gated per MarkdownEditor instance, not by
+  // file extension) and this issue must not narrow that. Still excludes a
+  // special tab (Settings, Glossary Manager, ...) and the read-only state,
+  // matching `canUseMarkdownToolbarCommands`'s other two conditions.
+  const hasEditableTextLikeDocument =
+    !isEditorAreaSpecialTabActive &&
+    activeMarkdownDocument !== null &&
+    !isReadOnlyProjectOwnedEditor;
   const canSave =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -3285,11 +3296,72 @@ export function App(): JSX.Element {
     paragraphIndentControllerRef.current?.insertLink(labelText, url);
   }, []);
 
-  // #529: the keyboard-shortcut path for the same five commands. Ctrl+B /
-  // Ctrl+I / Ctrl+Shift+X call the exact same controller methods as their
-  // toolbar buttons; Ctrl+L / Ctrl+K open the same heading selector / link
-  // dialog the toolbar buttons open (reading the selection directly from the
-  // CodeMirror view, since the keymap extension already has it at hand).
+  // #531: Horizontal rule / Code block apply immediately, same shape as
+  // #529's Bold / Italic / Strikethrough above.
+  const handleInsertHorizontalRule = useCallback(() => {
+    paragraphIndentControllerRef.current?.insertHorizontalRule();
+  }, []);
+  const handleInsertCodeBlock = useCallback(() => {
+    paragraphIndentControllerRef.current?.insertCodeBlock();
+  }, []);
+
+  // #531: Ruby / Emphasis Mark toolbar buttons reuse the exact same dialogs
+  // and no-selection/multi-line rules as the existing Ctrl+R / Ctrl+.
+  // shortcuts (read-only is handled by the button's own disabled state, so
+  // no notifyReadOnly here) — only HOW the selection is read differs, via
+  // the controller's `getSelection()` + `getBufferText()` pull, since a
+  // toolbar click has no direct CodeMirror `view` access the way the keymap
+  // handlers do.
+  const handleOpenRubyDialogFromToolbar = useCallback(
+    (opener: Element) => {
+      const controller = paragraphIndentControllerRef.current;
+      const selection = controller?.getSelection() ?? null;
+      if (!selection || selection.from === selection.to) {
+        notifyRubyNoSelection();
+        return;
+      }
+      const selectedText =
+        controller
+          ?.getBufferText()
+          ?.slice(selection.from, selection.to) ?? "";
+      if (/[\r\n]/.test(selectedText)) {
+        notifyRubyMultiLine();
+        return;
+      }
+      setRubyDialogState({ selectedText, selection, opener });
+    },
+    [notifyRubyNoSelection, notifyRubyMultiLine]
+  );
+
+  const handleOpenEmphasisDialogFromToolbar = useCallback(
+    (opener: Element) => {
+      const controller = paragraphIndentControllerRef.current;
+      const selection = controller?.getSelection() ?? null;
+      if (!selection || selection.from === selection.to) {
+        notifyEmphasisMarkNoSelection();
+        return;
+      }
+      const selectedText =
+        controller
+          ?.getBufferText()
+          ?.slice(selection.from, selection.to) ?? "";
+      if (/[\r\n]/.test(selectedText)) {
+        notifyEmphasisMarkMultiLine();
+        return;
+      }
+      setEmphasisMarkDialogState({ selectedText, selection, opener });
+    },
+    [notifyEmphasisMarkNoSelection, notifyEmphasisMarkMultiLine]
+  );
+
+  // #529 / #531: the keyboard-shortcut path for the Markdown-specific
+  // commands. Ctrl+B / Ctrl+I / Ctrl+Shift+X / Ctrl+Shift+L / Ctrl+Shift+B
+  // call the exact same controller methods as their toolbar buttons; Ctrl+L
+  // / Ctrl+K open the same heading selector / link dialog the toolbar
+  // buttons open (reading the selection directly from the CodeMirror view,
+  // since the keymap extension already has it at hand). Ruby / Emphasis Mark
+  // keep their own pre-existing shortcut extensions (editorRubyShortcuts.ts /
+  // editorEmphasisShortcuts.ts) — this config is unrelated to those.
   const markdownToolbarShortcutConfig =
     useMemo<MarkdownEditorToolbarShortcutConfig>(
       () => ({
@@ -3299,13 +3371,17 @@ export function App(): JSX.Element {
         applyStrikethrough: handleApplyStrikethroughMarkup,
         requestOpenHeadingSelector: () => setIsHeadingSelectorOpen(true),
         requestOpenLinkDialog: (selectedText, opener) =>
-          setLinkInsertDialogState({ selectedText, opener })
+          setLinkInsertDialogState({ selectedText, opener }),
+        insertHorizontalRule: handleInsertHorizontalRule,
+        insertCodeBlock: handleInsertCodeBlock
       }),
       [
         canUseMarkdownToolbarCommands,
         handleApplyBoldMarkup,
         handleApplyItalicMarkup,
-        handleApplyStrikethroughMarkup
+        handleApplyStrikethroughMarkup,
+        handleInsertHorizontalRule,
+        handleInsertCodeBlock
       ]
     );
 
@@ -10859,9 +10935,14 @@ export function App(): JSX.Element {
         onCloseHeadingSelector={handleCloseHeadingSelector}
         onSelectHeadingLevel={handleSelectHeadingLevel}
         onOpenLinkDialog={handleOpenLinkInsertDialog}
+        onInsertHorizontalRule={handleInsertHorizontalRule}
+        onInsertCodeBlock={handleInsertCodeBlock}
         onInsertTable={(columns, rows) => {
           paragraphIndentControllerRef.current?.insertTable?.(columns, rows);
         }}
+        hasEditableTextLikeDocument={hasEditableTextLikeDocument}
+        onOpenRubyDialog={handleOpenRubyDialogFromToolbar}
+        onOpenEmphasisDialog={handleOpenEmphasisDialogFromToolbar}
         translate={translate}
       />
 

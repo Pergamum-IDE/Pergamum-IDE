@@ -9,11 +9,13 @@ CC0 does not require attribution as a license condition, but Pergamum records th
 ## Imported assets
 
 | Pergamum asset | Original asset | Original page | License |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `vocabulary.svg` | Vocabulary | `https://www.svgrepo.com/svg/245661/vocabulary` | CC0 License |
 | `scroll.svg` | Scroll | `https://www.svgrepo.com/svg/412480/scroll` | CC0 License |
 | `document.svg` | Document | `https://www.svgrepo.com/svg/509890/document` | CC0 License |
 | `markdown.svg` | Markdown | `https://www.svgrepo.com/svg/510065/markdown` | CC0 License |
+| `indent.svg` | Indent | `https://www.svgrepo.com/svg/389250/indent` | MIT License |
+| `outdent.svg` | Indent | `https://www.svgrepo.com/svg/389332/outdent` | MIT License |
 
 ## Modifications
 

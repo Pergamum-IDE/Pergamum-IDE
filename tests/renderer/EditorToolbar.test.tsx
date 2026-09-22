@@ -51,7 +51,12 @@ function defaultProps(
     onCloseHeadingSelector: vi.fn(),
     onSelectHeadingLevel: vi.fn(),
     onOpenLinkDialog: vi.fn(),
+    onInsertHorizontalRule: vi.fn(),
+    onInsertCodeBlock: vi.fn(),
     onInsertTable: vi.fn(),
+    hasEditableTextLikeDocument: true,
+    onOpenRubyDialog: vi.fn(),
+    onOpenEmphasisDialog: vi.fn(),
     translate: mockTranslate,
     ...overrides
   };
@@ -72,26 +77,30 @@ function toolbarButtons(): HTMLButtonElement[] {
 }
 
 describe("EditorToolbar", () => {
-  it("renders Heading, Bold, Italic, Strikethrough, Link, and Table buttons in order", () => {
+  it("renders all buttons in the approved order", () => {
     renderToolbar();
 
     const buttons = toolbarButtons();
-    expect(buttons).toHaveLength(6);
+    expect(buttons).toHaveLength(10);
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
       "見出しを挿入",
       "太字",
       "斜体",
       "取消線",
       "リンクを挿入",
-      "表を挿入"
+      "水平線",
+      "コードブロック",
+      "表を挿入",
+      "ルビ",
+      "傍点"
     ]);
   });
 
-  it("renders three visual separators between the command groups", () => {
+  it("renders four visual separators between the command groups", () => {
     renderToolbar();
     expect(
       container.querySelectorAll(".editorToolbarSeparator")
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 
   it("every button is icon-only with aria-label and title, no visible text", () => {
@@ -106,17 +115,43 @@ describe("EditorToolbar", () => {
     }
   });
 
-  it("disables Heading/Bold/Italic/Strikethrough/Link when canUseMarkdownToolbarCommands is false", () => {
+  it("disables Heading/Bold/Italic/Strikethrough/Link/HorizontalRule/CodeBlock when canUseMarkdownToolbarCommands is false", () => {
     renderToolbar({ canUseMarkdownToolbarCommands: false });
-    const [heading, bold, italic, strikethrough, link, table] =
-      toolbarButtons();
+    const [
+      heading,
+      bold,
+      italic,
+      strikethrough,
+      link,
+      horizontalRule,
+      codeBlock,
+      table,
+      ruby,
+      emphasis
+    ] = toolbarButtons();
     expect(heading.disabled).toBe(true);
     expect(bold.disabled).toBe(true);
     expect(italic.disabled).toBe(true);
     expect(strikethrough.disabled).toBe(true);
     expect(link.disabled).toBe(true);
+    expect(horizontalRule.disabled).toBe(true);
+    expect(codeBlock.disabled).toBe(true);
     // Table's own gate is independent (still passed as true here).
     expect(table.disabled).toBe(false);
+    // Ruby / Emphasis follow their own, looser gate (still passed as true here).
+    expect(ruby.disabled).toBe(false);
+    expect(emphasis.disabled).toBe(false);
+  });
+
+  it("disables Ruby/Emphasis when hasEditableTextLikeDocument is false, independent of the Markdown gate", () => {
+    renderToolbar({ hasEditableTextLikeDocument: false });
+    const buttons = toolbarButtons();
+    const ruby = buttons[8];
+    const emphasis = buttons[9];
+    expect(ruby.disabled).toBe(true);
+    expect(emphasis.disabled).toBe(true);
+    // Markdown-specific commands stay enabled (still passed as true here).
+    expect(buttons[0].disabled).toBe(false);
   });
 
   it("Bold / Italic / Strikethrough buttons call their handlers when clicked", () => {
@@ -139,6 +174,40 @@ describe("EditorToolbar", () => {
 
     act(() => link.click());
     expect(props.onOpenLinkDialog).toHaveBeenCalledWith(link);
+  });
+
+  it("Horizontal rule button calls onInsertHorizontalRule when clicked", () => {
+    const props = renderToolbar();
+    const [, , , , , horizontalRule] = toolbarButtons();
+
+    act(() => horizontalRule.click());
+    expect(props.onInsertHorizontalRule).toHaveBeenCalledOnce();
+  });
+
+  it("Code block button calls onInsertCodeBlock when clicked", () => {
+    const props = renderToolbar();
+    const [, , , , , , codeBlock] = toolbarButtons();
+
+    act(() => codeBlock.click());
+    expect(props.onInsertCodeBlock).toHaveBeenCalledOnce();
+  });
+
+  it("Ruby button calls onOpenRubyDialog with the button element", () => {
+    const props = renderToolbar();
+    const buttons = toolbarButtons();
+    const ruby = buttons[8];
+
+    act(() => ruby.click());
+    expect(props.onOpenRubyDialog).toHaveBeenCalledWith(ruby);
+  });
+
+  it("Emphasis button calls onOpenEmphasisDialog with the button element", () => {
+    const props = renderToolbar();
+    const buttons = toolbarButtons();
+    const emphasis = buttons[9];
+
+    act(() => emphasis.click());
+    expect(props.onOpenEmphasisDialog).toHaveBeenCalledWith(emphasis);
   });
 
   it("Heading button calls onToggleHeadingSelector when clicked", () => {
@@ -177,7 +246,8 @@ describe("EditorToolbar", () => {
   it("renders disabled icon-only table button with aria-label and title when canInsertTable is false", () => {
     renderToolbar({ canInsertTable: false });
 
-    const [, , , , , table] = toolbarButtons();
+    const buttons = toolbarButtons();
+    const table = buttons[7];
     expect(table.disabled).toBe(true);
     expect(table.getAttribute("aria-label")).toBe("表を挿入");
     expect(table.getAttribute("title")).toBe("表を挿入");
@@ -188,7 +258,8 @@ describe("EditorToolbar", () => {
     const onInsertTable = vi.fn();
     renderToolbar({ canInsertTable: true, onInsertTable });
 
-    const [, , , , , table] = toolbarButtons();
+    const buttons = toolbarButtons();
+    const table = buttons[7];
     expect(table.disabled).toBe(false);
 
     // Popover initially not present

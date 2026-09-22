@@ -12,7 +12,8 @@ import {
   Transaction,
   type ChangeSpec,
   type AnnotationType,
-  type StateField
+  type StateField,
+  type Text
 } from "@codemirror/state";
 import {
   pergamumContextSurfaceAttribute,
@@ -44,6 +45,8 @@ import { generateMarkdownTable } from "../shared/markdownTableGenerator";
 import { wrapOrInsertInlineMarker } from "../shared/markdownInlineMarkup";
 import { applyHeadingToLine } from "../shared/markdownHeadingMarkup";
 import { buildMarkdownLink } from "../shared/markdownLinkMarkup";
+import { buildFencedCodeBlock } from "../shared/markdownCodeBlockMarkup";
+import { buildHorizontalRuleInsertion } from "../shared/markdownHorizontalRuleMarkup";
 import {
   playMarkdownEditorInputSound,
   type MarkdownEditorInputSoundEvent,
@@ -475,6 +478,29 @@ export interface MarkdownEditorParagraphIndentController {
    * exact text/cursor-placement rules.
    */
   insertLink(labelText: string, url: string): boolean;
+  /**
+   * #531: the current primary selection's document-coordinate range, or
+   * `null` when no view is mounted. Lets a toolbar button (which has no
+   * direct CodeMirror `view` access, unlike a keymap handler) read the
+   * selection it needs before opening the existing Ruby / Emphasis Mark
+   * dialogs — mirrors `getBufferText()`'s existing "read live state for
+   * App-level orchestration" role. Primary selection only; no multi-cursor
+   * support.
+   */
+  getSelection(): { from: number; to: number } | null;
+  /**
+   * #531: inserts a Markdown horizontal rule (with its own trailing blank
+   * line) at the current selection, padded against surrounding content by
+   * the same blank-line rule as `insertTable`.
+   */
+  insertHorizontalRule(): boolean;
+  /**
+   * #531: wraps the current selection in a fenced code block (or inserts an
+   * empty one with the cursor inside when there is no selection), padded
+   * against surrounding content by the same blank-line rule as
+   * `insertTable`.
+   */
+  insertCodeBlock(): boolean;
 }
 
 export interface MarkdownEditorViewStateController {
@@ -534,6 +560,51 @@ function isTypedInputUserEvent(userEvent: string | undefined): boolean {
     userEvent === "input.type" ||
     userEvent?.startsWith("input.type.") === true
   );
+}
+
+/**
+ * #531: shared leading/trailing blank-line padding for block-level toolbar
+ * insertions (table, horizontal rule, code block) at `from`/`to` in `doc` —
+ * extracted from #527's `insertTable` without changing its behavior. Looks
+ * at the one or two characters immediately before/after the insertion point
+ * and adds just enough newlines so the inserted block sits on its own
+ * blank-line-delimited paragraph, never stacking extra blank lines when one
+ * already exists (including at the very start/end of the document).
+ */
+function computeBlockInsertionPadding(
+  doc: Text,
+  from: number,
+  to: number
+): { leadingLines: string; trailingLines: string } {
+  const docLength = doc.length;
+
+  let leadingLines = "";
+  if (from > 0) {
+    const charBefore = doc.sliceString(from - 1, from);
+    if (charBefore !== "\n") {
+      leadingLines = "\n\n";
+    } else {
+      const char2Before = from >= 2 ? doc.sliceString(from - 2, from - 1) : "";
+      if (char2Before !== "\n") {
+        leadingLines = "\n";
+      }
+    }
+  }
+
+  let trailingLines = "";
+  if (to < docLength) {
+    const charAfter = doc.sliceString(to, to + 1);
+    if (charAfter !== "\n") {
+      trailingLines = "\n\n";
+    } else {
+      const char2After = to + 2 <= docLength ? doc.sliceString(to + 1, to + 2) : "";
+      if (char2After !== "\n") {
+        trailingLines = "\n";
+      }
+    }
+  }
+
+  return { leadingLines, trailingLines };
 }
 
 export function markdownEditorInputSoundEventFromTransactions(
@@ -1468,35 +1539,13 @@ export function MarkdownEditor({
         const selection = view.state.selection.main;
         const { from, to } = selection;
         const doc = view.state.doc;
-        const docLength = doc.length;
 
         const tableText = generateMarkdownTable(columns, rows);
-
-        let leadingLines = "";
-        if (from > 0) {
-          const charBefore = doc.sliceString(from - 1, from);
-          if (charBefore !== "\n") {
-            leadingLines = "\n\n";
-          } else {
-            const char2Before = from >= 2 ? doc.sliceString(from - 2, from - 1) : "";
-            if (char2Before !== "\n") {
-              leadingLines = "\n";
-            }
-          }
-        }
-
-        let trailingLines = "";
-        if (to < docLength) {
-          const charAfter = doc.sliceString(to, to + 1);
-          if (charAfter !== "\n") {
-            trailingLines = "\n\n";
-          } else {
-            const char2After = to + 2 <= docLength ? doc.sliceString(to + 1, to + 2) : "";
-            if (char2After !== "\n") {
-              trailingLines = "\n";
-            }
-          }
-        }
+        const { leadingLines, trailingLines } = computeBlockInsertionPadding(
+          doc,
+          from,
+          to
+        );
 
         const insertText = leadingLines + tableText + trailingLines;
         const firstHeaderCellOffset = 2;
@@ -1586,6 +1635,77 @@ export function MarkdownEditor({
         view.dispatch({
           changes: { from, to, insert: text },
           selection: { anchor: from + selectionOffsetFromInsertStart },
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
+        return true;
+      },
+      getSelection: () => {
+        const view = viewRef.current;
+        if (!view) {
+          return null;
+        }
+        const { from, to } = view.state.selection.main;
+        return { from, to };
+      },
+      insertHorizontalRule: (): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const { from, to } = view.state.selection.main;
+        const doc = view.state.doc;
+        const { leadingLines, trailingLines } = computeBlockInsertionPadding(
+          doc,
+          from,
+          to
+        );
+        const { text, selectionOffsetFromInsertStart } =
+          buildHorizontalRuleInsertion();
+
+        view.dispatch({
+          changes: {
+            from,
+            to,
+            insert: leadingLines + text + trailingLines
+          },
+          selection: {
+            anchor: from + leadingLines.length + selectionOffsetFromInsertStart
+          },
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
+        return true;
+      },
+      insertCodeBlock: (): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const { from, to } = view.state.selection.main;
+        const doc = view.state.doc;
+        const selectedText = view.state.sliceDoc(from, to);
+        const { leadingLines, trailingLines } = computeBlockInsertionPadding(
+          doc,
+          from,
+          to
+        );
+        const { text, selectionOffsetFromInsertStart } =
+          buildFencedCodeBlock(selectedText);
+
+        view.dispatch({
+          changes: {
+            from,
+            to,
+            insert: leadingLines + text + trailingLines
+          },
+          selection: {
+            anchor: from + leadingLines.length + selectionOffsetFromInsertStart
+          },
           scrollIntoView: true,
           userEvent: "input.replace"
         });
