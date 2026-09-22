@@ -244,6 +244,7 @@ import { LinkInsertDialog } from "./dialog/LinkInsertDialog";
 import { getCurrentActiveEditorSelectionText } from "./find/activeEditorSelectionAccess";
 import type { MarkdownEditorToolbarShortcutConfig } from "./editorMarkdownToolbarShortcuts";
 import type { HeadingLevel } from "../shared/markdownHeadingMarkup";
+import type { MarkdownListKind } from "../shared/markdownListMarkup";
 import {
   EditorSurface,
   type DocumentOpenAggregateMetrics,
@@ -3303,6 +3304,21 @@ export function App(): JSX.Element {
   }, []);
   const handleInsertCodeBlock = useCallback(() => {
     paragraphIndentControllerRef.current?.insertCodeBlock();
+  }, []);
+
+  // #533: Unordered / Ordered / Checklist apply immediately, same shape as
+  // the other Markdown-specific toolbar commands above.
+  const handleApplyList = useCallback((kind: MarkdownListKind) => {
+    paragraphIndentControllerRef.current?.applyList(kind);
+  }, []);
+  // #533: Outdent / Indent toolbar buttons call the existing `Mod+[` /
+  // `Mod+]` command path directly through the controller — no new indent
+  // logic, matching how the keyboard shortcuts already behave.
+  const handleOutdent = useCallback(() => {
+    paragraphIndentControllerRef.current?.outdent();
+  }, []);
+  const handleIndent = useCallback(() => {
+    paragraphIndentControllerRef.current?.indent();
   }, []);
 
   // #531: Ruby / Emphasis Mark toolbar buttons reuse the exact same dialogs
@@ -10934,6 +10950,9 @@ export function App(): JSX.Element {
         onToggleHeadingSelector={handleToggleHeadingSelector}
         onCloseHeadingSelector={handleCloseHeadingSelector}
         onSelectHeadingLevel={handleSelectHeadingLevel}
+        onApplyList={handleApplyList}
+        onOutdent={handleOutdent}
+        onIndent={handleIndent}
         onOpenLinkDialog={handleOpenLinkInsertDialog}
         onInsertHorizontalRule={handleInsertHorizontalRule}
         onInsertCodeBlock={handleInsertCodeBlock}
