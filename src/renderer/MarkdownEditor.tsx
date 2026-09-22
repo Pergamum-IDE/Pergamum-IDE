@@ -41,6 +41,9 @@ import { documentSwitchTransactionSpec } from "./editorLineEndingField";
 import type { LineEndingBreakSet } from "./editorLineEndingField";
 import type { LineEndingBreak, LineEndingKind } from "./lineEndingTracking";
 import { generateMarkdownTable } from "../shared/markdownTableGenerator";
+import { wrapOrInsertInlineMarker } from "../shared/markdownInlineMarkup";
+import { applyHeadingToLine } from "../shared/markdownHeadingMarkup";
+import { buildMarkdownLink } from "../shared/markdownLinkMarkup";
 import {
   playMarkdownEditorInputSound,
   type MarkdownEditorInputSoundEvent,
@@ -88,6 +91,11 @@ import {
   unpublishCurrentRubyShortcutConfig,
   type MarkdownEditorRubyShortcutConfig
 } from "./editorRubyShortcuts";
+import {
+  publishCurrentMarkdownToolbarShortcutConfig,
+  unpublishCurrentMarkdownToolbarShortcutConfig,
+  type MarkdownEditorToolbarShortcutConfig
+} from "./editorMarkdownToolbarShortcuts";
 import {
   publishCurrentActiveEditorSelectionAccess,
   unpublishCurrentActiveEditorSelectionAccess
@@ -315,6 +323,14 @@ interface MarkdownEditorProps {
   emphasisMarkShortcut?: MarkdownEditorEmphasisMarkShortcutConfig | null;
   rubyShortcut?: MarkdownEditorRubyShortcutConfig | null;
   /**
+   * #529: Ctrl+B / Ctrl+I / Ctrl+Shift+X / Ctrl+K / Ctrl+L for the Markdown
+   * toolbar commands. `undefined`/`null` (the default; the Glossary
+   * description field never passes it) leaves these shortcuts inert. Only
+   * EditorSurface's MarkdownEditorSurface supplies it. Same module-level-slot
+   * publish mechanism as `emphasisMarkShortcut` above, for the same reason.
+   */
+  markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
+  /**
    * #424: a Find-panel-driven "select + reveal this range" request, kept
    * entirely separate from `pendingSelection` (which App owns for Outline /
    * Go to Line / session restore). A new object is applied once; pass
@@ -439,6 +455,26 @@ export interface MarkdownEditorParagraphIndentController {
    * #527: Inserts a GFM Markdown table skeleton at current editor selection/cursor.
    */
   insertTable(columns: number, rows: number): boolean;
+  /**
+   * #529: wraps the current selection with `marker` (or inserts an empty
+   * marker pair with the cursor between them when there is no selection).
+   * Shared by the Bold (`**`) / Italic (`*`) / Strikethrough (`~~`) toolbar
+   * buttons and their keyboard shortcuts.
+   */
+  applyInlineMarkup(marker: "**" | "*" | "~~"): boolean;
+  /**
+   * #529: applies (or removes, for `"normal"`) an ATX heading marker to every
+   * line touched by the current primary selection (a single line when the
+   * selection is empty). Existing heading markers are replaced, not
+   * duplicated.
+   */
+  applyHeading(level: 1 | 2 | 3 | 4 | 5 | 6 | "normal"): boolean;
+  /**
+   * #529: replaces the current selection with a Markdown link built from
+   * `labelText` and `url`. See `src/shared/markdownLinkMarkup.ts` for the
+   * exact text/cursor-placement rules.
+   */
+  insertLink(labelText: string, url: string): boolean;
 }
 
 export interface MarkdownEditorViewStateController {
@@ -587,6 +623,7 @@ export function MarkdownEditor({
   glossarySelectionShortcut,
   emphasisMarkShortcut,
   rubyShortcut,
+  markdownToolbarShortcut,
   extraPendingSelection,
   onExtraPendingSelectionApplied,
   extraFocusRequest,
@@ -944,6 +981,8 @@ export function MarkdownEditor({
       glossarySelectionShortcutEnabled: (glossarySelectionShortcut ?? null) !== null,
       emphasisMarkShortcutEnabled: (emphasisMarkShortcut ?? null) !== null,
       rubyShortcutEnabled: (rubyShortcut ?? null) !== null,
+      markdownToolbarShortcutEnabled:
+        (markdownToolbarShortcut ?? null) !== null,
       imageAttachmentPasteOptions:
         currentImageAttachmentPasteOptionsRef.current,
       // #411 / #412: only add the broken-image-link lint extension when the
@@ -1136,6 +1175,16 @@ export function MarkdownEditor({
       unpublishCurrentRubyShortcutConfig(rubyShortcut);
     };
   }, [rubyShortcut]);
+
+  useEffect(() => {
+    if (!markdownToolbarShortcut) {
+      return undefined;
+    }
+    publishCurrentMarkdownToolbarShortcutConfig(markdownToolbarShortcut);
+    return () => {
+      unpublishCurrentMarkdownToolbarShortcutConfig(markdownToolbarShortcut);
+    };
+  }, [markdownToolbarShortcut]);
 
   // #457: publish this editor's live-selection reader into the module-level
   // slot the Project Search / Replace Ctrl+Shift+F / Ctrl+Shift+H selection
@@ -1456,6 +1505,87 @@ export function MarkdownEditor({
         view.dispatch({
           changes: { from, to, insert: insertText },
           selection: { anchor: targetCursorPos },
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
+        return true;
+      },
+      applyInlineMarkup: (marker: "**" | "*" | "~~"): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const { from, to } = view.state.selection.main;
+        const selectedText = view.state.sliceDoc(from, to);
+        const { text, selectionOffsetFromInsertStart } =
+          wrapOrInsertInlineMarker(selectedText, marker);
+
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + selectionOffsetFromInsertStart },
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
+        return true;
+      },
+      applyHeading: (level: 1 | 2 | 3 | 4 | 5 | 6 | "normal"): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const { from, to } = view.state.selection.main;
+        const doc = view.state.doc;
+        const firstLine = doc.lineAt(from);
+        const lastLine = doc.lineAt(to);
+
+        const changes: ChangeSpec[] = [];
+        for (
+          let lineNumber = firstLine.number;
+          lineNumber <= lastLine.number;
+          lineNumber++
+        ) {
+          const line = doc.line(lineNumber);
+          const newText = applyHeadingToLine(line.text, level);
+          if (newText !== line.text) {
+            changes.push({ from: line.from, to: line.to, insert: newText });
+          }
+        }
+
+        if (changes.length === 0) {
+          return true;
+        }
+
+        // No explicit `selection`: CodeMirror maps the existing selection
+        // through `changes` automatically, which is the right behavior here
+        // (per-line prefix edits, not a single replace like the other
+        // commands above).
+        view.dispatch({
+          changes,
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
+        return true;
+      },
+      insertLink: (labelText: string, url: string): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const { from, to } = view.state.selection.main;
+        const { text, selectionOffsetFromInsertStart } = buildMarkdownLink(
+          labelText,
+          url
+        );
+
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + selectionOffsetFromInsertStart },
           scrollIntoView: true,
           userEvent: "input.replace"
         });

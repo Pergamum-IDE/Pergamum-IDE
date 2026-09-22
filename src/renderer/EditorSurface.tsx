@@ -91,6 +91,7 @@ import {
   type MarkdownEditorViewStateController
 } from "./MarkdownEditor";
 import type { MarkdownEditorEmphasisMarkShortcutConfig } from "./editorEmphasisShortcuts";
+import type { MarkdownEditorToolbarShortcutConfig } from "./editorMarkdownToolbarShortcuts";
 import type { MarkdownEditorRubyShortcutConfig } from "./editorRubyShortcuts";
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import { useActiveFindShortcuts } from "./editorFindShortcuts";
@@ -555,6 +556,8 @@ interface EditorSurfaceProps {
   notifyRubyNoSelection?: () => void;
   notifyRubyReadOnly?: () => void;
   notifyRubyMultiLine?: () => void;
+  /** #529: see MarkdownEditor.tsx's `markdownToolbarShortcut` prop doc comment. */
+  markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -689,6 +692,7 @@ export function EditorSurface({
   notifyRubyNoSelection,
   notifyRubyReadOnly,
   notifyRubyMultiLine,
+  markdownToolbarShortcut,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -754,6 +758,7 @@ export function EditorSurface({
           notifyRubyNoSelection={notifyRubyNoSelection}
           notifyRubyReadOnly={notifyRubyReadOnly}
           notifyRubyMultiLine={notifyRubyMultiLine}
+          markdownToolbarShortcut={markdownToolbarShortcut}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -848,6 +853,8 @@ interface MarkdownEditorSurfaceProps {
   notifyRubyNoSelection?: () => void;
   notifyRubyReadOnly?: () => void;
   notifyRubyMultiLine?: () => void;
+  /** #529: see MarkdownEditor.tsx's `markdownToolbarShortcut` prop doc comment. */
+  markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -950,6 +957,7 @@ function MarkdownEditorSurface({
   notifyRubyNoSelection,
   notifyRubyReadOnly,
   notifyRubyMultiLine,
+  markdownToolbarShortcut,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -3236,6 +3244,7 @@ function MarkdownEditorSurface({
           glossarySelectionShortcut={glossarySelectionShortcutConfig}
           emphasisMarkShortcut={emphasisMarkShortcutConfig}
           rubyShortcut={rubyShortcutConfig}
+          markdownToolbarShortcut={markdownToolbarShortcut}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}

@@ -58,6 +58,7 @@ import { createActiveFindKeymapExtension } from "./find/activeFindKeymapExtensio
 import { createGlossarySelectionShortcutKeymapExtension } from "./glossarySelectionShortcutExtension";
 import { createEmphasisMarkKeymapExtension } from "./editorEmphasisShortcuts";
 import { createRubyKeymapExtension } from "./editorRubyShortcuts";
+import { createMarkdownToolbarShortcutKeymapExtension } from "./editorMarkdownToolbarShortcuts";
 import { createActiveFindGutterMarkerExtension } from "./find/activeFindGutterMarkerExtension";
 import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
@@ -164,6 +165,14 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly glossarySelectionShortcutEnabled?: boolean;
   readonly emphasisMarkShortcutEnabled?: boolean;
   readonly rubyShortcutEnabled?: boolean;
+  /**
+   * #529: same build-time-gate shape as the three flags above — `true` only
+   * for the one MarkdownEditor instance that ever publishes a
+   * `markdownToolbarShortcut` config (EditorSurface's MarkdownEditorSurface),
+   * so the Glossary description field's states never contain this keydown
+   * handler at all.
+   */
+  readonly markdownToolbarShortcutEnabled?: boolean;
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /**
    * #411: when present, adds the broken-image-link lint extension (gutter +
@@ -299,6 +308,9 @@ export function createMarkdownEditorDocumentState(
         ? [createEmphasisMarkKeymapExtension()]
         : []),
       ...(options.rubyShortcutEnabled ? [createRubyKeymapExtension()] : []),
+      ...(options.markdownToolbarShortcutEnabled
+        ? [createMarkdownToolbarShortcutKeymapExtension()]
+        : []),
       // #424 Slice 2: inert until the Find panel dispatches its first
       // "mark all" effect; safe on every document's state.
       activeFindHighlightField,

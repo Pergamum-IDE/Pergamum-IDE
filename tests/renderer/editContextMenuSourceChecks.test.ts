@@ -117,6 +117,11 @@ function allSourceText(): string {
  * are passive, never call preventDefault/stopPropagation, and cannot
  * compete with or shadow the Command Palette / native-edit-command
  * delegation this guard protects.
+ *
+ * HeadingLevelPopover.tsx (#529) is the same category as TableSizePopover.tsx:
+ * its `onKeyDown` only implements Escape-to-close for its own small anchored
+ * popover, scoped to that popover while it is open — not a document-level/
+ * global shortcut listener.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -134,6 +139,7 @@ const onKeyDownExemptFileNames = new Set([
   "ActiveFindPanel.tsx",
   "ActiveFindGlossarySelect.tsx",
   "TableSizePopover.tsx",
+  "HeadingLevelPopover.tsx",
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
   "App.tsx",

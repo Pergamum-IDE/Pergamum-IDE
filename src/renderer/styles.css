@@ -10787,4 +10787,54 @@ label.settingsItemHeader {
   border-color: #0366d6;
 }
 
+/* #529 Editor Toolbar command groups */
+.editorToolbarSeparator {
+  inline-size: 1px;
+  block-size: 20px;
+  background: #d3dae2;
+}
+
+/* Heading level popover styling */
+.headingLevelPopover {
+  position: absolute;
+  top: 100%;
+  inset-inline-start: 0;
+  margin-block-start: 4px;
+  padding: 4px;
+  border: 1px solid #c8d1d9;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  user-select: none;
+}
+
+.headingLevelPopoverList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.headingLevelPopoverOption {
+  display: block;
+  inline-size: 100%;
+  padding-block: 4px;
+  padding-inline: 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #24292e;
+  font-size: 13px;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.headingLevelPopoverOption:hover {
+  background: #e1e4e8;
+}
+
 
