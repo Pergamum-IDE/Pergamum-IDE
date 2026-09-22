@@ -197,6 +197,7 @@ export type {
   TextFileLineEnding,
   TextFilesEncoding,
   TextFilesLineEnding,
+  TextFilesIndentUnit,
   NewFileEncoding,
   NewFileLineEnding,
   ApplicationMarkdownFilesSettings,

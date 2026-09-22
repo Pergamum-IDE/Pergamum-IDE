@@ -538,6 +538,26 @@ describe("Settings Catalog Foundation (#150)", () => {
         validateCatalogValue("editor.fencedCodeIndentUnit", 4)
       ).toEqual({ ok: false, failure: "typeMismatch" });
     });
+
+    it("#546 follow-up: textFiles.indentUnit exists, defaults to 'tab', and accepts exactly tab/twoSpaces/fourSpaces", () => {
+      expect(Object.keys(settingsCatalog)).toContain("textFiles.indentUnit");
+      expect(getCatalogDefaultValue("textFiles.indentUnit")).toBe("tab");
+      expect(getCatalogEntry("textFiles.indentUnit").scope).toBe(
+        "applicationOnly"
+      );
+
+      for (const unit of ["tab", "twoSpaces", "fourSpaces"] as const) {
+        expect(validateCatalogValue("textFiles.indentUnit", unit)).toEqual({
+          ok: true
+        });
+      }
+      expect(
+        validateCatalogValue("textFiles.indentUnit", "eightSpaces")
+      ).toEqual({ ok: false, failure: "enumValue" });
+      expect(
+        validateCatalogValue("textFiles.indentUnit", 4)
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
   });
 
   describe("invalid value result shape", () => {
@@ -1354,6 +1374,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "markdownFiles.lineEnding",
           "textFiles.enablePlainTextDocuments",
           "textFiles.encoding",
+          "textFiles.indentUnit",
           "textFiles.lineEnding",
           "imageAttachment.saveDirectory",
           "preview.doubleClickJumpToEditor",

@@ -12,6 +12,7 @@ import {
   createMarkdownEditorDocumentState,
   type MarkdownEditorDocumentState
 } from "../../src/renderer/markdownEditorDocumentState";
+import { documentIsMarkdownFacet } from "../../src/renderer/plainTextIndentCommands";
 
 function ref<T>(value: T): { current: T } {
   return { current: value };
@@ -62,6 +63,21 @@ describe("createMarkdownEditorDocumentState (#387)", () => {
       baseOptions({ readOnlyRef: ref(false) })
     );
     expect(editable.state.readOnly).toBe(false);
+  });
+
+  it("#546: bakes isMarkdownDocument into documentIsMarkdownFacet, defaulting to true when omitted", () => {
+    const defaulted = createMarkdownEditorDocumentState(baseOptions());
+    expect(defaulted.state.facet(documentIsMarkdownFacet)).toBe(true);
+
+    const markdown = createMarkdownEditorDocumentState(
+      baseOptions({ isMarkdownDocument: true })
+    );
+    expect(markdown.state.facet(documentIsMarkdownFacet)).toBe(true);
+
+    const plainText = createMarkdownEditorDocumentState(
+      baseOptions({ isMarkdownDocument: false })
+    );
+    expect(plainText.state.facet(documentIsMarkdownFacet)).toBe(false);
   });
 
   it("#394 Step 1: undoHistoryMinDepth actually reaches CodeMirror's history() extension and changes its trimming behavior", () => {

@@ -160,6 +160,8 @@ export type MarkdownFilesEncoding = SettingValueOf<"markdownFiles.encoding">;
 export type MarkdownFilesLineEnding = SettingValueOf<"markdownFiles.lineEnding">;
 export type TextFilesEncoding = SettingValueOf<"textFiles.encoding">;
 export type TextFilesLineEnding = SettingValueOf<"textFiles.lineEnding">;
+// #546 follow-up: the plain text (.txt) indent unit — ADR-0014 決定3a / T-12.
+export type TextFilesIndentUnit = SettingValueOf<"textFiles.indentUnit">;
 export type MarkdownFileEncoding = MarkdownFilesEncoding;
 export type MarkdownFileLineEnding = MarkdownFilesLineEnding;
 export type TextFileEncoding = TextFilesEncoding;
@@ -212,6 +214,19 @@ export function resolveFencedCodeIndentText(
       return "        ";
     case "tab":
       return "\t";
+  }
+}
+
+/** #546 follow-up (ADR-0014 決定3a): the text inserted at the start of a
+ *  plain text (`.txt`) target line for a configured `textFiles.indentUnit`. */
+export function resolveTextFilesIndentText(unit: TextFilesIndentUnit): string {
+  switch (unit) {
+    case "tab":
+      return "\t";
+    case "twoSpaces":
+      return "  ";
+    case "fourSpaces":
+      return "    ";
   }
 }
 
@@ -344,6 +359,7 @@ export interface ApplicationTextFilesSettings {
   enablePlainTextDocuments?: boolean;
   encoding: TextFilesEncoding;
   lineEnding: TextFilesLineEnding;
+  indentUnit: TextFilesIndentUnit;
 }
 
 export interface ApplicationSettings {
@@ -522,6 +538,7 @@ export interface EffectiveTextFilesSettings {
   enablePlainTextDocuments: boolean;
   encoding: TextFilesEncoding;
   lineEnding: TextFilesLineEnding;
+  indentUnit: TextFilesIndentUnit;
 }
 
 // #407: always concrete after the Project > Application > Built-in chain.
@@ -725,7 +742,8 @@ export const builtInDefaultSettings: EffectiveSettings = {
       "textFiles.enablePlainTextDocuments"
     ),
     encoding: getCatalogDefaultValue("textFiles.encoding"),
-    lineEnding: getCatalogDefaultValue("textFiles.lineEnding")
+    lineEnding: getCatalogDefaultValue("textFiles.lineEnding"),
+    indentUnit: getCatalogDefaultValue("textFiles.indentUnit")
   },
   imageAttachment: {
     saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory")
@@ -844,7 +862,8 @@ export const defaultApplicationSettings: ApplicationSettings = {
     enablePlainTextDocuments:
       builtInDefaultSettings.textFiles.enablePlainTextDocuments,
     encoding: builtInDefaultSettings.textFiles.encoding,
-    lineEnding: builtInDefaultSettings.textFiles.lineEnding
+    lineEnding: builtInDefaultSettings.textFiles.lineEnding,
+    indentUnit: builtInDefaultSettings.textFiles.indentUnit
   },
   imageAttachment: {
     saveDirectory: builtInDefaultSettings.imageAttachment.saveDirectory
@@ -964,7 +983,8 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       enablePlainTextDocuments:
         defaultApplicationSettings.textFiles.enablePlainTextDocuments,
       encoding: defaultApplicationSettings.textFiles.encoding,
-      lineEnding: defaultApplicationSettings.textFiles.lineEnding
+      lineEnding: defaultApplicationSettings.textFiles.lineEnding,
+      indentUnit: defaultApplicationSettings.textFiles.indentUnit
     },
     imageAttachment: {
       saveDirectory:
@@ -1186,7 +1206,11 @@ export function resolveEffectiveSettings(
       lineEnding:
         projectSettings?.textFiles?.lineEnding ??
         applicationSettings.textFiles.lineEnding ??
-        builtInDefaultSettings.textFiles.lineEnding
+        builtInDefaultSettings.textFiles.lineEnding,
+      // #546 follow-up: applicationOnly — no project override chain.
+      indentUnit:
+        applicationSettings.textFiles?.indentUnit ??
+        builtInDefaultSettings.textFiles.indentUnit
     },
     // #407: supports the whole Project > Application > Built-in override
     // chain. The built-in default is the empty string (nullish-coalescing

@@ -49,6 +49,11 @@ import {
   resolveFencedCodeIndentText,
   type FencedCodeIndentUnit
 } from "../shared/settings";
+import {
+  documentIsMarkdownFacet,
+  plainTextIndentCommand,
+  plainTextOutdentCommand
+} from "./plainTextIndentCommands";
 
 export type IndentDirection = "indent" | "outdent";
 
@@ -371,15 +376,29 @@ function runIndentDirection(
   return true;
 }
 
-/** `Mod+]` - indent. A CodeMirror `Command`: reads `view.state`, dispatches
- *  through `view.dispatch` when {@link planIndentTransaction} produced any
- *  changes, and otherwise leaves the document and selection untouched. */
-export const indentCommand: Command = (view) =>
-  runIndentDirection(view, "indent");
+/**
+ * `Mod+]` - indent. The single entry point every UI surface (toolbar,
+ * `Mod+]`, `editor.captureTabInEditor` Tab) calls (ADR-0014 決定3, T-2). For
+ * a plain text (`.txt`) document (ADR-0014 決定3a / T-12,
+ * `documentIsMarkdownFacet` false), delegates to
+ * {@link plainTextIndentCommand} instead of the Markdown-aware context
+ * dispatch below - `.txt` is not a Markdown structure document, so the
+ * top-level-paragraph no-op (決定4) does not apply to it.
+ */
+export const indentCommand: Command = (view) => {
+  if (!view.state.facet(documentIsMarkdownFacet)) {
+    return plainTextIndentCommand(view);
+  }
+  return runIndentDirection(view, "indent");
+};
 
 /** `Mod+[` - outdent. See {@link indentCommand}. */
-export const outdentCommand: Command = (view) =>
-  runIndentDirection(view, "outdent");
+export const outdentCommand: Command = (view) => {
+  if (!view.state.facet(documentIsMarkdownFacet)) {
+    return plainTextOutdentCommand(view);
+  }
+  return runIndentDirection(view, "outdent");
+};
 
 /**
  * Replaces `defaultKeymap`'s own `Mod-]` / `Mod-[` (bound to the generic,

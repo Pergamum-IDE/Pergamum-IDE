@@ -135,7 +135,12 @@ function saveRequest(
       fencedCodeIndentUnit: "spaces4"
     },
     markdownFiles: { lineEnding: "lf", encoding: "utf8" },
-    textFiles: { enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8" },
+    textFiles: {
+      enablePlainTextDocuments: false,
+      lineEnding: "lf",
+      encoding: "utf8",
+      indentUnit: "tab"
+    },
     imageAttachment: { saveDirectory: "" },
     ...overrides
   } as SaveApplicationSettingsRequest;

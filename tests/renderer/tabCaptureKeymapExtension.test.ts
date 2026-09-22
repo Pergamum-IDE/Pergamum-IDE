@@ -9,12 +9,14 @@ import {
   triggerTabCaptureBypass
 } from "../../src/renderer/tabCaptureKeymapExtension";
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
+import { documentIsMarkdownFacet } from "../../src/renderer/plainTextIndentCommands";
 
 function mountEditor(input: {
   doc?: string;
   captureTabInEditor?: boolean;
   readOnly?: boolean;
   fencedCodeIndentUnit?: "spaces2" | "spaces4" | "spaces6" | "spaces8" | "tab";
+  isMarkdownDocument?: boolean;
 }): EditorView {
   const captureTabInEditor = input.captureTabInEditor ?? false;
   return new EditorView({
@@ -28,7 +30,10 @@ function mountEditor(input: {
           fencedCodeIndentUnit: input.fencedCodeIndentUnit ?? "spaces4"
         }),
         createTabCaptureKeymapExtension(captureTabInEditor),
-        ...(input.readOnly ? [EditorState.readOnly.of(true)] : [])
+        ...(input.readOnly ? [EditorState.readOnly.of(true)] : []),
+        ...(input.isMarkdownDocument !== undefined
+          ? [documentIsMarkdownFacet.of(input.isMarkdownDocument)]
+          : [])
       ]
     })
   });
@@ -342,6 +347,97 @@ describe("tabCaptureKeymapExtension (#467)", () => {
           view.destroy();
         }
       });
+    });
+  });
+
+  describe("plain text documents (#546, documentIsMarkdownFacet=false)", () => {
+    it("Tab key with no selection inserts the plain text indent unit at the caret (not a Markdown no-op, not line-start)", () => {
+      const view = mountEditor({
+        doc: "foo",
+        captureTabInEditor: true,
+        isMarkdownDocument: false
+      });
+      try {
+        // Caret mid-word — the indent unit lands at the caret, not the
+        // start of the line (#546 follow-up "Refine Tab behavior").
+        view.dispatch({ selection: EditorSelection.cursor(1) });
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+        // textFileIndentUnitFacet defaults to "tab" (textFiles.indentUnit's
+        // catalog default).
+        expect(view.state.doc.toString()).toBe("f\too");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Tab key with a partial single-line selection replaces the selection with the indent unit", () => {
+      const view = mountEditor({
+        doc: "foobarbaz",
+        captureTabInEditor: true,
+        isMarkdownDocument: false
+      });
+      try {
+        view.dispatch({ selection: EditorSelection.range(3, 6) }); // "bar"
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("foo\tbaz");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Tab key with a multi-line selection indents every selected line at line start", () => {
+      const doc = "foo\nbar";
+      const view = mountEditor({
+        doc,
+        captureTabInEditor: true,
+        isMarkdownDocument: false
+      });
+      try {
+        view.dispatch({ selection: EditorSelection.range(0, doc.length) });
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("\tfoo\n\tbar");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Shift+Tab key removes one indent unit of leading whitespace", () => {
+      const view = mountEditor({
+        doc: "  foo",
+        captureTabInEditor: true,
+        isMarkdownDocument: false
+      });
+      try {
+        view.dispatch({ selection: EditorSelection.cursor(3) });
+        const event = keydownEvent("Tab", { shiftKey: true });
+        view.contentDOM.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+        expect(view.state.doc.toString()).toBe("foo");
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Tab is not captured when editor.captureTabInEditor is false, even for a plain text document", () => {
+      const view = mountEditor({
+        doc: "foo",
+        captureTabInEditor: false,
+        isMarkdownDocument: false
+      });
+      try {
+        const event = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+        expect(view.state.doc.toString()).toBe("foo");
+      } finally {
+        view.destroy();
+      }
     });
   });
 

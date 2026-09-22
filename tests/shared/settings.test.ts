@@ -412,7 +412,12 @@ describe("Application Settings core defaults and effective settings (#195)", () 
       ...defaultApplicationSettings,
       editor: { ...defaultApplicationSettings.editor, fontFamily: "Fira Code" },
       markdownFiles: { lineEnding: "crlf", encoding: "utf8" },
-      textFiles: { enablePlainTextDocuments: true, lineEnding: "crlf", encoding: "utf8" }
+      textFiles: {
+        enablePlainTextDocuments: true,
+        lineEnding: "crlf",
+        encoding: "utf8",
+        indentUnit: "tab"
+      }
     };
     const effective = resolveEffectiveSettings(applicationSettings, {});
 
@@ -424,7 +429,8 @@ describe("Application Settings core defaults and effective settings (#195)", () 
     expect(effective.textFiles).toEqual({
       enablePlainTextDocuments: true,
       lineEnding: "crlf",
-      encoding: "utf8"
+      encoding: "utf8",
+      indentUnit: "tab"
     });
   });
 
@@ -1031,7 +1037,8 @@ describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () 
       textFiles: {
         enablePlainTextDocuments: false,
         lineEnding: "lf",
-        encoding: "utf8"
+        encoding: "utf8",
+        indentUnit: "tab"
       }
     };
 

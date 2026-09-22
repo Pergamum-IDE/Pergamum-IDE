@@ -1091,6 +1091,37 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     });
   });
 
+  it("saves immediately when textFiles.indentUnit changes (#546 follow-up)", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("textFiles.indentUnit"),
+      onChangeSettings
+    });
+    const select = controlElement(element, "textFiles.indentUnit");
+    const onChange = select.props.onChange as (event: {
+      target: { value: string };
+    }) => void;
+
+    onChange({ target: { value: "twoSpaces" } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
+      preview: settings.preview,
+      workbench: settings.workbench,
+      commandPalette: settings.commandPalette,
+      editor: settings.editor,
+      markdownFiles: settings.markdownFiles,
+      textFiles: {
+        ...settings.textFiles,
+        indentUnit: "twoSpaces"
+      }
+    });
+  });
+
   it("does not show legacy single-font settings in Application Settings while keeping structured font lists visible", () => {
     const appearanceMarkup = renderSettingsPanelView("en", {
       selectedCategoryId: "appearance"
@@ -1467,7 +1498,8 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
       textFiles: {
         enablePlainTextDocuments: false,
         encoding: "shiftJis",
-        lineEnding: "crlf"
+        lineEnding: "crlf",
+        indentUnit: "tab"
       }
     };
     const element = settingsPanelViewElement("en", {
@@ -1490,7 +1522,8 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
       textFiles: {
         enablePlainTextDocuments: true,
         encoding: "shiftJis",
-        lineEnding: "crlf"
+        lineEnding: "crlf",
+        indentUnit: "tab"
       }
     };
     const element = settingsPanelViewElement("en", {

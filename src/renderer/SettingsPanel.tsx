@@ -9,7 +9,8 @@ import type {
   SaveApplicationSettingsRequest,
   SearchNearbyUnit,
   SelectionHighlightMode,
-  TextFileEncoding
+  TextFileEncoding,
+  TextFilesIndentUnit
 } from "../shared/api";
 import type { Language, Translate, TranslationKey } from "../shared/i18n";
 import type { SettingKey } from "../shared/settingsCatalog";
@@ -561,6 +562,13 @@ function buildNextSettings(
         textFiles: {
           ...settings.textFiles,
           lineEnding: rawValue as NewFileLineEnding
+        }
+      });
+    case "textFiles.indentUnit":
+      return saveRequest(settings, {
+        textFiles: {
+          ...settings.textFiles,
+          indentUnit: rawValue as TextFilesIndentUnit
         }
       });
     case "preview.updateDelayMs":

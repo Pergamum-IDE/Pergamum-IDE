@@ -11548,6 +11548,9 @@ export function App(): JSX.Element {
                         fencedCodeIndentUnit={
                           effectiveSettings.editor.fencedCodeIndentUnit
                         }
+                        textFileIndentUnit={
+                          effectiveSettings.textFiles.indentUnit
+                        }
                         glossaryNearbySearchSettings={
                           effectiveSettings.search.nearby
                         }

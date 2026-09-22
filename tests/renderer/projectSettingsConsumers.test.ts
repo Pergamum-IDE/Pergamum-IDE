@@ -201,7 +201,8 @@ describe("Project Settings consumers integration (#396 Slice 7)", () => {
         textFiles: {
           enablePlainTextDocuments: false,
           lineEnding: "lf",
-          encoding: "utf8"
+          encoding: "utf8",
+          indentUnit: "tab"
         },
         editor: {
           ...defaultApplicationSettings.editor,

@@ -32,6 +32,7 @@ import type {
   LineEndingMarkerGlyph,
   NewFileLineEnding,
   SelectionHighlightMode,
+  TextFilesIndentUnit,
   WorkbenchSoundSettings
 } from "../shared/settings";
 import {
@@ -39,6 +40,7 @@ import {
   indentCommand,
   outdentCommand
 } from "./indentCommands";
+import { textFileIndentUnitFacet } from "./plainTextIndentCommands";
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
 import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
@@ -224,6 +226,27 @@ interface MarkdownEditorProps {
   findGutterMarkers?: boolean;
   captureTabInEditor?: boolean;
   fencedCodeIndentUnit?: FencedCodeIndentUnit;
+  /**
+   * #546 (ADR-0014 決定3a / T-12): `true` for a Markdown (`.md`) document,
+   * `false` for a plain text (`.txt`) document — a construction-time value
+   * (not a live ref, matching `markerGlyph` / `undoHistoryMinDepth` above),
+   * since a given `documentKey`'s file extension cannot change while it is
+   * open. Threaded to `createMarkdownEditorDocumentState`'s
+   * `isMarkdownDocument` option, which sets `documentIsMarkdownFacet` on that
+   * document's own `EditorState`. Defaults to `true` so callers that never
+   * pass it (e.g. GlossaryEditor's description field) keep today's
+   * Markdown-aware indent/outdent behavior unchanged.
+   */
+  isMarkdownDocument?: boolean;
+  /**
+   * #546 follow-up: `textFiles.indentUnit` — the configured indent unit for
+   * plain text (`.txt`) documents. Live, like `fencedCodeIndentUnit` above
+   * (its own compartment/ref + reconfigure effect): a Settings change takes
+   * effect on an already-open `.txt` document immediately. Ignored for a
+   * Markdown document (`isMarkdownDocument` true). Defaults to `"tab"`,
+   * matching the `textFiles.indentUnit` catalog default.
+   */
+  textFileIndentUnit?: TextFilesIndentUnit;
   /**
    * `editor.whitespace.*` (#256) — which whitespace categories to paint
    * display-only markers for (ideographic space, ASCII space, tab, other
@@ -697,6 +720,8 @@ export function MarkdownEditor({
   findGutterMarkers = false,
   captureTabInEditor = false,
   fencedCodeIndentUnit = "spaces4",
+  isMarkdownDocument = true,
+  textFileIndentUnit = "tab",
   whitespaceSettings,
   pendingSelection,
   onPendingSelectionApplied,
@@ -763,6 +788,8 @@ export function MarkdownEditor({
   const captureTabInEditorRef = useRef(captureTabInEditor);
   const fencedCodeIndentUnitCompartmentRef = useRef<Compartment | null>(null);
   const fencedCodeIndentUnitRef = useRef(fencedCodeIndentUnit);
+  const textFileIndentUnitCompartmentRef = useRef<Compartment | null>(null);
+  const textFileIndentUnitRef = useRef(textFileIndentUnit);
   const onChangeRef = useRef(onChange);
   // #272: read from a ref by the mount effect's cleanup (which is []-deps
   // and must not re-subscribe) so the outgoing View State is reported with
@@ -926,6 +953,12 @@ export function MarkdownEditor({
   const fencedCodeIndentUnitCompartment =
     fencedCodeIndentUnitCompartmentRef.current;
 
+  if (!textFileIndentUnitCompartmentRef.current) {
+    textFileIndentUnitCompartmentRef.current = new Compartment();
+  }
+  const textFileIndentUnitCompartment =
+    textFileIndentUnitCompartmentRef.current;
+
   // #375 Document Map: hoisted out of the mount effect (rather than defined
   // inline there, as before #387) so the document-switch effect below can
   // build a fresh document's updateListener identically via
@@ -1062,6 +1095,9 @@ export function MarkdownEditor({
       captureTabInEditorRef,
       fencedCodeIndentUnitCompartment,
       fencedCodeIndentUnitRef,
+      isMarkdownDocument,
+      textFileIndentUnitCompartment,
+      textFileIndentUnitRef,
       glossaryCompletionRef,
       activeFindDiagnostics: {
         editorInstanceId: activeFindEditorInstanceId,
@@ -1135,6 +1171,9 @@ export function MarkdownEditor({
       ),
       fencedCodeIndentUnitCompartment.reconfigure(
         fencedCodeIndentUnitFacet.of(fencedCodeIndentUnitRef.current)
+      ),
+      textFileIndentUnitCompartment.reconfigure(
+        textFileIndentUnitFacet.of(textFileIndentUnitRef.current)
       )
     ];
   }
@@ -2029,6 +2068,22 @@ export function MarkdownEditor({
       )
     });
   }, [fencedCodeIndentUnit]);
+
+  useEffect(() => {
+    textFileIndentUnitRef.current = textFileIndentUnit;
+
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: textFileIndentUnitCompartment.reconfigure(
+        textFileIndentUnitFacet.of(textFileIndentUnit)
+      )
+    });
+  }, [textFileIndentUnit]);
 
   useEffect(() => {
     const view = viewRef.current;
