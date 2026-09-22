@@ -179,6 +179,9 @@ function defaultProps(
     canTogglePreview: true,
     isPreviewVisible: true,
     onTogglePreview: vi.fn(),
+    selectedPreviewRenderer: "markdown",
+    defaultPreviewRenderer: "markdown",
+    onSelectPreviewRenderer: vi.fn(),
     isCommandPaletteOpen: false,
     commandPaletteLaunchAnimationDurationMs: 200,
     onOpenCommandPalette: vi.fn(),
@@ -199,6 +202,15 @@ function toolbarButtons(): HTMLButtonElement[] {
   return Array.from(
     container.querySelectorAll("button.editorToolbarButton")
   ) as HTMLButtonElement[];
+}
+
+function previewRendererTrigger(): HTMLButtonElement {
+  const trigger = container.querySelector(
+    ".previewRendererDropdownTrigger"
+  ) as HTMLButtonElement | null;
+
+  expect(trigger).not.toBeNull();
+  return trigger!;
 }
 
 const BUTTON_ORDER = [
@@ -237,6 +249,157 @@ describe("EditorToolbar", () => {
     expect(
       container.querySelectorAll(".editorToolbarSeparator")
     ).toHaveLength(8);
+  });
+
+  it("renders the Preview renderer dropdown immediately to the right of the Preview toggle without an intervening separator", () => {
+    renderToolbar();
+
+    const toolbar = container.querySelector(".editorToolbar")!;
+    const previewButton = toolbarButtons()[16];
+    const trigger = previewRendererTrigger();
+    const previewGroup = previewButton.closest(".editorToolbarGroup")!;
+    const groupItems = Array.from(previewGroup.children) as HTMLElement[];
+
+    expect(groupItems).toHaveLength(2);
+    expect(groupItems[0].contains(previewButton)).toBe(true);
+    expect(groupItems[1].contains(trigger)).toBe(true);
+    expect(
+      groupItems.some((item) =>
+        item.classList.contains("editorToolbarSeparator")
+      )
+    ).toBe(false);
+
+    const toolbarChildren = Array.from(toolbar.children) as HTMLElement[];
+    const previewGroupIndex = toolbarChildren.indexOf(
+      previewGroup as HTMLElement
+    );
+    expect(
+      toolbarChildren[previewGroupIndex + 1].classList.contains(
+        "editorToolbarSeparator"
+      )
+    ).toBe(true);
+  });
+
+  it("renders Preview renderer options from the existing renderer catalog order", () => {
+    renderToolbar();
+
+    act(() => previewRendererTrigger().click());
+
+    const options = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".previewRendererDropdownOption"
+      )
+    );
+
+    expect(options.map((option) => option.dataset.previewRendererId)).toEqual([
+      "markdown",
+      "narouHorizontal",
+      "kakuyomuHorizontal",
+      "aozoraHorizontal",
+      "narouVertical",
+      "kakuyomuVertical",
+      "aozoraVertical"
+    ]);
+    expect(
+      options.map(
+        (option) =>
+          option.querySelector(".previewRendererDropdownOptionLabel")
+            ?.textContent
+      )
+    ).toEqual([
+      "Markdown",
+      "小説家になろう風・横書き",
+      "カクヨム風・横書き",
+      "青空文庫風・横書き",
+      "小説家になろう風・縦書き",
+      "カクヨム風・縦書き",
+      "青空文庫風・縦書き"
+    ]);
+  });
+
+  it("separates the selected renderer check state from the default renderer indicator", () => {
+    renderToolbar({
+      selectedPreviewRenderer: "markdown",
+      defaultPreviewRenderer: "aozoraHorizontal"
+    });
+
+    act(() => previewRendererTrigger().click());
+
+    const selected = container.querySelector<HTMLButtonElement>(
+      ".previewRendererDropdownOption[data-preview-renderer-id='markdown']"
+    )!;
+    const defaultOption = container.querySelector<HTMLButtonElement>(
+      ".previewRendererDropdownOption[data-preview-renderer-id='aozoraHorizontal']"
+    )!;
+
+    expect(selected.getAttribute("aria-selected")).toBe("true");
+    expect(selected.dataset.defaultRenderer).toBeUndefined();
+    expect(defaultOption.getAttribute("aria-selected")).toBe("false");
+    expect(defaultOption.dataset.defaultRenderer).toBe("true");
+    expect(
+      defaultOption.querySelector(".previewRendererDropdownDefaultBadge")
+        ?.textContent
+    ).toBe("既定");
+  });
+
+  it("disables the Preview renderer dropdown while Preview is off and enables it while Preview is on", () => {
+    renderToolbar({ isPreviewVisible: false });
+    expect(previewRendererTrigger().disabled).toBe(true);
+
+    renderToolbar({ isPreviewVisible: true });
+    expect(previewRendererTrigger().disabled).toBe(false);
+  });
+
+  it("selects a temporary Preview renderer without changing the default renderer prop", () => {
+    const onSelectPreviewRenderer = vi.fn();
+    renderToolbar({
+      selectedPreviewRenderer: "markdown",
+      defaultPreviewRenderer: "aozoraHorizontal",
+      onSelectPreviewRenderer
+    });
+
+    act(() => previewRendererTrigger().click());
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          ".previewRendererDropdownOption[data-preview-renderer-id='narouHorizontal']"
+        )!
+        .click();
+    });
+
+    expect(onSelectPreviewRenderer).toHaveBeenCalledWith("narouHorizontal");
+  });
+
+  it("supports keyboard navigation in the Preview renderer dropdown", () => {
+    const onSelectPreviewRenderer = vi.fn();
+    renderToolbar({
+      selectedPreviewRenderer: "markdown",
+      onSelectPreviewRenderer
+    });
+
+    act(() => {
+      previewRendererTrigger().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+      );
+    });
+
+    const menu = container.querySelector(
+      ".previewRendererDropdownMenu"
+    ) as HTMLDivElement | null;
+    expect(menu).not.toBeNull();
+
+    act(() => {
+      menu!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+      );
+    });
+    act(() => {
+      menu!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+      );
+    });
+
+    expect(onSelectPreviewRenderer).toHaveBeenCalledWith("narouHorizontal");
   });
 
   it("renders the Command Box before the Heading button in the centered toolbar flow", () => {

@@ -231,11 +231,11 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
       expect(isMarkdownCurrentDocument(mdDoc)).toBe(true);
       expect(isMarkdownCurrentDocument(txtDoc)).toBe(false);
 
-      // Check helper logic: .txt + markdown is not shown, .txt + non-markdown renderer is shown
+      // #548: Preview availability is not gated by .md/.txt or renderer choice.
       const isPreviewAvailable = (doc: CurrentDocument, renderer: string) =>
-        isMarkdownCurrentDocument(doc) || renderer !== "markdown";
+        Boolean(doc) && Boolean(renderer);
 
-      expect(isPreviewAvailable(txtDoc, "markdown")).toBe(false);
+      expect(isPreviewAvailable(txtDoc, "markdown")).toBe(true);
       expect(isPreviewAvailable(txtDoc, "narouHorizontal")).toBe(true);
       expect(isPreviewAvailable(txtDoc, "kakuyomuHorizontal")).toBe(true);
       expect(isPreviewAvailable(txtDoc, "aozoraHorizontal")).toBe(true);
@@ -437,14 +437,15 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
       container.remove();
     });
 
-    it(".txt + markdown collapses to a single grid column and does NOT mount preview pane (#541 follow-up: no blank Preview-sized region)", () => {
+    it("#548: .txt + markdown applies gridTemplateColumns layout style and mounts preview pane", () => {
       const { workspace, previewPane, root, container } =
         renderEditorSurfaceForLayout("C:/tmp/novel.txt", "markdown");
 
       expect(workspace).not.toBeNull();
-      expect(workspace?.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
-      expect(workspace?.style.gridTemplateRows).toBe("minmax(0, 1fr)");
-      expect(previewPane).toBeNull();
+      expect(workspace?.style.gridTemplateColumns).toBe(
+        "minmax(0, 0.5fr) 6px minmax(0, 0.5fr)"
+      );
+      expect(previewPane).not.toBeNull();
 
       act(() => root.unmount());
       container.remove();

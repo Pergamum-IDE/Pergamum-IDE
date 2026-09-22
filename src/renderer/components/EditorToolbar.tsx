@@ -5,6 +5,8 @@ import type { MarkdownListKind } from "../../shared/markdownListMarkup";
 import { TableSizePopover } from "./TableSizePopover";
 import { HeadingLevelPopover } from "./HeadingLevelPopover";
 import { ToolbarCommandBox } from "./ToolbarCommandBox";
+import { PreviewRendererDropdown } from "./PreviewRendererDropdown";
+import type { PreviewRendererId } from "../../shared/settings";
 import type { QuickAccessPrefix } from "../quickAccessInputParser";
 import headingIconRaw from "../../../assets/icons/pergamum/toolbar/heading.svg?raw";
 import boldIconRaw from "../../../assets/icons/codicons/toolbar/bold.svg?raw";
@@ -62,6 +64,9 @@ export interface EditorToolbarProps {
    *  `aria-pressed` state. */
   isPreviewVisible: boolean;
   onTogglePreview: () => void;
+  selectedPreviewRenderer: PreviewRendererId;
+  defaultPreviewRenderer: PreviewRendererId;
+  onSelectPreviewRenderer: (renderer: PreviewRendererId) => void;
   isCommandPaletteOpen: boolean;
   commandPaletteLaunchAnimationDurationMs: number;
   /**
@@ -99,6 +104,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   canTogglePreview,
   isPreviewVisible,
   onTogglePreview,
+  selectedPreviewRenderer,
+  defaultPreviewRenderer,
+  onSelectPreviewRenderer,
   isCommandPaletteOpen,
   commandPaletteLaunchAnimationDurationMs,
   onOpenCommandPalette,
@@ -457,6 +465,16 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
               dangerouslySetInnerHTML={{ __html: togglePreviewIconRaw }}
             />
           </button>
+        </div>
+
+        <div className="editorToolbarItem">
+          <PreviewRendererDropdown
+            selectedRenderer={selectedPreviewRenderer}
+            defaultRenderer={defaultPreviewRenderer}
+            disabled={!canTogglePreview || !isPreviewVisible}
+            onSelectRenderer={onSelectPreviewRenderer}
+            translate={translate}
+          />
         </div>
       </div>
 

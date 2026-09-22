@@ -10767,6 +10767,138 @@ label.settingsItemHeader {
   fill: currentColor;
 }
 
+/* #548 Preview renderer selector */
+.previewRendererDropdown {
+  position: relative;
+}
+
+.previewRendererDropdownTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  inline-size: 156px;
+  block-size: 28px;
+  padding-block: 0;
+  padding-inline: 8px 7px;
+  border: 1px solid #c8d1d9;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #24292e;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.previewRendererDropdownTrigger:hover:not(:disabled) {
+  background: #f6f8fa;
+  border-color: #a8b6c8;
+}
+
+.previewRendererDropdownTrigger:focus-visible,
+.previewRendererDropdownMenu:focus-visible {
+  outline: 2px solid #0366d6;
+  outline-offset: 1px;
+}
+
+.previewRendererDropdownTrigger:disabled {
+  background: #eef3f8;
+  color: #6b7785;
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.previewRendererDropdownValue {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewRendererDropdownCaret {
+  flex: 0 0 auto;
+  inline-size: 0;
+  block-size: 0;
+  margin-inline-start: 8px;
+  border-inline: 4px solid transparent;
+  border-block-start: 5px solid currentColor;
+}
+
+.previewRendererDropdownMenu {
+  position: absolute;
+  z-index: 100;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  inline-size: max-content;
+  min-inline-size: 220px;
+  max-inline-size: min(360px, calc(100vw - 24px));
+  padding-block: 4px;
+  border: 1px solid #c8d1d9;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.previewRendererDropdownOption {
+  display: flex;
+  align-items: center;
+  inline-size: 100%;
+  min-block-size: 28px;
+  padding-block: 4px;
+  padding-inline: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #24292e;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.previewRendererDropdownOption:hover,
+.previewRendererDropdownOption[data-active="true"] {
+  background: #e8eef6;
+}
+
+.previewRendererDropdownCheck {
+  display: inline-flex;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
+  color: #0b5fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.previewRendererDropdownCheck[data-selected="true"]::before {
+  content: "\2713";
+}
+
+.previewRendererDropdownOptionText {
+  display: inline-flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.previewRendererDropdownOptionLabel {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewRendererDropdownOption[data-default-renderer="true"]
+  .previewRendererDropdownOptionLabel {
+  font-weight: 700;
+}
+
+.previewRendererDropdownDefaultBadge {
+  flex: 0 0 auto;
+  color: #52616f;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* Table size popover styling */
 .tableSizePopover {
   position: absolute;

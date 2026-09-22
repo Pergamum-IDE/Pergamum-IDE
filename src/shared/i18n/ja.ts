@@ -1781,6 +1781,8 @@ export const jaTranslations = {
   "toolbar.strikethrough": "取消線",
   "toolbar.tableGridLabel": "{cols} x {rows}",
   "toolbar.togglePreview": "プレビューを切り替え",
+  "toolbar.previewRenderer.defaultDescription": "既定のプレビューレンダラー: {renderer}",
+  "toolbar.previewRenderer.defaultIndicator": "既定",
   "toolbar.commandBox.cycleMode": "コマンドボックスのモードを切り替え",
   "toolbar.commandBox.placeholder.commands": "コマンドを入力...",
   "toolbar.commandBox.placeholder.projectFiles": "ファイルを開く...",
