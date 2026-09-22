@@ -4,6 +4,8 @@ import type { HeadingLevel } from "../../shared/markdownHeadingMarkup";
 import type { MarkdownListKind } from "../../shared/markdownListMarkup";
 import { TableSizePopover } from "./TableSizePopover";
 import { HeadingLevelPopover } from "./HeadingLevelPopover";
+import { ToolbarCommandBox } from "./ToolbarCommandBox";
+import type { QuickAccessPrefix } from "../quickAccessInputParser";
 import headingIconRaw from "../../../assets/icons/pergamum/toolbar/heading.svg?raw";
 import boldIconRaw from "../../../assets/icons/codicons/toolbar/bold.svg?raw";
 import italicIconRaw from "../../../assets/icons/codicons/toolbar/italic.svg?raw";
@@ -60,6 +62,13 @@ export interface EditorToolbarProps {
    *  `aria-pressed` state. */
   isPreviewVisible: boolean;
   onTogglePreview: () => void;
+  /**
+   * #542: Open the existing central Command Palette with the given initial
+   * prefix. Use `""` for file mode (project file quick open) — the caller
+   * must NOT collapse `""` to `">"`. Ctrl+Shift+P always uses `">"` directly
+   * and is unaffected by the Command Box's local mode state.
+   */
+  onOpenCommandPalette: (initialPrefix: QuickAccessPrefix) => void;
   translate: Translate;
 }
 
@@ -88,6 +97,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   canTogglePreview,
   isPreviewVisible,
   onTogglePreview,
+  onOpenCommandPalette,
   translate
 }) => {
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState<boolean>(false);
@@ -122,6 +132,13 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
 
   return (
     <header className="editorToolbar">
+      <ToolbarCommandBox
+        onOpenCommandPalette={onOpenCommandPalette}
+        translate={translate}
+      />
+
+      <div className="editorToolbarSeparator" role="separator" aria-orientation="vertical" />
+
       <div className="editorToolbarGroup">
         <div className="editorToolbarItem">
           <button
@@ -436,6 +453,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Right-end separator — reserved for a future fullscreen mode command. */}
+      <div className="editorToolbarSeparator" role="separator" aria-orientation="vertical" />
     </header>
   );
 };

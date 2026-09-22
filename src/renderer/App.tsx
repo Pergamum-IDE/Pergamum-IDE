@@ -1316,6 +1316,11 @@ export function App(): JSX.Element {
   const [isDebugModeEnabled, setIsDebugModeEnabled] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  // #542: initial input value for the Command Palette when opened by the
+  // toolbar Command Box. Uses `""` for project-file mode; do not collapse
+  // it to `">"`. Ctrl+Shift+P explicitly sets this state back to `">"`.
+  const [commandPaletteInitialInputValue, setCommandPaletteInitialInputValue] =
+    useState<string>(">");
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
   // #375: project tag list, shared by the editor (attach/detach picker) and
   // the sidebar (tag filter + tag manager). Reloaded whenever
@@ -3877,6 +3882,12 @@ export function App(): JSX.Element {
       registry,
       {
         openCommandPalette: () => {
+          // #542: Ctrl+Shift+P always opens in command mode (">").
+          // This is independent of whatever mode the toolbar Command Box
+          // currently has selected. setCommandPaletteInitialInputValue is
+          // called first so the palette mounts with ">" even if the Command
+          // Box had previously opened it in a different mode.
+          setCommandPaletteInitialInputValue(">");
           setIsCommandPaletteOpen((isOpen) => (isOpen ? isOpen : true));
         }
       },
@@ -5314,6 +5325,18 @@ export function App(): JSX.Element {
   function closeCommandPaletteAndRestoreMarkdownFocus(): void {
     setIsCommandPaletteOpen(false);
     setCommandPaletteMarkdownFocusRestorePending(true);
+  }
+
+  /**
+   * #542: Open the Command Palette with a specific initial prefix from the
+   * toolbar Command Box. The prefix may be `""` (file/project-file mode) —
+   * do NOT fall back to `">"` for an empty string here.
+   * Ctrl+Shift+P remains independent: it always opens command mode via the
+   * command registry and never calls this function.
+   */
+  function openCommandPaletteWithPrefix(initialPrefix: string): void {
+    setCommandPaletteInitialInputValue(initialPrefix);
+    setIsCommandPaletteOpen((isOpen) => (isOpen ? isOpen : true));
   }
 
   function showParagraphIndentResultDialog(
@@ -11176,6 +11199,7 @@ export function App(): JSX.Element {
         canTogglePreview={isPreviewEligible}
         isPreviewVisible={layout.markdownEditorPreview.visible}
         onTogglePreview={handleTogglePreviewVisible}
+        onOpenCommandPalette={openCommandPaletteWithPrefix}
         translate={translate}
       />
 
@@ -11720,6 +11744,7 @@ export function App(): JSX.Element {
           isComposing={imeCompositionSaveGuard.isComposing}
           commandContext={commandContext}
           footerDetailSettings={effectiveSettings.commandPalette.footerDetail}
+          initialInputValue={commandPaletteInitialInputValue}
           projectFileQuickOpenDocuments={projectFileQuickOpenDocuments}
           onOpenProjectFileQuickOpenCandidate={(relativePath) => {
             void activateProjectDocument(relativePath);
