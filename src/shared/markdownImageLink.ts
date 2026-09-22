@@ -116,3 +116,23 @@ export function markdownImageLinkForAttachment(input: {
   );
   return buildMarkdownImageLink(destination);
 }
+
+/**
+ * #535: the same pipeline as {@link markdownImageLinkForAttachment}, for one
+ * or more images inserted together — each on its own `![](...)` link,
+ * separated by a blank line (matching the Issue #535 multi-image example),
+ * in the same order as `imageRelativePaths`.
+ */
+export function markdownImageLinksForAttachments(input: {
+  readonly markdownRelativePath: string;
+  readonly imageRelativePaths: readonly string[];
+}): string {
+  return input.imageRelativePaths
+    .map((imageRelativePath) =>
+      markdownImageLinkForAttachment({
+        markdownRelativePath: input.markdownRelativePath,
+        imageRelativePath
+      })
+    )
+    .join("\n\n");
+}

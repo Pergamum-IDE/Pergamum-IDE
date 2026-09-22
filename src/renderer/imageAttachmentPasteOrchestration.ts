@@ -64,7 +64,6 @@ export type ImageAttachmentPasteOrchestrationStatus =
   | "targetInvalidAfterSave"
   | "insertFailed"
   | "linkInserted"
-  | "savedOnly"
   | "unexpectedError";
 
 export interface ImageAttachmentPasteOrchestrationDeps {
@@ -123,20 +122,6 @@ function successToastForInsertedLink(
       });
 
   return appendMultipleImageNotice(message, pending, translate);
-}
-
-function successToastForSaveOnly(
-  relativePath: string,
-  pending: PendingImageAttachment,
-  translate: Translate
-): string {
-  return appendMultipleImageNotice(
-    translate("notification.imageAttachment.savedOnly", {
-      path: relativePath
-    }),
-    pending,
-    translate
-  );
 }
 
 function targetChangedMessage(translate: Translate): string {
@@ -256,14 +241,6 @@ export async function runImageAttachmentPasteOrchestration(
         saveResult.actualBytes ?? pending.actualBytes
       );
       return "saveFailed";
-    }
-
-    if (!settings.insertMarkdownLink) {
-      clearPosition();
-      deps.showSuccessToast(
-        successToastForSaveOnly(saveResult.relativePath, pending, deps.translate)
-      );
-      return "savedOnly";
     }
 
     const targetBeforeInsert = deps.resolveTarget(pending);

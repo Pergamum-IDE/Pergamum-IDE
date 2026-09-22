@@ -8,11 +8,14 @@
 
 import type { AppConfirmDialogOptions } from "./appDialogTypes";
 import type { Translate, TranslationKey } from "../../shared/i18n";
-import type { SaveImageAttachmentFailureReason } from "../../shared/api";
+import type {
+  CopyImageInsertionFailureReason,
+  SaveImageAttachmentFailureReason
+} from "../../shared/api";
 import { formatImageByteSizeMiB } from "../../shared/imageAttachmentFormat";
 
 export function buildImageAttachmentWarningDialogOptions(
-  reason: SaveImageAttachmentFailureReason,
+  reason: SaveImageAttachmentFailureReason | CopyImageInsertionFailureReason,
   translate: Translate,
   actualBytes?: number
 ): AppConfirmDialogOptions {

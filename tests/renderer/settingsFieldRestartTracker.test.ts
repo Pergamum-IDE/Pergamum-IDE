@@ -125,10 +125,7 @@ function baseApplicationSettings(
       encoding: getCatalogDefaultValue("textFiles.encoding")
     },
     imageAttachment: {
-      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
-      insertMarkdownLink: getCatalogDefaultValue(
-        "imageAttachment.insertMarkdownLink"
-      )
+      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory")
     },
     documentMap: defaultDocumentMapSettings(),
     recentProjects: [],

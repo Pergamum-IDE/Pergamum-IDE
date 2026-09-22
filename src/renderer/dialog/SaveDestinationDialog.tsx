@@ -1,13 +1,14 @@
 /**
- * #407 B2: SaveDestinationDialog — configure image attachment save destination.
+ * #407 B2 / #535: SaveDestinationDialog — configure image attachment save
+ * destination.
  *
- * Used by SettingsPanel, ProjectSettingsPanel, and the unconfigured paste flow.
+ * Used by SettingsPanel, ProjectSettingsPanel, and the unconfigured
+ * paste/insertion flow.
  *
  * Normal mode:
  *   Title: "文書添付画像の保存先を指定してください"
  *   [ Path input ]
- *   ☑ Markdownリンクを挿入する
- *   [キャンセル] [保存]
+ *   [キャンセル] [決定]
  *
  * Paste prompt mode:
  *   Prepends advisory notice:
@@ -16,8 +17,16 @@
  * Validation:
  *   - Uses `validateAttachedImageSaveDestination` for path shape.
  *   - Uses `destinationHasMarkdownRiskyCharacters` for advisory warnings.
- *   - Save commits settings; never touches filesystem or creates directories.
- *   - Cancel dismisses dialog with zero changes, no image saved, no notifications.
+ *   - This component only decides the destination path string; it never
+ *     touches the filesystem itself. #535 moved "create the folder on
+ *     confirm" to the caller's `onSave` handler (shared by all three call
+ *     sites), since creating a directory is an IPC round trip the caller is
+ *     already positioned to await and report errors for.
+ *   - Cancel dismisses dialog with zero changes, no notifications.
+ *   - #535 removed the "Markdownリンクを挿入する" checkbox — a successful
+ *     image save/insertion now always inserts a Markdown link
+ *     unconditionally, so this dialog's only remaining job is the
+ *     destination path.
  */
 
 import {
@@ -40,13 +49,11 @@ import { InfoDialog } from "./InfoDialog";
 
 export interface SaveDestinationDialogResult {
   readonly saveDirectory: string;
-  readonly insertMarkdownLink: boolean;
 }
 
 export interface SaveDestinationDialogProps {
   readonly isOpen: boolean;
   readonly initialSaveDirectory?: string;
-  readonly initialInsertMarkdownLink?: boolean;
   readonly mode?: "settings" | "pastePrompt";
   readonly allowEmpty?: boolean;
   readonly translate: Translate;
@@ -59,7 +66,6 @@ export interface SaveDestinationDialogProps {
 export function SaveDestinationDialog({
   isOpen,
   initialSaveDirectory = "",
-  initialInsertMarkdownLink = true,
   mode = "settings",
   allowEmpty,
   translate,
@@ -69,16 +75,12 @@ export function SaveDestinationDialog({
   onDismiss
 }: SaveDestinationDialogProps): JSX.Element | null {
   const [saveDirectory, setSaveDirectory] = useState(initialSaveDirectory);
-  const [insertMarkdownLink, setInsertMarkdownLink] = useState(
-    initialInsertMarkdownLink
-  );
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const prevIsOpenRef = useRef(false);
 
   const dialogId = useId();
   const inputId = `${dialogId}-path`;
-  const linkCheckboxId = `${dialogId}-insert-link`;
   const errorId = `${dialogId}-error`;
   const riskyNoticeId = `${dialogId}-risky`;
 
@@ -88,13 +90,12 @@ export function SaveDestinationDialog({
 
     if (isOpen && wasClosed) {
       setSaveDirectory(initialSaveDirectory);
-      setInsertMarkdownLink(initialInsertMarkdownLink);
       setSubmitAttempted(false);
       // Autofocus and select path input when opening
       inputRef.current?.focus();
       inputRef.current?.select();
     }
-  }, [isOpen, initialSaveDirectory, initialInsertMarkdownLink]);
+  }, [isOpen, initialSaveDirectory]);
 
   const effectiveAllowEmpty = allowEmpty ?? (mode !== "pastePrompt");
   const isTrimmedEmpty = saveDirectory.trim().length === 0;
@@ -137,10 +138,9 @@ export function SaveDestinationDialog({
     }
 
     onSave({
-      saveDirectory: normalizedSaveDirectory,
-      insertMarkdownLink
+      saveDirectory: normalizedSaveDirectory
     });
-  }, [isValid, normalizedSaveDirectory, insertMarkdownLink, onSave]);
+  }, [isValid, normalizedSaveDirectory, onSave]);
 
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -159,7 +159,7 @@ export function SaveDestinationDialog({
       disabled={!isValid}
       onClick={handleSave}
     >
-      {translate("common.save")}
+      {translate("common.confirm")}
     </button>
   );
 
@@ -237,22 +237,6 @@ export function SaveDestinationDialog({
             )}
           </p>
         ) : null}
-
-        <label
-          className="saveDestinationDialogCheckboxLabel"
-          htmlFor={linkCheckboxId}
-        >
-          <input
-            id={linkCheckboxId}
-            type="checkbox"
-            className="saveDestinationDialogCheckbox"
-            checked={insertMarkdownLink}
-            onChange={(e) => setInsertMarkdownLink(e.target.checked)}
-          />
-          <span>
-            {translate("settings.imageAttachment.insertMarkdownLink.label")}
-          </span>
-        </label>
       </form>
     </InfoDialog>
   );

@@ -4,6 +4,7 @@ import {
   destinationHasMarkdownRiskyCharacters,
   markdownDestinationNeedsAngleWrapping,
   markdownImageLinkForAttachment,
+  markdownImageLinksForAttachments,
   projectRelativeDirname,
   projectRelativeLinkPath
 } from "../../src/shared/markdownImageLink";
@@ -104,6 +105,41 @@ describe("markdownImageLinkForAttachment", () => {
         imageRelativePath: "assets/images/x.png"
       })
     ).toBe("![](assets/images/x.png)");
+  });
+});
+
+describe("markdownImageLinksForAttachments", () => {
+  it("builds a single link the same way as markdownImageLinkForAttachment", () => {
+    expect(
+      markdownImageLinksForAttachments({
+        markdownRelativePath: "chapter01.md",
+        imageRelativePaths: ["assets/images/foo.png"]
+      })
+    ).toBe("![](assets/images/foo.png)");
+  });
+
+  it("joins multiple links with a blank line, preserving order (#535)", () => {
+    expect(
+      markdownImageLinksForAttachments({
+        markdownRelativePath: "chapter01.md",
+        imageRelativePaths: [
+          "assets/images/foo.png",
+          "assets/images/bar.png",
+          "assets/images/baz.png"
+        ]
+      })
+    ).toBe(
+      "![](assets/images/foo.png)\n\n![](assets/images/bar.png)\n\n![](assets/images/baz.png)"
+    );
+  });
+
+  it("returns an empty string for no images", () => {
+    expect(
+      markdownImageLinksForAttachments({
+        markdownRelativePath: "chapter01.md",
+        imageRelativePaths: []
+      })
+    ).toBe("");
   });
 });
 

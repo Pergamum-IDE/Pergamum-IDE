@@ -131,7 +131,7 @@ function saveRequest(
     },
     markdownFiles: { lineEnding: "lf", encoding: "utf8" },
     textFiles: { enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8" },
-    imageAttachment: { saveDirectory: "", insertMarkdownLink: true },
+    imageAttachment: { saveDirectory: "" },
     ...overrides
   } as SaveApplicationSettingsRequest;
 }

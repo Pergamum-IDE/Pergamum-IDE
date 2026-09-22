@@ -13,6 +13,7 @@ export const enTranslations = {
   "app.ready": "Ready",
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.confirm": "OK",
   "common.edit": "Edit",
   "common.numberFormatLocale": "en-US",
   "common.ok": "OK",
@@ -278,6 +279,8 @@ export const enTranslations = {
   "dialog.imageAttachment.failed.collisionExhausted": "Could not save the image because too many files with colliding names exist.",
   "dialog.imageAttachment.failed.writeFailure": "Failed to save the image.",
   "dialog.imageAttachment.failed.projectNotOpen": "Images can only be attached to Markdown documents within a project.",
+  "dialog.imageAttachment.failed.sourceUnreadable": "Could not read the selected image file.",
+  "dialog.imageAttachment.failed.overwriteNotAllowed": "Insertion was canceled because a file with the same name already exists.",
   "markdownImageLinkDiagnostics.missing": "Image link not found: {src}",
   "markdownImageLinkDiagnostics.directory": "Image link points to a folder: {src}",
   "markdownImageLinkDiagnostics.outsideProject": "Image link points outside the project: {src}",
@@ -1184,6 +1187,13 @@ export const enTranslations = {
   "documentMap.page.currentOfTotal": "Page {current} / {total}",
   "documentMap.page.option": "Page {page}",
   "documentMap.rendering": "Rendering…",
+  "imageInsertion.overwriteDialog.title": "Overwrite image files?",
+  "imageInsertion.overwriteDialog.message":
+    "The following files already exist. Continuing will overwrite them.",
+  "imageInsertion.overwriteDialog.confirm": "Overwrite and continue",
+  "imageInsertion.toast.inserted": "Inserted the image.",
+  "imageInsertion.toast.noSupportedImages": "No supported image files to insert.",
+  "imageInsertion.toast.targetChanged": "Could not insert the image because the target changed.",
   "language.en": "English",
   "language.ja": "Japanese",
   "link.dialog.title": "Insert link",
@@ -1359,8 +1369,6 @@ export const enTranslations = {
     "Inserted the attached image link.",
   "notification.imageAttachment.linkInsertedInDocument":
     "Inserted the attached image link in \"{name}\".",
-  "notification.imageAttachment.savedOnly":
-    "Saved attached image: {path}",
   "notification.imageAttachment.multipleImages":
     "Multiple images were included, so only the first one was attached.",
   "notification.imageAttachment.targetChanged":
@@ -1462,8 +1470,6 @@ export const enTranslations = {
   "settings.imageAttachment.saveDirectory.validation.invalidCharacter": "Path contains invalid characters.",
   "settings.imageAttachment.saveDirectory.validation.reservedName": "System reserved device names cannot be used.",
   "settings.imageAttachment.saveDirectory.validation.trailingDotOrSpace": "Names ending with a dot or space cannot be used.",
-  "settings.imageAttachment.insertMarkdownLink.label": "Insert a Markdown link",
-  "settings.imageAttachment.insertMarkdownLink.description": "When on, a saved image is followed by a Markdown image link at the paste position. When off, the image is saved but the document is left unchanged.",
   "settings.editor.lineEnding.expected.description": "The line ending that editor markers and the distribution dialog compare against. Never used to decide a new break's kind or to convert saved files.",
   "settings.editor.lineEnding.expected.label": "Expected line ending",
   "settings.editor.lineEnding.expected.option.cr.label": "CR",
@@ -1759,6 +1765,7 @@ export const enTranslations = {
   "toolbar.horizontalRule": "Horizontal rule",
   "toolbar.indent": "Indent",
   "toolbar.insertHeading": "Insert heading",
+  "toolbar.insertImage": "Insert image",
   "toolbar.insertLink": "Insert link",
   "toolbar.insertTable": "Insert table",
   "toolbar.italic": "Italic",

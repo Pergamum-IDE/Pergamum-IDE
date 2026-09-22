@@ -22,6 +22,7 @@ import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
 import { registerImageAttachmentIpc } from "./imageAttachmentIpc";
+import { registerImageInsertionIpc } from "./imageInsertionIpc";
 import { registerMarkdownImageLinkDiagnosticsIpc } from "./markdownImageLinkDiagnosticsIpc";
 import { registerPergamumAssetProtocol } from "./pergamumAssetProtocol";
 import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
@@ -352,6 +353,7 @@ app.whenReady().then(async () => {
   registerSettingsIpc();
   registerFontCacheIpc();
   registerImageAttachmentIpc();
+  registerImageInsertionIpc();
   // #411: read-only diagnostics for broken project-local image links in the
   // active Markdown editor (renderer extracts links + offsets; main resolves
   // the project root and validates the files).

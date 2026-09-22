@@ -34,7 +34,6 @@ describe("SaveDestinationDialog and SaveDestinationSettingControl (#407 B2)", ()
     const defaultProps: SaveDestinationDialogProps = {
       isOpen: true,
       initialSaveDirectory: "",
-      initialInsertMarkdownLink: true,
       mode: "settings",
       translate,
       onSave: vi.fn(),
@@ -69,17 +68,14 @@ describe("SaveDestinationDialog and SaveDestinationSettingControl (#407 B2)", ()
     expect(notice?.textContent).toContain("添付画像の保存先が未指定です");
   });
 
-  it("displays initial values for path input and checkbox", () => {
+  it("displays initial value for path input", () => {
     renderDialog({
-      initialSaveDirectory: "assets/images",
-      initialInsertMarkdownLink: false
+      initialSaveDirectory: "assets/images"
     });
 
     const input = container.querySelector<HTMLInputElement>(".saveDestinationDialogInput")!;
-    const checkbox = container.querySelector<HTMLInputElement>(".saveDestinationDialogCheckbox")!;
 
     expect(input.value).toBe("assets/images");
-    expect(checkbox.checked).toBe(false);
   });
 
   it("enables Save button for empty path in settings mode and saves empty string", () => {
@@ -94,8 +90,7 @@ describe("SaveDestinationDialog and SaveDestinationSettingControl (#407 B2)", ()
     });
 
     expect(onSave).toHaveBeenCalledWith({
-      saveDirectory: "",
-      insertMarkdownLink: true
+      saveDirectory: ""
     });
   });
 
@@ -147,11 +142,10 @@ describe("SaveDestinationDialog and SaveDestinationSettingControl (#407 B2)", ()
     expect(warning?.textContent).toContain("パスに空白や特殊文字が含まれているため");
   });
 
-  it("submits normalized path and checkbox state on Save click", () => {
+  it("submits normalized path on Save click", () => {
     const onSave = vi.fn();
     renderDialog({
       initialSaveDirectory: "assets\\images",
-      initialInsertMarkdownLink: true,
       onSave
     });
 
@@ -163,32 +157,7 @@ describe("SaveDestinationDialog and SaveDestinationSettingControl (#407 B2)", ()
     });
 
     expect(onSave).toHaveBeenCalledWith({
-      saveDirectory: "assets/images",
-      insertMarkdownLink: true
-    });
-  });
-
-  it("toggles markdown link insertion checkbox", () => {
-    const onSave = vi.fn();
-    renderDialog({
-      initialSaveDirectory: "assets",
-      initialInsertMarkdownLink: true,
-      onSave
-    });
-
-    const checkbox = container.querySelector<HTMLInputElement>(".saveDestinationDialogCheckbox")!;
-    act(() => {
-      checkbox.click();
-    });
-
-    const saveButton = container.querySelector<HTMLButtonElement>(".saveDestinationDialogSaveButton")!;
-    act(() => {
-      saveButton.click();
-    });
-
-    expect(onSave).toHaveBeenCalledWith({
-      saveDirectory: "assets",
-      insertMarkdownLink: false
+      saveDirectory: "assets/images"
     });
   });
 
@@ -217,8 +186,7 @@ describe("SaveDestinationDialog and SaveDestinationSettingControl (#407 B2)", ()
     });
 
     expect(onSave).toHaveBeenCalledWith({
-      saveDirectory: "valid/dir",
-      insertMarkdownLink: true
+      saveDirectory: "valid/dir"
     });
   });
 

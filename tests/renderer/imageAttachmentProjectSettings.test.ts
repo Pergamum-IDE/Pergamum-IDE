@@ -3,11 +3,10 @@ import { defaultApplicationSettings } from "../../src/shared/settings";
 import { buildImageAttachmentPasteProjectSettingsRequest } from "../../src/renderer/imageAttachmentProjectSettings";
 
 describe("image attachment paste Project Settings override request (#407 B4)", () => {
-  it("sets saveDirectory and insertMarkdownLink when they differ from inherited application settings", () => {
+  it("sets saveDirectory when it differs from inherited application settings", () => {
     const request = buildImageAttachmentPasteProjectSettingsRequest({
       nextSettings: {
-        saveDirectory: "assets/images",
-        insertMarkdownLink: false
+        saveDirectory: "assets/images"
       },
       applicationSettings: defaultApplicationSettings,
       projectSettings: undefined
@@ -15,8 +14,7 @@ describe("image attachment paste Project Settings override request (#407 B4)", (
 
     expect(request).toEqual({
       set: {
-        "imageAttachment.saveDirectory": "assets/images",
-        "imageAttachment.insertMarkdownLink": false
+        "imageAttachment.saveDirectory": "assets/images"
       }
     });
   });
@@ -24,43 +22,35 @@ describe("image attachment paste Project Settings override request (#407 B4)", (
   it("removes project overrides when prompt values match inherited settings", () => {
     const request = buildImageAttachmentPasteProjectSettingsRequest({
       nextSettings: {
-        saveDirectory: "assets/images",
-        insertMarkdownLink: false
+        saveDirectory: "assets/images"
       },
       applicationSettings: {
         ...defaultApplicationSettings,
         imageAttachment: {
-          saveDirectory: "assets/images",
-          insertMarkdownLink: false
+          saveDirectory: "assets/images"
         }
       },
       projectSettings: {
         imageAttachment: {
-          saveDirectory: "old",
-          insertMarkdownLink: true
+          saveDirectory: "old"
         }
       }
     });
 
     expect(request).toEqual({
-      remove: [
-        "imageAttachment.saveDirectory",
-        "imageAttachment.insertMarkdownLink"
-      ]
+      remove: ["imageAttachment.saveDirectory"]
     });
   });
 
   it("returns null when the normalized prompt values are already committed", () => {
     const request = buildImageAttachmentPasteProjectSettingsRequest({
       nextSettings: {
-        saveDirectory: "assets/images",
-        insertMarkdownLink: false
+        saveDirectory: "assets/images"
       },
       applicationSettings: defaultApplicationSettings,
       projectSettings: {
         imageAttachment: {
-          saveDirectory: "assets/images",
-          insertMarkdownLink: false
+          saveDirectory: "assets/images"
         }
       }
     });
@@ -71,8 +61,7 @@ describe("image attachment paste Project Settings override request (#407 B4)", (
   it("does not create an override request for an empty PastePrompt save directory", () => {
     const request = buildImageAttachmentPasteProjectSettingsRequest({
       nextSettings: {
-        saveDirectory: "",
-        insertMarkdownLink: true
+        saveDirectory: ""
       },
       applicationSettings: defaultApplicationSettings,
       projectSettings: undefined

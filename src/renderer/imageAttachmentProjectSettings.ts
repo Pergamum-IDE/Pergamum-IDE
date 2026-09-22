@@ -18,10 +18,7 @@ function inheritedImageAttachmentSettings(
   return {
     saveDirectory:
       applicationSettings.imageAttachment.saveDirectory ??
-      builtInDefaultSettings.imageAttachment.saveDirectory,
-    insertMarkdownLink:
-      applicationSettings.imageAttachment.insertMarkdownLink ??
-      builtInDefaultSettings.imageAttachment.insertMarkdownLink
+      builtInDefaultSettings.imageAttachment.saveDirectory
   };
 }
 
@@ -37,8 +34,6 @@ export function buildImageAttachmentPasteProjectSettingsRequest({
   const inherited = inheritedImageAttachmentSettings(applicationSettings);
   const committedSaveDirectory =
     projectSettings?.imageAttachment?.saveDirectory;
-  const committedInsertMarkdownLink =
-    projectSettings?.imageAttachment?.insertMarkdownLink;
 
   const set: Record<string, unknown> = {};
   const remove: string[] = [];
@@ -49,17 +44,6 @@ export function buildImageAttachmentPasteProjectSettingsRequest({
     }
   } else if (nextSettings.saveDirectory !== committedSaveDirectory) {
     set["imageAttachment.saveDirectory"] = nextSettings.saveDirectory;
-  }
-
-  if (nextSettings.insertMarkdownLink === inherited.insertMarkdownLink) {
-    if (committedInsertMarkdownLink !== undefined) {
-      remove.push("imageAttachment.insertMarkdownLink");
-    }
-  } else if (
-    nextSettings.insertMarkdownLink !== committedInsertMarkdownLink
-  ) {
-    set["imageAttachment.insertMarkdownLink"] =
-      nextSettings.insertMarkdownLink;
   }
 
   if (Object.keys(set).length === 0 && remove.length === 0) {

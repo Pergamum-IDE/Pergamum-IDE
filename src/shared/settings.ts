@@ -283,15 +283,15 @@ export type ImageAttachmentSaveDirectory = SettingValueOf<
   "imageAttachment.saveDirectory"
 >;
 
-// #407: clipboard image attachment. `saveDirectory` is a project-root-
-// relative path (empty = not configured yet); `insertMarkdownLink` toggles
-// whether a successful save is followed by a Markdown image link at the
-// paste position. applicationWithProjectOverride: both are always concrete
+// #407 / #535: clipboard image attachment. `saveDirectory` is a
+// project-root-relative path (empty = not configured yet). A successful
+// save always inserts a Markdown image link at the paste position — #535
+// removed the separate opt-out, which used to live here as
+// `insertMarkdownLink`. applicationWithProjectOverride: always concrete
 // here (never sparse), and resolveEffectiveSettings applies the
 // Project > Application > Built-in chain.
 export interface ApplicationImageAttachmentSettings {
   saveDirectory: ImageAttachmentSaveDirectory;
-  insertMarkdownLink: boolean;
 }
 
 // #424 Slice 7: glossary "近傍" (Nearby) relation search range.
@@ -439,7 +439,6 @@ export interface ProjectDocumentMapSettings {
 // overrides are present, mirroring ProjectEditorSettings etc.
 export interface ProjectImageAttachmentSettings {
   saveDirectory?: ImageAttachmentSaveDirectory;
-  insertMarkdownLink?: boolean;
 }
 
 // #424 Slice 7: sparse project override — only the keys the project actually
@@ -522,7 +521,6 @@ export interface EffectiveTextFilesSettings {
 // #407: always concrete after the Project > Application > Built-in chain.
 export interface EffectiveImageAttachmentSettings {
   saveDirectory: ImageAttachmentSaveDirectory;
-  insertMarkdownLink: boolean;
 }
 
 export interface EffectiveSettings {
@@ -719,10 +717,7 @@ export const builtInDefaultSettings: EffectiveSettings = {
     lineEnding: getCatalogDefaultValue("textFiles.lineEnding")
   },
   imageAttachment: {
-    saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
-    insertMarkdownLink: getCatalogDefaultValue(
-      "imageAttachment.insertMarkdownLink"
-    )
+    saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory")
   },
   documentMap: defaultDocumentMapSettings()
 };
@@ -837,9 +832,7 @@ export const defaultApplicationSettings: ApplicationSettings = {
     lineEnding: builtInDefaultSettings.textFiles.lineEnding
   },
   imageAttachment: {
-    saveDirectory: builtInDefaultSettings.imageAttachment.saveDirectory,
-    insertMarkdownLink:
-      builtInDefaultSettings.imageAttachment.insertMarkdownLink
+    saveDirectory: builtInDefaultSettings.imageAttachment.saveDirectory
   },
   documentMap: defaultDocumentMapSettings(),
   recentProjects: []
@@ -956,9 +949,7 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
     },
     imageAttachment: {
       saveDirectory:
-        defaultApplicationSettings.imageAttachment.saveDirectory,
-      insertMarkdownLink:
-        defaultApplicationSettings.imageAttachment.insertMarkdownLink
+        defaultApplicationSettings.imageAttachment.saveDirectory
     },
     documentMap: defaultDocumentMapSettings(),
     recentProjects: []
@@ -1174,19 +1165,15 @@ export function resolveEffectiveSettings(
         applicationSettings.textFiles.lineEnding ??
         builtInDefaultSettings.textFiles.lineEnding
     },
-    // #407: both keys support the whole Project > Application > Built-in
-    // override chain. `saveDirectory`'s built-in default is the empty string
-    // (nullish-coalescing leaves an explicit "" from a lower layer intact —
-    // an empty override is still "not configured").
+    // #407: supports the whole Project > Application > Built-in override
+    // chain. The built-in default is the empty string (nullish-coalescing
+    // leaves an explicit "" from a lower layer intact — an empty override is
+    // still "not configured").
     imageAttachment: {
       saveDirectory:
         projectSettings?.imageAttachment?.saveDirectory ??
         applicationSettings.imageAttachment.saveDirectory ??
-        builtInDefaultSettings.imageAttachment.saveDirectory,
-      insertMarkdownLink:
-        projectSettings?.imageAttachment?.insertMarkdownLink ??
-        applicationSettings.imageAttachment.insertMarkdownLink ??
-        builtInDefaultSettings.imageAttachment.insertMarkdownLink
+        builtInDefaultSettings.imageAttachment.saveDirectory
     },
     // #375 / #396: dialogueDelimiterPairs supports whole-array Project override
     // (no element-level merge; Project array > Application array > default).

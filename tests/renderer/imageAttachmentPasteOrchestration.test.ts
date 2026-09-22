@@ -66,7 +66,6 @@ function settings(
 ): EffectiveImageAttachmentSettings {
   return {
     saveDirectory: "assets/images",
-    insertMarkdownLink: true,
     ...overrides
   };
 }
@@ -141,27 +140,6 @@ describe("image attachment paste orchestration (#407 B4)", () => {
     expect(deps.showWarningDialog).not.toHaveBeenCalled();
   });
 
-  it("configured saveDirectory + insert off: saves only, leaves Markdown unchanged, clears marker, and shows saved-path toast", async () => {
-    const deps = createDeps({
-      getSettings: vi.fn(() =>
-        settings({
-          insertMarkdownLink: false
-        })
-      )
-    });
-
-    await expect(
-      runImageAttachmentPasteOrchestration(okResult(), deps)
-    ).resolves.toBe("savedOnly");
-
-    expect(deps.saveImageAttachment).toHaveBeenCalledTimes(1);
-    expect(deps.insertMarkdownLink).not.toHaveBeenCalled();
-    expect(deps.clearPosition).toHaveBeenCalledTimes(1);
-    expect(deps.showSuccessToast).toHaveBeenCalledWith(
-      "添付画像を保存しました: assets/images/x.png"
-    );
-  });
-
   it("save failure: shows warning dialog, does not edit Markdown, does not use Toast, and clears marker", async () => {
     const deps = createDeps({
       saveImageAttachment: vi.fn(async () => ({
@@ -221,8 +199,7 @@ describe("image attachment paste orchestration (#407 B4)", () => {
 
   it("saveDirectory unset + dialog save: saves Project override, revalidates target, then saves and inserts", async () => {
     const promptSettings = settings({
-      saveDirectory: "attachments",
-      insertMarkdownLink: true
+      saveDirectory: "attachments"
     });
     const deps = createDeps({
       getSettings: vi.fn(() => settings({ saveDirectory: "" })),
@@ -308,8 +285,7 @@ describe("image attachment paste orchestration (#407 B4)", () => {
 
   it("prompt save failed: shows warning dialog, does not save image, does not edit Markdown, and clears marker", async () => {
     const promptSettings = settings({
-      saveDirectory: "attachments",
-      insertMarkdownLink: true
+      saveDirectory: "attachments"
     });
     const deps = createDeps({
       getSettings: vi.fn(() => settings({ saveDirectory: "" })),

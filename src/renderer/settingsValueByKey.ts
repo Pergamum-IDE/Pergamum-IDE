@@ -129,8 +129,6 @@ export function readSettingValue(
       return settings.documentMap.dialogueDelimiterPairs;
     case "imageAttachment.saveDirectory":
       return settings.imageAttachment.saveDirectory;
-    case "imageAttachment.insertMarkdownLink":
-      return settings.imageAttachment.insertMarkdownLink;
     case "search.nearby.unit":
       return settings.search.nearby.unit;
     case "search.nearby.characterDistance":

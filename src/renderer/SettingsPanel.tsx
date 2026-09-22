@@ -592,17 +592,11 @@ function buildNextSettings(
         rawValue !== null &&
         "saveDirectory" in rawValue
       ) {
-        const payload = rawValue as {
-          saveDirectory: string;
-          insertMarkdownLink?: boolean;
-        };
+        const payload = rawValue as { saveDirectory: string };
         return saveRequest(settings, {
           imageAttachment: {
             ...settings.imageAttachment,
-            saveDirectory: String(payload.saveDirectory),
-            ...(typeof payload.insertMarkdownLink === "boolean"
-              ? { insertMarkdownLink: payload.insertMarkdownLink }
-              : {})
+            saveDirectory: String(payload.saveDirectory)
           }
         });
       }
@@ -610,13 +604,6 @@ function buildNextSettings(
         imageAttachment: {
           ...settings.imageAttachment,
           saveDirectory: String(rawValue)
-        }
-      });
-    case "imageAttachment.insertMarkdownLink":
-      return saveRequest(settings, {
-        imageAttachment: {
-          ...settings.imageAttachment,
-          insertMarkdownLink: Boolean(rawValue)
         }
       });
     // #424 Slice 7: glossary nearby search range (applicationWithProjectOverride).
@@ -1356,9 +1343,6 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
       <SaveDestinationDialog
         isOpen={isDestinationDialogOpen}
         initialSaveDirectory={props.settings.imageAttachment.saveDirectory}
-        initialInsertMarkdownLink={
-          props.settings.imageAttachment.insertMarkdownLink
-        }
         mode="settings"
         translate={props.translate}
         opener={dialogOpener}

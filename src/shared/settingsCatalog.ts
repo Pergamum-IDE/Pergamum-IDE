@@ -1131,18 +1131,6 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
-  // #407: when ON (default), a successful image save is followed by inserting
-  // a Markdown image link at the paste position; when OFF the image is still
-  // saved but the document is left untouched (a Toast confirms the save).
-  "imageAttachment.insertMarkdownLink": defineBooleanSetting({
-    key: "imageAttachment.insertMarkdownLink",
-    scope: "applicationWithProjectOverride",
-    defaultValue: true,
-    labelKey: "settings.imageAttachment.insertMarkdownLink.label",
-    descriptionKey: "settings.imageAttachment.insertMarkdownLink.description",
-    deprecatedAliases: [],
-    migrationNotes: []
-  }),
   "editor.emphasisMark.rule": defineEnumSetting({
     key: "editor.emphasisMark.rule",
     scope: "applicationWithProjectOverride",

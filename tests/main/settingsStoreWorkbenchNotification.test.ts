@@ -145,7 +145,7 @@ function saveRequest(
     },
     markdownFiles: { lineEnding: "lf", encoding: "utf8" },
     textFiles: { enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8" },
-    imageAttachment: { saveDirectory: "", insertMarkdownLink: true },
+    imageAttachment: { saveDirectory: "" },
     documentMap: {
       narrationColor: "#000000",
       glossaryFallbackColor: "#ff0000",

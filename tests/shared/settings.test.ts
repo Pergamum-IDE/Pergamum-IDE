@@ -1081,14 +1081,10 @@ describe("Project Settings Slice 7 PO-approved overrides resolution (#396)", () 
 describe("imageAttachment settings (#407 B1)", () => {
   it("defaults derive from the catalog and are concrete application settings", () => {
     const expected = {
-      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
-      insertMarkdownLink: getCatalogDefaultValue(
-        "imageAttachment.insertMarkdownLink"
-      )
+      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory")
     };
 
     expect(expected.saveDirectory).toBe("");
-    expect(expected.insertMarkdownLink).toBe(true);
     expect(builtInDefaultSettings.imageAttachment).toEqual(expected);
     expect(defaultApplicationSettings.imageAttachment).toEqual(expected);
     expect(createDefaultApplicationSettings().imageAttachment).toEqual(expected);
@@ -1098,40 +1094,27 @@ describe("imageAttachment settings (#407 B1)", () => {
     ).toEqual(expected);
   });
 
-  it("resolves Project > Application > Built-in for both keys", () => {
+  it("resolves Project > Application > Built-in for saveDirectory", () => {
     const appSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
       imageAttachment: {
-        saveDirectory: "assets/app",
-        insertMarkdownLink: true
+        saveDirectory: "assets/app"
       }
     };
 
     const withProject = resolveEffectiveSettings(appSettings, {
       imageAttachment: {
-        saveDirectory: "assets/project",
-        insertMarkdownLink: false
+        saveDirectory: "assets/project"
       }
     });
     expect(withProject.imageAttachment).toEqual({
-      saveDirectory: "assets/project",
-      insertMarkdownLink: false
-    });
-
-    // A partial project override only replaces the key it carries.
-    const partialProject = resolveEffectiveSettings(appSettings, {
-      imageAttachment: { insertMarkdownLink: false }
-    });
-    expect(partialProject.imageAttachment).toEqual({
-      saveDirectory: "assets/app",
-      insertMarkdownLink: false
+      saveDirectory: "assets/project"
     });
 
     // No project override -> Application Settings value.
     const withoutProject = resolveEffectiveSettings(appSettings, undefined);
     expect(withoutProject.imageAttachment).toEqual({
-      saveDirectory: "assets/app",
-      insertMarkdownLink: true
+      saveDirectory: "assets/app"
     });
   });
 
@@ -1139,15 +1122,13 @@ describe("imageAttachment settings (#407 B1)", () => {
     const appEmpty: ApplicationSettings = {
       ...defaultApplicationSettings,
       imageAttachment: {
-        saveDirectory: "",
-        insertMarkdownLink: true
+        saveDirectory: ""
       }
     };
     const appAssets: ApplicationSettings = {
       ...defaultApplicationSettings,
       imageAttachment: {
-        saveDirectory: "assets",
-        insertMarkdownLink: true
+        saveDirectory: "assets"
       }
     };
 

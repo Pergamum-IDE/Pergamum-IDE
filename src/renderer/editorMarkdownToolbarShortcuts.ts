@@ -34,6 +34,8 @@ export interface MarkdownEditorToolbarShortcutConfig {
   readonly insertHorizontalRule: () => void;
   /** #531 Ctrl+Shift+B */
   readonly insertCodeBlock: () => void;
+  /** #535 Ctrl+Shift+I */
+  readonly requestInsertImage: () => void;
 }
 
 let currentMarkdownToolbarShortcutConfig: MarkdownEditorToolbarShortcutConfig | null =
@@ -64,7 +66,8 @@ type MarkdownToolbarShortcutTrigger =
   | "heading"
   | "link"
   | "horizontalRule"
-  | "codeBlock";
+  | "codeBlock"
+  | "insertImage";
 
 function matchMarkdownToolbarShortcutTrigger(
   event: KeyboardEvent
@@ -83,6 +86,8 @@ function matchMarkdownToolbarShortcutTrigger(
         return "horizontalRule";
       case "b":
         return "codeBlock";
+      case "i":
+        return "insertImage";
       default:
         return null;
     }
@@ -159,6 +164,9 @@ export function createMarkdownToolbarShortcutKeymapExtension(input?: {
             break;
           case "codeBlock":
             config.insertCodeBlock();
+            break;
+          case "insertImage":
+            config.requestInsertImage();
             break;
           case "link": {
             const selection = view.state.selection.main;

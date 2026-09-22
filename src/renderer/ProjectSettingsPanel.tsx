@@ -216,8 +216,6 @@ export function readProjectSettingValue(
       return settings.documentMap?.dialogueDelimiterPairs;
     case "imageAttachment.saveDirectory":
       return settings.imageAttachment?.saveDirectory;
-    case "imageAttachment.insertMarkdownLink":
-      return settings.imageAttachment?.insertMarkdownLink;
     case "search.nearby.unit":
       return settings.search?.nearby?.unit;
     case "search.nearby.characterDistance":
@@ -1550,7 +1548,6 @@ export function ProjectSettingsPanel({
 
   const handleImageAttachmentSave = async (result: {
     readonly saveDirectory: string;
-    readonly insertMarkdownLink: boolean;
   }): Promise<void> => {
     if (isReadOnly || isSaving) {
       return;
@@ -1562,35 +1559,19 @@ export function ProjectSettingsPanel({
       applicationSettings,
       inheritedFontFamily
     );
-    const currentInsertLinkEffective = readEffectiveProjectSettingValue(
-      "imageAttachment.insertMarkdownLink",
-      projectSettings,
-      applicationSettings,
-      inheritedFontFamily
-    );
 
     const saveDirValidation = validateProjectSettingValue(
       "imageAttachment.saveDirectory",
       result.saveDirectory,
       currentSaveDirEffective
     );
-    const insertLinkValidation = validateProjectSettingValue(
-      "imageAttachment.insertMarkdownLink",
-      result.insertMarkdownLink,
-      currentInsertLinkEffective
-    );
 
-    if (!saveDirValidation.ok || !insertLinkValidation.ok) {
+    if (!saveDirValidation.ok) {
       return;
     }
 
     const inheritedSaveDir = readInheritedSettingValue(
       "imageAttachment.saveDirectory",
-      applicationSettings,
-      inheritedFontFamily
-    );
-    const inheritedInsertLink = readInheritedSettingValue(
-      "imageAttachment.insertMarkdownLink",
       applicationSettings,
       inheritedFontFamily
     );
@@ -1604,26 +1585,14 @@ export function ProjectSettingsPanel({
       setObj["imageAttachment.saveDirectory"] = saveDirValidation.value;
     }
 
-    if (insertLinkValidation.value === inheritedInsertLink) {
-      removeArr.push("imageAttachment.insertMarkdownLink");
-    } else if (insertLinkValidation.value !== undefined) {
-      setObj["imageAttachment.insertMarkdownLink"] = insertLinkValidation.value;
-    }
-
     const committedSaveDir = readProjectSettingValue(
       "imageAttachment.saveDirectory",
-      projectSettings
-    );
-    const committedInsertLink = readProjectSettingValue(
-      "imageAttachment.insertMarkdownLink",
       projectSettings
     );
 
     const actualRemoves = removeArr.filter((k) => {
       if (k === "imageAttachment.saveDirectory")
         return committedSaveDir !== undefined;
-      if (k === "imageAttachment.insertMarkdownLink")
-        return committedInsertLink !== undefined;
       return true;
     });
 
@@ -1634,13 +1603,6 @@ export function ProjectSettingsPanel({
     ) {
       actualSetObj["imageAttachment.saveDirectory"] =
         setObj["imageAttachment.saveDirectory"];
-    }
-    if (
-      setObj["imageAttachment.insertMarkdownLink"] !== undefined &&
-      setObj["imageAttachment.insertMarkdownLink"] !== committedInsertLink
-    ) {
-      actualSetObj["imageAttachment.insertMarkdownLink"] =
-        setObj["imageAttachment.insertMarkdownLink"];
     }
 
     if (Object.keys(actualSetObj).length === 0 && actualRemoves.length === 0) {
@@ -1789,16 +1751,6 @@ export function ProjectSettingsPanel({
               applicationSettings,
               inheritedFontFamily
             ) ?? ""
-          )
-        }
-        initialInsertMarkdownLink={
-          Boolean(
-            readEffectiveProjectSettingValue(
-              "imageAttachment.insertMarkdownLink",
-              projectSettings,
-              applicationSettings,
-              inheritedFontFamily
-            ) ?? true
           )
         }
         mode="settings"

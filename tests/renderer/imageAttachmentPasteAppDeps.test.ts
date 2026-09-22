@@ -656,8 +656,7 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
     // Settings save with stale sourceEditorId returns targetStale
     const saveResultStale = await saveImageAttachmentProjectSettingsFromPrompt({
       nextSettings: {
-        saveDirectory: "attachments",
-        insertMarkdownLink: true
+        saveDirectory: "attachments"
       },
       pending,
       currentProject,
@@ -669,8 +668,7 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
     // Settings save with null project returns targetStale
     const saveResultNullProject = await saveImageAttachmentProjectSettingsFromPrompt({
       nextSettings: {
-        saveDirectory: "attachments",
-        insertMarkdownLink: true
+        saveDirectory: "attachments"
       },
       pending,
       currentProject: null,
@@ -682,15 +680,14 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
 
   describe("saveImageAttachmentProjectSettingsFromPrompt outcomes", () => {
     const nextSettings: EffectiveImageAttachmentSettings = {
-      saveDirectory: "attachments",
-      insertMarkdownLink: true
+      saveDirectory: "attachments"
     };
 
     it("returns 'saved' when saveProjectSettings resolves with updated settings", async () => {
       const pending = makePending();
       const currentProject = createProjectContext();
       const updatedSettings: ProjectSettings = {
-        imageAttachment: { saveDirectory: "attachments", insertMarkdownLink: true }
+        imageAttachment: { saveDirectory: "attachments" }
       };
       const saveProjectSettings = vi.fn(async () => updatedSettings);
 
@@ -719,8 +716,7 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
       const applicationSettings = {
         ...defaultApplicationSettings,
         imageAttachment: {
-          saveDirectory: "attachments",
-          insertMarkdownLink: true
+          saveDirectory: "attachments"
         }
       };
 
@@ -779,14 +775,12 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
       let applicationSettings = {
         ...defaultApplicationSettings,
         imageAttachment: {
-          saveDirectory: "assets",
-          insertMarkdownLink: true
+          saveDirectory: "assets"
         }
       };
       let projectSettings: ProjectSettings = {
         imageAttachment: {
-          saveDirectory: "assets",
-          insertMarkdownLink: true
+          saveDirectory: "assets"
         }
       };
 

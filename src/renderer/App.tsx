@@ -245,6 +245,8 @@ import { getCurrentActiveEditorSelectionText } from "./find/activeEditorSelectio
 import type { MarkdownEditorToolbarShortcutConfig } from "./editorMarkdownToolbarShortcuts";
 import type { HeadingLevel } from "../shared/markdownHeadingMarkup";
 import type { MarkdownListKind } from "../shared/markdownListMarkup";
+import { markdownImageLinksForAttachments } from "../shared/markdownImageLink";
+import type { ImageInsertionCopyPlanEntry } from "../shared/api";
 import {
   EditorSurface,
   type DocumentOpenAggregateMetrics,
@@ -495,6 +497,7 @@ import {
   SaveDestinationDialog,
   type SaveDestinationDialogResult
 } from "./dialog/SaveDestinationDialog";
+import { ImageOverwriteConfirmDialog } from "./dialog/ImageOverwriteConfirmDialog";
 import {
   buildImageAttachmentSettingsSaveFailedWarningDialogOptions,
   buildImageAttachmentWarningDialogOptions
@@ -1515,6 +1518,22 @@ export function App(): JSX.Element {
     imageAttachmentPastePromptState,
     setImageAttachmentPastePromptState
   ] = useState<ImageAttachmentPastePromptDialogState | null>(null);
+  // #535: "Insert image" — a separate, simpler Promise-based dialog state
+  // than the paste flow's (no `PendingImageAttachment` to go stale, since
+  // this is a deliberate toolbar/shortcut action, not an implicit paste).
+  const imageInsertionSettingsPromptResolveRef = useRef<
+    ((result: { kind: "saved"; saveDirectory: string } | { kind: "cancelled" }) => void) | null
+  >(null);
+  const [imageInsertionSettingsPromptState, setImageInsertionSettingsPromptState] =
+    useState<{ readonly opener: Element | null } | null>(null);
+  const imageInsertionOverwriteResolveRef = useRef<
+    ((proceed: boolean) => void) | null
+  >(null);
+  const [imageInsertionOverwriteState, setImageInsertionOverwriteState] =
+    useState<{
+      readonly entries: readonly ImageInsertionCopyPlanEntry[];
+      readonly opener: Element | null;
+    } | null>(null);
   const bulkTextImportDialogOpenerRef = useRef<Element | null>(null);
   const isBulkTextImportDialogPendingOrOpenRef = useRef(false);
   const [isBulkTextImportDialogOpen, setIsBulkTextImportDialogOpen] =
@@ -2796,6 +2815,11 @@ export function App(): JSX.Element {
     !isEditorAreaSpecialTabActive &&
     activeMarkdownDocument !== null &&
     !isReadOnlyProjectOwnedEditor;
+  // #535: narrower than `canUseMarkdownToolbarCommands` — the inserted
+  // Markdown image link's relative path only makes sense for a project-owned
+  // document (the attachment folder itself is always project-relative).
+  const canInsertImage =
+    canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";
   const canSave =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -2842,8 +2866,7 @@ export function App(): JSX.Element {
     result: SaveDestinationDialogResult
   ): EffectiveImageAttachmentSettings {
     return {
-      saveDirectory: result.saveDirectory,
-      insertMarkdownLink: result.insertMarkdownLink
+      saveDirectory: result.saveDirectory
     };
   }
 
@@ -3370,6 +3393,111 @@ export function App(): JSX.Element {
     [notifyEmphasisMarkNoSelection, notifyEmphasisMarkMultiLine]
   );
 
+  // #535: Insert image — resolve/configure the asset folder (reusing the
+  // existing SaveDestinationDialog UI and its folder-creation-on-confirm
+  // behavior), pick files via the OS picker, dry-run a copy plan, confirm
+  // overwrites if needed, copy, then insert Markdown links at the CURRENT
+  // cursor position. Deliberately simpler than the clipboard-paste flow's
+  // position tracking (see imageAttachmentPasteOrchestration.ts): this is a
+  // deliberate toolbar/shortcut action gated behind a blocking native file
+  // dialog, not an implicit background paste, so inserting at whatever is
+  // the active cursor when the (short) async copy completes is an
+  // acceptable simplification — if the target document changed in that
+  // window, the info toast below explains why nothing was inserted.
+  const handleInsertImage = useCallback(
+    async (opener: Element | null) => {
+      const doc = activeMarkdownDocument;
+      if (!doc || doc.kind !== "project") {
+        return;
+      }
+      const markdownRelativePath = doc.relativePath;
+
+      let saveDirectory = currentImageAttachmentSettings().saveDirectory;
+
+      if (saveDirectory.trim().length === 0) {
+        const promptResult = await new Promise<
+          { kind: "saved"; saveDirectory: string } | { kind: "cancelled" }
+        >((resolve) => {
+          imageInsertionSettingsPromptResolveRef.current = resolve;
+          setImageInsertionSettingsPromptState({ opener });
+        });
+
+        if (promptResult.kind === "cancelled") {
+          return;
+        }
+        saveDirectory = promptResult.saveDirectory;
+      }
+
+      const pickResult = await window.pergamum.imageInsertion.pickFiles();
+      if (pickResult.paths.length === 0) {
+        return;
+      }
+
+      const planResult = await window.pergamum.imageInsertion.planCopy({
+        saveDirectory,
+        sourcePaths: pickResult.paths
+      });
+      if (!planResult.ok) {
+        await showImageAttachmentWarningDialog(planResult.reason);
+        return;
+      }
+      if (planResult.entries.length === 0) {
+        notifyImageAttachmentInfo(
+          translate("imageInsertion.toast.noSupportedImages")
+        );
+        return;
+      }
+
+      let allowOverwrite = false;
+      const conflicting = planResult.entries.filter(
+        (entry) => entry.willOverwrite
+      );
+      if (conflicting.length > 0) {
+        const proceed = await new Promise<boolean>((resolve) => {
+          imageInsertionOverwriteResolveRef.current = resolve;
+          setImageInsertionOverwriteState({ entries: conflicting, opener });
+        });
+        if (!proceed) {
+          return;
+        }
+        allowOverwrite = true;
+      }
+
+      const copyResult = await window.pergamum.imageInsertion.copyFiles({
+        saveDirectory,
+        sourcePaths: planResult.entries.map((entry) => entry.sourcePath),
+        allowOverwrite
+      });
+      if (!copyResult.ok) {
+        await showImageAttachmentWarningDialog(copyResult.reason);
+        return;
+      }
+
+      const selection = paragraphIndentControllerRef.current?.getSelection();
+      if (!selection) {
+        notifyImageAttachmentInfo(
+          translate("imageInsertion.toast.targetChanged")
+        );
+        return;
+      }
+
+      const linkText = markdownImageLinksForAttachments({
+        markdownRelativePath,
+        imageRelativePaths: copyResult.relativePaths
+      });
+
+      const inserted =
+        paragraphIndentControllerRef.current?.applyReplaceInBufferChanges([
+          { from: selection.from, to: selection.to, insert: linkText }
+        ]);
+
+      if (inserted) {
+        notifyImageAttachmentSuccess(translate("imageInsertion.toast.inserted"));
+      }
+    },
+    [activeMarkdownDocument, translate]
+  );
+
   // #529 / #531: the keyboard-shortcut path for the Markdown-specific
   // commands. Ctrl+B / Ctrl+I / Ctrl+Shift+X / Ctrl+Shift+L / Ctrl+Shift+B
   // call the exact same controller methods as their toolbar buttons; Ctrl+L
@@ -3389,7 +3517,10 @@ export function App(): JSX.Element {
         requestOpenLinkDialog: (selectedText, opener) =>
           setLinkInsertDialogState({ selectedText, opener }),
         insertHorizontalRule: handleInsertHorizontalRule,
-        insertCodeBlock: handleInsertCodeBlock
+        insertCodeBlock: handleInsertCodeBlock,
+        requestInsertImage: () => {
+          void handleInsertImage(null);
+        }
       }),
       [
         canUseMarkdownToolbarCommands,
@@ -3397,6 +3528,7 @@ export function App(): JSX.Element {
         handleApplyItalicMarkup,
         handleApplyStrikethroughMarkup,
         handleInsertHorizontalRule,
+        handleInsertImage,
         handleInsertCodeBlock
       ]
     );
@@ -10956,6 +11088,10 @@ export function App(): JSX.Element {
         onOpenLinkDialog={handleOpenLinkInsertDialog}
         onInsertHorizontalRule={handleInsertHorizontalRule}
         onInsertCodeBlock={handleInsertCodeBlock}
+        canInsertImage={Boolean(canInsertImage)}
+        onOpenImageInsertion={(opener) => {
+          void handleInsertImage(opener);
+        }}
         onInsertTable={(columns, rows) => {
           paragraphIndentControllerRef.current?.insertTable?.(columns, rows);
         }}
@@ -11665,21 +11801,98 @@ export function App(): JSX.Element {
           initialSaveDirectory={
             imageAttachmentPastePromptState.currentSettings.saveDirectory
           }
-          initialInsertMarkdownLink={
-            imageAttachmentPastePromptState.currentSettings.insertMarkdownLink
-          }
           translate={translate}
           platform={window.pergamum.platform}
           opener={imageAttachmentPastePromptOpenerRef.current}
-          onSave={(result) =>
+          onSave={async (result) => {
+            // #535: create the destination folder immediately on confirm,
+            // before persisting the setting or continuing the paste/insertion
+            // flow — an unusable destination is never saved.
+            const folderResult = await window.pergamum.imageInsertion.ensureFolder(
+              result.saveDirectory
+            );
+            if (!folderResult.ok) {
+              await showImageAttachmentWarningDialog(folderResult.reason);
+              return;
+            }
             closeImageAttachmentPastePrompt({
               kind: "saved",
               settings: imageAttachmentSettingsFromPrompt(result)
-            })
-          }
+            });
+          }}
           onDismiss={() =>
             closeImageAttachmentPastePrompt({ kind: "cancelled" })
           }
+        />
+      ) : null}
+
+      {imageInsertionSettingsPromptState !== null ? (
+        <SaveDestinationDialog
+          isOpen={true}
+          mode="pastePrompt"
+          allowEmpty={false}
+          initialSaveDirectory={currentImageAttachmentSettings().saveDirectory}
+          translate={translate}
+          platform={window.pergamum.platform}
+          opener={imageInsertionSettingsPromptState.opener}
+          onSave={async (result) => {
+            // #535: same "create the folder immediately on confirm" policy
+            // as the paste-prompt dialog above.
+            const folderResult = await window.pergamum.imageInsertion.ensureFolder(
+              result.saveDirectory
+            );
+            if (!folderResult.ok) {
+              await showImageAttachmentWarningDialog(folderResult.reason);
+              return;
+            }
+
+            const request = buildImageAttachmentPasteProjectSettingsRequest({
+              nextSettings: { saveDirectory: result.saveDirectory },
+              applicationSettings: settingsRef.current,
+              projectSettings: projectRef.current?.config?.settings
+            });
+            if (request) {
+              const saved = await handleSaveProjectSettings(request);
+              if (!saved) {
+                await showImageAttachmentSettingsSaveFailedWarningDialog();
+                return;
+              }
+            }
+
+            const resolve = imageInsertionSettingsPromptResolveRef.current;
+            imageInsertionSettingsPromptResolveRef.current = null;
+            setImageInsertionSettingsPromptState(null);
+            resolve?.({ kind: "saved", saveDirectory: result.saveDirectory });
+          }}
+          onDismiss={() => {
+            const resolve = imageInsertionSettingsPromptResolveRef.current;
+            imageInsertionSettingsPromptResolveRef.current = null;
+            setImageInsertionSettingsPromptState(null);
+            resolve?.({ kind: "cancelled" });
+          }}
+        />
+      ) : null}
+
+      {imageInsertionOverwriteState !== null ? (
+        <ImageOverwriteConfirmDialog
+          isOpen={true}
+          fileNames={imageInsertionOverwriteState.entries.map(
+            (entry) => entry.fileName
+          )}
+          opener={imageInsertionOverwriteState.opener}
+          translate={translate}
+          onConfirm={() => {
+            const resolve = imageInsertionOverwriteResolveRef.current;
+            imageInsertionOverwriteResolveRef.current = null;
+            setImageInsertionOverwriteState(null);
+            resolve?.(true);
+          }}
+          onCancel={() => {
+            const resolve = imageInsertionOverwriteResolveRef.current;
+            imageInsertionOverwriteResolveRef.current = null;
+            setImageInsertionOverwriteState(null);
+            resolve?.(false);
+          }}
         />
       ) : null}
 

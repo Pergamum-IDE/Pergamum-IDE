@@ -635,10 +635,6 @@ function readImageAttachmentSettings(
     saveDirectory: resolveCatalogValue(
       "imageAttachment.saveDirectory",
       imageAttachmentValue?.saveDirectory
-    ).value,
-    insertMarkdownLink: resolveCatalogValue(
-      "imageAttachment.insertMarkdownLink",
-      imageAttachmentValue?.insertMarkdownLink
     ).value
   };
 }
@@ -854,11 +850,7 @@ function parseImageAttachmentSettingsForWrite(
 
   const keys = Object.keys(value);
 
-  if (
-    keys.length !== 2 ||
-    !keys.includes("saveDirectory") ||
-    !keys.includes("insertMarkdownLink")
-  ) {
+  if (keys.length !== 1 || !keys.includes("saveDirectory")) {
     throw new Error("Invalid application settings.");
   }
 
@@ -866,18 +858,13 @@ function parseImageAttachmentSettingsForWrite(
     "imageAttachment.saveDirectory",
     value.saveDirectory
   );
-  const insertMarkdownLinkResolution = resolveCatalogValue(
-    "imageAttachment.insertMarkdownLink",
-    value.insertMarkdownLink
-  );
 
-  if (!saveDirectoryResolution.ok || !insertMarkdownLinkResolution.ok) {
+  if (!saveDirectoryResolution.ok) {
     throw new Error("Invalid application settings.");
   }
 
   return {
-    saveDirectory: saveDirectoryResolution.value,
-    insertMarkdownLink: insertMarkdownLinkResolution.value
+    saveDirectory: saveDirectoryResolution.value
   };
 }
 
