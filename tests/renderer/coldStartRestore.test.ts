@@ -49,6 +49,7 @@ function record(overrides: Partial<SessionRecord> = {}): SessionRecord {
     window: null,
     editors: [],
     activeEditor: null,
+    previewVisible: true,
     ...overrides
   };
 }
@@ -181,6 +182,20 @@ describe("runColdStartRestore (#274)", () => {
     expect(h.applied[0].openDocuments.documents).toEqual([]);
     expect(h.applied[0].openDocuments.activeDocumentId).toBeNull();
     expect(h.finished).toEqual([true]);
+  });
+
+  it("#541 follow-up: passes the saved previewVisible through to applyRestoredEnvironment", async () => {
+    const hVisible = harness(
+      okPayload([record({ projectContext: withProject, previewVisible: true })])
+    );
+    await runColdStartRestore(hVisible.deps);
+    expect(hVisible.applied[0].previewVisible).toBe(true);
+
+    const hHidden = harness(
+      okPayload([record({ projectContext: withProject, previewVisible: false })])
+    );
+    await runColdStartRestore(hHidden.deps);
+    expect(hHidden.applied[0].previewVisible).toBe(false);
   });
 
   it("adopts the sessionId BEFORE applying the environment", async () => {

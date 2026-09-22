@@ -122,6 +122,15 @@ function allSourceText(): string {
  * its `onKeyDown` only implements Escape-to-close for its own small anchored
  * popover, scoped to that popover while it is open — not a document-level/
  * global shortcut listener.
+ *
+ * globalKeyboardShortcuts.ts (#541) is the same category as
+ * editorTabShortcuts.ts: a small, reusable app-wide shortcut registry
+ * (Ctrl+P Preview toggle, with more shortcuts expected to register through
+ * it later) that reuses editorTabShortcuts.ts's own `isEditableTextInputTarget`
+ * / `isModalOrDialogActive` guards, so every registered shortcut is silent
+ * while typing in a text field or while a modal dialog is open — not a
+ * competing global shortcut system, and unrelated to the Markdown editor's
+ * native-edit-command delegation this guard otherwise protects.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -142,6 +151,7 @@ const onKeyDownExemptFileNames = new Set([
   "HeadingLevelPopover.tsx",
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
+  "globalKeyboardShortcuts.ts",
   "App.tsx",
   "EditorSurface.tsx"
 ]);

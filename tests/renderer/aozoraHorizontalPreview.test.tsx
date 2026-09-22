@@ -291,7 +291,8 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
   describe("7. Workspace layout grid gate for previews (#509 blocker fix)", () => {
     function renderEditorSurfaceForLayout(
       filePath: string,
-      previewRenderer: PreviewRendererId
+      previewRenderer: PreviewRendererId,
+      previewVisible: boolean = true
     ) {
       const doc = createFileDocument({
         path: filePath,
@@ -349,6 +350,7 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
         isProjectOwnedReadOnly: false,
         markdownEditorPreviewRatio: 0.5,
         onChangeMarkdownEditorPreviewRatio: noop,
+        previewVisible,
         onChangeMarkdownContent: noop,
         onGlossarySelectionShortcut: noop,
         onParagraphIndentControllerChange: noop,
@@ -435,12 +437,13 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
       container.remove();
     });
 
-    it(".txt + markdown does NOT apply gridTemplateColumns layout style and does NOT mount preview pane", () => {
+    it(".txt + markdown collapses to a single grid column and does NOT mount preview pane (#541 follow-up: no blank Preview-sized region)", () => {
       const { workspace, previewPane, root, container } =
         renderEditorSurfaceForLayout("C:/tmp/novel.txt", "markdown");
 
       expect(workspace).not.toBeNull();
-      expect(workspace?.style.gridTemplateColumns).toBe("");
+      expect(workspace?.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
+      expect(workspace?.style.gridTemplateRows).toBe("minmax(0, 1fr)");
       expect(previewPane).toBeNull();
 
       act(() => root.unmount());
@@ -456,6 +459,19 @@ describe("Aozora Bunko-like horizontal novel preview (#509)", () => {
         "minmax(0, 0.5fr) 6px minmax(0, 0.5fr)"
       );
       expect(previewPane).not.toBeNull();
+
+      act(() => root.unmount());
+      container.remove();
+    });
+
+    it("#541 follow-up: .md + markdown with Preview toggled off collapses to a single column and expands the editor, leaving no blank Preview-sized region", () => {
+      const { workspace, previewPane, root, container } =
+        renderEditorSurfaceForLayout("C:/tmp/novel.md", "markdown", false);
+
+      expect(workspace).not.toBeNull();
+      expect(workspace?.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
+      expect(workspace?.style.gridTemplateRows).toBe("minmax(0, 1fr)");
+      expect(previewPane).toBeNull();
 
       act(() => root.unmount());
       container.remove();

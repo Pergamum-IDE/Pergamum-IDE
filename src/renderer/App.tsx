@@ -177,6 +177,7 @@ import {
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
+import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
 import { type WorkspaceTab } from "./workspaceTabs";
 import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
@@ -2426,9 +2427,15 @@ export function App(): JSX.Element {
       buildSessionSnapshotInputs(
         rendererSessionId,
         project,
-        openDocumentsState
+        openDocumentsState,
+        layout.markdownEditorPreview.visible
       ),
-    [rendererSessionId, project, openDocumentsState]
+    [
+      rendererSessionId,
+      project,
+      openDocumentsState,
+      layout.markdownEditorPreview.visible
+    ]
   );
   useEffect(() => {
     sessionPersistence.updateSessionInputs(sessionSnapshotInputs);
@@ -2820,6 +2827,17 @@ export function App(): JSX.Element {
   // document (the attachment folder itself is always project-relative).
   const canInsertImage =
     canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";
+  // #541: mirrors EditorSurface.tsx's own `isPreviewAvailable` eligibility
+  // check (`isMarkdown || previewRenderer !== "markdown"`) — Preview is not
+  // Markdown-only, since `.txt` documents can use a non-Markdown preview
+  // renderer (Narou/Kakuyomu/Aozora style). Deliberately independent of
+  // `layout.markdownEditorPreview.visible`: the toolbar button must stay
+  // enabled/clickable even while Preview is currently hidden.
+  const isPreviewEligible =
+    !isEditorAreaSpecialTabActive &&
+    activeMarkdownDocument !== null &&
+    (isMarkdownCurrentDocument(activeMarkdownDocument) ||
+      effectiveSettings.preview.renderer !== "markdown");
   const canSave =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -4716,6 +4734,26 @@ export function App(): JSX.Element {
     onActivateWorkspaceTab: activateWorkspaceTab
   });
 
+  // #541: Ctrl+P toggles the Preview pane app-wide (editor, toolbar, or
+  // preview pane focused — unlike the CodeMirror-scoped toolbar shortcuts).
+  // More global shortcuts are expected to register here going forward.
+  useGlobalKeyboardShortcuts(
+    useMemo(
+      () => [
+        {
+          id: "togglePreview",
+          match: { key: "p", ctrlOrCmd: true },
+          handler: () => {
+            if (isPreviewEligible) {
+              handleTogglePreviewVisible();
+            }
+          }
+        }
+      ],
+      [isPreviewEligible]
+    )
+  );
+
   function closeSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings") {
       setIsSettingsTabOpen(false);
@@ -5702,8 +5740,27 @@ export function App(): JSX.Element {
     setLayout((current) =>
       current.markdownEditorPreview.ratio === ratio
         ? current
-        : { ...current, markdownEditorPreview: { ratio } }
+        : {
+            ...current,
+            markdownEditorPreview: {
+              ...current.markdownEditorPreview,
+              ratio
+            }
+          }
     );
+  }
+
+  // #541: shared command path for the Preview toolbar button and the
+  // Ctrl+P global shortcut — single source of truth in `layout.
+  // markdownEditorPreview.visible`, same session-local state as `ratio`.
+  function handleTogglePreviewVisible(): void {
+    setLayout((current) => ({
+      ...current,
+      markdownEditorPreview: {
+        ...current.markdownEditorPreview,
+        visible: !current.markdownEditorPreview.visible
+      }
+    }));
   }
 
   async function resolveEditor(
@@ -7652,12 +7709,14 @@ export function App(): JSX.Element {
         const preCloseSessionInputs = buildSessionSnapshotInputs(
           rendererSessionId,
           project,
-          openDocumentsStateRef.current
+          openDocumentsStateRef.current,
+          layout.markdownEditorPreview.visible
         );
         const prospectivePostCloseSessionInputs = buildSessionSnapshotInputs(
           rendererSessionId,
           null,
-          removeProjectScopedOpenEditors(openDocumentsStateRef.current)
+          removeProjectScopedOpenEditors(openDocumentsStateRef.current),
+          layout.markdownEditorPreview.visible
         );
 
         const closeResult = await runExplicitProjectCloseCommit({
@@ -8167,6 +8226,7 @@ export function App(): JSX.Element {
     readonly project: PergamumProject | null;
     readonly openDocuments: OpenDocumentsState;
     readonly pendingViewStates: ReadonlyMap<string, unknown>;
+    readonly previewVisible: boolean;
   }): void {
     editorNavigation.reset();
     projectActivationLifetimeRef.current.startProjectContextSwitch();
@@ -8203,6 +8263,21 @@ export function App(): JSX.Element {
     setProject(env.project);
     openDocumentsStateRef.current = env.openDocuments;
     setOpenDocumentsState(env.openDocuments);
+    // #541 follow-up: restore the saved Preview-pane visibility. This also
+    // restores the collapsed (single-column) layout for free — both
+    // `EditorSurface`'s `isPreviewAvailable` and the toolbar button read
+    // this same `layout.markdownEditorPreview.visible` flag.
+    setLayout((current) =>
+      current.markdownEditorPreview.visible === env.previewVisible
+        ? current
+        : {
+            ...current,
+            markdownEditorPreview: {
+              ...current.markdownEditorPreview,
+              visible: env.previewVisible
+            }
+          }
+    );
   }
 
   async function openStandaloneMarkdownByPathForRestore(
@@ -11098,6 +11173,9 @@ export function App(): JSX.Element {
         hasEditableTextLikeDocument={hasEditableTextLikeDocument}
         onOpenRubyDialog={handleOpenRubyDialogFromToolbar}
         onOpenEmphasisDialog={handleOpenEmphasisDialogFromToolbar}
+        canTogglePreview={isPreviewEligible}
+        isPreviewVisible={layout.markdownEditorPreview.visible}
+        onTogglePreview={handleTogglePreviewVisible}
         translate={translate}
       />
 
@@ -11460,6 +11538,7 @@ export function App(): JSX.Element {
                         onChangeMarkdownEditorPreviewRatio={
                           handleChangeMarkdownEditorPreviewRatio
                         }
+                        previewVisible={layout.markdownEditorPreview.visible}
                         onChangeMarkdownContent={setActiveDocumentContent}
                         onGlossarySelectionShortcut={
                           handleGlossarySelectionShortcut

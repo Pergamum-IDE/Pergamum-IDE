@@ -112,7 +112,7 @@ describe("#286 manuscript body stays only in Recovery.db payload_text", () => {
       null
     );
 
-    const inputs = buildSessionSnapshotInputs("session-x", null, state);
+    const inputs = buildSessionSnapshotInputs("session-x", null, state, true);
     expect(JSON.stringify(inputs)).not.toContain(MARKER);
     expect(JSON.stringify(inputs)).not.toContain("clean baseline");
   });

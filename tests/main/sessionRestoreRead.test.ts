@@ -32,7 +32,8 @@ function record(label: string): SessionRecord {
     projectContext: null,
     window: null,
     editors: [],
-    activeEditor: null
+    activeEditor: null,
+    previewVisible: true
   };
 }
 

@@ -53,7 +53,8 @@ describe("#519 Session restore and flush cycle for 2 .txt files", () => {
       activeEditor: {
         kind: "standaloneMarkdown",
         filePath: "C:\\works\\吾輩は猫である.txt"
-      }
+      },
+      previewVisible: true
     };
 
     // 1. Initial persist (before restart)

@@ -36,7 +36,8 @@ function record(sessionId: string): SessionRecord {
     projectContext: null,
     window: null,
     editors: [],
-    activeEditor: null
+    activeEditor: null,
+    previewVisible: true
   };
 }
 
@@ -169,7 +170,8 @@ describe("readRestoreSetForColdStart (#274)", () => {
           viewState: null
         }
       ],
-      activeEditor: { kind: "standaloneMarkdown", filePath: "/w/x/a.md" }
+      activeEditor: { kind: "standaloneMarkdown", filePath: "/w/x/a.md" },
+      previewVisible: true
     };
   }
 

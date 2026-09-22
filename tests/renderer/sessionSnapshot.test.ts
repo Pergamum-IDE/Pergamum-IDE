@@ -92,7 +92,7 @@ describe("buildSessionSnapshotInputs (#272)", () => {
     );
     state = openOrActivateEditor(state, untitledEditor(), projectContext);
 
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, project, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, project, state, true);
 
     expect(inputs.editors.map((e) => e.editor)).toEqual([
       { kind: "projectMarkdown", order: 0, relativePath: "01.md", viewState: null },
@@ -129,7 +129,7 @@ describe("buildSessionSnapshotInputs (#272)", () => {
     );
     state = activateOpenDocument(state, bId);
 
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state, true);
     expect(inputs.activeEditor).toEqual({
       kind: "standaloneMarkdown",
       filePath: "C:/b.md"
@@ -140,7 +140,8 @@ describe("buildSessionSnapshotInputs (#272)", () => {
     const inputs = buildSessionSnapshotInputs(
       SESSION_ID,
       null,
-      createInitialOpenDocumentsState()
+      createInitialOpenDocumentsState(),
+      true
     );
 
     expect(inputs.editors).toEqual([]);
@@ -152,7 +153,8 @@ describe("buildSessionSnapshotInputs (#272)", () => {
     const inputs = buildSessionSnapshotInputs(
       SESSION_ID,
       project,
-      createInitialOpenDocumentsState()
+      createInitialOpenDocumentsState(),
+      true
     );
 
     expect(inputs.projectContext).not.toBeNull();
@@ -165,10 +167,21 @@ describe("buildSessionSnapshotInputs (#272)", () => {
       null
     );
 
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state, true);
     expect(inputs.projectContext).toBeNull();
     expect(inputs.editors).toHaveLength(1);
     expect(inputs.editors[0].editor.kind).toBe("standaloneMarkdown");
+  });
+
+  it("#541 follow-up: carries the previewVisible flag through", () => {
+    const state = createInitialOpenDocumentsState();
+
+    expect(
+      buildSessionSnapshotInputs(SESSION_ID, null, state, true).previewVisible
+    ).toBe(true);
+    expect(
+      buildSessionSnapshotInputs(SESSION_ID, null, state, false).previewVisible
+    ).toBe(false);
   });
 
   it("keeps both Project Context and standalone-only editors", () => {
@@ -182,7 +195,7 @@ describe("buildSessionSnapshotInputs (#272)", () => {
       projectContext
     );
 
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, project, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, project, state, true);
     expect(inputs.projectContext).not.toBeNull();
     expect(inputs.editors.map((e) => e.editor.kind)).toEqual([
       "standaloneMarkdown",
@@ -203,7 +216,7 @@ describe("buildSessionSnapshotInputs (#272)", () => {
     );
     state = activateOpenDocument(state, standaloneId);
 
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, project, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, project, state, true);
     expect(inputs.activeEditor).toEqual({
       kind: "standaloneMarkdown",
       filePath: "C:/active-standalone.md"
@@ -225,7 +238,7 @@ describe("buildSessionSnapshotInputs (#272)", () => {
     // What explicitProjectClose does in App.tsx: drop project-owned editors
     // and setProject(null).
     state = removeProjectScopedOpenEditors(state);
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state, true);
 
     expect(inputs.projectContext).toBeNull();
     expect(inputs.editors.map((e) => e.editor.kind)).toEqual([
@@ -250,7 +263,7 @@ describe("buildSessionSnapshotInputs (#272)", () => {
       null
     );
 
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state, true);
     const untitledIds = inputs.editors.map(
       (e) => (e.editor as { untitledId: string }).untitledId
     );
@@ -275,7 +288,7 @@ describe("buildRendererSessionSnapshot (#272)", () => {
       markdownFileEditor("C:/b.md"),
       null
     );
-    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state);
+    const inputs = buildSessionSnapshotInputs(SESSION_ID, null, state, true);
 
     return {
       inputs,
@@ -295,6 +308,7 @@ describe("buildRendererSessionSnapshot (#272)", () => {
     expect(snapshot.editors[0].viewState).toEqual(viewState("a"));
     expect(snapshot.editors[1].viewState).toBeNull();
     expect(snapshot.sessionId).toBe(SESSION_ID);
+    expect(snapshot.previewVisible).toBe(true);
   });
 
   it("emits no document body — only the digest", () => {

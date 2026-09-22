@@ -45,6 +45,7 @@ function baseSnapshot(
     projectContext: null,
     editors: [],
     activeEditor: null,
+    previewVisible: true,
     ...overrides
   };
 }
@@ -432,7 +433,8 @@ describe("parseSessionRecord (#272)", () => {
           viewState: null
         }
       ],
-      activeEditor: { kind: "standaloneMarkdown", filePath: "/x.md" }
+      activeEditor: { kind: "standaloneMarkdown", filePath: "/x.md" },
+      previewVisible: true
     };
   }
 
@@ -467,6 +469,28 @@ describe("parseSessionRecord (#272)", () => {
     expect(parsed?.window).toBeNull();
     expect(parsed?.editors).toHaveLength(2);
     expect(parsed?.projectContext?.projectId).toBe(PROJECT_ID);
+  });
+
+  it("#541 follow-up: defaults previewVisible to true when the key is missing entirely", () => {
+    const { previewVisible: _omit, ...withoutPreviewVisible } = validRecord();
+
+    expect(parseSessionRecord(withoutPreviewVisible)?.previewVisible).toBe(
+      true
+    );
+  });
+
+  it("#541 follow-up: defaults previewVisible to true when it is not a boolean", () => {
+    expect(
+      parseSessionRecord({ ...validRecord(), previewVisible: "no" })
+        ?.previewVisible
+    ).toBe(true);
+  });
+
+  it("#541 follow-up: preserves an explicit previewVisible: false", () => {
+    expect(
+      parseSessionRecord({ ...validRecord(), previewVisible: false })
+        ?.previewVisible
+    ).toBe(false);
   });
 
   it("fails soft: one malformed editor is dropped, the rest kept and renumbered", () => {
@@ -565,7 +589,8 @@ describe("parseSessionRecordStrict (#274) — cold-start restore candidate", () 
         { kind: "projectMarkdown", order: 0, relativePath: "01.md", viewState: null },
         { kind: "standaloneMarkdown", order: 1, filePath: "/x.md", viewState: null }
       ],
-      activeEditor: { kind: "standaloneMarkdown", filePath: "/x.md" }
+      activeEditor: { kind: "standaloneMarkdown", filePath: "/x.md" },
+      previewVisible: true
     };
   }
 
@@ -573,6 +598,24 @@ describe("parseSessionRecordStrict (#274) — cold-start restore candidate", () 
     expect(parseSessionRecordStrict(validRecord())).toEqual(
       parseSessionRecord(validRecord())
     );
+  });
+
+  it("#541 follow-up: accepts a pre-existing record with no previewVisible key at all, defaulting it to true", () => {
+    const { previewVisible: _omit, ...withoutPreviewVisible } = validRecord();
+
+    const parsed = parseSessionRecordStrict(withoutPreviewVisible);
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.previewVisible).toBe(true);
+  });
+
+  it("#541 follow-up: accepts a record with previewVisible explicitly false", () => {
+    const parsed = parseSessionRecordStrict({
+      ...validRecord(),
+      previewVisible: false
+    });
+
+    expect(parsed?.previewVisible).toBe(false);
   });
 
   it("accepts a project-open zero-tab record", () => {
@@ -944,6 +987,22 @@ describe("parseRendererSessionSnapshot (#272)", () => {
       filePath: "/a.md"
     });
   });
+
+  it("#541 follow-up: defaults previewVisible to true when missing or not a boolean", () => {
+    const { previewVisible: _omit, ...withoutPreviewVisible } = baseSnapshot();
+
+    expect(
+      parseRendererSessionSnapshot(withoutPreviewVisible)?.previewVisible
+    ).toBe(true);
+    expect(
+      parseRendererSessionSnapshot(baseSnapshot({ previewVisible: "no" as unknown as boolean }))
+        ?.previewVisible
+    ).toBe(true);
+    expect(
+      parseRendererSessionSnapshot(baseSnapshot({ previewVisible: false }))
+        ?.previewVisible
+    ).toBe(false);
+  });
 });
 
 describe("sessionRecordFromSnapshot (#272) — main enrichment", () => {
@@ -983,8 +1042,18 @@ describe("sessionRecordFromSnapshot (#272) — main enrichment", () => {
         mode: "maximized"
       },
       editors: [],
-      activeEditor: null
+      activeEditor: null,
+      previewVisible: true
     });
+  });
+
+  it("#541 follow-up: copies previewVisible from the snapshot", () => {
+    const record = sessionRecordFromSnapshot(
+      baseSnapshot({ previewVisible: false }),
+      { instanceRunId: RUN_ID, projectId: null, window: null, now }
+    );
+
+    expect(record?.previewVisible).toBe(false);
   });
 
   it("returns null (never a fake identity) when a Project snapshot has no resolved projectId (Blocker 4)", () => {

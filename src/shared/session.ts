@@ -188,6 +188,15 @@ export interface SessionRecord {
   readonly editors: readonly SessionEditor[];
   /** `null` when `editors` is empty, or when the active editor is unknown. */
   readonly activeEditor: SessionEditorIdentity | null;
+  /**
+   * #541 follow-up: whether the Markdown editor's Preview pane was visible.
+   * Additive field — a pre-existing v1 record on disk simply lacks this key;
+   * `parseSessionRecord` defaults a missing/invalid value to `true` rather
+   * than bumping `SESSION_SCHEMA_VERSION`, and `parseSessionRecordStrict`'s
+   * required-field list is deliberately NOT extended to include it, so those
+   * older records remain valid cold-start restore candidates.
+   */
+  readonly previewVisible: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +228,8 @@ export interface RendererSessionSnapshot {
   } | null;
   readonly editors: readonly SessionEditor[];
   readonly activeEditor: SessionEditorIdentity | null;
+  /** #541 follow-up: see `SessionRecord.previewVisible`. */
+  readonly previewVisible: boolean;
 }
 
 export interface SessionRecordEnrichment {
@@ -527,6 +538,7 @@ export function parseSessionProjectContext(
  *   - a malformed editor `viewState` → `viewState: null`
  *   - a malformed `activeEditor` → `activeEditor: null`
  *   - a malformed `projectContext` → `projectContext: null`
+ *   - a missing/invalid `previewVisible` → `previewVisible: true`
  */
 export function parseSessionRecord(value: unknown): SessionRecord | null {
   if (!isRecord(value)) {
@@ -576,6 +588,9 @@ export function parseSessionRecord(value: unknown): SessionRecord | null {
       ? activeEditorCandidate
       : null;
 
+  const previewVisible =
+    typeof value.previewVisible === "boolean" ? value.previewVisible : true;
+
   return {
     schemaVersion: SESSION_SCHEMA_VERSION,
     sessionId: value.sessionId,
@@ -584,7 +599,8 @@ export function parseSessionRecord(value: unknown): SessionRecord | null {
     projectContext: parseSessionProjectContext(value.projectContext),
     window: parseWindowSessionState(value.window),
     editors,
-    activeEditor
+    activeEditor,
+    previewVisible
   };
 }
 
@@ -660,6 +676,12 @@ export function parseSessionRecordStrict(value: unknown): SessionRecord | null {
   // explicit value for projectContext / window / activeEditor ("no
   // project" / "no window captured" / "no active editor"); a MISSING key is
   // untrusted core structure ⇒ skip the whole Session.
+  //
+  // `previewVisible` (#541 follow-up) is deliberately NOT included here: it
+  // was added after this required-field list was frozen, so a pre-existing
+  // v1 record on disk legitimately lacks the key. Requiring it would make
+  // every already-persisted Session fail strict validation and drop out of
+  // the restore set. `parseSessionRecord` below defaults it to `true`.
   if (
     !("projectContext" in value) ||
     !("window" in value) ||
@@ -947,11 +969,15 @@ export function parseRendererSessionSnapshot(
       ? activeEditorCandidate
       : null;
 
+  const previewVisible =
+    typeof value.previewVisible === "boolean" ? value.previewVisible : true;
+
   return {
     sessionId: value.sessionId,
     projectContext,
     editors: normalizedEditors,
-    activeEditor
+    activeEditor,
+    previewVisible
   };
 }
 
@@ -1004,7 +1030,8 @@ export function sessionRecordFromSnapshot(
     projectContext,
     window: enrichment.window,
     editors: snapshot.editors,
-    activeEditor: snapshot.activeEditor
+    activeEditor: snapshot.activeEditor,
+    previewVisible: snapshot.previewVisible
   };
 }
 

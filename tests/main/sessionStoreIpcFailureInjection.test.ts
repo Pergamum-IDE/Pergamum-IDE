@@ -40,7 +40,8 @@ function dummySnapshot(
     sessionId,
     projectContext: null,
     editors: [],
-    activeEditor: null
+    activeEditor: null,
+    previewVisible: true
   };
 }
 

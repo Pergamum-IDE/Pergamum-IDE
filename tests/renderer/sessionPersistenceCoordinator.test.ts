@@ -69,7 +69,8 @@ function inputs(
     sessionId: SESSION_ID,
     projectContext,
     editors,
-    activeEditor: null
+    activeEditor: null,
+    previewVisible: true
   };
 }
 
