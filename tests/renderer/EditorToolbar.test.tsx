@@ -3,7 +3,10 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jaTranslations } from "../../src/shared/i18n/ja";
-import { EditorToolbar } from "../../src/renderer/components/EditorToolbar";
+import {
+  EditorToolbar,
+  type EditorToolbarProps
+} from "../../src/renderer/components/EditorToolbar";
 
 import type { TranslationValues } from "../../src/shared/i18n";
 
@@ -34,51 +37,166 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function defaultProps(
+  overrides: Partial<EditorToolbarProps> = {}
+): EditorToolbarProps {
+  return {
+    canUseMarkdownToolbarCommands: true,
+    canInsertTable: true,
+    onApplyBold: vi.fn(),
+    onApplyItalic: vi.fn(),
+    onApplyStrikethrough: vi.fn(),
+    isHeadingSelectorOpen: false,
+    onToggleHeadingSelector: vi.fn(),
+    onCloseHeadingSelector: vi.fn(),
+    onSelectHeadingLevel: vi.fn(),
+    onOpenLinkDialog: vi.fn(),
+    onInsertTable: vi.fn(),
+    translate: mockTranslate,
+    ...overrides
+  };
+}
+
+function renderToolbar(overrides: Partial<EditorToolbarProps> = {}) {
+  const props = defaultProps(overrides);
+  act(() => {
+    root.render(<EditorToolbar {...props} />);
+  });
+  return props;
+}
+
+function toolbarButtons(): HTMLButtonElement[] {
+  return Array.from(
+    container.querySelectorAll("button.editorToolbarButton")
+  ) as HTMLButtonElement[];
+}
+
 describe("EditorToolbar", () => {
-  it("renders disabled icon-only table button with aria-label and title when canInsertTable is false", () => {
-    act(() => {
-      root.render(
-        <EditorToolbar
-          canInsertTable={false}
-          onInsertTable={vi.fn()}
-          translate={mockTranslate}
-        />
+  it("renders Heading, Bold, Italic, Strikethrough, Link, and Table buttons in order", () => {
+    renderToolbar();
+
+    const buttons = toolbarButtons();
+    expect(buttons).toHaveLength(6);
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "見出しを挿入",
+      "太字",
+      "斜体",
+      "取消線",
+      "リンクを挿入",
+      "表を挿入"
+    ]);
+  });
+
+  it("renders three visual separators between the command groups", () => {
+    renderToolbar();
+    expect(
+      container.querySelectorAll(".editorToolbarSeparator")
+    ).toHaveLength(3);
+  });
+
+  it("every button is icon-only with aria-label and title, no visible text", () => {
+    renderToolbar();
+    for (const button of toolbarButtons()) {
+      expect(button.getAttribute("aria-label")).toBeTruthy();
+      expect(button.getAttribute("title")).toBe(
+        button.getAttribute("aria-label")
       );
+      expect(button.textContent?.trim()).toBe("");
+      expect(button.querySelector("svg")).not.toBeNull();
+    }
+  });
+
+  it("disables Heading/Bold/Italic/Strikethrough/Link when canUseMarkdownToolbarCommands is false", () => {
+    renderToolbar({ canUseMarkdownToolbarCommands: false });
+    const [heading, bold, italic, strikethrough, link, table] =
+      toolbarButtons();
+    expect(heading.disabled).toBe(true);
+    expect(bold.disabled).toBe(true);
+    expect(italic.disabled).toBe(true);
+    expect(strikethrough.disabled).toBe(true);
+    expect(link.disabled).toBe(true);
+    // Table's own gate is independent (still passed as true here).
+    expect(table.disabled).toBe(false);
+  });
+
+  it("Bold / Italic / Strikethrough buttons call their handlers when clicked", () => {
+    const props = renderToolbar();
+    const [, bold, italic, strikethrough] = toolbarButtons();
+
+    act(() => bold.click());
+    expect(props.onApplyBold).toHaveBeenCalledOnce();
+
+    act(() => italic.click());
+    expect(props.onApplyItalic).toHaveBeenCalledOnce();
+
+    act(() => strikethrough.click());
+    expect(props.onApplyStrikethrough).toHaveBeenCalledOnce();
+  });
+
+  it("Link button calls onOpenLinkDialog with the button element", () => {
+    const props = renderToolbar();
+    const [, , , , link] = toolbarButtons();
+
+    act(() => link.click());
+    expect(props.onOpenLinkDialog).toHaveBeenCalledWith(link);
+  });
+
+  it("Heading button calls onToggleHeadingSelector when clicked", () => {
+    const props = renderToolbar();
+    const [heading] = toolbarButtons();
+
+    act(() => heading.click());
+    expect(props.onToggleHeadingSelector).toHaveBeenCalledOnce();
+  });
+
+  it("shows the heading level popover when isHeadingSelectorOpen is true and selects a level", () => {
+    const props = renderToolbar({ isHeadingSelectorOpen: true });
+
+    const popover = container.querySelector(".headingLevelPopover");
+    expect(popover).not.toBeNull();
+
+    const options = container.querySelectorAll(".headingLevelPopoverOption");
+    expect(options).toHaveLength(7); // H1..H6 + normal paragraph
+
+    act(() => {
+      (options[1] as HTMLButtonElement).click(); // H2
     });
 
-    const button = container.querySelector("button.editorToolbarButton") as HTMLButtonElement;
-    expect(button).not.toBeNull();
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("aria-label")).toBe("表を挿入");
-    expect(button.getAttribute("title")).toBe("表を挿入");
-    expect(container.querySelector(".editorToolbarButtonLabel")).toBeNull();
-    expect(button.textContent?.trim()).toBe("");
+    expect(props.onCloseHeadingSelector).toHaveBeenCalledOnce();
+    expect(props.onSelectHeadingLevel).toHaveBeenCalledWith(2);
+  });
+
+  it("does not show the heading level popover when disabled even if isHeadingSelectorOpen is true", () => {
+    renderToolbar({
+      isHeadingSelectorOpen: true,
+      canUseMarkdownToolbarCommands: false
+    });
+    expect(container.querySelector(".headingLevelPopover")).toBeNull();
+  });
+
+  it("renders disabled icon-only table button with aria-label and title when canInsertTable is false", () => {
+    renderToolbar({ canInsertTable: false });
+
+    const [, , , , , table] = toolbarButtons();
+    expect(table.disabled).toBe(true);
+    expect(table.getAttribute("aria-label")).toBe("表を挿入");
+    expect(table.getAttribute("title")).toBe("表を挿入");
+    expect(table.textContent?.trim()).toBe("");
   });
 
   it("opens popover when clicking enabled icon-only table button and selects size", () => {
     const onInsertTable = vi.fn();
-    act(() => {
-      root.render(
-        <EditorToolbar
-          canInsertTable={true}
-          onInsertTable={onInsertTable}
-          translate={mockTranslate}
-        />
-      );
-    });
+    renderToolbar({ canInsertTable: true, onInsertTable });
 
-    const button = container.querySelector("button.editorToolbarButton") as HTMLButtonElement;
-    expect(button.disabled).toBe(false);
-    expect(button.getAttribute("aria-label")).toBe("表を挿入");
-    expect(button.getAttribute("title")).toBe("表を挿入");
-    expect(container.querySelector(".editorToolbarButtonLabel")).toBeNull();
+    const [, , , , , table] = toolbarButtons();
+    expect(table.disabled).toBe(false);
 
     // Popover initially not present
     expect(container.querySelector(".tableSizePopover")).toBeNull();
 
     // Click button to open popover
     act(() => {
-      button.click();
+      table.click();
     });
 
     const popover = container.querySelector(".tableSizePopover");

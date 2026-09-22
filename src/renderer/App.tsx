@@ -240,6 +240,10 @@ import {
 import { createDocumentOpenIdFactory } from "./documentOpenId";
 import { EmphasisMarkDialog } from "./dialog/EmphasisMarkDialog";
 import { RubyMarkupDialog } from "./dialog/RubyMarkupDialog";
+import { LinkInsertDialog } from "./dialog/LinkInsertDialog";
+import { getCurrentActiveEditorSelectionText } from "./find/activeEditorSelectionAccess";
+import type { MarkdownEditorToolbarShortcutConfig } from "./editorMarkdownToolbarShortcuts";
+import type { HeadingLevel } from "../shared/markdownHeadingMarkup";
 import {
   EditorSurface,
   type DocumentOpenAggregateMetrics,
@@ -1013,6 +1017,12 @@ export function App(): JSX.Element {
   const [rubyDialogState, setRubyDialogState] = useState<{
     readonly selectedText: string;
     readonly selection: { readonly from: number; readonly to: number };
+    readonly opener: Element | null;
+  } | null>(null);
+  const [isHeadingSelectorOpen, setIsHeadingSelectorOpen] =
+    useState<boolean>(false);
+  const [linkInsertDialogState, setLinkInsertDialogState] = useState<{
+    readonly selectedText: string;
     readonly opener: Element | null;
   } | null>(null);
 
@@ -2764,6 +2774,16 @@ export function App(): JSX.Element {
   }, [openDocumentsState]);
   const isReadOnlyProjectOwnedEditor =
     isReadOnlyProject && isProjectOwnedCurrentEditor;
+  // #529: shared enable gate for the Heading / Bold / Italic / Strikethrough
+  // / Link toolbar commands (and, since #527's table gate had the same
+  // Markdown-only requirement gap, the Table command too) — reuses the
+  // Outline pane's own "is a real Markdown editor on screen right now" gate
+  // (`activeEditorIsMarkdown`, #352) rather than #527's looser
+  // `activeMarkdownDocument !== null`, which allowed these commands while a
+  // special tab (Settings, Glossary Manager, ...) was showing, or on a
+  // non-Markdown (.txt) document.
+  const canUseMarkdownToolbarCommands =
+    activeEditorIsMarkdown && !isReadOnlyProjectOwnedEditor;
   const canSave =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -3228,6 +3248,67 @@ export function App(): JSX.Element {
     },
     [rubyDialogState, notifyRubyNoSelection]
   );
+
+  // #529: Bold / Italic / Strikethrough apply immediately through the same
+  // controller method both the toolbar buttons and the keyboard shortcuts
+  // call — no dialog/popover involved.
+  const handleApplyBoldMarkup = useCallback(() => {
+    paragraphIndentControllerRef.current?.applyInlineMarkup("**");
+  }, []);
+  const handleApplyItalicMarkup = useCallback(() => {
+    paragraphIndentControllerRef.current?.applyInlineMarkup("*");
+  }, []);
+  const handleApplyStrikethroughMarkup = useCallback(() => {
+    paragraphIndentControllerRef.current?.applyInlineMarkup("~~");
+  }, []);
+
+  const handleToggleHeadingSelector = useCallback(() => {
+    setIsHeadingSelectorOpen((prev) => !prev);
+  }, []);
+  const handleCloseHeadingSelector = useCallback(() => {
+    setIsHeadingSelectorOpen(false);
+  }, []);
+  const handleSelectHeadingLevel = useCallback((level: HeadingLevel) => {
+    paragraphIndentControllerRef.current?.applyHeading(level);
+  }, []);
+
+  const handleOpenLinkInsertDialog = useCallback((opener: Element | null) => {
+    setLinkInsertDialogState({
+      selectedText: getCurrentActiveEditorSelectionText(),
+      opener
+    });
+  }, []);
+  const handleCloseLinkInsertDialog = useCallback(() => {
+    setLinkInsertDialogState(null);
+  }, []);
+  const handleInsertLink = useCallback((labelText: string, url: string) => {
+    paragraphIndentControllerRef.current?.insertLink(labelText, url);
+  }, []);
+
+  // #529: the keyboard-shortcut path for the same five commands. Ctrl+B /
+  // Ctrl+I / Ctrl+Shift+X call the exact same controller methods as their
+  // toolbar buttons; Ctrl+L / Ctrl+K open the same heading selector / link
+  // dialog the toolbar buttons open (reading the selection directly from the
+  // CodeMirror view, since the keymap extension already has it at hand).
+  const markdownToolbarShortcutConfig =
+    useMemo<MarkdownEditorToolbarShortcutConfig>(
+      () => ({
+        isEnabled: canUseMarkdownToolbarCommands,
+        applyBold: handleApplyBoldMarkup,
+        applyItalic: handleApplyItalicMarkup,
+        applyStrikethrough: handleApplyStrikethroughMarkup,
+        requestOpenHeadingSelector: () => setIsHeadingSelectorOpen(true),
+        requestOpenLinkDialog: (selectedText, opener) =>
+          setLinkInsertDialogState({ selectedText, opener })
+      }),
+      [
+        canUseMarkdownToolbarCommands,
+        handleApplyBoldMarkup,
+        handleApplyItalicMarkup,
+        handleApplyStrikethroughMarkup
+      ]
+    );
+
   const statusBarNumberFormatter = useMemo(
     () => new Intl.NumberFormat(displayLanguage),
     [displayLanguage]
@@ -10768,9 +10849,16 @@ export function App(): JSX.Element {
       onContextMenuCapture={handleContextMenuCapture}
     >
       <EditorToolbar
-        canInsertTable={
-          activeMarkdownDocument !== null && !isReadOnlyProjectOwnedEditor
-        }
+        canUseMarkdownToolbarCommands={canUseMarkdownToolbarCommands}
+        canInsertTable={canUseMarkdownToolbarCommands}
+        onApplyBold={handleApplyBoldMarkup}
+        onApplyItalic={handleApplyItalicMarkup}
+        onApplyStrikethrough={handleApplyStrikethroughMarkup}
+        isHeadingSelectorOpen={isHeadingSelectorOpen}
+        onToggleHeadingSelector={handleToggleHeadingSelector}
+        onCloseHeadingSelector={handleCloseHeadingSelector}
+        onSelectHeadingLevel={handleSelectHeadingLevel}
+        onOpenLinkDialog={handleOpenLinkInsertDialog}
         onInsertTable={(columns, rows) => {
           paragraphIndentControllerRef.current?.insertTable?.(columns, rows);
         }}
@@ -11154,6 +11242,7 @@ export function App(): JSX.Element {
                         notifyRubyNoSelection={notifyRubyNoSelection}
                         notifyRubyReadOnly={notifyRubyReadOnly}
                         notifyRubyMultiLine={notifyRubyMultiLine}
+                        markdownToolbarShortcut={markdownToolbarShortcutConfig}
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }
@@ -11544,6 +11633,17 @@ export function App(): JSX.Element {
           translate={translate}
           onApply={handleApplyRubyMarkup}
           onClose={() => setRubyDialogState(null)}
+        />
+      ) : null}
+
+      {linkInsertDialogState !== null ? (
+        <LinkInsertDialog
+          isOpen={true}
+          initialText={linkInsertDialogState.selectedText}
+          opener={linkInsertDialogState.opener}
+          translate={translate}
+          onInsert={handleInsertLink}
+          onClose={handleCloseLinkInsertDialog}
         />
       ) : null}
 
