@@ -6240,6 +6240,24 @@ label.settingsItemHeader {
   outline: none;
 }
 
+.commandPaletteLaunchMeasure {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.commandPaletteLaunchMeasureInput {
+  flex: 1;
+  min-width: 0;
+  block-size: 1.625rem;
+}
+
 .commandPaletteCloseButton {
   height: 1.625rem;
   border: 0;
@@ -10848,4 +10866,172 @@ label.settingsItemHeader {
   background: #e1e4e8;
 }
 
+/* #542 Toolbar Command Box */
 
+/**
+ * The Command Box group is the leftmost item in the centered toolbar flow.
+ * No margin override is needed — the toolbar's justify-content:center handles
+ * centering for all items, including the Command Box.
+ */
+.toolbarCommandBoxGroup {
+  display: flex;
+  align-items: center;
+}
+
+/**
+ * The Command Box itself: prefix button + launcher body, joined visually
+ * to look like a compact input field.
+ */
+.toolbarCommandBox {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid #c8d1d9;
+  border-radius: 4px;
+  background: #ffffff;
+  overflow: hidden;
+  height: 28px;
+}
+
+.toolbarCommandBox:focus-within {
+  border-color: #0366d6;
+  box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.2);
+  outline: none;
+}
+
+/* Prefix / mode cycle button — left side */
+.toolbarCommandBoxPrefix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 28px;
+  padding-inline: 6px;
+  border: none;
+  border-inline-end: 1px solid #d3dae2;
+  border-radius: 0;
+  background: #f2f5f8;
+  color: #444d56;
+  font-size: 12px;
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transform: translateY(-0.2em);
+}
+
+.toolbarCommandBoxPrefix:hover {
+  background: #e1e4e8;
+  color: #24292e;
+}
+
+.toolbarCommandBoxPrefix:active {
+  background: #d1d5da;
+}
+
+.toolbarCommandBoxPrefix:focus-visible {
+  outline: 2px solid #0366d6;
+  outline-offset: -2px;
+}
+
+/* Empty prefix indicator: shown when mode has no prefix character */
+.toolbarCommandBoxPrefixEmpty {
+  color: #a3aab1;
+  font-size: 10px;
+}
+
+/* Launcher body — right side, looks like an input but is a button */
+.toolbarCommandBoxBody {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 8px;
+  min-inline-size: 140px;
+  max-inline-size: 200px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #a3aab1;
+  font-size: 12px;
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
+  text-align: start;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+}
+
+.toolbarCommandBoxBody:hover {
+  background: #f6f8fa;
+  color: #6a737d;
+}
+
+.toolbarCommandBoxBody:active {
+  background: #edf2f7;
+}
+
+.toolbarCommandBoxBody:focus-visible {
+  outline: 2px solid #0366d6;
+  outline-offset: -2px;
+}
+
+.toolbarCommandBoxBodyPlaceholder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commandPaletteLaunchGhost {
+  position: fixed;
+  z-index: 80;
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid #c8d1d9;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #6a737d;
+  font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
+  pointer-events: none;
+  transition:
+    transform var(--command-palette-launch-animation-duration, 200ms) ease-out,
+    opacity var(--command-palette-launch-animation-duration, 200ms) ease-out,
+    box-shadow var(--command-palette-launch-animation-duration, 200ms) ease-out;
+  transform-origin: top left;
+  will-change: transform, opacity, box-shadow;
+}
+
+.commandPaletteLaunchGhostPrefix {
+  display: inline-flex;
+  min-inline-size: 28px;
+  align-items: center;
+  justify-content: center;
+  border-inline-end: 1px solid #d3dae2;
+  background: #f2f5f8;
+  color: #444d56;
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.commandPaletteLaunchGhostPrefixEmpty {
+  color: #a3aab1;
+  font-size: 10px;
+}
+
+.commandPaletteLaunchGhostPlaceholder {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  overflow: hidden;
+  padding-inline: 8px;
+  color: #a3aab1;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commandPaletteLaunchGhost {
+    transition: none;
+    animation: none;
+  }
+}

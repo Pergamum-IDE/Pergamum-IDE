@@ -147,8 +147,13 @@ export interface CommandPaletteFooterDetailSettings {
   marquee: CommandPaletteFooterDetailMarqueeSettings;
 }
 
+export interface CommandPaletteLaunchAnimationSettings {
+  durationMs: number;
+}
+
 export interface ApplicationCommandPaletteSettings {
   footerDetail: CommandPaletteFooterDetailSettings;
+  launchAnimation: CommandPaletteLaunchAnimationSettings;
 }
 
 export type MarkdownFilesEncoding = SettingValueOf<"markdownFiles.encoding">;
@@ -489,6 +494,7 @@ export interface EffectiveWorkbenchSettings {
 
 export interface EffectiveCommandPaletteSettings {
   footerDetail: CommandPaletteFooterDetailSettings;
+  launchAnimation: CommandPaletteLaunchAnimationSettings;
 }
 
 export interface EffectiveEditorSettings {
@@ -641,6 +647,11 @@ export const builtInDefaultSettings: EffectiveSettings = {
           "commandPalette.footerDetail.marquee.speed"
         )
       }
+    },
+    launchAnimation: {
+      durationMs: getCatalogDefaultValue(
+        "commandPalette.launchAnimation.durationMs"
+      )
     }
   },
   editor: {
@@ -771,6 +782,10 @@ export const defaultApplicationSettings: ApplicationSettings = {
         speed:
           builtInDefaultSettings.commandPalette.footerDetail.marquee.speed
       }
+    },
+    launchAnimation: {
+      durationMs:
+        builtInDefaultSettings.commandPalette.launchAnimation.durationMs
     }
   },
   editor: {
@@ -881,6 +896,10 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
           speed:
             defaultApplicationSettings.commandPalette.footerDetail.marquee.speed
         }
+      },
+      launchAnimation: {
+        durationMs:
+          defaultApplicationSettings.commandPalette.launchAnimation.durationMs
       }
     },
     editor: {
@@ -1051,6 +1070,10 @@ export function resolveEffectiveSettings(
           delay: applicationSettings.commandPalette.footerDetail.marquee.delay,
           speed: applicationSettings.commandPalette.footerDetail.marquee.speed
         }
+      },
+      launchAnimation: {
+        durationMs:
+          applicationSettings.commandPalette.launchAnimation.durationMs
       }
     },
     // #396 Slice 3: editor.fontFamily resolution precedence:

@@ -143,7 +143,7 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     expect(settingsPanelSource).toContain('"textFiles.encoding"');
   });
 
-  it("SettingsPanel keeps Command Palette footer detail controls directly editable, with unit suffixes for the marquee number controls, and no advanced gate (#232: catalog-driven)", () => {
+  it("SettingsPanel keeps Command Palette controls directly editable, with unit suffixes for number controls, and no advanced gate (#232: catalog-driven)", () => {
     const settingsPanelSource = readFileSync(
       "src/renderer/SettingsPanel.tsx",
       "utf8"
@@ -157,6 +157,9 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
     );
     expect(settingsPanelSource).toContain(
       '"commandPalette.footerDetail.marquee.speed"'
+    );
+    expect(settingsPanelSource).toContain(
+      '"commandPalette.launchAnimation.durationMs"'
     );
     expect(settingsPanelSource).not.toContain("advancedGatedKeys");
     expect(settingsPanelSource).toContain("footerDetailMarqueeKeys");

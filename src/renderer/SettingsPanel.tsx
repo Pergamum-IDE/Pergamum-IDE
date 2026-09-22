@@ -36,6 +36,7 @@ import {
 import { FontFamilyListSettingControl } from "./FontFamilyListSettingControl";
 import { FontPickerDialog } from "./dialog/FontPickerDialog";
 import type { FontFamilySetting, FontSlot } from "../shared/fontSettings";
+import { normalizeCommandPaletteLaunchAnimationDurationMs } from "../shared/commandPaletteLaunchAnimationSettings";
 
 import type {
   AppConfirmDialogOptions,
@@ -132,6 +133,7 @@ const textFilesDependentKeys = new Set<SettingKey>([
 const numberUnitKeyByKey: Partial<Record<SettingKey, TranslationKey>> = {
   "commandPalette.footerDetail.marquee.delay": "settings.unit.ms",
   "commandPalette.footerDetail.marquee.speed": "settings.unit.pxPerSecond",
+  "commandPalette.launchAnimation.durationMs": "settings.unit.ms",
   "preview.updateDelayMs": "settings.unit.ms",
   "workbench.notification.durationMs": "settings.unit.ms"
 };
@@ -407,6 +409,21 @@ function buildNextSettings(
               ...settings.commandPalette.footerDetail.marquee,
               speed: rawValue
             }
+          }
+        }
+      });
+    case "commandPalette.launchAnimation.durationMs":
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return null;
+      }
+
+      return saveRequest(settings, {
+        commandPalette: {
+          ...settings.commandPalette,
+          launchAnimation: {
+            durationMs: normalizeCommandPaletteLaunchAnimationDurationMs(
+              rawValue
+            )
           }
         }
       });

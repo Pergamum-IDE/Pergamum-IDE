@@ -199,6 +199,11 @@ import {
   TEXT_FILE_ENCODINGS
 } from "./textFileEncoding";
 import { validateNarouEmphasisMarkText } from "./emphasisMarkSettings";
+import {
+  COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MAX_MS,
+  COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MIN_MS,
+  DEFAULT_COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MS
+} from "./commandPaletteLaunchAnimationSettings";
 
 // ---------------------------------------------------------------------------
 // Key pattern / area validation (ADR-0006 S-10)
@@ -703,6 +708,21 @@ export const settingsCatalog = defineSettingsCatalog({
     descriptionKey:
       "settings.commandPalette.footerDetail.marquee.speed.description",
     numericRange: { min: 1, max: 1000 },
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "commandPalette.launchAnimation.durationMs": defineNumberSetting({
+    key: "commandPalette.launchAnimation.durationMs",
+    scope: "applicationOnly",
+    defaultValue: DEFAULT_COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MS,
+    labelKey: "settings.commandPalette.launchAnimation.durationMs.label",
+    descriptionKey:
+      "settings.commandPalette.launchAnimation.durationMs.description",
+    numericRange: {
+      min: COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MIN_MS,
+      max: COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MAX_MS,
+      integer: true
+    },
     deprecatedAliases: [],
     migrationNotes: []
   }),

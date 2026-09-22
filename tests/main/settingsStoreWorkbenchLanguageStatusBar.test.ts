@@ -142,6 +142,11 @@ function saveRequest(
       footerDetail: {
         enable: true,
         marquee: { delay: 2000, speed: 40 }
+      },
+      launchAnimation: {
+        durationMs: getCatalogDefaultValue(
+          "commandPalette.launchAnimation.durationMs"
+        )
       }
     },
     editor: {
@@ -485,6 +490,11 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         footerDetail: {
           enable: true,
           marquee: { delay: 2000, speed: 40 }
+        },
+        launchAnimation: {
+          durationMs: getCatalogDefaultValue(
+            "commandPalette.launchAnimation.durationMs"
+          )
         }
       },
       editor: {
@@ -525,6 +535,11 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         footerDetail: {
           enable: true,
           marquee: { delay: 2000, speed: 40 }
+        },
+        launchAnimation: {
+          durationMs: getCatalogDefaultValue(
+            "commandPalette.launchAnimation.durationMs"
+          )
         }
       },
       editor: {

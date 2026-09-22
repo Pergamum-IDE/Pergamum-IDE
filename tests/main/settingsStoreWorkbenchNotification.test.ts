@@ -123,7 +123,12 @@ function saveRequest(
       ...workbench
     },
     commandPalette: {
-      footerDetail: { enable: true, marquee: { delay: 2000, speed: 40 } }
+      footerDetail: { enable: true, marquee: { delay: 2000, speed: 40 } },
+      launchAnimation: {
+        durationMs: getCatalogDefaultValue(
+          "commandPalette.launchAnimation.durationMs"
+        )
+      }
     },
     editor: {
       lineEnding: defaultLineEndingSettings,

@@ -1,0 +1,22 @@
+export const COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MIN_MS = 0;
+export const COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MAX_MS = 1000;
+export const COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_STEP_MS = 100;
+export const DEFAULT_COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MS = 200;
+
+export function normalizeCommandPaletteLaunchAnimationDurationMs(
+  value: unknown
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MS;
+  }
+
+  const clamped = Math.min(
+    COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MAX_MS,
+    Math.max(COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_MIN_MS, value)
+  );
+
+  return (
+    Math.round(clamped / COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_STEP_MS) *
+    COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_STEP_MS
+  );
+}

@@ -704,6 +704,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqual([
         "commandPalette.footerDetail.marquee.delay",
         "commandPalette.footerDetail.marquee.speed",
+        "commandPalette.launchAnimation.durationMs",
         "editor.undoHistoryMinDepth",
         "search.nearby.characterDistance",
         "search.nearby.paragraphDistance",
@@ -799,6 +800,39 @@ describe("Settings Catalog Foundation (#150)", () => {
           Number.NaN
         )
       ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("validates Command Palette launch animation duration as a finite integer from 0 to 1000", () => {
+      const entry = getCatalogEntry(
+        "commandPalette.launchAnimation.durationMs"
+      );
+
+      expect(entry.type).toBe("number");
+      if (entry.type !== "number") {
+        throw new Error("Expected number setting.");
+      }
+
+      expect(entry.defaultValue).toBe(200);
+      expect(entry.numericRange).toEqual({
+        min: 0,
+        max: 1000,
+        integer: true
+      });
+      expect(
+        validateCatalogValue("commandPalette.launchAnimation.durationMs", 0)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.launchAnimation.durationMs", 1000)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("commandPalette.launchAnimation.durationMs", -1)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.launchAnimation.durationMs", 1001)
+      ).toEqual({ ok: false, failure: "numericRange" });
+      expect(
+        validateCatalogValue("commandPalette.launchAnimation.durationMs", 150.5)
+      ).toEqual({ ok: false, failure: "integer" });
     });
 
     it("#505 Phase 1: the 3 preview scroll-sync / jump settings are applicationOnly booleans, all defaulting to true", () => {
@@ -1122,6 +1156,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(
         getCatalogEntry("commandPalette.footerDetail.marquee.speed").scope
       ).toBe("applicationOnly");
+      expect(
+        getCatalogEntry("commandPalette.launchAnimation.durationMs").scope
+      ).toBe("applicationOnly");
       expect(getCatalogEntry("preview.updateDelayMs").scope).toBe(
         "applicationOnly"
       );
@@ -1170,6 +1207,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getSettingArea("editor.fontFamily")).toBe("editor");
       expect(getSettingArea("preview.renderer")).toBe("preview");
       expect(getSettingArea("commandPalette.footerDetail.enable")).toBe(
+        "commandPalette"
+      );
+      expect(getSettingArea("commandPalette.launchAnimation.durationMs")).toBe(
         "commandPalette"
       );
       expect(getSettingArea("markdownFiles.lineEnding")).toBe("markdownFiles");
@@ -1285,6 +1325,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "commandPalette.footerDetail.enable",
           "commandPalette.footerDetail.marquee.delay",
           "commandPalette.footerDetail.marquee.speed",
+          "commandPalette.launchAnimation.durationMs",
           "documentMap.dialogueDelimiterPairs",
           "editor.captureTabInEditor",
           "editor.characterCount.exclude.headings",

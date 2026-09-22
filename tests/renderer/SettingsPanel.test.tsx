@@ -1279,6 +1279,42 @@ describe("SettingsPanelView edit/save behavior (#230)", () => {
     });
   });
 
+  it("saves immediately when the Command Palette launch animation duration changes", () => {
+    const settings: ApplicationSettings = defaultApplicationSettings;
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      settings,
+      searchQuery: isolate("commandPalette.launchAnimation.durationMs"),
+      onChangeSettings
+    });
+    const input = controlElement(
+      element,
+      "commandPalette.launchAnimation.durationMs"
+    );
+    const onChange = input.props.onChange as (event: {
+      target: { valueAsNumber: number };
+    }) => void;
+
+    onChange({ target: { valueAsNumber: 500 } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      documentMap: defaultApplicationSettings.documentMap,
+      imageAttachment: defaultApplicationSettings.imageAttachment,
+      search: defaultApplicationSettings.search,
+      preview: settings.preview,
+      workbench: settings.workbench,
+      commandPalette: {
+        ...settings.commandPalette,
+        launchAnimation: {
+          durationMs: 500
+        }
+      },
+      editor: settings.editor,
+      markdownFiles: settings.markdownFiles,
+      textFiles: settings.textFiles
+    });
+  });
+
   it("ignores a non-finite number value instead of saving it", () => {
     const settings: ApplicationSettings = defaultApplicationSettings;
     const onChangeSettings = vi.fn();
@@ -1485,7 +1521,10 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       commandPalette: {
-        footerDetail: { enable: false, marquee: { delay: 3456, speed: 78.5 } }
+        footerDetail: { enable: false, marquee: { delay: 3456, speed: 78.5 } },
+        launchAnimation: {
+          durationMs: 500
+        }
       }
     };
     const element = settingsPanelViewElement("en", {
@@ -1505,6 +1544,14 @@ describe("SettingsPanelView: legacy Advanced Settings gate removed (#232)", () =
       controlElement(element, "commandPalette.footerDetail.marquee.delay")
         .props.value
     ).toBe(3456);
+    expect(
+      controlElement(element, "commandPalette.launchAnimation.durationMs").props
+        .disabled
+    ).toBe(false);
+    expect(
+      controlElement(element, "commandPalette.launchAnimation.durationMs").props
+        .value
+    ).toBe(500);
   });
 
   it("marquee number controls are enabled when footer details are enabled (the default)", () => {
@@ -1954,6 +2001,7 @@ describe("Settings number control right-alignment (common style)", () => {
       [
         "commandPalette.footerDetail.marquee.delay",
         "commandPalette.footerDetail.marquee.speed",
+        "commandPalette.launchAnimation.durationMs",
         "editor.undoHistoryMinDepth",
         "preview.updateDelayMs",
         "search.nearby.characterDistance",

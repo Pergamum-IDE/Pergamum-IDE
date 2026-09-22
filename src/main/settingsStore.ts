@@ -17,6 +17,7 @@ import {
   resolveCatalogValue,
   validateCatalogValue
 } from "../shared/settingsCatalog";
+import { normalizeCommandPaletteLaunchAnimationDurationMs } from "../shared/commandPaletteLaunchAnimationSettings";
 
 const settingsFileName = "settings.json";
 const maxRecentProjects = 10;
@@ -377,6 +378,18 @@ function readCommandPaletteFooterDetailSettings(
   };
 }
 
+function readCommandPaletteLaunchAnimationSettings(
+  value: unknown
+): ApplicationSettings["commandPalette"]["launchAnimation"] {
+  const launchAnimationValue = isObject(value) ? value : undefined;
+
+  return {
+    durationMs: normalizeCommandPaletteLaunchAnimationDurationMs(
+      launchAnimationValue?.durationMs
+    )
+  };
+}
+
 function readCommandPaletteSettings(
   value: unknown
 ): ApplicationSettings["commandPalette"] {
@@ -385,6 +398,9 @@ function readCommandPaletteSettings(
   return {
     footerDetail: readCommandPaletteFooterDetailSettings(
       commandPaletteValue?.footerDetail
+    ),
+    launchAnimation: readCommandPaletteLaunchAnimationSettings(
+      commandPaletteValue?.launchAnimation
     )
   };
 }
@@ -1314,6 +1330,26 @@ function parseCommandPaletteFooterDetailSettingsForWrite(
   };
 }
 
+function parseCommandPaletteLaunchAnimationSettingsForWrite(
+  value: unknown
+): ApplicationSettings["commandPalette"]["launchAnimation"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("durationMs")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    durationMs: normalizeCommandPaletteLaunchAnimationDurationMs(
+      value.durationMs
+    )
+  };
+}
+
 function parseCommandPaletteSettingsForWrite(
   value: unknown
 ): ApplicationSettings["commandPalette"] {
@@ -1323,13 +1359,20 @@ function parseCommandPaletteSettingsForWrite(
 
   const keys = Object.keys(value);
 
-  if (keys.length !== 1 || !keys.includes("footerDetail")) {
+  if (
+    keys.length !== 2 ||
+    !keys.includes("footerDetail") ||
+    !keys.includes("launchAnimation")
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   return {
     footerDetail: parseCommandPaletteFooterDetailSettingsForWrite(
       value.footerDetail
+    ),
+    launchAnimation: parseCommandPaletteLaunchAnimationSettingsForWrite(
+      value.launchAnimation
     )
   };
 }

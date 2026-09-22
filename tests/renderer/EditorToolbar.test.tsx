@@ -12,6 +12,28 @@ import type { TranslationValues } from "../../src/shared/i18n";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+const originalMatchMediaDescriptor = Object.getOwnPropertyDescriptor(
+  window,
+  "matchMedia"
+);
+const originalAnimateDescriptor = Object.getOwnPropertyDescriptor(
+  Element.prototype,
+  "animate"
+);
+
+function restoreProperty(
+  target: object,
+  property: PropertyKey,
+  descriptor: PropertyDescriptor | undefined
+): void {
+  if (descriptor) {
+    Object.defineProperty(target, property, descriptor);
+    return;
+  }
+
+  delete (target as any)[property];
+}
+
 function mockTranslate(key: string, values?: TranslationValues): string {
   let text = (jaTranslations as any)[key] ?? key;
   if (values) {
@@ -20,6 +42,93 @@ function mockTranslate(key: string, values?: TranslationValues): string {
     }
   }
   return text;
+}
+
+function mockMatchMedia(prefersReducedMotion: boolean): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => {
+      return {
+        matches:
+          query === "(prefers-reduced-motion: reduce)"
+            ? prefersReducedMotion
+            : false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      } as unknown as MediaQueryList;
+    })
+  });
+}
+
+function mockElementAnimate(finished: Promise<void>): ReturnType<typeof vi.fn> {
+  const animate = vi.fn(() => {
+    return {
+      finished,
+      cancel: vi.fn()
+    } as unknown as Animation;
+  });
+
+  Object.defineProperty(Element.prototype, "animate", {
+    configurable: true,
+    writable: true,
+    value: animate
+  });
+
+  return animate;
+}
+
+function domRect(
+  left: number,
+  top: number,
+  width: number,
+  height: number
+): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    toJSON: () => ({})
+  } as DOMRect;
+}
+
+function mockLaunchAnimationRects(): void {
+  const originalGetBoundingClientRect =
+    HTMLElement.prototype.getBoundingClientRect;
+
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+    function (this: HTMLElement): DOMRect {
+      if (this.classList.contains("toolbarCommandBoxBody")) {
+        return domRect(20, 12, 160, 28);
+      }
+
+      if (this.classList.contains("commandPaletteLaunchMeasureInput")) {
+        return domRect(260, 96, 420, 26);
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    }
+  );
+}
+
+function clickWithPointer(button: HTMLButtonElement): void {
+  button.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      detail: 1
+    })
+  );
 }
 
 let container: HTMLDivElement;
@@ -34,7 +143,12 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  document
+    .querySelectorAll(".commandPaletteLaunchGhost, .commandPaletteLaunchMeasure")
+    .forEach((element) => element.remove());
   vi.restoreAllMocks();
+  restoreProperty(window, "matchMedia", originalMatchMediaDescriptor);
+  restoreProperty(Element.prototype, "animate", originalAnimateDescriptor);
 });
 
 function defaultProps(
@@ -65,6 +179,9 @@ function defaultProps(
     canTogglePreview: true,
     isPreviewVisible: true,
     onTogglePreview: vi.fn(),
+    isCommandPaletteOpen: false,
+    commandPaletteLaunchAnimationDurationMs: 200,
+    onOpenCommandPalette: vi.fn(),
     translate: mockTranslate,
     ...overrides
   };
@@ -115,11 +232,253 @@ describe("EditorToolbar", () => {
     );
   });
 
-  it("renders six visual separators between the command groups", () => {
+  it("renders separators between command groups and keeps the right-end separator", () => {
     renderToolbar();
     expect(
       container.querySelectorAll(".editorToolbarSeparator")
-    ).toHaveLength(6);
+    ).toHaveLength(8);
+  });
+
+  it("renders the Command Box before the Heading button in the centered toolbar flow", () => {
+    renderToolbar();
+    const toolbar = container.querySelector(".editorToolbar")!;
+    const children = Array.from(toolbar.children) as HTMLElement[];
+
+    expect(children[0].classList.contains("toolbarCommandBoxGroup")).toBe(
+      true
+    );
+    expect(children[0].querySelector(".toolbarCommandBox")).not.toBeNull();
+    expect(children[1].classList.contains("editorToolbarSeparator")).toBe(true);
+    expect(
+      children[2]
+        .querySelector("button.editorToolbarButton")
+        ?.getAttribute("aria-label")
+    ).toBe("見出しを挿入");
+    expect(
+      children[children.length - 1].classList.contains("editorToolbarSeparator")
+    ).toBe(true);
+  });
+
+  it("Command Box initial mode is commands (prefix '>')", () => {
+    renderToolbar();
+    const prefixBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxPrefix']"
+    ) as HTMLButtonElement | null;
+    expect(prefixBtn).not.toBeNull();
+    expect(prefixBtn!.dataset.mode).toBe("commands");
+  });
+
+  it("Command Box prefix button cycles to the next mode when clicked", () => {
+    const onOpenCommandPalette = vi.fn();
+    renderToolbar({ onOpenCommandPalette });
+    const prefixBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxPrefix']"
+    ) as HTMLButtonElement;
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    // Initial state: commands
+    expect(prefixBtn.dataset.mode).toBe("commands");
+    expect(bodyBtn.dataset.mode).toBe("commands");
+
+    // Click once → projectFiles
+    act(() => prefixBtn.click());
+    expect(prefixBtn.dataset.mode).toBe("projectFiles");
+    expect(bodyBtn.dataset.mode).toBe("projectFiles");
+    expect(onOpenCommandPalette).not.toHaveBeenCalled();
+  });
+
+  it("Command Box launcher body calls onOpenCommandPalette with the current mode's prefix", () => {
+    const onOpenCommandPalette = vi.fn();
+    renderToolbar({ onOpenCommandPalette });
+
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    act(() => bodyBtn.click());
+    // Initial mode is commands → prefix ">"
+    expect(onOpenCommandPalette).toHaveBeenCalledWith(">");
+  });
+
+  it("Command Box launcher body calls onOpenCommandPalette with '' when mode is projectFiles", () => {
+    const onOpenCommandPalette = vi.fn();
+    renderToolbar({ onOpenCommandPalette });
+
+    const prefixBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxPrefix']"
+    ) as HTMLButtonElement;
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    // Advance to projectFiles
+    act(() => prefixBtn.click());
+
+    act(() => bodyBtn.click());
+    // projectFiles mode → prefix "" (empty string, NOT ">")
+    expect(onOpenCommandPalette).toHaveBeenCalledWith("");
+    expect(onOpenCommandPalette).not.toHaveBeenCalledWith(">");
+  });
+
+  it("Command Box launcher opens each cycled mode with the matching prefix", () => {
+    const onOpenCommandPalette = vi.fn();
+    renderToolbar({ onOpenCommandPalette });
+
+    const prefixBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxPrefix']"
+    ) as HTMLButtonElement;
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+    const expectedPrefixes = [">", "", "#", "@", ":", "%"];
+
+    for (const expectedPrefix of expectedPrefixes) {
+      act(() => bodyBtn.click());
+      expect(onOpenCommandPalette).toHaveBeenLastCalledWith(expectedPrefix);
+      act(() => prefixBtn.click());
+    }
+  });
+
+  it("Command Box pointer click animates the launcher before opening the Command Palette", async () => {
+    const onOpenCommandPalette = vi.fn();
+    let resolveAnimation: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      resolveAnimation = resolve;
+    });
+    const animate = mockElementAnimate(finished);
+    mockMatchMedia(false);
+    mockLaunchAnimationRects();
+    renderToolbar({ onOpenCommandPalette });
+
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    act(() => clickWithPointer(bodyBtn));
+
+    expect(animate).toHaveBeenCalledOnce();
+    expect(animate.mock.calls[0]?.[1]).toMatchObject({ duration: 200 });
+    expect(onOpenCommandPalette).not.toHaveBeenCalled();
+    expect(document.querySelector(".commandPaletteLaunchGhost")).not.toBeNull();
+
+    await act(async () => {
+      resolveAnimation();
+      await finished;
+      await Promise.resolve();
+    });
+
+    expect(onOpenCommandPalette).toHaveBeenCalledWith(">");
+    expect(document.querySelector(".commandPaletteLaunchGhost")).toBeNull();
+  });
+
+  it("Command Box launch animation preserves the selected mode prefix", async () => {
+    const onOpenCommandPalette = vi.fn();
+    let resolveAnimation: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      resolveAnimation = resolve;
+    });
+    mockElementAnimate(finished);
+    mockMatchMedia(false);
+    mockLaunchAnimationRects();
+    renderToolbar({ onOpenCommandPalette });
+
+    const prefixBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxPrefix']"
+    ) as HTMLButtonElement;
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    act(() => prefixBtn.click());
+    act(() => clickWithPointer(bodyBtn));
+
+    await act(async () => {
+      resolveAnimation();
+      await finished;
+      await Promise.resolve();
+    });
+
+    expect(onOpenCommandPalette).toHaveBeenCalledWith("");
+  });
+
+  it("Command Box launch animation uses the configured duration", () => {
+    const onOpenCommandPalette = vi.fn();
+    const animate = mockElementAnimate(new Promise(() => undefined));
+    mockMatchMedia(false);
+    mockLaunchAnimationRects();
+    renderToolbar({
+      commandPaletteLaunchAnimationDurationMs: 500,
+      onOpenCommandPalette
+    });
+
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    act(() => clickWithPointer(bodyBtn));
+
+    expect(animate).toHaveBeenCalledOnce();
+    expect(animate.mock.calls[0]?.[1]).toMatchObject({ duration: 500 });
+    expect(onOpenCommandPalette).not.toHaveBeenCalled();
+  });
+
+  it("Command Box body opens immediately when launch animation duration is 0", () => {
+    const onOpenCommandPalette = vi.fn();
+    const animate = mockElementAnimate(Promise.resolve());
+    mockMatchMedia(false);
+    mockLaunchAnimationRects();
+    renderToolbar({
+      commandPaletteLaunchAnimationDurationMs: 0,
+      onOpenCommandPalette
+    });
+
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    act(() => clickWithPointer(bodyBtn));
+
+    expect(animate).not.toHaveBeenCalled();
+    expect(onOpenCommandPalette).toHaveBeenCalledWith(">");
+  });
+
+  it("Command Box body opens immediately when reduced motion is requested", () => {
+    const onOpenCommandPalette = vi.fn();
+    const animate = mockElementAnimate(Promise.resolve());
+    mockMatchMedia(true);
+    mockLaunchAnimationRects();
+    renderToolbar({
+      commandPaletteLaunchAnimationDurationMs: 500,
+      onOpenCommandPalette
+    });
+
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    act(() => clickWithPointer(bodyBtn));
+
+    expect(animate).not.toHaveBeenCalled();
+    expect(onOpenCommandPalette).toHaveBeenCalledWith(">");
+  });
+
+  it("Command Box body skips duplicate animation when the Command Palette is already open", () => {
+    const onOpenCommandPalette = vi.fn();
+    const animate = mockElementAnimate(Promise.resolve());
+    mockMatchMedia(false);
+    mockLaunchAnimationRects();
+    renderToolbar({ isCommandPaletteOpen: true, onOpenCommandPalette });
+
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    act(() => clickWithPointer(bodyBtn));
+
+    expect(animate).not.toHaveBeenCalled();
+    expect(onOpenCommandPalette).toHaveBeenCalledWith(">");
   });
 
   it("every button is icon-only with aria-label and title, no visible text", () => {
