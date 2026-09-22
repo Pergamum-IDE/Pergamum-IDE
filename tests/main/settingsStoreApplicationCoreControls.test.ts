@@ -208,7 +208,8 @@ function validSaveRequest(
     textFiles: {
       enablePlainTextDocuments: false,
       lineEnding: "lf",
-      encoding: "utf8"
+      encoding: "utf8",
+      indentUnit: "tab"
     },
     imageAttachment: {
       saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory")
@@ -246,7 +247,8 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.textFiles).toEqual({
       enablePlainTextDocuments: getCatalogDefaultValue("textFiles.enablePlainTextDocuments"),
       lineEnding: getCatalogDefaultValue("textFiles.lineEnding"),
-      encoding: getCatalogDefaultValue("textFiles.encoding")
+      encoding: getCatalogDefaultValue("textFiles.encoding"),
+      indentUnit: getCatalogDefaultValue("textFiles.indentUnit")
     });
     expect(settings.commandPalette.footerDetail).toEqual({
       enable: getCatalogDefaultValue("commandPalette.footerDetail.enable"),
@@ -437,7 +439,8 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.textFiles).toEqual({
       enablePlainTextDocuments: false,
       lineEnding: "lf",
-      encoding: "utf8"
+      encoding: "utf8",
+      indentUnit: "tab"
     });
     expect(settings.commandPalette.footerDetail).toEqual({
       enable: false,
@@ -520,7 +523,8 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     expect(settings.textFiles).toEqual({
       enablePlainTextDocuments: false,
       lineEnding: "lf",
-      encoding: "utf8"
+      encoding: "utf8",
+      indentUnit: "tab"
     });
     expect(settings.commandPalette.footerDetail).toEqual({
       enable: true,
@@ -769,7 +773,8 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     expect(written.textFiles).toEqual({
       enablePlainTextDocuments: false,
       lineEnding: "lf",
-      encoding: "utf8"
+      encoding: "utf8",
+      indentUnit: "tab"
     });
   });
 

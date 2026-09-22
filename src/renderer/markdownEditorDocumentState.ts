@@ -39,9 +39,14 @@ import type {
   ExpectedLineEnding,
   FencedCodeIndentUnit,
   LineEndingMarkerGlyph,
-  SelectionHighlightMode
+  SelectionHighlightMode,
+  TextFilesIndentUnit
 } from "../shared/settings";
 import { fencedCodeIndentUnitFacet } from "./indentCommands";
+import {
+  documentIsMarkdownFacet,
+  textFileIndentUnitFacet
+} from "./plainTextIndentCommands";
 import { whitespaceMarkerLayer } from "./whitespaceRendering/whitespaceMarkerLayer";
 import { createVisibilityExtension } from "./editorVisibility/visibilityFeature";
 import { createLineEndingVisibilityFeatures } from "./editorVisibility/lineEndMarkerFeature";
@@ -126,6 +131,10 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly captureTabInEditorRef?: LiveRef<boolean>;
   readonly fencedCodeIndentUnitCompartment?: Compartment;
   readonly fencedCodeIndentUnitRef?: LiveRef<FencedCodeIndentUnit>;
+  /** #546 follow-up: `textFiles.indentUnit`, live like `fencedCodeIndentUnitRef`
+   *  above — a Settings change reconfigures an already-open `.txt` document. */
+  readonly textFileIndentUnitCompartment?: Compartment;
+  readonly textFileIndentUnitRef?: LiveRef<TextFilesIndentUnit>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
   /**
    * #424 / #425 follow-up: the Ctrl+F / Ctrl+H keymap no longer reads a
@@ -173,6 +182,18 @@ export interface MarkdownEditorDocumentStateOptions {
    * handler at all.
    */
   readonly markdownToolbarShortcutEnabled?: boolean;
+  /**
+   * #546 (ADR-0014 決定3a / T-12): `true` for a Markdown (`.md`) document,
+   * `false` for a plain text (`.txt`) document — a BUILD-TIME decision, like
+   * the `*ShortcutEnabled` flags above, not a `LiveRef`: a given document's
+   * file extension cannot change while it is open. Feeds
+   * `documentIsMarkdownFacet`, which `indentCommands.ts`'s `indentCommand` /
+   * `outdentCommand` read to choose Markdown-aware context dispatch vs.
+   * plain text indent/outdent. Defaults to `true` when omitted, matching the
+   * facet's own default, so every existing caller (Glossary description
+   * field, tests) keeps today's Markdown-aware behavior unchanged.
+   */
+  readonly isMarkdownDocument?: boolean;
   readonly imageAttachmentPasteOptions?: MarkdownImageAttachmentPasteExtensionOptions;
   /**
    * #411: when present, adds the broken-image-link lint extension (gutter +
@@ -286,6 +307,12 @@ export function createMarkdownEditorDocumentState(
       (options.fencedCodeIndentUnitCompartment ?? new Compartment()).of(
         fencedCodeIndentUnitFacet.of(
           options.fencedCodeIndentUnitRef?.current ?? "spaces4"
+        )
+      ),
+      documentIsMarkdownFacet.of(options.isMarkdownDocument ?? true),
+      (options.textFileIndentUnitCompartment ?? new Compartment()).of(
+        textFileIndentUnitFacet.of(
+          options.textFileIndentUnitRef?.current ?? "tab"
         )
       ),
       createGlossaryCompletionExtension({

@@ -414,3 +414,239 @@ describe("MarkdownEditor dynamic tab capture configuration (#476)", () => {
     );
   });
 });
+
+describe("MarkdownEditor isMarkdownDocument prop (#546)", () => {
+  let container: HTMLDivElement | null = null;
+  let root: import("react-dom/client").Root | null = null;
+
+  afterEach(() => {
+    if (root) {
+      act(() => root!.unmount());
+      root = null;
+    }
+    container?.remove();
+    container = null;
+  });
+
+  function mount(isMarkdownDocument: boolean | undefined, doc: string): EditorView {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: doc,
+          onChange: () => undefined,
+          isMarkdownDocument
+        })
+      );
+    });
+
+    const cmElement = container!.querySelector<HTMLElement>(".cm-editor");
+    return EditorView.findFromDOM(cmElement!)!;
+  }
+
+  it("defaults to Markdown-aware indent: Mod+] on a top-level paragraph is a no-op", () => {
+    const view = mount(undefined, "Hello world");
+    view.dispatch({ selection: EditorSelection.cursor(3) });
+    const event = new KeyboardEvent("keydown", {
+      key: "]",
+      code: "BracketRight",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+    view.contentDOM.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe("Hello world");
+  });
+
+  it("isMarkdownDocument=false: Mod+] on a top-level paragraph inserts the plain text indent unit", () => {
+    const view = mount(false, "Hello world");
+    view.dispatch({ selection: EditorSelection.cursor(3) });
+    const event = new KeyboardEvent("keydown", {
+      key: "]",
+      code: "BracketRight",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+    view.contentDOM.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    // textFileIndentUnitFacet defaults to "tab" (textFiles.indentUnit's
+    // catalog default).
+    expect(view.state.doc.toString()).toBe("\tHello world");
+  });
+});
+
+describe("MarkdownEditor textFileIndentUnit prop (#546 follow-up)", () => {
+  let container: HTMLDivElement | null = null;
+  let root: import("react-dom/client").Root | null = null;
+
+  afterEach(() => {
+    if (root) {
+      act(() => root!.unmount());
+      root = null;
+    }
+    container?.remove();
+    container = null;
+  });
+
+  function modBracketKeydown(bracket: "[" | "]"): KeyboardEvent {
+    return new KeyboardEvent("keydown", {
+      key: bracket,
+      code: bracket === "]" ? "BracketRight" : "BracketLeft",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+  }
+
+  it("Ctrl+] uses the configured textFileIndentUnit for a plain text document", () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: "foo",
+          onChange: () => undefined,
+          isMarkdownDocument: false,
+          textFileIndentUnit: "fourSpaces"
+        })
+      );
+    });
+
+    const cmElement = container!.querySelector<HTMLElement>(".cm-editor");
+    const view = EditorView.findFromDOM(cmElement!)!;
+    view.dispatch({ selection: EditorSelection.cursor(1) });
+
+    const event = modBracketKeydown("]");
+    view.contentDOM.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe("    foo");
+  });
+
+  it("Ctrl+[ uses the plain text outdent strategy with the configured textFileIndentUnit", () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: "    foo",
+          onChange: () => undefined,
+          isMarkdownDocument: false,
+          textFileIndentUnit: "fourSpaces"
+        })
+      );
+    });
+
+    const cmElement = container!.querySelector<HTMLElement>(".cm-editor");
+    const view = EditorView.findFromDOM(cmElement!)!;
+    view.dispatch({ selection: EditorSelection.cursor(4) });
+
+    const event = modBracketKeydown("[");
+    view.contentDOM.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.toString()).toBe("foo");
+  });
+
+  it("Tab (captureTabInEditor=true) is selection-aware for a plain text document: caret insert, then Shift+Tab line-outdents", () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root!.render(
+        React.createElement(MarkdownEditor, {
+          value: "foobar",
+          onChange: () => undefined,
+          isMarkdownDocument: false,
+          textFileIndentUnit: "twoSpaces",
+          captureTabInEditor: true
+        })
+      );
+    });
+
+    const cmElement = container!.querySelector<HTMLElement>(".cm-editor");
+    const view = EditorView.findFromDOM(cmElement!)!;
+    view.dispatch({ selection: EditorSelection.cursor(3) });
+
+    const tabEvent = new KeyboardEvent("keydown", {
+      key: "Tab",
+      code: "Tab",
+      bubbles: true,
+      cancelable: true
+    });
+    view.contentDOM.dispatchEvent(tabEvent);
+
+    expect(tabEvent.defaultPrevented).toBe(true);
+    // No selection -> inserted at the caret, not at line start.
+    expect(view.state.doc.toString()).toBe("foo  bar");
+
+    const shiftTabEvent = new KeyboardEvent("keydown", {
+      key: "Tab",
+      code: "Tab",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    });
+    view.contentDOM.dispatchEvent(shiftTabEvent);
+
+    expect(shiftTabEvent.defaultPrevented).toBe(true);
+    // Shift+Tab stays line-based outdent — the line has no LEADING
+    // whitespace (the inserted unit landed mid-line, not at line start), so
+    // this is correctly a no-op, not a removal of the mid-line unit.
+    expect(view.state.doc.toString()).toBe("foo  bar");
+  });
+
+  it("dynamically reconfigures the live indent unit when textFileIndentUnit prop changes", () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const renderEditor = (
+      value: string,
+      textFileIndentUnit: "tab" | "twoSpaces" | "fourSpaces"
+    ) => {
+      act(() => {
+        root!.render(
+          React.createElement(MarkdownEditor, {
+            value,
+            onChange: () => undefined,
+            isMarkdownDocument: false,
+            textFileIndentUnit
+          })
+        );
+      });
+    };
+
+    renderEditor("foo", "twoSpaces");
+    const cmElement = container!.querySelector<HTMLElement>(".cm-editor");
+    const view = EditorView.findFromDOM(cmElement!)!;
+    view.dispatch({ selection: EditorSelection.cursor(1) });
+
+    view.contentDOM.dispatchEvent(modBracketKeydown("]"));
+    expect(view.state.doc.toString()).toBe("  foo");
+
+    // Prop change alone (no remount) must reconfigure the live facet. `value`
+    // is re-passed as the editor's own current content (matching what the
+    // real App.tsx onChange round-trip would do) so this render doesn't also
+    // trigger the unrelated "external content changed" replace path.
+    renderEditor("  foo", "fourSpaces");
+    view.dispatch({ selection: EditorSelection.cursor(0) });
+    view.contentDOM.dispatchEvent(modBracketKeydown("]"));
+    expect(view.state.doc.toString()).toBe("      foo");
+  });
+});

@@ -213,6 +213,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "markdownFiles.lineEnding",
           "textFiles.enablePlainTextDocuments",
           "textFiles.encoding",
+          "textFiles.indentUnit",
           "textFiles.lineEnding",
           "imageAttachment.saveDirectory",
           "preview.renderer",

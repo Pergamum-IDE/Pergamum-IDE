@@ -622,6 +622,13 @@ function readTextFilesSettings(
     lineEnding: resolveCatalogValue(
       "textFiles.lineEnding",
       textFilesValue?.lineEnding
+    ).value,
+    // #546 follow-up: an invalid or missing on-disk value (e.g. a settings
+    // file saved before this setting existed) falls back to the catalog
+    // default ("tab") rather than rejecting the whole textFiles block.
+    indentUnit: resolveCatalogValue(
+      "textFiles.indentUnit",
+      textFilesValue?.indentUnit
     ).value
   };
 
@@ -1776,12 +1783,13 @@ function parseTextFilesSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasEnablePlainTextDocuments = keys.includes("enablePlainTextDocuments");
-  const expectedKeyCount = 2 + (hasEnablePlainTextDocuments ? 1 : 0);
+  const expectedKeyCount = 3 + (hasEnablePlainTextDocuments ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
     !keys.includes("encoding") ||
-    !keys.includes("lineEnding")
+    !keys.includes("lineEnding") ||
+    !keys.includes("indentUnit")
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -1794,14 +1802,23 @@ function parseTextFilesSettingsForWrite(
     "textFiles.lineEnding",
     value.lineEnding
   );
+  const indentUnitResolution = resolveCatalogValue(
+    "textFiles.indentUnit",
+    value.indentUnit
+  );
 
-  if (!encodingResolution.ok || !lineEndingResolution.ok) {
+  if (
+    !encodingResolution.ok ||
+    !lineEndingResolution.ok ||
+    !indentUnitResolution.ok
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   const textFiles: ApplicationSettings["textFiles"] = {
     encoding: encodingResolution.value,
-    lineEnding: lineEndingResolution.value
+    lineEnding: lineEndingResolution.value,
+    indentUnit: indentUnitResolution.value
   };
 
   if (hasEnablePlainTextDocuments) {

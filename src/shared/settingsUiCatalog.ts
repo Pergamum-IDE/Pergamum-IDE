@@ -985,6 +985,31 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("textFiles.lineEnding")
   },
   {
+    key: "textFiles.indentUnit",
+    category: "textFiles",
+    order: 400,
+    labelKey: "settings.textFiles.indentUnit.label",
+    descriptionKey: "settings.textFiles.indentUnit.description",
+    control: {
+      kind: "select",
+      options: [
+        {
+          value: "tab",
+          labelKey: "settings.textFiles.indentUnit.option.tab.label"
+        },
+        {
+          value: "twoSpaces",
+          labelKey: "settings.textFiles.indentUnit.option.twoSpaces.label"
+        },
+        {
+          value: "fourSpaces",
+          labelKey: "settings.textFiles.indentUnit.option.fourSpaces.label"
+        }
+      ]
+    },
+    defaultValue: getCatalogDefaultValue("textFiles.indentUnit")
+  },
+  {
     key: "preview.renderer",
     category: "preview",
     order: 100,

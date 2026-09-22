@@ -117,6 +117,8 @@ export function readSettingValue(
       return settings.textFiles.encoding;
     case "textFiles.lineEnding":
       return settings.textFiles.lineEnding;
+    case "textFiles.indentUnit":
+      return settings.textFiles.indentUnit;
     case "preview.renderer":
       return settings.preview.renderer;
     case "preview.updateDelayMs":

@@ -164,7 +164,10 @@ function saveRequest(
       lineEnding: "lf", encoding: "utf8"
     },
     textFiles: {
-      enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8"
+      enablePlainTextDocuments: false,
+      lineEnding: "lf",
+      encoding: "utf8",
+      indentUnit: "tab"
     },
     imageAttachment: { saveDirectory: "" }
   } as unknown as SaveApplicationSettingsRequest;

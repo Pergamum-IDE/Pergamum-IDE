@@ -131,7 +131,8 @@ function baseApplicationSettings(
     textFiles: {
       enablePlainTextDocuments: getCatalogDefaultValue("textFiles.enablePlainTextDocuments"),
       lineEnding: getCatalogDefaultValue("textFiles.lineEnding"),
-      encoding: getCatalogDefaultValue("textFiles.encoding")
+      encoding: getCatalogDefaultValue("textFiles.encoding"),
+      indentUnit: getCatalogDefaultValue("textFiles.indentUnit")
     },
     imageAttachment: {
       saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory")

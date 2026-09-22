@@ -83,7 +83,7 @@ false
 ```
 
 | 値 | Tab / Shift+Tab の意味 | `Mod+]` / `Mod+[` | 脱出ハッチ |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `false`（既定） | フォーカス移動 | 有効（既定状態での正式なキーボード導線） | 不要（Tab が既にフォーカス移動のため） |
 | `true` | 文脈別エディタ操作（決定3参照） | 有効（既定状態での正式なキーボード導線） | Escape → Tab（決定9）／ Ctrl+M（決定10） |
 
@@ -108,7 +108,7 @@ Tab / Shift+Tab キー自体が Markdown 文脈を判断するのではない。
 文脈別の方針は以下のとおりとする。
 
 | 文脈 | Indent / Forward | Outdent / Backward |
-|---|---|---|
+| --- | --- | --- |
 | リスト項目（最外周を除く） | 親の content column に合わせて sink（子リスト項目化） | lift（親の階層へ戻す） |
 | リスト項目（最外周） | 親の content column に合わせて sink | no-op（決定6、T-5） |
 | GFM table | 次セルへ移動 | 前セルへ移動 |
@@ -132,7 +132,56 @@ GFM table の端セルについては、以下を明記する。
 
 GFM table の forward / backward はセル移動であり、単一カーソルまたは単一セル内選択に対してのみ実行する。複数行選択、複数 selection、または複数セルにまたがる選択では no-op とする（T-4）。
 
+### 3a. プレーンテキスト文書では Markdown 文脈ディスパッチを適用しない
+
+決定3の文脈ディスパッチは、Markdown 文書に対する indent / outdent の実行時意味論を定義する。
+
+プレーンテキスト文書（`.txt`）は Markdown 構造文書ではない。  
+そのため、Markdown 固有の構造制約を `.txt` 文書に適用してはならない。
+
+`.txt` 文書では、indent / outdent は plain text editing command として扱う。
+
+```text
+Markdown documents:
+  Markdown-aware indent / outdent を行う
+  決定3・決定4に定める文脈ディスパッチと no-op ルールに従う
+
+Plain text documents:
+  Markdown 文脈ディスパッチを行わない
+  現在行または選択行に対して自由な行頭インデントを行う
+```
+
+`.txt` 文書では以下のとおりとする。
+
+```text
+Indent:
+  対象行の行頭に indent unit を挿入する
+
+Outdent:
+  対象行の行頭から削除可能な indent unit または空白を削除する
+  削除可能な空白がない行は no-op とする
+```
+
+対象行は T-4 と同じく、選択がある場合は選択範囲が交差するすべての行、選択がない場合はカーソルがある行とする。複数 selection を持つ場合は、全 selection が交差する行の集合を重複排除して対象行とする。
+
+`.txt` 文書では、以下の操作経路が同じ plain text indent / outdent コマンドを呼ぶ。
+
+```text
+Mod+] / Mod+[
+toolbar indent / outdent
+menu / command palette からの indent / outdent
+editor.captureTabInEditor=true の場合の Tab / Shift+Tab
+```
+
+ただし、Tab キーの捕捉方針そのものは決定1・決定2に従う。  
+すなわち、`editor.captureTabInEditor=false` の場合、Tab / Shift+Tab は引き続きフォーカス移動に明け渡す。
+
+この例外は、ADR-0014 の Markdown 側の決定を撤回するものではない。  
+Markdown 文書では、引き続き決定3・決定4の Markdown-aware な挙動を維持する。
+
 ### 4. トップレベル段落ではインデントしない
+
+本決定は Markdown 文書に適用する。プレーンテキスト文書（`.txt`）については、決定3aに従う。
 
 トップレベル段落（リスト項目・blockquote・fenced code block のいずれにも属さない、文書のトップレベルにある段落）では、インデント／アウトデントコマンドは no-op とする。上記以外の文脈（決定3参照）も同様に no-op とする。
 
@@ -162,7 +211,7 @@ Markdown のインデント量は文書構造の意味論に支配される
 具体例:
 
 | 親マーカー | content column | 子として有効な indent 量 |
-|---|---:|---:|
+| --- | ---: | ---: |
 | `- ` | 2 | 2〜5 columns |
 | `1. ` | 3 | 3〜6 columns |
 | `10. ` | 4 | 4〜7 columns |
@@ -187,7 +236,7 @@ fenced code block 内のインデントは Markdown 構造インデントとは�
 和文小説の段落頭に使われる字下げ（全角空白 U+3000 による段落頭のインデント）は、Markdown の block indentation とは別概念として扱う。
 
 | 層 | 方針 |
-|---|---|
+| --- | --- |
 | ソース `.md` | 段落頭の字下げを持たない |
 | エディタ表示 | CSS のぶら下げインデント等、表示上の装飾として字下げを見せる |
 | `.txt` エクスポート | 段落頭に U+3000 を付与する |
@@ -345,6 +394,7 @@ read-only state の announcement（読み取り専用状態の告知）
 - **T-9** Tab capture を有効にする構成（`editor.captureTabInEditor=true`）では、脱出ハッチ（Escape → Tab、Ctrl+M）と支援技術向け告知を必ずセットで提供する。
 - **T-10** IME composition 中の Escape / Ctrl+M は、Tab 脱出状態や Tab focus mode を変更してはならない。
 - **T-11** `.txt` → `.md` 変換インポートは元の `.txt` を削除・移動・改変してはならない。変換結果は新しい `.md` として生成する。
+- **T-12** プレーンテキスト文書（`.txt`）では、Markdown 文脈ディスパッチおよびトップレベル段落 no-op ルールを適用してはならない。`.txt` のインデント／アウトデントは plain text editing command として、現在行または選択行の行頭空白を増減する。Tab / Shift+Tab からこのコマンドを呼ぶかどうかは `editor.captureTabInEditor` に従う。
 
 ---
 
@@ -359,6 +409,8 @@ read-only state の announcement（読み取り専用状態の告知）
 **日本語 IME との相互作用**: 日本語執筆では Escape が IME の変換キャンセル・未確定文字列処理に頻繁に使われ、Ctrl+M もキーバインド設定によっては IME の確定操作として使われうる。Escape → Tab の脱出ハッチと Ctrl+M の Tab focus mode トグルは、いずれも IME と相互作用しうるため、デフォルトの必須脱出機構にはできず、`editor.captureTabInEditor` の opt-in 時のみの条件付き要件とする。IME composition 中の Escape / Ctrl+M では、いずれも Pergamum 側の状態を変更しない（決定10・決定11、T-10）。
 
 **Pergamum 固有の動機**: Pergamum は小説執筆 IDE である。執筆はテキスト中心の作業であり、スクリーンリーダー等の支援技術と原理的に相性がよい。視覚障害を持つ作者にとって、執筆環境のアクセシビリティは義務であるだけでなく、Pergamum の差別化要素になる。この動機が、Tab キーの既定挙動を「多くのエディタの慣習」より「アクセシビリティの安全側」に置くという判断（決定1・決定2、T-1）を支えている。
+
+本 ADR における `.txt` の自由なインデント／アウトデント例外（決定3a、T-12）は、Markdown 文書の意味論を撤回するものではない。`.txt` は Markdown 構造文書ではないため、CommonMark の block indentation に由来する no-op ルールや文脈ディスパッチを適用しない。プレーンテキスト文書では、行頭空白の増減は素朴なテキスト編集操作であり、Markdown 構造保護のための制約とは別に扱う。
 
 ---
 
@@ -427,13 +479,15 @@ Markdownでは有効なインデント量が文脈で決まる
 
 - 今後のインデント実装は command-first（コマンド中心）になる。Tab キーはそのコマンドを呼び出す入口の一つである（T-2）。
 - `Mod+]` / `Mod+[`、toolbar、menu、command palette は、`editor.captureTabInEditor` の設定値に関わらず常に有効な、既定状態での正式なキーボード導線である。
+- Markdown 文書では、インデント／アウトデントコマンドは Markdown-aware な文脈ディスパッチに従う。トップレベル段落および未定義文脈は no-op のままとする（T-3）。
+- プレーンテキスト文書（`.txt`）では、Markdown 文脈ディスパッチおよびトップレベル段落 no-op ルールを適用しない。`.txt` のインデント／アウトデントは、現在行または選択行の行頭空白を増減する plain text editing command として実装する（T-12）。
 - `editor.captureTabInEditor` の実装は、Tab capture 単体では完結しない。Escape → Tab の脱出ハッチ、Ctrl+M の一時トグル、両者の相互作用（決定12）、アクセシビリティ告知を必ずセットで実装する（T-9）。
 - `.txt` の read-only 表示には、read-only document state の共通基盤が必要になる。この基盤は `.txt` 専用に閉じず、将来の画像・PDF・エクスポート HTML 等の非編集対象にも再利用できる形で設計する。read-only editor の実装は `EditorState.readOnly.of(true)` を用い、`EditorView.editable.of(false)` を使わない（T-8）。
 - read-only UI は lock アイコンだけでなく、accessible name / title への「読み取り専用」明示を含める。
 - `.txt` の export / import は、`.md` → `.txt` 変換時の U+3000 付与オプションと、`.txt` → `.md` の明示的インポート（元 `.txt` の削除・移動・改変を伴わない、T-11）に従う。
 - read-only 派生表現から元ソースを開く導線は、明示的な source mapping がある場合に限る。ファイル名・置き場所・近傍ファイルからの推測によるソース解決は行わない。
 - editor accessibility（ARIA landmarks、focus ring、reading order、accessible names、read-only announcement）は、継続的なテーマとして今後の Issue で扱われ続ける。
-- 本 ADR により、後続のインデント、Tab capture、read-only、`.txt` import/export、editor accessibility の実装は、本 ADR の決定と不変条件（T-1〜T-11）に従う。
+- 本 ADR により、後続のインデント、Tab capture、read-only、`.txt` import/export、editor accessibility の実装は、本 ADR の決定と不変条件（T-1〜T-12）に従う。
 
 ---
 
@@ -448,6 +502,8 @@ ADR-0003: UI Interaction Architecture
   I-15（同一の操作について同一の Command を実行する）に従い、
   Mod+] / Mod+[ と editor.captureTabInEditor=true 時の Tab / Shift+Tab は
   同一のインデント／アウトデントコマンドを呼ぶ（決定3、T-2）。
+  プレーンテキスト文書（.txt）でも、各 UI 導線は同一の plain text indent / outdent
+  command を呼ぶ（決定3a、T-12）。
 
 ADR-0004: 本文非破壊原則と日本語テキスト処理方針
   .md ソースへ段落頭の U+3000 を自動挿入しないという方針（決定7、T-6）は、

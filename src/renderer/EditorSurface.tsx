@@ -26,6 +26,7 @@ import {
   type NewFileLineEnding,
   type PreviewRendererId,
   type SelectionHighlightMode,
+  type TextFilesIndentUnit,
   type WorkbenchSoundSettings
 } from "../shared/settings";
 import type { Translate } from "../shared/i18n";
@@ -521,6 +522,8 @@ interface EditorSurfaceProps {
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   captureTabInEditor?: boolean;
   fencedCodeIndentUnit?: FencedCodeIndentUnit;
+  /** #546 follow-up: `textFiles.indentUnit` for plain text (`.txt`) indent/outdent. */
+  textFileIndentUnit?: TextFilesIndentUnit;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
   /** Existing workbench.normalizeUnicodeToNfc setting for active text Find. */
@@ -676,6 +679,7 @@ export function EditorSurface({
   whitespaceSettings,
   captureTabInEditor,
   fencedCodeIndentUnit,
+  textFileIndentUnit,
   glossaryNearbySearchSettings,
   normalizeUnicodeToNfcMatching,
   projectRootPath,
@@ -745,6 +749,7 @@ export function EditorSurface({
           whitespaceSettings={whitespaceSettings}
           captureTabInEditor={captureTabInEditor}
           fencedCodeIndentUnit={fencedCodeIndentUnit}
+          textFileIndentUnit={textFileIndentUnit}
           glossaryNearbySearchSettings={glossaryNearbySearchSettings}
           normalizeUnicodeToNfcMatching={normalizeUnicodeToNfcMatching}
           projectRootPath={projectRootPath}
@@ -827,6 +832,8 @@ interface MarkdownEditorSurfaceProps {
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   captureTabInEditor?: boolean;
   fencedCodeIndentUnit?: FencedCodeIndentUnit;
+  /** #546 follow-up: `textFiles.indentUnit` for plain text (`.txt`) indent/outdent. */
+  textFileIndentUnit?: TextFilesIndentUnit;
   /** #424 Slice 7: glossary "nearby" relation search range (effective). */
   glossaryNearbySearchSettings: ActiveGlossaryNearbySettings;
   /** Existing workbench.normalizeUnicodeToNfc setting for active text Find. */
@@ -946,6 +953,7 @@ function MarkdownEditorSurface({
   whitespaceSettings,
   captureTabInEditor,
   fencedCodeIndentUnit,
+  textFileIndentUnit,
   glossaryNearbySearchSettings,
   normalizeUnicodeToNfcMatching,
   projectRootPath,
@@ -3307,6 +3315,8 @@ function MarkdownEditorSurface({
           whitespaceSettings={whitespaceSettings}
           captureTabInEditor={captureTabInEditor}
           fencedCodeIndentUnit={fencedCodeIndentUnit}
+          isMarkdownDocument={isMarkdown}
+          textFileIndentUnit={textFileIndentUnit}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}
           contextSurface="markdownEditor"

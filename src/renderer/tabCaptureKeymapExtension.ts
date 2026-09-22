@@ -1,6 +1,10 @@
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentCommand, outdentCommand } from "./indentCommands";
+import {
+  documentIsMarkdownFacet,
+  plainTextTabCommand
+} from "./plainTextIndentCommands";
 import { tryNavigateTableCell } from "./markdownTableNavigation";
 
 /**
@@ -72,7 +76,14 @@ export function createTabCaptureKeymapExtension(
           if (event.shiftKey) {
             return outdentCommand(view);
           }
-          return indentCommand(view);
+          // #546 follow-up: Tab (not Shift+Tab, not Mod+]/Mod+[, not the
+          // toolbar) is text-entry-like for a plain text document — see
+          // plainTextIndentCommands.ts's plainTextTabCommand doc comment.
+          // Markdown documents keep the unchanged, always-line-based
+          // indentCommand.
+          return view.state.facet(documentIsMarkdownFacet)
+            ? indentCommand(view)
+            : plainTextTabCommand(view);
         }
 
         return false;

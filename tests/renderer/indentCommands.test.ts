@@ -13,6 +13,7 @@ import {
 } from "../../src/renderer/indentCommands";
 import { classifyLine } from "../../src/renderer/indentLineContext";
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
+import { documentIsMarkdownFacet } from "../../src/renderer/plainTextIndentCommands";
 import type { FencedCodeIndentUnit } from "../../src/shared/settings";
 
 function stateFor(
@@ -986,5 +987,76 @@ describe("fencedCodeIndentUnit live setting integration (#474 blocker remediatio
     const plan = planIndentTransaction(state, "indent");
     expect(plan.result).toEqual({ kind: "applied", changedLineCount: 1 });
     expect(plan.changes).toEqual([{ from: 6, insert: "  " }]);
+  });
+});
+
+describe("indentCommand / outdentCommand routing by documentIsMarkdownFacet (#546)", () => {
+  it("documentIsMarkdownFacet defaults to true: a top-level paragraph stays a Markdown-aware no-op", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "Hello world",
+        selection: EditorSelection.single(3)
+      })
+    });
+    try {
+      expect(indentCommand(view)).toBe(true);
+      expect(view.state.doc.toString()).toBe("Hello world");
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("documentIsMarkdownFacet=false: indentCommand delegates to plain text indent, NOT the Markdown top-level-paragraph no-op", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "Hello world",
+        selection: EditorSelection.single(3),
+        extensions: [documentIsMarkdownFacet.of(false)]
+      })
+    });
+    try {
+      expect(indentCommand(view)).toBe(true);
+      // textFileIndentUnitFacet defaults to "tab" (textFiles.indentUnit's
+      // catalog default), same default as documentIsMarkdownFacet unset.
+      expect(view.state.doc.toString()).toBe("\tHello world");
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("documentIsMarkdownFacet=false: outdentCommand delegates to plain text outdent", () => {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "  Hello world",
+        selection: EditorSelection.single(5),
+        extensions: [documentIsMarkdownFacet.of(false)]
+      })
+    });
+    try {
+      expect(outdentCommand(view)).toBe(true);
+      expect(view.state.doc.toString()).toBe("Hello world");
+    } finally {
+      view.destroy();
+    }
+  });
+
+  it("documentIsMarkdownFacet=false does not affect a genuinely Markdown structure (list item) already tested elsewhere: Mod+] via the base setup still no-ops the outermost list item's outdent", () => {
+    // documentIsMarkdownFacet only changes whether Markdown CONTEXT DISPATCH
+    // runs at all - it never re-enables ADR-0014 決定6 for a Markdown
+    // document. This test documents that the facet's markdown=true default
+    // (used everywhere the facet is unset, including every existing Markdown
+    // editor) is unaffected by #546's addition.
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "- item",
+        selection: EditorSelection.single(2)
+      })
+    });
+    try {
+      expect(outdentCommand(view)).toBe(true);
+      expect(view.state.doc.toString()).toBe("- item");
+    } finally {
+      view.destroy();
+    }
   });
 });

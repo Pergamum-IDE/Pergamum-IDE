@@ -1019,6 +1019,20 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  // #546 follow-up: applicationOnly (not project-overridable) — plain text
+  // indent unit is an editor-feel preference, not a project structure
+  // setting. Default "tab": .txt is not a Markdown structure document, so a
+  // real tab character is the most natural default (see ADR-0014 決定3a).
+  "textFiles.indentUnit": defineEnumSetting({
+    key: "textFiles.indentUnit",
+    scope: "applicationOnly",
+    enumValues: ["tab", "twoSpaces", "fourSpaces"],
+    defaultValue: "tab",
+    labelKey: "settings.textFiles.indentUnit.label",
+    descriptionKey: "settings.textFiles.indentUnit.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "preview.renderer": defineEnumSetting({
     key: "preview.renderer",
     scope: "applicationWithProjectOverride",

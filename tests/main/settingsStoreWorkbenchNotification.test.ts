@@ -149,7 +149,12 @@ function saveRequest(
       }
     },
     markdownFiles: { lineEnding: "lf", encoding: "utf8" },
-    textFiles: { enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8" },
+    textFiles: {
+      enablePlainTextDocuments: false,
+      lineEnding: "lf",
+      encoding: "utf8",
+      indentUnit: "tab"
+    },
     imageAttachment: { saveDirectory: "" },
     documentMap: {
       narrationColor: "#000000",
