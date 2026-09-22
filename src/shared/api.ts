@@ -35,6 +35,14 @@ import type {
   SaveImageAttachmentResult
 } from "./imageAttachmentSaveResult";
 import type {
+  CopyImageInsertionFilesRequest,
+  CopyImageInsertionFilesResult,
+  EnsureImageInsertionFolderResult,
+  PickImageInsertionFilesResult,
+  PlanImageInsertionCopyRequest,
+  PlanImageInsertionCopyResult
+} from "./imageInsertion";
+import type {
   MarkdownImageLinkDiagnosticsRequest,
   MarkdownImageLinkDiagnosticsResult
 } from "./markdownImageLinkDiagnostics";
@@ -149,6 +157,18 @@ export type {
   SaveImageAttachmentStorageFailureReason,
   SaveImageAttachmentStorageResult
 } from "./imageAttachmentSaveResult";
+export type {
+  CopyImageInsertionFailureReason,
+  CopyImageInsertionFilesRequest,
+  CopyImageInsertionFilesResult,
+  EnsureImageInsertionFolderResult,
+  ImageInsertionCopyPlanEntry,
+  ImageInsertionPlanRejection,
+  ImageInsertionPlanRejectionReason,
+  PickImageInsertionFilesResult,
+  PlanImageInsertionCopyRequest,
+  PlanImageInsertionCopyResult
+} from "./imageInsertion";
 export type {
   MarkdownImageLinkDiagnostic,
   MarkdownImageLinkDiagnosticReason,
@@ -342,6 +362,13 @@ export const SETTINGS_CHANNELS = {
 
 export const IMAGE_ATTACHMENT_CHANNELS = {
   save: "imageAttachment:save"
+} as const;
+
+export const IMAGE_INSERTION_CHANNELS = {
+  pickFiles: "imageInsertion:pickFiles",
+  ensureFolder: "imageInsertion:ensureFolder",
+  planCopy: "imageInsertion:planCopy",
+  copyFiles: "imageInsertion:copyFiles"
 } as const;
 
 export const MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS = {
@@ -1542,6 +1569,18 @@ export interface PergamumApi {
     save: (
       payload: SaveImageAttachmentPayload
     ) => Promise<SaveImageAttachmentResult>;
+  };
+  imageInsertion: {
+    pickFiles: () => Promise<PickImageInsertionFilesResult>;
+    ensureFolder: (
+      saveDirectory: string
+    ) => Promise<EnsureImageInsertionFolderResult>;
+    planCopy: (
+      request: PlanImageInsertionCopyRequest
+    ) => Promise<PlanImageInsertionCopyResult>;
+    copyFiles: (
+      request: CopyImageInsertionFilesRequest
+    ) => Promise<CopyImageInsertionFilesResult>;
   };
   markdownImageLinkDiagnostics: {
     validate: (

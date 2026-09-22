@@ -384,6 +384,19 @@ describe("application menu", () => {
     }
   });
 
+  it("binds Toggle Developer Tools to CommandOrControl+Shift+D, not the Electron role default (#535 follow-up)", () => {
+    const viewItems = viewMenuItems("win32");
+    const item = viewItems.find(
+      (candidate) => candidate.label === "Toggle Developer Tools"
+    );
+
+    expect(item).toBeTruthy();
+    expect(item?.role).toBe("toggleDevTools");
+    expect(item?.accelerator).toBe("CommandOrControl+Shift+D");
+    // Ctrl+Shift+I is reserved for the renderer's Insert Image shortcut.
+    expect(item?.accelerator).not.toBe("CommandOrControl+Shift+I");
+  });
+
   it("adds a Command Palette item to the View menu with a CommandOrControl+Shift+P accelerator", () => {
     const viewItems = viewMenuItems("win32");
     const item = viewItems.find(

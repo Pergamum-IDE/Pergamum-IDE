@@ -649,7 +649,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     const rows = container.querySelectorAll(".settingsItemRow");
     // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row; #501 adds textFiles.lineEnding.
-    expect(rows).toHaveLength(23);
+    expect(rows).toHaveLength(22);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -927,7 +927,7 @@ describe("ProjectSettingsPanel integration and differential behaviors (#396 Slic
 
     const rows = container.querySelectorAll(".settingsItemRow");
     // #407: +2 for imageAttachment.*; #424 Slice 7: +3 for search.nearby.*; #484: +3 for editor.emphasisMark.*; #486: +1 for editor.ruby.rule; #490: +3 for font family list settings; #497 omits the legacy editor.fontFamily UI row; #501 adds textFiles.lineEnding.
-    expect(rows).toHaveLength(23);
+    expect(rows).toHaveLength(22);
 
     // Both should have modified badges
     const editorRow = Array.from(rows).find(
@@ -1260,7 +1260,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
           "search.nearby.characterDistance",
           "search.nearby.paragraphDistance",
           "imageAttachment.saveDirectory",
-          "imageAttachment.insertMarkdownLink",
           "preview.renderer",
           "preview.fontFamilyList",
           "documentMap.dialogueDelimiterPairs",
@@ -1469,7 +1468,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "search.nearby.characterDistance",
         "search.nearby.paragraphDistance",
         "imageAttachment.saveDirectory",
-        "imageAttachment.insertMarkdownLink",
         "preview.renderer",
         "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
@@ -1626,10 +1624,7 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
       itemKeys = Array.from(
         container.querySelectorAll(".settingsItemKey")
       ).map((k) => k.textContent);
-      expect(itemKeys).toEqual([
-        "imageAttachment.saveDirectory",
-        "imageAttachment.insertMarkdownLink"
-      ]);
+      expect(itemKeys).toEqual(["imageAttachment.saveDirectory"]);
 
       // Click "プレビュー"
       act(() => {
@@ -1712,7 +1707,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "search.nearby.characterDistance",
         "search.nearby.paragraphDistance",
         "imageAttachment.saveDirectory",
-        "imageAttachment.insertMarkdownLink",
         "preview.renderer",
         "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
@@ -1804,7 +1798,6 @@ describe("ProjectSettingsPanel Slice 6 - Search and Category Filtering (#396)", 
         "search.nearby.characterDistance",
         "search.nearby.paragraphDistance",
         "imageAttachment.saveDirectory",
-        "imageAttachment.insertMarkdownLink",
         "preview.renderer",
         "preview.fontFamilyList",
         "documentMap.dialogueDelimiterPairs",
@@ -3662,8 +3655,7 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
           projectSettings={undefined}
           applicationSettings={{
             imageAttachment: {
-              saveDirectory: "images",
-              insertMarkdownLink: true
+              saveDirectory: "images"
             }
           }}
           isReadOnly={false}
@@ -3713,72 +3705,6 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
     expect(container.querySelector(".saveDestinationDialog")).toBeNull();
   });
 
-  it("saves only insertMarkdownLink when the dialog path is unchanged", async () => {
-    const onSaveSettings = vi.fn(async () => undefined);
-
-    act(() => {
-      root.render(
-        <ProjectSettingsPanel
-          translate={translateJa}
-          projectSettings={{
-            imageAttachment: {
-              saveDirectory: "custom-dir"
-            }
-          }}
-          applicationSettings={{
-            imageAttachment: {
-              saveDirectory: "images",
-              insertMarkdownLink: true
-            }
-          }}
-          isReadOnly={false}
-          onSaveSettings={onSaveSettings}
-        />
-      );
-    });
-
-    const editButton = container.querySelector<HTMLButtonElement>(
-      "#projectSettingControl-imageAttachment\\.saveDirectory"
-    );
-    expect(editButton).not.toBeNull();
-
-    act(() => {
-      editButton!.click();
-    });
-
-    const input = container.querySelector<HTMLInputElement>(
-      ".saveDestinationDialogInput"
-    );
-    expect(input).not.toBeNull();
-    expect(input!.value).toBe("custom-dir");
-
-    const checkbox = container.querySelector<HTMLInputElement>(
-      ".saveDestinationDialogCheckbox"
-    );
-    expect(checkbox).not.toBeNull();
-    expect(checkbox!.checked).toBe(true);
-
-    act(() => {
-      checkbox!.click();
-    });
-
-    const confirmButton = container.querySelector<HTMLButtonElement>(
-      ".saveDestinationDialog .appDialogButton-confirm"
-    );
-    expect(confirmButton).not.toBeNull();
-
-    await act(async () => {
-      confirmButton!.click();
-    });
-
-    expect(onSaveSettings).toHaveBeenCalledTimes(1);
-    expect(onSaveSettings).toHaveBeenCalledWith({
-      set: {
-        "imageAttachment.insertMarkdownLink": false
-      }
-    });
-  });
-
   it("saves remove request when editing path back to match inherited applicationSettings", async () => {
     const onSaveSettings = vi.fn(async () => undefined);
 
@@ -3793,8 +3719,7 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
           }}
           applicationSettings={{
             imageAttachment: {
-              saveDirectory: "images",
-              insertMarkdownLink: true
+              saveDirectory: "images"
             }
           }}
           isReadOnly={false}
@@ -3843,8 +3768,7 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
           projectSettings={undefined}
           applicationSettings={{
             imageAttachment: {
-              saveDirectory: "images",
-              insertMarkdownLink: true
+              saveDirectory: "images"
             }
           }}
           isReadOnly={false}
@@ -3897,8 +3821,7 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
           projectSettings={undefined}
           applicationSettings={{
             imageAttachment: {
-              saveDirectory: "images",
-              insertMarkdownLink: true
+              saveDirectory: "images"
             }
           }}
           isReadOnly={false}
@@ -3948,8 +3871,7 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
           }}
           applicationSettings={{
             imageAttachment: {
-              saveDirectory: "images",
-              insertMarkdownLink: true
+              saveDirectory: "images"
             }
           }}
           isReadOnly={false}
@@ -3997,8 +3919,7 @@ describe("ProjectSettingsPanel image attachment save destination workflow (#407 
           }}
           applicationSettings={{
             imageAttachment: {
-              saveDirectory: "",
-              insertMarkdownLink: true
+              saveDirectory: ""
             }
           }}
           isReadOnly={false}

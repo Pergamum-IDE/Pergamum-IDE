@@ -232,8 +232,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
           {
             name: "Image Attachment Test",
             settings: {
-              "imageAttachment.saveDirectory": "assets/pasted",
-              "imageAttachment.insertMarkdownLink": false
+              "imageAttachment.saveDirectory": "assets/pasted"
             }
           },
           null,
@@ -244,8 +243,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
 
       const loaded = await loadProjectConfig(workDir);
       expect(loaded?.config.settings?.imageAttachment).toEqual({
-        saveDirectory: "assets/pasted",
-        insertMarkdownLink: false
+        saveDirectory: "assets/pasted"
       });
     });
 
@@ -256,8 +254,7 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
         JSON.stringify(
           {
             settings: {
-              "imageAttachment.saveDirectory": 123,
-              "imageAttachment.insertMarkdownLink": true
+              "imageAttachment.saveDirectory": 123
             }
           },
           null,
@@ -270,9 +267,6 @@ describe("Project Settings persistence foundation (#396 Slice 2)", () => {
       expect(
         loaded?.config.settings?.imageAttachment?.saveDirectory
       ).toBeUndefined();
-      expect(
-        loaded?.config.settings?.imageAttachment?.insertMarkdownLink
-      ).toBe(true);
     });
 
     it("ignores invalid documentMap.dialogueDelimiterPairs (ADR-0006 S-23) without failing project load", async () => {

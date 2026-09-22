@@ -201,10 +201,7 @@ function validSaveRequest(
       encoding: "utf8"
     },
     imageAttachment: {
-      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory"),
-      insertMarkdownLink: getCatalogDefaultValue(
-        "imageAttachment.insertMarkdownLink"
-      )
+      saveDirectory: getCatalogDefaultValue("imageAttachment.saveDirectory")
     },
     documentMap: defaultDocumentMapSettings(),
     ...overrides
@@ -817,8 +814,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     await saveApplicationSettings(
       validSaveRequest({
         imageAttachment: {
-          saveDirectory: "assets/pasted",
-          insertMarkdownLink: false
+          saveDirectory: "assets/pasted"
         }
       })
     );
@@ -829,15 +825,13 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     ];
     const written = JSON.parse(writtenContent);
     expect(written.imageAttachment).toEqual({
-      saveDirectory: "assets/pasted",
-      insertMarkdownLink: false
+      saveDirectory: "assets/pasted"
     });
 
     fsMock.readFile.mockResolvedValue(writtenContent);
     const reloaded = await loadSettings();
     expect(reloaded.imageAttachment).toEqual({
-      saveDirectory: "assets/pasted",
-      insertMarkdownLink: false
+      saveDirectory: "assets/pasted"
     });
   });
 
@@ -847,8 +841,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     const settings = await loadSettings();
 
     expect(settings.imageAttachment).toEqual({
-      saveDirectory: "",
-      insertMarkdownLink: true
+      saveDirectory: ""
     });
   });
 

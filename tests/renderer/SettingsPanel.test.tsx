@@ -2040,14 +2040,13 @@ describe("SettingsPanel image attachment save destination workflow (#407 B2 reme
     vi.restoreAllMocks();
   });
 
-  it("opens SaveDestinationDialog, edits path and checkbox, and saves without recentProjects (P0-1)", () => {
+  it("opens SaveDestinationDialog, edits path, and saves without recentProjects (P0-1)", () => {
     const onChangeSettings = vi.fn();
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       recentProjects: [{ path: "/foo/bar", lastOpened: 12345 }] as any,
       imageAttachment: {
-        saveDirectory: "",
-        insertMarkdownLink: true
+        saveDirectory: ""
       }
     };
 
@@ -2088,12 +2087,10 @@ describe("SettingsPanel image attachment save destination workflow (#407 B2 reme
     expect(dialog).not.toBeNull();
 
     const input = container.querySelector<HTMLInputElement>(".saveDestinationDialogInput")!;
-    const checkbox = container.querySelector<HTMLInputElement>(".saveDestinationDialogCheckbox")!;
     const saveButton = container.querySelector<HTMLButtonElement>(".saveDestinationDialogSaveButton")!;
 
     act(() => {
       changeInputValue(input, "assets/images");
-      checkbox.click();
     });
 
     act(() => {
@@ -2109,8 +2106,7 @@ describe("SettingsPanel image attachment save destination workflow (#407 B2 reme
 
     // Values must be updated
     expect(passedPayload.imageAttachment).toEqual({
-      saveDirectory: "assets/images",
-      insertMarkdownLink: false
+      saveDirectory: "assets/images"
     });
 
     // Valid SaveApplicationSettingsRequest shape
@@ -2126,8 +2122,7 @@ describe("SettingsPanel image attachment save destination workflow (#407 B2 reme
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       imageAttachment: {
-        saveDirectory: "assets/images",
-        insertMarkdownLink: true
+        saveDirectory: "assets/images"
       }
     };
 
@@ -2178,7 +2173,6 @@ describe("SettingsPanel image attachment save destination workflow (#407 B2 reme
     expect(onChangeSettings).toHaveBeenCalledTimes(1);
     const passedPayload = onChangeSettings.mock.calls[0][0];
     expect(passedPayload.imageAttachment.saveDirectory).toBe("");
-    expect(passedPayload.imageAttachment.insertMarkdownLink).toBe(true);
     expect("recentProjects" in passedPayload).toBe(false);
   });
 
@@ -2187,8 +2181,7 @@ describe("SettingsPanel image attachment save destination workflow (#407 B2 reme
     const settings: ApplicationSettings = {
       ...defaultApplicationSettings,
       imageAttachment: {
-        saveDirectory: "assets/images",
-        insertMarkdownLink: true
+        saveDirectory: "assets/images"
       }
     };
 

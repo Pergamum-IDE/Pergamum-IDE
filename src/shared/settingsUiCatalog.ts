@@ -690,15 +690,6 @@ export const settingCatalogItems = defineSettingCatalog([
     defaultValue: getCatalogDefaultValue("imageAttachment.saveDirectory")
   },
   {
-    key: "imageAttachment.insertMarkdownLink",
-    category: "imageAttachment",
-    order: 200,
-    labelKey: "settings.imageAttachment.insertMarkdownLink.label",
-    descriptionKey: "settings.imageAttachment.insertMarkdownLink.description",
-    control: { kind: "switch" },
-    defaultValue: getCatalogDefaultValue("imageAttachment.insertMarkdownLink")
-  },
-  {
     key: "editor.lineEnding.expected",
     category: "editor",
     order: 200,

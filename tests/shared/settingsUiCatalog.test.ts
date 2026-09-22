@@ -214,7 +214,6 @@ describe("Settings UI Catalog Schema (#226)", () => {
           "textFiles.encoding",
           "textFiles.lineEnding",
           "imageAttachment.saveDirectory",
-          "imageAttachment.insertMarkdownLink",
           "preview.renderer",
           "preview.fontFamilyList",
           "preview.doubleClickJumpToEditor",
@@ -442,13 +441,6 @@ describe("Settings UI Catalog Schema (#226)", () => {
           defaultValue: ""
         }
       );
-      expect(
-        getSettingCatalogItem("imageAttachment.insertMarkdownLink")
-      ).toMatchObject({
-        category: "imageAttachment",
-        control: { kind: "switch" },
-        defaultValue: true
-      });
     });
 
     it("places the four #256 whitespace switches in the editor category, independently and before character count settings", () => {

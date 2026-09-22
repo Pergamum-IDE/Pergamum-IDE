@@ -161,8 +161,8 @@ function saveRequest(
     textFiles: {
       enablePlainTextDocuments: false, lineEnding: "lf", encoding: "utf8"
     },
-    imageAttachment: { saveDirectory: "", insertMarkdownLink: true }
-  } as SaveApplicationSettingsRequest;
+    imageAttachment: { saveDirectory: "" }
+  } as unknown as SaveApplicationSettingsRequest;
 }
 
 describe("settingsStore workbench.language / workbench.statusBar.visible read path (#174)", () => {

@@ -53,11 +53,17 @@ function roleItem(
   role: MenuRole,
   language: Language,
   key: TranslationKey,
-  values?: Record<string, string | number>
+  values?: Record<string, string | number>,
+  accelerator?: string
 ): MenuItemConstructorOptions {
   return {
     role,
-    label: label(language, key, values)
+    label: label(language, key, values),
+    // Electron assigns each role a built-in default accelerator when this
+    // is omitted. Pass one explicitly to override it (e.g. #535 follow-up:
+    // `toggleDevTools`'s own default, CmdOrCtrl+Shift+I on Windows/Linux,
+    // collides with the Insert Image toolbar shortcut).
+    ...(accelerator ? { accelerator } : {})
   };
 }
 
@@ -318,7 +324,13 @@ function viewMenu(
       { type: "separator" },
       roleItem("reload", language, "menu.reload"),
       roleItem("forceReload", language, "menu.forceReload"),
-      roleItem("toggleDevTools", language, "menu.toggleDevTools"),
+      roleItem(
+        "toggleDevTools",
+        language,
+        "menu.toggleDevTools",
+        undefined,
+        "CommandOrControl+Shift+D"
+      ),
       { type: "separator" },
       roleItem("resetZoom", language, "menu.actualSize"),
       roleItem("zoomIn", language, "menu.zoomIn"),

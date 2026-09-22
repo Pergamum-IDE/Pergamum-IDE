@@ -10,6 +10,7 @@ import {
   FONT_CACHE_CHANNELS,
   GLOSSARY_CHANNELS,
   IMAGE_ATTACHMENT_CHANNELS,
+  IMAGE_INSERTION_CHANNELS,
   MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS,
   LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
@@ -410,6 +411,15 @@ const pergamumApi: PergamumApi = {
   imageAttachment: {
     save: (payload) =>
       ipcRenderer.invoke(IMAGE_ATTACHMENT_CHANNELS.save, payload)
+  },
+  imageInsertion: {
+    pickFiles: () => ipcRenderer.invoke(IMAGE_INSERTION_CHANNELS.pickFiles),
+    ensureFolder: (saveDirectory) =>
+      ipcRenderer.invoke(IMAGE_INSERTION_CHANNELS.ensureFolder, saveDirectory),
+    planCopy: (request) =>
+      ipcRenderer.invoke(IMAGE_INSERTION_CHANNELS.planCopy, request),
+    copyFiles: (request) =>
+      ipcRenderer.invoke(IMAGE_INSERTION_CHANNELS.copyFiles, request)
   },
   markdownImageLinkDiagnostics: {
     validate: (request) =>

@@ -269,20 +269,6 @@ function parseProjectSettings(value: unknown): ProjectSettings | undefined {
     }
   }
 
-  const rawInsertMarkdownLink = value["imageAttachment.insertMarkdownLink"];
-  if (rawInsertMarkdownLink !== undefined) {
-    const validation = validateCatalogValue(
-      "imageAttachment.insertMarkdownLink",
-      rawInsertMarkdownLink
-    );
-    if (validation.ok && typeof rawInsertMarkdownLink === "boolean") {
-      imageAttachment = {
-        ...(imageAttachment ?? {}),
-        insertMarkdownLink: rawInsertMarkdownLink
-      };
-    }
-  }
-
   // #424 Slice 7: sparse glossary nearby-search overrides — each key accepted
   // independently; a rejected value is omitted so resolveEffectiveSettings
   // falls through to Application / Built-in.

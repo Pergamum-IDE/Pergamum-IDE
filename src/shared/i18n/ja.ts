@@ -11,6 +11,7 @@ export const jaTranslations = {
   "app.ready": "準備完了",
   "common.cancel": "キャンセル",
   "common.close": "閉じる",
+  "common.confirm": "決定",
   "common.edit": "編集",
   "common.numberFormatLocale": "ja-JP",
   "common.ok": "OK",
@@ -274,6 +275,8 @@ export const jaTranslations = {
   "dialog.imageAttachment.failed.collisionExhausted": "同名の画像ファイルが多数存在するため、保存できませんでした。",
   "dialog.imageAttachment.failed.writeFailure": "画像の保存に失敗しました。",
   "dialog.imageAttachment.failed.projectNotOpen": "プロジェクト内のMarkdown文書でのみ画像添付できます。",
+  "dialog.imageAttachment.failed.sourceUnreadable": "選択した画像ファイルを読み込めませんでした。",
+  "dialog.imageAttachment.failed.overwriteNotAllowed": "保存先に同名のファイルが存在するため、挿入を中止しました。",
   "markdownImageLinkDiagnostics.missing": "画像リンクが見つかりません: {src}",
   "markdownImageLinkDiagnostics.directory": "画像リンクがフォルダを指しています: {src}",
   "markdownImageLinkDiagnostics.outsideProject": "画像リンクがプロジェクト外を指しています: {src}",
@@ -1176,6 +1179,13 @@ export const jaTranslations = {
   "documentMap.page.currentOfTotal": "ページ {current} / {total}",
   "documentMap.page.option": "ページ {page}",
   "documentMap.rendering": "描画中…",
+  "imageInsertion.overwriteDialog.title": "画像ファイルを上書きしますか？",
+  "imageInsertion.overwriteDialog.message":
+    "以下のファイルは既に存在します。続行すると上書きされます。",
+  "imageInsertion.overwriteDialog.confirm": "上書きして続行",
+  "imageInsertion.toast.inserted": "画像を挿入しました。",
+  "imageInsertion.toast.noSupportedImages": "挿入できる画像ファイルがありませんでした。",
+  "imageInsertion.toast.targetChanged": "編集対象が変更されたため画像を挿入できませんでした。",
   "language.en": "英語",
   "language.ja": "日本語",
   "link.dialog.title": "リンクを挿入",
@@ -1357,8 +1367,6 @@ export const jaTranslations = {
     "添付画像のリンクを挿入しました。",
   "notification.imageAttachment.linkInsertedInDocument":
     "「{name}」に添付画像のリンクを挿入しました。",
-  "notification.imageAttachment.savedOnly":
-    "添付画像を保存しました: {path}",
   "notification.imageAttachment.multipleImages":
     "複数の画像が含まれていたため、先頭の1枚だけを添付しました。",
   "notification.imageAttachment.targetChanged":
@@ -1460,8 +1468,6 @@ export const jaTranslations = {
   "settings.imageAttachment.saveDirectory.validation.invalidCharacter": "パスに使用できない文字が含まれています。",
   "settings.imageAttachment.saveDirectory.validation.reservedName": "システム予約名は使用できません。",
   "settings.imageAttachment.saveDirectory.validation.trailingDotOrSpace": "末尾にピリオドや空白を含む名前は使用できません。",
-  "settings.imageAttachment.insertMarkdownLink.label": "Markdownリンクを挿入する",
-  "settings.imageAttachment.insertMarkdownLink.description": "オンの場合、画像を保存したあと貼り付け位置にMarkdownの画像リンクを挿入します。オフの場合は保存のみ行い、本文は変更しません。",
   "settings.editor.lineEnding.expected.description": "改行の診断表示・マーカー表示で比較対象とする改行コードです。新規改行の種類の決定や保存時の変換には使用しません。",
   "settings.editor.lineEnding.expected.label": "想定する改行コード",
   "settings.editor.lineEnding.expected.option.cr.label": "CR",
@@ -1755,6 +1761,7 @@ export const jaTranslations = {
   "toolbar.horizontalRule": "水平線",
   "toolbar.indent": "インデント",
   "toolbar.insertHeading": "見出しを挿入",
+  "toolbar.insertImage": "画像を挿入",
   "toolbar.insertLink": "リンクを挿入",
   "toolbar.insertTable": "表を挿入",
   "toolbar.italic": "斜体",

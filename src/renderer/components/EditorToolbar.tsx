@@ -11,6 +11,7 @@ import strikeIconRaw from "../../../assets/icons/pergamum/toolbar/strike.svg?raw
 import linkIconRaw from "../../../assets/icons/codicons/toolbar/link.svg?raw";
 import horizontalRuleIconRaw from "../../../assets/icons/codicons/toolbar/horizontal-rule.svg?raw";
 import codeBlockIconRaw from "../../../assets/icons/codicons/toolbar/code.svg?raw";
+import imageIconRaw from "../../../assets/icons/feather/toolbar/image.svg?raw";
 import tableIconRaw from "../../../assets/icons/codicons/toolbar/table.svg?raw";
 import rubyIconRaw from "../../../assets/icons/pergamum/toolbar/ruby.svg?raw";
 import emphasisIconRaw from "../../../assets/icons/pergamum/toolbar/emphasis.svg?raw";
@@ -38,6 +39,11 @@ export interface EditorToolbarProps {
   onOpenLinkDialog: (opener: Element) => void;
   onInsertHorizontalRule: () => void;
   onInsertCodeBlock: () => void;
+  /** #535: narrower than `canUseMarkdownToolbarCommands` — image insertion
+   *  additionally requires the active document to be project-owned, since
+   *  the inserted link's relative path only makes sense for one. */
+  canInsertImage: boolean;
+  onOpenImageInsertion: (opener: Element) => void;
   onInsertTable: (columns: number, rows: number) => void;
   /** #531: shared enable gate for Ruby / Emphasis Mark — unlike
    *  `canUseMarkdownToolbarCommands`, this stays true on `.txt` documents,
@@ -64,6 +70,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   onOpenLinkDialog,
   onInsertHorizontalRule,
   onInsertCodeBlock,
+  canInsertImage,
+  onOpenImageInsertion,
   onInsertTable,
   hasEditableTextLikeDocument,
   onOpenRubyDialog,
@@ -84,6 +92,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
 
   const handleLinkButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     onOpenLinkDialog(event.currentTarget);
+  };
+
+  const handleImageButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    onOpenImageInsertion(event.currentTarget);
   };
 
   const handleRubyButtonClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -311,6 +323,22 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             <span
               className="editorToolbarButtonIcon"
               dangerouslySetInnerHTML={{ __html: codeBlockIconRaw }}
+            />
+          </button>
+        </div>
+
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canInsertImage}
+            onClick={handleImageButtonClick}
+            aria-label={translate("toolbar.insertImage")}
+            title={translate("toolbar.insertImage")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: imageIconRaw }}
             />
           </button>
         </div>

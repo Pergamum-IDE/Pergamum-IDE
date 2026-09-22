@@ -56,6 +56,8 @@ function defaultProps(
     onOpenLinkDialog: vi.fn(),
     onInsertHorizontalRule: vi.fn(),
     onInsertCodeBlock: vi.fn(),
+    canInsertImage: true,
+    onOpenImageInsertion: vi.fn(),
     onInsertTable: vi.fn(),
     hasEditableTextLikeDocument: true,
     onOpenRubyDialog: vi.fn(),
@@ -92,6 +94,7 @@ const BUTTON_ORDER = [
   "リンクを挿入",
   "水平線",
   "コードブロック",
+  "画像を挿入",
   "表を挿入",
   "ルビ",
   "傍点"
@@ -143,6 +146,7 @@ describe("EditorToolbar", () => {
       link,
       horizontalRule,
       codeBlock,
+      image,
       table,
       ruby,
       emphasis
@@ -157,8 +161,9 @@ describe("EditorToolbar", () => {
     expect(link.disabled).toBe(true);
     expect(horizontalRule.disabled).toBe(true);
     expect(codeBlock.disabled).toBe(true);
-    // Table / Outdent / Indent / Ruby / Emphasis use their own, independent
-    // gates (still passed as true/enabled here).
+    // Image / Table / Outdent / Indent / Ruby / Emphasis use their own,
+    // independent gates (still passed as true/enabled here).
+    expect(image.disabled).toBe(false);
     expect(table.disabled).toBe(false);
     expect(ruby.disabled).toBe(false);
     expect(emphasis.disabled).toBe(false);
@@ -169,8 +174,8 @@ describe("EditorToolbar", () => {
     const buttons = toolbarButtons();
     const outdent = buttons[7];
     const indent = buttons[8];
-    const ruby = buttons[13];
-    const emphasis = buttons[14];
+    const ruby = buttons[14];
+    const emphasis = buttons[15];
     expect(outdent.disabled).toBe(true);
     expect(indent.disabled).toBe(true);
     expect(ruby.disabled).toBe(true);
@@ -178,6 +183,17 @@ describe("EditorToolbar", () => {
     // Markdown-specific commands stay enabled (still passed as true here).
     expect(buttons[0].disabled).toBe(false);
     expect(buttons[4].disabled).toBe(false);
+  });
+
+  it("disables Image when canInsertImage is false, independent of the other gates", () => {
+    renderToolbar({ canInsertImage: false });
+    const buttons = toolbarButtons();
+    const image = buttons[12];
+    expect(image.disabled).toBe(true);
+    // Markdown-specific commands and Table stay enabled (still passed as
+    // true here).
+    expect(buttons[0].disabled).toBe(false);
+    expect(buttons[13].disabled).toBe(false);
   });
 
   it("Bold / Italic / Strikethrough buttons call their handlers when clicked", () => {
@@ -244,10 +260,19 @@ describe("EditorToolbar", () => {
     expect(props.onInsertCodeBlock).toHaveBeenCalledOnce();
   });
 
+  it("Image button calls onOpenImageInsertion with the button element", () => {
+    const props = renderToolbar();
+    const buttons = toolbarButtons();
+    const image = buttons[12];
+
+    act(() => image.click());
+    expect(props.onOpenImageInsertion).toHaveBeenCalledWith(image);
+  });
+
   it("Ruby button calls onOpenRubyDialog with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const ruby = buttons[13];
+    const ruby = buttons[14];
 
     act(() => ruby.click());
     expect(props.onOpenRubyDialog).toHaveBeenCalledWith(ruby);
@@ -256,7 +281,7 @@ describe("EditorToolbar", () => {
   it("Emphasis button calls onOpenEmphasisDialog with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const emphasis = buttons[14];
+    const emphasis = buttons[15];
 
     act(() => emphasis.click());
     expect(props.onOpenEmphasisDialog).toHaveBeenCalledWith(emphasis);
@@ -299,7 +324,7 @@ describe("EditorToolbar", () => {
     renderToolbar({ canInsertTable: false });
 
     const buttons = toolbarButtons();
-    const table = buttons[12];
+    const table = buttons[13];
     expect(table.disabled).toBe(true);
     expect(table.getAttribute("aria-label")).toBe("表を挿入");
     expect(table.getAttribute("title")).toBe("表を挿入");
@@ -311,7 +336,7 @@ describe("EditorToolbar", () => {
     renderToolbar({ canInsertTable: true, onInsertTable });
 
     const buttons = toolbarButtons();
-    const table = buttons[12];
+    const table = buttons[13];
     expect(table.disabled).toBe(false);
 
     // Popover initially not present

@@ -54,6 +54,7 @@ function createConfig(
     requestOpenLinkDialog: vi.fn(),
     insertHorizontalRule: vi.fn(),
     insertCodeBlock: vi.fn(),
+    requestInsertImage: vi.fn(),
     ...overrides
   };
 }
@@ -173,6 +174,24 @@ describe("createMarkdownToolbarShortcutKeymapExtension", () => {
     v.contentDOM.dispatchEvent(event);
     expect(config.applyBold).toHaveBeenCalledOnce();
     expect(config.insertCodeBlock).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+Shift+I calls requestInsertImage", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "i", shiftKey: true });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.requestInsertImage).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Ctrl+I (without Shift) still calls applyItalic, not requestInsertImage", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "i" });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.applyItalic).toHaveBeenCalledOnce();
+    expect(config.requestInsertImage).not.toHaveBeenCalled();
   });
 
   it("Ctrl+K calls requestOpenLinkDialog with the current selection text", () => {
