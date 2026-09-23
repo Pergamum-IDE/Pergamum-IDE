@@ -6,6 +6,10 @@ import importantIcon from "../../../assets/icons/svgrepo/callout/info-message.sv
 import warningIcon from "../../../assets/icons/feather/callout/alert-triangle.svg?raw";
 import cautionIcon from "../../../assets/icons/feather/callout/alert-octagon.svg?raw";
 import { defaultLanguage, t, type TranslationKey } from "../../shared/i18n";
+import {
+  markdownCalloutTypes,
+  type MarkdownCalloutType
+} from "../../shared/markdownCalloutMarkup";
 
 /**
  * #568: GitHub Alert-style callouts (`> [!NOTE]` ...).
@@ -31,15 +35,10 @@ import { defaultLanguage, t, type TranslationKey } from "../../shared/i18n";
  * the icon missing, without color, and in black-and-white print.
  */
 
-export const markdownCalloutTypes = [
-  "note",
-  "tip",
-  "important",
-  "warning",
-  "caution"
-] as const;
-
-export type MarkdownCalloutType = (typeof markdownCalloutTypes)[number];
+// #570: the type vocabulary lives in `src/shared/markdownCalloutMarkup.ts`
+// so the toolbar insertion command shares it; re-exported here for callers
+// of this rendering module.
+export { markdownCalloutTypes, type MarkdownCalloutType };
 
 export type MarkdownCalloutLabels = Readonly<Record<MarkdownCalloutType, string>>;
 
@@ -60,13 +59,21 @@ export const markdownCalloutIconPaths: Readonly<Record<MarkdownCalloutType, stri
   caution: "assets/icons/feather/callout/alert-octagon.svg"
 };
 
+// Trimmed: the asset files may end with a (CR)LF depending on checkout
+// settings, which would otherwise leak a whitespace text node into the
+// inlined markup.
 const calloutIconSvgs: Readonly<Record<MarkdownCalloutType, string>> = {
-  note: noteIcon,
-  tip: tipIcon,
-  important: importantIcon,
-  warning: warningIcon,
-  caution: cautionIcon
+  note: noteIcon.trim(),
+  tip: tipIcon.trim(),
+  important: importantIcon.trim(),
+  warning: warningIcon.trim(),
+  caution: cautionIcon.trim()
 };
+
+/** #570: the bundled SVG markup for a type (also used by the toolbar). */
+export function markdownCalloutIconSvg(type: MarkdownCalloutType): string {
+  return calloutIconSvgs[type];
+}
 
 export function markdownCalloutLabelsFor(
   translate: (key: TranslationKey) => string

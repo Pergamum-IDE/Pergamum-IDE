@@ -1,6 +1,13 @@
 :root {
   color: #1f2933;
   background: #f7f8fa;
+  /* #568 / #570: per-type callout accents, shared by the preview callouts
+     and the toolbar callout dropdown items. */
+  --markdown-callout-note-accent: #0969da;
+  --markdown-callout-tip-accent: #1a7f37;
+  --markdown-callout-important-accent: #8250df;
+  --markdown-callout-warning-accent: #9a6700;
+  --markdown-callout-caution-accent: #cf222e;
   --workspace-sidebar-background: #f8fafc;
   --workspace-sidebar-border: #d3dae2;
   --workspace-sidebar-divider: #e3e8ee;
@@ -5054,7 +5061,7 @@ label.settingsItemHeader {
    enhancement only: the icon + text label and the neutral outer border keep
    each callout identifiable without color. */
 .preview .markdown-callout {
-  --markdown-callout-accent: #0969da;
+  --markdown-callout-accent: var(--markdown-callout-note-accent);
   --markdown-callout-background: #f1f7ff;
   margin-block: 0 14px;
   padding-block: 8px;
@@ -5066,22 +5073,22 @@ label.settingsItemHeader {
 }
 
 .preview .markdown-callout-tip {
-  --markdown-callout-accent: #1a7f37;
+  --markdown-callout-accent: var(--markdown-callout-tip-accent);
   --markdown-callout-background: #effaf1;
 }
 
 .preview .markdown-callout-important {
-  --markdown-callout-accent: #8250df;
+  --markdown-callout-accent: var(--markdown-callout-important-accent);
   --markdown-callout-background: #f6f1ff;
 }
 
 .preview .markdown-callout-warning {
-  --markdown-callout-accent: #9a6700;
+  --markdown-callout-accent: var(--markdown-callout-warning-accent);
   --markdown-callout-background: #fff8e5;
 }
 
 .preview .markdown-callout-caution {
-  --markdown-callout-accent: #cf222e;
+  --markdown-callout-accent: var(--markdown-callout-caution-accent);
   --markdown-callout-background: #fff0f0;
 }
 
@@ -11369,6 +11376,130 @@ label.settingsItemHeader {
   color: #52616f;
   font-size: 11px;
   font-weight: 600;
+}
+
+/* #570 Callout insertion dropdown — text-only trigger (no representative
+   alert icon); type icons + accent colors appear only on the menu items,
+   always next to their text label. */
+.calloutInsertDropdown {
+  position: relative;
+}
+
+.calloutInsertDropdownTrigger {
+  display: inline-flex;
+  align-items: center;
+  block-size: 28px;
+  padding-block: 0;
+  padding-inline: 8px 7px;
+  border: 1px solid #c8d1d9;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #24292e;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.calloutInsertDropdownTrigger:hover:not(:disabled) {
+  background: #f6f8fa;
+  border-color: #a8b6c8;
+}
+
+.calloutInsertDropdownTrigger:focus-visible,
+.calloutInsertDropdownMenu:focus-visible {
+  outline: 2px solid #0366d6;
+  outline-offset: 1px;
+}
+
+.calloutInsertDropdownTrigger:disabled {
+  background: #eef3f8;
+  color: #6b7785;
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.calloutInsertDropdownCaret {
+  flex: 0 0 auto;
+  inline-size: 0;
+  block-size: 0;
+  margin-inline-start: 8px;
+  border-inline: 4px solid transparent;
+  border-block-start: 5px solid currentColor;
+}
+
+.calloutInsertDropdownMenu {
+  position: absolute;
+  z-index: 100;
+  inset-block-start: calc(100% + 4px);
+  inset-inline-start: 0;
+  inline-size: max-content;
+  min-inline-size: 160px;
+  padding-block: 4px;
+  border: 1px solid #c8d1d9;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.calloutInsertDropdownOption {
+  --callout-insert-accent: var(--markdown-callout-note-accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 28px;
+  padding-block: 4px;
+  padding-inline: 10px 12px;
+  border: none;
+  border-inline-start: 3px solid var(--callout-insert-accent);
+  background: transparent;
+  color: #24292e;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.calloutInsertDropdownOption[data-callout-type="tip"] {
+  --callout-insert-accent: var(--markdown-callout-tip-accent);
+}
+
+.calloutInsertDropdownOption[data-callout-type="important"] {
+  --callout-insert-accent: var(--markdown-callout-important-accent);
+}
+
+.calloutInsertDropdownOption[data-callout-type="warning"] {
+  --callout-insert-accent: var(--markdown-callout-warning-accent);
+}
+
+.calloutInsertDropdownOption[data-callout-type="caution"] {
+  --callout-insert-accent: var(--markdown-callout-caution-accent);
+}
+
+.calloutInsertDropdownOption:hover,
+.calloutInsertDropdownOption[data-active="true"] {
+  background: #e8eef6;
+}
+
+.calloutInsertDropdownOptionIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--callout-insert-accent);
+}
+
+.calloutInsertDropdownOptionIcon svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+@media (forced-colors: active) {
+  .calloutInsertDropdownOption {
+    border-inline-start-color: CanvasText;
+  }
+
+  .calloutInsertDropdownOptionIcon {
+    color: CanvasText;
+  }
 }
 
 /* Table size popover styling */

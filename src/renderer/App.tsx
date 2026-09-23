@@ -11304,6 +11304,10 @@ export function App(): JSX.Element {
         onInsertTable={(columns, rows) => {
           paragraphIndentControllerRef.current?.insertTable?.(columns, rows);
         }}
+        canInsertCallout={canUseMarkdownToolbarCommands}
+        onInsertCallout={(type) => {
+          paragraphIndentControllerRef.current?.insertCallout(type);
+        }}
         hasEditableTextLikeDocument={hasEditableTextLikeDocument}
         onOpenRubyDialog={handleOpenRubyDialogFromToolbar}
         onOpenEmphasisDialog={handleOpenEmphasisDialogFromToolbar}

@@ -1810,6 +1810,8 @@ export const jaTranslations = {
   "toolbar.insertImage": "画像を挿入",
   "toolbar.insertLink": "リンクを挿入",
   "toolbar.insertTable": "表を挿入",
+  "toolbar.callout": "コールアウト",
+  "toolbar.callout.tooltip": "文中に色とアイコン付きの引用ブロックを挿入します",
   "toolbar.italic": "斜体",
   "toolbar.openProject": "プロジェクトを開く",
   "toolbar.orderedList": "オーダーリスト",

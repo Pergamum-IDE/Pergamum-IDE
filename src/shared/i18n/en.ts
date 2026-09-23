@@ -1815,6 +1815,8 @@ export const enTranslations = {
   "toolbar.insertImage": "Insert image",
   "toolbar.insertLink": "Insert link",
   "toolbar.insertTable": "Insert table",
+  "toolbar.callout": "Callout",
+  "toolbar.callout.tooltip": "Insert a colored, icon-labeled callout quote block.",
   "toolbar.italic": "Italic",
   "toolbar.openProject": "Open Project",
   "toolbar.orderedList": "Ordered list",

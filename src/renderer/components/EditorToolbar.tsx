@@ -6,12 +6,14 @@ import { TableSizePopover } from "./TableSizePopover";
 import { HeadingLevelPopover } from "./HeadingLevelPopover";
 import { ToolbarCommandBox } from "./ToolbarCommandBox";
 import { PreviewRendererDropdown } from "./PreviewRendererDropdown";
+import { CalloutInsertDropdown } from "./CalloutInsertDropdown";
+import type { MarkdownCalloutType } from "../../shared/markdownCalloutMarkup";
 import type { PreviewRendererId } from "../../shared/settings";
 import type { QuickAccessPrefix } from "../quickAccessInputParser";
 import headingIconRaw from "../../../assets/icons/pergamum/toolbar/heading.svg?raw";
 import boldIconRaw from "../../../assets/icons/codicons/toolbar/bold.svg?raw";
 import italicIconRaw from "../../../assets/icons/codicons/toolbar/italic.svg?raw";
-import strikeIconRaw from "../../../assets/icons/pergamum/toolbar/strike.svg?raw";
+import strikeIconRaw from "../../../assets/icons/codicons/toolbar/strikethrough.svg?raw";
 import linkIconRaw from "../../../assets/icons/codicons/toolbar/link.svg?raw";
 import horizontalRuleIconRaw from "../../../assets/icons/codicons/toolbar/horizontal-rule.svg?raw";
 import codeBlockIconRaw from "../../../assets/icons/codicons/toolbar/code.svg?raw";
@@ -50,6 +52,9 @@ export interface EditorToolbarProps {
   canInsertImage: boolean;
   onOpenImageInsertion: (opener: Element) => void;
   onInsertTable: (columns: number, rows: number) => void;
+  /** #570: same Markdown-only gate as the table command. */
+  canInsertCallout: boolean;
+  onInsertCallout: (type: MarkdownCalloutType) => void;
   /** #531: shared enable gate for Ruby / Emphasis Mark — unlike
    *  `canUseMarkdownToolbarCommands`, this stays true on `.txt` documents,
    *  matching the existing Ctrl+R / Ctrl+. shortcuts' own applicability. */
@@ -98,6 +103,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   canInsertImage,
   onOpenImageInsertion,
   onInsertTable,
+  canInsertCallout,
+  onInsertCallout,
   hasEditableTextLikeDocument,
   onOpenRubyDialog,
   onOpenEmphasisDialog,
@@ -408,6 +415,14 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
               translate={translate}
             />
           )}
+        </div>
+
+        <div className="editorToolbarItem">
+          <CalloutInsertDropdown
+            disabled={!canInsertCallout}
+            onInsertCallout={onInsertCallout}
+            translate={translate}
+          />
         </div>
       </div>
 

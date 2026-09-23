@@ -128,6 +128,10 @@ function allSourceText(): string {
  * navigation while the renderer menu is open, and does not implement editor
  * shortcuts or native edit commands.
  *
+ * CalloutInsertDropdown.tsx (#570) is the same toolbar-scoped category as
+ * PreviewRendererDropdown.tsx: its `onKeyDown` handles only the callout
+ * menu's own Arrow/Home/End/Enter/Escape/Tab navigation while it is open.
+ *
  * globalKeyboardShortcuts.ts (#541) is the same category as
  * editorTabShortcuts.ts: a small, reusable app-wide shortcut registry
  * (Ctrl+P Preview toggle, with more shortcuts expected to register through
@@ -155,6 +159,7 @@ const onKeyDownExemptFileNames = new Set([
   "TableSizePopover.tsx",
   "HeadingLevelPopover.tsx",
   "PreviewRendererDropdown.tsx",
+  "CalloutInsertDropdown.tsx",
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
   "globalKeyboardShortcuts.ts",

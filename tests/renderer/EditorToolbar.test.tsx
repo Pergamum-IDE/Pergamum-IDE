@@ -173,6 +173,8 @@ function defaultProps(
     canInsertImage: true,
     onOpenImageInsertion: vi.fn(),
     onInsertTable: vi.fn(),
+    canInsertCallout: true,
+    onInsertCallout: vi.fn(),
     hasEditableTextLikeDocument: true,
     onOpenRubyDialog: vi.fn(),
     onOpenEmphasisDialog: vi.fn(),
@@ -914,5 +916,154 @@ describe("EditorToolbar", () => {
     expect(onInsertTable).toHaveBeenCalledWith(3, 2);
     // Popover closes after selection
     expect(container.querySelector(".tableSizePopover")).toBeNull();
+  });
+});
+
+describe("EditorToolbar callout dropdown (#570)", () => {
+  function calloutTrigger(): HTMLButtonElement {
+    const trigger = container.querySelector(
+      ".calloutInsertDropdownTrigger"
+    ) as HTMLButtonElement | null;
+    expect(trigger).not.toBeNull();
+    return trigger!;
+  }
+
+  function calloutOptions(): HTMLButtonElement[] {
+    return Array.from(
+      container.querySelectorAll(".calloutInsertDropdownOption")
+    ) as HTMLButtonElement[];
+  }
+
+  it("is placed immediately after the table button, in the same group", () => {
+    renderToolbar();
+
+    const tableItem = toolbarButtons()
+      .find((button) => button.getAttribute("aria-label") === "表を挿入")!
+      .closest(".editorToolbarItem")!;
+    const calloutItem = container
+      .querySelector("[data-testid='calloutInsertDropdown']")!
+      .closest(".editorToolbarItem")!;
+
+    expect(tableItem.nextElementSibling).toBe(calloutItem);
+  });
+
+  it("shows a text-only trigger (no representative icon) with a tooltip", () => {
+    renderToolbar();
+
+    const trigger = calloutTrigger();
+    expect(trigger.textContent).toBe("コールアウト");
+    expect(trigger.querySelector("svg")).toBeNull();
+    expect(trigger.querySelector(".calloutInsertDropdownCaret")).not.toBeNull();
+    expect(trigger.getAttribute("title")).toBe(
+      "文中に色とアイコン付きの引用ブロックを挿入します"
+    );
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+  });
+
+  it("uses the English labels under an English translate", () => {
+    renderToolbar({
+      translate: (key) =>
+        ({
+          "toolbar.callout": "Callout",
+          "toolbar.callout.tooltip":
+            "Insert a colored, icon-labeled callout quote block."
+        })[key as string] ?? mockTranslate(key)
+    });
+
+    expect(calloutTrigger().textContent).toBe("Callout");
+    expect(calloutTrigger().getAttribute("title")).toBe(
+      "Insert a colored, icon-labeled callout quote block."
+    );
+  });
+
+  it("opens a menu with exactly the five callout types, each with icon + label", () => {
+    renderToolbar();
+    expect(calloutOptions()).toHaveLength(0);
+
+    act(() => calloutTrigger().click());
+
+    expect(calloutTrigger().getAttribute("aria-expanded")).toBe("true");
+    const options = calloutOptions();
+    expect(options.map((option) => option.dataset.calloutType)).toEqual([
+      "note",
+      "tip",
+      "important",
+      "warning",
+      "caution"
+    ]);
+    expect(options.map((option) => option.dataset.calloutMarker)).toEqual([
+      "NOTE",
+      "TIP",
+      "IMPORTANT",
+      "WARNING",
+      "CAUTION"
+    ]);
+    expect(options.map((option) => option.textContent)).toEqual([
+      "補足",
+      "ヒント",
+      "重要",
+      "警告",
+      "注意"
+    ]);
+    for (const option of options) {
+      expect(option.getAttribute("role")).toBe("menuitem");
+      expect(
+        option.querySelector(".calloutInsertDropdownOptionIcon svg")
+      ).not.toBeNull();
+    }
+  });
+
+  it("calls onInsertCallout with the chosen type and closes the menu", () => {
+    const { onInsertCallout } = renderToolbar();
+
+    act(() => calloutTrigger().click());
+    act(() => calloutOptions()[2].click());
+
+    expect(onInsertCallout).toHaveBeenCalledTimes(1);
+    expect(onInsertCallout).toHaveBeenCalledWith("important");
+    expect(calloutOptions()).toHaveLength(0);
+  });
+
+  it("supports keyboard selection and Escape", () => {
+    const { onInsertCallout } = renderToolbar();
+    const keyDown = (target: Element, key: string) =>
+      act(() => {
+        target.dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })
+        );
+      });
+
+    keyDown(calloutTrigger(), "ArrowDown");
+    const menu = container.querySelector(".calloutInsertDropdownMenu")!;
+    expect(menu).not.toBeNull();
+    keyDown(menu, "ArrowDown");
+    keyDown(menu, "ArrowDown");
+    keyDown(menu, "ArrowDown");
+    keyDown(menu, "Enter");
+    expect(onInsertCallout).toHaveBeenCalledWith("warning");
+
+    keyDown(calloutTrigger(), "ArrowDown");
+    keyDown(container.querySelector(".calloutInsertDropdownMenu")!, "Escape");
+    expect(calloutOptions()).toHaveLength(0);
+    expect(onInsertCallout).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays visible but disabled when canInsertCallout is false, and never opens", () => {
+    const { onInsertCallout } = renderToolbar({ canInsertCallout: false });
+
+    const trigger = calloutTrigger();
+    expect(trigger.disabled).toBe(true);
+    act(() => trigger.click());
+    expect(calloutOptions()).toHaveLength(0);
+    expect(onInsertCallout).not.toHaveBeenCalled();
+  });
+
+  it("closes an open menu when it becomes disabled", () => {
+    renderToolbar();
+    act(() => calloutTrigger().click());
+    expect(calloutOptions()).toHaveLength(5);
+
+    renderToolbar({ canInsertCallout: false });
+    expect(calloutOptions()).toHaveLength(0);
   });
 });
