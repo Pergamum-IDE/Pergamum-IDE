@@ -15,13 +15,17 @@ import { describe, expect, it } from "vitest";
 function globalShortcutsBlock(): string {
   const source = readFileSync("src/renderer/App.tsx", "utf8");
 
-  const start = source.indexOf('id: "togglePreview"');
+  const callStart = source.indexOf("useGlobalKeyboardShortcuts(");
+  expect(callStart).toBeGreaterThan(-1);
+
+  const callEnd = source.indexOf("\n  function closeSpecialTab", callStart);
+  expect(callEnd).toBeGreaterThan(callStart);
+
+  const callBlock = source.slice(callStart, callEnd);
+  const start = callBlock.indexOf('id: "togglePreview"');
   expect(start).toBeGreaterThan(-1);
 
-  const end = source.indexOf("[isPreviewEligible]", start);
-  expect(end).toBeGreaterThan(start);
-
-  return source.slice(start, end);
+  return callBlock.slice(start);
 }
 
 describe("direct Command Palette mode shortcut wiring (source-level assertions, #556)", () => {
