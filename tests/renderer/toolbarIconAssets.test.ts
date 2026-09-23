@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const themeableToolbarIconPaths = [
-  "assets/icons/pergamum/toolbar/strike.svg",
+  "assets/icons/codicons/toolbar/strikethrough.svg",
   "assets/icons/pergamum/toolbar/ruby.svg",
   "assets/icons/pergamum/toolbar/emphasis.svg"
 ];
@@ -17,14 +17,13 @@ describe("toolbar icon assets", () => {
     }
   });
 
-  it("keeps the strikethrough icon stroke-based", () => {
+  it("keeps the strikethrough icon themeable", () => {
     const svg = readFileSync(
-      "assets/icons/pergamum/toolbar/strike.svg",
+      "assets/icons/codicons/toolbar/strikethrough.svg",
       "utf8"
     );
 
-    expect(svg).toContain('fill="none"');
-    expect(svg).toContain('stroke="currentColor"');
-    expect(svg).not.toMatch(/\bfill=["']currentColor["']/i);
+    expect(svg).toContain('fill="currentColor"');
+    expect(svg).not.toMatch(/\b(?:fill|stroke)=["'](?:#000000|black)["']/i);
   });
 });

@@ -13,7 +13,7 @@ import type { QuickAccessPrefix } from "../quickAccessInputParser";
 import headingIconRaw from "../../../assets/icons/pergamum/toolbar/heading.svg?raw";
 import boldIconRaw from "../../../assets/icons/codicons/toolbar/bold.svg?raw";
 import italicIconRaw from "../../../assets/icons/codicons/toolbar/italic.svg?raw";
-import strikeIconRaw from "../../../assets/icons/pergamum/toolbar/strike.svg?raw";
+import strikeIconRaw from "../../../assets/icons/codicons/toolbar/strikethrough.svg?raw";
 import linkIconRaw from "../../../assets/icons/codicons/toolbar/link.svg?raw";
 import horizontalRuleIconRaw from "../../../assets/icons/codicons/toolbar/horizontal-rule.svg?raw";
 import codeBlockIconRaw from "../../../assets/icons/codicons/toolbar/code.svg?raw";
