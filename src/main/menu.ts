@@ -322,8 +322,6 @@ function viewMenu(
       ),
       commandPaletteF1MenuItem(options),
       { type: "separator" },
-      roleItem("reload", language, "menu.reload"),
-      roleItem("forceReload", language, "menu.forceReload"),
       roleItem(
         "toggleDevTools",
         language,

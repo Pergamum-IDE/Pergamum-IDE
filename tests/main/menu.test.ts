@@ -384,6 +384,42 @@ describe("application menu", () => {
     }
   });
 
+  // #552: Chromium's reload / force reload must never be reachable — neither
+  // as a menu item nor as a claimed CommandOrControl+R / +Shift+R
+  // accelerator anywhere in the application menu — so Mod+R keeps falling
+  // through to the renderer's own ruby-insertion shortcut
+  // (editorRubyShortcuts.ts) instead of being intercepted by Electron.
+  it("never exposes Reload / Force Reload menu roles (#552)", () => {
+    for (const platform of ["win32", "darwin", "linux"] as const) {
+      const viewItems = viewMenuItems(platform);
+
+      expect(
+        viewItems.some((item) => item.role === "reload")
+      ).toBe(false);
+      expect(
+        viewItems.some((item) => item.role === "forceReload")
+      ).toBe(false);
+      expect(
+        viewItems.some((item) => item.label === "Reload")
+      ).toBe(false);
+      expect(
+        viewItems.some((item) => item.label === "Force Reload")
+      ).toBe(false);
+    }
+  });
+
+  it("never binds CommandOrControl+R / +Shift+R to any application menu item (#552)", () => {
+    for (const platform of ["win32", "darwin", "linux"] as const) {
+      const template = buildApplicationMenu("en", emptyMenuOptions(), platform);
+      const accelerators = flattenMenuItems(template)
+        .map((item) => item.accelerator)
+        .filter((accelerator): accelerator is string => Boolean(accelerator));
+
+      expect(accelerators).not.toContain("CommandOrControl+R");
+      expect(accelerators).not.toContain("CommandOrControl+Shift+R");
+    }
+  });
+
   it("binds Toggle Developer Tools to CommandOrControl+Shift+D, not the Electron role default (#535 follow-up)", () => {
     const viewItems = viewMenuItems("win32");
     const item = viewItems.find(
@@ -823,6 +859,15 @@ function submenuItems(
   }
 
   return item.submenu;
+}
+
+function flattenMenuItems(
+  items: readonly MenuItemConstructorOptions[]
+): MenuItemConstructorOptions[] {
+  return items.flatMap((item) => [
+    item,
+    ...(Array.isArray(item.submenu) ? flattenMenuItems(item.submenu) : [])
+  ]);
 }
 
 function fileMenuItems(
