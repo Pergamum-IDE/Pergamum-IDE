@@ -31,13 +31,13 @@ import {
 } from "../shared/settings";
 import type { Translate } from "../shared/i18n";
 import {
-  currentDocumentContent,
-  currentProjectRelativePath,
-  isCurrentDocumentDirty,
-  isMarkdownCurrentDocument,
-  type CurrentDocument
-} from "./currentDocument";
-import type { CurrentEditor } from "./currentEditor";
+  markdownDocumentForEditor,
+  type CurrentEditor
+} from "./currentEditor";
+import {
+  createCurrentDocumentMarkdownSurfaceSource,
+  type MarkdownSurfaceSource
+} from "./markdownSurfaceSource";
 import {
   lineEndingBreakSetToArray,
   type LineEndingBreakSet
@@ -735,11 +735,26 @@ export function EditorSurface({
   onViewportChanged,
   onPreviewScrollSyncEvent
 }: EditorSurfaceProps): JSX.Element {
+  // #573 Slice 2: re-derived only when the document object itself changes
+  // (the same cadence the surface's effects previously keyed on).
+  const markdownDocument = markdownDocumentForEditor(editor);
+  const markdownSurfaceSource = useMemo(
+    () =>
+      markdownDocument
+        ? createCurrentDocumentMarkdownSurfaceSource(markdownDocument)
+        : null,
+    [markdownDocument]
+  );
+
   switch (editor.kind) {
     case "markdown":
+      if (!markdownSurfaceSource) {
+        throw new Error("A Markdown editor must have a surface source.");
+      }
+
       return (
         <MarkdownEditorSurface
-          document={editor.document}
+          source={markdownSurfaceSource}
           isDebugModeEnabled={isDebugModeEnabled}
           isSyncScrollEditorToPreviewEnabled={isSyncScrollEditorToPreviewEnabled}
           isSyncScrollPreviewToEditorEnabled={isSyncScrollPreviewToEditorEnabled}
@@ -825,7 +840,8 @@ export function EditorSurface({
 }
 
 interface MarkdownEditorSurfaceProps {
-  document: CurrentDocument;
+  /** #573 Slice 2: what is being edited — see markdownSurfaceSource.ts. */
+  source: MarkdownSurfaceSource;
   /** #505 Phase 0: see EditorSurfaceProps's own doc comment. */
   isDebugModeEnabled: boolean;
   /** #505 Phase 1: see EditorSurfaceProps's own doc comment. */
@@ -950,7 +966,7 @@ interface MarkdownEditorSurfaceProps {
 }
 
 function MarkdownEditorSurface({
-  document,
+  source,
   isDebugModeEnabled,
   isSyncScrollEditorToPreviewEnabled,
   isSyncScrollPreviewToEditorEnabled,
@@ -1027,7 +1043,7 @@ function MarkdownEditorSurface({
     [onPreviewScrollSyncEvent]
   );
 
-  const content = currentDocumentContent(document);
+  const content = source.text;
   // #253: only converted to a plain array (an O(n) walk of the tracked
   // breaks) when the document identity itself changes — never per
   // keystroke. For the same documentKey, MarkdownEditor ignores this prop
@@ -1036,7 +1052,7 @@ function MarkdownEditorSurface({
   // breaks, a real per-keystroke cost this Issue explicitly avoids).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initialLineEndingBreaks = useMemo(
-    () => lineEndingBreakSetToArray(document.lineEndingBreaks),
+    () => lineEndingBreakSetToArray(source.lineEndingBreaks),
     [documentKey]
   );
   // #250: the preview is rendered from a debounced trailing view of
@@ -1048,33 +1064,36 @@ function MarkdownEditorSurface({
     content,
     previewUpdateDelayMs
   );
-  // #409: only a project document has a project-root-relative path to
-  // resolve project-local image links against; a standalone `.md` file
-  // renders image links verbatim, as before.
+  // #409 / #412: the source decides how project-local image links resolve
+  // (`sourceFile` for a project document, `none` for a standalone /
+  // untitled one; the Glossary vocabulary Preview uses `projectRoot` — see
+  // GlossaryEditor.tsx). Re-memoized on its primitive parts so it stays a
+  // stable prop identity for MarkdownEditor's effect deps across keystrokes.
+  const previewImageResolutionKind = source.imageResolution.kind;
   const previewSourceProjectRelativePath =
-    currentProjectRelativePath(document);
-  // #412: a Markdown document Preview anchors links at the document's own
-  // folder (`sourceFile`); a standalone / non-project document does not
-  // rewrite at all (`none`). The Glossary vocabulary Preview uses
-  // `projectRoot` instead — see GlossaryEditor.tsx. Memoized so it is a
-  // stable prop identity for MarkdownEditor's effect deps.
+    source.imageResolution.kind === "sourceFile"
+      ? source.imageResolution.sourceMarkdownProjectRelativePath
+      : null;
   const previewImageResolution = useMemo<ProjectLocalImageResolutionContext>(
     () =>
+      previewImageResolutionKind === "sourceFile" &&
       previewSourceProjectRelativePath !== null
         ? {
             kind: "sourceFile",
             sourceMarkdownProjectRelativePath: previewSourceProjectRelativePath
           }
-        : { kind: "none" },
-    [previewSourceProjectRelativePath]
+        : previewImageResolutionKind === "projectRoot"
+          ? { kind: "projectRoot" }
+          : { kind: "none" },
+    [previewImageResolutionKind, previewSourceProjectRelativePath]
   );
-  const isMarkdown = isMarkdownCurrentDocument(document);
+  const isMarkdown = source.isMarkdownDocument;
   // #548: Preview availability is controlled by the user-visible toggle, not
   // by document extension or renderer choice. A `.txt` document rendered with
   // the Markdown renderer intentionally follows the existing renderer's
   // behavior instead of introducing a plain-text-specific renderer here.
   const isPreviewAvailable = previewVisible;
-  const isDirty = isCurrentDocumentDirty(document);
+  const isDirty = source.isDirty;
 
   const [aozoraCleanText, setAozoraCleanText] = useState<string | null>(null);
 
@@ -1088,19 +1107,20 @@ function MarkdownEditorSurface({
     async function loadAozoraCleanText() {
       try {
         let text: string | null = null;
+        const aozoraSourceText = source.aozoraSourceText;
         if (
-          document.kind === "file" &&
-          document.path &&
+          aozoraSourceText?.kind === "file" &&
           window.pergamum?.files?.readAozoraTextFile
         ) {
-          text = await window.pergamum.files.readAozoraTextFile(document.path);
+          text = await window.pergamum.files.readAozoraTextFile(
+            aozoraSourceText.path
+          );
         } else if (
-          document.kind === "project" &&
-          document.relativePath &&
+          aozoraSourceText?.kind === "projectDocument" &&
           window.pergamum?.projects?.readProjectDocumentAozora
         ) {
           text = await window.pergamum.projects.readProjectDocumentAozora(
-            document.relativePath
+            aozoraSourceText.relativePath
           );
         }
         if (!canceled && text !== null) {
@@ -1117,7 +1137,9 @@ function MarkdownEditorSurface({
     return () => {
       canceled = true;
     };
-  }, [previewRenderer, isMarkdown, isDirty, documentKey, document]);
+    // `source` is re-derived exactly when the backing document object
+    // changes (see EditorSurface), matching the previous `document` dep.
+  }, [previewRenderer, isMarkdown, isDirty, documentKey, source]);
 
   const effectivePreviewSourceContent =
     isAozoraPreviewRenderer(previewRenderer) &&
@@ -1816,9 +1838,9 @@ function MarkdownEditorSurface({
       return undefined;
     }
 
-    // NOT the global `document`: this component's own `document` prop (a
-    // CurrentDocument) shadows it. `ownerDocument` is the actual DOM
-    // Document regardless of that naming collision.
+    // `ownerDocument` is the DOM Document the editor scroller actually
+    // lives in (this component used to shadow the global `document` with a
+    // CurrentDocument prop; #573 Slice 2 replaced that prop with `source`).
     const ownerDocument = editorScroller.ownerDocument;
 
     function makeInputHandler(
