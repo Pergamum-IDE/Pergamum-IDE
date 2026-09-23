@@ -214,12 +214,17 @@ function fileMenu(
     { type: "separator" },
     importMenu(language, options),
     { type: "separator" },
+    // #556: CommandOrControl+O was freed up for the Command Palette's
+    // project-file-open mode (a renderer-level global shortcut — see
+    // App.tsx). Keeping it here as an Electron menu accelerator would
+    // intercept the keystroke before the renderer ever sees it (same
+    // mechanism removed for Reload in #552), so this item is now
+    // mouse/menu-only.
     commandMenuItem(
       editorCommandIds.openMarkdownDocument,
       language,
       "menu.openMarkdownFile",
-      options,
-      "CommandOrControl+O"
+      options
     ),
     commandMenuItem(
       editorCommandIds.saveDocument,

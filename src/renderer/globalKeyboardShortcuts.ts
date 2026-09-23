@@ -30,6 +30,15 @@ export interface GlobalKeyboardShortcutMatch {
   readonly ctrlOrCmd?: boolean;
   readonly shift?: boolean;
   readonly alt?: boolean;
+  /**
+   * #556: skips the `shift` / `alt` checks above and matches on `key` alone
+   * (plus `ctrlOrCmd`). Needed for symbol shortcuts (`#`, `@`, `:`, `%`)
+   * whose producing keystroke legitimately varies by keyboard layout — e.g.
+   * `#` is Shift+3 on a US layout, so a strict `shift: false` check would
+   * never match it. The character itself identifies the shortcut, not which
+   * modifiers produced it.
+   */
+  readonly ignoreShiftAndAltState?: boolean;
 }
 
 export interface GlobalKeyboardShortcut {
@@ -44,6 +53,24 @@ export interface GlobalKeyboardShortcut {
   readonly suppressWhenModalActive?: boolean;
 }
 
+/**
+ * #556: on Windows, AltGr (used to type `@` / `#` / etc. on many European
+ * keyboard layouts, e.g. German AltGr+Q for `@`) is reported by Chromium as
+ * a synthetic `ctrlKey: true, altKey: true` combination — indistinguishable
+ * from a real Ctrl+Alt chord by those flags alone. Without this check, a
+ * `ctrlOrCmd`-requiring shortcut would misfire every time such a layout
+ * types that character normally (e.g. inside the CodeMirror editor, which
+ * `isEditableTextInputTarget` deliberately does not suppress).
+ */
+function isAltGraphEvent(event: {
+  readonly getModifierState?: (key: string) => boolean;
+}): boolean {
+  return (
+    typeof event.getModifierState === "function" &&
+    event.getModifierState("AltGraph")
+  );
+}
+
 export function matchesGlobalKeyboardShortcut(
   event: {
     readonly key: string;
@@ -51,6 +78,7 @@ export function matchesGlobalKeyboardShortcut(
     readonly metaKey: boolean;
     readonly shiftKey: boolean;
     readonly altKey: boolean;
+    readonly getModifierState?: (key: string) => boolean;
   },
   match: GlobalKeyboardShortcutMatch
 ): boolean {
@@ -58,11 +86,16 @@ export function matchesGlobalKeyboardShortcut(
   if (Boolean(match.ctrlOrCmd) !== ctrlOrCmd) {
     return false;
   }
-  if (Boolean(match.shift) !== event.shiftKey) {
+  if (match.ctrlOrCmd && isAltGraphEvent(event)) {
     return false;
   }
-  if (Boolean(match.alt) !== event.altKey) {
-    return false;
+  if (!match.ignoreShiftAndAltState) {
+    if (Boolean(match.shift) !== event.shiftKey) {
+      return false;
+    }
+    if (Boolean(match.alt) !== event.altKey) {
+      return false;
+    }
   }
   return event.key.toLowerCase() === match.key.toLowerCase();
 }

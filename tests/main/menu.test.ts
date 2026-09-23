@@ -340,8 +340,9 @@ describe("application menu", () => {
     expect(fileItemByLabel(fileItems, "Open Project").accelerator).toBe(
       "CommandOrControl+Shift+O"
     );
+    // #556: freed for the Command Palette's project-file-open shortcut.
     expect(fileItemByLabel(fileItems, "Open Markdown File").accelerator).toBe(
-      "CommandOrControl+O"
+      undefined
     );
     expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
       "CommandOrControl+S"
@@ -369,8 +370,9 @@ describe("application menu", () => {
       expect(fileItemByLabel(fileItems, "Open Project").accelerator).toBe(
         "CommandOrControl+Shift+O"
       );
+      // #556: freed for the Command Palette's project-file-open shortcut.
       expect(fileItemByLabel(fileItems, "Open Markdown File").accelerator).toBe(
-        "CommandOrControl+O"
+        undefined
       );
       expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
         "CommandOrControl+S"
@@ -432,6 +434,20 @@ describe("application menu", () => {
 
       expect(itemsWithAccelerator).toHaveLength(1);
       expect(itemsWithAccelerator[0]?.id).toBe(commandPaletteCommandIds.open);
+    }
+  });
+
+  // #556: CommandOrControl+O must never be claimed by any application menu
+  // item, so it reaches the renderer's Command Palette project-file-open
+  // shortcut instead of being intercepted as an Electron accelerator.
+  it("never binds CommandOrControl+O to any application menu item (#556)", () => {
+    for (const platform of ["win32", "darwin", "linux"] as const) {
+      const template = buildApplicationMenu("en", emptyMenuOptions(), platform);
+      const accelerators = flattenMenuItems(template)
+        .map((item) => item.accelerator)
+        .filter((accelerator): accelerator is string => Boolean(accelerator));
+
+      expect(accelerators).not.toContain("CommandOrControl+O");
     }
   });
 

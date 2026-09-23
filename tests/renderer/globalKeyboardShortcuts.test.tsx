@@ -72,6 +72,105 @@ describe("matchesGlobalKeyboardShortcut", () => {
       )
     ).toBe(false);
   });
+
+  // #556: symbol shortcuts (#, @, :, %) must match on `event.key` alone,
+  // ignoring which modifiers produced that character — e.g. `#` requires
+  // Shift on a US keyboard layout but may not on others.
+  describe("ignoreShiftAndAltState (#556)", () => {
+    it("matches Ctrl+# even though # is typed with Shift held", () => {
+      expect(
+        matchesGlobalKeyboardShortcut(
+          { key: "#", ctrlKey: true, metaKey: false, shiftKey: true, altKey: false },
+          { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true }
+        )
+      ).toBe(true);
+    });
+
+    it("matches Ctrl+@ when @ is typed without Shift (layout without a Shift requirement)", () => {
+      expect(
+        matchesGlobalKeyboardShortcut(
+          { key: "@", ctrlKey: true, metaKey: false, shiftKey: false, altKey: false },
+          { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true }
+        )
+      ).toBe(true);
+    });
+
+    it("does not use event.code as a physical-key fallback", () => {
+      // Ctrl+Digit3 with a "3" key (not "#") must never match the # shortcut,
+      // even on layouts where # is physically Shift+3 — only event.key
+      // identifies the shortcut, per #556's keyboard layout policy.
+      expect(
+        matchesGlobalKeyboardShortcut(
+          { key: "3", ctrlKey: true, metaKey: false, shiftKey: true, altKey: false },
+          { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true }
+        )
+      ).toBe(false);
+    });
+
+    it("still requires ctrlOrCmd even when shift/alt state is ignored", () => {
+      expect(
+        matchesGlobalKeyboardShortcut(
+          { key: "#", ctrlKey: false, metaKey: false, shiftKey: true, altKey: false },
+          { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true }
+        )
+      ).toBe(false);
+    });
+  });
+
+  // #556: AltGr (common on European keyboard layouts for typing @ / # / etc.)
+  // is reported by Chromium as synthetic ctrlKey+altKey, indistinguishable
+  // from a real Ctrl+Alt chord by those flags alone. A ctrlOrCmd-requiring
+  // shortcut must not misfire when the user is simply typing that character
+  // via AltGr with no literal Ctrl held.
+  describe("AltGr guard (#556)", () => {
+    it("does not match when getModifierState reports AltGraph", () => {
+      expect(
+        matchesGlobalKeyboardShortcut(
+          {
+            key: "@",
+            ctrlKey: true,
+            metaKey: false,
+            shiftKey: false,
+            altKey: true,
+            getModifierState: (key) => key === "AltGraph"
+          },
+          { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true }
+        )
+      ).toBe(false);
+    });
+
+    it("still matches a real Ctrl chord when getModifierState reports no AltGraph", () => {
+      expect(
+        matchesGlobalKeyboardShortcut(
+          {
+            key: "@",
+            ctrlKey: true,
+            metaKey: false,
+            shiftKey: false,
+            altKey: false,
+            getModifierState: () => false
+          },
+          { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true }
+        )
+      ).toBe(true);
+    });
+
+    it("ignores AltGraph state for shortcuts that do not require ctrlOrCmd", () => {
+      expect(
+        matchesGlobalKeyboardShortcut(
+          {
+            key: "p",
+            ctrlKey: false,
+            metaKey: false,
+            shiftKey: false,
+            altKey: false,
+            getModifierState: (key) => key === "AltGraph"
+          },
+          { key: "p" }
+        )
+      ).toBe(true);
+    });
+  });
 });
 
 describe("useGlobalKeyboardShortcuts", () => {

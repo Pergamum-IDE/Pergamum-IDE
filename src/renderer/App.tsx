@@ -4755,6 +4755,15 @@ export function App(): JSX.Element {
   // Palette launcher (see `commandPaletteCommandIds.open`'s accelerator in
   // menu.ts). More global shortcuts are expected to register here going
   // forward.
+  // #556: direct shortcuts into the Command Palette's existing prefix modes
+  // (Mod+P/command mode is handled separately, via the Electron menu
+  // accelerator — see menu.ts). Each one calls the same
+  // `openCommandPaletteWithPrefix` path as the toolbar Command Box, passing
+  // its prefix explicitly so it never depends on the Command Box's current
+  // mode state. `#` / `@` / `:` / `%` set `ignoreShiftAndAltState` because
+  // the modifiers that produce those characters vary by keyboard layout
+  // (e.g. Shift+3 for `#` on a US layout) — `event.key` alone identifies
+  // the shortcut, per #556's keyboard layout policy.
   useGlobalKeyboardShortcuts(
     useMemo(
       () => [
@@ -4766,6 +4775,31 @@ export function App(): JSX.Element {
               handleTogglePreviewVisible();
             }
           }
+        },
+        {
+          id: "openCommandPaletteFileMode",
+          match: { key: "o", ctrlOrCmd: true },
+          handler: () => openCommandPaletteWithPrefix("")
+        },
+        {
+          id: "openCommandPaletteHeadingJump",
+          match: { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+          handler: () => openCommandPaletteWithPrefix("#")
+        },
+        {
+          id: "openCommandPaletteGlossaryJump",
+          match: { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+          handler: () => openCommandPaletteWithPrefix("@")
+        },
+        {
+          id: "openCommandPaletteLineJump",
+          match: { key: ":", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+          handler: () => openCommandPaletteWithPrefix(":")
+        },
+        {
+          id: "openCommandPaletteProjectSearch",
+          match: { key: "%", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+          handler: () => openCommandPaletteWithPrefix("%")
         }
       ],
       [isPreviewEligible]
