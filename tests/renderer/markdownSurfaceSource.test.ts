@@ -5,7 +5,11 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
-import { createCurrentDocumentMarkdownSurfaceSource } from "../../src/renderer/markdownSurfaceSource";
+import { createGlossaryDescriptionCurrentEditor } from "../../src/renderer/currentEditor";
+import {
+  createCurrentDocumentMarkdownSurfaceSource,
+  createGlossaryDescriptionMarkdownSurfaceSource
+} from "../../src/renderer/markdownSurfaceSource";
 
 describe("createCurrentDocumentMarkdownSurfaceSource (#573 Slice 2)", () => {
   it("adapts a project Markdown document", () => {
@@ -99,5 +103,38 @@ describe("createCurrentDocumentMarkdownSurfaceSource (#573 Slice 2)", () => {
 
     expect(source.text).toBe("edited");
     expect(source.isDirty).toBe(true);
+  });
+});
+
+describe("createGlossaryDescriptionMarkdownSurfaceSource (#573 Slice 3)", () => {
+  it("adapts a glossary Description draft as project-root Markdown", () => {
+    const entryId = "0190b6a1-1c2d-7e3f-8a4b-5c6d7e8f9a0b";
+    const editor = createGlossaryDescriptionCurrentEditor({
+      id: entryId,
+      description: "![図](images/a.png)",
+      atoms: [
+        {
+          id: "0190b6a1-1c2d-7e3f-8a4b-000000000001",
+          entryId,
+          sortOrder: 0,
+          value: "アリス",
+          matchFlags: 0,
+          createdAt: "2026-09-24T00:00:00.000Z",
+          updatedAt: "2026-09-24T00:00:00.000Z"
+        }
+      ],
+      tags: [],
+      createdAt: "2026-09-24T00:00:00.000Z",
+      updatedAt: "2026-09-24T00:00:00.000Z"
+    });
+
+    expect(createGlossaryDescriptionMarkdownSurfaceSource(editor)).toEqual({
+      text: "![図](images/a.png)",
+      lineEndingBreaks: editor.descriptionLineEndingBreaks,
+      isDirty: false,
+      isMarkdownDocument: true,
+      imageResolution: { kind: "projectRoot" },
+      aozoraSourceText: null
+    });
   });
 });

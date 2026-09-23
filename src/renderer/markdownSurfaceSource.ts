@@ -6,6 +6,7 @@ import {
   isMarkdownCurrentDocument,
   type CurrentDocument
 } from "./currentDocument";
+import type { GlossaryDescriptionCurrentEditor } from "./currentEditor";
 import type { LineEndingBreakSet } from "./editorLineEndingField";
 
 /**
@@ -19,9 +20,10 @@ export type MarkdownSurfaceAozoraSourceText =
 /**
  * #573 Slice 2: the narrow set of facts `MarkdownEditorSurface` needs about
  * what it is editing, so the editor / preview stack no longer reads a
- * file-backed `CurrentDocument` directly. Today the only adapter is
- * `createCurrentDocumentMarkdownSurfaceSource`; a glossary Description
- * adapter is expected in a later slice.
+ * file-backed `CurrentDocument` directly. Adapters:
+ * `createCurrentDocumentMarkdownSurfaceSource` (file-backed / untitled
+ * documents) and `createGlossaryDescriptionMarkdownSurfaceSource` (#573
+ * Slice 3, a glossary entry's in-memory Description draft).
  *
  * Tab identity (`documentKey`) and project read-only state stay separate
  * `MarkdownEditorSurface` props — they are not properties of the text source.
@@ -82,5 +84,29 @@ export function createCurrentDocumentMarkdownSurfaceSource(
     isMarkdownDocument: isMarkdownCurrentDocument(document),
     imageResolution: currentDocumentImageResolution(document),
     aozoraSourceText: currentDocumentAozoraSourceText(document)
+  };
+}
+
+// #412: glossary text has no source-file location, so its Preview and image
+// diagnostics resolve project-local image links against the PROJECT ROOT —
+// the same behavior as the Glossary Entry Editor Pane's Description preview.
+const GLOSSARY_DESCRIPTION_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext =
+  { kind: "projectRoot" };
+
+/**
+ * #573 Slice 3: adapts a glossary Description tab's in-memory draft. Always
+ * Markdown, never an Aozora source, and not dirty-tracked yet (save / dirty
+ * arrive in a later slice).
+ */
+export function createGlossaryDescriptionMarkdownSurfaceSource(
+  editor: GlossaryDescriptionCurrentEditor
+): MarkdownSurfaceSource {
+  return {
+    text: editor.draft.description,
+    lineEndingBreaks: editor.descriptionLineEndingBreaks,
+    isDirty: false,
+    isMarkdownDocument: true,
+    imageResolution: GLOSSARY_DESCRIPTION_IMAGE_RESOLUTION,
+    aozoraSourceText: null
   };
 }

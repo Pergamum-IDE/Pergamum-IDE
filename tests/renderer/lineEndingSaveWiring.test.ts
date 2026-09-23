@@ -94,7 +94,7 @@ describe("line-ending preservation on save (#253)", () => {
     const source = appSource();
 
     expect(source).toContain(
-      "updateCurrentDocumentContent(\n          document,\n          nextContent,\n          nextLineEndingBreaks\n        )"
+      "updateCurrentDocumentContent(\n              document,\n              nextContent,\n              nextLineEndingBreaks\n            )"
     );
   });
 

@@ -12,7 +12,17 @@ import {
   isCurrentDocumentDirty,
   type CurrentDocument
 } from "./currentDocument";
+import {
+  buildLineEndingBreakSet,
+  type LineEndingBreakSet
+} from "./editorLineEndingField";
+import {
+  createGlossaryEntryDraft,
+  updateGlossaryEntryDraftDescription,
+  type GlossaryEntryDraft
+} from "./glossaryEntryDraft";
 import { representativeGlossarySurface } from "./glossaryPresentation";
+import { analyzeLineEndings } from "./lineEndingTracking";
 
 export interface MarkdownCurrentEditor {
   kind: "markdown";
@@ -20,16 +30,22 @@ export interface MarkdownCurrentEditor {
 }
 
 /**
- * #573 Slice 1: a non-file-backed tab for one glossary entry's Description.
- * It holds only what the placeholder needs (identity + the representative
- * surface captured at open time); later slices are expected to evolve this
- * into owning a `GlossaryEntryDraft`. It never has a `CurrentDocument`, so
- * every file-backed feature gated on `markdownDocumentForEditor()` skips it.
+ * #573: a non-file-backed tab for one glossary entry's Description. It never
+ * has a `CurrentDocument`, so every file-backed feature gated on
+ * `markdownDocumentForEditor()` skips it.
+ *
+ * Slice 3: the tab owns an in-memory `GlossaryEntryDraft` (seeded from the
+ * entry at open time); only `draft.description` is edited. Nothing is
+ * persisted yet — save / dirty arrive in a later slice.
  */
 export interface GlossaryDescriptionCurrentEditor {
   kind: "glossaryDescription";
   entryId: GlossaryEntryId;
   representativeSurface: string;
+  draft: GlossaryEntryDraft;
+  /** Line-ending breaks for `draft.description`, as last reported by the
+   *  editor (seeded by analyzing the entry's Description at open time). */
+  descriptionLineEndingBreaks: LineEndingBreakSet;
 }
 
 export type CurrentEditor =
@@ -53,7 +69,31 @@ export function createGlossaryDescriptionCurrentEditor(
   return {
     kind: "glossaryDescription",
     entryId: entry.id,
-    representativeSurface: representativeGlossarySurface(entry).trim()
+    representativeSurface: representativeGlossarySurface(entry).trim(),
+    draft: createGlossaryEntryDraft(entry),
+    descriptionLineEndingBreaks: buildLineEndingBreakSet(
+      analyzeLineEndings(entry.description)
+    )
+  };
+}
+
+/**
+ * #573 Slice 3: apply an editor text change to a glossary Description tab's
+ * in-memory draft. Any other editor is returned unchanged.
+ */
+export function updateGlossaryDescriptionEditorText(
+  editor: CurrentEditor,
+  description: string,
+  lineEndingBreaks: LineEndingBreakSet
+): CurrentEditor {
+  if (editor.kind !== "glossaryDescription") {
+    return editor;
+  }
+
+  return {
+    ...editor,
+    draft: updateGlossaryEntryDraftDescription(editor.draft, description),
+    descriptionLineEndingBreaks: lineEndingBreaks
   };
 }
 
@@ -87,7 +127,8 @@ export function isCurrentEditorDirty(editor: CurrentEditor): boolean {
     case "markdown":
       return isCurrentDocumentDirty(editor.document);
     case "glossaryDescription":
-      // #573 Slice 1: read-only placeholder — no draft, never dirty.
+      // #573 Slice 3: edits live only in the in-memory draft; dirty / save
+      // tracking is deliberately deferred to a later slice.
       return false;
   }
 }

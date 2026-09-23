@@ -61,8 +61,10 @@ describe("project access mode command wiring (#211)", () => {
     expect(contextBlock).toContain(
       "const isReadOnlyProjectOwnedEditor ="
     );
+    // #573 Slice 3: a glossary Description tab is project-owned glossary
+    // data, so it is read-only in a read-only project too.
     expect(contextBlock).toContain(
-      "isReadOnlyProject && isProjectOwnedCurrentEditor"
+      "isReadOnlyProject &&\n    (isProjectOwnedCurrentEditor || isGlossaryDescriptionEditorActive)"
     );
     expect(contextBlock).toContain(
       'activeMarkdownDocument?.kind === "project"'
@@ -96,7 +98,7 @@ describe("project access mode command wiring (#211)", () => {
     );
     expect(setActiveDocumentContentBlock).toContain("return;");
     expect(setActiveDocumentContentBlock).toContain(
-      "updateCurrentDocumentContent(\n          document,\n          nextContent,\n          nextLineEndingBreaks\n        )"
+      "updateCurrentDocumentContent(\n              document,\n              nextContent,\n              nextLineEndingBreaks\n            )"
     );
   });
 

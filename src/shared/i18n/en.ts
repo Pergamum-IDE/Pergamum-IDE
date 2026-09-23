@@ -1023,9 +1023,8 @@ export const enTranslations = {
   "glossaryEntryEditorPane.label": "Glossary Entry Editor",
   "glossaryEntryEditorPane.close": "Close",
   "glossaryEntryEditorPane.openDescriptionTab": "Open in Tab",
-  "glossaryDescriptionTab.placeholder.heading": "Glossary Description Tab",
-  "glossaryDescriptionTab.placeholder.notice":
-    "The Description editor / preview will be implemented in a later slice. This tab is not editable yet.",
+  "glossaryDescriptionTab.unsavedNotice":
+    "Saving is not supported in this glossary Description tab yet. Save and unsaved-change confirmation will be added in a later slice.",
   "glossaryEntryEditorPane.resizeHandle": "Resize the Glossary Entry Editor pane",
   "glossaryEntryEditorPane.create.submit": "Create",
   "glossaryEntryEditorPane.create.failed":

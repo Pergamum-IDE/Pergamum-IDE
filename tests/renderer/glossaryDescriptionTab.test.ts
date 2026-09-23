@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import {
@@ -18,7 +19,8 @@ import {
   editorIdForCurrentEditor,
   glossaryDescriptionEditorTitle,
   isCurrentEditorDirty,
-  markdownDocumentForEditor
+  markdownDocumentForEditor,
+  updateGlossaryDescriptionEditorText
 } from "../../src/renderer/currentEditor";
 import {
   activeProjectDocumentRelativePath,
@@ -29,6 +31,7 @@ import {
   openOrActivateDocument,
   openOrActivateEditor,
   removeProjectScopedOpenEditors,
+  updateActiveOpenEditor,
   updateOpenDocument
 } from "../../src/renderer/openDocuments";
 import {
@@ -275,5 +278,100 @@ describe("glossaryDescription tabs in OpenDocuments (#573 Slice 1)", () => {
       kind: "project",
       relativePath: "chapter.md"
     });
+  });
+});
+
+describe("glossaryDescription in-memory draft (#573 Slice 3)", () => {
+  it("seeds the tab's draft from the entry's current Description", () => {
+    const entry = { ...glossaryEntry(entryIdA, "アリス"), description: "一行目\r\n二行目" };
+    const editor = createGlossaryDescriptionCurrentEditor(entry);
+
+    expect(editor.draft.entry).toBe(entry);
+    expect(editor.draft.description).toBe("一行目\r\n二行目");
+    expect(currentEditorTitle(editor)).toBe("語彙: アリス");
+  });
+
+  it("updates only the draft Description, stays clean, and never becomes a document", () => {
+    const editor = createGlossaryDescriptionCurrentEditor(
+      glossaryEntry(entryIdA, "アリス")
+    );
+    const breaks = createGlossaryDescriptionCurrentEditor({
+      ...glossaryEntry(entryIdA, "アリス"),
+      description: "a\nb"
+    }).descriptionLineEndingBreaks;
+    const updated = updateGlossaryDescriptionEditorText(editor, "新しい説明", breaks);
+
+    expect(updated.kind).toBe("glossaryDescription");
+    if (updated.kind !== "glossaryDescription") {
+      return;
+    }
+    expect(updated.draft.description).toBe("新しい説明");
+    expect(updated.draft.entry.description).toBe("説明");
+    expect(updated.descriptionLineEndingBreaks).toBe(breaks);
+    // Slice 3 deliberately defers dirty / save to Slice 4.
+    expect(isCurrentEditorDirty(updated)).toBe(false);
+    expect(markdownDocumentForEditor(updated)).toBeNull();
+  });
+
+  it("leaves a Markdown editor untouched", () => {
+    const editor = createMarkdownCurrentEditor(
+      createProjectDocument({ relativePath: "a.md", name: "a.md" }, "本文")
+    );
+    const breaks = markdownDocumentForEditor(editor)!.lineEndingBreaks;
+
+    expect(updateGlossaryDescriptionEditorText(editor, "x", breaks)).toBe(editor);
+  });
+
+  it("updates the active glossary tab's draft inside OpenDocuments", () => {
+    const glossaryEditor = createGlossaryDescriptionCurrentEditor(
+      glossaryEntry(entryIdA, "アリス")
+    );
+    const opened = openOrActivateEditor(
+      createInitialOpenDocumentsState(),
+      glossaryEditor,
+      projectContext
+    );
+    const next = updateActiveOpenEditor(opened, (editor) =>
+      updateGlossaryDescriptionEditorText(
+        editor,
+        "編集後",
+        glossaryEditor.descriptionLineEndingBreaks
+      )
+    );
+    const nextEditor = next.documents[0].editor;
+
+    expect(
+      nextEditor.kind === "glossaryDescription" && nextEditor.draft.description
+    ).toBe("編集後");
+    expect(getDirtyWorkingCopies(next)).toEqual([]);
+    expect(buildSessionSnapshotInputs("session", null, next, true).editors).toEqual(
+      []
+    );
+  });
+});
+
+describe("App glossary Description wiring (#573 Slice 3)", () => {
+  const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+
+  it("routes editor text changes of a glossary tab into its in-memory draft", () => {
+    const block = appSource.slice(
+      appSource.indexOf("function setActiveDocumentContent"),
+      appSource.indexOf("function openGlossaryCreateEntryPaneFromSidebar")
+    );
+
+    expect(block).toContain(
+      'activeCurrentEditor(state)?.kind === "glossaryDescription"'
+    );
+    expect(block).toContain("updateGlossaryDescriptionEditorText(");
+    expect(block).not.toContain("window.pergamum.glossary");
+  });
+
+  it("keeps image insertion and image paste file-backed only", () => {
+    expect(appSource).toContain(
+      'const canInsertImage =\n    canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";'
+    );
+    expect(appSource).toContain(
+      'onImageAttachmentPaste={\n                          currentEditor?.kind === "markdown" &&\n                          activeMarkdownDocument?.kind === "project" &&'
+    );
   });
 });

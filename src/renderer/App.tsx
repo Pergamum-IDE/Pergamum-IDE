@@ -177,6 +177,7 @@ import {
 import {
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
+  updateGlossaryDescriptionEditorText,
   currentEditorProjectRelativePath,
   currentEditorTitle,
   isCurrentEditorDirty,
@@ -2827,8 +2828,14 @@ export function App(): JSX.Element {
 
     return dirty;
   }, [openDocumentsState]);
+  // #573 Slice 3: the active tab is a glossary Description editor (project
+  // glossary data, but no backing file / CurrentDocument).
+  const isGlossaryDescriptionEditorActive =
+    !isEditorAreaSpecialTabActive &&
+    currentEditor?.kind === "glossaryDescription";
   const isReadOnlyProjectOwnedEditor =
-    isReadOnlyProject && isProjectOwnedCurrentEditor;
+    isReadOnlyProject &&
+    (isProjectOwnedCurrentEditor || isGlossaryDescriptionEditorActive);
   // #529: shared enable gate for the Heading / Bold / Italic / Strikethrough
   // / Link toolbar commands (and, since #527's table gate had the same
   // Markdown-only requirement gap, the Table command too) — reuses the
@@ -2837,8 +2844,13 @@ export function App(): JSX.Element {
   // `activeMarkdownDocument !== null`, which allowed these commands while a
   // special tab (Settings, Glossary Manager, ...) was showing, or on a
   // non-Markdown (.txt) document.
+  //
+  // #573 Slice 3: widened from "file-backed Markdown document" to "Markdown
+  // editing target", which also covers a glossary Description tab.
+  const activeEditorIsMarkdownEditingTarget =
+    activeEditorIsMarkdown || isGlossaryDescriptionEditorActive;
   const canUseMarkdownToolbarCommands =
-    activeEditorIsMarkdown && !isReadOnlyProjectOwnedEditor;
+    activeEditorIsMarkdownEditingTarget && !isReadOnlyProjectOwnedEditor;
   // #531: shared enable gate for the Ruby / Emphasis Mark toolbar buttons —
   // deliberately looser than `canUseMarkdownToolbarCommands` above, since the
   // existing Ctrl+R / Ctrl+. shortcuts already work on `.txt` documents
@@ -2848,11 +2860,12 @@ export function App(): JSX.Element {
   // matching `canUseMarkdownToolbarCommands`'s other two conditions.
   const hasEditableTextLikeDocument =
     !isEditorAreaSpecialTabActive &&
-    activeMarkdownDocument !== null &&
+    (activeMarkdownDocument !== null || isGlossaryDescriptionEditorActive) &&
     !isReadOnlyProjectOwnedEditor;
   // #535: narrower than `canUseMarkdownToolbarCommands` — the inserted
   // Markdown image link's relative path only makes sense for a project-owned
   // document (the attachment folder itself is always project-relative).
+  // #573: stays false for a glossary Description tab (no CurrentDocument).
   const canInsertImage =
     canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";
   // #548: Preview availability is no longer gated by document extension or
@@ -2860,7 +2873,7 @@ export function App(): JSX.Element {
   // dropdown controls how the current text-like document is interpreted.
   const isPreviewEligible =
     !isEditorAreaSpecialTabActive &&
-    activeMarkdownDocument !== null;
+    (activeMarkdownDocument !== null || isGlossaryDescriptionEditorActive);
   const canSave =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -4184,13 +4197,23 @@ export function App(): JSX.Element {
     }
 
     setOpenDocumentsState((state) =>
-      updateActiveOpenDocument(state, (document) =>
-        updateCurrentDocumentContent(
-          document,
-          nextContent,
-          nextLineEndingBreaks
-        )
-      )
+      // #573 Slice 3: a glossary Description tab keeps its text in the tab's
+      // in-memory draft only — never written to the DB here.
+      activeCurrentEditor(state)?.kind === "glossaryDescription"
+        ? updateActiveOpenEditor(state, (editor) =>
+            updateGlossaryDescriptionEditorText(
+              editor,
+              nextContent,
+              nextLineEndingBreaks
+            )
+          )
+        : updateActiveOpenDocument(state, (document) =>
+            updateCurrentDocumentContent(
+              document,
+              nextContent,
+              nextLineEndingBreaks
+            )
+          )
     );
   }
 
@@ -11677,7 +11700,9 @@ export function App(): JSX.Element {
                           effectiveSettings.preview.updateDelayMs
                         }
                         newFileLineEndingFallback={
-                          activeMarkdownDocument &&
+                          // #573 Slice 3: a glossary Description is Markdown
+                          // (same fallback as the Glossary Entry Editor Pane).
+                          !activeMarkdownDocument ||
                           isMarkdownCurrentDocument(activeMarkdownDocument)
                             ? effectiveSettings.markdownFiles.lineEnding
                             : effectiveSettings.textFiles.lineEnding

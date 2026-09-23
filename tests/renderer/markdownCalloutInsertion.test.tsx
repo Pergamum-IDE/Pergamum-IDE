@@ -235,7 +235,7 @@ describe("App callout toolbar wiring (#570)", () => {
 
   it("gates the callout dropdown with the shared Markdown toolbar gate (Markdown editor, not a special tab, not read-only)", () => {
     expect(appSource).toContain(
-      "const canUseMarkdownToolbarCommands =\n    activeEditorIsMarkdown && !isReadOnlyProjectOwnedEditor;"
+      "const canUseMarkdownToolbarCommands =\n    activeEditorIsMarkdownEditingTarget && !isReadOnlyProjectOwnedEditor;"
     );
     expect(appSource).toContain(
       "canInsertCallout={canUseMarkdownToolbarCommands}"

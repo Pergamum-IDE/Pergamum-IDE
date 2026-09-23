@@ -1017,9 +1017,8 @@ export const jaTranslations = {
   "glossaryEntryEditorPane.label": "語彙登録・編集ペイン",
   "glossaryEntryEditorPane.close": "閉じる",
   "glossaryEntryEditorPane.openDescriptionTab": "タブで開く",
-  "glossaryDescriptionTab.placeholder.heading": "語彙Descriptionタブ",
-  "glossaryDescriptionTab.placeholder.notice":
-    "Descriptionのエディタ／プレビューは後続のSliceで実装予定です。このタブはまだ編集できません。",
+  "glossaryDescriptionTab.unsavedNotice":
+    "この語彙Descriptionタブはまだ保存未対応です。保存・未保存確認は後続Sliceで実装します。",
   "glossaryEntryEditorPane.resizeHandle": "語彙登録・編集ペインの高さを変更",
   "glossaryEntryEditorPane.create.submit": "作成",
   "glossaryEntryEditorPane.create.failed": "語彙を作成できませんでした。",

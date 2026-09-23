@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 //
 // #573 Slice 2: EditorSurface routes a Markdown editor through
-// MarkdownSurfaceSource (unchanged editor + preview behavior) and still
-// renders the Slice 1 placeholder for a glossary Description tab.
+// MarkdownSurfaceSource (unchanged editor + preview behavior).
+// #573 Slice 3: a glossary Description tab renders the same editor + preview
+// stack over its in-memory draft (plus a "not saved yet" notice).
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EditorView } from "@codemirror/view";
@@ -13,8 +14,12 @@ import { EditorSurface } from "../../src/renderer/EditorSurface";
 import {
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
+  updateGlossaryDescriptionEditorText,
   type CurrentEditor
 } from "../../src/renderer/currentEditor";
+import type { LineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
+import type { MarkdownEditorParagraphIndentController } from "../../src/renderer/MarkdownEditor";
+import { MERMAID_BLOCK_CLASS } from "../../src/renderer/preview/mermaidPreviewPlaceholder";
 import { createProjectDocument } from "../../src/renderer/currentDocument";
 
 let containers: HTMLDivElement[] = [];
@@ -34,9 +39,29 @@ afterEach(() => {
 
 const entryId = "0190b6a1-1c2d-7e3f-8a4b-5c6d7e8f9a0b";
 
+const glossaryDescription = [
+  "# 人物",
+  "",
+  "> [!NOTE]",
+  "> 注記",
+  "",
+  "```ts",
+  "const x = 1;",
+  "```",
+  "",
+  "$E = mc^2$",
+  "",
+  "```mermaid",
+  "graph TD",
+  "  A --> B",
+  "```",
+  "",
+  "![図](images/a.png)"
+].join("\n");
+
 const glossaryEntry: GlossaryEntry = {
   id: entryId,
-  description: "説明",
+  description: glossaryDescription,
   atoms: [
     {
       id: "0190b6a1-1c2d-7e3f-8a4b-000000000001",
@@ -62,10 +87,13 @@ function projectEditor(relativePath: string, content: string): CurrentEditor {
   );
 }
 
+type SurfaceProps = React.ComponentProps<typeof EditorSurface>;
+
 function props(
   editor: CurrentEditor,
-  documentKey: string
-): React.ComponentProps<typeof EditorSurface> {
+  documentKey: string,
+  overrides: Partial<SurfaceProps> = {}
+): SurfaceProps {
   const noop = () => undefined;
 
   return {
@@ -126,11 +154,16 @@ function props(
     onDocumentOpenPreviewDomCommitted: noop,
     onDocumentOpenPreviewDecorationCompleted: noop,
     onDocumentOpenPreviewFrameObserved: noop,
-    onViewportChanged: noop
-  } as React.ComponentProps<typeof EditorSurface>;
+    onViewportChanged: noop,
+    ...overrides
+  } as SurfaceProps;
 }
 
-function mount(editor: CurrentEditor, documentKey: string) {
+function mount(
+  editor: CurrentEditor,
+  documentKey: string,
+  overrides: Partial<SurfaceProps> = {}
+) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -138,20 +171,33 @@ function mount(editor: CurrentEditor, documentKey: string) {
   roots.push(root);
 
   act(() => {
-    root.render(<EditorSurface {...props(editor, documentKey)} />);
+    root.render(<EditorSurface {...props(editor, documentKey, overrides)} />);
   });
+
+  function view(): EditorView | null {
+    const cmContent = container.querySelector<HTMLElement>(".cm-content");
+    return cmContent ? EditorView.findFromDOM(cmContent) : null;
+  }
 
   return {
     container,
-    rerender(nextEditor: CurrentEditor, nextKey: string) {
+    rerender(
+      nextEditor: CurrentEditor,
+      nextKey: string,
+      nextOverrides: Partial<SurfaceProps> = overrides
+    ) {
       act(() => {
-        root.render(<EditorSurface {...props(nextEditor, nextKey)} />);
+        root.render(
+          <EditorSurface {...props(nextEditor, nextKey, nextOverrides)} />
+        );
       });
     },
+    view,
     editorText(): string | null {
-      const cmContent = container.querySelector<HTMLElement>(".cm-content");
-      const view = cmContent ? EditorView.findFromDOM(cmContent) : null;
-      return view ? view.state.doc.toString() : null;
+      return view()?.state.doc.toString() ?? null;
+    },
+    previewHtml(): string {
+      return container.querySelector("article.preview")?.innerHTML ?? "";
     }
   };
 }
@@ -185,21 +231,127 @@ describe("EditorSurface source routing (#573 Slice 2)", () => {
     expect(surface.editorText()).toBe("メモ");
   });
 
-  it("renders the placeholder (no editor) for a glossary Description tab", () => {
+  it("renders a glossary Description tab as editor + preview with a notice", () => {
     const surface = mount(
       createGlossaryDescriptionCurrentEditor(glossaryEntry),
       "glossary"
     );
 
-    expect(surface.editorText()).toBeNull();
+    expect(surface.editorText()).toBe(glossaryDescription);
     expect(
-      surface.container.querySelector(".glossaryDescriptionTabSurface")
+      surface.container.querySelector(".glossaryDescriptionTabNotice")
         ?.textContent
-    ).toBe("アリス");
+    ).toBe(t("ja", "glossaryDescriptionTab.unsavedNotice"));
+
+    const html = surface.previewHtml();
+    expect(html).toContain("markdown-callout-note");
+    expect(html).toContain("hljs language-ts");
+    expect(html).toContain('class="katex"');
+    expect(html).toContain(MERMAID_BLOCK_CLASS);
+    // Project-root image resolution, like the Glossary Entry Editor Pane.
+    expect(
+      surface.container.querySelector("article.preview img")?.getAttribute("src")
+    ).toBe("pergamum-asset://project/images/a.png");
+  });
+
+  it("previews glossary Description as Markdown regardless of the selected renderer", () => {
+    const surface = mount(
+      createGlossaryDescriptionCurrentEditor(glossaryEntry),
+      "glossary",
+      { previewRenderer: "aozoraVertical" }
+    );
+
+    expect(
+      surface.container.querySelector("article.preview h1")?.textContent
+    ).toBe("人物");
+  });
+
+  it("reports edits and re-renders the preview from the updated draft", async () => {
+    const changes: { text: string; breaks: LineEndingBreakSet }[] = [];
+    const overrides: Partial<SurfaceProps> = {
+      onChangeMarkdownContent: (text, breaks) => {
+        changes.push({ text, breaks });
+      }
+    };
+    const editor = createGlossaryDescriptionCurrentEditor({
+      ...glossaryEntry,
+      description: "旧"
+    });
+    const surface = mount(editor, "glossary", overrides);
+
+    act(() => {
+      surface.view()!.dispatch({
+        changes: { from: 0, to: 1, insert: "## 新しい見出し" }
+      });
+    });
+
+    expect(changes.at(-1)?.text).toBe("## 新しい見出し");
+
+    const updated = updateGlossaryDescriptionEditorText(
+      editor,
+      changes.at(-1)!.text,
+      changes.at(-1)!.breaks
+    );
+    surface.rerender(updated, "glossary");
+    // The preview trails the editor by a (0 ms here) debounce timer.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(
+      surface.container.querySelector("article.preview h2")?.textContent
+    ).toBe("新しい見出し");
+  });
+
+  it("hands the toolbar controller to the glossary Description editor, not the previous document", () => {
+    let controller: MarkdownEditorParagraphIndentController | null = null;
+    const changes: string[] = [];
+    const overrides: Partial<SurfaceProps> = {
+      onParagraphIndentControllerChange: (next) => {
+        controller = next;
+      },
+      onChangeMarkdownContent: (text) => {
+        changes.push(text);
+      }
+    };
+    const surface = mount(projectEditor("a.md", "本文"), "a", overrides);
+
+    surface.rerender(
+      createGlossaryDescriptionCurrentEditor({
+        ...glossaryEntry,
+        description: "語"
+      }),
+      "glossary"
+    );
+
+    act(() => {
+      surface.view()!.dispatch({ selection: { anchor: 0, head: 1 } });
+    });
+    act(() => {
+      controller!.applyInlineMarkup("**");
+    });
+
+    expect(surface.editorText()).toBe("**語**");
+    expect(changes.at(-1)).toBe("**語**");
+
+    act(() => {
+      controller!.insertCallout("warning");
+    });
+
+    expect(changes.at(-1)).toContain("> [!WARNING]");
+  });
+
+  it("switches between a glossary Description tab and a document tab", () => {
+    const surface = mount(
+      createGlossaryDescriptionCurrentEditor(glossaryEntry),
+      "glossary"
+    );
 
     surface.rerender(projectEditor("a.md", "戻った"), "a");
 
     expect(surface.editorText()).toBe("戻った");
-    expect(surface.container.querySelector(".glossaryDescriptionTab")).toBeNull();
+    expect(
+      surface.container.querySelector(".glossaryDescriptionTabNotice")
+    ).toBeNull();
   });
 });

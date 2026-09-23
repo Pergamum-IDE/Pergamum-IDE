@@ -6384,33 +6384,16 @@ label.settingsItemHeader {
   color: #8f1b21;
 }
 
-/* #573 Slice 1: glossary Description tab placeholder body. */
-.glossaryDescriptionTab {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  background: #ffffff;
-  padding: 28px 32px;
-  color: #52616f;
-}
-
-.glossaryDescriptionTabHeading {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.glossaryDescriptionTabSurface {
-  margin: 0 0 16px;
-  color: #17212b;
-  font-size: 20px;
-  font-weight: 700;
-}
-
+/* #573 Slice 3: non-blocking "not saved yet" note above a glossary
+   Description tab's editor / preview workspace. */
 .glossaryDescriptionTabNotice {
+  flex: 0 0 auto;
   margin: 0;
-  font-size: 13px;
+  padding: 6px 16px;
+  border-bottom: 1px solid #efd9a8;
+  background: #fff8e6;
+  color: #6b4e00;
+  font-size: 12px;
 }
 
 /* #375: Glossary Management tab — reuses the Tag Manager's cell / drag-handle /

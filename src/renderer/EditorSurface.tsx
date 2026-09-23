@@ -36,6 +36,7 @@ import {
 } from "./currentEditor";
 import {
   createCurrentDocumentMarkdownSurfaceSource,
+  createGlossaryDescriptionMarkdownSurfaceSource,
   type MarkdownSurfaceSource
 } from "./markdownSurfaceSource";
 import {
@@ -143,7 +144,7 @@ import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import type { SoundFeedbackPlayer } from "./soundFeedback";
 import { clampMarkdownEditorPreviewRatio } from "./workbenchLayout";
-import { GlossaryDescriptionTabPlaceholder } from "./GlossaryDescriptionTabPlaceholder";
+import { GlossaryDescriptionTabNotice } from "./GlossaryDescriptionTabNotice";
 
 const NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY = "(max-width: 760px)";
 
@@ -736,24 +737,30 @@ export function EditorSurface({
   onPreviewScrollSyncEvent
 }: EditorSurfaceProps): JSX.Element {
   // #573 Slice 2: re-derived only when the document object itself changes
-  // (the same cadence the surface's effects previously keyed on).
+  // (the same cadence the surface's effects previously keyed on). Slice 3: a
+  // glossary Description tab is re-derived when its editor (draft) changes.
   const markdownDocument = markdownDocumentForEditor(editor);
+  const markdownSurfaceSourceKey: object = markdownDocument ?? editor;
   const markdownSurfaceSource = useMemo(
     () =>
-      markdownDocument
-        ? createCurrentDocumentMarkdownSurfaceSource(markdownDocument)
-        : null,
-    [markdownDocument]
+      editor.kind === "markdown"
+        ? createCurrentDocumentMarkdownSurfaceSource(editor.document)
+        : createGlossaryDescriptionMarkdownSurfaceSource(editor),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [markdownSurfaceSourceKey]
   );
+  const isGlossaryDescription = editor.kind === "glossaryDescription";
 
-  switch (editor.kind) {
-    case "markdown":
-      if (!markdownSurfaceSource) {
-        throw new Error("A Markdown editor must have a surface source.");
-      }
-
-      return (
-        <MarkdownEditorSurface
+  // #573 Slice 3: both editor kinds share ONE MarkdownEditorSurface at a
+  // stable position (after the optional glossary notice), so switching
+  // between a document tab and a glossary Description tab behaves like
+  // switching between two document tabs.
+  return (
+    <>
+      {isGlossaryDescription ? (
+        <GlossaryDescriptionTabNotice translate={translate} />
+      ) : null}
+      <MarkdownEditorSurface
           source={markdownSurfaceSource}
           isDebugModeEnabled={isDebugModeEnabled}
           isSyncScrollEditorToPreviewEnabled={isSyncScrollEditorToPreviewEnabled}
@@ -761,7 +768,9 @@ export function EditorSurface({
           isDoubleClickJumpToEditorEnabled={isDoubleClickJumpToEditorEnabled}
           documentKey={activeDocumentKey}
           documentStates={documentStates}
-          previewRenderer={previewRenderer}
+          // #573 Slice 3: glossary Description always previews as plain
+          // (horizontal) Markdown, like the Glossary Entry Editor Pane.
+          previewRenderer={isGlossaryDescription ? "markdown" : previewRenderer}
           narouMarkText={narouMarkText}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
@@ -828,15 +837,8 @@ export function EditorSurface({
           onViewportChanged={onViewportChanged}
           onPreviewScrollSyncEvent={onPreviewScrollSyncEvent}
         />
-      );
-    case "glossaryDescription":
-      return (
-        <GlossaryDescriptionTabPlaceholder
-          editor={editor}
-          translate={translate}
-        />
-      );
-  }
+    </>
+  );
 }
 
 interface MarkdownEditorSurfaceProps {
