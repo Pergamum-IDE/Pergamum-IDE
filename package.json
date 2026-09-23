@@ -57,6 +57,7 @@
     "codemirror": "^6.0.2",
     "electron-squirrel-startup": "^1.0.1",
     "encoding-japanese": "^2.4.0",
+    "highlight.js": "^11.12.0",
     "iconv-lite": "^0.7.3",
     "markdown-it": "^15.0.0",
     "react": "^18.3.1",

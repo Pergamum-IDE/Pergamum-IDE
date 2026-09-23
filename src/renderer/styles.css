@@ -4862,6 +4862,122 @@ label.settingsItemHeader {
   padding: 0;
 }
 
+/*
+ * #536: highlight.js syntax highlighting — GitHub light theme.
+ * Scoped to the Preview pane so it does not affect other surfaces.
+ * Source: highlight.js/styles/github.css (BSD 3-Clause License).
+ * Third-party notices: see THIRD_PARTY_NOTICES.md.
+ */
+.preview pre code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1em;
+  background: #ffffff;
+  color: #24292e;
+  border-radius: 4px;
+}
+
+.preview .hljs-doctag,
+.preview .hljs-keyword,
+.preview .hljs-meta .hljs-keyword,
+.preview .hljs-template-tag,
+.preview .hljs-template-variable,
+.preview .hljs-type,
+.preview .hljs-variable.language_ {
+  /* prettylights-syntax-keyword */
+  color: #d73a49;
+}
+
+.preview .hljs-title,
+.preview .hljs-title.class_,
+.preview .hljs-title.class_.inherited__,
+.preview .hljs-title.function_ {
+  /* prettylights-syntax-entity */
+  color: #6f42c1;
+}
+
+.preview .hljs-attr,
+.preview .hljs-attribute,
+.preview .hljs-literal,
+.preview .hljs-meta,
+.preview .hljs-number,
+.preview .hljs-operator,
+.preview .hljs-variable,
+.preview .hljs-selector-attr,
+.preview .hljs-selector-class,
+.preview .hljs-selector-id {
+  /* prettylights-syntax-constant */
+  color: #005cc5;
+}
+
+.preview .hljs-regexp,
+.preview .hljs-string,
+.preview .hljs-meta .hljs-string {
+  /* prettylights-syntax-string */
+  color: #032f62;
+}
+
+.preview .hljs-built_in,
+.preview .hljs-symbol {
+  /* prettylights-syntax-variable */
+  color: #e36209;
+}
+
+.preview .hljs-comment,
+.preview .hljs-code,
+.preview .hljs-formula {
+  /* prettylights-syntax-comment */
+  color: #6a737d;
+}
+
+.preview .hljs-name,
+.preview .hljs-quote,
+.preview .hljs-selector-tag,
+.preview .hljs-selector-pseudo {
+  /* prettylights-syntax-entity-tag */
+  color: #22863a;
+}
+
+.preview .hljs-subst {
+  /* prettylights-syntax-storage-modifier-import */
+  color: #24292e;
+}
+
+.preview .hljs-section {
+  /* prettylights-syntax-markup-heading */
+  color: #005cc5;
+  font-weight: bold;
+}
+
+.preview .hljs-bullet {
+  /* prettylights-syntax-markup-list */
+  color: #735c0f;
+}
+
+.preview .hljs-emphasis {
+  /* prettylights-syntax-markup-italic */
+  color: #24292e;
+  font-style: italic;
+}
+
+.preview .hljs-strong {
+  /* prettylights-syntax-markup-bold */
+  color: #24292e;
+  font-weight: bold;
+}
+
+.preview .hljs-addition {
+  /* prettylights-syntax-markup-inserted */
+  color: #22863a;
+  background-color: #f0fff4;
+}
+
+.preview .hljs-deletion {
+  /* prettylights-syntax-markup-deleted */
+  color: #b31d28;
+  background-color: #ffeef0;
+}
+
 .preview blockquote {
   margin: 0 0 14px;
   border-left: 3px solid #9bb5d1;

@@ -9,6 +9,7 @@ import {
   isNarouPreviewRenderer,
   type PreviewRendererId
 } from "../../shared/settings";
+import { renderHighlightedCodeBlock } from "./codeHighlight";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -361,6 +362,23 @@ markdown.core.ruler.push("aozora_ruby_transform", (state) => {
 });
 
 const NO_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext = { kind: "none" };
+
+/**
+ * #536: Syntax-highlight fenced code blocks in Markdown Preview.
+ * Delegates to the shared `renderHighlightedCodeBlock` helper which uses
+ * highlight.js for known languages and falls back to escaped plaintext for
+ * unknown or missing languages.  `highlightAuto` is never called.
+ *
+ * `data-source-line` is forwarded from the token attrs (set by
+ * `source_line_anchors`, #503) so that preview scroll-sync and
+ * jump-to-source (#504) continue to function correctly.
+ */
+markdown.renderer.rules.fence = (tokens, idx) => {
+  const token = tokens[idx];
+  const rawSourceLine = token.attrGet("data-source-line");
+  const sourceLine = rawSourceLine != null ? String(rawSourceLine) : undefined;
+  return renderHighlightedCodeBlock(token.info, token.content, sourceLine);
+};
 
 /**
  * #409 / #412: rewrite project-local image `src` to `pergamum-asset://` so the
