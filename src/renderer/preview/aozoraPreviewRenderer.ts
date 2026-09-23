@@ -4,6 +4,7 @@ import {
   getAozoraBoutenMark,
   replaceAozoraTargetBoutenInText
 } from "./aozoraBoutenMap";
+import { decodeAozoraAccentDecomposedText } from "../../shared/aozoraAccentDecomposition";
 
 function isKanjiCodePoint(codePoint: number): boolean {
   return (
@@ -139,6 +140,7 @@ function parseRubyInText(text: string): RubyTextChunk[] {
 
 /**
  * Transforms inline annotations in escaped source text:
+ * - Accent decomposition (〔e'tiquette〕)
  * - Ruby (｜漢字《るび》, 漢字《るび》)
  * - Bouten (［＃傍点］...［＃傍点終わり］)
  * - Bold (［＃太字］...［＃太字終わり］)
@@ -147,7 +149,8 @@ function parseRubyInText(text: string): RubyTextChunk[] {
  */
 function processInlineContent(rawText: string): string {
   const gaijiResolved = replaceAozoraGaijiInText(rawText);
-  const escaped = escapeHtml(gaijiResolved);
+  const accentDecoded = decodeAozoraAccentDecomposedText(gaijiResolved);
+  const escaped = escapeHtml(accentDecoded);
   const targetBoutenResolved = replaceAozoraTargetBoutenInText(escaped);
 
   // 1. Ruby parsing

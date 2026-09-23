@@ -163,3 +163,18 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## Aozora / accent decomposition conversion table
+
+Pergamum includes a derived mapping table for accent-decomposed Latin text used when rendering Aozora-style text.
+
+Primary source:
+アクセント付き文字の変換表 0.11
+<https://cosmoshouse.com/tools/acc-conv-j.htm>
+
+Aozora usage reference:
+青空文庫テキストへの「アクセント分解」の適用
+<https://www.aozora.gr.jp/accent_separation.html>
+
+The table is used to convert Aozora-style accent-decomposed Latin notation inside 〔...〕 into Unicode characters for rendering.
+
