@@ -32,6 +32,7 @@ const emptySurfaceIndex = { entries: [], trie: null as any };
 const defaultDecoratorProps: GlossaryPreviewDecoratorProps = {
   previewHtml: "<p>テスト</p>",
   surfaceIndex: emptySurfaceIndex,
+  translate: (key, values) => t("ja", key, values),
   documentOpenId: null,
   previewRenderStartedAt: 0,
   onPreviewDomCommitted: () => {},

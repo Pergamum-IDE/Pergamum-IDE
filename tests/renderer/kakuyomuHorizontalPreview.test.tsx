@@ -103,6 +103,7 @@ describe("Kakuyomu-like horizontal novel preview (#508)", () => {
             onPreviewDomCommitted={() => {}}
             onPreviewDecorationCompleted={() => {}}
             onPreviewFrameObserved={() => {}}
+            translate={(key) => key}
           />
         );
       });
@@ -134,6 +135,7 @@ describe("Kakuyomu-like horizontal novel preview (#508)", () => {
             onPreviewDomCommitted={() => {}}
             onPreviewDecorationCompleted={() => {}}
             onPreviewFrameObserved={() => {}}
+            translate={(key) => key}
           />
         );
       });
@@ -154,6 +156,7 @@ describe("Kakuyomu-like horizontal novel preview (#508)", () => {
             onPreviewDomCommitted={() => {}}
             onPreviewDecorationCompleted={() => {}}
             onPreviewFrameObserved={() => {}}
+            translate={(key) => key}
           />
         );
       });

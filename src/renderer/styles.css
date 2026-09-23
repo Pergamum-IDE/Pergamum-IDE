@@ -4978,6 +4978,69 @@ label.settingsItemHeader {
   background-color: #ffeef0;
 }
 
+/* #564: Mermaid diagram blocks — Markdown horizontal preview only. No theme
+   settings in this issue; this is layout/scoping only. */
+.preview .markdownMermaidBlock {
+  display: block;
+  margin: 12px 0;
+}
+
+.preview .markdownMermaidDiagram {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.preview .markdownMermaidDiagram svg {
+  max-inline-size: 100%;
+  height: auto;
+}
+
+.preview .markdownMermaidEmpty {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+  color: var(--workspace-sidebar-muted-foreground, #6b7785);
+  font-size: 0.9em;
+}
+
+.preview .markdownMermaidError {
+  padding: 10px 12px;
+  border: 1px solid var(--app-dialog-icon-warning, #8a4c0f);
+  border-radius: 4px;
+  background: var(--app-dialog-warning-header-background, #f7e4e8);
+}
+
+.preview .markdownMermaidErrorMessage {
+  margin: 0;
+  color: var(--app-dialog-icon-warning, #8a4c0f);
+  font-weight: 600;
+}
+
+.preview .markdownMermaidErrorHint {
+  margin: 4px 0 0;
+  font-size: 0.9em;
+  color: var(--workspace-sidebar-muted-foreground, #6b7785);
+}
+
+.preview .markdownMermaidErrorDetails {
+  margin-block-start: 8px;
+  font-size: 0.85em;
+}
+
+.preview .markdownMermaidErrorReason,
+.preview .markdownMermaidErrorSource {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-bg-input, #fff);
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 4px;
+}
+
 .preview blockquote {
   margin: 0 0 14px;
   border-left: 3px solid #9bb5d1;

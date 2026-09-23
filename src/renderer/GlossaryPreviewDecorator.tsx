@@ -3,6 +3,7 @@ import {
   isNarouPreviewRenderer,
   type PreviewRendererId
 } from "../shared/settings";
+import type { Translate } from "../shared/i18n";
 import {
   isAmbiguousGlossarySurfaceTextMatch,
   type GlossarySurfaceIndex
@@ -12,12 +13,21 @@ import {
   buildGlossarySurfaceDecorationSegments,
   shouldSkipGlossarySurfaceDecorationTextNode
 } from "./glossarySurfaceDecoration";
+import { renderMermaidDiagramsInContainer } from "./preview/markdownMermaidRendering";
 
 export interface GlossaryPreviewDecoratorProps {
   previewHtml: string;
   surfaceIndex: GlossarySurfaceIndex;
   previewRenderer?: PreviewRendererId;
   narouMarkText?: string;
+  /**
+   * #564: required only to localize the Mermaid empty/error inline
+   * messages. Mermaid diagrams are scanned and rendered from this same
+   * effect ONLY when `previewRenderer === "markdown"` — Narou / Kakuyomu
+   * (horizontal and vertical) and Aozora previews, which reuse this same
+   * component, are unaffected.
+   */
+  translate: Translate;
   /** In-flight document-open correlation id (#152), or null when idle. */
   documentOpenId: string | null;
   /**
@@ -154,6 +164,7 @@ export function GlossaryPreviewDecorator({
   surfaceIndex,
   previewRenderer = "markdown",
   narouMarkText,
+  translate,
   documentOpenId,
   previewRenderStartedAt,
   onPreviewDomCommitted,
@@ -165,6 +176,11 @@ export function GlossaryPreviewDecorator({
   const previewRef = useRef<HTMLElement | null>(null);
   const onPreviewContainerMountRef = useRef(onPreviewContainerMount);
   const onPreviewContentCommittedRef = useRef(onPreviewContentCommitted);
+  // #564: incremented once per live preview DOM commit (below), so an
+  // async mermaid.render() from an older commit can be identified by its id
+  // alone — the actual staleness guard is `container.isConnected`
+  // (see markdownMermaidRendering.ts), not a comparison against this ref.
+  const mermaidGenerationRef = useRef(0);
   useLayoutEffect(() => {
     onPreviewContainerMountRef.current = onPreviewContainerMount;
     onPreviewContentCommittedRef.current = onPreviewContentCommitted;
@@ -198,6 +214,30 @@ export function GlossaryPreviewDecorator({
     }
     previewElement.innerHTML = previewHtml;
     onPreviewContentCommittedRef.current?.(previewElement);
+
+    // #564: Mermaid placeholders only ever appear in the HTML when this
+    // render was for "markdown" (horizontal) preview — the fence rule
+    // itself is gated the same way — but this check is kept here too as a
+    // second, independent guard against ever scanning a Narou / Kakuyomu /
+    // Aozora container. Synchronous and fast when there is nothing to do
+    // (querySelectorAll on an empty match set). mermaid.render() is async,
+    // so its results always arrive strictly after the synchronous Glossary
+    // decoration pass below completes — see markdownMermaidRendering.ts's
+    // module doc comment for why that ordering makes SVG output safe from
+    // decoration without needing to special-case it here.
+    if (previewRenderer === "markdown") {
+      mermaidGenerationRef.current += 1;
+      renderMermaidDiagramsInContainer(
+        previewElement,
+        mermaidGenerationRef.current,
+        {
+          emptyMessage: translate("preview.mermaid.emptyMessage"),
+          errorMessage: translate("preview.mermaid.errorMessage"),
+          errorHint: translate("preview.mermaid.errorHint"),
+          showDetailsLabel: translate("preview.mermaid.showDetails")
+        }
+      );
+    }
 
     // Proxy measurement (#154): React's own commit timing isn't directly
     // observable, so this layout effect firing — which runs synchronously
@@ -293,6 +333,12 @@ export function GlossaryPreviewDecorator({
     // excluded: this effect must only re-run when the preview content
     // itself changes (open or edit), never merely because App.tsx cleared
     // documentOpenId after handleDocumentOpenMeasured — see comment above.
+    // previewRenderer/translate (#564) are excluded for the same reason —
+    // `previewHtml` is already recomputed whenever `previewRenderer`
+    // changes (it is a dependency of the memo that produces it), so
+    // whenever that change is actually consequential for Mermaid (a
+    // Mermaid placeholder appearing/disappearing) `previewHtml` itself
+    // changes and re-triggers this effect.
   }, [previewHtml, surfaceIndex]);
 
   const isNarou = isNarouPreviewRenderer(previewRenderer);
