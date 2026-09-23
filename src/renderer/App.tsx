@@ -4764,47 +4764,73 @@ export function App(): JSX.Element {
   // the modifiers that produce those characters vary by keyboard layout
   // (e.g. Shift+3 for `#` on a US layout) — `event.key` alone identifies
   // the shortcut, per #556's keyboard layout policy.
-  useGlobalKeyboardShortcuts(
-    useMemo(
-      () => [
-        {
-          id: "togglePreview",
-          match: { key: "p", ctrlOrCmd: true, shift: true },
-          handler: () => {
-            if (isPreviewEligible) {
-              handleTogglePreviewVisible();
-            }
-          }
-        },
-        {
-          id: "openCommandPaletteFileMode",
-          match: { key: "o", ctrlOrCmd: true },
-          handler: () => openCommandPaletteWithPrefix("")
-        },
-        {
-          id: "openCommandPaletteHeadingJump",
-          match: { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true },
-          handler: () => openCommandPaletteWithPrefix("#")
-        },
-        {
-          id: "openCommandPaletteGlossaryJump",
-          match: { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true },
-          handler: () => openCommandPaletteWithPrefix("@")
-        },
-        {
-          id: "openCommandPaletteLineJump",
-          match: { key: ":", ctrlOrCmd: true, ignoreShiftAndAltState: true },
-          handler: () => openCommandPaletteWithPrefix(":")
-        },
-        {
-          id: "openCommandPaletteProjectSearch",
-          match: { key: "%", ctrlOrCmd: true, ignoreShiftAndAltState: true },
-          handler: () => openCommandPaletteWithPrefix("%")
+  // #558: pane toggle shortcuts (Ctrl+Shift+E/G/M/T) are registered further
+  // below in this same array.
+  // Pass fresh closures every render: the hook keeps a single listener and
+  // reads this array through a ref, so pane shortcuts see the same current
+  // command state as Activity Bar clicks.
+  useGlobalKeyboardShortcuts([
+    {
+      id: "togglePreview",
+      match: { key: "p", ctrlOrCmd: true, shift: true },
+      handler: () => {
+        if (isPreviewEligible) {
+          handleTogglePreviewVisible();
         }
-      ],
-      [isPreviewEligible]
-    )
-  );
+      }
+    },
+    {
+      id: "openCommandPaletteFileMode",
+      match: { key: "o", ctrlOrCmd: true },
+      handler: () => openCommandPaletteWithPrefix("")
+    },
+    {
+      id: "openCommandPaletteHeadingJump",
+      match: { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      handler: () => openCommandPaletteWithPrefix("#")
+    },
+    {
+      id: "openCommandPaletteGlossaryJump",
+      match: { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      handler: () => openCommandPaletteWithPrefix("@")
+    },
+    {
+      id: "openCommandPaletteLineJump",
+      match: { key: ":", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      handler: () => openCommandPaletteWithPrefix(":")
+    },
+    {
+      id: "openCommandPaletteProjectSearch",
+      match: { key: "%", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      handler: () => openCommandPaletteWithPrefix("%")
+    },
+    // #558: pane toggle shortcuts. Each calls `handleActivityBarModeClick`
+    // directly — the exact same function the Activity Bar buttons' onClick
+    // uses — so the toggle behavior (resolveSidebarToggle: same mode
+    // collapses, different mode switches + expands) and Activity Bar
+    // selected-state consistency come for free, with no logic duplicated
+    // in the shortcut handler itself.
+    {
+      id: "toggleFileExplorer",
+      match: { key: "e", ctrlOrCmd: true, shift: true },
+      handler: () => handleActivityBarModeClick("files")
+    },
+    {
+      id: "toggleGlossaryPane",
+      match: { key: "g", ctrlOrCmd: true, shift: true },
+      handler: () => handleActivityBarModeClick("glossary")
+    },
+    {
+      id: "toggleDocumentMap",
+      match: { key: "m", ctrlOrCmd: true, shift: true },
+      handler: () => handleActivityBarModeClick("documentMap")
+    },
+    {
+      id: "toggleDocumentMetrics",
+      match: { key: "t", ctrlOrCmd: true, shift: true },
+      handler: () => handleActivityBarModeClick("documentMetrics")
+    }
+  ]);
 
   function closeSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings") {
