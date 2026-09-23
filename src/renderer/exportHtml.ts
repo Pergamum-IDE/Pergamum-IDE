@@ -23,6 +23,11 @@ import type {
   PdfWritingMode
 } from "./exportTypes";
 import { escapeCssFontFamily } from "./exportPdf";
+import {
+  markdownCalloutExportCss,
+  markdownItCallout,
+  type MarkdownCalloutLabels
+} from "./preview/markdownCallout";
 
 export function isNetworkExternalImageSrc(src: string): boolean {
   const value = src.trim();
@@ -89,6 +94,12 @@ const pdfMarkdownParser = new MarkdownIt({
   html: false,
   linkify: true
 });
+
+// #568: GitHub Alert-style callouts, shared with the Markdown preview so
+// HTML / PDF export produce the same callout structure. Both parsers only
+// ever render `bodyNotation === "markdown"` documents, so no gate is needed.
+markdownParser.use(markdownItCallout);
+pdfMarkdownParser.use(markdownItCallout);
 
 const defaultPdfImageRender =
   pdfMarkdownParser.renderer.rules.image ||
@@ -385,7 +396,7 @@ export function renderDocumentToHtml(
   bodyNotation: ExportBodyNotation,
   headingRemovalLevel: HeadingRemovalLevel,
   imageAssetFolderName: string,
-  options?: { isPdf?: boolean }
+  options?: { isPdf?: boolean; calloutLabels?: MarkdownCalloutLabels }
 ): {
   readonly bodyHtml: string;
   readonly assets: readonly ExportImageAssetCopyItem[];
@@ -409,7 +420,9 @@ export function renderDocumentToHtml(
       );
 
     const parser = options?.isPdf ? pdfMarkdownParser : markdownParser;
-    const renderedHtml = parser.render(modifiedMarkdownText);
+    const renderedHtml = parser.render(modifiedMarkdownText, {
+      markdownCalloutLabels: options?.calloutLabels
+    });
     return { bodyHtml: renderedHtml, assets };
   }
 
@@ -525,7 +538,12 @@ export interface CombinedHtmlResult {
 
 export function generateCombinedHtml(
   assembly: ExportAssembly,
-  options?: { isPdf?: boolean; pdfWritingMode?: PdfWritingMode }
+  options?: {
+    isPdf?: boolean;
+    pdfWritingMode?: PdfWritingMode;
+    /** #568: localized callout labels; Japanese when omitted. */
+    calloutLabels?: MarkdownCalloutLabels;
+  }
 ): CombinedHtmlResult {
   const titleText = assembly.projectName
     ? escapeHtmlText(assembly.projectName)
@@ -650,7 +668,8 @@ export function generateCombinedHtml(
         `    img {`,
         `      max-width: 100%;`,
         `      height: auto;`,
-        `    }`
+        `    }`,
+        markdownCalloutExportCss
       ].join("\n")
     : [
         `    .pergamum-export-document-anchor {`,
@@ -668,7 +687,8 @@ export function generateCombinedHtml(
         `    .emphasis-mark {`,
         `      text-emphasis-style: sesame;`,
         `      -webkit-text-emphasis-style: sesame;`,
-        `    }`
+        `    }`,
+        markdownCalloutExportCss
       ].join("\n");
 
   const htmlContent = [

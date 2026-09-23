@@ -394,7 +394,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       // resolution context — the discriminant kind plus (for `sourceFile`)
       // the previewed document's project-relative path.
       expect(hookBody).toContain(
-        "}, [previewSourceContent, resolutionKind, resolutionSourcePath, previewRenderer]);"
+        "}, [previewSourceContent, resolutionKind, resolutionSourcePath, previewRenderer, calloutLabels]);"
       );
     });
 

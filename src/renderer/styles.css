@@ -5048,6 +5048,88 @@ label.settingsItemHeader {
   padding-left: 12px;
 }
 
+/* #568: GitHub Alert-style callouts — Markdown horizontal preview only (the
+   same structure/classes are styled for HTML/PDF export by
+   `markdownCalloutExportCss` in preview/markdownCallout.ts). Color is an
+   enhancement only: the icon + text label and the neutral outer border keep
+   each callout identifiable without color. */
+.preview .markdown-callout {
+  --markdown-callout-accent: #0969da;
+  --markdown-callout-background: #f1f7ff;
+  margin-block: 0 14px;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border: 1px solid #d0d7de;
+  border-inline-start: 4px solid var(--markdown-callout-accent);
+  border-radius: 4px;
+  background: var(--markdown-callout-background);
+}
+
+.preview .markdown-callout-tip {
+  --markdown-callout-accent: #1a7f37;
+  --markdown-callout-background: #effaf1;
+}
+
+.preview .markdown-callout-important {
+  --markdown-callout-accent: #8250df;
+  --markdown-callout-background: #f6f1ff;
+}
+
+.preview .markdown-callout-warning {
+  --markdown-callout-accent: #9a6700;
+  --markdown-callout-background: #fff8e5;
+}
+
+.preview .markdown-callout-caution {
+  --markdown-callout-accent: #cf222e;
+  --markdown-callout-background: #fff0f0;
+}
+
+.preview .markdown-callout-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block-end: 4px;
+  color: var(--markdown-callout-accent);
+  font-weight: 600;
+}
+
+.preview .markdown-callout-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.preview .markdown-callout-icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+.preview .markdown-callout-body > :first-child {
+  margin-block-start: 0;
+}
+
+.preview .markdown-callout-body > :last-child {
+  margin-block-end: 0;
+}
+
+@media print {
+  .preview .markdown-callout {
+    break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+@media (forced-colors: active) {
+  .preview .markdown-callout {
+    border-color: CanvasText;
+  }
+
+  .preview .markdown-callout-title {
+    color: CanvasText;
+  }
+}
+
 /* #160: long-document preview layout mitigation.
    Each top-level block gets its own content-visibility containment box, so
    a block that is scrolled out of the preview's viewport is skipped for

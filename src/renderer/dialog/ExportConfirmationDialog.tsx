@@ -72,6 +72,7 @@ import {
   htmlExportDefaultFileName
 } from "../exportHtml";
 import { pdfExportDefaultFileName } from "../exportPdf";
+import { markdownCalloutLabelsFor } from "../preview/markdownCallout";
 import {
   DEFAULT_EXPORT_BODY_NOTATION,
   DEFAULT_EXPORT_DIALOG_OPTIONS_STATE,
@@ -686,7 +687,9 @@ export function ExportConfirmationDialog({
           return;
         }
 
-        const { htmlContent, imageAssets } = generateCombinedHtml(assembly);
+        const { htmlContent, imageAssets } = generateCombinedHtml(assembly, {
+          calloutLabels: markdownCalloutLabelsFor(translate)
+        });
 
         const result = await onExportHtmlCombined({
           defaultFileName: fileName,
@@ -724,7 +727,8 @@ export function ExportConfirmationDialog({
 
         const { htmlContent, imageAssets } = generateCombinedHtml(assembly, {
           isPdf: true,
-          pdfWritingMode
+          pdfWritingMode,
+          calloutLabels: markdownCalloutLabelsFor(translate)
         });
 
         const result = await onExportPdfCombined({

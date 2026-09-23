@@ -16,6 +16,7 @@ CC0 does not require attribution as a license condition, but Pergamum records th
 | `markdown.svg` | Markdown | `https://www.svgrepo.com/svg/510065/markdown` | CC0 License |
 | `indent.svg` | Indent | `https://www.svgrepo.com/svg/389250/indent` | MIT License |
 | `outdent.svg` | Indent | `https://www.svgrepo.com/svg/389332/outdent` | MIT License |
+| `info-message.svg` | info-message | `https://www.svgrepo.com/svg/456530/info-message` | MIT License |
 
 ## Modifications
 
@@ -23,6 +24,7 @@ CC0 does not require attribution as a license condition, but Pergamum records th
 - File names and paths may have been changed to match Pergamum conventions.
 - Icons may be styled by CSS, including size and color.
 - SVG path data is otherwise unmodified unless noted in commit history.
+- `callout/info-message.svg`: the XML declaration, SVG Repo comment, `id` / `data-name` attributes and embedded `<style>` block were removed, `width` / `height` were set to 24, and the stroke styling was moved to root attributes using `currentColor`, so the icon can be inlined multiple times in preview / exported HTML without id or CSS class collisions. Shape data is unchanged.
 
 ## Notes
 
