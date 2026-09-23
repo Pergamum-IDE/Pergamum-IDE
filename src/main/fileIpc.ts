@@ -17,6 +17,8 @@ import {
   type ExportHtmlCombinedResult,
   type ExportPdfCombinedRequest,
   type ExportPdfCombinedResult,
+  type ExportPngFailureReason,
+  type ExportPngResult,
   type ExportTxtUtf8Request,
   type ExportTxtUtf8Result,
   type GetDocumentsPathResult,
@@ -329,6 +331,28 @@ async function protectedTargetRejectionReason(
   )
     ? "protected"
     : null;
+}
+
+/**
+ * #537: maps a raw Node `error.code` from a PNG export write to a small,
+ * stable reason — the raw Node error / exception text is never surfaced to
+ * the renderer (same convention as `fileExplorerCreateFailureReasonFromErrorCode`
+ * / `fileExplorerRenameFailureReasonFromErrorCode`).
+ */
+function exportPngFailureReasonFromErrorCode(
+  code: string | null
+): ExportPngFailureReason {
+  switch (code) {
+    case "EACCES":
+    case "EPERM":
+      return "permissionDenied";
+    case "ENOSPC":
+      return "noSpace";
+    case "EROFS":
+      return "readOnlyFilesystem";
+    default:
+      return "unknown";
+  }
 }
 
 async function classifyStandaloneSaveTarget(
@@ -1572,6 +1596,45 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         return { exists: true };
       } catch {
         return { exists: false };
+      }
+    }
+  );
+
+  // #537: Document Map PNG export — one page per call. Overwrite permission
+  // is decided by the renderer BEFORE this is ever invoked (dry-run exists
+  // check + explicit user confirmation), so this always writes/overwrites
+  // unconditionally, exactly like `writeFileAtomic`'s own always-replace
+  // semantics.
+  ipcMain.handle(
+    FILE_CHANNELS.exportPng,
+    async (_event, rawRequest: unknown): Promise<ExportPngResult> => {
+      if (
+        typeof rawRequest !== "object" ||
+        rawRequest === null ||
+        typeof (rawRequest as { filePath?: unknown }).filePath !== "string" ||
+        !((rawRequest as { pngBytes?: unknown }).pngBytes instanceof Uint8Array)
+      ) {
+        return { ok: false, reason: "invalidRequest" };
+      }
+
+      const { filePath, pngBytes } = rawRequest as {
+        filePath: string;
+        pngBytes: Uint8Array;
+      };
+
+      const targetClassification = await classifyStandaloneSaveTarget(filePath);
+      if (targetClassification.kind === "rejected") {
+        return { ok: false, reason: "rejected" };
+      }
+
+      try {
+        await writeFileAtomic(filePath, Buffer.from(pngBytes));
+        return { ok: true };
+      } catch (error) {
+        return {
+          ok: false,
+          reason: exportPngFailureReasonFromErrorCode(nodeErrorCode(error))
+        };
       }
     }
   );

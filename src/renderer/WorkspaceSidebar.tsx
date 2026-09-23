@@ -29,6 +29,7 @@ import type {
 import type { TextSearchOptions } from "../shared/textSearch";
 import type { ReplacePreviewOpenRequest } from "./replace/replacePreviewTypes";
 import { DocumentMapPanel } from "./DocumentMapPanel";
+import type { DocumentMapPngExportSnapshot } from "./dialog/DocumentMapPngExportDialog";
 import {
   DocumentMetricsPanel,
   type DocumentMetricsFileInfo
@@ -145,6 +146,11 @@ interface WorkspaceSidebarProps {
     lineIndex: number,
     options?: { align?: EditorScrollAlign }
   ) => void;
+  /** #537: the active document's display name, for the PNG export dialog's
+   *  default base filename. */
+  documentMapActiveDocumentName?: string | null;
+  /** #537: opens the Document Map PNG export dialog with a frozen snapshot. */
+  onExportDocumentMapPng?: (snapshot: DocumentMapPngExportSnapshot) => void;
   onNavigateGlossaryOccurrence: (
     entry: GlossaryEntry,
     direction: "previous" | "next"
@@ -254,6 +260,8 @@ export function WorkspaceSidebar({
   documentMapEditorVisibleRange = null,
   documentMapSettings,
   onDocumentMapNavigateToLine,
+  documentMapActiveDocumentName = null,
+  onExportDocumentMapPng,
   onNavigateGlossaryOccurrence,
   markdownOutline = null,
   activeEditorIsMarkdown = false,
@@ -358,6 +366,8 @@ export function WorkspaceSidebar({
           documentMapSettings={documentMapSettings}
           normalizeUnicodeToNfc={normalizeUnicodeToNfc}
           onNavigateToLine={onDocumentMapNavigateToLine}
+          activeDocumentName={documentMapActiveDocumentName}
+          onExportDocumentMapPng={onExportDocumentMapPng}
         />
       );
     case "documentMetrics":

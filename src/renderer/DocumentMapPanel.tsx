@@ -8,10 +8,14 @@ import { GlossaryTextMinimapCanvas } from "./GlossaryTextMinimapCanvas";
 import { DocumentMapTagFilter } from "./DocumentMapTagFilter";
 import { DocumentMapPaginator } from "./DocumentMapPaginator";
 import {
+  GLOSSARY_DOCUMENT_MAP_CELL_SIZE,
   buildDocumentMapLineLayout,
   computeDocumentMapPages,
   resolveDocumentMapWrapColumns
 } from "./glossaryDocumentMap";
+import { deriveDefaultDocumentMapPngBaseFileName } from "./documentMapPngExportPlan";
+import type { DocumentMapPngExportSnapshot } from "./dialog/DocumentMapPngExportDialog";
+import saveIconRaw from "../../assets/icons/codicons/documentMap/save.svg?raw";
 
 interface DocumentMapPanelProps {
   /**
@@ -51,6 +55,19 @@ interface DocumentMapPanelProps {
     lineIndex: number,
     options?: { align?: EditorScrollAlign }
   ) => void;
+  /**
+   * #537: the active document's display name (e.g. `"chapter01.md"`), used
+   * only to derive the PNG export dialog's default base filename. `null` /
+   * omitted falls back to a safe generic default.
+   */
+  activeDocumentName?: string | null;
+  /**
+   * #537: opens the Document Map PNG export dialog with a frozen snapshot of
+   * everything needed to render every page — the current document text,
+   * glossary entries, the CURRENT "Render tags" selection, layout, and
+   * settings. Omitted → the export icon is not shown.
+   */
+  onExportDocumentMapPng?: (snapshot: DocumentMapPngExportSnapshot) => void;
   translate: Translate;
 }
 
@@ -77,6 +94,8 @@ export function DocumentMapPanel({
   documentMapSettings,
   normalizeUnicodeToNfc = false,
   onNavigateToLine,
+  activeDocumentName = null,
+  onExportDocumentMapPng,
   translate
 }: DocumentMapPanelProps): JSX.Element {
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -181,6 +200,30 @@ export function DocumentMapPanel({
     return selectedTagIds.filter((id) => known.has(id));
   }, [selectedTagIds, allTagIds]);
 
+  // #537: snapshot everything the export dialog needs at the moment the
+  // button is clicked — NOT re-derived reactively while the dialog is open,
+  // so later edits to the document / tag filter / settings can never change
+  // an in-progress export.
+  function handleExportDocumentMapPngClick(): void {
+    if (!hasContent || !onExportDocumentMapPng) {
+      return;
+    }
+
+    onExportDocumentMapPng({
+      text: activeDocumentContent as string,
+      entries: glossaryEntries,
+      selectedTagIds: validSelectedTagIds,
+      wrapColumns,
+      contentWidth: wrapColumns * GLOSSARY_DOCUMENT_MAP_CELL_SIZE,
+      documentMapSettings,
+      normalizeUnicodeToNfc,
+      pages,
+      pixelRatio,
+      defaultBaseFileName:
+        deriveDefaultDocumentMapPngBaseFileName(activeDocumentName)
+    });
+  }
+
   return (
     <aside
       className="workspaceSidebarPanel documentMapPanel"
@@ -204,6 +247,22 @@ export function DocumentMapPanel({
           translate={translate}
           onChange={setSelectedTagIds}
         />
+        {onExportDocumentMapPng ? (
+          <button
+            type="button"
+            className="documentMapExportButton"
+            disabled={!hasContent}
+            aria-label={translate("documentMap.export.openButtonLabel")}
+            title={translate("documentMap.export.openButtonLabel")}
+            onClick={handleExportDocumentMapPngClick}
+          >
+            <span
+              className="documentMapExportButtonIcon"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: saveIconRaw }}
+            />
+          </button>
+        ) : null}
       </div>
 
       {hasContent ? (

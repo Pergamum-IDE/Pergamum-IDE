@@ -973,3 +973,109 @@ describe("Document Map render skeleton / paint-before-blocking (#403 Dogfood rem
     expect(host?.style.height).toBe("4464px");
   });
 });
+
+describe("DocumentMapPanel PNG export entry point (#537)", () => {
+  function exportButton(): HTMLButtonElement | null {
+    return container.querySelector(".documentMapExportButton");
+  }
+
+  it("does not render the export button when onExportDocumentMapPng is omitted", () => {
+    render({
+      activeDocumentContent: "Foo bar baz",
+      glossaryEntries: []
+    });
+
+    expect(exportButton()).toBeNull();
+  });
+
+  it("renders the export button disabled when there is no active document", () => {
+    render({
+      activeDocumentContent: null,
+      glossaryEntries: [],
+      onExportDocumentMapPng: vi.fn()
+    });
+
+    expect(exportButton()).not.toBeNull();
+    expect(exportButton()?.disabled).toBe(true);
+  });
+
+  it("enables the export button once there is active content", () => {
+    render({
+      activeDocumentContent: "Foo bar baz",
+      glossaryEntries: [],
+      onExportDocumentMapPng: vi.fn()
+    });
+
+    expect(exportButton()?.disabled).toBe(false);
+  });
+
+  it("passes a snapshot with the document text, entries, tag selection, and layout on click", () => {
+    const onExportDocumentMapPng = vi.fn();
+    const glossaryEntries = [entry("e1", "Foo")];
+    const glossaryTags = [tag("t1", "Tag 1")];
+    const documentMapSettings = defaultDocumentMapSettings();
+
+    render({
+      activeDocumentContent: "Foo bar baz",
+      glossaryEntries,
+      glossaryTags,
+      documentMapSettings,
+      normalizeUnicodeToNfc: true,
+      activeDocumentName: "chapter01.md",
+      onExportDocumentMapPng
+    });
+
+    act(() => {
+      exportButton()!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onExportDocumentMapPng).toHaveBeenCalledTimes(1);
+    const snapshot = onExportDocumentMapPng.mock.calls[0][0];
+
+    expect(snapshot.text).toBe("Foo bar baz");
+    expect(snapshot.entries).toBe(glossaryEntries);
+    expect(snapshot.selectedTagIds).toEqual(["t1"]);
+    expect(snapshot.documentMapSettings).toBe(documentMapSettings);
+    expect(snapshot.normalizeUnicodeToNfc).toBe(true);
+    expect(snapshot.defaultBaseFileName).toBe("chapter01");
+    expect(Array.isArray(snapshot.pages)).toBe(true);
+    expect(snapshot.pages.length).toBeGreaterThan(0);
+    expect(snapshot.contentWidth).toBe(snapshot.wrapColumns * 2);
+    expect(snapshot.pixelRatio).toBeGreaterThan(0);
+  });
+
+  it("falls back to a safe default base filename when there is no active document name", () => {
+    const onExportDocumentMapPng = vi.fn();
+
+    render({
+      activeDocumentContent: "Foo bar baz",
+      glossaryEntries: [],
+      activeDocumentName: null,
+      onExportDocumentMapPng
+    });
+
+    act(() => {
+      exportButton()!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const snapshot = onExportDocumentMapPng.mock.calls[0][0];
+    expect(typeof snapshot.defaultBaseFileName).toBe("string");
+    expect(snapshot.defaultBaseFileName.length).toBeGreaterThan(0);
+  });
+
+  it("does not call onExportDocumentMapPng when clicked with no active document", () => {
+    const onExportDocumentMapPng = vi.fn();
+
+    render({
+      activeDocumentContent: null,
+      glossaryEntries: [],
+      onExportDocumentMapPng
+    });
+
+    act(() => {
+      exportButton()!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onExportDocumentMapPng).not.toHaveBeenCalled();
+  });
+});

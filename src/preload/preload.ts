@@ -89,7 +89,9 @@ const pergamumApi: PergamumApi = {
     getDocumentsPath: () =>
       ipcRenderer.invoke(FILE_CHANNELS.getDocumentsPath),
     checkFileExists: (request) =>
-      ipcRenderer.invoke(FILE_CHANNELS.checkFileExists, request)
+      ipcRenderer.invoke(FILE_CHANNELS.checkFileExists, request),
+    exportPng: (request) =>
+      ipcRenderer.invoke(FILE_CHANNELS.exportPng, request)
   },
   projects: {
     createProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.createProject),

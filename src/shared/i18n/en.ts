@@ -1187,6 +1187,43 @@ export const enTranslations = {
   "documentMap.page.currentOfTotal": "Page {current} / {total}",
   "documentMap.page.option": "Page {page}",
   "documentMap.rendering": "Rendering…",
+  "documentMap.export.openButtonLabel": "Export Document Map as PNG",
+  "documentMap.export.dialogTitle": "Export Document Map",
+  "documentMap.export.outputFolderLabel": "Output folder",
+  "documentMap.export.browseButton": "Browse",
+  "documentMap.export.baseFileNameLabel": "Base filename",
+  "documentMap.export.baseFileNameError.empty": "Enter a base filename.",
+  "documentMap.export.baseFileNameError.invalidCharacter":
+    "Contains a character that cannot be used (< > : \" / \\ | ? *).",
+  "documentMap.export.baseFileNameError.controlCharacter":
+    "Contains a control character that cannot be used.",
+  "documentMap.export.baseFileNameError.trailingDotOrSpace":
+    "Cannot end with a period or a trailing space.",
+  "documentMap.export.baseFileNameError.reservedName":
+    "This name is reserved by the system and cannot be used.",
+  "documentMap.export.plannedOutputHeading": "Planned output files",
+  "documentMap.export.headerToggleLabel": "Toggle output for all rows",
+  "documentMap.export.columnPage": "Page",
+  "documentMap.export.columnFileName": "Filename",
+  "documentMap.export.rowToggleLabel": "Toggle output for page {page}",
+  "documentMap.export.exportingStatus": "Exporting…",
+  "documentMap.export.successStatus": "Export completed.",
+  "documentMap.export.exportButton": "Export",
+  "documentMap.export.closeButton": "Close",
+  "documentMap.export.writeFailed": "Failed to write {fileName} ({reason}).",
+  "documentMap.export.renderFailed":
+    "Failed to generate {fileName}. Please try again.",
+  "documentMap.export.failureReason.rejected": "protected save location",
+  "documentMap.export.failureReason.permissionDenied": "permission denied",
+  "documentMap.export.failureReason.noSpace": "not enough disk space",
+  "documentMap.export.failureReason.readOnlyFilesystem":
+    "read-only filesystem",
+  "documentMap.export.failureReason.invalidRequest": "invalid request",
+  "documentMap.export.failureReason.unknown": "unknown error",
+  "documentMap.export.overwriteConfirm.title": "Confirm overwrite",
+  "documentMap.export.overwriteConfirm.message":
+    "{count} file(s) already exist. Overwrite them?",
+  "documentMap.export.overwriteConfirm.confirm": "Overwrite",
   "imageInsertion.overwriteDialog.title": "Overwrite image files?",
   "imageInsertion.overwriteDialog.message":
     "The following files already exist. Continuing will overwrite them.",
