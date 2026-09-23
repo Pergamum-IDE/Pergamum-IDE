@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import markdownItKatex from "@vscode/markdown-it-katex";
 import type { PreviewRenderer } from "./previewRenderer";
 import {
   resolveProjectLocalImageSrc,
@@ -403,6 +404,59 @@ markdown.renderer.rules.fence = (tokens, idx, _options, env) => {
 };
 
 /**
+ * #566: KaTeX math rendering — inline `$...$` and display `$$...$$` — for
+ * Markdown horizontal preview only.
+ *
+ * `@vscode/markdown-it-katex` is installed unconditionally on this SAME
+ * shared markdown-it instance (it never touches `md.renderer.rules.fence`
+ * unless its `enableFencedBlocks` option is passed, which it is not here, so
+ * it cannot interact with #536's highlight.js path or #564's Mermaid
+ * placeholders). What actually scopes math to Markdown horizontal preview
+ * is `markdownPreviewRenderer.render` below, which enables/disables the
+ * plugin's parser rules (`math_inline` / `math_inline_block` / `math_block`)
+ * by name on every call based on `previewRenderer === "markdown"` —
+ * `.use()` itself has no per-call env awareness, so toggling via
+ * markdown-it's own `enable`/`disable` API immediately before each
+ * synchronous `markdown.render()` call is the only reliable way to scope a
+ * plugin registered on a shared instance to one render target (same
+ * constraint #564 solved for the Mermaid fence rule, by contrast, purely
+ * inside the rule function itself since that one was custom-written here).
+ *
+ * `throwOnError: false` (per #566) means invalid math renders as KaTeX's
+ * own safe, already-escaped inline error span instead of throwing — no
+ * separate Pergamum error-card UI is needed (unlike #564's Mermaid, whose
+ * `mermaid.render()` is async and DOM-external, `katex.renderToString` is
+ * synchronous and fully self-contained within this one render() call).
+ *
+ * Third-party license: KaTeX and @vscode/markdown-it-katex are both MIT
+ * licensed. See THIRD_PARTY_NOTICES.md for the full license text.
+ */
+const MATH_RULE_NAMES = ["math_inline", "math_inline_block", "math_block"] as const;
+
+markdown.use(markdownItKatex, { throwOnError: false });
+
+/**
+ * #566: the plugin's own `math_block` renderer builds its HTML directly
+ * from `tokens[idx].content`, bypassing markdown-it's normal
+ * attribute-rendering path — so the `data-source-line` `source_line_anchors`
+ * (#503) already set ON THE TOKEN never reaches the output HTML. Wrapping
+ * the plugin's (already-safe) output in a `data-source-line` container —
+ * rather than parsing/rewriting its inner markup — keeps preview scroll-sync
+ * / jump-to-source (#504) working for display math without depending on the
+ * plugin's exact HTML shape.
+ */
+const katexBlockRenderer = markdown.renderer.rules.math_block;
+if (katexBlockRenderer) {
+  markdown.renderer.rules.math_block = (tokens, idx, options, env, self) => {
+    const html = katexBlockRenderer(tokens, idx, options, env, self);
+    const sourceLine = tokens[idx].attrGet("data-source-line");
+    return sourceLine != null
+      ? `<div data-source-line="${escapeHtml(String(sourceLine))}">${html}</div>`
+      : html;
+  };
+}
+
+/**
  * #409 / #412: rewrite project-local image `src` to `pergamum-asset://` so the
  * Preview can display images that live in the project (e.g. the ones #407's
  * clipboard paste saves). Both the Markdown document Preview and the Glossary
@@ -470,10 +524,27 @@ markdown.renderer.rules.image = (tokens, idx, options, env, self) => {
 };
 
 export const markdownPreviewRenderer: PreviewRenderer = {
-  render: (content, options) =>
-    markdown.render(content, {
+  render: (content, options) => {
+    const previewRenderer = options?.previewRenderer;
+
+    // #566: toggle KaTeX's parser rules on this SHARED markdown-it instance
+    // immediately before the synchronous render call below — see the block
+    // comment above `markdown.use(markdownItKatex, ...)` for why this
+    // enable/disable toggle (rather than a check inside the rule itself, as
+    // #564's custom Mermaid fence rule does) is what scopes math to
+    // Markdown horizontal preview only. Every caller of `render()` goes
+    // through this one function, and JS is single-threaded with no `await`
+    // inside `markdown.render()`, so this toggle-then-render is race-free.
+    if (previewRenderer === "markdown") {
+      markdown.enable([...MATH_RULE_NAMES]);
+    } else {
+      markdown.disable([...MATH_RULE_NAMES]);
+    }
+
+    return markdown.render(content, {
       projectLocalImageResolution:
         options?.projectLocalImageResolution ?? NO_IMAGE_RESOLUTION,
-      previewRenderer: options?.previewRenderer
-    })
+      previewRenderer
+    });
+  }
 };
