@@ -3353,6 +3353,7 @@ function MarkdownEditorSurface({
             surfaceIndex={surfaceIndex}
             previewRenderer={previewRenderer}
             narouMarkText={narouMarkText}
+            translate={translate}
             documentOpenId={documentOpenId}
             previewRenderStartedAt={previewRenderStartedAt}
             onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}

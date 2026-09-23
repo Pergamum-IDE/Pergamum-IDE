@@ -162,6 +162,17 @@ describe("shouldSkipGlossarySurfaceDecorationTextNode", () => {
     ).toBe(true);
   });
 
+  // #564: a Mermaid diagram's <text> labels must never be wrapped in
+  // decoration <span> markup — see the skip set's own comment for why this
+  // is defensive rather than reachable in the current render/decorate order.
+  it("skips text nodes under an svg element (#564)", () => {
+    expect(
+      shouldSkipGlossarySurfaceDecorationTextNode(
+        ancestor("text", ancestor("svg"))
+      )
+    ).toBe(true);
+  });
+
   it("does not skip normal paragraph text nodes", () => {
     expect(
       shouldSkipGlossarySurfaceDecorationTextNode(

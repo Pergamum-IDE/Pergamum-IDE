@@ -108,6 +108,7 @@ describe("Narou-like horizontal novel preview (#507)", () => {
             onPreviewDomCommitted={() => {}}
             onPreviewDecorationCompleted={() => {}}
             onPreviewFrameObserved={() => {}}
+            translate={(key) => key}
           />
         );
       });
@@ -139,6 +140,7 @@ describe("Narou-like horizontal novel preview (#507)", () => {
             onPreviewDomCommitted={() => {}}
             onPreviewDecorationCompleted={() => {}}
             onPreviewFrameObserved={() => {}}
+            translate={(key) => key}
           />
         );
       });
@@ -171,6 +173,7 @@ describe("Narou-like horizontal novel preview (#507)", () => {
             onPreviewDomCommitted={() => {}}
             onPreviewDecorationCompleted={() => {}}
             onPreviewFrameObserved={() => {}}
+            translate={(key) => key}
           />
         );
       });

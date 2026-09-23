@@ -10,6 +10,10 @@ import {
   type PreviewRendererId
 } from "../../shared/settings";
 import { renderHighlightedCodeBlock } from "./codeHighlight";
+import {
+  isMermaidFenceInfo,
+  renderMermaidPlaceholder
+} from "./mermaidPreviewPlaceholder";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -372,11 +376,29 @@ const NO_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext = { kind: "none" }
  * `data-source-line` is forwarded from the token attrs (set by
  * `source_line_anchors`, #503) so that preview scroll-sync and
  * jump-to-source (#504) continue to function correctly.
+ *
+ * #564: a `mermaid` fence (exact first-token match — `mmd` and other
+ * aliases are NOT Mermaid) becomes a Mermaid placeholder INSTEAD, but only
+ * when this render call is for the "markdown" (horizontal) preview target
+ * — `env.previewRenderer` is checked explicitly. `markdownPreviewRenderer`
+ * is the SAME markdown-it instance shared by Narou / Kakuyomu horizontal
+ * AND vertical previews (only Aozora has its own separate pipeline), so
+ * this exact-match guard is what keeps Mermaid rendering scoped to Markdown
+ * horizontal preview only, per #564's scope. A `mermaid` fence never
+ * reaches `renderHighlightedCodeBlock` / highlight.js.
  */
-markdown.renderer.rules.fence = (tokens, idx) => {
+markdown.renderer.rules.fence = (tokens, idx, _options, env) => {
   const token = tokens[idx];
   const rawSourceLine = token.attrGet("data-source-line");
   const sourceLine = rawSourceLine != null ? String(rawSourceLine) : undefined;
+
+  const previewRenderer = (env as { previewRenderer?: PreviewRendererId } | undefined)
+    ?.previewRenderer;
+
+  if (previewRenderer === "markdown" && isMermaidFenceInfo(token.info)) {
+    return renderMermaidPlaceholder(token.content, sourceLine);
+  }
+
   return renderHighlightedCodeBlock(token.info, token.content, sourceLine);
 };
 

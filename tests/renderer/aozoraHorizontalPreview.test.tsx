@@ -26,12 +26,20 @@ import { createMarkdownCurrentEditor } from "../../src/renderer/currentEditor";
 import { defaultDocumentMapSettings } from "../../src/shared/documentMapSettings";
 import { t } from "../../src/shared/i18n";
 
-function renderDecorator(props: React.ComponentProps<typeof GlossaryPreviewDecorator>) {
+function renderDecorator(
+  props: Omit<React.ComponentProps<typeof GlossaryPreviewDecorator>, "translate"> &
+    Partial<Pick<React.ComponentProps<typeof GlossaryPreviewDecorator>, "translate">>
+) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = reactCreateRoot(container);
   act(() => {
-    root.render(<GlossaryPreviewDecorator {...props} />);
+    root.render(
+      <GlossaryPreviewDecorator
+        translate={(key, values) => t("ja", key, values)}
+        {...props}
+      />
+    );
   });
   return { container, article: container.querySelector("article") };
 }
