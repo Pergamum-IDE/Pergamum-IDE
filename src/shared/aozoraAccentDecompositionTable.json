@@ -1,0 +1,310 @@
+[
+  {
+    "source": "ae&",
+    "replacement": "æ"
+  },
+  {
+    "source": "AE&",
+    "replacement": "Æ"
+  },
+  {
+    "source": "oe&",
+    "replacement": "œ"
+  },
+  {
+    "source": "OE&",
+    "replacement": "Œ"
+  },
+  {
+    "source": "!@",
+    "replacement": "¡"
+  },
+  {
+    "source": "?@",
+    "replacement": "¿"
+  },
+  {
+    "source": "a_",
+    "replacement": "ā"
+  },
+  {
+    "source": "A_",
+    "replacement": "Ā"
+  },
+  {
+    "source": "a:",
+    "replacement": "ä"
+  },
+  {
+    "source": "A:",
+    "replacement": "Ä"
+  },
+  {
+    "source": "a'",
+    "replacement": "á"
+  },
+  {
+    "source": "A'",
+    "replacement": "Á"
+  },
+  {
+    "source": "a*",
+    "replacement": "å"
+  },
+  {
+    "source": "A*",
+    "replacement": "Å"
+  },
+  {
+    "source": "a`",
+    "replacement": "à"
+  },
+  {
+    "source": "A`",
+    "replacement": "À"
+  },
+  {
+    "source": "a^",
+    "replacement": "â"
+  },
+  {
+    "source": "A^",
+    "replacement": "Â"
+  },
+  {
+    "source": "a~",
+    "replacement": "ã"
+  },
+  {
+    "source": "A~",
+    "replacement": "Ã"
+  },
+  {
+    "source": "c,",
+    "replacement": "ç"
+  },
+  {
+    "source": "C,",
+    "replacement": "Ç"
+  },
+  {
+    "source": "d-",
+    "replacement": "ð"
+  },
+  {
+    "source": "D-",
+    "replacement": "Ð"
+  },
+  {
+    "source": "e_",
+    "replacement": "ē"
+  },
+  {
+    "source": "E_",
+    "replacement": "Ē"
+  },
+  {
+    "source": "e:",
+    "replacement": "ë"
+  },
+  {
+    "source": "E:",
+    "replacement": "Ë"
+  },
+  {
+    "source": "e'",
+    "replacement": "é"
+  },
+  {
+    "source": "E'",
+    "replacement": "É"
+  },
+  {
+    "source": "e`",
+    "replacement": "è"
+  },
+  {
+    "source": "E`",
+    "replacement": "È"
+  },
+  {
+    "source": "e^",
+    "replacement": "ê"
+  },
+  {
+    "source": "E^",
+    "replacement": "Ê"
+  },
+  {
+    "source": "i_",
+    "replacement": "ī"
+  },
+  {
+    "source": "I_",
+    "replacement": "Ī"
+  },
+  {
+    "source": "i:",
+    "replacement": "ï"
+  },
+  {
+    "source": "I:",
+    "replacement": "Ï"
+  },
+  {
+    "source": "i'",
+    "replacement": "í"
+  },
+  {
+    "source": "I'",
+    "replacement": "Í"
+  },
+  {
+    "source": "i`",
+    "replacement": "ì"
+  },
+  {
+    "source": "I`",
+    "replacement": "Ì"
+  },
+  {
+    "source": "i^",
+    "replacement": "î"
+  },
+  {
+    "source": "I^",
+    "replacement": "Î"
+  },
+  {
+    "source": "n~",
+    "replacement": "ñ"
+  },
+  {
+    "source": "N~",
+    "replacement": "Ñ"
+  },
+  {
+    "source": "o_",
+    "replacement": "ō"
+  },
+  {
+    "source": "O_",
+    "replacement": "Ō"
+  },
+  {
+    "source": "o:",
+    "replacement": "ö"
+  },
+  {
+    "source": "O:",
+    "replacement": "Ö"
+  },
+  {
+    "source": "o'",
+    "replacement": "ó"
+  },
+  {
+    "source": "O'",
+    "replacement": "Ó"
+  },
+  {
+    "source": "o/",
+    "replacement": "ø"
+  },
+  {
+    "source": "O/",
+    "replacement": "Ø"
+  },
+  {
+    "source": "o`",
+    "replacement": "ò"
+  },
+  {
+    "source": "O`",
+    "replacement": "Ò"
+  },
+  {
+    "source": "o^",
+    "replacement": "ô"
+  },
+  {
+    "source": "O^",
+    "replacement": "Ô"
+  },
+  {
+    "source": "o~",
+    "replacement": "õ"
+  },
+  {
+    "source": "O~",
+    "replacement": "Õ"
+  },
+  {
+    "source": "s&",
+    "replacement": "ß"
+  },
+  {
+    "source": "th",
+    "replacement": "þ"
+  },
+  {
+    "source": "TH",
+    "replacement": "Þ"
+  },
+  {
+    "source": "u_",
+    "replacement": "ū"
+  },
+  {
+    "source": "U_",
+    "replacement": "Ū"
+  },
+  {
+    "source": "u:",
+    "replacement": "ü"
+  },
+  {
+    "source": "U:",
+    "replacement": "Ü"
+  },
+  {
+    "source": "u'",
+    "replacement": "ú"
+  },
+  {
+    "source": "U'",
+    "replacement": "Ú"
+  },
+  {
+    "source": "u`",
+    "replacement": "ù"
+  },
+  {
+    "source": "U`",
+    "replacement": "Ù"
+  },
+  {
+    "source": "u^",
+    "replacement": "û"
+  },
+  {
+    "source": "U^",
+    "replacement": "Û"
+  },
+  {
+    "source": "y:",
+    "replacement": "ÿ"
+  },
+  {
+    "source": "Y:",
+    "replacement": "Ÿ"
+  },
+  {
+    "source": "y'",
+    "replacement": "ý"
+  },
+  {
+    "source": "Y'",
+    "replacement": "Ý"
+  }
+]

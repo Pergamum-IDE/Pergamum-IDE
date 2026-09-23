@@ -8,7 +8,8 @@ npm-debug.log*
 out/
 .claude/
 review-notes/
-scripts/
+scripts/*
+!scripts/generate-aozora-accent-table.mjs
 *.ps1
 /docs/handoff*.md
 review-logs/
