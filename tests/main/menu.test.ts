@@ -420,6 +420,21 @@ describe("application menu", () => {
     }
   });
 
+  // #554: CommandOrControl+P must be claimed only by the Command Palette
+  // item, so Chromium's browser-print fallback is never reachable and the
+  // accelerator is not accidentally shared with any other command.
+  it("binds CommandOrControl+P exclusively to the Command Palette open command", () => {
+    for (const platform of ["win32", "darwin", "linux"] as const) {
+      const template = buildApplicationMenu("en", emptyMenuOptions(), platform);
+      const itemsWithAccelerator = flattenMenuItems(template).filter(
+        (item) => item.accelerator === "CommandOrControl+P"
+      );
+
+      expect(itemsWithAccelerator).toHaveLength(1);
+      expect(itemsWithAccelerator[0]?.id).toBe(commandPaletteCommandIds.open);
+    }
+  });
+
   it("binds Toggle Developer Tools to CommandOrControl+Shift+D, not the Electron role default (#535 follow-up)", () => {
     const viewItems = viewMenuItems("win32");
     const item = viewItems.find(
@@ -433,14 +448,16 @@ describe("application menu", () => {
     expect(item?.accelerator).not.toBe("CommandOrControl+Shift+I");
   });
 
-  it("adds a Command Palette item to the View menu with a CommandOrControl+Shift+P accelerator", () => {
+  // #554: Mod+P is Pergamum's primary Command Palette / launcher shortcut
+  // (swapped off Mod+Shift+P, which now belongs to Preview toggle instead).
+  it("adds a Command Palette item to the View menu with a CommandOrControl+P accelerator", () => {
     const viewItems = viewMenuItems("win32");
     const item = viewItems.find(
       (candidate) => candidate.label === "Command Palette..."
     );
 
     expect(item).toBeTruthy();
-    expect(item?.accelerator).toBe("CommandOrControl+Shift+P");
+    expect(item?.accelerator).toBe("CommandOrControl+P");
   });
 
   it("sends the Command Palette open command from the View menu item", () => {
