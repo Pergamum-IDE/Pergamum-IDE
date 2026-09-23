@@ -11,6 +11,29 @@ export type GlossarySurfaceDecorationSegment =
 export interface GlossarySurfaceDecorationAncestor {
   readonly tagName: string;
   readonly parentElement: GlossarySurfaceDecorationAncestor | null;
+  /** DOM `Element.classList` (optional so plain test doubles stay valid). */
+  readonly classList?: { contains(token: string): boolean };
+}
+
+// #568: a callout's title row (icon + "補足" / "注意" ... label) is UI /
+// structural chrome, not manuscript text, so it is never glossary-decorated.
+// `.markdown-callout-body` is manuscript text and stays decorated.
+const skippedDecorationAncestorClassNames = [
+  "markdown-callout-title",
+  "markdown-callout-label",
+  "markdown-callout-icon"
+] as const;
+
+function hasSkippedDecorationClassName(
+  element: GlossarySurfaceDecorationAncestor
+): boolean {
+  const classList = element.classList;
+  return (
+    classList !== undefined &&
+    skippedDecorationAncestorClassNames.some((className) =>
+      classList.contains(className)
+    )
+  );
 }
 
 // #564: SVG is defensive — Mermaid diagram SVGs are inserted asynchronously,
@@ -35,7 +58,10 @@ export function shouldSkipGlossarySurfaceDecorationTextNode(
   let element = parentElement;
 
   while (element) {
-    if (isGlossarySurfaceDecorationSkipTagName(element.tagName)) {
+    if (
+      isGlossarySurfaceDecorationSkipTagName(element.tagName) ||
+      hasSkippedDecorationClassName(element)
+    ) {
       return true;
     }
 

@@ -173,6 +173,39 @@ describe("shouldSkipGlossarySurfaceDecorationTextNode", () => {
     ).toBe(true);
   });
 
+  // #568: callout title row (icon + label) is UI chrome; the body is text.
+  it("skips text nodes under a callout title / label / icon (#568)", () => {
+    const withClass = (
+      tagName: string,
+      className: string,
+      parentElement: GlossarySurfaceDecorationAncestor | null = null
+    ): GlossarySurfaceDecorationAncestor => ({
+      tagName,
+      parentElement,
+      classList: { contains: (token) => token === className }
+    });
+
+    for (const className of [
+      "markdown-callout-title",
+      "markdown-callout-label",
+      "markdown-callout-icon"
+    ]) {
+      expect(
+        shouldSkipGlossarySurfaceDecorationTextNode(withClass("span", className))
+      ).toBe(true);
+    }
+    expect(
+      shouldSkipGlossarySurfaceDecorationTextNode(
+        withClass("span", "markdown-callout-label", withClass("div", "markdown-callout-title"))
+      )
+    ).toBe(true);
+    expect(
+      shouldSkipGlossarySurfaceDecorationTextNode(
+        ancestor("p", withClass("div", "markdown-callout-body"))
+      )
+    ).toBe(false);
+  });
+
   it("does not skip normal paragraph text nodes", () => {
     expect(
       shouldSkipGlossarySurfaceDecorationTextNode(

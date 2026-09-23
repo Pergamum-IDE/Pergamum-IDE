@@ -15,6 +15,7 @@ import {
   isMermaidFenceInfo,
   renderMermaidPlaceholder
 } from "./mermaidPreviewPlaceholder";
+import { markdownItCallout } from "./markdownCallout";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -31,6 +32,19 @@ markdown.core.ruler.push("source_line_anchors", (state) => {
       token.attrSet("data-source-line", String(token.map[0] + 1));
     }
   }
+});
+
+/**
+ * #568: GitHub Alert-style callouts (`> [!NOTE]` ...) — Markdown horizontal
+ * preview only. This instance is shared with Narou / Kakuyomu (horizontal
+ * and vertical) previews, so the plugin is gated per render call on
+ * `env.previewRenderer === "markdown"` (same scoping as #564 / #566); for
+ * every other target a `[!NOTE]` blockquote stays a normal blockquote.
+ */
+markdown.use(markdownItCallout, {
+  isEnabled: (env: unknown) =>
+    (env as { previewRenderer?: PreviewRendererId } | undefined)
+      ?.previewRenderer === "markdown"
 });
 
 function isKanjiCodePoint(codePoint: number): boolean {
@@ -544,7 +558,8 @@ export const markdownPreviewRenderer: PreviewRenderer = {
     return markdown.render(content, {
       projectLocalImageResolution:
         options?.projectLocalImageResolution ?? NO_IMAGE_RESOLUTION,
-      previewRenderer
+      previewRenderer,
+      markdownCalloutLabels: options?.calloutLabels
     });
   }
 };

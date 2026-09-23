@@ -1,5 +1,6 @@
 import type { ProjectLocalImageResolutionContext } from "../../shared/projectLocalImageLink";
 import type { PreviewRendererId } from "../../shared/settings";
+import type { MarkdownCalloutLabels } from "./markdownCallout";
 
 export interface PreviewRenderOptions {
   /**
@@ -19,6 +20,11 @@ export interface PreviewRenderOptions {
    */
   readonly projectLocalImageResolution?: ProjectLocalImageResolutionContext;
   readonly previewRenderer?: PreviewRendererId;
+  /**
+   * #568: localized callout labels (`callout.*`). Only used when callouts
+   * render (Markdown horizontal preview); Japanese labels when omitted.
+   */
+  readonly calloutLabels?: MarkdownCalloutLabels;
 }
 
 export interface PreviewRenderer {

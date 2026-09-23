@@ -135,6 +135,10 @@ import type { MarkdownEditorDocumentState } from "./markdownEditorDocumentState"
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import { aozoraPreviewRenderer } from "./preview/aozoraPreviewRenderer";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
+import {
+  markdownCalloutLabelsFor,
+  type MarkdownCalloutLabels
+} from "./preview/markdownCallout";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import type { SoundFeedbackPlayer } from "./soundFeedback";
@@ -416,7 +420,10 @@ export function useMemoizedPreviewRender(
   projectLocalImageResolution: ProjectLocalImageResolutionContext = {
     kind: "none"
   },
-  previewRenderer: PreviewRendererId = "markdown"
+  previewRenderer: PreviewRendererId = "markdown",
+  // #568: localized callout labels. Callers memoize this per UI language
+  // (`translate` identity), so it is safe as a memo dependency.
+  calloutLabels?: MarkdownCalloutLabels
 ): PreviewRenderResult {
   const resolutionKind = projectLocalImageResolution.kind;
   const resolutionSourcePath =
@@ -433,14 +440,15 @@ export function useMemoizedPreviewRender(
           })
         : markdownPreviewRenderer.render(previewSourceContent, {
             projectLocalImageResolution,
-            previewRenderer
+            previewRenderer,
+            calloutLabels
           });
 
     return { html, startedAt, durationMs: performance.now() - startedAt };
     // projectLocalImageResolution is reconstructed from the two primitives
     // it keys on; adding it as a dep would re-run on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewSourceContent, resolutionKind, resolutionSourcePath, previewRenderer]);
+  }, [previewSourceContent, resolutionKind, resolutionSourcePath, previewRenderer, calloutLabels]);
 }
 
 interface EditorSurfaceProps {
@@ -1114,10 +1122,15 @@ function MarkdownEditorSurface({
   // #250 follow-up: see useMemoizedPreviewRender above — markdown-it only
   // re-runs when previewSourceContent changes, not on every keystroke
   // rerender of this component.
+  const calloutLabels = useMemo(
+    () => markdownCalloutLabelsFor(translate),
+    [translate]
+  );
   const previewRender = useMemoizedPreviewRender(
     effectivePreviewSourceContent,
     previewImageResolution,
-    previewRenderer
+    previewRenderer,
+    calloutLabels
   );
   const previewHtml = previewRender.html;
   const previewRenderStartedAt = previewRender.startedAt;
