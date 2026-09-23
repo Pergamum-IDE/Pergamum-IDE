@@ -233,7 +233,7 @@ function runCommandPaletteLaunchAnimation(input: {
  *
  * Internal state: `modeIndex` — which entry in `TOOLBAR_COMMAND_BOX_MODES`
  * is currently selected. This state is local to the Command Box and does NOT
- * affect the global Command Palette or Ctrl+Shift+P behavior.
+ * affect the global Command Palette or Ctrl+P (#554) behavior.
  */
 export const ToolbarCommandBox: FC<ToolbarCommandBoxProps> = ({
   onOpenCommandPalette,

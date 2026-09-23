@@ -318,7 +318,11 @@ function viewMenu(
         language,
         "menu.commandPalette",
         options,
-        "CommandOrControl+Shift+P"
+        // #554: Mod+P is Pergamum's primary Command Palette / launcher
+        // shortcut (moved off Mod+Shift+P, which VSCode uses — Pergamum is
+        // not a VSCode clone). Preview toggle now owns Mod+Shift+P instead
+        // (see the `togglePreview` global shortcut in App.tsx).
+        "CommandOrControl+P"
       ),
       commandPaletteF1MenuItem(options),
       { type: "separator" },

@@ -213,7 +213,7 @@ describe("resolveToolbarCommandBoxModeEntry", () => {
 });
 
 describe("Command Box App.tsx wiring (source-level assertions)", () => {
-  it("Ctrl+Shift+P command handler explicitly sets initialInputValue to '>'", () => {
+  it("Ctrl+P (#554) command handler explicitly sets initialInputValue to '>'", () => {
     const { readFileSync } = require("node:fs");
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 

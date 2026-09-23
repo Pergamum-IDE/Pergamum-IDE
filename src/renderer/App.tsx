@@ -1321,7 +1321,7 @@ export function App(): JSX.Element {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   // #542: initial input value for the Command Palette when opened by the
   // toolbar Command Box. Uses `""` for project-file mode; do not collapse
-  // it to `">"`. Ctrl+Shift+P explicitly sets this state back to `">"`.
+  // it to `">"`. Ctrl+P (#554) explicitly sets this state back to `">"`.
   const [commandPaletteInitialInputValue, setCommandPaletteInitialInputValue] =
     useState<string>(">");
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
@@ -3886,7 +3886,7 @@ export function App(): JSX.Element {
       registry,
       {
         openCommandPalette: () => {
-          // #542: Ctrl+Shift+P always opens in command mode (">").
+          // #542/#554: Ctrl+P always opens in command mode (">").
           // This is independent of whatever mode the toolbar Command Box
           // currently has selected. setCommandPaletteInitialInputValue is
           // called first so the palette mounts with ">" even if the Command
@@ -4749,15 +4749,18 @@ export function App(): JSX.Element {
     onActivateWorkspaceTab: activateWorkspaceTab
   });
 
-  // #541: Ctrl+P toggles the Preview pane app-wide (editor, toolbar, or
-  // preview pane focused — unlike the CodeMirror-scoped toolbar shortcuts).
-  // More global shortcuts are expected to register here going forward.
+  // #554: Ctrl+Shift+P toggles the Preview pane app-wide (editor, toolbar,
+  // or preview pane focused — unlike the CodeMirror-scoped toolbar
+  // shortcuts). Moved off Ctrl+P (#541), which is now the primary Command
+  // Palette launcher (see `commandPaletteCommandIds.open`'s accelerator in
+  // menu.ts). More global shortcuts are expected to register here going
+  // forward.
   useGlobalKeyboardShortcuts(
     useMemo(
       () => [
         {
           id: "togglePreview",
-          match: { key: "p", ctrlOrCmd: true },
+          match: { key: "p", ctrlOrCmd: true, shift: true },
           handler: () => {
             if (isPreviewEligible) {
               handleTogglePreviewVisible();
@@ -5335,7 +5338,7 @@ export function App(): JSX.Element {
    * #542: Open the Command Palette with a specific initial prefix from the
    * toolbar Command Box. The prefix may be `""` (file/project-file mode) —
    * do NOT fall back to `">"` for an empty string here.
-   * Ctrl+Shift+P remains independent: it always opens command mode via the
+   * Ctrl+P (#554) remains independent: it always opens command mode via the
    * command registry and never calls this function.
    */
   function openCommandPaletteWithPrefix(initialPrefix: string): void {
@@ -5777,8 +5780,8 @@ export function App(): JSX.Element {
     );
   }
 
-  // #541: shared command path for the Preview toolbar button and the
-  // Ctrl+P global shortcut — single source of truth in `layout.
+  // #541/#554: shared command path for the Preview toolbar button and the
+  // Ctrl+Shift+P global shortcut — single source of truth in `layout.
   // markdownEditorPreview.visible`, same session-local state as `ratio`.
   function handleTogglePreviewVisible(): void {
     setLayout((current) => ({

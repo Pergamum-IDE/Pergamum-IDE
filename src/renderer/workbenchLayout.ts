@@ -27,9 +27,9 @@ export interface WorkbenchSidebarLayoutState {
 
 export interface WorkbenchMarkdownEditorPreviewLayoutState {
   ratio: number;
-  /** #541: user-toggled Preview pane visibility (Ctrl+P / toolbar button).
-   *  Session-local only, like the rest of `WorkbenchLayoutState` — not
-   *  persisted to `pergamum.json` or Session. */
+  /** #541/#554: user-toggled Preview pane visibility (Ctrl+Shift+P / toolbar
+   *  button). Session-local only, like the rest of `WorkbenchLayoutState` —
+   *  not persisted to `pergamum.json` or Session. */
   visible: boolean;
 }
 

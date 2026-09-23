@@ -72,7 +72,7 @@ export interface EditorToolbarProps {
   /**
    * #542: Open the existing central Command Palette with the given initial
    * prefix. Use `""` for file mode (project file quick open) — the caller
-   * must NOT collapse `""` to `">"`. Ctrl+Shift+P always uses `">"` directly
+   * must NOT collapse `""` to `">"`. Ctrl+P (#554) always uses `">"` directly
    * and is unaffected by the Command Box's local mode state.
    */
   onOpenCommandPalette: (initialPrefix: QuickAccessPrefix) => void;
