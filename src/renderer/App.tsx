@@ -175,6 +175,7 @@ import {
   serializeLineEndings
 } from "./lineEndingTracking";
 import {
+  applyGlossaryDescriptionEditorSaveResult,
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
   updateGlossaryDescriptionEditorText,
@@ -404,6 +405,8 @@ import {
 } from "./editorNavigation";
 import {
   createGlossaryEntryDraft,
+  glossaryEntryDraftUpdateInput,
+  glossaryEntryDraftValidity,
   representativeGlossaryAtomDraft,
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
@@ -1213,6 +1216,18 @@ export function App(): JSX.Element {
   async function transitionGlossaryEntryEditorPane(
     next: OpenGlossaryEntryEditorPaneState
   ): Promise<void> {
+    // #573 Slice 4: one editing owner per glossary entry. An entry already
+    // open in a glossary Description tab is edited there — focus the tab
+    // instead of opening a second, independently-saved draft in the pane.
+    if (next.mode === "edit") {
+      const descriptionTabId = createGlossaryDescriptionEditorId(next.entryId);
+
+      if (hasOpenDocument(openDocumentsStateRef.current, descriptionTabId)) {
+        openEditorFromUi(descriptionTabId);
+        return;
+      }
+    }
+
     if (
       isSameGlossaryEntryEditorPaneTarget(
         glossaryEntryEditorPaneRef.current,
@@ -2875,9 +2890,11 @@ export function App(): JSX.Element {
     !isEditorAreaSpecialTabActive &&
     (activeMarkdownDocument !== null || isGlossaryDescriptionEditorActive);
   const canSave =
-    !isEditorAreaSpecialTabActive &&
-    currentEditor?.kind === "markdown" &&
-    Boolean(activeMarkdownDocument);
+    (!isEditorAreaSpecialTabActive &&
+      currentEditor?.kind === "markdown" &&
+      Boolean(activeMarkdownDocument)) ||
+    // #573 Slice 4: Ctrl+S saves a glossary Description tab's draft.
+    isGlossaryDescriptionEditorActive;
   const canSaveAs =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -3187,14 +3204,19 @@ export function App(): JSX.Element {
         projectIsOpen: project !== null,
         projectAccessReadWrite: isReadWriteProject,
         projectAccessReadOnly: isReadOnlyProject,
+        // #573 Slice 4: a glossary Description tab is a saveable working
+        // copy too. `editor.kind.markdown` stays false for it, so Save As /
+        // paragraph indent (gated on both keys) remain unavailable.
         editorHasDocument:
-          !isEditorAreaSpecialTabActive &&
-          currentEditor?.kind === "markdown" &&
-          Boolean(activeMarkdownDocument),
+          (!isEditorAreaSpecialTabActive &&
+            currentEditor?.kind === "markdown" &&
+            Boolean(activeMarkdownDocument)) ||
+          isGlossaryDescriptionEditorActive,
         editorIsDirty: !isEditorAreaSpecialTabActive && isDirty,
         editorKindMarkdown:
           !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown",
-        editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
+        editorDocumentProjectOwned:
+          isProjectOwnedCurrentEditor || isGlossaryDescriptionEditorActive,
         // #318: same source of truth as the Rename target resolution — an
         // active Markdown editor over a current-project document. Untitled,
         // external / standalone, project-root-outside, and other-project
@@ -4279,26 +4301,79 @@ export function App(): JSX.Element {
     }
   }
 
-  // #436 Phase 8-0 PoC (Slice 8): load the entry an edit-mode pane targets.
-  // A thin forward of the existing glossary IPC — `GlossaryEntryEditForm`
-  // owns the loading / failed / ready state and the race guard.
   // #573 Slice 1: open (or focus, if already open) the glossary Description
   // tab for `entryId`. Identity is the entry id, so `applyEditor` activates an
-  // existing tab instead of adding a duplicate. Reads the renderer's
-  // already-loaded `glossaryEntries` — no new IPC.
-  function handleOpenGlossaryDescriptionTab(entryId: GlossaryEntryId): void {
-    const entry = glossaryEntries.find((candidate) => candidate.id === entryId);
-
-    if (!project || !entry) {
+  // existing tab instead of adding a duplicate.
+  // #573 Slice 4: one editing owner per entry. When the Glossary Entry
+  // Editor Pane is editing the same entry, its existing dirty confirm runs
+  // first (save / discard / cancel), the pane closes, and the tab is seeded
+  // from the entry as currently stored (the existing `getById` IPC) — so a
+  // pane save just made is never lost behind a stale snapshot.
+  async function handleOpenGlossaryDescriptionTab(
+    entryId: GlossaryEntryId
+  ): Promise<void> {
+    if (!projectRef.current || isLifecycleCommitBarrierActiveNow()) {
       return;
     }
 
-    openEditorFromUi(createGlossaryDescriptionEditorId(entry.id), {
+    const editorId = createGlossaryDescriptionEditorId(entryId);
+    const isPaneEditingEntry = (): boolean => {
+      const pane = glossaryEntryEditorPaneRef.current;
+
+      return pane.isOpen && pane.mode === "edit" && pane.entryId === entryId;
+    };
+
+    if (
+      isPaneEditingEntry() &&
+      !(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())
+    ) {
+      return;
+    }
+
+    if (hasOpenDocument(openDocumentsStateRef.current, editorId)) {
+      if (isPaneEditingEntry()) {
+        setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+      }
+      openEditorFromUi(editorId);
+      return;
+    }
+
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+    let entry: GlossaryEntry | null;
+
+    try {
+      entry = await window.pergamum.glossary.getById(entryId);
+    } catch (error) {
+      entry = null;
+      setStatus({
+        key: "status.documentOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    }
+
+    if (
+      !entry ||
+      !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+        projectGeneration
+      )
+    ) {
+      return;
+    }
+
+    if (isPaneEditingEntry()) {
+      setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+    }
+
+    openEditorFromUi(editorId, {
       history: "record",
       resolvedEditor: createGlossaryDescriptionCurrentEditor(entry)
     });
   }
 
+  // #436 Phase 8-0 PoC (Slice 8): load the entry an edit-mode pane targets.
+  // A thin forward of the existing glossary IPC — `GlossaryEntryEditForm`
+  // owns the loading / failed / ready state and the race guard.
   async function handleLoadGlossaryEntryFromPane(
     entryId: GlossaryEntryId
   ): Promise<GlossaryEntry | null> {
@@ -7306,19 +7381,10 @@ export function App(): JSX.Element {
       return "ignored";
     }
 
-    // #573 Slice 1: a glossary Description tab has no file to save.
-    if (targetOpenDocument.editor.kind !== "markdown") {
-      logRendererDebugEvent({
-        level: "debug",
-        event: "save.skipped",
-        details: {
-          editorIdKind,
-          operation: "save",
-          result: "ignored",
-          reason: "unsupported_editor"
-        }
-      });
-      return "ignored";
+    // #573 Slice 4: a glossary Description tab has no file — it saves its
+    // whole draft through the existing glossary update path instead.
+    if (targetOpenDocument.editor.kind === "glossaryDescription") {
+      return await saveGlossaryDescriptionEditor(targetOpenDocument.id);
     }
 
     const targetEditor = targetOpenDocument.editor;
@@ -7619,6 +7685,96 @@ export function App(): JSX.Element {
           event: "save.in_flight.ignored",
           details: {
             editorIdKind,
+            operation: "save",
+            result: "ignored"
+          }
+        });
+      }
+    );
+
+    return result ?? "ignored";
+  }
+
+  // #573 Slice 4: save a glossary Description tab. Validates the WHOLE draft,
+  // then reuses the Glossary Entry Editor Pane's save route
+  // (`handleSaveGlossaryEntryFromPane`: the existing glossary update IPC,
+  // glossary refresh, status and save-failed dialog). On success the tab's
+  // saved baseline (`draft.entry`) becomes the saved entry; on any failure
+  // the draft (and so the dirty state) is left untouched.
+  async function saveGlossaryDescriptionEditor(
+    editorId: EditorId
+  ): Promise<SaveFileOutcome> {
+    const openDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      editorId
+    );
+
+    if (openDocument?.editor.kind !== "glossaryDescription") {
+      return "ignored";
+    }
+
+    const { draft } = openDocument.editor;
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "save.requested",
+      details: {
+        editorIdKind: "glossaryDescription",
+        operation: "save",
+        isDirty: isCurrentEditorDirty(openDocument.editor),
+        canSave: projectRef.current?.accessMode.kind === "readWrite"
+      }
+    });
+
+    if (projectRef.current?.accessMode.kind !== "readWrite") {
+      setStatus({
+        key: "status.saveFailed",
+        values: { message: translate("command.disabled.readOnlyProject") }
+      });
+      return "rejected";
+    }
+
+    const validity = glossaryEntryDraftValidity(draft);
+
+    if (!validity.ok) {
+      const message = translate(
+        validity.reason === "noAtoms"
+          ? "glossaryEditor.validity.noAtoms"
+          : "glossaryEditor.validity.duplicateAtomValue"
+      );
+
+      setStatus({ key: "status.saveFailed", values: { message } });
+      notificationController.notify({ message });
+      return "rejected";
+    }
+
+    const result = await saveInFlightGuard.run<SaveFileOutcome>(
+      async () => {
+        let savedEntry: GlossaryEntry;
+
+        try {
+          savedEntry = await handleSaveGlossaryEntryFromPane(
+            glossaryEntryDraftUpdateInput(draft)
+          );
+        } catch {
+          // Status + save-failed dialog were already surfaced; the tab stays
+          // open and dirty with the user's edits intact.
+          return "failed";
+        }
+
+        setOpenDocumentsState((state) =>
+          updateOpenEditor(state, editorId, (editor) =>
+            applyGlossaryDescriptionEditorSaveResult(editor, savedEntry)
+          )
+        );
+        return "saved";
+      },
+      () => {
+        logRendererDebugEvent({
+          level: "debug",
+          event: "save.in_flight.ignored",
+          details: {
+            editorIdKind: "glossaryDescription",
             operation: "save",
             result: "ignored"
           }
@@ -11901,7 +12057,9 @@ export function App(): JSX.Element {
                         undoHistoryMinDepth={
                           effectiveSettings.editor.undoHistoryMinDepth
                         }
-                        onOpenDescriptionTab={handleOpenGlossaryDescriptionTab}
+                        onOpenDescriptionTab={(entryId) =>
+                          void handleOpenGlossaryDescriptionTab(entryId)
+                        }
                         onClose={() =>
                           void closeGlossaryEntryEditorPaneWithConfirm()
                         }

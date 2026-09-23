@@ -42,8 +42,9 @@ describe("project access mode command wiring (#211)", () => {
     expect(contextBlock).toContain(
       "projectAccessReadOnly: isReadOnlyProject"
     );
+    // #573 Slice 4: a glossary Description tab is project-owned too.
     expect(contextBlock).toContain(
-      "editorDocumentProjectOwned: isProjectOwnedCurrentEditor"
+      "editorDocumentProjectOwned:\n          isProjectOwnedCurrentEditor || isGlossaryDescriptionEditorActive"
     );
     expect(contextBlock).toContain(
       "activeEditorSaveBlockedByReadOnlyProjectRootForUi"

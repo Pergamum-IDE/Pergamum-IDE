@@ -144,7 +144,6 @@ import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import type { SoundFeedbackPlayer } from "./soundFeedback";
 import { clampMarkdownEditorPreviewRatio } from "./workbenchLayout";
-import { GlossaryDescriptionTabNotice } from "./GlossaryDescriptionTabNotice";
 
 const NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY = "(max-width: 760px)";
 
@@ -751,15 +750,10 @@ export function EditorSurface({
   );
   const isGlossaryDescription = editor.kind === "glossaryDescription";
 
-  // #573 Slice 3: both editor kinds share ONE MarkdownEditorSurface at a
-  // stable position (after the optional glossary notice), so switching
-  // between a document tab and a glossary Description tab behaves like
-  // switching between two document tabs.
+  // #573 Slice 3: both editor kinds share ONE MarkdownEditorSurface, so
+  // switching between a document tab and a glossary Description tab behaves
+  // like switching between two document tabs.
   return (
-    <>
-      {isGlossaryDescription ? (
-        <GlossaryDescriptionTabNotice translate={translate} />
-      ) : null}
       <MarkdownEditorSurface
           source={markdownSurfaceSource}
           isDebugModeEnabled={isDebugModeEnabled}
@@ -837,7 +831,6 @@ export function EditorSurface({
           onViewportChanged={onViewportChanged}
           onPreviewScrollSyncEvent={onPreviewScrollSyncEvent}
         />
-    </>
   );
 }
 

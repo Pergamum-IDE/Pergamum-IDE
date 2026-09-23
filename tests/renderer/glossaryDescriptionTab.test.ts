@@ -291,7 +291,7 @@ describe("glossaryDescription in-memory draft (#573 Slice 3)", () => {
     expect(currentEditorTitle(editor)).toBe("語彙: アリス");
   });
 
-  it("updates only the draft Description, stays clean, and never becomes a document", () => {
+  it("updates only the draft Description, becomes dirty, and never becomes a document", () => {
     const editor = createGlossaryDescriptionCurrentEditor(
       glossaryEntry(entryIdA, "アリス")
     );
@@ -308,8 +308,8 @@ describe("glossaryDescription in-memory draft (#573 Slice 3)", () => {
     expect(updated.draft.description).toBe("新しい説明");
     expect(updated.draft.entry.description).toBe("説明");
     expect(updated.descriptionLineEndingBreaks).toBe(breaks);
-    // Slice 3 deliberately defers dirty / save to Slice 4.
-    expect(isCurrentEditorDirty(updated)).toBe(false);
+    // #573 Slice 4: dirty against the draft's saved baseline.
+    expect(isCurrentEditorDirty(updated)).toBe(true);
     expect(markdownDocumentForEditor(updated)).toBeNull();
   });
 
@@ -343,7 +343,14 @@ describe("glossaryDescription in-memory draft (#573 Slice 3)", () => {
     expect(
       nextEditor.kind === "glossaryDescription" && nextEditor.draft.description
     ).toBe("編集後");
-    expect(getDirtyWorkingCopies(next)).toEqual([]);
+    expect(getDirtyWorkingCopies(next)).toEqual([
+      {
+        editorId: createGlossaryDescriptionEditorId(entryIdA),
+        kind: "glossaryDescription",
+        scope: "glossary",
+        title: "語彙: アリス"
+      }
+    ]);
     expect(buildSessionSnapshotInputs("session", null, next, true).editors).toEqual(
       []
     );

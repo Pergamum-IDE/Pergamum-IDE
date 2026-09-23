@@ -235,21 +235,28 @@ function dirtyWorkingCopyScopeForDocument(
 export function getDirtyWorkingCopies(
   state: OpenDocumentsState
 ): DirtyWorkingCopy[] {
-  return state.documents.flatMap((openDocument) => {
-    // #573 Slice 1: only Markdown editors own a working copy; a glossary
-    // Description tab is a read-only placeholder and never dirty.
-    const document = markdownDocumentForEditor(openDocument.editor);
+  return state.documents.flatMap((openDocument): DirtyWorkingCopy[] => {
+    const { editor } = openDocument;
 
-    return document && isCurrentEditorDirty(openDocument.editor)
-      ? [
-          {
-            editorId: openDocument.id,
-            kind: "markdown" as const,
-            scope: dirtyWorkingCopyScopeForDocument(document),
-            title: currentEditorTitle(openDocument.editor)
-          }
-        ]
-      : [];
+    if (!isCurrentEditorDirty(editor)) {
+      return [];
+    }
+
+    // #573 Slice 4: a dirty glossary Description tab is a project-scoped
+    // working copy saved through the glossary update path.
+    const document = markdownDocumentForEditor(editor);
+    const scope: DirtyWorkingCopyScope = document
+      ? dirtyWorkingCopyScopeForDocument(document)
+      : "glossary";
+
+    return [
+      {
+        editorId: openDocument.id,
+        kind: editor.kind,
+        scope,
+        title: currentEditorTitle(editor)
+      }
+    ];
   });
 }
 

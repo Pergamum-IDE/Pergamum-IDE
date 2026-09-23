@@ -3,7 +3,7 @@
 // #573 Slice 2: EditorSurface routes a Markdown editor through
 // MarkdownSurfaceSource (unchanged editor + preview behavior).
 // #573 Slice 3: a glossary Description tab renders the same editor + preview
-// stack over its in-memory draft (plus a "not saved yet" notice).
+// stack over its in-memory draft.
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EditorView } from "@codemirror/view";
@@ -231,17 +231,17 @@ describe("EditorSurface source routing (#573 Slice 2)", () => {
     expect(surface.editorText()).toBe("メモ");
   });
 
-  it("renders a glossary Description tab as editor + preview with a notice", () => {
+  it("renders a glossary Description tab as editor + preview", () => {
     const surface = mount(
       createGlossaryDescriptionCurrentEditor(glossaryEntry),
       "glossary"
     );
 
     expect(surface.editorText()).toBe(glossaryDescription);
+    // #573 Slice 4: the Slice 3 "not saved yet" notice is gone.
     expect(
       surface.container.querySelector(".glossaryDescriptionTabNotice")
-        ?.textContent
-    ).toBe(t("ja", "glossaryDescriptionTab.unsavedNotice"));
+    ).toBeNull();
 
     const html = surface.previewHtml();
     expect(html).toContain("markdown-callout-note");

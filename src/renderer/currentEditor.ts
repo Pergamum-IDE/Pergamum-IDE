@@ -17,7 +17,9 @@ import {
   type LineEndingBreakSet
 } from "./editorLineEndingField";
 import {
+  applyGlossaryEntryDraftSaveResult,
   createGlossaryEntryDraft,
+  isGlossaryEntryDraftDirty,
   updateGlossaryEntryDraftDescription,
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
@@ -35,8 +37,10 @@ export interface MarkdownCurrentEditor {
  * `markdownDocumentForEditor()` skips it.
  *
  * Slice 3: the tab owns an in-memory `GlossaryEntryDraft` (seeded from the
- * entry at open time); only `draft.description` is edited. Nothing is
- * persisted yet — save / dirty arrive in a later slice.
+ * entry at open time); only `draft.description` is edited in the tab.
+ * Slice 4: `draft.entry` is the saved baseline — the tab is dirty while the
+ * draft differs from it, and a successful save replaces it with the saved
+ * entry (`applyGlossaryDescriptionEditorSaveResult`).
  */
 export interface GlossaryDescriptionCurrentEditor {
   kind: "glossaryDescription";
@@ -97,6 +101,27 @@ export function updateGlossaryDescriptionEditorText(
   };
 }
 
+/**
+ * #573 Slice 4: rebase a glossary Description tab onto the entry the store
+ * just saved. The CURRENT draft is kept (edits typed while the save was in
+ * flight stay dirty against the new baseline); only its baseline and store
+ * ids are updated. Any other editor is returned unchanged.
+ */
+export function applyGlossaryDescriptionEditorSaveResult(
+  editor: CurrentEditor,
+  savedEntry: GlossaryEntry
+): CurrentEditor {
+  if (editor.kind !== "glossaryDescription" || editor.entryId !== savedEntry.id) {
+    return editor;
+  }
+
+  return {
+    ...editor,
+    representativeSurface: representativeGlossarySurface(savedEntry).trim(),
+    draft: applyGlossaryEntryDraftSaveResult(editor.draft, savedEntry)
+  };
+}
+
 export function markdownDocumentForEditor(
   editor: CurrentEditor
 ): CurrentDocument | null {
@@ -127,9 +152,7 @@ export function isCurrentEditorDirty(editor: CurrentEditor): boolean {
     case "markdown":
       return isCurrentDocumentDirty(editor.document);
     case "glossaryDescription":
-      // #573 Slice 3: edits live only in the in-memory draft; dirty / save
-      // tracking is deliberately deferred to a later slice.
-      return false;
+      return isGlossaryEntryDraftDirty(editor.draft);
   }
 }
 

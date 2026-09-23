@@ -6384,18 +6384,6 @@ label.settingsItemHeader {
   color: #8f1b21;
 }
 
-/* #573 Slice 3: non-blocking "not saved yet" note above a glossary
-   Description tab's editor / preview workspace. */
-.glossaryDescriptionTabNotice {
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 6px 16px;
-  border-bottom: 1px solid #efd9a8;
-  background: #fff8e6;
-  color: #6b4e00;
-  font-size: 12px;
-}
-
 /* #375: Glossary Management tab — reuses the Tag Manager's cell / drag-handle /
    icon-button styles; only the wrapper + the 9-column row grid are its own. */
 .glossaryEntryManagerTab {

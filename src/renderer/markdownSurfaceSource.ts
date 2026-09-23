@@ -8,6 +8,7 @@ import {
 } from "./currentDocument";
 import type { GlossaryDescriptionCurrentEditor } from "./currentEditor";
 import type { LineEndingBreakSet } from "./editorLineEndingField";
+import { isGlossaryEntryDraftDirty } from "./glossaryEntryDraft";
 
 /**
  * Where the Aozora-renderer preview can load a document's pre-cleaned source
@@ -95,8 +96,8 @@ const GLOSSARY_DESCRIPTION_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext 
 
 /**
  * #573 Slice 3: adapts a glossary Description tab's in-memory draft. Always
- * Markdown, never an Aozora source, and not dirty-tracked yet (save / dirty
- * arrive in a later slice).
+ * Markdown and never an Aozora source. Slice 4: dirty against the draft's
+ * saved baseline.
  */
 export function createGlossaryDescriptionMarkdownSurfaceSource(
   editor: GlossaryDescriptionCurrentEditor
@@ -104,7 +105,7 @@ export function createGlossaryDescriptionMarkdownSurfaceSource(
   return {
     text: editor.draft.description,
     lineEndingBreaks: editor.descriptionLineEndingBreaks,
-    isDirty: false,
+    isDirty: isGlossaryEntryDraftDirty(editor.draft),
     isMarkdownDocument: true,
     imageResolution: GLOSSARY_DESCRIPTION_IMAGE_RESOLUTION,
     aozoraSourceText: null
